@@ -1,0 +1,24 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: tutor-dev
+  namespace: argocd
+spec:
+  project: default
+  source:
+    repoURL: https://github.com/devopclinics/platform-tutor.git
+    targetRevision: main
+    path: charts/tutor
+    helm:
+      valueFiles:
+        - ../../env/dev/workloads/tutor/values.yaml
+  destination:
+    server: https://kubernetes.default.svc
+    naespace: dev-{{ .Values.app.team }}-{{ .Values.app.name }}
+
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true

@@ -1,0 +1,19 @@
+app:
+  name: tutor
+  team: platform
+  image: nginx:1.14
+  replicas: 3
+
+service:
+  port: 80
+
+ingress:
+  host: tutor.dev.vsgs.local
+
+resources:
+  requests:
+    cpu: 500m
+    memory: 512Mi
+  limits:
+    cpu: 1000m
+    memory: 1Gi

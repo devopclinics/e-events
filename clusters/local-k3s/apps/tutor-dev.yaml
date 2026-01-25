@@ -22,3 +22,13 @@ spec:
       selfHeal: true
     syncOptions:
       - CreateNamespace=true
+  ignoreDifferences:
+    - group: ""
+      kind: Service
+      name: tutor
+      namespace: dev-platform-tutor
+      jsonPointers:
+        - /spec/clusterIP
+        - /spec/clusterIPs
+        - /spec/ipFamilies
+        - /spec/ipFamilyPolicy

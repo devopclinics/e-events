@@ -14,7 +14,7 @@ spec:
         - ../../env/dev/workloads/tutor/values.yaml
   destination:
     server: https://kubernetes.default.svc
-    namespace: dev-{{ .Values.app.team }}-{{ .Values.app.name }}
+    namespace: dev-platform-tutor
 
   syncPolicy:
     automated:

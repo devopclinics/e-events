@@ -1,4 +1,8 @@
 # App-team input values for tutor
+app:
+  team: platform
+  name: tutor
+
 replicaCount: 2
 image:
   repository: nginx

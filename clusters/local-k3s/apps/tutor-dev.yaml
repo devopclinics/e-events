@@ -32,3 +32,5 @@ spec:
         - /spec/clusterIPs
         - /spec/ipFamilies
         - /spec/ipFamilyPolicy
+        - /spec/internalTrafficPolicy
+

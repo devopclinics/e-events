@@ -1,8 +1,10 @@
 apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:
-  name: tutor
-  namespace: dev-{{ .Values.app.team }}-{{ .Values.app.name }}
+  name: {{ include "tutor.name" . }}
+  namespace: {{ include "tutor.namespace" . }}
+  labels:
+{{ include "tutor.labels" . | indent 4 }}
 
 spec:
   ingressClassName: traefik

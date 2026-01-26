@@ -1,23 +1,21 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: {{ .Values.app.name }}
-  namespace: dev-{{ .Values.app.team }}-{{ .Values.app.name }}
+  name: {{ include "tutor.name" . }}
+  namespace: {{ include "tutor.namespace" . }}
   labels:
-    app.kubernetes.io/name: {{ .Values.app.name }}
-    app.kubernetes.io/team: {{ .Values.app.team }}
-    app.kubernetes.io/managed-by: platform
+{{ include "tutor.labels" . | indent 4 }}
+
 spec:
   replicas: {{ .Values.app.replicas }}
   selector:
     matchLabels:
-      app.kubernetes.io/name: {{ .Values.app.name }}
-      app.kubernetes.io/team: {{ .Values.app.team }}
+{{ include "tutor.selectorLabels" . | indent 6 }}
   template:
     metadata:
       labels:
-        app.kubernetes.io/name: {{ .Values.app.name }}
-        app.kubernetes.io/team: {{ .Values.app.team }}
+{{ include "tutor.selectorLabels" . | indent 8 }}
+
     spec:
       containers:
         - name: {{ .Values.app.name }}

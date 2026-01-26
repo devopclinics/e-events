@@ -1,0 +1,19 @@
+app:
+  name: reader
+  team: platform
+  image: nginx:1.14
+  replicas: 2
+
+service:
+  port: 80
+
+ingress:
+  host: reader.dev.vsgs.local
+
+resources:
+  requests:
+    cpu: 250m
+    memory: 256Mi
+  limits:
+    cpu: 500m
+    memory: 512Mi

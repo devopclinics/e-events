@@ -4,7 +4,7 @@ metadata:
   name: reader-dev
   namespace: argocd
 spec:
-  project: default
+  project:  platform-dev
   source:
     repoURL: https://github.com/devopclinics/platform-tutor.git
     targetRevision: main

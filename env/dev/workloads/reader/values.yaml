@@ -1,7 +1,7 @@
 app:
   name: reader
   team: platform
-  image: nginx:1.14
+  image: nginx:latest
   replicas: 2
 
 service:

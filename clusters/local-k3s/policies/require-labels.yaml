@@ -1,0 +1,20 @@
+apiVersion: kyverno.io/v1
+kind: ClusterPolicy
+metadata:
+  name: require-platform-labels
+spec:
+  validationFailureAction: enforce
+  rules:
+    - name: require-standard-labels
+      match:
+        resources:
+          kinds:
+            - Pod
+      validate:
+        message: "Missing required platform labels"
+        pattern:
+          metadata:
+            labels:
+              app.kubernetes.io/name: "?*"
+              app.kubernetes.io/team: "?*"
+              app.kubernetes.io/managed-by: "platform"

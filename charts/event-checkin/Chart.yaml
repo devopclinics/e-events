@@ -1,0 +1,6 @@
+apiVersion: v2
+name: event-checkin
+description: Event check-in system with QR codes, email invites, and live dashboard
+type: application
+version: 0.1.0
+appVersion: "1.0.0"

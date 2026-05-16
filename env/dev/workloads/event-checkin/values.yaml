@@ -1,0 +1,27 @@
+app:
+  name: event-checkin
+  team: platform
+
+backend:
+  image: ghcr.io/devopclinics/event-checkin-backend:1.0.0
+  replicas: 1
+
+frontend:
+  image: ghcr.io/devopclinics/event-checkin-frontend:1.0.0
+  replicas: 1
+
+postgres:
+  enabled: true
+
+ingress:
+  host: checkin.dev.vsgs.local
+
+secrets:
+  secretName: event-checkin-secrets
+  databaseUrl: "postgresql+asyncpg://checkin:checkin@event-checkin-postgres:5432/checkin"
+  secretKey: "dev-secret-key-replace-in-prod"
+  smtpHost: ""
+  emailFrom: "noreply@checkin.dev.vsgs.local"
+  twilioAccountSid: ""
+  twilioAuthToken: ""
+  twilioFromNumber: ""

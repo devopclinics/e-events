@@ -1,0 +1,16 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "event-checkin.name" . }}-frontend
+  namespace: {{ include "event-checkin.namespace" . }}
+  labels:
+{{ include "event-checkin.frontendLabels" . | indent 4 }}
+spec:
+  type: ClusterIP
+  selector:
+    app.kubernetes.io/name: {{ .Values.app.name }}
+    app.kubernetes.io/component: frontend
+  ports:
+    - port: {{ .Values.frontend.port }}
+      targetPort: {{ .Values.frontend.port }}
+      protocol: TCP

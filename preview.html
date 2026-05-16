@@ -1,0 +1,320 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Event Check-In — UI Preview</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<style>
+  .screen { border-radius: 12px; box-shadow: 0 4px 24px rgba(0,0,0,0.13); overflow: hidden; }
+  .phone { max-width: 390px; }
+</style>
+</head>
+<body class="bg-gray-100 p-6 font-sans">
+
+<h1 class="text-2xl font-bold text-center text-gray-800 mb-2">Event Check-In QR System</h1>
+<p class="text-center text-gray-500 text-sm mb-10">UI Preview — 4 screens</p>
+
+<!-- ===================== ADMIN PAGE ===================== -->
+<section class="mb-16">
+  <h2 class="text-lg font-semibold text-gray-700 mb-3">① Admin Panel</h2>
+  <div class="screen bg-white">
+    <!-- Nav -->
+    <nav class="bg-indigo-600 px-4 h-14 flex items-center gap-2">
+      <span class="text-white font-bold text-base mr-4">EventQR</span>
+      <span class="bg-white text-indigo-700 px-3 py-1 rounded-lg text-xs font-semibold">Admin</span>
+      <span class="text-indigo-200 px-3 py-1 text-xs">Scanner</span>
+      <span class="text-indigo-200 px-3 py-1 text-xs">Dashboard</span>
+    </nav>
+    <div class="p-5 space-y-4">
+      <!-- Header -->
+      <div class="flex justify-between items-center">
+        <h1 class="text-xl font-bold">Admin Panel</h1>
+        <button class="bg-indigo-600 text-white px-3 py-1.5 rounded-lg text-xs font-semibold">+ New Event</button>
+      </div>
+      <!-- Event selector -->
+      <div class="bg-gray-50 border border-gray-200 rounded-xl p-4">
+        <label class="block text-xs font-semibold text-gray-500 mb-1.5">Select Event</label>
+        <div class="flex gap-2 items-center">
+          <div class="flex-1 bg-white border border-gray-300 rounded-lg px-3 py-2 text-sm text-gray-700">Smith-Jones Wedding — John & Jane</div>
+          <span class="text-xs text-indigo-600 font-medium">Edit</span>
+        </div>
+      </div>
+      <!-- Stats -->
+      <div class="grid grid-cols-4 gap-3">
+        <div class="bg-indigo-50 rounded-xl p-3 text-center">
+          <div class="text-2xl font-bold text-indigo-600">120</div>
+          <div class="text-xs text-gray-500 mt-0.5">Total</div>
+        </div>
+        <div class="bg-blue-50 rounded-xl p-3 text-center">
+          <div class="text-2xl font-bold text-blue-600">120</div>
+          <div class="text-xs text-gray-500 mt-0.5">QR Ready</div>
+        </div>
+        <div class="bg-amber-50 rounded-xl p-3 text-center">
+          <div class="text-2xl font-bold text-amber-600">118</div>
+          <div class="text-xs text-gray-500 mt-0.5">Invited</div>
+        </div>
+        <div class="bg-green-50 rounded-xl p-3 text-center">
+          <div class="text-2xl font-bold text-green-600">47</div>
+          <div class="text-xs text-gray-500 mt-0.5">Admitted</div>
+        </div>
+      </div>
+      <!-- Actions -->
+      <div class="bg-gray-50 border border-gray-200 rounded-xl p-4">
+        <p class="text-sm font-semibold mb-3">Guest Management</p>
+        <div class="flex flex-wrap gap-2">
+          <button class="bg-white border border-gray-300 text-gray-700 px-3 py-1.5 rounded-lg text-xs font-medium">Upload CSV</button>
+          <button class="bg-blue-600 text-white px-3 py-1.5 rounded-lg text-xs font-semibold">Generate QR Codes</button>
+          <button class="bg-amber-500 text-white px-3 py-1.5 rounded-lg text-xs font-semibold">Send Invites</button>
+        </div>
+        <p class="text-xs text-gray-400 mt-2">CSV format: first_name, last_name, email, phone</p>
+      </div>
+      <!-- Guest table -->
+      <div class="border border-gray-200 rounded-xl overflow-hidden">
+        <div class="px-4 py-3 border-b bg-gray-50">
+          <span class="font-semibold text-sm">Guest List (120)</span>
+        </div>
+        <table class="w-full text-xs">
+          <thead class="bg-gray-50 text-gray-500 font-semibold uppercase tracking-wide">
+            <tr>
+              <th class="px-3 py-2 text-left">Name</th>
+              <th class="px-3 py-2 text-left">Email</th>
+              <th class="px-3 py-2 text-center">QR</th>
+              <th class="px-3 py-2 text-center">Invited</th>
+              <th class="px-3 py-2 text-center">Status</th>
+            </tr>
+          </thead>
+          <tbody class="divide-y divide-gray-100">
+            <tr class="hover:bg-gray-50">
+              <td class="px-3 py-2 font-medium">Alice Johnson</td>
+              <td class="px-3 py-2 text-gray-500">alice@email.com</td>
+              <td class="px-3 py-2 text-center"><span class="bg-green-100 text-green-700 px-1.5 py-0.5 rounded-full text-xs">Ready</span></td>
+              <td class="px-3 py-2 text-center"><span class="bg-green-100 text-green-700 px-1.5 py-0.5 rounded-full text-xs">Sent</span></td>
+              <td class="px-3 py-2 text-center"><span class="bg-green-100 text-green-700 px-1.5 py-0.5 rounded-full text-xs">14:32</span></td>
+            </tr>
+            <tr class="hover:bg-gray-50">
+              <td class="px-3 py-2 font-medium">Bob Smith</td>
+              <td class="px-3 py-2 text-gray-500">bob@email.com</td>
+              <td class="px-3 py-2 text-center"><span class="bg-green-100 text-green-700 px-1.5 py-0.5 rounded-full text-xs">Ready</span></td>
+              <td class="px-3 py-2 text-center"><span class="bg-green-100 text-green-700 px-1.5 py-0.5 rounded-full text-xs">Sent</span></td>
+              <td class="px-3 py-2 text-center"><span class="bg-gray-100 text-gray-500 px-1.5 py-0.5 rounded-full text-xs">Pending</span></td>
+            </tr>
+            <tr class="hover:bg-gray-50">
+              <td class="px-3 py-2 font-medium">Carol White</td>
+              <td class="px-3 py-2 text-gray-500">carol@email.com</td>
+              <td class="px-3 py-2 text-center"><span class="bg-green-100 text-green-700 px-1.5 py-0.5 rounded-full text-xs">Ready</span></td>
+              <td class="px-3 py-2 text-center"><span class="bg-green-100 text-green-700 px-1.5 py-0.5 rounded-full text-xs">Sent</span></td>
+              <td class="px-3 py-2 text-center"><span class="bg-green-100 text-green-700 px-1.5 py-0.5 rounded-full text-xs">14:51</span></td>
+            </tr>
+          </tbody>
+        </table>
+        <div class="px-3 py-2 text-xs text-gray-400 bg-gray-50 text-center">… 117 more guests</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ===================== SCANNER PAGE ===================== -->
+<section class="mb-16">
+  <h2 class="text-lg font-semibold text-gray-700 mb-3">② Scanner — Check-In</h2>
+  <div class="screen bg-white max-w-sm">
+    <nav class="bg-indigo-600 px-4 h-14 flex items-center gap-2">
+      <span class="text-white font-bold text-base mr-4">EventQR</span>
+      <span class="text-indigo-200 px-3 py-1 text-xs">Admin</span>
+      <span class="bg-white text-indigo-700 px-3 py-1 rounded-lg text-xs font-semibold">Scanner</span>
+      <span class="text-indigo-200 px-3 py-1 text-xs">Dashboard</span>
+    </nav>
+    <div class="p-5 space-y-4">
+      <h1 class="text-xl font-bold text-center">Check-In Scanner</h1>
+      <!-- Camera view mock -->
+      <div class="bg-gray-900 rounded-xl overflow-hidden aspect-square relative flex items-center justify-center">
+        <div class="absolute inset-0 opacity-30"
+          style="background: repeating-linear-gradient(0deg,transparent,transparent 30px,rgba(255,255,255,.03) 30px,rgba(255,255,255,.03) 31px),repeating-linear-gradient(90deg,transparent,transparent 30px,rgba(255,255,255,.03) 30px,rgba(255,255,255,.03) 31px)">
+        </div>
+        <!-- QR finder box -->
+        <div class="w-48 h-48 border-2 border-white rounded-lg relative flex items-center justify-center">
+          <div class="absolute top-0 left-0 w-6 h-6 border-t-4 border-l-4 border-indigo-400 rounded-tl"></div>
+          <div class="absolute top-0 right-0 w-6 h-6 border-t-4 border-r-4 border-indigo-400 rounded-tr"></div>
+          <div class="absolute bottom-0 left-0 w-6 h-6 border-b-4 border-l-4 border-indigo-400 rounded-bl"></div>
+          <div class="absolute bottom-0 right-0 w-6 h-6 border-b-4 border-r-4 border-indigo-400 rounded-br"></div>
+          <!-- Simulated QR code -->
+          <div class="grid grid-cols-7 gap-0.5 opacity-50">
+            <div class="w-3 h-3 bg-white col-span-3 row-span-3"></div>
+            <div class="w-3 h-3"></div>
+            <div class="w-3 h-3 bg-white"></div>
+            <div class="w-3 h-3"></div>
+            <div class="w-3 h-3 bg-white"></div>
+          </div>
+        </div>
+        <p class="absolute bottom-4 text-white text-xs opacity-70">Point at guest QR code</p>
+      </div>
+      <!-- Manual entry -->
+      <div class="border border-gray-200 rounded-xl p-3">
+        <p class="text-xs font-semibold text-gray-600 mb-2">Manual Entry</p>
+        <div class="flex gap-2">
+          <input class="flex-1 border border-gray-300 rounded-lg px-2 py-1.5 text-xs" placeholder="Paste token or URL…" readonly />
+          <button class="bg-indigo-600 text-white px-3 py-1.5 rounded-lg text-xs font-semibold">Submit</button>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ===================== SCAN RESULTS ===================== -->
+<section class="mb-16">
+  <h2 class="text-lg font-semibold text-gray-700 mb-3">③ Scan Results (3 states)</h2>
+  <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
+    <!-- Admitted -->
+    <div class="screen bg-green-500 text-white p-8 text-center">
+      <div class="text-7xl font-bold mb-3">✓</div>
+      <div class="text-2xl font-bold">ADMITTED</div>
+      <div class="text-xl font-semibold mt-4">Alice Johnson</div>
+      <p class="mt-2 text-white/90 text-sm">Welcome, Alice Johnson! You are admitted.</p>
+      <p class="mt-1 text-white/70 text-xs">14:32:05</p>
+      <button class="mt-6 bg-white/20 text-white font-semibold px-6 py-2 rounded-xl text-sm">Scan Next Guest</button>
+    </div>
+    <!-- Already admitted -->
+    <div class="screen bg-amber-500 text-white p-8 text-center">
+      <div class="text-7xl font-bold mb-3">⚠</div>
+      <div class="text-2xl font-bold">ALREADY ADMITTED</div>
+      <div class="text-xl font-semibold mt-4">Bob Smith</div>
+      <p class="mt-2 text-white/90 text-sm">Bob Smith was already admitted at 13:15.</p>
+      <button class="mt-6 bg-white/20 text-white font-semibold px-6 py-2 rounded-xl text-sm">Scan Next Guest</button>
+    </div>
+    <!-- Invalid -->
+    <div class="screen bg-red-500 text-white p-8 text-center">
+      <div class="text-7xl font-bold mb-3">✕</div>
+      <div class="text-2xl font-bold">INVALID QR CODE</div>
+      <p class="mt-4 text-white/90 text-sm">This ticket was not found.</p>
+      <button class="mt-6 bg-white/20 text-white font-semibold px-6 py-2 rounded-xl text-sm">Scan Next Guest</button>
+    </div>
+  </div>
+</section>
+
+<!-- ===================== DASHBOARD ===================== -->
+<section class="mb-16">
+  <h2 class="text-lg font-semibold text-gray-700 mb-3">④ Live Dashboard</h2>
+  <div class="screen bg-white">
+    <nav class="bg-indigo-600 px-4 h-14 flex items-center gap-2">
+      <span class="text-white font-bold text-base mr-4">EventQR</span>
+      <span class="text-indigo-200 px-3 py-1 text-xs">Admin</span>
+      <span class="text-indigo-200 px-3 py-1 text-xs">Scanner</span>
+      <span class="bg-white text-indigo-700 px-3 py-1 rounded-lg text-xs font-semibold">Dashboard</span>
+    </nav>
+    <div class="p-5 space-y-4">
+      <!-- Header with live indicator -->
+      <div class="flex justify-between items-center">
+        <h1 class="text-xl font-bold">Live Dashboard</h1>
+        <div class="flex items-center gap-1.5">
+          <span class="w-2.5 h-2.5 rounded-full bg-green-500 inline-block animate-pulse"></span>
+          <span class="text-xs text-gray-500">Live</span>
+        </div>
+      </div>
+      <!-- Event banner -->
+      <div class="bg-indigo-600 text-white rounded-xl px-5 py-4">
+        <div class="text-lg font-bold">Smith-Jones Wedding</div>
+        <div class="text-indigo-200 text-sm mt-0.5">John & Jane · Saturday, 14 June 2025</div>
+      </div>
+      <!-- Stats -->
+      <div class="grid grid-cols-3 gap-3">
+        <div class="bg-white border border-gray-100 rounded-xl shadow-sm p-4 text-center">
+          <div class="text-3xl font-bold text-indigo-600">120</div>
+          <div class="text-xs text-gray-500 mt-1">Total</div>
+          <div class="mt-2 h-1.5 bg-gray-100 rounded-full"><div class="h-full bg-indigo-500 rounded-full" style="width:100%"></div></div>
+          <div class="text-xs text-gray-400 mt-1">100%</div>
+        </div>
+        <div class="bg-white border border-gray-100 rounded-xl shadow-sm p-4 text-center">
+          <div class="text-3xl font-bold text-green-600">47</div>
+          <div class="text-xs text-gray-500 mt-1">Admitted</div>
+          <div class="mt-2 h-1.5 bg-gray-100 rounded-full"><div class="h-full bg-green-500 rounded-full" style="width:39%"></div></div>
+          <div class="text-xs text-gray-400 mt-1">39%</div>
+        </div>
+        <div class="bg-white border border-gray-100 rounded-xl shadow-sm p-4 text-center">
+          <div class="text-3xl font-bold text-amber-600">73</div>
+          <div class="text-xs text-gray-500 mt-1">Pending</div>
+          <div class="mt-2 h-1.5 bg-gray-100 rounded-full"><div class="h-full bg-amber-400 rounded-full" style="width:61%"></div></div>
+          <div class="text-xs text-gray-400 mt-1">61%</div>
+        </div>
+      </div>
+      <!-- Progress bar -->
+      <div class="bg-white border border-gray-100 rounded-xl shadow-sm p-4">
+        <div class="flex justify-between text-sm font-medium text-gray-600 mb-2">
+          <span>Check-In Progress</span>
+          <span>39%</span>
+        </div>
+        <div class="h-4 bg-gray-100 rounded-full overflow-hidden">
+          <div class="h-full bg-green-500 rounded-full" style="width: 39%;"></div>
+        </div>
+        <div class="text-xs text-gray-400 mt-1">47 of 120 guests admitted</div>
+      </div>
+      <!-- Admitted list -->
+      <div class="border border-gray-200 rounded-xl overflow-hidden">
+        <div class="px-4 py-3 border-b bg-gray-50 flex justify-between items-center">
+          <span class="font-semibold text-sm">Admitted Guests</span>
+          <span class="text-xs text-indigo-600">Refresh</span>
+        </div>
+        <table class="w-full text-xs">
+          <thead class="bg-gray-50 text-gray-500 font-semibold uppercase tracking-wide">
+            <tr>
+              <th class="px-3 py-2 text-left">#</th>
+              <th class="px-3 py-2 text-left">Name</th>
+              <th class="px-3 py-2 text-left">Email</th>
+              <th class="px-3 py-2 text-right">Time</th>
+            </tr>
+          </thead>
+          <tbody class="divide-y divide-gray-100">
+            <tr class="hover:bg-gray-50 bg-green-50">
+              <td class="px-3 py-2 text-gray-400">47</td>
+              <td class="px-3 py-2 font-semibold">Carol White</td>
+              <td class="px-3 py-2 text-gray-500">carol@email.com</td>
+              <td class="px-3 py-2 text-right text-gray-700 font-medium">14:51</td>
+            </tr>
+            <tr class="hover:bg-gray-50">
+              <td class="px-3 py-2 text-gray-400">46</td>
+              <td class="px-3 py-2 font-medium">Alice Johnson</td>
+              <td class="px-3 py-2 text-gray-500">alice@email.com</td>
+              <td class="px-3 py-2 text-right text-gray-500">14:32</td>
+            </tr>
+            <tr class="hover:bg-gray-50">
+              <td class="px-3 py-2 text-gray-400">45</td>
+              <td class="px-3 py-2 font-medium">David Brown</td>
+              <td class="px-3 py-2 text-gray-500">david@email.com</td>
+              <td class="px-3 py-2 text-right text-gray-500">14:28</td>
+            </tr>
+            <tr class="hover:bg-gray-50">
+              <td class="px-3 py-2 text-gray-400">44</td>
+              <td class="px-3 py-2 font-medium">Eve Martinez</td>
+              <td class="px-3 py-2 text-gray-500">eve@email.com</td>
+              <td class="px-3 py-2 text-right text-gray-500">14:19</td>
+            </tr>
+            <tr class="hover:bg-gray-50">
+              <td class="px-3 py-2 text-gray-400">43</td>
+              <td class="px-3 py-2 font-medium">Frank Lee</td>
+              <td class="px-3 py-2 text-gray-500">frank@email.com</td>
+              <td class="px-3 py-2 text-right text-gray-500">14:05</td>
+            </tr>
+          </tbody>
+        </table>
+        <div class="px-3 py-2 text-xs text-gray-400 bg-gray-50 text-center">… 42 more admitted</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ===================== AUTO-SCAN (PHONE OPENS QR URL) ===================== -->
+<section class="mb-10">
+  <h2 class="text-lg font-semibold text-gray-700 mb-3">⑤ Guest's Phone — Auto Admission Screen</h2>
+  <div class="screen bg-green-500 text-white p-10 text-center max-w-sm">
+    <div class="text-8xl font-bold mb-4">✓</div>
+    <div class="text-3xl font-bold mb-2">ADMITTED</div>
+    <div class="text-2xl font-semibold mt-5">Alice Johnson</div>
+    <p class="mt-3 text-white/85 text-lg">Welcome, Alice! You are admitted.</p>
+    <p class="mt-2 text-white/70">14:32:05</p>
+    <p class="mt-6 text-white/60 text-xs">(Guest scans QR from invite email → phone opens this screen automatically)</p>
+  </div>
+</section>
+
+<p class="text-center text-gray-400 text-xs mb-8">EventQR Check-In System · Built with FastAPI + React + PostgreSQL</p>
+
+</body>
+</html>

@@ -1,16 +1,47 @@
 from datetime import datetime
 from fastapi import APIRouter, Depends, BackgroundTasks
+from fastapi.responses import Response
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 from ..database import get_db
-from ..models import Guest, User
-from ..schemas import ScanResult, GuestOut
+from ..models import Guest, Event, User
+from ..schemas import ScanResult, GuestOut, TicketView, EventBrief
 from ..auth import require_official
 from services.email_service import send_admission_email
 from services.sms_service import send_admission_sms
+from services.qr_service import generate_qr_bytes
 from . import broadcast
 
 router = APIRouter()
+
+
+@router.get("/{qr_token}/ticket", response_model=TicketView)
+async def view_ticket(qr_token: str, db: AsyncSession = Depends(get_db)):
+    """Public endpoint — guest opens QR link to see their digital ticket."""
+    result = await db.execute(select(Guest).where(Guest.qr_token == qr_token))
+    guest = result.scalar_one_or_none()
+    if not guest:
+        return TicketView(status="invalid")
+    event = await db.get(Event, guest.event_id)
+    event_brief = EventBrief(
+        name=event.name,
+        couples_name=event.couples_name,
+        event_date=event.event_date,
+    ) if event else None
+    status = "admitted" if guest.admitted else "valid"
+    return TicketView(status=status, guest=GuestOut.model_validate(guest), event=event_brief)
+
+
+@router.get("/{qr_token}/qr.png")
+async def ticket_qr_image(qr_token: str, db: AsyncSession = Depends(get_db)):
+    """Public endpoint — returns the QR image for the guest's own ticket page."""
+    result = await db.execute(select(Guest).where(Guest.qr_token == qr_token))
+    guest = result.scalar_one_or_none()
+    if not guest:
+        return Response(status_code=404)
+    event = await db.get(Event, guest.event_id)
+    base_url = event.checkin_base_url if event else "https://events.vsgs.io"
+    return Response(content=generate_qr_bytes(qr_token, base_url), media_type="image/png")
 
 
 @router.post("/{qr_token}", response_model=ScanResult)

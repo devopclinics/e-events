@@ -2,55 +2,166 @@ import { useEffect, useState } from 'react'
 import { useParams } from 'react-router-dom'
 import { api } from '../api'
 
+function StatusBadge({ status }) {
+  const cfg = {
+    valid: {
+      bg: 'bg-emerald-50 border-emerald-300 text-emerald-700',
+      dot: 'bg-emerald-500',
+      label: 'Valid Ticket',
+    },
+    admitted: {
+      bg: 'bg-indigo-50 border-indigo-300 text-indigo-700',
+      dot: 'bg-indigo-500',
+      label: 'Admitted',
+    },
+    invalid: {
+      bg: 'bg-red-50 border-red-300 text-red-600',
+      dot: 'bg-red-500',
+      label: 'Invalid Ticket',
+    },
+  }[status] || { bg: 'bg-gray-100 border-gray-300 text-gray-500', dot: 'bg-gray-400', label: 'Unknown' }
+
+  return (
+    <span className={`inline-flex items-center gap-2 px-4 py-1.5 rounded-full border text-sm font-semibold ${cfg.bg}`}>
+      <span className={`w-2 h-2 rounded-full ${cfg.dot} ${status === 'valid' ? 'animate-pulse' : ''}`} />
+      {cfg.label}
+    </span>
+  )
+}
+
+function AdmittedBanner({ guest, event }) {
+  return (
+    <div className="bg-indigo-600 text-white rounded-2xl px-6 py-5 text-center">
+      <div className="flex items-center justify-center gap-2 mb-1">
+        <svg className="w-5 h-5 text-indigo-200" fill="currentColor" viewBox="0 0 20 20">
+          <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+        </svg>
+        <span className="text-indigo-200 text-sm font-medium">Check-in complete</span>
+      </div>
+      <p className="font-semibold text-lg">
+        Welcome, {guest.first_name}!
+      </p>
+      {guest.admitted_at && (
+        <p className="text-indigo-200 text-sm mt-0.5">
+          Admitted at {new Date(guest.admitted_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+        </p>
+      )}
+    </div>
+  )
+}
+
 export default function ScanAutoPage() {
   const { token } = useParams()
-  const [state, setState] = useState('loading') // loading | admitted | already_admitted | invalid
-  const [result, setResult] = useState(null)
+  const [data, setData] = useState(null)
+  const [loading, setLoading] = useState(true)
 
   useEffect(() => {
-    api.scan(token).then((res) => {
-      setResult(res)
-      setState(res.status)
-    }).catch((err) => {
-      setResult({ status: 'invalid', message: err.message })
-      setState('invalid')
-    })
+    api.viewTicket(token)
+      .then(setData)
+      .catch(() => setData({ status: 'invalid' }))
+      .finally(() => setLoading(false))
   }, [token])
 
-  const cfg = {
-    admitted: { bg: 'bg-green-500', icon: '✓', heading: 'ADMITTED' },
-    already_admitted: { bg: 'bg-amber-500', icon: '⚠', heading: 'ALREADY ADMITTED' },
-    invalid: { bg: 'bg-red-500', icon: '✕', heading: 'INVALID TICKET' },
-  }[state]
-
-  if (state === 'loading') {
+  if (loading) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gray-50">
+      <div className="min-h-screen flex items-center justify-center bg-slate-50">
         <div className="text-center">
-          <div className="inline-block w-12 h-12 border-4 border-indigo-500 border-t-transparent rounded-full animate-spin" />
-          <p className="mt-4 text-gray-600">Verifying your ticket…</p>
+          <div className="inline-block w-10 h-10 border-4 border-indigo-500 border-t-transparent rounded-full animate-spin" />
+          <p className="mt-4 text-slate-500 text-sm">Loading your ticket…</p>
         </div>
       </div>
     )
   }
 
-  return (
-    <div className="min-h-screen flex items-center justify-center bg-gray-100 p-4">
-      <div className={`${cfg.bg} text-white rounded-3xl p-10 text-center shadow-2xl max-w-sm w-full`}>
-        <div className="text-8xl font-bold mb-3">{cfg.icon}</div>
-        <div className="text-3xl font-bold mb-2">{cfg.heading}</div>
-        {result?.guest && (
-          <div className="text-2xl font-semibold mt-4">
-            {result.guest.first_name} {result.guest.last_name}
+  if (data?.status === 'invalid') {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-slate-50 p-4">
+        <div className="bg-white rounded-3xl shadow-xl p-10 text-center max-w-sm w-full">
+          <div className="w-16 h-16 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-4">
+            <svg className="w-8 h-8 text-red-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+            </svg>
           </div>
-        )}
-        <p className="mt-3 text-white/85 text-lg">{result?.message}</p>
-        {result?.guest?.admitted_at && state === 'admitted' && (
-          <p className="mt-2 text-white/70">
-            {new Date(result.guest.admitted_at).toLocaleTimeString()}
-          </p>
-        )}
+          <h2 className="text-xl font-bold text-slate-800 mb-2">Invalid Ticket</h2>
+          <p className="text-slate-500 text-sm">This QR code is not valid for any event. Please contact the event organiser.</p>
+        </div>
       </div>
+    )
+  }
+
+  const { guest, event, status } = data || {}
+  const qrImageUrl = `/api/scan/${token}/qr.png`
+  const eventDate = event?.event_date ? new Date(event.event_date) : null
+
+  return (
+    <div className="min-h-screen bg-gradient-to-br from-slate-100 to-indigo-50 flex items-center justify-center p-4 py-10">
+      {/* Ticket card */}
+      <div className="bg-white rounded-3xl shadow-2xl w-full max-w-sm overflow-hidden">
+
+        {/* Header strip */}
+        <div className="bg-gradient-to-r from-indigo-600 to-indigo-500 px-6 pt-8 pb-10 text-center relative">
+          <div className="absolute top-4 right-4 left-4 flex justify-center">
+            <StatusBadge status={status} />
+          </div>
+          <div className="mt-8">
+            <p className="text-indigo-200 text-xs uppercase tracking-widest font-medium mb-1">You're invited to</p>
+            <h1 className="text-white text-2xl font-bold leading-tight">{event?.name || 'Event'}</h1>
+            <p className="text-indigo-200 text-sm mt-1 italic">{event?.couples_name}</p>
+            {eventDate && (
+              <p className="text-indigo-300 text-xs mt-2 font-medium">
+                {eventDate.toLocaleDateString(undefined, { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}
+              </p>
+            )}
+          </div>
+        </div>
+
+        {/* Tear-line notches */}
+        <div className="relative -mt-4 flex justify-between px-0">
+          <div className="w-8 h-8 bg-gradient-to-br from-slate-100 to-indigo-50 rounded-full -ml-4" />
+          <div className="flex-1 border-t-2 border-dashed border-slate-200 self-center mx-2 mt-4" />
+          <div className="w-8 h-8 bg-gradient-to-br from-slate-100 to-indigo-50 rounded-full -mr-4" />
+        </div>
+
+        {/* Body */}
+        <div className="px-6 pb-8 pt-2 space-y-5">
+          {/* Guest name */}
+          <div className="text-center">
+            <p className="text-xs uppercase tracking-widest text-slate-400 font-medium mb-0.5">Guest</p>
+            <p className="text-slate-800 text-xl font-bold">
+              {guest?.first_name} {guest?.last_name}
+            </p>
+          </div>
+
+          {/* QR code */}
+          <div className="flex justify-center">
+            <div className="bg-slate-50 border border-slate-100 rounded-2xl p-4 inline-block">
+              {guest?.id ? (
+                <img
+                  src={qrImageUrl}
+                  alt="Your QR code"
+                  className="w-44 h-44 object-contain"
+                  onError={(e) => { e.target.style.display = 'none' }}
+                />
+              ) : (
+                <div className="w-44 h-44 flex items-center justify-center text-slate-300 text-sm">
+                  QR not available
+                </div>
+              )}
+            </div>
+          </div>
+
+          <p className="text-center text-slate-400 text-xs">
+            {status === 'admitted'
+              ? 'You have already been checked in.'
+              : 'Show this code to the check-in official at the entrance.'}
+          </p>
+
+          {/* Admitted banner */}
+          {status === 'admitted' && <AdmittedBanner guest={guest} event={event} />}
+        </div>
+      </div>
+
+      <p className="fixed bottom-4 text-slate-400 text-xs text-center w-full">Powered by EventQR</p>
     </div>
   )
 }

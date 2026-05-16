@@ -46,8 +46,10 @@ export const api = {
   sendInvites: (eventId) => req('POST', `/events/${eventId}/guests/send-invites`),
   guestQrUrl: (eventId, guestId) => `${BASE}/events/${eventId}/guests/${guestId}/qr.png`,
 
-  // Scanner
+  // Scanner (official — requires auth)
   scan: (token) => req('POST', `/scan/${token}`),
+  // Ticket view (public — guest's own phone)
+  viewTicket: (token) => fetch(`/api/scan/${token}/ticket`).then((r) => r.json()),
 
   // Dashboard
   getDashboard: (eventId) => req('GET', `/events/${eventId}/dashboard`),

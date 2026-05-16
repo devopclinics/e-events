@@ -84,6 +84,18 @@ class ScanResult(BaseModel):
     guest: Optional[GuestOut] = None
 
 
+class EventBrief(BaseModel):
+    name: str
+    couples_name: str
+    event_date: datetime
+
+
+class TicketView(BaseModel):
+    status: str  # "valid" | "admitted" | "invalid"
+    guest: Optional[GuestOut] = None
+    event: Optional[EventBrief] = None
+
+
 class DashboardStats(BaseModel):
     total: int
     admitted: int

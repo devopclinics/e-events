@@ -1,12 +1,22 @@
 const BASE = '/api'
 
+function authHeaders() {
+  const token = localStorage.getItem('token')
+  return token ? { Authorization: `Bearer ${token}` } : {}
+}
+
 async function req(method, path, body) {
   const opts = {
     method,
-    headers: body ? { 'Content-Type': 'application/json' } : {},
+    headers: { ...authHeaders(), ...(body ? { 'Content-Type': 'application/json' } : {}) },
   }
   if (body) opts.body = JSON.stringify(body)
   const res = await fetch(`${BASE}${path}`, opts)
+  if (res.status === 401) {
+    localStorage.removeItem('token')
+    window.location.href = '/login'
+    return
+  }
   if (!res.ok) {
     const err = await res.json().catch(() => ({ detail: res.statusText }))
     throw new Error(err.detail || res.statusText)
@@ -26,9 +36,11 @@ export const api = {
   uploadGuests: (eventId, file) => {
     const fd = new FormData()
     fd.append('file', file)
-    return fetch(`${BASE}/events/${eventId}/guests/upload`, { method: 'POST', body: fd }).then((r) =>
-      r.ok ? r.json() : r.json().then((e) => Promise.reject(new Error(e.detail)))
-    )
+    return fetch(`${BASE}/events/${eventId}/guests/upload`, {
+      method: 'POST',
+      headers: authHeaders(),
+      body: fd,
+    }).then((r) => (r.ok ? r.json() : r.json().then((e) => Promise.reject(new Error(e.detail)))))
   },
   generateQR: (eventId) => req('POST', `/events/${eventId}/guests/generate-qr`),
   sendInvites: (eventId) => req('POST', `/events/${eventId}/guests/send-invites`),
@@ -39,4 +51,8 @@ export const api = {
 
   // Dashboard
   getDashboard: (eventId) => req('GET', `/events/${eventId}/dashboard`),
+
+  // Auth
+  listUsers: () => req('GET', '/auth/users'),
+  updateUserRole: (userId, role) => req('PUT', `/auth/users/${userId}/role?role=${role}`),
 }

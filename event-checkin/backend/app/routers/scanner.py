@@ -3,8 +3,9 @@ from fastapi import APIRouter, Depends, BackgroundTasks
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 from ..database import get_db
-from ..models import Guest
+from ..models import Guest, User
 from ..schemas import ScanResult, GuestOut
+from ..auth import require_official
 from services.email_service import send_admission_email
 from services.sms_service import send_admission_sms
 from . import broadcast
@@ -13,7 +14,12 @@ router = APIRouter()
 
 
 @router.post("/{qr_token}", response_model=ScanResult)
-async def scan_qr(qr_token: str, background_tasks: BackgroundTasks, db: AsyncSession = Depends(get_db)):
+async def scan_qr(
+    qr_token: str,
+    background_tasks: BackgroundTasks,
+    db: AsyncSession = Depends(get_db),
+    _: User = Depends(require_official),
+):
     result = await db.execute(select(Guest).where(Guest.qr_token == qr_token))
     guest = result.scalar_one_or_none()
 

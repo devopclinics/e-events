@@ -2,7 +2,7 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from .database import engine, Base
-from .routers import events, guests, scanner, dashboard
+from .routers import events, guests, scanner, dashboard, auth as auth_router
 
 
 @asynccontextmanager
@@ -22,6 +22,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+app.include_router(auth_router.router, prefix="/api/auth", tags=["auth"])
 app.include_router(events.router, prefix="/api/events", tags=["events"])
 app.include_router(guests.router, prefix="/api/events", tags=["guests"])
 app.include_router(scanner.router, prefix="/api/scan", tags=["scanner"])

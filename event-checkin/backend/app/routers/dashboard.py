@@ -5,15 +5,16 @@ from fastapi.responses import StreamingResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func
 from ..database import get_db
-from ..models import Guest, Event
+from ..models import Guest, Event, User
 from ..schemas import DashboardStats, GuestOut
+from ..auth import require_admin
 from . import sse_subscribers
 
 router = APIRouter()
 
 
 @router.get("/{event_id}/dashboard", response_model=DashboardStats)
-async def get_dashboard(event_id: str, db: AsyncSession = Depends(get_db)):
+async def get_dashboard(event_id: str, db: AsyncSession = Depends(get_db), _: User = Depends(require_admin)):
     event = await db.get(Event, event_id)
     if not event:
         raise HTTPException(404, "Event not found")
@@ -39,7 +40,7 @@ async def get_dashboard(event_id: str, db: AsyncSession = Depends(get_db)):
 
 
 @router.get("/{event_id}/stream")
-async def event_stream(event_id: str, db: AsyncSession = Depends(get_db)):
+async def event_stream(event_id: str, db: AsyncSession = Depends(get_db), _: User = Depends(require_admin)):
     event = await db.get(Event, event_id)
     if not event:
         raise HTTPException(404, "Event not found")

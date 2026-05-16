@@ -2,12 +2,12 @@ import csv
 import io
 from datetime import datetime
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, BackgroundTasks, Response
-from fastapi.responses import StreamingResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 from ..database import get_db
-from ..models import Event, Guest
+from ..models import Event, Guest, User
 from ..schemas import GuestOut
+from ..auth import require_admin
 from services.qr_service import generate_qr_bytes
 from services.email_service import send_invite_email
 
@@ -15,7 +15,7 @@ router = APIRouter()
 
 
 @router.post("/{event_id}/guests/upload")
-async def upload_guests(event_id: str, file: UploadFile = File(...), db: AsyncSession = Depends(get_db)):
+async def upload_guests(event_id: str, file: UploadFile = File(...), db: AsyncSession = Depends(get_db), _: User = Depends(require_admin)):
     event = await db.get(Event, event_id)
     if not event:
         raise HTTPException(404, "Event not found")
@@ -49,7 +49,7 @@ async def upload_guests(event_id: str, file: UploadFile = File(...), db: AsyncSe
 
 
 @router.get("/{event_id}/guests", response_model=list[GuestOut])
-async def list_guests(event_id: str, db: AsyncSession = Depends(get_db)):
+async def list_guests(event_id: str, db: AsyncSession = Depends(get_db), _: User = Depends(require_admin)):
     result = await db.execute(
         select(Guest).where(Guest.event_id == event_id).order_by(Guest.last_name, Guest.first_name)
     )
@@ -57,7 +57,7 @@ async def list_guests(event_id: str, db: AsyncSession = Depends(get_db)):
 
 
 @router.post("/{event_id}/guests/generate-qr")
-async def generate_qr_codes(event_id: str, db: AsyncSession = Depends(get_db)):
+async def generate_qr_codes(event_id: str, db: AsyncSession = Depends(get_db), _: User = Depends(require_admin)):
     event = await db.get(Event, event_id)
     if not event:
         raise HTTPException(404, "Event not found")
@@ -75,11 +75,7 @@ async def generate_qr_codes(event_id: str, db: AsyncSession = Depends(get_db)):
 
 
 @router.post("/{event_id}/guests/send-invites")
-async def send_invites(
-    event_id: str,
-    background_tasks: BackgroundTasks,
-    db: AsyncSession = Depends(get_db),
-):
+async def send_invites(event_id: str, background_tasks: BackgroundTasks, db: AsyncSession = Depends(get_db), _: User = Depends(require_admin)):
     event = await db.get(Event, event_id)
     if not event:
         raise HTTPException(404, "Event not found")
@@ -105,14 +101,7 @@ async def send_invites(
             "email": guest.email,
             "qr_token": guest.qr_token,
         }
-        background_tasks.add_task(
-            send_invite_email,
-            guest_data,
-            event_name,
-            couples_name,
-            checkin_base_url,
-            event_date,
-        )
+        background_tasks.add_task(send_invite_email, guest_data, event_name, couples_name, checkin_base_url, event_date)
         guest.invite_sent_at = datetime.utcnow()
 
     await db.commit()
@@ -120,7 +109,7 @@ async def send_invites(
 
 
 @router.get("/{event_id}/guests/{guest_id}/qr.png")
-async def get_guest_qr(event_id: str, guest_id: str, db: AsyncSession = Depends(get_db)):
+async def get_guest_qr(event_id: str, guest_id: str, db: AsyncSession = Depends(get_db), _: User = Depends(require_admin)):
     guest = await db.get(Guest, guest_id)
     if not guest or guest.event_id != event_id:
         raise HTTPException(404, "Guest not found")

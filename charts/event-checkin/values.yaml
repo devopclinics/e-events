@@ -44,15 +44,19 @@ ingress:
 # Stored in a Kubernetes Secret; override in env values.yaml
 secrets:
   secretName: event-checkin-secrets
-  # Provide these values via sealed-secrets or external-secrets in production
   databaseUrl: "postgresql+asyncpg://checkin:checkin@event-checkin-postgres:5432/checkin"
   secretKey: "changeme"
+  jwtSecret: "changeme-jwt"
+  googleClientId: ""
+  googleClientSecret: ""
+  googleRedirectUri: "https://events.vsgs.io/api/auth/google/callback"
+  frontendUrl: "https://events.vsgs.io"
   smtpHost: ""
   smtpPort: "587"
   smtpUser: ""
   smtpPassword: ""
   smtpTls: "true"
-  emailFrom: "noreply@event.com"
+  emailFrom: "noreply@events.vsgs.io"
   twilioAccountSid: ""
   twilioAuthToken: ""
   twilioFromNumber: ""

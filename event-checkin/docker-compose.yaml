@@ -1,41 +1,50 @@
 version: '3.9'
 
 services:
+
+  # ── Reverse proxy (Cloudflare → this → frontend/backend) ──────────────────
+  proxy:
+    image: nginx:1.25-alpine
+    ports:
+      - "80:80"
+    volumes:
+      - ./proxy.conf:/etc/nginx/conf.d/default.conf:ro
+    depends_on:
+      - frontend
+      - backend
+    restart: unless-stopped
+
+  # ── React frontend ─────────────────────────────────────────────────────────
+  frontend:
+    build: ./frontend
+    restart: unless-stopped
+    depends_on:
+      - backend
+
+  # ── FastAPI backend ────────────────────────────────────────────────────────
+  backend:
+    build: ./backend
+    env_file: ./backend/.env
+    depends_on:
+      db:
+        condition: service_healthy
+    restart: unless-stopped
+
+  # ── PostgreSQL ─────────────────────────────────────────────────────────────
   db:
     image: postgres:16-alpine
     environment:
       POSTGRES_DB: checkin
       POSTGRES_USER: checkin
-      POSTGRES_PASSWORD: checkin
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-checkin}
     volumes:
       - pgdata:/var/lib/postgresql/data
-    ports:
-      - "5432:5432"
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U checkin"]
       interval: 5s
       timeout: 5s
       retries: 5
-
-  backend:
-    build: ./backend
-    environment:
-      DATABASE_URL: postgresql+asyncpg://checkin:checkin@db/checkin
-      SECRET_KEY: dev-secret-key
-      SMTP_HOST: ""
-      TWILIO_ACCOUNT_SID: ""
-    depends_on:
-      db:
-        condition: service_healthy
-    ports:
-      - "8000:8000"
-
-  frontend:
-    build: ./frontend
-    ports:
-      - "80:80"
-    depends_on:
-      - backend
+    restart: unless-stopped
 
 volumes:
   pgdata:

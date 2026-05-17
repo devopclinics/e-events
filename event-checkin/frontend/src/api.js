@@ -30,6 +30,12 @@ export const api = {
   createEvent: (data) => req('POST', '/events', data),
   updateEvent: (id, data) => req('PUT', `/events/${id}`, data),
   deleteEvent: (id) => req('DELETE', `/events/${id}`),
+  changeStatus: (id, status) => req('PATCH', `/events/${id}/status`, { status }),
+
+  // Team (event members)
+  listMembers: (eventId) => req('GET', `/events/${eventId}/members`),
+  assignMember: (eventId, userId) => req('POST', `/events/${eventId}/members`, { user_id: userId }),
+  removeMember: (eventId, userId) => req('DELETE', `/events/${eventId}/members/${userId}`),
 
   // Guests
   listGuests: (eventId) => req('GET', `/events/${eventId}/guests`),

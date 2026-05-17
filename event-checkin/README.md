@@ -140,8 +140,10 @@ TWILIO_FROM_NUMBER=+1xxxxxxxxxx
 
 | Role | Access |
 |------|--------|
-| **Admin** | Create events, upload guest lists, generate QRs, send invites, view dashboard |
-| **Official** | Scanner page only — scan and admit guests |
+| **Admin** | Create events, manage all events globally, assign team members, view dashboard |
+| **Official** | Scanner only — for events they are explicitly assigned to |
+
+Officials see **only** the events they have been assigned to. Admins see all events.
 
 ### Creating the first admin
 
@@ -149,7 +151,39 @@ TWILIO_FROM_NUMBER=+1xxxxxxxxxx
 2. Select **Admin** role
 3. Fill in name, email, password — or use Google sign-in
 
-Admins can later promote/demote other users from the user list (API: `PUT /api/auth/users/{id}/role`).
+---
+
+## Event Lifecycle
+
+Every event moves through three states:
+
+```
+draft ──▶ active ──▶ ended
+              ↑          │
+              └──────────┘  (reopen if needed)
+```
+
+| State | Scanning | Guest management | Dashboard |
+|-------|----------|-----------------|-----------|
+| **Draft** | ❌ Blocked | ✅ Upload, QR, invites | ✅ Read |
+| **Active** | ✅ Live | ✅ Continue setup | ✅ Live |
+| **Ended** | ❌ Blocked | ✅ Read-only | ✅ Final record |
+
+Control this with the **Start Event / End Event / Reopen** buttons in the Admin panel.
+
+---
+
+## Team Assignment (per event)
+
+Each event has its own team. From the Admin panel → select an event → **Event Team** section:
+
+- **Assign** any registered user (admin or official) to the event
+- **Remove** them when the event is over
+- Assigned **admins** can manage guests, invites, and view the dashboard for that event
+- Assigned **officials** can scan QR codes for that event
+- Officials assigned to Event A **cannot** scan Event B's guests — the backend enforces this
+
+The event creator is automatically added to the team.
 
 ---
 

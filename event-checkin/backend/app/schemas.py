@@ -33,6 +33,8 @@ class TokenResponse(BaseModel):
     user: UserOut
 
 
+# ── Events ───────────────────────────────────────────────────────────────────
+
 class EventCreate(BaseModel):
     name: str
     couples_name: str
@@ -58,8 +60,21 @@ class EventOut(BaseModel):
     event_date: datetime
     description: Optional[str]
     checkin_base_url: str
+    status: str  # draft | active | ended
     created_at: datetime
 
+
+class EventMemberOut(BaseModel):
+    id: str          # EventUser.id
+    user: UserOut
+    assigned_at: datetime
+
+
+class AssignUserRequest(BaseModel):
+    user_id: str
+
+
+# ── Guests ───────────────────────────────────────────────────────────────────
 
 class GuestOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)
@@ -78,8 +93,10 @@ class GuestOut(BaseModel):
     admit_notified: bool
 
 
+# ── Scanner ──────────────────────────────────────────────────────────────────
+
 class ScanResult(BaseModel):
-    status: str  # "admitted" | "already_admitted" | "invalid"
+    status: str  # admitted | already_admitted | invalid | not_active | not_assigned
     message: str
     guest: Optional[GuestOut] = None
 
@@ -88,13 +105,16 @@ class EventBrief(BaseModel):
     name: str
     couples_name: str
     event_date: datetime
+    status: str
 
 
 class TicketView(BaseModel):
-    status: str  # "valid" | "admitted" | "invalid"
+    status: str  # valid | admitted | invalid
     guest: Optional[GuestOut] = None
     event: Optional[EventBrief] = None
 
+
+# ── Dashboard ─────────────────────────────────────────────────────────────────
 
 class DashboardStats(BaseModel):
     total: int

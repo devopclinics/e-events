@@ -1,6 +1,159 @@
 import { useState, useEffect, useRef } from 'react'
 import { api } from '../api'
 
+// ── helpers ──────────────────────────────────────────────────────────────────
+
+const STATUS_CFG = {
+  draft:  { label: 'Draft',  dot: 'bg-gray-400',    text: 'text-gray-600',  bg: 'bg-gray-100'   },
+  active: { label: 'Active', dot: 'bg-green-500 animate-pulse', text: 'text-green-700', bg: 'bg-green-50' },
+  ended:  { label: 'Ended',  dot: 'bg-slate-400',   text: 'text-slate-600', bg: 'bg-slate-100'  },
+}
+
+function StatusBadge({ status }) {
+  const cfg = STATUS_CFG[status] || STATUS_CFG.draft
+  return (
+    <span className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold ${cfg.bg} ${cfg.text}`}>
+      <span className={`w-2 h-2 rounded-full ${cfg.dot}`} />
+      {cfg.label}
+    </span>
+  )
+}
+
+function StatusControls({ event, onChanged }) {
+  const [loading, setLoading] = useState(false)
+  const [err, setErr] = useState('')
+
+  const actions = {
+    draft:  [{ label: '▶ Start Event',  next: 'active', cls: 'bg-green-600 hover:bg-green-700 text-white' }],
+    active: [{ label: '⏹ End Event',    next: 'ended',  cls: 'bg-red-600 hover:bg-red-700 text-white' }],
+    ended:  [{ label: '↩ Reopen',       next: 'active', cls: 'bg-amber-500 hover:bg-amber-600 text-white' }],
+  }[event.status] || []
+
+  async function change(next) {
+    setLoading(true); setErr('')
+    try {
+      const updated = await api.changeStatus(event.id, next)
+      onChanged(updated)
+    } catch (e) { setErr(e.message) }
+    finally { setLoading(false) }
+  }
+
+  return (
+    <div className="flex items-center gap-3 flex-wrap">
+      <StatusBadge status={event.status} />
+      {actions.map(({ label, next, cls }) => (
+        <button key={next} onClick={() => change(next)} disabled={loading}
+          className={`px-4 py-1.5 rounded-lg text-sm font-semibold disabled:opacity-50 transition-colors ${cls}`}>
+          {loading ? '…' : label}
+        </button>
+      ))}
+      {err && <span className="text-red-600 text-xs">{err}</span>}
+      {event.status === 'draft' && (
+        <span className="text-xs text-gray-400">Start the event to enable scanning.</span>
+      )}
+      {event.status === 'ended' && (
+        <span className="text-xs text-gray-400">Event ended — scanning is disabled.</span>
+      )}
+    </div>
+  )
+}
+
+// ── Team panel ────────────────────────────────────────────────────────────────
+
+function TeamPanel({ eventId }) {
+  const [members, setMembers] = useState([])
+  const [allUsers, setAllUsers] = useState([])
+  const [selectedUserId, setSelectedUserId] = useState('')
+  const [loading, setLoading] = useState(false)
+  const [msg, setMsg] = useState('')
+
+  useEffect(() => {
+    api.listMembers(eventId).then(setMembers).catch(console.error)
+    api.listUsers().then(setAllUsers).catch(console.error)
+  }, [eventId])
+
+  const assignedIds = new Set(members.map((m) => m.user.id))
+  const unassigned = allUsers.filter((u) => !assignedIds.has(u.id))
+
+  async function assign() {
+    if (!selectedUserId) return
+    setLoading(true)
+    try {
+      const m = await api.assignMember(eventId, selectedUserId)
+      setMembers((prev) => [...prev, m])
+      setSelectedUserId('')
+      setMsg('Member assigned.')
+      setTimeout(() => setMsg(''), 3000)
+    } catch (e) { setMsg(e.message) }
+    finally { setLoading(false) }
+  }
+
+  async function remove(userId) {
+    setLoading(true)
+    try {
+      await api.removeMember(eventId, userId)
+      setMembers((prev) => prev.filter((m) => m.user.id !== userId))
+    } catch (e) { setMsg(e.message) }
+    finally { setLoading(false) }
+  }
+
+  const roleTag = (role) => (
+    <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${role === 'admin' ? 'bg-indigo-100 text-indigo-700' : 'bg-amber-100 text-amber-700'}`}>
+      {role}
+    </span>
+  )
+
+  return (
+    <div className="bg-white rounded-xl shadow p-6 space-y-4">
+      <h2 className="font-semibold text-base">Event Team</h2>
+
+      {members.length === 0 ? (
+        <p className="text-sm text-gray-400">No members assigned yet.</p>
+      ) : (
+        <ul className="divide-y divide-gray-100">
+          {members.map((m) => (
+            <li key={m.id} className="flex items-center justify-between py-2.5">
+              <div className="flex items-center gap-3">
+                <div className="w-8 h-8 rounded-full bg-indigo-100 flex items-center justify-center text-indigo-700 font-semibold text-sm">
+                  {m.user.name[0].toUpperCase()}
+                </div>
+                <div>
+                  <div className="text-sm font-medium">{m.user.name}</div>
+                  <div className="text-xs text-gray-400">{m.user.email}</div>
+                </div>
+              </div>
+              <div className="flex items-center gap-2">
+                {roleTag(m.user.role)}
+                <button onClick={() => remove(m.user.id)} disabled={loading}
+                  className="text-xs text-red-400 hover:text-red-600 disabled:opacity-40 px-2 py-1 rounded hover:bg-red-50">
+                  Remove
+                </button>
+              </div>
+            </li>
+          ))}
+        </ul>
+      )}
+
+      <div className="flex gap-2 pt-2 border-t">
+        <select value={selectedUserId} onChange={(e) => setSelectedUserId(e.target.value)}
+          className="flex-1 border border-gray-300 rounded-lg px-3 py-2 text-sm">
+          <option value="">— assign a user —</option>
+          {unassigned.map((u) => (
+            <option key={u.id} value={u.id}>{u.name} ({u.role})</option>
+          ))}
+        </select>
+        <button onClick={assign} disabled={loading || !selectedUserId}
+          className="bg-indigo-600 text-white px-4 py-2 rounded-lg text-sm font-semibold hover:bg-indigo-700 disabled:opacity-50">
+          Assign
+        </button>
+      </div>
+      {msg && <p className="text-sm text-indigo-600">{msg}</p>}
+    </div>
+  )
+}
+
+// ── EventForm ─────────────────────────────────────────────────────────────────
+
 function EventForm({ initial, onSave, onCancel }) {
   const [form, setForm] = useState(
     initial || { name: '', couples_name: '', event_date: '', description: '', checkin_base_url: window.location.origin }
@@ -12,16 +165,11 @@ function EventForm({ initial, onSave, onCancel }) {
 
   async function submit(e) {
     e.preventDefault()
-    setSaving(true)
-    setError('')
+    setSaving(true); setError('')
     try {
-      const payload = { ...form, event_date: new Date(form.event_date).toISOString() }
-      await onSave(payload)
-    } catch (err) {
-      setError(err.message)
-    } finally {
-      setSaving(false)
-    }
+      await onSave({ ...form, event_date: new Date(form.event_date).toISOString() })
+    } catch (err) { setError(err.message) }
+    finally { setSaving(false) }
   }
 
   const field = 'block w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500'
@@ -43,20 +191,23 @@ function EventForm({ initial, onSave, onCancel }) {
         </div>
         <div>
           <label className="block text-xs font-semibold text-gray-600 mb-1">App Base URL *</label>
-          <input className={field} value={form.checkin_base_url} onChange={set('checkin_base_url')} required placeholder="https://checkin.example.com" />
+          <input className={field} value={form.checkin_base_url} onChange={set('checkin_base_url')} required placeholder="https://events.vsgs.io" />
         </div>
       </div>
       <div>
         <label className="block text-xs font-semibold text-gray-600 mb-1">Description</label>
-        <textarea className={field} rows={2} value={form.description || ''} onChange={set('description')} placeholder="Optional note to guests" />
+        <textarea className={field} rows={2} value={form.description || ''} onChange={set('description')} />
       </div>
       {error && <p className="text-red-600 text-sm">{error}</p>}
       <div className="flex gap-3">
-        <button type="submit" disabled={saving} className="bg-indigo-600 text-white px-5 py-2 rounded-lg text-sm font-semibold hover:bg-indigo-700 disabled:opacity-50">
+        <button type="submit" disabled={saving}
+          className="bg-indigo-600 text-white px-5 py-2 rounded-lg text-sm font-semibold hover:bg-indigo-700 disabled:opacity-50">
           {saving ? 'Saving…' : initial ? 'Save Changes' : 'Create Event'}
         </button>
         {onCancel && (
-          <button type="button" onClick={onCancel} className="px-5 py-2 rounded-lg border text-sm font-semibold hover:bg-gray-100">Cancel</button>
+          <button type="button" onClick={onCancel} className="px-5 py-2 rounded-lg border text-sm font-semibold hover:bg-gray-50">
+            Cancel
+          </button>
         )}
       </div>
     </form>
@@ -71,6 +222,8 @@ function Badge({ on, labels }) {
   )
 }
 
+// ── AdminPage ─────────────────────────────────────────────────────────────────
+
 export default function AdminPage() {
   const [events, setEvents] = useState([])
   const [selectedId, setSelectedId] = useState('')
@@ -84,9 +237,7 @@ export default function AdminPage() {
 
   const event = events.find((e) => e.id === selectedId)
 
-  useEffect(() => {
-    api.listEvents().then(setEvents).catch(console.error)
-  }, [])
+  useEffect(() => { api.listEvents().then(setEvents).catch(console.error) }, [])
 
   useEffect(() => {
     if (!selectedId) return setGuests([])
@@ -94,15 +245,17 @@ export default function AdminPage() {
   }, [selectedId])
 
   function flash(m, isErr = false) {
-    if (isErr) setError(m)
-    else setMsg(m)
+    isErr ? setError(m) : setMsg(m)
     setTimeout(() => { setMsg(''); setError('') }, 4000)
+  }
+
+  function updateEvent(updated) {
+    setEvents((prev) => prev.map((e) => (e.id === updated.id ? updated : e)))
   }
 
   async function handleCreate(data) {
     const ev = await api.createEvent(data)
-    const updated = [ev, ...events]
-    setEvents(updated)
+    setEvents([ev, ...events])
     setSelectedId(ev.id)
     setShowForm(false)
     flash('Event created!')
@@ -110,7 +263,7 @@ export default function AdminPage() {
 
   async function handleUpdate(data) {
     const ev = await api.updateEvent(selectedId, data)
-    setEvents(events.map((e) => (e.id === selectedId ? ev : e)))
+    updateEvent(ev)
     setEditing(false)
     flash('Event updated!')
   }
@@ -122,14 +275,9 @@ export default function AdminPage() {
     try {
       const res = await api.uploadGuests(selectedId, file)
       flash(`${res.added} guests added, ${res.skipped} skipped.`)
-      const g = await api.listGuests(selectedId)
-      setGuests(g)
-    } catch (err) {
-      flash(err.message, true)
-    } finally {
-      setLoading(false)
-      fileRef.current.value = ''
-    }
+      setGuests(await api.listGuests(selectedId))
+    } catch (err) { flash(err.message, true) }
+    finally { setLoading(false); fileRef.current.value = '' }
   }
 
   async function handleGenQR() {
@@ -138,11 +286,8 @@ export default function AdminPage() {
       const res = await api.generateQR(selectedId)
       flash(`QR codes generated for ${res.generated} guests.`)
       setGuests(await api.listGuests(selectedId))
-    } catch (err) {
-      flash(err.message, true)
-    } finally {
-      setLoading(false)
-    }
+    } catch (err) { flash(err.message, true) }
+    finally { setLoading(false) }
   }
 
   async function handleSendInvites() {
@@ -151,11 +296,8 @@ export default function AdminPage() {
       const res = await api.sendInvites(selectedId)
       flash(`Invite emails queued for ${res.queued} guests.`)
       setGuests(await api.listGuests(selectedId))
-    } catch (err) {
-      flash(err.message, true)
-    } finally {
-      setLoading(false)
-    }
+    } catch (err) { flash(err.message, true) }
+    finally { setLoading(false) }
   }
 
   const stats = {
@@ -169,12 +311,12 @@ export default function AdminPage() {
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-bold">Admin Panel</h1>
-        <button onClick={() => { setShowForm(true); setEditing(false) }} className="bg-indigo-600 text-white px-4 py-2 rounded-lg text-sm font-semibold hover:bg-indigo-700">
+        <button onClick={() => { setShowForm(true); setEditing(false) }}
+          className="bg-indigo-600 text-white px-4 py-2 rounded-lg text-sm font-semibold hover:bg-indigo-700">
           + New Event
         </button>
       </div>
 
-      {/* Create form */}
       {showForm && (
         <div className="bg-white rounded-xl shadow p-6">
           <h2 className="font-semibold text-lg mb-4">New Event</h2>
@@ -182,23 +324,22 @@ export default function AdminPage() {
         </div>
       )}
 
-      {/* Event selector */}
       {events.length > 0 && (
         <div className="bg-white rounded-xl shadow p-6">
           <label className="block text-xs font-semibold text-gray-600 mb-2">Select Event</label>
           <div className="flex gap-3 items-center">
-            <select
-              className="border border-gray-300 rounded-lg px-3 py-2 text-sm flex-1"
+            <select className="border border-gray-300 rounded-lg px-3 py-2 text-sm flex-1"
               value={selectedId}
-              onChange={(e) => { setSelectedId(e.target.value); setEditing(false) }}
-            >
+              onChange={(e) => { setSelectedId(e.target.value); setEditing(false) }}>
               <option value="">— choose an event —</option>
               {events.map((ev) => (
-                <option key={ev.id} value={ev.id}>{ev.name} — {ev.couples_name}</option>
+                <option key={ev.id} value={ev.id}>
+                  {ev.name} — {ev.couples_name}
+                </option>
               ))}
             </select>
             {event && (
-              <button onClick={() => setEditing(!editing)} className="text-sm text-indigo-600 hover:underline">
+              <button onClick={() => setEditing(!editing)} className="text-sm text-indigo-600 hover:underline whitespace-nowrap">
                 {editing ? 'Cancel' : 'Edit'}
               </button>
             )}
@@ -216,13 +357,24 @@ export default function AdminPage() {
         </div>
       )}
 
-      {/* Feedback */}
       {msg && <div className="bg-green-50 border border-green-200 text-green-700 rounded-lg px-4 py-3 text-sm">{msg}</div>}
       {error && <div className="bg-red-50 border border-red-200 text-red-700 rounded-lg px-4 py-3 text-sm">{error}</div>}
 
-      {/* Guest management */}
       {event && (
         <>
+          {/* Status controls */}
+          <div className="bg-white rounded-xl shadow p-6">
+            <div className="flex items-center justify-between flex-wrap gap-3">
+              <h2 className="font-semibold text-base">Event Status</h2>
+              <StatusControls event={event} onChanged={updateEvent} />
+            </div>
+            <p className="text-xs text-gray-400 mt-3">
+              <strong>Draft</strong> → set up guests and invites &nbsp;·&nbsp;
+              <strong>Active</strong> → scanning enabled &nbsp;·&nbsp;
+              <strong>Ended</strong> → read-only record
+            </p>
+          </div>
+
           {/* Stats */}
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
             {[
@@ -238,37 +390,31 @@ export default function AdminPage() {
             ))}
           </div>
 
-          {/* Actions */}
+          {/* Guest management */}
           <div className="bg-white rounded-xl shadow p-6">
             <h2 className="font-semibold text-base mb-4">Guest Management</h2>
             <div className="flex flex-wrap gap-3 items-center">
               <div>
                 <input type="file" accept=".csv" ref={fileRef} onChange={handleUpload} className="hidden" />
-                <button
-                  onClick={() => fileRef.current.click()}
-                  disabled={loading}
-                  className="bg-white border border-gray-300 text-gray-700 px-4 py-2 rounded-lg text-sm font-medium hover:bg-gray-50 disabled:opacity-50"
-                >
+                <button onClick={() => fileRef.current.click()} disabled={loading}
+                  className="bg-white border border-gray-300 text-gray-700 px-4 py-2 rounded-lg text-sm font-medium hover:bg-gray-50 disabled:opacity-50">
                   Upload CSV
                 </button>
                 <span className="text-xs text-gray-400 ml-2">first_name, last_name, email, phone</span>
               </div>
-              <button
-                onClick={handleGenQR}
-                disabled={loading || stats.total === 0}
-                className="bg-blue-600 text-white px-4 py-2 rounded-lg text-sm font-semibold hover:bg-blue-700 disabled:opacity-50"
-              >
+              <button onClick={handleGenQR} disabled={loading || stats.total === 0}
+                className="bg-blue-600 text-white px-4 py-2 rounded-lg text-sm font-semibold hover:bg-blue-700 disabled:opacity-50">
                 Generate QR Codes
               </button>
-              <button
-                onClick={handleSendInvites}
-                disabled={loading || stats.qr === 0}
-                className="bg-amber-500 text-white px-4 py-2 rounded-lg text-sm font-semibold hover:bg-amber-600 disabled:opacity-50"
-              >
+              <button onClick={handleSendInvites} disabled={loading || stats.qr === 0}
+                className="bg-amber-500 text-white px-4 py-2 rounded-lg text-sm font-semibold hover:bg-amber-600 disabled:opacity-50">
                 Send Invites
               </button>
             </div>
           </div>
+
+          {/* Team assignment */}
+          <TeamPanel eventId={selectedId} />
 
           {/* Guest table */}
           {guests.length > 0 && (
@@ -302,15 +448,12 @@ export default function AdminPage() {
                             <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-700">
                               {g.admitted_at ? new Date(g.admitted_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : 'Yes'}
                             </span>
-                          ) : (
-                            <Badge on={false} labels={['', 'Pending']} />
-                          )}
+                          ) : <Badge on={false} labels={['', 'Pending']} />}
                         </td>
                         <td className="px-4 py-3 text-center">
                           {g.qr_generated_at && (
-                            <a href={api.guestQrUrl(selectedId, g.id)} target="_blank" rel="noopener noreferrer" className="text-indigo-600 hover:underline text-xs">
-                              View QR
-                            </a>
+                            <a href={api.guestQrUrl(selectedId, g.id)} target="_blank" rel="noopener noreferrer"
+                              className="text-indigo-600 hover:underline text-xs">View QR</a>
                           )}
                         </td>
                       </tr>

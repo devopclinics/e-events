@@ -4,7 +4,7 @@ from fastapi.responses import Response
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 from ..database import get_db
-from ..models import Guest, Event, User
+from ..models import Guest, Event, EventUser, User
 from ..schemas import ScanResult, GuestOut, TicketView, EventBrief
 from ..auth import require_official
 from services.email_service import send_admission_email
@@ -17,7 +17,7 @@ router = APIRouter()
 
 @router.get("/{qr_token}/ticket", response_model=TicketView)
 async def view_ticket(qr_token: str, db: AsyncSession = Depends(get_db)):
-    """Public endpoint — guest opens QR link to see their digital ticket."""
+    """Public — guest views their digital ticket."""
     result = await db.execute(select(Guest).where(Guest.qr_token == qr_token))
     guest = result.scalar_one_or_none()
     if not guest:
@@ -27,14 +27,18 @@ async def view_ticket(qr_token: str, db: AsyncSession = Depends(get_db)):
         name=event.name,
         couples_name=event.couples_name,
         event_date=event.event_date,
+        status=event.status,
     ) if event else None
-    status = "admitted" if guest.admitted else "valid"
-    return TicketView(status=status, guest=GuestOut.model_validate(guest), event=event_brief)
+    return TicketView(
+        status="admitted" if guest.admitted else "valid",
+        guest=GuestOut.model_validate(guest),
+        event=event_brief,
+    )
 
 
 @router.get("/{qr_token}/qr.png")
 async def ticket_qr_image(qr_token: str, db: AsyncSession = Depends(get_db)):
-    """Public endpoint — returns the QR image for the guest's own ticket page."""
+    """Public — QR image for the guest's own ticket page."""
     result = await db.execute(select(Guest).where(Guest.qr_token == qr_token))
     guest = result.scalar_one_or_none()
     if not guest:
@@ -49,13 +53,37 @@ async def scan_qr(
     qr_token: str,
     background_tasks: BackgroundTasks,
     db: AsyncSession = Depends(get_db),
-    _: User = Depends(require_official),
+    current_user: User = Depends(require_official),
 ):
     result = await db.execute(select(Guest).where(Guest.qr_token == qr_token))
     guest = result.scalar_one_or_none()
 
     if not guest:
         return ScanResult(status="invalid", message="Invalid QR code. This ticket was not found.")
+
+    event = await db.get(Event, guest.event_id)
+
+    # Block scanning when event is not active
+    if event and event.status != "active":
+        label = "has not started yet" if event.status == "draft" else "has ended"
+        return ScanResult(
+            status="not_active",
+            message=f"'{event.name}' {label}. Scanning is disabled.",
+        )
+
+    # Officials must be assigned to this event; admins bypass
+    if current_user.role == "official":
+        assigned = await db.scalar(
+            select(EventUser).where(
+                EventUser.event_id == guest.event_id,
+                EventUser.user_id == current_user.id,
+            )
+        )
+        if not assigned:
+            return ScanResult(
+                status="not_assigned",
+                message="You are not assigned to this event.",
+            )
 
     if guest.admitted:
         admitted_time = guest.admitted_at.strftime("%H:%M") if guest.admitted_at else "unknown"

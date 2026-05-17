@@ -1,6 +1,6 @@
 import uuid
 from datetime import datetime
-from sqlalchemy import String, Boolean, DateTime, ForeignKey, Text
+from sqlalchemy import String, Boolean, DateTime, ForeignKey, Text, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from .database import Base
 
@@ -17,6 +17,20 @@ class User(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
 
 
+class EventUser(Base):
+    """Junction table — assigns a user to an event."""
+    __tablename__ = "event_users"
+    __table_args__ = (UniqueConstraint("event_id", "user_id", name="uq_event_user"),)
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+    event_id: Mapped[str] = mapped_column(String(36), ForeignKey("events.id"))
+    user_id: Mapped[str] = mapped_column(String(36), ForeignKey("users.id"))
+    assigned_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+
+    event: Mapped["Event"] = relationship("Event", back_populates="members")
+    user: Mapped["User"] = relationship("User")
+
+
 class Event(Base):
     __tablename__ = "events"
 
@@ -26,8 +40,11 @@ class Event(Base):
     event_date: Mapped[datetime] = mapped_column(DateTime)
     description: Mapped[str | None] = mapped_column(Text, nullable=True)
     checkin_base_url: Mapped[str] = mapped_column(String(500))
+    # draft → active → ended
+    status: Mapped[str] = mapped_column(String(20), default="draft")
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
 
+    members: Mapped[list["EventUser"]] = relationship("EventUser", back_populates="event", cascade="all, delete-orphan")
     guests: Mapped[list["Guest"]] = relationship("Guest", back_populates="event", cascade="all, delete-orphan")
 
 

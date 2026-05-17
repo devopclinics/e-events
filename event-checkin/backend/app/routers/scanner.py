@@ -95,6 +95,7 @@ async def scan_qr(
 
     guest.admitted = True
     guest.admitted_at = datetime.utcnow()
+    guest.admit_notified = True
     await db.commit()
     await db.refresh(guest)
 

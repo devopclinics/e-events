@@ -1,16 +1,19 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
 import { api } from '../api'
 
+const STAT_TEXT = { indigo: 'text-indigo-600', green: 'text-green-600', amber: 'text-amber-600' }
+const STAT_BAR  = { indigo: 'bg-indigo-500',  green: 'bg-green-500',  amber: 'bg-amber-500'  }
+
 function StatCard({ label, value, total, color }) {
   const pct = total > 0 ? Math.round((value / total) * 100) : 0
   return (
     <div className="bg-white rounded-xl shadow p-5">
-      <div className={`text-4xl font-bold text-${color}-600`}>{value}</div>
+      <div className={`text-4xl font-bold ${STAT_TEXT[color]}`}>{value}</div>
       <div className="text-sm text-gray-500 mt-1">{label}</div>
       {total > 0 && (
         <div className="mt-3">
           <div className="h-1.5 bg-gray-100 rounded-full overflow-hidden">
-            <div className={`h-full bg-${color}-500 rounded-full transition-all`} style={{ width: `${pct}%` }} />
+            <div className={`h-full ${STAT_BAR[color]} rounded-full transition-all`} style={{ width: `${pct}%` }} />
           </div>
           <div className="text-xs text-gray-400 mt-1">{pct}%</div>
         </div>

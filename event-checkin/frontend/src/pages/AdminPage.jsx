@@ -152,6 +152,70 @@ function TeamPanel({ eventId }) {
   )
 }
 
+// ── UsersPanel ────────────────────────────────────────────────────────────────
+
+function UsersPanel() {
+  const [users, setUsers] = useState([])
+  const [changing, setChanging] = useState(null)
+  const [msg, setMsg] = useState('')
+
+  useEffect(() => {
+    api.listUsers().then(setUsers).catch(console.error)
+  }, [])
+
+  async function changeRole(userId, newRole) {
+    setChanging(userId)
+    try {
+      await api.updateUserRole(userId, newRole)
+      setUsers((prev) => prev.map((u) => (u.id === userId ? { ...u, role: newRole } : u)))
+      setMsg('Role updated.')
+      setTimeout(() => setMsg(''), 3000)
+    } catch (e) { setMsg(e.message) }
+    finally { setChanging(null) }
+  }
+
+  return (
+    <div className="bg-white rounded-xl shadow p-6 space-y-4">
+      <h2 className="font-semibold text-base">User Management</h2>
+      {users.length === 0 ? (
+        <p className="text-sm text-gray-400">No users yet.</p>
+      ) : (
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm">
+            <thead className="bg-gray-50 text-xs font-semibold text-gray-500 uppercase">
+              <tr>
+                <th className="px-4 py-2 text-left">Name</th>
+                <th className="px-4 py-2 text-left">Email</th>
+                <th className="px-4 py-2 text-left">Role</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-gray-100">
+              {users.map((u) => (
+                <tr key={u.id} className="hover:bg-gray-50">
+                  <td className="px-4 py-2.5 font-medium">{u.name}</td>
+                  <td className="px-4 py-2.5 text-gray-500">{u.email}</td>
+                  <td className="px-4 py-2.5">
+                    <select
+                      value={u.role}
+                      onChange={(e) => changeRole(u.id, e.target.value)}
+                      disabled={changing === u.id}
+                      className="border border-gray-300 rounded px-2 py-1 text-xs disabled:opacity-50"
+                    >
+                      <option value="admin">Admin</option>
+                      <option value="official">Official</option>
+                    </select>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+      {msg && <p className="text-sm text-indigo-600">{msg}</p>}
+    </div>
+  )
+}
+
 // ── EventForm ─────────────────────────────────────────────────────────────────
 
 function EventForm({ initial, onSave, onCancel }) {
@@ -300,6 +364,24 @@ export default function AdminPage() {
     finally { setLoading(false) }
   }
 
+  async function handleDeleteGuest(guestId) {
+    if (!confirm('Remove this guest?')) return
+    try {
+      await api.deleteGuest(selectedId, guestId)
+      setGuests((prev) => prev.filter((g) => g.id !== guestId))
+      flash('Guest removed.')
+    } catch (err) { flash(err.message, true) }
+  }
+
+  async function handleResendInvite(guestId) {
+    setLoading(true)
+    try {
+      await api.resendInvite(selectedId, guestId)
+      flash('Invite resent.')
+    } catch (err) { flash(err.message, true) }
+    finally { setLoading(false) }
+  }
+
   const stats = {
     total: guests.length,
     qr: guests.filter((g) => g.qr_generated_at).length,
@@ -378,13 +460,13 @@ export default function AdminPage() {
           {/* Stats */}
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
             {[
-              { label: 'Total Guests', value: stats.total, color: 'indigo' },
-              { label: 'QR Generated', value: stats.qr, color: 'blue' },
-              { label: 'Invites Sent', value: stats.invited, color: 'amber' },
-              { label: 'Admitted', value: stats.admitted, color: 'green' },
-            ].map(({ label, value, color }) => (
+              { label: 'Total Guests', value: stats.total, cls: 'text-indigo-600' },
+              { label: 'QR Generated', value: stats.qr,    cls: 'text-blue-600'   },
+              { label: 'Invites Sent', value: stats.invited,cls: 'text-amber-600'  },
+              { label: 'Admitted',     value: stats.admitted,cls: 'text-green-600' },
+            ].map(({ label, value, cls }) => (
               <div key={label} className="bg-white rounded-xl shadow p-4 text-center">
-                <div className={`text-3xl font-bold text-${color}-600`}>{value}</div>
+                <div className={`text-3xl font-bold ${cls}`}>{value}</div>
                 <div className="text-xs text-gray-500 mt-1">{label}</div>
               </div>
             ))}
@@ -432,7 +514,7 @@ export default function AdminPage() {
                       <th className="px-4 py-3 text-center">QR</th>
                       <th className="px-4 py-3 text-center">Invited</th>
                       <th className="px-4 py-3 text-center">Admitted</th>
-                      <th className="px-4 py-3 text-center">QR Code</th>
+                      <th className="px-4 py-3 text-center">Actions</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-gray-100">
@@ -451,10 +533,18 @@ export default function AdminPage() {
                           ) : <Badge on={false} labels={['', 'Pending']} />}
                         </td>
                         <td className="px-4 py-3 text-center">
-                          {g.qr_generated_at && (
-                            <a href={api.guestQrUrl(selectedId, g.id)} target="_blank" rel="noopener noreferrer"
-                              className="text-indigo-600 hover:underline text-xs">View QR</a>
-                          )}
+                          <div className="flex items-center justify-center gap-3">
+                            {g.qr_generated_at && (
+                              <a href={api.guestQrUrl(selectedId, g.id)} target="_blank" rel="noopener noreferrer"
+                                className="text-xs text-indigo-600 hover:underline">QR</a>
+                            )}
+                            {g.qr_generated_at && !g.admitted && (
+                              <button onClick={() => handleResendInvite(g.id)} disabled={loading}
+                                className="text-xs text-amber-600 hover:underline disabled:opacity-40">Resend</button>
+                            )}
+                            <button onClick={() => handleDeleteGuest(g.id)} disabled={loading}
+                              className="text-xs text-red-400 hover:text-red-600 disabled:opacity-40">Delete</button>
+                          </div>
                         </td>
                       </tr>
                     ))}
@@ -465,6 +555,9 @@ export default function AdminPage() {
           )}
         </>
       )}
+
+      {/* User management — always visible to admins */}
+      <UsersPanel />
     </div>
   )
 }

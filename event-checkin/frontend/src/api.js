@@ -50,6 +50,8 @@ export const api = {
   },
   generateQR: (eventId) => req('POST', `/events/${eventId}/guests/generate-qr`),
   sendInvites: (eventId) => req('POST', `/events/${eventId}/guests/send-invites`),
+  deleteGuest: (eventId, guestId) => req('DELETE', `/events/${eventId}/guests/${guestId}`),
+  resendInvite: (eventId, guestId) => req('POST', `/events/${eventId}/guests/${guestId}/resend-invite`),
   guestQrUrl: (eventId, guestId) => `${BASE}/events/${eventId}/guests/${guestId}/qr.png`,
 
   // Scanner (official — requires auth)

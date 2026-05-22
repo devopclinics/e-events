@@ -1,3 +1,4 @@
+import html as _html
 import logging
 from datetime import datetime
 from email.mime.image import MIMEImage
@@ -45,23 +46,28 @@ async def send_invite_email(
     qr_bytes = generate_qr_bytes(guest_data["qr_token"], checkin_base_url)
     date_str = event_date.strftime("%A, %d %B %Y")
 
-    html = f"""
+    first = _html.escape(guest_data["first_name"])
+    last  = _html.escape(guest_data["last_name"])
+    e_name    = _html.escape(event_name)
+    e_couple  = _html.escape(couples_name)
+
+    body = f"""
     <html>
     <body style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
       <h1 style="color: #1a1a2e;">You're Invited!</h1>
-      <p>Dear <strong>{guest_data['first_name']} {guest_data['last_name']}</strong>,</p>
-      <p>We are delighted to invite you to <strong>{event_name}</strong> on <strong>{date_str}</strong>.</p>
+      <p>Dear <strong>{first} {last}</strong>,</p>
+      <p>We are delighted to invite you to <strong>{e_name}</strong> on <strong>{date_str}</strong>.</p>
       <p>Please present the QR code below at the entrance on the day of the event:</p>
       <div style="text-align: center; margin: 30px 0;">
         <img src="cid:qrcode" alt="Your QR Code" style="width: 220px; height: 220px;" />
       </div>
       <p style="color: #666; font-size: 14px;">This QR code is unique to you — please do not share it.</p>
-      <p>With love,<br/><strong>{couples_name}</strong></p>
+      <p>With love,<br/><strong>{e_couple}</strong></p>
     </body>
     </html>
     """
 
-    msg.attach(MIMEText(html, "html"))
+    msg.attach(MIMEText(body, "html"))
     img_part = MIMEImage(qr_bytes)
     img_part.add_header("Content-ID", "<qrcode>")
     img_part.add_header("Content-Disposition", "inline", filename="invite-qr.png")
@@ -77,12 +83,13 @@ async def send_admission_email(guest_data: dict):
     msg["To"] = guest_data["email"]
 
     admitted_time = guest_data["admitted_at"].strftime("%H:%M") if guest_data.get("admitted_at") else ""
+    first = _html.escape(guest_data["first_name"])
 
-    html = f"""
+    body = f"""
     <html>
     <body style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
       <div style="background: #22c55e; color: white; padding: 30px; border-radius: 12px; text-align: center;">
-        <h1>Welcome, {guest_data['first_name']}!</h1>
+        <h1>Welcome, {first}!</h1>
         <p style="font-size: 18px;">You have been successfully admitted.</p>
         {"<p>Check-in time: <strong>" + admitted_time + "</strong></p>" if admitted_time else ""}
       </div>
@@ -91,5 +98,6 @@ async def send_admission_email(guest_data: dict):
     </html>
     """
 
-    msg.attach(MIMEText(html, "html"))
+    msg.attach(MIMEText(body, "html"))
     await _send(msg)
+

@@ -218,6 +218,13 @@ function UsersPanel() {
 
 // ── EventForm ─────────────────────────────────────────────────────────────────
 
+function utcToLocal(utcStr) {
+  if (!utcStr) return ''
+  const d = new Date(utcStr)
+  const local = new Date(d.getTime() - d.getTimezoneOffset() * 60000)
+  return local.toISOString().slice(0, 16)
+}
+
 function EventForm({ initial, onSave, onCancel }) {
   const [form, setForm] = useState(
     initial || { name: '', couples_name: '', event_date: '', description: '', checkin_base_url: window.location.origin }
@@ -297,13 +304,16 @@ export default function AdminPage() {
   const [loading, setLoading] = useState(false)
   const [msg, setMsg] = useState('')
   const [error, setError] = useState('')
+  const [page, setPage] = useState(0)
   const fileRef = useRef()
 
+  const PAGE_SIZE = 50
   const event = events.find((e) => e.id === selectedId)
 
   useEffect(() => { api.listEvents().then(setEvents).catch(console.error) }, [])
 
   useEffect(() => {
+    setPage(0)
     if (!selectedId) return setGuests([])
     api.listGuests(selectedId).then(setGuests).catch(console.error)
   }, [selectedId])
@@ -430,7 +440,7 @@ export default function AdminPage() {
           {editing && event && (
             <div className="mt-4 pt-4 border-t">
               <EventForm
-                initial={{ ...event, event_date: event.event_date?.slice(0, 16) }}
+                initial={{ ...event, event_date: utcToLocal(event.event_date) }}
                 onSave={handleUpdate}
                 onCancel={() => setEditing(false)}
               />
@@ -499,10 +509,22 @@ export default function AdminPage() {
           <TeamPanel eventId={selectedId} />
 
           {/* Guest table */}
-          {guests.length > 0 && (
+          {guests.length > 0 && (() => {
+            const totalPages = Math.ceil(guests.length / PAGE_SIZE)
+            const pageGuests = guests.slice(page * PAGE_SIZE, (page + 1) * PAGE_SIZE)
+            return (
             <div className="bg-white rounded-xl shadow overflow-hidden">
-              <div className="px-6 py-4 border-b">
+              <div className="px-6 py-4 border-b flex items-center justify-between">
                 <h2 className="font-semibold">Guest List ({guests.length})</h2>
+                {totalPages > 1 && (
+                  <div className="flex items-center gap-2 text-sm">
+                    <button onClick={() => setPage((p) => Math.max(0, p - 1))} disabled={page === 0}
+                      className="px-2 py-1 border rounded text-gray-600 disabled:opacity-40 hover:bg-gray-50">←</button>
+                    <span className="text-gray-500 text-xs">{page + 1} / {totalPages}</span>
+                    <button onClick={() => setPage((p) => Math.min(totalPages - 1, p + 1))} disabled={page === totalPages - 1}
+                      className="px-2 py-1 border rounded text-gray-600 disabled:opacity-40 hover:bg-gray-50">→</button>
+                  </div>
+                )}
               </div>
               <div className="overflow-x-auto">
                 <table className="w-full text-sm">
@@ -518,7 +540,7 @@ export default function AdminPage() {
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-gray-100">
-                    {guests.map((g) => (
+                    {pageGuests.map((g) => (
                       <tr key={g.id} className="hover:bg-gray-50">
                         <td className="px-4 py-3 font-medium">{g.first_name} {g.last_name}</td>
                         <td className="px-4 py-3 text-gray-600">{g.email}</td>
@@ -552,7 +574,8 @@ export default function AdminPage() {
                 </table>
               </div>
             </div>
-          )}
+            )
+          })()}
         </>
       )}
 

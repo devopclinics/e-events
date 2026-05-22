@@ -3,11 +3,11 @@ app:
   team: platform
 
 backend:
-  image: ghcr.io/devopclinics/event-checkin-backend:1.0.0
+  image: dclinics/events:backend-1.0.0
   replicas: 1
 
 frontend:
-  image: ghcr.io/devopclinics/event-checkin-frontend:1.0.0
+  image: dclinics/events:frontend-1.0.0
   replicas: 1
 
 postgres:

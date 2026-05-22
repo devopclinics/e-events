@@ -17,6 +17,7 @@ services:
   # ── React frontend ─────────────────────────────────────────────────────────
   frontend:
     build: ./frontend
+    image: dclinics/events:frontend-1.0.0
     restart: unless-stopped
     depends_on:
       - backend
@@ -24,6 +25,7 @@ services:
   # ── FastAPI backend ────────────────────────────────────────────────────────
   backend:
     build: ./backend
+    image: dclinics/events:backend-1.0.0
     env_file: ./backend/.env
     depends_on:
       db:

@@ -289,6 +289,32 @@ The ArgoCD Application at `clusters/local-k3s/apps/event-checkin-dev.yaml` syncs
 
 ---
 
+## Building & Pushing Images
+
+Images are published to Docker Hub under `dclinics/events`.
+
+```bash
+cd event-checkin
+
+# Build both images
+docker compose build
+
+# Push to Docker Hub (login first if needed: docker login)
+docker compose push
+
+# Or build + push a specific tag manually
+docker build -t dclinics/events:backend-1.0.0 ./backend
+docker build -t dclinics/events:frontend-1.0.0 ./frontend
+docker push dclinics/events:backend-1.0.0
+docker push dclinics/events:frontend-1.0.0
+```
+
+To release a new version, update the tag in both:
+- `event-checkin/docker-compose.yaml` (the `image:` fields)
+- `env/dev/workloads/event-checkin/values.yaml` (the `image:` fields)
+
+---
+
 ## Updating
 
 ```bash

@@ -1,0 +1,221 @@
+#!/usr/bin/env bash
+# ─────────────────────────────────────────────────────────────────────────────
+# deploy.sh — Build, push, prune old tags, then redeploy from Docker Hub
+#
+# Usage:
+#   ./deploy.sh              # build & deploy current VERSION
+#   ./deploy.sh --no-cache   # force rebuild without layer cache
+#   ./deploy.sh --push-only  # skip deploy; just build + push + prune
+#   ./deploy.sh --deploy-only # skip build; just pull & restart services
+#
+# Required env vars (or export before running):
+#   DOCKER_USERNAME   — Docker Hub username
+#   DOCKER_PASSWORD   — Docker Hub password or access token
+#
+# Optional env vars:
+#   KEEP_VERSIONS     — number of versioned tags to keep per service (default: 3)
+#   DB_PASSWORD       — overrides docker-compose default
+# ─────────────────────────────────────────────────────────────────────────────
+
+set -euo pipefail
+
+# ── colours ──────────────────────────────────────────────────────────────────
+RED='\033[0;31m'; GREEN='\033[0;32m'; YELLOW='\033[1;33m'
+BLUE='\033[0;34m'; CYAN='\033[0;36m'; BOLD='\033[1m'; NC='\033[0m'
+
+info()  { echo -e "${BLUE}[INFO]${NC}  $*"; }
+ok()    { echo -e "${GREEN}[✓]${NC}    $*"; }
+warn()  { echo -e "${YELLOW}[WARN]${NC}  $*"; }
+step()  { echo -e "\n${BOLD}${CYAN}━━ $* ━━${NC}"; }
+die()   { echo -e "${RED}[ERROR]${NC} $*" >&2; exit 1; }
+
+# ── config ────────────────────────────────────────────────────────────────────
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+VERSION_FILE="${SCRIPT_DIR}/VERSION"
+PROD_COMPOSE="${SCRIPT_DIR}/docker-compose.prod.yaml"
+NAMESPACE="dclinics"
+REPO="events"
+REGISTRY="${NAMESPACE}/${REPO}"
+KEEP_VERSIONS="${KEEP_VERSIONS:-3}"
+NO_CACHE=""
+DO_BUILD=true
+DO_DEPLOY=true
+
+# ── parse args ────────────────────────────────────────────────────────────────
+for arg in "$@"; do
+  case "$arg" in
+    --no-cache)    NO_CACHE="--no-cache" ;;
+    --push-only)   DO_DEPLOY=false ;;
+    --deploy-only) DO_BUILD=false ;;
+    --help|-h)
+      grep '^#' "$0" | sed 's/^# \?//'
+      exit 0 ;;
+    *) die "Unknown argument: $arg" ;;
+  esac
+done
+
+# ── preflight checks ──────────────────────────────────────────────────────────
+[[ -f "$VERSION_FILE" ]] || die "VERSION file not found at $VERSION_FILE"
+VERSION=$(tr -d '[:space:]' < "$VERSION_FILE")
+[[ -n "$VERSION" ]] || die "VERSION file is empty"
+
+if $DO_BUILD; then
+  [[ -n "${DOCKER_USERNAME:-}" ]] || die "DOCKER_USERNAME is not set. Export it before running."
+  [[ -n "${DOCKER_PASSWORD:-}" ]] || die "DOCKER_PASSWORD (or access token) is not set. Export it before running."
+  command -v docker  &>/dev/null || die "docker is not installed"
+  command -v curl    &>/dev/null || die "curl is not installed"
+  command -v jq      &>/dev/null || die "jq is not installed (brew install jq / apt install jq)"
+fi
+
+echo -e "\n${BOLD}EventQR Deployment Pipeline${NC}"
+echo    "  Version  : ${VERSION}"
+echo    "  Registry : ${REGISTRY}"
+echo    "  Compose  : ${PROD_COMPOSE}"
+echo    "  Keep tags: last ${KEEP_VERSIONS} per service"
+
+# ─────────────────────────────────────────────────────────────────────────────
+# PHASE 1 — Build images
+# ─────────────────────────────────────────────────────────────────────────────
+if $DO_BUILD; then
+  step "1/4  Building images (version ${VERSION})"
+
+  BUILD_DATE=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+  BUILD_ARGS=(
+    --build-arg "BUILD_DATE=${BUILD_DATE}"
+    --build-arg "VERSION=${VERSION}"
+    --label    "version=${VERSION}"
+    --label    "build-date=${BUILD_DATE}"
+    --label    "maintainer=devopclinics"
+  )
+
+  info "Building backend..."
+  docker build $NO_CACHE \
+    "${BUILD_ARGS[@]}" \
+    --tag "${REGISTRY}:backend-${VERSION}" \
+    --tag "${REGISTRY}:backend-latest" \
+    "${SCRIPT_DIR}/backend"
+  ok "Backend built → ${REGISTRY}:backend-${VERSION}"
+
+  info "Building frontend..."
+  docker build $NO_CACHE \
+    "${BUILD_ARGS[@]}" \
+    --tag "${REGISTRY}:frontend-${VERSION}" \
+    --tag "${REGISTRY}:frontend-latest" \
+    "${SCRIPT_DIR}/frontend"
+  ok "Frontend built → ${REGISTRY}:frontend-${VERSION}"
+
+  # ── PHASE 2 — Push to Docker Hub ────────────────────────────────────────────
+  step "2/4  Pushing images to Docker Hub"
+
+  info "Authenticating with Docker Hub..."
+  echo "${DOCKER_PASSWORD}" | docker login --username "${DOCKER_USERNAME}" --password-stdin
+  ok "Logged in as ${DOCKER_USERNAME}"
+
+  for tag in \
+    "${REGISTRY}:backend-${VERSION}" \
+    "${REGISTRY}:backend-latest" \
+    "${REGISTRY}:frontend-${VERSION}" \
+    "${REGISTRY}:frontend-latest"; do
+    info "Pushing ${tag}..."
+    docker push "$tag"
+    ok "Pushed ${tag}"
+  done
+
+  # ── PHASE 3 — Prune old tags from Docker Hub ─────────────────────────────────
+  step "3/4  Pruning old tags (keeping last ${KEEP_VERSIONS} per service)"
+
+  info "Fetching Docker Hub auth token..."
+  HUB_TOKEN=$(curl -sf -X POST "https://hub.docker.com/v2/users/login" \
+    -H "Content-Type: application/json" \
+    -d "{\"username\":\"${DOCKER_USERNAME}\",\"password\":\"${DOCKER_PASSWORD}\"}" \
+    | jq -r '.token')
+
+  [[ -z "$HUB_TOKEN" || "$HUB_TOKEN" == "null" ]] && \
+    die "Docker Hub login failed — check DOCKER_USERNAME / DOCKER_PASSWORD"
+
+  prune_service_tags() {
+    local service="$1"      # "backend" or "frontend"
+    local prefix="${service}-"
+
+    info "Fetching tags for '${service}'..."
+    local page=1
+    local all_tags="[]"
+
+    # Walk pages (100 per page) to collect all matching tags
+    while true; do
+      local page_json
+      page_json=$(curl -sf \
+        "https://hub.docker.com/v2/repositories/${NAMESPACE}/${REPO}/tags/?page_size=100&page=${page}" \
+        -H "Authorization: Bearer ${HUB_TOKEN}")
+
+      local page_tags
+      page_tags=$(echo "$page_json" | jq --arg p "$prefix" '
+        [.results[] | select(.name | startswith($p)) | select(.name != ($p + "latest"))]
+      ')
+
+      all_tags=$(echo "${all_tags} ${page_tags}" | jq -s 'add')
+
+      # Stop if no next page
+      local next
+      next=$(echo "$page_json" | jq -r '.next // empty')
+      [[ -z "$next" ]] && break
+      ((page++))
+    done
+
+    # Sort by last_updated descending; collect tags beyond KEEP_VERSIONS
+    local to_delete
+    to_delete=$(echo "$all_tags" | jq -r --argjson keep "$KEEP_VERSIONS" '
+      sort_by(.last_updated) | reverse | .[$keep:] | .[].name
+    ')
+
+    if [[ -z "$to_delete" ]]; then
+      ok "No old '${service}' tags to prune"
+      return
+    fi
+
+    while IFS= read -r tag; do
+      [[ -z "$tag" ]] && continue
+      info "  Deleting ${REGISTRY}:${tag} ..."
+      local http_code
+      http_code=$(curl -s -o /dev/null -w "%{http_code}" -X DELETE \
+        "https://hub.docker.com/v2/repositories/${NAMESPACE}/${REPO}/tags/${tag}/" \
+        -H "Authorization: Bearer ${HUB_TOKEN}")
+
+      case "$http_code" in
+        204) ok  "  Deleted: ${tag}" ;;
+        404) warn "  Not found (already gone?): ${tag}" ;;
+        *)   warn "  Delete returned HTTP ${http_code} for: ${tag}" ;;
+      esac
+    done <<< "$to_delete"
+  }
+
+  prune_service_tags "backend"
+  prune_service_tags "frontend"
+
+  # Remove the dangling local build cache (optional, frees disk)
+  info "Pruning dangling local image layers..."
+  docker image prune -f --filter "label=maintainer=devopclinics" 2>/dev/null || true
+fi  # end DO_BUILD
+
+# ─────────────────────────────────────────────────────────────────────────────
+# PHASE 4 — Deploy via production docker-compose (pull from registry)
+# ─────────────────────────────────────────────────────────────────────────────
+if $DO_DEPLOY; then
+  step "4/4  Deploying from Docker Hub"
+
+  [[ -f "$PROD_COMPOSE" ]] || die "Production compose file not found: $PROD_COMPOSE"
+
+  info "Pulling latest images from Docker Hub..."
+  APP_VERSION="$VERSION" docker compose -f "$PROD_COMPOSE" pull backend frontend
+
+  info "Restarting services..."
+  APP_VERSION="$VERSION" docker compose -f "$PROD_COMPOSE" up -d --remove-orphans
+
+  ok "Services restarted"
+
+  echo ""
+  info "Running containers:"
+  APP_VERSION="$VERSION" docker compose -f "$PROD_COMPOSE" ps
+fi
+
+echo -e "\n${GREEN}${BOLD}Deployment complete — version ${VERSION} is live.${NC}\n"

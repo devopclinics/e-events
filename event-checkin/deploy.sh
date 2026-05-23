@@ -8,13 +8,8 @@
 #   ./deploy.sh --push-only  # skip deploy; just build + push + prune
 #   ./deploy.sh --deploy-only # skip build; just pull & restart services
 #
-# Required env vars (or export before running):
-#   DOCKER_USERNAME   — Docker Hub username
-#   DOCKER_PASSWORD   — Docker Hub password or access token
-#
-# Optional env vars:
-#   KEEP_VERSIONS     — number of versioned tags to keep per service (default: 3)
-#   DB_PASSWORD       — overrides docker-compose default
+# Credentials are read from .env in the same directory as this script.
+# Copy .env.example → .env and fill in your values before running.
 # ─────────────────────────────────────────────────────────────────────────────
 
 set -euo pipefail
@@ -29,8 +24,22 @@ warn()  { echo -e "${YELLOW}[WARN]${NC}  $*"; }
 step()  { echo -e "\n${BOLD}${CYAN}━━ $* ━━${NC}"; }
 die()   { echo -e "${RED}[ERROR]${NC} $*" >&2; exit 1; }
 
-# ── config ────────────────────────────────────────────────────────────────────
+# ── load .env ─────────────────────────────────────────────────────────────────
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+ENV_FILE="${SCRIPT_DIR}/.env"
+
+if [[ -f "$ENV_FILE" ]]; then
+  set -a                        # auto-export every variable that gets set
+  # shellcheck source=/dev/null
+  source "$ENV_FILE"
+  set +a
+  info "Loaded config from .env"
+else
+  warn ".env not found — falling back to environment variables already exported"
+  warn "Copy .env.example → .env and fill in your values for a smoother workflow"
+fi
+
+# ── config ────────────────────────────────────────────────────────────────────
 VERSION_FILE="${SCRIPT_DIR}/VERSION"
 PROD_COMPOSE="${SCRIPT_DIR}/docker-compose.prod.yaml"
 NAMESPACE="dclinics"

@@ -4,6 +4,7 @@ backups/*.dump
 backups/*.backup
 
 # Secrets — never commit
+.env
 backend/.env
 frontend/.env
 **/.env

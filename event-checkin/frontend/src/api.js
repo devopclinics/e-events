@@ -36,6 +36,8 @@ export const api = {
   updateEvent:  (id, data)   => req('PUT',    `/events/${id}`, data),
   deleteEvent:  (id)         => req('DELETE', `/events/${id}`),
   changeStatus: (id, status) => req('PATCH',  `/events/${id}/status`, { status }),
+  updateSource: (id, data)   => req('PUT',    `/events/${id}/source`, data),
+  syncNow:      (id)         => req('POST',   `/events/${id}/sync-now`),
 
   // Team
   listMembers:   (eventId)         => req('GET',    `/events/${eventId}/members`),
@@ -47,6 +49,8 @@ export const api = {
   importGuestsFromUrl: (eventId, url)      => req('POST', `/events/${eventId}/guests/import-url`, { url }),
   generateQR:          (eventId)           => req('POST', `/events/${eventId}/guests/generate-qr`),
   sendInvites:         (eventId)           => req('POST', `/events/${eventId}/guests/send-invites`),
+  sendInvitesBatch:    (eventId, guestIds, force = false) =>
+    req('POST', `/events/${eventId}/guests/send-batch`, { guest_ids: guestIds, force }),
   deleteGuest:         (eventId, guestId)  => req('DELETE', `/events/${eventId}/guests/${guestId}`),
   resendInvite:        (eventId, guestId)  => req('POST',   `/events/${eventId}/guests/${guestId}/resend-invite`),
   guestQrUrl:          (eventId, guestId)  => `${BASE}/events/${eventId}/guests/${guestId}/qr.png`,

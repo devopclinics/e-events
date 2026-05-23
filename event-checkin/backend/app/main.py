@@ -1,17 +1,41 @@
+import asyncio
 from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from sqlalchemy import text
 from .database import engine, Base
 from .config import settings
 from .routers import events, guests, scanner, dashboard
 from .routers import auth as auth_router
+from . import sync_poller
+
+
+# Idempotent column additions for tables that already existed when these
+# fields were introduced. Postgres-only — uses IF NOT EXISTS.
+_SCHEMA_PATCHES = [
+    "ALTER TABLE events ADD COLUMN IF NOT EXISTS source_url VARCHAR(1000)",
+    "ALTER TABLE events ADD COLUMN IF NOT EXISTS source_sync_interval_seconds INTEGER DEFAULT 60",
+    "ALTER TABLE events ADD COLUMN IF NOT EXISTS source_last_sync_at TIMESTAMP",
+    "ALTER TABLE events ADD COLUMN IF NOT EXISTS source_last_error TEXT",
+]
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
-    yield
+        for stmt in _SCHEMA_PATCHES:
+            await conn.execute(text(stmt))
+
+    poller_task = asyncio.create_task(sync_poller.run())
+    try:
+        yield
+    finally:
+        poller_task.cancel()
+        try:
+            await poller_task
+        except asyncio.CancelledError:
+            pass
 
 
 app = FastAPI(title="Event Check-In QR System", version="1.0.0", lifespan=lifespan)

@@ -285,6 +285,114 @@ function EventForm({ initial, onSave, onCancel }) {
   )
 }
 
+function relativeTime(iso) {
+  if (!iso) return 'never'
+  const t = new Date(iso).getTime()
+  const s = Math.max(0, Math.floor((Date.now() - t) / 1000))
+  if (s < 60) return `${s}s ago`
+  if (s < 3600) return `${Math.floor(s / 60)}m ago`
+  if (s < 86400) return `${Math.floor(s / 3600)}h ago`
+  return `${Math.floor(s / 86400)}d ago`
+}
+
+function SourceSyncPanel({ event, onSave, onSyncNow, loading }) {
+  const [url, setUrl] = useState(event.source_url || '')
+  const [interval, setInterval] = useState(event.source_sync_interval_seconds || 60)
+  const [tick, setTick] = useState(0)
+
+  useEffect(() => { setUrl(event.source_url || '') }, [event.id, event.source_url])
+  useEffect(() => { setInterval(event.source_sync_interval_seconds || 60) }, [event.id, event.source_sync_interval_seconds])
+
+  // Re-render once a second so "X seconds ago" stays live.
+  useEffect(() => {
+    const id = window.setInterval(() => setTick((t) => t + 1), 1000)
+    return () => window.clearInterval(id)
+  }, [])
+
+  const dirty = url.trim() !== (event.source_url || '') ||
+    Number(interval) !== (event.source_sync_interval_seconds || 60)
+  const polling = event.status === 'active' && !!event.source_url
+
+  return (
+    <div className="bg-white dark:bg-slate-800 dark:border dark:border-slate-700/60 rounded-xl shadow p-6 space-y-4">
+      <div className="flex items-center justify-between flex-wrap gap-2">
+        <div>
+          <h2 className="font-semibold text-base dark:text-white">Live Spreadsheet Sync</h2>
+          <p className="text-xs text-gray-500 dark:text-slate-400 mt-1">
+            Paste a Google Sheets or OneDrive share URL. While the event is <strong>Active</strong>,
+            the server re-imports it every {event.source_sync_interval_seconds || 60} seconds and
+            adds any new guests. Existing guests are never removed.
+          </p>
+        </div>
+        {polling && (
+          <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-green-50 dark:bg-green-900/40 text-green-700 dark:text-green-300">
+            <span className="w-2 h-2 rounded-full bg-green-500 animate-pulse" />
+            Listening
+          </span>
+        )}
+      </div>
+
+      <div className="flex flex-col sm:flex-row gap-2">
+        <input
+          type="url"
+          value={url}
+          onChange={(e) => setUrl(e.target.value)}
+          placeholder="https://1drv.ms/x/… or https://docs.google.com/spreadsheets/d/…"
+          className="flex-1 border border-gray-300 dark:border-slate-700 rounded-lg px-3 py-2 text-sm bg-white dark:bg-slate-700 text-gray-900 dark:text-white"
+        />
+        <div className="flex items-center gap-2">
+          <label className="text-xs text-gray-500 dark:text-slate-400 whitespace-nowrap">Every</label>
+          <input
+            type="number"
+            min={15}
+            max={3600}
+            value={interval}
+            onChange={(e) => setInterval(Number(e.target.value) || 60)}
+            className="w-20 border border-gray-300 dark:border-slate-700 rounded-lg px-2 py-2 text-sm bg-white dark:bg-slate-700 text-gray-900 dark:text-white"
+          />
+          <span className="text-xs text-gray-500 dark:text-slate-400">sec</span>
+        </div>
+      </div>
+
+      <div className="flex flex-wrap items-center gap-2">
+        <button
+          onClick={() => onSave(url.trim(), Number(interval) || 60)}
+          disabled={!dirty}
+          className="bg-indigo-600 text-white px-4 py-2 rounded-lg text-sm font-semibold hover:bg-indigo-700 disabled:opacity-50">
+          Save
+        </button>
+        <button
+          onClick={onSyncNow}
+          disabled={loading || !event.source_url}
+          className="bg-white dark:bg-slate-700 border border-gray-300 dark:border-slate-700 text-gray-700 dark:text-slate-200 px-4 py-2 rounded-lg text-sm font-medium hover:bg-gray-50 dark:hover:bg-slate-600 disabled:opacity-50">
+          {loading ? 'Syncing…' : 'Sync now'}
+        </button>
+        {event.source_url && (
+          <button
+            onClick={() => { setUrl(''); onSave('', Number(interval) || 60) }}
+            className="text-xs text-red-500 hover:text-red-700 hover:underline px-2 py-2">
+            Clear URL
+          </button>
+        )}
+        <span className="text-xs text-gray-500 dark:text-slate-400 ml-auto" key={tick}>
+          Last sync: <strong>{relativeTime(event.source_last_sync_at)}</strong>
+        </span>
+      </div>
+
+      {event.source_last_error && (
+        <div className="bg-red-50 dark:bg-red-900/30 border border-red-200 dark:border-red-800 text-red-700 dark:text-red-300 rounded-lg px-3 py-2 text-xs">
+          {event.source_last_error}
+        </div>
+      )}
+      {!polling && event.source_url && (
+        <p className="text-xs text-gray-400 dark:text-slate-500">
+          Auto-sync starts when you set the event to <strong>Active</strong>.
+        </p>
+      )}
+    </div>
+  )
+}
+
 function Badge({ on, labels }) {
   return (
     <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${on ? 'bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-400' : 'bg-gray-100 text-gray-500 dark:bg-slate-700 dark:text-slate-400'}`}>
@@ -307,6 +415,7 @@ export default function AdminPage() {
   const [page, setPage] = useState(0)
   const [sheetUrl, setSheetUrl] = useState('')
   const [showUrlInput, setShowUrlInput] = useState(false)
+  const [selectedGuests, setSelectedGuests] = useState(new Set())
   const fileRef = useRef()
 
   const PAGE_SIZE = 50
@@ -316,8 +425,24 @@ export default function AdminPage() {
 
   useEffect(() => {
     setPage(0)
+    setSelectedGuests(new Set())
     if (!selectedId) return setGuests([])
     api.listGuests(selectedId).then(setGuests).catch(console.error)
+  }, [selectedId])
+
+  // Poll the event list every 15s while a sync-enabled event is selected,
+  // so the "Last sync" timestamp and guest count stay live without a refresh.
+  useEffect(() => {
+    if (!selectedId) return
+    const id = setInterval(async () => {
+      try {
+        const evs = await api.listEvents()
+        setEvents(evs)
+        const guests = await api.listGuests(selectedId)
+        setGuests(guests)
+      } catch { /* swallow — network blips shouldn't surface here */ }
+    }, 15000)
+    return () => clearInterval(id)
   }, [selectedId])
 
   function flash(m, isErr = false) {
@@ -388,6 +513,35 @@ export default function AdminPage() {
     finally { setLoading(false) }
   }
 
+  async function handleSendBatch({ ids = null, force = false, label }) {
+    setLoading(true)
+    try {
+      const res = await api.sendInvitesBatch(selectedId, ids, force)
+      flash(`${label}: ${res.queued} invite${res.queued === 1 ? '' : 's'} queued.`)
+      setGuests(await api.listGuests(selectedId))
+      setSelectedGuests(new Set())
+    } catch (err) { flash(err.message, true) }
+    finally { setLoading(false) }
+  }
+
+  function toggleSelectGuest(id) {
+    setSelectedGuests((prev) => {
+      const next = new Set(prev)
+      next.has(id) ? next.delete(id) : next.add(id)
+      return next
+    })
+  }
+
+  function toggleSelectPage(pageGuests, allSelected) {
+    setSelectedGuests((prev) => {
+      const next = new Set(prev)
+      for (const g of pageGuests) {
+        allSelected ? next.delete(g.id) : next.add(g.id)
+      }
+      return next
+    })
+  }
+
   async function handleImportUrl() {
     if (!sheetUrl.trim()) return
     setLoading(true)
@@ -397,6 +551,30 @@ export default function AdminPage() {
       setGuests(await api.listGuests(selectedId))
       setSheetUrl('')
       setShowUrlInput(false)
+    } catch (err) { flash(err.message, true) }
+    finally { setLoading(false) }
+  }
+
+  async function handleSaveSource(url, interval) {
+    try {
+      const updated = await api.updateSource(selectedId, {
+        source_url: url,
+        source_sync_interval_seconds: interval,
+      })
+      updateEvent(updated)
+      flash(url ? 'Spreadsheet URL saved.' : 'Spreadsheet URL cleared.')
+    } catch (err) { flash(err.message, true) }
+  }
+
+  async function handleSyncNow() {
+    setLoading(true)
+    try {
+      const res = await api.syncNow(selectedId)
+      flash(`Synced: ${res.added} added, ${res.skipped} skipped.`)
+      setGuests(await api.listGuests(selectedId))
+      // Refresh the event so last_sync_at updates locally.
+      const refreshed = await api.listEvents()
+      setEvents(refreshed)
     } catch (err) { flash(err.message, true) }
     finally { setLoading(false) }
   }
@@ -500,6 +678,14 @@ export default function AdminPage() {
             </p>
           </div>
 
+          {/* Live spreadsheet sync */}
+          <SourceSyncPanel
+            event={event}
+            onSave={handleSaveSource}
+            onSyncNow={handleSyncNow}
+            loading={loading}
+          />
+
           {/* Stats */}
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
             {[
@@ -566,9 +752,18 @@ export default function AdminPage() {
                 className="bg-blue-600 text-white px-4 py-2 rounded-lg text-sm font-semibold hover:bg-blue-700 disabled:opacity-50">
                 Generate QR Codes
               </button>
-              <button onClick={handleSendInvites} disabled={loading || stats.qr === 0}
+              <button onClick={() => handleSendBatch({ force: false, label: 'Send unsent' })}
+                disabled={loading || stats.total === 0 || stats.total - stats.invited === 0}
                 className="bg-amber-500 text-white px-4 py-2 rounded-lg text-sm font-semibold hover:bg-amber-600 disabled:opacity-50">
-                Send Invites
+                Send to Unsent ({stats.total - stats.invited})
+              </button>
+              <button onClick={() => {
+                  if (!confirm(`Re-send invite to ALL ${stats.total} guests, including those already invited?`)) return
+                  handleSendBatch({ force: true, label: 'Resend all' })
+                }}
+                disabled={loading || stats.total === 0}
+                className="bg-white dark:bg-slate-700 border border-amber-300 dark:border-amber-700 text-amber-700 dark:text-amber-300 px-4 py-2 rounded-lg text-sm font-semibold hover:bg-amber-50 dark:hover:bg-slate-600 disabled:opacity-50">
+                Resend to All
               </button>
             </div>
           </div>
@@ -580,8 +775,28 @@ export default function AdminPage() {
           {guests.length > 0 && (() => {
             const totalPages = Math.ceil(guests.length / PAGE_SIZE)
             const pageGuests = guests.slice(page * PAGE_SIZE, (page + 1) * PAGE_SIZE)
+            const pageSelectedCount = pageGuests.filter((g) => selectedGuests.has(g.id)).length
+            const pageAllSelected = pageGuests.length > 0 && pageSelectedCount === pageGuests.length
             return (
               <div className="bg-white dark:bg-slate-800 dark:border dark:border-slate-700/60 rounded-xl shadow overflow-hidden">
+                {selectedGuests.size > 0 && (
+                  <div className="px-4 sm:px-6 py-3 bg-indigo-50 dark:bg-indigo-900/30 border-b border-indigo-200 dark:border-indigo-800 flex items-center gap-3 flex-wrap">
+                    <span className="text-sm font-semibold text-indigo-900 dark:text-indigo-100">
+                      {selectedGuests.size} selected
+                    </span>
+                    <button
+                      onClick={() => handleSendBatch({ ids: [...selectedGuests], force: true, label: 'Send to selected' })}
+                      disabled={loading}
+                      className="bg-indigo-600 text-white px-3 py-1.5 rounded-lg text-xs font-semibold hover:bg-indigo-700 disabled:opacity-50">
+                      Send invite to selected
+                    </button>
+                    <button
+                      onClick={() => setSelectedGuests(new Set())}
+                      className="text-xs text-gray-600 dark:text-slate-300 hover:underline ml-auto">
+                      Clear selection
+                    </button>
+                  </div>
+                )}
                 <div className="px-4 sm:px-6 py-4 border-b dark:border-slate-700 flex items-center justify-between gap-2">
                   <h2 className="font-semibold text-sm sm:text-base dark:text-white">Guest List ({guests.length})</h2>
                   {totalPages > 1 && (
@@ -600,6 +815,16 @@ export default function AdminPage() {
                   <table className="w-full text-sm">
                     <thead className="bg-gray-50 dark:bg-slate-700 text-xs font-semibold text-gray-500 dark:text-slate-400 uppercase tracking-wide">
                       <tr>
+                        <th className="px-3 py-3 w-8">
+                          <input
+                            type="checkbox"
+                            checked={pageAllSelected}
+                            ref={(el) => { if (el) el.indeterminate = pageSelectedCount > 0 && !pageAllSelected }}
+                            onChange={() => toggleSelectPage(pageGuests, pageAllSelected)}
+                            className="cursor-pointer"
+                            aria-label="Select page"
+                          />
+                        </th>
                         <th className="px-4 py-3 text-left">Name</th>
                         <th className="px-4 py-3 text-left">Email</th>
                         <th className="px-4 py-3 text-center">QR</th>
@@ -610,7 +835,16 @@ export default function AdminPage() {
                     </thead>
                     <tbody className="divide-y divide-gray-100 dark:divide-slate-700">
                       {pageGuests.map((g) => (
-                        <tr key={g.id} className="hover:bg-gray-50 dark:hover:bg-slate-700">
+                        <tr key={g.id} className={`hover:bg-gray-50 dark:hover:bg-slate-700 ${selectedGuests.has(g.id) ? 'bg-indigo-50/60 dark:bg-indigo-900/20' : ''}`}>
+                          <td className="px-3 py-3">
+                            <input
+                              type="checkbox"
+                              checked={selectedGuests.has(g.id)}
+                              onChange={() => toggleSelectGuest(g.id)}
+                              className="cursor-pointer"
+                              aria-label={`Select ${g.first_name} ${g.last_name}`}
+                            />
+                          </td>
                           <td className="px-4 py-3 font-medium dark:text-slate-100">{g.first_name} {g.last_name}</td>
                           <td className="px-4 py-3 text-gray-500 dark:text-slate-400 text-xs">{g.email}</td>
                           <td className="px-4 py-3 text-center"><Badge on={!!g.qr_generated_at} labels={['Ready', 'Pending']} /></td>
@@ -645,11 +879,20 @@ export default function AdminPage() {
                 {/* Mobile cards */}
                 <div className="sm:hidden divide-y divide-gray-100 dark:divide-slate-700">
                   {pageGuests.map((g) => (
-                    <div key={g.id} className="px-4 py-4 space-y-2">
+                    <div key={g.id} className={`px-4 py-4 space-y-2 ${selectedGuests.has(g.id) ? 'bg-indigo-50/60 dark:bg-indigo-900/20' : ''}`}>
                       <div className="flex items-start justify-between gap-2">
-                        <div>
-                          <div className="font-semibold text-sm dark:text-slate-100">{g.first_name} {g.last_name}</div>
-                          <div className="text-xs text-gray-500 dark:text-slate-400 break-all">{g.email}</div>
+                        <div className="flex items-start gap-3">
+                          <input
+                            type="checkbox"
+                            checked={selectedGuests.has(g.id)}
+                            onChange={() => toggleSelectGuest(g.id)}
+                            className="mt-1 cursor-pointer"
+                            aria-label={`Select ${g.first_name} ${g.last_name}`}
+                          />
+                          <div>
+                            <div className="font-semibold text-sm dark:text-slate-100">{g.first_name} {g.last_name}</div>
+                            <div className="text-xs text-gray-500 dark:text-slate-400 break-all">{g.email}</div>
+                          </div>
                         </div>
                         {g.admitted && (
                           <span className="shrink-0 inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-700">

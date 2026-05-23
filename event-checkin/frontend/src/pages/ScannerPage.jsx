@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react'
-import { Html5QrcodeScanner } from 'html5-qrcode'
+import { Html5Qrcode } from 'html5-qrcode'
 import { api } from '../api'
 
 function ResultCard({ result, onReset }) {
@@ -37,24 +37,169 @@ function ResultCard({ result, onReset }) {
 }
 
 function QrScanner({ onScan }) {
-  const ref = useRef(null)
+  const [running, setRunning] = useState(false)
+  const [starting, setStarting] = useState(false)
+  const [error, setError] = useState('')
+  const [cameras, setCameras] = useState([])
+  const [cameraId, setCameraId] = useState(null)
+  const scannerRef = useRef(null)
+  const ELEMENT_ID = 'qr-reader'
 
-  useEffect(() => {
-    const scanner = new Html5QrcodeScanner('qr-reader', { fps: 10, qrbox: 250 }, false)
-    scanner.render(
-      (text) => {
-        scanner.clear().catch(() => {})
-        onScan(text)
-      },
-      () => {}
-    )
-    ref.current = scanner
-    return () => {
-      ref.current?.clear().catch(() => {})
+  // Stop the camera on unmount.
+  useEffect(() => () => { stopCamera() }, [])
+
+  async function stopCamera() {
+    const s = scannerRef.current
+    if (s) {
+      try { await s.stop() } catch { /* already stopped */ }
+      try { await s.clear() } catch { /* ignored */ }
     }
-  }, [onScan])
+    scannerRef.current = null
+  }
 
-  return <div id="qr-reader" className="w-full max-w-sm mx-auto" />
+  // iOS requires getUserMedia() to be called SYNCHRONOUSLY inside a click
+  // handler. We call it first thing in the tap, then hand off to html5-qrcode.
+  async function startCamera() {
+    setError('')
+    setStarting(true)
+
+    // 1. Request the permission synchronously inside this user gesture.
+    //    Prefer back camera; fall back to any camera if 'environment' is unsupported.
+    let probe
+    try {
+      probe = await navigator.mediaDevices.getUserMedia({
+        video: { facingMode: { ideal: 'environment' } },
+        audio: false,
+      })
+    } catch (e) {
+      setStarting(false)
+      setError(iosCameraHelp(e))
+      return
+    }
+    // Release the probe stream — html5-qrcode opens its own.
+    probe.getTracks().forEach((t) => t.stop())
+
+    // 2. Enumerate cameras (now allowed since permission is granted).
+    let devices = []
+    try {
+      devices = await Html5Qrcode.getCameras()
+    } catch (e) {
+      setStarting(false)
+      setError(`Could not list cameras: ${e?.message || e}`)
+      return
+    }
+    if (!devices || devices.length === 0) {
+      setStarting(false)
+      setError('No camera detected on this device.')
+      return
+    }
+    setCameras(devices)
+    const preferred =
+      devices.find((d) => /back|rear|environment/i.test(d.label)) ||
+      devices[devices.length - 1]
+    const id = preferred.id
+    setCameraId(id)
+
+    // 3. Start the scanner.
+    const scanner = new Html5Qrcode(ELEMENT_ID)
+    scannerRef.current = scanner
+    try {
+      await scanner.start(
+        id,
+        { fps: 10, qrbox: { width: 250, height: 250 } },
+        async (text) => {
+          // First valid decode → stop camera & propagate.
+          await stopCamera()
+          setRunning(false)
+          onScan(text)
+        },
+        () => { /* per-frame decode failure — ignore */ }
+      )
+      setRunning(true)
+      setStarting(false)
+    } catch (e) {
+      setStarting(false)
+      setError(`Camera failed to start: ${e?.message || e}`)
+    }
+  }
+
+  async function switchCamera(newId) {
+    if (newId === cameraId) return
+    await stopCamera()
+    setCameraId(newId)
+    const scanner = new Html5Qrcode(ELEMENT_ID)
+    scannerRef.current = scanner
+    try {
+      await scanner.start(
+        newId,
+        { fps: 10, qrbox: { width: 250, height: 250 } },
+        async (text) => {
+          await stopCamera()
+          setRunning(false)
+          onScan(text)
+        },
+        () => {}
+      )
+      setRunning(true)
+    } catch (e) {
+      setError(`Camera failed: ${e?.message || e}`)
+    }
+  }
+
+  return (
+    <div className="space-y-3">
+      <div id={ELEMENT_ID} className="w-full max-w-sm mx-auto" />
+
+      {!running && (
+        <button
+          onClick={startCamera}
+          disabled={starting}
+          className="w-full bg-teal-600 text-white px-4 py-3 rounded-lg font-semibold hover:bg-teal-700 disabled:opacity-60"
+        >
+          {starting ? 'Requesting camera…' : '📷 Start Camera'}
+        </button>
+      )}
+
+      {running && cameras.length > 1 && (
+        <select
+          value={cameraId || ''}
+          onChange={(e) => switchCamera(e.target.value)}
+          className="w-full border border-gray-300 dark:border-slate-700 rounded-lg px-3 py-2 text-sm bg-white dark:bg-slate-700 text-gray-900 dark:text-white"
+        >
+          {cameras.map((c) => (
+            <option key={c.id} value={c.id}>{c.label || c.id}</option>
+          ))}
+        </select>
+      )}
+
+      {error && (
+        <div className="bg-red-50 dark:bg-red-900/30 border border-red-200 dark:border-red-800 text-red-700 dark:text-red-300 rounded-lg px-3 py-2 text-xs whitespace-pre-line">
+          {error}
+        </div>
+      )}
+    </div>
+  )
+}
+
+function iosCameraHelp(err) {
+  const name = err?.name || ''
+  const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent)
+  const lines = [`Camera blocked (${name || err?.message || 'unknown'}).`]
+  if (name === 'NotAllowedError' || name === 'SecurityError') {
+    if (isIOS) {
+      lines.push('iPhone fix:')
+      lines.push('1. Settings → Safari → Camera → set to "Ask" or "Allow"')
+      lines.push('2. Settings → Safari → Advanced → Website Data → search "vsgs.io" → delete')
+      lines.push('3. Reload this page and tap Start Camera again')
+    } else {
+      lines.push('Tap the camera icon in the address bar and choose "Allow" for this site, then reload.')
+    }
+  } else if (name === 'NotFoundError' || name === 'OverconstrainedError') {
+    lines.push('No camera matching the request was found. Try a different camera in the dropdown.')
+  } else if (name === 'NotReadableError') {
+    lines.push('Another app is already using the camera. Close other camera apps and retry.')
+  }
+  return lines.join('\n')
 }
 
 function extractToken(raw) {
@@ -132,7 +277,7 @@ export default function ScannerPage() {
         {!loading && !result && (
           <div>
             <p className="text-center text-sm text-gray-500 dark:text-slate-400 mb-4">
-              Point your camera at a guest's QR code
+              Tap <strong>Start Camera</strong>, then point at the guest's QR code.
             </p>
             <QrScanner key={scanKey} onScan={handleScan} />
           </div>

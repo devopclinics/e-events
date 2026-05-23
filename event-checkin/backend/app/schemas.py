@@ -65,6 +65,11 @@ class EventUpdate(BaseModel):
         return v
 
 
+class EventSourceUpdate(BaseModel):
+    source_url: Optional[str] = None
+    source_sync_interval_seconds: Optional[int] = None
+
+
 class EventOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
@@ -76,6 +81,10 @@ class EventOut(BaseModel):
     checkin_base_url: str
     status: str  # draft | active | ended
     created_at: datetime
+    source_url: Optional[str] = None
+    source_sync_interval_seconds: int = 60
+    source_last_sync_at: Optional[datetime] = None
+    source_last_error: Optional[str] = None
 
 
 class EventMemberOut(BaseModel):

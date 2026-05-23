@@ -1,10 +1,12 @@
+from datetime import datetime
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 from ..database import get_db
 from ..models import Event, EventUser, User
-from ..schemas import EventCreate, EventUpdate, EventOut, EventMemberOut, AssignUserRequest, UserOut
+from ..schemas import EventCreate, EventUpdate, EventOut, EventMemberOut, AssignUserRequest, UserOut, EventSourceUpdate
 from ..auth import require_admin, get_current_user
+from .guests import import_from_source_url
 
 router = APIRouter()
 
@@ -176,6 +178,55 @@ async def assign_member(
     await db.commit()
     await db.refresh(eu)
     return EventMemberOut(id=eu.id, user=UserOut.model_validate(user), assigned_at=eu.assigned_at)
+
+
+@router.put("/{event_id}/source", response_model=EventOut)
+async def update_event_source(
+    event_id: str,
+    body: EventSourceUpdate,
+    db: AsyncSession = Depends(get_db),
+    _: User = Depends(require_admin),
+):
+    event = await db.get(Event, event_id)
+    if not event:
+        raise HTTPException(404, "Event not found")
+    if body.source_url is not None:
+        event.source_url = body.source_url.strip() or None
+        # Clear last error on URL change so the UI doesn't show a stale message.
+        event.source_last_error = None
+    if body.source_sync_interval_seconds is not None:
+        # Clamp to a sane range; OneDrive is happy at 60s but reject sub-15s.
+        event.source_sync_interval_seconds = max(15, min(body.source_sync_interval_seconds, 3600))
+    await db.commit()
+    await db.refresh(event)
+    return event
+
+
+@router.post("/{event_id}/sync-now")
+async def sync_event_now(
+    event_id: str,
+    db: AsyncSession = Depends(get_db),
+    _: User = Depends(require_admin),
+):
+    event = await db.get(Event, event_id)
+    if not event:
+        raise HTTPException(404, "Event not found")
+    if not event.source_url:
+        raise HTTPException(400, "No source URL configured for this event")
+    try:
+        result = await import_from_source_url(event.source_url, event_id, db)
+        event.source_last_sync_at = datetime.utcnow()
+        event.source_last_error = None
+        await db.commit()
+        return {
+            **result,
+            "source_last_sync_at": event.source_last_sync_at.isoformat() + "Z",
+        }
+    except HTTPException as e:
+        event.source_last_error = e.detail
+        event.source_last_sync_at = datetime.utcnow()
+        await db.commit()
+        raise
 
 
 @router.delete("/{event_id}/members/{user_id}", status_code=204)

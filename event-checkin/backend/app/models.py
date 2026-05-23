@@ -1,6 +1,6 @@
 import uuid
 from datetime import datetime
-from sqlalchemy import String, Boolean, DateTime, ForeignKey, Text, UniqueConstraint
+from sqlalchemy import String, Boolean, DateTime, ForeignKey, Integer, Text, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from .database import Base
 
@@ -42,6 +42,13 @@ class Event(Base):
     # draft → active → ended
     status: Mapped[str] = mapped_column(String(20), default="draft")
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+
+    # Live guest-list sync from a Google Sheets / OneDrive / Excel Online URL.
+    # Polled every source_sync_interval_seconds while the event is "active".
+    source_url: Mapped[str | None] = mapped_column(String(1000), nullable=True)
+    source_sync_interval_seconds: Mapped[int] = mapped_column(Integer, default=60)
+    source_last_sync_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    source_last_error: Mapped[str | None] = mapped_column(Text, nullable=True)
 
     members: Mapped[list["EventUser"]] = relationship("EventUser", back_populates="event", cascade="all, delete-orphan")
     guests: Mapped[list["Guest"]] = relationship("Guest", back_populates="event", cascade="all, delete-orphan")

@@ -66,16 +66,48 @@ export const api = {
     )
   },
 
+  // Features
+  toggleFeatures: (eventId, body) => req('PATCH', `/events/${eventId}/features`, body),
+
+  // Seating
+  listTables:              (eventId)                   => req('GET',    `/events/${eventId}/tables`),
+  createTable:             (eventId, data)             => req('POST',   `/events/${eventId}/tables`, data),
+  updateTable:             (eventId, tableId, data)    => req('PUT',    `/events/${eventId}/tables/${tableId}`, data),
+  deleteTable:             (eventId, tableId)          => req('DELETE', `/events/${eventId}/tables/${tableId}`),
+  getSeatingChart:         (eventId)                   => req('GET',    `/events/${eventId}/seating`),
+  autoAssign:              (eventId, clear = false)    => req('POST',   `/events/${eventId}/seating/auto-assign?clear=${clear}`),
+  assignSeat:              (eventId, guestId, body)    => req('PATCH',  `/events/${eventId}/guests/${guestId}/seat`, body),
+  markMealServed:          (eventId, guestId)          => req('PATCH',  `/events/${eventId}/guests/${guestId}/meal-served`),
+  updateMemberPermissions: (eventId, userId, body)     => req('PATCH',  `/events/${eventId}/members/${userId}/permissions`, body),
+
+  // Menu (admin)
+  listMenuCategories: (eventId)              => req('GET',    `/events/${eventId}/menu-categories`),
+  createMenuCategory: (eventId, data)        => req('POST',   `/events/${eventId}/menu-categories`, data),
+  updateMenuCategory: (eventId, catId, data) => req('PUT',    `/events/${eventId}/menu-categories/${catId}`, data),
+  deleteMenuCategory: (eventId, catId)       => req('DELETE', `/events/${eventId}/menu-categories/${catId}`),
+  addMenuItem:        (eventId, catId, data) => req('POST',   `/events/${eventId}/menu-categories/${catId}/items`, data),
+  updateMenuItem:     (eventId, itemId, data)=> req('PUT',    `/events/${eventId}/menu-items/${itemId}`, data),
+  deleteMenuItem:     (eventId, itemId)      => req('DELETE', `/events/${eventId}/menu-items/${itemId}`),
+  getMenuSummary:     (eventId)              => req('GET',    `/events/${eventId}/menu/summary`),
+
   // Scanner
   scan: (token) => req('POST', `/scan/${token}`),
 
   // Ticket (public)
   viewTicket: (token) => fetch(`/api/scan/${token}/ticket`).then((r) => r.json()),
 
+  // Menu submit (public — guest, no auth)
+  submitMenuChoice: (token, choices) =>
+    fetch(`/api/scan/${token}/menu`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ choices }),
+    }).then((r) => (r.ok ? r.json() : r.json().then((e) => Promise.reject(new Error(e.detail))))),
+
   // Dashboard
   getDashboard: (eventId) => req('GET', `/events/${eventId}/dashboard`),
 
   // Users
-  listUsers:      ()                => req('GET', '/auth/users'),
-  updateUserRole: (userId, role)    => req('PUT', `/auth/users/${userId}/role?role=${role}`),
+  listUsers:      ()             => req('GET', '/auth/users'),
+  updateUserRole: (userId, role) => req('PUT', `/auth/users/${userId}/role?role=${role}`),
 }

@@ -58,6 +58,473 @@ function StatusControls({ event, onChanged }) {
   )
 }
 
+// ── Feature Toggles ───────────────────────────────────────────────────────────
+
+function FeatureToggles({ event, onChanged }) {
+  const [loading, setLoading] = useState(false)
+
+  async function toggle(key) {
+    setLoading(true)
+    try {
+      const updated = await api.toggleFeatures(event.id, { [key]: !event[key] })
+      onChanged(updated)
+    } catch (e) { console.error(e) }
+    finally { setLoading(false) }
+  }
+
+  return (
+    <div className="flex flex-wrap gap-3 pt-3 border-t dark:border-slate-700 mt-3">
+      <span className="text-xs font-semibold text-gray-500 dark:text-slate-400 self-center">Features:</span>
+      {[
+        { key: 'seating_enabled', label: 'Seating' },
+        { key: 'menu_enabled',    label: 'Menu' },
+      ].map(({ key, label }) => (
+        <button
+          key={key}
+          onClick={() => toggle(key)}
+          disabled={loading}
+          className={`px-3 py-1.5 rounded-lg text-xs font-semibold border transition-colors disabled:opacity-50 ${
+            event[key]
+              ? 'bg-indigo-600 text-white border-indigo-600 hover:bg-indigo-700'
+              : 'bg-white dark:bg-slate-700 text-gray-600 dark:text-slate-300 border-gray-300 dark:border-slate-600 hover:bg-gray-50 dark:hover:bg-slate-600'
+          }`}
+        >
+          {label} {event[key] ? 'ON' : 'OFF'}
+        </button>
+      ))}
+    </div>
+  )
+}
+
+// ── Seating Panel ─────────────────────────────────────────────────────────────
+
+function SeatingPanel({ eventId }) {
+  const [tables, setTables]       = useState([])
+  const [chart, setChart]         = useState(null)
+  const [showChart, setShowChart] = useState(false)
+  const [form, setForm]           = useState(null)
+  const [loading, setLoading]     = useState(false)
+  const [msg, setMsg]             = useState('')
+
+  const fieldCls = 'border border-gray-300 dark:border-slate-700 rounded-lg px-3 py-2 text-sm bg-white dark:bg-slate-700 text-gray-900 dark:text-white'
+
+  useEffect(() => {
+    api.listTables(eventId).then(setTables).catch(console.error)
+  }, [eventId])
+
+  async function loadChart() {
+    const data = await api.getSeatingChart(eventId)
+    setChart(data)
+    setShowChart(true)
+  }
+
+  async function saveTable(e) {
+    e.preventDefault()
+    setLoading(true)
+    try {
+      const payload = { name: form.name, capacity: Number(form.capacity) }
+      if (form.id) {
+        const updated = await api.updateTable(eventId, form.id, payload)
+        setTables((prev) => prev.map((t) => (t.id === form.id ? updated : t)))
+      } else {
+        const created = await api.createTable(eventId, payload)
+        setTables((prev) => [...prev, created])
+      }
+      setForm(null)
+      if (showChart) loadChart()
+    } catch (e) { setMsg(e.message) }
+    finally { setLoading(false) }
+  }
+
+  async function deleteTable(id) {
+    if (!confirm('Delete this table? Assigned guests will be unassigned.')) return
+    setLoading(true)
+    try {
+      await api.deleteTable(eventId, id)
+      setTables((prev) => prev.filter((t) => t.id !== id))
+      if (showChart) loadChart()
+    } catch (e) { setMsg(e.message) }
+    finally { setLoading(false) }
+  }
+
+  async function autoAssign(clear) {
+    if (clear && !confirm('Clear all seat assignments and reassign everyone?')) return
+    setLoading(true)
+    try {
+      const res = await api.autoAssign(eventId, clear)
+      setMsg(`Assigned: ${res.assigned}, remaining unassigned: ${res.unassigned}`)
+      setTimeout(() => setMsg(''), 4000)
+      api.listTables(eventId).then(setTables)
+      if (showChart) loadChart()
+    } catch (e) { setMsg(e.message) }
+    finally { setLoading(false) }
+  }
+
+  return (
+    <div className="bg-white dark:bg-slate-800 dark:border dark:border-slate-700/60 rounded-xl shadow p-6 space-y-4">
+      <div className="flex items-center justify-between flex-wrap gap-2">
+        <h2 className="font-semibold text-base dark:text-white">Seating</h2>
+        <div className="flex gap-2 flex-wrap">
+          <button onClick={() => autoAssign(false)} disabled={loading || tables.length === 0}
+            className="bg-blue-600 text-white px-3 py-1.5 rounded-lg text-xs font-semibold hover:bg-blue-700 disabled:opacity-50">
+            Auto-Assign
+          </button>
+          <button onClick={() => autoAssign(true)} disabled={loading || tables.length === 0}
+            className="bg-amber-500 text-white px-3 py-1.5 rounded-lg text-xs font-semibold hover:bg-amber-600 disabled:opacity-50">
+            Reassign All
+          </button>
+          <button onClick={() => setForm({ name: '', capacity: 10 })} disabled={loading}
+            className="bg-indigo-600 text-white px-3 py-1.5 rounded-lg text-xs font-semibold hover:bg-indigo-700">
+            + Table
+          </button>
+        </div>
+      </div>
+
+      {tables.length === 0 && !form ? (
+        <p className="text-sm text-gray-400 dark:text-slate-500">No tables yet. Add tables to enable seating.</p>
+      ) : (
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm">
+            <thead className="bg-gray-50 dark:bg-slate-700 text-xs font-semibold text-gray-500 dark:text-slate-400 uppercase">
+              <tr>
+                <th className="px-4 py-2 text-left">Table</th>
+                <th className="px-4 py-2 text-center">Capacity</th>
+                <th className="px-4 py-2 text-center">Assigned</th>
+                <th className="px-4 py-2 text-center">Actions</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-gray-100 dark:divide-slate-700">
+              {tables.map((t) => (
+                <tr key={t.id} className="hover:bg-gray-50 dark:hover:bg-slate-700">
+                  <td className="px-4 py-2.5 font-medium dark:text-slate-100">{t.name}</td>
+                  <td className="px-4 py-2.5 text-center dark:text-slate-300">{t.capacity}</td>
+                  <td className="px-4 py-2.5 text-center">
+                    <span className={`text-xs font-semibold ${t.assigned_count >= t.capacity ? 'text-red-500' : 'text-green-600'}`}>
+                      {t.assigned_count}/{t.capacity}
+                    </span>
+                  </td>
+                  <td className="px-4 py-2.5 text-center">
+                    <div className="flex justify-center gap-3">
+                      <button onClick={() => setForm({ id: t.id, name: t.name, capacity: t.capacity })}
+                        className="text-xs text-indigo-600 hover:underline">Edit</button>
+                      <button onClick={() => deleteTable(t.id)} disabled={loading}
+                        className="text-xs text-red-400 hover:text-red-600 disabled:opacity-40">Delete</button>
+                    </div>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+
+      {form && (
+        <form onSubmit={saveTable} className="flex flex-wrap gap-2 items-end bg-gray-50 dark:bg-slate-700 rounded-lg p-3 border dark:border-slate-600">
+          <div>
+            <label className="block text-xs font-semibold text-gray-600 dark:text-slate-300 mb-1">Table Name</label>
+            <input value={form.name} onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))} required
+              className={fieldCls} placeholder="Table 1" />
+          </div>
+          <div>
+            <label className="block text-xs font-semibold text-gray-600 dark:text-slate-300 mb-1">Capacity</label>
+            <input type="number" min="1" max="200" value={form.capacity}
+              onChange={(e) => setForm((f) => ({ ...f, capacity: e.target.value }))} required
+              className={`${fieldCls} w-24`} />
+          </div>
+          <button type="submit" disabled={loading}
+            className="bg-indigo-600 text-white px-4 py-2 rounded-lg text-sm font-semibold hover:bg-indigo-700 disabled:opacity-50">
+            {form.id ? 'Save' : 'Add'}
+          </button>
+          <button type="button" onClick={() => setForm(null)}
+            className="px-4 py-2 border border-gray-300 dark:border-slate-600 rounded-lg text-sm dark:text-slate-300 hover:bg-gray-100 dark:hover:bg-slate-600">
+            Cancel
+          </button>
+        </form>
+      )}
+
+      {tables.length > 0 && (
+        <div className="pt-2 border-t dark:border-slate-700">
+          <button
+            onClick={showChart ? () => setShowChart(false) : loadChart}
+            disabled={loading}
+            className="text-sm text-indigo-600 dark:text-indigo-400 hover:underline"
+          >
+            {showChart ? '▲ Hide Seating Chart' : '▼ Show Seating Chart'}
+          </button>
+          {showChart && chart && (
+            <div className="mt-4 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+              {chart.map((t) => (
+                <div key={t.id} className="border dark:border-slate-700 rounded-lg overflow-hidden">
+                  <div className="bg-slate-100 dark:bg-slate-700 px-3 py-2 flex justify-between items-center">
+                    <span className="text-sm font-semibold dark:text-white">{t.name}</span>
+                    <span className="text-xs text-gray-500 dark:text-slate-400">
+                      {t.seats.filter((s) => s.guest_id).length}/{t.capacity}
+                    </span>
+                  </div>
+                  <div className="divide-y dark:divide-slate-700 max-h-48 overflow-y-auto">
+                    {t.seats.map((s) => (
+                      <div key={s.seat} className="px-3 py-1.5 flex items-center gap-2 text-sm">
+                        <span className="w-6 text-xs font-mono text-gray-400 dark:text-slate-500 shrink-0">{s.seat}</span>
+                        {s.guest_id ? (
+                          <>
+                            <span className="flex-1 dark:text-slate-200 truncate">{s.name}</span>
+                            {s.admitted && <span className="text-xs text-green-600 shrink-0">✓</span>}
+                            {s.meal_served && <span className="text-xs text-amber-600 shrink-0">🍽</span>}
+                          </>
+                        ) : (
+                          <span className="flex-1 text-xs italic text-gray-300 dark:text-slate-600">Empty</span>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+
+      {msg && <p className="text-sm text-indigo-600">{msg}</p>}
+    </div>
+  )
+}
+
+// ── Menu Panel ────────────────────────────────────────────────────────────────
+
+function MenuPanel({ eventId }) {
+  const [categories, setCategories] = useState([])
+  const [catForm, setCatForm]       = useState(null)
+  const [itemForms, setItemForms]   = useState({})
+  const [summary, setSummary]       = useState(null)
+  const [showSummary, setShowSummary] = useState(false)
+  const [loading, setLoading]       = useState(false)
+  const [msg, setMsg]               = useState('')
+
+  const fieldCls = 'border border-gray-300 dark:border-slate-700 rounded-lg px-3 py-2 text-sm bg-white dark:bg-slate-700 text-gray-900 dark:text-white'
+
+  useEffect(() => {
+    api.listMenuCategories(eventId).then(setCategories).catch(console.error)
+  }, [eventId])
+
+  async function loadSummary() {
+    const data = await api.getMenuSummary(eventId)
+    setSummary(data)
+    setShowSummary(true)
+  }
+
+  async function saveCat(e) {
+    e.preventDefault()
+    setLoading(true)
+    try {
+      const payload = { name: catForm.name, sort_order: Number(catForm.sort_order) || 0 }
+      if (catForm.id) {
+        const updated = await api.updateMenuCategory(eventId, catForm.id, payload)
+        setCategories((prev) => prev.map((c) => (c.id === catForm.id ? updated : c)))
+      } else {
+        const created = await api.createMenuCategory(eventId, payload)
+        setCategories((prev) => [...prev, created])
+      }
+      setCatForm(null)
+    } catch (e) { setMsg(e.message) }
+    finally { setLoading(false) }
+  }
+
+  async function deleteCat(catId) {
+    if (!confirm('Delete this category and all its items?')) return
+    setLoading(true)
+    try {
+      await api.deleteMenuCategory(eventId, catId)
+      setCategories((prev) => prev.filter((c) => c.id !== catId))
+    } catch (e) { setMsg(e.message) }
+    finally { setLoading(false) }
+  }
+
+  async function saveItem(e, catId) {
+    e.preventDefault()
+    const form = itemForms[catId]
+    setLoading(true)
+    try {
+      const payload = { name: form.name, description: form.description || '' }
+      if (form.id) {
+        const updated = await api.updateMenuItem(eventId, form.id, payload)
+        setCategories((prev) => prev.map((c) =>
+          c.id === catId ? { ...c, items: c.items.map((i) => (i.id === form.id ? updated : i)) } : c
+        ))
+      } else {
+        const created = await api.addMenuItem(eventId, catId, payload)
+        setCategories((prev) => prev.map((c) =>
+          c.id === catId ? { ...c, items: [...c.items, created] } : c
+        ))
+      }
+      setItemForms((prev) => ({ ...prev, [catId]: null }))
+    } catch (e) { setMsg(e.message) }
+    finally { setLoading(false) }
+  }
+
+  async function deleteItem(catId, itemId) {
+    setLoading(true)
+    try {
+      await api.deleteMenuItem(eventId, itemId)
+      setCategories((prev) => prev.map((c) =>
+        c.id === catId ? { ...c, items: c.items.filter((i) => i.id !== itemId) } : c
+      ))
+    } catch (e) { setMsg(e.message) }
+    finally { setLoading(false) }
+  }
+
+  return (
+    <div className="bg-white dark:bg-slate-800 dark:border dark:border-slate-700/60 rounded-xl shadow p-6 space-y-4">
+      <div className="flex items-center justify-between flex-wrap gap-2">
+        <h2 className="font-semibold text-base dark:text-white">Menu</h2>
+        <div className="flex gap-2">
+          <button
+            onClick={showSummary ? () => setShowSummary(false) : loadSummary}
+            className="text-xs text-indigo-600 dark:text-indigo-400 hover:underline"
+          >
+            {showSummary ? 'Hide Summary' : 'View Summary'}
+          </button>
+          <button
+            onClick={() => setCatForm({ name: '', sort_order: categories.length })}
+            className="bg-indigo-600 text-white px-3 py-1.5 rounded-lg text-xs font-semibold hover:bg-indigo-700"
+          >
+            + Category
+          </button>
+        </div>
+      </div>
+
+      {categories.length === 0 && !catForm && (
+        <p className="text-sm text-gray-400 dark:text-slate-500">No menu categories yet. Add a category to get started.</p>
+      )}
+
+      <div className="space-y-3">
+        {categories.map((cat) => (
+          <div key={cat.id} className="border dark:border-slate-700 rounded-lg overflow-hidden">
+            <div className="bg-slate-50 dark:bg-slate-700 px-4 py-2.5 flex items-center justify-between">
+              <span className="text-sm font-semibold dark:text-white">{cat.name}</span>
+              <div className="flex gap-3">
+                <button onClick={() => setCatForm({ id: cat.id, name: cat.name, sort_order: cat.sort_order })}
+                  className="text-xs text-indigo-600 hover:underline">Edit</button>
+                <button onClick={() => deleteCat(cat.id)} disabled={loading}
+                  className="text-xs text-red-400 hover:text-red-600 disabled:opacity-40">Delete</button>
+                <button
+                  onClick={() => setItemForms((prev) => ({ ...prev, [cat.id]: { name: '', description: '' } }))}
+                  className="text-xs text-green-600 hover:underline font-semibold"
+                >
+                  + Item
+                </button>
+              </div>
+            </div>
+            <div className="divide-y dark:divide-slate-700">
+              {cat.items.map((item) => (
+                <div key={item.id} className="px-4 py-2 flex items-center justify-between">
+                  <div>
+                    <span className="text-sm dark:text-slate-200">{item.name}</span>
+                    {item.description && (
+                      <span className="ml-2 text-xs text-gray-400 dark:text-slate-500">{item.description}</span>
+                    )}
+                  </div>
+                  <div className="flex gap-3">
+                    <button
+                      onClick={() => setItemForms((prev) => ({ ...prev, [cat.id]: { id: item.id, name: item.name, description: item.description || '' } }))}
+                      className="text-xs text-indigo-600 hover:underline"
+                    >
+                      Edit
+                    </button>
+                    <button onClick={() => deleteItem(cat.id, item.id)} disabled={loading}
+                      className="text-xs text-red-400 hover:text-red-600 disabled:opacity-40">Delete</button>
+                  </div>
+                </div>
+              ))}
+              {cat.items.length === 0 && !itemForms[cat.id] && (
+                <div className="px-4 py-2 text-xs text-gray-400 dark:text-slate-500 italic">No items yet.</div>
+              )}
+              {itemForms[cat.id] && (
+                <form
+                  onSubmit={(e) => saveItem(e, cat.id)}
+                  className="px-4 py-3 flex flex-wrap gap-2 items-end bg-gray-50 dark:bg-slate-700/50"
+                >
+                  <div>
+                    <label className="block text-xs font-semibold text-gray-600 dark:text-slate-300 mb-1">Item Name</label>
+                    <input
+                      value={itemForms[cat.id].name}
+                      onChange={(e) => setItemForms((prev) => ({ ...prev, [cat.id]: { ...prev[cat.id], name: e.target.value } }))}
+                      required className={fieldCls} placeholder="Chicken Breast"
+                    />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <label className="block text-xs font-semibold text-gray-600 dark:text-slate-300 mb-1">Description</label>
+                    <input
+                      value={itemForms[cat.id].description}
+                      onChange={(e) => setItemForms((prev) => ({ ...prev, [cat.id]: { ...prev[cat.id], description: e.target.value } }))}
+                      className={fieldCls} placeholder="Optional"
+                    />
+                  </div>
+                  <button type="submit" disabled={loading}
+                    className="bg-indigo-600 text-white px-4 py-2 rounded-lg text-sm font-semibold hover:bg-indigo-700 disabled:opacity-50">
+                    {itemForms[cat.id].id ? 'Save' : 'Add'}
+                  </button>
+                  <button type="button" onClick={() => setItemForms((prev) => ({ ...prev, [cat.id]: null }))}
+                    className="px-4 py-2 border border-gray-300 dark:border-slate-600 rounded-lg text-sm dark:text-slate-300 hover:bg-gray-100 dark:hover:bg-slate-600">
+                    ×
+                  </button>
+                </form>
+              )}
+            </div>
+          </div>
+        ))}
+      </div>
+
+      {catForm && (
+        <form onSubmit={saveCat} className="flex flex-wrap gap-2 items-end bg-gray-50 dark:bg-slate-700 rounded-lg p-3 border dark:border-slate-600">
+          <div>
+            <label className="block text-xs font-semibold text-gray-600 dark:text-slate-300 mb-1">Category Name</label>
+            <input value={catForm.name} onChange={(e) => setCatForm((f) => ({ ...f, name: e.target.value }))} required
+              className={fieldCls} placeholder="Main Course" />
+          </div>
+          <div>
+            <label className="block text-xs font-semibold text-gray-600 dark:text-slate-300 mb-1">Sort Order</label>
+            <input type="number" value={catForm.sort_order} onChange={(e) => setCatForm((f) => ({ ...f, sort_order: e.target.value }))}
+              className={`${fieldCls} w-20`} />
+          </div>
+          <button type="submit" disabled={loading}
+            className="bg-indigo-600 text-white px-4 py-2 rounded-lg text-sm font-semibold hover:bg-indigo-700 disabled:opacity-50">
+            {catForm.id ? 'Save' : 'Add'}
+          </button>
+          <button type="button" onClick={() => setCatForm(null)}
+            className="px-4 py-2 border border-gray-300 dark:border-slate-600 rounded-lg text-sm dark:text-slate-300 hover:bg-gray-100 dark:hover:bg-slate-600">
+            Cancel
+          </button>
+        </form>
+      )}
+
+      {showSummary && summary && (
+        <div className="pt-3 border-t dark:border-slate-700 space-y-4">
+          <h3 className="text-sm font-semibold dark:text-white">Selection Summary</h3>
+          {summary.map((cat) => (
+            <div key={cat.id}>
+              <div className="text-xs font-semibold text-gray-500 dark:text-slate-400 uppercase mb-1.5">{cat.category}</div>
+              <div className="space-y-1">
+                {cat.items.map((item) => (
+                  <div key={item.id} className="flex items-center gap-2">
+                    <span className="text-sm dark:text-slate-200 flex-1">{item.name}</span>
+                    <span className="text-xs font-bold text-indigo-600 dark:text-indigo-400 w-8 text-right">{item.count}</span>
+                  </div>
+                ))}
+                <div className="flex items-center gap-2 text-gray-400 dark:text-slate-500">
+                  <span className="text-sm flex-1 italic">No selection</span>
+                  <span className="text-xs font-bold w-8 text-right">{cat.no_choice}</span>
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {msg && <p className="text-sm text-red-600">{msg}</p>}
+    </div>
+  )
+}
+
 // ── Team panel ────────────────────────────────────────────────────────────────
 
 function TeamPanel({ eventId }) {
@@ -97,6 +564,15 @@ function TeamPanel({ eventId }) {
     finally { setLoading(false) }
   }
 
+  async function toggleSeatPerm(userId, current) {
+    setLoading(true)
+    try {
+      await api.updateMemberPermissions(eventId, userId, { can_reassign_seats: !current })
+      setMembers((prev) => prev.map((m) => m.user.id === userId ? { ...m, can_reassign_seats: !current } : m))
+    } catch (e) { setMsg(e.message) }
+    finally { setLoading(false) }
+  }
+
   const roleTag = (role) => (
     <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${role === 'admin' ? 'bg-indigo-100 text-indigo-700 dark:bg-indigo-900/50 dark:text-indigo-300' : 'bg-amber-100 text-amber-700 dark:bg-amber-900/50 dark:text-amber-300'}`}>
       {role}
@@ -112,7 +588,7 @@ function TeamPanel({ eventId }) {
       ) : (
         <ul className="divide-y divide-gray-100 dark:divide-slate-700">
           {members.map((m) => (
-            <li key={m.id} className="flex items-center justify-between py-2.5">
+            <li key={m.id} className="flex items-center justify-between py-2.5 gap-2 flex-wrap">
               <div className="flex items-center gap-3">
                 <div className="w-8 h-8 rounded-full bg-indigo-100 dark:bg-indigo-900/50 flex items-center justify-center text-indigo-700 dark:text-indigo-300 font-semibold text-sm">
                   {m.user.name[0].toUpperCase()}
@@ -122,8 +598,22 @@ function TeamPanel({ eventId }) {
                   <div className="text-xs text-gray-400 dark:text-slate-500">{m.user.email}</div>
                 </div>
               </div>
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-2 flex-wrap">
                 {roleTag(m.user.role)}
+                {m.user.role === 'official' && (
+                  <button
+                    onClick={() => toggleSeatPerm(m.user.id, m.can_reassign_seats)}
+                    disabled={loading}
+                    title="Can reassign seats"
+                    className={`text-xs px-2 py-0.5 rounded-full font-medium border transition-colors disabled:opacity-50 ${
+                      m.can_reassign_seats
+                        ? 'bg-green-100 text-green-700 border-green-200 dark:bg-green-900/40 dark:text-green-400 dark:border-green-800'
+                        : 'bg-gray-100 text-gray-500 border-gray-200 dark:bg-slate-700 dark:text-slate-400 dark:border-slate-600'
+                    }`}
+                  >
+                    Seats: {m.can_reassign_seats ? 'Yes' : 'No'}
+                  </button>
+                )}
                 <button onClick={() => remove(m.user.id)} disabled={loading}
                   className="text-xs text-red-400 hover:text-red-600 disabled:opacity-40 px-2 py-1 rounded hover:bg-red-50 dark:hover:bg-red-950">
                   Remove
@@ -676,6 +1166,7 @@ export default function AdminPage() {
               <strong>Active</strong> → scanning enabled &nbsp;·&nbsp;
               <strong>Ended</strong> → read-only record
             </p>
+            <FeatureToggles event={event} onChanged={updateEvent} />
           </div>
 
           {/* Live spreadsheet sync */}
@@ -770,6 +1261,12 @@ export default function AdminPage() {
 
           {/* Team assignment */}
           <TeamPanel eventId={selectedId} />
+
+          {/* Seating management */}
+          {event.seating_enabled && <SeatingPanel eventId={selectedId} />}
+
+          {/* Menu management */}
+          {event.menu_enabled && <MenuPanel eventId={selectedId} />}
 
           {/* Guest list */}
           {guests.length > 0 && (() => {

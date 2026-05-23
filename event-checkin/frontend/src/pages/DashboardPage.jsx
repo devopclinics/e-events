@@ -7,15 +7,15 @@ const STAT_BAR  = { indigo: 'bg-indigo-500',  green: 'bg-green-500',  amber: 'bg
 function StatCard({ label, value, total, color }) {
   const pct = total > 0 ? Math.round((value / total) * 100) : 0
   return (
-    <div className="bg-white rounded-xl shadow p-5">
+    <div className="bg-white dark:bg-slate-800 dark:border dark:border-slate-700/60 rounded-xl shadow p-5">
       <div className={`text-4xl font-bold ${STAT_TEXT[color]}`}>{value}</div>
-      <div className="text-sm text-gray-500 mt-1">{label}</div>
+      <div className="text-sm text-gray-500 dark:text-slate-400 mt-1">{label}</div>
       {total > 0 && (
         <div className="mt-3">
-          <div className="h-1.5 bg-gray-100 rounded-full overflow-hidden">
+          <div className="h-1.5 bg-gray-100 dark:bg-slate-700 rounded-full overflow-hidden">
             <div className={`h-full ${STAT_BAR[color]} rounded-full transition-all`} style={{ width: `${pct}%` }} />
           </div>
-          <div className="text-xs text-gray-400 mt-1">{pct}%</div>
+          <div className="text-xs text-gray-400 dark:text-slate-500 mt-1">{pct}%</div>
         </div>
       )}
     </div>
@@ -93,17 +93,17 @@ export default function DashboardPage() {
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-bold">Live Dashboard</h1>
+        <h1 className="text-2xl font-bold dark:text-white">Live Dashboard</h1>
         <div className="flex items-center gap-2">
-          <span className={`w-2.5 h-2.5 rounded-full ${connected ? 'bg-green-500 animate-pulse' : 'bg-gray-300'}`} />
-          <span className="text-xs text-gray-500">{connected ? 'Live' : 'Disconnected'}</span>
+          <span className={`w-2.5 h-2.5 rounded-full ${connected ? 'bg-green-500 animate-pulse' : 'bg-gray-300 dark:bg-slate-600'}`} />
+          <span className="text-xs text-gray-500 dark:text-slate-400">{connected ? 'Live' : 'Disconnected'}</span>
         </div>
       </div>
 
       {events.length > 1 && (
-        <div className="bg-white rounded-xl shadow p-4">
+        <div className="bg-white dark:bg-slate-800 dark:border dark:border-slate-700/60 rounded-xl shadow p-4">
           <select
-            className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm"
+            className="w-full border border-gray-300 dark:border-slate-700 rounded-lg px-3 py-2 text-sm bg-white dark:bg-slate-700 text-gray-900 dark:text-white"
             value={eventId}
             onChange={(e) => setEventId(e.target.value)}
           >
@@ -131,31 +131,31 @@ export default function DashboardPage() {
           </div>
 
           {/* Progress bar */}
-          <div className="bg-white rounded-xl shadow p-5">
-            <div className="flex justify-between text-sm font-medium text-gray-600 mb-2">
+          <div className="bg-white dark:bg-slate-800 dark:border dark:border-slate-700/60 rounded-xl shadow p-5">
+            <div className="flex justify-between text-sm font-medium text-gray-600 dark:text-slate-300 mb-2">
               <span>Check-In Progress</span>
               <span>{stats.total > 0 ? Math.round((stats.admitted / stats.total) * 100) : 0}%</span>
             </div>
-            <div className="h-4 bg-gray-100 rounded-full overflow-hidden">
+            <div className="h-4 bg-gray-100 dark:bg-slate-700 rounded-full overflow-hidden">
               <div
                 className="h-full bg-green-500 rounded-full transition-all duration-500"
                 style={{ width: stats.total > 0 ? `${(stats.admitted / stats.total) * 100}%` : '0%' }}
               />
             </div>
-            <div className="text-xs text-gray-400 mt-1">{stats.admitted} of {stats.total} guests admitted</div>
+            <div className="text-xs text-gray-400 dark:text-slate-500 mt-1">{stats.admitted} of {stats.total} guests admitted</div>
           </div>
 
           {/* Live admitted list */}
-          <div className="bg-white rounded-xl shadow overflow-hidden">
-            <div className="px-6 py-4 border-b flex items-center justify-between">
-              <h2 className="font-semibold">Admitted Guests</h2>
+          <div className="bg-white dark:bg-slate-800 dark:border dark:border-slate-700/60 rounded-xl shadow overflow-hidden">
+            <div className="px-6 py-4 border-b dark:border-slate-700 flex items-center justify-between">
+              <h2 className="font-semibold dark:text-white">Admitted Guests</h2>
               <button onClick={() => fetchStats(eventId)} className="text-xs text-indigo-600 hover:underline">Refresh</button>
             </div>
             {stats.admitted_guests.length === 0 ? (
-              <div className="px-6 py-10 text-center text-gray-400 text-sm">No guests admitted yet.</div>
+              <div className="px-6 py-10 text-center text-gray-400 dark:text-slate-500 text-sm">No guests admitted yet.</div>
             ) : (
               <table className="w-full text-sm">
-                <thead className="bg-gray-50 text-xs font-semibold text-gray-500 uppercase">
+                <thead className="bg-gray-50 dark:bg-slate-700 text-xs font-semibold text-gray-500 dark:text-slate-400 uppercase">
                   <tr>
                     <th className="px-4 py-3 text-left">#</th>
                     <th className="px-4 py-3 text-left">Name</th>
@@ -163,13 +163,13 @@ export default function DashboardPage() {
                     <th className="px-4 py-3 text-right">Time</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-gray-100">
+                <tbody className="divide-y divide-gray-100 dark:divide-slate-700">
                   {stats.admitted_guests.map((g, i) => (
-                    <tr key={g.id || i} className="hover:bg-gray-50">
-                      <td className="px-4 py-3 text-gray-400">{stats.admitted - i}</td>
-                      <td className="px-4 py-3 font-medium">{g.first_name} {g.last_name}</td>
-                      <td className="px-4 py-3 text-gray-500">{g.email}</td>
-                      <td className="px-4 py-3 text-right text-gray-500">
+                    <tr key={g.id || i} className="hover:bg-gray-50 dark:hover:bg-slate-700">
+                      <td className="px-4 py-3 text-gray-400 dark:text-slate-500">{stats.admitted - i}</td>
+                      <td className="px-4 py-3 font-medium dark:text-slate-100">{g.first_name} {g.last_name}</td>
+                      <td className="px-4 py-3 text-gray-500 dark:text-slate-400">{g.email}</td>
+                      <td className="px-4 py-3 text-right text-gray-500 dark:text-slate-400">
                         {g.admitted_at ? new Date(g.admitted_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '—'}
                       </td>
                     </tr>
@@ -182,7 +182,7 @@ export default function DashboardPage() {
       )}
 
       {!eventId && events.length === 0 && (
-        <div className="text-center py-16 text-gray-400">No events found. Create one in the Admin panel.</div>
+        <div className="text-center py-16 text-gray-400 dark:text-slate-500">No events found. Create one in the Admin panel.</div>
       )}
     </div>
   )

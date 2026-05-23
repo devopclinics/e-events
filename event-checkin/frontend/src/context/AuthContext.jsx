@@ -1,37 +1,45 @@
-import { createContext, useContext, useState, useEffect, useCallback } from 'react'
+import { createContext, useContext, useState, useEffect } from 'react'
+import { onAuthStateChanged, signOut as fbSignOut } from 'firebase/auth'
+import { auth } from '../firebase'
 
 const AuthContext = createContext(null)
 
 export function AuthProvider({ children }) {
-  const [user, setUser] = useState(null)
-  const [token, setToken] = useState(() => localStorage.getItem('token'))
-  const [loading, setLoading] = useState(true)
-
-  const logout = useCallback(() => {
-    localStorage.removeItem('token')
-    setToken(null)
-    setUser(null)
-  }, [])
+  // undefined = still loading, null = signed out, object = signed in
+  const [user, setUser] = useState(undefined)
 
   useEffect(() => {
-    if (!token) {
-      setLoading(false)
-      return
-    }
-    fetch('/api/auth/me', { headers: { Authorization: `Bearer ${token}` } })
-      .then((r) => (r.ok ? r.json() : Promise.reject()))
-      .then(setUser)
-      .catch(logout)
-      .finally(() => setLoading(false))
-  }, [token, logout])
+    return onAuthStateChanged(auth, async (firebaseUser) => {
+      if (!firebaseUser) {
+        setUser(null)
+        return
+      }
+      try {
+        const token = await firebaseUser.getIdToken()
+        const res = await fetch('/api/auth/me', {
+          headers: { Authorization: `Bearer ${token}` },
+        })
+        if (res.ok) {
+          setUser(await res.json())
+        } else {
+          setUser(null)
+        }
+      } catch {
+        setUser(null)
+      }
+    })
+  }, [])
 
-  function saveToken(t) {
-    localStorage.setItem('token', t)
-    setToken(t)
+  async function logout() {
+    await fbSignOut(auth)
+    setUser(null)
   }
 
+  // Block render until Firebase resolves the auth state (prevents flash)
+  if (user === undefined) return null
+
   return (
-    <AuthContext.Provider value={{ user, token, loading, saveToken, logout }}>
+    <AuthContext.Provider value={{ user, logout }}>
       {children}
     </AuthContext.Provider>
   )

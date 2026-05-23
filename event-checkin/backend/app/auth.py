@@ -1,53 +1,67 @@
-import urllib.parse
-from datetime import datetime, timedelta
-from typing import Optional
-
-import httpx
-from jose import JWTError, jwt
-from passlib.context import CryptContext
+import json
+import firebase_admin
+from firebase_admin import credentials, auth as firebase_auth
 from fastapi import Depends, HTTPException
-from fastapi.security import OAuth2PasswordBearer
+from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy import select
 
 from .database import get_db
 from .models import User
 from .config import settings
 
-pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
-oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/auth/login", auto_error=False)
+_firebase_app = None
 
 
-def hash_password(password: str) -> str:
-    return pwd_context.hash(password)
+def _ensure_firebase():
+    global _firebase_app
+    if _firebase_app is not None:
+        return
+    if not settings.firebase_credentials:
+        raise HTTPException(503, "Firebase not configured — set FIREBASE_CREDENTIALS in .env")
+    cred_data = json.loads(settings.firebase_credentials)
+    cred = credentials.Certificate(cred_data)
+    _firebase_app = firebase_admin.initialize_app(cred)
 
 
-def verify_password(plain: str, hashed: str) -> bool:
-    return pwd_context.verify(plain, hashed)
-
-
-def create_token(user: User) -> str:
-    expire = datetime.utcnow() + timedelta(minutes=settings.jwt_expire_minutes)
-    return jwt.encode(
-        {"sub": user.id, "role": user.role, "exp": expire},
-        settings.jwt_secret,
-        algorithm="HS256",
-    )
+bearer = HTTPBearer(auto_error=False)
 
 
 async def get_current_user(
-    token: Optional[str] = Depends(oauth2_scheme),
+    creds: HTTPAuthorizationCredentials = Depends(bearer),
     db: AsyncSession = Depends(get_db),
 ) -> User:
-    if not token:
+    if not creds:
         raise HTTPException(401, "Not authenticated")
+
+    _ensure_firebase()
     try:
-        payload = jwt.decode(token, settings.jwt_secret, algorithms=["HS256"])
-        user_id: str = payload.get("sub")
-    except JWTError:
+        decoded = firebase_auth.verify_id_token(creds.credentials)
+    except Exception:
         raise HTTPException(401, "Invalid or expired token")
-    user = await db.get(User, user_id)
+
+    firebase_uid = decoded["uid"]
+    email = (decoded.get("email") or "").lower()
+    name = decoded.get("name") or (decoded.get("email") or "user").split("@")[0]
+
+    # Look up by firebase_uid first
+    result = await db.execute(select(User).where(User.firebase_uid == firebase_uid))
+    user = result.scalar_one_or_none()
+
+    if not user and email:
+        # Link existing account by email on first Firebase sign-in
+        result = await db.execute(select(User).where(User.email == email))
+        user = result.scalar_one_or_none()
+        if user:
+            user.firebase_uid = firebase_uid
+            await db.commit()
+
     if not user:
-        raise HTTPException(401, "User not found")
+        user = User(name=name, email=email, firebase_uid=firebase_uid, role="official")
+        db.add(user)
+        await db.commit()
+        await db.refresh(user)
+
     return user
 
 
@@ -61,47 +75,3 @@ async def require_official(user: User = Depends(get_current_user)) -> User:
     if user.role not in ("admin", "official"):
         raise HTTPException(403, "Access denied")
     return user
-
-
-# ── Google OAuth helpers ─────────────────────────────────────────────────────
-
-def google_enabled() -> bool:
-    return bool(settings.google_client_id and settings.google_client_secret)
-
-
-def google_auth_url(state: str = "") -> str:
-    params = {
-        "client_id": settings.google_client_id,
-        "redirect_uri": settings.google_redirect_uri,
-        "response_type": "code",
-        "scope": "openid email profile",
-        "access_type": "offline",
-        "prompt": "select_account",
-    }
-    if state:
-        params["state"] = state
-    return "https://accounts.google.com/o/oauth2/v2/auth?" + urllib.parse.urlencode(params)
-
-
-async def exchange_google_code(code: str) -> dict:
-    async with httpx.AsyncClient() as client:
-        resp = await client.post(
-            "https://oauth2.googleapis.com/token",
-            data={
-                "client_id": settings.google_client_id,
-                "client_secret": settings.google_client_secret,
-                "code": code,
-                "grant_type": "authorization_code",
-                "redirect_uri": settings.google_redirect_uri,
-            },
-        )
-        return resp.json()
-
-
-async def get_google_user_info(access_token: str) -> dict:
-    async with httpx.AsyncClient() as client:
-        resp = await client.get(
-            "https://www.googleapis.com/oauth2/v2/userinfo",
-            headers={"Authorization": f"Bearer {access_token}"},
-        )
-        return resp.json()

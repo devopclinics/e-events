@@ -3,7 +3,8 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from .database import engine, Base
 from .config import settings
-from .routers import events, guests, scanner, dashboard, auth as auth_router
+from .routers import events, guests, scanner, dashboard
+from .routers import auth as auth_router
 
 
 @asynccontextmanager

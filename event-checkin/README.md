@@ -59,6 +59,46 @@ That's it. The app is live at **http://events.vsgs.io** (once DNS is configured)
 
 ---
 
+## Data Persistence and Backups
+
+Postgres data is stored in the named Docker volume `event-checkin_pgdata`. Normal rebuilds, restarts, and server reboots keep this data:
+
+```bash
+docker compose restart
+docker compose up -d --build
+```
+
+Do not use these commands unless you intentionally want to remove the database:
+
+```bash
+docker compose down -v
+docker volume rm event-checkin_pgdata
+docker volume prune
+```
+
+Automatic backups run in the `db-backup` service. It writes compressed SQL dumps to `./backups` every 24 hours and keeps 14 days by default. Change retention with:
+
+```bash
+BACKUP_RETENTION_DAYS=30 docker compose up -d db-backup
+```
+
+Create an immediate manual backup:
+
+```bash
+mkdir -p backups
+docker compose exec -T db pg_dump -U checkin -d checkin --clean --if-exists --no-owner --no-privileges \
+  | gzip > backups/checkin-$(date -u +%Y%m%dT%H%M%SZ)-manual.sql.gz
+```
+
+Restore a backup into the running database:
+
+```bash
+gzip -dc backups/checkin-YYYYMMDDTHHMMSSZ.sql.gz \
+  | docker compose exec -T db psql -U checkin -d checkin
+```
+
+---
+
 ## Cloudflare + Domain Setup (events.vsgs.io)
 
 ### DNS record

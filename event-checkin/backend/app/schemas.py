@@ -1,5 +1,5 @@
-from pydantic import BaseModel, ConfigDict, EmailStr
-from datetime import datetime
+from pydantic import BaseModel, ConfigDict, EmailStr, field_validator
+from datetime import datetime, timezone
 from typing import Optional, Literal
 
 
@@ -42,6 +42,13 @@ class EventCreate(BaseModel):
     description: Optional[str] = None
     checkin_base_url: str
 
+    @field_validator("event_date", mode="after")
+    @classmethod
+    def strip_tz(cls, v):
+        if v is not None and v.tzinfo is not None:
+            return v.astimezone(timezone.utc).replace(tzinfo=None)
+        return v
+
 
 class EventUpdate(BaseModel):
     name: Optional[str] = None
@@ -49,6 +56,13 @@ class EventUpdate(BaseModel):
     event_date: Optional[datetime] = None
     description: Optional[str] = None
     checkin_base_url: Optional[str] = None
+
+    @field_validator("event_date", mode="after")
+    @classmethod
+    def strip_tz(cls, v):
+        if v is not None and v.tzinfo is not None:
+            return v.astimezone(timezone.utc).replace(tzinfo=None)
+        return v
 
 
 class EventOut(BaseModel):

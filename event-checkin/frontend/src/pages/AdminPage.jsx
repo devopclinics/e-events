@@ -4,9 +4,9 @@ import { api } from '../api'
 // ── helpers ──────────────────────────────────────────────────────────────────
 
 const STATUS_CFG = {
-  draft:  { label: 'Draft',  dot: 'bg-gray-400',    text: 'text-gray-600',  bg: 'bg-gray-100'   },
-  active: { label: 'Active', dot: 'bg-green-500 animate-pulse', text: 'text-green-700', bg: 'bg-green-50' },
-  ended:  { label: 'Ended',  dot: 'bg-slate-400',   text: 'text-slate-600', bg: 'bg-slate-100'  },
+  draft:  { label: 'Draft',  dot: 'bg-gray-400',    text: 'text-gray-600 dark:text-slate-300',  bg: 'bg-gray-100 dark:bg-slate-700'   },
+  active: { label: 'Active', dot: 'bg-green-500 animate-pulse', text: 'text-green-700 dark:text-green-400', bg: 'bg-green-50 dark:bg-green-900/40' },
+  ended:  { label: 'Ended',  dot: 'bg-slate-400',   text: 'text-slate-600 dark:text-slate-400', bg: 'bg-slate-100 dark:bg-slate-700'  },
 }
 
 function StatusBadge({ status }) {
@@ -98,34 +98,34 @@ function TeamPanel({ eventId }) {
   }
 
   const roleTag = (role) => (
-    <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${role === 'admin' ? 'bg-indigo-100 text-indigo-700' : 'bg-amber-100 text-amber-700'}`}>
+    <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${role === 'admin' ? 'bg-indigo-100 text-indigo-700 dark:bg-indigo-900/50 dark:text-indigo-300' : 'bg-amber-100 text-amber-700 dark:bg-amber-900/50 dark:text-amber-300'}`}>
       {role}
     </span>
   )
 
   return (
-    <div className="bg-white rounded-xl shadow p-6 space-y-4">
-      <h2 className="font-semibold text-base">Event Team</h2>
+    <div className="bg-white dark:bg-slate-800 dark:border dark:border-slate-700/60 rounded-xl shadow p-6 space-y-4">
+      <h2 className="font-semibold text-base dark:text-white">Event Team</h2>
 
       {members.length === 0 ? (
-        <p className="text-sm text-gray-400">No members assigned yet.</p>
+        <p className="text-sm text-gray-400 dark:text-slate-500">No members assigned yet.</p>
       ) : (
-        <ul className="divide-y divide-gray-100">
+        <ul className="divide-y divide-gray-100 dark:divide-slate-700">
           {members.map((m) => (
             <li key={m.id} className="flex items-center justify-between py-2.5">
               <div className="flex items-center gap-3">
-                <div className="w-8 h-8 rounded-full bg-indigo-100 flex items-center justify-center text-indigo-700 font-semibold text-sm">
+                <div className="w-8 h-8 rounded-full bg-indigo-100 dark:bg-indigo-900/50 flex items-center justify-center text-indigo-700 dark:text-indigo-300 font-semibold text-sm">
                   {m.user.name[0].toUpperCase()}
                 </div>
                 <div>
-                  <div className="text-sm font-medium">{m.user.name}</div>
-                  <div className="text-xs text-gray-400">{m.user.email}</div>
+                  <div className="text-sm font-medium dark:text-slate-100">{m.user.name}</div>
+                  <div className="text-xs text-gray-400 dark:text-slate-500">{m.user.email}</div>
                 </div>
               </div>
               <div className="flex items-center gap-2">
                 {roleTag(m.user.role)}
                 <button onClick={() => remove(m.user.id)} disabled={loading}
-                  className="text-xs text-red-400 hover:text-red-600 disabled:opacity-40 px-2 py-1 rounded hover:bg-red-50">
+                  className="text-xs text-red-400 hover:text-red-600 disabled:opacity-40 px-2 py-1 rounded hover:bg-red-50 dark:hover:bg-red-950">
                   Remove
                 </button>
               </div>
@@ -134,9 +134,9 @@ function TeamPanel({ eventId }) {
         </ul>
       )}
 
-      <div className="flex gap-2 pt-2 border-t">
+      <div className="flex gap-2 pt-2 border-t dark:border-slate-700">
         <select value={selectedUserId} onChange={(e) => setSelectedUserId(e.target.value)}
-          className="flex-1 border border-gray-300 rounded-lg px-3 py-2 text-sm">
+          className="flex-1 border border-gray-300 dark:border-slate-700 rounded-lg px-3 py-2 text-sm bg-white dark:bg-slate-700 text-gray-900 dark:text-white">
           <option value="">— assign a user —</option>
           {unassigned.map((u) => (
             <option key={u.id} value={u.id}>{u.name} ({u.role})</option>
@@ -175,31 +175,31 @@ function UsersPanel() {
   }
 
   return (
-    <div className="bg-white rounded-xl shadow p-6 space-y-4">
-      <h2 className="font-semibold text-base">User Management</h2>
+    <div className="bg-white dark:bg-slate-800 dark:border dark:border-slate-700/60 rounded-xl shadow p-6 space-y-4">
+      <h2 className="font-semibold text-base dark:text-white">User Management</h2>
       {users.length === 0 ? (
-        <p className="text-sm text-gray-400">No users yet.</p>
+        <p className="text-sm text-gray-400 dark:text-slate-500">No users yet.</p>
       ) : (
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
-            <thead className="bg-gray-50 text-xs font-semibold text-gray-500 uppercase">
+            <thead className="bg-gray-50 dark:bg-slate-700 text-xs font-semibold text-gray-500 dark:text-slate-400 uppercase">
               <tr>
                 <th className="px-4 py-2 text-left">Name</th>
                 <th className="px-4 py-2 text-left">Email</th>
                 <th className="px-4 py-2 text-left">Role</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-gray-100">
+            <tbody className="divide-y divide-gray-100 dark:divide-slate-700">
               {users.map((u) => (
-                <tr key={u.id} className="hover:bg-gray-50">
-                  <td className="px-4 py-2.5 font-medium">{u.name}</td>
-                  <td className="px-4 py-2.5 text-gray-500">{u.email}</td>
+                <tr key={u.id} className="hover:bg-gray-50 dark:hover:bg-slate-700">
+                  <td className="px-4 py-2.5 font-medium dark:text-slate-100">{u.name}</td>
+                  <td className="px-4 py-2.5 text-gray-500 dark:text-slate-400">{u.email}</td>
                   <td className="px-4 py-2.5">
                     <select
                       value={u.role}
                       onChange={(e) => changeRole(u.id, e.target.value)}
                       disabled={changing === u.id}
-                      className="border border-gray-300 rounded px-2 py-1 text-xs disabled:opacity-50"
+                      className="border border-gray-300 dark:border-slate-700 rounded px-2 py-1 text-xs disabled:opacity-50 bg-white dark:bg-slate-700 text-gray-900 dark:text-white"
                     >
                       <option value="admin">Admin</option>
                       <option value="official">Official</option>
@@ -243,7 +243,7 @@ function EventForm({ initial, onSave, onCancel }) {
     finally { setSaving(false) }
   }
 
-  const field = 'block w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500'
+  const field = 'block w-full border border-gray-300 dark:border-slate-700 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-white dark:bg-slate-700 text-gray-900 dark:text-white'
 
   return (
     <form onSubmit={submit} className="space-y-4">
@@ -276,7 +276,7 @@ function EventForm({ initial, onSave, onCancel }) {
           {saving ? 'Saving…' : initial ? 'Save Changes' : 'Create Event'}
         </button>
         {onCancel && (
-          <button type="button" onClick={onCancel} className="px-5 py-2 rounded-lg border text-sm font-semibold hover:bg-gray-50">
+          <button type="button" onClick={onCancel} className="px-5 py-2 rounded-lg border border-gray-300 dark:border-slate-700 text-sm font-semibold hover:bg-gray-50 dark:hover:bg-slate-700 dark:text-slate-200">
             Cancel
           </button>
         )}
@@ -287,7 +287,7 @@ function EventForm({ initial, onSave, onCancel }) {
 
 function Badge({ on, labels }) {
   return (
-    <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${on ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-500'}`}>
+    <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${on ? 'bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-400' : 'bg-gray-100 text-gray-500 dark:bg-slate-700 dark:text-slate-400'}`}>
       {on ? labels[0] : labels[1]}
     </span>
   )
@@ -305,6 +305,8 @@ export default function AdminPage() {
   const [msg, setMsg] = useState('')
   const [error, setError] = useState('')
   const [page, setPage] = useState(0)
+  const [sheetUrl, setSheetUrl] = useState('')
+  const [showUrlInput, setShowUrlInput] = useState(false)
   const fileRef = useRef()
 
   const PAGE_SIZE = 50
@@ -342,6 +344,18 @@ export default function AdminPage() {
     flash('Event updated!')
   }
 
+  async function handleDeleteEvent() {
+    if (!event) return
+    if (!confirm(`Delete "${event.name}"? This removes all guests and cannot be undone.`)) return
+    try {
+      await api.deleteEvent(selectedId)
+      setEvents((prev) => prev.filter((e) => e.id !== selectedId))
+      setSelectedId('')
+      setGuests([])
+      flash('Event deleted.')
+    } catch (err) { flash(err.message, true) }
+  }
+
   async function handleUpload(e) {
     const file = e.target.files[0]
     if (!file) return
@@ -374,6 +388,19 @@ export default function AdminPage() {
     finally { setLoading(false) }
   }
 
+  async function handleImportUrl() {
+    if (!sheetUrl.trim()) return
+    setLoading(true)
+    try {
+      const res = await api.importGuestsFromUrl(selectedId, sheetUrl.trim())
+      flash(`${res.added} guests added, ${res.skipped} skipped.`)
+      setGuests(await api.listGuests(selectedId))
+      setSheetUrl('')
+      setShowUrlInput(false)
+    } catch (err) { flash(err.message, true) }
+    finally { setLoading(false) }
+  }
+
   async function handleDeleteGuest(guestId) {
     if (!confirm('Remove this guest?')) return
     try {
@@ -402,7 +429,7 @@ export default function AdminPage() {
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-bold">Admin Panel</h1>
+        <h1 className="text-2xl font-bold dark:text-white">Admin Panel</h1>
         <button onClick={() => { setShowForm(true); setEditing(false) }}
           className="bg-indigo-600 text-white px-4 py-2 rounded-lg text-sm font-semibold hover:bg-indigo-700">
           + New Event
@@ -410,17 +437,17 @@ export default function AdminPage() {
       </div>
 
       {showForm && (
-        <div className="bg-white rounded-xl shadow p-6">
-          <h2 className="font-semibold text-lg mb-4">New Event</h2>
+        <div className="bg-white dark:bg-slate-800 dark:border dark:border-slate-700/60 rounded-xl shadow p-6">
+          <h2 className="font-semibold text-lg mb-4 dark:text-white">New Event</h2>
           <EventForm onSave={handleCreate} onCancel={() => setShowForm(false)} />
         </div>
       )}
 
       {events.length > 0 && (
-        <div className="bg-white rounded-xl shadow p-6">
-          <label className="block text-xs font-semibold text-gray-600 mb-2">Select Event</label>
+        <div className="bg-white dark:bg-slate-800 dark:border dark:border-slate-700/60 rounded-xl shadow p-6">
+          <label className="block text-xs font-semibold text-gray-600 dark:text-slate-300 mb-2">Select Event</label>
           <div className="flex gap-3 items-center">
-            <select className="border border-gray-300 rounded-lg px-3 py-2 text-sm flex-1"
+            <select className="border border-gray-300 dark:border-slate-700 rounded-lg px-3 py-2 text-sm flex-1 bg-white dark:bg-slate-700 text-gray-900 dark:text-white"
               value={selectedId}
               onChange={(e) => { setSelectedId(e.target.value); setEditing(false) }}>
               <option value="">— choose an event —</option>
@@ -431,14 +458,20 @@ export default function AdminPage() {
               ))}
             </select>
             {event && (
-              <button onClick={() => setEditing(!editing)} className="text-sm text-indigo-600 hover:underline whitespace-nowrap">
-                {editing ? 'Cancel' : 'Edit'}
-              </button>
+              <div className="flex items-center gap-2 shrink-0">
+                <button onClick={() => setEditing(!editing)} className="text-sm text-indigo-600 hover:underline whitespace-nowrap">
+                  {editing ? 'Cancel' : 'Edit'}
+                </button>
+                <button onClick={handleDeleteEvent}
+                  className="text-sm text-red-500 hover:text-red-700 hover:underline whitespace-nowrap">
+                  Delete
+                </button>
+              </div>
             )}
           </div>
 
           {editing && event && (
-            <div className="mt-4 pt-4 border-t">
+            <div className="mt-4 pt-4 border-t dark:border-slate-700">
               <EventForm
                 initial={{ ...event, event_date: utcToLocal(event.event_date) }}
                 onSave={handleUpdate}
@@ -449,18 +482,18 @@ export default function AdminPage() {
         </div>
       )}
 
-      {msg && <div className="bg-green-50 border border-green-200 text-green-700 rounded-lg px-4 py-3 text-sm">{msg}</div>}
-      {error && <div className="bg-red-50 border border-red-200 text-red-700 rounded-lg px-4 py-3 text-sm">{error}</div>}
+      {msg && <div className="bg-green-50 dark:bg-green-900/30 border border-green-200 dark:border-green-800 text-green-700 dark:text-green-300 rounded-lg px-4 py-3 text-sm">{msg}</div>}
+      {error && <div className="bg-red-50 dark:bg-red-900/30 border border-red-200 dark:border-red-800 text-red-700 dark:text-red-300 rounded-lg px-4 py-3 text-sm">{error}</div>}
 
       {event && (
         <>
           {/* Status controls */}
-          <div className="bg-white rounded-xl shadow p-6">
+          <div className="bg-white dark:bg-slate-800 dark:border dark:border-slate-700/60 rounded-xl shadow p-6">
             <div className="flex items-center justify-between flex-wrap gap-3">
-              <h2 className="font-semibold text-base">Event Status</h2>
+              <h2 className="font-semibold text-base dark:text-white">Event Status</h2>
               <StatusControls event={event} onChanged={updateEvent} />
             </div>
-            <p className="text-xs text-gray-400 mt-3">
+            <p className="text-xs text-gray-400 dark:text-slate-500 mt-3">
               <strong>Draft</strong> → set up guests and invites &nbsp;·&nbsp;
               <strong>Active</strong> → scanning enabled &nbsp;·&nbsp;
               <strong>Ended</strong> → read-only record
@@ -475,25 +508,60 @@ export default function AdminPage() {
               { label: 'Invites Sent', value: stats.invited,cls: 'text-amber-600'  },
               { label: 'Admitted',     value: stats.admitted,cls: 'text-green-600' },
             ].map(({ label, value, cls }) => (
-              <div key={label} className="bg-white rounded-xl shadow p-4 text-center">
+              <div key={label} className="bg-white dark:bg-slate-800 dark:border dark:border-slate-700/60 rounded-xl shadow p-4 text-center">
                 <div className={`text-3xl font-bold ${cls}`}>{value}</div>
-                <div className="text-xs text-gray-500 mt-1">{label}</div>
+                <div className="text-xs text-gray-500 dark:text-slate-400 mt-1">{label}</div>
               </div>
             ))}
           </div>
 
           {/* Guest management */}
-          <div className="bg-white rounded-xl shadow p-6">
-            <h2 className="font-semibold text-base mb-4">Guest Management</h2>
+          <div className="bg-white dark:bg-slate-800 dark:border dark:border-slate-700/60 rounded-xl shadow p-6 space-y-4">
+            <h2 className="font-semibold text-base dark:text-white">Guest Management</h2>
+
+            {/* Import row */}
             <div className="flex flex-wrap gap-3 items-center">
               <div>
-                <input type="file" accept=".csv" ref={fileRef} onChange={handleUpload} className="hidden" />
+                <input type="file" accept=".csv,.xlsx,.xls" ref={fileRef} onChange={handleUpload} className="hidden" />
                 <button onClick={() => fileRef.current.click()} disabled={loading}
-                  className="bg-white border border-gray-300 text-gray-700 px-4 py-2 rounded-lg text-sm font-medium hover:bg-gray-50 disabled:opacity-50">
+                  className="bg-white dark:bg-slate-700 border border-gray-300 dark:border-slate-700 text-gray-700 dark:text-slate-200 px-4 py-2 rounded-lg text-sm font-medium hover:bg-gray-50 dark:hover:bg-slate-700 disabled:opacity-50">
                   Upload CSV
                 </button>
-                <span className="text-xs text-gray-400 ml-2">first_name, last_name, email, phone</span>
+                <span className="text-xs text-gray-400 dark:text-slate-500 ml-2">first_name, last_name, email, phone</span>
               </div>
+              <button onClick={() => setShowUrlInput((v) => !v)} disabled={loading}
+                className="bg-white dark:bg-slate-700 border border-gray-300 dark:border-slate-700 text-gray-700 dark:text-slate-200 px-4 py-2 rounded-lg text-sm font-medium hover:bg-gray-50 dark:hover:bg-slate-700 disabled:opacity-50">
+                📋 Import from Google Sheets / Excel
+              </button>
+            </div>
+
+            {/* Spreadsheet URL input */}
+            {showUrlInput && (
+              <div className="flex gap-2 items-center bg-gray-50 dark:bg-slate-700 rounded-lg p-3 border border-gray-200 dark:border-slate-700">
+                <input
+                  type="url"
+                  value={sheetUrl}
+                  onChange={(e) => setSheetUrl(e.target.value)}
+                  placeholder="Paste Google Sheets or Excel Online share link…"
+                  className="flex-1 border border-gray-300 dark:border-slate-700 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-white dark:bg-slate-800 text-gray-900 dark:text-white"
+                />
+                <button onClick={handleImportUrl} disabled={loading || !sheetUrl.trim()}
+                  className="bg-indigo-600 text-white px-4 py-2 rounded-lg text-sm font-semibold hover:bg-indigo-700 disabled:opacity-50 whitespace-nowrap">
+                  {loading ? 'Importing…' : 'Import'}
+                </button>
+                <button onClick={() => { setShowUrlInput(false); setSheetUrl('') }}
+                  className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 px-2 text-lg leading-none">×</button>
+              </div>
+            )}
+            {showUrlInput && (
+              <p className="text-xs text-gray-400 dark:text-slate-500">
+                Google Sheets: share with "Anyone with link can view". OneDrive/Excel: use Share → Copy link with "Anyone with the link can view", not the browser address bar URL.
+                Sheet must have columns: <strong>first_name, last_name, email, phone</strong>
+              </p>
+            )}
+
+            {/* Action buttons */}
+            <div className="flex flex-wrap gap-3 pt-1 border-t dark:border-slate-700">
               <button onClick={handleGenQR} disabled={loading || stats.total === 0}
                 className="bg-blue-600 text-white px-4 py-2 rounded-lg text-sm font-semibold hover:bg-blue-700 disabled:opacity-50">
                 Generate QR Codes
@@ -508,72 +576,107 @@ export default function AdminPage() {
           {/* Team assignment */}
           <TeamPanel eventId={selectedId} />
 
-          {/* Guest table */}
+          {/* Guest list */}
           {guests.length > 0 && (() => {
             const totalPages = Math.ceil(guests.length / PAGE_SIZE)
             const pageGuests = guests.slice(page * PAGE_SIZE, (page + 1) * PAGE_SIZE)
             return (
-            <div className="bg-white rounded-xl shadow overflow-hidden">
-              <div className="px-6 py-4 border-b flex items-center justify-between">
-                <h2 className="font-semibold">Guest List ({guests.length})</h2>
-                {totalPages > 1 && (
-                  <div className="flex items-center gap-2 text-sm">
-                    <button onClick={() => setPage((p) => Math.max(0, p - 1))} disabled={page === 0}
-                      className="px-2 py-1 border rounded text-gray-600 disabled:opacity-40 hover:bg-gray-50">←</button>
-                    <span className="text-gray-500 text-xs">{page + 1} / {totalPages}</span>
-                    <button onClick={() => setPage((p) => Math.min(totalPages - 1, p + 1))} disabled={page === totalPages - 1}
-                      className="px-2 py-1 border rounded text-gray-600 disabled:opacity-40 hover:bg-gray-50">→</button>
-                  </div>
-                )}
-              </div>
-              <div className="overflow-x-auto">
-                <table className="w-full text-sm">
-                  <thead className="bg-gray-50 text-xs font-semibold text-gray-500 uppercase tracking-wide">
-                    <tr>
-                      <th className="px-4 py-3 text-left">Name</th>
-                      <th className="px-4 py-3 text-left">Email</th>
-                      <th className="px-4 py-3 text-left">Phone</th>
-                      <th className="px-4 py-3 text-center">QR</th>
-                      <th className="px-4 py-3 text-center">Invited</th>
-                      <th className="px-4 py-3 text-center">Admitted</th>
-                      <th className="px-4 py-3 text-center">Actions</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-gray-100">
-                    {pageGuests.map((g) => (
-                      <tr key={g.id} className="hover:bg-gray-50">
-                        <td className="px-4 py-3 font-medium">{g.first_name} {g.last_name}</td>
-                        <td className="px-4 py-3 text-gray-600">{g.email}</td>
-                        <td className="px-4 py-3 text-gray-500">{g.phone || '—'}</td>
-                        <td className="px-4 py-3 text-center"><Badge on={!!g.qr_generated_at} labels={['Ready', 'Pending']} /></td>
-                        <td className="px-4 py-3 text-center"><Badge on={!!g.invite_sent_at} labels={['Sent', 'Not Sent']} /></td>
-                        <td className="px-4 py-3 text-center">
-                          {g.admitted ? (
-                            <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-700">
-                              {g.admitted_at ? new Date(g.admitted_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : 'Yes'}
-                            </span>
-                          ) : <Badge on={false} labels={['', 'Pending']} />}
-                        </td>
-                        <td className="px-4 py-3 text-center">
-                          <div className="flex items-center justify-center gap-3">
-                            {g.qr_generated_at && (
-                              <a href={api.guestQrUrl(selectedId, g.id)} target="_blank" rel="noopener noreferrer"
-                                className="text-xs text-indigo-600 hover:underline">QR</a>
-                            )}
-                            {g.qr_generated_at && !g.admitted && (
-                              <button onClick={() => handleResendInvite(g.id)} disabled={loading}
-                                className="text-xs text-amber-600 hover:underline disabled:opacity-40">Resend</button>
-                            )}
-                            <button onClick={() => handleDeleteGuest(g.id)} disabled={loading}
-                              className="text-xs text-red-400 hover:text-red-600 disabled:opacity-40">Delete</button>
-                          </div>
-                        </td>
+              <div className="bg-white dark:bg-slate-800 dark:border dark:border-slate-700/60 rounded-xl shadow overflow-hidden">
+                <div className="px-4 sm:px-6 py-4 border-b dark:border-slate-700 flex items-center justify-between gap-2">
+                  <h2 className="font-semibold text-sm sm:text-base dark:text-white">Guest List ({guests.length})</h2>
+                  {totalPages > 1 && (
+                    <div className="flex items-center gap-2">
+                      <button onClick={() => setPage((p) => Math.max(0, p - 1))} disabled={page === 0}
+                        className="px-2 py-1 border dark:border-slate-700 rounded text-gray-600 dark:text-slate-300 disabled:opacity-40 hover:bg-gray-50 dark:hover:bg-slate-700 text-sm">←</button>
+                      <span className="text-gray-500 dark:text-slate-400 text-xs">{page + 1} / {totalPages}</span>
+                      <button onClick={() => setPage((p) => Math.min(totalPages - 1, p + 1))} disabled={page === totalPages - 1}
+                        className="px-2 py-1 border dark:border-slate-700 rounded text-gray-600 dark:text-slate-300 disabled:opacity-40 hover:bg-gray-50 dark:hover:bg-slate-700 text-sm">→</button>
+                    </div>
+                  )}
+                </div>
+
+                {/* Desktop table */}
+                <div className="hidden sm:block overflow-x-auto">
+                  <table className="w-full text-sm">
+                    <thead className="bg-gray-50 dark:bg-slate-700 text-xs font-semibold text-gray-500 dark:text-slate-400 uppercase tracking-wide">
+                      <tr>
+                        <th className="px-4 py-3 text-left">Name</th>
+                        <th className="px-4 py-3 text-left">Email</th>
+                        <th className="px-4 py-3 text-center">QR</th>
+                        <th className="px-4 py-3 text-center">Invited</th>
+                        <th className="px-4 py-3 text-center">Admitted</th>
+                        <th className="px-4 py-3 text-center">Actions</th>
                       </tr>
-                    ))}
-                  </tbody>
-                </table>
+                    </thead>
+                    <tbody className="divide-y divide-gray-100 dark:divide-slate-700">
+                      {pageGuests.map((g) => (
+                        <tr key={g.id} className="hover:bg-gray-50 dark:hover:bg-slate-700">
+                          <td className="px-4 py-3 font-medium dark:text-slate-100">{g.first_name} {g.last_name}</td>
+                          <td className="px-4 py-3 text-gray-500 dark:text-slate-400 text-xs">{g.email}</td>
+                          <td className="px-4 py-3 text-center"><Badge on={!!g.qr_generated_at} labels={['Ready', 'Pending']} /></td>
+                          <td className="px-4 py-3 text-center"><Badge on={!!g.invite_sent_at} labels={['Sent', 'Unsent']} /></td>
+                          <td className="px-4 py-3 text-center">
+                            {g.admitted
+                              ? <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-700">
+                                  {g.admitted_at ? new Date(g.admitted_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : 'Yes'}
+                                </span>
+                              : <Badge on={false} labels={['', 'Pending']} />}
+                          </td>
+                          <td className="px-4 py-3 text-center">
+                            <div className="flex items-center justify-center gap-3">
+                              {g.qr_generated_at && (
+                                <a href={api.guestQrUrl(selectedId, g.id)} target="_blank" rel="noopener noreferrer"
+                                  className="text-xs text-indigo-600 hover:underline">QR</a>
+                              )}
+                              {g.qr_generated_at && !g.admitted && (
+                                <button onClick={() => handleResendInvite(g.id)} disabled={loading}
+                                  className="text-xs text-amber-600 hover:underline disabled:opacity-40">Resend</button>
+                              )}
+                              <button onClick={() => handleDeleteGuest(g.id)} disabled={loading}
+                                className="text-xs text-red-400 hover:text-red-600 disabled:opacity-40">Remove</button>
+                            </div>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+
+                {/* Mobile cards */}
+                <div className="sm:hidden divide-y divide-gray-100 dark:divide-slate-700">
+                  {pageGuests.map((g) => (
+                    <div key={g.id} className="px-4 py-4 space-y-2">
+                      <div className="flex items-start justify-between gap-2">
+                        <div>
+                          <div className="font-semibold text-sm dark:text-slate-100">{g.first_name} {g.last_name}</div>
+                          <div className="text-xs text-gray-500 dark:text-slate-400 break-all">{g.email}</div>
+                        </div>
+                        {g.admitted && (
+                          <span className="shrink-0 inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-700">
+                            ✓ {g.admitted_at ? new Date(g.admitted_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : 'In'}
+                          </span>
+                        )}
+                      </div>
+                      <div className="flex flex-wrap gap-1.5">
+                        <Badge on={!!g.qr_generated_at} labels={['QR Ready', 'No QR']} />
+                        <Badge on={!!g.invite_sent_at} labels={['Invited', 'Unsent']} />
+                      </div>
+                      <div className="flex gap-4 pt-1">
+                        {g.qr_generated_at && (
+                          <a href={api.guestQrUrl(selectedId, g.id)} target="_blank" rel="noopener noreferrer"
+                            className="text-xs text-indigo-600 hover:underline">View QR</a>
+                        )}
+                        {g.qr_generated_at && !g.admitted && (
+                          <button onClick={() => handleResendInvite(g.id)} disabled={loading}
+                            className="text-xs text-amber-600 hover:underline disabled:opacity-40">Resend invite</button>
+                        )}
+                        <button onClick={() => handleDeleteGuest(g.id)} disabled={loading}
+                          className="text-xs text-red-400 hover:text-red-600 disabled:opacity-40 ml-auto">Remove</button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
               </div>
-            </div>
             )
           })()}
         </>

@@ -1,7 +1,292 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
+:root {
+  color-scheme: light;
+  --app-bg: #f4f7f8;
+  --app-surface: #ffffff;
+  --app-surface-muted: #eef3f4;
+  --app-border: #dbe4e6;
+  --app-text: #172126;
+  --app-muted: #64757c;
+  --app-primary: #0f766e;
+  --app-primary-hover: #115e59;
+  --app-primary-soft: #ccfbf1;
+}
+
+.dark {
+  color-scheme: dark;
+  --app-bg: #0d1418;
+  --app-surface: #121c22;
+  --app-surface-muted: #19262d;
+  --app-border: #263942;
+  --app-text: #eef6f7;
+  --app-muted: #96a8ae;
+  --app-primary: #2dd4bf;
+  --app-primary-hover: #5eead4;
+  --app-primary-soft: #123c3a;
+}
+
 body {
-  @apply bg-gray-50 text-gray-900;
+  margin: 0;
+  background: var(--app-bg);
+  color: var(--app-text);
+  font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+::selection {
+  background: rgba(45, 212, 191, 0.24);
+}
+
+button,
+input,
+select,
+textarea {
+  font: inherit;
+}
+
+button {
+  letter-spacing: 0;
+}
+
+input,
+select,
+textarea {
+  transition: border-color 160ms ease, box-shadow 160ms ease, background-color 160ms ease;
+}
+
+input:focus,
+select:focus,
+textarea:focus {
+  border-color: var(--app-primary) !important;
+  box-shadow: 0 0 0 3px rgba(20, 184, 166, 0.16) !important;
+}
+
+.app-shell {
+  background:
+    radial-gradient(circle at top left, rgba(20, 184, 166, 0.10), transparent 34rem),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.72), rgba(244, 247, 248, 0.96) 26rem),
+    var(--app-bg);
+}
+
+.dark .app-shell {
+  background:
+    radial-gradient(circle at top left, rgba(45, 212, 191, 0.10), transparent 32rem),
+    linear-gradient(180deg, rgba(18, 28, 34, 0.9), rgba(13, 20, 24, 0.98) 28rem),
+    var(--app-bg);
+}
+
+.app-nav {
+  background: rgba(255, 255, 255, 0.92);
+  border-bottom: 1px solid var(--app-border);
+  box-shadow: 0 1px 0 rgba(15, 23, 42, 0.02);
+}
+
+.dark .app-nav {
+  background: rgba(13, 20, 24, 0.94);
+  border-bottom-color: var(--app-border);
+  box-shadow: 0 1px 0 rgba(255, 255, 255, 0.03);
+}
+
+.app-nav a,
+.app-nav button,
+.app-nav span {
+  text-shadow: none;
+}
+
+/* Modernize legacy Tailwind utility-heavy screens without touching every node. */
+.bg-indigo-600,
+.hover\:bg-indigo-700:hover,
+.bg-blue-600,
+.hover\:bg-blue-700:hover {
+  background-color: var(--app-primary) !important;
+}
+
+.bg-indigo-500,
+.bg-blue-500 {
+  background-color: #14b8a6 !important;
+}
+
+.text-indigo-600,
+.text-blue-600,
+.hover\:text-indigo-600:hover {
+  color: var(--app-primary) !important;
+}
+
+.border-indigo-200,
+.border-indigo-300,
+.border-indigo-400 {
+  border-color: rgba(20, 184, 166, 0.34) !important;
+}
+
+.focus\:ring-indigo-500:focus {
+  --tw-ring-color: rgba(20, 184, 166, 0.34) !important;
+}
+
+.shadow,
+.shadow-lg,
+.shadow-xl,
+.shadow-2xl {
+  box-shadow: 0 14px 36px rgba(15, 23, 42, 0.08) !important;
+}
+
+.dark .shadow,
+.dark .shadow-lg,
+.dark .shadow-xl,
+.dark .shadow-2xl {
+  box-shadow: 0 18px 48px rgba(0, 0, 0, 0.28) !important;
+}
+
+.rounded-2xl,
+.rounded-3xl {
+  border-radius: 0.75rem !important;
+}
+
+.dark .dark\:bg-slate-950,
+.dark .dark\:bg-slate-900,
+.dark .dark\:bg-slate-800 {
+  background-color: var(--app-surface) !important;
+}
+
+.dark .dark\:bg-slate-800\/70,
+.dark .dark\:bg-slate-800\/50,
+.dark .dark\:bg-slate-700,
+.dark .dark\:hover\:bg-slate-700:hover {
+  background-color: var(--app-surface-muted) !important;
+}
+
+.dark .dark\:border-slate-800,
+.dark .dark\:border-slate-700,
+.dark .dark\:border-slate-700\/60 {
+  border-color: var(--app-border) !important;
+}
+
+.dark .dark\:text-white,
+.dark .dark\:text-slate-100 {
+  color: var(--app-text) !important;
+}
+
+.dark .dark\:text-slate-200,
+.dark .dark\:text-slate-300 {
+  color: #d6e2e5 !important;
+}
+
+.dark .dark\:text-slate-400,
+.dark .dark\:text-slate-500 {
+  color: var(--app-muted) !important;
+}
+
+.dark thead,
+.dark .dark\:bg-slate-700.text-xs {
+  background-color: #1d2b33 !important;
+}
+
+.dark table tbody tr:hover,
+.dark .dark\:hover\:bg-slate-700:hover {
+  background-color: #1a282f !important;
+}
+
+.dark input,
+.dark select,
+.dark textarea {
+  background-color: #101a20 !important;
+  border-color: var(--app-border) !important;
+  color: var(--app-text) !important;
+}
+
+.dark input::placeholder,
+.dark textarea::placeholder {
+  color: #748990 !important;
+}
+
+/* ── html5-qrcode overrides ─────────────────────────────────────────────────── */
+
+/* Reset the library's default dark/textured scan region */
+#qr-reader {
+  border: none !important;
+  padding: 0 !important;
+  background: transparent !important;
+  font-family: inherit !important;
+}
+
+#qr-reader__scan_region {
+  background: transparent !important;
+  border: 2px solid #e5e7eb !important;
+  border-radius: 12px !important;
+  overflow: hidden !important;
+  min-height: 200px !important;
+}
+
+#qr-reader__scan_region img {
+  display: none !important;
+}
+
+#qr-reader__dashboard {
+  padding: 8px 0 0 !important;
+  background: transparent !important;
+}
+
+#qr-reader__dashboard_section_csr button,
+#qr-reader__dashboard_section_fsr button {
+  background: var(--app-primary) !important;
+  color: white !important;
+  border: none !important;
+  border-radius: 8px !important;
+  padding: 8px 16px !important;
+  font-weight: 600 !important;
+  font-size: 13px !important;
+  cursor: pointer !important;
+  margin-top: 8px !important;
+}
+
+#qr-reader__dashboard_section_csr button:hover,
+#qr-reader__dashboard_section_fsr button:hover {
+  background: var(--app-primary-hover) !important;
+}
+
+#qr-reader__dashboard_section_fsr span,
+#qr-reader__dashboard_section_csr span {
+  display: none !important;
+}
+
+/* Stop / camera toggle button */
+#qr-reader__camera_selection {
+  width: 100% !important;
+  border: 1px solid #d1d5db !important;
+  border-radius: 8px !important;
+  padding: 6px 10px !important;
+  font-size: 13px !important;
+  background: white !important;
+  margin-bottom: 8px !important;
+}
+
+#qr-reader__status_span {
+  font-size: 12px !important;
+  color: #6b7280 !important;
+}
+
+/* Dark mode overrides */
+.dark #qr-reader__scan_region {
+  border-color: #334155 !important;
+}
+
+.dark #qr-reader__camera_selection {
+  background: #1e293b !important;
+  border-color: #334155 !important;
+  color: #f1f5f9 !important;
+}
+
+.dark #qr-reader__status_span {
+  color: #94a3b8 !important;
+}
+
+/* ── Card borders in dark mode ──────────────────────────────────────────────── */
+/* Adds a crisp border to all white cards in dark mode for clean separation */
+.dark .dark-card {
+  border: 1px solid #1e293b;
 }

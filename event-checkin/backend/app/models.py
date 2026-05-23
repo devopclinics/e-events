@@ -11,8 +11,7 @@ class User(Base):
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
     name: Mapped[str] = mapped_column(String(255))
     email: Mapped[str] = mapped_column(String(255), unique=True, index=True)
-    password_hash: Mapped[str | None] = mapped_column(String(255), nullable=True)
-    google_id: Mapped[str | None] = mapped_column(String(255), unique=True, nullable=True)
+    firebase_uid: Mapped[str | None] = mapped_column(String(128), unique=True, nullable=True, index=True)
     role: Mapped[str] = mapped_column(String(50), default="official")  # "admin" | "official"
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
 

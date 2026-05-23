@@ -1,0 +1,15 @@
+backups/*.sql
+backups/*.sql.gz
+backups/*.dump
+backups/*.backup
+
+# Secrets — never commit
+backend/.env
+frontend/.env
+**/.env
+**/*.env.local
+
+# Python cache
+**/__pycache__/
+**/*.pyc
+**/*.pyo

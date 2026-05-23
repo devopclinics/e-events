@@ -101,13 +101,13 @@ export default function ScannerPage() {
 
   return (
     <div className="max-w-lg mx-auto space-y-6">
-      <h1 className="text-2xl font-bold text-center">Check-In Scanner</h1>
+      <h1 className="text-2xl font-bold text-center dark:text-white">Check-In Scanner</h1>
 
       {events.length > 1 && (
-        <div className="bg-white rounded-xl shadow p-4">
-          <label className="block text-xs font-semibold text-gray-600 mb-1">Event</label>
+        <div className="bg-white dark:bg-slate-800 dark:border dark:border-slate-700/60 rounded-xl shadow p-4">
+          <label className="block text-xs font-semibold text-gray-600 dark:text-slate-300 mb-1">Event</label>
           <select
-            className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm"
+            className="w-full border border-gray-300 dark:border-slate-700 rounded-lg px-3 py-2 text-sm bg-white dark:bg-slate-700 text-gray-900 dark:text-white"
             value={eventId}
             onChange={(e) => setEventId(e.target.value)}
           >
@@ -119,11 +119,11 @@ export default function ScannerPage() {
         </div>
       )}
 
-      <div className="bg-white rounded-xl shadow p-6">
+      <div className="bg-white dark:bg-slate-800 dark:border dark:border-slate-700/60 rounded-xl shadow p-6">
         {loading && (
           <div className="text-center py-8">
             <div className="inline-block w-10 h-10 border-4 border-indigo-500 border-t-transparent rounded-full animate-spin" />
-            <p className="mt-3 text-gray-600">Checking in…</p>
+            <p className="mt-3 text-gray-600 dark:text-slate-400">Checking in…</p>
           </div>
         )}
 
@@ -131,7 +131,7 @@ export default function ScannerPage() {
 
         {!loading && !result && (
           <div>
-            <p className="text-center text-sm text-gray-500 mb-4">
+            <p className="text-center text-sm text-gray-500 dark:text-slate-400 mb-4">
               Point your camera at a guest's QR code
             </p>
             <QrScanner key={scanKey} onScan={handleScan} />
@@ -139,8 +139,8 @@ export default function ScannerPage() {
         )}
       </div>
 
-      <div className="bg-white rounded-xl shadow p-4">
-        <p className="text-xs font-semibold text-gray-600 mb-2">Manual Token Entry</p>
+      <div className="bg-white dark:bg-slate-800 dark:border dark:border-slate-700/60 rounded-xl shadow p-4">
+        <p className="text-xs font-semibold text-gray-600 dark:text-slate-300 mb-2">Manual Token Entry</p>
         <form
           onSubmit={(e) => {
             e.preventDefault()
@@ -153,7 +153,7 @@ export default function ScannerPage() {
           <input
             name="token"
             placeholder="Paste QR token or URL…"
-            className="flex-1 border border-gray-300 rounded-lg px-3 py-2 text-sm"
+            className="flex-1 border border-gray-300 dark:border-slate-700 rounded-lg px-3 py-2 text-sm bg-white dark:bg-slate-700 text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-slate-500"
           />
           <button type="submit" className="bg-indigo-600 text-white px-4 py-2 rounded-lg text-sm font-semibold">
             Submit

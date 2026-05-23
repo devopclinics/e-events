@@ -5,13 +5,13 @@ import { api } from '../api'
 function StatusBadge({ status }) {
   const cfg = {
     valid: {
-      bg: 'bg-emerald-50 border-emerald-300 text-emerald-700',
+      bg: 'bg-emerald-50 border-emerald-200 text-emerald-700',
       dot: 'bg-emerald-500',
       label: 'Valid Ticket',
     },
     admitted: {
-      bg: 'bg-indigo-50 border-indigo-300 text-indigo-700',
-      dot: 'bg-indigo-500',
+      bg: 'bg-teal-50 border-teal-200 text-teal-700',
+      dot: 'bg-teal-500',
       label: 'Admitted',
     },
     invalid: {
@@ -31,18 +31,18 @@ function StatusBadge({ status }) {
 
 function AdmittedBanner({ guest, event }) {
   return (
-    <div className="bg-indigo-600 text-white rounded-2xl px-6 py-5 text-center">
+    <div className="bg-teal-600 text-white rounded-lg px-6 py-5 text-center">
       <div className="flex items-center justify-center gap-2 mb-1">
-        <svg className="w-5 h-5 text-indigo-200" fill="currentColor" viewBox="0 0 20 20">
+        <svg className="w-5 h-5 text-teal-100" fill="currentColor" viewBox="0 0 20 20">
           <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
         </svg>
-        <span className="text-indigo-200 text-sm font-medium">Check-in complete</span>
+        <span className="text-teal-100 text-sm font-medium">Check-in complete</span>
       </div>
       <p className="font-semibold text-lg">
         Welcome, {guest.first_name}!
       </p>
       {guest.admitted_at && (
-        <p className="text-indigo-200 text-sm mt-0.5">
+        <p className="text-teal-100 text-sm mt-0.5">
           Admitted at {new Date(guest.admitted_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
         </p>
       )}
@@ -64,9 +64,9 @@ export default function ScanAutoPage() {
 
   if (loading) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-slate-50">
+      <div className="app-shell min-h-screen flex items-center justify-center">
         <div className="text-center">
-          <div className="inline-block w-10 h-10 border-4 border-indigo-500 border-t-transparent rounded-full animate-spin" />
+          <div className="inline-block w-10 h-10 border-4 border-teal-500 border-t-transparent rounded-full animate-spin" />
           <p className="mt-4 text-slate-500 text-sm">Loading your ticket…</p>
         </div>
       </div>
@@ -75,8 +75,8 @@ export default function ScanAutoPage() {
 
   if (data?.status === 'invalid') {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-slate-50 p-4">
-        <div className="bg-white rounded-3xl shadow-xl p-10 text-center max-w-sm w-full">
+      <div className="app-shell min-h-screen flex items-center justify-center p-4">
+        <div className="bg-white rounded-xl border border-slate-200 shadow-xl p-10 text-center max-w-sm w-full">
           <div className="w-16 h-16 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-4">
             <svg className="w-8 h-8 text-red-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
@@ -94,21 +94,21 @@ export default function ScanAutoPage() {
   const eventDate = event?.event_date ? new Date(event.event_date) : null
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-100 to-indigo-50 flex items-center justify-center p-4 py-10">
+    <div className="app-shell min-h-screen flex items-center justify-center p-4 py-10">
       {/* Ticket card */}
-      <div className="bg-white rounded-3xl shadow-2xl w-full max-w-sm overflow-hidden">
+      <div className="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 shadow-2xl w-full max-w-sm overflow-hidden">
 
         {/* Header strip */}
-        <div className="bg-gradient-to-r from-indigo-600 to-indigo-500 px-6 pt-8 pb-10 text-center relative">
+        <div className="bg-slate-950 px-6 pt-8 pb-10 text-center relative">
           <div className="absolute top-4 right-4 left-4 flex justify-center">
             <StatusBadge status={status} />
           </div>
           <div className="mt-8">
-            <p className="text-indigo-200 text-xs uppercase tracking-widest font-medium mb-1">You're invited to</p>
+            <p className="text-teal-200 text-xs uppercase font-semibold mb-1">You're invited to</p>
             <h1 className="text-white text-2xl font-bold leading-tight">{event?.name || 'Event'}</h1>
-            <p className="text-indigo-200 text-sm mt-1 italic">{event?.couples_name}</p>
+            <p className="text-slate-300 text-sm mt-1 italic">{event?.couples_name}</p>
             {eventDate && (
-              <p className="text-indigo-300 text-xs mt-2 font-medium">
+              <p className="text-slate-400 text-xs mt-2 font-medium">
                 {eventDate.toLocaleDateString(undefined, { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}
               </p>
             )}
@@ -117,9 +117,9 @@ export default function ScanAutoPage() {
 
         {/* Tear-line notches */}
         <div className="relative -mt-4 flex justify-between px-0">
-          <div className="w-8 h-8 bg-gradient-to-br from-slate-100 to-indigo-50 rounded-full -ml-4" />
+          <div className="w-8 h-8 bg-slate-100 dark:bg-slate-950 rounded-full -ml-4" />
           <div className="flex-1 border-t-2 border-dashed border-slate-200 self-center mx-2 mt-4" />
-          <div className="w-8 h-8 bg-gradient-to-br from-slate-100 to-indigo-50 rounded-full -mr-4" />
+          <div className="w-8 h-8 bg-slate-100 dark:bg-slate-950 rounded-full -mr-4" />
         </div>
 
         {/* Body */}
@@ -127,14 +127,14 @@ export default function ScanAutoPage() {
           {/* Guest name */}
           <div className="text-center">
             <p className="text-xs uppercase tracking-widest text-slate-400 font-medium mb-0.5">Guest</p>
-            <p className="text-slate-800 text-xl font-bold">
+            <p className="text-slate-800 dark:text-white text-xl font-bold">
               {guest?.first_name} {guest?.last_name}
             </p>
           </div>
 
           {/* QR code */}
           <div className="flex justify-center">
-            <div className="bg-slate-50 border border-slate-100 rounded-2xl p-4 inline-block">
+            <div className="bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg p-4 inline-block">
               {guest?.id ? (
                 <img
                   src={qrImageUrl}

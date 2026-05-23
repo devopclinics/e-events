@@ -3,7 +3,7 @@ from datetime import datetime, timezone
 from typing import Optional, Literal
 
 
-# ── Auth ────────────────────────────────────────────────────────────────────
+# ── Auth ─────────────────────────────────────────────────────────────────────
 
 class RegisterRequest(BaseModel):
     name: str
@@ -74,18 +74,77 @@ class EventOut(BaseModel):
     event_date: datetime
     description: Optional[str]
     checkin_base_url: str
-    status: str  # draft | active | ended
+    status: str
+    seating_enabled: bool
+    menu_enabled: bool
     created_at: datetime
 
 
 class EventMemberOut(BaseModel):
-    id: str          # EventUser.id
+    id: str
     user: UserOut
     assigned_at: datetime
+    can_reassign_seats: bool
 
 
 class AssignUserRequest(BaseModel):
     user_id: str
+
+
+# ── Seating ───────────────────────────────────────────────────────────────────
+
+class SeatingTableCreate(BaseModel):
+    name: str
+    capacity: int
+
+
+class SeatingTableOut(BaseModel):
+    id: str
+    event_id: str
+    name: str
+    capacity: int
+    assigned_count: int = 0
+
+
+class SeatAssignRequest(BaseModel):
+    table_id: Optional[str] = None
+    seat_number: Optional[str] = None
+
+
+# ── Menu ─────────────────────────────────────────────────────────────────────
+
+class MenuItemCreate(BaseModel):
+    name: str
+    description: Optional[str] = None
+
+
+class MenuItemOut(BaseModel):
+    id: str
+    category_id: str
+    name: str
+    description: Optional[str]
+
+
+class MenuCategoryCreate(BaseModel):
+    name: str
+    sort_order: int = 0
+
+
+class MenuCategoryOut(BaseModel):
+    id: str
+    event_id: str
+    name: str
+    sort_order: int
+    items: list[MenuItemOut] = []
+
+
+class GuestMenuChoiceOut(BaseModel):
+    category_id: str
+    menu_item_id: str
+
+
+class GuestMenuSubmit(BaseModel):
+    choices: dict[str, str]  # category_id → menu_item_id
 
 
 # ── Guests ───────────────────────────────────────────────────────────────────
@@ -105,6 +164,9 @@ class GuestOut(BaseModel):
     admitted: bool
     admitted_at: Optional[datetime]
     admit_notified: bool
+    table_id: Optional[str] = None
+    seat_number: Optional[str] = None
+    meal_served: bool = False
 
 
 # ── Scanner ──────────────────────────────────────────────────────────────────
@@ -113,6 +175,8 @@ class ScanResult(BaseModel):
     status: str  # admitted | already_admitted | invalid | not_active | not_assigned
     message: str
     guest: Optional[GuestOut] = None
+    table_name: Optional[str] = None
+    seat_number: Optional[str] = None
 
 
 class EventBrief(BaseModel):
@@ -120,12 +184,18 @@ class EventBrief(BaseModel):
     couples_name: str
     event_date: datetime
     status: str
+    seating_enabled: bool = False
+    menu_enabled: bool = False
 
 
 class TicketView(BaseModel):
     status: str  # valid | admitted | invalid
     guest: Optional[GuestOut] = None
     event: Optional[EventBrief] = None
+    table_name: Optional[str] = None
+    seat_number: Optional[str] = None
+    menu_categories: list[MenuCategoryOut] = []
+    guest_choices: dict[str, str] = {}  # category_id → menu_item_id
 
 
 # ── Dashboard ─────────────────────────────────────────────────────────────────

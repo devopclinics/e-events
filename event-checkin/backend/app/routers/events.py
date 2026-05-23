@@ -146,7 +146,7 @@ async def list_members(
     )
     rows = result.all()
     return [
-        EventMemberOut(id=eu.id, user=UserOut.model_validate(u), assigned_at=eu.assigned_at)
+        EventMemberOut(id=eu.id, user=UserOut.model_validate(u), assigned_at=eu.assigned_at, can_reassign_seats=eu.can_reassign_seats)
         for eu, u in rows
     ]
 
@@ -175,7 +175,7 @@ async def assign_member(
     db.add(eu)
     await db.commit()
     await db.refresh(eu)
-    return EventMemberOut(id=eu.id, user=UserOut.model_validate(user), assigned_at=eu.assigned_at)
+    return EventMemberOut(id=eu.id, user=UserOut.model_validate(user), assigned_at=eu.assigned_at, can_reassign_seats=eu.can_reassign_seats)
 
 
 @router.delete("/{event_id}/members/{user_id}", status_code=204)
@@ -192,3 +192,24 @@ async def remove_member(
         raise HTTPException(404, "Assignment not found")
     await db.delete(eu)
     await db.commit()
+
+
+# ── Feature toggles ───────────────────────────────────────────────────────────
+
+@router.patch("/{event_id}/features", response_model=EventOut)
+async def toggle_features(
+    event_id: str,
+    body: dict,
+    db: AsyncSession = Depends(get_db),
+    _: User = Depends(require_admin),
+):
+    event = await db.get(Event, event_id)
+    if not event:
+        raise HTTPException(404, "Event not found")
+    if "seating_enabled" in body:
+        event.seating_enabled = bool(body["seating_enabled"])
+    if "menu_enabled" in body:
+        event.menu_enabled = bool(body["menu_enabled"])
+    await db.commit()
+    await db.refresh(event)
+    return event

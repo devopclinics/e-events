@@ -26,6 +26,20 @@ function ResultCard({ result, onReset }) {
           {new Date(result.guest.admitted_at).toLocaleTimeString()}
         </p>
       )}
+      {(result.table_name || result.seat_number) && (
+        <div className="mt-3 flex justify-center gap-4 text-sm text-white/90">
+          {result.table_name && (
+            <span className="bg-white/20 px-3 py-1 rounded-full">
+              Table: <strong>{result.table_name}</strong>
+            </span>
+          )}
+          {result.seat_number && (
+            <span className="bg-white/20 px-3 py-1 rounded-full">
+              Seat: <strong>{result.seat_number}</strong>
+            </span>
+          )}
+        </div>
+      )}
       <button
         onClick={onReset}
         className="mt-8 bg-white/20 hover:bg-white/30 text-white font-semibold px-8 py-3 rounded-xl transition-colors"

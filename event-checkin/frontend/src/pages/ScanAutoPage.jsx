@@ -2,6 +2,91 @@ import { useEffect, useState } from 'react'
 import { useParams } from 'react-router-dom'
 import { api } from '../api'
 
+function MenuSelection({ token, categories, initialChoices, mealServed }) {
+  const [choices, setChoices] = useState(initialChoices || {})
+  const [saving, setSaving] = useState(false)
+  const [msg, setMsg] = useState('')
+  const [error, setError] = useState('')
+
+  const allSelected = categories.every((cat) => choices[cat.id])
+
+  async function submit(e) {
+    e.preventDefault()
+    setSaving(true)
+    setError('')
+    try {
+      await api.submitMenuChoice(token, choices)
+      setMsg('Menu selection saved!')
+      setTimeout(() => setMsg(''), 4000)
+    } catch (err) {
+      setError(err.message)
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  if (mealServed) {
+    return (
+      <div className="border border-amber-200 rounded-lg p-4 text-center">
+        <p className="text-sm text-amber-600 font-medium">Your meal has been served</p>
+        <p className="text-xs text-slate-400 mt-1">Menu selection is locked.</p>
+      </div>
+    )
+  }
+
+  return (
+    <div className="border border-slate-200 dark:border-slate-700 rounded-lg overflow-hidden">
+      <div className="bg-slate-50 dark:bg-slate-800 px-4 py-3 border-b border-slate-200 dark:border-slate-700">
+        <h3 className="text-sm font-semibold text-slate-800 dark:text-white">Your Menu Selection</h3>
+        <p className="text-xs text-slate-400 mt-0.5">Choose your preference for each course</p>
+      </div>
+      <form onSubmit={submit} className="p-4 space-y-4">
+        {categories.map((cat) => (
+          <div key={cat.id}>
+            <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-2">{cat.name}</p>
+            <div className="space-y-1.5">
+              {cat.items.map((item) => (
+                <label
+                  key={item.id}
+                  className={`flex items-start gap-3 p-2.5 rounded-lg border cursor-pointer transition-colors ${
+                    choices[cat.id] === item.id
+                      ? 'border-teal-500 bg-teal-50 dark:bg-teal-900/20'
+                      : 'border-slate-200 dark:border-slate-700 hover:border-slate-300 dark:hover:border-slate-600'
+                  }`}
+                >
+                  <input
+                    type="radio"
+                    name={cat.id}
+                    value={item.id}
+                    checked={choices[cat.id] === item.id}
+                    onChange={() => setChoices((prev) => ({ ...prev, [cat.id]: item.id }))}
+                    className="mt-0.5 accent-teal-500"
+                  />
+                  <div>
+                    <div className="text-sm font-medium text-slate-800 dark:text-slate-200">{item.name}</div>
+                    {item.description && (
+                      <div className="text-xs text-slate-400 mt-0.5">{item.description}</div>
+                    )}
+                  </div>
+                </label>
+              ))}
+            </div>
+          </div>
+        ))}
+        {error && <p className="text-xs text-red-600">{error}</p>}
+        {msg && <p className="text-xs text-teal-600 font-medium">{msg}</p>}
+        <button
+          type="submit"
+          disabled={saving || !allSelected}
+          className="w-full bg-teal-600 text-white py-2.5 rounded-lg text-sm font-semibold hover:bg-teal-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+        >
+          {saving ? 'Saving…' : 'Confirm Menu Selection'}
+        </button>
+      </form>
+    </div>
+  )
+}
+
 function StatusBadge({ status }) {
   const cfg = {
     valid: {
@@ -89,7 +174,7 @@ export default function ScanAutoPage() {
     )
   }
 
-  const { guest, event, status } = data || {}
+  const { guest, event, status, table_name, seat_number, menu_categories, guest_choices } = data || {}
   const qrImageUrl = `/api/scan/${token}/qr.png`
   const eventDate = event?.event_date ? new Date(event.event_date) : null
 
@@ -158,6 +243,29 @@ export default function ScanAutoPage() {
 
           {/* Admitted banner */}
           {status === 'admitted' && <AdmittedBanner guest={guest} event={event} />}
+
+          {/* Table / Seat badge */}
+          {(table_name || seat_number) && (
+            <div className="flex justify-center">
+              <span className="inline-flex items-center gap-2 bg-indigo-50 border border-indigo-200 text-indigo-700 px-4 py-2 rounded-lg text-sm font-medium">
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z" />
+                </svg>
+                {table_name}
+                {seat_number && <span className="text-indigo-400">· Seat {seat_number}</span>}
+              </span>
+            </div>
+          )}
+
+          {/* Menu selection */}
+          {menu_categories && menu_categories.length > 0 && (
+            <MenuSelection
+              token={token}
+              categories={menu_categories}
+              initialChoices={guest_choices || {}}
+              mealServed={guest?.meal_served}
+            />
+          )}
         </div>
       </div>
 

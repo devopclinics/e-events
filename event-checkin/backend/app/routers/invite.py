@@ -98,6 +98,7 @@ async def get_invite_page(event_id: str, db: AsyncSession = Depends(get_db)):
         description=event.description,
         invite_theme=event.invite_theme,
         invite_message=event.invite_message,
+        invite_cover_image=event.invite_cover_image,
         rsvp_enabled=event.rsvp_enabled,
         rsvp_collect_phone=event.rsvp_collect_phone,
         rsvp_collect_email=event.rsvp_collect_email,

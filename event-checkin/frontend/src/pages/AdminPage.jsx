@@ -891,6 +891,85 @@ function Badge({ on, labels }) {
   )
 }
 
+// ── Server Health Panel ───────────────────────────────────────────────────────
+
+function MeterBar({ percent, color }) {
+  const bar = { indigo: 'bg-indigo-500', amber: 'bg-amber-500', green: 'bg-green-500', red: 'bg-red-500' }
+  const used = color || (percent >= 90 ? 'red' : percent >= 70 ? 'amber' : 'indigo')
+  return (
+    <div className="w-full bg-gray-200 dark:bg-slate-700 rounded-full h-2 mt-1">
+      <div className={`${bar[used]} h-2 rounded-full transition-all`} style={{ width: `${Math.min(percent, 100)}%` }} />
+    </div>
+  )
+}
+
+function ServerHealthPanel() {
+  const [health, setHealth] = useState(null)
+  const [err, setErr]       = useState('')
+  const [loading, setLoading] = useState(false)
+
+  async function refresh() {
+    setLoading(true); setErr('')
+    try {
+      setHealth(await api.getSystemHealth())
+    } catch (e) { setErr(e.message) }
+    finally { setLoading(false) }
+  }
+
+  useEffect(() => { refresh() }, [])
+
+  return (
+    <div className="bg-white dark:bg-slate-800 dark:border dark:border-slate-700/60 rounded-xl shadow p-6 space-y-4">
+      <div className="flex items-center justify-between">
+        <h2 className="font-semibold text-base dark:text-white">Server Resources</h2>
+        <button onClick={refresh} disabled={loading}
+          className="text-xs text-indigo-600 hover:underline disabled:opacity-40">
+          {loading ? 'Refreshing…' : '↻ Refresh'}
+        </button>
+      </div>
+
+      {err && <p className="text-red-500 text-sm">{err}</p>}
+
+      {health && (
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-6">
+          {/* CPU */}
+          <div>
+            <div className="flex justify-between text-sm font-medium dark:text-slate-200">
+              <span>CPU</span>
+              <span>{health.cpu.percent}%</span>
+            </div>
+            <MeterBar percent={health.cpu.percent} />
+          </div>
+
+          {/* Memory */}
+          <div>
+            <div className="flex justify-between text-sm font-medium dark:text-slate-200">
+              <span>Memory</span>
+              <span>{health.memory.percent}%</span>
+            </div>
+            <MeterBar percent={health.memory.percent} />
+            <p className="text-xs text-gray-400 dark:text-slate-500 mt-1">
+              {health.memory.used_mb.toLocaleString()} MB used &nbsp;/&nbsp; {health.memory.available_mb.toLocaleString()} MB free
+            </p>
+          </div>
+
+          {/* Disk */}
+          <div>
+            <div className="flex justify-between text-sm font-medium dark:text-slate-200">
+              <span>Disk</span>
+              <span>{health.disk.percent}%</span>
+            </div>
+            <MeterBar percent={health.disk.percent} />
+            <p className="text-xs text-gray-400 dark:text-slate-500 mt-1">
+              {health.disk.used_gb.toLocaleString()} GB used &nbsp;/&nbsp; {health.disk.free_gb.toLocaleString()} GB free
+            </p>
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
+
 // ── AdminPage ─────────────────────────────────────────────────────────────────
 
 export default function AdminPage() {
@@ -1424,6 +1503,9 @@ export default function AdminPage() {
 
       {/* User management — always visible to admins */}
       <UsersPanel />
+
+      {/* Server resource monitoring */}
+      <ServerHealthPanel />
     </div>
   )
 }

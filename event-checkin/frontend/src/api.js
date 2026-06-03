@@ -110,4 +110,7 @@ export const api = {
   // Users
   listUsers:      ()             => req('GET', '/auth/users'),
   updateUserRole: (userId, role) => req('PUT', `/auth/users/${userId}/role?role=${role}`),
+
+  // System
+  getSystemHealth: () => req('GET', '/system/health'),
 }

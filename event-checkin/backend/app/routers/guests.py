@@ -9,14 +9,48 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 from ..database import get_db
 from ..models import Event, Guest, User
-from ..schemas import GuestOut
+from ..schemas import GuestOut, GuestCreate
 from ..auth import require_admin
 from services.qr_service import generate_qr_bytes
 from services.email_service import send_invite_email
+from services import messaging
 
 router = APIRouter()
 
 _E164_RE = re.compile(r'^\+[1-9]\d{6,14}$')
+# Strip everything except digits and leading '+'.
+_PHONE_STRIP = re.compile(r'[^\d+]')
+
+
+def _normalize_phone(raw: str, default_country_code: str = "1") -> str | None:
+    """Coerce a freeform phone string into E.164.
+
+    Accepts: '+1 832-794-1707', '(832) 794-1707', '8327941707',
+             '18327941707', '+18327941707'.
+    Returns: '+18327941707' or None if the digits don't look like a valid number.
+
+    `default_country_code` is used when the input has no '+' and looks like a
+    local number. Defaults to US (1) — change if your event audience is elsewhere.
+    """
+    if not raw:
+        return None
+    cleaned = _PHONE_STRIP.sub('', raw.strip())
+    if not cleaned:
+        return None
+    if cleaned.startswith('+'):
+        candidate = cleaned
+    elif cleaned.startswith('00'):
+        # Some countries write international as 00<cc>... — treat as +<cc>...
+        candidate = '+' + cleaned[2:]
+    elif len(cleaned) == 10 and default_country_code == "1":
+        # Bare US 10-digit number
+        candidate = '+1' + cleaned
+    elif len(cleaned) == 11 and cleaned.startswith('1') and default_country_code == "1":
+        candidate = '+' + cleaned
+    else:
+        # Could be a longer non-US number missing its + — assume international and prepend.
+        candidate = '+' + cleaned
+    return candidate if _E164_RE.match(candidate) else None
 
 # A real browser UA is required: SharePoint Online's abuse filter
 # rejects requests with bot-looking User-Agents (returns 401/403).
@@ -130,7 +164,7 @@ async def _process_csv(text: str, event_id: str, db: AsyncSession):
             "Expected header: first_name,last_name,email,phone"
         )
 
-    added = skipped = invalid_phones = 0
+    added = skipped = invalid_phones = backfilled_phones = 0
     for row in reader:
         email = row.get("email", "").strip().lower()
         first = row.get("first_name", "").strip()
@@ -138,37 +172,45 @@ async def _process_csv(text: str, event_id: str, db: AsyncSession):
         if not email:
             skipped += 1
             continue
+
+        phone_raw = row.get("phone", "").strip()
+        normalized_phone: str | None = None
+        if phone_raw:
+            normalized_phone = _normalize_phone(phone_raw)
+            if normalized_phone is None:
+                invalid_phones += 1
+
         # Deduplicate on (first_name + last_name + email) — same person twice
-        existing = await db.execute(
+        existing = (await db.execute(
             select(Guest).where(
                 Guest.event_id == event_id,
                 Guest.email == email,
                 Guest.first_name == first,
                 Guest.last_name == last,
             )
-        )
-        if existing.scalar_one_or_none():
+        )).scalar_one_or_none()
+        if existing:
+            # Backfill missing fields on re-import — useful when the source spreadsheet
+            # now has a phone number that was blank/invalid on the first import.
+            if not existing.phone and normalized_phone:
+                existing.phone = normalized_phone
+                backfilled_phones += 1
             skipped += 1
             continue
-
-        phone_raw = row.get("phone", "").strip()
-        if phone_raw and not _E164_RE.match(phone_raw):
-            phone = None
-            invalid_phones += 1
-        else:
-            phone = phone_raw or None
 
         db.add(Guest(
             event_id=event_id,
             first_name=first,
             last_name=last,
             email=email,
-            phone=phone,
+            phone=normalized_phone,
         ))
         added += 1
 
     await db.commit()
     result = {"added": added, "skipped": skipped}
+    if backfilled_phones:
+        result["backfilled_phones"] = backfilled_phones
     if invalid_phones:
         result["invalid_phones"] = invalid_phones
         result["phone_note"] = "Phones with invalid format were cleared (must be E.164 e.g. +447911123456)"
@@ -184,6 +226,39 @@ async def upload_guests(event_id: str, file: UploadFile = File(...), db: AsyncSe
     raw = await file.read()
     text = _decode_csv_bytes(raw, file.filename or "")
     return await _process_csv(text, event_id, db)
+
+
+def _dispatch_invite(background_tasks: BackgroundTasks, event: Event, guest: Guest) -> None:
+    """Fan out an invite across enabled channels for this event. Channel modules
+    no-op silently when contact info is missing or creds aren't configured."""
+    ticket_url = f"{event.checkin_base_url.rstrip('/')}/scan/{guest.qr_token}"
+
+    if event.notify_email:
+        guest_data = {
+            "first_name": guest.first_name,
+            "last_name":  guest.last_name,
+            "email":      guest.email,
+            "qr_token":   guest.qr_token,
+        }
+        background_tasks.add_task(
+            send_invite_email,
+            guest_data, event.name, event.couples_name, event.checkin_base_url, event.event_date,
+            event.seating_enabled, event.menu_enabled,
+        )
+
+    if event.notify_sms and guest.phone and guest.sms_consent:
+        background_tasks.add_task(
+            messaging.send_invite_sms,
+            phone=guest.phone, first_name=guest.first_name,
+            event_name=event.name, ticket_url=ticket_url, event_date=event.event_date,
+        )
+
+    if event.notify_whatsapp and guest.phone and guest.whatsapp_consent:
+        background_tasks.add_task(
+            messaging.send_invite_whatsapp,
+            phone=guest.phone, first_name=guest.first_name,
+            event_name=event.name, ticket_url=ticket_url, event_date=event.event_date,
+        )
 
 
 async def import_from_source_url(url: str, event_id: str, db: AsyncSession) -> dict:
@@ -210,6 +285,31 @@ async def import_guests_from_url(
         raise HTTPException(400, "url is required")
 
     return await import_from_source_url(url, event_id, db)
+
+
+@router.post("/{event_id}/guests", response_model=GuestOut, status_code=201)
+async def add_guest(event_id: str, data: GuestCreate, db: AsyncSession = Depends(get_db), _: User = Depends(require_admin)):
+    """Manually add a single guest — used for VVIP walk-ins not on the original list.
+    Email is optional; phone validated if provided. No invite is auto-sent."""
+    event = await db.get(Event, event_id)
+    if not event:
+        raise HTTPException(404, "Event not found")
+
+    first = data.first_name.strip()
+    last = data.last_name.strip()
+    if not first or not last:
+        raise HTTPException(400, "first_name and last_name are required")
+    email = (data.email or "").strip().lower()
+    phone_raw = (data.phone or "").strip()
+    phone = _normalize_phone(phone_raw) if phone_raw else None
+    if phone_raw and phone is None:
+        raise HTTPException(400, "Phone format not recognised. Use E.164 (e.g. +18327941707) or US 10-digit.")
+
+    guest = Guest(event_id=event_id, first_name=first, last_name=last, email=email, phone=phone, is_vip=bool(data.is_vip))
+    db.add(guest)
+    await db.commit()
+    await db.refresh(guest)
+    return guest
 
 
 @router.get("/{event_id}/guests", response_model=list[GuestOut])
@@ -263,13 +363,7 @@ async def send_invites(event_id: str, background_tasks: BackgroundTasks, db: Asy
     guests = result.scalars().all()
 
     for guest in guests:
-        guest_data = {
-            "first_name": guest.first_name,
-            "last_name": guest.last_name,
-            "email": guest.email,
-            "qr_token": guest.qr_token,
-        }
-        background_tasks.add_task(send_invite_email, guest_data, event.name, event.couples_name, event.checkin_base_url, event.event_date)
+        _dispatch_invite(background_tasks, event, guest)
         guest.invite_sent_at = datetime.utcnow()
 
     await db.commit()
@@ -312,16 +406,7 @@ async def send_invites_batch(
         # Auto-generate QR timestamp on first send so it can also be a no-op for never-touched guests.
         if not guest.qr_generated_at:
             guest.qr_generated_at = now
-        guest_data = {
-            "first_name": guest.first_name,
-            "last_name": guest.last_name,
-            "email": guest.email,
-            "qr_token": guest.qr_token,
-        }
-        background_tasks.add_task(
-            send_invite_email,
-            guest_data, event.name, event.couples_name, event.checkin_base_url, event.event_date,
-        )
+        _dispatch_invite(background_tasks, event, guest)
         guest.invite_sent_at = now
         queued += 1
 
@@ -340,13 +425,7 @@ async def resend_invite(event_id: str, guest_id: str, background_tasks: Backgrou
     if not guest.qr_generated_at:
         raise HTTPException(400, "Generate QR codes first before sending invites")
 
-    guest_data = {
-        "first_name": guest.first_name,
-        "last_name": guest.last_name,
-        "email": guest.email,
-        "qr_token": guest.qr_token,
-    }
-    background_tasks.add_task(send_invite_email, guest_data, event.name, event.couples_name, event.checkin_base_url, event.event_date)
+    _dispatch_invite(background_tasks, event, guest)
     guest.invite_sent_at = datetime.utcnow()
     await db.commit()
     return {"ok": True}

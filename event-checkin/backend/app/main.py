@@ -2,30 +2,19 @@ import asyncio
 from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from sqlalchemy import text
-from .database import engine, Base
+from .database import engine
 from .config import settings
 from .routers import events, guests, scanner, dashboard, seating, menu
 from .routers import auth as auth_router
-from . import sync_poller
-
-
-# Idempotent column additions for tables that already existed when these
-# fields were introduced. Postgres-only — uses IF NOT EXISTS.
-_SCHEMA_PATCHES = [
-    "ALTER TABLE events ADD COLUMN IF NOT EXISTS source_url VARCHAR(1000)",
-    "ALTER TABLE events ADD COLUMN IF NOT EXISTS source_sync_interval_seconds INTEGER DEFAULT 60",
-    "ALTER TABLE events ADD COLUMN IF NOT EXISTS source_last_sync_at TIMESTAMP",
-    "ALTER TABLE events ADD COLUMN IF NOT EXISTS source_last_error TEXT",
-]
+from . import sync_poller, db_migrate
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    async with engine.begin() as conn:
-        await conn.run_sync(Base.metadata.create_all)
-        for stmt in _SCHEMA_PATCHES:
-            await conn.execute(text(stmt))
+    # Safety net: applies missing tables/columns if the deploy pipeline didn't
+    # already run them. The pipeline phase (`python -m app.db_migrate`) is
+    # preferred — it fails fast before swapping production.
+    await db_migrate.apply(engine)
 
     poller_task = asyncio.create_task(sync_poller.run())
     try:

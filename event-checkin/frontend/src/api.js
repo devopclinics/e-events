@@ -47,6 +47,7 @@ export const api = {
   // Guests
   listGuests:          (eventId)           => req('GET',  `/events/${eventId}/guests`),
   importGuestsFromUrl: (eventId, url)      => req('POST', `/events/${eventId}/guests/import-url`, { url }),
+  addGuest:            (eventId, data)     => req('POST', `/events/${eventId}/guests`, data),
   generateQR:          (eventId)           => req('POST', `/events/${eventId}/guests/generate-qr`),
   sendInvites:         (eventId)           => req('POST', `/events/${eventId}/guests/send-invites`),
   sendInvitesBatch:    (eventId, guestIds, force = false) =>
@@ -68,6 +69,8 @@ export const api = {
 
   // Features
   toggleFeatures: (eventId, body) => req('PATCH', `/events/${eventId}/features`, body),
+  sendTestMessage: (eventId, channel, phone) =>
+    req('POST', `/events/${eventId}/messaging/test`, { channel, phone }),
 
   // Seating
   listTables:              (eventId)                   => req('GET',    `/events/${eventId}/tables`),
@@ -89,6 +92,12 @@ export const api = {
   updateMenuItem:     (eventId, itemId, data)=> req('PUT',    `/events/${eventId}/menu-items/${itemId}`, data),
   deleteMenuItem:     (eventId, itemId)      => req('DELETE', `/events/${eventId}/menu-items/${itemId}`),
   getMenuSummary:     (eventId)              => req('GET',    `/events/${eventId}/menu/summary`),
+  getMenuDashboard:   (eventId)              => req('GET',    `/events/${eventId}/menu/dashboard`),
+
+  // Menu combinations (combo categories)
+  createCombination:  (eventId, catId, data)  => req('POST',   `/events/${eventId}/menu-categories/${catId}/combinations`, data),
+  updateCombination:  (eventId, comboId, data)=> req('PUT',    `/events/${eventId}/menu-combinations/${comboId}`, data),
+  deleteCombination:  (eventId, comboId)      => req('DELETE', `/events/${eventId}/menu-combinations/${comboId}`),
 
   // Scanner
   scan: (token) => req('POST', `/scan/${token}`),
@@ -97,11 +106,30 @@ export const api = {
   viewTicket: (token) => fetch(`/api/scan/${token}/ticket`).then((r) => r.json()),
 
   // Menu submit (public — guest, no auth)
-  submitMenuChoice: (token, choices) =>
+  submitMenuChoice: (token, payload) =>
     fetch(`/api/scan/${token}/menu`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ choices }),
+      body: JSON.stringify(payload),
+    }).then((r) => (r.ok ? r.json() : r.json().then((e) => Promise.reject(new Error(e.detail))))),
+
+  // Partner pairing (public — guest, no auth)
+  pairPartner: (token, partner_first_name, partner_last_name, partner_email) =>
+    fetch(`/api/scan/${token}/pair`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ partner_first_name, partner_last_name, partner_email }),
+    }).then((r) => (r.ok ? r.json() : r.json().then((e) => Promise.reject(new Error(e.detail))))),
+  unpairPartner: (token) =>
+    fetch(`/api/scan/${token}/pair`, { method: 'DELETE' }).then((r) =>
+      r.ok ? r.json() : r.json().then((e) => Promise.reject(new Error(e.detail)))),
+
+  // Notification consent (public — guest, no auth)
+  updatePreferences: (token, body) =>
+    fetch(`/api/scan/${token}/preferences`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
     }).then((r) => (r.ok ? r.json() : r.json().then((e) => Promise.reject(new Error(e.detail))))),
 
   // Dashboard

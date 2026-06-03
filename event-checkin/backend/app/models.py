@@ -26,6 +26,7 @@ class EventUser(Base):
     user_id: Mapped[str] = mapped_column(String(36), ForeignKey("users.id"))
     assigned_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
     can_reassign_seats: Mapped[bool] = mapped_column(Boolean, default=False)
+    can_manage_menu: Mapped[bool] = mapped_column(Boolean, default=False)
 
     event: Mapped["Event"] = relationship("Event", back_populates="members")
     user: Mapped["User"] = relationship("User")
@@ -43,6 +44,12 @@ class Event(Base):
     status: Mapped[str] = mapped_column(String(20), default="draft")
     seating_enabled: Mapped[bool] = mapped_column(Boolean, default=False)
     menu_enabled: Mapped[bool] = mapped_column(Boolean, default=False)
+    # Per-event notification channels — admin toggles which channels fire
+    # for invites + admission. Defaults all on; provider-level config (Bird /
+    # Twilio creds) decides whether a channel is actually wired.
+    notify_email: Mapped[bool] = mapped_column(Boolean, default=True)
+    notify_sms: Mapped[bool] = mapped_column(Boolean, default=True)
+    notify_whatsapp: Mapped[bool] = mapped_column(Boolean, default=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
 
     # Live guest-list sync from a Google Sheets / OneDrive / Excel Online URL.
@@ -77,9 +84,14 @@ class MenuCategory(Base):
     event_id: Mapped[str] = mapped_column(String(36), ForeignKey("events.id"))
     name: Mapped[str] = mapped_column(String(100))
     sort_order: Mapped[int] = mapped_column(Integer, default=0)
+    selection_type: Mapped[str] = mapped_column(String(10), default="single")
+    min_selections: Mapped[int] = mapped_column(Integer, default=0)
+    max_selections: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    is_required: Mapped[bool] = mapped_column(Boolean, default=False)
 
     event: Mapped["Event"] = relationship("Event", back_populates="menu_categories")
     items: Mapped[list["MenuItem"]] = relationship("MenuItem", back_populates="category", cascade="all, delete-orphan")
+    combinations: Mapped[list["MenuCombination"]] = relationship("MenuCombination", back_populates="category", cascade="all, delete-orphan")
 
 
 class MenuItem(Base):
@@ -95,15 +107,45 @@ class MenuItem(Base):
 
 
 class GuestMenuChoice(Base):
-    """One row per guest per menu category — their chosen item."""
+    """One row per guest per menu selection — their chosen item or combination.
+
+    For single/multi categories: menu_item_id is set, combination_id is null.
+    For combo categories: combination_id is set, menu_item_id is null.
+    Multi-select stores one row per selected item.
+    """
     __tablename__ = "guest_menu_choices"
-    __table_args__ = (UniqueConstraint("guest_id", "category_id", name="uq_guest_category"),)
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
     guest_id: Mapped[str] = mapped_column(String(36), ForeignKey("guests.id"))
     category_id: Mapped[str] = mapped_column(String(36), ForeignKey("menu_categories.id"))
-    menu_item_id: Mapped[str] = mapped_column(String(36), ForeignKey("menu_items.id"))
+    menu_item_id: Mapped[str | None] = mapped_column(String(36), ForeignKey("menu_items.id"), nullable=True)
+    combination_id: Mapped[str | None] = mapped_column(String(36), ForeignKey("menu_combinations.id"), nullable=True)
     chosen_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+
+
+class MenuCombination(Base):
+    __tablename__ = "menu_combinations"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+    event_id: Mapped[str] = mapped_column(String(36), ForeignKey("events.id"))
+    category_id: Mapped[str] = mapped_column(String(36), ForeignKey("menu_categories.id"))
+    name: Mapped[str] = mapped_column(String(200))
+    description: Mapped[str | None] = mapped_column(Text, nullable=True)
+    sort_order: Mapped[int] = mapped_column(Integer, default=0)
+
+    category: Mapped["MenuCategory"] = relationship("MenuCategory", back_populates="combinations")
+    items: Mapped[list["MenuCombinationItem"]] = relationship("MenuCombinationItem", cascade="all, delete-orphan", back_populates="combination")
+
+
+class MenuCombinationItem(Base):
+    __tablename__ = "menu_combination_items"
+
+    combination_id: Mapped[str] = mapped_column(String(36), ForeignKey("menu_combinations.id"), primary_key=True)
+    menu_item_id: Mapped[str] = mapped_column(String(36), ForeignKey("menu_items.id"), primary_key=True)
+    quantity: Mapped[int] = mapped_column(Integer, default=1)
+
+    combination: Mapped["MenuCombination"] = relationship("MenuCombination", back_populates="items")
+    menu_item: Mapped["MenuItem"] = relationship("MenuItem")
 
 
 class Guest(Base):
@@ -124,8 +166,20 @@ class Guest(Base):
     # Seating
     table_id: Mapped[str | None] = mapped_column(String(36), ForeignKey("seating_tables.id"), nullable=True)
     seat_number: Mapped[str | None] = mapped_column(String(20), nullable=True)
+    # Couple/party — mutual link to another guest in the same event.
+    # When the first partner is seated and the second hasn't arrived, the
+    # adjacent seat is reserved via `held_seat` so other FCFS arrivals skip it.
+    partner_guest_id: Mapped[str | None] = mapped_column(String(36), ForeignKey("guests.id"), nullable=True)
+    held_seat: Mapped[str | None] = mapped_column(String(20), nullable=True)
     # Menu
     meal_served: Mapped[bool] = mapped_column(Boolean, default=False)
+    # VVIP: added on the fly via the Reserve modal — flagged for visual emphasis.
+    is_vip: Mapped[bool] = mapped_column(Boolean, default=False)
+    # Per-guest notification consent. Default true: host adding a guest's phone
+    # is an implicit invite-to-message. Guests can opt out from their ticket page
+    # (the visible toggle satisfies TCR's "opt-in workflow" documentation).
+    sms_consent: Mapped[bool] = mapped_column(Boolean, default=True)
+    whatsapp_consent: Mapped[bool] = mapped_column(Boolean, default=True)
 
     event: Mapped["Event"] = relationship("Event", back_populates="guests")
     table: Mapped["SeatingTable | None"] = relationship("SeatingTable", back_populates="guests")

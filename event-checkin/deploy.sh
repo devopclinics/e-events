@@ -106,8 +106,18 @@ if $DO_BUILD; then
   ok "Backend built → ${REGISTRY}:backend-${VERSION}"
 
   info "Building frontend..."
+  # Load Firebase vars from frontend/.env if present
+  FIREBASE_BUILD_ARGS=()
+  FRONTEND_ENV="${SCRIPT_DIR}/frontend/.env"
+  if [[ -f "$FRONTEND_ENV" ]]; then
+    while IFS='=' read -r key value || [[ -n "$key" ]]; do
+      [[ "$key" =~ ^#.*$ || -z "$key" ]] && continue
+      FIREBASE_BUILD_ARGS+=(--build-arg "${key}=${value}")
+    done < "$FRONTEND_ENV"
+  fi
   docker build $NO_CACHE \
     "${BUILD_ARGS[@]}" \
+    "${FIREBASE_BUILD_ARGS[@]}" \
     --tag "${REGISTRY}:frontend-${VERSION}" \
     --tag "${REGISTRY}:frontend-latest" \
     "${SCRIPT_DIR}/frontend"

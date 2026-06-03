@@ -100,6 +100,7 @@ async def get_invite_page(event_id: str, db: AsyncSession = Depends(get_db)):
         invite_message=event.invite_message,
         rsvp_enabled=event.rsvp_enabled,
         rsvp_collect_phone=event.rsvp_collect_phone,
+        rsvp_collect_email=event.rsvp_collect_email,
         rsvp_capacity=event.rsvp_capacity,
         rsvp_count=count,
         questions=list(questions),
@@ -126,14 +127,15 @@ async def submit_rsvp(
         if count >= event.rsvp_capacity:
             raise HTTPException(409, "Sorry — this event is at capacity")
 
-    email = data.email.lower().strip()
+    email = data.email.lower().strip() if data.email else None
 
-    # Duplicate guard
-    existing = (await db.execute(
-        select(Guest).where(Guest.event_id == event_id, Guest.email == email)
-    )).scalar_one_or_none()
-    if existing:
-        raise HTTPException(409, "You've already RSVP'd for this event")
+    # Duplicate guard (only when email is provided)
+    if email:
+        existing = (await db.execute(
+            select(Guest).where(Guest.event_id == event_id, Guest.email == email)
+        )).scalar_one_or_none()
+        if existing:
+            raise HTTPException(409, "You've already RSVP'd for this event")
 
     # Validate / normalise phone
     phone: str | None = None

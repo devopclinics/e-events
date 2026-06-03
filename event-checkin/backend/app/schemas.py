@@ -98,6 +98,7 @@ class EventOut(BaseModel):
     invite_theme: str = "default"
     invite_message: Optional[str] = None
     rsvp_collect_phone: bool = True
+    rsvp_collect_email: bool = True
     rsvp_capacity: Optional[int] = None
 
 
@@ -364,6 +365,7 @@ class InviteSettingsUpdate(BaseModel):
     invite_theme: Optional[Literal["default", "gold", "rose", "midnight", "forest"]] = None
     invite_message: Optional[str] = None
     rsvp_collect_phone: Optional[bool] = None
+    rsvp_collect_email: Optional[bool] = None
     rsvp_capacity: Optional[int] = None
 
 
@@ -379,6 +381,7 @@ class InvitePageOut(BaseModel):
     invite_message: Optional[str]
     rsvp_enabled: bool
     rsvp_collect_phone: bool
+    rsvp_collect_email: bool
     rsvp_capacity: Optional[int]
     # rsvp_count populated by the endpoint
     rsvp_count: int = 0
@@ -388,7 +391,7 @@ class InvitePageOut(BaseModel):
 class RSVPSubmit(BaseModel):
     first_name: str
     last_name: str
-    email: EmailStr
+    email: Optional[EmailStr] = None
     phone: Optional[str] = None
     # key = question_id, value = answer string
     answers: dict[str, str] = {}

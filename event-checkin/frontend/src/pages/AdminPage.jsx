@@ -1572,6 +1572,7 @@ function InvitePanel({ event, onChanged }) {
     invite_theme:      event.invite_theme       ?? 'default',
     invite_message:    event.invite_message     ?? '',
     rsvp_collect_phone:event.rsvp_collect_phone ?? true,
+    rsvp_collect_email:event.rsvp_collect_email ?? true,
     rsvp_capacity:     event.rsvp_capacity      ?? '',
   })
   const [questions, setQuestions] = useState([])
@@ -1664,6 +1665,10 @@ function InvitePanel({ event, onChanged }) {
         <div className="flex items-center gap-2">
           <input id="collect_phone" type="checkbox" checked={form.rsvp_collect_phone} onChange={set('rsvp_collect_phone')} className="w-4 h-4 accent-teal-600" />
           <label htmlFor="collect_phone" className="text-sm font-medium text-slate-700 dark:text-slate-300 cursor-pointer">Collect phone number</label>
+        </div>
+        <div className="flex items-center gap-2">
+          <input id="collect_email" type="checkbox" checked={form.rsvp_collect_email} onChange={set('rsvp_collect_email')} className="w-4 h-4 accent-teal-600" />
+          <label htmlFor="collect_email" className="text-sm font-medium text-slate-700 dark:text-slate-300 cursor-pointer">Collect email address</label>
         </div>
         <div>
           <label className="block text-xs font-semibold text-slate-500 dark:text-slate-400 mb-1">Theme</label>

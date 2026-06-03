@@ -65,6 +65,7 @@ class Event(Base):
     invite_theme: Mapped[str] = mapped_column(String(50), default="default")
     invite_message: Mapped[str | None] = mapped_column(Text, nullable=True)
     rsvp_collect_phone: Mapped[bool] = mapped_column(Boolean, default=True)
+    rsvp_collect_email: Mapped[bool] = mapped_column(Boolean, default=True)
     # None = unlimited; integer = max accepted RSVPs
     rsvp_capacity: Mapped[int | None] = mapped_column(Integer, nullable=True)
 

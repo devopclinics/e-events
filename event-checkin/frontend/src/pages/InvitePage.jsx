@@ -179,10 +179,12 @@ function RSVPForm({ event, theme, onConfirmed }) {
         </div>
       </div>
 
-      <div>
-        <label className="block text-xs font-semibold text-slate-500 dark:text-slate-400 mb-1">Email *</label>
-        <input required type="email" value={form.email} onChange={set('email')} className={inputCls} placeholder="jane@example.com" />
-      </div>
+      {event.rsvp_collect_email !== false && (
+        <div>
+          <label className="block text-xs font-semibold text-slate-500 dark:text-slate-400 mb-1">Email *</label>
+          <input required type="email" value={form.email} onChange={set('email')} className={inputCls} placeholder="jane@example.com" />
+        </div>
+      )}
 
       {event.rsvp_collect_phone && (
         <div>

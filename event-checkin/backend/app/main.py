@@ -5,7 +5,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy import text
 from .database import engine, Base
 from .config import settings
-from .routers import events, guests, scanner, dashboard, seating, menu
+from .routers import events, guests, scanner, dashboard, seating, menu, system
 from .routers import auth as auth_router
 from . import sync_poller
 
@@ -55,6 +55,7 @@ app.include_router(seating.router,     prefix="/api/events", tags=["seating"])
 app.include_router(menu.router,        prefix="/api/events", tags=["menu"])
 app.include_router(scanner.router,     prefix="/api/scan",   tags=["scanner"])
 app.include_router(dashboard.router,   prefix="/api/events", tags=["dashboard"])
+app.include_router(system.router,      prefix="/api/system", tags=["system"])
 
 
 @app.get("/api/health")

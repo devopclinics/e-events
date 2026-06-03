@@ -10,6 +10,7 @@ import ScanAutoPage from './pages/ScanAutoPage'
 import LoginPage from './pages/LoginPage'
 import RegisterPage from './pages/RegisterPage'
 import LandingPage from './pages/LandingPage'
+import InvitePage from './pages/InvitePage'
 
 // ── Preferred-view helpers ────────────────────────────────────────────────────
 
@@ -155,6 +156,8 @@ function AppRoutes() {
       <Route path="/login" element={<LoginPage />} />
       <Route path="/register" element={<RegisterPage />} />
       <Route path="/scan/:token" element={<ScanAutoPage />} />
+      {/* Public invite page — no auth required */}
+      <Route path="/e/:eventId" element={<InvitePage />} />
 
       {/* Landing page: show to guests, redirect logged-in users */}
       <Route path="/"

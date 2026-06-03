@@ -1,10 +1,15 @@
 from datetime import datetime
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 from ..database import get_db
-from ..models import Event, EventUser, User
-from ..schemas import EventCreate, EventUpdate, EventOut, EventMemberOut, AssignUserRequest, UserOut, EventSourceUpdate
+from ..models import Event, EventUser, Guest, RSVPQuestion, User
+from ..schemas import (
+    EventCreate, EventUpdate, EventOut, EventMemberOut, AssignUserRequest,
+    UserOut, EventSourceUpdate,
+    InviteSettingsUpdate, RSVPQuestionCreate, RSVPQuestionUpdate, RSVPQuestionOut,
+    BroadcastRequest, BroadcastResult,
+)
 from ..auth import require_admin, get_current_user
 from .guests import import_from_source_url, _normalize_phone
 from services import messaging
@@ -305,3 +310,151 @@ async def toggle_features(
     await db.commit()
     await db.refresh(event)
     return event
+
+
+# ── Invite page settings ──────────────────────────────────────────────────────
+
+@router.put("/{event_id}/invite-settings", response_model=EventOut)
+async def update_invite_settings(
+    event_id: str,
+    data: InviteSettingsUpdate,
+    db: AsyncSession = Depends(get_db),
+    _: User = Depends(require_admin),
+):
+    event = await db.get(Event, event_id)
+    if not event:
+        raise HTTPException(404, "Event not found")
+    for field, value in data.model_dump(exclude_none=True).items():
+        setattr(event, field, value)
+    await db.commit()
+    await db.refresh(event)
+    return event
+
+
+# ── RSVP questions (admin CRUD) ───────────────────────────────────────────────
+
+@router.get("/{event_id}/rsvp-questions", response_model=list[RSVPQuestionOut])
+async def list_rsvp_questions(
+    event_id: str,
+    db: AsyncSession = Depends(get_db),
+    _: User = Depends(require_admin),
+):
+    result = await db.execute(
+        select(RSVPQuestion)
+        .where(RSVPQuestion.event_id == event_id)
+        .order_by(RSVPQuestion.sort_order)
+    )
+    return result.scalars().all()
+
+
+@router.post("/{event_id}/rsvp-questions", response_model=RSVPQuestionOut, status_code=201)
+async def create_rsvp_question(
+    event_id: str,
+    data: RSVPQuestionCreate,
+    db: AsyncSession = Depends(get_db),
+    _: User = Depends(require_admin),
+):
+    event = await db.get(Event, event_id)
+    if not event:
+        raise HTTPException(404, "Event not found")
+    q = RSVPQuestion(event_id=event_id, **data.model_dump())
+    db.add(q)
+    await db.commit()
+    await db.refresh(q)
+    return q
+
+
+@router.put("/{event_id}/rsvp-questions/{question_id}", response_model=RSVPQuestionOut)
+async def update_rsvp_question(
+    event_id: str,
+    question_id: str,
+    data: RSVPQuestionUpdate,
+    db: AsyncSession = Depends(get_db),
+    _: User = Depends(require_admin),
+):
+    q = await db.get(RSVPQuestion, question_id)
+    if not q or q.event_id != event_id:
+        raise HTTPException(404, "Question not found")
+    for field, value in data.model_dump(exclude_none=True).items():
+        setattr(q, field, value)
+    await db.commit()
+    await db.refresh(q)
+    return q
+
+
+@router.delete("/{event_id}/rsvp-questions/{question_id}", status_code=204)
+async def delete_rsvp_question(
+    event_id: str,
+    question_id: str,
+    db: AsyncSession = Depends(get_db),
+    _: User = Depends(require_admin),
+):
+    q = await db.get(RSVPQuestion, question_id)
+    if not q or q.event_id != event_id:
+        raise HTTPException(404, "Question not found")
+    await db.delete(q)
+    await db.commit()
+
+
+# ── Broadcast ─────────────────────────────────────────────────────────────────
+
+@router.post("/{event_id}/broadcast", response_model=BroadcastResult)
+async def broadcast_message(
+    event_id: str,
+    data: BroadcastRequest,
+    background_tasks: BackgroundTasks,
+    db: AsyncSession = Depends(get_db),
+    _: User = Depends(require_admin),
+):
+    """Send a free-text message to a subset of guests via SMS and/or WhatsApp."""
+    event = await db.get(Event, event_id)
+    if not event:
+        raise HTTPException(404, "Event not found")
+
+    if not data.message.strip():
+        raise HTTPException(400, "message cannot be empty")
+
+    q = select(Guest).where(Guest.event_id == event_id)
+    if data.target == "admitted":
+        q = q.where(Guest.admitted == True)  # noqa: E712
+    elif data.target == "not_admitted":
+        q = q.where(Guest.admitted == False)  # noqa: E712
+
+    guests = (await db.execute(q)).scalars().all()
+
+    queued = skipped_no_phone = skipped_no_consent = 0
+
+    for guest in guests:
+        if not guest.phone:
+            skipped_no_phone += 1
+            continue
+
+        sent_any = False
+        if "sms" in data.channels and guest.sms_consent:
+            background_tasks.add_task(
+                messaging.send_broadcast_sms,
+                phone=guest.phone,
+                first_name=guest.first_name,
+                message=data.message,
+            )
+            sent_any = True
+
+        if "whatsapp" in data.channels and guest.whatsapp_consent:
+            background_tasks.add_task(
+                messaging.send_broadcast_whatsapp,
+                phone=guest.phone,
+                first_name=guest.first_name,
+                message=data.message,
+            )
+            sent_any = True
+
+        if sent_any:
+            queued += 1
+        else:
+            skipped_no_consent += 1
+
+    return BroadcastResult(
+        queued=queued,
+        skipped_no_phone=skipped_no_phone,
+        skipped_no_consent=skipped_no_consent,
+    )

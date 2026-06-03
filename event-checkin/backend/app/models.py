@@ -59,10 +59,20 @@ class Event(Base):
     source_last_sync_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     source_last_error: Mapped[str | None] = mapped_column(Text, nullable=True)
 
+    # ── Invite page & self-service RSVP ──────────────────────────────────────
+    rsvp_enabled: Mapped[bool] = mapped_column(Boolean, default=False)
+    # Theme key: "default" | "gold" | "rose" | "midnight" | "forest"
+    invite_theme: Mapped[str] = mapped_column(String(50), default="default")
+    invite_message: Mapped[str | None] = mapped_column(Text, nullable=True)
+    rsvp_collect_phone: Mapped[bool] = mapped_column(Boolean, default=True)
+    # None = unlimited; integer = max accepted RSVPs
+    rsvp_capacity: Mapped[int | None] = mapped_column(Integer, nullable=True)
+
     members: Mapped[list["EventUser"]] = relationship("EventUser", back_populates="event", cascade="all, delete-orphan")
     guests: Mapped[list["Guest"]] = relationship("Guest", back_populates="event", cascade="all, delete-orphan")
     tables: Mapped[list["SeatingTable"]] = relationship("SeatingTable", back_populates="event", cascade="all, delete-orphan")
     menu_categories: Mapped[list["MenuCategory"]] = relationship("MenuCategory", back_populates="event", cascade="all, delete-orphan")
+    rsvp_questions: Mapped[list["RSVPQuestion"]] = relationship("RSVPQuestion", back_populates="event", cascade="all, delete-orphan")
 
 
 class SeatingTable(Base):
@@ -184,3 +194,36 @@ class Guest(Base):
     event: Mapped["Event"] = relationship("Event", back_populates="guests")
     table: Mapped["SeatingTable | None"] = relationship("SeatingTable", back_populates="guests")
     menu_choices: Mapped[list["GuestMenuChoice"]] = relationship("GuestMenuChoice", cascade="all, delete-orphan")
+    rsvp_answers: Mapped[list["RSVPAnswer"]] = relationship("RSVPAnswer", cascade="all, delete-orphan")
+
+
+# ── RSVP / Invite page ────────────────────────────────────────────────────────
+
+class RSVPQuestion(Base):
+    """A custom question shown on the public invite page before/during RSVP."""
+    __tablename__ = "rsvp_questions"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+    event_id: Mapped[str] = mapped_column(String(36), ForeignKey("events.id"))
+    question: Mapped[str] = mapped_column(String(500))
+    # "text" — free-form text input
+    # "select" — single-choice from options (JSON array stored in options col)
+    # "boolean" — yes/no toggle
+    question_type: Mapped[str] = mapped_column(String(20), default="text")
+    options: Mapped[str | None] = mapped_column(Text, nullable=True)  # JSON: ["Option A", "Option B"]
+    is_required: Mapped[bool] = mapped_column(Boolean, default=False)
+    sort_order: Mapped[int] = mapped_column(Integer, default=0)
+
+    event: Mapped["Event"] = relationship("Event", back_populates="rsvp_questions")
+    answers: Mapped[list["RSVPAnswer"]] = relationship("RSVPAnswer", cascade="all, delete-orphan")
+
+
+class RSVPAnswer(Base):
+    """One row per guest per RSVP question answer."""
+    __tablename__ = "rsvp_answers"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+    guest_id: Mapped[str] = mapped_column(String(36), ForeignKey("guests.id"))
+    question_id: Mapped[str] = mapped_column(String(36), ForeignKey("rsvp_questions.id"))
+    answer: Mapped[str] = mapped_column(Text)
+    answered_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)

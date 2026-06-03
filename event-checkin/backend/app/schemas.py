@@ -210,6 +210,16 @@ class GuestCreate(BaseModel):
     is_vip: bool = False
 
 
+class GuestUpdate(BaseModel):
+    first_name: Optional[str] = None
+    last_name: Optional[str] = None
+    email: Optional[str] = None
+    phone: Optional[str] = None
+    is_vip: Optional[bool] = None
+    sms_consent: Optional[bool] = None
+    whatsapp_consent: Optional[bool] = None
+
+
 class GuestOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 

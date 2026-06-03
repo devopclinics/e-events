@@ -1972,6 +1972,98 @@ function TabBar({ tabs, active, onChange }) {
   )
 }
 
+// ── Edit Guest Modal ──────────────────────────────────────────────────────────
+
+function EditGuestModal({ guest, onSave, onClose, loading }) {
+  const [form, setForm] = useState({
+    first_name: guest.first_name || '',
+    last_name:  guest.last_name  || '',
+    email:      guest.email      || '',
+    phone:      guest.phone      || '',
+    is_vip:     guest.is_vip     || false,
+    sms_consent: guest.sms_consent !== false,
+    whatsapp_consent: guest.whatsapp_consent !== false,
+  })
+
+  function handleSubmit(e) {
+    e.preventDefault()
+    onSave({
+      first_name: form.first_name.trim(),
+      last_name:  form.last_name.trim(),
+      email:      form.email.trim(),
+      phone:      form.phone.trim() || null,
+      is_vip:     form.is_vip,
+      sms_consent: form.sms_consent,
+      whatsapp_consent: form.whatsapp_consent,
+    })
+  }
+
+  const inputCls = 'w-full border border-slate-300 dark:border-slate-700 rounded-lg px-3 py-2 text-sm bg-white dark:bg-slate-800 text-slate-900 dark:text-white'
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/60 backdrop-blur-sm" onClick={onClose}>
+      <div onClick={(e) => e.stopPropagation()}
+        className="bg-white dark:bg-slate-900 dark:border dark:border-slate-700 rounded-xl shadow-2xl w-full max-w-md">
+        <div className="px-5 py-4 border-b dark:border-slate-700 flex items-center justify-between">
+          <h3 className="font-bold text-slate-900 dark:text-white">Edit guest</h3>
+          <button onClick={onClose} className="text-slate-400 hover:text-slate-700 dark:hover:text-white text-2xl leading-none">×</button>
+        </div>
+        <form onSubmit={handleSubmit} className="p-5 space-y-3">
+          <div className="grid grid-cols-2 gap-2">
+            <div>
+              <label className="block text-xs font-medium text-slate-500 dark:text-slate-400 mb-1">First name *</label>
+              <input autoFocus required className={inputCls} value={form.first_name}
+                onChange={(e) => setForm((f) => ({ ...f, first_name: e.target.value }))} />
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-slate-500 dark:text-slate-400 mb-1">Last name *</label>
+              <input required className={inputCls} value={form.last_name}
+                onChange={(e) => setForm((f) => ({ ...f, last_name: e.target.value }))} />
+            </div>
+          </div>
+          <div>
+            <label className="block text-xs font-medium text-slate-500 dark:text-slate-400 mb-1">Email</label>
+            <input type="email" className={inputCls} value={form.email}
+              onChange={(e) => setForm((f) => ({ ...f, email: e.target.value }))} />
+          </div>
+          <div>
+            <label className="block text-xs font-medium text-slate-500 dark:text-slate-400 mb-1">Phone (E.164, e.g. +14155550123)</label>
+            <input className={inputCls} value={form.phone} placeholder="+14155550123"
+              onChange={(e) => setForm((f) => ({ ...f, phone: e.target.value }))} />
+          </div>
+          <div className="flex flex-wrap gap-4 pt-1">
+            <label className="flex items-center gap-2 text-sm text-slate-700 dark:text-slate-300 cursor-pointer">
+              <input type="checkbox" checked={form.is_vip}
+                onChange={(e) => setForm((f) => ({ ...f, is_vip: e.target.checked }))} />
+              VIP
+            </label>
+            <label className="flex items-center gap-2 text-sm text-slate-700 dark:text-slate-300 cursor-pointer">
+              <input type="checkbox" checked={form.sms_consent}
+                onChange={(e) => setForm((f) => ({ ...f, sms_consent: e.target.checked }))} />
+              SMS consent
+            </label>
+            <label className="flex items-center gap-2 text-sm text-slate-700 dark:text-slate-300 cursor-pointer">
+              <input type="checkbox" checked={form.whatsapp_consent}
+                onChange={(e) => setForm((f) => ({ ...f, whatsapp_consent: e.target.checked }))} />
+              WhatsApp consent
+            </label>
+          </div>
+          <div className="flex gap-2 pt-2">
+            <button type="submit" disabled={loading || !form.first_name.trim() || !form.last_name.trim()}
+              className="flex-1 bg-indigo-600 hover:bg-indigo-700 text-white font-semibold py-2.5 rounded-lg disabled:opacity-50 text-sm">
+              {loading ? 'Saving…' : 'Save changes'}
+            </button>
+            <button type="button" onClick={onClose}
+              className="px-4 py-2.5 rounded-lg border border-slate-300 dark:border-slate-600 text-sm text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800">
+              Cancel
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  )
+}
+
 export default function AdminPage() {
   const [events, setEvents] = useState([])
   const [selectedId, setSelectedId] = useState('')
@@ -1986,6 +2078,7 @@ export default function AdminPage() {
   const [showUrlInput, setShowUrlInput] = useState(false)
   const [selectedGuests, setSelectedGuests] = useState(new Set())
   const [activeTab, setActiveTab] = useState('overview')
+  const [editingGuest, setEditingGuest] = useState(null)
   const fileRef = useRef()
 
   const PAGE_SIZE = 50
@@ -2146,6 +2239,17 @@ export default function AdminPage() {
       // Refresh the event so last_sync_at updates locally.
       const refreshed = await api.listEvents()
       setEvents(refreshed)
+    } catch (err) { flash(err.message, true) }
+    finally { setLoading(false) }
+  }
+
+  async function handleUpdateGuest(guestId, data) {
+    setLoading(true)
+    try {
+      const updated = await api.updateGuest(selectedId, guestId, data)
+      setGuests((prev) => prev.map((g) => g.id === guestId ? updated : g))
+      setEditingGuest(null)
+      flash('Guest updated.')
     } catch (err) { flash(err.message, true) }
     finally { setLoading(false) }
   }
@@ -2470,6 +2574,8 @@ export default function AdminPage() {
                                 <button onClick={() => handleResendInvite(g.id)} disabled={loading}
                                   className="text-xs text-amber-600 hover:underline disabled:opacity-40">Resend</button>
                               )}
+                              <button onClick={() => setEditingGuest(g)} disabled={loading}
+                                className="text-xs text-teal-600 hover:underline disabled:opacity-40">Edit</button>
                               <button onClick={() => handleDeleteGuest(g.id)} disabled={loading}
                                 className="text-xs text-red-400 hover:text-red-600 disabled:opacity-40">Remove</button>
                             </div>
@@ -2517,6 +2623,8 @@ export default function AdminPage() {
                           <button onClick={() => handleResendInvite(g.id)} disabled={loading}
                             className="text-xs text-amber-600 hover:underline disabled:opacity-40">Resend invite</button>
                         )}
+                        <button onClick={() => setEditingGuest(g)} disabled={loading}
+                          className="text-xs text-teal-600 hover:underline disabled:opacity-40">Edit</button>
                         <button onClick={() => handleDeleteGuest(g.id)} disabled={loading}
                           className="text-xs text-red-400 hover:text-red-600 disabled:opacity-40 ml-auto">Remove</button>
                       </div>
@@ -2531,6 +2639,15 @@ export default function AdminPage() {
 
       {/* User management — always visible to admins */}
       <UsersPanel />
+
+      {editingGuest && (
+        <EditGuestModal
+          guest={editingGuest}
+          loading={loading}
+          onSave={(data) => handleUpdateGuest(editingGuest.id, data)}
+          onClose={() => setEditingGuest(null)}
+        />
+      )}
     </div>
   )
 }

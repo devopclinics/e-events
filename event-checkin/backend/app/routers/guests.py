@@ -9,7 +9,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 from ..database import get_db
 from ..models import Event, Guest, User
-from ..schemas import GuestOut, GuestCreate
+from ..schemas import GuestOut, GuestCreate, GuestUpdate
 from ..auth import require_admin
 from services.qr_service import generate_qr_bytes
 from services.email_service import send_invite_email
@@ -318,6 +318,39 @@ async def list_guests(event_id: str, db: AsyncSession = Depends(get_db), _: User
         select(Guest).where(Guest.event_id == event_id).order_by(Guest.last_name, Guest.first_name)
     )
     return result.scalars().all()
+
+
+@router.patch("/{event_id}/guests/{guest_id}", response_model=GuestOut)
+async def update_guest(
+    event_id: str,
+    guest_id: str,
+    data: GuestUpdate,
+    db: AsyncSession = Depends(get_db),
+    _: User = Depends(require_admin),
+):
+    guest = await db.get(Guest, guest_id)
+    if not guest or guest.event_id != event_id:
+        raise HTTPException(404, "Guest not found")
+    if data.first_name is not None:
+        guest.first_name = data.first_name.strip()
+    if data.last_name is not None:
+        guest.last_name = data.last_name.strip()
+    if data.email is not None:
+        guest.email = data.email.strip()
+    if data.phone is not None:
+        phone = _normalize_phone(data.phone.strip()) if data.phone.strip() else None
+        if data.phone.strip() and phone is None:
+            raise HTTPException(400, "Invalid phone format — use E.164 e.g. +447911123456")
+        guest.phone = phone
+    if data.is_vip is not None:
+        guest.is_vip = data.is_vip
+    if data.sms_consent is not None:
+        guest.sms_consent = data.sms_consent
+    if data.whatsapp_consent is not None:
+        guest.whatsapp_consent = data.whatsapp_consent
+    await db.commit()
+    await db.refresh(guest)
+    return guest
 
 
 @router.delete("/{event_id}/guests/{guest_id}", status_code=204)

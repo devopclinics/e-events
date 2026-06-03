@@ -151,6 +151,21 @@ export const api = {
   // Manual invites (admin)
   sendInvites: (eventId, data) => req('POST', `/events/${eventId}/send-invites`, data),
   // Cover image (admin)
+  uploadCoverImage: async (eventId, file) => {
+    const token = await getToken()
+    const fd = new FormData()
+    fd.append('file', file)
+    const res = await fetch(`${BASE}/events/${eventId}/upload-cover`, {
+      method: 'POST',
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
+      body: fd,
+    })
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({ detail: res.statusText }))
+      throw new Error(err.detail || res.statusText)
+    }
+    return res.json()
+  },
   deleteCoverImage: (eventId) => req('DELETE', `/events/${eventId}/upload-cover`),
   // Invite page public URL helper (no auth needed)
   inviteUrl: (eventId) => `${window.location.origin}/e/${eventId}`,

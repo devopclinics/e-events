@@ -1630,16 +1630,7 @@ function InvitePanel({ event, onChanged }) {
     if (!file) return
     setUploading(true); setMsg(''); setErr('')
     try {
-      const token = await import('./firebase').then(m => m.auth.currentUser?.getIdToken())
-      const fd = new FormData()
-      fd.append('file', file)
-      const res = await fetch(`/api/events/${event.id}/upload-cover`, {
-        method: 'POST',
-        headers: token ? { Authorization: `Bearer ${token}` } : {},
-        body: fd,
-      })
-      const data = await res.json()
-      if (!res.ok) throw new Error(data.detail || 'Upload failed')
+      const data = await api.uploadCoverImage(event.id, file)
       setCoverImage(data.url)
       onChanged(data.event)
       setMsg('Cover image uploaded!')

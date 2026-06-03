@@ -1,6 +1,6 @@
-# Ansible — Ubuntu Server Inventory
+# Ansible — Ubuntu Server Resource Utilization
 
-Collects a comprehensive snapshot of the Ubuntu server's system state and saves a plain-text report to your local `/tmp/` directory.
+Checks real-time CPU, memory, disk, and network utilization on the target Ubuntu server and prints the results to the terminal. Nothing is written to the server.
 
 ## Prerequisites
 
@@ -28,35 +28,19 @@ events-server ansible_host=203.0.113.10 ansible_user=ubuntu
 ansible-playbook -i inventory/hosts.ini playbooks/server-inventory.yml
 ```
 
-To target a specific host from the inventory group:
-
-```bash
-ansible-playbook -i inventory/hosts.ini playbooks/server-inventory.yml --limit events-server
-```
-
 To prompt for a sudo password (if the remote user is not password-less sudo):
 
 ```bash
 ansible-playbook -i inventory/hosts.ini playbooks/server-inventory.yml -K
 ```
 
-### 3. Read the report
+## What is checked
 
-The report is saved locally to:
-
-```
-/tmp/server-inventory-<hostname>.txt
-```
-
-## What is collected
-
-| Section | Details |
+| Section | Metrics |
 |---------|---------|
-| **OS & Kernel** | Distribution, version, codename, kernel, architecture, uptime, timezone |
-| **Hardware** | CPU (lscpu), memory (free), disk usage (df), block devices (lsblk) |
-| **Network** | Interfaces, routing table, listening ports, DNS config |
-| **Users & Groups** | Non-system local users, sudo group members |
-| **Services** | Running, failed, and enabled systemd services |
-| **Packages** | Total installed count, manually installed packages, pending security updates |
-| **Docker** | Version, running containers, all containers, images, disk usage |
-| **Security** | UFW firewall rules, last 10 logins |
+| **CPU** | Load averages (uptime), utilization % (user/system/idle/iowait via vmstat), top 10 processes by CPU |
+| **Memory** | Total / used / free / available / swap (free -h), top 10 processes by memory |
+| **Disk** | Filesystem usage per mount (size / used / available / %), I/O statistics (iostat) |
+| **Network** | TX/RX bytes and packet counts per interface |
+
+Results are printed directly to the Ansible output — nothing is created on the server or control node.

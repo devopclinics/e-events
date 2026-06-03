@@ -1,7 +1,6 @@
 ---
-# Ubuntu Server Inventory Playbook
-# Collects comprehensive system information from the target Ubuntu server
-# and saves a report to /tmp/server-inventory-<hostname>.txt on the control node.
+# Ubuntu Server Resource Utilization Playbook
+# Checks CPU, memory, disk, and network utilization on the target Ubuntu server.
 #
 # Usage:
 #   ansible-playbook -i inventory/hosts.ini playbooks/server-inventory.yml
@@ -9,298 +8,100 @@
 # To target a specific host:
 #   ansible-playbook -i inventory/hosts.ini playbooks/server-inventory.yml --limit events-server
 
-- name: Ubuntu Server Inventory
+- name: Ubuntu Server Resource Utilization
   hosts: ubuntu_servers
   gather_facts: true
   become: true
 
   tasks:
 
-    # ── OS & Kernel ───────────────────────────────────────────────────────────
+    # ── CPU ───────────────────────────────────────────────────────────────────
 
-    - name: Get kernel version
-      command: uname -r
-      register: kernel_version
+    - name: Get system load and uptime
+      command: uptime
+      register: load_info
       changed_when: false
 
-    - name: Get OS release details
-      command: cat /etc/os-release
-      register: os_release
+    - name: Get CPU utilization (1-second snapshot)
+      shell: "vmstat 1 2 | tail -1 | awk '{print \"us=\"$13\"% sy=\"$14\"% id=\"$15\"% wa=\"$16\"%\"}'"
+      register: cpu_util
       changed_when: false
 
-    - name: Get system uptime
-      command: uptime -p
-      register: system_uptime
+    - name: Get top 10 CPU-consuming processes
+      shell: "ps aux --sort=-%cpu | head -11"
+      register: top_cpu_procs
       changed_when: false
 
-    - name: Get system timezone
-      command: timedatectl show --property=Timezone --value
-      register: system_timezone
-      changed_when: false
+    # ── Memory ────────────────────────────────────────────────────────────────
 
-    # ── Hardware ──────────────────────────────────────────────────────────────
-
-    - name: Get CPU information
-      command: lscpu
-      register: cpu_info
-      changed_when: false
-
-    - name: Get total RAM
+    - name: Get memory utilization
       command: free -h
-      register: ram_info
+      register: mem_info
       changed_when: false
 
-    - name: Get disk usage
-      command: df -hT
-      register: disk_usage
+    - name: Get top 10 memory-consuming processes
+      shell: "ps aux --sort=-%mem | head -11"
+      register: top_mem_procs
       changed_when: false
 
-    - name: Get block devices
-      command: lsblk -o NAME,SIZE,TYPE,MOUNTPOINT,FSTYPE
-      register: block_devices
+    # ── Disk ──────────────────────────────────────────────────────────────────
+
+    - name: Get disk utilization
+      command: df -h --output=source,size,used,avail,pcent,target -x tmpfs -x devtmpfs
+      register: disk_info
       changed_when: false
+
+    - name: Get disk I/O statistics
+      command: iostat -xh 1 1
+      register: disk_io
+      changed_when: false
+      failed_when: false
 
     # ── Network ───────────────────────────────────────────────────────────────
 
-    - name: Get network interfaces
-      command: ip -br addr show
-      register: network_interfaces
+    - name: Get network interface statistics
+      command: ip -s link show
+      register: net_stats
       changed_when: false
 
-    - name: Get routing table
-      command: ip route show
-      register: routing_table
-      changed_when: false
+    # ── Print Results ─────────────────────────────────────────────────────────
 
-    - name: Get listening ports
-      command: ss -tlnp
-      register: listening_ports
-      changed_when: false
-
-    - name: Get DNS configuration
-      command: cat /etc/resolv.conf
-      register: dns_config
-      changed_when: false
-
-    # ── Users & Groups ────────────────────────────────────────────────────────
-
-    - name: Get local users (non-system)
-      shell: "awk -F: '($3 >= 1000) {print $1, \"uid=\"$3, \"home=\"$6, \"shell=\"$7}' /etc/passwd"
-      register: local_users
-      changed_when: false
-
-    - name: Get sudo group members
-      shell: "getent group sudo | cut -d: -f4"
-      register: sudo_members
-      changed_when: false
-
-    # ── Services ──────────────────────────────────────────────────────────────
-
-    - name: Get running services
-      command: systemctl list-units --type=service --state=running --no-legend --no-pager
-      register: running_services
-      changed_when: false
-
-    - name: Get failed services
-      command: systemctl list-units --type=service --state=failed --no-legend --no-pager
-      register: failed_services
-      changed_when: false
-
-    - name: Get enabled services
-      command: systemctl list-unit-files --type=service --state=enabled --no-legend --no-pager
-      register: enabled_services
-      changed_when: false
-
-    # ── Packages ──────────────────────────────────────────────────────────────
-
-    - name: Get count of installed packages
-      shell: dpkg-query -f '${Status}\n' -W | grep -c 'install ok installed'
-      register: package_count
-      changed_when: false
-
-    - name: Get list of manually installed packages
-      shell: "apt-mark showmanual | sort"
-      register: manual_packages
-      changed_when: false
-
-    - name: Refresh apt cache before checking for updates
-      apt:
-        update_cache: true
-      changed_when: false
-
-    - name: Check for pending security updates
-      shell: apt-get -s upgrade 2>/dev/null | grep -i 'security' | wc -l
-      register: security_updates
-      changed_when: false
-
-    # ── Docker ────────────────────────────────────────────────────────────────
-
-    - name: Check if Docker is installed
-      command: which docker
-      register: docker_installed
-      changed_when: false
-      failed_when: false
-
-    - name: Get Docker version
-      command: docker version --format '{{ "{{" }}.Server.Version{{ "}}" }}'
-      register: docker_version
-      changed_when: false
-      failed_when: false
-      when: docker_installed.rc == 0
-
-    - name: Get running Docker containers
-      command: docker ps --format "table {{ "{{" }}.Names{{ "}}" }}\t{{ "{{" }}.Image{{ "}}" }}\t{{ "{{" }}.Status{{ "}}" }}\t{{ "{{" }}.Ports{{ "}}" }}"
-      register: docker_containers
-      changed_when: false
-      failed_when: false
-      when: docker_installed.rc == 0
-
-    - name: Get all Docker containers (including stopped)
-      command: docker ps -a --format "table {{ "{{" }}.Names{{ "}}" }}\t{{ "{{" }}.Image{{ "}}" }}\t{{ "{{" }}.Status{{ "}}" }}"
-      register: docker_all_containers
-      changed_when: false
-      failed_when: false
-      when: docker_installed.rc == 0
-
-    - name: Get Docker images
-      command: docker images --format "table {{ "{{" }}.Repository{{ "}}" }}\t{{ "{{" }}.Tag{{ "}}" }}\t{{ "{{" }}.Size{{ "}}" }}"
-      register: docker_images
-      changed_when: false
-      failed_when: false
-      when: docker_installed.rc == 0
-
-    - name: Get Docker disk usage
-      command: docker system df
-      register: docker_disk_usage
-      changed_when: false
-      failed_when: false
-      when: docker_installed.rc == 0
-
-    # ── Security ──────────────────────────────────────────────────────────────
-
-    - name: Get UFW firewall status
-      command: ufw status verbose
-      register: ufw_status
-      changed_when: false
-      failed_when: false
-
-    - name: Get last logins
-      command: last -n 10
-      register: last_logins
-      changed_when: false
-
-    - name: Check SSH configuration
-      command: /usr/sbin/sshd -T
-      register: sshd_config
-      changed_when: false
-      failed_when: false
-
-    # ── Compile Report ────────────────────────────────────────────────────────
-
-    - name: Compile inventory report
-      set_fact:
-        inventory_report: |
+    - name: "RESOURCE UTILIZATION — {{ inventory_hostname }} ({{ ansible_date_time.iso8601 }})"
+      debug:
+        msg: |
           ================================================================
-          SERVER INVENTORY REPORT
-          Host     : {{ inventory_hostname }}
-          Date     : {{ ansible_date_time.iso8601 }}
+          HOST   : {{ inventory_hostname }}
+          OS     : {{ ansible_distribution }} {{ ansible_distribution_version }}
+          Date   : {{ ansible_date_time.iso8601 }}
           ================================================================
 
-          ── OS & KERNEL ─────────────────────────────────────────────────
-          Distribution : {{ ansible_distribution }} {{ ansible_distribution_version }}
-          Codename     : {{ ansible_distribution_release }}
-          Kernel       : {{ kernel_version.stdout }}
-          Architecture : {{ ansible_architecture }}
-          Uptime       : {{ system_uptime.stdout }}
-          Timezone     : {{ system_timezone.stdout }}
+          ── CPU ─────────────────────────────────────────────────────────
+          Load / Uptime:
+          {{ load_info.stdout }}
 
-          ── HARDWARE ────────────────────────────────────────────────────
-          CPU Info:
-          {{ cpu_info.stdout }}
+          Utilization (user / system / idle / iowait):
+          {{ cpu_util.stdout }}
 
-          Memory:
-          {{ ram_info.stdout }}
+          Top 10 processes by CPU:
+          {{ top_cpu_procs.stdout }}
 
-          Disk Usage:
-          {{ disk_usage.stdout }}
+          ── MEMORY ──────────────────────────────────────────────────────
+          {{ mem_info.stdout }}
 
-          Block Devices:
-          {{ block_devices.stdout }}
+          Top 10 processes by memory:
+          {{ top_mem_procs.stdout }}
 
-          ── NETWORK ─────────────────────────────────────────────────────
-          Interfaces:
-          {{ network_interfaces.stdout }}
+          ── DISK ────────────────────────────────────────────────────────
+          Filesystem Usage:
+          {{ disk_info.stdout }}
 
-          Routing Table:
-          {{ routing_table.stdout }}
-
-          Listening Ports:
-          {{ listening_ports.stdout }}
-
-          DNS Config:
-          {{ dns_config.stdout }}
-
-          ── USERS & GROUPS ──────────────────────────────────────────────
-          Local Users (uid >= 1000):
-          {{ local_users.stdout }}
-
-          Sudo Members:
-          {{ sudo_members.stdout | default('(none)') }}
-
-          ── SERVICES ────────────────────────────────────────────────────
-          Running Services:
-          {{ running_services.stdout }}
-
-          Failed Services:
-          {{ failed_services.stdout | default('(none)') }}
-
-          Enabled Services:
-          {{ enabled_services.stdout }}
-
-          ── PACKAGES ────────────────────────────────────────────────────
-          Total Installed Packages : {{ package_count.stdout }}
-          Pending Security Updates : {{ security_updates.stdout }}
-
-          Manually Installed Packages:
-          {{ manual_packages.stdout }}
-
-          ── DOCKER ──────────────────────────────────────────────────────
-          {% if docker_installed.rc == 0 %}
-          Docker Version : {{ docker_version.stdout | default('unknown') }}
-
-          Running Containers:
-          {{ docker_containers.stdout | default('(none)') }}
-
-          All Containers:
-          {{ docker_all_containers.stdout | default('(none)') }}
-
-          Images:
-          {{ docker_images.stdout | default('(none)') }}
-
-          Docker Disk Usage:
-          {{ docker_disk_usage.stdout | default('(none)') }}
-          {% else %}
-          Docker is not installed.
+          {% if disk_io.rc == 0 %}
+          I/O Statistics:
+          {{ disk_io.stdout }}
           {% endif %}
 
-          ── SECURITY ────────────────────────────────────────────────────
-          UFW Firewall:
-          {{ ufw_status.stdout | default('ufw not installed') }}
-
-          Last 10 Logins:
-          {{ last_logins.stdout }}
+          ── NETWORK ─────────────────────────────────────────────────────
+          Interface TX/RX Statistics:
+          {{ net_stats.stdout }}
 
           ================================================================
-          END OF REPORT
-          ================================================================
-
-    - name: Save inventory report locally
-      copy:
-        content: "{{ inventory_report }}"
-        dest: "/tmp/server-inventory-{{ inventory_hostname }}.txt"
-      delegate_to: localhost
-      become: false
-
-    - name: Print report path
-      debug:
-        msg: "Inventory report saved to: /tmp/server-inventory-{{ inventory_hostname }}.txt"

@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
 import { api } from '../api'
+import { auth } from '../firebase'
 
 const STAT_TEXT = { indigo: 'text-indigo-600', green: 'text-green-600', amber: 'text-amber-600' }
 const STAT_BAR  = { indigo: 'bg-indigo-500',  green: 'bg-green-500',  amber: 'bg-amber-500'  }
@@ -52,40 +53,43 @@ export default function DashboardPage() {
 
     if (esRef.current) esRef.current.close()
 
-    const es = new EventSource(`/api/events/${eventId}/stream`)
-    esRef.current = es
+    // EventSource can't send headers — pass token as query param
+    auth.currentUser?.getIdToken().then((token) => {
+      const es = new EventSource(`/api/events/${eventId}/stream?token=${encodeURIComponent(token)}`)
+      esRef.current = es
 
-    es.onopen = () => setConnected(true)
-    es.onerror = () => setConnected(false)
+      es.onopen = () => setConnected(true)
+      es.onerror = () => setConnected(false)
 
-    es.onmessage = (e) => {
-      const data = JSON.parse(e.data)
-      if (data.type === 'admitted') {
-        setStats((prev) => {
-          if (!prev) return prev
-          const already = prev.admitted_guests.find((g) => g.id === data.guest_id)
-          if (already) return prev
-          return {
-            ...prev,
-            admitted: prev.admitted + 1,
-            pending: prev.pending - 1,
-            admitted_guests: [
-              {
-                id: data.guest_id,
-                first_name: data.name.split(' ')[0],
-                last_name: data.name.split(' ').slice(1).join(' '),
-                email: data.email,
-                admitted_at: data.admitted_at,
-                admitted: true,
-              },
-              ...prev.admitted_guests,
-            ],
-          }
-        })
+      es.onmessage = (e) => {
+        const data = JSON.parse(e.data)
+        if (data.type === 'admitted') {
+          setStats((prev) => {
+            if (!prev) return prev
+            const already = prev.admitted_guests.find((g) => g.id === data.guest_id)
+            if (already) return prev
+            return {
+              ...prev,
+              admitted: prev.admitted + 1,
+              pending: prev.pending - 1,
+              admitted_guests: [
+                {
+                  id: data.guest_id,
+                  first_name: data.name.split(' ')[0],
+                  last_name: data.name.split(' ').slice(1).join(' '),
+                  email: data.email,
+                  admitted_at: data.admitted_at,
+                  admitted: true,
+                },
+                ...prev.admitted_guests,
+              ],
+            }
+          })
+        }
       }
-    }
+    })
 
-    return () => es.close()
+    return () => { if (esRef.current) esRef.current.close() }
   }, [eventId, fetchStats])
 
   const event = events.find((e) => e.id === eventId)

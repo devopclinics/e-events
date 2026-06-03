@@ -148,6 +148,8 @@ export const api = {
   deleteRSVPQuestion:   (eventId, qId)         => req('DELETE', `/events/${eventId}/rsvp-questions/${qId}`),
   // Broadcast (admin)
   broadcast: (eventId, data) => req('POST', `/events/${eventId}/broadcast`, data),
+  // Manual invites (admin)
+  sendInvites: (eventId, data) => req('POST', `/events/${eventId}/send-invites`, data),
   // Invite page public URL helper (no auth needed)
   inviteUrl: (eventId) => `${window.location.origin}/e/${eventId}`,
 }

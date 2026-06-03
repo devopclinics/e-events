@@ -219,3 +219,45 @@ async def send_admission_email(guest_data: dict):
     msg.attach(MIMEText(body, "html"))
     await _send(msg)
 
+
+async def send_manual_invite_email(
+    *,
+    name: str,
+    email: str,
+    invite_url: str,
+    event_name: str,
+    event_date: datetime,
+    invite_message: str | None = None,
+):
+    """Send a personal invite link (no QR) to a recipient who hasn't RSVP'd yet."""
+    msg = MIMEMultipart()
+    msg["Subject"] = f"You're invited — {event_name}"
+    msg["From"] = settings.email_from
+    msg["To"] = email
+
+    safe_name = _html.escape(name)
+    safe_event = _html.escape(event_name)
+    date_str = event_date.strftime("%A, %d %B %Y") if event_date else ""
+    safe_msg = f"<p>{_html.escape(invite_message)}</p>" if invite_message else ""
+
+    body = f"""
+    <html>
+    <body style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;padding:20px;">
+      <h1 style="color:#1a1a2e;">You're Invited!</h1>
+      <p>Hi <strong>{safe_name}</strong>,</p>
+      <p>You have been personally invited to <strong>{safe_event}</strong>{(' on <strong>' + date_str + '</strong>') if date_str else ''}.</p>
+      {safe_msg}
+      <div style="text-align:center;margin:32px 0;">
+        <a href="{invite_url}" style="background:#0f766e;color:white;text-decoration:none;
+           padding:14px 28px;border-radius:10px;font-size:16px;font-weight:700;display:inline-block;">
+          RSVP Now →
+        </a>
+      </div>
+      <p style="color:#666;font-size:13px;">Or copy this link: {invite_url}</p>
+    </body>
+    </html>
+    """
+
+    msg.attach(MIMEText(body, "html"))
+    await _send(msg)
+

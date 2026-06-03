@@ -9,10 +9,12 @@ from ..schemas import (
     UserOut, EventSourceUpdate,
     InviteSettingsUpdate, RSVPQuestionCreate, RSVPQuestionUpdate, RSVPQuestionOut,
     BroadcastRequest, BroadcastResult,
+    ManualInviteRequest, ManualInviteResult,
 )
 from ..auth import require_admin, get_current_user
 from .guests import import_from_source_url, _normalize_phone
 from services import messaging
+from services.email_service import send_manual_invite_email
 
 router = APIRouter()
 
@@ -458,3 +460,73 @@ async def broadcast_message(
         skipped_no_phone=skipped_no_phone,
         skipped_no_consent=skipped_no_consent,
     )
+
+
+# ── Manual invites ────────────────────────────────────────────────────────────
+
+@router.post("/{event_id}/send-invites", response_model=ManualInviteResult)
+async def send_manual_invites(
+    event_id: str,
+    data: ManualInviteRequest,
+    background_tasks: BackgroundTasks,
+    db: AsyncSession = Depends(get_db),
+    _: User = Depends(require_admin),
+):
+    """Send a personal invite link to one or more recipients by email/phone."""
+    event = await db.get(Event, event_id)
+    if not event:
+        raise HTTPException(404, "Event not found")
+    if not data.recipients:
+        raise HTTPException(400, "No recipients provided")
+
+    invite_url = f"{event.checkin_base_url.rstrip('/')}/e/{event_id}"
+
+    sent = skipped = 0
+    errors: list[str] = []
+
+    for r in data.recipients:
+        name = r.name.strip() or "Guest"
+        dispatched = False
+
+        if "email" in data.channels and r.email:
+            background_tasks.add_task(
+                send_manual_invite_email,
+                name=name,
+                email=str(r.email),
+                invite_url=invite_url,
+                event_name=event.name,
+                event_date=event.event_date,
+                invite_message=event.invite_message,
+            )
+            dispatched = True
+
+        if r.phone:
+            phone = _normalize_phone(r.phone.strip())
+            if phone is None:
+                errors.append(f"{name}: invalid phone '{r.phone}'")
+            else:
+                if "sms" in data.channels:
+                    background_tasks.add_task(
+                        messaging.send_manual_invite_sms,
+                        phone=phone,
+                        name=name,
+                        event_name=event.name,
+                        invite_url=invite_url,
+                    )
+                    dispatched = True
+                if "whatsapp" in data.channels:
+                    background_tasks.add_task(
+                        messaging.send_manual_invite_whatsapp,
+                        phone=phone,
+                        name=name,
+                        event_name=event.name,
+                        invite_url=invite_url,
+                    )
+                    dispatched = True
+
+        if dispatched:
+            sent += 1
+        else:
+            skipped += 1
+
+    return ManualInviteResult(sent=sent, skipped=skipped, errors=errors)

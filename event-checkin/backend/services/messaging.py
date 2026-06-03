@@ -86,6 +86,22 @@ async def send_broadcast_whatsapp(*, phone: str, first_name: str, message: str) 
     await _send_sms_as_whatsapp(phone, body)
 
 
+async def send_manual_invite_sms(*, phone: str, name: str, event_name: str, invite_url: str) -> None:
+    """Send a personal invite link via SMS to someone who hasn't RSVP'd yet."""
+    if not _channel_ready("sms", phone):
+        return
+    body = f"Hi {name}! You're invited to {event_name}. RSVP here: {invite_url}"
+    await _send_sms(phone, body)
+
+
+async def send_manual_invite_whatsapp(*, phone: str, name: str, event_name: str, invite_url: str) -> None:
+    """Send a personal invite link via WhatsApp to someone who hasn't RSVP'd yet."""
+    if not _channel_ready("whatsapp", phone):
+        return
+    body = f"Hi {name}! You're invited to {event_name}. RSVP here: {invite_url}"
+    await _send_sms_as_whatsapp(phone, body)
+
+
 # ── internal: routing ─────────────────────────────────────────────────────────
 
 def _channel_ready(channel: str, phone: str | None) -> bool:

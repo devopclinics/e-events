@@ -418,3 +418,22 @@ class BroadcastResult(BaseModel):
     queued: int
     skipped_no_phone: int
     skipped_no_consent: int
+
+
+# ── Manual invite ─────────────────────────────────────────────────────────────
+
+class ManualInviteRecipient(BaseModel):
+    name: str
+    email: Optional[EmailStr] = None
+    phone: Optional[str] = None
+
+
+class ManualInviteRequest(BaseModel):
+    recipients: list[ManualInviteRecipient]
+    channels: list[Literal["email", "sms", "whatsapp"]] = ["email"]
+
+
+class ManualInviteResult(BaseModel):
+    sent: int
+    skipped: int
+    errors: list[str] = []

@@ -114,7 +114,7 @@
     # ── Packages ──────────────────────────────────────────────────────────────
 
     - name: Get count of installed packages
-      shell: "dpkg -l | grep '^ii' | wc -l"
+      shell: dpkg-query -f '${Status}\n' -W | grep -c 'install ok installed'
       register: package_count
       changed_when: false
 
@@ -123,8 +123,13 @@
       register: manual_packages
       changed_when: false
 
+    - name: Refresh apt cache before checking for updates
+      apt:
+        update_cache: true
+      changed_when: false
+
     - name: Check for pending security updates
-      shell: "apt-get -s upgrade 2>/dev/null | grep -i 'security' | wc -l"
+      shell: apt-get -s upgrade 2>/dev/null | grep -i 'security' | wc -l
       register: security_updates
       changed_when: false
 
@@ -185,7 +190,7 @@
       changed_when: false
 
     - name: Check SSH configuration
-      command: sshd -T
+      command: /usr/sbin/sshd -T
       register: sshd_config
       changed_when: false
       failed_when: false

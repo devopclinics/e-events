@@ -150,6 +150,8 @@ export const api = {
   broadcast: (eventId, data) => req('POST', `/events/${eventId}/broadcast`, data),
   // Manual invites (admin)
   sendInvites: (eventId, data) => req('POST', `/events/${eventId}/send-invites`, data),
+  // Cover image (admin)
+  deleteCoverImage: (eventId) => req('DELETE', `/events/${eventId}/upload-cover`),
   // Invite page public URL helper (no auth needed)
   inviteUrl: (eventId) => `${window.location.origin}/e/${eventId}`,
 }

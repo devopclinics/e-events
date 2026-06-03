@@ -1,13 +1,17 @@
 import asyncio
+import os
 from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
 from .database import engine
 from .config import settings
 from .routers import events, guests, scanner, dashboard, seating, menu
 from .routers import auth as auth_router
 from .routers import invite as invite_router
 from . import sync_poller, db_migrate
+
+UPLOADS_DIR = "/app/uploads"
 
 
 @asynccontextmanager
@@ -46,6 +50,10 @@ app.include_router(menu.router,        prefix="/api/events", tags=["menu"])
 app.include_router(scanner.router,     prefix="/api/scan",   tags=["scanner"])
 app.include_router(dashboard.router,   prefix="/api/events", tags=["dashboard"])
 app.include_router(invite_router.router, prefix="/api/invite", tags=["invite"])
+
+# Serve uploaded files (cover images, etc.)
+os.makedirs(UPLOADS_DIR, exist_ok=True)
+app.mount("/api/uploads", StaticFiles(directory=UPLOADS_DIR), name="uploads")
 
 
 @app.get("/api/health")

@@ -100,6 +100,7 @@ class EventOut(BaseModel):
     rsvp_collect_phone: bool = True
     rsvp_collect_email: bool = True
     rsvp_capacity: Optional[int] = None
+    invite_cover_image: Optional[str] = None
 
 
 class EventMemberOut(BaseModel):
@@ -367,6 +368,7 @@ class InviteSettingsUpdate(BaseModel):
     rsvp_collect_phone: Optional[bool] = None
     rsvp_collect_email: Optional[bool] = None
     rsvp_capacity: Optional[int] = None
+    invite_cover_image: Optional[str] = None
 
 
 class InvitePageOut(BaseModel):
@@ -383,6 +385,7 @@ class InvitePageOut(BaseModel):
     rsvp_collect_phone: bool
     rsvp_collect_email: bool
     rsvp_capacity: Optional[int]
+    invite_cover_image: Optional[str] = None
     # rsvp_count populated by the endpoint
     rsvp_count: int = 0
     questions: list[RSVPQuestionOut] = []

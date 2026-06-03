@@ -32,6 +32,8 @@ services:
     image: dclinics/events:backend-${APP_VERSION:-latest}
     pull_policy: always
     env_file: ./backend/.env
+    volumes:
+      - uploads:/app/uploads
     depends_on:
       db:
         condition: service_healthy
@@ -85,3 +87,5 @@ services:
 volumes:
   pgdata:
     name: event-checkin_pgdata
+  uploads:
+    name: event-checkin_uploads

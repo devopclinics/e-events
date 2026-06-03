@@ -303,6 +303,26 @@ export default function InvitePage() {
         <div className={`w-full max-w-lg rounded-2xl shadow-xl border ${t.border} ${t.card} overflow-hidden`}>
 
           {/* Event hero */}
+          {event.invite_cover_image ? (
+            <div className="relative">
+              <img
+                src={event.invite_cover_image}
+                alt={event.name}
+                className="w-full max-h-64 object-cover"
+              />
+              <div className={`absolute inset-0 bg-gradient-to-t from-black/60 to-transparent`} />
+              <div className="absolute bottom-0 left-0 right-0 px-6 pb-6 text-white">
+                <div className="text-2xl font-extrabold leading-tight drop-shadow">{event.name}</div>
+                {event.couples_name && (
+                  <div className="mt-1 text-white/80 text-sm font-medium">{event.couples_name}</div>
+                )}
+                <div className="mt-3 flex flex-wrap gap-4 text-sm">
+                  <div className="flex items-center gap-1.5 text-white/90"><span>📅</span><span>{fmtDate(event.event_date)}</span></div>
+                  <div className="flex items-center gap-1.5 text-white/90"><span>🕐</span><span>{fmtTime(event.event_date)}</span></div>
+                </div>
+              </div>
+            </div>
+          ) : (
           <div className={`${t.header} px-6 py-8 text-white`}>
             <div className="text-2xl font-extrabold leading-tight">{event.name}</div>
             {event.couples_name && (
@@ -319,6 +339,7 @@ export default function InvitePage() {
               </div>
             </div>
           </div>
+          )}
 
           {/* Body */}
           <div className="px-6 py-6 space-y-5">

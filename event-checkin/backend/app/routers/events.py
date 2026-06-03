@@ -1,5 +1,7 @@
 from datetime import datetime
-from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException
+import os
+import uuid as _uuid
+from fastapi import APIRouter, BackgroundTasks, Depends, File, HTTPException, UploadFile
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 from ..database import get_db
@@ -15,6 +17,10 @@ from ..auth import require_admin, get_current_user
 from .guests import import_from_source_url, _normalize_phone
 from services import messaging
 from services.email_service import send_manual_invite_email
+
+UPLOADS_DIR = "/app/uploads"
+ALLOWED_IMAGE_TYPES = {"image/jpeg", "image/png", "image/webp", "image/gif"}
+MAX_IMAGE_SIZE = 10 * 1024 * 1024  # 10 MB
 
 router = APIRouter()
 
@@ -530,3 +536,64 @@ async def send_manual_invites(
             skipped += 1
 
     return ManualInviteResult(sent=sent, skipped=skipped, errors=errors)
+
+
+# ── Cover image upload ────────────────────────────────────────────────────────
+
+@router.post("/{event_id}/upload-cover")
+async def upload_cover_image(
+    event_id: str,
+    file: UploadFile = File(...),
+    db: AsyncSession = Depends(get_db),
+    _: User = Depends(require_admin),
+):
+    """Upload a cover/banner image for the invite page. Stored in /app/uploads/."""
+    event = await db.get(Event, event_id)
+    if not event:
+        raise HTTPException(404, "Event not found")
+
+    if file.content_type not in ALLOWED_IMAGE_TYPES:
+        raise HTTPException(400, f"Unsupported file type '{file.content_type}'. Use JPEG, PNG, WebP or GIF.")
+
+    data = await file.read()
+    if len(data) > MAX_IMAGE_SIZE:
+        raise HTTPException(413, "Image too large — maximum 10 MB.")
+
+    # Derive extension from content type
+    ext = {"image/jpeg": "jpg", "image/png": "png", "image/webp": "webp", "image/gif": "gif"}.get(file.content_type, "jpg")
+    filename = f"{event_id}-cover-{_uuid.uuid4().hex[:8]}.{ext}"
+    dir_path = os.path.join(UPLOADS_DIR, "events")
+    os.makedirs(dir_path, exist_ok=True)
+    file_path = os.path.join(dir_path, filename)
+
+    with open(file_path, "wb") as f:
+        f.write(data)
+
+    url = f"/api/uploads/events/{filename}"
+    event.invite_cover_image = url
+    await db.commit()
+    await db.refresh(event)
+    return {"url": url, "event": event}
+
+
+@router.delete("/{event_id}/upload-cover", response_model=EventOut)
+async def delete_cover_image(
+    event_id: str,
+    db: AsyncSession = Depends(get_db),
+    _: User = Depends(require_admin),
+):
+    """Remove the cover image from an event."""
+    event = await db.get(Event, event_id)
+    if not event:
+        raise HTTPException(404, "Event not found")
+    if event.invite_cover_image:
+        # Best-effort delete the file
+        path = os.path.join(UPLOADS_DIR, event.invite_cover_image.lstrip("/api/uploads/"))
+        try:
+            os.remove(path)
+        except OSError:
+            pass
+        event.invite_cover_image = None
+        await db.commit()
+        await db.refresh(event)
+    return event

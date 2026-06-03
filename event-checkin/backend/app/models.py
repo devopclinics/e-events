@@ -68,6 +68,8 @@ class Event(Base):
     rsvp_collect_email: Mapped[bool] = mapped_column(Boolean, default=True)
     # None = unlimited; integer = max accepted RSVPs
     rsvp_capacity: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    # Cover image URL — served from /api/uploads/
+    invite_cover_image: Mapped[str | None] = mapped_column(String(500), nullable=True)
 
     members: Mapped[list["EventUser"]] = relationship("EventUser", back_populates="event", cascade="all, delete-orphan")
     guests: Mapped[list["Guest"]] = relationship("Guest", back_populates="event", cascade="all, delete-orphan")

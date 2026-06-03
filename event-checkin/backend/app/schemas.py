@@ -56,6 +56,9 @@ class EventUpdate(BaseModel):
     event_date: Optional[datetime] = None
     description: Optional[str] = None
     checkin_base_url: Optional[str] = None
+    notify_email: Optional[bool] = None
+    notify_sms: Optional[bool] = None
+    notify_whatsapp: Optional[bool] = None
 
     @field_validator("event_date", mode="after")
     @classmethod
@@ -82,6 +85,9 @@ class EventOut(BaseModel):
     status: str
     seating_enabled: bool
     menu_enabled: bool
+    notify_email: bool = True
+    notify_sms: bool = True
+    notify_whatsapp: bool = True
     created_at: datetime
     source_url: Optional[str] = None
     source_sync_interval_seconds: int = 60
@@ -94,6 +100,7 @@ class EventMemberOut(BaseModel):
     user: UserOut
     assigned_at: datetime
     can_reassign_seats: bool
+    can_manage_menu: bool = False
 
 
 class AssignUserRequest(BaseModel):
@@ -137,6 +144,36 @@ class MenuItemOut(BaseModel):
 class MenuCategoryCreate(BaseModel):
     name: str
     sort_order: int = 0
+    selection_type: str = "single"  # single|multi|combo
+    min_selections: int = 0
+    max_selections: Optional[int] = None
+    is_required: bool = False
+
+
+class MenuCombinationItemOut(BaseModel):
+    menu_item_id: str
+    name: str
+    quantity: int
+
+
+class MenuCombinationOut(BaseModel):
+    id: str
+    name: str
+    description: Optional[str] = None
+    sort_order: int = 0
+    items: list[MenuCombinationItemOut] = []
+
+
+class MenuCombinationItemIn(BaseModel):
+    menu_item_id: str
+    quantity: int = 1
+
+
+class MenuCombinationCreate(BaseModel):
+    name: str
+    description: Optional[str] = None
+    sort_order: int = 0
+    items: list[MenuCombinationItemIn] = []
 
 
 class MenuCategoryOut(BaseModel):
@@ -144,7 +181,12 @@ class MenuCategoryOut(BaseModel):
     event_id: str
     name: str
     sort_order: int
+    selection_type: str = "single"
+    min_selections: int = 0
+    max_selections: Optional[int] = None
+    is_required: bool = False
     items: list[MenuItemOut] = []
+    combinations: list[MenuCombinationOut] = []
 
 
 class GuestMenuChoiceOut(BaseModel):
@@ -153,10 +195,20 @@ class GuestMenuChoiceOut(BaseModel):
 
 
 class GuestMenuSubmit(BaseModel):
-    choices: dict[str, str]  # category_id → menu_item_id
+    single: dict[str, str] = {}  # category_id → menu_item_id
+    multi: dict[str, list[str]] = {}  # category_id → [menu_item_id, ...]
+    combo: dict[str, str] = {}  # category_id → combination_id
 
 
 # ── Guests ───────────────────────────────────────────────────────────────────
+
+class GuestCreate(BaseModel):
+    first_name: str
+    last_name: str
+    email: Optional[str] = ""   # empty allowed for VVIP walk-ins with no contact email
+    phone: Optional[str] = None
+    is_vip: bool = False
+
 
 class GuestOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)
@@ -176,6 +228,9 @@ class GuestOut(BaseModel):
     table_id: Optional[str] = None
     seat_number: Optional[str] = None
     meal_served: bool = False
+    is_vip: bool = False
+    sms_consent: bool = True
+    whatsapp_consent: bool = True
 
 
 # ── Scanner ──────────────────────────────────────────────────────────────────
@@ -195,6 +250,15 @@ class EventBrief(BaseModel):
     status: str
     seating_enabled: bool = False
     menu_enabled: bool = False
+    notify_sms: bool = True
+    notify_whatsapp: bool = True
+
+
+class PartnerInfo(BaseModel):
+    first_name: str
+    last_name: str
+    email: str
+    admitted: bool = False
 
 
 class TicketView(BaseModel):
@@ -203,8 +267,17 @@ class TicketView(BaseModel):
     event: Optional[EventBrief] = None
     table_name: Optional[str] = None
     seat_number: Optional[str] = None
+    menu_locked: bool = False
     menu_categories: list[MenuCategoryOut] = []
-    guest_choices: dict[str, str] = {}  # category_id → menu_item_id
+    # Shape: {"single": {category_id: item_id}, "multi": {category_id: [item_ids]}, "combo": {category_id: combo_id}}
+    guest_choices: dict[str, dict] = {}
+    partner: Optional[PartnerInfo] = None
+
+
+class PairRequest(BaseModel):
+    partner_first_name: str
+    partner_last_name: str
+    partner_email: str
 
 
 # ── Dashboard ─────────────────────────────────────────────────────────────────
@@ -214,3 +287,38 @@ class DashboardStats(BaseModel):
     admitted: int
     pending: int
     admitted_guests: list[GuestOut]
+
+
+# ── Menu dashboard ────────────────────────────────────────────────────────────
+
+class MenuItemTotal(BaseModel):
+    item_id: str
+    name: str
+    category_name: str
+    count: int
+
+
+class MenuCombinationTotal(BaseModel):
+    combination_id: str
+    name: str
+    count: int
+
+
+class MenuDashboardGuest(BaseModel):
+    guest_id: str
+    name: str
+    email: str
+    table_name: Optional[str] = None
+    seat_number: Optional[str] = None
+    admitted: bool
+    meal_served: bool
+    is_vip: bool = False
+    single: dict[str, dict] = {}  # category_id → {item_name, category_name}
+    multi: dict[str, dict] = {}  # category_id → {category_name, items: [item_name]}
+    combo: dict[str, dict] = {}  # category_id → {category_name, combination_name, items: [item_name]}
+
+
+class MenuDashboardOut(BaseModel):
+    item_totals: list[MenuItemTotal]
+    combination_totals: list[MenuCombinationTotal]
+    guests: list[MenuDashboardGuest]

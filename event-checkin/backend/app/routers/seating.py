@@ -14,6 +14,107 @@ async def _table_out(table: SeatingTable, db: AsyncSession) -> SeatingTableOut:
     return SeatingTableOut(id=table.id, event_id=table.event_id, name=table.name, capacity=table.capacity, assigned_count=count)
 
 
+# ── First-come-first-served seat picker (used by scanner.py at admit time) ────
+
+async def _seat_state(table: SeatingTable, db: AsyncSession) -> tuple[set[int], set[int]]:
+    """Returns (taken_seats, held_seats) for the table — both as int sets.
+    A 'held' seat is one a paired guest is keeping for their unseated partner."""
+    rows = (await db.execute(
+        select(Guest.seat_number, Guest.held_seat).where(Guest.table_id == table.id)
+    )).all()
+    taken: set[int] = set()
+    held: set[int] = set()
+    for seat, hold in rows:
+        if seat and seat.isdigit():
+            taken.add(int(seat))
+        if hold and hold.isdigit():
+            held.add(int(hold))
+    return taken, held
+
+
+def _first_free(taken: set[int], held: set[int], capacity: int, skip_held: bool) -> int | None:
+    """Lowest seat number in 1..capacity not in taken, optionally skipping held."""
+    blocked = taken | held if skip_held else taken
+    for n in range(1, capacity + 1):
+        if n not in blocked:
+            return n
+    return None
+
+
+async def assign_next_seat(guest: Guest, db: AsyncSession) -> None:
+    """First-come-first-served seat assignment honoring couple pairings.
+
+    Mutates guest.table_id / guest.seat_number / guest.held_seat in-place.
+    Caller is responsible for commit. No-op if guest already has a table.
+    """
+    if guest.table_id:
+        return
+
+    tables = (await db.execute(
+        select(SeatingTable).where(SeatingTable.event_id == guest.event_id).order_by(SeatingTable.name)
+    )).scalars().all()
+    if not tables:
+        return  # nothing we can do; admit without seat
+
+    partner = await db.get(Guest, guest.partner_guest_id) if guest.partner_guest_id else None
+
+    # Case 1 — partner is already seated. Join their table at the held seat
+    # (if there is one), else the next free seat there.
+    if partner and partner.table_id:
+        partner_table = next((t for t in tables if t.id == partner.table_id), None)
+        if partner_table:
+            taken, held = await _seat_state(partner_table, db)
+            target: int | None = None
+            if partner.held_seat and partner.held_seat.isdigit():
+                target = int(partner.held_seat)
+                if target in taken:
+                    target = None  # held seat got taken somehow; fall through
+            if target is None:
+                target = _first_free(taken, held, partner_table.capacity, skip_held=False)
+            if target is not None:
+                guest.table_id = partner_table.id
+                guest.seat_number = str(target)
+                # Release partner's hold now that we're sitting next to them.
+                if partner.held_seat == str(target):
+                    partner.held_seat = None
+                return
+        # Partner's table is full — fall through to find any seat for this guest
+
+    # Case 2 — guest is paired but partner not yet arrived: find table with
+    # ≥2 contiguous free seats (ignoring held seats — we want a real pair).
+    if partner and not partner.table_id:
+        for table in tables:
+            taken, held = await _seat_state(table, db)
+            blocked = taken | held
+            for n in range(1, table.capacity):
+                if n not in blocked and (n + 1) not in blocked:
+                    guest.table_id = table.id
+                    guest.seat_number = str(n)
+                    guest.held_seat = str(n + 1)
+                    return
+        # No table has 2 contiguous seats — fall through to solo placement
+
+    # Case 3 — solo guest, or paired fallback: lowest free non-held seat.
+    for table in tables:
+        taken, held = await _seat_state(table, db)
+        seat = _first_free(taken, held, table.capacity, skip_held=True)
+        if seat is not None:
+            guest.table_id = table.id
+            guest.seat_number = str(seat)
+            return
+
+    # Last resort: every table is full when held seats are honored.
+    # Take a held seat from the lowest table to avoid turning the guest away.
+    for table in tables:
+        taken, _ = await _seat_state(table, db)
+        seat = _first_free(taken, set(), table.capacity, skip_held=False)
+        if seat is not None:
+            guest.table_id = table.id
+            guest.seat_number = str(seat)
+            return
+    # No capacity anywhere — leave guest unseated.
+
+
 # ── Tables CRUD ───────────────────────────────────────────────────────────────
 
 @router.get("/{event_id}/tables", response_model=list[SeatingTableOut])
@@ -81,13 +182,13 @@ async def seating_chart(event_id: str, db: AsyncSession = Depends(get_db), _: Us
             seat_str = str(i)
             g = next((x for x in assigned if x.seat_number == seat_str), None)
             if g:
-                seats.append({"seat": seat_str, "guest_id": g.id, "name": f"{g.first_name} {g.last_name}", "admitted": g.admitted, "meal_served": g.meal_served})
+                seats.append({"seat": seat_str, "guest_id": g.id, "name": f"{g.first_name} {g.last_name}", "admitted": g.admitted, "meal_served": g.meal_served, "is_vip": g.is_vip})
             else:
                 seats.append({"seat": seat_str, "guest_id": None, "name": None, "admitted": False, "meal_served": False})
         # Guests with non-numeric or out-of-range seats
         for g in assigned:
             if g.seat_number not in assigned_nums or not (g.seat_number or "").isdigit() or int(g.seat_number) > t.capacity:
-                seats.append({"seat": g.seat_number, "guest_id": g.id, "name": f"{g.first_name} {g.last_name}", "admitted": g.admitted, "meal_served": g.meal_served})
+                seats.append({"seat": g.seat_number, "guest_id": g.id, "name": f"{g.first_name} {g.last_name}", "admitted": g.admitted, "meal_served": g.meal_served, "is_vip": g.is_vip})
         chart.append({"id": t.id, "name": t.name, "capacity": t.capacity, "seats": seats})
     return chart
 
@@ -197,5 +298,7 @@ async def update_member_permissions(
         raise HTTPException(404, "Member not found")
     if "can_reassign_seats" in body:
         eu.can_reassign_seats = bool(body["can_reassign_seats"])
+    if "can_manage_menu" in body:
+        eu.can_manage_menu = bool(body["can_manage_menu"])
     await db.commit()
     return {"ok": True}

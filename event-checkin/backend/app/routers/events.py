@@ -6,7 +6,8 @@ from ..database import get_db
 from ..models import Event, EventUser, User
 from ..schemas import EventCreate, EventUpdate, EventOut, EventMemberOut, AssignUserRequest, UserOut, EventSourceUpdate
 from ..auth import require_admin, get_current_user
-from .guests import import_from_source_url
+from .guests import import_from_source_url, _normalize_phone
+from services import messaging
 
 router = APIRouter()
 
@@ -148,7 +149,7 @@ async def list_members(
     )
     rows = result.all()
     return [
-        EventMemberOut(id=eu.id, user=UserOut.model_validate(u), assigned_at=eu.assigned_at, can_reassign_seats=eu.can_reassign_seats)
+        EventMemberOut(id=eu.id, user=UserOut.model_validate(u), assigned_at=eu.assigned_at, can_reassign_seats=eu.can_reassign_seats, can_manage_menu=eu.can_manage_menu)
         for eu, u in rows
     ]
 
@@ -177,7 +178,7 @@ async def assign_member(
     db.add(eu)
     await db.commit()
     await db.refresh(eu)
-    return EventMemberOut(id=eu.id, user=UserOut.model_validate(user), assigned_at=eu.assigned_at, can_reassign_seats=eu.can_reassign_seats)
+    return EventMemberOut(id=eu.id, user=UserOut.model_validate(user), assigned_at=eu.assigned_at, can_reassign_seats=eu.can_reassign_seats, can_manage_menu=eu.can_manage_menu)
 
 
 @router.put("/{event_id}/source", response_model=EventOut)
@@ -247,6 +248,43 @@ async def remove_member(
 
 # ── Feature toggles ───────────────────────────────────────────────────────────
 
+@router.post("/{event_id}/messaging/test")
+async def send_test_message(
+    event_id: str,
+    body: dict,
+    db: AsyncSession = Depends(get_db),
+    _: User = Depends(require_admin),
+):
+    """Fire a single test message to verify provider creds + delivery.
+    Body: {channel: 'sms'|'whatsapp', phone: '<E.164 or US 10-digit>'}"""
+    event = await db.get(Event, event_id)
+    if not event:
+        raise HTTPException(404, "Event not found")
+    channel = (body.get("channel") or "").lower()
+    if channel not in ("sms", "whatsapp"):
+        raise HTTPException(400, "channel must be 'sms' or 'whatsapp'")
+    phone = _normalize_phone(body.get("phone") or "")
+    if not phone:
+        raise HTTPException(400, "Phone format not recognised. Use E.164 or US 10-digit.")
+    ticket_url = f"{event.checkin_base_url.rstrip('/')}/scan/test"
+    try:
+        if channel == "sms":
+            await messaging.send_invite_sms(
+                phone=phone, first_name="EventQR",
+                event_name=f"{event.name} (TEST)",
+                ticket_url=ticket_url, event_date=event.event_date,
+            )
+        else:
+            await messaging.send_invite_whatsapp(
+                phone=phone, first_name="EventQR",
+                event_name=f"{event.name} (TEST)",
+                ticket_url=ticket_url, event_date=event.event_date,
+            )
+    except Exception as e:
+        raise HTTPException(500, f"Send failed: {e}")
+    return {"ok": True, "channel": channel, "to": phone}
+
+
 @router.patch("/{event_id}/features", response_model=EventOut)
 async def toggle_features(
     event_id: str,
@@ -261,6 +299,9 @@ async def toggle_features(
         event.seating_enabled = bool(body["seating_enabled"])
     if "menu_enabled" in body:
         event.menu_enabled = bool(body["menu_enabled"])
+    for k in ("notify_email", "notify_sms", "notify_whatsapp"):
+        if k in body:
+            setattr(event, k, bool(body[k]))
     await db.commit()
     await db.refresh(event)
     return event

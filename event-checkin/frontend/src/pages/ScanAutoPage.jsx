@@ -2,21 +2,273 @@ import { useEffect, useState } from 'react'
 import { useParams } from 'react-router-dom'
 import { api } from '../api'
 
+function MenuLockedCard() {
+  return (
+    <div className="border-2 border-amber-300 bg-amber-50 dark:bg-amber-900/20 rounded-xl p-5 text-center">
+      <div className="text-3xl mb-2">🔒</div>
+      <p className="font-bold text-amber-800 dark:text-amber-200">Menu unlocks at check-in</p>
+      <p className="text-sm text-slate-600 dark:text-slate-300 mt-1">
+        Show your QR code to the check-in official. Once you're admitted, you'll be able to pick your meal here.
+      </p>
+    </div>
+  )
+}
+
+function multiBoundsLabel(min, max) {
+  if (min > 0 && max != null) return `Pick ${min} to ${max}`
+  if ((min === 0 || min == null) && max != null) return `Pick up to ${max}`
+  if (min > 0 && max == null) return `Pick at least ${min}`
+  return `Pick as many as you'd like`
+}
+
+function CategoryHeader({ name, required, helper }) {
+  return (
+    <div className="flex items-center justify-between mb-2">
+      <p className="text-xs font-bold text-amber-700 dark:text-amber-300 uppercase tracking-wide">{name}</p>
+      <div className="flex items-center gap-2">
+        {helper && <span className="text-[10px] text-slate-500 dark:text-slate-400 font-medium">{helper}</span>}
+        {required && (
+          <span className="text-[10px] font-bold uppercase tracking-wide bg-amber-200 text-amber-800 dark:bg-amber-700 dark:text-amber-50 px-1.5 py-0.5 rounded">
+            Required
+          </span>
+        )}
+      </div>
+    </div>
+  )
+}
+
+function SingleCategory({ category, value, onChange }) {
+  return (
+    <div>
+      <CategoryHeader
+        name={category.name}
+        required={category.is_required}
+        helper={category.is_required ? 'Pick one' : 'Pick one (optional)'}
+      />
+      <div className="space-y-2">
+        {category.items.map((item) => {
+          const selected = value === item.id
+          return (
+            <label
+              key={item.id}
+              className={`flex items-start gap-3 p-3 rounded-lg border-2 cursor-pointer transition-all ${
+                selected
+                  ? 'border-amber-500 bg-amber-100 dark:bg-amber-900/40 ring-2 ring-amber-300'
+                  : 'border-slate-300 dark:border-slate-600 hover:border-amber-400 hover:bg-amber-50/50 dark:hover:bg-amber-900/10'
+              }`}
+            >
+              <input
+                type="radio"
+                name={`cat-${category.id}`}
+                value={item.id}
+                checked={selected}
+                onChange={() => onChange(item.id)}
+                className="mt-1 w-5 h-5 accent-amber-500"
+              />
+              <div className="flex-1">
+                <div className="text-base font-semibold text-slate-900 dark:text-slate-100">{item.name}</div>
+                {item.description && (
+                  <div className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">{item.description}</div>
+                )}
+              </div>
+              {selected && (
+                <svg className="w-5 h-5 text-amber-600 mt-1 shrink-0" fill="currentColor" viewBox="0 0 20 20">
+                  <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+                </svg>
+              )}
+            </label>
+          )
+        })}
+      </div>
+    </div>
+  )
+}
+
+function MultiCategory({ category, value, onChange }) {
+  const min = category.min_selections || 0
+  const max = category.max_selections
+  const selectedIds = value || []
+  const count = selectedIds.length
+  const maxForCheck = max == null ? Infinity : max
+  const inBounds = count >= min && count <= maxForCheck
+  const required = !!category.is_required || min > 0
+  const countLabel = max != null ? `${count} of ${max} selected` : `${count} selected`
+
+  function toggle(itemId) {
+    const has = selectedIds.includes(itemId)
+    if (has) {
+      onChange(selectedIds.filter((id) => id !== itemId))
+    } else {
+      if (max != null && count >= max) return
+      onChange([...selectedIds, itemId])
+    }
+  }
+
+  return (
+    <div>
+      <CategoryHeader name={category.name} required={required} helper={multiBoundsLabel(min, max)} />
+      <p className={`text-xs mb-2 font-semibold ${inBounds ? 'text-emerald-600 dark:text-emerald-400' : 'text-red-600 dark:text-red-400'}`}>
+        {countLabel}
+      </p>
+      <div className="space-y-2">
+        {category.items.map((item) => {
+          const selected = selectedIds.includes(item.id)
+          const atMax = max != null && count >= max && !selected
+          return (
+            <label
+              key={item.id}
+              className={`flex items-start gap-3 p-3 rounded-lg border-2 transition-all ${
+                selected
+                  ? 'border-amber-500 bg-amber-100 dark:bg-amber-900/40 ring-2 ring-amber-300 cursor-pointer'
+                  : atMax
+                    ? 'border-slate-200 dark:border-slate-700 opacity-50 cursor-not-allowed'
+                    : 'border-slate-300 dark:border-slate-600 hover:border-amber-400 hover:bg-amber-50/50 dark:hover:bg-amber-900/10 cursor-pointer'
+              }`}
+            >
+              <input
+                type="checkbox"
+                checked={selected}
+                disabled={atMax}
+                onChange={() => toggle(item.id)}
+                className="mt-1 w-5 h-5 accent-amber-500"
+              />
+              <div className="flex-1">
+                <div className="text-base font-semibold text-slate-900 dark:text-slate-100">{item.name}</div>
+                {item.description && (
+                  <div className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">{item.description}</div>
+                )}
+              </div>
+              {selected && (
+                <svg className="w-5 h-5 text-amber-600 mt-1 shrink-0" fill="currentColor" viewBox="0 0 20 20">
+                  <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+                </svg>
+              )}
+            </label>
+          )
+        })}
+      </div>
+    </div>
+  )
+}
+
+function ComboCategory({ category, value, onChange }) {
+  const combos = category.combinations || []
+  if (combos.length === 0) {
+    return (
+      <div>
+        <CategoryHeader name={category.name} helper="Combinations coming soon" />
+        <div className="text-xs italic text-slate-500 dark:text-slate-400 border border-dashed border-slate-300 dark:border-slate-700 rounded-lg p-3 text-center">
+          The host hasn't added any combinations to this section yet.
+        </div>
+      </div>
+    )
+  }
+  function pick(comboId) {
+    // Required combos can't be cleared by re-tap; optional ones can.
+    if (category.is_required) onChange(comboId)
+    else onChange(value === comboId ? null : comboId)
+  }
+  return (
+    <div>
+      <CategoryHeader
+        name={category.name}
+        required={category.is_required}
+        helper={category.is_required ? 'Pick one' : 'Pick one (optional)'}
+      />
+      <div className="space-y-3">
+        {combos.map((combo) => {
+          const selected = value === combo.id
+          return (
+            <label
+              key={combo.id}
+              className={`block p-4 rounded-xl border-2 cursor-pointer transition-all ${
+                selected
+                  ? 'border-amber-500 bg-amber-100 dark:bg-amber-900/40 ring-2 ring-amber-300 scale-[1.01] shadow-md'
+                  : 'border-slate-300 dark:border-slate-600 hover:border-amber-400 hover:bg-amber-50/50 dark:hover:bg-amber-900/10'
+              }`}
+            >
+              <div className="flex items-start gap-3">
+                <input
+                  type="radio"
+                  name={`combo-${category.id}`}
+                  value={combo.id}
+                  checked={selected}
+                  onChange={() => pick(combo.id)}
+                  onClick={() => selected && pick(combo.id)}
+                  className="mt-1 w-5 h-5 accent-amber-500 shrink-0"
+                />
+                <div className="flex-1">
+                  <div className="text-base font-bold text-slate-900 dark:text-slate-100">{combo.name}</div>
+                  {combo.items && combo.items.length > 0 && (
+                    <div className="text-sm text-amber-800 dark:text-amber-200 font-medium mt-1">
+                      {combo.items.map((it) => it.name).join(', ')}
+                    </div>
+                  )}
+                  {combo.description && (
+                    <div className="text-xs text-slate-500 dark:text-slate-400 mt-1 italic">{combo.description}</div>
+                  )}
+                </div>
+                {selected && (
+                  <svg className="w-5 h-5 text-amber-600 mt-1 shrink-0" fill="currentColor" viewBox="0 0 20 20">
+                    <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+                  </svg>
+                )}
+              </div>
+            </label>
+          )
+        })}
+      </div>
+    </div>
+  )
+}
+
 function MenuSelection({ token, categories, initialChoices, mealServed }) {
-  const [choices, setChoices] = useState(initialChoices || {})
+  const [single, setSingle] = useState(initialChoices?.single || {})
+  const [multi, setMulti] = useState(initialChoices?.multi || {})
+  const [combo, setCombo] = useState(initialChoices?.combo || {})
   const [saving, setSaving] = useState(false)
   const [msg, setMsg] = useState('')
   const [error, setError] = useState('')
 
-  const allSelected = categories.every((cat) => choices[cat.id])
+  const hasExistingChoice =
+    Object.keys(initialChoices?.single || {}).length > 0 ||
+    Object.keys(initialChoices?.multi || {}).length > 0 ||
+    Object.keys(initialChoices?.combo || {}).length > 0
+
+  // Required gating respects each category's is_required flag.
+  // For multi: max is always enforced; min is enforced when required OR when
+  // the guest has already started picking from this category.
+  function categoryError(cat) {
+    if (cat.selection_type === 'single') {
+      if (cat.is_required && !single[cat.id]) return 'Please pick one option.'
+      return null
+    }
+    if (cat.selection_type === 'combo') {
+      if (cat.is_required && !combo[cat.id]) return 'Please pick a combination.'
+      return null
+    }
+    if (cat.selection_type === 'multi') {
+      const arr = multi[cat.id] || []
+      const min = cat.min_selections || 0
+      const max = cat.max_selections == null ? Infinity : cat.max_selections
+      if (arr.length > max) return `Pick at most ${cat.max_selections}.`
+      const needMin = cat.is_required || arr.length > 0
+      if (needMin && arr.length < min) return `Pick at least ${min}.`
+      return null
+    }
+    return null
+  }
+
+  const canSubmit = categories.every((cat) => categoryError(cat) === null)
 
   async function submit(e) {
     e.preventDefault()
+    if (!canSubmit) return
     setSaving(true)
     setError('')
     try {
-      await api.submitMenuChoice(token, choices)
-      setMsg('Menu selection saved!')
+      await api.submitMenuChoice(token, { single, multi, combo })
+      setMsg(hasExistingChoice ? 'Selection updated!' : 'Menu selection saved!')
       setTimeout(() => setMsg(''), 4000)
     } catch (err) {
       setError(err.message)
@@ -27,60 +279,64 @@ function MenuSelection({ token, categories, initialChoices, mealServed }) {
 
   if (mealServed) {
     return (
-      <div className="border border-amber-200 rounded-lg p-4 text-center">
-        <p className="text-sm text-amber-600 font-medium">Your meal has been served</p>
-        <p className="text-xs text-slate-400 mt-1">Menu selection is locked.</p>
+      <div className="border-2 border-amber-300 bg-amber-50 dark:bg-amber-900/20 rounded-lg p-4 text-center">
+        <p className="text-sm text-amber-700 dark:text-amber-200 font-semibold">Your meal has been served — selection is locked</p>
+        <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">Enjoy your meal!</p>
       </div>
     )
   }
 
   return (
-    <div className="border border-slate-200 dark:border-slate-700 rounded-lg overflow-hidden">
-      <div className="bg-slate-50 dark:bg-slate-800 px-4 py-3 border-b border-slate-200 dark:border-slate-700">
-        <h3 className="text-sm font-semibold text-slate-800 dark:text-white">Your Menu Selection</h3>
-        <p className="text-xs text-slate-400 mt-0.5">Choose your preference for each course</p>
-      </div>
-      <form onSubmit={submit} className="p-4 space-y-4">
-        {categories.map((cat) => (
-          <div key={cat.id}>
-            <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-2">{cat.name}</p>
-            <div className="space-y-1.5">
-              {cat.items.map((item) => (
-                <label
-                  key={item.id}
-                  className={`flex items-start gap-3 p-2.5 rounded-lg border cursor-pointer transition-colors ${
-                    choices[cat.id] === item.id
-                      ? 'border-teal-500 bg-teal-50 dark:bg-teal-900/20'
-                      : 'border-slate-200 dark:border-slate-700 hover:border-slate-300 dark:hover:border-slate-600'
-                  }`}
-                >
-                  <input
-                    type="radio"
-                    name={cat.id}
-                    value={item.id}
-                    checked={choices[cat.id] === item.id}
-                    onChange={() => setChoices((prev) => ({ ...prev, [cat.id]: item.id }))}
-                    className="mt-0.5 accent-teal-500"
-                  />
-                  <div>
-                    <div className="text-sm font-medium text-slate-800 dark:text-slate-200">{item.name}</div>
-                    {item.description && (
-                      <div className="text-xs text-slate-400 mt-0.5">{item.description}</div>
-                    )}
-                  </div>
-                </label>
-              ))}
-            </div>
+    <div className="border-2 border-amber-400 dark:border-amber-500 bg-amber-50 dark:bg-amber-900/20 rounded-xl overflow-hidden shadow-md">
+      <div className="bg-amber-400 dark:bg-amber-600 px-4 py-3 text-white">
+        <div className="flex items-center gap-2">
+          <span className="text-2xl">🍽️</span>
+          <div>
+            <h3 className="text-base font-bold">Pick your meal</h3>
+            <p className="text-xs text-amber-50">
+              {hasExistingChoice ? 'Tap any option to change your choice.' : 'Tap to select what you want to eat.'}
+            </p>
           </div>
-        ))}
-        {error && <p className="text-xs text-red-600">{error}</p>}
-        {msg && <p className="text-xs text-teal-600 font-medium">{msg}</p>}
+        </div>
+      </div>
+      <form onSubmit={submit} className="p-4 space-y-5 bg-white dark:bg-slate-900">
+        {categories.map((cat) => {
+          const err = categoryError(cat)
+          return (
+            <div key={cat.id}>
+              {cat.selection_type === 'single' && (
+                <SingleCategory
+                  category={cat}
+                  value={single[cat.id]}
+                  onChange={(itemId) => setSingle((prev) => ({ ...prev, [cat.id]: itemId }))}
+                />
+              )}
+              {cat.selection_type === 'multi' && (
+                <MultiCategory
+                  category={cat}
+                  value={multi[cat.id]}
+                  onChange={(ids) => setMulti((prev) => ({ ...prev, [cat.id]: ids }))}
+                />
+              )}
+              {cat.selection_type === 'combo' && (
+                <ComboCategory
+                  category={cat}
+                  value={combo[cat.id]}
+                  onChange={(comboId) => setCombo((prev) => ({ ...prev, [cat.id]: comboId }))}
+                />
+              )}
+              {err && <p className="text-xs text-red-600 dark:text-red-400 font-medium mt-2">{err}</p>}
+            </div>
+          )
+        })}
+        {error && <p className="text-sm text-red-600 dark:text-red-400 font-medium">{error}</p>}
+        {msg && <p className="text-sm text-green-600 dark:text-green-400 font-bold text-center">✓ {msg}</p>}
         <button
           type="submit"
-          disabled={saving || !allSelected}
-          className="w-full bg-teal-600 text-white py-2.5 rounded-lg text-sm font-semibold hover:bg-teal-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+          disabled={saving || !canSubmit}
+          className="w-full bg-amber-500 hover:bg-amber-600 text-white py-3 rounded-lg text-base font-bold shadow-md disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
         >
-          {saving ? 'Saving…' : 'Confirm Menu Selection'}
+          {saving ? 'Saving…' : hasExistingChoice ? 'Update Selection' : 'Save Selection'}
         </button>
       </form>
     </div>
@@ -135,16 +391,174 @@ function AdmittedBanner({ guest, event }) {
   )
 }
 
+function NotificationPreferences({ token, guest, eventNotifySms, eventNotifyWa, onChange }) {
+  // Don't show the card if the guest has no phone OR both channels are off at the event level.
+  const phone = guest?.phone
+  if (!phone) return null
+  if (!eventNotifySms && !eventNotifyWa) return null
+
+  const [smsOn, setSmsOn] = useState(guest?.sms_consent ?? true)
+  const [waOn,  setWaOn]  = useState(guest?.whatsapp_consent ?? true)
+  const [saving, setSaving] = useState(false)
+  const [msg, setMsg] = useState('')
+
+  async function toggle(field, next, setter) {
+    setSaving(true); setMsg('')
+    setter(next)
+    try {
+      await api.updatePreferences(token, { [field]: next })
+      setMsg(next ? 'Notifications on.' : 'Opted out.')
+      setTimeout(() => setMsg(''), 3000)
+      onChange?.()
+    } catch (e) {
+      setter(!next)
+      setMsg(e.message)
+    } finally { setSaving(false) }
+  }
+
+  return (
+    <div className="border border-slate-200 dark:border-slate-700 rounded-lg p-4 space-y-3">
+      <div>
+        <p className="text-sm font-semibold text-slate-800 dark:text-slate-100">🔔 Notification preferences</p>
+        <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+          We'll send event reminders, check-in confirmations and seat assignments to <strong>{phone}</strong>.
+          Standard message and data rates may apply. Reply <strong>STOP</strong> to opt out at any time.
+        </p>
+      </div>
+      <div className="space-y-2">
+        {eventNotifySms && (
+          <label className="flex items-center gap-3 cursor-pointer">
+            <input type="checkbox" checked={smsOn} disabled={saving}
+              onChange={(e) => toggle('sms_consent', e.target.checked, setSmsOn)}
+              className="w-5 h-5 accent-teal-500" />
+            <span className="text-sm text-slate-700 dark:text-slate-200">
+              Receive <strong>SMS</strong> updates
+            </span>
+          </label>
+        )}
+        {eventNotifyWa && (
+          <label className="flex items-center gap-3 cursor-pointer">
+            <input type="checkbox" checked={waOn} disabled={saving}
+              onChange={(e) => toggle('whatsapp_consent', e.target.checked, setWaOn)}
+              className="w-5 h-5 accent-teal-500" />
+            <span className="text-sm text-slate-700 dark:text-slate-200">
+              Receive <strong>WhatsApp</strong> updates
+            </span>
+          </label>
+        )}
+      </div>
+      {msg && <p className="text-xs text-teal-600 dark:text-teal-400">{msg}</p>}
+    </div>
+  )
+}
+
+function PartnerPairing({ token, partner, onChange, eventSeatingEnabled }) {
+  const [open, setOpen] = useState(false)
+  const [first, setFirst] = useState('')
+  const [last, setLast] = useState('')
+  const [email, setEmail] = useState('')
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState('')
+
+  if (!eventSeatingEnabled) return null
+
+  async function pair(e) {
+    e.preventDefault()
+    setBusy(true); setError('')
+    try {
+      await api.pairPartner(token, first.trim(), last.trim(), email.trim())
+      setOpen(false); setFirst(''); setLast(''); setEmail('')
+      onChange?.()
+    } catch (err) { setError(err.message) }
+    finally { setBusy(false) }
+  }
+
+  async function unpair() {
+    if (!confirm('Remove your pairing? You may not end up at the same table as your partner.')) return
+    setBusy(true); setError('')
+    try {
+      await api.unpairPartner(token)
+      onChange?.()
+    } catch (err) { setError(err.message) }
+    finally { setBusy(false) }
+  }
+
+  if (partner) {
+    return (
+      <div className="bg-pink-50 dark:bg-pink-900/20 border border-pink-200 dark:border-pink-800 rounded-lg p-4 text-center space-y-2">
+        <div className="text-pink-600 dark:text-pink-300 text-xs uppercase font-semibold tracking-wide">
+          Seated together
+        </div>
+        <div className="text-slate-800 dark:text-white font-semibold">
+          You & {partner.first_name} {partner.last_name}
+        </div>
+        <p className="text-xs text-slate-500 dark:text-slate-400">
+          When you both check in, you'll be placed at the same table — side by side.
+          {partner.admitted && ' (Your partner has already arrived.)'}
+        </p>
+        <button onClick={unpair} disabled={busy}
+          className="text-xs text-red-500 hover:underline disabled:opacity-50">
+          Unpair
+        </button>
+      </div>
+    )
+  }
+
+  return (
+    <div className="border border-slate-200 dark:border-slate-700 rounded-lg p-4 space-y-3">
+      {!open ? (
+        <div className="text-center space-y-2">
+          <p className="text-sm text-slate-700 dark:text-slate-300 font-medium">
+            Are you attending with your spouse or partner?
+          </p>
+          <p className="text-xs text-slate-500 dark:text-slate-400">
+            Pair up and we'll seat you together at check-in.
+          </p>
+          <button onClick={() => setOpen(true)}
+            className="bg-pink-500 hover:bg-pink-600 text-white text-sm font-semibold px-4 py-2 rounded-lg">
+            Pair with my partner
+          </button>
+        </div>
+      ) : (
+        <form onSubmit={pair} className="space-y-2">
+          <p className="text-xs text-slate-500 dark:text-slate-400">
+            Enter your partner's details exactly as on the invite list.
+          </p>
+          <div className="grid grid-cols-2 gap-2">
+            <input value={first} onChange={(e) => setFirst(e.target.value)} required placeholder="First name"
+              className="border border-slate-300 dark:border-slate-700 rounded-md px-2 py-1.5 text-sm bg-white dark:bg-slate-800 text-slate-900 dark:text-white" />
+            <input value={last} onChange={(e) => setLast(e.target.value)} required placeholder="Last name"
+              className="border border-slate-300 dark:border-slate-700 rounded-md px-2 py-1.5 text-sm bg-white dark:bg-slate-800 text-slate-900 dark:text-white" />
+          </div>
+          <input value={email} onChange={(e) => setEmail(e.target.value)} required type="email" placeholder="Email"
+            className="w-full border border-slate-300 dark:border-slate-700 rounded-md px-2 py-1.5 text-sm bg-white dark:bg-slate-800 text-slate-900 dark:text-white" />
+          {error && <div className="text-xs text-red-500">{error}</div>}
+          <div className="flex gap-2">
+            <button type="submit" disabled={busy}
+              className="flex-1 bg-pink-500 hover:bg-pink-600 text-white text-sm font-semibold px-3 py-2 rounded-md disabled:opacity-50">
+              {busy ? 'Pairing…' : 'Pair'}
+            </button>
+            <button type="button" onClick={() => { setOpen(false); setError('') }}
+              className="text-sm text-slate-500 hover:text-slate-700 px-3 py-2">
+              Cancel
+            </button>
+          </div>
+        </form>
+      )}
+    </div>
+  )
+}
+
 export default function ScanAutoPage() {
   const { token } = useParams()
   const [data, setData] = useState(null)
   const [loading, setLoading] = useState(true)
 
+  const reload = () => api.viewTicket(token).then(setData).catch(() => setData({ status: 'invalid' }))
+
   useEffect(() => {
-    api.viewTicket(token)
-      .then(setData)
-      .catch(() => setData({ status: 'invalid' }))
-      .finally(() => setLoading(false))
+    reload().finally(() => setLoading(false))
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [token])
 
   if (loading) {
@@ -174,7 +588,7 @@ export default function ScanAutoPage() {
     )
   }
 
-  const { guest, event, status, table_name, seat_number, menu_categories, guest_choices } = data || {}
+  const { guest, event, status, table_name, seat_number, menu_categories, guest_choices, partner, menu_locked } = data || {}
   const qrImageUrl = `/api/scan/${token}/qr.png`
   const eventDate = event?.event_date ? new Date(event.event_date) : null
 
@@ -257,15 +671,36 @@ export default function ScanAutoPage() {
             </div>
           )}
 
+          {/* Partner pairing — only when seating is enabled and guest not yet seated */}
+          {event?.seating_enabled && status !== 'admitted' && (
+            <PartnerPairing
+              token={token}
+              partner={partner}
+              eventSeatingEnabled={event?.seating_enabled}
+              onChange={reload}
+            />
+          )}
+
+          {/* Notification preferences — TCR opt-in compliance + guest control */}
+          <NotificationPreferences
+            token={token}
+            guest={guest}
+            eventNotifySms={event?.notify_sms}
+            eventNotifyWa={event?.notify_whatsapp}
+            onChange={reload}
+          />
+
           {/* Menu selection */}
-          {menu_categories && menu_categories.length > 0 && (
+          {menu_locked ? (
+            <MenuLockedCard />
+          ) : menu_categories && menu_categories.length > 0 ? (
             <MenuSelection
               token={token}
               categories={menu_categories}
               initialChoices={guest_choices || {}}
               mealServed={guest?.meal_served}
             />
-          )}
+          ) : null}
         </div>
       </div>
 

@@ -86,7 +86,7 @@ echo    "  Keep tags: last ${KEEP_VERSIONS} per service"
 # PHASE 1 — Build images
 # ─────────────────────────────────────────────────────────────────────────────
 if $DO_BUILD; then
-  step "1/4  Building images (version ${VERSION})"
+  step "1/6  Building images (version ${VERSION})"
 
   BUILD_DATE=$(date -u +%Y-%m-%dT%H:%M:%SZ)
   BUILD_ARGS=(
@@ -124,7 +124,7 @@ if $DO_BUILD; then
   ok "Frontend built → ${REGISTRY}:frontend-${VERSION}"
 
   # ── PHASE 2 — Push to Docker Hub ────────────────────────────────────────────
-  step "2/4  Pushing images to Docker Hub"
+  step "2/6  Pushing images to Docker Hub"
 
   info "Authenticating with Docker Hub..."
   echo "${DOCKER_PASSWORD}" | docker login --username "${DOCKER_USERNAME}" --password-stdin
@@ -141,7 +141,7 @@ if $DO_BUILD; then
   done
 
   # ── PHASE 3 — Prune old tags from Docker Hub ─────────────────────────────────
-  step "3/4  Pruning old tags (keeping last ${KEEP_VERSIONS} per service)"
+  step "3/6  Pruning old tags (keeping last ${KEEP_VERSIONS} per service)"
 
   info "Fetching Docker Hub auth token..."
   HUB_TOKEN=$(curl -sf -X POST "https://hub.docker.com/v2/users/login" \
@@ -220,16 +220,30 @@ fi  # end DO_BUILD
 # PHASE 4 — Deploy via production docker-compose (pull from registry)
 # ─────────────────────────────────────────────────────────────────────────────
 if $DO_DEPLOY; then
-  step "4/4  Deploying from Docker Hub"
-
   [[ -f "$PROD_COMPOSE" ]] || die "Production compose file not found: $PROD_COMPOSE"
 
-  info "Pulling latest images from Docker Hub..."
+  # ── Phase 4a — Pull new images ──────────────────────────────────────────────
+  step "4/6  Pulling images from Docker Hub"
   APP_VERSION="$VERSION" docker compose -f "$PROD_COMPOSE" pull backend frontend
+  ok "Images pulled"
 
-  info "Restarting services..."
+  # ── Phase 4b — Run DB migration in a one-off container ──────────────────────
+  # Uses the NEW backend image against the LIVE database (same compose network,
+  # same env_file). If schema apply or ORM verification fails, abort before
+  # swapping production so the running stack keeps serving traffic.
+  step "5/6  Running DB migration + schema verification"
+  info "Ensuring db service is up..."
+  APP_VERSION="$VERSION" docker compose -f "$PROD_COMPOSE" up -d db
+  info "Applying schema patches via new backend image..."
+  if ! APP_VERSION="$VERSION" docker compose -f "$PROD_COMPOSE" \
+        run --rm --no-deps backend python -m app.db_migrate; then
+    die "Migration failed — production NOT swapped. Inspect output above."
+  fi
+  ok "Migration applied and verified"
+
+  # ── Phase 4c — Swap production containers ───────────────────────────────────
+  step "6/6  Restarting services with new images"
   APP_VERSION="$VERSION" docker compose -f "$PROD_COMPOSE" up -d --remove-orphans
-
   ok "Services restarted"
 
   echo ""

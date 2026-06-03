@@ -60,6 +60,74 @@ function StatusControls({ event, onChanged }) {
 
 // ── Feature Toggles ───────────────────────────────────────────────────────────
 
+function ChannelToggles({ event, onChanged }) {
+  const [loading, setLoading]   = useState(false)
+  const [testing, setTesting]   = useState(null)        // channel currently being tested
+  const [testMsg, setTestMsg]   = useState('')          // success / error banner
+  async function toggle(key) {
+    setLoading(true)
+    try {
+      const updated = await api.toggleFeatures(event.id, { [key]: !event[key] })
+      onChanged(updated)
+    } catch (e) { console.error(e) }
+    finally { setLoading(false) }
+  }
+  async function sendTest(channel) {
+    const phone = prompt(`Send a test ${channel.toUpperCase()} to which number?\n(US 10-digit or full E.164 e.g. +18327941707)`)
+    if (!phone || !phone.trim()) return
+    setTesting(channel); setTestMsg('')
+    try {
+      const res = await api.sendTestMessage(event.id, channel, phone.trim())
+      setTestMsg(`✓ Test ${channel} sent to ${res.to}`)
+      setTimeout(() => setTestMsg(''), 6000)
+    } catch (e) { setTestMsg(`✗ ${e.message}`) }
+    finally { setTesting(null) }
+  }
+  const channels = [
+    { key: 'notify_email',    label: 'Email',    icon: '✉', test: null },
+    { key: 'notify_sms',      label: 'SMS',      icon: '📱', test: 'sms' },
+    { key: 'notify_whatsapp', label: 'WhatsApp', icon: '💬', test: 'whatsapp' },
+  ]
+  return (
+    <div className="pt-3 border-t dark:border-slate-700 mt-3 space-y-2">
+      <div className="flex flex-wrap gap-3 items-center">
+        <span className="text-xs font-semibold text-gray-500 dark:text-slate-400">Notify on:</span>
+        {channels.map(({ key, label, icon, test }) => (
+          <div key={key} className="flex items-center gap-1">
+            <button onClick={() => toggle(key)} disabled={loading}
+              className={`px-3 py-1.5 rounded-lg text-xs font-semibold border transition-colors disabled:opacity-50 ${
+                event[key]
+                  ? 'bg-teal-600 text-white border-teal-600 hover:bg-teal-700'
+                  : 'bg-white dark:bg-slate-700 text-gray-600 dark:text-slate-300 border-gray-300 dark:border-slate-600 hover:bg-gray-50 dark:hover:bg-slate-600'
+              }`}>
+              {icon} {label} {event[key] ? 'ON' : 'OFF'}
+            </button>
+            {test && (
+              <button
+                onClick={() => sendTest(test)}
+                disabled={testing === test}
+                title={`Send a test ${test.toUpperCase()} to verify provider creds`}
+                className="text-[10px] text-indigo-600 dark:text-indigo-400 hover:underline disabled:opacity-50">
+                {testing === test ? '…sending' : 'test'}
+              </button>
+            )}
+          </div>
+        ))}
+      </div>
+      {testMsg && (
+        <div className={`text-xs px-2 py-1 rounded inline-block ${testMsg.startsWith('✓')
+          ? 'bg-emerald-50 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300'
+          : 'bg-red-50 text-red-700 dark:bg-red-900/30 dark:text-red-300'}`}>
+          {testMsg}
+        </div>
+      )}
+      <p className="text-[10px] text-gray-400 dark:text-slate-500 italic">
+        SMS / WhatsApp need a phone number on each guest + provider creds in .env
+      </p>
+    </div>
+  )
+}
+
 function FeatureToggles({ event, onChanged }) {
   const [loading, setLoading] = useState(false)
 
@@ -98,6 +166,18 @@ function FeatureToggles({ event, onChanged }) {
 
 // ── Seating Panel ─────────────────────────────────────────────────────────────
 
+function VipBadge({ className = '' }) {
+  return (
+    <span className={`inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wide bg-purple-100 text-purple-700 dark:bg-purple-900/40 dark:text-purple-300 ${className}`}
+      title="VVIP">
+      <svg className="w-2.5 h-2.5" fill="currentColor" viewBox="0 0 20 20">
+        <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118L10 13.347l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L3.567 7.819c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" />
+      </svg>
+      VIP
+    </span>
+  )
+}
+
 function SeatingPanel({ eventId }) {
   const [tables, setTables]       = useState([])
   const [chart, setChart]         = useState(null)
@@ -105,6 +185,10 @@ function SeatingPanel({ eventId }) {
   const [form, setForm]           = useState(null)
   const [loading, setLoading]     = useState(false)
   const [msg, setMsg]             = useState('')
+  // Reserve modal — when admin clicks an empty seat we open a guest picker.
+  const [assignSlot, setAssignSlot] = useState(null)  // {tableId, tableName, seat}
+  const [allGuests, setAllGuests]   = useState([])
+  const [guestQuery, setGuestQuery] = useState('')
 
   const fieldCls = 'border border-gray-300 dark:border-slate-700 rounded-lg px-3 py-2 text-sm bg-white dark:bg-slate-700 text-gray-900 dark:text-white'
 
@@ -113,9 +197,70 @@ function SeatingPanel({ eventId }) {
   }, [eventId])
 
   async function loadChart() {
-    const data = await api.getSeatingChart(eventId)
-    setChart(data)
+    const [chartData, guestData] = await Promise.all([
+      api.getSeatingChart(eventId),
+      api.listGuests(eventId),
+    ])
+    setChart(chartData)
+    setAllGuests(guestData)
     setShowChart(true)
+  }
+
+  async function reserveSeat(guestId) {
+    if (!assignSlot) return
+    setLoading(true)
+    try {
+      await api.assignSeat(eventId, guestId, {
+        table_id: assignSlot.tableId,
+        seat_number: String(assignSlot.seat),
+      })
+      setAssignSlot(null)
+      setGuestQuery('')
+      const [chartData, guestData, tableData] = await Promise.all([
+        api.getSeatingChart(eventId),
+        api.listGuests(eventId),
+        api.listTables(eventId),
+      ])
+      setChart(chartData); setAllGuests(guestData); setTables(tableData)
+    } catch (e) { setMsg(e.message) }
+    finally { setLoading(false) }
+  }
+
+  async function addVvipAndReserve(vvip) {
+    if (!assignSlot) return
+    setLoading(true)
+    try {
+      const created = await api.addGuest(eventId, vvip)
+      await api.assignSeat(eventId, created.id, {
+        table_id: assignSlot.tableId,
+        seat_number: String(assignSlot.seat),
+      })
+      setAssignSlot(null); setGuestQuery('')
+      const [chartData, guestData, tableData] = await Promise.all([
+        api.getSeatingChart(eventId),
+        api.listGuests(eventId),
+        api.listTables(eventId),
+      ])
+      setChart(chartData); setAllGuests(guestData); setTables(tableData)
+      setMsg(`${created.first_name} ${created.last_name} added & seated.`)
+      setTimeout(() => setMsg(''), 4000)
+    } catch (e) { setMsg(e.message) }
+    finally { setLoading(false) }
+  }
+
+  async function unassignSeat(guestId) {
+    if (!confirm('Remove this guest from their seat?')) return
+    setLoading(true)
+    try {
+      await api.assignSeat(eventId, guestId, { table_id: null, seat_number: null })
+      const [chartData, guestData, tableData] = await Promise.all([
+        api.getSeatingChart(eventId),
+        api.listGuests(eventId),
+        api.listTables(eventId),
+      ])
+      setChart(chartData); setAllGuests(guestData); setTables(tableData)
+    } catch (e) { setMsg(e.message) }
+    finally { setLoading(false) }
   }
 
   async function saveTable(e) {
@@ -261,20 +406,33 @@ function SeatingPanel({ eventId }) {
                       {t.seats.filter((s) => s.guest_id).length}/{t.capacity}
                     </span>
                   </div>
-                  <div className="divide-y dark:divide-slate-700 max-h-48 overflow-y-auto">
+                  <div className="divide-y dark:divide-slate-700 max-h-64 overflow-y-auto">
                     {t.seats.map((s) => (
-                      <div key={s.seat} className="px-3 py-1.5 flex items-center gap-2 text-sm">
+                      <button
+                        key={s.seat}
+                        type="button"
+                        onClick={() => s.guest_id
+                          ? unassignSeat(s.guest_id)
+                          : setAssignSlot({ tableId: t.id, tableName: t.name, seat: s.seat })}
+                        className={`w-full px-3 py-1.5 flex items-center gap-2 text-sm text-left transition-colors ${
+                          s.guest_id
+                            ? 'hover:bg-rose-50 dark:hover:bg-rose-900/20'
+                            : 'hover:bg-teal-50 dark:hover:bg-teal-900/20'
+                        }`}
+                        title={s.guest_id ? 'Click to unassign' : 'Click to reserve for a guest'}
+                      >
                         <span className="w-6 text-xs font-mono text-gray-400 dark:text-slate-500 shrink-0">{s.seat}</span>
                         {s.guest_id ? (
                           <>
                             <span className="flex-1 dark:text-slate-200 truncate">{s.name}</span>
-                            {s.admitted && <span className="text-xs text-green-600 shrink-0">✓</span>}
-                            {s.meal_served && <span className="text-xs text-amber-600 shrink-0">🍽</span>}
+                            {s.is_vip && <VipBadge />}
+                            {s.admitted && <span className="text-xs text-green-600 shrink-0" title="Arrived">✓</span>}
+                            {s.meal_served && <span className="text-xs text-amber-600 shrink-0" title="Meal served">🍽</span>}
                           </>
                         ) : (
-                          <span className="flex-1 text-xs italic text-gray-300 dark:text-slate-600">Empty</span>
+                          <span className="flex-1 text-xs italic text-teal-600 dark:text-teal-400">+ reserve</span>
                         )}
-                      </div>
+                      </button>
                     ))}
                   </div>
                 </div>
@@ -285,11 +443,350 @@ function SeatingPanel({ eventId }) {
       )}
 
       {msg && <p className="text-sm text-indigo-600">{msg}</p>}
+
+      {assignSlot && (
+        <ReserveSeatModal
+          slot={assignSlot}
+          guests={allGuests}
+          loading={loading}
+          query={guestQuery}
+          onQuery={setGuestQuery}
+          onPick={reserveSeat}
+          onAddVvip={addVvipAndReserve}
+          onClose={() => { setAssignSlot(null); setGuestQuery('') }}
+        />
+      )}
+    </div>
+  )
+}
+
+function ReserveSeatModal({ slot, guests, loading, query, onQuery, onPick, onAddVvip, onClose }) {
+  const [mode, setMode] = useState('search') // 'search' | 'vvip'
+  const [vvip, setVvip] = useState({ first_name: '', last_name: '', email: '', phone: '' })
+  const q = (query || '').trim().toLowerCase()
+  const matches = guests.filter((g) => {
+    if (!q) return true
+    return (`${g.first_name} ${g.last_name} ${g.email}`).toLowerCase().includes(q)
+  })
+
+  function submitVvip(e) {
+    e.preventDefault()
+    if (!vvip.first_name.trim() || !vvip.last_name.trim()) return
+    onAddVvip({
+      first_name: vvip.first_name.trim(),
+      last_name:  vvip.last_name.trim(),
+      email:      vvip.email.trim(),
+      phone:      vvip.phone.trim() || null,
+      is_vip:     true,
+    })
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/60 backdrop-blur-sm"
+      onClick={onClose}>
+      <div onClick={(e) => e.stopPropagation()}
+        className="bg-white dark:bg-slate-900 dark:border dark:border-slate-700 rounded-xl shadow-2xl w-full max-w-md max-h-[85vh] flex flex-col overflow-hidden">
+        <div className="px-5 py-4 border-b dark:border-slate-700 flex items-center justify-between">
+          <div>
+            <h3 className="font-bold text-slate-900 dark:text-white">Reserve seat</h3>
+            <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+              <strong>{slot.tableName}</strong> · Seat <strong>{slot.seat}</strong>
+            </p>
+          </div>
+          <button onClick={onClose} className="text-slate-400 hover:text-slate-700 dark:hover:text-white text-2xl leading-none">×</button>
+        </div>
+
+        <div className="flex gap-1 px-4 pt-3 border-b dark:border-slate-700">
+          <button onClick={() => setMode('search')}
+            className={`px-3 py-2 text-xs font-bold border-b-2 -mb-px ${
+              mode === 'search' ? 'border-teal-500 text-teal-700 dark:text-teal-300' : 'border-transparent text-slate-500 dark:text-slate-400'
+            }`}>From guest list</button>
+          <button onClick={() => setMode('vvip')}
+            className={`px-3 py-2 text-xs font-bold border-b-2 -mb-px ${
+              mode === 'vvip' ? 'border-purple-500 text-purple-700 dark:text-purple-300' : 'border-transparent text-slate-500 dark:text-slate-400'
+            }`}>+ Add VVIP</button>
+        </div>
+
+        {mode === 'search' && <>
+          <div className="p-4">
+            <input
+              autoFocus
+              value={query}
+              onChange={(e) => onQuery(e.target.value)}
+              placeholder="Search by name or email…"
+              className="w-full border border-slate-300 dark:border-slate-700 rounded-lg px-3 py-2 text-sm bg-white dark:bg-slate-800 text-slate-900 dark:text-white"
+            />
+          </div>
+          <div className="flex-1 overflow-y-auto divide-y divide-slate-100 dark:divide-slate-800 border-t dark:border-slate-700">
+            {matches.length === 0 && (
+              <div className="p-6 text-center text-sm text-slate-400 dark:text-slate-500 italic">
+                No guests match. Use <button onClick={() => setMode('vvip')} className="text-purple-600 hover:underline font-semibold">+ Add VVIP</button> instead.
+              </div>
+            )}
+            {matches.map((g) => {
+              const alreadyAssigned = g.table_id != null
+              return (
+                <button key={g.id}
+                  onClick={() => onPick(g.id)}
+                  disabled={loading}
+                  className="w-full px-4 py-2.5 text-left hover:bg-teal-50 dark:hover:bg-teal-900/20 disabled:opacity-50 flex items-center gap-3">
+                  <div className="flex-1 min-w-0">
+                    <div className="font-medium text-slate-900 dark:text-slate-100 truncate">
+                      {g.first_name} {g.last_name}
+                    </div>
+                    <div className="text-xs text-slate-500 dark:text-slate-400 truncate">{g.email || <em>no email</em>}</div>
+                  </div>
+                  {alreadyAssigned ? (
+                    <span className="text-[10px] uppercase font-bold bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300 px-2 py-0.5 rounded-full">
+                      move from seat {g.seat_number ?? '–'}
+                    </span>
+                  ) : g.admitted ? (
+                    <span className="text-[10px] uppercase font-bold bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300 px-2 py-0.5 rounded-full">
+                      arrived
+                    </span>
+                  ) : null}
+                </button>
+              )
+            })}
+          </div>
+        </>}
+
+        {mode === 'vvip' && (
+          <form onSubmit={submitVvip} className="p-4 space-y-3 overflow-y-auto">
+            <p className="text-xs text-slate-500 dark:text-slate-400">
+              Add someone who isn't on the imported guest list. Email is optional — no invite will be sent.
+            </p>
+            <div className="grid grid-cols-2 gap-2">
+              <input autoFocus required value={vvip.first_name} onChange={(e) => setVvip((v) => ({ ...v, first_name: e.target.value }))}
+                placeholder="First name *"
+                className="border border-slate-300 dark:border-slate-700 rounded-lg px-3 py-2 text-sm bg-white dark:bg-slate-800 text-slate-900 dark:text-white" />
+              <input required value={vvip.last_name} onChange={(e) => setVvip((v) => ({ ...v, last_name: e.target.value }))}
+                placeholder="Last name *"
+                className="border border-slate-300 dark:border-slate-700 rounded-lg px-3 py-2 text-sm bg-white dark:bg-slate-800 text-slate-900 dark:text-white" />
+            </div>
+            <input type="email" value={vvip.email} onChange={(e) => setVvip((v) => ({ ...v, email: e.target.value }))}
+              placeholder="Email (optional)"
+              className="w-full border border-slate-300 dark:border-slate-700 rounded-lg px-3 py-2 text-sm bg-white dark:bg-slate-800 text-slate-900 dark:text-white" />
+            <input value={vvip.phone} onChange={(e) => setVvip((v) => ({ ...v, phone: e.target.value }))}
+              placeholder="Phone E.164 (optional, e.g. +447911123456)"
+              className="w-full border border-slate-300 dark:border-slate-700 rounded-lg px-3 py-2 text-sm bg-white dark:bg-slate-800 text-slate-900 dark:text-white" />
+            <button type="submit" disabled={loading || !vvip.first_name.trim() || !vvip.last_name.trim()}
+              className="w-full bg-purple-600 hover:bg-purple-700 text-white font-semibold py-2.5 rounded-lg disabled:opacity-50">
+              {loading ? 'Saving…' : `Reserve ${slot.tableName} · Seat ${slot.seat}`}
+            </button>
+          </form>
+        )}
+      </div>
     </div>
   )
 }
 
 // ── Menu Panel ────────────────────────────────────────────────────────────────
+
+const SELECTION_TYPES = [
+  { value: 'single', label: 'Single (pick 1)' },
+  { value: 'multi',  label: 'Multi (pick several)' },
+  { value: 'combo',  label: 'Combo (preset sets)' },
+]
+
+function CombinationsSection({ eventId, cat, loading, setLoading, onCatsChange, setMsg }) {
+  const [form, setForm] = useState(null)
+
+  const fieldCls = 'border border-gray-300 dark:border-slate-700 rounded-lg px-3 py-2 text-sm bg-white dark:bg-slate-700 text-gray-900 dark:text-white'
+  const combos = cat.combinations || []
+
+  function openNew() {
+    setForm({
+      name: '',
+      description: '',
+      sort_order: combos.length,
+      items: Object.fromEntries(cat.items.map((i) => [i.id, { checked: false, quantity: 1 }])),
+    })
+  }
+
+  function openEdit(c) {
+    const items = Object.fromEntries(cat.items.map((i) => [i.id, { checked: false, quantity: 1 }]))
+    for (const ci of c.items || []) {
+      items[ci.menu_item_id] = { checked: true, quantity: ci.quantity || 1 }
+    }
+    setForm({ id: c.id, name: c.name, description: c.description || '', sort_order: c.sort_order ?? 0, items })
+  }
+
+  async function save(e) {
+    e.preventDefault()
+    const items = Object.entries(form.items)
+      .filter(([, v]) => v.checked)
+      .map(([menu_item_id, v]) => ({ menu_item_id, quantity: Number(v.quantity) || 1 }))
+    if (items.length === 0) {
+      setMsg('Pick at least one item for the combination.')
+      return
+    }
+    setLoading(true)
+    try {
+      const payload = {
+        name: form.name,
+        description: form.description || '',
+        sort_order: Number(form.sort_order) || 0,
+        items,
+      }
+      if (form.id) {
+        const updated = await api.updateCombination(eventId, form.id, payload)
+        onCatsChange((prev) => prev.map((c) =>
+          c.id === cat.id
+            ? { ...c, combinations: (c.combinations || []).map((x) => x.id === form.id ? updated : x) }
+            : c
+        ))
+      } else {
+        const created = await api.createCombination(eventId, cat.id, payload)
+        onCatsChange((prev) => prev.map((c) =>
+          c.id === cat.id
+            ? { ...c, combinations: [...(c.combinations || []), created] }
+            : c
+        ))
+      }
+      setForm(null)
+    } catch (err) { setMsg(err.message) }
+    finally { setLoading(false) }
+  }
+
+  async function remove(comboId) {
+    if (!confirm('Delete this combination?')) return
+    setLoading(true)
+    try {
+      await api.deleteCombination(eventId, comboId)
+      onCatsChange((prev) => prev.map((c) =>
+        c.id === cat.id
+          ? { ...c, combinations: (c.combinations || []).filter((x) => x.id !== comboId) }
+          : c
+      ))
+    } catch (err) { setMsg(err.message) }
+    finally { setLoading(false) }
+  }
+
+  const itemName = (id) => cat.items.find((i) => i.id === id)?.name || '—'
+
+  return (
+    <div className="px-4 py-3 space-y-3">
+      <div className="flex items-center justify-between">
+        <div className="text-xs font-semibold text-gray-500 dark:text-slate-400 uppercase">Combinations</div>
+        <button
+          type="button"
+          onClick={openNew}
+          disabled={loading || cat.items.length === 0}
+          className="text-xs text-green-600 hover:underline font-semibold disabled:opacity-40"
+        >
+          + Add combination
+        </button>
+      </div>
+
+      {cat.items.length === 0 && (
+        <p className="text-xs text-gray-400 dark:text-slate-500 italic">
+          Add items to this category first (use the items list above… or temporarily switch type to Single).
+        </p>
+      )}
+
+      {combos.length === 0 && cat.items.length > 0 && !form && (
+        <p className="text-xs text-gray-400 dark:text-slate-500 italic">No combinations yet.</p>
+      )}
+
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+        {combos.map((c) => (
+          <div key={c.id} className="border dark:border-slate-700 rounded-lg p-3 bg-white dark:bg-slate-800">
+            <div className="flex items-start justify-between gap-2">
+              <div className="min-w-0">
+                <div className="text-sm font-semibold dark:text-slate-100 truncate">{c.name}</div>
+                {c.description && (
+                  <div className="text-xs text-gray-500 dark:text-slate-400 mt-0.5">{c.description}</div>
+                )}
+              </div>
+              <div className="flex gap-2 shrink-0">
+                <button type="button" onClick={() => openEdit(c)}
+                  className="text-xs text-indigo-600 hover:underline">Edit</button>
+                <button type="button" onClick={() => remove(c.id)} disabled={loading}
+                  className="text-xs text-red-400 hover:text-red-600 disabled:opacity-40">Delete</button>
+              </div>
+            </div>
+            <ul className="mt-2 space-y-0.5">
+              {(c.items || []).map((ci, idx) => (
+                <li key={idx} className="text-xs text-gray-600 dark:text-slate-300 flex justify-between gap-2">
+                  <span className="truncate">{itemName(ci.menu_item_id)}</span>
+                  <span className="text-gray-400 dark:text-slate-500 shrink-0">× {ci.quantity}</span>
+                </li>
+              ))}
+            </ul>
+          </div>
+        ))}
+      </div>
+
+      {form && (
+        <form onSubmit={save} className="bg-gray-50 dark:bg-slate-700/50 border dark:border-slate-600 rounded-lg p-3 space-y-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+            <div>
+              <label className="block text-xs font-semibold text-gray-600 dark:text-slate-300 mb-1">Name</label>
+              <input value={form.name} required onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))}
+                className={fieldCls} placeholder="Wedding Banquet" />
+            </div>
+            <div>
+              <label className="block text-xs font-semibold text-gray-600 dark:text-slate-300 mb-1">Sort Order</label>
+              <input type="number" value={form.sort_order}
+                onChange={(e) => setForm((f) => ({ ...f, sort_order: e.target.value }))}
+                className={`${fieldCls} w-24`} />
+            </div>
+          </div>
+          <div>
+            <label className="block text-xs font-semibold text-gray-600 dark:text-slate-300 mb-1">Description</label>
+            <input value={form.description}
+              onChange={(e) => setForm((f) => ({ ...f, description: e.target.value }))}
+              className={fieldCls} placeholder="Optional" />
+          </div>
+          <div>
+            <div className="text-xs font-semibold text-gray-600 dark:text-slate-300 mb-1">Items in this combo</div>
+            <div className="space-y-1.5 max-h-56 overflow-y-auto pr-1">
+              {cat.items.map((it) => {
+                const row = form.items[it.id] || { checked: false, quantity: 1 }
+                return (
+                  <div key={it.id} className="flex items-center gap-2">
+                    <input
+                      type="checkbox"
+                      checked={row.checked}
+                      onChange={(e) => setForm((f) => ({
+                        ...f,
+                        items: { ...f.items, [it.id]: { ...row, checked: e.target.checked } },
+                      }))}
+                      className="cursor-pointer"
+                    />
+                    <span className="text-sm dark:text-slate-200 flex-1 truncate">{it.name}</span>
+                    <input
+                      type="number"
+                      min={1}
+                      value={row.quantity}
+                      disabled={!row.checked}
+                      onChange={(e) => setForm((f) => ({
+                        ...f,
+                        items: { ...f.items, [it.id]: { ...row, quantity: e.target.value } },
+                      }))}
+                      className={`${fieldCls} w-20 disabled:opacity-40`}
+                    />
+                  </div>
+                )
+              })}
+            </div>
+          </div>
+          <div className="flex gap-2">
+            <button type="submit" disabled={loading}
+              className="bg-indigo-600 text-white px-4 py-2 rounded-lg text-sm font-semibold hover:bg-indigo-700 disabled:opacity-50">
+              {form.id ? 'Save' : 'Add'}
+            </button>
+            <button type="button" onClick={() => setForm(null)}
+              className="px-4 py-2 border border-gray-300 dark:border-slate-600 rounded-lg text-sm dark:text-slate-300 hover:bg-gray-100 dark:hover:bg-slate-600">
+              Cancel
+            </button>
+          </div>
+        </form>
+      )}
+    </div>
+  )
+}
 
 function MenuPanel({ eventId }) {
   const [categories, setCategories] = useState([])
@@ -316,13 +813,23 @@ function MenuPanel({ eventId }) {
     e.preventDefault()
     setLoading(true)
     try {
-      const payload = { name: catForm.name, sort_order: Number(catForm.sort_order) || 0 }
+      const selType = catForm.selection_type || 'single'
+      const payload = {
+        name: catForm.name,
+        sort_order: Number(catForm.sort_order) || 0,
+        selection_type: selType,
+        min_selections: selType === 'multi' ? Math.max(0, Number(catForm.min_selections) || 0) : 1,
+        max_selections: selType === 'multi'
+          ? (catForm.max_selections === '' || catForm.max_selections == null ? null : Number(catForm.max_selections))
+          : 1,
+        is_required: !!catForm.is_required,
+      }
       if (catForm.id) {
         const updated = await api.updateMenuCategory(eventId, catForm.id, payload)
-        setCategories((prev) => prev.map((c) => (c.id === catForm.id ? updated : c)))
+        setCategories((prev) => prev.map((c) => (c.id === catForm.id ? { ...c, ...updated } : c)))
       } else {
         const created = await api.createMenuCategory(eventId, payload)
-        setCategories((prev) => [...prev, created])
+        setCategories((prev) => [...prev, { items: [], combinations: [], ...created }])
       }
       setCatForm(null)
     } catch (e) { setMsg(e.message) }
@@ -372,6 +879,29 @@ function MenuPanel({ eventId }) {
     finally { setLoading(false) }
   }
 
+  function startNewCat() {
+    setCatForm({
+      name: '',
+      sort_order: categories.length,
+      selection_type: 'single',
+      min_selections: 1,
+      max_selections: '',
+      is_required: false,
+    })
+  }
+
+  function startEditCat(cat) {
+    setCatForm({
+      id: cat.id,
+      name: cat.name,
+      sort_order: cat.sort_order,
+      selection_type: cat.selection_type || 'single',
+      min_selections: cat.min_selections ?? 1,
+      max_selections: cat.max_selections ?? '',
+      is_required: !!cat.is_required,
+    })
+  }
+
   return (
     <div className="bg-white dark:bg-slate-800 dark:border dark:border-slate-700/60 rounded-xl shadow p-6 space-y-4">
       <div className="flex items-center justify-between flex-wrap gap-2">
@@ -384,7 +914,7 @@ function MenuPanel({ eventId }) {
             {showSummary ? 'Hide Summary' : 'View Summary'}
           </button>
           <button
-            onClick={() => setCatForm({ name: '', sort_order: categories.length })}
+            onClick={startNewCat}
             className="bg-indigo-600 text-white px-3 py-1.5 rounded-lg text-xs font-semibold hover:bg-indigo-700"
           >
             + Category
@@ -397,81 +927,137 @@ function MenuPanel({ eventId }) {
       )}
 
       <div className="space-y-3">
-        {categories.map((cat) => (
-          <div key={cat.id} className="border dark:border-slate-700 rounded-lg overflow-hidden">
-            <div className="bg-slate-50 dark:bg-slate-700 px-4 py-2.5 flex items-center justify-between">
-              <span className="text-sm font-semibold dark:text-white">{cat.name}</span>
-              <div className="flex gap-3">
-                <button onClick={() => setCatForm({ id: cat.id, name: cat.name, sort_order: cat.sort_order })}
-                  className="text-xs text-indigo-600 hover:underline">Edit</button>
-                <button onClick={() => deleteCat(cat.id)} disabled={loading}
-                  className="text-xs text-red-400 hover:text-red-600 disabled:opacity-40">Delete</button>
-                <button
-                  onClick={() => setItemForms((prev) => ({ ...prev, [cat.id]: { name: '', description: '' } }))}
-                  className="text-xs text-green-600 hover:underline font-semibold"
-                >
-                  + Item
-                </button>
-              </div>
-            </div>
-            <div className="divide-y dark:divide-slate-700">
-              {cat.items.map((item) => (
-                <div key={item.id} className="px-4 py-2 flex items-center justify-between">
-                  <div>
-                    <span className="text-sm dark:text-slate-200">{item.name}</span>
-                    {item.description && (
-                      <span className="ml-2 text-xs text-gray-400 dark:text-slate-500">{item.description}</span>
-                    )}
-                  </div>
-                  <div className="flex gap-3">
-                    <button
-                      onClick={() => setItemForms((prev) => ({ ...prev, [cat.id]: { id: item.id, name: item.name, description: item.description || '' } }))}
-                      className="text-xs text-indigo-600 hover:underline"
-                    >
-                      Edit
-                    </button>
-                    <button onClick={() => deleteItem(cat.id, item.id)} disabled={loading}
-                      className="text-xs text-red-400 hover:text-red-600 disabled:opacity-40">Delete</button>
-                  </div>
+        {categories.map((cat) => {
+          const selType = cat.selection_type || 'single'
+          const isCombo = selType === 'combo'
+          const isMulti = selType === 'multi'
+          return (
+            <div key={cat.id} className="border dark:border-slate-700 rounded-lg overflow-hidden">
+              <div className="bg-slate-50 dark:bg-slate-700 px-4 py-2.5 flex items-center justify-between gap-2 flex-wrap">
+                <div className="flex items-center gap-2 flex-wrap">
+                  <span className="text-sm font-semibold dark:text-white">{cat.name}</span>
+                  <span className="text-[10px] uppercase font-semibold px-2 py-0.5 rounded-full bg-indigo-100 text-indigo-700 dark:bg-indigo-900/40 dark:text-indigo-300">
+                    {selType}
+                  </span>
+                  {isMulti && (
+                    <span className="text-xs text-gray-500 dark:text-slate-400">
+                      Min {cat.min_selections ?? 0}, Max {cat.max_selections ?? '∞'}
+                    </span>
+                  )}
                 </div>
-              ))}
-              {cat.items.length === 0 && !itemForms[cat.id] && (
-                <div className="px-4 py-2 text-xs text-gray-400 dark:text-slate-500 italic">No items yet.</div>
-              )}
-              {itemForms[cat.id] && (
-                <form
-                  onSubmit={(e) => saveItem(e, cat.id)}
-                  className="px-4 py-3 flex flex-wrap gap-2 items-end bg-gray-50 dark:bg-slate-700/50"
-                >
-                  <div>
-                    <label className="block text-xs font-semibold text-gray-600 dark:text-slate-300 mb-1">Item Name</label>
-                    <input
-                      value={itemForms[cat.id].name}
-                      onChange={(e) => setItemForms((prev) => ({ ...prev, [cat.id]: { ...prev[cat.id], name: e.target.value } }))}
-                      required className={fieldCls} placeholder="Chicken Breast"
+                <div className="flex gap-3">
+                  <button onClick={() => startEditCat(cat)}
+                    className="text-xs text-indigo-600 hover:underline">Edit</button>
+                  <button onClick={() => deleteCat(cat.id)} disabled={loading}
+                    className="text-xs text-red-400 hover:text-red-600 disabled:opacity-40">Delete</button>
+                  {!isCombo && (
+                    <button
+                      onClick={() => setItemForms((prev) => ({ ...prev, [cat.id]: { name: '', description: '' } }))}
+                      className="text-xs text-green-600 hover:underline font-semibold"
+                    >
+                      + Item
+                    </button>
+                  )}
+                </div>
+              </div>
+
+              {/* Combo: also keep an items strip (for editing the underlying pool) at the bottom of combos UI */}
+              {isCombo ? (
+                <>
+                  <CombinationsSection
+                    eventId={eventId}
+                    cat={cat}
+                    loading={loading}
+                    setLoading={setLoading}
+                    onCatsChange={setCategories}
+                    setMsg={setMsg}
+                  />
+                  <details className="border-t dark:border-slate-700 bg-gray-50/40 dark:bg-slate-800/40">
+                    <summary className="px-4 py-2 text-xs font-semibold text-gray-500 dark:text-slate-400 cursor-pointer select-none">
+                      Manage underlying items ({cat.items.length})
+                    </summary>
+                    <div className="divide-y dark:divide-slate-700">
+                      {cat.items.map((item) => (
+                        <div key={item.id} className="px-4 py-2 flex items-center justify-between">
+                          <div>
+                            <span className="text-sm dark:text-slate-200">{item.name}</span>
+                            {item.description && (
+                              <span className="ml-2 text-xs text-gray-400 dark:text-slate-500">{item.description}</span>
+                            )}
+                          </div>
+                          <div className="flex gap-3">
+                            <button
+                              onClick={() => setItemForms((prev) => ({ ...prev, [cat.id]: { id: item.id, name: item.name, description: item.description || '' } }))}
+                              className="text-xs text-indigo-600 hover:underline"
+                            >
+                              Edit
+                            </button>
+                            <button onClick={() => deleteItem(cat.id, item.id)} disabled={loading}
+                              className="text-xs text-red-400 hover:text-red-600 disabled:opacity-40">Delete</button>
+                          </div>
+                        </div>
+                      ))}
+                      <div className="px-4 py-2 flex justify-end">
+                        <button
+                          onClick={() => setItemForms((prev) => ({ ...prev, [cat.id]: { name: '', description: '' } }))}
+                          className="text-xs text-green-600 hover:underline font-semibold"
+                        >
+                          + Item
+                        </button>
+                      </div>
+                      {itemForms[cat.id] && (
+                        <ItemForm
+                          form={itemForms[cat.id]}
+                          fieldCls={fieldCls}
+                          loading={loading}
+                          onChange={(patch) => setItemForms((prev) => ({ ...prev, [cat.id]: { ...prev[cat.id], ...patch } }))}
+                          onSubmit={(e) => saveItem(e, cat.id)}
+                          onCancel={() => setItemForms((prev) => ({ ...prev, [cat.id]: null }))}
+                        />
+                      )}
+                    </div>
+                  </details>
+                </>
+              ) : (
+                <div className="divide-y dark:divide-slate-700">
+                  {cat.items.map((item) => (
+                    <div key={item.id} className="px-4 py-2 flex items-center justify-between">
+                      <div>
+                        <span className="text-sm dark:text-slate-200">{item.name}</span>
+                        {item.description && (
+                          <span className="ml-2 text-xs text-gray-400 dark:text-slate-500">{item.description}</span>
+                        )}
+                      </div>
+                      <div className="flex gap-3">
+                        <button
+                          onClick={() => setItemForms((prev) => ({ ...prev, [cat.id]: { id: item.id, name: item.name, description: item.description || '' } }))}
+                          className="text-xs text-indigo-600 hover:underline"
+                        >
+                          Edit
+                        </button>
+                        <button onClick={() => deleteItem(cat.id, item.id)} disabled={loading}
+                          className="text-xs text-red-400 hover:text-red-600 disabled:opacity-40">Delete</button>
+                      </div>
+                    </div>
+                  ))}
+                  {cat.items.length === 0 && !itemForms[cat.id] && (
+                    <div className="px-4 py-2 text-xs text-gray-400 dark:text-slate-500 italic">No items yet.</div>
+                  )}
+                  {itemForms[cat.id] && (
+                    <ItemForm
+                      form={itemForms[cat.id]}
+                      fieldCls={fieldCls}
+                      loading={loading}
+                      onChange={(patch) => setItemForms((prev) => ({ ...prev, [cat.id]: { ...prev[cat.id], ...patch } }))}
+                      onSubmit={(e) => saveItem(e, cat.id)}
+                      onCancel={() => setItemForms((prev) => ({ ...prev, [cat.id]: null }))}
                     />
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <label className="block text-xs font-semibold text-gray-600 dark:text-slate-300 mb-1">Description</label>
-                    <input
-                      value={itemForms[cat.id].description}
-                      onChange={(e) => setItemForms((prev) => ({ ...prev, [cat.id]: { ...prev[cat.id], description: e.target.value } }))}
-                      className={fieldCls} placeholder="Optional"
-                    />
-                  </div>
-                  <button type="submit" disabled={loading}
-                    className="bg-indigo-600 text-white px-4 py-2 rounded-lg text-sm font-semibold hover:bg-indigo-700 disabled:opacity-50">
-                    {itemForms[cat.id].id ? 'Save' : 'Add'}
-                  </button>
-                  <button type="button" onClick={() => setItemForms((prev) => ({ ...prev, [cat.id]: null }))}
-                    className="px-4 py-2 border border-gray-300 dark:border-slate-600 rounded-lg text-sm dark:text-slate-300 hover:bg-gray-100 dark:hover:bg-slate-600">
-                    ×
-                  </button>
-                </form>
+                  )}
+                </div>
               )}
             </div>
-          </div>
-        ))}
+          )
+        })}
       </div>
 
       {catForm && (
@@ -486,6 +1072,42 @@ function MenuPanel({ eventId }) {
             <input type="number" value={catForm.sort_order} onChange={(e) => setCatForm((f) => ({ ...f, sort_order: e.target.value }))}
               className={`${fieldCls} w-20`} />
           </div>
+          <div>
+            <label className="block text-xs font-semibold text-gray-600 dark:text-slate-300 mb-1">Selection Type</label>
+            <select
+              value={catForm.selection_type}
+              onChange={(e) => setCatForm((f) => ({ ...f, selection_type: e.target.value }))}
+              className={fieldCls}
+            >
+              {SELECTION_TYPES.map((t) => (
+                <option key={t.value} value={t.value}>{t.label}</option>
+              ))}
+            </select>
+          </div>
+          {catForm.selection_type === 'multi' && (
+            <>
+              <div>
+                <label className="block text-xs font-semibold text-gray-600 dark:text-slate-300 mb-1">Min</label>
+                <input type="number" min={0} value={catForm.min_selections}
+                  onChange={(e) => setCatForm((f) => ({ ...f, min_selections: e.target.value }))}
+                  className={`${fieldCls} w-20`} />
+              </div>
+              <div>
+                <label className="block text-xs font-semibold text-gray-600 dark:text-slate-300 mb-1">Max</label>
+                <input type="number" min={0} value={catForm.max_selections}
+                  onChange={(e) => setCatForm((f) => ({ ...f, max_selections: e.target.value }))}
+                  placeholder="∞"
+                  className={`${fieldCls} w-20`} />
+              </div>
+            </>
+          )}
+          <label className="flex items-center gap-2 text-sm text-gray-700 dark:text-slate-200 select-none cursor-pointer">
+            <input type="checkbox"
+              checked={!!catForm.is_required}
+              onChange={(e) => setCatForm((f) => ({ ...f, is_required: e.target.checked }))}
+              className="w-4 h-4 accent-amber-500" />
+            Required
+          </label>
           <button type="submit" disabled={loading}
             className="bg-indigo-600 text-white px-4 py-2 rounded-lg text-sm font-semibold hover:bg-indigo-700 disabled:opacity-50">
             {catForm.id ? 'Save' : 'Add'}
@@ -521,6 +1143,415 @@ function MenuPanel({ eventId }) {
       )}
 
       {msg && <p className="text-sm text-red-600">{msg}</p>}
+    </div>
+  )
+}
+
+function ItemForm({ form, fieldCls, loading, onChange, onSubmit, onCancel }) {
+  return (
+    <form onSubmit={onSubmit} className="px-4 py-3 flex flex-wrap gap-2 items-end bg-gray-50 dark:bg-slate-700/50">
+      <div>
+        <label className="block text-xs font-semibold text-gray-600 dark:text-slate-300 mb-1">Item Name</label>
+        <input
+          value={form.name}
+          onChange={(e) => onChange({ name: e.target.value })}
+          required className={fieldCls} placeholder="Chicken Breast"
+        />
+      </div>
+      <div className="flex-1 min-w-0">
+        <label className="block text-xs font-semibold text-gray-600 dark:text-slate-300 mb-1">Description</label>
+        <input
+          value={form.description}
+          onChange={(e) => onChange({ description: e.target.value })}
+          className={fieldCls} placeholder="Optional"
+        />
+      </div>
+      <button type="submit" disabled={loading}
+        className="bg-indigo-600 text-white px-4 py-2 rounded-lg text-sm font-semibold hover:bg-indigo-700 disabled:opacity-50">
+        {form.id ? 'Save' : 'Add'}
+      </button>
+      <button type="button" onClick={onCancel}
+        className="px-4 py-2 border border-gray-300 dark:border-slate-600 rounded-lg text-sm dark:text-slate-300 hover:bg-gray-100 dark:hover:bg-slate-600">
+        ×
+      </button>
+    </form>
+  )
+}
+
+// ── Menu Dashboard ───────────────────────────────────────────────────────────
+
+function MenuDashboard({ eventId }) {
+  const [data, setData]         = useState(null)
+  const [loading, setLoading]   = useState(false)
+  const [err, setErr]           = useState('')
+  const [open, setOpen]         = useState(true)
+  const [search, setSearch]     = useState('')
+  const [statusF, setStatusF]   = useState('all') // all | served | pending
+  const [tableF, setTableF]     = useState('all')
+  const [working, setWorking]   = useState(null)
+  const [viewMode, setViewMode] = useState('table') // 'table' | 'guest'
+
+  async function load() {
+    setLoading(true); setErr('')
+    try {
+      const res = await api.getMenuDashboard(eventId)
+      setData(res)
+    } catch (e) { setErr(e.message); setData(null) }
+    finally { setLoading(false) }
+  }
+
+  useEffect(() => { if (open) load() }, [eventId, open])
+
+  async function markServed(guestId) {
+    setWorking(guestId)
+    try {
+      await api.markMealServed(eventId, guestId)
+      setData((d) => d && {
+        ...d,
+        guests: d.guests.map((g) => g.guest_id === guestId ? { ...g, meal_served: true } : g),
+      })
+      // Refresh totals to reflect the change.
+      load()
+    } catch (e) { setErr(e.message) }
+    finally { setWorking(null) }
+  }
+
+  const sortedItems = (data?.item_totals || []).slice().sort((a, b) => b.count - a.count)
+  const sortedCombos = (data?.combination_totals || []).slice().sort((a, b) => b.count - a.count)
+
+  const tables = Array.from(new Set((data?.guests || []).map((g) => g.table_name).filter(Boolean))).sort()
+
+  const filtered = (data?.guests || []).filter((g) => {
+    if (statusF === 'served' && !g.meal_served) return false
+    if (statusF === 'pending' && g.meal_served) return false
+    if (tableF !== 'all' && g.table_name !== tableF) return false
+    if (search.trim()) {
+      const q = search.trim().toLowerCase()
+      if (!(g.name || '').toLowerCase().includes(q) && !(g.email || '').toLowerCase().includes(q)) return false
+    }
+    return true
+  })
+
+  function renderChoices(g) {
+    const pills = []
+    for (const [catId, sel] of Object.entries(g.single || {})) {
+      pills.push({ key: `s-${catId}`, label: sel.category_name, value: sel.item_name })
+    }
+    for (const [catId, sel] of Object.entries(g.multi || {})) {
+      pills.push({ key: `m-${catId}`, label: sel.category_name, value: (sel.items || []).join(', ') })
+    }
+    for (const [catId, sel] of Object.entries(g.combo || {})) {
+      const items = (sel.items || []).join(', ')
+      pills.push({
+        key: `c-${catId}`,
+        label: sel.category_name,
+        value: items ? `${sel.combination_name} (${items})` : sel.combination_name,
+      })
+    }
+    if (pills.length === 0) {
+      return <span className="text-xs italic text-gray-400 dark:text-slate-500">No selection</span>
+    }
+    return (
+      <div className="flex flex-col gap-1">
+        {pills.map((p) => (
+          <span key={p.key}
+            className="inline-block px-2 py-0.5 rounded-full text-xs bg-slate-100 text-slate-700 dark:bg-slate-700 dark:text-slate-200">
+            <strong className="font-semibold">{p.label}:</strong> {p.value || '—'}
+          </span>
+        ))}
+      </div>
+    )
+  }
+
+  // Group filtered guests by table name (unassigned guests go to a synthetic '— unassigned —' bucket)
+  // and compute per-table item totals so the kitchen can see "Table 5: Rice ×3, Dodo ×5" at a glance.
+  function buildTableGroups(guestList) {
+    const buckets = new Map()
+    for (const g of guestList) {
+      const key = g.table_name || '— unassigned —'
+      if (!buckets.has(key)) buckets.set(key, [])
+      buckets.get(key).push(g)
+    }
+    const result = []
+    for (const [tableName, list] of buckets) {
+      const sortedSeats = list.slice().sort((a, b) => {
+        const an = Number(a.seat_number); const bn = Number(b.seat_number)
+        if (!isNaN(an) && !isNaN(bn)) return an - bn
+        return String(a.seat_number || '').localeCompare(String(b.seat_number || ''))
+      })
+      const itemCounts = new Map()
+      const bump = (label) => itemCounts.set(label, (itemCounts.get(label) || 0) + 1)
+      for (const g of list) {
+        for (const sel of Object.values(g.single || {})) bump(sel.item_name)
+        for (const sel of Object.values(g.multi || {})) for (const n of (sel.items || [])) bump(n)
+        // Combos: count the combo as one unit. Don't unroll its items —
+        // servers already know what's in each combo and we don't want noisy headers.
+        for (const sel of Object.values(g.combo || {})) bump(sel.combination_name)
+      }
+      const totals = [...itemCounts.entries()].sort((a, b) => b[1] - a[1])
+      const served = list.filter((g) => g.meal_served).length
+      result.push({ tableName, guests: sortedSeats, totals, served, total: list.length })
+    }
+    // Sort: real tables alphabetically, unassigned last
+    result.sort((a, b) => {
+      if (a.tableName.startsWith('—')) return 1
+      if (b.tableName.startsWith('—')) return -1
+      return a.tableName.localeCompare(b.tableName, undefined, { numeric: true })
+    })
+    return result
+  }
+
+  const tableGroups = buildTableGroups(filtered)
+
+  return (
+    <div className="bg-white dark:bg-slate-800 dark:border dark:border-slate-700/60 rounded-xl shadow p-6 space-y-4 border-l-4 border-l-amber-500">
+      <div className="flex items-center justify-between flex-wrap gap-2">
+        <div className="flex items-center gap-2">
+          <h2 className="font-semibold text-base dark:text-white">Menu Dashboard</h2>
+          <button onClick={() => setOpen((v) => !v)}
+            className="text-xs text-indigo-600 dark:text-indigo-400 hover:underline">
+            {open ? '▲ Hide' : '▼ Show'}
+          </button>
+        </div>
+        {open && (
+          <button onClick={load} disabled={loading}
+            className="text-xs text-indigo-600 dark:text-indigo-400 hover:underline disabled:opacity-50">
+            {loading ? 'Refreshing…' : 'Refresh'}
+          </button>
+        )}
+      </div>
+
+      {!open ? null : err ? (
+        <p className="text-sm text-red-600">{err}</p>
+      ) : loading && !data ? (
+        <p className="text-sm text-gray-400 dark:text-slate-500">Loading…</p>
+      ) : !data ? null : (
+        <>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="border dark:border-slate-700 rounded-lg overflow-hidden">
+              <div className="bg-slate-50 dark:bg-slate-700 px-4 py-2 text-sm font-semibold dark:text-white">Item totals</div>
+              {sortedItems.length === 0 ? (
+                <div className="px-4 py-3 text-xs text-gray-400 dark:text-slate-500 italic">No selections yet.</div>
+              ) : (
+                <table className="w-full text-sm">
+                  <thead className="text-xs font-semibold text-gray-500 dark:text-slate-400 uppercase">
+                    <tr>
+                      <th className="px-4 py-2 text-left">Category</th>
+                      <th className="px-4 py-2 text-left">Item</th>
+                      <th className="px-4 py-2 text-right">Count</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y dark:divide-slate-700">
+                    {sortedItems.map((it) => (
+                      <tr key={it.item_id}>
+                        <td className="px-4 py-1.5 text-xs text-gray-500 dark:text-slate-400">{it.category_name}</td>
+                        <td className="px-4 py-1.5 dark:text-slate-200">{it.name}</td>
+                        <td className="px-4 py-1.5 text-right font-bold text-indigo-600 dark:text-indigo-400">{it.count}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              )}
+            </div>
+
+            <div className="border dark:border-slate-700 rounded-lg overflow-hidden">
+              <div className="bg-slate-50 dark:bg-slate-700 px-4 py-2 text-sm font-semibold dark:text-white">Combination totals</div>
+              {sortedCombos.length === 0 ? (
+                <div className="px-4 py-3 text-xs text-gray-400 dark:text-slate-500 italic">No combo selections.</div>
+              ) : (
+                <table className="w-full text-sm">
+                  <thead className="text-xs font-semibold text-gray-500 dark:text-slate-400 uppercase">
+                    <tr>
+                      <th className="px-4 py-2 text-left">Combination</th>
+                      <th className="px-4 py-2 text-right">Count</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y dark:divide-slate-700">
+                    {sortedCombos.map((c) => (
+                      <tr key={c.combination_id}>
+                        <td className="px-4 py-1.5 dark:text-slate-200">{c.name}</td>
+                        <td className="px-4 py-1.5 text-right font-bold text-indigo-600 dark:text-indigo-400">{c.count}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              )}
+            </div>
+          </div>
+
+          <div className="pt-2 border-t dark:border-slate-700 space-y-3">
+            <div className="flex flex-wrap items-end gap-3">
+              <div className="flex-1 min-w-[12rem]">
+                <label className="block text-xs font-semibold text-gray-600 dark:text-slate-300 mb-1">Search</label>
+                <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Name or email…"
+                  className="w-full border border-gray-300 dark:border-slate-700 rounded-lg px-3 py-2 text-sm bg-white dark:bg-slate-700 text-gray-900 dark:text-white" />
+              </div>
+              <div>
+                <label className="block text-xs font-semibold text-gray-600 dark:text-slate-300 mb-1">Status</label>
+                <select value={statusF} onChange={(e) => setStatusF(e.target.value)}
+                  className="border border-gray-300 dark:border-slate-700 rounded-lg px-3 py-2 text-sm bg-white dark:bg-slate-700 text-gray-900 dark:text-white">
+                  <option value="all">All</option>
+                  <option value="pending">Only pending</option>
+                  <option value="served">Only served</option>
+                </select>
+              </div>
+              <div>
+                <label className="block text-xs font-semibold text-gray-600 dark:text-slate-300 mb-1">Table</label>
+                <select value={tableF} onChange={(e) => setTableF(e.target.value)}
+                  className="border border-gray-300 dark:border-slate-700 rounded-lg px-3 py-2 text-sm bg-white dark:bg-slate-700 text-gray-900 dark:text-white">
+                  <option value="all">All tables</option>
+                  {tables.map((t) => <option key={t} value={t}>{t}</option>)}
+                </select>
+              </div>
+              <div className="flex gap-1 ml-auto rounded-lg bg-slate-100 dark:bg-slate-700 p-1">
+                <button onClick={() => setViewMode('table')}
+                  className={`px-3 py-1 rounded text-xs font-semibold transition-colors ${
+                    viewMode === 'table' ? 'bg-white dark:bg-slate-900 text-amber-700 dark:text-amber-300 shadow' : 'text-slate-600 dark:text-slate-300'
+                  }`}>By table</button>
+                <button onClick={() => setViewMode('guest')}
+                  className={`px-3 py-1 rounded text-xs font-semibold transition-colors ${
+                    viewMode === 'guest' ? 'bg-white dark:bg-slate-900 text-indigo-700 dark:text-indigo-300 shadow' : 'text-slate-600 dark:text-slate-300'
+                  }`}>By guest</button>
+              </div>
+              <span className="text-xs text-gray-500 dark:text-slate-400">
+                {filtered.length} of {data.guests.length}
+              </span>
+            </div>
+
+            {viewMode === 'table' && (
+              <div className="space-y-4">
+                {tableGroups.length === 0 && (
+                  <div className="text-center text-sm text-gray-400 dark:text-slate-500 italic py-6">
+                    No guests match these filters.
+                  </div>
+                )}
+                {tableGroups.map((tg) => (
+                  <div key={tg.tableName} className="border-2 border-amber-300 dark:border-amber-700 rounded-xl overflow-hidden">
+                    <div className="bg-amber-400 dark:bg-amber-700 px-4 py-3 flex items-center justify-between gap-3 flex-wrap">
+                      <div className="flex items-center gap-3">
+                        <div className="text-lg font-bold text-white">{tg.tableName}</div>
+                        <span className="text-xs font-semibold bg-white/20 text-white px-2 py-0.5 rounded">
+                          {tg.guests.length} guest{tg.guests.length === 1 ? '' : 's'} · {tg.served}/{tg.total} served
+                        </span>
+                      </div>
+                      {tg.totals.length > 0 && (
+                        <div className="flex flex-wrap gap-1.5 justify-end">
+                          {tg.totals.map(([name, n]) => (
+                            <span key={name} className="bg-white/95 dark:bg-slate-900 text-amber-800 dark:text-amber-300 px-2.5 py-1 rounded-full text-xs font-bold whitespace-nowrap">
+                              {name} × {n}
+                            </span>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                    <div className="divide-y dark:divide-slate-700 bg-white dark:bg-slate-900">
+                      {tg.guests.map((g) => (
+                        <div key={g.guest_id} className="p-3 flex flex-wrap items-start gap-3">
+                          <div className="shrink-0 w-12 text-center">
+                            <div className="text-[10px] uppercase text-slate-400 leading-none">Seat</div>
+                            <div className="text-2xl font-extrabold text-slate-700 dark:text-slate-200 leading-tight">
+                              {g.seat_number ?? '–'}
+                            </div>
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center gap-2">
+                              <span className="font-semibold dark:text-slate-100 truncate">{g.name}</span>
+                              {g.is_vip && <VipBadge />}
+                            </div>
+                            <div className="mt-1">{renderChoices(g)}</div>
+                          </div>
+                          <div className="flex flex-col items-end gap-1.5 shrink-0">
+                            {!g.admitted && (
+                              <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-semibold bg-slate-100 text-slate-500 dark:bg-slate-700 dark:text-slate-400">
+                                Not arrived
+                              </span>
+                            )}
+                            <button
+                              onClick={() => markServed(g.guest_id)}
+                              disabled={g.meal_served || working === g.guest_id || !g.admitted}
+                              title={!g.admitted ? 'Guest not admitted yet' : ''}
+                              className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-colors disabled:cursor-not-allowed ${
+                                g.meal_served
+                                  ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300'
+                                  : 'bg-amber-500 hover:bg-amber-600 text-white disabled:opacity-40'
+                              }`}
+                            >
+                              {g.meal_served ? 'Served ✓' : working === g.guest_id ? '…' : 'Mark served'}
+                            </button>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {viewMode === 'guest' && (
+            <div className="overflow-x-auto border dark:border-slate-700 rounded-lg">
+              <table className="w-full text-sm">
+                <thead className="bg-gray-50 dark:bg-slate-700 text-xs font-semibold text-gray-500 dark:text-slate-400 uppercase">
+                  <tr>
+                    <th className="px-4 py-2 text-left">Name</th>
+                    <th className="px-4 py-2 text-left">Table / Seat</th>
+                    <th className="px-4 py-2 text-center">Admitted</th>
+                    <th className="px-4 py-2 text-left">Choices</th>
+                    <th className="px-4 py-2 text-center">Meal served</th>
+                    <th className="px-4 py-2 text-center">Action</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-100 dark:divide-slate-700">
+                  {filtered.map((g) => (
+                    <tr key={g.guest_id} className="hover:bg-gray-50 dark:hover:bg-slate-700/60 align-top">
+                      <td className="px-4 py-2.5">
+                        <div className="flex items-center gap-2">
+                          <span className="font-medium dark:text-slate-100">{g.name}</span>
+                          {g.is_vip && <VipBadge />}
+                        </div>
+                        {g.email && <div className="text-xs text-gray-400 dark:text-slate-500">{g.email}</div>}
+                      </td>
+                      <td className="px-4 py-2.5 text-xs text-gray-600 dark:text-slate-300">
+                        {g.table_name
+                          ? <>{g.table_name}{g.seat_number != null ? ` · seat ${g.seat_number}` : ''}</>
+                          : <span className="italic text-gray-400 dark:text-slate-500">unassigned</span>}
+                      </td>
+                      <td className="px-4 py-2.5 text-center">
+                        {g.admitted
+                          ? <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-400">Yes</span>
+                          : <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-500 dark:bg-slate-700 dark:text-slate-400">No</span>}
+                      </td>
+                      <td className="px-4 py-2.5">{renderChoices(g)}</td>
+                      <td className="px-4 py-2.5 text-center">
+                        {g.meal_served
+                          ? <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300">Served ✓</span>
+                          : <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-500 dark:bg-slate-700 dark:text-slate-400">Pending</span>}
+                      </td>
+                      <td className="px-4 py-2.5 text-center">
+                        <button
+                          onClick={() => markServed(g.guest_id)}
+                          disabled={g.meal_served || working === g.guest_id || !g.admitted}
+                          title={!g.admitted ? 'Guest not admitted yet' : ''}
+                          className="bg-amber-500 text-white px-3 py-1 rounded-lg text-xs font-semibold hover:bg-amber-600 disabled:opacity-40 disabled:cursor-not-allowed"
+                        >
+                          {g.meal_served ? 'Served' : working === g.guest_id ? '…' : 'Mark served'}
+                        </button>
+                      </td>
+                    </tr>
+                  ))}
+                  {filtered.length === 0 && (
+                    <tr>
+                      <td colSpan={6} className="px-4 py-6 text-center text-sm text-gray-400 dark:text-slate-500 italic">
+                        No guests match these filters.
+                      </td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+            )}
+          </div>
+        </>
+      )}
     </div>
   )
 }
@@ -573,6 +1604,15 @@ function TeamPanel({ eventId }) {
     finally { setLoading(false) }
   }
 
+  async function toggleMenuPerm(userId, current) {
+    setLoading(true)
+    try {
+      await api.updateMemberPermissions(eventId, userId, { can_manage_menu: !current })
+      setMembers((prev) => prev.map((m) => m.user.id === userId ? { ...m, can_manage_menu: !current } : m))
+    } catch (e) { setMsg(e.message) }
+    finally { setLoading(false) }
+  }
+
   const roleTag = (role) => (
     <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${role === 'admin' ? 'bg-indigo-100 text-indigo-700 dark:bg-indigo-900/50 dark:text-indigo-300' : 'bg-amber-100 text-amber-700 dark:bg-amber-900/50 dark:text-amber-300'}`}>
       {role}
@@ -601,18 +1641,32 @@ function TeamPanel({ eventId }) {
               <div className="flex items-center gap-2 flex-wrap">
                 {roleTag(m.user.role)}
                 {m.user.role === 'official' && (
-                  <button
-                    onClick={() => toggleSeatPerm(m.user.id, m.can_reassign_seats)}
-                    disabled={loading}
-                    title="Can reassign seats"
-                    className={`text-xs px-2 py-0.5 rounded-full font-medium border transition-colors disabled:opacity-50 ${
-                      m.can_reassign_seats
-                        ? 'bg-green-100 text-green-700 border-green-200 dark:bg-green-900/40 dark:text-green-400 dark:border-green-800'
-                        : 'bg-gray-100 text-gray-500 border-gray-200 dark:bg-slate-700 dark:text-slate-400 dark:border-slate-600'
-                    }`}
-                  >
-                    Seats: {m.can_reassign_seats ? 'Yes' : 'No'}
-                  </button>
+                  <>
+                    <button
+                      onClick={() => toggleSeatPerm(m.user.id, m.can_reassign_seats)}
+                      disabled={loading}
+                      title="Can reassign seats"
+                      className={`text-xs px-2 py-0.5 rounded-full font-medium border transition-colors disabled:opacity-50 ${
+                        m.can_reassign_seats
+                          ? 'bg-green-100 text-green-700 border-green-200 dark:bg-green-900/40 dark:text-green-400 dark:border-green-800'
+                          : 'bg-gray-100 text-gray-500 border-gray-200 dark:bg-slate-700 dark:text-slate-400 dark:border-slate-600'
+                      }`}
+                    >
+                      Seats: {m.can_reassign_seats ? 'Yes' : 'No'}
+                    </button>
+                    <button
+                      onClick={() => toggleMenuPerm(m.user.id, m.can_manage_menu)}
+                      disabled={loading}
+                      title="Can manage menu"
+                      className={`text-xs px-2 py-0.5 rounded-full font-medium border transition-colors disabled:opacity-50 ${
+                        m.can_manage_menu
+                          ? 'bg-green-100 text-green-700 border-green-200 dark:bg-green-900/40 dark:text-green-400 dark:border-green-800'
+                          : 'bg-gray-100 text-gray-500 border-gray-200 dark:bg-slate-700 dark:text-slate-400 dark:border-slate-600'
+                      }`}
+                    >
+                      Menu: {m.can_manage_menu ? 'Yes' : 'No'}
+                    </button>
+                  </>
                 )}
                 <button onClick={() => remove(m.user.id)} disabled={loading}
                   className="text-xs text-red-400 hover:text-red-600 disabled:opacity-40 px-2 py-1 rounded hover:bg-red-50 dark:hover:bg-red-950">
@@ -893,6 +1947,31 @@ function Badge({ on, labels }) {
 
 // ── AdminPage ─────────────────────────────────────────────────────────────────
 
+function TabBar({ tabs, active, onChange }) {
+  return (
+    <div className="bg-white dark:bg-slate-800 dark:border dark:border-slate-700/60 rounded-xl shadow overflow-hidden">
+      <div className="flex overflow-x-auto border-b dark:border-slate-700">
+        {tabs.map((t) => {
+          const isActive = active === t.id
+          return (
+            <button key={t.id} onClick={() => onChange(t.id)}
+              className={`shrink-0 px-4 sm:px-5 py-3 text-sm font-semibold transition-colors border-b-2 -mb-px ${
+                isActive
+                  ? 'border-teal-500 text-teal-700 dark:text-teal-300 bg-teal-50/50 dark:bg-teal-900/20'
+                  : 'border-transparent text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-white hover:bg-slate-50 dark:hover:bg-slate-700/50'
+              }`}>
+              {t.label}
+              {typeof t.count === 'number' && (
+                <span className={`ml-1.5 text-xs ${isActive ? 'text-teal-600' : 'text-slate-400'}`}>· {t.count}</span>
+              )}
+            </button>
+          )
+        })}
+      </div>
+    </div>
+  )
+}
+
 export default function AdminPage() {
   const [events, setEvents] = useState([])
   const [selectedId, setSelectedId] = useState('')
@@ -906,6 +1985,7 @@ export default function AdminPage() {
   const [sheetUrl, setSheetUrl] = useState('')
   const [showUrlInput, setShowUrlInput] = useState(false)
   const [selectedGuests, setSelectedGuests] = useState(new Set())
+  const [activeTab, setActiveTab] = useState('overview')
   const fileRef = useRef()
 
   const PAGE_SIZE = 50
@@ -916,6 +1996,7 @@ export default function AdminPage() {
   useEffect(() => {
     setPage(0)
     setSelectedGuests(new Set())
+    setActiveTab('overview')
     if (!selectedId) return setGuests([])
     api.listGuests(selectedId).then(setGuests).catch(console.error)
   }, [selectedId])
@@ -1155,6 +2236,20 @@ export default function AdminPage() {
 
       {event && (
         <>
+          <TabBar
+            active={activeTab}
+            onChange={setActiveTab}
+            tabs={[
+              { id: 'overview', label: 'Overview' },
+              { id: 'guests',   label: 'Guests', count: guests.length },
+              { id: 'team',     label: 'Team' },
+              ...(event.seating_enabled ? [{ id: 'seating', label: 'Seating' }] : []),
+              ...(event.menu_enabled    ? [{ id: 'menu',    label: 'Menu' }]    : []),
+            ]}
+          />
+
+          {activeTab === 'overview' && <>
+
           {/* Status controls */}
           <div className="bg-white dark:bg-slate-800 dark:border dark:border-slate-700/60 rounded-xl shadow p-6">
             <div className="flex items-center justify-between flex-wrap gap-3">
@@ -1167,6 +2262,7 @@ export default function AdminPage() {
               <strong>Ended</strong> → read-only record
             </p>
             <FeatureToggles event={event} onChanged={updateEvent} />
+            <ChannelToggles event={event} onChanged={updateEvent} />
           </div>
 
           {/* Live spreadsheet sync */}
@@ -1259,17 +2355,26 @@ export default function AdminPage() {
             </div>
           </div>
 
-          {/* Team assignment */}
-          <TeamPanel eventId={selectedId} />
+          </>}{/* end overview tab */}
 
-          {/* Seating management */}
-          {event.seating_enabled && <SeatingPanel eventId={selectedId} />}
+          {activeTab === 'team' && <TeamPanel eventId={selectedId} />}
 
-          {/* Menu management */}
-          {event.menu_enabled && <MenuPanel eventId={selectedId} />}
+          {activeTab === 'seating' && event.seating_enabled && <SeatingPanel eventId={selectedId} />}
+
+          {activeTab === 'menu' && event.menu_enabled && <>
+            <MenuPanel eventId={selectedId} />
+            <MenuDashboard eventId={selectedId} />
+          </>}
 
           {/* Guest list */}
-          {guests.length > 0 && (() => {
+          {activeTab === 'guests' && guests.length === 0 && (
+            <div className="bg-white dark:bg-slate-800 dark:border dark:border-slate-700/60 rounded-xl shadow p-10 text-center">
+              <p className="text-sm text-slate-500 dark:text-slate-400">
+                No guests yet. Go to <button onClick={() => setActiveTab('overview')} className="text-teal-600 hover:underline font-semibold">Overview</button> to upload a CSV, import from Google Sheets / OneDrive, or paste in a URL to sync.
+              </p>
+            </div>
+          )}
+          {activeTab === 'guests' && guests.length > 0 && (() => {
             const totalPages = Math.ceil(guests.length / PAGE_SIZE)
             const pageGuests = guests.slice(page * PAGE_SIZE, (page + 1) * PAGE_SIZE)
             const pageSelectedCount = pageGuests.filter((g) => selectedGuests.has(g.id)).length
@@ -1342,7 +2447,9 @@ export default function AdminPage() {
                               aria-label={`Select ${g.first_name} ${g.last_name}`}
                             />
                           </td>
-                          <td className="px-4 py-3 font-medium dark:text-slate-100">{g.first_name} {g.last_name}</td>
+                          <td className="px-4 py-3 font-medium dark:text-slate-100">
+                            <span className="inline-flex items-center gap-2">{g.first_name} {g.last_name}{g.is_vip && <VipBadge />}</span>
+                          </td>
                           <td className="px-4 py-3 text-gray-500 dark:text-slate-400 text-xs">{g.email}</td>
                           <td className="px-4 py-3 text-center"><Badge on={!!g.qr_generated_at} labels={['Ready', 'Pending']} /></td>
                           <td className="px-4 py-3 text-center"><Badge on={!!g.invite_sent_at} labels={['Sent', 'Unsent']} /></td>
@@ -1387,7 +2494,7 @@ export default function AdminPage() {
                             aria-label={`Select ${g.first_name} ${g.last_name}`}
                           />
                           <div>
-                            <div className="font-semibold text-sm dark:text-slate-100">{g.first_name} {g.last_name}</div>
+                            <div className="font-semibold text-sm dark:text-slate-100 flex items-center gap-2">{g.first_name} {g.last_name}{g.is_vip && <VipBadge />}</div>
                             <div className="text-xs text-gray-500 dark:text-slate-400 break-all">{g.email}</div>
                           </div>
                         </div>

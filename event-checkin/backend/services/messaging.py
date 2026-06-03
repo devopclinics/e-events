@@ -66,6 +66,26 @@ async def send_admission_whatsapp(*, phone: str, first_name: str, event_name: st
     )
 
 
+async def send_broadcast_sms(*, phone: str, first_name: str, message: str) -> None:
+    """Send a free-text host broadcast over SMS."""
+    if not _channel_ready("sms", phone):
+        return
+    body = f"Hi {first_name}! {message}"
+    await _send_sms(phone, body)
+
+
+async def send_broadcast_whatsapp(*, phone: str, first_name: str, message: str) -> None:
+    """Send a free-text host broadcast over WhatsApp.
+
+    Falls back to plain SMS-style text since broadcast messages don't use a
+    registered template — this only works in WhatsApp sandbox / Business API
+    sessions where a 24-hour messaging window is already open."""
+    if not _channel_ready("whatsapp", phone):
+        return
+    body = f"Hi {first_name}! {message}"
+    await _send_sms_as_whatsapp(phone, body)
+
+
 # ── internal: routing ─────────────────────────────────────────────────────────
 
 def _channel_ready(channel: str, phone: str | None) -> bool:
@@ -176,3 +196,17 @@ async def _send_whatsapp_template(*, phone: str, kind: str, params: list[str]) -
         else:
             body = " | ".join(params)  # sandbox fallback for testing
             await asyncio.to_thread(_twilio_send_sync, settings.twilio_whatsapp_from, to_addr, body=body)
+
+
+async def _send_sms_as_whatsapp(phone: str, body: str) -> None:
+    """Send a plain-text message via the WhatsApp channel (used for broadcasts
+    where no template is registered)."""
+    provider = (settings.messaging_provider or "").lower()
+    if provider == "bird":
+        await _bird_post(settings.bird_whatsapp_channel_id, {
+            "receiver": _bird_recipient(phone),
+            "body": {"type": "text", "text": {"text": body}},
+        })
+    elif provider == "twilio":
+        to_addr = phone if phone.startswith("whatsapp:") else f"whatsapp:{phone}"
+        await asyncio.to_thread(_twilio_send_sync, settings.twilio_whatsapp_from, to_addr, body=body)

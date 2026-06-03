@@ -93,6 +93,12 @@ class EventOut(BaseModel):
     source_sync_interval_seconds: int = 60
     source_last_sync_at: Optional[datetime] = None
     source_last_error: Optional[str] = None
+    # Invite / RSVP
+    rsvp_enabled: bool = False
+    invite_theme: str = "default"
+    invite_message: Optional[str] = None
+    rsvp_collect_phone: bool = True
+    rsvp_capacity: Optional[int] = None
 
 
 class EventMemberOut(BaseModel):
@@ -322,3 +328,90 @@ class MenuDashboardOut(BaseModel):
     item_totals: list[MenuItemTotal]
     combination_totals: list[MenuCombinationTotal]
     guests: list[MenuDashboardGuest]
+
+
+# ── Invite page & RSVP ───────────────────────────────────────────────────────
+
+class RSVPQuestionOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: str
+    question: str
+    question_type: str   # "text" | "select" | "boolean"
+    options: Optional[str] = None  # JSON string e.g. '["Option A","Option B"]'
+    is_required: bool
+    sort_order: int
+
+
+class RSVPQuestionCreate(BaseModel):
+    question: str
+    question_type: Literal["text", "select", "boolean"] = "text"
+    options: Optional[str] = None
+    is_required: bool = False
+    sort_order: int = 0
+
+
+class RSVPQuestionUpdate(BaseModel):
+    question: Optional[str] = None
+    question_type: Optional[Literal["text", "select", "boolean"]] = None
+    options: Optional[str] = None
+    is_required: Optional[bool] = None
+    sort_order: Optional[int] = None
+
+
+class InviteSettingsUpdate(BaseModel):
+    rsvp_enabled: Optional[bool] = None
+    invite_theme: Optional[Literal["default", "gold", "rose", "midnight", "forest"]] = None
+    invite_message: Optional[str] = None
+    rsvp_collect_phone: Optional[bool] = None
+    rsvp_capacity: Optional[int] = None
+
+
+class InvitePageOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: str
+    name: str
+    couples_name: str
+    event_date: datetime
+    description: Optional[str]
+    invite_theme: str
+    invite_message: Optional[str]
+    rsvp_enabled: bool
+    rsvp_collect_phone: bool
+    rsvp_capacity: Optional[int]
+    # rsvp_count populated by the endpoint
+    rsvp_count: int = 0
+    questions: list[RSVPQuestionOut] = []
+
+
+class RSVPSubmit(BaseModel):
+    first_name: str
+    last_name: str
+    email: EmailStr
+    phone: Optional[str] = None
+    # key = question_id, value = answer string
+    answers: dict[str, str] = {}
+
+
+class RSVPConfirm(BaseModel):
+    id: str
+    qr_token: str
+    first_name: str
+    last_name: str
+    message: str = "RSVP confirmed!"
+
+
+# ── Broadcast ────────────────────────────────────────────────────────────────
+
+class BroadcastRequest(BaseModel):
+    message: str
+    # which guests to target
+    target: Literal["all", "admitted", "not_admitted"] = "all"
+    channels: list[Literal["sms", "whatsapp"]] = ["sms"]
+
+
+class BroadcastResult(BaseModel):
+    queued: int
+    skipped_no_phone: int
+    skipped_no_consent: int

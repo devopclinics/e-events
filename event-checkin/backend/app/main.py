@@ -6,6 +6,7 @@ from .database import engine
 from .config import settings
 from .routers import events, guests, scanner, dashboard, seating, menu
 from .routers import auth as auth_router
+from .routers import invite as invite_router
 from . import sync_poller, db_migrate
 
 
@@ -44,6 +45,7 @@ app.include_router(seating.router,     prefix="/api/events", tags=["seating"])
 app.include_router(menu.router,        prefix="/api/events", tags=["menu"])
 app.include_router(scanner.router,     prefix="/api/scan",   tags=["scanner"])
 app.include_router(dashboard.router,   prefix="/api/events", tags=["dashboard"])
+app.include_router(invite_router.router, prefix="/api/invite", tags=["invite"])
 
 
 @app.get("/api/health")

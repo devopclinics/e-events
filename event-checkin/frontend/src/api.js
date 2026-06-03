@@ -138,4 +138,16 @@ export const api = {
   // Users
   listUsers:      ()             => req('GET', '/auth/users'),
   updateUserRole: (userId, role) => req('PUT', `/auth/users/${userId}/role?role=${role}`),
+
+  // ── Invite page settings (admin) ──────────────────────────────────────────
+  updateInviteSettings: (eventId, data) => req('PUT',  `/events/${eventId}/invite-settings`, data),
+  // RSVP questions CRUD (admin)
+  listRSVPQuestions:    (eventId)              => req('GET',    `/events/${eventId}/rsvp-questions`),
+  createRSVPQuestion:   (eventId, data)        => req('POST',   `/events/${eventId}/rsvp-questions`, data),
+  updateRSVPQuestion:   (eventId, qId, data)   => req('PUT',    `/events/${eventId}/rsvp-questions/${qId}`, data),
+  deleteRSVPQuestion:   (eventId, qId)         => req('DELETE', `/events/${eventId}/rsvp-questions/${qId}`),
+  // Broadcast (admin)
+  broadcast: (eventId, data) => req('POST', `/events/${eventId}/broadcast`, data),
+  // Invite page public URL helper (no auth needed)
+  inviteUrl: (eventId) => `${window.location.origin}/e/${eventId}`,
 }

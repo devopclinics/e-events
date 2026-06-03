@@ -1556,10 +1556,274 @@ function MenuDashboard({ eventId }) {
   )
 }
 
+// ── Invite & RSVP panel ───────────────────────────────────────────────────────
+
+const INVITE_THEMES = [
+  { id: 'default',  label: 'Teal (Default)' },
+  { id: 'gold',     label: 'Gold' },
+  { id: 'rose',     label: 'Rose' },
+  { id: 'midnight', label: 'Midnight' },
+  { id: 'forest',   label: 'Forest' },
+]
+
+function InvitePanel({ event, onChanged }) {
+  const [form, setForm] = useState({
+    rsvp_enabled:      event.rsvp_enabled      ?? false,
+    invite_theme:      event.invite_theme       ?? 'default',
+    invite_message:    event.invite_message     ?? '',
+    rsvp_collect_phone:event.rsvp_collect_phone ?? true,
+    rsvp_capacity:     event.rsvp_capacity      ?? '',
+  })
+  const [questions, setQuestions] = useState([])
+  const [newQ, setNewQ] = useState({ question: '', question_type: 'text', options: '', is_required: false })
+  const [loading, setLoading] = useState(false)
+  const [msg, setMsg] = useState('')
+  const [err, setErr] = useState('')
+
+  useEffect(() => {
+    api.listRSVPQuestions(event.id).then(setQuestions).catch(console.error)
+  }, [event.id])
+
+  const set = (k) => (e) => setForm((p) => ({ ...p, [k]: e.target.type === 'checkbox' ? e.target.checked : e.target.value }))
+
+  async function save() {
+    setLoading(true); setMsg(''); setErr('')
+    try {
+      const payload = {
+        ...form,
+        rsvp_capacity: form.rsvp_capacity === '' ? null : Number(form.rsvp_capacity),
+      }
+      const updated = await api.updateInviteSettings(event.id, payload)
+      onChanged(updated)
+      setMsg('Invite settings saved!')
+    } catch (e) { setErr(e.message) }
+    finally { setLoading(false) }
+  }
+
+  async function addQuestion() {
+    if (!newQ.question.trim()) return
+    try {
+      const payload = {
+        question: newQ.question.trim(),
+        question_type: newQ.question_type,
+        is_required: newQ.is_required,
+        sort_order: questions.length,
+        options: newQ.question_type === 'select' && newQ.options.trim()
+          ? JSON.stringify(newQ.options.split(',').map((s) => s.trim()).filter(Boolean))
+          : null,
+      }
+      const q = await api.createRSVPQuestion(event.id, payload)
+      setQuestions((p) => [...p, q])
+      setNewQ({ question: '', question_type: 'text', options: '', is_required: false })
+    } catch (e) { setErr(e.message) }
+  }
+
+  async function deleteQuestion(qId) {
+    await api.deleteRSVPQuestion(event.id, qId)
+    setQuestions((p) => p.filter((q) => q.id !== qId))
+  }
+
+  const inviteUrl = api.inviteUrl(event.id)
+
+  const inputCls = 'w-full border border-gray-300 dark:border-slate-600 rounded-lg px-3 py-2 text-sm bg-white dark:bg-slate-700 text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-teal-500'
+
+  return (
+    <div className="bg-white dark:bg-slate-800 dark:border dark:border-slate-700/60 rounded-xl shadow p-6 space-y-6">
+      <div className="flex items-center justify-between">
+        <h2 className="font-semibold text-base dark:text-white">Invite Page &amp; RSVP</h2>
+        <a
+          href={inviteUrl}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="text-xs text-teal-600 dark:text-teal-400 hover:underline font-medium"
+        >
+          Preview invite page ↗
+        </a>
+      </div>
+
+      {/* Share link */}
+      <div>
+        <label className="block text-xs font-semibold text-slate-500 dark:text-slate-400 mb-1">Share link</label>
+        <div className="flex gap-2">
+          <input readOnly value={inviteUrl} className={`${inputCls} text-slate-500`} />
+          <button
+            onClick={() => navigator.clipboard.writeText(inviteUrl).then(() => setMsg('Link copied!'))}
+            className="shrink-0 bg-slate-100 dark:bg-slate-700 border border-slate-300 dark:border-slate-600 text-slate-700 dark:text-slate-200 px-3 py-2 rounded-lg text-sm hover:bg-slate-200 dark:hover:bg-slate-600"
+          >
+            Copy
+          </button>
+        </div>
+      </div>
+
+      {/* Settings form */}
+      <div className="grid sm:grid-cols-2 gap-4">
+        <div className="flex items-center gap-2">
+          <input id="rsvp_enabled" type="checkbox" checked={form.rsvp_enabled} onChange={set('rsvp_enabled')} className="w-4 h-4 accent-teal-600" />
+          <label htmlFor="rsvp_enabled" className="text-sm font-medium text-slate-700 dark:text-slate-300 cursor-pointer">Enable RSVP form</label>
+        </div>
+        <div className="flex items-center gap-2">
+          <input id="collect_phone" type="checkbox" checked={form.rsvp_collect_phone} onChange={set('rsvp_collect_phone')} className="w-4 h-4 accent-teal-600" />
+          <label htmlFor="collect_phone" className="text-sm font-medium text-slate-700 dark:text-slate-300 cursor-pointer">Collect phone number</label>
+        </div>
+        <div>
+          <label className="block text-xs font-semibold text-slate-500 dark:text-slate-400 mb-1">Theme</label>
+          <select value={form.invite_theme} onChange={set('invite_theme')} className={inputCls}>
+            {INVITE_THEMES.map((t) => <option key={t.id} value={t.id}>{t.label}</option>)}
+          </select>
+        </div>
+        <div>
+          <label className="block text-xs font-semibold text-slate-500 dark:text-slate-400 mb-1">Max RSVPs (leave blank = unlimited)</label>
+          <input type="number" min="0" value={form.rsvp_capacity} onChange={set('rsvp_capacity')} className={inputCls} placeholder="e.g. 100" />
+        </div>
+      </div>
+
+      <div>
+        <label className="block text-xs font-semibold text-slate-500 dark:text-slate-400 mb-1">Invite message (shown on invite page)</label>
+        <textarea rows={3} value={form.invite_message} onChange={set('invite_message')} className={inputCls} placeholder="Add a personal message to your guests…" />
+      </div>
+
+      {msg && <div className="text-xs text-green-600 dark:text-green-400">{msg}</div>}
+      {err && <div className="text-xs text-red-600 dark:text-red-400">{err}</div>}
+
+      <button onClick={save} disabled={loading}
+        className="bg-teal-600 hover:bg-teal-700 text-white px-4 py-2 rounded-lg text-sm font-semibold disabled:opacity-50">
+        {loading ? 'Saving…' : 'Save Settings'}
+      </button>
+
+      {/* RSVP questions */}
+      <div className="border-t dark:border-slate-700 pt-4 space-y-3">
+        <h3 className="text-sm font-semibold text-slate-700 dark:text-slate-300">RSVP Questions</h3>
+        {questions.length === 0 && <p className="text-xs text-slate-400">No questions yet.</p>}
+        {questions.map((q) => (
+          <div key={q.id} className="flex items-center justify-between gap-3 bg-slate-50 dark:bg-slate-700/50 rounded-lg px-3 py-2 text-sm">
+            <div>
+              <span className="font-medium text-slate-800 dark:text-slate-200">{q.question}</span>
+              <span className="ml-2 text-xs text-slate-400">({q.question_type}{q.is_required ? ', required' : ''})</span>
+            </div>
+            <button onClick={() => deleteQuestion(q.id)} className="text-red-400 hover:text-red-600 text-xs shrink-0">Remove</button>
+          </div>
+        ))}
+        {/* Add question form */}
+        <div className="grid sm:grid-cols-3 gap-2">
+          <input
+            value={newQ.question}
+            onChange={(e) => setNewQ((p) => ({ ...p, question: e.target.value }))}
+            placeholder="Question text…"
+            className={`${inputCls} sm:col-span-2`}
+          />
+          <select value={newQ.question_type} onChange={(e) => setNewQ((p) => ({ ...p, question_type: e.target.value }))} className={inputCls}>
+            <option value="text">Text</option>
+            <option value="select">Select</option>
+            <option value="boolean">Yes/No</option>
+          </select>
+        </div>
+        {newQ.question_type === 'select' && (
+          <input
+            value={newQ.options}
+            onChange={(e) => setNewQ((p) => ({ ...p, options: e.target.value }))}
+            placeholder="Options (comma separated): Option A, Option B"
+            className={inputCls}
+          />
+        )}
+        <div className="flex items-center gap-4">
+          <label className="flex items-center gap-2 text-xs text-slate-600 dark:text-slate-400 cursor-pointer">
+            <input type="checkbox" checked={newQ.is_required} onChange={(e) => setNewQ((p) => ({ ...p, is_required: e.target.checked }))} className="w-3 h-3 accent-teal-600" />
+            Required
+          </label>
+          <button onClick={addQuestion}
+            className="bg-slate-100 dark:bg-slate-700 border border-slate-300 dark:border-slate-600 text-slate-700 dark:text-slate-200 px-3 py-1.5 rounded-lg text-xs font-semibold hover:bg-slate-200 dark:hover:bg-slate-600">
+            + Add Question
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+// ── Broadcast panel ───────────────────────────────────────────────────────────
+
+function BroadcastPanel({ event }) {
+  const [msg, setMsg] = useState('')
+  const [target, setTarget] = useState('all')
+  const [channels, setChannels] = useState(['sms'])
+  const [loading, setLoading] = useState(false)
+  const [result, setResult] = useState(null)
+  const [err, setErr] = useState('')
+
+  function toggleChannel(ch) {
+    setChannels((p) => p.includes(ch) ? p.filter((c) => c !== ch) : [...p, ch])
+  }
+
+  async function send() {
+    if (!msg.trim()) return
+    if (channels.length === 0) { setErr('Select at least one channel'); return }
+    if (!confirm(`Send broadcast to ${target === 'all' ? 'all guests' : target === 'admitted' ? 'admitted guests' : 'guests not yet admitted'}?`)) return
+    setLoading(true); setResult(null); setErr('')
+    try {
+      const res = await api.broadcast(event.id, { message: msg.trim(), target, channels })
+      setResult(res)
+      setMsg('')
+    } catch (e) { setErr(e.message) }
+    finally { setLoading(false) }
+  }
+
+  const inputCls = 'border border-gray-300 dark:border-slate-600 rounded-lg px-3 py-2 text-sm bg-white dark:bg-slate-700 text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-teal-500'
+
+  return (
+    <div className="bg-white dark:bg-slate-800 dark:border dark:border-slate-700/60 rounded-xl shadow p-6 space-y-4">
+      <h2 className="font-semibold text-base dark:text-white">📣 Broadcast Message</h2>
+      <p className="text-xs text-slate-500 dark:text-slate-400">
+        Send an update to guests — running late, venue change, add-ons, etc.
+      </p>
+
+      <textarea
+        rows={3}
+        value={msg}
+        onChange={(e) => setMsg(e.target.value)}
+        placeholder="e.g. Doors open at 7pm. Parking on Main St."
+        className={`w-full ${inputCls}`}
+      />
+
+      <div className="flex flex-wrap gap-4 items-center">
+        <div>
+          <label className="block text-xs font-semibold text-slate-500 dark:text-slate-400 mb-1">Send to</label>
+          <select value={target} onChange={(e) => setTarget(e.target.value)} className={inputCls}>
+            <option value="all">All guests</option>
+            <option value="admitted">Admitted only</option>
+            <option value="not_admitted">Not yet admitted</option>
+          </select>
+        </div>
+        <div>
+          <label className="block text-xs font-semibold text-slate-500 dark:text-slate-400 mb-1">Channels</label>
+          <div className="flex gap-3">
+            {['sms', 'whatsapp'].map((ch) => (
+              <label key={ch} className="flex items-center gap-1.5 text-sm cursor-pointer select-none text-slate-700 dark:text-slate-300">
+                <input type="checkbox" checked={channels.includes(ch)} onChange={() => toggleChannel(ch)} className="w-4 h-4 accent-teal-600" />
+                {ch.toUpperCase()}
+              </label>
+            ))}
+          </div>
+        </div>
+      </div>
+
+      {err && <div className="text-xs text-red-600 dark:text-red-400">{err}</div>}
+      {result && (
+        <div className="text-xs text-green-700 dark:text-green-400 bg-green-50 dark:bg-green-900/30 border border-green-200 dark:border-green-800 rounded-lg px-3 py-2">
+          Queued: {result.queued} · Skipped (no phone): {result.skipped_no_phone} · Skipped (no consent): {result.skipped_no_consent}
+        </div>
+      )}
+
+      <button onClick={send} disabled={loading || !msg.trim()}
+        className="bg-teal-600 hover:bg-teal-700 text-white px-4 py-2 rounded-lg text-sm font-semibold disabled:opacity-50">
+        {loading ? 'Sending…' : '📤 Send Broadcast'}
+      </button>
+    </div>
+  )
+}
+
 // ── Team panel ────────────────────────────────────────────────────────────────
 
-function TeamPanel({ eventId }) {
-  const [members, setMembers] = useState([])
+function TeamPanel({ eventId }) {  const [members, setMembers] = useState([])
   const [allUsers, setAllUsers] = useState([])
   const [selectedUserId, setSelectedUserId] = useState('')
   const [loading, setLoading] = useState(false)
@@ -2243,6 +2507,7 @@ export default function AdminPage() {
               { id: 'overview', label: 'Overview' },
               { id: 'guests',   label: 'Guests', count: guests.length },
               { id: 'team',     label: 'Team' },
+              { id: 'invite',   label: '✉️ Invite' },
               ...(event.seating_enabled ? [{ id: 'seating', label: 'Seating' }] : []),
               ...(event.menu_enabled    ? [{ id: 'menu',    label: 'Menu' }]    : []),
             ]}
@@ -2358,6 +2623,11 @@ export default function AdminPage() {
           </>}{/* end overview tab */}
 
           {activeTab === 'team' && <TeamPanel eventId={selectedId} />}
+
+          {activeTab === 'invite' && <>
+            <InvitePanel event={event} onChanged={updateEvent} />
+            <BroadcastPanel event={event} />
+          </>}
 
           {activeTab === 'seating' && event.seating_enabled && <SeatingPanel eventId={selectedId} />}
 

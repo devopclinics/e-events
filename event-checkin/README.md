@@ -46,7 +46,7 @@ nano backend/.env
 DATABASE_URL=postgresql+asyncpg://checkin:checkin@db:5432/checkin
 SECRET_KEY=<generate: openssl rand -hex 32>
 JWT_SECRET=<generate: openssl rand -hex 32>
-FRONTEND_URL=https://events.vsgs.io
+FRONTEND_URL=https://events.nihlah.io
 ```
 
 ### 3. Start everything
@@ -55,7 +55,7 @@ FRONTEND_URL=https://events.vsgs.io
 docker compose up -d --build
 ```
 
-That's it. The app is live at **http://events.vsgs.io** (once DNS is configured).
+That's it. The app is live at **http://events.nihlah.io** (once DNS is configured).
 
 ---
 
@@ -99,7 +99,7 @@ gzip -dc backups/checkin-YYYYMMDDTHHMMSSZ.sql.gz \
 
 ---
 
-## Cloudflare + Domain Setup (events.vsgs.io)
+## Cloudflare + Domain Setup (events.nihlah.io)
 
 ### DNS record
 
@@ -125,16 +125,16 @@ The `proxy.conf` already includes all Cloudflare IP ranges to restore real visit
 2. Create a project (or select existing)
 3. **APIs & Services → OAuth consent screen**
    - Choose **External**
-   - Fill in App name: `EventQR`, your email, and `vsgs.io` as the authorized domain
+   - Fill in App name: `EventQR`, your email, and `nihlah.io` as the authorized domain
 4. **APIs & Services → Credentials → Create Credentials → OAuth 2.0 Client ID**
    - Application type: **Web application**
-   - Authorized redirect URI: `https://events.vsgs.io/api/auth/google/callback`
+   - Authorized redirect URI: `https://events.nihlah.io/api/auth/google/callback`
 5. Copy the **Client ID** and **Client Secret** into `backend/.env`:
 
 ```env
 GOOGLE_CLIENT_ID=123456789-abc.apps.googleusercontent.com
 GOOGLE_CLIENT_SECRET=GOCSPX-xxxxxxxxxxxxxxxxx
-GOOGLE_REDIRECT_URI=https://events.vsgs.io/api/auth/google/callback
+GOOGLE_REDIRECT_URI=https://events.nihlah.io/api/auth/google/callback
 ```
 
 6. Restart: `docker compose restart backend`
@@ -187,7 +187,7 @@ Officials see **only** the events they have been assigned to. Admins see all eve
 
 ### Creating the first admin
 
-1. Visit `https://events.vsgs.io/register`
+1. Visit `https://events.nihlah.io/register`
 2. Select **Admin** role
 3. Fill in name, email, password — or use Google sign-in
 
@@ -245,14 +245,14 @@ Jane,Doe,jane@email.com,
 
 ## Admin Workflow (Day Before Event)
 
-1. **Create event** — name, couple's name, date, and your app URL (`https://events.vsgs.io`)
+1. **Create event** — name, couple's name, date, and your app URL (`https://events.nihlah.io`)
 2. **Upload CSV** — your guest list
 3. **Generate QR Codes** — marks all guests as QR-ready
 4. **Send Invites** — emails each guest their personal QR code
 
 ## Day-of Workflow
 
-1. **Officials** open `https://events.vsgs.io/scanner` on their phones/tablets
+1. **Officials** open `https://events.nihlah.io/scanner` on their phones/tablets
 2. Each official signs in with their account (admin or official role)
 3. Point camera at guest's QR code — the app admits instantly
 4. **Green screen** = admitted ✓ (guest also receives SMS + email)
@@ -265,7 +265,7 @@ Guests receive an email with their QR code image attached.
 
 On the day, they **show the QR code to the official** (either from email or by opening the link in the QR which shows their digital ticket).
 
-The digital ticket at `https://events.vsgs.io/scan/{token}` shows:
+The digital ticket at `https://events.nihlah.io/scan/{token}` shows:
 - Event name and couple's name
 - Guest's full name
 - Their QR code (for officials to scan from the screen)

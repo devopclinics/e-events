@@ -752,7 +752,7 @@ function EventForm({ initial, onSave, onCancel }) {
         </div>
         <div>
           <label className="block text-xs font-semibold text-gray-600 mb-1">App Base URL *</label>
-          <input className={field} value={form.checkin_base_url} onChange={set('checkin_base_url')} required placeholder="https://events.vsgs.io" />
+          <input className={field} value={form.checkin_base_url} onChange={set('checkin_base_url')} required placeholder="https://events.nihlah.io" />
         </div>
       </div>
       <div>

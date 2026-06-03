@@ -203,7 +203,7 @@ function iosCameraHelp(err) {
     if (isIOS) {
       lines.push('iPhone fix:')
       lines.push('1. Settings → Safari → Camera → set to "Ask" or "Allow"')
-      lines.push('2. Settings → Safari → Advanced → Website Data → search "vsgs.io" → delete')
+      lines.push('2. Settings → Safari → Advanced → Website Data → search "nihlah.io" → delete')
       lines.push('3. Reload this page and tap Start Camera again')
     } else {
       lines.push('Tap the camera icon in the address bar and choose "Allow" for this site, then reload.')

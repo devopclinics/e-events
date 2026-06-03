@@ -31,8 +31,8 @@ Admin                 Guest                        Official
 ### 1. Clone and configure
 
 ```bash
-git clone https://github.com/devopclinics/platform-tutor.git
-cd platform-tutor/event-checkin
+git clone https://github.com/devopclinics/e-events.git
+cd e-events/event-checkin
 
 # Copy and edit environment variables
 cp backend/.env.example backend/.env

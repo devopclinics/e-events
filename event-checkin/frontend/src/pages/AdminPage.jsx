@@ -1576,6 +1576,7 @@ function InvitePanel({ event, onChanged }) {
     rsvp_capacity:     event.rsvp_capacity      ?? '',
     invite_mode:       event.invite_mode        ?? 'open',
     rsvp_deadline:     event.rsvp_deadline ? event.rsvp_deadline.slice(0, 16) : '',
+    rsvp_require_approval: event.rsvp_require_approval ?? false,
   })
   const [questions, setQuestions] = useState([])
   const [newQ, setNewQ] = useState({ question: '', question_type: 'text', options: '', is_required: false })
@@ -1747,6 +1748,16 @@ function InvitePanel({ event, onChanged }) {
       {form.invite_mode === 'closed' && (
         <div className="rounded-lg bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 px-3 py-2 text-xs text-amber-800 dark:text-amber-300">
           🔒 Closed mode: the public event link is disabled. Each guest gets a unique RSVP link — use the <span className="font-semibold">Invite</span> tab to send them, or copy a guest's link from the list. They confirm or decline, and their ticket QR is issued only after they confirm.
+        </div>
+      )}
+
+      {form.invite_mode === 'open' && (
+        <div className="flex items-start gap-2">
+          <input id="require_approval" type="checkbox" checked={form.rsvp_require_approval} onChange={set('rsvp_require_approval')} className="w-4 h-4 mt-0.5 accent-teal-600" />
+          <label htmlFor="require_approval" className="text-sm text-slate-700 dark:text-slate-300 cursor-pointer">
+            <span className="font-medium">Require approval for RSVPs</span>
+            <span className="block text-xs text-slate-500 dark:text-slate-400">Self-registrations land as “Pending” — no ticket is sent until you approve them in the Guests tab.</span>
+          </label>
         </div>
       )}
 
@@ -2417,6 +2428,7 @@ function RsvpStatusBadge({ status }) {
   const map = {
     confirmed: { label: '✓ Attending', cls: 'bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-300' },
     declined:  { label: '✗ Declined',  cls: 'bg-red-100 text-red-600 dark:bg-red-900/40 dark:text-red-300' },
+    pending:   { label: '⏳ Pending',   cls: 'bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300' },
     invited:   { label: 'No reply',    cls: 'bg-gray-100 text-gray-500 dark:bg-slate-700 dark:text-slate-400' },
   }
   const c = map[status] || map.invited
@@ -2654,11 +2666,46 @@ export default function AdminPage() {
     } catch (err) { flash(err.message, true) }
   }
 
+  async function handleApproveRsvp(guestId) {
+    setLoading(true)
+    try {
+      await api.approveRsvp(selectedId, guestId)
+      flash('RSVP approved — ticket sent.')
+      setGuests(await api.listGuests(selectedId))
+    } catch (err) { flash(err.message, true) }
+    finally { setLoading(false) }
+  }
+
+  async function handleRejectRsvp(guestId) {
+    if (!confirm('Reject this RSVP? The guest will be marked declined (no ticket).')) return
+    setLoading(true)
+    try {
+      await api.rejectRsvp(selectedId, guestId)
+      flash('RSVP rejected.')
+      setGuests(await api.listGuests(selectedId))
+    } catch (err) { flash(err.message, true) }
+    finally { setLoading(false) }
+  }
+
+  async function handleApproveAll() {
+    const pendingIds = guests.filter((g) => g.rsvp_status === 'pending').map((g) => g.id)
+    if (pendingIds.length === 0) return
+    if (!confirm(`Approve all ${pendingIds.length} pending RSVP(s) and send their tickets?`)) return
+    setLoading(true)
+    try {
+      for (const id of pendingIds) await api.approveRsvp(selectedId, id)
+      flash(`Approved ${pendingIds.length} RSVP(s).`)
+      setGuests(await api.listGuests(selectedId))
+    } catch (err) { flash(err.message, true) }
+    finally { setLoading(false) }
+  }
+
   const stats = {
     total: guests.length,
     qr: guests.filter((g) => g.qr_generated_at).length,
     invited: guests.filter((g) => g.invite_sent_at).length,
     admitted: guests.filter((g) => g.admitted).length,
+    pending: guests.filter((g) => g.rsvp_status === 'pending').length,
   }
 
   return (
@@ -2920,6 +2967,17 @@ export default function AdminPage() {
             const pageAllSelected = pageGuests.length > 0 && pageSelectedCount === pageGuests.length
             return (
               <div className="bg-white dark:bg-slate-800 dark:border dark:border-slate-700/60 rounded-xl shadow overflow-hidden">
+                {stats.pending > 0 && (
+                  <div className="px-4 sm:px-6 py-3 bg-amber-50 dark:bg-amber-900/30 border-b border-amber-200 dark:border-amber-800 flex items-center gap-3 flex-wrap">
+                    <span className="text-sm font-semibold text-amber-900 dark:text-amber-200">
+                      ⏳ {stats.pending} RSVP{stats.pending === 1 ? '' : 's'} awaiting approval
+                    </span>
+                    <button onClick={handleApproveAll} disabled={loading}
+                      className="bg-green-600 text-white px-3 py-1.5 rounded-lg text-xs font-semibold hover:bg-green-700 disabled:opacity-50 ml-auto">
+                      Approve all
+                    </button>
+                  </div>
+                )}
                 {selectedGuests.size > 0 && (
                   <div className="px-4 sm:px-6 py-3 bg-indigo-50 dark:bg-indigo-900/30 border-b border-indigo-200 dark:border-indigo-800 flex items-center gap-3 flex-wrap">
                     <span className="text-sm font-semibold text-indigo-900 dark:text-indigo-100">
@@ -3003,6 +3061,14 @@ export default function AdminPage() {
                           </td>
                           <td className="px-4 py-3 text-center">
                             <div className="flex items-center justify-center gap-3">
+                              {g.rsvp_status === 'pending' && (
+                                <>
+                                  <button onClick={() => handleApproveRsvp(g.id)} disabled={loading}
+                                    className="text-xs font-semibold text-green-600 hover:underline disabled:opacity-40">Approve</button>
+                                  <button onClick={() => handleRejectRsvp(g.id)} disabled={loading}
+                                    className="text-xs text-red-500 hover:underline disabled:opacity-40">Reject</button>
+                                </>
+                              )}
                               {event?.invite_mode === 'closed' && (
                                 <button onClick={() => handleCopyInviteLink(g.id)}
                                   className="text-xs text-teal-600 hover:underline">Copy link</button>
@@ -3055,6 +3121,14 @@ export default function AdminPage() {
                         <RsvpStatusBadge status={g.rsvp_status} />
                       </div>
                       <div className="flex gap-4 pt-1">
+                        {g.rsvp_status === 'pending' && (
+                          <>
+                            <button onClick={() => handleApproveRsvp(g.id)} disabled={loading}
+                              className="text-xs font-semibold text-green-600 hover:underline disabled:opacity-40">Approve</button>
+                            <button onClick={() => handleRejectRsvp(g.id)} disabled={loading}
+                              className="text-xs text-red-500 hover:underline disabled:opacity-40">Reject</button>
+                          </>
+                        )}
                         {event?.invite_mode === 'closed' && (
                           <button onClick={() => handleCopyInviteLink(g.id)}
                             className="text-xs text-teal-600 hover:underline">Copy RSVP link</button>

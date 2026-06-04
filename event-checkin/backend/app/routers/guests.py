@@ -473,6 +473,40 @@ async def resend_invite(event_id: str, guest_id: str, background_tasks: Backgrou
     return {"ok": True}
 
 
+@router.post("/{event_id}/guests/{guest_id}/approve")
+async def approve_rsvp(event_id: str, guest_id: str, background_tasks: BackgroundTasks, db: AsyncSession = Depends(get_db), _: User = Depends(require_admin)):
+    """Approve a pending self-registered RSVP: confirm the guest, issue their QR,
+    and send the ticket. No-op-safe if the guest is already confirmed."""
+    event = await db.get(Event, event_id)
+    if not event:
+        raise HTTPException(404, "Event not found")
+    guest = await db.get(Guest, guest_id)
+    if not guest or guest.event_id != event_id:
+        raise HTTPException(404, "Guest not found")
+
+    now = datetime.utcnow()
+    guest.rsvp_status = "confirmed"
+    if not guest.qr_generated_at:
+        guest.qr_generated_at = now
+    guest.invite_sent_at = now
+    _dispatch_invite(background_tasks, event, guest)
+    await db.commit()
+    return {"ok": True, "rsvp_status": "confirmed"}
+
+
+@router.post("/{event_id}/guests/{guest_id}/reject")
+async def reject_rsvp(event_id: str, guest_id: str, db: AsyncSession = Depends(get_db), _: User = Depends(require_admin)):
+    """Reject a pending RSVP — marks the guest declined (no ticket). Keeps the
+    record so the planner has a history; use delete to remove entirely."""
+    guest = await db.get(Guest, guest_id)
+    if not guest or guest.event_id != event_id:
+        raise HTTPException(404, "Guest not found")
+    guest.rsvp_status = "declined"
+    guest.rsvp_responded_at = datetime.utcnow()
+    await db.commit()
+    return {"ok": True, "rsvp_status": "declined"}
+
+
 @router.post("/{event_id}/guests/{guest_id}/invite-token")
 async def ensure_invite_token(event_id: str, guest_id: str, db: AsyncSession = Depends(get_db), _: User = Depends(require_admin)):
     """Mint (or return) a guest's personal RSVP-link token so the planner can

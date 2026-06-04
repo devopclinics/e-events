@@ -103,6 +103,7 @@ class EventOut(BaseModel):
     invite_cover_image: Optional[str] = None
     invite_mode: str = "open"
     rsvp_deadline: Optional[datetime] = None
+    rsvp_require_approval: bool = False
 
 
 class EventMemberOut(BaseModel):
@@ -376,6 +377,7 @@ class InviteSettingsUpdate(BaseModel):
     invite_cover_image: Optional[str] = None
     invite_mode: Optional[Literal["open", "closed"]] = None
     rsvp_deadline: Optional[datetime] = None
+    rsvp_require_approval: Optional[bool] = None
 
 
 class InvitePageOut(BaseModel):

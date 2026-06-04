@@ -77,6 +77,9 @@ class Event(Base):
     invite_mode: Mapped[str] = mapped_column(String(20), default="open")
     # RSVP cutoff. After this instant the invite page is read-only. None = no deadline.
     rsvp_deadline: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    # Open mode only: when True, self-service RSVPs land as "pending" and a
+    # planner must approve before a ticket is issued. No effect in closed mode.
+    rsvp_require_approval: Mapped[bool] = mapped_column(Boolean, default=False)
 
     members: Mapped[list["EventUser"]] = relationship("EventUser", back_populates="event", cascade="all, delete-orphan")
     guests: Mapped[list["Guest"]] = relationship("Guest", back_populates="event", cascade="all, delete-orphan")

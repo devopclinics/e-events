@@ -222,15 +222,23 @@ async def submit_rsvp(
                 "Phone format not recognised. Use E.164 (e.g. +18327941707) or US 10-digit.",
             )
 
+    # When the event requires approval, self-registrations land as "pending":
+    # no ticket is issued until a planner approves. Otherwise confirm instantly.
+    needs_approval = event.rsvp_require_approval
+    now = datetime.utcnow()
+
     guest = Guest(
         event_id=event_id,
         first_name=data.first_name.strip(),
         last_name=data.last_name.strip(),
         email=email,
         phone=phone,
-        qr_generated_at=datetime.utcnow(),
-        rsvp_status="confirmed",
-        rsvp_responded_at=datetime.utcnow(),
+        qr_generated_at=None if needs_approval else now,
+        # invite_sent_at marks that we've delivered their ticket — set it here for
+        # instant confirmations so self-registrations count as "invited" in stats.
+        invite_sent_at=None if needs_approval else now,
+        rsvp_status="pending" if needs_approval else "confirmed",
+        rsvp_responded_at=now,
     )
     db.add(guest)
     await db.flush()
@@ -240,14 +248,24 @@ async def submit_rsvp(
     await db.commit()
     await db.refresh(guest)
 
-    # Fire invite notifications in the background
-    _send_rsvp_invite(background_tasks, event, guest)
+    if needs_approval:
+        return RSVPConfirm(
+            id=guest.id,
+            qr_token=guest.qr_token,
+            first_name=guest.first_name,
+            last_name=guest.last_name,
+            rsvp_status="pending",
+            message="RSVP received! The host will confirm your spot and email your ticket.",
+        )
 
+    # Approved automatically — fire the ticket in the background.
+    _send_rsvp_invite(background_tasks, event, guest)
     return RSVPConfirm(
         id=guest.id,
         qr_token=guest.qr_token,
         first_name=guest.first_name,
         last_name=guest.last_name,
+        rsvp_status="confirmed",
         message="RSVP confirmed! Check your email for your ticket.",
     )
 

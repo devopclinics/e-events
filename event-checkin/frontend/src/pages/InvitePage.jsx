@@ -248,6 +248,19 @@ function ConfirmView({ confirm, event, theme }) {
   )
 }
 
+function PendingView({ confirm }) {
+  return (
+    <div className="text-center space-y-3 py-4">
+      <div className="text-5xl">⏳</div>
+      <div className="text-xl font-bold text-slate-900 dark:text-white">Thanks, {confirm.first_name}!</div>
+      <div className="text-sm text-slate-500 dark:text-slate-400">{confirm.message}</div>
+      <div className="text-xs text-slate-400 dark:text-slate-500">
+        You'll receive your ticket by email once the host confirms your spot.
+      </div>
+    </div>
+  )
+}
+
 function DeclinedView({ confirm }) {
   return (
     <div className="text-center space-y-3 py-4">
@@ -512,7 +525,9 @@ export default function InvitePage() {
             {confirmed ? (
               confirmed.rsvp_status === 'declined'
                 ? <DeclinedView confirm={confirmed} />
-                : <ConfirmView confirm={confirmed} event={event} theme={theme} />
+                : confirmed.rsvp_status === 'pending'
+                  ? <PendingView confirm={confirmed} />
+                  : <ConfirmView confirm={confirmed} event={event} theme={theme} />
             ) : tokenMode ? (
               /* ── Personalised (closed-mode) invite ── */
               deadlinePassed ? (

@@ -2847,6 +2847,52 @@ export default function AdminPage() {
           {activeTab === 'team' && <TeamPanel eventId={selectedId} />}
 
           {activeTab === 'invite' && <>
+            {event.invite_mode === 'closed' && (() => {
+              const notInvited = guests.filter((g) => !g.invite_sent_at)
+              const noReply = guests.filter((g) => g.rsvp_status === 'invited')
+              const btn = 'px-4 py-2 rounded-lg text-sm font-semibold disabled:opacity-50'
+              return (
+                <div className="bg-white dark:bg-slate-800 dark:border dark:border-slate-700/60 rounded-xl shadow p-6 space-y-4">
+                  <div>
+                    <h2 className="font-semibold text-base dark:text-white">✉️ Bulk RSVP invites</h2>
+                    <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
+                      Send each guest their personal RSVP link across the event's enabled channels (email / SMS / WhatsApp). They confirm or decline — tickets are issued only after they confirm.
+                    </p>
+                  </div>
+                  <div className="flex flex-wrap gap-3">
+                    <button
+                      onClick={() => handleSendBatch({ ids: notInvited.map((g) => g.id), force: true, label: 'RSVP invites' })}
+                      disabled={loading || notInvited.length === 0}
+                      className={`bg-teal-600 text-white hover:bg-teal-700 ${btn}`}>
+                      Send to not-yet-invited ({notInvited.length})
+                    </button>
+                    <button
+                      onClick={() => {
+                        if (noReply.length === 0) return
+                        if (!confirm(`Re-send the RSVP link to ${noReply.length} guest(s) who haven't replied yet?`)) return
+                        handleSendBatch({ ids: noReply.map((g) => g.id), force: true, label: 'RSVP reminders' })
+                      }}
+                      disabled={loading || noReply.length === 0}
+                      className={`bg-amber-500 text-white hover:bg-amber-600 ${btn}`}>
+                      Remind no-reply ({noReply.length})
+                    </button>
+                    <button
+                      onClick={() => {
+                        if (guests.length === 0) return
+                        if (!confirm(`Resend the RSVP link to ALL ${guests.length} guests, including those who already replied?`)) return
+                        handleSendBatch({ ids: null, force: true, label: 'RSVP invites' })
+                      }}
+                      disabled={loading || guests.length === 0}
+                      className={`bg-white dark:bg-slate-700 border border-amber-300 dark:border-amber-700 text-amber-700 dark:text-amber-300 hover:bg-amber-50 dark:hover:bg-slate-600 ${btn}`}>
+                      Resend to all ({guests.length})
+                    </button>
+                  </div>
+                  <p className="text-xs text-slate-400 dark:text-slate-500">
+                    Guests without a usable contact for any enabled channel are skipped. Manage individual links in the <button onClick={() => setActiveTab('guests')} className="text-teal-600 hover:underline font-semibold">Guests</button> tab.
+                  </p>
+                </div>
+              )
+            })()}
             <InvitePanel event={event} onChanged={updateEvent} />
             <ManualInvitePanel event={event} />
             <BroadcastPanel event={event} />

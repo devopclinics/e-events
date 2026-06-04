@@ -154,8 +154,8 @@ function RSVPForm({ event, theme, onConfirmed }) {
           answers,
         }),
       })
-      const data = await res.json()
-      if (!res.ok) throw new Error(data.detail || 'RSVP failed')
+      const data = await res.json().catch(() => null)
+      if (!res.ok) throw new Error(data?.detail || 'Something went wrong — please try again.')
       onConfirmed(data)
     } catch (err) {
       setError(err.message)
@@ -248,26 +248,176 @@ function ConfirmView({ confirm, event, theme }) {
   )
 }
 
+function DeclinedView({ confirm }) {
+  return (
+    <div className="text-center space-y-3 py-4">
+      <div className="text-5xl">💌</div>
+      <div className="text-xl font-bold text-slate-900 dark:text-white">
+        Thanks, {confirm.first_name}.
+      </div>
+      <div className="text-sm text-slate-500 dark:text-slate-400">{confirm.message}</div>
+      <div className="text-xs text-slate-400 dark:text-slate-500">
+        Changed your mind? You can still confirm below until the RSVP deadline.
+      </div>
+    </div>
+  )
+}
+
+// ── Personalised (token) RSVP form — confirm or decline ─────────────────────────
+
+function TokenRSVPForm({ event, prefill, token, theme, onDone }) {
+  const t = THEMES[theme] || THEMES.default
+  const [form, setForm] = useState({
+    first_name: prefill.first_name || '',
+    last_name: prefill.last_name || '',
+    phone: prefill.phone || '',
+  })
+  const [answers, setAnswers] = useState({})
+  const [loading, setLoading] = useState('')   // '' | 'confirmed' | 'declined'
+  const [error, setError] = useState('')
+
+  const set = (k) => (e) => setForm((p) => ({ ...p, [k]: e.target.value }))
+  const inputCls = `w-full rounded-lg border px-3 py-2.5 text-sm bg-white dark:bg-slate-700 text-slate-900 dark:text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-offset-0 ${t.border}`
+  const lockedCls = `w-full rounded-lg border px-3 py-2.5 text-sm bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400 cursor-not-allowed ${t.border}`
+
+  async function submit(status) {
+    setError('')
+    if (status === 'confirmed') {
+      if (!form.first_name.trim() || !form.last_name.trim()) {
+        setError('Please enter your first and last name.')
+        return
+      }
+      const missing = (event.questions || []).find(
+        (q) => q.is_required && !(answers[q.id] || '').trim(),
+      )
+      if (missing) { setError(`Please answer: ${missing.question}`); return }
+    }
+    setLoading(status)
+    try {
+      const res = await fetch(`/api/invite/token/${token}/rsvp`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          status,
+          first_name: form.first_name.trim(),
+          last_name: form.last_name.trim(),
+          phone: form.phone.trim() || undefined,
+          answers,
+        }),
+      })
+      const data = await res.json().catch(() => null)
+      if (!res.ok) throw new Error(data?.detail || 'Something went wrong — please try again.')
+      onDone(data)
+    } catch (err) {
+      setError(err.message)
+    } finally {
+      setLoading('')
+    }
+  }
+
+  return (
+    <div className="space-y-4">
+      <div className="grid grid-cols-2 gap-3">
+        <div>
+          <label className="block text-xs font-semibold text-slate-500 dark:text-slate-400 mb-1">First name *</label>
+          <input value={form.first_name} onChange={set('first_name')} className={inputCls} placeholder="Jane" />
+        </div>
+        <div>
+          <label className="block text-xs font-semibold text-slate-500 dark:text-slate-400 mb-1">Last name *</label>
+          <input value={form.last_name} onChange={set('last_name')} className={inputCls} placeholder="Smith" />
+        </div>
+      </div>
+
+      {prefill.email && (
+        <div>
+          <label className="block text-xs font-semibold text-slate-500 dark:text-slate-400 mb-1">Email</label>
+          <input value={prefill.email} disabled readOnly className={lockedCls} />
+        </div>
+      )}
+
+      {event.rsvp_collect_phone && (
+        <div>
+          <label className="block text-xs font-semibold text-slate-500 dark:text-slate-400 mb-1">Phone (optional)</label>
+          <input type="tel" value={form.phone} onChange={set('phone')} className={inputCls} placeholder="+1 (832) 000-0000" />
+        </div>
+      )}
+
+      {event.questions?.length > 0 && (
+        <div className="space-y-3 pt-1">
+          <div className={`text-xs font-semibold uppercase tracking-wide ${t.accent}`}>A few quick questions</div>
+          {event.questions.map((q) => (
+            <QuestionField
+              key={q.id}
+              question={q}
+              value={answers[q.id] || ''}
+              onChange={(v) => setAnswers((p) => ({ ...p, [q.id]: v }))}
+              theme={theme}
+            />
+          ))}
+        </div>
+      )}
+
+      {error && (
+        <div className="rounded-lg bg-red-50 dark:bg-red-900/30 border border-red-200 dark:border-red-800 px-3 py-2 text-sm text-red-700 dark:text-red-300">
+          {error}
+        </div>
+      )}
+
+      <div className="flex flex-col gap-2">
+        <button
+          type="button"
+          onClick={() => submit('confirmed')}
+          disabled={!!loading}
+          className={`w-full rounded-xl py-3 text-white font-bold text-sm tracking-wide transition-colors disabled:opacity-50 ${t.btn}`}
+        >
+          {loading === 'confirmed' ? 'Confirming…' : '✅ Confirm attendance'}
+        </button>
+        <button
+          type="button"
+          onClick={() => submit('declined')}
+          disabled={!!loading}
+          className="w-full rounded-xl py-2.5 text-sm font-semibold text-slate-500 dark:text-slate-400 border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors disabled:opacity-50"
+        >
+          {loading === 'declined' ? 'Submitting…' : "Can't make it"}
+        </button>
+      </div>
+    </div>
+  )
+}
+
 // ── Page ──────────────────────────────────────────────────────────────────────
 
 export default function InvitePage() {
-  const { eventId } = useParams()
+  const { eventId, token } = useParams()
+  const tokenMode = !!token
   const [event, setEvent] = useState(null)
+  const [guest, setGuest] = useState(null)
+  const [tokenMeta, setTokenMeta] = useState({ deadline_passed: false, already_responded: false })
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const [confirmed, setConfirmed] = useState(null)
 
   useEffect(() => {
-    fetch(`/api/invite/${eventId}`)
+    const url = tokenMode ? `/api/invite/token/${token}` : `/api/invite/${eventId}`
+    fetch(url)
       .then((r) => {
         if (r.status === 410) throw new Error('This event has ended.')
-        if (!r.ok) throw new Error('Event not found.')
+        if (r.status === 404) throw new Error(tokenMode ? 'This invite link is not valid.' : 'Event not found.')
+        if (!r.ok) throw new Error('Something went wrong.')
         return r.json()
       })
-      .then(setEvent)
+      .then((data) => {
+        if (tokenMode) {
+          setEvent(data.event)
+          setGuest(data.guest)
+          setTokenMeta({ deadline_passed: data.deadline_passed, already_responded: data.already_responded })
+        } else {
+          setEvent(data)
+        }
+      })
       .catch((e) => setError(e.message))
       .finally(() => setLoading(false))
-  }, [eventId])
+  }, [eventId, token, tokenMode])
 
   if (loading) return (
     <div className="min-h-screen flex items-center justify-center bg-slate-100 dark:bg-slate-900">
@@ -287,6 +437,7 @@ export default function InvitePage() {
   const theme = event.invite_theme || 'default'
   const t = THEMES[theme] || THEMES.default
   const atCapacity = event.rsvp_capacity != null && event.rsvp_count >= event.rsvp_capacity
+  const deadlinePassed = !!event.deadline_passed
 
   return (
     <div className={`min-h-screen ${t.bg} flex flex-col`}>
@@ -302,28 +453,18 @@ export default function InvitePage() {
       <div className="flex-1 flex items-start justify-center px-4 py-8">
         <div className={`w-full max-w-lg rounded-2xl shadow-xl border ${t.border} ${t.card} overflow-hidden`}>
 
-          {/* Event hero */}
-          {event.invite_cover_image ? (
-            <div className="relative">
+          {/* Event hero — cover image as its own banner (no text overlaid),
+              with the title/date in a solid band directly below it. */}
+          {event.invite_cover_image && (
+            <div className="h-48 bg-slate-900 flex items-center justify-center">
               <img
                 src={event.invite_cover_image}
                 alt={event.name}
-                className="w-full max-h-64 object-cover"
+                className="w-full h-full object-contain"
               />
-              <div className={`absolute inset-0 bg-gradient-to-t from-black/60 to-transparent`} />
-              <div className="absolute bottom-0 left-0 right-0 px-6 pb-6 text-white">
-                <div className="text-2xl font-extrabold leading-tight drop-shadow">{event.name}</div>
-                {event.couples_name && (
-                  <div className="mt-1 text-white/80 text-sm font-medium">{event.couples_name}</div>
-                )}
-                <div className="mt-3 flex flex-wrap gap-4 text-sm">
-                  <div className="flex items-center gap-1.5 text-white/90"><span>📅</span><span>{fmtDate(event.event_date)}</span></div>
-                  <div className="flex items-center gap-1.5 text-white/90"><span>🕐</span><span>{fmtTime(event.event_date)}</span></div>
-                </div>
-              </div>
             </div>
-          ) : (
-          <div className={`${t.header} px-6 py-8 text-white`}>
+          )}
+          <div className={`${t.header} px-6 py-6 text-white`}>
             <div className="text-2xl font-extrabold leading-tight">{event.name}</div>
             {event.couples_name && (
               <div className="mt-1 text-white/80 text-sm font-medium">{event.couples_name}</div>
@@ -339,7 +480,6 @@ export default function InvitePage() {
               </div>
             </div>
           </div>
-          )}
 
           {/* Body */}
           <div className="px-6 py-6 space-y-5">
@@ -370,10 +510,46 @@ export default function InvitePage() {
 
             {/* RSVP section */}
             {confirmed ? (
-              <ConfirmView confirm={confirmed} event={event} theme={theme} />
+              confirmed.rsvp_status === 'declined'
+                ? <DeclinedView confirm={confirmed} />
+                : <ConfirmView confirm={confirmed} event={event} theme={theme} />
+            ) : tokenMode ? (
+              /* ── Personalised (closed-mode) invite ── */
+              deadlinePassed ? (
+                <div className="text-center py-4 space-y-1">
+                  <div className="text-3xl">⏰</div>
+                  <div className="text-sm font-semibold text-slate-600 dark:text-slate-300">RSVP has closed for this event.</div>
+                  {tokenMeta.already_responded && (
+                    <div className="text-xs text-slate-400 dark:text-slate-500">
+                      Your response: <span className="font-semibold">{guest?.rsvp_status === 'confirmed' ? 'Attending' : 'Not attending'}</span>
+                    </div>
+                  )}
+                </div>
+              ) : (
+                <>
+                  <div className={`text-sm font-bold ${t.accent}`}>RSVP</div>
+                  {tokenMeta.already_responded && (
+                    <div className={`rounded-lg border px-3 py-2 text-xs ${t.badge} ${t.border}`}>
+                      You previously responded <span className="font-semibold">{guest?.rsvp_status === 'confirmed' ? '“Attending”' : '“Not attending”'}</span>. You can update it below until the deadline.
+                    </div>
+                  )}
+                  <TokenRSVPForm event={event} prefill={guest} token={token} theme={theme} onDone={setConfirmed} />
+                </>
+              )
             ) : !event.rsvp_enabled ? (
               <div className="text-center py-4 text-sm text-slate-500 dark:text-slate-400">
                 RSVP is not open yet. Check back soon.
+              </div>
+            ) : event.invite_mode === 'closed' ? (
+              <div className="text-center py-4 space-y-1">
+                <div className="text-3xl">🔒</div>
+                <div className="text-sm font-semibold text-slate-600 dark:text-slate-300">This event is by invitation only.</div>
+                <div className="text-xs text-slate-400 dark:text-slate-500">Please use the personal invite link sent to you.</div>
+              </div>
+            ) : deadlinePassed ? (
+              <div className="text-center py-4 space-y-1">
+                <div className="text-3xl">⏰</div>
+                <div className="text-sm font-semibold text-slate-600 dark:text-slate-300">RSVP has closed for this event.</div>
               </div>
             ) : atCapacity ? (
               <div className="text-center py-4">

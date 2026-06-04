@@ -54,6 +54,7 @@ export const api = {
     req('POST', `/events/${eventId}/guests/send-batch`, { guest_ids: guestIds, force }),
   deleteGuest:         (eventId, guestId)  => req('DELETE', `/events/${eventId}/guests/${guestId}`),
   resendInvite:        (eventId, guestId)  => req('POST',   `/events/${eventId}/guests/${guestId}/resend-invite`),
+  ensureInviteToken:   (eventId, guestId)  => req('POST',   `/events/${eventId}/guests/${guestId}/invite-token`),
   guestQrUrl:          (eventId, guestId)  => `${BASE}/events/${eventId}/guests/${guestId}/qr.png`,
   uploadGuests: (eventId, file) => {
     const fd = new FormData()

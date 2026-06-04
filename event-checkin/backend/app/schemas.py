@@ -101,6 +101,8 @@ class EventOut(BaseModel):
     rsvp_collect_email: bool = True
     rsvp_capacity: Optional[int] = None
     invite_cover_image: Optional[str] = None
+    invite_mode: str = "open"
+    rsvp_deadline: Optional[datetime] = None
 
 
 class EventMemberOut(BaseModel):
@@ -225,11 +227,14 @@ class GuestOut(BaseModel):
     event_id: str
     first_name: str
     last_name: str
-    email: str
+    email: Optional[str] = None
     phone: Optional[str]
     qr_token: str
     qr_generated_at: Optional[datetime]
     invite_sent_at: Optional[datetime]
+    invite_token: Optional[str] = None
+    rsvp_status: str = "invited"
+    rsvp_responded_at: Optional[datetime] = None
     admitted: bool
     admitted_at: Optional[datetime]
     admit_notified: bool
@@ -369,6 +374,8 @@ class InviteSettingsUpdate(BaseModel):
     rsvp_collect_email: Optional[bool] = None
     rsvp_capacity: Optional[int] = None
     invite_cover_image: Optional[str] = None
+    invite_mode: Optional[Literal["open", "closed"]] = None
+    rsvp_deadline: Optional[datetime] = None
 
 
 class InvitePageOut(BaseModel):
@@ -386,8 +393,12 @@ class InvitePageOut(BaseModel):
     rsvp_collect_email: bool
     rsvp_capacity: Optional[int]
     invite_cover_image: Optional[str] = None
+    invite_mode: str = "open"
+    rsvp_deadline: Optional[datetime] = None
     # rsvp_count populated by the endpoint
     rsvp_count: int = 0
+    # deadline_passed computed by the endpoint
+    deadline_passed: bool = False
     questions: list[RSVPQuestionOut] = []
 
 
@@ -405,7 +416,41 @@ class RSVPConfirm(BaseModel):
     qr_token: str
     first_name: str
     last_name: str
+    rsvp_status: str = "confirmed"
     message: str = "RSVP confirmed!"
+
+
+# ── Personalised (token) invite — closed mode ────────────────────────────────
+
+class InviteGuestPrefill(BaseModel):
+    """The invited guest's known details, used to pre-fill the RSVP form.
+    `email_locked` / `phone_locked` flag which identifiers came from the
+    planner's list and must not be edited (they're the identity key)."""
+    first_name: str
+    last_name: str
+    email: Optional[str] = None
+    phone: Optional[str] = None
+    rsvp_status: str = "invited"
+    email_locked: bool = False
+    phone_locked: bool = False
+
+
+class InviteTokenPageOut(BaseModel):
+    """Payload for a personalised /r/{invite_token} link: the event page plus
+    the specific guest's prefill + response state."""
+    event: InvitePageOut
+    guest: InviteGuestPrefill
+    deadline_passed: bool = False
+    already_responded: bool = False
+
+
+class RSVPTokenSubmit(BaseModel):
+    status: Literal["confirmed", "declined"] = "confirmed"
+    # Editable fields; email is never editable on a token link (identity key).
+    first_name: Optional[str] = None
+    last_name: Optional[str] = None
+    phone: Optional[str] = None
+    answers: dict[str, str] = {}
 
 
 # ── Broadcast ────────────────────────────────────────────────────────────────

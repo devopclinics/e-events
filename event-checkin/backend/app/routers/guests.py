@@ -1,6 +1,7 @@
 import csv
 import io
 import re
+import uuid
 import httpx
 from datetime import datetime
 from urllib.parse import urlparse
@@ -12,7 +13,7 @@ from ..models import Event, Guest, User
 from ..schemas import GuestOut, GuestCreate
 from ..auth import require_admin
 from services.qr_service import generate_qr_bytes
-from services.email_service import send_invite_email
+from services.email_service import send_invite_email, send_manual_invite_email
 from services import messaging
 
 router = APIRouter()
@@ -230,7 +231,15 @@ async def upload_guests(event_id: str, file: UploadFile = File(...), db: AsyncSe
 
 def _dispatch_invite(background_tasks: BackgroundTasks, event: Event, guest: Guest) -> None:
     """Fan out an invite across enabled channels for this event. Channel modules
-    no-op silently when contact info is missing or creds aren't configured."""
+    no-op silently when contact info is missing or creds aren't configured.
+
+    In closed (invitation-only) mode we send the guest their personal RSVP link
+    (/r/{invite_token}) rather than a ticket — the ticket QR is issued only after
+    they confirm. In open mode we send the ticket directly, as before."""
+    if event.invite_mode == "closed":
+        _dispatch_rsvp_invite(background_tasks, event, guest)
+        return
+
     ticket_url = f"{event.checkin_base_url.rstrip('/')}/scan/{guest.qr_token}"
 
     if event.notify_email:
@@ -258,6 +267,38 @@ def _dispatch_invite(background_tasks: BackgroundTasks, event: Event, guest: Gue
             messaging.send_invite_whatsapp,
             phone=guest.phone, first_name=guest.first_name,
             event_name=event.name, ticket_url=ticket_url, event_date=event.event_date,
+        )
+
+
+def _dispatch_rsvp_invite(background_tasks: BackgroundTasks, event: Event, guest: Guest) -> None:
+    """Closed-mode invite: send the guest their personal RSVP link. Generates a
+    one-per-guest invite_token on first send (mutation persisted by the caller's
+    commit). No ticket/QR yet — that's issued when they confirm."""
+    if not guest.invite_token:
+        guest.invite_token = str(uuid.uuid4())
+    invite_url = f"{event.checkin_base_url.rstrip('/')}/r/{guest.invite_token}"
+    name = f"{guest.first_name} {guest.last_name}".strip() or "Guest"
+
+    if event.notify_email and guest.email:
+        background_tasks.add_task(
+            send_manual_invite_email,
+            name=name, email=guest.email, invite_url=invite_url,
+            event_name=event.name, event_date=event.event_date,
+            invite_message=event.invite_message,
+        )
+
+    if event.notify_sms and guest.phone and guest.sms_consent:
+        background_tasks.add_task(
+            messaging.send_manual_invite_sms,
+            phone=guest.phone, name=name,
+            event_name=event.name, invite_url=invite_url,
+        )
+
+    if event.notify_whatsapp and guest.phone and guest.whatsapp_consent:
+        background_tasks.add_task(
+            messaging.send_manual_invite_whatsapp,
+            phone=guest.phone, name=name,
+            event_name=event.name, invite_url=invite_url,
         )
 
 
@@ -422,13 +463,32 @@ async def resend_invite(event_id: str, guest_id: str, background_tasks: Backgrou
     guest = await db.get(Guest, guest_id)
     if not guest or guest.event_id != event_id:
         raise HTTPException(404, "Guest not found")
-    if not guest.qr_generated_at:
+    # Open mode emails a ticket (needs a QR); closed mode emails an RSVP link (no QR yet).
+    if event.invite_mode != "closed" and not guest.qr_generated_at:
         raise HTTPException(400, "Generate QR codes first before sending invites")
 
     _dispatch_invite(background_tasks, event, guest)
     guest.invite_sent_at = datetime.utcnow()
     await db.commit()
     return {"ok": True}
+
+
+@router.post("/{event_id}/guests/{guest_id}/invite-token")
+async def ensure_invite_token(event_id: str, guest_id: str, db: AsyncSession = Depends(get_db), _: User = Depends(require_admin)):
+    """Mint (or return) a guest's personal RSVP-link token so the planner can
+    copy /r/{token} from the dashboard without having to send the invite first."""
+    guest = await db.get(Guest, guest_id)
+    if not guest or guest.event_id != event_id:
+        raise HTTPException(404, "Guest not found")
+    if not guest.invite_token:
+        guest.invite_token = str(uuid.uuid4())
+        await db.commit()
+        await db.refresh(guest)
+    event = await db.get(Event, event_id)
+    return {
+        "invite_token": guest.invite_token,
+        "invite_url": f"{event.checkin_base_url.rstrip('/')}/r/{guest.invite_token}",
+    }
 
 
 @router.get("/{event_id}/guests/{guest_id}/qr.png")

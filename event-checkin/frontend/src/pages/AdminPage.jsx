@@ -1574,6 +1574,8 @@ function InvitePanel({ event, onChanged }) {
     rsvp_collect_phone:event.rsvp_collect_phone ?? true,
     rsvp_collect_email:event.rsvp_collect_email ?? true,
     rsvp_capacity:     event.rsvp_capacity      ?? '',
+    invite_mode:       event.invite_mode        ?? 'open',
+    rsvp_deadline:     event.rsvp_deadline ? event.rsvp_deadline.slice(0, 16) : '',
   })
   const [questions, setQuestions] = useState([])
   const [newQ, setNewQ] = useState({ question: '', question_type: 'text', options: '', is_required: false })
@@ -1595,6 +1597,7 @@ function InvitePanel({ event, onChanged }) {
       const payload = {
         ...form,
         rsvp_capacity: form.rsvp_capacity === '' ? null : Number(form.rsvp_capacity),
+        rsvp_deadline: form.rsvp_deadline ? form.rsvp_deadline : null,
       }
       const updated = await api.updateInviteSettings(event.id, payload)
       onChanged(updated)
@@ -1728,7 +1731,24 @@ function InvitePanel({ event, onChanged }) {
           <label className="block text-xs font-semibold text-slate-500 dark:text-slate-400 mb-1">Max RSVPs (leave blank = unlimited)</label>
           <input type="number" min="0" value={form.rsvp_capacity} onChange={set('rsvp_capacity')} className={inputCls} placeholder="e.g. 100" />
         </div>
+        <div>
+          <label className="block text-xs font-semibold text-slate-500 dark:text-slate-400 mb-1">Invitation mode</label>
+          <select value={form.invite_mode} onChange={set('invite_mode')} className={inputCls}>
+            <option value="open">Open — anyone with the event link can RSVP</option>
+            <option value="closed">Closed — invited guests only (personal links)</option>
+          </select>
+        </div>
+        <div>
+          <label className="block text-xs font-semibold text-slate-500 dark:text-slate-400 mb-1">RSVP deadline (optional)</label>
+          <input type="datetime-local" value={form.rsvp_deadline} onChange={set('rsvp_deadline')} className={inputCls} />
+        </div>
       </div>
+
+      {form.invite_mode === 'closed' && (
+        <div className="rounded-lg bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 px-3 py-2 text-xs text-amber-800 dark:text-amber-300">
+          🔒 Closed mode: the public event link is disabled. Each guest gets a unique RSVP link — use the <span className="font-semibold">Invite</span> tab to send them, or copy a guest's link from the list. They confirm or decline, and their ticket QR is issued only after they confirm.
+        </div>
+      )}
 
       <div>
         <label className="block text-xs font-semibold text-slate-500 dark:text-slate-400 mb-1">Invite message (shown on invite page)</label>
@@ -2381,6 +2401,16 @@ function Badge({ on, labels }) {
   )
 }
 
+function RsvpStatusBadge({ status }) {
+  const map = {
+    confirmed: { label: '✓ Attending', cls: 'bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-300' },
+    declined:  { label: '✗ Declined',  cls: 'bg-red-100 text-red-600 dark:bg-red-900/40 dark:text-red-300' },
+    invited:   { label: 'No reply',    cls: 'bg-gray-100 text-gray-500 dark:bg-slate-700 dark:text-slate-400' },
+  }
+  const c = map[status] || map.invited
+  return <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${c.cls}`}>{c.label}</span>
+}
+
 // ── AdminPage ─────────────────────────────────────────────────────────────────
 
 function TabBar({ tabs, active, onChange }) {
@@ -2602,6 +2632,14 @@ export default function AdminPage() {
       flash('Invite resent.')
     } catch (err) { flash(err.message, true) }
     finally { setLoading(false) }
+  }
+
+  async function handleCopyInviteLink(guestId) {
+    try {
+      const { invite_url } = await api.ensureInviteToken(selectedId, guestId)
+      await navigator.clipboard.writeText(invite_url)
+      flash('RSVP link copied to clipboard.')
+    } catch (err) { flash(err.message, true) }
   }
 
   const stats = {
@@ -2874,6 +2912,7 @@ export default function AdminPage() {
                         <th className="px-4 py-3 text-left">Email</th>
                         <th className="px-4 py-3 text-center">QR</th>
                         <th className="px-4 py-3 text-center">Invited</th>
+                        <th className="px-4 py-3 text-center">RSVP</th>
                         <th className="px-4 py-3 text-center">Admitted</th>
                         <th className="px-4 py-3 text-center">Actions</th>
                       </tr>
@@ -2896,6 +2935,7 @@ export default function AdminPage() {
                           <td className="px-4 py-3 text-gray-500 dark:text-slate-400 text-xs">{g.email}</td>
                           <td className="px-4 py-3 text-center"><Badge on={!!g.qr_generated_at} labels={['Ready', 'Pending']} /></td>
                           <td className="px-4 py-3 text-center"><Badge on={!!g.invite_sent_at} labels={['Sent', 'Unsent']} /></td>
+                          <td className="px-4 py-3 text-center"><RsvpStatusBadge status={g.rsvp_status} /></td>
                           <td className="px-4 py-3 text-center">
                             {g.admitted
                               ? <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-700">
@@ -2905,6 +2945,10 @@ export default function AdminPage() {
                           </td>
                           <td className="px-4 py-3 text-center">
                             <div className="flex items-center justify-center gap-3">
+                              {event?.invite_mode === 'closed' && (
+                                <button onClick={() => handleCopyInviteLink(g.id)}
+                                  className="text-xs text-teal-600 hover:underline">Copy link</button>
+                              )}
                               {g.qr_generated_at && (
                                 <a href={api.guestQrUrl(selectedId, g.id)} target="_blank" rel="noopener noreferrer"
                                   className="text-xs text-indigo-600 hover:underline">QR</a>
@@ -2950,8 +2994,13 @@ export default function AdminPage() {
                       <div className="flex flex-wrap gap-1.5">
                         <Badge on={!!g.qr_generated_at} labels={['QR Ready', 'No QR']} />
                         <Badge on={!!g.invite_sent_at} labels={['Invited', 'Unsent']} />
+                        <RsvpStatusBadge status={g.rsvp_status} />
                       </div>
                       <div className="flex gap-4 pt-1">
+                        {event?.invite_mode === 'closed' && (
+                          <button onClick={() => handleCopyInviteLink(g.id)}
+                            className="text-xs text-teal-600 hover:underline">Copy RSVP link</button>
+                        )}
                         {g.qr_generated_at && (
                           <a href={api.guestQrUrl(selectedId, g.id)} target="_blank" rel="noopener noreferrer"
                             className="text-xs text-indigo-600 hover:underline">View QR</a>

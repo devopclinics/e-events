@@ -158,6 +158,8 @@ function AppRoutes() {
       <Route path="/scan/:token" element={<ScanAutoPage />} />
       {/* Public invite page — no auth required */}
       <Route path="/e/:eventId" element={<InvitePage />} />
+      {/* Personalised (closed-mode) invite link — no auth required */}
+      <Route path="/r/:token" element={<InvitePage />} />
 
       {/* Landing page: show to guests, redirect logged-in users */}
       <Route path="/"

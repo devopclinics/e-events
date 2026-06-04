@@ -39,6 +39,9 @@ SCHEMA_PATCHES: list[str] = [
     # Original table created the column NOT NULL; auto-patch only adds columns,
     # so this constraint-drop has to live here.
     "ALTER TABLE guest_menu_choices ALTER COLUMN menu_item_id DROP NOT NULL",
+    # guests.email was created NOT NULL; events with rsvp_collect_email=False now
+    # register guests with no email. Auto-patch only adds columns, so relax here.
+    "ALTER TABLE guests ALTER COLUMN email DROP NOT NULL",
 ]
 
 

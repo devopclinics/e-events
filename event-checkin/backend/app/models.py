@@ -70,6 +70,13 @@ class Event(Base):
     rsvp_capacity: Mapped[int | None] = mapped_column(Integer, nullable=True)
     # Cover image URL — served from /api/uploads/
     invite_cover_image: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    # Invite distribution mode:
+    #   "open"   — shared /e/{event_id} link; anyone with it can RSVP.
+    #   "closed" — invitation-only; each guest gets a unique /r/{invite_token}
+    #              link and the open form is disabled.
+    invite_mode: Mapped[str] = mapped_column(String(20), default="open")
+    # RSVP cutoff. After this instant the invite page is read-only. None = no deadline.
+    rsvp_deadline: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
 
     members: Mapped[list["EventUser"]] = relationship("EventUser", back_populates="event", cascade="all, delete-orphan")
     guests: Mapped[list["Guest"]] = relationship("Guest", back_populates="event", cascade="all, delete-orphan")
@@ -168,11 +175,18 @@ class Guest(Base):
     event_id: Mapped[str] = mapped_column(String(36), ForeignKey("events.id"))
     first_name: Mapped[str] = mapped_column(String(100))
     last_name: Mapped[str] = mapped_column(String(100))
-    email: Mapped[str] = mapped_column(String(255))
+    # Nullable: events with rsvp_collect_email=False register guests with no email.
+    email: Mapped[str | None] = mapped_column(String(255), nullable=True)
     phone: Mapped[str | None] = mapped_column(String(50), nullable=True)
     qr_token: Mapped[str] = mapped_column(String(36), unique=True, default=lambda: str(uuid.uuid4()))
     qr_generated_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     invite_sent_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    # Per-guest RSVP invite-link token (closed mode). Generated when the invite
+    # is sent; distinct from qr_token (the post-confirmation ticket credential).
+    invite_token: Mapped[str | None] = mapped_column(String(36), nullable=True)
+    # RSVP response state: "invited" (no response yet) | "confirmed" | "declined".
+    rsvp_status: Mapped[str] = mapped_column(String(20), default="invited")
+    rsvp_responded_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     admitted: Mapped[bool] = mapped_column(Boolean, default=False)
     admitted_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     admit_notified: Mapped[bool] = mapped_column(Boolean, default=False)

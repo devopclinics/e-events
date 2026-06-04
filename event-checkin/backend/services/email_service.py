@@ -261,3 +261,31 @@ async def send_manual_invite_email(
     msg.attach(MIMEText(body, "html"))
     await _send(msg)
 
+
+async def send_broadcast_email(*, email: str, first_name: str, message: str, event_name: str):
+    """Send a free-text broadcast update (no QR/link) to a guest."""
+    msg = MIMEMultipart()
+    msg["Subject"] = f"Update — {event_name}"
+    msg["From"] = settings.email_from
+    msg["To"] = email
+
+    safe_name = _html.escape(first_name or "there")
+    safe_event = _html.escape(event_name)
+    safe_msg = _html.escape(message).replace("\n", "<br>")
+
+    body = f"""
+    <html>
+    <body style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;padding:20px;">
+      <h2 style="color:#1a1a2e;">{safe_event}</h2>
+      <p>Hi <strong>{safe_name}</strong>,</p>
+      <p style="font-size:15px;line-height:1.6;">{safe_msg}</p>
+      <p style="color:#888;font-size:12px;margin-top:28px;">
+        You're receiving this because you're on the guest list for {safe_event}.
+      </p>
+    </body>
+    </html>
+    """
+
+    msg.attach(MIMEText(body, "html"))
+    await _send(msg)
+

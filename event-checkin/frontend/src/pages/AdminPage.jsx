@@ -1946,10 +1946,19 @@ function BroadcastPanel({ event }) {
     setChannels((p) => p.includes(ch) ? p.filter((c) => c !== ch) : [...p, ch])
   }
 
+  const TARGET_LABELS = {
+    all: 'all guests',
+    admitted: 'checked-in guests',
+    not_admitted: 'guests not yet checked in',
+    confirmed: 'guests attending (RSVP yes)',
+    declined: 'guests who declined',
+    no_reply: 'guests with no RSVP reply',
+  }
+
   async function send() {
     if (!msg.trim()) return
     if (channels.length === 0) { setErr('Select at least one channel'); return }
-    if (!confirm(`Send broadcast to ${target === 'all' ? 'all guests' : target === 'admitted' ? 'admitted guests' : 'guests not yet admitted'}?`)) return
+    if (!confirm(`Send broadcast to ${TARGET_LABELS[target] || 'selected guests'}?`)) return
     setLoading(true); setResult(null); setErr('')
     try {
       const res = await api.broadcast(event.id, { message: msg.trim(), target, channels })
@@ -1981,14 +1990,17 @@ function BroadcastPanel({ event }) {
           <label className="block text-xs font-semibold text-slate-500 dark:text-slate-400 mb-1">Send to</label>
           <select value={target} onChange={(e) => setTarget(e.target.value)} className={inputCls}>
             <option value="all">All guests</option>
-            <option value="admitted">Admitted only</option>
-            <option value="not_admitted">Not yet admitted</option>
+            <option value="confirmed">RSVP: Attending</option>
+            <option value="declined">RSVP: Declined</option>
+            <option value="no_reply">RSVP: No reply</option>
+            <option value="admitted">Checked in</option>
+            <option value="not_admitted">Not yet checked in</option>
           </select>
         </div>
         <div>
           <label className="block text-xs font-semibold text-slate-500 dark:text-slate-400 mb-1">Channels</label>
           <div className="flex gap-3">
-            {['sms', 'whatsapp'].map((ch) => (
+            {['email', 'sms', 'whatsapp'].map((ch) => (
               <label key={ch} className="flex items-center gap-1.5 text-sm cursor-pointer select-none text-slate-700 dark:text-slate-300">
                 <input type="checkbox" checked={channels.includes(ch)} onChange={() => toggleChannel(ch)} className="w-4 h-4 accent-teal-600" />
                 {ch.toUpperCase()}
@@ -2001,7 +2013,7 @@ function BroadcastPanel({ event }) {
       {err && <div className="text-xs text-red-600 dark:text-red-400">{err}</div>}
       {result && (
         <div className="text-xs text-green-700 dark:text-green-400 bg-green-50 dark:bg-green-900/30 border border-green-200 dark:border-green-800 rounded-lg px-3 py-2">
-          Queued: {result.queued} · Skipped (no phone): {result.skipped_no_phone} · Skipped (no consent): {result.skipped_no_consent}
+          Queued: {result.queued} · Skipped (no contact): {result.skipped_no_contact} · Skipped (no consent): {result.skipped_no_consent}
         </div>
       )}
 

@@ -457,14 +457,23 @@ class RSVPTokenSubmit(BaseModel):
 
 class BroadcastRequest(BaseModel):
     message: str
-    # which guests to target
-    target: Literal["all", "admitted", "not_admitted"] = "all"
-    channels: list[Literal["sms", "whatsapp"]] = ["sms"]
+    # which guests to target:
+    #   all          — everyone on the guest list
+    #   admitted     — checked in (admitted == True)
+    #   not_admitted — not yet checked in
+    #   confirmed    — RSVP'd attending
+    #   declined     — RSVP'd no
+    #   no_reply     — invited but no RSVP response yet
+    target: Literal[
+        "all", "admitted", "not_admitted", "confirmed", "declined", "no_reply"
+    ] = "all"
+    channels: list[Literal["email", "sms", "whatsapp"]] = ["sms"]
 
 
 class BroadcastResult(BaseModel):
     queued: int
-    skipped_no_phone: int
+    # couldn't reach: no email (for email) and no phone (for sms/whatsapp)
+    skipped_no_contact: int
     skipped_no_consent: int
 
 

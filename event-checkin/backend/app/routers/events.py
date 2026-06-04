@@ -16,7 +16,7 @@ from ..schemas import (
 from ..auth import require_admin, get_current_user
 from .guests import import_from_source_url, _normalize_phone
 from services import messaging
-from services.email_service import send_manual_invite_email
+from services.email_service import send_manual_invite_email, send_broadcast_email
 
 UPLOADS_DIR = "/app/uploads"
 ALLOWED_IMAGE_TYPES = {"image/jpeg", "image/png", "image/webp", "image/gif"}
@@ -427,43 +427,60 @@ async def broadcast_message(
         q = q.where(Guest.admitted == True)  # noqa: E712
     elif data.target == "not_admitted":
         q = q.where(Guest.admitted == False)  # noqa: E712
+    elif data.target in ("confirmed", "declined", "no_reply"):
+        status = {"confirmed": "confirmed", "declined": "declined", "no_reply": "invited"}[data.target]
+        q = q.where(Guest.rsvp_status == status)
 
     guests = (await db.execute(q)).scalars().all()
 
-    queued = skipped_no_phone = skipped_no_consent = 0
+    want_email = "email" in data.channels
+    want_phone = "sms" in data.channels or "whatsapp" in data.channels
+
+    queued = skipped_no_contact = skipped_no_consent = 0
 
     for guest in guests:
-        if not guest.phone:
-            skipped_no_phone += 1
-            continue
-
         sent_any = False
-        if "sms" in data.channels and guest.sms_consent:
+
+        if want_email and guest.email:
             background_tasks.add_task(
-                messaging.send_broadcast_sms,
-                phone=guest.phone,
+                send_broadcast_email,
+                email=guest.email,
                 first_name=guest.first_name,
                 message=data.message,
+                event_name=event.name,
             )
             sent_any = True
 
-        if "whatsapp" in data.channels and guest.whatsapp_consent:
-            background_tasks.add_task(
-                messaging.send_broadcast_whatsapp,
-                phone=guest.phone,
-                first_name=guest.first_name,
-                message=data.message,
-            )
-            sent_any = True
+        if guest.phone:
+            if "sms" in data.channels and guest.sms_consent:
+                background_tasks.add_task(
+                    messaging.send_broadcast_sms,
+                    phone=guest.phone,
+                    first_name=guest.first_name,
+                    message=data.message,
+                )
+                sent_any = True
+            if "whatsapp" in data.channels and guest.whatsapp_consent:
+                background_tasks.add_task(
+                    messaging.send_broadcast_whatsapp,
+                    phone=guest.phone,
+                    first_name=guest.first_name,
+                    message=data.message,
+                )
+                sent_any = True
 
         if sent_any:
             queued += 1
-        else:
+        elif (want_email and guest.email) or (want_phone and guest.phone):
+            # Had a usable contact method but consent blocked every channel.
             skipped_no_consent += 1
+        else:
+            # No email and/or no phone for the channels selected.
+            skipped_no_contact += 1
 
     return BroadcastResult(
         queued=queued,
-        skipped_no_phone=skipped_no_phone,
+        skipped_no_contact=skipped_no_contact,
         skipped_no_consent=skipped_no_consent,
     )
 

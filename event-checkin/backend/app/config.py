@@ -18,6 +18,8 @@ class Settings(BaseSettings):
     smtp_password: str = ""
     smtp_tls: bool = True
     email_from: str = "noreply@event.com"
+    # If set, email is sent via the Resend HTTP API instead of SMTP.
+    resend_api_key: str = ""
 
     # Messaging provider switch: 'bird' | 'twilio' | '' (off)
     messaging_provider: str = ""

@@ -1,3 +1,4 @@
+import base64
 import html as _html
 import logging
 from datetime import datetime
@@ -6,6 +7,7 @@ from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
 
 import aiosmtplib
+import httpx
 
 from app.config import settings
 from app.timeutil import local_hhmm
@@ -14,12 +16,55 @@ from services.qr_service import generate_qr_bytes
 logger = logging.getLogger(__name__)
 
 
+def _resend_payload(msg: MIMEMultipart) -> dict:
+    """Convert a built MIME message into a Resend API payload, preserving the
+    HTML body and any inline/attached images (incl. the cid:qrcode QR)."""
+    payload = {
+        "from": msg["From"],
+        "to": [a.strip() for a in (msg["To"] or "").split(",") if a.strip()],
+        "subject": msg["Subject"] or "",
+    }
+    attachments = []
+    for part in msg.walk():
+        if part.get_content_type() == "text/html" and "html" not in payload:
+            payload["html"] = part.get_payload(decode=True).decode("utf-8", "replace")
+        elif part.get_content_maintype() == "image":
+            raw = part.get_payload(decode=True)
+            if not raw:
+                continue
+            att = {
+                "filename": part.get_filename() or "image.png",
+                "content": base64.b64encode(raw).decode(),
+            }
+            cid = part.get("Content-ID")
+            if cid:
+                att["content_id"] = cid.strip("<>")  # renders cid: refs inline
+            attachments.append(att)
+    if attachments:
+        payload["attachments"] = attachments
+    return payload
+
+
+async def _send_via_resend(msg: MIMEMultipart):
+    headers = {"Authorization": f"Bearer {settings.resend_api_key}"}
+    async with httpx.AsyncClient(timeout=20) as c:
+        r = await c.post("https://api.resend.com/emails", json=_resend_payload(msg), headers=headers)
+    r.raise_for_status()
+
+
 async def _send(msg: MIMEMultipart):
     if not (msg["To"] or "").strip():
         logger.info("Skipping email — recipient has no email address (likely a VVIP walk-in)")
         return
+    # Prefer the Resend HTTP API when configured; otherwise fall back to SMTP.
+    if settings.resend_api_key:
+        try:
+            await _send_via_resend(msg)
+        except Exception:
+            logger.exception("Resend send failed for %s", msg["To"])
+        return
     if not settings.smtp_host:
-        logger.warning("SMTP not configured — skipping email to %s", msg["To"])
+        logger.warning("Email not configured — skipping email to %s", msg["To"])
         return
     try:
         async with aiosmtplib.SMTP(

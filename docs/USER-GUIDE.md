@@ -9,6 +9,8 @@ Short, role-based instructions. Find your role and follow the steps.
 
 Site: **https://events.vsgs.io**
 
+![EventQR landing page](images/landing.png)
+
 ---
 
 ## 1. Event organizer
@@ -64,6 +66,14 @@ Site: **https://events.vsgs.io**
 - Running low on SMS/WhatsApp? Buy a **credit top-up** in the same panel.
 - See plans any time at **/pricing**.
 
+![Pricing page](images/pricing.png)
+
+_Admin screens (add screenshots — see "Adding screenshots" below):_
+- _`images/admin-overview.png` — event Overview with guest import + Features._
+- _`images/admin-guests.png` — Guests tab with RSVP status column._
+- _`images/admin-invite.png` — Invite Page & RSVP settings + Event Pass panel._
+- _`images/admin-team.png` — Team tab (add teammate + assign)._
+
 ---
 
 ## 2. Staff / scanner
@@ -86,6 +96,10 @@ Site: **https://events.vsgs.io**
 3. Once confirmed, your **ticket QR** is emailed to you.
 4. On the day, show the **QR** (on your phone or printed) at the entrance.
 
+![Invite page](images/invite-page.png)
+
+_Add `images/scanner.png` (Scanner result) and `images/console.png` (operator Console) — see below._
+
 ---
 
 ## 4. Platform operator (EventQR admin)
@@ -98,3 +112,25 @@ Operator accounts see a **Console** link in the top nav (`/console`). Everyone e
 - **Operators** — add another operator by email, or revoke one. (You can't revoke yourself.)
 
 To make someone an operator: **Console → Operators → add their email**. They get access on next sign-in.
+
+---
+
+## Adding screenshots
+
+Images live in `docs/images/` and are referenced like `![alt](images/name.png)`.
+
+The public-page shots (landing, pricing, invite) were captured automatically.
+The signed-in screens (Admin tabs, Scanner, Console) need a logged-in session,
+so capture those yourself:
+
+1. Sign in and open the screen.
+2. Take a screenshot:
+   - **Mac:** Cmd+Shift+4 (drag a region)
+   - **Windows:** Win+Shift+S (Snipping Tool)
+   - or use the browser DevTools device toolbar for a clean full-page capture.
+3. Save it into `docs/images/` using the exact filename referenced above
+   (e.g. `admin-invite.png`, `admin-team.png`, `scanner.png`, `console.png`).
+4. The placeholders in this guide will then render the image.
+
+Tip: blur or use a demo event so you don't expose real guest emails/phones.
+

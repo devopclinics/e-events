@@ -164,6 +164,12 @@ async def scan_qr(
         label = "has not started yet" if event.status == "draft" else "has ended"
         return ScanResult(status="not_active", message=f"'{event.name}' {label}. Scanning is disabled.")
 
+    if event and not event.is_paid:
+        return ScanResult(
+            status="not_active",
+            message="This event needs an Event Pass to run check-in. Upgrade it in the admin panel.",
+        )
+
     # Tenant + assignment check: scanner must belong to this event's org. Org
     # owners/admins can scan any of their events; staff must be assigned to it.
     if not current_user.is_platform_superadmin:

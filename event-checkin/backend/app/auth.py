@@ -177,3 +177,45 @@ async def require_event_admin(
     if role not in ("owner", "admin"):
         raise HTTPException(403, "Admin access required")
     return user
+
+
+_PAID_REQUIRED = "This feature requires an Event Pass — upgrade this event to unlock it."
+
+
+async def require_paid_event_admin(
+    event_id: str,
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+) -> User:
+    """Org owner/admin AND the event is on a paid plan (or superadmin)."""
+    event = await db.get(Event, event_id)
+    if not event:
+        raise HTTPException(404, "Event not found")
+    if user.is_platform_superadmin:
+        return user
+    role = await _org_role(user, event.org_id, db)
+    if role is None:
+        raise HTTPException(404, "Event not found")
+    if role not in ("owner", "admin"):
+        raise HTTPException(403, "Admin access required")
+    if not event.is_paid:
+        raise HTTPException(402, _PAID_REQUIRED)
+    return user
+
+
+async def require_paid_event_member(
+    event_id: str,
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+) -> User:
+    """Any org member AND the event is on a paid plan (or superadmin)."""
+    event = await db.get(Event, event_id)
+    if not event:
+        raise HTTPException(404, "Event not found")
+    if user.is_platform_superadmin:
+        return user
+    if await _org_role(user, event.org_id, db) is None:
+        raise HTTPException(404, "Event not found")
+    if not event.is_paid:
+        raise HTTPException(402, _PAID_REQUIRED)
+    return user

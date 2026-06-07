@@ -102,6 +102,10 @@ export default function LandingPage() {
             aria-label="Toggle theme">
             {dark ? <SunIcon /> : <MoonIcon />}
           </button>
+          <Link to="/pricing"
+            className="text-sm font-medium text-slate-600 dark:text-slate-300 hover:text-teal-700 dark:hover:text-teal-300 transition-colors">
+            Pricing
+          </Link>
           <Link to="/login"
             className="text-sm font-medium text-slate-600 dark:text-slate-300 hover:text-teal-700 dark:hover:text-teal-300 transition-colors">
             Sign In

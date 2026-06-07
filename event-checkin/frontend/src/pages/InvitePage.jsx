@@ -581,10 +581,12 @@ export default function InvitePage() {
         </div>
       </div>
 
-      {/* Footer */}
-      <div className="py-4 text-center text-xs text-slate-400 dark:text-slate-600">
-        Powered by EventQR
-      </div>
+      {/* Footer — branding shown only on free events */}
+      {!event.is_paid && (
+        <div className="py-4 text-center text-xs text-slate-400 dark:text-slate-600">
+          Powered by EventQR
+        </div>
+      )}
     </div>
   )
 }

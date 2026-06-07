@@ -132,12 +132,16 @@ function ChannelToggles({ event, onChanged }) {
 function FeatureToggles({ event, onChanged }) {
   const [loading, setLoading] = useState(false)
 
+  const [err, setErr] = useState('')
+  const locked = !event.is_paid   // seating/menu are paid-plan features
+
   async function toggle(key) {
-    setLoading(true)
+    if (locked) { setErr('Seating and menu require an Event Pass — upgrade this event first.'); return }
+    setLoading(true); setErr('')
     try {
       const updated = await api.toggleFeatures(event.id, { [key]: !event[key] })
       onChanged(updated)
-    } catch (e) { console.error(e) }
+    } catch (e) { setErr(e.message) }
     finally { setLoading(false) }
   }
 
@@ -151,16 +155,18 @@ function FeatureToggles({ event, onChanged }) {
         <button
           key={key}
           onClick={() => toggle(key)}
-          disabled={loading}
+          disabled={loading || locked}
+          title={locked ? 'Requires an Event Pass' : ''}
           className={`px-3 py-1.5 rounded-lg text-xs font-semibold border transition-colors disabled:opacity-50 ${
             event[key]
               ? 'bg-indigo-600 text-white border-indigo-600 hover:bg-indigo-700'
               : 'bg-white dark:bg-slate-700 text-gray-600 dark:text-slate-300 border-gray-300 dark:border-slate-600 hover:bg-gray-50 dark:hover:bg-slate-600'
           }`}
         >
-          {label} {event[key] ? 'ON' : 'OFF'}
+          {label} {event[key] ? 'ON' : 'OFF'}{locked ? ' 🔒' : ''}
         </button>
       ))}
+      {err && <span className="text-xs text-amber-600 dark:text-amber-400 self-center">{err}</span>}
     </div>
   )
 }

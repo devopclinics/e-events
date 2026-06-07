@@ -322,6 +322,9 @@ async def toggle_features(
     event = await db.get(Event, event_id)
     if not event:
         raise HTTPException(404, "Event not found")
+    # Seating & menu are paid-plan features — block turning them on for free events.
+    if (body.get("seating_enabled") or body.get("menu_enabled")) and not event.is_paid:
+        raise HTTPException(402, "Seating and menu require an Event Pass — upgrade this event first.")
     if "seating_enabled" in body:
         event.seating_enabled = bool(body["seating_enabled"])
     if "menu_enabled" in body:

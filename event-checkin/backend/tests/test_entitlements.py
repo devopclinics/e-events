@@ -34,6 +34,14 @@ def test_credit_metering_decrements_then_blocks():
 
 
 @pytest.mark.asyncio
+async def test_free_event_blocks_seating(ctx):
+    # event_a is free by default → seating is a paid feature → 402.
+    ctx.login(ctx.ids["user_a"])
+    r = await ctx.client.get(f"/api/events/{ctx.ids['event_a']}/tables")
+    assert r.status_code == 402
+
+
+@pytest.mark.asyncio
 async def test_broadcast_out_of_credits_reported(ctx):
     # Make the seeded event paid but with zero credits, then broadcast SMS.
     from conftest import _Session

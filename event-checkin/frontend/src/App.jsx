@@ -169,7 +169,6 @@ function AppRoutes() {
       {/* Public marketing pages — no auth required */}
       <Route path="/pricing" element={<PricingPage />} />
       <Route path="/refund-policy" element={<RefundPolicyPage />} />
-      <Route path="/help" element={<HelpPage />} />
 
       {/* Landing page: show to guests, redirect logged-in users */}
       <Route path="/"
@@ -188,6 +187,7 @@ function AppRoutes() {
                 <Route path="/dashboard" element={<ProtectedRoute><DashboardPage /></ProtectedRoute>} />
                 <Route path="/scanner" element={<ProtectedRoute><ScannerPage /></ProtectedRoute>} />
                 <Route path="/console" element={<ProtectedRoute><ConsolePage /></ProtectedRoute>} />
+                <Route path="/help" element={<ProtectedRoute><HelpPage /></ProtectedRoute>} />
                 <Route path="*" element={<Navigate to="/" replace />} />
               </Routes>
             </main>

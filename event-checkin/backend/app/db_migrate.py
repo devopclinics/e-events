@@ -61,6 +61,8 @@ SCHEMA_PATCHES: list[str] = [
     "SELECT 1 FROM memberships m WHERE m.org_id = '00000000-0000-0000-0000-000000000001' AND m.user_id = u.id)",
     # 4) Operator superadmin (no-op until that account exists; D3 also sets it at sign-in).
     "UPDATE users SET is_platform_superadmin = TRUE WHERE email = 'info@devopclinics.com'",
+    # 5) D4: every event now has an org (backfilled above + create_event stamps it).
+    "ALTER TABLE events ALTER COLUMN org_id SET NOT NULL",
 ]
 
 

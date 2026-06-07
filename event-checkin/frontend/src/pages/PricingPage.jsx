@@ -39,7 +39,29 @@ export default function PricingPage() {
 
         {data && (
           <>
-            <div className="mt-10 grid sm:grid-cols-2 lg:grid-cols-4 gap-4">
+            {/* Free plan */}
+            <div className="mt-10 bg-white dark:bg-slate-800 rounded-2xl shadow p-6 border-2 border-teal-200 dark:border-teal-800 flex flex-col sm:flex-row sm:items-center gap-6">
+              <div className="sm:w-1/4">
+                <div className="font-semibold text-slate-900 dark:text-white">Free</div>
+                <div className="text-3xl font-extrabold text-slate-900 dark:text-white">{currency === 'NGN' ? '₦0' : '$0'}</div>
+                <div className="text-xs text-slate-500 dark:text-slate-400">per event, forever</div>
+                <Link to="/register" className="mt-3 inline-block bg-teal-600 hover:bg-teal-700 text-white text-center px-4 py-2 rounded-lg text-sm font-semibold">
+                  Get started free
+                </Link>
+              </div>
+              <ul className="flex-1 grid sm:grid-cols-2 gap-y-1.5 gap-x-6 text-sm text-slate-600 dark:text-slate-400">
+                <li>✓ Up to 25 guests</li>
+                <li>✓ Email invitations</li>
+                <li>✓ Self-serve RSVP page</li>
+                <li>✓ Confirm / decline + custom questions</li>
+                <li className="text-slate-400 dark:text-slate-500">— No SMS / WhatsApp</li>
+                <li className="text-slate-400 dark:text-slate-500">— No seating, menu, or QR check-in</li>
+                <li className="text-slate-400 dark:text-slate-500">— Shows EventQR branding</li>
+              </ul>
+            </div>
+
+            <h2 className="text-xl font-bold text-slate-900 dark:text-white mt-12 mb-3">Event Passes — pay per event</h2>
+            <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-4">
               {data.tiers.map((t) => (
                 <div key={t.key} className="bg-white dark:bg-slate-800 rounded-2xl shadow p-6 flex flex-col gap-3 border dark:border-slate-700">
                   <div className="font-semibold text-slate-900 dark:text-white">{t.label}</div>

@@ -69,6 +69,22 @@ SCHEMA_PATCHES: list[str] = [
     "UPDATE events SET is_paid = TRUE, paid_channels = TRUE, plan_tier = 'comp', "
     "message_credits = 100000 "
     "WHERE created_at < TIMESTAMP '2026-06-07 02:30:00' AND plan_tier = 'free'",
+
+    # 7) Phase 3: seed editable pricing plans (idempotent; superadmin can edit later).
+    *[
+        "INSERT INTO pricing_plans (key, kind, label, guest_cap, credits, usd, ngn, active, sort_order) "
+        f"SELECT '{k}', '{kind}', '{label}', {cap}, {cr}, {usd}, {ngn}, TRUE, {so} "
+        f"WHERE NOT EXISTS (SELECT 1 FROM pricing_plans WHERE key = '{k}')"
+        for (k, kind, label, cap, cr, usd, ngn, so) in [
+            ("tier50",      "tier", "Up to 50 guests",     "50",   100,  2900,  2500000,  1),
+            ("tier150",     "tier", "Up to 150 guests",    "150",  300,  5900,  5500000,  2),
+            ("tier300",     "tier", "Up to 300 guests",    "300",  600,  9900,  9500000,  3),
+            ("unlimited",   "tier", "300+ (unlimited)",    "NULL", 1500, 14900, 15000000, 4),
+            ("credits_100", "pack", "100 message credits", "NULL", 100,  500,   500000,   1),
+            ("credits_500", "pack", "500 message credits", "NULL", 500,  2000,  2000000,  2),
+            ("credits_2000","pack", "2,000 message credits","NULL",2000, 6000,  6000000,  3),
+        ]
+    ],
 ]
 
 

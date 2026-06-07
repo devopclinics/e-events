@@ -1,88 +1,58 @@
-"""Event Pass pricing tiers and entitlement application (Phase 3).
+"""Event Pass pricing — now DB-backed (superadmin-editable via the console).
 
-Amounts are in the smallest currency unit (USD cents, NGN kobo). Tweak freely —
-this is the single source of truth for what each pass costs and unlocks.
+Prices/limits live in the `pricing_plans` table (seeded by db_migrate). Amounts
+are smallest currency unit (USD cents, NGN kobo).
 """
-from .models import Event
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
 
-# tier_key -> definition. guest_cap=None means unlimited.
-TIERS: dict[str, dict] = {
-    "tier50":     {"label": "Up to 50 guests",     "guest_cap": 50,   "credits": 100,  "usd": 2900,  "ngn": 2500000},
-    "tier150":    {"label": "Up to 150 guests",    "guest_cap": 150,  "credits": 300,  "usd": 5900,  "ngn": 5500000},
-    "tier300":    {"label": "Up to 300 guests",    "guest_cap": 300,  "credits": 600,  "usd": 9900,  "ngn": 9500000},
-    "unlimited":  {"label": "300+ (unlimited)",    "guest_cap": None, "credits": 1500, "usd": 14900, "ngn": 15000000},
-}
-
-# Credit-only top-up packs (no tier/cap change) — for paid events that run low.
-CREDIT_PACKS: dict[str, dict] = {
-    "credits_100":  {"label": "100 message credits",   "credits": 100,  "usd": 500,  "ngn": 500000},
-    "credits_500":  {"label": "500 message credits",   "credits": 500,  "usd": 2000, "ngn": 2000000},
-    "credits_2000": {"label": "2,000 message credits", "credits": 2000, "usd": 6000, "ngn": 6000000},
-}
+from .models import Event, PricingPlan
 
 # Which currency each region pays in (and thus which provider is used).
 REGION_CURRENCY = {"US": "USD", "NG": "NGN"}
 
 
-def _catalog(key: str) -> dict | None:
-    return TIERS.get(key) or CREDIT_PACKS.get(key)
+async def get_plan(db: AsyncSession, key: str) -> PricingPlan | None:
+    return await db.scalar(select(PricingPlan).where(PricingPlan.key == key))
 
 
-def is_purchasable(key: str) -> bool:
-    return key in TIERS or key in CREDIT_PACKS
+async def list_plans(db: AsyncSession, kind: str | None = None, active_only: bool = True):
+    q = select(PricingPlan)
+    if kind:
+        q = q.where(PricingPlan.kind == kind)
+    if active_only:
+        q = q.where(PricingPlan.active.is_(True))
+    return (await db.execute(q.order_by(PricingPlan.kind, PricingPlan.sort_order))).scalars().all()
 
 
-def is_credit_pack(key: str) -> bool:
-    return key in CREDIT_PACKS
+def plan_amount(plan: PricingPlan, currency: str) -> int:
+    return plan.usd if currency.upper() == "USD" else plan.ngn
 
 
-def amount_for(key: str, currency: str) -> int:
-    """Smallest-unit price for a tier or credit pack in the given currency."""
-    item = _catalog(key)
-    return item["usd"] if currency.upper() == "USD" else item["ngn"]
-
-
-def packs_public(currency: str) -> list[dict]:
+def plan_public(plan: PricingPlan, currency: str) -> dict:
     cur = currency.upper()
-    return [
-        {"key": k, "label": p["label"], "credits": p["credits"],
-         "currency": cur, "amount": p["usd"] if cur == "USD" else p["ngn"]}
-        for k, p in CREDIT_PACKS.items()
-    ]
+    return {
+        "key": plan.key, "kind": plan.kind, "label": plan.label,
+        "guest_cap": plan.guest_cap, "credits": plan.credits,
+        "currency": cur, "amount": plan.usd if cur == "USD" else plan.ngn,
+    }
 
 
-def apply_purchase(event: Event, key: str) -> None:
-    """Apply a paid purchase: a tier flips entitlements; a credit pack only
-    adds credits. Caller commits; idempotency is the caller's job."""
-    if key in TIERS:
-        apply_pass(event, key)
-    elif key in CREDIT_PACKS:
-        event.message_credits = (event.message_credits or 0) + CREDIT_PACKS[key]["credits"]
+async def tiers_public(db: AsyncSession, currency: str) -> list[dict]:
+    return [plan_public(p, currency) for p in await list_plans(db, kind="tier")]
 
 
-def tiers_public(currency: str) -> list[dict]:
-    """Tier catalogue for the pricing UI, priced in one currency."""
-    cur = currency.upper()
-    return [
-        {
-            "key": k,
-            "label": t["label"],
-            "guest_cap": t["guest_cap"],
-            "credits": t["credits"],
-            "currency": cur,
-            "amount": t["usd"] if cur == "USD" else t["ngn"],
-        }
-        for k, t in TIERS.items()
-    ]
+async def packs_public(db: AsyncSession, currency: str) -> list[dict]:
+    return [plan_public(p, currency) for p in await list_plans(db, kind="pack")]
 
 
-def apply_pass(event: Event, tier_key: str) -> None:
-    """Flip the event's entitlements for a purchased tier. Credits are added
-    (top-ups accumulate). Caller commits. Idempotency is the caller's job
-    (guard on the Payment reference)."""
-    tier = TIERS[tier_key]
-    event.plan_tier = tier_key
-    event.is_paid = True
-    event.paid_channels = True
-    event.guest_cap = tier["guest_cap"]
-    event.message_credits = (event.message_credits or 0) + tier["credits"]
+def apply_purchase(event: Event, plan: PricingPlan) -> None:
+    """Apply a paid purchase to an event. A tier flips entitlements + adds its
+    credits; a credit pack only adds credits. Caller commits; idempotency is the
+    caller's responsibility (guard on Payment.reference)."""
+    if plan.kind == "tier":
+        event.plan_tier = plan.key
+        event.is_paid = True
+        event.paid_channels = True
+        event.guest_cap = plan.guest_cap
+    event.message_credits = (event.message_credits or 0) + (plan.credits or 0)

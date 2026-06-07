@@ -90,6 +90,25 @@ async def test_cannot_assign_non_org_member(ctx):
 
 
 @pytest.mark.asyncio
+async def test_console_overview_superadmin_only(ctx):
+    ctx.login(ctx.ids["user_a"])            # org owner, not a platform operator
+    assert (await ctx.client.get("/api/admin/overview")).status_code == 403
+    ctx.login(ctx.ids["superadmin"])
+    r = await ctx.client.get("/api/admin/overview")
+    assert r.status_code == 200
+    assert len(r.json()) >= 2               # sees Org A and Org B
+
+
+@pytest.mark.asyncio
+async def test_operator_grant_and_revoke(ctx):
+    ctx.login(ctx.ids["superadmin"])
+    r = await ctx.client.post("/api/admin/operators", json={"email": "op2@x.com"})
+    assert r.status_code == 200 and r.json()["is_platform_superadmin"] is True
+    ops = (await ctx.client.get("/api/admin/operators")).json()
+    assert any(o["email"] == "op2@x.com" for o in ops)
+
+
+@pytest.mark.asyncio
 async def test_me_reports_effective_admin_role(ctx):
     ctx.login(ctx.ids["user_a"])           # owner of Org A
     me = (await ctx.client.get("/api/auth/me")).json()

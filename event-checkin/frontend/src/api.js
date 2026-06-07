@@ -161,6 +161,16 @@ export const api = {
   checkout:        (eventId, tier) => req('POST', '/billing/checkout', { event_id: eventId, tier }),
   // Public marketing pricing (no auth)
   getPricing:      (currency = 'USD') => fetch(`/api/billing/pricing?currency=${currency}`).then((r) => r.json()),
+
+  // Superadmin console
+  adminOverview:       ()              => req('GET',    '/admin/overview'),
+  adminGrant:          (eventId, body) => req('POST',   `/admin/events/${eventId}/grant`, body),
+  adminListOperators:  ()              => req('GET',    '/admin/operators'),
+  adminAddOperator:    (email)         => req('POST',   '/admin/operators', { email }),
+  adminRemoveOperator: (userId)        => req('DELETE', `/admin/operators/${userId}`),
+  adminListPlans:      ()              => req('GET',    '/admin/plans'),
+  adminSavePlan:       (key, body)     => req('PUT',    `/admin/plans/${key}`, body),
+  adminDeletePlan:     (key)           => req('DELETE', `/admin/plans/${key}`),
   // Manual invites (admin)
   sendInvites: (eventId, data) => req('POST', `/events/${eventId}/send-invites`, data),
   // Cover image (admin)

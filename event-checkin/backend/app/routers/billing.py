@@ -15,8 +15,7 @@ from ..models import Event, Organization, Payment, User
 from ..schemas import CheckoutRequest, CheckoutOut
 from ..auth import get_current_user, _org_role
 from ..billing import (
-    amount_for, apply_purchase, is_purchasable, is_credit_pack,
-    tiers_public, packs_public,
+    get_plan, plan_amount, apply_purchase, tiers_public, packs_public,
 )
 from ..config import settings
 from services import payments
@@ -57,26 +56,27 @@ async def list_tiers(event_id: str, user: User = Depends(get_current_user), db: 
         "is_paid": event.is_paid,
         "plan_tier": event.plan_tier,
         "message_credits": event.message_credits,
-        "tiers": tiers_public(currency),
-        "packs": packs_public(currency),
+        "tiers": await tiers_public(db, currency),
+        "packs": await packs_public(db, currency),
     }
 
 
 @router.get("/pricing")
-async def public_pricing(currency: str = "USD"):
+async def public_pricing(currency: str = "USD", db: AsyncSession = Depends(get_db)):
     """Public pricing catalogue for the marketing page (no auth)."""
     cur = currency.upper()
     if cur not in ("USD", "NGN"):
         cur = "USD"
-    return {"currency": cur, "tiers": tiers_public(cur), "packs": packs_public(cur)}
+    return {"currency": cur, "tiers": await tiers_public(db, cur), "packs": await packs_public(db, cur)}
 
 
 @router.post("/checkout", response_model=CheckoutOut)
 async def checkout(body: CheckoutRequest, user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
     event = await _require_event_admin(body.event_id, user, db)
-    if not is_purchasable(body.tier):
-        raise HTTPException(400, "Unknown item")
-    if is_credit_pack(body.tier) and not event.is_paid:
+    plan = await get_plan(db, body.tier)
+    if not plan or not plan.active:
+        raise HTTPException(400, "Unknown or inactive item")
+    if plan.kind == "pack" and not event.is_paid:
         raise HTTPException(400, "Buy an Event Pass before topping up message credits.")
     org = await db.get(Organization, event.org_id)
     currency = (org.currency if org else "USD").upper()
@@ -84,7 +84,7 @@ async def checkout(body: CheckoutRequest, user: User = Depends(get_current_user)
     if not _provider_enabled(provider):
         raise HTTPException(503, f"{provider.title()} billing is not configured yet.")
 
-    amount = amount_for(body.tier, currency)
+    amount = plan_amount(plan, currency)
     base = (settings.public_base_url or settings.frontend_url).rstrip("/")
     success_url = f"{base}/admin?upgraded=1"
     cancel_url = f"{base}/admin"
@@ -124,7 +124,11 @@ async def _fulfill(db: AsyncSession, provider: str, reference: str, event_id: st
         logger.warning("billing: fulfill for unknown event ref=%s", reference)
         return
 
-    apply_purchase(event, tier_key)
+    plan = await get_plan(db, tier_key)
+    if not plan:
+        logger.warning("billing: fulfill for unknown plan key=%s ref=%s", tier_key, reference)
+        return
+    apply_purchase(event, plan)
     if payment:
         payment.status = "paid"
     else:

@@ -138,6 +138,28 @@ class OrgMemberOut(BaseModel):
     role: str
 
 
+# ── Superadmin console ──────────────────────────────────────────────────────
+
+class GrantRequest(BaseModel):
+    tier: Optional[str] = None          # comp this event onto a tier
+    add_credits: Optional[int] = None   # add message credits
+
+
+class OperatorInvite(BaseModel):
+    email: EmailStr
+
+
+class PlanUpsert(BaseModel):
+    kind: Literal["tier", "pack"]
+    label: str
+    guest_cap: Optional[int] = None
+    credits: int = 0
+    usd: int = 0
+    ngn: int = 0
+    active: bool = True
+    sort_order: int = 0
+
+
 # ── Seating ───────────────────────────────────────────────────────────────────
 
 class SeatingTableCreate(BaseModel):

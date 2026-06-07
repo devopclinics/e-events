@@ -132,6 +132,22 @@ class Event(Base):
     rsvp_questions: Mapped[list["RSVPQuestion"]] = relationship("RSVPQuestion", back_populates="event", cascade="all, delete-orphan")
 
 
+class PricingPlan(Base):
+    """Editable catalogue of Event Pass tiers and credit packs (superadmin-managed).
+    Seeded from defaults; the billing flow reads prices/limits from here."""
+    __tablename__ = "pricing_plans"
+
+    key: Mapped[str] = mapped_column(String(40), primary_key=True)  # e.g. "tier50", "credits_100"
+    kind: Mapped[str] = mapped_column(String(10))                   # "tier" | "pack"
+    label: Mapped[str] = mapped_column(String(120))
+    guest_cap: Mapped[int | None] = mapped_column(Integer, nullable=True)  # tiers; None = unlimited
+    credits: Mapped[int] = mapped_column(Integer, default=0)
+    usd: Mapped[int] = mapped_column(Integer, default=0)            # cents
+    ngn: Mapped[int] = mapped_column(Integer, default=0)            # kobo
+    active: Mapped[bool] = mapped_column(Boolean, default=True)
+    sort_order: Mapped[int] = mapped_column(Integer, default=0)
+
+
 class Payment(Base):
     """One Event Pass purchase. `reference` is the provider's id (Stripe session
     or Paystack reference) and is unique → webhook retries are idempotent."""

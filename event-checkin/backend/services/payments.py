@@ -26,6 +26,7 @@ def paystack_enabled() -> bool:
 async def stripe_create_checkout(
     *, amount: int, currency: str, event_id: str, tier_key: str,
     email: str | None, success_url: str, cancel_url: str,
+    tax_enabled: bool = False,
 ) -> tuple[str, str]:
     """Create a Checkout Session. Returns (checkout_url, reference=session_id)."""
     data = {
@@ -35,12 +36,18 @@ async def stripe_create_checkout(
         "line_items[0][quantity]": "1",
         "line_items[0][price_data][currency]": currency.lower(),
         "line_items[0][price_data][unit_amount]": str(amount),
-        "line_items[0][price_data][product_data][name]": f"EventQR Event Pass — {tier_key}",
+        "line_items[0][price_data][product_data][name]": f"EventQR — {tier_key}",
         "metadata[event_id]": event_id,
         "metadata[tier_key]": tier_key,
+        # A receipt/invoice the customer can download (also satisfies records).
+        "invoice_creation[enabled]": "true",
     }
     if email:
         data["customer_email"] = email
+    if tax_enabled:
+        # Requires Stripe Tax activated in the dashboard.
+        data["automatic_tax[enabled]"] = "true"
+        data["billing_address_collection"] = "required"
     async with httpx.AsyncClient(timeout=20) as c:
         r = await c.post(
             "https://api.stripe.com/v1/checkout/sessions",

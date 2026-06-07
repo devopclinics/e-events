@@ -155,6 +155,8 @@ export const api = {
   // Billing (Event Pass)
   getBillingTiers: (eventId)      => req('GET',  `/billing/tiers/${eventId}`),
   checkout:        (eventId, tier) => req('POST', '/billing/checkout', { event_id: eventId, tier }),
+  // Public marketing pricing (no auth)
+  getPricing:      (currency = 'USD') => fetch(`/api/billing/pricing?currency=${currency}`).then((r) => r.json()),
   // Manual invites (admin)
   sendInvites: (eventId, data) => req('POST', `/events/${eventId}/send-invites`, data),
   // Cover image (admin)

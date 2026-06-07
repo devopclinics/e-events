@@ -13,14 +13,51 @@ TIERS: dict[str, dict] = {
     "unlimited":  {"label": "300+ (unlimited)",    "guest_cap": None, "credits": 1500, "usd": 14900, "ngn": 15000000},
 }
 
+# Credit-only top-up packs (no tier/cap change) — for paid events that run low.
+CREDIT_PACKS: dict[str, dict] = {
+    "credits_100":  {"label": "100 message credits",   "credits": 100,  "usd": 500,  "ngn": 500000},
+    "credits_500":  {"label": "500 message credits",   "credits": 500,  "usd": 2000, "ngn": 2000000},
+    "credits_2000": {"label": "2,000 message credits", "credits": 2000, "usd": 6000, "ngn": 6000000},
+}
+
 # Which currency each region pays in (and thus which provider is used).
 REGION_CURRENCY = {"US": "USD", "NG": "NGN"}
 
 
-def amount_for(tier_key: str, currency: str) -> int:
-    """Smallest-unit price for a tier in the given currency."""
-    tier = TIERS[tier_key]
-    return tier["usd"] if currency.upper() == "USD" else tier["ngn"]
+def _catalog(key: str) -> dict | None:
+    return TIERS.get(key) or CREDIT_PACKS.get(key)
+
+
+def is_purchasable(key: str) -> bool:
+    return key in TIERS or key in CREDIT_PACKS
+
+
+def is_credit_pack(key: str) -> bool:
+    return key in CREDIT_PACKS
+
+
+def amount_for(key: str, currency: str) -> int:
+    """Smallest-unit price for a tier or credit pack in the given currency."""
+    item = _catalog(key)
+    return item["usd"] if currency.upper() == "USD" else item["ngn"]
+
+
+def packs_public(currency: str) -> list[dict]:
+    cur = currency.upper()
+    return [
+        {"key": k, "label": p["label"], "credits": p["credits"],
+         "currency": cur, "amount": p["usd"] if cur == "USD" else p["ngn"]}
+        for k, p in CREDIT_PACKS.items()
+    ]
+
+
+def apply_purchase(event: Event, key: str) -> None:
+    """Apply a paid purchase: a tier flips entitlements; a credit pack only
+    adds credits. Caller commits; idempotency is the caller's job."""
+    if key in TIERS:
+        apply_pass(event, key)
+    elif key in CREDIT_PACKS:
+        event.message_credits = (event.message_credits or 0) + CREDIT_PACKS[key]["credits"]
 
 
 def tiers_public(currency: str) -> list[dict]:

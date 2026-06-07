@@ -11,6 +11,8 @@ import LoginPage from './pages/LoginPage'
 import RegisterPage from './pages/RegisterPage'
 import LandingPage from './pages/LandingPage'
 import InvitePage from './pages/InvitePage'
+import PricingPage from './pages/PricingPage'
+import RefundPolicyPage from './pages/RefundPolicyPage'
 
 // ── Preferred-view helpers ────────────────────────────────────────────────────
 
@@ -160,6 +162,9 @@ function AppRoutes() {
       <Route path="/e/:eventId" element={<InvitePage />} />
       {/* Personalised (closed-mode) invite link — no auth required */}
       <Route path="/r/:token" element={<InvitePage />} />
+      {/* Public marketing pages — no auth required */}
+      <Route path="/pricing" element={<PricingPage />} />
+      <Route path="/refund-policy" element={<RefundPolicyPage />} />
 
       {/* Landing page: show to guests, redirect logged-in users */}
       <Route path="/"

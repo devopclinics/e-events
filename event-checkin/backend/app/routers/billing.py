@@ -14,7 +14,10 @@ from ..database import get_db
 from ..models import Event, Organization, Payment, User
 from ..schemas import CheckoutRequest, CheckoutOut
 from ..auth import get_current_user, _org_role
-from ..billing import TIERS, amount_for, apply_pass, tiers_public
+from ..billing import (
+    amount_for, apply_purchase, is_purchasable, is_credit_pack,
+    tiers_public, packs_public,
+)
 from ..config import settings
 from services import payments
 
@@ -53,15 +56,28 @@ async def list_tiers(event_id: str, user: User = Depends(get_current_user), db: 
         "configured": _provider_enabled(provider),
         "is_paid": event.is_paid,
         "plan_tier": event.plan_tier,
+        "message_credits": event.message_credits,
         "tiers": tiers_public(currency),
+        "packs": packs_public(currency),
     }
+
+
+@router.get("/pricing")
+async def public_pricing(currency: str = "USD"):
+    """Public pricing catalogue for the marketing page (no auth)."""
+    cur = currency.upper()
+    if cur not in ("USD", "NGN"):
+        cur = "USD"
+    return {"currency": cur, "tiers": tiers_public(cur), "packs": packs_public(cur)}
 
 
 @router.post("/checkout", response_model=CheckoutOut)
 async def checkout(body: CheckoutRequest, user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
     event = await _require_event_admin(body.event_id, user, db)
-    if body.tier not in TIERS:
-        raise HTTPException(400, "Unknown tier")
+    if not is_purchasable(body.tier):
+        raise HTTPException(400, "Unknown item")
+    if is_credit_pack(body.tier) and not event.is_paid:
+        raise HTTPException(400, "Buy an Event Pass before topping up message credits.")
     org = await db.get(Organization, event.org_id)
     currency = (org.currency if org else "USD").upper()
     provider = _provider_for(currency)
@@ -77,6 +93,7 @@ async def checkout(body: CheckoutRequest, user: User = Depends(get_current_user)
         url, reference = await payments.stripe_create_checkout(
             amount=amount, currency=currency, event_id=event.id, tier_key=body.tier,
             email=user.email, success_url=success_url, cancel_url=cancel_url,
+            tax_enabled=settings.stripe_tax_enabled,
         )
     else:
         url, reference = await payments.paystack_create_checkout(
@@ -107,7 +124,7 @@ async def _fulfill(db: AsyncSession, provider: str, reference: str, event_id: st
         logger.warning("billing: fulfill for unknown event ref=%s", reference)
         return
 
-    apply_pass(event, tier_key)
+    apply_purchase(event, tier_key)
     if payment:
         payment.status = "paid"
     else:

@@ -36,6 +36,13 @@ class Settings(BaseSettings):
     bird_whatsapp_invite_template: str = ""           # Bird template name or project ID for invite
     bird_whatsapp_admission_template: str = ""        # Bird template name or project ID for admission
 
+    # ── Billing (Phase 3) — Event Pass checkout. Empty = provider disabled. ──
+    # Public base used to build checkout return URLs (defaults to frontend_url).
+    public_base_url: str = ""
+    stripe_secret_key: str = ""        # sk_live_... / sk_test_...
+    stripe_webhook_secret: str = ""    # whsec_...
+    paystack_secret_key: str = ""      # sk_live_... / sk_test_...
+
     class Config:
         env_file = ".env"
         extra = "ignore"  # tolerate unknown keys in .env / environment

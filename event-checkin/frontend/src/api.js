@@ -151,6 +151,10 @@ export const api = {
   deleteRSVPQuestion:   (eventId, qId)         => req('DELETE', `/events/${eventId}/rsvp-questions/${qId}`),
   // Broadcast (admin)
   broadcast: (eventId, data) => req('POST', `/events/${eventId}/broadcast`, data),
+
+  // Billing (Event Pass)
+  getBillingTiers: (eventId)      => req('GET',  `/billing/tiers/${eventId}`),
+  checkout:        (eventId, tier) => req('POST', '/billing/checkout', { event_id: eventId, tier }),
   // Manual invites (admin)
   sendInvites: (eventId, data) => req('POST', `/events/${eventId}/send-invites`, data),
   // Cover image (admin)

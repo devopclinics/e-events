@@ -481,6 +481,16 @@ class BroadcastRequest(BaseModel):
     channels: list[Literal["email", "sms", "whatsapp"]] = ["sms"]
 
 
+class CheckoutRequest(BaseModel):
+    event_id: str
+    tier: str
+
+
+class CheckoutOut(BaseModel):
+    url: str
+    provider: str
+
+
 class BroadcastResult(BaseModel):
     queued: int
     # couldn't reach: no email (for email) and no phone (for sms/whatsapp)

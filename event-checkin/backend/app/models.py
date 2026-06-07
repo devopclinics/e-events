@@ -132,6 +132,23 @@ class Event(Base):
     rsvp_questions: Mapped[list["RSVPQuestion"]] = relationship("RSVPQuestion", back_populates="event", cascade="all, delete-orphan")
 
 
+class Payment(Base):
+    """One Event Pass purchase. `reference` is the provider's id (Stripe session
+    or Paystack reference) and is unique → webhook retries are idempotent."""
+    __tablename__ = "payments"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+    org_id: Mapped[str] = mapped_column(String(36), ForeignKey("organizations.id"), index=True)
+    event_id: Mapped[str] = mapped_column(String(36), ForeignKey("events.id"), index=True)
+    provider: Mapped[str] = mapped_column(String(20))           # "stripe" | "paystack"
+    reference: Mapped[str] = mapped_column(String(255), unique=True, index=True)
+    tier_key: Mapped[str] = mapped_column(String(20))
+    amount: Mapped[int] = mapped_column(Integer)               # smallest unit
+    currency: Mapped[str] = mapped_column(String(10))
+    status: Mapped[str] = mapped_column(String(20), default="pending")  # pending|paid|failed
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+
+
 class SeatingTable(Base):
     __tablename__ = "seating_tables"
 

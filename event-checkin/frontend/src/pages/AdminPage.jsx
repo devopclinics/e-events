@@ -1944,6 +1944,75 @@ function ManualInvitePanel({ event }) {
   )
 }
 
+// ── Billing / Event Pass panel ──────────────────────────────────────────────
+
+function fmtMoney(amount, currency) {
+  const major = amount / 100
+  return currency === 'NGN'
+    ? `₦${major.toLocaleString()}`
+    : `$${major.toLocaleString(undefined, { minimumFractionDigits: 0 })}`
+}
+
+function BillingPanel({ event }) {
+  const [info, setInfo] = useState(null)
+  const [busy, setBusy] = useState('')
+  const [err, setErr] = useState('')
+
+  useEffect(() => {
+    api.getBillingTiers(event.id).then(setInfo).catch((e) => setErr(e.message))
+  }, [event.id])
+
+  async function upgrade(tier) {
+    setBusy(tier); setErr('')
+    try {
+      const { url } = await api.checkout(event.id, tier)
+      window.location.href = url   // hand off to Stripe/Paystack
+    } catch (e) { setErr(e.message); setBusy('') }
+  }
+
+  return (
+    <div className="bg-white dark:bg-slate-800 dark:border dark:border-slate-700/60 rounded-xl shadow p-6 space-y-4">
+      <h2 className="font-semibold text-base dark:text-white">💳 Event Pass</h2>
+
+      {event.is_paid ? (
+        <div className="rounded-lg bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 px-4 py-3 text-sm text-green-800 dark:text-green-300">
+          ✓ This event is on the <span className="font-semibold">{event.plan_tier}</span> plan
+          {event.guest_cap ? ` · up to ${event.guest_cap} guests` : ' · unlimited guests'}
+          {` · ${event.message_credits} message credits`}.
+        </div>
+      ) : (
+        <>
+          <p className="text-xs text-slate-500 dark:text-slate-400">
+            Free events are email-only, capped at 25 guests. An Event Pass unlocks
+            SMS/WhatsApp, more guests, and removes branding — one payment, no subscription.
+          </p>
+          {info && !info.configured && (
+            <div className="rounded-lg bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 px-3 py-2 text-xs text-amber-800 dark:text-amber-300">
+              Online payment isn’t set up yet — contact the organizer to enable {info.provider}.
+            </div>
+          )}
+          <div className="grid sm:grid-cols-2 gap-3">
+            {info?.tiers.map((t) => (
+              <div key={t.key} className="border dark:border-slate-700 rounded-xl p-4 flex flex-col gap-2">
+                <div className="font-semibold text-sm dark:text-white">{t.label}</div>
+                <div className="text-2xl font-bold text-teal-700 dark:text-teal-300">{fmtMoney(t.amount, t.currency)}</div>
+                <div className="text-xs text-slate-500 dark:text-slate-400">{t.credits} SMS/WhatsApp credits</div>
+                <button
+                  onClick={() => upgrade(t.key)}
+                  disabled={!info.configured || !!busy}
+                  className="mt-1 bg-teal-600 hover:bg-teal-700 text-white px-3 py-2 rounded-lg text-sm font-semibold disabled:opacity-50">
+                  {busy === t.key ? 'Redirecting…' : 'Buy pass'}
+                </button>
+              </div>
+            ))}
+          </div>
+        </>
+      )}
+      {err && <div className="text-xs text-red-600 dark:text-red-400">{err}</div>}
+    </div>
+  )
+}
+
 // ── Broadcast panel ───────────────────────────────────────────────────────────
 
 function BroadcastPanel({ event }) {
@@ -2485,6 +2554,17 @@ export default function AdminPage() {
 
   useEffect(() => { api.listEvents().then(setEvents).catch(console.error) }, [])
 
+  // Returning from a successful Event Pass checkout (Stripe/Paystack).
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search)
+    if (params.get('upgraded')) {
+      setMsg('Payment received — your Event Pass is being applied. Refresh in a moment if the plan hasn’t updated.')
+      setTimeout(() => setMsg(''), 8000)
+      window.history.replaceState({}, '', '/admin')
+      api.listEvents().then(setEvents).catch(console.error)
+    }
+  }, [])
+
   useEffect(() => {
     setPage(0)
     setSelectedGuests(new Set())
@@ -2942,6 +3022,7 @@ export default function AdminPage() {
                 </div>
               )
             })()}
+            <BillingPanel event={event} />
             <InvitePanel event={event} onChanged={updateEvent} />
             <ManualInvitePanel event={event} />
             <BroadcastPanel event={event} />

@@ -25,6 +25,9 @@ class UserOut(BaseModel):
     email: str
     role: str
     created_at: datetime
+    # Org-aware flags (populated for the current user by /auth/me).
+    is_platform_superadmin: bool = False
+    is_org_admin: bool = False
 
 
 class TokenResponse(BaseModel):
@@ -104,6 +107,12 @@ class EventOut(BaseModel):
     invite_mode: str = "open"
     rsvp_deadline: Optional[datetime] = None
     rsvp_require_approval: bool = False
+    # Entitlements (Phase 2)
+    plan_tier: str = "free"
+    is_paid: bool = False
+    guest_cap: Optional[int] = None
+    paid_channels: bool = False
+    message_credits: int = 0
 
 
 class EventMemberOut(BaseModel):

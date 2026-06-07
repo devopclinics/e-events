@@ -23,6 +23,7 @@ from ..schemas import (
 from services import messaging
 from services.email_service import send_invite_email
 from .guests import _normalize_phone
+from ..entitlements import assert_within_guest_cap
 
 logger = logging.getLogger(__name__)
 
@@ -189,11 +190,11 @@ async def submit_rsvp(
     if _deadline_passed(event):
         raise HTTPException(410, "RSVP has closed for this event")
 
-    # Capacity guard
-    if event.rsvp_capacity is not None:
-        count = await _rsvp_count(event_id, db)
-        if count >= event.rsvp_capacity:
-            raise HTTPException(409, "Sorry — this event is at capacity")
+    # Capacity guard (host-set RSVP cap and plan entitlement cap)
+    count = await _rsvp_count(event_id, db)
+    if event.rsvp_capacity is not None and count >= event.rsvp_capacity:
+        raise HTTPException(409, "Sorry — this event is at capacity")
+    assert_within_guest_cap(event, count)
 
     await _require_questions_answered(event_id, data.answers, db)
 

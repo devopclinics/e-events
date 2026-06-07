@@ -7,11 +7,12 @@ from datetime import datetime
 from urllib.parse import urlparse
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, BackgroundTasks, Response, Body
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select
+from sqlalchemy import select, func
 from ..database import get_db
 from ..models import Event, Guest, User
 from ..schemas import GuestOut, GuestCreate
 from ..auth import require_event_admin
+from ..entitlements import assert_within_guest_cap, can_use_paid_channels
 from services.qr_service import generate_qr_bytes
 from services.email_service import send_invite_email, send_manual_invite_email
 from services import messaging
@@ -241,6 +242,7 @@ def _dispatch_invite(background_tasks: BackgroundTasks, event: Event, guest: Gue
         return
 
     ticket_url = f"{event.checkin_base_url.rstrip('/')}/scan/{guest.qr_token}"
+    paid_channels = can_use_paid_channels(event)
 
     if event.notify_email:
         guest_data = {
@@ -255,14 +257,14 @@ def _dispatch_invite(background_tasks: BackgroundTasks, event: Event, guest: Gue
             event.seating_enabled, event.menu_enabled,
         )
 
-    if event.notify_sms and guest.phone and guest.sms_consent:
+    if paid_channels and event.notify_sms and guest.phone and guest.sms_consent:
         background_tasks.add_task(
             messaging.send_invite_sms,
             phone=guest.phone, first_name=guest.first_name,
             event_name=event.name, ticket_url=ticket_url, event_date=event.event_date,
         )
 
-    if event.notify_whatsapp and guest.phone and guest.whatsapp_consent:
+    if paid_channels and event.notify_whatsapp and guest.phone and guest.whatsapp_consent:
         background_tasks.add_task(
             messaging.send_invite_whatsapp,
             phone=guest.phone, first_name=guest.first_name,
@@ -278,6 +280,7 @@ def _dispatch_rsvp_invite(background_tasks: BackgroundTasks, event: Event, guest
         guest.invite_token = str(uuid.uuid4())
     invite_url = f"{event.checkin_base_url.rstrip('/')}/r/{guest.invite_token}"
     name = f"{guest.first_name} {guest.last_name}".strip() or "Guest"
+    paid_channels = can_use_paid_channels(event)
 
     if event.notify_email and guest.email:
         background_tasks.add_task(
@@ -287,14 +290,14 @@ def _dispatch_rsvp_invite(background_tasks: BackgroundTasks, event: Event, guest
             invite_message=event.invite_message,
         )
 
-    if event.notify_sms and guest.phone and guest.sms_consent:
+    if paid_channels and event.notify_sms and guest.phone and guest.sms_consent:
         background_tasks.add_task(
             messaging.send_manual_invite_sms,
             phone=guest.phone, name=name,
             event_name=event.name, invite_url=invite_url,
         )
 
-    if event.notify_whatsapp and guest.phone and guest.whatsapp_consent:
+    if paid_channels and event.notify_whatsapp and guest.phone and guest.whatsapp_consent:
         background_tasks.add_task(
             messaging.send_manual_invite_whatsapp,
             phone=guest.phone, name=name,
@@ -345,6 +348,9 @@ async def add_guest(event_id: str, data: GuestCreate, db: AsyncSession = Depends
     phone = _normalize_phone(phone_raw) if phone_raw else None
     if phone_raw and phone is None:
         raise HTTPException(400, "Phone format not recognised. Use E.164 (e.g. +18327941707) or US 10-digit.")
+
+    count = await db.scalar(select(func.count()).where(Guest.event_id == event_id)) or 0
+    assert_within_guest_cap(event, count)
 
     guest = Guest(event_id=event_id, first_name=first, last_name=last, email=email, phone=phone, is_vip=bool(data.is_vip))
     db.add(guest)

@@ -114,6 +114,17 @@ class Event(Base):
     # planner must approve before a ticket is issued. No effect in closed mode.
     rsvp_require_approval: Mapped[bool] = mapped_column(Boolean, default=False)
 
+    # ── Per-event entitlements (Phase 2) — what an Event Pass unlocks ─────────
+    # plan_tier: "free" | "tier50" | "tier150" | "tier300" | "unlimited" | "comp"
+    plan_tier: Mapped[str] = mapped_column(String(20), default="free")
+    is_paid: Mapped[bool] = mapped_column(Boolean, default=False)
+    # Max guests for this event. None = unlimited (paid). Free uses FREE_GUEST_CAP.
+    guest_cap: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    # SMS/WhatsApp unlocked (email is always allowed).
+    paid_channels: Mapped[bool] = mapped_column(Boolean, default=False)
+    # Prepaid SMS/WhatsApp credits remaining (metering wired in Phase 3 billing).
+    message_credits: Mapped[int] = mapped_column(Integer, default=0)
+
     members: Mapped[list["EventUser"]] = relationship("EventUser", back_populates="event", cascade="all, delete-orphan")
     guests: Mapped[list["Guest"]] = relationship("Guest", back_populates="event", cascade="all, delete-orphan")
     tables: Mapped[list["SeatingTable"]] = relationship("SeatingTable", back_populates="event", cascade="all, delete-orphan")

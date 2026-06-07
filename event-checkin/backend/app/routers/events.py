@@ -14,6 +14,7 @@ from ..schemas import (
     ManualInviteRequest, ManualInviteResult,
 )
 from ..auth import require_admin, require_event_admin, get_current_user, _org_role
+from ..entitlements import can_use_paid_channels
 from .guests import import_from_source_url, _normalize_phone
 from services import messaging
 from services.email_service import send_manual_invite_email, send_broadcast_email
@@ -434,6 +435,20 @@ async def broadcast_message(
 
     if not data.message.strip():
         raise HTTPException(400, "message cannot be empty")
+
+    # Entitlement gate: SMS/WhatsApp require a paid event; email is always allowed.
+    channels = list(data.channels)
+    if not can_use_paid_channels(event):
+        dropped = [c for c in channels if c in ("sms", "whatsapp")]
+        channels = [c for c in channels if c == "email"]
+        if not channels:
+            raise HTTPException(
+                402,
+                "Sending SMS/WhatsApp requires an Event Pass. Upgrade this event, "
+                "or broadcast by email.",
+            )
+        data = data.model_copy(update={"channels": channels})
+        _ = dropped  # (silently dropped paid channels; email still sent)
 
     q = select(Guest).where(Guest.event_id == event_id)
     if data.target == "admitted":

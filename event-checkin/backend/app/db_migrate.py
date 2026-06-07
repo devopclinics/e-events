@@ -63,6 +63,12 @@ SCHEMA_PATCHES: list[str] = [
     "UPDATE users SET is_platform_superadmin = TRUE WHERE email = 'info@devopclinics.com'",
     # 5) D4: every event now has an org (backfilled above + create_event stamps it).
     "ALTER TABLE events ALTER COLUMN org_id SET NOT NULL",
+    # 6) Phase 2: grandfather all PRE-EXISTING events to a comp (unlimited, paid)
+    #    tier so entitlement gates never break events created before billing.
+    #    Fixed cutoff → idempotent and never touches events created afterward.
+    "UPDATE events SET is_paid = TRUE, paid_channels = TRUE, plan_tier = 'comp', "
+    "message_credits = 100000 "
+    "WHERE created_at < TIMESTAMP '2026-06-07 02:30:00' AND plan_tier = 'free'",
 ]
 
 

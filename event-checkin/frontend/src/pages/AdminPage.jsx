@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from 'react'
 import { api } from '../api'
+import { useAuth } from '../context/AuthContext'
 
 // ── helpers ──────────────────────────────────────────────────────────────────
 
@@ -2463,6 +2464,7 @@ function TabBar({ tabs, active, onChange }) {
 }
 
 export default function AdminPage() {
+  const { user } = useAuth()
   const [events, setEvents] = useState([])
   const [selectedId, setSelectedId] = useState('')
   const [showForm, setShowForm] = useState(false)
@@ -3153,8 +3155,8 @@ export default function AdminPage() {
         </>
       )}
 
-      {/* User management — always visible to admins */}
-      <UsersPanel />
+      {/* User management — platform operator (superadmin) only */}
+      {user?.is_platform_superadmin && <UsersPanel />}
     </div>
   )
 }

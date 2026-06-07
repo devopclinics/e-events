@@ -3,7 +3,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 
 from ..database import get_db
-from ..models import User
+from ..models import User, Membership
 from ..schemas import UserOut
 from ..auth import get_current_user, require_superadmin
 
@@ -11,8 +11,22 @@ router = APIRouter()
 
 
 @router.get("/me", response_model=UserOut)
-async def me(user: User = Depends(get_current_user)):
-    return user
+async def me(user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
+    # Effective role reflects org membership so the UI gates on org standing, not
+    # the legacy global role: org owner/admin (or superadmin) => "admin".
+    is_org_admin = bool(await db.scalar(
+        select(Membership.id).where(
+            Membership.user_id == user.id, Membership.role.in_(["owner", "admin"])
+        ).limit(1)
+    ))
+    effective_admin = is_org_admin or user.is_platform_superadmin
+    return UserOut(
+        id=user.id, name=user.name, email=user.email,
+        role="admin" if effective_admin else "official",
+        created_at=user.created_at,
+        is_platform_superadmin=user.is_platform_superadmin,
+        is_org_admin=is_org_admin,
+    )
 
 
 @router.get("/google-status")

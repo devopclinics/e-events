@@ -5,6 +5,33 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship
 from .database import Base
 
 
+class Organization(Base):
+    """A tenant/account. All events belong to exactly one organization; users
+    access events only through a Membership in the owning org."""
+    __tablename__ = "organizations"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+    name: Mapped[str] = mapped_column(String(255))
+    slug: Mapped[str] = mapped_column(String(120), unique=True, index=True)
+    region: Mapped[str] = mapped_column(String(10), default="US")       # "US" | "NG"
+    currency: Mapped[str] = mapped_column(String(10), default="USD")    # "USD" | "NGN"
+    plan: Mapped[str] = mapped_column(String(50), default="free")
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+
+
+class Membership(Base):
+    """User ↔ Organization with an org-scoped role. Replaces the global User.role
+    for access decisions. A user may belong to multiple orgs."""
+    __tablename__ = "memberships"
+    __table_args__ = (UniqueConstraint("org_id", "user_id", name="uq_membership_org_user"),)
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+    org_id: Mapped[str] = mapped_column(String(36), ForeignKey("organizations.id"), index=True)
+    user_id: Mapped[str] = mapped_column(String(36), ForeignKey("users.id"), index=True)
+    role: Mapped[str] = mapped_column(String(20), default="staff")  # "owner" | "admin" | "staff"
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+
+
 class User(Base):
     __tablename__ = "users"
 
@@ -12,7 +39,10 @@ class User(Base):
     name: Mapped[str] = mapped_column(String(255))
     email: Mapped[str] = mapped_column(String(255), unique=True, index=True)
     firebase_uid: Mapped[str | None] = mapped_column(String(128), unique=True, nullable=True, index=True)
-    role: Mapped[str] = mapped_column(String(50), default="official")  # "admin" | "official"
+    role: Mapped[str] = mapped_column(String(50), default="official")  # legacy global role; superseded by Membership
+    # Operator-only flag (you), distinct from customer org admins. Grants audited
+    # cross-tenant support access. Never set for customer accounts.
+    is_platform_superadmin: Mapped[bool] = mapped_column(Boolean, default=False)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
 
 
@@ -36,6 +66,9 @@ class Event(Base):
     __tablename__ = "events"
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+    # Tenant owner. Nullable during the multi-tenancy rollout (backfilled, then
+    # tightened to NOT NULL in a follow-up deploy). See docs/PHASE1-MULTITENANCY-PLAN.md.
+    org_id: Mapped[str | None] = mapped_column(String(36), ForeignKey("organizations.id"), nullable=True, index=True)
     name: Mapped[str] = mapped_column(String(255))
     couples_name: Mapped[str] = mapped_column(String(255))
     event_date: Mapped[datetime] = mapped_column(DateTime)

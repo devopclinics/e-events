@@ -42,6 +42,25 @@ SCHEMA_PATCHES: list[str] = [
     # guests.email was created NOT NULL; events with rsvp_collect_email=False now
     # register guests with no email. Auto-patch only adds columns, so relax here.
     "ALTER TABLE guests ALTER COLUMN email DROP NOT NULL",
+
+    # ── Multi-tenancy backfill (idempotent) — see docs/PHASE1-MULTITENANCY-PLAN.md.
+    # Runs after create_all (organizations/memberships tables) and auto-patch
+    # (events.org_id, users.is_platform_superadmin). Safe to re-run every deploy.
+    #
+    # 1) Default organization for all pre-existing data.
+    "INSERT INTO organizations (id, name, slug, region, currency, plan, created_at) "
+    "SELECT '00000000-0000-0000-0000-000000000001', 'vsgs', 'vsgs', 'US', 'USD', 'free', now() "
+    "WHERE NOT EXISTS (SELECT 1 FROM organizations WHERE id = '00000000-0000-0000-0000-000000000001')",
+    # 2) Attach orphan events to the default org.
+    "UPDATE events SET org_id = '00000000-0000-0000-0000-000000000001' WHERE org_id IS NULL",
+    # 3) Membership for every existing user (legacy admins -> owner, else staff).
+    "INSERT INTO memberships (id, org_id, user_id, role, created_at) "
+    "SELECT gen_random_uuid()::text, '00000000-0000-0000-0000-000000000001', u.id, "
+    "CASE WHEN u.role = 'admin' THEN 'owner' ELSE 'staff' END, now() "
+    "FROM users u WHERE NOT EXISTS ("
+    "SELECT 1 FROM memberships m WHERE m.org_id = '00000000-0000-0000-0000-000000000001' AND m.user_id = u.id)",
+    # 4) Operator superadmin (no-op until that account exists; D3 also sets it at sign-in).
+    "UPDATE users SET is_platform_superadmin = TRUE WHERE email = 'info@devopclinics.com'",
 ]
 
 

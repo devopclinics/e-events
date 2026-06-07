@@ -133,6 +133,10 @@ export default function LandingPage() {
             className="text-sm font-medium text-slate-600 dark:text-slate-300 hover:text-teal-700 dark:hover:text-teal-300 transition-colors">
             Pricing
           </Link>
+          <Link to="/help"
+            className="text-sm font-medium text-slate-600 dark:text-slate-300 hover:text-teal-700 dark:hover:text-teal-300 transition-colors">
+            Help
+          </Link>
           <Link to="/login"
             className="text-sm font-medium text-slate-600 dark:text-slate-300 hover:text-teal-700 dark:hover:text-teal-300 transition-colors">
             Sign In

@@ -14,6 +14,7 @@ import InvitePage from './pages/InvitePage'
 import PricingPage from './pages/PricingPage'
 import RefundPolicyPage from './pages/RefundPolicyPage'
 import ConsolePage from './pages/ConsolePage'
+import HelpPage from './pages/HelpPage'
 
 // ── Preferred-view helpers ────────────────────────────────────────────────────
 
@@ -74,6 +75,7 @@ function Nav() {
     { to: '/dashboard', label: 'Dashboard' },
     { to: '/scanner', label: 'Scanner' },
     ...(user?.is_platform_superadmin ? [{ to: '/console', label: 'Console' }] : []),
+    { to: '/help', label: 'Help' },
   ]
 
   return (
@@ -167,6 +169,7 @@ function AppRoutes() {
       {/* Public marketing pages — no auth required */}
       <Route path="/pricing" element={<PricingPage />} />
       <Route path="/refund-policy" element={<RefundPolicyPage />} />
+      <Route path="/help" element={<HelpPage />} />
 
       {/* Landing page: show to guests, redirect logged-in users */}
       <Route path="/"

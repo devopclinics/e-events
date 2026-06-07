@@ -8,7 +8,7 @@ from ..database import get_db
 from ..models import Event, EventUser, Guest, Membership, RSVPQuestion, User
 from ..schemas import (
     EventCreate, EventUpdate, EventOut, EventMemberOut, AssignUserRequest,
-    UserOut, EventSourceUpdate,
+    OrgMemberInvite, OrgMemberOut, UserOut, EventSourceUpdate,
     InviteSettingsUpdate, RSVPQuestionCreate, RSVPQuestionUpdate, RSVPQuestionOut,
     BroadcastRequest, BroadcastResult,
     ManualInviteRequest, ManualInviteResult,
@@ -195,6 +195,15 @@ async def assign_member(
     if not user:
         raise HTTPException(404, "User not found")
 
+    # The user must already be a member of this event's organization.
+    is_member = await db.scalar(
+        select(Membership.id).where(
+            Membership.org_id == event.org_id, Membership.user_id == body.user_id
+        )
+    )
+    if not is_member:
+        raise HTTPException(400, "Add this person to your team first, then assign them to the event.")
+
     existing = await db.scalar(
         select(EventUser).where(EventUser.event_id == event_id, EventUser.user_id == body.user_id)
     )
@@ -206,6 +215,55 @@ async def assign_member(
     await db.commit()
     await db.refresh(eu)
     return EventMemberOut(id=eu.id, user=UserOut.model_validate(user), assigned_at=eu.assigned_at, can_reassign_seats=eu.can_reassign_seats, can_manage_menu=eu.can_manage_menu)
+
+
+# ── Organization team (members of the event's org) ──────────────────────────────
+
+@router.get("/{event_id}/org-members", response_model=list[OrgMemberOut])
+async def list_org_members(
+    event_id: str,
+    db: AsyncSession = Depends(get_db),
+    _: User = Depends(require_event_admin),
+):
+    """Everyone in this event's organization — the pool you can assign from."""
+    event = await db.get(Event, event_id)
+    rows = (await db.execute(
+        select(Membership, User)
+        .join(User, User.id == Membership.user_id)
+        .where(Membership.org_id == event.org_id)
+        .order_by(Membership.role, User.name)
+    )).all()
+    return [OrgMemberOut(user=UserOut.model_validate(u), role=m.role) for m, u in rows]
+
+
+@router.post("/{event_id}/org-members", response_model=OrgMemberOut, status_code=201)
+async def invite_org_member(
+    event_id: str,
+    body: OrgMemberInvite,
+    db: AsyncSession = Depends(get_db),
+    _: User = Depends(require_event_admin),
+):
+    """Add a teammate to this event's org by email. If they don't have an account
+    yet, a placeholder is created and linked when they first sign in with that
+    email. Re-inviting an existing member updates their role."""
+    event = await db.get(Event, event_id)
+    email = body.email.lower().strip()
+    user = (await db.execute(select(User).where(User.email == email))).scalar_one_or_none()
+    if not user:
+        user = User(name=(body.name or email.split("@")[0]), email=email, role="official")
+        db.add(user)
+        await db.flush()
+
+    membership = await db.scalar(
+        select(Membership).where(Membership.org_id == event.org_id, Membership.user_id == user.id)
+    )
+    if membership:
+        membership.role = body.role
+    else:
+        db.add(Membership(org_id=event.org_id, user_id=user.id, role=body.role))
+    await db.commit()
+    await db.refresh(user)
+    return OrgMemberOut(user=UserOut.model_validate(user), role=body.role)
 
 
 @router.put("/{event_id}/source", response_model=EventOut)

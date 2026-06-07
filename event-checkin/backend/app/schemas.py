@@ -127,6 +127,17 @@ class AssignUserRequest(BaseModel):
     user_id: str
 
 
+class OrgMemberInvite(BaseModel):
+    email: EmailStr
+    name: Optional[str] = None
+    role: Literal["admin", "staff"] = "staff"
+
+
+class OrgMemberOut(BaseModel):
+    user: UserOut
+    role: str
+
+
 # ── Seating ───────────────────────────────────────────────────────────────────
 
 class SeatingTableCreate(BaseModel):

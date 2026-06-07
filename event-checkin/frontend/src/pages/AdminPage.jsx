@@ -2135,19 +2135,38 @@ function BroadcastPanel({ event }) {
 
 // ── Team panel ────────────────────────────────────────────────────────────────
 
-function TeamPanel({ eventId }) {  const [members, setMembers] = useState([])
-  const [allUsers, setAllUsers] = useState([])
+function TeamPanel({ eventId }) {
+  const [members, setMembers] = useState([])
+  const [orgMembers, setOrgMembers] = useState([])
   const [selectedUserId, setSelectedUserId] = useState('')
+  const [invite, setInvite] = useState({ email: '', role: 'staff' })
   const [loading, setLoading] = useState(false)
   const [msg, setMsg] = useState('')
 
+  function loadOrgMembers() {
+    api.listOrgMembers(eventId).then(setOrgMembers).catch((e) => setMsg(e.message))
+  }
+
   useEffect(() => {
     api.listMembers(eventId).then(setMembers).catch(console.error)
-    api.listUsers().then(setAllUsers).catch(console.error)
+    loadOrgMembers()
   }, [eventId])
 
   const assignedIds = new Set(members.map((m) => m.user.id))
-  const unassigned = allUsers.filter((u) => !assignedIds.has(u.id))
+  const unassigned = orgMembers.map((om) => om.user).filter((u) => !assignedIds.has(u.id))
+
+  async function inviteMember() {
+    if (!invite.email.trim()) return
+    setLoading(true); setMsg('')
+    try {
+      await api.inviteOrgMember(eventId, { email: invite.email.trim(), role: invite.role })
+      setInvite({ email: '', role: 'staff' })
+      loadOrgMembers()
+      setMsg('Teammate added. They can now sign in and be assigned to events.')
+      setTimeout(() => setMsg(''), 4000)
+    } catch (e) { setMsg(e.message) }
+    finally { setLoading(false) }
+  }
 
   async function assign() {
     if (!selectedUserId) return
@@ -2254,18 +2273,46 @@ function TeamPanel({ eventId }) {  const [members, setMembers] = useState([])
         </ul>
       )}
 
+      {/* Assign an existing org member to this event */}
       <div className="flex gap-2 pt-2 border-t dark:border-slate-700">
         <select value={selectedUserId} onChange={(e) => setSelectedUserId(e.target.value)}
           className="flex-1 border border-gray-300 dark:border-slate-700 rounded-lg px-3 py-2 text-sm bg-white dark:bg-slate-700 text-gray-900 dark:text-white">
-          <option value="">— assign a user —</option>
+          <option value="">— assign a teammate to this event —</option>
           {unassigned.map((u) => (
-            <option key={u.id} value={u.id}>{u.name} ({u.role})</option>
+            <option key={u.id} value={u.id}>{u.name} · {u.email}</option>
           ))}
         </select>
         <button onClick={assign} disabled={loading || !selectedUserId}
           className="bg-indigo-600 text-white px-4 py-2 rounded-lg text-sm font-semibold hover:bg-indigo-700 disabled:opacity-50">
           Assign
         </button>
+      </div>
+
+      {/* Invite a new teammate to the organization by email */}
+      <div className="pt-3 border-t dark:border-slate-700 space-y-2">
+        <div className="text-xs font-semibold text-gray-500 dark:text-slate-400">Add a teammate to your organization</div>
+        <div className="flex gap-2 flex-wrap">
+          <input
+            type="email"
+            value={invite.email}
+            onChange={(e) => setInvite((p) => ({ ...p, email: e.target.value }))}
+            placeholder="teammate@email.com"
+            className="flex-1 min-w-[180px] border border-gray-300 dark:border-slate-700 rounded-lg px-3 py-2 text-sm bg-white dark:bg-slate-700 text-gray-900 dark:text-white"
+          />
+          <select value={invite.role} onChange={(e) => setInvite((p) => ({ ...p, role: e.target.value }))}
+            className="border border-gray-300 dark:border-slate-700 rounded-lg px-3 py-2 text-sm bg-white dark:bg-slate-700 text-gray-900 dark:text-white">
+            <option value="staff">Staff (scan / day-of)</option>
+            <option value="admin">Admin (manage events)</option>
+          </select>
+          <button onClick={inviteMember} disabled={loading || !invite.email.trim()}
+            className="bg-teal-600 text-white px-4 py-2 rounded-lg text-sm font-semibold hover:bg-teal-700 disabled:opacity-50">
+            Add teammate
+          </button>
+        </div>
+        <p className="text-xs text-slate-400 dark:text-slate-500">
+          They sign in with this email (Google/email) and the account links automatically.
+          Staff also need assigning to a specific event above to scan it.
+        </p>
       </div>
       {msg && <p className="text-sm text-indigo-600">{msg}</p>}
     </div>

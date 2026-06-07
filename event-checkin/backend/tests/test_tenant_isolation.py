@@ -63,6 +63,33 @@ async def test_global_users_endpoint_superadmin_only(ctx):
 
 
 @pytest.mark.asyncio
+async def test_invite_teammate_then_assign_to_event(ctx):
+    ctx.login(ctx.ids["user_a"])
+    e = ctx.ids["event_a"]
+    # invite a teammate to the org by email
+    r = await ctx.client.post(f"/api/events/{e}/org-members", json={"email": "staff@a.com", "role": "staff"})
+    assert r.status_code == 201
+    members = (await ctx.client.get(f"/api/events/{e}/org-members")).json()
+    match = [m for m in members if m["user"]["email"] == "staff@a.com"]
+    assert match and match[0]["role"] == "staff"
+    # now assignable to the event (org membership exists)
+    uid = match[0]["user"]["id"]
+    ra = await ctx.client.post(f"/api/events/{e}/members", json={"user_id": uid})
+    assert ra.status_code == 201
+
+
+@pytest.mark.asyncio
+async def test_cannot_assign_non_org_member(ctx):
+    ctx.login(ctx.ids["user_a"])
+    # user_b belongs to Org B, not Org A → can't be assigned to Org A's event
+    r = await ctx.client.post(
+        f"/api/events/{ctx.ids['event_a']}/members",
+        json={"user_id": ctx.ids["user_b"].id},
+    )
+    assert r.status_code == 400
+
+
+@pytest.mark.asyncio
 async def test_me_reports_effective_admin_role(ctx):
     ctx.login(ctx.ids["user_a"])           # owner of Org A
     me = (await ctx.client.get("/api/auth/me")).json()

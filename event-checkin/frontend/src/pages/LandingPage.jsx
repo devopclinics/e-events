@@ -34,7 +34,34 @@ const features = [
       </svg>
     ),
     title: 'Instant QR Codes',
-    desc: "Generate personalized QR codes for every guest. Email invites with one click — guests carry their ticket on their phone.",
+    desc: "Generate personalized QR codes for every guest — they carry their ticket on their phone.",
+  },
+  {
+    icon: (
+      <svg className="w-7 h-7 text-indigo-600 dark:text-indigo-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M8 10h.01M12 10h.01M16 10h.01M21 12a9 9 0 01-13.5 7.8L3 21l1.2-4.5A9 9 0 1121 12z" />
+      </svg>
+    ),
+    title: 'WhatsApp, SMS & Email',
+    desc: 'Send invites and updates across WhatsApp, SMS, and email — meet guests on the channel they actually use.',
+  },
+  {
+    icon: (
+      <svg className="w-7 h-7 text-indigo-600 dark:text-indigo-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M9 12l2 2 4-4M7.835 4.697a3.42 3.42 0 001.946-.806 3.42 3.42 0 014.438 0 3.42 3.42 0 001.946.806 3.42 3.42 0 013.138 3.138 3.42 3.42 0 00.806 1.946 3.42 3.42 0 010 4.438 3.42 3.42 0 00-.806 1.946 3.42 3.42 0 01-3.138 3.138 3.42 3.42 0 00-1.946.806 3.42 3.42 0 01-4.438 0 3.42 3.42 0 00-1.946-.806 3.42 3.42 0 01-3.138-3.138 3.42 3.42 0 00-.806-1.946 3.42 3.42 0 010-4.438 3.42 3.42 0 00.806-1.946 3.42 3.42 0 013.138-3.138z" />
+      </svg>
+    ),
+    title: 'Self-Serve RSVP',
+    desc: 'A branded invite page where guests RSVP themselves — open links or unique per-guest links, confirm/decline, deadlines, and approvals.',
+  },
+  {
+    icon: (
+      <svg className="w-7 h-7 text-indigo-600 dark:text-indigo-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M3 10h18M3 10l1.5-5.5A1 1 0 015.46 4h13.08a1 1 0 01.96.5L21 10M5 10v9a1 1 0 001 1h12a1 1 0 001-1v-9M9 14h6" />
+      </svg>
+    ),
+    title: 'Seating & Menu',
+    desc: 'Assign tables and seats, capture meal choices, and track catering — all in one place for the big day.',
   },
   {
     icon: (
@@ -132,7 +159,9 @@ export default function LandingPage() {
               </h1>
 
               <p className="mt-5 text-lg sm:text-xl text-slate-600 dark:text-slate-300 max-w-xl leading-relaxed">
-                A professional check-in console for guest lists, QR tickets, scanner teams, and live attendance.
+                Invitations, RSVPs, and check-in in one place — WhatsApp/SMS/email invites,
+                self-serve RSVP, seating &amp; menu, and QR check-in on the day.
+                <span className="block mt-2 text-base text-slate-500 dark:text-slate-400">Free to start · pay per event, no subscription.</span>
               </p>
 
               <div className="mt-8 flex flex-col sm:flex-row gap-3">
@@ -204,7 +233,7 @@ export default function LandingPage() {
             </div>
           </div>
           <div className="mt-12 grid grid-cols-3 gap-4 max-w-xl">
-            {[['QR Check-In', 'Instant'], ['Live Dashboard', 'Real-time'], ['Any Device', 'No app install']].map(([label, sub]) => (
+            {[['Invites & RSVP', 'WhatsApp · SMS · Email'], ['QR Check-In', 'Instant'], ['Seating & Menu', 'Built-in']].map(([label, sub]) => (
               <div key={label}>
                 <div className="text-sm font-bold text-slate-950 dark:text-white">{label}</div>
                 <div className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">{sub}</div>
@@ -268,6 +297,7 @@ export default function LandingPage() {
           </h2>
           <p className="text-gray-500 dark:text-slate-400 mb-8 text-lg">
             Create your account and set up your first event in under five minutes.
+            Free to start — upgrade with a one-time Event Pass when you're ready.
           </p>
           <Link to="/register"
             className="inline-flex items-center gap-2 bg-indigo-600 text-white px-10 py-4 rounded-xl font-semibold text-lg hover:bg-indigo-700 transition-colors shadow-lg shadow-indigo-500/25">
@@ -276,7 +306,9 @@ export default function LandingPage() {
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7l5 5m0 0l-5 5m5-5H6" />
             </svg>
           </Link>
-          <p className="mt-4 text-sm text-gray-400 dark:text-slate-500">No credit card required</p>
+          <p className="mt-4 text-sm text-gray-400 dark:text-slate-500">
+            No credit card required · <Link to="/pricing" className="text-teal-600 hover:underline">See pricing</Link>
+          </p>
         </div>
       </section>
 

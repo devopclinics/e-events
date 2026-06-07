@@ -68,11 +68,17 @@ Site: **https://events.vsgs.io**
 
 ![Pricing page](images/pricing.png)
 
-_Admin screens (add screenshots — see "Adding screenshots" below):_
-- _`images/admin-overview.png` — event Overview with guest import + Features._
-- _`images/admin-guests.png` — Guests tab with RSVP status column._
-- _`images/admin-invite.png` — Invite Page & RSVP settings + Event Pass panel._
-- _`images/admin-team.png` — Team tab (add teammate + assign)._
+**Event overview** (status, features, guest import):
+![Admin overview](images/admin-overview.png)
+
+**Invite tab** (Event Pass, RSVP settings, broadcast):
+![Invite tab](images/admin-invite.png)
+
+**Guests** (RSVP status + check-in):
+![Guests tab](images/admin-guests.png)
+
+**Team** (add teammate + assign to event):
+![Team tab](images/admin-team.png)
 
 ---
 
@@ -98,7 +104,8 @@ _Admin screens (add screenshots — see "Adding screenshots" below):_
 
 ![Invite page](images/invite-page.png)
 
-_Add `images/scanner.png` (Scanner result) and `images/console.png` (operator Console) — see below._
+The scanner (staff check-in):
+![Scanner](images/scanner.png)
 
 ---
 
@@ -115,22 +122,10 @@ To make someone an operator: **Console → Operators → add their email**. They
 
 ---
 
-## Adding screenshots
+## Screenshots
 
-Images live in `docs/images/` and are referenced like `![alt](images/name.png)`.
-
-The public-page shots (landing, pricing, invite) were captured automatically.
-The signed-in screens (Admin tabs, Scanner, Console) need a logged-in session,
-so capture those yourself:
-
-1. Sign in and open the screen.
-2. Take a screenshot:
-   - **Mac:** Cmd+Shift+4 (drag a region)
-   - **Windows:** Win+Shift+S (Snipping Tool)
-   - or use the browser DevTools device toolbar for a clean full-page capture.
-3. Save it into `docs/images/` using the exact filename referenced above
-   (e.g. `admin-invite.png`, `admin-team.png`, `scanner.png`, `console.png`).
-4. The placeholders in this guide will then render the image.
-
-Tip: blur or use a demo event so you don't expose real guest emails/phones.
+Images live in `docs/images/` (and the same set in `event-checkin/frontend/public/guide/`
+for the in-app `/help` page). Public + admin/scanner shots use a demo event, so no
+real guest data is shown. The operator Console is intentionally text-only here
+(it lists real tenants). To refresh a shot, replace the file with the same name.
 

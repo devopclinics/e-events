@@ -51,6 +51,8 @@ export default function HelpPage() {
             <Step><b>Check-in day:</b> set the event Active; you/staff use <Link to="/scanner" className="text-teal-600 hover:underline">Scanner</Link>; watch <Link to="/dashboard" className="text-teal-600 hover:underline">Dashboard</Link>.</Step>
             <Step><b>Upgrade:</b> Invite tab → Event Pass unlocks SMS/WhatsApp, more guests, seating/menu, check-in, and removes branding. See <Link to="/pricing" className="text-teal-600 hover:underline">pricing</Link>.</Step>
           </Steps>
+          <Shot src="/guide/admin-overview.png" alt="Admin — event overview" />
+          <Shot src="/guide/admin-invite.png" alt="Invite tab — Event Pass, RSVP, broadcast" />
           <Shot src="/guide/pricing.png" alt="Pricing / Event Pass tiers" />
         </Section>
       )}
@@ -63,6 +65,7 @@ export default function HelpPage() {
             <Step><b>Welcome</b> = admitted · <b>Already admitted</b> = ticket used · <b>Not assigned / needs pass</b> = ask the organizer.</Step>
             <Step>No app needed — it runs in the browser.</Step>
           </Steps>
+          <Shot src="/guide/scanner.png" alt="Check-in scanner" />
         </Section>
       )}
 

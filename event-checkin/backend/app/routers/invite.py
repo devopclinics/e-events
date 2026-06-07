@@ -23,7 +23,7 @@ from ..schemas import (
 from services import messaging
 from services.email_service import send_invite_email
 from .guests import _normalize_phone
-from ..entitlements import assert_within_guest_cap
+from ..entitlements import assert_within_guest_cap, can_use_paid_channels, take_message_credit
 
 logger = logging.getLogger(__name__)
 
@@ -126,8 +126,11 @@ def _send_rsvp_invite(
     event: Event,
     guest: Guest,
 ) -> None:
-    """Fan out invite notifications across the channels enabled on this event."""
+    """Fan out invite notifications across the channels enabled on this event.
+    SMS/WhatsApp require a paid event and consume one message credit each;
+    email is always allowed. Caller must commit to persist credit decrements."""
     ticket_url = f"{event.checkin_base_url.rstrip('/')}/scan/{guest.qr_token}"
+    paid_channels = can_use_paid_channels(event)
 
     if event.notify_email and guest.email:
         background_tasks.add_task(
@@ -139,7 +142,7 @@ def _send_rsvp_invite(
             event.seating_enabled, event.menu_enabled,
         )
 
-    if event.notify_sms and guest.phone and guest.sms_consent:
+    if paid_channels and event.notify_sms and guest.phone and guest.sms_consent and take_message_credit(event):
         background_tasks.add_task(
             messaging.send_invite_sms,
             phone=guest.phone, first_name=guest.first_name,
@@ -147,7 +150,7 @@ def _send_rsvp_invite(
             event_date=event.event_date,
         )
 
-    if event.notify_whatsapp and guest.phone and guest.whatsapp_consent:
+    if paid_channels and event.notify_whatsapp and guest.phone and guest.whatsapp_consent and take_message_credit(event):
         background_tasks.add_task(
             messaging.send_invite_whatsapp,
             phone=guest.phone, first_name=guest.first_name,
@@ -261,6 +264,7 @@ async def submit_rsvp(
 
     # Approved automatically — fire the ticket in the background.
     _send_rsvp_invite(background_tasks, event, guest)
+    await db.commit()  # persist any message-credit decrements
     return RSVPConfirm(
         id=guest.id,
         qr_token=guest.qr_token,
@@ -348,6 +352,7 @@ async def submit_invite_token_rsvp(
         await db.refresh(guest)
         # Issue the ticket now that they've confirmed.
         _send_rsvp_invite(background_tasks, event, guest)
+        await db.commit()  # persist any message-credit decrements
         message = "You're confirmed! Check your email for your ticket."
     else:
         await db.commit()

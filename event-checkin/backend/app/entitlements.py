@@ -23,6 +23,20 @@ def can_use_paid_channels(event: Event) -> bool:
     return bool(event.is_paid and event.paid_channels)
 
 
+def take_message_credit(event: Event) -> bool:
+    """Consume one SMS/WhatsApp credit. Returns True if a credit was available
+    (and decrements it), False if the event is out of credits. Mutates the event
+    in memory — the caller is responsible for committing the session.
+
+    Call ONLY after confirming the channel is otherwise sendable, since it has a
+    side effect: `... and can_use_paid_channels(e) and take_message_credit(e)`.
+    """
+    if (event.message_credits or 0) > 0:
+        event.message_credits -= 1
+        return True
+    return False
+
+
 def assert_within_guest_cap(event: Event, current_count: int, adding: int = 1) -> None:
     """Raise 402 if adding `adding` guests would exceed the event's plan cap."""
     cap = guest_limit(event)

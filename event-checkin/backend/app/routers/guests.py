@@ -12,7 +12,7 @@ from ..database import get_db
 from ..models import Event, Guest, User
 from ..schemas import GuestOut, GuestCreate
 from ..auth import require_event_admin
-from ..entitlements import assert_within_guest_cap, can_use_paid_channels
+from ..entitlements import assert_within_guest_cap, can_use_paid_channels, take_message_credit
 from services.qr_service import generate_qr_bytes
 from services.email_service import send_invite_email, send_manual_invite_email
 from services import messaging
@@ -257,14 +257,14 @@ def _dispatch_invite(background_tasks: BackgroundTasks, event: Event, guest: Gue
             event.seating_enabled, event.menu_enabled,
         )
 
-    if paid_channels and event.notify_sms and guest.phone and guest.sms_consent:
+    if paid_channels and event.notify_sms and guest.phone and guest.sms_consent and take_message_credit(event):
         background_tasks.add_task(
             messaging.send_invite_sms,
             phone=guest.phone, first_name=guest.first_name,
             event_name=event.name, ticket_url=ticket_url, event_date=event.event_date,
         )
 
-    if paid_channels and event.notify_whatsapp and guest.phone and guest.whatsapp_consent:
+    if paid_channels and event.notify_whatsapp and guest.phone and guest.whatsapp_consent and take_message_credit(event):
         background_tasks.add_task(
             messaging.send_invite_whatsapp,
             phone=guest.phone, first_name=guest.first_name,
@@ -290,14 +290,14 @@ def _dispatch_rsvp_invite(background_tasks: BackgroundTasks, event: Event, guest
             invite_message=event.invite_message,
         )
 
-    if paid_channels and event.notify_sms and guest.phone and guest.sms_consent:
+    if paid_channels and event.notify_sms and guest.phone and guest.sms_consent and take_message_credit(event):
         background_tasks.add_task(
             messaging.send_manual_invite_sms,
             phone=guest.phone, name=name,
             event_name=event.name, invite_url=invite_url,
         )
 
-    if paid_channels and event.notify_whatsapp and guest.phone and guest.whatsapp_consent:
+    if paid_channels and event.notify_whatsapp and guest.phone and guest.whatsapp_consent and take_message_credit(event):
         background_tasks.add_task(
             messaging.send_manual_invite_whatsapp,
             phone=guest.phone, name=name,

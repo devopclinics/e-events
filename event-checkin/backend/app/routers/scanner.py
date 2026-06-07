@@ -7,6 +7,7 @@ from ..database import get_db
 from ..models import Guest, Event, EventUser, User, SeatingTable, MenuCategory, MenuItem, GuestMenuChoice, MenuCombination, MenuCombinationItem
 from ..schemas import ScanResult, GuestOut, TicketView, EventBrief, MenuCategoryOut, MenuItemOut, MenuCombinationOut, MenuCombinationItemOut, GuestMenuSubmit, PartnerInfo, PairRequest
 from ..auth import require_official, _org_role
+from ..entitlements import can_use_paid_channels, take_message_credit
 from services.email_service import send_admission_email
 from services import messaging
 from services.qr_service import generate_qr_bytes
@@ -238,9 +239,10 @@ async def scan_qr(
         "ticket_url": ticket_url,
         "menu_enabled": bool(event and event.menu_enabled),
     }
+    paid = can_use_paid_channels(event) if event else False
     if event.notify_email:
         background_tasks.add_task(send_admission_email, guest_data)
-    if event.notify_sms and guest.phone and guest.sms_consent:
+    if paid and event.notify_sms and guest.phone and guest.sms_consent and take_message_credit(event):
         background_tasks.add_task(
             messaging.send_admission_sms,
             phone=guest.phone, first_name=guest.first_name,
@@ -248,13 +250,14 @@ async def scan_qr(
             admitted_at=guest.admitted_at,
             table_name=table_name, seat_number=guest.seat_number,
         )
-    if event.notify_whatsapp and guest.phone and guest.whatsapp_consent:
+    if paid and event.notify_whatsapp and guest.phone and guest.whatsapp_consent and take_message_credit(event):
         background_tasks.add_task(
             messaging.send_admission_whatsapp,
             phone=guest.phone, first_name=guest.first_name,
             event_name=event.name if event else "the event",
             table_name=table_name, seat_number=guest.seat_number,
         )
+    await db.commit()  # persist message-credit decrements
 
     broadcast(guest.event_id, {
         "type": "admitted",

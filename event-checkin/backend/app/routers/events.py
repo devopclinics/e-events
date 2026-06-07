@@ -14,7 +14,7 @@ from ..schemas import (
     ManualInviteRequest, ManualInviteResult,
 )
 from ..auth import require_admin, require_event_admin, get_current_user, _org_role
-from ..entitlements import can_use_paid_channels
+from ..entitlements import can_use_paid_channels, take_message_credit
 from .guests import import_from_source_url, _normalize_phone
 from services import messaging
 from services.email_service import send_manual_invite_email, send_broadcast_email
@@ -464,10 +464,11 @@ async def broadcast_message(
     want_email = "email" in data.channels
     want_phone = "sms" in data.channels or "whatsapp" in data.channels
 
-    queued = skipped_no_contact = skipped_no_consent = 0
+    queued = skipped_no_contact = skipped_no_consent = skipped_no_credits = 0
 
     for guest in guests:
         sent_any = False
+        credit_blocked = False
 
         if want_email and guest.email:
             background_tasks.add_task(
@@ -481,24 +482,32 @@ async def broadcast_message(
 
         if guest.phone:
             if "sms" in data.channels and guest.sms_consent:
-                background_tasks.add_task(
-                    messaging.send_broadcast_sms,
-                    phone=guest.phone,
-                    first_name=guest.first_name,
-                    message=data.message,
-                )
-                sent_any = True
+                if take_message_credit(event):
+                    background_tasks.add_task(
+                        messaging.send_broadcast_sms,
+                        phone=guest.phone,
+                        first_name=guest.first_name,
+                        message=data.message,
+                    )
+                    sent_any = True
+                else:
+                    credit_blocked = True
             if "whatsapp" in data.channels and guest.whatsapp_consent:
-                background_tasks.add_task(
-                    messaging.send_broadcast_whatsapp,
-                    phone=guest.phone,
-                    first_name=guest.first_name,
-                    message=data.message,
-                )
-                sent_any = True
+                if take_message_credit(event):
+                    background_tasks.add_task(
+                        messaging.send_broadcast_whatsapp,
+                        phone=guest.phone,
+                        first_name=guest.first_name,
+                        message=data.message,
+                    )
+                    sent_any = True
+                else:
+                    credit_blocked = True
 
         if sent_any:
             queued += 1
+        elif credit_blocked:
+            skipped_no_credits += 1
         elif (want_email and guest.email) or (want_phone and guest.phone):
             # Had a usable contact method but consent blocked every channel.
             skipped_no_consent += 1
@@ -506,10 +515,12 @@ async def broadcast_message(
             # No email and/or no phone for the channels selected.
             skipped_no_contact += 1
 
+    await db.commit()  # persist message-credit decrements
     return BroadcastResult(
         queued=queued,
         skipped_no_contact=skipped_no_contact,
         skipped_no_consent=skipped_no_consent,
+        skipped_no_credits=skipped_no_credits,
     )
 
 
@@ -531,6 +542,7 @@ async def send_manual_invites(
         raise HTTPException(400, "No recipients provided")
 
     invite_url = f"{event.checkin_base_url.rstrip('/')}/e/{event_id}"
+    paid_channels = can_use_paid_channels(event)
 
     sent = skipped = 0
     errors: list[str] = []
@@ -551,12 +563,12 @@ async def send_manual_invites(
             )
             dispatched = True
 
-        if r.phone:
+        if r.phone and paid_channels:
             phone = _normalize_phone(r.phone.strip())
             if phone is None:
                 errors.append(f"{name}: invalid phone '{r.phone}'")
             else:
-                if "sms" in data.channels:
+                if "sms" in data.channels and take_message_credit(event):
                     background_tasks.add_task(
                         messaging.send_manual_invite_sms,
                         phone=phone,
@@ -565,7 +577,7 @@ async def send_manual_invites(
                         invite_url=invite_url,
                     )
                     dispatched = True
-                if "whatsapp" in data.channels:
+                if "whatsapp" in data.channels and take_message_credit(event):
                     background_tasks.add_task(
                         messaging.send_manual_invite_whatsapp,
                         phone=phone,
@@ -580,6 +592,7 @@ async def send_manual_invites(
         else:
             skipped += 1
 
+    await db.commit()  # persist message-credit decrements
     return ManualInviteResult(sent=sent, skipped=skipped, errors=errors)
 
 

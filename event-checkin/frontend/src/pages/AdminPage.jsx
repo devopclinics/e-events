@@ -2095,6 +2095,7 @@ function BroadcastPanel({ event }) {
       {result && (
         <div className="text-xs text-green-700 dark:text-green-400 bg-green-50 dark:bg-green-900/30 border border-green-200 dark:border-green-800 rounded-lg px-3 py-2">
           Queued: {result.queued} · Skipped (no contact): {result.skipped_no_contact} · Skipped (no consent): {result.skipped_no_consent}
+          {result.skipped_no_credits ? ` · Skipped (out of credits): ${result.skipped_no_credits}` : ''}
         </div>
       )}
 

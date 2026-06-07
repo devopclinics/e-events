@@ -496,6 +496,7 @@ class BroadcastResult(BaseModel):
     # couldn't reach: no email (for email) and no phone (for sms/whatsapp)
     skipped_no_contact: int
     skipped_no_consent: int
+    skipped_no_credits: int = 0
 
 
 # ── Manual invite ─────────────────────────────────────────────────────────────

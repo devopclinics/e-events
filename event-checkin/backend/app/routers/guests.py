@@ -11,7 +11,7 @@ from sqlalchemy import select
 from ..database import get_db
 from ..models import Event, Guest, User
 from ..schemas import GuestOut, GuestCreate
-from ..auth import require_admin
+from ..auth import require_event_admin
 from services.qr_service import generate_qr_bytes
 from services.email_service import send_invite_email, send_manual_invite_email
 from services import messaging
@@ -219,7 +219,7 @@ async def _process_csv(text: str, event_id: str, db: AsyncSession):
 
 
 @router.post("/{event_id}/guests/upload")
-async def upload_guests(event_id: str, file: UploadFile = File(...), db: AsyncSession = Depends(get_db), _: User = Depends(require_admin)):
+async def upload_guests(event_id: str, file: UploadFile = File(...), db: AsyncSession = Depends(get_db), _: User = Depends(require_event_admin)):
     event = await db.get(Event, event_id)
     if not event:
         raise HTTPException(404, "Event not found")
@@ -315,7 +315,7 @@ async def import_guests_from_url(
     event_id: str,
     body: dict = Body(...),
     db: AsyncSession = Depends(get_db),
-    _: User = Depends(require_admin),
+    _: User = Depends(require_event_admin),
 ):
     event = await db.get(Event, event_id)
     if not event:
@@ -329,7 +329,7 @@ async def import_guests_from_url(
 
 
 @router.post("/{event_id}/guests", response_model=GuestOut, status_code=201)
-async def add_guest(event_id: str, data: GuestCreate, db: AsyncSession = Depends(get_db), _: User = Depends(require_admin)):
+async def add_guest(event_id: str, data: GuestCreate, db: AsyncSession = Depends(get_db), _: User = Depends(require_event_admin)):
     """Manually add a single guest — used for VVIP walk-ins not on the original list.
     Email is optional; phone validated if provided. No invite is auto-sent."""
     event = await db.get(Event, event_id)
@@ -354,7 +354,7 @@ async def add_guest(event_id: str, data: GuestCreate, db: AsyncSession = Depends
 
 
 @router.get("/{event_id}/guests", response_model=list[GuestOut])
-async def list_guests(event_id: str, db: AsyncSession = Depends(get_db), _: User = Depends(require_admin)):
+async def list_guests(event_id: str, db: AsyncSession = Depends(get_db), _: User = Depends(require_event_admin)):
     result = await db.execute(
         select(Guest).where(Guest.event_id == event_id).order_by(Guest.last_name, Guest.first_name)
     )
@@ -362,7 +362,7 @@ async def list_guests(event_id: str, db: AsyncSession = Depends(get_db), _: User
 
 
 @router.delete("/{event_id}/guests/{guest_id}", status_code=204)
-async def delete_guest(event_id: str, guest_id: str, db: AsyncSession = Depends(get_db), _: User = Depends(require_admin)):
+async def delete_guest(event_id: str, guest_id: str, db: AsyncSession = Depends(get_db), _: User = Depends(require_event_admin)):
     guest = await db.get(Guest, guest_id)
     if not guest or guest.event_id != event_id:
         raise HTTPException(404, "Guest not found")
@@ -371,7 +371,7 @@ async def delete_guest(event_id: str, guest_id: str, db: AsyncSession = Depends(
 
 
 @router.post("/{event_id}/guests/generate-qr")
-async def generate_qr_codes(event_id: str, db: AsyncSession = Depends(get_db), _: User = Depends(require_admin)):
+async def generate_qr_codes(event_id: str, db: AsyncSession = Depends(get_db), _: User = Depends(require_event_admin)):
     event = await db.get(Event, event_id)
     if not event:
         raise HTTPException(404, "Event not found")
@@ -389,7 +389,7 @@ async def generate_qr_codes(event_id: str, db: AsyncSession = Depends(get_db), _
 
 
 @router.post("/{event_id}/guests/send-invites")
-async def send_invites(event_id: str, background_tasks: BackgroundTasks, db: AsyncSession = Depends(get_db), _: User = Depends(require_admin)):
+async def send_invites(event_id: str, background_tasks: BackgroundTasks, db: AsyncSession = Depends(get_db), _: User = Depends(require_event_admin)):
     event = await db.get(Event, event_id)
     if not event:
         raise HTTPException(404, "Event not found")
@@ -417,7 +417,7 @@ async def send_invites_batch(
     body: dict = Body(default={}),
     background_tasks: BackgroundTasks = None,
     db: AsyncSession = Depends(get_db),
-    _: User = Depends(require_admin),
+    _: User = Depends(require_event_admin),
 ):
     """Send (or resend) invites in bulk.
 
@@ -456,7 +456,7 @@ async def send_invites_batch(
 
 
 @router.post("/{event_id}/guests/{guest_id}/resend-invite")
-async def resend_invite(event_id: str, guest_id: str, background_tasks: BackgroundTasks, db: AsyncSession = Depends(get_db), _: User = Depends(require_admin)):
+async def resend_invite(event_id: str, guest_id: str, background_tasks: BackgroundTasks, db: AsyncSession = Depends(get_db), _: User = Depends(require_event_admin)):
     event = await db.get(Event, event_id)
     if not event:
         raise HTTPException(404, "Event not found")
@@ -474,7 +474,7 @@ async def resend_invite(event_id: str, guest_id: str, background_tasks: Backgrou
 
 
 @router.post("/{event_id}/guests/{guest_id}/approve")
-async def approve_rsvp(event_id: str, guest_id: str, background_tasks: BackgroundTasks, db: AsyncSession = Depends(get_db), _: User = Depends(require_admin)):
+async def approve_rsvp(event_id: str, guest_id: str, background_tasks: BackgroundTasks, db: AsyncSession = Depends(get_db), _: User = Depends(require_event_admin)):
     """Approve a pending self-registered RSVP: confirm the guest, issue their QR,
     and send the ticket. No-op-safe if the guest is already confirmed."""
     event = await db.get(Event, event_id)
@@ -495,7 +495,7 @@ async def approve_rsvp(event_id: str, guest_id: str, background_tasks: Backgroun
 
 
 @router.post("/{event_id}/guests/{guest_id}/reject")
-async def reject_rsvp(event_id: str, guest_id: str, db: AsyncSession = Depends(get_db), _: User = Depends(require_admin)):
+async def reject_rsvp(event_id: str, guest_id: str, db: AsyncSession = Depends(get_db), _: User = Depends(require_event_admin)):
     """Reject a pending RSVP — marks the guest declined (no ticket). Keeps the
     record so the planner has a history; use delete to remove entirely."""
     guest = await db.get(Guest, guest_id)
@@ -508,7 +508,7 @@ async def reject_rsvp(event_id: str, guest_id: str, db: AsyncSession = Depends(g
 
 
 @router.post("/{event_id}/guests/{guest_id}/invite-token")
-async def ensure_invite_token(event_id: str, guest_id: str, db: AsyncSession = Depends(get_db), _: User = Depends(require_admin)):
+async def ensure_invite_token(event_id: str, guest_id: str, db: AsyncSession = Depends(get_db), _: User = Depends(require_event_admin)):
     """Mint (or return) a guest's personal RSVP-link token so the planner can
     copy /r/{token} from the dashboard without having to send the invite first."""
     guest = await db.get(Guest, guest_id)

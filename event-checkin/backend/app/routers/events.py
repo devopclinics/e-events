@@ -5,7 +5,7 @@ from fastapi import APIRouter, BackgroundTasks, Depends, File, HTTPException, Up
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 from ..database import get_db
-from ..models import Event, EventUser, Guest, RSVPQuestion, User
+from ..models import Event, EventUser, Guest, Membership, RSVPQuestion, User
 from ..schemas import (
     EventCreate, EventUpdate, EventOut, EventMemberOut, AssignUserRequest,
     UserOut, EventSourceUpdate,
@@ -13,7 +13,7 @@ from ..schemas import (
     BroadcastRequest, BroadcastResult,
     ManualInviteRequest, ManualInviteResult,
 )
-from ..auth import require_admin, get_current_user
+from ..auth import require_admin, require_event_admin, get_current_user, _org_role
 from .guests import import_from_source_url, _normalize_phone
 from services import messaging
 from services.email_service import send_manual_invite_email, send_broadcast_email
@@ -36,12 +36,12 @@ async def _get_accessible_event(event_id: str, user: User, db: AsyncSession) -> 
     event = await db.get(Event, event_id)
     if not event:
         raise HTTPException(404, "Event not found")
-    if user.role != "admin":
-        assigned = await db.scalar(
-            select(EventUser).where(EventUser.event_id == event_id, EventUser.user_id == user.id)
-        )
-        if not assigned:
-            raise HTTPException(403, "You are not assigned to this event")
+    if user.is_platform_superadmin:
+        return event
+    # Tenant isolation: caller must belong to the event's org. 404 (not 403) so
+    # we don't leak that an event exists in another tenant.
+    if await _org_role(user, event.org_id, db) is None:
+        raise HTTPException(404, "Event not found")
     return event
 
 
@@ -53,7 +53,19 @@ async def create_event(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_admin),
 ):
-    event = Event(**data.model_dump())
+    # New events belong to the caller's organization (where they own/admin).
+    org_id = await db.scalar(
+        select(Membership.org_id)
+        .where(
+            Membership.user_id == current_user.id,
+            Membership.role.in_(["owner", "admin"]),
+        )
+        .order_by(Membership.created_at)
+        .limit(1)
+    )
+    if not org_id:
+        raise HTTPException(403, "You don't belong to an organization")
+    event = Event(**data.model_dump(), org_id=org_id)
     db.add(event)
     await db.flush()
     # Auto-assign creator so they appear in their own event member list
@@ -68,13 +80,14 @@ async def list_events(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    if current_user.role == "admin":
+    # Platform superadmin sees everything; everyone else only their org's events.
+    if current_user.is_platform_superadmin:
         result = await db.execute(select(Event).order_by(Event.created_at.desc()))
     else:
         result = await db.execute(
             select(Event)
-            .join(EventUser, EventUser.event_id == Event.id)
-            .where(EventUser.user_id == current_user.id)
+            .join(Membership, Membership.org_id == Event.org_id)
+            .where(Membership.user_id == current_user.id)
             .order_by(Event.created_at.desc())
         )
     return result.scalars().all()
@@ -94,7 +107,7 @@ async def update_event(
     event_id: str,
     data: EventUpdate,
     db: AsyncSession = Depends(get_db),
-    _: User = Depends(require_admin),
+    _: User = Depends(require_event_admin),
 ):
     event = await db.get(Event, event_id)
     if not event:
@@ -110,7 +123,7 @@ async def update_event(
 async def delete_event(
     event_id: str,
     db: AsyncSession = Depends(get_db),
-    _: User = Depends(require_admin),
+    _: User = Depends(require_event_admin),
 ):
     event = await db.get(Event, event_id)
     if not event:
@@ -126,7 +139,7 @@ async def change_status(
     event_id: str,
     body: dict,
     db: AsyncSession = Depends(get_db),
-    _: User = Depends(require_admin),
+    _: User = Depends(require_event_admin),
 ):
     new_status = body.get("status", "")
     if new_status not in VALID_STATUSES:
@@ -152,7 +165,7 @@ async def change_status(
 async def list_members(
     event_id: str,
     db: AsyncSession = Depends(get_db),
-    _: User = Depends(require_admin),
+    _: User = Depends(require_event_admin),
 ):
     result = await db.execute(
         select(EventUser, User)
@@ -172,7 +185,7 @@ async def assign_member(
     event_id: str,
     body: AssignUserRequest,
     db: AsyncSession = Depends(get_db),
-    _: User = Depends(require_admin),
+    _: User = Depends(require_event_admin),
 ):
     event = await db.get(Event, event_id)
     if not event:
@@ -199,7 +212,7 @@ async def update_event_source(
     event_id: str,
     body: EventSourceUpdate,
     db: AsyncSession = Depends(get_db),
-    _: User = Depends(require_admin),
+    _: User = Depends(require_event_admin),
 ):
     event = await db.get(Event, event_id)
     if not event:
@@ -220,7 +233,7 @@ async def update_event_source(
 async def sync_event_now(
     event_id: str,
     db: AsyncSession = Depends(get_db),
-    _: User = Depends(require_admin),
+    _: User = Depends(require_event_admin),
 ):
     event = await db.get(Event, event_id)
     if not event:
@@ -248,7 +261,7 @@ async def remove_member(
     event_id: str,
     user_id: str,
     db: AsyncSession = Depends(get_db),
-    _: User = Depends(require_admin),
+    _: User = Depends(require_event_admin),
 ):
     eu = await db.scalar(
         select(EventUser).where(EventUser.event_id == event_id, EventUser.user_id == user_id)
@@ -266,7 +279,7 @@ async def send_test_message(
     event_id: str,
     body: dict,
     db: AsyncSession = Depends(get_db),
-    _: User = Depends(require_admin),
+    _: User = Depends(require_event_admin),
 ):
     """Fire a single test message to verify provider creds + delivery.
     Body: {channel: 'sms'|'whatsapp', phone: '<E.164 or US 10-digit>'}"""
@@ -303,7 +316,7 @@ async def toggle_features(
     event_id: str,
     body: dict,
     db: AsyncSession = Depends(get_db),
-    _: User = Depends(require_admin),
+    _: User = Depends(require_event_admin),
 ):
     event = await db.get(Event, event_id)
     if not event:
@@ -327,7 +340,7 @@ async def update_invite_settings(
     event_id: str,
     data: InviteSettingsUpdate,
     db: AsyncSession = Depends(get_db),
-    _: User = Depends(require_admin),
+    _: User = Depends(require_event_admin),
 ):
     event = await db.get(Event, event_id)
     if not event:
@@ -345,7 +358,7 @@ async def update_invite_settings(
 async def list_rsvp_questions(
     event_id: str,
     db: AsyncSession = Depends(get_db),
-    _: User = Depends(require_admin),
+    _: User = Depends(require_event_admin),
 ):
     result = await db.execute(
         select(RSVPQuestion)
@@ -360,7 +373,7 @@ async def create_rsvp_question(
     event_id: str,
     data: RSVPQuestionCreate,
     db: AsyncSession = Depends(get_db),
-    _: User = Depends(require_admin),
+    _: User = Depends(require_event_admin),
 ):
     event = await db.get(Event, event_id)
     if not event:
@@ -378,7 +391,7 @@ async def update_rsvp_question(
     question_id: str,
     data: RSVPQuestionUpdate,
     db: AsyncSession = Depends(get_db),
-    _: User = Depends(require_admin),
+    _: User = Depends(require_event_admin),
 ):
     q = await db.get(RSVPQuestion, question_id)
     if not q or q.event_id != event_id:
@@ -395,7 +408,7 @@ async def delete_rsvp_question(
     event_id: str,
     question_id: str,
     db: AsyncSession = Depends(get_db),
-    _: User = Depends(require_admin),
+    _: User = Depends(require_event_admin),
 ):
     q = await db.get(RSVPQuestion, question_id)
     if not q or q.event_id != event_id:
@@ -412,7 +425,7 @@ async def broadcast_message(
     data: BroadcastRequest,
     background_tasks: BackgroundTasks,
     db: AsyncSession = Depends(get_db),
-    _: User = Depends(require_admin),
+    _: User = Depends(require_event_admin),
 ):
     """Send a free-text message to a subset of guests via SMS and/or WhatsApp."""
     event = await db.get(Event, event_id)
@@ -493,7 +506,7 @@ async def send_manual_invites(
     data: ManualInviteRequest,
     background_tasks: BackgroundTasks,
     db: AsyncSession = Depends(get_db),
-    _: User = Depends(require_admin),
+    _: User = Depends(require_event_admin),
 ):
     """Send a personal invite link to one or more recipients by email/phone."""
     event = await db.get(Event, event_id)
@@ -562,7 +575,7 @@ async def upload_cover_image(
     event_id: str,
     file: UploadFile = File(...),
     db: AsyncSession = Depends(get_db),
-    _: User = Depends(require_admin),
+    _: User = Depends(require_event_admin),
 ):
     """Upload a cover/banner image for the invite page. Stored in /app/uploads/."""
     event = await db.get(Event, event_id)
@@ -597,7 +610,7 @@ async def upload_cover_image(
 async def delete_cover_image(
     event_id: str,
     db: AsyncSession = Depends(get_db),
-    _: User = Depends(require_admin),
+    _: User = Depends(require_event_admin),
 ):
     """Remove the cover image from an event."""
     event = await db.get(Event, event_id)

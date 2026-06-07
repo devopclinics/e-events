@@ -5,7 +5,7 @@ from sqlalchemy import select
 from ..database import get_db
 from ..models import User
 from ..schemas import UserOut
-from ..auth import get_current_user, require_admin
+from ..auth import get_current_user, require_superadmin
 
 router = APIRouter()
 
@@ -23,7 +23,7 @@ async def google_status():
 
 
 @router.get("/users", response_model=list[UserOut])
-async def list_users(_: User = Depends(require_admin), db: AsyncSession = Depends(get_db)):
+async def list_users(_: User = Depends(require_superadmin), db: AsyncSession = Depends(get_db)):
     result = await db.execute(select(User).order_by(User.created_at.desc()))
     return result.scalars().all()
 
@@ -32,7 +32,7 @@ async def list_users(_: User = Depends(require_admin), db: AsyncSession = Depend
 async def update_role(
     user_id: str,
     role: str,
-    _: User = Depends(require_admin),
+    _: User = Depends(require_superadmin),
     db: AsyncSession = Depends(get_db),
 ):
     if role not in ("admin", "official"):

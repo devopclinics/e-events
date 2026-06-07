@@ -8,6 +8,10 @@ class Settings(BaseSettings):
     # Firebase — paste the service account JSON as a single-line string
     firebase_credentials: str = ""
 
+    # Comma-separated emails granted platform-superadmin (operator/support) on
+    # sign-in. Cross-tenant access; keep this to your own operator accounts.
+    superadmin_emails: str = ""
+
     smtp_host: str = ""
     smtp_port: int = 587
     smtp_user: str = ""

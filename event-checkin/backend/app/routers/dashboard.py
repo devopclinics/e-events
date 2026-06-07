@@ -7,14 +7,14 @@ from sqlalchemy import select, func
 from ..database import get_db
 from ..models import Guest, Event, User
 from ..schemas import DashboardStats, GuestOut
-from ..auth import require_admin
+from ..auth import require_event_admin
 from . import sse_subscribers
 
 router = APIRouter()
 
 
 @router.get("/{event_id}/dashboard", response_model=DashboardStats)
-async def get_dashboard(event_id: str, db: AsyncSession = Depends(get_db), _: User = Depends(require_admin)):
+async def get_dashboard(event_id: str, db: AsyncSession = Depends(get_db), _: User = Depends(require_event_admin)):
     event = await db.get(Event, event_id)
     if not event:
         raise HTTPException(404, "Event not found")
@@ -40,7 +40,7 @@ async def get_dashboard(event_id: str, db: AsyncSession = Depends(get_db), _: Us
 
 
 @router.get("/{event_id}/stream")
-async def event_stream(event_id: str, db: AsyncSession = Depends(get_db), _: User = Depends(require_admin)):
+async def event_stream(event_id: str, db: AsyncSession = Depends(get_db), _: User = Depends(require_event_admin)):
     event = await db.get(Event, event_id)
     if not event:
         raise HTTPException(404, "Event not found")

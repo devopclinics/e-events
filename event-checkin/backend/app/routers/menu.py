@@ -12,7 +12,7 @@ from ..schemas import (
     MenuCombinationCreate, MenuCombinationOut, MenuCombinationItemOut,
     MenuDashboardOut, MenuDashboardGuest, MenuItemTotal, MenuCombinationTotal,
 )
-from ..auth import get_current_user
+from ..auth import require_event_member
 
 router = APIRouter()
 
@@ -69,13 +69,13 @@ async def _cat_out(cat: MenuCategory, db: AsyncSession) -> MenuCategoryOut:
 # ── Categories ────────────────────────────────────────────────────────────────
 
 @router.get("/{event_id}/menu-categories", response_model=list[MenuCategoryOut])
-async def list_categories(event_id: str, db: AsyncSession = Depends(get_db), _: User = Depends(get_current_user)):
+async def list_categories(event_id: str, db: AsyncSession = Depends(get_db), _: User = Depends(require_event_member)):
     cats = (await db.execute(select(MenuCategory).where(MenuCategory.event_id == event_id).order_by(MenuCategory.sort_order, MenuCategory.name))).scalars().all()
     return [await _cat_out(c, db) for c in cats]
 
 
 @router.post("/{event_id}/menu-categories", response_model=MenuCategoryOut, status_code=201)
-async def create_category(event_id: str, data: MenuCategoryCreate, db: AsyncSession = Depends(get_db), current_user: User = Depends(get_current_user)):
+async def create_category(event_id: str, data: MenuCategoryCreate, db: AsyncSession = Depends(get_db), current_user: User = Depends(require_event_member)):
     await _require_menu_access(event_id, db, current_user)
     if not await db.get(Event, event_id):
         raise HTTPException(404, "Event not found")
@@ -97,7 +97,7 @@ async def create_category(event_id: str, data: MenuCategoryCreate, db: AsyncSess
 
 
 @router.put("/{event_id}/menu-categories/{category_id}", response_model=MenuCategoryOut)
-async def update_category(event_id: str, category_id: str, data: MenuCategoryCreate, db: AsyncSession = Depends(get_db), current_user: User = Depends(get_current_user)):
+async def update_category(event_id: str, category_id: str, data: MenuCategoryCreate, db: AsyncSession = Depends(get_db), current_user: User = Depends(require_event_member)):
     await _require_menu_access(event_id, db, current_user)
     cat = await db.get(MenuCategory, category_id)
     if not cat or cat.event_id != event_id:
@@ -116,7 +116,7 @@ async def update_category(event_id: str, category_id: str, data: MenuCategoryCre
 
 
 @router.delete("/{event_id}/menu-categories/{category_id}", status_code=204)
-async def delete_category(event_id: str, category_id: str, db: AsyncSession = Depends(get_db), current_user: User = Depends(get_current_user)):
+async def delete_category(event_id: str, category_id: str, db: AsyncSession = Depends(get_db), current_user: User = Depends(require_event_member)):
     await _require_menu_access(event_id, db, current_user)
     cat = await db.get(MenuCategory, category_id)
     if not cat or cat.event_id != event_id:
@@ -128,7 +128,7 @@ async def delete_category(event_id: str, category_id: str, db: AsyncSession = De
 # ── Items ─────────────────────────────────────────────────────────────────────
 
 @router.post("/{event_id}/menu-categories/{category_id}/items", response_model=MenuItemOut, status_code=201)
-async def add_item(event_id: str, category_id: str, data: MenuItemCreate, db: AsyncSession = Depends(get_db), current_user: User = Depends(get_current_user)):
+async def add_item(event_id: str, category_id: str, data: MenuItemCreate, db: AsyncSession = Depends(get_db), current_user: User = Depends(require_event_member)):
     await _require_menu_access(event_id, db, current_user)
     cat = await db.get(MenuCategory, category_id)
     if not cat or cat.event_id != event_id:
@@ -141,7 +141,7 @@ async def add_item(event_id: str, category_id: str, data: MenuItemCreate, db: As
 
 
 @router.put("/{event_id}/menu-items/{item_id}", response_model=MenuItemOut)
-async def update_item(event_id: str, item_id: str, data: MenuItemCreate, db: AsyncSession = Depends(get_db), current_user: User = Depends(get_current_user)):
+async def update_item(event_id: str, item_id: str, data: MenuItemCreate, db: AsyncSession = Depends(get_db), current_user: User = Depends(require_event_member)):
     await _require_menu_access(event_id, db, current_user)
     item = await db.get(MenuItem, item_id)
     if not item or item.event_id != event_id:
@@ -153,7 +153,7 @@ async def update_item(event_id: str, item_id: str, data: MenuItemCreate, db: Asy
 
 
 @router.delete("/{event_id}/menu-items/{item_id}", status_code=204)
-async def delete_item(event_id: str, item_id: str, db: AsyncSession = Depends(get_db), current_user: User = Depends(get_current_user)):
+async def delete_item(event_id: str, item_id: str, db: AsyncSession = Depends(get_db), current_user: User = Depends(require_event_member)):
     await _require_menu_access(event_id, db, current_user)
     item = await db.get(MenuItem, item_id)
     if not item or item.event_id != event_id:
@@ -165,7 +165,7 @@ async def delete_item(event_id: str, item_id: str, db: AsyncSession = Depends(ge
 # ── Combinations ──────────────────────────────────────────────────────────────
 
 @router.post("/{event_id}/menu-categories/{category_id}/combinations", response_model=MenuCombinationOut, status_code=201)
-async def create_combination(event_id: str, category_id: str, data: MenuCombinationCreate, db: AsyncSession = Depends(get_db), current_user: User = Depends(get_current_user)):
+async def create_combination(event_id: str, category_id: str, data: MenuCombinationCreate, db: AsyncSession = Depends(get_db), current_user: User = Depends(require_event_member)):
     await _require_menu_access(event_id, db, current_user)
     cat = await db.get(MenuCategory, category_id)
     if not cat or cat.event_id != event_id:
@@ -190,7 +190,7 @@ async def create_combination(event_id: str, category_id: str, data: MenuCombinat
 
 
 @router.put("/{event_id}/menu-combinations/{combo_id}", response_model=MenuCombinationOut)
-async def update_combination(event_id: str, combo_id: str, data: MenuCombinationCreate, db: AsyncSession = Depends(get_db), current_user: User = Depends(get_current_user)):
+async def update_combination(event_id: str, combo_id: str, data: MenuCombinationCreate, db: AsyncSession = Depends(get_db), current_user: User = Depends(require_event_member)):
     await _require_menu_access(event_id, db, current_user)
     combo = await db.get(MenuCombination, combo_id)
     if not combo or combo.event_id != event_id:
@@ -215,7 +215,7 @@ async def update_combination(event_id: str, combo_id: str, data: MenuCombination
 
 
 @router.delete("/{event_id}/menu-combinations/{combo_id}", status_code=204)
-async def delete_combination(event_id: str, combo_id: str, db: AsyncSession = Depends(get_db), current_user: User = Depends(get_current_user)):
+async def delete_combination(event_id: str, combo_id: str, db: AsyncSession = Depends(get_db), current_user: User = Depends(require_event_member)):
     await _require_menu_access(event_id, db, current_user)
     combo = await db.get(MenuCombination, combo_id)
     if not combo or combo.event_id != event_id:
@@ -227,7 +227,7 @@ async def delete_combination(event_id: str, combo_id: str, db: AsyncSession = De
 # ── Summary ───────────────────────────────────────────────────────────────────
 
 @router.get("/{event_id}/menu/summary")
-async def menu_summary(event_id: str, db: AsyncSession = Depends(get_db), current_user: User = Depends(get_current_user)):
+async def menu_summary(event_id: str, db: AsyncSession = Depends(get_db), current_user: User = Depends(require_event_member)):
     await _require_menu_access(event_id, db, current_user)
     cats = (await db.execute(select(MenuCategory).where(MenuCategory.event_id == event_id).order_by(MenuCategory.sort_order, MenuCategory.name))).scalars().all()
     result = []
@@ -250,7 +250,7 @@ async def menu_summary(event_id: str, db: AsyncSession = Depends(get_db), curren
 # ── Dashboard ─────────────────────────────────────────────────────────────────
 
 @router.get("/{event_id}/menu/dashboard", response_model=MenuDashboardOut)
-async def menu_dashboard(event_id: str, db: AsyncSession = Depends(get_db), current_user: User = Depends(get_current_user)):
+async def menu_dashboard(event_id: str, db: AsyncSession = Depends(get_db), current_user: User = Depends(require_event_member)):
     await _require_menu_access(event_id, db, current_user)
     if not await db.get(Event, event_id):
         raise HTTPException(404, "Event not found")

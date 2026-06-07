@@ -4,7 +4,7 @@ from sqlalchemy import select, func
 from ..database import get_db
 from ..models import Event, SeatingTable, Guest, EventUser, User
 from ..schemas import SeatingTableCreate, SeatingTableOut, SeatAssignRequest
-from ..auth import require_admin, get_current_user, require_official
+from ..auth import require_event_admin, require_event_member
 
 router = APIRouter()
 
@@ -118,14 +118,14 @@ async def assign_next_seat(guest: Guest, db: AsyncSession) -> None:
 # ── Tables CRUD ───────────────────────────────────────────────────────────────
 
 @router.get("/{event_id}/tables", response_model=list[SeatingTableOut])
-async def list_tables(event_id: str, db: AsyncSession = Depends(get_db), _: User = Depends(get_current_user)):
+async def list_tables(event_id: str, db: AsyncSession = Depends(get_db), _: User = Depends(require_event_member)):
     result = await db.execute(select(SeatingTable).where(SeatingTable.event_id == event_id).order_by(SeatingTable.name))
     tables = result.scalars().all()
     return [await _table_out(t, db) for t in tables]
 
 
 @router.post("/{event_id}/tables", response_model=SeatingTableOut, status_code=201)
-async def create_table(event_id: str, data: SeatingTableCreate, db: AsyncSession = Depends(get_db), _: User = Depends(require_admin)):
+async def create_table(event_id: str, data: SeatingTableCreate, db: AsyncSession = Depends(get_db), _: User = Depends(require_event_admin)):
     if not await db.get(Event, event_id):
         raise HTTPException(404, "Event not found")
     table = SeatingTable(event_id=event_id, name=data.name, capacity=data.capacity)
@@ -136,7 +136,7 @@ async def create_table(event_id: str, data: SeatingTableCreate, db: AsyncSession
 
 
 @router.put("/{event_id}/tables/{table_id}", response_model=SeatingTableOut)
-async def update_table(event_id: str, table_id: str, data: SeatingTableCreate, db: AsyncSession = Depends(get_db), _: User = Depends(require_admin)):
+async def update_table(event_id: str, table_id: str, data: SeatingTableCreate, db: AsyncSession = Depends(get_db), _: User = Depends(require_event_admin)):
     table = await db.get(SeatingTable, table_id)
     if not table or table.event_id != event_id:
         raise HTTPException(404, "Table not found")
@@ -148,7 +148,7 @@ async def update_table(event_id: str, table_id: str, data: SeatingTableCreate, d
 
 
 @router.delete("/{event_id}/tables/{table_id}", status_code=204)
-async def delete_table(event_id: str, table_id: str, db: AsyncSession = Depends(get_db), _: User = Depends(require_admin)):
+async def delete_table(event_id: str, table_id: str, db: AsyncSession = Depends(get_db), _: User = Depends(require_event_admin)):
     table = await db.get(SeatingTable, table_id)
     if not table or table.event_id != event_id:
         raise HTTPException(404, "Table not found")
@@ -164,7 +164,7 @@ async def delete_table(event_id: str, table_id: str, db: AsyncSession = Depends(
 # ── Seating chart ─────────────────────────────────────────────────────────────
 
 @router.get("/{event_id}/seating")
-async def seating_chart(event_id: str, db: AsyncSession = Depends(get_db), _: User = Depends(get_current_user)):
+async def seating_chart(event_id: str, db: AsyncSession = Depends(get_db), _: User = Depends(require_event_member)):
     """Full chart: each table with all seat slots (filled and empty)."""
     tables = (await db.execute(select(SeatingTable).where(SeatingTable.event_id == event_id).order_by(SeatingTable.name))).scalars().all()
     guests = (await db.execute(select(Guest).where(Guest.event_id == event_id, Guest.table_id.isnot(None)))).scalars().all()
@@ -196,7 +196,7 @@ async def seating_chart(event_id: str, db: AsyncSession = Depends(get_db), _: Us
 # ── Auto-assign ───────────────────────────────────────────────────────────────
 
 @router.post("/{event_id}/seating/auto-assign")
-async def auto_assign(event_id: str, clear: bool = False, db: AsyncSession = Depends(get_db), _: User = Depends(require_admin)):
+async def auto_assign(event_id: str, clear: bool = False, db: AsyncSession = Depends(get_db), _: User = Depends(require_event_admin)):
     if not await db.get(Event, event_id):
         raise HTTPException(404, "Event not found")
 
@@ -240,7 +240,7 @@ async def assign_seat(
     guest_id: str,
     body: SeatAssignRequest,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_event_member),
 ):
     if current_user.role != "admin":
         eu = await db.scalar(select(EventUser).where(EventUser.event_id == event_id, EventUser.user_id == current_user.id))
@@ -269,7 +269,7 @@ async def mark_meal_served(
     event_id: str,
     guest_id: str,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_official),
+    current_user: User = Depends(require_event_member),
 ):
     if current_user.role == "official":
         eu = await db.scalar(select(EventUser).where(EventUser.event_id == event_id, EventUser.user_id == current_user.id))
@@ -291,7 +291,7 @@ async def update_member_permissions(
     user_id: str,
     body: dict,
     db: AsyncSession = Depends(get_db),
-    _: User = Depends(require_admin),
+    _: User = Depends(require_event_admin),
 ):
     eu = await db.scalar(select(EventUser).where(EventUser.event_id == event_id, EventUser.user_id == user_id))
     if not eu:

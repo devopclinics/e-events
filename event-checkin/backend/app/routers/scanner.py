@@ -6,7 +6,7 @@ from sqlalchemy import select
 from ..database import get_db
 from ..models import Guest, Event, EventUser, User, SeatingTable, MenuCategory, MenuItem, GuestMenuChoice, MenuCombination, MenuCombinationItem
 from ..schemas import ScanResult, GuestOut, TicketView, EventBrief, MenuCategoryOut, MenuItemOut, MenuCombinationOut, MenuCombinationItemOut, GuestMenuSubmit, PartnerInfo, PairRequest
-from ..auth import require_official
+from ..auth import require_official, _org_role
 from services.email_service import send_admission_email
 from services import messaging
 from services.qr_service import generate_qr_bytes
@@ -163,12 +163,18 @@ async def scan_qr(
         label = "has not started yet" if event.status == "draft" else "has ended"
         return ScanResult(status="not_active", message=f"'{event.name}' {label}. Scanning is disabled.")
 
-    if current_user.role == "official":
-        assigned = await db.scalar(
-            select(EventUser).where(EventUser.event_id == guest.event_id, EventUser.user_id == current_user.id)
-        )
-        if not assigned:
+    # Tenant + assignment check: scanner must belong to this event's org. Org
+    # owners/admins can scan any of their events; staff must be assigned to it.
+    if not current_user.is_platform_superadmin:
+        org_role = await _org_role(current_user, event.org_id if event else None, db)
+        if org_role is None:
             return ScanResult(status="not_assigned", message="You are not assigned to this event.")
+        if org_role == "staff":
+            assigned = await db.scalar(
+                select(EventUser).where(EventUser.event_id == guest.event_id, EventUser.user_id == current_user.id)
+            )
+            if not assigned:
+                return ScanResult(status="not_assigned", message="You are not assigned to this event.")
 
     if guest.admitted:
         admitted_time = local_hhmm(guest.admitted_at) or "unknown"

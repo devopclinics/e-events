@@ -159,6 +159,7 @@ export const api = {
   // Billing (Event Pass)
   getBillingTiers: (eventId)      => req('GET',  `/billing/tiers/${eventId}`),
   checkout:        (eventId, tier) => req('POST', '/billing/checkout', { event_id: eventId, tier }),
+  setBillingCurrency: (eventId, currency) => req('POST', '/billing/currency', { event_id: eventId, currency }),
   // Public marketing pricing (no auth)
   getPricing:      (currency = 'USD') => fetch(`/api/billing/pricing?currency=${currency}`).then((r) => r.json()),
 

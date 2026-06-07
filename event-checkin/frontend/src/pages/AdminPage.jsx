@@ -1964,9 +1964,16 @@ function BillingPanel({ event }) {
   const [busy, setBusy] = useState('')
   const [err, setErr] = useState('')
 
-  useEffect(() => {
+  function loadInfo() {
     api.getBillingTiers(event.id).then(setInfo).catch((e) => setErr(e.message))
-  }, [event.id])
+  }
+  useEffect(() => { loadInfo() }, [event.id])
+
+  async function changeCurrency(cur) {
+    setErr('')
+    try { await api.setBillingCurrency(event.id, cur); loadInfo() }
+    catch (e) { setErr(e.message) }
+  }
 
   async function upgrade(tier) {
     setBusy(tier); setErr('')
@@ -1978,7 +1985,19 @@ function BillingPanel({ event }) {
 
   return (
     <div className="bg-white dark:bg-slate-800 dark:border dark:border-slate-700/60 rounded-xl shadow p-6 space-y-4">
-      <h2 className="font-semibold text-base dark:text-white">💳 Event Pass</h2>
+      <div className="flex items-center justify-between gap-3 flex-wrap">
+        <h2 className="font-semibold text-base dark:text-white">💳 Event Pass</h2>
+        <label className="flex items-center gap-2 text-xs text-slate-500 dark:text-slate-400">
+          Currency
+          <select
+            value={info?.currency || 'USD'}
+            onChange={(e) => changeCurrency(e.target.value)}
+            className="border border-gray-300 dark:border-slate-600 rounded-lg px-2 py-1 text-sm bg-white dark:bg-slate-700 text-slate-900 dark:text-white">
+            <option value="USD">USD ($) · Stripe</option>
+            <option value="NGN">NGN (₦) · Paystack</option>
+          </select>
+        </label>
+      </div>
 
       {event.is_paid ? (
         <>

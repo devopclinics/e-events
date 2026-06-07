@@ -519,6 +519,11 @@ class CheckoutRequest(BaseModel):
     tier: str
 
 
+class CurrencyRequest(BaseModel):
+    event_id: str
+    currency: Literal["USD", "NGN"]
+
+
 class CheckoutOut(BaseModel):
     url: str
     provider: str

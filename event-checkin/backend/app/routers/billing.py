@@ -12,7 +12,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..database import get_db
 from ..models import Event, Organization, Payment, User
-from ..schemas import CheckoutRequest, CheckoutOut
+from ..schemas import CheckoutRequest, CheckoutOut, CurrencyRequest
 from ..auth import get_current_user, _org_role
 from ..billing import (
     get_plan, plan_amount, apply_purchase, tiers_public, packs_public,
@@ -68,6 +68,19 @@ async def public_pricing(currency: str = "USD", db: AsyncSession = Depends(get_d
     if cur not in ("USD", "NGN"):
         cur = "USD"
     return {"currency": cur, "tiers": await tiers_public(db, cur), "packs": await packs_public(db, cur)}
+
+
+@router.post("/currency")
+async def set_currency(body: CurrencyRequest, user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
+    """Set the billing currency for the event's organization (USD→Stripe, NGN→Paystack)."""
+    event = await _require_event_admin(body.event_id, user, db)
+    org = await db.get(Organization, event.org_id)
+    if not org:
+        raise HTTPException(404, "Organization not found")
+    org.currency = body.currency
+    org.region = "NG" if body.currency == "NGN" else "US"
+    await db.commit()
+    return {"currency": org.currency, "region": org.region}
 
 
 @router.post("/checkout", response_model=CheckoutOut)

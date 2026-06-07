@@ -2568,6 +2568,48 @@ function Badge({ on, labels }) {
   )
 }
 
+function OnboardingChecklist({ event, stats, onTab }) {
+  const key = `onb_${event.id}`
+  const [dismissed, setDismissed] = useState(() => localStorage.getItem(key) === '1')
+  if (dismissed) return null
+  const items = [
+    { label: 'Create your event', done: true },
+    { label: 'Add your guest list', done: stats.total > 0, tab: 'overview' },
+    { label: 'Set up the RSVP & invite page', done: !!event.rsvp_enabled, tab: 'invite' },
+    { label: 'Send invitations', done: stats.invited > 0, tab: 'invite' },
+    { label: 'Upgrade to an Event Pass', done: !!event.is_paid, tab: 'invite' },
+  ]
+  const doneCount = items.filter((i) => i.done).length
+  const pct = Math.round((doneCount / items.length) * 100)
+  const allDone = doneCount === items.length
+  return (
+    <div className="rounded-2xl border border-teal-200 dark:border-teal-800 bg-teal-50/60 dark:bg-teal-900/20 p-5">
+      <div className="flex items-start justify-between gap-3">
+        <div>
+          <h3 className="font-bold text-slate-900 dark:text-white">{allDone ? "🎉 You're all set!" : 'Get this event ready'}</h3>
+          <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">{doneCount} of {items.length} complete</p>
+        </div>
+        <button onClick={() => { localStorage.setItem(key, '1'); setDismissed(true) }}
+          className="text-xs text-slate-400 hover:text-slate-600 dark:hover:text-slate-200">Dismiss</button>
+      </div>
+      <div className="mt-3 h-2 rounded-full bg-teal-100 dark:bg-teal-900/40 overflow-hidden">
+        <div className="h-full bg-teal-600 transition-all duration-500" style={{ width: `${pct}%` }} />
+      </div>
+      <ul className="mt-4 space-y-2.5">
+        {items.map((it, i) => (
+          <li key={i} className="flex items-center gap-3 text-sm">
+            <span className={`shrink-0 w-5 h-5 rounded-full flex items-center justify-center text-[11px] font-bold ${it.done ? 'bg-teal-600 text-white' : 'border-2 border-slate-300 dark:border-slate-600 text-transparent'}`}>✓</span>
+            <span className={`flex-1 ${it.done ? 'text-slate-400 line-through' : 'text-slate-700 dark:text-slate-200'}`}>{it.label}</span>
+            {!it.done && it.tab && (
+              <button onClick={() => onTab(it.tab)} className="text-xs font-semibold text-teal-600 hover:underline">Do it →</button>
+            )}
+          </li>
+        ))}
+      </ul>
+    </div>
+  )
+}
+
 function RsvpStatusBadge({ status }) {
   const map = {
     confirmed: { label: '✓ Attending', cls: 'bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-300' },
@@ -2925,6 +2967,7 @@ export default function AdminPage() {
 
       {event && (
         <>
+          <OnboardingChecklist event={event} stats={stats} onTab={setActiveTab} />
           <TabBar
             active={activeTab}
             onChange={setActiveTab}

@@ -32,16 +32,16 @@ const CONTENT = {
         'Optional: RSVP deadline, require approval, custom questions, cover image, message.',
         'Use "Preview invite page" to see exactly what guests will get.',
       ]},
-      { id: 'org-send', icon: '📤', title: 'Send invitations', steps: [
+      { id: 'org-send', icon: '📤', title: 'Send invitations', img: '/guide/send-invites.png', steps: [
         'Open mode: share the event link, or use Manual invite for specific people.',
         'Closed mode: use Bulk RSVP invites — Send to not-yet-invited, Remind no-reply, or Resend to all.',
         'Email is always free; SMS/WhatsApp require an Event Pass + message credits.',
       ]},
-      { id: 'org-track', icon: '✅', title: 'Track RSVPs & approvals', steps: [
+      { id: 'org-track', icon: '✅', title: 'Track RSVPs & approvals', img: '/guide/admin-guests.png', steps: [
         'Guests tab shows each person: Attending / Declined / Pending / No reply, plus check-in status.',
         'If approval is on, approve or reject pending RSVPs (or Approve all).',
       ]},
-      { id: 'org-broadcast', icon: '📣', title: 'Broadcast an update', steps: [
+      { id: 'org-broadcast', icon: '📣', title: 'Broadcast an update', img: '/guide/broadcast.png', steps: [
         'Invite tab → Broadcast Message.',
         'Pick a target: All, RSVP Attending/Declined/No-reply, Checked-in, or Not checked-in.',
         'Send via email / SMS / WhatsApp.',

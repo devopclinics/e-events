@@ -2364,70 +2364,6 @@ function TeamPanel({ eventId }) {
   )
 }
 
-// ── UsersPanel ────────────────────────────────────────────────────────────────
-
-function UsersPanel() {
-  const [users, setUsers] = useState([])
-  const [changing, setChanging] = useState(null)
-  const [msg, setMsg] = useState('')
-
-  useEffect(() => {
-    api.listUsers().then(setUsers).catch(console.error)
-  }, [])
-
-  async function changeRole(userId, newRole) {
-    setChanging(userId)
-    try {
-      await api.updateUserRole(userId, newRole)
-      setUsers((prev) => prev.map((u) => (u.id === userId ? { ...u, role: newRole } : u)))
-      setMsg('Role updated.')
-      setTimeout(() => setMsg(''), 3000)
-    } catch (e) { setMsg(e.message) }
-    finally { setChanging(null) }
-  }
-
-  return (
-    <div className="bg-white dark:bg-slate-800 dark:border dark:border-slate-700/60 rounded-xl shadow p-6 space-y-4">
-      <h2 className="font-semibold text-base dark:text-white">User Management</h2>
-      {users.length === 0 ? (
-        <p className="text-sm text-gray-400 dark:text-slate-500">No users yet.</p>
-      ) : (
-        <div className="overflow-x-auto">
-          <table className="w-full text-sm">
-            <thead className="bg-gray-50 dark:bg-slate-700 text-xs font-semibold text-gray-500 dark:text-slate-400 uppercase">
-              <tr>
-                <th className="px-4 py-2 text-left">Name</th>
-                <th className="px-4 py-2 text-left">Email</th>
-                <th className="px-4 py-2 text-left">Role</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-gray-100 dark:divide-slate-700">
-              {users.map((u) => (
-                <tr key={u.id} className="hover:bg-gray-50 dark:hover:bg-slate-700">
-                  <td className="px-4 py-2.5 font-medium dark:text-slate-100">{u.name}</td>
-                  <td className="px-4 py-2.5 text-gray-500 dark:text-slate-400">{u.email}</td>
-                  <td className="px-4 py-2.5">
-                    <select
-                      value={u.role}
-                      onChange={(e) => changeRole(u.id, e.target.value)}
-                      disabled={changing === u.id}
-                      className="border border-gray-300 dark:border-slate-700 rounded px-2 py-1 text-xs disabled:opacity-50 bg-white dark:bg-slate-700 text-gray-900 dark:text-white"
-                    >
-                      <option value="admin">Admin</option>
-                      <option value="official">Official</option>
-                    </select>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      )}
-      {msg && <p className="text-sm text-indigo-600">{msg}</p>}
-    </div>
-  )
-}
-
 // ── EventForm ─────────────────────────────────────────────────────────────────
 
 function utcToLocal(utcStr) {
@@ -3397,9 +3333,6 @@ export default function AdminPage() {
           })()}
         </>
       )}
-
-      {/* User management — platform operator (superadmin) only */}
-      {user?.is_platform_superadmin && <UsersPanel />}
     </div>
   )
 }

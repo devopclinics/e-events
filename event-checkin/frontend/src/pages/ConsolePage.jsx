@@ -27,6 +27,10 @@ function OverviewTab() {
   if (!orgs) return <div className="text-sm text-slate-500">Loading…</div>
   return (
     <div className="space-y-6">
+      <p className="text-xs text-slate-500 dark:text-slate-400 bg-slate-100 dark:bg-slate-800 rounded-lg px-3 py-2">
+        <strong>Comp a plan</strong> to make an event paid — that unlocks SMS/WhatsApp, seating, menu &amp; QR check-in.
+        <strong> Add credits</strong> only tops up the message balance (it does <em>not</em> unlock features).
+      </p>
       {msg && <div className="text-sm text-teal-600">{msg}</div>}
       {orgs.map((o) => (
         <div key={o.id} className="bg-white dark:bg-slate-800 rounded-xl shadow p-4 border dark:border-slate-700">
@@ -47,22 +51,33 @@ function EventRow({ ev, plans, onGrant }) {
   const [tier, setTier] = useState('')
   const [credits, setCredits] = useState('')
   return (
-    <div className="py-2 flex items-center gap-3 flex-wrap text-sm">
-      <div className="flex-1 min-w-[160px]">
+    <div className="py-3 flex items-end gap-4 flex-wrap text-sm">
+      <div className="flex-1 min-w-[180px]">
         <span className="font-medium dark:text-slate-100">{ev.name}</span>
-        <span className="ml-2 text-xs text-slate-400">{ev.is_paid ? `${ev.plan_tier}` : 'free'} · {ev.message_credits} cr · {ev.status}</span>
+        <div className="mt-1 flex items-center gap-2 text-xs">
+          <span className={`px-2 py-0.5 rounded-full font-medium ${ev.is_paid ? 'bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-300' : 'bg-gray-100 text-gray-500 dark:bg-slate-700 dark:text-slate-300'}`}>
+            {ev.is_paid ? `Paid · ${ev.plan_tier}` : 'Free'}
+          </span>
+          <span className="text-slate-400">{ev.message_credits} credits · {ev.status}</span>
+        </div>
       </div>
-      <select value={tier} onChange={(e) => setTier(e.target.value)} className="border dark:border-slate-600 rounded px-2 py-1 text-xs bg-white dark:bg-slate-700 dark:text-white">
-        <option value="">comp tier…</option>
-        {plans.map((p) => <option key={p.key} value={p.key}>{p.key}</option>)}
-      </select>
-      <input value={credits} onChange={(e) => setCredits(e.target.value)} placeholder="+credits" type="number"
-        className="w-24 border dark:border-slate-600 rounded px-2 py-1 text-xs bg-white dark:bg-slate-700 dark:text-white" />
+      <div>
+        <label className="block text-[11px] font-semibold text-slate-500 dark:text-slate-400 mb-1">Comp a plan <span className="font-normal">(unlocks paid features)</span></label>
+        <select value={tier} onChange={(e) => setTier(e.target.value)} className="border dark:border-slate-600 rounded px-2 py-1 text-xs bg-white dark:bg-slate-700 dark:text-white">
+          <option value="">— no change —</option>
+          {plans.map((p) => <option key={p.key} value={p.key}>{p.key}</option>)}
+        </select>
+      </div>
+      <div>
+        <label className="block text-[11px] font-semibold text-slate-500 dark:text-slate-400 mb-1">Add credits <span className="font-normal">(messaging only)</span></label>
+        <input value={credits} onChange={(e) => setCredits(e.target.value)} placeholder="0" type="number"
+          className="w-20 border dark:border-slate-600 rounded px-2 py-1 text-xs bg-white dark:bg-slate-700 dark:text-white" />
+      </div>
       <button
-        onClick={() => onGrant(ev.id, { tier: tier || undefined, add_credits: credits ? Number(credits) : undefined })}
+        onClick={() => { onGrant(ev.id, { tier: tier || undefined, add_credits: credits ? Number(credits) : undefined }); setTier(''); setCredits('') }}
         disabled={!tier && !credits}
-        className="bg-teal-600 text-white px-3 py-1 rounded text-xs font-semibold disabled:opacity-40 hover:bg-teal-700">
-        Grant
+        className="bg-teal-600 text-white px-3 py-1.5 rounded text-xs font-semibold disabled:opacity-40 hover:bg-teal-700">
+        Apply
       </button>
     </div>
   )

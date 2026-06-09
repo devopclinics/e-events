@@ -12,14 +12,16 @@ from ..schemas import (
     MenuCombinationCreate, MenuCombinationOut, MenuCombinationItemOut,
     MenuDashboardOut, MenuDashboardGuest, MenuItemTotal, MenuCombinationTotal,
 )
-from ..auth import require_paid_event_member
+from ..auth import require_paid_event_member, is_org_manager
 
 router = APIRouter()
 
 
 async def _require_menu_access(event_id: str, db: AsyncSession, user: User) -> None:
-    if user.role == "admin":
+    event = await db.get(Event, event_id)
+    if await is_org_manager(user, event.org_id if event else None, db):
         return
+    # Staff need the per-event "manage menu" permission.
     eu = await db.scalar(
         select(EventUser).where(EventUser.event_id == event_id, EventUser.user_id == user.id)
     )

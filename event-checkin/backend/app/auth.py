@@ -97,6 +97,13 @@ async def require_superadmin(user: User = Depends(get_current_user)) -> User:
     return user
 
 
+async def is_org_manager(user: User, org_id: str | None, db: AsyncSession) -> bool:
+    """True if the user can manage this org's events (owner/admin or superadmin)."""
+    if user.is_platform_superadmin:
+        return True
+    return (await _org_role(user, org_id, db)) in ("owner", "admin")
+
+
 async def _org_role(user: User, org_id: str | None, db: AsyncSession) -> str | None:
     """The caller's role in a given org, or None if not a member."""
     if not org_id:

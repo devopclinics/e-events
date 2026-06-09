@@ -4,7 +4,7 @@ from sqlalchemy import select, func
 from ..database import get_db
 from ..models import Event, SeatingTable, Guest, EventUser, User
 from ..schemas import SeatingTableCreate, SeatingTableOut, SeatAssignRequest
-from ..auth import require_paid_event_admin, require_paid_event_member
+from ..auth import require_paid_event_admin, require_paid_event_member, is_org_manager
 
 router = APIRouter()
 
@@ -242,7 +242,8 @@ async def assign_seat(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_paid_event_member),
 ):
-    if current_user.role != "admin":
+    _ev = await db.get(Event, event_id)
+    if not await is_org_manager(current_user, _ev.org_id if _ev else None, db):
         eu = await db.scalar(select(EventUser).where(EventUser.event_id == event_id, EventUser.user_id == current_user.id))
         if not eu or not eu.can_reassign_seats:
             raise HTTPException(403, "You don't have permission to reassign seats")
@@ -271,7 +272,8 @@ async def mark_meal_served(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_paid_event_member),
 ):
-    if current_user.role == "official":
+    _ev = await db.get(Event, event_id)
+    if not await is_org_manager(current_user, _ev.org_id if _ev else None, db):
         eu = await db.scalar(select(EventUser).where(EventUser.event_id == event_id, EventUser.user_id == current_user.id))
         if not eu:
             raise HTTPException(403, "You are not assigned to this event")

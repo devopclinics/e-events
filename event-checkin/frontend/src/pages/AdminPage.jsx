@@ -2307,6 +2307,32 @@ function TeamPanel({ eventId }) {
         </button>
       </div>
 
+      {/* Organization members & their roles */}
+      <div className="pt-3 border-t dark:border-slate-700 space-y-2">
+        <div className="text-xs font-semibold text-gray-500 dark:text-slate-400">Organization members &amp; roles</div>
+        <ul className="divide-y divide-gray-100 dark:divide-slate-700">
+          {orgMembers.map((m) => (
+            <li key={m.user.id} className="flex items-center justify-between py-2 gap-2 text-sm">
+              <span className="truncate min-w-0">
+                <span className="font-medium dark:text-slate-100">{m.user.name}</span>
+                <span className="text-gray-400 dark:text-slate-500"> · {m.user.email}</span>
+              </span>
+              <select value={m.role}
+                onChange={async (e) => {
+                  try { await api.setOrgMemberRole(eventId, m.user.id, e.target.value); loadOrgMembers(); setMsg('Role updated.'); setTimeout(() => setMsg(''), 2500) }
+                  catch (err) { setMsg(err.message) }
+                }}
+                className="shrink-0 border border-gray-300 dark:border-slate-600 rounded-lg px-2 py-1 text-xs bg-white dark:bg-slate-700 dark:text-white">
+                <option value="owner">Owner</option>
+                <option value="admin">Admin</option>
+                <option value="staff">Staff</option>
+              </select>
+            </li>
+          ))}
+        </ul>
+        <p className="text-xs text-slate-400 dark:text-slate-500">Owners &amp; Admins can manage events. Staff can only scan events they're assigned to.</p>
+      </div>
+
       {/* Invite a new teammate to the organization by email */}
       <div className="pt-3 border-t dark:border-slate-700 space-y-2">
         <div className="text-xs font-semibold text-gray-500 dark:text-slate-400">Add a teammate to your organization</div>

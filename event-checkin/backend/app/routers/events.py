@@ -8,7 +8,7 @@ from ..database import get_db
 from ..models import Event, EventUser, Guest, Membership, RSVPQuestion, User
 from ..schemas import (
     EventCreate, EventUpdate, EventOut, EventMemberOut, AssignUserRequest,
-    OrgMemberInvite, OrgMemberOut, UserOut, EventSourceUpdate,
+    OrgMemberInvite, OrgMemberOut, MemberRoleUpdate, UserOut, EventSourceUpdate,
     InviteSettingsUpdate, RSVPQuestionCreate, RSVPQuestionUpdate, RSVPQuestionOut,
     BroadcastRequest, BroadcastResult,
     ManualInviteRequest, ManualInviteResult,
@@ -234,6 +234,26 @@ async def list_org_members(
         .order_by(Membership.role, User.name)
     )).all()
     return [OrgMemberOut(user=UserOut.model_validate(u), role=m.role) for m, u in rows]
+
+
+@router.put("/{event_id}/org-members/{user_id}")
+async def set_org_member_role(
+    event_id: str,
+    user_id: str,
+    body: MemberRoleUpdate,
+    db: AsyncSession = Depends(get_db),
+    _: User = Depends(require_event_admin),
+):
+    """Change a teammate's role in this event's organization (owner/admin/staff)."""
+    event = await db.get(Event, event_id)
+    membership = await db.scalar(
+        select(Membership).where(Membership.org_id == event.org_id, Membership.user_id == user_id)
+    )
+    if not membership:
+        raise HTTPException(404, "That person isn't a member of this organization")
+    membership.role = body.role
+    await db.commit()
+    return {"ok": True, "role": membership.role}
 
 
 @router.post("/{event_id}/org-members", response_model=OrgMemberOut, status_code=201)

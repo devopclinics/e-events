@@ -138,6 +138,10 @@ class OrgMemberOut(BaseModel):
     role: str
 
 
+class MemberRoleUpdate(BaseModel):
+    role: Literal["owner", "admin", "staff"]
+
+
 # ── Superadmin console ──────────────────────────────────────────────────────
 
 class GrantRequest(BaseModel):

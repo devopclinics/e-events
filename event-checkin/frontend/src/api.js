@@ -145,6 +145,7 @@ export const api = {
   // Organization team (members of an event's org)
   listOrgMembers:  (eventId)        => req('GET',  `/events/${eventId}/org-members`),
   inviteOrgMember: (eventId, body)  => req('POST', `/events/${eventId}/org-members`, body),
+  setOrgMemberRole:(eventId, userId, role) => req('PUT', `/events/${eventId}/org-members/${userId}`, { role }),
 
   // ── Invite page settings (admin) ──────────────────────────────────────────
   updateInviteSettings: (eventId, data) => req('PUT',  `/events/${eventId}/invite-settings`, data),

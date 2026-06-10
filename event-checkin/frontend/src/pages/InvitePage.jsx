@@ -129,10 +129,49 @@ function QuestionField({ question, value, onChange, theme }) {
 
 // ── RSVP form ─────────────────────────────────────────────────────────────────
 
+// Shipping address + per-shipment size selectors for the logistics add-on.
+// Rendered only when the invite payload includes a `shipping` block.
+function ShippingSection({ shipping, addr, setAddr, sizes, setSizes, inputCls, accent }) {
+  if (!shipping) return null
+  const sa = (k) => (e) => setAddr((p) => ({ ...p, [k]: e.target.value }))
+  const withSize = (shipping.shipments || []).filter((s) => s.collect_size)
+  return (
+    <div className="space-y-3 pt-1">
+      <div className={`text-xs font-semibold uppercase tracking-wide ${accent}`}>Shipping details</div>
+      <p className="text-xs text-slate-500 dark:text-slate-400 -mt-1">Where should we ship your item(s)?</p>
+      <input className={inputCls} placeholder="Street address" value={addr.ship_address1 || ''} onChange={sa('ship_address1')} />
+      <input className={inputCls} placeholder="Apartment, suite (optional)" value={addr.ship_address2 || ''} onChange={sa('ship_address2')} />
+      <div className="grid grid-cols-2 gap-3">
+        <input className={inputCls} placeholder="City" value={addr.ship_city || ''} onChange={sa('ship_city')} />
+        <input className={inputCls} placeholder="State / Region" value={addr.ship_state || ''} onChange={sa('ship_state')} />
+      </div>
+      <div className="grid grid-cols-2 gap-3">
+        <input className={inputCls} placeholder="Postal code" value={addr.ship_postal || ''} onChange={sa('ship_postal')} />
+        <input className={inputCls} placeholder="Country" value={addr.ship_country || ''} onChange={sa('ship_country')} />
+      </div>
+      {withSize.map((s) => (
+        <div key={s.shipment_id}>
+          <label className="block text-xs font-semibold text-slate-500 dark:text-slate-400 mb-1">{s.name} — size</label>
+          {s.size_options?.length ? (
+            <select className={inputCls} value={sizes[s.shipment_id] || ''} onChange={(e) => setSizes((p) => ({ ...p, [s.shipment_id]: e.target.value }))}>
+              <option value="">Select a size…</option>
+              {s.size_options.map((o) => <option key={o} value={o}>{o}</option>)}
+            </select>
+          ) : (
+            <input className={inputCls} value={sizes[s.shipment_id] || ''} onChange={(e) => setSizes((p) => ({ ...p, [s.shipment_id]: e.target.value }))} placeholder="Your size" />
+          )}
+        </div>
+      ))}
+    </div>
+  )
+}
+
 function RSVPForm({ event, theme, onConfirmed }) {
   const t = THEMES[theme] || THEMES.default
   const [form, setForm] = useState({ first_name: '', last_name: '', email: '', phone: '' })
   const [answers, setAnswers] = useState({})
+  const [shipAddr, setShipAddr] = useState({})
+  const [sizes, setSizes] = useState({})
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
 
@@ -152,6 +191,8 @@ function RSVPForm({ event, theme, onConfirmed }) {
           email: form.email.trim(),
           phone: form.phone.trim() || undefined,
           answers,
+          shipping_address: event.shipping ? shipAddr : undefined,
+          sizes: event.shipping ? sizes : undefined,
         }),
       })
       const data = await res.json().catch(() => null)
@@ -207,6 +248,9 @@ function RSVPForm({ event, theme, onConfirmed }) {
           ))}
         </div>
       )}
+
+      <ShippingSection shipping={event.shipping} addr={shipAddr} setAddr={setShipAddr}
+        sizes={sizes} setSizes={setSizes} inputCls={inputCls} accent={t.accent} />
 
       {error && (
         <div className="rounded-lg bg-red-50 dark:bg-red-900/30 border border-red-200 dark:border-red-800 px-3 py-2 text-sm text-red-700 dark:text-red-300">
@@ -286,6 +330,8 @@ function TokenRSVPForm({ event, prefill, token, theme, onDone }) {
     phone: prefill.phone || '',
   })
   const [answers, setAnswers] = useState({})
+  const [shipAddr, setShipAddr] = useState({})
+  const [sizes, setSizes] = useState({})
   const [loading, setLoading] = useState('')   // '' | 'confirmed' | 'declined'
   const [error, setError] = useState('')
 
@@ -316,6 +362,8 @@ function TokenRSVPForm({ event, prefill, token, theme, onDone }) {
           last_name: form.last_name.trim(),
           phone: form.phone.trim() || undefined,
           answers,
+          shipping_address: event.shipping ? shipAddr : undefined,
+          sizes: event.shipping ? sizes : undefined,
         }),
       })
       const data = await res.json().catch(() => null)
@@ -369,6 +417,9 @@ function TokenRSVPForm({ event, prefill, token, theme, onDone }) {
           ))}
         </div>
       )}
+
+      <ShippingSection shipping={event.shipping} addr={shipAddr} setAddr={setShipAddr}
+        sizes={sizes} setSizes={setSizes} inputCls={inputCls} accent={t.accent} />
 
       {error && (
         <div className="rounded-lg bg-red-50 dark:bg-red-900/30 border border-red-200 dark:border-red-800 px-3 py-2 text-sm text-red-700 dark:text-red-300">
@@ -580,6 +631,16 @@ export default function InvitePage() {
           </div>
         </div>
       </div>
+
+      {/* Gift registry link */}
+      {event.registry_enabled && event.registry_token && (
+        <div className="pb-6 text-center">
+          <a href={`/registry/${event.registry_token}`}
+            className="inline-flex items-center gap-2 bg-white/80 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-full px-5 py-2.5 text-sm font-semibold text-slate-700 dark:text-slate-200 hover:bg-white dark:hover:bg-slate-700 shadow-sm">
+            🎁 View our gift registry
+          </a>
+        </div>
+      )}
 
       {/* Footer — branding shown only on free events */}
       {!event.is_paid && (

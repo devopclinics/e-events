@@ -2,11 +2,12 @@ from datetime import datetime
 from fastapi import APIRouter, Depends, BackgroundTasks, HTTPException
 from fastapi.responses import Response
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select
+from sqlalchemy import select, func
 from ..database import get_db
-from ..models import Guest, Event, EventUser, User, SeatingTable, MenuCategory, MenuItem, GuestMenuChoice, MenuCombination, MenuCombinationItem
-from ..schemas import ScanResult, GuestOut, TicketView, EventBrief, MenuCategoryOut, MenuItemOut, MenuCombinationOut, MenuCombinationItemOut, GuestMenuSubmit, PartnerInfo, PairRequest
+from ..models import Guest, Event, EventUser, User, SeatingTable, MenuCategory, MenuItem, GuestMenuChoice, MenuCombination, MenuCombinationItem, Zone, TicketType, ScanEvent
+from ..schemas import ScanResult, GuestOut, TicketView, EventBrief, MenuCategoryOut, MenuItemOut, MenuCombinationOut, MenuCombinationItemOut, GuestMenuSubmit, PartnerInfo, PairRequest, ScanZoneRequest, ScanZoneResult
 from ..auth import require_official, _org_role
+from .access import zone_occupancy, ticket_allows
 from ..entitlements import can_use_paid_channels, take_message_credit
 from services.email_service import send_admission_email
 from services import messaging
@@ -279,6 +280,102 @@ async def scan_qr(
         guest=GuestOut.model_validate(guest),
         table_name=table_name,
         seat_number=guest.seat_number,
+    )
+
+
+@router.post("/{qr_token}/zone", response_model=ScanZoneResult)
+async def scan_qr_zone(
+    qr_token: str,
+    body: ScanZoneRequest,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_official),
+):
+    """Venue Access scan: log a directional, per-zone movement. Completely
+    separate from the legacy `scan_qr` flow above (which is unchanged). Only
+    usable on events with `venue_access_enabled`."""
+    guest = (await db.execute(select(Guest).where(Guest.qr_token == qr_token))).scalar_one_or_none()
+    if not guest:
+        raise HTTPException(404, "Invalid QR code — this ticket was not found.")
+    event = await db.get(Event, guest.event_id)
+    if not event or not event.venue_access_enabled:
+        raise HTTPException(400, "Venue access scanning is not enabled for this event.")
+    if event.status != "active":
+        raise HTTPException(409, f"'{event.name}' is not active. Scanning is disabled.")
+    if not event.is_paid:
+        raise HTTPException(402, "This event needs an Event Pass to run check-in.")
+
+    # Same tenant/assignment check as scan_qr (copied, not shared, to keep that
+    # endpoint untouched).
+    if not current_user.is_platform_superadmin:
+        org_role = await _org_role(current_user, event.org_id, db)
+        if org_role is None:
+            raise HTTPException(403, "You are not assigned to this event.")
+        if org_role == "staff":
+            assigned = await db.scalar(
+                select(EventUser).where(EventUser.event_id == guest.event_id, EventUser.user_id == current_user.id)
+            )
+            if not assigned:
+                raise HTTPException(403, "You are not assigned to this event.")
+
+    zone = await db.get(Zone, body.zone_id)
+    if not zone or zone.event_id != event.id or not zone.is_active:
+        raise HTTPException(404, "Zone not found.")
+
+    # Direction: explicit, else inferred from the zone's mode.
+    direction = body.direction or ("in" if zone.direction_mode in ("both", "entry") else "out")
+    if zone.direction_mode == "entry":
+        direction = "in"
+    elif zone.direction_mode == "exit":
+        direction = "out"
+
+    # Access decision: ticket-type zone permission, then capacity.
+    allowed, reason = await ticket_allows(guest, zone.id, db)
+    denied = not allowed
+    deny_reason = reason
+    if not denied and direction == "in" and zone.capacity:
+        if await zone_occupancy(zone.id, db) >= zone.capacity:
+            denied, deny_reason = True, "Zone is at capacity"
+
+    db.add(ScanEvent(
+        event_id=event.id, guest_id=guest.id, zone_id=zone.id, direction=direction,
+        scanned_by=current_user.id, denied=denied, deny_reason=deny_reason,
+    ))
+    # First allowed entry also marks the guest admitted so the normal dashboard
+    # still reflects arrivals (legacy events never reach this code).
+    if not denied and direction == "in" and not guest.admitted:
+        guest.admitted = True
+        guest.admitted_at = datetime.utcnow()
+        guest.admit_notified = True
+        if event.seating_enabled and not guest.table_id:
+            await assign_next_seat(guest, db)
+    await db.commit()
+
+    occ = await zone_occupancy(zone.id, db)
+    journey_count = await db.scalar(
+        select(func.count(ScanEvent.id)).where(
+            ScanEvent.guest_id == guest.id, ScanEvent.event_id == event.id, ScanEvent.denied.is_(False))
+    ) or 0
+    tt_name = None
+    if guest.ticket_type_id:
+        tt = await db.get(TicketType, guest.ticket_type_id)
+        tt_name = tt.name if tt else None
+    table_name = None
+    if guest.table_id:
+        tbl = await db.get(SeatingTable, guest.table_id)
+        table_name = tbl.name if tbl else None
+
+    broadcast(event.id, {
+        "type": "scan", "guest_id": guest.id,
+        "name": f"{guest.first_name} {guest.last_name}",
+        "zone_id": zone.id, "zone_name": zone.name,
+        "direction": direction, "denied": denied, "occupancy": occ,
+    })
+
+    return ScanZoneResult(
+        status="denied" if denied else "ok", denied=denied, deny_reason=deny_reason,
+        guest_name=f"{guest.first_name} {guest.last_name}", ticket_type=tt_name,
+        zone_name=zone.name, direction=direction, occupancy=occ,
+        journey_count=int(journey_count), seat_number=guest.seat_number, table_name=table_name,
     )
 
 

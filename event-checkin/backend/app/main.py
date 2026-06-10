@@ -6,7 +6,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from .database import engine
 from .config import settings
-from .routers import events, guests, scanner, dashboard, seating, menu
+from .routers import events, guests, scanner, dashboard, seating, menu, logistics, registry, access
 from .routers import auth as auth_router
 from .routers import invite as invite_router
 from .routers import billing as billing_router
@@ -49,6 +49,11 @@ app.include_router(events.router,      prefix="/api/events", tags=["events"])
 app.include_router(guests.router,      prefix="/api/events", tags=["guests"])
 app.include_router(seating.router,     prefix="/api/events", tags=["seating"])
 app.include_router(menu.router,        prefix="/api/events", tags=["menu"])
+app.include_router(logistics.router,   prefix="/api/events", tags=["logistics"])
+app.include_router(logistics.vendor_router, prefix="/api/vendor", tags=["vendor"])
+app.include_router(registry.router,    prefix="/api/events", tags=["registry"])
+app.include_router(registry.registry_router, prefix="/api/registry", tags=["registry-public"])
+app.include_router(access.router,      prefix="/api/events", tags=["access"])
 app.include_router(scanner.router,     prefix="/api/scan",   tags=["scanner"])
 app.include_router(dashboard.router,   prefix="/api/events", tags=["dashboard"])
 app.include_router(invite_router.router, prefix="/api/invite", tags=["invite"])

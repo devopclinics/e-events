@@ -109,7 +109,7 @@ export default function DashboardPage() {
           >
             <option value="">— select event —</option>
             {events.map((ev) => (
-              <option key={ev.id} value={ev.id}>{ev.name} — {ev.couples_name}</option>
+              <option key={ev.id} value={ev.id}>{ev.couples_name ? `${ev.name} — ${ev.couples_name}` : ev.name}</option>
             ))}
           </select>
         </div>
@@ -118,7 +118,7 @@ export default function DashboardPage() {
       {event && (
         <div className="bg-indigo-600 text-white rounded-xl px-6 py-4">
           <div className="text-xl font-bold">{event.name}</div>
-          <div className="text-indigo-200 text-sm mt-0.5">{event.couples_name} · {new Date(event.event_date).toLocaleDateString(undefined, { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}</div>
+          <div className="text-indigo-200 text-sm mt-0.5">{event.couples_name ? `${event.couples_name} · ` : ''}{new Date(event.event_date).toLocaleDateString(undefined, { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}</div>
         </div>
       )}
 

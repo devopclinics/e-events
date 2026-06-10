@@ -77,6 +77,22 @@ class Event(Base):
     status: Mapped[str] = mapped_column(String(20), default="draft")
     seating_enabled: Mapped[bool] = mapped_column(Boolean, default=False)
     menu_enabled: Mapped[bool] = mapped_column(Boolean, default=False)
+    # Logistics add-on: ship merchandise (pre-event) / gifts (post-event) to
+    # guests. Off by default; paid-gated like seating/menu.
+    logistics_enabled: Mapped[bool] = mapped_column(Boolean, default=False)
+    # Gift registry add-on (mark-only — no money flows through the platform).
+    registry_enabled: Mapped[bool] = mapped_column(Boolean, default=False)
+    registry_message: Mapped[str | None] = mapped_column(Text, nullable=True)
+    # Venue Access Intelligence add-on (zones, multi-zone scanning, analytics).
+    # Off by default — does not touch the legacy single-scan check-in flow.
+    venue_access_enabled: Mapped[bool] = mapped_column(Boolean, default=False)
+    venue_name: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    venue_address: Mapped[str | None] = mapped_column(Text, nullable=True)
+    # Unguessable public token for the registry page (cf. invite_token). Nullable
+    # so existing rows backfill lazily; new events get one via the default.
+    registry_token: Mapped[str | None] = mapped_column(
+        String(36), unique=True, nullable=True, default=lambda: str(uuid.uuid4())
+    )
     # Per-event notification channels — admin toggles which channels fire
     # for invites + admission. Defaults all on; provider-level config (Bird /
     # Twilio creds) decides whether a channel is actually wired.
@@ -172,6 +188,9 @@ class SeatingTable(Base):
     event_id: Mapped[str] = mapped_column(String(36), ForeignKey("events.id"))
     name: Mapped[str] = mapped_column(String(100))
     capacity: Mapped[int] = mapped_column(Integer)
+    # Optional seating category/restriction label (e.g. Male, Female, Kids,
+    # Youth, VIP). Display-only guidance for manual seat assignment.
+    category: Mapped[str | None] = mapped_column(String(50), nullable=True)
 
     event: Mapped["Event"] = relationship("Event", back_populates="tables")
     guests: Mapped[list["Guest"]] = relationship("Guest", back_populates="table")
@@ -288,6 +307,19 @@ class Guest(Base):
     sms_consent: Mapped[bool] = mapped_column(Boolean, default=True)
     whatsapp_consent: Mapped[bool] = mapped_column(Boolean, default=True)
 
+    # Shipping address for the logistics add-on. One address per guest, reused
+    # across shipments. Phone (above) doubles as the shipping contact number.
+    ship_address1: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    ship_address2: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    ship_city: Mapped[str | None] = mapped_column(String(120), nullable=True)
+    ship_state: Mapped[str | None] = mapped_column(String(120), nullable=True)
+    ship_postal: Mapped[str | None] = mapped_column(String(40), nullable=True)
+    ship_country: Mapped[str | None] = mapped_column(String(120), nullable=True)
+
+    # Venue-access add-on: optional ticket type (GA/VIP/…). Nullable; ignored by
+    # the legacy check-in flow.
+    ticket_type_id: Mapped[str | None] = mapped_column(String(36), ForeignKey("ticket_types.id"), nullable=True)
+
     event: Mapped["Event"] = relationship("Event", back_populates="guests")
     table: Mapped["SeatingTable | None"] = relationship("SeatingTable", back_populates="guests")
     menu_choices: Mapped[list["GuestMenuChoice"]] = relationship("GuestMenuChoice", cascade="all, delete-orphan")
@@ -324,3 +356,172 @@ class RSVPAnswer(Base):
     question_id: Mapped[str] = mapped_column(String(36), ForeignKey("rsvp_questions.id"))
     answer: Mapped[str] = mapped_column(Text)
     answered_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+
+
+# ── Logistics / Fulfillment add-on ────────────────────────────────────────────
+
+class Shipment(Base):
+    """A batch of items shipped to guests for an event — pre-event merchandise
+    (e.g. aso-ebi cloth) or post-event gifts. The organizer pays the vendor
+    off-platform; this model only collects sizes/addresses and produces the
+    packing list (download + tokenized vendor page)."""
+    __tablename__ = "shipments"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+    event_id: Mapped[str] = mapped_column(String(36), ForeignKey("events.id"), index=True)
+    name: Mapped[str] = mapped_column(String(150))
+    phase: Mapped[str] = mapped_column(String(10), default="pre")  # "pre" | "post"
+    collect_size: Mapped[bool] = mapped_column(Boolean, default=True)
+    # Whether guests who RSVP are auto-added to this shipment. True suits "ship
+    # to everyone" (e.g. aso-ebi); False keeps the list admin-curated (e.g. VIP
+    # gifts) so removed guests don't get re-added on the next RSVP.
+    auto_add: Mapped[bool] = mapped_column(Boolean, default=True)
+    size_options: Mapped[str | None] = mapped_column(Text, nullable=True)  # JSON: ["S","M","L","XL"]
+    notes: Mapped[str | None] = mapped_column(Text, nullable=True)  # instructions shown to the vendor
+    vendor_name: Mapped[str | None] = mapped_column(String(150), nullable=True)
+    vendor_email: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    vendor_phone: Mapped[str | None] = mapped_column(String(50), nullable=True)
+    # Unguessable token powering the public, read-only vendor page.
+    share_token: Mapped[str] = mapped_column(String(36), unique=True, default=lambda: str(uuid.uuid4()))
+    sent_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)    # emailed to vendor
+    viewed_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)  # vendor first opened page
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+
+    event: Mapped["Event"] = relationship("Event")
+    lines: Mapped[list["GuestShipment"]] = relationship("GuestShipment", cascade="all, delete-orphan")
+
+
+class GuestShipment(Base):
+    """One guest's line within a shipment: their chosen size/quantity and the
+    fulfillment status the organizer tracks against the vendor."""
+    __tablename__ = "guest_shipments"
+    __table_args__ = (UniqueConstraint("shipment_id", "guest_id", name="uq_guest_shipment"),)
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+    shipment_id: Mapped[str] = mapped_column(String(36), ForeignKey("shipments.id"), index=True)
+    guest_id: Mapped[str] = mapped_column(String(36), ForeignKey("guests.id"), index=True)
+    # Optional per-guest item override. Blank → the shipment's name is the item.
+    item: Mapped[str | None] = mapped_column(String(150), nullable=True)
+    size: Mapped[str | None] = mapped_column(String(40), nullable=True)
+    quantity: Mapped[int] = mapped_column(Integer, default=1)
+    ship_status: Mapped[str] = mapped_column(String(20), default="pending")  # pending | shipped | delivered
+    tracking_number: Mapped[str | None] = mapped_column(String(120), nullable=True)
+    shipped_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    notes: Mapped[str | None] = mapped_column(Text, nullable=True)
+
+    guest: Mapped["Guest"] = relationship("Guest")
+
+
+# ── Gift Registry add-on ──────────────────────────────────────────────────────
+
+class RegistryItem(Base):
+    """One entry on an event's gift registry. Mark-only: no money moves through
+    the platform. `kind` distinguishes a physical item (external buy link), a
+    cash fund (target + the organizer's own payment instructions), or a link to
+    an external registry (e.g. the couple's Amazon/Jumia list)."""
+    __tablename__ = "registry_items"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+    event_id: Mapped[str] = mapped_column(String(36), ForeignKey("events.id"), index=True)
+    kind: Mapped[str] = mapped_column(String(10), default="item")  # "item" | "fund" | "link"
+    title: Mapped[str] = mapped_column(String(255))
+    description: Mapped[str | None] = mapped_column(Text, nullable=True)
+    image_url: Mapped[str | None] = mapped_column(String(1000), nullable=True)
+    # item: store/buy link; link: external registry URL; fund: optional pay link.
+    external_url: Mapped[str | None] = mapped_column(String(1000), nullable=True)
+    # item: display price; fund: target amount. Minor units (cents/kobo).
+    amount_minor: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    currency: Mapped[str] = mapped_column(String(10), default="USD")  # "USD" | "NGN"
+    quantity_wanted: Mapped[int] = mapped_column(Integer, default=1)  # items only
+    # funds: how to send the money (bank details, Paystack/PayPal/Venmo link…).
+    payment_instructions: Mapped[str | None] = mapped_column(Text, nullable=True)
+    sort_order: Mapped[int] = mapped_column(Integer, default=0)
+    is_active: Mapped[bool] = mapped_column(Boolean, default=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+
+    claims: Mapped[list["RegistryClaim"]] = relationship("RegistryClaim", cascade="all, delete-orphan")
+
+
+class RegistryClaim(Base):
+    """A guest reserving an item or pledging to a fund. Self-reported; the actual
+    purchase/transfer happens off-platform."""
+    __tablename__ = "registry_claims"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+    item_id: Mapped[str] = mapped_column(String(36), ForeignKey("registry_items.id"), index=True)
+    claimer_name: Mapped[str] = mapped_column(String(255))
+    claimer_email: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    quantity: Mapped[int] = mapped_column(Integer, default=1)            # items
+    amount_minor: Mapped[int | None] = mapped_column(Integer, nullable=True)  # funds
+    message: Mapped[str | None] = mapped_column(Text, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+
+
+class AffiliateStore(Base):
+    """Platform-wide (superadmin-managed) affiliate store. When a registry item's
+    buy link points to a matching domain, the store's query param is appended so
+    purchases carry the platform's affiliate tag (Amazon Associates, Jumia, …)."""
+    __tablename__ = "affiliate_stores"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+    domain: Mapped[str] = mapped_column(String(255))      # host suffix, e.g. "amazon.com"
+    label: Mapped[str] = mapped_column(String(120))       # "Amazon US"
+    param_key: Mapped[str] = mapped_column(String(60))    # e.g. "tag"
+    param_value: Mapped[str] = mapped_column(String(255)) # your affiliate id
+    active: Mapped[bool] = mapped_column(Boolean, default=True)
+    sort_order: Mapped[int] = mapped_column(Integer, default=0)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+
+
+# ── Venue Access Intelligence add-on ──────────────────────────────────────────
+
+class Zone(Base):
+    """A room/area within an event's venue. Guests are scanned in/out of zones;
+    the scan log powers occupancy, flow, peak-times and journeys."""
+    __tablename__ = "zones"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+    event_id: Mapped[str] = mapped_column(String(36), ForeignKey("events.id"), index=True)
+    name: Mapped[str] = mapped_column(String(150))
+    description: Mapped[str | None] = mapped_column(Text, nullable=True)
+    capacity: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    # How scans at this zone are recorded: "both" (official picks), "entry"
+    # (always counts as in), "exit" (always out).
+    direction_mode: Mapped[str] = mapped_column(String(10), default="both")
+    sort_order: Mapped[int] = mapped_column(Integer, default=0)
+    is_active: Mapped[bool] = mapped_column(Boolean, default=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+
+
+class TicketType(Base):
+    """A ticket class (GA / VIP / Press / Speaker) with optional per-zone access."""
+    __tablename__ = "ticket_types"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+    event_id: Mapped[str] = mapped_column(String(36), ForeignKey("events.id"), index=True)
+    name: Mapped[str] = mapped_column(String(120))
+    color: Mapped[str | None] = mapped_column(String(20), nullable=True)  # badge tint
+    description: Mapped[str | None] = mapped_column(Text, nullable=True)
+    capacity: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    # JSON list of zone ids this ticket may enter. null/empty = all zones.
+    allowed_zone_ids: Mapped[str | None] = mapped_column(Text, nullable=True)
+    sort_order: Mapped[int] = mapped_column(Integer, default=0)
+    is_active: Mapped[bool] = mapped_column(Boolean, default=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+
+
+class ScanEvent(Base):
+    """One row per scan — a timestamped, directional, per-zone movement. This is
+    the log the whole analytics layer reads. Separate from the legacy
+    Guest.admitted boolean, which the old check-in flow still uses."""
+    __tablename__ = "scan_events"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+    event_id: Mapped[str] = mapped_column(String(36), ForeignKey("events.id"), index=True)
+    guest_id: Mapped[str] = mapped_column(String(36), ForeignKey("guests.id"), index=True)
+    zone_id: Mapped[str | None] = mapped_column(String(36), ForeignKey("zones.id"), index=True, nullable=True)
+    direction: Mapped[str] = mapped_column(String(4), default="in")  # "in" | "out"
+    scanned_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, index=True)
+    scanned_by: Mapped[str | None] = mapped_column(String(36), ForeignKey("users.id"), nullable=True)
+    denied: Mapped[bool] = mapped_column(Boolean, default=False)
+    deny_reason: Mapped[str | None] = mapped_column(String(255), nullable=True)

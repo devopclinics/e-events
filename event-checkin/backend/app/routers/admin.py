@@ -8,8 +8,8 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..database import get_db
-from ..models import Organization, Event, User, PricingPlan
-from ..schemas import GrantRequest, OperatorInvite, PlanUpsert, UserOut
+from ..models import Organization, Event, User, PricingPlan, AffiliateStore
+from ..schemas import GrantRequest, OperatorInvite, PlanUpsert, UserOut, AffiliateStoreIn, AffiliateStoreOut
 from ..auth import require_superadmin
 from ..billing import get_plan, apply_purchase
 
@@ -132,4 +132,62 @@ async def delete_plan(key: str, _: User = Depends(require_superadmin), db: Async
     if not plan:
         raise HTTPException(404, "Plan not found")
     await db.delete(plan)
+    await db.commit()
+
+
+# ── Affiliate stores (registry Buy-link tags) ─────────────────────────────────
+
+def _store_out(s: AffiliateStore) -> AffiliateStoreOut:
+    return AffiliateStoreOut(
+        id=s.id, domain=s.domain, label=s.label, param_key=s.param_key,
+        param_value=s.param_value, active=s.active, sort_order=s.sort_order,
+    )
+
+
+@router.get("/affiliate-stores", response_model=list[AffiliateStoreOut])
+async def list_affiliate_stores(_: User = Depends(require_superadmin), db: AsyncSession = Depends(get_db)):
+    rows = (await db.execute(
+        select(AffiliateStore).order_by(AffiliateStore.sort_order, AffiliateStore.domain)
+    )).scalars().all()
+    return [_store_out(s) for s in rows]
+
+
+@router.post("/affiliate-stores", response_model=AffiliateStoreOut, status_code=201)
+async def create_affiliate_store(body: AffiliateStoreIn, _: User = Depends(require_superadmin),
+                                 db: AsyncSession = Depends(get_db)):
+    s = AffiliateStore(
+        domain=body.domain.strip().lower(), label=body.label.strip(),
+        param_key=body.param_key.strip(), param_value=body.param_value.strip(),
+        active=body.active, sort_order=body.sort_order,
+    )
+    db.add(s)
+    await db.commit()
+    await db.refresh(s)
+    return _store_out(s)
+
+
+@router.put("/affiliate-stores/{store_id}", response_model=AffiliateStoreOut)
+async def update_affiliate_store(store_id: str, body: AffiliateStoreIn,
+                                 _: User = Depends(require_superadmin), db: AsyncSession = Depends(get_db)):
+    s = await db.get(AffiliateStore, store_id)
+    if not s:
+        raise HTTPException(404, "Store not found")
+    s.domain = body.domain.strip().lower()
+    s.label = body.label.strip()
+    s.param_key = body.param_key.strip()
+    s.param_value = body.param_value.strip()
+    s.active = body.active
+    s.sort_order = body.sort_order
+    await db.commit()
+    await db.refresh(s)
+    return _store_out(s)
+
+
+@router.delete("/affiliate-stores/{store_id}", status_code=204)
+async def delete_affiliate_store(store_id: str, _: User = Depends(require_superadmin),
+                                 db: AsyncSession = Depends(get_db)):
+    s = await db.get(AffiliateStore, store_id)
+    if not s:
+        raise HTTPException(404, "Store not found")
+    await db.delete(s)
     await db.commit()

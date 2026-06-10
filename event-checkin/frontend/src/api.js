@@ -29,6 +29,26 @@ async function req(method, path, body) {
   return res.status === 204 ? null : res.json()
 }
 
+// Fetch a file endpoint (with auth) and trigger a browser download.
+async function downloadFile(path, filename, { withAuth = true } = {}) {
+  const headers = {}
+  if (withAuth) {
+    const token = await getToken()
+    if (token) headers.Authorization = `Bearer ${token}`
+  }
+  const res = await fetch(`${BASE}${path}`, { headers })
+  if (!res.ok) throw new Error('Download failed')
+  const blob = await res.blob()
+  const url = URL.createObjectURL(blob)
+  const a = document.createElement('a')
+  a.href = url
+  a.download = filename
+  document.body.appendChild(a)
+  a.click()
+  a.remove()
+  URL.revokeObjectURL(url)
+}
+
 export const api = {
   // Events
   listEvents:   ()           => req('GET',    '/events'),
@@ -46,6 +66,8 @@ export const api = {
 
   // Guests
   listGuests:          (eventId)           => req('GET',  `/events/${eventId}/guests`),
+  downloadGuestTemplate: (eventId, fmt = 'xlsx') =>
+    downloadFile(`/events/${eventId}/guests/template?fmt=${fmt}`, `guest-template.${fmt}`),
   importGuestsFromUrl: (eventId, url)      => req('POST', `/events/${eventId}/guests/import-url`, { url }),
   addGuest:            (eventId, data)     => req('POST', `/events/${eventId}/guests`, data),
   generateQR:          (eventId)           => req('POST', `/events/${eventId}/guests/generate-qr`),
@@ -157,6 +179,54 @@ export const api = {
   // Broadcast (admin)
   broadcast: (eventId, data) => req('POST', `/events/${eventId}/broadcast`, data),
 
+  // Logistics / Fulfillment (admin)
+  listShipments:       (eventId)            => req('GET',    `/events/${eventId}/shipments`),
+  createShipment:      (eventId, data)      => req('POST',   `/events/${eventId}/shipments`, data),
+  updateShipment:      (eventId, sid, data) => req('PUT',    `/events/${eventId}/shipments/${sid}`, data),
+  deleteShipment:      (eventId, sid)       => req('DELETE', `/events/${eventId}/shipments/${sid}`),
+  populateShipment:    (eventId, sid)       => req('POST',   `/events/${eventId}/shipments/${sid}/populate`),
+  listShipmentLines:   (eventId, sid)       => req('GET',    `/events/${eventId}/shipments/${sid}/lines`),
+  addShipmentGuest:    (eventId, sid, gid, data = {}) => req('POST', `/events/${eventId}/shipments/${sid}/lines/${gid}`, data),
+  removeShipmentGuest: (eventId, sid, gid)  => req('DELETE', `/events/${eventId}/shipments/${sid}/lines/${gid}`),
+  updateShipmentLine:  (eventId, sid, gid, data) => req('PUT', `/events/${eventId}/shipments/${sid}/lines/${gid}`, data),
+  updateGuestShipping: (eventId, gid, data) => req('PUT',    `/events/${eventId}/guests/${gid}/shipping`, data),
+  sendShipmentToVendor:(eventId, sid)       => req('POST',   `/events/${eventId}/shipments/${sid}/send-to-vendor`),
+  downloadShipmentXlsx:(eventId, sid, filename = 'shipping-list.xlsx') =>
+    downloadFile(`/events/${eventId}/shipments/${sid}/export.xlsx`, filename),
+  // Public vendor page (no auth)
+  getVendorPage:       (token)              => req('GET',    `/vendor/${token}`),
+  downloadVendorXlsx:  (token, filename = 'shipping-list.xlsx') =>
+    downloadFile(`/vendor/${token}/export.xlsx`, filename, { withAuth: false }),
+
+  // Gift Registry (admin)
+  listRegistryItems:    (eventId)            => req('GET',    `/events/${eventId}/registry/items`),
+  createRegistryItem:   (eventId, data)      => req('POST',   `/events/${eventId}/registry/items`, data),
+  updateRegistryItem:   (eventId, id, data)  => req('PUT',    `/events/${eventId}/registry/items/${id}`, data),
+  deleteRegistryItem:   (eventId, id)        => req('DELETE', `/events/${eventId}/registry/items/${id}`),
+  unfurlRegistryLink:   (eventId, url)       => req('POST',   `/events/${eventId}/registry/unfurl`, { url }),
+  getRegistrySettings:  (eventId)            => req('GET',    `/events/${eventId}/registry/settings`),
+  updateRegistrySettings:(eventId, data)     => req('PUT',    `/events/${eventId}/registry/settings`, data),
+  listRegistryClaims:   (eventId)            => req('GET',    `/events/${eventId}/registry/claims`),
+  // Venue Access Intelligence (admin)
+  listZones:           (eventId)            => req('GET',    `/events/${eventId}/zones`),
+  createZone:          (eventId, data)      => req('POST',   `/events/${eventId}/zones`, data),
+  updateZone:          (eventId, id, data)  => req('PUT',    `/events/${eventId}/zones/${id}`, data),
+  deleteZone:          (eventId, id)        => req('DELETE', `/events/${eventId}/zones/${id}`),
+  listTicketTypes:     (eventId)            => req('GET',    `/events/${eventId}/ticket-types`),
+  createTicketType:    (eventId, data)      => req('POST',   `/events/${eventId}/ticket-types`, data),
+  updateTicketType:    (eventId, id, data)  => req('PUT',    `/events/${eventId}/ticket-types/${id}`, data),
+  deleteTicketType:    (eventId, id)        => req('DELETE', `/events/${eventId}/ticket-types/${id}`),
+  assignTicketType:    (eventId, gid, ticketTypeId) => req('PUT', `/events/${eventId}/guests/${gid}/ticket-type`, { ticket_type_id: ticketTypeId }),
+  accessOccupancy:     (eventId)            => req('GET',    `/events/${eventId}/access/occupancy`),
+  accessPeak:          (eventId, bucket=15) => req('GET',    `/events/${eventId}/access/peak?bucket_minutes=${bucket}`),
+  accessFlow:          (eventId)            => req('GET',    `/events/${eventId}/access/flow`),
+  guestJourney:        (eventId, gid)       => req('GET',    `/events/${eventId}/guests/${gid}/journey`),
+  scanZone:            (qrToken, body)      => req('POST',   `/scan/${qrToken}/zone`, body),
+
+  // Public registry (no auth) — resolved by unguessable token
+  getRegistryPage:      (token)              => req('GET',    `/registry/${token}`),
+  claimRegistryItem:    (token, itemId, data) => req('POST',  `/registry/${token}/items/${itemId}/claim`, data),
+
   // Billing (Event Pass)
   getBillingTiers: (eventId)      => req('GET',  `/billing/tiers/${eventId}`),
   checkout:        (eventId, tier) => req('POST', '/billing/checkout', { event_id: eventId, tier }),
@@ -173,6 +243,10 @@ export const api = {
   adminListPlans:      ()              => req('GET',    '/admin/plans'),
   adminSavePlan:       (key, body)     => req('PUT',    `/admin/plans/${key}`, body),
   adminDeletePlan:     (key)           => req('DELETE', `/admin/plans/${key}`),
+  adminListAffiliateStores: ()         => req('GET',    '/admin/affiliate-stores'),
+  adminCreateAffiliateStore:(body)     => req('POST',   '/admin/affiliate-stores', body),
+  adminUpdateAffiliateStore:(id, body) => req('PUT',    `/admin/affiliate-stores/${id}`, body),
+  adminDeleteAffiliateStore:(id)       => req('DELETE', `/admin/affiliate-stores/${id}`),
   // Manual invites (admin)
   sendInvites: (eventId, data) => req('POST', `/events/${eventId}/send-invites`, data),
   // Cover image (admin)

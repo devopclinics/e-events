@@ -9,7 +9,7 @@ from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Backgro
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func
 from ..database import get_db
-from ..models import Event, Guest, User
+from ..models import Event, Guest, TicketType, User
 from ..schemas import GuestOut, GuestCreate
 from ..auth import require_event_admin
 from ..entitlements import assert_within_guest_cap, can_use_paid_channels, take_message_credit
@@ -154,6 +154,34 @@ async def _fetch_sheet_csv(url: str) -> tuple[bytes, str]:
     return body, fname
 
 
+# Guest shipping-address columns (logistics add-on) — template and import
+# must agree on these names since they map 1:1 onto Guest attributes.
+_SHIP_COLS = ("ship_address1", "ship_address2", "ship_city", "ship_state",
+              "ship_postal", "ship_country")
+
+
+def _template_columns(event: Event) -> list[str]:
+    """Importable columns for this event, driven by its enabled add-ons.
+    Must stay in lockstep with what _process_csv understands."""
+    cols = ["first_name", "last_name", "email", "phone"]
+    if event.venue_access_enabled:
+        cols.append("ticket_type")
+    if event.logistics_enabled:
+        cols.extend(_SHIP_COLS)
+    return cols
+
+
+# Sample row values. The example.com email doubles as the marker _process_csv
+# uses to skip the row if the client forgets to delete it.
+_TEMPLATE_SAMPLE = {
+    "first_name": "Jane", "last_name": "Doe",
+    "email": "jane@example.com", "phone": "+18325550100",
+    "ship_address1": "123 Main St", "ship_address2": "Apt 4B",
+    "ship_city": "Houston", "ship_state": "TX",
+    "ship_postal": "77002", "ship_country": "USA",
+}
+
+
 async def _process_csv(text: str, event_id: str, db: AsyncSession):
     text = text.replace('\r\n', '\n').replace('\r', '\n')
     reader = csv.DictReader(io.StringIO(text))
@@ -166,12 +194,31 @@ async def _process_csv(text: str, event_id: str, db: AsyncSession):
             "Expected header: first_name,last_name,email,phone"
         )
 
+    # Add-on columns (matching the downloadable template) are honored only when
+    # the event has the feature enabled — extra columns are otherwise ignored.
+    event = await db.get(Event, event_id)
+    want_ticket = bool(event and event.venue_access_enabled) and "ticket_type" in fields
+    want_shipping = bool(event and event.logistics_enabled) and "ship_address1" in fields
+    tt_by_name: dict[str, str] = {}
+    if want_ticket:
+        tts = (await db.execute(
+            select(TicketType).where(TicketType.event_id == event_id)
+        )).scalars().all()
+        tt_by_name = {t.name.strip().lower(): t.id for t in tts}
+
     added = skipped = invalid_phones = backfilled_phones = 0
+    tickets_assigned = addresses_added = 0
+    unknown_tickets: set[str] = set()
     for row in reader:
         email = row.get("email", "").strip().lower()
         first = row.get("first_name", "").strip()
         last = row.get("last_name", "").strip()
         if not email:
+            skipped += 1
+            continue
+        # The sample row shipped in the template uses a reserved example.com
+        # address — skip it so an undeleted sample never becomes a guest.
+        if email.endswith("@example.com"):
             skipped += 1
             continue
 
@@ -181,6 +228,18 @@ async def _process_csv(text: str, event_id: str, db: AsyncSession):
             normalized_phone = _normalize_phone(phone_raw)
             if normalized_phone is None:
                 invalid_phones += 1
+
+        ticket_type_id: str | None = None
+        if want_ticket:
+            tt_name = (row.get("ticket_type") or "").strip()
+            if tt_name:
+                ticket_type_id = tt_by_name.get(tt_name.lower())
+                if ticket_type_id is None:
+                    unknown_tickets.add(tt_name)
+
+        ship: dict[str, str | None] = {}
+        if want_shipping and (row.get("ship_address1") or "").strip():
+            ship = {c: (row.get(c) or "").strip() or None for c in _SHIP_COLS}
 
         # Deduplicate on (first_name + last_name + email) — same person twice
         existing = (await db.execute(
@@ -197,6 +256,13 @@ async def _process_csv(text: str, event_id: str, db: AsyncSession):
             if not existing.phone and normalized_phone:
                 existing.phone = normalized_phone
                 backfilled_phones += 1
+            if ticket_type_id and not existing.ticket_type_id:
+                existing.ticket_type_id = ticket_type_id
+                tickets_assigned += 1
+            if ship and not existing.ship_address1:
+                for c in _SHIP_COLS:
+                    setattr(existing, c, ship[c])
+                addresses_added += 1
             skipped += 1
             continue
 
@@ -206,8 +272,14 @@ async def _process_csv(text: str, event_id: str, db: AsyncSession):
             last_name=last,
             email=email,
             phone=normalized_phone,
+            ticket_type_id=ticket_type_id,
+            **ship,
         ))
         added += 1
+        if ticket_type_id:
+            tickets_assigned += 1
+        if ship:
+            addresses_added += 1
 
     await db.commit()
     result = {"added": added, "skipped": skipped}
@@ -216,7 +288,89 @@ async def _process_csv(text: str, event_id: str, db: AsyncSession):
     if invalid_phones:
         result["invalid_phones"] = invalid_phones
         result["phone_note"] = "Phones with invalid format were cleared (must be E.164 e.g. +447911123456)"
+    if tickets_assigned:
+        result["ticket_types_assigned"] = tickets_assigned
+    if addresses_added:
+        result["addresses_added"] = addresses_added
+    if unknown_tickets:
+        result["unknown_ticket_types"] = sorted(unknown_tickets)
+        result["ticket_note"] = (
+            "Unknown ticket types were ignored — create them in the Access tab "
+            "(or download a fresh template), then re-import to assign."
+        )
     return result
+
+
+@router.get("/{event_id}/guests/template")
+async def download_guest_template(event_id: str, fmt: str = "xlsx", db: AsyncSession = Depends(get_db), _: User = Depends(require_event_admin)):
+    """Downloadable guest-list template. Columns reflect the event's enabled
+    add-ons (ticket_type for venue access, ship_* for logistics), so what the
+    client fills in is exactly what upload / URL import / live sync ingest."""
+    event = await db.get(Event, event_id)
+    if not event:
+        raise HTTPException(404, "Event not found")
+    if fmt not in ("csv", "xlsx"):
+        raise HTTPException(400, "fmt must be csv or xlsx")
+
+    cols = _template_columns(event)
+    tt_names: list[str] = []
+    if event.venue_access_enabled:
+        tt_names = list((await db.execute(
+            select(TicketType.name).where(TicketType.event_id == event_id)
+            .order_by(TicketType.sort_order, TicketType.name)
+        )).scalars())
+    sample = {**_TEMPLATE_SAMPLE, "ticket_type": tt_names[0] if tt_names else ""}
+    sample_row = [sample.get(c, "") for c in cols]
+
+    if fmt == "csv":
+        out = io.StringIO()
+        writer = csv.writer(out)
+        writer.writerow(cols)
+        writer.writerow(sample_row)
+        return Response(
+            out.getvalue(),
+            media_type="text/csv; charset=utf-8",
+            headers={"Content-Disposition": 'attachment; filename="guest-template.csv"'},
+        )
+
+    import openpyxl
+    from openpyxl.styles import Font, PatternFill
+    from openpyxl.utils import get_column_letter
+    from openpyxl.worksheet.datavalidation import DataValidation
+
+    wb = openpyxl.Workbook()
+    ws = wb.active
+    ws.title = "Guests"
+    ws.append(cols)
+    for i, col in enumerate(cols, 1):
+        cell = ws.cell(row=1, column=i)
+        cell.font = Font(bold=True, color="FFFFFF")
+        cell.fill = PatternFill("solid", fgColor="0F766E")
+        ws.column_dimensions[get_column_letter(i)].width = max(len(col) + 4, 16)
+    ws.append(sample_row)
+    for i in range(1, len(cols) + 1):
+        ws.cell(row=2, column=i).font = Font(italic=True, color="94A3B8")
+    ws.freeze_panes = "A2"
+
+    if tt_names and "ticket_type" in cols:
+        joined = ",".join(n.replace(",", " ") for n in tt_names)
+        # Excel caps inline validation lists at 255 chars — beyond that, ship
+        # the template without the dropdown (names still match on import).
+        if len(joined) <= 255:
+            dv = DataValidation(type="list", formula1=f'"{joined}"', allow_blank=True)
+            dv.error = "Pick one of the event's ticket types"
+            dv.prompt = "Ticket types: " + ", ".join(tt_names)
+            ws.add_data_validation(dv)
+            letter = get_column_letter(cols.index("ticket_type") + 1)
+            dv.add(f"{letter}2:{letter}1001")
+
+    buf = io.BytesIO()
+    wb.save(buf)
+    return Response(
+        buf.getvalue(),
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers={"Content-Disposition": 'attachment; filename="guest-template.xlsx"'},
+    )
 
 
 @router.post("/{event_id}/guests/upload")

@@ -11,6 +11,8 @@ import LoginPage from './pages/LoginPage'
 import RegisterPage from './pages/RegisterPage'
 import LandingPage from './pages/LandingPage'
 import InvitePage from './pages/InvitePage'
+import VendorPage from './pages/VendorPage'
+import RegistryPage from './pages/RegistryPage'
 import PricingPage from './pages/PricingPage'
 import RefundPolicyPage from './pages/RefundPolicyPage'
 import ConsolePage from './pages/ConsolePage'
@@ -166,6 +168,10 @@ function AppRoutes() {
       <Route path="/e/:eventId" element={<InvitePage />} />
       {/* Personalised (closed-mode) invite link — no auth required */}
       <Route path="/r/:token" element={<InvitePage />} />
+      {/* Public vendor packing list — no auth required */}
+      <Route path="/vendor/:token" element={<VendorPage />} />
+      {/* Public gift registry — no auth required (unguessable token) */}
+      <Route path="/registry/:token" element={<RegistryPage />} />
       {/* Public marketing pages — no auth required */}
       <Route path="/pricing" element={<PricingPage />} />
       <Route path="/refund-policy" element={<RefundPolicyPage />} />

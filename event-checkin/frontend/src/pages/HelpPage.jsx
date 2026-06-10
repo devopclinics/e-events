@@ -17,7 +17,7 @@ const CONTENT = {
       ]},
       { id: 'org-create', icon: '📅', title: 'Create your event', img: '/guide/admin-overview.png', steps: [
         'Admin → New Event.',
-        'Enter the event name, couple/host name, date & time, and base URL.',
+        'Enter the event name, host/organizer (optional), date & time, and base URL.',
         'Save. Open the event to see its tabs: Overview, Guests, Team, Invite.',
       ]},
       { id: 'org-guests', icon: '👥', title: 'Add your guest list', img: '/guide/admin-guests.png', steps: [

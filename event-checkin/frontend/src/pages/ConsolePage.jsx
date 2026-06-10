@@ -6,6 +6,7 @@ import { useAuth } from '../context/AuthContext'
 const TABS = [
   { id: 'overview', label: 'Overview' },
   { id: 'pricing', label: 'Pricing' },
+  { id: 'affiliates', label: 'Affiliate stores' },
   { id: 'operators', label: 'Operators' },
 ]
 
@@ -134,6 +135,86 @@ function PricingTab() {
   )
 }
 
+// ── Affiliate stores: rewrite registry Buy links with your affiliate tag ──────
+function AffiliateStoresTab() {
+  const [stores, setStores] = useState(null)
+  const [draft, setDraft] = useState({ domain: '', label: '', param_key: '', param_value: '', active: true, sort_order: 0 })
+  const [msg, setMsg] = useState('')
+  function load() { api.adminListAffiliateStores().then(setStores).catch((e) => setMsg(e.message)) }
+  useEffect(() => { load() }, [])
+
+  const inp = 'border dark:border-slate-600 rounded px-1 bg-white dark:bg-slate-700 dark:text-white'
+
+  async function save(s) {
+    setMsg('')
+    try {
+      await api.adminUpdateAffiliateStore(s.id, {
+        domain: s.domain, label: s.label, param_key: s.param_key,
+        param_value: s.param_value, active: !!s.active, sort_order: Number(s.sort_order) || 0,
+      })
+      setMsg(`Saved ${s.domain}.`); setTimeout(() => setMsg(''), 2500)
+    } catch (e) { setMsg(e.message) }
+  }
+  async function add() {
+    if (!draft.domain.trim() || !draft.param_key.trim()) { setMsg('Domain and param key are required.'); return }
+    setMsg('')
+    try {
+      await api.adminCreateAffiliateStore({ ...draft, sort_order: Number(draft.sort_order) || 0 })
+      setDraft({ domain: '', label: '', param_key: '', param_value: '', active: true, sort_order: 0 }); load()
+    } catch (e) { setMsg(e.message) }
+  }
+  async function remove(id) {
+    if (!confirm('Delete this affiliate store?')) return
+    try { await api.adminDeleteAffiliateStore(id); load() } catch (e) { setMsg(e.message) }
+  }
+  function edit(i, k, v) { setStores((prev) => prev.map((s, idx) => idx === i ? { ...s, [k]: v } : s)) }
+
+  if (!stores) return <div className="text-sm text-slate-500">Loading…</div>
+  return (
+    <div className="space-y-2">
+      {msg && <div className="text-sm text-teal-600">{msg}</div>}
+      <p className="text-xs text-slate-500 dark:text-slate-400">
+        When a registry item's Buy link matches a <strong>domain</strong> below, the <strong>param</strong> is appended so purchases carry your affiliate tag.
+        E.g. Amazon: domain <code>amazon.com</code>, key <code>tag</code>, value <code>yourtag-20</code>.
+      </p>
+      <div className="overflow-x-auto">
+        <table className="w-full text-xs">
+          <thead className="text-left text-slate-500 dark:text-slate-400">
+            <tr><th className="p-2">domain</th><th>label</th><th>param key</th><th>param value</th><th>active</th><th>sort</th><th></th></tr>
+          </thead>
+          <tbody>
+            {stores.map((s, i) => (
+              <tr key={s.id} className="border-t dark:border-slate-700">
+                <td className="p-2"><input value={s.domain} onChange={(e) => edit(i, 'domain', e.target.value)} className={`w-32 ${inp}`} /></td>
+                <td><input value={s.label} onChange={(e) => edit(i, 'label', e.target.value)} className={`w-28 ${inp}`} /></td>
+                <td><input value={s.param_key} onChange={(e) => edit(i, 'param_key', e.target.value)} className={`w-20 ${inp}`} /></td>
+                <td><input value={s.param_value} onChange={(e) => edit(i, 'param_value', e.target.value)} className={`w-28 ${inp}`} /></td>
+                <td><input type="checkbox" checked={!!s.active} onChange={(e) => edit(i, 'active', e.target.checked)} /></td>
+                <td><input value={s.sort_order} onChange={(e) => edit(i, 'sort_order', e.target.value)} className={`w-12 ${inp}`} /></td>
+                <td className="whitespace-nowrap">
+                  <button onClick={() => save(s)} className="bg-teal-600 text-white px-2 py-1 rounded font-semibold hover:bg-teal-700 mr-1">Save</button>
+                  <button onClick={() => remove(s.id)} className="text-red-500 hover:underline">Del</button>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+          <tfoot>
+            <tr className="border-t dark:border-slate-700">
+              <td className="p-2"><input value={draft.domain} onChange={(e) => setDraft((d) => ({ ...d, domain: e.target.value }))} placeholder="amazon.com" className={`w-32 ${inp}`} /></td>
+              <td><input value={draft.label} onChange={(e) => setDraft((d) => ({ ...d, label: e.target.value }))} placeholder="Amazon US" className={`w-28 ${inp}`} /></td>
+              <td><input value={draft.param_key} onChange={(e) => setDraft((d) => ({ ...d, param_key: e.target.value }))} placeholder="tag" className={`w-20 ${inp}`} /></td>
+              <td><input value={draft.param_value} onChange={(e) => setDraft((d) => ({ ...d, param_value: e.target.value }))} placeholder="yourtag-20" className={`w-28 ${inp}`} /></td>
+              <td><input type="checkbox" checked={draft.active} onChange={(e) => setDraft((d) => ({ ...d, active: e.target.checked }))} /></td>
+              <td><input value={draft.sort_order} onChange={(e) => setDraft((d) => ({ ...d, sort_order: e.target.value }))} className={`w-12 ${inp}`} /></td>
+              <td><button onClick={add} className="bg-indigo-600 text-white px-2 py-1 rounded font-semibold hover:bg-indigo-700">Add</button></td>
+            </tr>
+          </tfoot>
+        </table>
+      </div>
+    </div>
+  )
+}
+
 // ── Operators ───────────────────────────────────────────────────────────────
 function OperatorsTab({ me }) {
   const [ops, setOps] = useState(null)
@@ -193,6 +274,7 @@ export default function ConsolePage() {
       </div>
       {tab === 'overview' && <OverviewTab />}
       {tab === 'pricing' && <PricingTab />}
+      {tab === 'affiliates' && <AffiliateStoresTab />}
       {tab === 'operators' && <OperatorsTab me={user} />}
     </div>
   )

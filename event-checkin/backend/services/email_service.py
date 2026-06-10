@@ -2,6 +2,7 @@ import base64
 import html as _html
 import logging
 from datetime import datetime
+from email.mime.application import MIMEApplication
 from email.mime.image import MIMEImage
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
@@ -40,6 +41,14 @@ def _resend_payload(msg: MIMEMultipart) -> dict:
             if cid:
                 att["content_id"] = cid.strip("<>")  # renders cid: refs inline
             attachments.append(att)
+        elif part.get_content_disposition() == "attachment":
+            raw = part.get_payload(decode=True)
+            if not raw:
+                continue
+            attachments.append({
+                "filename": part.get_filename() or "attachment",
+                "content": base64.b64encode(raw).decode(),
+            })
     if attachments:
         payload["attachments"] = attachments
     return payload
@@ -304,6 +313,58 @@ async def send_manual_invite_email(
     """
 
     msg.attach(MIMEText(body, "html"))
+    await _send(msg)
+
+
+async def send_vendor_shipping_email(
+    *,
+    vendor_email: str,
+    vendor_name: str | None,
+    event_name: str,
+    shipment_name: str,
+    vendor_url: str,
+    item_count: int,
+    notes: str | None = None,
+    attachment: bytes | None = None,
+    attachment_name: str = "shipping-list.xlsx",
+):
+    """Send a vendor the shipping/packing list for a shipment — a link to the
+    read-only vendor page, plus an optional spreadsheet attachment."""
+    msg = MIMEMultipart()
+    msg["Subject"] = f"Shipping list — {shipment_name} ({event_name})"
+    msg["From"] = settings.email_from
+    msg["To"] = vendor_email
+
+    safe_vendor = _html.escape(vendor_name) if vendor_name else "there"
+    safe_event = _html.escape(event_name)
+    safe_shipment = _html.escape(shipment_name)
+    safe_notes = f'<p style="background:#f8fafc;border-left:3px solid #0f766e;padding:10px 14px;color:#334155;">{_html.escape(notes)}</p>' if notes else ""
+
+    body = f"""
+    <html>
+    <body style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;padding:20px;">
+      <h1 style="color:#1a1a2e;">Shipping list ready</h1>
+      <p>Hi <strong>{safe_vendor}</strong>,</p>
+      <p>Here is the shipping list for <strong>{safe_shipment}</strong> ({safe_event}) —
+         <strong>{item_count}</strong> recipient(s).</p>
+      {safe_notes}
+      <div style="text-align:center;margin:32px 0;">
+        <a href="{vendor_url}" style="background:#0f766e;color:white;text-decoration:none;
+           padding:14px 28px;border-radius:10px;font-size:16px;font-weight:700;display:inline-block;">
+          View shipping list →
+        </a>
+      </div>
+      <p style="color:#666;font-size:13px;">Or copy this link: {vendor_url}</p>
+      <p style="color:#666;font-size:13px;">The full list (names, addresses, sizes) is on that page, and also attached as a spreadsheet.</p>
+    </body>
+    </html>
+    """
+
+    msg.attach(MIMEText(body, "html"))
+    if attachment:
+        part = MIMEApplication(attachment, _subtype="vnd.openxmlformats-officedocument.spreadsheetml.sheet")
+        part.add_header("Content-Disposition", "attachment", filename=attachment_name)
+        msg.attach(part)
     await _send(msg)
 
 

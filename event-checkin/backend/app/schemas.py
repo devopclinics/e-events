@@ -40,10 +40,13 @@ class TokenResponse(BaseModel):
 
 class EventCreate(BaseModel):
     name: str
-    couples_name: str
+    # Optional host/organizer/honoree label — blank for events with no such party.
+    couples_name: Optional[str] = ""
     event_date: datetime
     description: Optional[str] = None
     checkin_base_url: str
+    venue_name: Optional[str] = None
+    venue_address: Optional[str] = None
 
     @field_validator("event_date", mode="after")
     @classmethod
@@ -59,6 +62,8 @@ class EventUpdate(BaseModel):
     event_date: Optional[datetime] = None
     description: Optional[str] = None
     checkin_base_url: Optional[str] = None
+    venue_name: Optional[str] = None
+    venue_address: Optional[str] = None
     notify_email: Optional[bool] = None
     notify_sms: Optional[bool] = None
     notify_whatsapp: Optional[bool] = None
@@ -88,6 +93,11 @@ class EventOut(BaseModel):
     status: str
     seating_enabled: bool
     menu_enabled: bool
+    logistics_enabled: bool = False
+    registry_enabled: bool = False
+    venue_access_enabled: bool = False
+    venue_name: Optional[str] = None
+    venue_address: Optional[str] = None
     notify_email: bool = True
     notify_sms: bool = True
     notify_whatsapp: bool = True
@@ -169,6 +179,7 @@ class PlanUpsert(BaseModel):
 class SeatingTableCreate(BaseModel):
     name: str
     capacity: int
+    category: Optional[str] = None
 
 
 class SeatingTableOut(BaseModel):
@@ -176,12 +187,343 @@ class SeatingTableOut(BaseModel):
     event_id: str
     name: str
     capacity: int
+    category: Optional[str] = None
     assigned_count: int = 0
 
 
 class SeatAssignRequest(BaseModel):
     table_id: Optional[str] = None
     seat_number: Optional[str] = None
+
+
+# ── Logistics / Fulfillment ───────────────────────────────────────────────────
+
+class ShipmentCreate(BaseModel):
+    name: str
+    phase: Literal["pre", "post"] = "pre"
+    collect_size: bool = True
+    auto_add: Optional[bool] = None  # None → default by phase (pre=True, post=False)
+    size_options: Optional[list[str]] = None
+    notes: Optional[str] = None
+    vendor_name: Optional[str] = None
+    vendor_email: Optional[EmailStr] = None
+    vendor_phone: Optional[str] = None
+
+
+class ShipmentUpdate(BaseModel):
+    name: Optional[str] = None
+    phase: Optional[Literal["pre", "post"]] = None
+    collect_size: Optional[bool] = None
+    auto_add: Optional[bool] = None
+    size_options: Optional[list[str]] = None
+    notes: Optional[str] = None
+    vendor_name: Optional[str] = None
+    vendor_email: Optional[EmailStr] = None
+    vendor_phone: Optional[str] = None
+
+
+class ShipmentOut(BaseModel):
+    id: str
+    event_id: str
+    name: str
+    phase: str
+    collect_size: bool
+    auto_add: bool = True
+    size_options: Optional[list[str]] = None
+    notes: Optional[str] = None
+    vendor_name: Optional[str] = None
+    vendor_email: Optional[str] = None
+    vendor_phone: Optional[str] = None
+    share_token: str
+    sent_at: Optional[datetime] = None
+    viewed_at: Optional[datetime] = None
+    line_count: int = 0
+    created_at: Optional[datetime] = None
+
+
+class ShippingAddressUpdate(BaseModel):
+    ship_address1: Optional[str] = None
+    ship_address2: Optional[str] = None
+    ship_city: Optional[str] = None
+    ship_state: Optional[str] = None
+    ship_postal: Optional[str] = None
+    ship_country: Optional[str] = None
+
+
+class GuestShipmentOut(BaseModel):
+    guest_id: str
+    first_name: str
+    last_name: str
+    phone: Optional[str] = None
+    email: Optional[str] = None
+    ship_address1: Optional[str] = None
+    ship_address2: Optional[str] = None
+    ship_city: Optional[str] = None
+    ship_state: Optional[str] = None
+    ship_postal: Optional[str] = None
+    ship_country: Optional[str] = None
+    has_address: bool = False
+    item: Optional[str] = None
+    size: Optional[str] = None
+    quantity: int = 1
+    ship_status: str = "pending"
+    tracking_number: Optional[str] = None
+
+
+class GuestShipmentUpdate(BaseModel):
+    item: Optional[str] = None
+    size: Optional[str] = None
+    quantity: Optional[int] = None
+    ship_status: Optional[Literal["pending", "shipped", "delivered"]] = None
+    tracking_number: Optional[str] = None
+
+
+class VendorPageOut(BaseModel):
+    shipment_name: str
+    phase: str
+    event_name: str
+    notes: Optional[str] = None
+    vendor_name: Optional[str] = None
+    collect_size: bool = True
+    lines: list[GuestShipmentOut] = []
+
+
+# What the public invite page needs to collect for logistics, if anything.
+class InviteShipmentNeed(BaseModel):
+    shipment_id: str
+    name: str
+    collect_size: bool = True
+    size_options: Optional[list[str]] = None
+
+
+class InviteShippingOut(BaseModel):
+    collect_address: bool = False
+    shipments: list[InviteShipmentNeed] = []
+
+
+# ── Gift Registry ─────────────────────────────────────────────────────────────
+
+class RegistryItemCreate(BaseModel):
+    kind: Literal["item", "fund", "link"] = "item"
+    title: str
+    description: Optional[str] = None
+    image_url: Optional[str] = None
+    external_url: Optional[str] = None
+    amount_minor: Optional[int] = None
+    currency: Optional[str] = None  # defaults to org currency
+    quantity_wanted: int = 1
+    payment_instructions: Optional[str] = None
+    sort_order: int = 0
+
+
+class RegistryItemUpdate(BaseModel):
+    kind: Optional[Literal["item", "fund", "link"]] = None
+    title: Optional[str] = None
+    description: Optional[str] = None
+    image_url: Optional[str] = None
+    external_url: Optional[str] = None
+    amount_minor: Optional[int] = None
+    currency: Optional[str] = None
+    quantity_wanted: Optional[int] = None
+    payment_instructions: Optional[str] = None
+    sort_order: Optional[int] = None
+    is_active: Optional[bool] = None
+
+
+class RegistryItemOut(BaseModel):
+    id: str
+    event_id: str
+    kind: str
+    title: str
+    description: Optional[str] = None
+    image_url: Optional[str] = None
+    external_url: Optional[str] = None
+    amount_minor: Optional[int] = None
+    currency: str
+    quantity_wanted: int
+    payment_instructions: Optional[str] = None
+    sort_order: int
+    is_active: bool
+    # Outbound buy link with any affiliate tag applied (falls back to external_url).
+    buy_url: Optional[str] = None
+    # Computed progress
+    reserved_qty: int = 0     # items: total reserved
+    remaining: Optional[int] = None  # items: quantity_wanted - reserved_qty
+    raised_minor: int = 0     # funds: total pledged (minor units)
+    claim_count: int = 0
+
+
+class RegistryUnfurlRequest(BaseModel):
+    url: str
+
+
+class RegistryUnfurlOut(BaseModel):
+    title: Optional[str] = None
+    image_url: Optional[str] = None
+    amount_minor: Optional[int] = None
+    currency: Optional[str] = None
+    site_name: Optional[str] = None
+
+
+class AffiliateStoreIn(BaseModel):
+    domain: str
+    label: str
+    param_key: str
+    param_value: str
+    active: bool = True
+    sort_order: int = 0
+
+
+class AffiliateStoreOut(BaseModel):
+    id: str
+    domain: str
+    label: str
+    param_key: str
+    param_value: str
+    active: bool
+    sort_order: int
+
+
+class RegistrySettingsUpdate(BaseModel):
+    registry_message: Optional[str] = None
+
+
+class RegistrySettingsOut(BaseModel):
+    registry_message: Optional[str] = None
+    registry_token: Optional[str] = None
+
+
+class RegistryClaimCreate(BaseModel):
+    claimer_name: str
+    claimer_email: Optional[EmailStr] = None
+    quantity: int = 1
+    amount_minor: Optional[int] = None
+    message: Optional[str] = None
+
+
+class RegistryClaimOut(BaseModel):
+    id: str
+    item_id: str
+    item_title: str
+    claimer_name: str
+    claimer_email: Optional[str] = None
+    quantity: int
+    amount_minor: Optional[int] = None
+    message: Optional[str] = None
+    created_at: Optional[datetime] = None
+
+
+class RegistryPageOut(BaseModel):
+    event_name: str
+    couples_name: Optional[str] = None
+    registry_message: Optional[str] = None
+    items: list[RegistryItemOut] = []
+
+
+# ── Venue Access Intelligence ─────────────────────────────────────────────────
+
+class ZoneCreate(BaseModel):
+    name: str
+    description: Optional[str] = None
+    capacity: Optional[int] = None
+    direction_mode: Literal["both", "entry", "exit"] = "both"
+    sort_order: int = 0
+
+
+class ZoneUpdate(BaseModel):
+    name: Optional[str] = None
+    description: Optional[str] = None
+    capacity: Optional[int] = None
+    direction_mode: Optional[Literal["both", "entry", "exit"]] = None
+    sort_order: Optional[int] = None
+    is_active: Optional[bool] = None
+
+
+class ZoneOut(BaseModel):
+    id: str
+    event_id: str
+    name: str
+    description: Optional[str] = None
+    capacity: Optional[int] = None
+    direction_mode: str
+    sort_order: int
+    is_active: bool
+    occupancy: int = 0  # computed live count currently inside
+
+
+class TicketTypeCreate(BaseModel):
+    name: str
+    color: Optional[str] = None
+    description: Optional[str] = None
+    capacity: Optional[int] = None
+    allowed_zone_ids: Optional[list[str]] = None  # null/empty = all zones
+    sort_order: int = 0
+
+
+class TicketTypeUpdate(BaseModel):
+    name: Optional[str] = None
+    color: Optional[str] = None
+    description: Optional[str] = None
+    capacity: Optional[int] = None
+    allowed_zone_ids: Optional[list[str]] = None
+    sort_order: Optional[int] = None
+    is_active: Optional[bool] = None
+
+
+class TicketTypeOut(BaseModel):
+    id: str
+    event_id: str
+    name: str
+    color: Optional[str] = None
+    description: Optional[str] = None
+    capacity: Optional[int] = None
+    allowed_zone_ids: Optional[list[str]] = None
+    sort_order: int
+    is_active: bool
+    assigned_count: int = 0
+
+
+class GuestTicketAssign(BaseModel):
+    ticket_type_id: Optional[str] = None  # null = clear
+
+
+class ScanZoneRequest(BaseModel):
+    zone_id: str
+    direction: Optional[Literal["in", "out"]] = None  # default from zone mode
+
+
+class ScanZoneResult(BaseModel):
+    status: str               # "ok" | "denied"
+    denied: bool = False
+    deny_reason: Optional[str] = None
+    guest_name: str
+    ticket_type: Optional[str] = None
+    zone_name: str
+    direction: str
+    occupancy: int = 0
+    journey_count: int = 0
+    seat_number: Optional[str] = None
+    table_name: Optional[str] = None
+
+
+class PeakBucket(BaseModel):
+    t: str        # ISO bucket start
+    ins: int = 0
+    outs: int = 0
+
+
+class FlowEdge(BaseModel):
+    from_zone: Optional[str] = None
+    to_zone: str
+    count: int
+
+
+class JourneyStep(BaseModel):
+    zone_name: Optional[str] = None
+    direction: str
+    scanned_at: datetime
+    denied: bool = False
+    deny_reason: Optional[str] = None
 
 
 # ── Menu ─────────────────────────────────────────────────────────────────────
@@ -289,6 +631,7 @@ class GuestOut(BaseModel):
     seat_number: Optional[str] = None
     meal_served: bool = False
     is_vip: bool = False
+    ticket_type_id: Optional[str] = None
     sms_consent: bool = True
     whatsapp_consent: bool = True
 
@@ -448,6 +791,10 @@ class InvitePageOut(BaseModel):
     # deadline_passed computed by the endpoint
     deadline_passed: bool = False
     questions: list[RSVPQuestionOut] = []
+    # Logistics: address/size collection needed for this event, if any.
+    shipping: Optional[InviteShippingOut] = None
+    registry_enabled: bool = False
+    registry_token: Optional[str] = None
 
 
 class RSVPSubmit(BaseModel):
@@ -457,6 +804,9 @@ class RSVPSubmit(BaseModel):
     phone: Optional[str] = None
     # key = question_id, value = answer string
     answers: dict[str, str] = {}
+    # Logistics add-on (optional): shipping address + per-shipment size choices.
+    shipping_address: Optional[ShippingAddressUpdate] = None
+    sizes: dict[str, str] = {}  # shipment_id -> size
 
 
 class RSVPConfirm(BaseModel):
@@ -499,6 +849,8 @@ class RSVPTokenSubmit(BaseModel):
     last_name: Optional[str] = None
     phone: Optional[str] = None
     answers: dict[str, str] = {}
+    shipping_address: Optional[ShippingAddressUpdate] = None
+    sizes: dict[str, str] = {}  # shipment_id -> size
 
 
 # ── Broadcast ────────────────────────────────────────────────────────────────

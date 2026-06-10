@@ -400,13 +400,23 @@ async def toggle_features(
     event = await db.get(Event, event_id)
     if not event:
         raise HTTPException(404, "Event not found")
-    # Seating & menu are paid-plan features — block turning them on for free events.
-    if (body.get("seating_enabled") or body.get("menu_enabled")) and not event.is_paid:
-        raise HTTPException(402, "Seating and menu require an Event Pass — upgrade this event first.")
+    # Seating, menu, logistics, registry & venue access are paid-plan features.
+    if (body.get("seating_enabled") or body.get("menu_enabled") or body.get("logistics_enabled")
+            or body.get("registry_enabled") or body.get("venue_access_enabled")) and not event.is_paid:
+        raise HTTPException(402, "This feature requires an Event Pass — upgrade this event first.")
     if "seating_enabled" in body:
         event.seating_enabled = bool(body["seating_enabled"])
     if "menu_enabled" in body:
         event.menu_enabled = bool(body["menu_enabled"])
+    if "logistics_enabled" in body:
+        event.logistics_enabled = bool(body["logistics_enabled"])
+    if "venue_access_enabled" in body:
+        event.venue_access_enabled = bool(body["venue_access_enabled"])
+    if "registry_enabled" in body:
+        event.registry_enabled = bool(body["registry_enabled"])
+        # Mint the public registry token on first enable.
+        if event.registry_enabled and not event.registry_token:
+            event.registry_token = str(_uuid.uuid4())
     for k in ("notify_email", "notify_sms", "notify_whatsapp"):
         if k in body:
             setattr(event, k, bool(body[k]))

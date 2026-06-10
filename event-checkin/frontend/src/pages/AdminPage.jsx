@@ -151,6 +151,9 @@ function FeatureToggles({ event, onChanged }) {
       {[
         { key: 'seating_enabled', label: 'Seating' },
         { key: 'menu_enabled',    label: 'Menu' },
+        { key: 'logistics_enabled', label: 'Logistics' },
+        { key: 'registry_enabled', label: 'Registry' },
+        { key: 'venue_access_enabled', label: 'Access' },
       ].map(({ key, label }) => (
         <button
           key={key}
@@ -181,6 +184,27 @@ function VipBadge({ className = '' }) {
         <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118L10 13.347l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L3.567 7.819c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" />
       </svg>
       VIP
+    </span>
+  )
+}
+
+// Preset seating categories. The form's input is free-text backed by these
+// suggestions, so organizers can also type a custom label (e.g. "Sponsors").
+const TABLE_CATEGORIES = ['General', 'Male', 'Female', 'Kids', 'Youth', 'Couples', 'VIP', 'Family', 'Staff']
+
+function CategoryBadge({ value, className = '' }) {
+  if (!value) return null
+  const c = String(value).toLowerCase()
+  const tone =
+    c === 'male'   ? 'bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300'
+    : c === 'female' ? 'bg-pink-100 text-pink-700 dark:bg-pink-900/40 dark:text-pink-300'
+    : c === 'kids'   ? 'bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300'
+    : c === 'youth'  ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300'
+    : c === 'vip'    ? 'bg-purple-100 text-purple-700 dark:bg-purple-900/40 dark:text-purple-300'
+    : 'bg-slate-200 text-slate-600 dark:bg-slate-600 dark:text-slate-200'
+  return (
+    <span className={`inline-block text-[10px] font-semibold px-1.5 py-0.5 rounded ${tone} ${className}`}>
+      {value}
     </span>
   )
 }
@@ -274,7 +298,7 @@ function SeatingPanel({ eventId }) {
     e.preventDefault()
     setLoading(true)
     try {
-      const payload = { name: form.name, capacity: Number(form.capacity) }
+      const payload = { name: form.name, capacity: Number(form.capacity), category: form.category?.trim() || null }
       if (form.id) {
         const updated = await api.updateTable(eventId, form.id, payload)
         setTables((prev) => prev.map((t) => (t.id === form.id ? updated : t)))
@@ -325,7 +349,7 @@ function SeatingPanel({ eventId }) {
             className="bg-amber-500 text-white px-3 py-1.5 rounded-lg text-xs font-semibold hover:bg-amber-600 disabled:opacity-50">
             Reassign All
           </button>
-          <button onClick={() => setForm({ name: '', capacity: 10 })} disabled={loading}
+          <button onClick={() => setForm({ name: '', capacity: 10, category: '' })} disabled={loading}
             className="bg-indigo-600 text-white px-3 py-1.5 rounded-lg text-xs font-semibold hover:bg-indigo-700">
             + Table
           </button>
@@ -340,6 +364,7 @@ function SeatingPanel({ eventId }) {
             <thead className="bg-gray-50 dark:bg-slate-700 text-xs font-semibold text-gray-500 dark:text-slate-400 uppercase">
               <tr>
                 <th className="px-4 py-2 text-left">Table</th>
+                <th className="px-4 py-2 text-center">Category</th>
                 <th className="px-4 py-2 text-center">Capacity</th>
                 <th className="px-4 py-2 text-center">Assigned</th>
                 <th className="px-4 py-2 text-center">Actions</th>
@@ -349,6 +374,9 @@ function SeatingPanel({ eventId }) {
               {tables.map((t) => (
                 <tr key={t.id} className="hover:bg-gray-50 dark:hover:bg-slate-700">
                   <td className="px-4 py-2.5 font-medium dark:text-slate-100">{t.name}</td>
+                  <td className="px-4 py-2.5 text-center">
+                    {t.category ? <CategoryBadge value={t.category} /> : <span className="text-xs text-gray-300 dark:text-slate-600">—</span>}
+                  </td>
                   <td className="px-4 py-2.5 text-center dark:text-slate-300">{t.capacity}</td>
                   <td className="px-4 py-2.5 text-center">
                     <span className={`text-xs font-semibold ${t.assigned_count >= t.capacity ? 'text-red-500' : 'text-green-600'}`}>
@@ -357,7 +385,7 @@ function SeatingPanel({ eventId }) {
                   </td>
                   <td className="px-4 py-2.5 text-center">
                     <div className="flex justify-center gap-3">
-                      <button onClick={() => setForm({ id: t.id, name: t.name, capacity: t.capacity })}
+                      <button onClick={() => setForm({ id: t.id, name: t.name, capacity: t.capacity, category: t.category || '' })}
                         className="text-xs text-indigo-600 hover:underline">Edit</button>
                       <button onClick={() => deleteTable(t.id)} disabled={loading}
                         className="text-xs text-red-400 hover:text-red-600 disabled:opacity-40">Delete</button>
@@ -376,6 +404,15 @@ function SeatingPanel({ eventId }) {
             <label className="block text-xs font-semibold text-gray-600 dark:text-slate-300 mb-1">Table Name</label>
             <input value={form.name} onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))} required
               className={fieldCls} placeholder="Table 1" />
+          </div>
+          <div>
+            <label className="block text-xs font-semibold text-gray-600 dark:text-slate-300 mb-1">Category</label>
+            <input list="table-category-list" value={form.category || ''}
+              onChange={(e) => setForm((f) => ({ ...f, category: e.target.value }))}
+              className={`${fieldCls} w-44`} placeholder="General · or type your own" />
+            <datalist id="table-category-list">
+              {TABLE_CATEGORIES.map((c) => <option key={c} value={c} />)}
+            </datalist>
           </div>
           <div>
             <label className="block text-xs font-semibold text-gray-600 dark:text-slate-300 mb-1">Capacity</label>
@@ -408,7 +445,10 @@ function SeatingPanel({ eventId }) {
               {chart.map((t) => (
                 <div key={t.id} className="border dark:border-slate-700 rounded-lg overflow-hidden">
                   <div className="bg-slate-100 dark:bg-slate-700 px-3 py-2 flex justify-between items-center">
-                    <span className="text-sm font-semibold dark:text-white">{t.name}</span>
+                    <span className="text-sm font-semibold dark:text-white flex items-center gap-2">
+                      {t.name}
+                      <CategoryBadge value={t.category} />
+                    </span>
                     <span className="text-xs text-gray-500 dark:text-slate-400">
                       {t.seats.filter((s) => s.guest_id).length}/{t.capacity}
                     </span>
@@ -731,7 +771,7 @@ function CombinationsSection({ eventId, cat, loading, setLoading, onCatsChange, 
             <div>
               <label className="block text-xs font-semibold text-gray-600 dark:text-slate-300 mb-1">Name</label>
               <input value={form.name} required onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))}
-                className={fieldCls} placeholder="Wedding Banquet" />
+                className={fieldCls} placeholder="VIP Package" />
             </div>
             <div>
               <label className="block text-xs font-semibold text-gray-600 dark:text-slate-300 mb-1">Sort Order</label>
@@ -791,6 +831,987 @@ function CombinationsSection({ eventId, cat, loading, setLoading, onCatsChange, 
           </div>
         </form>
       )}
+    </div>
+  )
+}
+
+// ── Logistics Panel ───────────────────────────────────────────────────────────
+
+const SHIP_STATUS = ['pending', 'shipped', 'delivered']
+
+function LogisticsPanel({ eventId }) {
+  const [shipments, setShipments] = useState([])
+  const [form, setForm]           = useState(null)   // create/edit shipment form
+  const [activeId, setActiveId]   = useState(null)   // shipment whose lines are shown
+  const [lines, setLines]         = useState([])
+  const [rowEdit, setRowEdit]     = useState({})     // guest_id -> editable buffer
+  const [pickerOpen, setPickerOpen] = useState(false)
+  const [allGuests, setAllGuests] = useState([])
+  const [guestQuery, setGuestQuery] = useState('')
+  const [loading, setLoading]     = useState(false)
+  const [msg, setMsg]             = useState('')
+
+  const fieldCls = 'border border-gray-300 dark:border-slate-700 rounded-lg px-3 py-2 text-sm bg-white dark:bg-slate-700 text-gray-900 dark:text-white'
+
+  const flash = (m) => { setMsg(m); setTimeout(() => setMsg(''), 4000) }
+
+  function load() {
+    api.listShipments(eventId).then(setShipments).catch((e) => setMsg(e.message))
+  }
+  useEffect(() => { load() }, [eventId])
+
+  async function loadLines(sid) {
+    setLoading(true)
+    try {
+      const data = await api.listShipmentLines(eventId, sid)
+      setLines(data); setActiveId(sid); setRowEdit({})
+    } catch (e) { setMsg(e.message) } finally { setLoading(false) }
+  }
+
+  async function saveShipment(e) {
+    e.preventDefault()
+    setLoading(true)
+    try {
+      const payload = {
+        name: form.name,
+        phase: form.phase,
+        collect_size: form.collect_size,
+        auto_add: form.auto_add,
+        size_options: (form.size_options || '').split(',').map((s) => s.trim()).filter(Boolean),
+        notes: form.notes || null,
+        vendor_name: form.vendor_name || null,
+        vendor_email: form.vendor_email || null,
+        vendor_phone: form.vendor_phone || null,
+      }
+      if (form.id) await api.updateShipment(eventId, form.id, payload)
+      else await api.createShipment(eventId, payload)
+      setForm(null); load()
+    } catch (e) { setMsg(e.message) } finally { setLoading(false) }
+  }
+
+  async function removeShipment(sid) {
+    if (!confirm('Delete this shipment and all its guest lines?')) return
+    setLoading(true)
+    try {
+      await api.deleteShipment(eventId, sid)
+      if (activeId === sid) { setActiveId(null); setLines([]) }
+      load()
+    } catch (e) { setMsg(e.message) } finally { setLoading(false) }
+  }
+
+  async function populate(sid) {
+    setLoading(true)
+    try {
+      const res = await api.populateShipment(eventId, sid)
+      flash(`Added ${res.added} confirmed guest(s).`)
+      await loadLines(sid); load()
+    } catch (e) { setMsg(e.message) } finally { setLoading(false) }
+  }
+
+  async function openPicker() {
+    try {
+      const gs = await api.listGuests(eventId)
+      setAllGuests(gs); setGuestQuery(''); setPickerOpen(true)
+    } catch (e) { setMsg(e.message) }
+  }
+
+  async function addGuest(gid) {
+    try {
+      await api.addShipmentGuest(eventId, activeId, gid)
+      await loadLines(activeId); load()
+    } catch (e) { setMsg(e.message) }
+  }
+
+  async function removeGuest(gid) {
+    if (!confirm('Remove this guest from the shipment?')) return
+    setLoading(true)
+    try {
+      await api.removeShipmentGuest(eventId, activeId, gid)
+      await loadLines(activeId); load()
+    } catch (e) { setMsg(e.message) } finally { setLoading(false) }
+  }
+
+  async function sendToVendor(s) {
+    if (!s.vendor_email) { setMsg('Add a vendor email to this shipment first (Edit).'); return }
+    if (!confirm(`Email the shipping list to ${s.vendor_email}?`)) return
+    setLoading(true)
+    try {
+      await api.sendShipmentToVendor(eventId, s.id)
+      flash(`Sent to ${s.vendor_email}.`); load()
+    } catch (e) { setMsg(e.message) } finally { setLoading(false) }
+  }
+
+  function copyVendorLink(s) {
+    const url = `${window.location.origin}/vendor/${s.share_token}`
+    navigator.clipboard?.writeText(url)
+    flash('Vendor link copied to clipboard.')
+  }
+
+  async function saveRow(gid) {
+    const buf = rowEdit[gid]
+    if (!buf) return
+    setLoading(true)
+    try {
+      await api.updateShipmentLine(eventId, activeId, gid, {
+        item: buf.item || null,
+        size: buf.size ?? null,
+        quantity: Number(buf.quantity) || 1,
+        ship_status: buf.ship_status,
+        tracking_number: buf.tracking_number || null,
+      })
+      await api.updateGuestShipping(eventId, gid, {
+        ship_address1: buf.ship_address1 || null,
+        ship_address2: buf.ship_address2 || null,
+        ship_city: buf.ship_city || null,
+        ship_state: buf.ship_state || null,
+        ship_postal: buf.ship_postal || null,
+        ship_country: buf.ship_country || null,
+      })
+      setRowEdit((p) => { const n = { ...p }; delete n[gid]; return n })
+      await loadLines(activeId)
+      flash('Saved.')
+    } catch (e) { setMsg(e.message) } finally { setLoading(false) }
+  }
+
+  const editRow = (ln) => setRowEdit((p) => ({ ...p, [ln.guest_id]: { ...ln } }))
+  const setBuf = (gid, k, v) => setRowEdit((p) => ({ ...p, [gid]: { ...p[gid], [k]: v } }))
+  const addrText = (ln) => [ln.ship_address1, ln.ship_address2, ln.ship_city, ln.ship_state, ln.ship_postal, ln.ship_country].filter(Boolean).join(', ')
+
+  return (
+    <div className="bg-white dark:bg-slate-800 dark:border dark:border-slate-700/60 rounded-xl shadow p-6 space-y-4">
+      <div className="flex items-center justify-between flex-wrap gap-2">
+        <div>
+          <h2 className="font-semibold text-base dark:text-white">📦 Logistics</h2>
+          <p className="text-xs text-gray-500 dark:text-slate-400 mt-0.5">
+            Collect shipping addresses & sizes, then hand a packing list to your vendor. Guests enter their address on the RSVP page.
+          </p>
+        </div>
+        <button onClick={() => setForm({ name: '', phase: 'pre', collect_size: true, auto_add: true, size_options: 'S, M, L, XL, 2XL', notes: '', vendor_name: '', vendor_email: '', vendor_phone: '' })}
+          disabled={loading}
+          className="bg-indigo-600 text-white px-3 py-1.5 rounded-lg text-xs font-semibold hover:bg-indigo-700 disabled:opacity-50">
+          + New shipment
+        </button>
+      </div>
+
+      {shipments.length === 0 && !form && (
+        <p className="text-sm text-gray-400 dark:text-slate-500">No shipments yet. Create one for pre-event merchandise (e.g. aso-ebi) or a post-event gift.</p>
+      )}
+
+      {/* Shipment cards */}
+      <div className="space-y-3">
+        {shipments.map((s) => (
+          <div key={s.id} className="border dark:border-slate-700 rounded-lg p-3">
+            <div className="flex items-start justify-between flex-wrap gap-2">
+              <div>
+                <div className="flex items-center gap-2">
+                  <span className="font-semibold text-sm dark:text-white">{s.name}</span>
+                  <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded ${s.phase === 'post' ? 'bg-purple-100 text-purple-700 dark:bg-purple-900/40 dark:text-purple-300' : 'bg-teal-100 text-teal-700 dark:bg-teal-900/40 dark:text-teal-300'}`}>
+                    {s.phase === 'post' ? 'Post-event' : 'Pre-event'}
+                  </span>
+                  <span className="text-xs text-gray-500 dark:text-slate-400">{s.line_count} guest(s)</span>
+                </div>
+                <div className="text-xs text-gray-400 dark:text-slate-500 mt-1 flex flex-wrap gap-x-3 gap-y-0.5">
+                  {s.vendor_email ? <span>Vendor: {s.vendor_email}</span> : <span className="text-amber-500">No vendor email set</span>}
+                  {s.sent_at && <span className="text-green-600">✓ Sent {new Date(s.sent_at).toLocaleDateString()}</span>}
+                  {s.viewed_at && <span className="text-blue-500">👁 Viewed {new Date(s.viewed_at).toLocaleDateString()}</span>}
+                </div>
+              </div>
+              <div className="flex flex-wrap gap-2 text-xs">
+                <button onClick={() => (activeId === s.id ? (setActiveId(null), setLines([])) : loadLines(s.id))}
+                  className="text-indigo-600 dark:text-indigo-400 hover:underline">{activeId === s.id ? 'Hide list' : 'Manage list'}</button>
+                <button onClick={() => api.downloadShipmentXlsx(eventId, s.id, `${s.name}.xlsx`).catch((e) => setMsg(e.message))}
+                  className="text-teal-600 hover:underline">Download Excel</button>
+                <button onClick={() => copyVendorLink(s)} className="text-slate-500 hover:underline">Copy vendor link</button>
+                <button onClick={() => sendToVendor(s)} className="text-blue-600 hover:underline">Send to vendor</button>
+                <button onClick={() => setForm({ id: s.id, name: s.name, phase: s.phase, collect_size: s.collect_size, auto_add: s.auto_add, size_options: (s.size_options || []).join(', '), notes: s.notes || '', vendor_name: s.vendor_name || '', vendor_email: s.vendor_email || '', vendor_phone: s.vendor_phone || '' })}
+                  className="text-gray-500 hover:underline">Edit</button>
+                <button onClick={() => removeShipment(s.id)} className="text-red-400 hover:text-red-600">Delete</button>
+              </div>
+            </div>
+
+            {/* Per-guest lines */}
+            {activeId === s.id && (
+              <div className="mt-3 border-t dark:border-slate-700 pt-3">
+                <div className="flex justify-between items-center mb-2 flex-wrap gap-2">
+                  <span className="text-xs font-semibold text-gray-500 dark:text-slate-400">Recipients</span>
+                  <div className="flex gap-2">
+                    <button onClick={openPicker} disabled={loading}
+                      className="text-xs bg-indigo-100 dark:bg-indigo-900/40 text-indigo-700 dark:text-indigo-300 px-2 py-1 rounded hover:bg-indigo-200 dark:hover:bg-indigo-900/60">+ Add guest</button>
+                    <button onClick={() => populate(s.id)} disabled={loading}
+                      className="text-xs bg-slate-100 dark:bg-slate-700 px-2 py-1 rounded hover:bg-slate-200 dark:hover:bg-slate-600 dark:text-slate-200">+ Add all confirmed</button>
+                  </div>
+                </div>
+                {lines.length === 0 ? (
+                  <p className="text-xs text-gray-400 dark:text-slate-500">No recipients yet. Use "+ Add guest" to hand-pick, "+ Add all confirmed" for everyone{s.auto_add ? ', or they appear automatically when guests RSVP with an address.' : '.'}</p>
+                ) : (
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-xs">
+                      <thead className="text-gray-500 dark:text-slate-400 text-left">
+                        <tr><th className="py-1 pr-2">Guest</th><th className="py-1 pr-2">Address</th><th className="py-1 pr-2">Item</th><th className="py-1 pr-2">Size</th><th className="py-1 pr-2">Qty</th><th className="py-1 pr-2">Status</th><th className="py-1 pr-2">Tracking</th><th></th></tr>
+                      </thead>
+                      <tbody className="divide-y divide-gray-100 dark:divide-slate-700 align-top">
+                        {lines.map((ln) => {
+                          const buf = rowEdit[ln.guest_id]
+                          return (
+                            <tr key={ln.guest_id}>
+                              <td className="py-1.5 pr-2 dark:text-slate-200 whitespace-nowrap">{ln.first_name} {ln.last_name}</td>
+                              {buf ? (
+                                <>
+                                  <td className="py-1.5 pr-2 space-y-1">
+                                    <input className={`${fieldCls} w-full py-1`} placeholder="Address" value={buf.ship_address1 || ''} onChange={(e) => setBuf(ln.guest_id, 'ship_address1', e.target.value)} />
+                                    <div className="flex gap-1">
+                                      <input className={`${fieldCls} w-1/2 py-1`} placeholder="City" value={buf.ship_city || ''} onChange={(e) => setBuf(ln.guest_id, 'ship_city', e.target.value)} />
+                                      <input className={`${fieldCls} w-1/2 py-1`} placeholder="State" value={buf.ship_state || ''} onChange={(e) => setBuf(ln.guest_id, 'ship_state', e.target.value)} />
+                                    </div>
+                                    <div className="flex gap-1">
+                                      <input className={`${fieldCls} w-1/2 py-1`} placeholder="Postal" value={buf.ship_postal || ''} onChange={(e) => setBuf(ln.guest_id, 'ship_postal', e.target.value)} />
+                                      <input className={`${fieldCls} w-1/2 py-1`} placeholder="Country" value={buf.ship_country || ''} onChange={(e) => setBuf(ln.guest_id, 'ship_country', e.target.value)} />
+                                    </div>
+                                  </td>
+                                  <td className="py-1.5 pr-2"><input className={`${fieldCls} w-28 py-1`} placeholder={s.name} value={buf.item || ''} onChange={(e) => setBuf(ln.guest_id, 'item', e.target.value)} /></td>
+                                  <td className="py-1.5 pr-2"><input className={`${fieldCls} w-16 py-1`} value={buf.size || ''} onChange={(e) => setBuf(ln.guest_id, 'size', e.target.value)} /></td>
+                                  <td className="py-1.5 pr-2"><input type="number" min="1" className={`${fieldCls} w-14 py-1`} value={buf.quantity || 1} onChange={(e) => setBuf(ln.guest_id, 'quantity', e.target.value)} /></td>
+                                  <td className="py-1.5 pr-2">
+                                    <select className={`${fieldCls} py-1`} value={buf.ship_status} onChange={(e) => setBuf(ln.guest_id, 'ship_status', e.target.value)}>
+                                      {SHIP_STATUS.map((st) => <option key={st} value={st}>{st}</option>)}
+                                    </select>
+                                  </td>
+                                  <td className="py-1.5 pr-2"><input className={`${fieldCls} w-28 py-1`} value={buf.tracking_number || ''} onChange={(e) => setBuf(ln.guest_id, 'tracking_number', e.target.value)} /></td>
+                                  <td className="py-1.5 whitespace-nowrap">
+                                    <button onClick={() => saveRow(ln.guest_id)} className="text-green-600 hover:underline mr-2">Save</button>
+                                    <button onClick={() => setRowEdit((p) => { const n = { ...p }; delete n[ln.guest_id]; return n })} className="text-gray-400 hover:underline">Cancel</button>
+                                  </td>
+                                </>
+                              ) : (
+                                <>
+                                  <td className={`py-1.5 pr-2 max-w-xs ${ln.has_address ? 'dark:text-slate-300' : 'text-amber-500 italic'}`}>{ln.has_address ? addrText(ln) : 'No address yet'}</td>
+                                  <td className={`py-1.5 pr-2 ${ln.item ? 'dark:text-slate-300' : 'text-gray-400 dark:text-slate-500'}`}>{ln.item || s.name}</td>
+                                  <td className="py-1.5 pr-2 dark:text-slate-300">{ln.size || '—'}</td>
+                                  <td className="py-1.5 pr-2 dark:text-slate-300">{ln.quantity}</td>
+                                  <td className="py-1.5 pr-2">
+                                    <span className={`px-1.5 py-0.5 rounded text-[10px] font-semibold ${ln.ship_status === 'delivered' ? 'bg-green-100 text-green-700' : ln.ship_status === 'shipped' ? 'bg-blue-100 text-blue-700' : 'bg-slate-200 text-slate-600 dark:bg-slate-600 dark:text-slate-200'}`}>{ln.ship_status}</span>
+                                  </td>
+                                  <td className="py-1.5 pr-2 dark:text-slate-300">{ln.tracking_number || '—'}</td>
+                                  <td className="py-1.5 whitespace-nowrap">
+                                    <button onClick={() => editRow(ln)} className="text-indigo-600 dark:text-indigo-400 hover:underline mr-2">Edit</button>
+                                    <button onClick={() => removeGuest(ln.guest_id)} className="text-red-400 hover:text-red-600">Remove</button>
+                                  </td>
+                                </>
+                              )}
+                            </tr>
+                          )
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+        ))}
+      </div>
+
+      {/* Create / edit shipment form */}
+      {form && (
+        <form onSubmit={saveShipment} className="bg-gray-50 dark:bg-slate-700/50 border dark:border-slate-600 rounded-lg p-4 space-y-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div>
+              <label className="block text-xs font-semibold text-gray-600 dark:text-slate-300 mb-1">Shipment name *</label>
+              <input className={`${fieldCls} w-full`} required value={form.name} onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))} placeholder="Aso-Ebi Cloth / Thank-you Gift" />
+            </div>
+            <div>
+              <label className="block text-xs font-semibold text-gray-600 dark:text-slate-300 mb-1">When</label>
+              <select className={`${fieldCls} w-full`} value={form.phase} onChange={(e) => setForm((f) => ({ ...f, phase: e.target.value }))}>
+                <option value="pre">Pre-event (collect on RSVP)</option>
+                <option value="post">Post-event (gift after)</option>
+              </select>
+            </div>
+          </div>
+          <div className="flex flex-wrap items-center gap-x-5 gap-y-2">
+            <label className="flex items-center gap-2 text-xs font-semibold text-gray-600 dark:text-slate-300">
+              <input type="checkbox" checked={form.collect_size} onChange={(e) => setForm((f) => ({ ...f, collect_size: e.target.checked }))} />
+              Ask guests for a size
+            </label>
+            <label className="flex items-center gap-2 text-xs font-semibold text-gray-600 dark:text-slate-300">
+              <input type="checkbox" checked={form.auto_add} onChange={(e) => setForm((f) => ({ ...f, auto_add: e.target.checked }))} />
+              Auto-add guests who RSVP
+              <span className="font-normal text-gray-400 dark:text-slate-500">(off = hand-pick the list)</span>
+            </label>
+          </div>
+          {form.collect_size && (
+            <div>
+              <label className="block text-xs font-semibold text-gray-600 dark:text-slate-300 mb-1">Size options (comma-separated)</label>
+              <input className={`${fieldCls} w-full`} value={form.size_options} onChange={(e) => setForm((f) => ({ ...f, size_options: e.target.value }))} placeholder="S, M, L, XL, 2XL" />
+            </div>
+          )}
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+            <div>
+              <label className="block text-xs font-semibold text-gray-600 dark:text-slate-300 mb-1">Vendor name</label>
+              <input className={`${fieldCls} w-full`} value={form.vendor_name} onChange={(e) => setForm((f) => ({ ...f, vendor_name: e.target.value }))} />
+            </div>
+            <div>
+              <label className="block text-xs font-semibold text-gray-600 dark:text-slate-300 mb-1">Vendor email</label>
+              <input type="email" className={`${fieldCls} w-full`} value={form.vendor_email} onChange={(e) => setForm((f) => ({ ...f, vendor_email: e.target.value }))} />
+            </div>
+            <div>
+              <label className="block text-xs font-semibold text-gray-600 dark:text-slate-300 mb-1">Vendor phone</label>
+              <input className={`${fieldCls} w-full`} value={form.vendor_phone} onChange={(e) => setForm((f) => ({ ...f, vendor_phone: e.target.value }))} />
+            </div>
+          </div>
+          <div>
+            <label className="block text-xs font-semibold text-gray-600 dark:text-slate-300 mb-1">Notes for vendor</label>
+            <textarea className={`${fieldCls} w-full`} rows={2} value={form.notes} onChange={(e) => setForm((f) => ({ ...f, notes: e.target.value }))} placeholder="Delivery instructions, deadlines, etc." />
+          </div>
+          <div className="flex gap-2">
+            <button type="submit" disabled={loading} className="bg-indigo-600 text-white px-4 py-2 rounded-lg text-sm font-semibold hover:bg-indigo-700 disabled:opacity-50">{form.id ? 'Save' : 'Create'}</button>
+            <button type="button" onClick={() => setForm(null)} className="px-4 py-2 border border-gray-300 dark:border-slate-600 rounded-lg text-sm dark:text-slate-300 hover:bg-gray-100 dark:hover:bg-slate-600">Cancel</button>
+          </div>
+        </form>
+      )}
+
+      {msg && <p className="text-sm text-indigo-600 dark:text-indigo-400">{msg}</p>}
+
+      {/* Add-guest picker */}
+      {pickerOpen && (
+        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4" onClick={() => setPickerOpen(false)}>
+          <div className="bg-white dark:bg-slate-800 rounded-xl shadow-xl w-full max-w-md max-h-[80vh] flex flex-col" onClick={(e) => e.stopPropagation()}>
+            <div className="p-4 border-b dark:border-slate-700">
+              <div className="flex justify-between items-center mb-2">
+                <h3 className="font-semibold text-sm dark:text-white">Add a guest to this shipment</h3>
+                <button onClick={() => setPickerOpen(false)} className="text-gray-400 hover:text-gray-600 text-lg leading-none">×</button>
+              </div>
+              <input autoFocus className={`${fieldCls} w-full`} placeholder="Search guests…" value={guestQuery} onChange={(e) => setGuestQuery(e.target.value)} />
+            </div>
+            <div className="overflow-y-auto p-2">
+              {(() => {
+                const onList = new Set(lines.map((l) => l.guest_id))
+                const q = guestQuery.trim().toLowerCase()
+                const available = allGuests.filter((g) => !onList.has(g.id) &&
+                  (!q || `${g.first_name} ${g.last_name} ${g.email || ''}`.toLowerCase().includes(q)))
+                if (available.length === 0) return <p className="text-xs text-gray-400 p-3">No matching guests (everyone may already be on the list).</p>
+                return available.slice(0, 100).map((g) => (
+                  <button key={g.id} onClick={() => addGuest(g.id)}
+                    className="w-full text-left px-3 py-2 rounded-lg hover:bg-indigo-50 dark:hover:bg-slate-700 flex justify-between items-center">
+                    <span className="text-sm dark:text-slate-200">{g.first_name} {g.last_name}</span>
+                    <span className="text-xs text-gray-400">{g.email || g.phone || ''}</span>
+                  </button>
+                ))
+              })()}
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
+
+// ── Registry Panel ────────────────────────────────────────────────────────────
+
+// Reuses the existing module-level `fmtMoney(minorAmount, currency)` (hoisted).
+const toMinor = (major) => {
+  const n = parseFloat(major)
+  return Number.isFinite(n) ? Math.round(n * 100) : null
+}
+
+const REGISTRY_KINDS = [
+  { value: 'item', label: 'Gift item' },
+  { value: 'fund', label: 'Cash fund' },
+  { value: 'link', label: 'External registry link' },
+]
+
+function RegistryPanel({ eventId, event }) {
+  const [items, setItems]     = useState([])
+  const [claims, setClaims]   = useState([])
+  const [showClaims, setShowClaims] = useState(false)
+  const [form, setForm]       = useState(null)
+  const [message, setMessage] = useState(event?.registry_message || '')
+  const [token, setToken]     = useState('')
+  const [loading, setLoading] = useState(false)
+  const [msg, setMsg]         = useState('')
+
+  const fieldCls = 'border border-gray-300 dark:border-slate-700 rounded-lg px-3 py-2 text-sm bg-white dark:bg-slate-700 text-gray-900 dark:text-white'
+  const flash = (m) => { setMsg(m); setTimeout(() => setMsg(''), 4000) }
+
+  function load() {
+    api.listRegistryItems(eventId).then(setItems).catch((e) => setMsg(e.message))
+  }
+  useEffect(() => {
+    load()
+    api.getRegistrySettings(eventId)
+      .then((s) => { setToken(s.registry_token || ''); if (s.registry_message != null) setMessage(s.registry_message) })
+      .catch((e) => setMsg(e.message))
+  }, [eventId])
+
+  async function saveMessage() {
+    try {
+      await api.updateRegistrySettings(eventId, { registry_message: message })
+      flash('Intro message saved.')
+    } catch (e) { setMsg(e.message) }
+  }
+
+  async function fetchDetails() {
+    if (!form.external_url) { setMsg('Paste a product link first.'); return }
+    setLoading(true)
+    try {
+      const d = await api.unfurlRegistryLink(eventId, form.external_url)
+      setForm((f) => ({
+        ...f,
+        title: f.title || d.title || '',
+        image_url: f.image_url || d.image_url || '',
+        amountMajor: f.amountMajor || (d.amount_minor != null ? String(d.amount_minor / 100) : ''),
+        currency: d.currency || f.currency,
+      }))
+      const nothing = !d.title && !d.image_url && d.amount_minor == null
+      flash(nothing ? 'No details found — please fill them in manually.' : 'Details fetched — review and edit as needed.')
+    } catch (e) { setMsg(e.message) } finally { setLoading(false) }
+  }
+
+  async function saveItem(e) {
+    e.preventDefault()
+    setLoading(true)
+    try {
+      const payload = {
+        kind: form.kind,
+        title: form.title,
+        description: form.description || null,
+        image_url: form.image_url || null,
+        external_url: form.external_url || null,
+        amount_minor: form.amountMajor ? toMinor(form.amountMajor) : null,
+        currency: form.currency || 'USD',
+        quantity_wanted: Number(form.quantity_wanted) || 1,
+        payment_instructions: form.payment_instructions || null,
+      }
+      if (form.id) await api.updateRegistryItem(eventId, form.id, payload)
+      else await api.createRegistryItem(eventId, payload)
+      setForm(null); load()
+    } catch (e) { setMsg(e.message) } finally { setLoading(false) }
+  }
+
+  async function removeItem(id) {
+    if (!confirm('Delete this registry entry?')) return
+    setLoading(true)
+    try { await api.deleteRegistryItem(eventId, id); load() }
+    catch (e) { setMsg(e.message) } finally { setLoading(false) }
+  }
+
+  async function loadClaims() {
+    try { setClaims(await api.listRegistryClaims(eventId)); setShowClaims(true) }
+    catch (e) { setMsg(e.message) }
+  }
+
+  const openNew = () => setForm({ kind: 'item', title: '', description: '', image_url: '', external_url: '', amountMajor: '', currency: 'USD', quantity_wanted: 1, payment_instructions: '' })
+  const openEdit = (it) => setForm({
+    id: it.id, kind: it.kind, title: it.title, description: it.description || '',
+    image_url: it.image_url || '', external_url: it.external_url || '',
+    amountMajor: it.amount_minor != null ? String(it.amount_minor / 100) : '',
+    currency: it.currency || 'USD', quantity_wanted: it.quantity_wanted || 1,
+    payment_instructions: it.payment_instructions || '',
+  })
+
+  const registryUrl = token ? `${window.location.origin}/registry/${token}` : ''
+
+  return (
+    <div className="bg-white dark:bg-slate-800 dark:border dark:border-slate-700/60 rounded-xl shadow p-6 space-y-4">
+      <div className="flex items-center justify-between flex-wrap gap-2">
+        <div>
+          <h2 className="font-semibold text-base dark:text-white">🎁 Gift Registry</h2>
+          <p className="text-xs text-gray-500 dark:text-slate-400 mt-0.5">Mark-only — guests buy from your links or send cash to your own details. No money passes through EventQR.</p>
+        </div>
+        <div className="flex gap-2">
+          <button onClick={() => { if (!registryUrl) return flash('Preparing link…'); navigator.clipboard?.writeText(registryUrl); flash('Registry link copied.') }}
+            className="text-xs border border-gray-300 dark:border-slate-600 px-3 py-1.5 rounded-lg dark:text-slate-200 hover:bg-gray-50 dark:hover:bg-slate-700">Copy registry link</button>
+          <button onClick={() => (showClaims ? setShowClaims(false) : loadClaims())}
+            className="text-xs border border-gray-300 dark:border-slate-600 px-3 py-1.5 rounded-lg dark:text-slate-200 hover:bg-gray-50 dark:hover:bg-slate-700">{showClaims ? 'Hide claims' : 'Claims & pledges'}</button>
+          <button onClick={openNew} className="bg-indigo-600 text-white px-3 py-1.5 rounded-lg text-xs font-semibold hover:bg-indigo-700">+ Add entry</button>
+        </div>
+      </div>
+
+      {/* Intro message */}
+      <div className="flex gap-2 items-end">
+        <div className="flex-1">
+          <label className="block text-xs font-semibold text-gray-600 dark:text-slate-300 mb-1">Intro message (shown atop your registry)</label>
+          <input className={`${fieldCls} w-full`} value={message} onChange={(e) => setMessage(e.target.value)} placeholder="Your presence is the greatest gift — but if you'd like to give…" />
+        </div>
+        <button onClick={saveMessage} className="text-xs bg-slate-100 dark:bg-slate-700 px-3 py-2 rounded-lg dark:text-slate-200 hover:bg-slate-200 dark:hover:bg-slate-600">Save</button>
+      </div>
+
+      {/* Claims view */}
+      {showClaims && (
+        <div className="border dark:border-slate-700 rounded-lg p-3">
+          <div className="text-xs font-semibold text-gray-500 dark:text-slate-400 mb-2">Who's giving what</div>
+          {claims.length === 0 ? <p className="text-xs text-gray-400">No reservations or pledges yet.</p> : (
+            <div className="overflow-x-auto">
+              <table className="w-full text-xs">
+                <thead className="text-gray-500 dark:text-slate-400 text-left"><tr><th className="py-1 pr-2">Guest</th><th className="py-1 pr-2">Gift</th><th className="py-1 pr-2">Qty / Amount</th><th className="py-1 pr-2">Message</th></tr></thead>
+                <tbody className="divide-y divide-gray-100 dark:divide-slate-700">
+                  {claims.map((c) => (
+                    <tr key={c.id}>
+                      <td className="py-1.5 pr-2 dark:text-slate-200">{c.claimer_name}{c.claimer_email ? <span className="text-gray-400"> · {c.claimer_email}</span> : ''}</td>
+                      <td className="py-1.5 pr-2 dark:text-slate-300">{c.item_title}</td>
+                      <td className="py-1.5 pr-2 dark:text-slate-300">{c.amount_minor != null ? (c.amount_minor / 100).toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 2 }) : `×${c.quantity}`}</td>
+                      <td className="py-1.5 pr-2 text-gray-500 dark:text-slate-400 max-w-xs truncate">{c.message || '—'}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Entries */}
+      {items.length === 0 && !form ? (
+        <p className="text-sm text-gray-400 dark:text-slate-500">No registry entries yet. Add a gift item, a cash fund, or a link to an external registry (Amazon, Jumia…).</p>
+      ) : (
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          {items.map((it) => (
+            <div key={it.id} className="border dark:border-slate-700 rounded-lg p-3 flex gap-3">
+              {it.image_url && <img src={it.image_url} alt="" className="w-14 h-14 rounded object-cover shrink-0" />}
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center gap-2">
+                  <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded bg-slate-200 text-slate-600 dark:bg-slate-600 dark:text-slate-200">{REGISTRY_KINDS.find((k) => k.value === it.kind)?.label || it.kind}</span>
+                  {!it.is_active && <span className="text-[10px] text-amber-500">hidden</span>}
+                </div>
+                <div className="font-semibold text-sm dark:text-white truncate mt-1">{it.title}</div>
+                {it.kind === 'item' && (
+                  <div className="text-xs text-gray-500 dark:text-slate-400">
+                    {it.amount_minor != null && <span>{fmtMoney(it.amount_minor, it.currency)} · </span>}
+                    Reserved {it.reserved_qty}/{it.quantity_wanted}
+                  </div>
+                )}
+                {it.kind === 'fund' && (
+                  <div className="text-xs text-gray-500 dark:text-slate-400">
+                    Raised {fmtMoney(it.raised_minor, it.currency)}{it.amount_minor != null && ` of ${fmtMoney(it.amount_minor, it.currency)}`} · {it.claim_count} pledge(s)
+                  </div>
+                )}
+                {it.kind === 'link' && it.external_url && <div className="text-xs text-indigo-500 truncate">{it.external_url}</div>}
+                <div className="flex gap-3 mt-1.5 text-xs">
+                  <button onClick={() => openEdit(it)} className="text-indigo-600 dark:text-indigo-400 hover:underline">Edit</button>
+                  <button onClick={() => removeItem(it.id)} className="text-red-400 hover:text-red-600">Delete</button>
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* Add / edit entry form */}
+      {form && (
+        <form onSubmit={saveItem} className="bg-gray-50 dark:bg-slate-700/50 border dark:border-slate-600 rounded-lg p-4 space-y-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div>
+              <label className="block text-xs font-semibold text-gray-600 dark:text-slate-300 mb-1">Type</label>
+              <select className={`${fieldCls} w-full`} value={form.kind} onChange={(e) => setForm((f) => ({ ...f, kind: e.target.value }))}>
+                {REGISTRY_KINDS.map((k) => <option key={k.value} value={k.value}>{k.label}</option>)}
+              </select>
+            </div>
+            <div>
+              <label className="block text-xs font-semibold text-gray-600 dark:text-slate-300 mb-1">Title *</label>
+              <input className={`${fieldCls} w-full`} required value={form.title} onChange={(e) => setForm((f) => ({ ...f, title: e.target.value }))}
+                placeholder={form.kind === 'fund' ? 'Honeymoon Fund' : form.kind === 'link' ? 'Our Amazon registry' : 'KitchenAid Mixer'} />
+            </div>
+          </div>
+
+          {form.kind === 'item' && (
+            <>
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                <div>
+                  <label className="block text-xs font-semibold text-gray-600 dark:text-slate-300 mb-1">Price</label>
+                  <div className="flex gap-1">
+                    <select className={`${fieldCls} w-20`} value={form.currency} onChange={(e) => setForm((f) => ({ ...f, currency: e.target.value }))}>
+                      <option value="USD">USD</option><option value="NGN">NGN</option>
+                    </select>
+                    <input className={`${fieldCls} w-full`} type="number" step="0.01" value={form.amountMajor} onChange={(e) => setForm((f) => ({ ...f, amountMajor: e.target.value }))} placeholder="0.00" />
+                  </div>
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold text-gray-600 dark:text-slate-300 mb-1">Quantity wanted</label>
+                  <input className={`${fieldCls} w-full`} type="number" min="1" value={form.quantity_wanted} onChange={(e) => setForm((f) => ({ ...f, quantity_wanted: e.target.value }))} />
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold text-gray-600 dark:text-slate-300 mb-1">Image URL</label>
+                  <input className={`${fieldCls} w-full`} value={form.image_url} onChange={(e) => setForm((f) => ({ ...f, image_url: e.target.value }))} placeholder="https://…" />
+                </div>
+              </div>
+              <div>
+                <label className="block text-xs font-semibold text-gray-600 dark:text-slate-300 mb-1">Store / buy link</label>
+                <div className="flex gap-2">
+                  <input className={`${fieldCls} w-full`} value={form.external_url} onChange={(e) => setForm((f) => ({ ...f, external_url: e.target.value }))} placeholder="https://www.amazon.com/… or any store" />
+                  <button type="button" onClick={fetchDetails} disabled={loading}
+                    className="shrink-0 text-xs bg-slate-100 dark:bg-slate-700 px-3 rounded-lg dark:text-slate-200 hover:bg-slate-200 dark:hover:bg-slate-600 disabled:opacity-50">Fetch details</button>
+                </div>
+                <p className="text-[11px] text-gray-400 dark:text-slate-500 mt-1">Paste a link from any store and Fetch details to auto-fill — best-effort, edit anything that looks off.</p>
+              </div>
+            </>
+          )}
+
+          {form.kind === 'fund' && (
+            <>
+              <div>
+                <label className="block text-xs font-semibold text-gray-600 dark:text-slate-300 mb-1">Target amount (optional)</label>
+                <div className="flex gap-1 max-w-xs">
+                  <select className={`${fieldCls} w-20`} value={form.currency} onChange={(e) => setForm((f) => ({ ...f, currency: e.target.value }))}>
+                    <option value="USD">USD</option><option value="NGN">NGN</option>
+                  </select>
+                  <input className={`${fieldCls} w-full`} type="number" step="0.01" value={form.amountMajor} onChange={(e) => setForm((f) => ({ ...f, amountMajor: e.target.value }))} placeholder="0.00" />
+                </div>
+              </div>
+              <div>
+                <label className="block text-xs font-semibold text-gray-600 dark:text-slate-300 mb-1">How to send money *</label>
+                <textarea className={`${fieldCls} w-full`} rows={2} value={form.payment_instructions} onChange={(e) => setForm((f) => ({ ...f, payment_instructions: e.target.value }))} placeholder="Bank: GTBank 0123456789 (Jane Doe) · or Paystack/PayPal link" />
+              </div>
+            </>
+          )}
+
+          {form.kind === 'link' && (
+            <div>
+              <label className="block text-xs font-semibold text-gray-600 dark:text-slate-300 mb-1">Registry URL *</label>
+              <input className={`${fieldCls} w-full`} value={form.external_url} onChange={(e) => setForm((f) => ({ ...f, external_url: e.target.value }))} placeholder="https://www.amazon.com/wedding/registry/…" />
+            </div>
+          )}
+
+          <div>
+            <label className="block text-xs font-semibold text-gray-600 dark:text-slate-300 mb-1">Description (optional)</label>
+            <input className={`${fieldCls} w-full`} value={form.description} onChange={(e) => setForm((f) => ({ ...f, description: e.target.value }))} />
+          </div>
+
+          <div className="flex gap-2">
+            <button type="submit" disabled={loading} className="bg-indigo-600 text-white px-4 py-2 rounded-lg text-sm font-semibold hover:bg-indigo-700 disabled:opacity-50">{form.id ? 'Save' : 'Add'}</button>
+            <button type="button" onClick={() => setForm(null)} className="px-4 py-2 border border-gray-300 dark:border-slate-600 rounded-lg text-sm dark:text-slate-300 hover:bg-gray-100 dark:hover:bg-slate-600">Cancel</button>
+          </div>
+        </form>
+      )}
+
+      {msg && <p className="text-sm text-indigo-600 dark:text-indigo-400">{msg}</p>}
+    </div>
+  )
+}
+
+// ── Venue Access Panel ────────────────────────────────────────────────────────
+
+const DIRECTION_MODES = [
+  { value: 'both', label: 'Entry & Exit' },
+  { value: 'entry', label: 'Entry only' },
+  { value: 'exit', label: 'Exit only' },
+]
+const TICKET_COLORS = ['slate', 'indigo', 'emerald', 'amber', 'rose', 'purple', 'blue', 'teal']
+function ticketTint(c) {
+  const m = {
+    slate: 'bg-slate-200 text-slate-700', indigo: 'bg-indigo-100 text-indigo-700',
+    emerald: 'bg-emerald-100 text-emerald-700', amber: 'bg-amber-100 text-amber-700',
+    rose: 'bg-rose-100 text-rose-700', purple: 'bg-purple-100 text-purple-700',
+    blue: 'bg-blue-100 text-blue-700', teal: 'bg-teal-100 text-teal-700',
+  }
+  return m[c] || m.slate
+}
+
+function AccessPanel({ eventId }) {
+  const [view, setView] = useState('zones')   // zones | tickets | assign | analytics
+  const [zones, setZones] = useState([])
+  const [tickets, setTickets] = useState([])
+  const [zoneForm, setZoneForm] = useState(null)
+  const [ticketForm, setTicketForm] = useState(null)
+  const [guests, setGuests] = useState([])
+  const [occ, setOcc] = useState(null)
+  const [peak, setPeak] = useState([])
+  const [flow, setFlow] = useState([])
+  const [journeyGuest, setJourneyGuest] = useState(null)
+  const [journey, setJourney] = useState([])
+  const [loading, setLoading] = useState(false)
+  const [msg, setMsg] = useState('')
+
+  const fieldCls = 'border border-gray-300 dark:border-slate-700 rounded-lg px-3 py-2 text-sm bg-white dark:bg-slate-700 text-gray-900 dark:text-white'
+  const flash = (m) => { setMsg(m); setTimeout(() => setMsg(''), 4000) }
+
+  function loadZones() { api.listZones(eventId).then(setZones).catch((e) => setMsg(e.message)) }
+  function loadTickets() { api.listTicketTypes(eventId).then(setTickets).catch((e) => setMsg(e.message)) }
+  useEffect(() => { loadZones(); loadTickets() }, [eventId])
+
+  // Analytics: load on entry + poll occupancy live.
+  useEffect(() => {
+    if (view !== 'analytics') return
+    const refresh = () => {
+      api.accessOccupancy(eventId).then(setOcc).catch(() => {})
+      api.accessPeak(eventId).then(setPeak).catch(() => {})
+      api.accessFlow(eventId).then(setFlow).catch(() => {})
+    }
+    refresh()
+    const t = setInterval(() => api.accessOccupancy(eventId).then(setOcc).catch(() => {}), 5000)
+    return () => clearInterval(t)
+  }, [view, eventId])
+
+  useEffect(() => {
+    if (view === 'assign') api.listGuests(eventId).then(setGuests).catch((e) => setMsg(e.message))
+  }, [view, eventId])
+
+  // ── Zones ──
+  async function saveZone(e) {
+    e.preventDefault(); setLoading(true)
+    try {
+      const payload = { name: zoneForm.name, capacity: zoneForm.capacity === '' ? null : Number(zoneForm.capacity),
+        direction_mode: zoneForm.direction_mode, description: zoneForm.description || null }
+      if (zoneForm.id) await api.updateZone(eventId, zoneForm.id, payload)
+      else await api.createZone(eventId, payload)
+      setZoneForm(null); loadZones()
+    } catch (e) { setMsg(e.message) } finally { setLoading(false) }
+  }
+  async function delZone(id) {
+    if (!confirm('Delete this zone? Its scan history stays but it disappears from analytics.')) return
+    try { await api.deleteZone(eventId, id); loadZones() } catch (e) { setMsg(e.message) }
+  }
+
+  // ── Ticket types ──
+  async function saveTicket(e) {
+    e.preventDefault(); setLoading(true)
+    try {
+      const payload = { name: ticketForm.name, color: ticketForm.color, capacity: ticketForm.capacity === '' ? null : Number(ticketForm.capacity),
+        allowed_zone_ids: ticketForm.allowAll ? [] : ticketForm.allowed_zone_ids }
+      if (ticketForm.id) await api.updateTicketType(eventId, ticketForm.id, payload)
+      else await api.createTicketType(eventId, payload)
+      setTicketForm(null); loadTickets()
+    } catch (e) { setMsg(e.message) } finally { setLoading(false) }
+  }
+  async function delTicket(id) {
+    if (!confirm('Delete this ticket type? Guests keep their records but lose this type.')) return
+    try { await api.deleteTicketType(eventId, id); loadTickets() } catch (e) { setMsg(e.message) }
+  }
+  function toggleAllowed(zid) {
+    setTicketForm((f) => {
+      const set = new Set(f.allowed_zone_ids || [])
+      set.has(zid) ? set.delete(zid) : set.add(zid)
+      return { ...f, allowed_zone_ids: [...set] }
+    })
+  }
+
+  async function assign(gid, ticketTypeId) {
+    try { await api.assignTicketType(eventId, gid, ticketTypeId || null); loadTickets()
+      setGuests((prev) => prev.map((g) => g.id === gid ? { ...g, ticket_type_id: ticketTypeId || null } : g))
+    } catch (e) { setMsg(e.message) }
+  }
+
+  async function showJourney(g) {
+    setJourneyGuest(g)
+    try { setJourney(await api.guestJourney(eventId, g.id)) } catch (e) { setMsg(e.message) }
+  }
+
+  const TABS = [['zones', 'Zones'], ['tickets', 'Ticket types'], ['assign', 'Assign'], ['analytics', 'Analytics']]
+  const peakMax = Math.max(1, ...peak.map((b) => b.ins))
+
+  return (
+    <div className="bg-white dark:bg-slate-800 dark:border dark:border-slate-700/60 rounded-xl shadow p-6 space-y-4">
+      <div className="flex items-center justify-between flex-wrap gap-2">
+        <div>
+          <h2 className="font-semibold text-base dark:text-white">🎟️ Venue Access</h2>
+          <p className="text-xs text-gray-500 dark:text-slate-400 mt-0.5">Zones, ticket types, live occupancy, room flow, peak times & guest journeys. Officials scan in/out per zone.</p>
+        </div>
+        <div className="flex gap-1 flex-wrap">
+          {TABS.map(([id, label]) => (
+            <button key={id} onClick={() => setView(id)}
+              className={`px-3 py-1.5 rounded-lg text-xs font-semibold ${view === id ? 'bg-indigo-600 text-white' : 'bg-gray-100 dark:bg-slate-700 text-gray-600 dark:text-slate-300 hover:bg-gray-200 dark:hover:bg-slate-600'}`}>{label}</button>
+          ))}
+        </div>
+      </div>
+
+      {/* ZONES */}
+      {view === 'zones' && (
+        <div className="space-y-3">
+          <div className="flex justify-end">
+            <button onClick={() => setZoneForm({ name: '', capacity: '', direction_mode: 'both', description: '' })}
+              className="bg-indigo-600 text-white px-3 py-1.5 rounded-lg text-xs font-semibold hover:bg-indigo-700">+ Zone</button>
+          </div>
+          {zones.length === 0 && !zoneForm && <p className="text-sm text-gray-400 dark:text-slate-500">No zones yet. Add rooms/areas guests are scanned into (Main Gate, Hall A, VIP Lounge…).</p>}
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            {zones.map((z) => (
+              <div key={z.id} className="border dark:border-slate-700 rounded-lg p-3 flex justify-between items-start">
+                <div>
+                  <div className="font-semibold text-sm dark:text-white">{z.name}</div>
+                  <div className="text-xs text-gray-500 dark:text-slate-400 mt-0.5">
+                    {DIRECTION_MODES.find((m) => m.value === z.direction_mode)?.label} · inside now: <strong>{z.occupancy}</strong>{z.capacity != null && ` / ${z.capacity}`}
+                  </div>
+                </div>
+                <div className="flex gap-2 text-xs shrink-0">
+                  <button onClick={() => setZoneForm({ id: z.id, name: z.name, capacity: z.capacity ?? '', direction_mode: z.direction_mode, description: z.description || '' })} className="text-indigo-600 dark:text-indigo-400 hover:underline">Edit</button>
+                  <button onClick={() => delZone(z.id)} className="text-red-400 hover:text-red-600">Delete</button>
+                </div>
+              </div>
+            ))}
+          </div>
+          {zoneForm && (
+            <form onSubmit={saveZone} className="bg-gray-50 dark:bg-slate-700/50 border dark:border-slate-600 rounded-lg p-3 flex flex-wrap gap-2 items-end">
+              <div><label className="block text-xs font-semibold text-gray-600 dark:text-slate-300 mb-1">Zone name *</label>
+                <input className={fieldCls} required value={zoneForm.name} onChange={(e) => setZoneForm((f) => ({ ...f, name: e.target.value }))} placeholder="Hall A" /></div>
+              <div><label className="block text-xs font-semibold text-gray-600 dark:text-slate-300 mb-1">Capacity</label>
+                <input type="number" min="1" className={`${fieldCls} w-24`} value={zoneForm.capacity} onChange={(e) => setZoneForm((f) => ({ ...f, capacity: e.target.value }))} placeholder="—" /></div>
+              <div><label className="block text-xs font-semibold text-gray-600 dark:text-slate-300 mb-1">Scan mode</label>
+                <select className={fieldCls} value={zoneForm.direction_mode} onChange={(e) => setZoneForm((f) => ({ ...f, direction_mode: e.target.value }))}>
+                  {DIRECTION_MODES.map((m) => <option key={m.value} value={m.value}>{m.label}</option>)}
+                </select></div>
+              <button type="submit" disabled={loading} className="bg-indigo-600 text-white px-4 py-2 rounded-lg text-sm font-semibold hover:bg-indigo-700 disabled:opacity-50">{zoneForm.id ? 'Save' : 'Add'}</button>
+              <button type="button" onClick={() => setZoneForm(null)} className="px-4 py-2 border border-gray-300 dark:border-slate-600 rounded-lg text-sm dark:text-slate-300">Cancel</button>
+            </form>
+          )}
+        </div>
+      )}
+
+      {/* TICKET TYPES */}
+      {view === 'tickets' && (
+        <div className="space-y-3">
+          <div className="flex justify-end">
+            <button onClick={() => setTicketForm({ name: '', color: 'indigo', capacity: '', allowAll: true, allowed_zone_ids: [] })}
+              className="bg-indigo-600 text-white px-3 py-1.5 rounded-lg text-xs font-semibold hover:bg-indigo-700">+ Ticket type</button>
+          </div>
+          {tickets.length === 0 && !ticketForm && <p className="text-sm text-gray-400 dark:text-slate-500">No ticket types yet. Define GA, VIP, Press… and which zones each may enter.</p>}
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            {tickets.map((t) => (
+              <div key={t.id} className="border dark:border-slate-700 rounded-lg p-3 flex justify-between items-start">
+                <div>
+                  <span className={`text-xs font-semibold px-2 py-0.5 rounded ${ticketTint(t.color)}`}>{t.name}</span>
+                  <div className="text-xs text-gray-500 dark:text-slate-400 mt-1">
+                    {t.assigned_count} assigned · {(!t.allowed_zone_ids || t.allowed_zone_ids.length === 0) ? 'all zones' : `${t.allowed_zone_ids.length} zone(s)`}
+                  </div>
+                </div>
+                <div className="flex gap-2 text-xs shrink-0">
+                  <button onClick={() => setTicketForm({ id: t.id, name: t.name, color: t.color || 'indigo', capacity: t.capacity ?? '', allowAll: !t.allowed_zone_ids || t.allowed_zone_ids.length === 0, allowed_zone_ids: t.allowed_zone_ids || [] })} className="text-indigo-600 dark:text-indigo-400 hover:underline">Edit</button>
+                  <button onClick={() => delTicket(t.id)} className="text-red-400 hover:text-red-600">Delete</button>
+                </div>
+              </div>
+            ))}
+          </div>
+          {ticketForm && (
+            <form onSubmit={saveTicket} className="bg-gray-50 dark:bg-slate-700/50 border dark:border-slate-600 rounded-lg p-3 space-y-3">
+              <div className="flex flex-wrap gap-2 items-end">
+                <div><label className="block text-xs font-semibold text-gray-600 dark:text-slate-300 mb-1">Name *</label>
+                  <input className={fieldCls} required value={ticketForm.name} onChange={(e) => setTicketForm((f) => ({ ...f, name: e.target.value }))} placeholder="VIP" /></div>
+                <div><label className="block text-xs font-semibold text-gray-600 dark:text-slate-300 mb-1">Color</label>
+                  <select className={fieldCls} value={ticketForm.color} onChange={(e) => setTicketForm((f) => ({ ...f, color: e.target.value }))}>
+                    {TICKET_COLORS.map((c) => <option key={c} value={c}>{c}</option>)}
+                  </select></div>
+                <div><label className="block text-xs font-semibold text-gray-600 dark:text-slate-300 mb-1">Capacity</label>
+                  <input type="number" min="1" className={`${fieldCls} w-24`} value={ticketForm.capacity} onChange={(e) => setTicketForm((f) => ({ ...f, capacity: e.target.value }))} placeholder="—" /></div>
+              </div>
+              <div>
+                <label className="flex items-center gap-2 text-xs font-semibold text-gray-600 dark:text-slate-300 mb-2">
+                  <input type="checkbox" checked={ticketForm.allowAll} onChange={(e) => setTicketForm((f) => ({ ...f, allowAll: e.target.checked }))} />
+                  Can enter all zones
+                </label>
+                {!ticketForm.allowAll && (
+                  <div className="flex flex-wrap gap-2">
+                    {zones.map((z) => (
+                      <label key={z.id} className={`text-xs px-2 py-1 rounded border cursor-pointer ${(ticketForm.allowed_zone_ids || []).includes(z.id) ? 'bg-indigo-600 text-white border-indigo-600' : 'border-gray-300 dark:border-slate-600 dark:text-slate-300'}`}>
+                        <input type="checkbox" className="hidden" checked={(ticketForm.allowed_zone_ids || []).includes(z.id)} onChange={() => toggleAllowed(z.id)} />
+                        {z.name}
+                      </label>
+                    ))}
+                    {zones.length === 0 && <span className="text-xs text-amber-500">Add zones first.</span>}
+                  </div>
+                )}
+              </div>
+              <div className="flex gap-2">
+                <button type="submit" disabled={loading} className="bg-indigo-600 text-white px-4 py-2 rounded-lg text-sm font-semibold hover:bg-indigo-700 disabled:opacity-50">{ticketForm.id ? 'Save' : 'Add'}</button>
+                <button type="button" onClick={() => setTicketForm(null)} className="px-4 py-2 border border-gray-300 dark:border-slate-600 rounded-lg text-sm dark:text-slate-300">Cancel</button>
+              </div>
+            </form>
+          )}
+        </div>
+      )}
+
+      {/* ASSIGN */}
+      {view === 'assign' && (
+        <div className="space-y-2">
+          <p className="text-xs text-gray-500 dark:text-slate-400">Assign a ticket type to each guest. (Guests with no type can enter any zone.)</p>
+          <div className="max-h-96 overflow-y-auto divide-y divide-gray-100 dark:divide-slate-700">
+            {guests.map((g) => (
+              <div key={g.id} className="flex items-center justify-between py-2 gap-2">
+                <span className="text-sm dark:text-slate-200 truncate">{g.first_name} {g.last_name}</span>
+                <select className={`${fieldCls} py-1 shrink-0`} value={g.ticket_type_id || ''} onChange={(e) => assign(g.id, e.target.value)}>
+                  <option value="">— none —</option>
+                  {tickets.map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}
+                </select>
+              </div>
+            ))}
+            {guests.length === 0 && <p className="text-sm text-gray-400 py-3">No guests yet.</p>}
+          </div>
+        </div>
+      )}
+
+      {/* ANALYTICS */}
+      {view === 'analytics' && (
+        <div className="space-y-5">
+          {/* Live occupancy */}
+          <div>
+            <div className="flex items-center justify-between mb-2">
+              <h3 className="text-sm font-semibold dark:text-white">Live occupancy</h3>
+              <span className="text-xs text-gray-400">total inside: <strong>{occ?.total_inside ?? 0}</strong> · auto-refresh</span>
+            </div>
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+              {(occ?.zones || []).map((z) => (
+                <div key={z.id} className="border dark:border-slate-700 rounded-lg p-3 text-center">
+                  <div className="text-2xl font-bold text-indigo-600 dark:text-indigo-400">{z.occupancy}</div>
+                  <div className="text-xs text-gray-500 dark:text-slate-400 truncate">{z.name}{z.capacity != null && <span className="text-gray-400"> / {z.capacity}</span>}</div>
+                </div>
+              ))}
+              {(!occ || occ.zones.length === 0) && <p className="text-sm text-gray-400 col-span-full">No zones / no scans yet.</p>}
+            </div>
+          </div>
+
+          {/* Peak times */}
+          <div>
+            <h3 className="text-sm font-semibold dark:text-white mb-2">Peak times (entries per 15 min)</h3>
+            {peak.length === 0 ? <p className="text-sm text-gray-400">No scans recorded yet.</p> : (
+              <div className="flex items-end gap-1 h-32 border-b dark:border-slate-700">
+                {peak.map((b) => (
+                  <div key={b.t} className="flex-1 flex flex-col justify-end items-center group" title={`${new Date(b.t).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })} — ${b.ins} in`}>
+                    <div className="w-full bg-indigo-500 rounded-t" style={{ height: `${(b.ins / peakMax) * 100}%` }} />
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
+          {/* Room flow */}
+          <div>
+            <h3 className="text-sm font-semibold dark:text-white mb-2">Room flow (most common movements)</h3>
+            {flow.length === 0 ? <p className="text-sm text-gray-400">No movements yet.</p> : (
+              <ul className="text-sm space-y-1">
+                {flow.slice(0, 10).map((f, i) => (
+                  <li key={i} className="flex items-center gap-2 dark:text-slate-300">
+                    <span className="text-gray-400">{f.from_zone || 'Arrival'}</span>
+                    <span className="text-indigo-400">→</span>
+                    <span className="font-medium">{f.to_zone}</span>
+                    <span className="text-xs text-gray-400 ml-auto">{f.count}×</span>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
+
+          {/* Guest journey */}
+          <div>
+            <h3 className="text-sm font-semibold dark:text-white mb-2">Guest journey</h3>
+            <select className={`${fieldCls} w-full max-w-sm`} value={journeyGuest?.id || ''}
+              onChange={(e) => { const g = guests.find((x) => x.id === e.target.value); if (g) showJourney(g) }}
+              onClick={() => { if (guests.length === 0) api.listGuests(eventId).then(setGuests) }}>
+              <option value="">Pick a guest…</option>
+              {guests.map((g) => <option key={g.id} value={g.id}>{g.first_name} {g.last_name}</option>)}
+            </select>
+            {journeyGuest && (
+              <ol className="mt-3 border-l-2 border-indigo-200 dark:border-slate-600 pl-4 space-y-2">
+                {journey.length === 0 && <li className="text-sm text-gray-400">No scans for this guest.</li>}
+                {journey.map((s, i) => (
+                  <li key={i} className="text-sm">
+                    <span className="font-medium dark:text-slate-200">{s.zone_name || '—'}</span>
+                    <span className={`ml-2 text-xs px-1.5 py-0.5 rounded ${s.direction === 'in' ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-200 text-slate-600'}`}>{s.direction}</span>
+                    {s.denied && <span className="ml-2 text-xs text-red-500">denied: {s.deny_reason}</span>}
+                    <span className="text-xs text-gray-400 ml-2">{new Date(s.scanned_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
+                  </li>
+                ))}
+              </ol>
+            )}
+          </div>
+        </div>
+      )}
+
+      {msg && <p className="text-sm text-indigo-600 dark:text-indigo-400">{msg}</p>}
     </div>
   )
 }
@@ -2398,11 +3419,11 @@ function EventForm({ initial, onSave, onCancel }) {
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
         <div>
           <label className="block text-xs font-semibold text-gray-600 mb-1">Event Name *</label>
-          <input className={field} value={form.name} onChange={set('name')} required placeholder="Smith-Jones Wedding" />
+          <input className={field} value={form.name} onChange={set('name')} required placeholder="Annual Gala / Acme Conference / Birthday Party" />
         </div>
         <div>
-          <label className="block text-xs font-semibold text-gray-600 mb-1">Couple's Name *</label>
-          <input className={field} value={form.couples_name} onChange={set('couples_name')} required placeholder="John & Jane" />
+          <label className="block text-xs font-semibold text-gray-600 mb-1">Host / Organizer</label>
+          <input className={field} value={form.couples_name} onChange={set('couples_name')} placeholder="e.g. Acme Corp, The Smiths, John &amp; Jane" />
         </div>
         <div>
           <label className="block text-xs font-semibold text-gray-600 mb-1">Event Date *</label>
@@ -2411,6 +3432,14 @@ function EventForm({ initial, onSave, onCancel }) {
         <div>
           <label className="block text-xs font-semibold text-gray-600 mb-1">App Base URL *</label>
           <input className={field} value={form.checkin_base_url} onChange={set('checkin_base_url')} required placeholder="https://events.vsgs.io" />
+        </div>
+        <div>
+          <label className="block text-xs font-semibold text-gray-600 mb-1">Venue</label>
+          <input className={field} value={form.venue_name || ''} onChange={set('venue_name')} placeholder="e.g. Grand Ballroom" />
+        </div>
+        <div>
+          <label className="block text-xs font-semibold text-gray-600 mb-1">Venue address</label>
+          <input className={field} value={form.venue_address || ''} onChange={set('venue_address')} placeholder="Street, city" />
         </div>
       </div>
       <div>
@@ -2721,16 +3750,33 @@ export default function AdminPage() {
     } catch (err) { flash(err.message, true) }
   }
 
+  function flashImportResult(res) {
+    let msg = `${res.added} guests added, ${res.skipped} skipped.`
+    if (res.ticket_types_assigned) msg += ` ${res.ticket_types_assigned} ticket type${res.ticket_types_assigned === 1 ? '' : 's'} assigned.`
+    if (res.addresses_added) msg += ` ${res.addresses_added} shipping address${res.addresses_added === 1 ? '' : 'es'} added.`
+    if (res.unknown_ticket_types?.length) {
+      msg += ` Unknown ticket types ignored: ${res.unknown_ticket_types.join(', ')} — create them in the Access tab, then re-import to assign.`
+      flash(msg, true)
+    } else {
+      flash(msg)
+    }
+  }
+
   async function handleUpload(e) {
     const file = e.target.files[0]
     if (!file) return
     setLoading(true)
     try {
       const res = await api.uploadGuests(selectedId, file)
-      flash(`${res.added} guests added, ${res.skipped} skipped.`)
+      flashImportResult(res)
       setGuests(await api.listGuests(selectedId))
     } catch (err) { flash(err.message, true) }
     finally { setLoading(false); fileRef.current.value = '' }
+  }
+
+  async function handleDownloadTemplate(fmt) {
+    try { await api.downloadGuestTemplate(selectedId, fmt) }
+    catch (err) { flash(err.message, true) }
   }
 
   async function handleGenQR() {
@@ -2787,7 +3833,7 @@ export default function AdminPage() {
     setLoading(true)
     try {
       const res = await api.importGuestsFromUrl(selectedId, sheetUrl.trim())
-      flash(`${res.added} guests added, ${res.skipped} skipped.`)
+      flashImportResult(res)
       setGuests(await api.listGuests(selectedId))
       setSheetUrl('')
       setShowUrlInput(false)
@@ -2914,7 +3960,7 @@ export default function AdminPage() {
               <option value="">— choose an event —</option>
               {events.map((ev) => (
                 <option key={ev.id} value={ev.id}>
-                  {ev.name} — {ev.couples_name}
+                  {ev.couples_name ? `${ev.name} — ${ev.couples_name}` : ev.name}
                 </option>
               ))}
             </select>
@@ -2959,6 +4005,9 @@ export default function AdminPage() {
               { id: 'invite',   label: '✉️ Invite' },
               ...(event.seating_enabled ? [{ id: 'seating', label: 'Seating' }] : []),
               ...(event.menu_enabled    ? [{ id: 'menu',    label: 'Menu' }]    : []),
+              ...(event.logistics_enabled ? [{ id: 'logistics', label: '📦 Logistics' }] : []),
+              ...(event.registry_enabled ? [{ id: 'registry', label: '🎁 Registry' }] : []),
+              ...(event.venue_access_enabled ? [{ id: 'access', label: '🎟️ Access' }] : []),
             ]}
           />
 
@@ -3014,12 +4063,28 @@ export default function AdminPage() {
                   className="bg-white dark:bg-slate-700 border border-gray-300 dark:border-slate-700 text-gray-700 dark:text-slate-200 px-4 py-2 rounded-lg text-sm font-medium hover:bg-gray-50 dark:hover:bg-slate-700 disabled:opacity-50">
                   Upload CSV
                 </button>
-                <span className="text-xs text-gray-400 dark:text-slate-500 ml-2">first_name, last_name, email, phone</span>
+                <span className="text-xs text-gray-400 dark:text-slate-500 ml-2">
+                  {['first_name, last_name, email, phone',
+                    ...(event.venue_access_enabled ? ['ticket_type'] : []),
+                    ...(event.logistics_enabled ? ['ship_address…'] : [])].join(', ')}
+                </span>
               </div>
               <button onClick={() => setShowUrlInput((v) => !v)} disabled={loading}
                 className="bg-white dark:bg-slate-700 border border-gray-300 dark:border-slate-700 text-gray-700 dark:text-slate-200 px-4 py-2 rounded-lg text-sm font-medium hover:bg-gray-50 dark:hover:bg-slate-700 disabled:opacity-50">
                 📋 Import from Google Sheets / Excel
               </button>
+              <div className="flex items-center gap-1">
+                <button onClick={() => handleDownloadTemplate('xlsx')} disabled={loading}
+                  className="bg-white dark:bg-slate-700 border border-gray-300 dark:border-slate-700 text-gray-700 dark:text-slate-200 px-4 py-2 rounded-lg text-sm font-medium hover:bg-gray-50 dark:hover:bg-slate-700 disabled:opacity-50"
+                  title="Excel template with the columns this event imports — includes a ticket-type dropdown when Venue Access is on">
+                  ⬇ Download template
+                </button>
+                <button onClick={() => handleDownloadTemplate('csv')} disabled={loading}
+                  className="text-xs text-gray-400 dark:text-slate-500 hover:text-teal-600 dark:hover:text-teal-400 px-1 disabled:opacity-50"
+                  title="Same template as plain CSV">
+                  CSV
+                </button>
+              </div>
             </div>
 
             {/* Spreadsheet URL input */}
@@ -3132,6 +4197,18 @@ export default function AdminPage() {
             <MenuPanel eventId={selectedId} />
             <MenuDashboard eventId={selectedId} />
           </>}
+
+          {activeTab === 'logistics' && event.logistics_enabled && (
+            <LogisticsPanel eventId={selectedId} event={event} />
+          )}
+
+          {activeTab === 'registry' && event.registry_enabled && (
+            <RegistryPanel eventId={selectedId} event={event} />
+          )}
+
+          {activeTab === 'access' && event.venue_access_enabled && (
+            <AccessPanel eventId={selectedId} />
+          )}
 
           {/* Guest list */}
           {activeTab === 'guests' && guests.length === 0 && (

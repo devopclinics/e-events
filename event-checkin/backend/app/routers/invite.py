@@ -15,9 +15,10 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..database import get_db
-from ..models import Event, Guest, RSVPAnswer, RSVPQuestion
+from ..models import Event, Guest, RSVPAnswer, RSVPQuestion, Shipment, GuestShipment
 from ..schemas import (
     InviteGuestPrefill, InvitePageOut, InviteTokenPageOut,
+    InviteShippingOut, InviteShipmentNeed, ShippingAddressUpdate,
     RSVPConfirm, RSVPSubmit, RSVPTokenSubmit,
 )
 from services import messaging
@@ -93,6 +94,71 @@ async def _save_answers(
             db.add(RSVPAnswer(guest_id=guest_id, question_id=qid, answer=ans))
 
 
+async def _pre_shipments(event: Event, db: AsyncSession) -> list[Shipment]:
+    """Auto-add pre-event shipments for a logistics-enabled event. These drive
+    shipping-address + size collection on the public RSVP page. Curated
+    shipments (auto_add=False) are excluded so they stay admin-managed."""
+    if not event.logistics_enabled:
+        return []
+    return list((await db.execute(
+        select(Shipment)
+        .where(
+            Shipment.event_id == event.id,
+            Shipment.phase == "pre",
+            Shipment.auto_add.is_(True),
+        )
+        .order_by(Shipment.created_at)
+    )).scalars().all())
+
+
+async def _invite_shipping(event: Event, db: AsyncSession) -> InviteShippingOut | None:
+    shipments = await _pre_shipments(event, db)
+    if not shipments:
+        return None
+    import json as _json
+    needs = []
+    for s in shipments:
+        opts = None
+        if s.size_options:
+            try:
+                opts = _json.loads(s.size_options)
+            except Exception:
+                opts = None
+        needs.append(InviteShipmentNeed(
+            shipment_id=s.id, name=s.name,
+            collect_size=s.collect_size, size_options=opts,
+        ))
+    return InviteShippingOut(collect_address=True, shipments=needs)
+
+
+async def _save_shipping(
+    guest: Guest, event: Event,
+    shipping_address: ShippingAddressUpdate | None,
+    sizes: dict[str, str], db: AsyncSession,
+) -> None:
+    """Persist a guest's shipping address and ensure a GuestShipment line exists
+    on each pre-event shipment (with their chosen size). No-op without logistics."""
+    shipments = await _pre_shipments(event, db)
+    if not shipments:
+        return
+    if shipping_address is not None:
+        for k, v in shipping_address.model_dump(exclude_unset=True).items():
+            setattr(guest, k, (v.strip() if isinstance(v, str) else v) or None)
+    valid_ids = {s.id for s in shipments}
+    for s in shipments:
+        chosen = (sizes.get(s.id) or "").strip() or None
+        line = await db.scalar(
+            select(GuestShipment).where(
+                GuestShipment.shipment_id == s.id, GuestShipment.guest_id == guest.id
+            )
+        )
+        if line:
+            if chosen:
+                line.size = chosen
+        else:
+            db.add(GuestShipment(shipment_id=s.id, guest_id=guest.id, size=chosen))
+
+
 async def _invite_page_out(event: Event, db: AsyncSession) -> InvitePageOut:
     questions = (await db.execute(
         select(RSVPQuestion)
@@ -118,6 +184,9 @@ async def _invite_page_out(event: Event, db: AsyncSession) -> InvitePageOut:
         rsvp_count=count,
         deadline_passed=_deadline_passed(event),
         questions=list(questions),
+        shipping=await _invite_shipping(event, db),
+        registry_enabled=event.registry_enabled,
+        registry_token=event.registry_token,
     )
 
 
@@ -248,6 +317,7 @@ async def submit_rsvp(
     await db.flush()
 
     await _save_answers(guest.id, event_id, data.answers, db)
+    await _save_shipping(guest, event, data.shipping_address, data.sizes, db)
 
     await db.commit()
     await db.refresh(guest)
@@ -344,6 +414,8 @@ async def submit_invite_token_rsvp(
     guest.rsvp_status = data.status
     guest.rsvp_responded_at = datetime.utcnow()
     await _save_answers(guest.id, event.id, data.answers, db, replace=True)
+    if data.status == "confirmed":
+        await _save_shipping(guest, event, data.shipping_address, data.sizes, db)
 
     if data.status == "confirmed":
         if not guest.qr_generated_at:

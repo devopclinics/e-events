@@ -61,7 +61,7 @@ const features = [
       </svg>
     ),
     title: 'Seating & Menu',
-    desc: 'Assign tables and seats, capture meal choices, and track catering — all in one place for the big day.',
+    desc: 'Assign tables and seats, capture meal choices, and track catering — all in one place for the event.',
   },
   {
     icon: (

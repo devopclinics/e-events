@@ -11,7 +11,7 @@ router = APIRouter()
 
 async def _table_out(table: SeatingTable, db: AsyncSession) -> SeatingTableOut:
     count = await db.scalar(select(func.count(Guest.id)).where(Guest.table_id == table.id)) or 0
-    return SeatingTableOut(id=table.id, event_id=table.event_id, name=table.name, capacity=table.capacity, assigned_count=count)
+    return SeatingTableOut(id=table.id, event_id=table.event_id, name=table.name, capacity=table.capacity, category=table.category, assigned_count=count)
 
 
 # ── First-come-first-served seat picker (used by scanner.py at admit time) ────
@@ -128,11 +128,11 @@ async def list_tables(event_id: str, db: AsyncSession = Depends(get_db), _: User
 async def create_table(event_id: str, data: SeatingTableCreate, db: AsyncSession = Depends(get_db), _: User = Depends(require_paid_event_admin)):
     if not await db.get(Event, event_id):
         raise HTTPException(404, "Event not found")
-    table = SeatingTable(event_id=event_id, name=data.name, capacity=data.capacity)
+    table = SeatingTable(event_id=event_id, name=data.name, capacity=data.capacity, category=data.category)
     db.add(table)
     await db.commit()
     await db.refresh(table)
-    return SeatingTableOut(id=table.id, event_id=table.event_id, name=table.name, capacity=table.capacity, assigned_count=0)
+    return SeatingTableOut(id=table.id, event_id=table.event_id, name=table.name, capacity=table.capacity, category=table.category, assigned_count=0)
 
 
 @router.put("/{event_id}/tables/{table_id}", response_model=SeatingTableOut)
@@ -142,6 +142,7 @@ async def update_table(event_id: str, table_id: str, data: SeatingTableCreate, d
         raise HTTPException(404, "Table not found")
     table.name = data.name
     table.capacity = data.capacity
+    table.category = data.category
     await db.commit()
     await db.refresh(table)
     return await _table_out(table, db)
@@ -189,7 +190,7 @@ async def seating_chart(event_id: str, db: AsyncSession = Depends(get_db), _: Us
         for g in assigned:
             if g.seat_number not in assigned_nums or not (g.seat_number or "").isdigit() or int(g.seat_number) > t.capacity:
                 seats.append({"seat": g.seat_number, "guest_id": g.id, "name": f"{g.first_name} {g.last_name}", "admitted": g.admitted, "meal_served": g.meal_served, "is_vip": g.is_vip})
-        chart.append({"id": t.id, "name": t.name, "capacity": t.capacity, "seats": seats})
+        chart.append({"id": t.id, "name": t.name, "capacity": t.capacity, "category": t.category, "seats": seats})
     return chart
 
 

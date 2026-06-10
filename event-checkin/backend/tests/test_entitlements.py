@@ -42,6 +42,30 @@ async def test_free_event_blocks_seating(ctx):
 
 
 @pytest.mark.asyncio
+async def test_free_event_blocks_logistics(ctx):
+    # event_a is free by default → logistics is a paid feature → 402.
+    ctx.login(ctx.ids["user_a"])
+    r = await ctx.client.get(f"/api/events/{ctx.ids['event_a']}/shipments")
+    assert r.status_code == 402
+
+
+@pytest.mark.asyncio
+async def test_free_event_blocks_registry(ctx):
+    # event_a is free by default → registry is a paid feature → 402.
+    ctx.login(ctx.ids["user_a"])
+    r = await ctx.client.get(f"/api/events/{ctx.ids['event_a']}/registry/items")
+    assert r.status_code == 402
+
+
+@pytest.mark.asyncio
+async def test_free_event_blocks_access(ctx):
+    # event_a is free by default → venue access is a paid feature → 402.
+    ctx.login(ctx.ids["user_a"])
+    r = await ctx.client.get(f"/api/events/{ctx.ids['event_a']}/zones")
+    assert r.status_code == 402
+
+
+@pytest.mark.asyncio
 async def test_broadcast_out_of_credits_reported(ctx):
     # Make the seeded event paid but with zero credits, then broadcast SMS.
     from conftest import _Session

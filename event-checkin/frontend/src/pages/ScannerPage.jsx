@@ -2,6 +2,32 @@ import { useState, useEffect, useRef } from 'react'
 import { Html5Qrcode } from 'html5-qrcode'
 import { api } from '../api'
 
+function ZoneResultCard({ result, onReset }) {
+  const denied = result.denied || result.status === 'invalid'
+  const cfg = result.status === 'invalid'
+    ? { bg: 'bg-red-500', icon: '✕', heading: 'INVALID' }
+    : denied
+      ? { bg: 'bg-red-500', icon: '🚫', heading: 'ACCESS DENIED' }
+      : result.direction === 'out'
+        ? { bg: 'bg-slate-600', icon: '←', heading: 'EXIT RECORDED' }
+        : { bg: 'bg-green-500', icon: '✓', heading: 'ENTRY ALLOWED' }
+  return (
+    <div className="text-center">
+      <div className={`${cfg.bg} text-white rounded-xl py-6 px-4`}>
+        <div className="text-5xl mb-2">{cfg.icon}</div>
+        <div className="text-xl font-extrabold tracking-wide">{cfg.heading}</div>
+        {result.guest_name && <div className="mt-2 text-lg font-semibold">{result.guest_name}</div>}
+        {result.ticket_type && <div className="text-sm opacity-90 mt-0.5">{result.ticket_type}</div>}
+        {result.zone_name && <div className="text-sm opacity-90 mt-1">{result.zone_name}</div>}
+        {result.deny_reason && <div className="text-sm mt-2 bg-black/20 rounded px-2 py-1 inline-block">{result.deny_reason}</div>}
+        {result.message && !result.guest_name && <div className="text-sm mt-2">{result.message}</div>}
+        {!denied && result.occupancy != null && <div className="text-xs opacity-90 mt-2">Now inside this zone: {result.occupancy}</div>}
+      </div>
+      <button onClick={onReset} className="mt-4 w-full bg-indigo-600 text-white py-3 rounded-xl font-bold hover:bg-indigo-700">Scan next</button>
+    </div>
+  )
+}
+
 function ResultCard({ result, onReset }) {
   const cfg = {
     admitted:        { bg: 'bg-green-500',  icon: '✓', heading: 'ADMITTED' },
@@ -232,6 +258,14 @@ export default function ScannerPage() {
   const [result, setResult] = useState(null)
   const [loading, setLoading] = useState(false)
   const [scanKey, setScanKey] = useState(0)
+  // Venue-access mode (additive — legacy scanning is unchanged when off).
+  const [zones, setZones] = useState([])
+  const [zoneId, setZoneId] = useState('')
+  const [direction, setDirection] = useState('in')
+
+  const selectedEvent = events.find((e) => e.id === eventId)
+  const accessMode = !!selectedEvent?.venue_access_enabled
+  const selectedZone = zones.find((z) => z.id === zoneId)
 
   useEffect(() => {
     api.listEvents().then((evs) => {
@@ -240,14 +274,30 @@ export default function ScannerPage() {
     })
   }, [])
 
+  // Load zones only for venue-access events.
+  useEffect(() => {
+    setZoneId(''); setZones([])
+    if (eventId && selectedEvent?.venue_access_enabled) {
+      api.listZones(eventId).then(setZones).catch(() => {})
+    }
+  }, [eventId]) // eslint-disable-line
+
   async function handleScan(raw) {
     const token = extractToken(raw)
     setLoading(true)
     try {
-      const res = await api.scan(token)
-      setResult(res)
+      if (accessMode) {
+        if (!zoneId) { setResult({ zoneMode: true, status: 'invalid', message: 'Pick a zone first.' }); return }
+        const body = { zone_id: zoneId }
+        if (selectedZone?.direction_mode === 'both') body.direction = direction
+        const res = await api.scanZone(token, body)
+        setResult({ zoneMode: true, ...res })
+      } else {
+        const res = await api.scan(token)
+        setResult(res)
+      }
     } catch (err) {
-      setResult({ status: 'invalid', message: err.message })
+      setResult({ zoneMode: accessMode, status: 'invalid', message: err.message })
     } finally {
       setLoading(false)
     }
@@ -272,9 +322,30 @@ export default function ScannerPage() {
           >
             <option value="">— select event —</option>
             {events.map((ev) => (
-              <option key={ev.id} value={ev.id}>{ev.name} — {ev.couples_name}</option>
+              <option key={ev.id} value={ev.id}>{ev.couples_name ? `${ev.name} — ${ev.couples_name}` : ev.name}</option>
             ))}
           </select>
+        </div>
+      )}
+
+      {accessMode && (
+        <div className="bg-white dark:bg-slate-800 dark:border dark:border-slate-700/60 rounded-xl shadow p-4 space-y-3">
+          <div>
+            <label className="block text-xs font-semibold text-gray-600 dark:text-slate-300 mb-1">🎟️ Scanning zone</label>
+            <select className="w-full border border-gray-300 dark:border-slate-700 rounded-lg px-3 py-2 text-sm bg-white dark:bg-slate-700 text-gray-900 dark:text-white"
+              value={zoneId} onChange={(e) => setZoneId(e.target.value)}>
+              <option value="">— select zone —</option>
+              {zones.map((z) => <option key={z.id} value={z.id}>{z.name} · inside {z.occupancy}{z.capacity != null ? `/${z.capacity}` : ''}</option>)}
+            </select>
+          </div>
+          {selectedZone?.direction_mode === 'both' && (
+            <div className="flex gap-2">
+              {[['in', 'Entry →'], ['out', '← Exit']].map(([d, label]) => (
+                <button key={d} onClick={() => setDirection(d)}
+                  className={`flex-1 py-2 rounded-lg text-sm font-semibold ${direction === d ? 'bg-indigo-600 text-white' : 'bg-gray-100 dark:bg-slate-700 text-gray-600 dark:text-slate-300'}`}>{label}</button>
+              ))}
+            </div>
+          )}
         </div>
       )}
 
@@ -282,11 +353,12 @@ export default function ScannerPage() {
         {loading && (
           <div className="text-center py-8">
             <div className="inline-block w-10 h-10 border-4 border-indigo-500 border-t-transparent rounded-full animate-spin" />
-            <p className="mt-3 text-gray-600 dark:text-slate-400">Checking in…</p>
+            <p className="mt-3 text-gray-600 dark:text-slate-400">Scanning…</p>
           </div>
         )}
 
-        {!loading && result && <ResultCard result={result} onReset={reset} />}
+        {!loading && result && result.zoneMode && <ZoneResultCard result={result} onReset={reset} />}
+        {!loading && result && !result.zoneMode && <ResultCard result={result} onReset={reset} />}
 
         {!loading && !result && (
           <div>

@@ -53,12 +53,27 @@ SCHEMA_PATCHES: list[str] = [
     "WHERE NOT EXISTS (SELECT 1 FROM organizations WHERE id = '00000000-0000-0000-0000-000000000001')",
     # 2) Attach orphan events to the default org.
     "UPDATE events SET org_id = '00000000-0000-0000-0000-000000000001' WHERE org_id IS NULL",
-    # 3) Membership for every existing user (legacy admins -> owner, else staff).
+    # 3) Membership in the default org for every PRE-EXISTING (legacy) user.
+    #    CRITICAL: the cutoff makes this legacy-only. Without it this runs every
+    #    deploy and auto-enrolls brand-new signups (who already have their own
+    #    org) as staff in the shared default org — a cross-tenant leak letting
+    #    them see other tenants' events. New users get only their personal org
+    #    (provisioned in get_current_user); they must never land here.
     "INSERT INTO memberships (id, org_id, user_id, role, created_at) "
     "SELECT gen_random_uuid()::text, '00000000-0000-0000-0000-000000000001', u.id, "
     "CASE WHEN u.role = 'admin' THEN 'owner' ELSE 'staff' END, now() "
-    "FROM users u WHERE NOT EXISTS ("
+    "FROM users u WHERE u.created_at < TIMESTAMP '2026-06-07 02:30:00' AND NOT EXISTS ("
     "SELECT 1 FROM memberships m WHERE m.org_id = '00000000-0000-0000-0000-000000000001' AND m.user_id = u.id)",
+    # 3b) Clean up leaks already created by the un-cutoff'd step 3: remove the
+    #     auto-added default-org STAFF membership from any post-cutoff self-signup
+    #     who owns their own org. Idempotent. Leaves legacy members, deliberate
+    #     'admin'/'owner' grants, and invite-only users (no own org) untouched.
+    "DELETE FROM memberships m USING users u "
+    "WHERE m.user_id = u.id "
+    "AND m.org_id = '00000000-0000-0000-0000-000000000001' AND m.role = 'staff' "
+    "AND u.created_at >= TIMESTAMP '2026-06-07 02:30:00' "
+    "AND EXISTS (SELECT 1 FROM memberships o WHERE o.user_id = m.user_id "
+    "AND o.role = 'owner' AND o.org_id <> '00000000-0000-0000-0000-000000000001')",
     # 4) Operator superadmin (no-op until that account exists; D3 also sets it at sign-in).
     "UPDATE users SET is_platform_superadmin = TRUE WHERE email = 'info@devopclinics.com'",
     # 5) D4: every event now has an org (backfilled above + create_event stamps it).

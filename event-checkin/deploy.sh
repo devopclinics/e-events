@@ -224,9 +224,19 @@ if $DO_DEPLOY; then
   step "5/6  Running DB migration + schema verification"
   info "Ensuring db service is up..."
   APP_VERSION="$VERSION" docker compose -f "$PROD_COMPOSE" up -d db
+
+  # DDL such as ALTER TABLE ... SET NOT NULL needs strong Postgres locks. If the
+  # currently running backend is still serving requests, it can deadlock with the
+  # one-off migration container. Stop only the live backend here; on failure we
+  # start the same stopped container again instead of recreating production.
+  info "Stopping live backend during schema migration to avoid database lock deadlocks..."
+  APP_VERSION="$VERSION" docker compose -f "$PROD_COMPOSE" stop backend
+
   info "Applying schema patches via new backend image..."
   if ! APP_VERSION="$VERSION" docker compose -f "$PROD_COMPOSE" \
         run --rm --no-deps backend python -m app.db_migrate; then
+    warn "Migration failed — restarting previously running backend container..."
+    APP_VERSION="$VERSION" docker compose -f "$PROD_COMPOSE" start backend || true
     die "Migration failed — production NOT swapped. Inspect output above."
   fi
   ok "Migration applied and verified"

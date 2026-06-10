@@ -62,7 +62,15 @@ SCHEMA_PATCHES: list[str] = [
     # 4) Operator superadmin (no-op until that account exists; D3 also sets it at sign-in).
     "UPDATE users SET is_platform_superadmin = TRUE WHERE email = 'info@devopclinics.com'",
     # 5) D4: every event now has an org (backfilled above + create_event stamps it).
-    "ALTER TABLE events ALTER COLUMN org_id SET NOT NULL",
+    #    Guarded: only take the AccessExclusiveLock when org_id is still nullable
+    #    (a not-yet-migrated DB). On already-migrated DBs this is a no-op and
+    #    grabs no lock — a bare SET NOT NULL re-locks `events` every deploy and
+    #    deadlocks against the live backend's reads.
+    "DO $$ BEGIN "
+    "IF EXISTS (SELECT 1 FROM information_schema.columns "
+    "WHERE table_name = 'events' AND column_name = 'org_id' AND is_nullable = 'YES') THEN "
+    "ALTER TABLE events ALTER COLUMN org_id SET NOT NULL; "
+    "END IF; END $$",
     # 6) Phase 2: grandfather all PRE-EXISTING events to a comp (unlimited, paid)
     #    tier so entitlement gates never break events created before billing.
     #    Fixed cutoff → idempotent and never touches events created afterward.

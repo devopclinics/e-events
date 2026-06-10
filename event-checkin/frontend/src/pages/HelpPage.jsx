@@ -208,18 +208,21 @@ function Topic({ t, open, onToggle, query }) {
   )
 }
 
-export default function HelpPage() {
+export default function HelpPage({ publicMode = false }) {
   const { user } = useAuth()
   const isSuper = !!user?.is_platform_superadmin
   const isAdmin = user?.role === 'admin'
 
   const roles = useMemo(() => {
+    // Public /guide: show the organizer/staff/guest guides to anyone (no
+    // operator section, no account required).
+    if (publicMode) return ['organizer', 'staff', 'guest']
     const r = []
     if (isAdmin || isSuper) r.push('organizer')
     r.push('staff', 'guest')
     if (isSuper) r.push('operator')
     return r
-  }, [isAdmin, isSuper])
+  }, [isAdmin, isSuper, publicMode])
 
   const [role, setRole] = useState(roles[0] || 'guest')
   const [query, setQuery] = useState('')
@@ -250,6 +253,20 @@ export default function HelpPage() {
 
   return (
     <div className="max-w-5xl mx-auto px-4 py-8">
+      {/* Public header — /guide has no app Nav around it */}
+      {publicMode && (
+        <div className="flex items-center justify-between mb-6">
+          <Link to="/" className="flex items-center gap-2 font-bold text-lg text-slate-900 dark:text-white tracking-tight">
+            <span className="grid h-8 w-8 place-items-center rounded-md bg-teal-600 text-white text-sm">EQ</span>
+            EventQR
+          </Link>
+          <div className="flex items-center gap-1 text-sm">
+            <Link to="/pricing" className="px-3 py-2 rounded-md text-slate-600 dark:text-slate-300 hover:text-teal-700 dark:hover:text-teal-300">Pricing</Link>
+            <Link to="/login" className="px-3 py-2 rounded-md text-slate-600 dark:text-slate-300 hover:text-teal-700 dark:hover:text-teal-300">Sign in</Link>
+            <Link to="/register" className="px-4 py-2 rounded-lg bg-teal-600 text-white font-semibold hover:bg-teal-700">Get started</Link>
+          </div>
+        </div>
+      )}
       {/* Hero */}
       <div className="rounded-2xl bg-gradient-to-br from-teal-600 to-cyan-700 text-white p-7 sm:p-9 mb-6">
         <h1 className="text-2xl sm:text-3xl font-extrabold">Help &amp; How-To</h1>
@@ -267,6 +284,19 @@ export default function HelpPage() {
           ))}
         </div>
       </div>
+
+      {/* Getting-started video — shown on the organizer guide */}
+      {role === 'organizer' && (
+        <div className="mb-6 rounded-2xl overflow-hidden border border-slate-200 dark:border-slate-700 bg-black">
+          <video
+            src="/guide/getting-started.webm"
+            controls
+            preload="metadata"
+            poster="/guide/admin-overview.png"
+            className="w-full block aspect-video"
+          />
+        </div>
+      )}
 
       {/* Search */}
       <div className="relative mb-6">

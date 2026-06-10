@@ -175,6 +175,8 @@ function AppRoutes() {
       {/* Public marketing pages — no auth required */}
       <Route path="/pricing" element={<PricingPage />} />
       <Route path="/refund-policy" element={<RefundPolicyPage />} />
+      {/* Unlisted public help — shareable with prospects, no account needed */}
+      <Route path="/guide" element={<HelpPage publicMode />} />
 
       {/* Landing page: show to guests, redirect logged-in users */}
       <Route path="/"

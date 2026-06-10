@@ -154,30 +154,31 @@ function TrialRow({ req, events, plans, onResolve }) {
       </div>
       <div className="text-xs text-slate-600 dark:text-slate-300 grid sm:grid-cols-2 gap-x-6 gap-y-1">
         <span><strong>Contact:</strong> {req.contact_name}</span>
+        <span><strong>Phone:</strong> {req.phone || '—'}</span>
         <span><strong>Event:</strong> {req.event_name || '—'}</span>
         <span><strong>Expected guests:</strong> {req.guest_count ?? '—'}</span>
-        <span><strong>Wants:</strong> {req.use_case || '—'}</span>
+        <span className="sm:col-span-2"><strong>Wants:</strong> {req.use_case || '—'}</span>
       </div>
 
       <div className="flex items-end gap-3 flex-wrap border-t dark:border-slate-700 pt-3">
         <div>
-          <label className="block text-[11px] font-semibold text-slate-500 dark:text-slate-400 mb-1">Comp which event</label>
+          <label className="block text-[11px] font-semibold text-slate-500 dark:text-slate-400 mb-1">Apply to event <span className="font-normal">(optional)</span></label>
           <select value={eventId} onChange={(e) => setEventId(e.target.value)} className="border dark:border-slate-600 rounded px-2 py-1 text-xs bg-white dark:bg-slate-700 dark:text-white">
-            <option value="">— none —</option>
+            <option value="">{events.length ? '— their next event —' : '— no events yet —'}</option>
             {events.map((e) => <option key={e.id} value={e.id}>{e.name}{e.is_paid ? ` (paid)` : ''}</option>)}
           </select>
         </div>
         <div>
           <label className="block text-[11px] font-semibold text-slate-500 dark:text-slate-400 mb-1">Tier</label>
-          <select value={tier} onChange={(e) => setTier(e.target.value)} disabled={!eventId} className="border dark:border-slate-600 rounded px-2 py-1 text-xs bg-white dark:bg-slate-700 dark:text-white disabled:opacity-40">
+          <select value={tier} onChange={(e) => setTier(e.target.value)} className="border dark:border-slate-600 rounded px-2 py-1 text-xs bg-white dark:bg-slate-700 dark:text-white">
             <option value="">— none —</option>
             {plans.map((p) => <option key={p.key} value={p.key}>{p.key}</option>)}
           </select>
         </div>
         <div>
           <label className="block text-[11px] font-semibold text-slate-500 dark:text-slate-400 mb-1">Credits</label>
-          <input value={credits} onChange={(e) => setCredits(e.target.value)} disabled={!eventId} type="number" placeholder="0"
-            className="w-20 border dark:border-slate-600 rounded px-2 py-1 text-xs bg-white dark:bg-slate-700 dark:text-white disabled:opacity-40" />
+          <input value={credits} onChange={(e) => setCredits(e.target.value)} type="number" placeholder="0"
+            className="w-20 border dark:border-slate-600 rounded px-2 py-1 text-xs bg-white dark:bg-slate-700 dark:text-white" />
         </div>
         <input value={note} onChange={(e) => setNote(e.target.value)} placeholder="Note (optional)"
           className="flex-1 min-w-[140px] border dark:border-slate-600 rounded px-2 py-1 text-xs bg-white dark:bg-slate-700 dark:text-white" />

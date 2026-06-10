@@ -3673,7 +3673,7 @@ function TrialBanner({ events, user }) {
   const [tiers, setTiers] = useState([])
   const [requests, setRequests] = useState(null)   // null = loading
   const [showForm, setShowForm] = useState(false)
-  const [form, setForm] = useState({ contact_name: '', event_name: '', guest_count: '', use_case: '' })
+  const [form, setForm] = useState({ contact_name: '', phone: '', event_name: '', guest_count: '', use_case: '' })
   const [busy, setBusy] = useState(false)
   const [msg, setMsg] = useState('')
 
@@ -3698,6 +3698,7 @@ function TrialBanner({ events, user }) {
     try {
       await api.submitTrialRequest({
         contact_name: form.contact_name,
+        phone: form.phone || null,
         event_name: form.event_name || null,
         guest_count: form.guest_count ? Number(form.guest_count) : null,
         use_case: form.use_case || null,
@@ -3761,6 +3762,11 @@ function TrialBanner({ events, user }) {
               <span className="text-slate-600 dark:text-slate-300 text-xs font-semibold">Your name</span>
               <input value={form.contact_name} onChange={(e) => setForm((f) => ({ ...f, contact_name: e.target.value }))}
                 className="mt-1 w-full border border-gray-300 dark:border-slate-700 rounded-lg px-3 py-2 text-sm bg-white dark:bg-slate-900 text-slate-900 dark:text-white" placeholder="Jane Doe" />
+            </label>
+            <label className="block text-sm">
+              <span className="text-slate-600 dark:text-slate-300 text-xs font-semibold">Phone</span>
+              <input value={form.phone} onChange={(e) => setForm((f) => ({ ...f, phone: e.target.value }))}
+                className="mt-1 w-full border border-gray-300 dark:border-slate-700 rounded-lg px-3 py-2 text-sm bg-white dark:bg-slate-900 text-slate-900 dark:text-white" placeholder="+1 832 555 0100" />
             </label>
             <label className="block text-sm">
               <span className="text-slate-600 dark:text-slate-300 text-xs font-semibold">Event</span>

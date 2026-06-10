@@ -17,6 +17,10 @@ class Organization(Base):
     currency: Mapped[str] = mapped_column(String(10), default="USD")    # "USD" | "NGN"
     plan: Mapped[str] = mapped_column(String(50), default="free")
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    # Pending trial grant from an approved TrialRequest when the org had no event
+    # yet. Consumed (applied + cleared) by the next event the org creates.
+    trial_tier: Mapped[str | None] = mapped_column(String(50), nullable=True)
+    trial_credits: Mapped[int | None] = mapped_column(Integer, nullable=True)
 
 
 class Membership(Base):
@@ -487,6 +491,7 @@ class TrialRequest(Base):
     org_id: Mapped[str] = mapped_column(String(36), ForeignKey("organizations.id"), index=True)
     user_id: Mapped[str] = mapped_column(String(36), ForeignKey("users.id"))
     contact_name: Mapped[str] = mapped_column(String(255))
+    phone: Mapped[str | None] = mapped_column(String(50), nullable=True)
     event_name: Mapped[str | None] = mapped_column(String(255), nullable=True)
     guest_count: Mapped[int | None] = mapped_column(Integer, nullable=True)
     use_case: Mapped[str | None] = mapped_column(Text, nullable=True)

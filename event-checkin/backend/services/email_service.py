@@ -89,6 +89,18 @@ async def _send(msg: MIMEMultipart):
         logger.exception("Failed to send email to %s", msg["To"])
 
 
+async def send_simple_email(to_email: str, subject: str, html_body: str):
+    """Lightweight HTML email — used for trial-request notifications."""
+    if not to_email:
+        return
+    msg = MIMEMultipart("alternative")
+    msg["Subject"] = subject
+    msg["From"] = settings.email_from
+    msg["To"] = to_email
+    msg.attach(MIMEText(html_body, "html"))
+    await _send(msg)
+
+
 async def send_invite_email(
     guest_data: dict,
     event_name: str,

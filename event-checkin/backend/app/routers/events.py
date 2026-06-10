@@ -5,7 +5,7 @@ from fastapi import APIRouter, BackgroundTasks, Depends, File, HTTPException, Up
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 from ..database import get_db
-from ..models import Event, EventUser, Guest, Membership, RSVPQuestion, User
+from ..models import Event, EventUser, Guest, Membership, Organization, RSVPQuestion, User
 from ..schemas import (
     EventCreate, EventUpdate, EventOut, EventMemberOut, AssignUserRequest,
     OrgMemberInvite, OrgMemberOut, MemberRoleUpdate, UserOut, EventSourceUpdate,
@@ -71,6 +71,21 @@ async def create_event(
     await db.flush()
     # Auto-assign creator so they appear in their own event member list
     db.add(EventUser(event_id=event.id, user_id=current_user.id))
+
+    # Consume a pending trial grant (from an approved TrialRequest made before
+    # the org had any event) — apply it to this first event, then clear it.
+    org = await db.get(Organization, org_id)
+    if org and (org.trial_tier or org.trial_credits):
+        from ..billing import get_plan, apply_purchase
+        if org.trial_tier:
+            plan = await get_plan(db, org.trial_tier)
+            if plan:
+                apply_purchase(event, plan)
+        if org.trial_credits:
+            event.message_credits = (event.message_credits or 0) + int(org.trial_credits)
+        org.trial_tier = None
+        org.trial_credits = None
+
     await db.commit()
     await db.refresh(event)
     return event

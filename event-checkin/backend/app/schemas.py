@@ -162,6 +162,7 @@ class GrantRequest(BaseModel):
 
 class TrialRequestCreate(BaseModel):
     contact_name: str
+    phone: Optional[str] = None
     event_name: Optional[str] = None
     guest_count: Optional[int] = None
     use_case: Optional[str] = None
@@ -173,6 +174,7 @@ class TrialRequestOut(BaseModel):
     id: str
     org_id: str
     contact_name: str
+    phone: Optional[str] = None
     event_name: Optional[str] = None
     guest_count: Optional[int] = None
     use_case: Optional[str] = None

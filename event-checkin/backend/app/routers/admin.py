@@ -5,7 +5,7 @@ without code: see all tenants, comp/credit events, manage operators, edit pricin
 """
 from datetime import datetime
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks
 from sqlalchemy import select, desc
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -15,6 +15,7 @@ from ..schemas import (GrantRequest, OperatorInvite, PlanUpsert, UserOut,
                        AffiliateStoreIn, AffiliateStoreOut, TrialRequestOut, TrialResolve)
 from ..auth import require_superadmin
 from ..billing import get_plan, apply_purchase
+from services.email_service import send_simple_email
 
 router = APIRouter()
 
@@ -220,29 +221,45 @@ async def list_trial_requests(status: str | None = None, _: User = Depends(requi
 
 @router.post("/trial-requests/{req_id}/resolve", response_model=TrialRequestOut)
 async def resolve_trial_request(req_id: str, body: TrialResolve,
+                                background_tasks: BackgroundTasks,
                                 operator: User = Depends(require_superadmin),
                                 db: AsyncSession = Depends(get_db)):
-    """Approve (optionally comping an event onto a tier / adding credits) or
-    decline a trial request. Reuses the same grant mechanism as /grant."""
+    """Approve or decline a trial request. On approve, grant a tier and/or
+    credits either to a specific event (comp now) or — when the org has no
+    event yet — to the org, to auto-apply to the next event they create."""
     req = await db.get(TrialRequest, req_id)
     if not req:
         raise HTTPException(404, "Request not found")
     if req.status != "pending":
         raise HTTPException(409, "This request has already been resolved.")
 
+    granted_desc = ""
     if body.action == "approve":
-        # Optional comp: operator may pick one of the org's events to grant.
+        plan = None
+        if body.tier:
+            plan = await get_plan(db, body.tier)
+            if not plan:
+                raise HTTPException(400, "Unknown tier")
         if body.event_id:
+            # Comp a specific existing event now.
             event = await db.get(Event, body.event_id)
             if not event or event.org_id != req.org_id:
                 raise HTTPException(400, "Event not found in this organization.")
-            if body.tier:
-                plan = await get_plan(db, body.tier)
-                if not plan:
-                    raise HTTPException(400, "Unknown tier")
+            if plan:
                 apply_purchase(event, plan)
             if body.add_credits:
                 event.message_credits = (event.message_credits or 0) + int(body.add_credits)
+            granted_desc = f"applied to “{event.name}”"
+        elif body.tier or body.add_credits:
+            # No event yet — stash on the org; consumed by their next event.
+            org = await db.get(Organization, req.org_id)
+            if not org:
+                raise HTTPException(400, "Organization not found.")
+            if body.tier:
+                org.trial_tier = body.tier
+            if body.add_credits:
+                org.trial_credits = (org.trial_credits or 0) + int(body.add_credits)
+            granted_desc = "saved to your account — it applies to the next event you create"
         req.status = "approved"
     else:
         req.status = "declined"
@@ -252,4 +269,26 @@ async def resolve_trial_request(req_id: str, body: TrialResolve,
     req.resolution_note = (body.note or "").strip() or None
     await db.commit()
     await db.refresh(req)
+
+    # Email the requester the outcome (best-effort).
+    requester = await db.get(User, req.user_id)
+    if requester and requester.email:
+        if req.status == "approved":
+            extra = f" Your trial has been {granted_desc}." if granted_desc else ""
+            note = f"<p>Note: {req.resolution_note}</p>" if req.resolution_note else ""
+            background_tasks.add_task(
+                send_simple_email, requester.email,
+                "Your EventQR trial is approved 🎉",
+                f"<p>Hi {req.contact_name},</p><p>Good news — your trial request is approved."
+                f"{extra}</p>{note}<p>Sign in to get started.</p><p>— The EventQR team</p>",
+            )
+        else:
+            note = f"<p>{req.resolution_note}</p>" if req.resolution_note else ""
+            background_tasks.add_task(
+                send_simple_email, requester.email,
+                "About your EventQR trial request",
+                f"<p>Hi {req.contact_name},</p><p>Thanks for your interest. We're not able to "
+                f"approve this trial request right now.</p>{note}"
+                "<p>You can still start free, or reply with more details.</p>",
+            )
     return await _trial_out(req, db)

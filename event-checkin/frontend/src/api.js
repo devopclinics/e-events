@@ -234,8 +234,14 @@ export const api = {
   // Public marketing pricing (no auth)
   getPricing:      (currency = 'USD') => fetch(`/api/billing/pricing?currency=${currency}`).then((r) => r.json()),
 
+  // Trial-credit requests (customer)
+  submitTrialRequest:  (body)          => req('POST', '/trial-requests', body),
+  myTrialRequests:     ()              => req('GET',  '/trial-requests/mine'),
+
   // Superadmin console
   adminOverview:       ()              => req('GET',    '/admin/overview'),
+  adminListTrials:     ()              => req('GET',    '/admin/trial-requests'),
+  adminResolveTrial:   (id, body)      => req('POST',   `/admin/trial-requests/${id}/resolve`, body),
   adminGrant:          (eventId, body) => req('POST',   `/admin/events/${eventId}/grant`, body),
   adminListOperators:  ()              => req('GET',    '/admin/operators'),
   adminAddOperator:    (email)         => req('POST',   '/admin/operators', { email }),

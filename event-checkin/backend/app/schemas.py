@@ -160,6 +160,39 @@ class GrantRequest(BaseModel):
     add_credits: Optional[int] = None   # add message credits
 
 
+class TrialRequestCreate(BaseModel):
+    contact_name: str
+    event_name: Optional[str] = None
+    guest_count: Optional[int] = None
+    use_case: Optional[str] = None
+
+
+class TrialRequestOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: str
+    org_id: str
+    contact_name: str
+    event_name: Optional[str] = None
+    guest_count: Optional[int] = None
+    use_case: Optional[str] = None
+    status: str
+    created_at: datetime
+    resolved_at: Optional[datetime] = None
+    resolution_note: Optional[str] = None
+    # Populated for the operator console:
+    org_name: Optional[str] = None
+    requester_email: Optional[str] = None
+
+
+class TrialResolve(BaseModel):
+    action: Literal["approve", "decline"]
+    event_id: Optional[str] = None      # which event to comp (approve only)
+    tier: Optional[str] = None          # tier to comp onto
+    add_credits: Optional[int] = None   # message credits to add
+    note: Optional[str] = None
+
+
 class OperatorInvite(BaseModel):
     email: EmailStr
 

@@ -476,6 +476,27 @@ class AffiliateStore(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
 
 
+class TrialRequest(Base):
+    """A customer's request to try paid features for free. Submitted from the
+    onboarding banner; an operator approves it in the Console by comping one of
+    the org's events (reusing the existing grant mechanism). Mark-only — no
+    automatic grant, the operator chooses tier/credits per request."""
+    __tablename__ = "trial_requests"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+    org_id: Mapped[str] = mapped_column(String(36), ForeignKey("organizations.id"), index=True)
+    user_id: Mapped[str] = mapped_column(String(36), ForeignKey("users.id"))
+    contact_name: Mapped[str] = mapped_column(String(255))
+    event_name: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    guest_count: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    use_case: Mapped[str | None] = mapped_column(Text, nullable=True)
+    status: Mapped[str] = mapped_column(String(20), default="pending")  # pending | approved | declined
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, index=True)
+    resolved_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    resolved_by: Mapped[str | None] = mapped_column(String(36), ForeignKey("users.id"), nullable=True)
+    resolution_note: Mapped[str | None] = mapped_column(Text, nullable=True)
+
+
 # ── Venue Access Intelligence add-on ──────────────────────────────────────────
 
 class Zone(Base):

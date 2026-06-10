@@ -5,6 +5,7 @@ import { useAuth } from '../context/AuthContext'
 
 const TABS = [
   { id: 'overview', label: 'Overview' },
+  { id: 'trials', label: 'Trial requests' },
   { id: 'pricing', label: 'Pricing' },
   { id: 'affiliates', label: 'Affiliate stores' },
   { id: 'operators', label: 'Operators' },
@@ -80,6 +81,113 @@ function EventRow({ ev, plans, onGrant }) {
         className="bg-teal-600 text-white px-3 py-1.5 rounded text-xs font-semibold disabled:opacity-40 hover:bg-teal-700">
         Apply
       </button>
+    </div>
+  )
+}
+
+// ── Trial requests: approve (comp an event) / decline ───────────────────────
+function TrialsTab() {
+  const [reqs, setReqs] = useState(null)
+  const [orgs, setOrgs] = useState([])
+  const [plans, setPlans] = useState([])
+  const [msg, setMsg] = useState('')
+
+  function load() { api.adminListTrials().then(setReqs).catch((e) => setMsg(e.message)) }
+  useEffect(() => {
+    load()
+    api.adminOverview().then(setOrgs).catch(() => {})
+    api.adminListPlans().then((p) => setPlans(p.filter((x) => x.kind === 'tier'))).catch(() => {})
+  }, [])
+
+  async function resolve(id, body) {
+    setMsg('')
+    try { await api.adminResolveTrial(id, body); load(); setMsg('Done.'); setTimeout(() => setMsg(''), 2500) }
+    catch (e) { setMsg(e.message) }
+  }
+
+  if (!reqs) return <div className="text-sm text-slate-500">Loading…</div>
+  const pending = reqs.filter((r) => r.status === 'pending')
+  const resolved = reqs.filter((r) => r.status !== 'pending')
+
+  return (
+    <div className="space-y-5">
+      <p className="text-xs text-slate-500 dark:text-slate-400 bg-slate-100 dark:bg-slate-800 rounded-lg px-3 py-2">
+        Approve a request by comping one of the org’s events onto a tier and/or adding credits — same as the Overview grant. Declining just records the decision.
+      </p>
+      {msg && <div className="text-sm text-teal-600">{msg}</div>}
+
+      {pending.length === 0 && <div className="text-sm text-slate-400">No pending requests.</div>}
+      {pending.map((r) => {
+        const org = orgs.find((o) => o.id === r.org_id)
+        return <TrialRow key={r.id} req={r} events={org?.events || []} plans={plans} onResolve={resolve} />
+      })}
+
+      {resolved.length > 0 && (
+        <div className="pt-2">
+          <div className="text-xs font-semibold uppercase tracking-wide text-slate-400 mb-2">Resolved</div>
+          <div className="space-y-1">
+            {resolved.map((r) => (
+              <div key={r.id} className="text-xs text-slate-500 dark:text-slate-400 flex gap-2 items-center">
+                <span className={`px-2 py-0.5 rounded-full font-medium ${r.status === 'approved' ? 'bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-300' : 'bg-gray-100 text-gray-500 dark:bg-slate-700'}`}>{r.status}</span>
+                <span className="font-medium text-slate-600 dark:text-slate-300">{r.org_name}</span>
+                <span>· {r.event_name || '—'} · {r.contact_name}</span>
+                {r.resolution_note && <span className="italic">“{r.resolution_note}”</span>}
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
+
+function TrialRow({ req, events, plans, onResolve }) {
+  const [eventId, setEventId] = useState('')
+  const [tier, setTier] = useState('')
+  const [credits, setCredits] = useState('')
+  const [note, setNote] = useState('')
+  return (
+    <div className="bg-white dark:bg-slate-800 rounded-xl shadow p-4 border dark:border-slate-700 space-y-3">
+      <div className="flex flex-wrap items-baseline gap-x-2 gap-y-1 text-sm">
+        <span className="font-semibold dark:text-white">{req.org_name}</span>
+        <span className="text-slate-400 text-xs">· {req.requester_email}</span>
+      </div>
+      <div className="text-xs text-slate-600 dark:text-slate-300 grid sm:grid-cols-2 gap-x-6 gap-y-1">
+        <span><strong>Contact:</strong> {req.contact_name}</span>
+        <span><strong>Event:</strong> {req.event_name || '—'}</span>
+        <span><strong>Expected guests:</strong> {req.guest_count ?? '—'}</span>
+        <span><strong>Wants:</strong> {req.use_case || '—'}</span>
+      </div>
+
+      <div className="flex items-end gap-3 flex-wrap border-t dark:border-slate-700 pt-3">
+        <div>
+          <label className="block text-[11px] font-semibold text-slate-500 dark:text-slate-400 mb-1">Comp which event</label>
+          <select value={eventId} onChange={(e) => setEventId(e.target.value)} className="border dark:border-slate-600 rounded px-2 py-1 text-xs bg-white dark:bg-slate-700 dark:text-white">
+            <option value="">— none —</option>
+            {events.map((e) => <option key={e.id} value={e.id}>{e.name}{e.is_paid ? ` (paid)` : ''}</option>)}
+          </select>
+        </div>
+        <div>
+          <label className="block text-[11px] font-semibold text-slate-500 dark:text-slate-400 mb-1">Tier</label>
+          <select value={tier} onChange={(e) => setTier(e.target.value)} disabled={!eventId} className="border dark:border-slate-600 rounded px-2 py-1 text-xs bg-white dark:bg-slate-700 dark:text-white disabled:opacity-40">
+            <option value="">— none —</option>
+            {plans.map((p) => <option key={p.key} value={p.key}>{p.key}</option>)}
+          </select>
+        </div>
+        <div>
+          <label className="block text-[11px] font-semibold text-slate-500 dark:text-slate-400 mb-1">Credits</label>
+          <input value={credits} onChange={(e) => setCredits(e.target.value)} disabled={!eventId} type="number" placeholder="0"
+            className="w-20 border dark:border-slate-600 rounded px-2 py-1 text-xs bg-white dark:bg-slate-700 dark:text-white disabled:opacity-40" />
+        </div>
+        <input value={note} onChange={(e) => setNote(e.target.value)} placeholder="Note (optional)"
+          className="flex-1 min-w-[140px] border dark:border-slate-600 rounded px-2 py-1 text-xs bg-white dark:bg-slate-700 dark:text-white" />
+        <div className="flex gap-2">
+          <button onClick={() => onResolve(req.id, { action: 'approve', event_id: eventId || undefined, tier: tier || undefined, add_credits: credits ? Number(credits) : undefined, note: note || undefined })}
+            className="bg-teal-600 text-white px-3 py-1.5 rounded text-xs font-semibold hover:bg-teal-700">Approve</button>
+          <button onClick={() => onResolve(req.id, { action: 'decline', note: note || undefined })}
+            className="bg-white dark:bg-slate-700 border border-gray-300 dark:border-slate-600 text-slate-600 dark:text-slate-200 px-3 py-1.5 rounded text-xs font-semibold hover:bg-gray-50">Decline</button>
+        </div>
+      </div>
     </div>
   )
 }
@@ -273,6 +381,7 @@ export default function ConsolePage() {
         ))}
       </div>
       {tab === 'overview' && <OverviewTab />}
+      {tab === 'trials' && <TrialsTab />}
       {tab === 'pricing' && <PricingTab />}
       {tab === 'affiliates' && <AffiliateStoresTab />}
       {tab === 'operators' && <OperatorsTab me={user} />}

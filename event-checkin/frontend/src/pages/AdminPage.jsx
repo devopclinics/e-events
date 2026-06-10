@@ -3663,6 +3663,135 @@ function TabBar({ tabs, active, onChange }) {
   )
 }
 
+// ── Trial / plans onboarding banner ───────────────────────────────────────────
+function trialMoney(amount, currency) {
+  const major = (amount || 0) / 100
+  return currency === 'NGN' ? `₦${major.toLocaleString()}` : `$${major.toLocaleString()}`
+}
+
+function TrialBanner({ events, user }) {
+  const [tiers, setTiers] = useState([])
+  const [requests, setRequests] = useState(null)   // null = loading
+  const [showForm, setShowForm] = useState(false)
+  const [form, setForm] = useState({ contact_name: '', event_name: '', guest_count: '', use_case: '' })
+  const [busy, setBusy] = useState(false)
+  const [msg, setMsg] = useState('')
+
+  useEffect(() => {
+    api.getPricing().then((d) => setTiers(d.tiers || [])).catch(() => {})
+    api.myTrialRequests().then(setRequests).catch(() => setRequests([]))
+  }, [])
+
+  useEffect(() => {
+    if (user?.name) setForm((f) => ({ ...f, contact_name: f.contact_name || user.name }))
+  }, [user])
+
+  // Already paying for something → nothing to upsell here.
+  const hasPaid = events.some((e) => e.is_paid)
+  if (hasPaid || requests === null) return null
+
+  const pending = requests.find((r) => r.status === 'pending')
+  const approved = requests.find((r) => r.status === 'approved')
+
+  async function submit() {
+    setBusy(true); setMsg('')
+    try {
+      await api.submitTrialRequest({
+        contact_name: form.contact_name,
+        event_name: form.event_name || null,
+        guest_count: form.guest_count ? Number(form.guest_count) : null,
+        use_case: form.use_case || null,
+      })
+      setRequests(await api.myTrialRequests())
+      setShowForm(false)
+    } catch (e) { setMsg(e.message) }
+    finally { setBusy(false) }
+  }
+
+  return (
+    <div className="rounded-2xl border border-teal-200 dark:border-teal-800 bg-teal-50/60 dark:bg-teal-900/20 p-6 space-y-4">
+      <div className="flex items-start justify-between gap-4 flex-wrap">
+        <div>
+          <h2 className="font-bold text-lg text-slate-900 dark:text-white">Choose how to start</h2>
+          <p className="text-sm text-slate-600 dark:text-slate-300 mt-1 max-w-2xl">
+            Every event is free to start — email invites and up to 25 guests. Unlock SMS/WhatsApp,
+            check-in, seating, venue access and more with an Event Pass. Want to try the paid
+            features first? Request free trial credits and we’ll set you up.
+          </p>
+        </div>
+        {approved ? (
+          <span className="shrink-0 inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-green-100 dark:bg-green-900/40 text-green-700 dark:text-green-300 text-xs font-semibold">
+            ✓ Trial approved — check your events
+          </span>
+        ) : pending ? (
+          <span className="shrink-0 inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-amber-100 dark:bg-amber-900/40 text-amber-700 dark:text-amber-300 text-xs font-semibold">
+            ⏳ Trial request received — we’ll be in touch
+          </span>
+        ) : (
+          <button onClick={() => setShowForm((v) => !v)}
+            className="shrink-0 bg-teal-600 hover:bg-teal-700 text-white px-4 py-2 rounded-lg text-sm font-semibold">
+            Request free trial credits
+          </button>
+        )}
+      </div>
+
+      {/* Plan tiers */}
+      {tiers.length > 0 && (
+        <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-3">
+          {tiers.map((t) => (
+            <div key={t.key} className="bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 p-3">
+              <div className="font-semibold text-sm text-slate-900 dark:text-white">{t.label}</div>
+              <div className="text-xl font-extrabold text-teal-700 dark:text-teal-300">{trialMoney(t.amount, t.currency)}</div>
+              <div className="text-xs text-slate-500 dark:text-slate-400 mt-1">
+                {t.guest_cap ? `Up to ${t.guest_cap} guests` : 'Unlimited guests'} · {t.credits} credits
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+      <a href="/pricing" target="_blank" rel="noopener noreferrer" className="inline-block text-xs text-teal-700 dark:text-teal-300 hover:underline">
+        See full pricing →
+      </a>
+
+      {/* Request form */}
+      {showForm && !pending && (
+        <div className="bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 p-4 space-y-3">
+          <div className="grid sm:grid-cols-2 gap-3">
+            <label className="block text-sm">
+              <span className="text-slate-600 dark:text-slate-300 text-xs font-semibold">Your name</span>
+              <input value={form.contact_name} onChange={(e) => setForm((f) => ({ ...f, contact_name: e.target.value }))}
+                className="mt-1 w-full border border-gray-300 dark:border-slate-700 rounded-lg px-3 py-2 text-sm bg-white dark:bg-slate-900 text-slate-900 dark:text-white" placeholder="Jane Doe" />
+            </label>
+            <label className="block text-sm">
+              <span className="text-slate-600 dark:text-slate-300 text-xs font-semibold">Event</span>
+              <input value={form.event_name} onChange={(e) => setForm((f) => ({ ...f, event_name: e.target.value }))}
+                className="mt-1 w-full border border-gray-300 dark:border-slate-700 rounded-lg px-3 py-2 text-sm bg-white dark:bg-slate-900 text-slate-900 dark:text-white" placeholder="e.g. Spring Gala" />
+            </label>
+            <label className="block text-sm">
+              <span className="text-slate-600 dark:text-slate-300 text-xs font-semibold">Expected guests</span>
+              <input type="number" min="0" value={form.guest_count} onChange={(e) => setForm((f) => ({ ...f, guest_count: e.target.value }))}
+                className="mt-1 w-full border border-gray-300 dark:border-slate-700 rounded-lg px-3 py-2 text-sm bg-white dark:bg-slate-900 text-slate-900 dark:text-white" placeholder="120" />
+            </label>
+            <label className="block text-sm">
+              <span className="text-slate-600 dark:text-slate-300 text-xs font-semibold">What do you want to try?</span>
+              <input value={form.use_case} onChange={(e) => setForm((f) => ({ ...f, use_case: e.target.value }))}
+                className="mt-1 w-full border border-gray-300 dark:border-slate-700 rounded-lg px-3 py-2 text-sm bg-white dark:bg-slate-900 text-slate-900 dark:text-white" placeholder="SMS invites, check-in, venue zones…" />
+            </label>
+          </div>
+          {msg && <p className="text-xs text-red-500">{msg}</p>}
+          <div className="flex gap-2">
+            <button onClick={submit} disabled={busy || !form.contact_name.trim()}
+              className="bg-teal-600 hover:bg-teal-700 text-white px-4 py-2 rounded-lg text-sm font-semibold disabled:opacity-50">
+              {busy ? 'Sending…' : 'Send request'}
+            </button>
+            <button onClick={() => setShowForm(false)} className="text-sm text-slate-500 hover:text-slate-700 dark:hover:text-slate-300 px-3">Cancel</button>
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
+
 export default function AdminPage() {
   const { user } = useAuth()
   const [events, setEvents] = useState([])
@@ -3952,6 +4081,8 @@ export default function AdminPage() {
           + New Event
         </button>
       </div>
+
+      <TrialBanner events={events} user={user} />
 
       {showForm && (
         <div className="bg-white dark:bg-slate-800 dark:border dark:border-slate-700/60 rounded-xl shadow p-6">

@@ -3,13 +3,16 @@
 All endpoints require platform superadmin. Lets operators run the business
 without code: see all tenants, comp/credit events, manage operators, edit pricing.
 """
+from datetime import datetime
+
 from fastapi import APIRouter, Depends, HTTPException
-from sqlalchemy import select
+from sqlalchemy import select, desc
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..database import get_db
-from ..models import Organization, Event, User, PricingPlan, AffiliateStore
-from ..schemas import GrantRequest, OperatorInvite, PlanUpsert, UserOut, AffiliateStoreIn, AffiliateStoreOut
+from ..models import Organization, Event, User, PricingPlan, AffiliateStore, TrialRequest
+from ..schemas import (GrantRequest, OperatorInvite, PlanUpsert, UserOut,
+                       AffiliateStoreIn, AffiliateStoreOut, TrialRequestOut, TrialResolve)
 from ..auth import require_superadmin
 from ..billing import get_plan, apply_purchase
 
@@ -191,3 +194,62 @@ async def delete_affiliate_store(store_id: str, _: User = Depends(require_supera
         raise HTTPException(404, "Store not found")
     await db.delete(s)
     await db.commit()
+
+
+# ── Trial-credit requests ────────────────────────────────────────────────────
+
+async def _trial_out(req: TrialRequest, db: AsyncSession) -> TrialRequestOut:
+    org = await db.get(Organization, req.org_id)
+    requester = await db.get(User, req.user_id)
+    out = TrialRequestOut.model_validate(req)
+    out.org_name = org.name if org else None
+    out.requester_email = requester.email if requester else None
+    return out
+
+
+@router.get("/trial-requests", response_model=list[TrialRequestOut])
+async def list_trial_requests(status: str | None = None, _: User = Depends(require_superadmin),
+                              db: AsyncSession = Depends(get_db)):
+    """All trial requests for the operator queue. Pending first, newest first."""
+    q = select(TrialRequest).order_by(TrialRequest.status != "pending", desc(TrialRequest.created_at))
+    if status:
+        q = select(TrialRequest).where(TrialRequest.status == status).order_by(desc(TrialRequest.created_at))
+    rows = (await db.execute(q)).scalars().all()
+    return [await _trial_out(r, db) for r in rows]
+
+
+@router.post("/trial-requests/{req_id}/resolve", response_model=TrialRequestOut)
+async def resolve_trial_request(req_id: str, body: TrialResolve,
+                                operator: User = Depends(require_superadmin),
+                                db: AsyncSession = Depends(get_db)):
+    """Approve (optionally comping an event onto a tier / adding credits) or
+    decline a trial request. Reuses the same grant mechanism as /grant."""
+    req = await db.get(TrialRequest, req_id)
+    if not req:
+        raise HTTPException(404, "Request not found")
+    if req.status != "pending":
+        raise HTTPException(409, "This request has already been resolved.")
+
+    if body.action == "approve":
+        # Optional comp: operator may pick one of the org's events to grant.
+        if body.event_id:
+            event = await db.get(Event, body.event_id)
+            if not event or event.org_id != req.org_id:
+                raise HTTPException(400, "Event not found in this organization.")
+            if body.tier:
+                plan = await get_plan(db, body.tier)
+                if not plan:
+                    raise HTTPException(400, "Unknown tier")
+                apply_purchase(event, plan)
+            if body.add_credits:
+                event.message_credits = (event.message_credits or 0) + int(body.add_credits)
+        req.status = "approved"
+    else:
+        req.status = "declined"
+
+    req.resolved_at = datetime.utcnow()
+    req.resolved_by = operator.id
+    req.resolution_note = (body.note or "").strip() or None
+    await db.commit()
+    await db.refresh(req)
+    return await _trial_out(req, db)

@@ -32,6 +32,32 @@ def _ensure_firebase():
 
 bearer = HTTPBearer(auto_error=False)
 
+import logging as _logging
+_log = _logging.getLogger(__name__)
+
+
+def set_firebase_disabled(firebase_uid: str | None, disabled: bool) -> None:
+    """Disable/enable a Firebase login so a suspended user can't authenticate.
+    Best-effort: never breaks the operator action if Firebase is unconfigured."""
+    if not firebase_uid:
+        return
+    try:
+        _ensure_firebase()
+        firebase_auth.update_user(firebase_uid, disabled=disabled)
+    except Exception as e:
+        _log.warning("Firebase disable(%s)=%s failed: %s", firebase_uid, disabled, e)
+
+
+def delete_firebase_user(firebase_uid: str | None) -> None:
+    """Delete a Firebase login so a removed account can't sign back in."""
+    if not firebase_uid:
+        return
+    try:
+        _ensure_firebase()
+        firebase_auth.delete_user(firebase_uid)
+    except Exception as e:
+        _log.warning("Firebase delete(%s) failed: %s", firebase_uid, e)
+
 
 async def get_current_user(
     creds: HTTPAuthorizationCredentials = Depends(bearer),
@@ -87,6 +113,10 @@ async def get_current_user(
         await db.commit()
         await db.refresh(user)
 
+    # Suspended account → no access (paired with a disabled Firebase user).
+    if not user.is_active:
+        raise HTTPException(403, "This account has been suspended. Contact support.")
+
     return user
 
 
@@ -105,12 +135,16 @@ async def is_org_manager(user: User, org_id: str | None, db: AsyncSession) -> bo
 
 
 async def _org_role(user: User, org_id: str | None, db: AsyncSession) -> str | None:
-    """The caller's role in a given org, or None if not a member."""
+    """The caller's role in a given org, or None if not a member. A suspended
+    org reports None for non-operators, so every per-event guard denies access."""
     if not org_id:
         return None
     return await db.scalar(
-        select(Membership.role).where(
-            Membership.user_id == user.id, Membership.org_id == org_id
+        select(Membership.role)
+        .join(Organization, Organization.id == Membership.org_id)
+        .where(
+            Membership.user_id == user.id, Membership.org_id == org_id,
+            Organization.is_active.is_(True),
         )
     )
 

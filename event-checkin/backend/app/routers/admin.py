@@ -6,16 +6,52 @@ without code: see all tenants, comp/credit events, manage operators, edit pricin
 from datetime import datetime
 
 from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks
-from sqlalchemy import select, desc
+from sqlalchemy import select, desc, func, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..database import get_db
-from ..models import Organization, Event, User, PricingPlan, AffiliateStore, TrialRequest
+from ..models import Organization, Event, User, Membership, PricingPlan, AffiliateStore, TrialRequest
 from ..schemas import (GrantRequest, OperatorInvite, PlanUpsert, UserOut,
-                       AffiliateStoreIn, AffiliateStoreOut, TrialRequestOut, TrialResolve)
-from ..auth import require_superadmin
+                       AffiliateStoreIn, AffiliateStoreOut, TrialRequestOut, TrialResolve,
+                       AccountOrgOut, AccountMemberOut, ActiveToggle, MemberRole)
+from ..auth import require_superadmin, set_firebase_disabled, delete_firebase_user
 from ..billing import get_plan, apply_purchase
 from services.email_service import send_simple_email
+
+DEFAULT_ORG_ID = "00000000-0000-0000-0000-000000000001"  # legacy default org — protected
+
+# Child tables to clear when hard-deleting an org, in FK-safe order. Scoped to
+# the org's events (E) or the org itself. See db FK map.
+_ORG_DELETE_SQL = [
+    "DELETE FROM scan_events WHERE event_id IN (SELECT id FROM events WHERE org_id=:o)",
+    "DELETE FROM guest_shipments WHERE shipment_id IN (SELECT id FROM shipments WHERE event_id IN (SELECT id FROM events WHERE org_id=:o))",
+    "DELETE FROM shipments WHERE event_id IN (SELECT id FROM events WHERE org_id=:o)",
+    "DELETE FROM rsvp_answers WHERE question_id IN (SELECT id FROM rsvp_questions WHERE event_id IN (SELECT id FROM events WHERE org_id=:o))",
+    "DELETE FROM rsvp_questions WHERE event_id IN (SELECT id FROM events WHERE org_id=:o)",
+    "DELETE FROM guest_menu_choices WHERE guest_id IN (SELECT id FROM guests WHERE event_id IN (SELECT id FROM events WHERE org_id=:o))",
+    "DELETE FROM menu_combination_items WHERE combination_id IN (SELECT id FROM menu_combinations WHERE event_id IN (SELECT id FROM events WHERE org_id=:o))",
+    "DELETE FROM menu_combinations WHERE event_id IN (SELECT id FROM events WHERE org_id=:o)",
+    "DELETE FROM menu_items WHERE event_id IN (SELECT id FROM events WHERE org_id=:o)",
+    "DELETE FROM menu_categories WHERE event_id IN (SELECT id FROM events WHERE org_id=:o)",
+    "DELETE FROM registry_claims WHERE item_id IN (SELECT id FROM registry_items WHERE event_id IN (SELECT id FROM events WHERE org_id=:o))",
+    "DELETE FROM registry_items WHERE event_id IN (SELECT id FROM events WHERE org_id=:o)",
+    "UPDATE guests SET partner_guest_id=NULL, table_id=NULL WHERE event_id IN (SELECT id FROM events WHERE org_id=:o)",
+    "DELETE FROM guests WHERE event_id IN (SELECT id FROM events WHERE org_id=:o)",
+    "DELETE FROM seating_tables WHERE event_id IN (SELECT id FROM events WHERE org_id=:o)",
+    "DELETE FROM ticket_types WHERE event_id IN (SELECT id FROM events WHERE org_id=:o)",
+    "DELETE FROM zones WHERE event_id IN (SELECT id FROM events WHERE org_id=:o)",
+    "DELETE FROM event_users WHERE event_id IN (SELECT id FROM events WHERE org_id=:o)",
+    "DELETE FROM payments WHERE org_id=:o OR event_id IN (SELECT id FROM events WHERE org_id=:o)",
+    "DELETE FROM events WHERE org_id=:o",
+    "DELETE FROM trial_requests WHERE org_id=:o",
+    "DELETE FROM memberships WHERE org_id=:o",
+    "DELETE FROM organizations WHERE id=:o",
+]
+
+
+async def _delete_org(org_id: str, db: AsyncSession) -> None:
+    for stmt in _ORG_DELETE_SQL:
+        await db.execute(text(stmt), {"o": org_id})
 
 router = APIRouter()
 
@@ -61,6 +97,133 @@ async def grant(event_id: str, body: GrantRequest, _: User = Depends(require_sup
         "ok": True, "plan_tier": event.plan_tier, "is_paid": event.is_paid,
         "guest_cap": event.guest_cap, "message_credits": event.message_credits,
     }
+
+
+# ── Account management (orgs, members, users) ────────────────────────────────
+
+@router.get("/accounts", response_model=list[AccountOrgOut])
+async def list_accounts(_: User = Depends(require_superadmin), db: AsyncSession = Depends(get_db)):
+    """Every org with its members and event count — for the Accounts panel."""
+    orgs = (await db.execute(select(Organization).order_by(Organization.created_at))).scalars().all()
+    counts = dict((await db.execute(
+        select(Event.org_id, func.count(Event.id)).group_by(Event.org_id)
+    )).all())
+    rows = (await db.execute(
+        select(Membership.org_id, Membership.role, User)
+        .join(User, User.id == Membership.user_id)
+    )).all()
+    members_by_org: dict[str, list[AccountMemberOut]] = {}
+    for org_id, role, u in rows:
+        members_by_org.setdefault(org_id, []).append(AccountMemberOut(
+            user_id=u.id, name=u.name, email=u.email, role=role,
+            is_active=u.is_active, is_platform_superadmin=u.is_platform_superadmin,
+        ))
+    return [AccountOrgOut(
+        id=o.id, name=o.name, slug=o.slug, is_active=o.is_active,
+        created_at=o.created_at, event_count=int(counts.get(o.id, 0)),
+        members=members_by_org.get(o.id, []),
+    ) for o in orgs]
+
+
+@router.patch("/orgs/{org_id}/active", response_model=AccountOrgOut)
+async def set_org_active(org_id: str, body: ActiveToggle,
+                         _: User = Depends(require_superadmin), db: AsyncSession = Depends(get_db)):
+    """Suspend or reactivate a tenant. Suspended → members lose access to its
+    events (enforced in _org_role / list_events); reversible, no data loss."""
+    if org_id == DEFAULT_ORG_ID:
+        raise HTTPException(400, "The default organization cannot be suspended.")
+    org = await db.get(Organization, org_id)
+    if not org:
+        raise HTTPException(404, "Organization not found")
+    org.is_active = body.active
+    await db.commit()
+    await db.refresh(org)
+    cnt = await db.scalar(select(func.count(Event.id)).where(Event.org_id == org_id)) or 0
+    return AccountOrgOut(id=org.id, name=org.name, slug=org.slug, is_active=org.is_active,
+                         created_at=org.created_at, event_count=int(cnt), members=[])
+
+
+@router.delete("/orgs/{org_id}", status_code=204)
+async def delete_org(org_id: str, _: User = Depends(require_superadmin), db: AsyncSession = Depends(get_db)):
+    """Hard-delete a tenant and ALL its data (events, guests, scans, …).
+    Irreversible. Member user accounts remain (delete them separately)."""
+    if org_id == DEFAULT_ORG_ID:
+        raise HTTPException(400, "The default organization cannot be deleted.")
+    org = await db.get(Organization, org_id)
+    if not org:
+        raise HTTPException(404, "Organization not found")
+    await _delete_org(org_id, db)
+    await db.commit()
+
+
+@router.patch("/orgs/{org_id}/members/{user_id}", response_model=AccountMemberOut)
+async def set_member_role(org_id: str, user_id: str, body: MemberRole,
+                          _: User = Depends(require_superadmin), db: AsyncSession = Depends(get_db)):
+    m = await db.scalar(select(Membership).where(
+        Membership.org_id == org_id, Membership.user_id == user_id))
+    if not m:
+        raise HTTPException(404, "Membership not found")
+    m.role = body.role
+    await db.commit()
+    u = await db.get(User, user_id)
+    return AccountMemberOut(user_id=u.id, name=u.name, email=u.email, role=body.role,
+                            is_active=u.is_active, is_platform_superadmin=u.is_platform_superadmin)
+
+
+@router.delete("/orgs/{org_id}/members/{user_id}", status_code=204)
+async def remove_member(org_id: str, user_id: str,
+                        _: User = Depends(require_superadmin), db: AsyncSession = Depends(get_db)):
+    """Remove a user from an org. Their account itself is untouched."""
+    m = await db.scalar(select(Membership).where(
+        Membership.org_id == org_id, Membership.user_id == user_id))
+    if not m:
+        raise HTTPException(404, "Membership not found")
+    await db.delete(m)
+    await db.commit()
+
+
+@router.patch("/users/{user_id}/active", response_model=UserOut)
+async def set_user_active(user_id: str, body: ActiveToggle,
+                          operator: User = Depends(require_superadmin), db: AsyncSession = Depends(get_db)):
+    """Suspend or reactivate a user account — also disables/enables the Firebase
+    login so a suspended user can't re-authenticate."""
+    if user_id == operator.id:
+        raise HTTPException(400, "You can't suspend your own account.")
+    user = await db.get(User, user_id)
+    if not user:
+        raise HTTPException(404, "User not found")
+    user.is_active = body.active
+    await db.commit()
+    set_firebase_disabled(user.firebase_uid, not body.active)
+    await db.refresh(user)
+    return user
+
+
+@router.delete("/users/{user_id}", status_code=204)
+async def delete_user(user_id: str, operator: User = Depends(require_superadmin),
+                      db: AsyncSession = Depends(get_db)):
+    """Delete a user account everywhere + delete their Firebase login. Blocks
+    deleting yourself or the last remaining operator."""
+    if user_id == operator.id:
+        raise HTTPException(400, "You can't delete your own account.")
+    user = await db.get(User, user_id)
+    if not user:
+        raise HTTPException(404, "User not found")
+    if user.is_platform_superadmin:
+        others = await db.scalar(select(func.count(User.id)).where(
+            User.is_platform_superadmin.is_(True), User.id != user_id))
+        if not others:
+            raise HTTPException(400, "Can't delete the last operator.")
+    uid = user.firebase_uid
+    # Unlink references that must survive / can't cascade, then remove the user.
+    await db.execute(text("UPDATE scan_events SET scanned_by=NULL WHERE scanned_by=:u"), {"u": user_id})
+    await db.execute(text("UPDATE trial_requests SET resolved_by=NULL WHERE resolved_by=:u"), {"u": user_id})
+    await db.execute(text("DELETE FROM trial_requests WHERE user_id=:u"), {"u": user_id})
+    await db.execute(text("DELETE FROM event_users WHERE user_id=:u"), {"u": user_id})
+    await db.execute(text("DELETE FROM memberships WHERE user_id=:u"), {"u": user_id})
+    await db.delete(user)
+    await db.commit()
+    delete_firebase_user(uid)
 
 
 # ── Operators (platform superadmins) ────────────────────────────────────────

@@ -5,6 +5,7 @@ import { useAuth } from '../context/AuthContext'
 
 const TABS = [
   { id: 'overview', label: 'Overview' },
+  { id: 'accounts', label: 'Accounts' },
   { id: 'trials', label: 'Trial requests' },
   { id: 'pricing', label: 'Pricing' },
   { id: 'affiliates', label: 'Affiliate stores' },
@@ -81,6 +82,84 @@ function EventRow({ ev, plans, onGrant }) {
         className="bg-teal-600 text-white px-3 py-1.5 rounded text-xs font-semibold disabled:opacity-40 hover:bg-teal-700">
         Apply
       </button>
+    </div>
+  )
+}
+
+// ── Accounts: suspend/delete orgs, manage members, suspend/delete users ─────
+function AccountsTab({ me }) {
+  const [orgs, setOrgs] = useState(null)
+  const [msg, setMsg] = useState('')
+  const [err, setErr] = useState('')
+
+  function load() { api.adminListAccounts().then(setOrgs).catch((e) => setErr(e.message)) }
+  useEffect(load, [])
+
+  async function run(fn, ok) {
+    setMsg(''); setErr('')
+    try { await fn(); load(); if (ok) { setMsg(ok); setTimeout(() => setMsg(''), 2500) } }
+    catch (e) { setErr(e.message) }
+  }
+
+  if (!orgs) return <div className="text-sm text-slate-500">Loading…</div>
+  return (
+    <div className="space-y-4">
+      <p className="text-xs text-slate-500 dark:text-slate-400 bg-slate-100 dark:bg-slate-800 rounded-lg px-3 py-2">
+        <strong>Suspend</strong> is reversible (blocks access / sign-in). <strong>Delete</strong> is permanent.
+        Deleting an org removes all its events &amp; data; deleting a user also disables their sign-in.
+      </p>
+      {msg && <div className="text-sm text-teal-600">{msg}</div>}
+      {err && <div className="text-sm text-red-500">{err}</div>}
+      {orgs.map((o) => (
+        <div key={o.id} className={`bg-white dark:bg-slate-800 rounded-xl shadow p-4 border ${o.is_active ? 'dark:border-slate-700' : 'border-amber-300 dark:border-amber-700'}`}>
+          <div className="flex items-center justify-between flex-wrap gap-2">
+            <div className="font-semibold dark:text-white flex items-center gap-2">
+              {o.name}
+              {!o.is_active && <span className="text-[11px] px-2 py-0.5 rounded-full bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300">Suspended</span>}
+              <span className="text-xs text-slate-400 font-normal">· {o.event_count} event(s) · {o.members.length} member(s)</span>
+            </div>
+            <div className="flex gap-2">
+              <button onClick={() => run(() => api.adminSetOrgActive(o.id, !o.is_active), o.is_active ? 'Org suspended.' : 'Org reactivated.')}
+                className="text-xs font-semibold px-3 py-1.5 rounded border border-amber-300 dark:border-amber-700 text-amber-700 dark:text-amber-300 hover:bg-amber-50 dark:hover:bg-amber-900/30">
+                {o.is_active ? 'Suspend' : 'Reactivate'}
+              </button>
+              <button onClick={() => { if (window.prompt(`Type the org name to permanently DELETE it and all its data:\n\n${o.name}`) === o.name) run(() => api.adminDeleteOrg(o.id), 'Org deleted.') }}
+                className="text-xs font-semibold px-3 py-1.5 rounded bg-red-600 text-white hover:bg-red-700">
+                Delete
+              </button>
+            </div>
+          </div>
+          <div className="mt-3 divide-y divide-gray-100 dark:divide-slate-700">
+            {o.members.map((m) => (
+              <div key={m.user_id} className="py-2 flex items-center gap-3 flex-wrap text-sm">
+                <div className="flex-1 min-w-[180px]">
+                  <span className="dark:text-slate-100">{m.name}</span>
+                  <span className="text-xs text-slate-400 ml-2">{m.email}</span>
+                  {!m.is_active && <span className="text-[11px] ml-2 px-1.5 py-0.5 rounded bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300">suspended</span>}
+                  {m.is_platform_superadmin && <span className="text-[11px] ml-2 px-1.5 py-0.5 rounded bg-indigo-100 text-indigo-700 dark:bg-indigo-900/40 dark:text-indigo-300">operator</span>}
+                </div>
+                <select value={m.role} onChange={(e) => run(() => api.adminSetMemberRole(o.id, m.user_id, e.target.value))}
+                  className="border dark:border-slate-600 rounded px-2 py-1 text-xs bg-white dark:bg-slate-700 dark:text-white">
+                  {['owner', 'admin', 'staff'].map((r) => <option key={r} value={r}>{r}</option>)}
+                </select>
+                <button onClick={() => run(() => api.adminRemoveMember(o.id, m.user_id), 'Removed from org.')}
+                  className="text-xs text-slate-500 hover:text-slate-800 dark:hover:text-white">Remove</button>
+                {m.user_id !== me.id && (
+                  <>
+                    <button onClick={() => run(() => api.adminSetUserActive(m.user_id, !m.is_active), 'Updated.')}
+                      className="text-xs text-amber-600 dark:text-amber-400 hover:underline">
+                      {m.is_active ? 'Suspend user' : 'Reactivate'}
+                    </button>
+                    <button onClick={() => { if (window.confirm(`Permanently delete ${m.email}? This disables their sign-in.`)) run(() => api.adminDeleteUser(m.user_id), 'User deleted.') }}
+                      className="text-xs text-red-500 hover:text-red-700">Delete user</button>
+                  </>
+                )}
+              </div>
+            ))}
+            {o.members.length === 0 && <div className="text-xs text-slate-400 py-2">No members.</div>}
+          </div>
+        </div>
+      ))}
     </div>
   )
 }
@@ -382,6 +461,7 @@ export default function ConsolePage() {
         ))}
       </div>
       {tab === 'overview' && <OverviewTab />}
+      {tab === 'accounts' && <AccountsTab me={user} />}
       {tab === 'trials' && <TrialsTab />}
       {tab === 'pricing' && <PricingTab />}
       {tab === 'affiliates' && <AffiliateStoresTab />}

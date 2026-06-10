@@ -17,6 +17,9 @@ class Organization(Base):
     currency: Mapped[str] = mapped_column(String(10), default="USD")    # "USD" | "NGN"
     plan: Mapped[str] = mapped_column(String(50), default="free")
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    # Operator can suspend a tenant: members lose access to its events (login
+    # still works for other orgs they belong to). Superadmins bypass.
+    is_active: Mapped[bool] = mapped_column(Boolean, default=True)
     # Pending trial grant from an approved TrialRequest when the org had no event
     # yet. Consumed (applied + cleared) by the next event the org creates.
     trial_tier: Mapped[str | None] = mapped_column(String(50), nullable=True)
@@ -47,6 +50,9 @@ class User(Base):
     # Operator-only flag (you), distinct from customer org admins. Grants audited
     # cross-tenant support access. Never set for customer accounts.
     is_platform_superadmin: Mapped[bool] = mapped_column(Boolean, default=False)
+    # Operator can suspend an account: blocks sign-in entirely. Paired with
+    # disabling the Firebase user so they can't re-authenticate.
+    is_active: Mapped[bool] = mapped_column(Boolean, default=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
 
 

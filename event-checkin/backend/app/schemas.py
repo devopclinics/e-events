@@ -199,6 +199,33 @@ class OperatorInvite(BaseModel):
     email: EmailStr
 
 
+class AccountMemberOut(BaseModel):
+    user_id: str
+    name: str
+    email: str
+    role: str
+    is_active: bool
+    is_platform_superadmin: bool
+
+
+class AccountOrgOut(BaseModel):
+    id: str
+    name: str
+    slug: str
+    is_active: bool
+    created_at: datetime
+    event_count: int
+    members: list[AccountMemberOut] = []
+
+
+class ActiveToggle(BaseModel):
+    active: bool
+
+
+class MemberRole(BaseModel):
+    role: Literal["owner", "admin", "staff"]
+
+
 class PlanUpsert(BaseModel):
     kind: Literal["tier", "pack"]
     label: str

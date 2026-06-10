@@ -103,7 +103,8 @@ async def list_events(
         result = await db.execute(
             select(Event)
             .join(Membership, Membership.org_id == Event.org_id)
-            .where(Membership.user_id == current_user.id)
+            .join(Organization, Organization.id == Event.org_id)
+            .where(Membership.user_id == current_user.id, Organization.is_active.is_(True))
             .order_by(Event.created_at.desc())
         )
     return result.scalars().all()

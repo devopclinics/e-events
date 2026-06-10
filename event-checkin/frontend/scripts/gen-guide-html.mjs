@@ -59,6 +59,7 @@ const html = `<!DOCTYPE html>
   <h1>EventQR — Help &amp; How-To</h1>
   <p>A plain, printable copy of the guide. For the interactive version, open
      <a href="/guide">/guide</a> · <a href="/register">Get started free</a></p>
+  <p class="skip-print"><a href="/media/guide.pdf">⬇ Download this guide as PDF</a></p>
 </header>
 <video src="/media/getting-started.webm" controls preload="metadata" poster="/media/admin-overview.png"></video>
 ${body}

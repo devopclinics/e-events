@@ -15,7 +15,7 @@ from ..schemas import (
 )
 from ..auth import require_admin, require_event_admin, get_current_user, _org_role
 from ..entitlements import can_use_paid_channels, take_message_credit
-from .guests import import_from_source_url, _normalize_phone
+from .guests import import_from_source_url, import_warning_summary, _normalize_phone
 from services import messaging
 from services.email_service import send_manual_invite_email, send_broadcast_email
 
@@ -298,8 +298,9 @@ async def update_event_source(
         raise HTTPException(404, "Event not found")
     if body.source_url is not None:
         event.source_url = body.source_url.strip() or None
-        # Clear last error on URL change so the UI doesn't show a stale message.
+        # Clear last error/warning on URL change so the UI doesn't show a stale message.
         event.source_last_error = None
+        event.source_last_warning = None
     if body.source_sync_interval_seconds is not None:
         # Clamp to a sane range; OneDrive is happy at 60s but reject sub-15s.
         event.source_sync_interval_seconds = max(15, min(body.source_sync_interval_seconds, 3600))
@@ -323,6 +324,7 @@ async def sync_event_now(
         result = await import_from_source_url(event.source_url, event_id, db)
         event.source_last_sync_at = datetime.utcnow()
         event.source_last_error = None
+        event.source_last_warning = import_warning_summary(result)
         await db.commit()
         return {
             **result,

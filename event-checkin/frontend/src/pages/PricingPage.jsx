@@ -55,7 +55,7 @@ export default function PricingPage() {
                 <li>✓ Self-serve RSVP page</li>
                 <li>✓ Confirm / decline + custom questions</li>
                 <li className="text-slate-400 dark:text-slate-500">— No SMS / WhatsApp</li>
-                <li className="text-slate-400 dark:text-slate-500">— No seating, menu, or QR check-in</li>
+                <li className="text-slate-400 dark:text-slate-500">— No QR check-in or paid add-ons (seating, menu, access zones, logistics, registry)</li>
                 <li className="text-slate-400 dark:text-slate-500">— Shows EventQR branding</li>
               </ul>
             </div>
@@ -70,7 +70,8 @@ export default function PricingPage() {
                     <li>✓ {t.guest_cap ? `Up to ${t.guest_cap} guests` : 'Unlimited guests'}</li>
                     <li>✓ SMS / WhatsApp + email invites</li>
                     <li>✓ {t.credits} message credits</li>
-                    <li>✓ QR check-in &amp; seating</li>
+                    <li>✓ QR check-in, seating &amp; menu</li>
+                    <li>✓ Access zones, logistics &amp; registry</li>
                     <li>✓ No EventQR branding</li>
                   </ul>
                   <Link to="/register" className="mt-auto bg-teal-600 hover:bg-teal-700 text-white text-center px-3 py-2 rounded-lg text-sm font-semibold">

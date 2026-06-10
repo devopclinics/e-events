@@ -106,6 +106,7 @@ class EventOut(BaseModel):
     source_sync_interval_seconds: int = 60
     source_last_sync_at: Optional[datetime] = None
     source_last_error: Optional[str] = None
+    source_last_warning: Optional[str] = None
     # Invite / RSVP
     rsvp_enabled: bool = False
     invite_theme: str = "default"

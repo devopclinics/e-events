@@ -3561,6 +3561,11 @@ function SourceSyncPanel({ event, onSave, onSyncNow, loading }) {
           {event.source_last_error}
         </div>
       )}
+      {!event.source_last_error && event.source_last_warning && (
+        <div className="bg-amber-50 dark:bg-amber-900/30 border border-amber-200 dark:border-amber-800 text-amber-700 dark:text-amber-300 rounded-lg px-3 py-2 text-xs">
+          ⚠ {event.source_last_warning}
+        </div>
+      )}
       {!polling && event.source_url && (
         <p className="text-xs text-gray-400 dark:text-slate-500">
           Auto-sync starts when you set the event to <strong>Active</strong>.
@@ -3752,14 +3757,19 @@ export default function AdminPage() {
 
   function flashImportResult(res) {
     let msg = `${res.added} guests added, ${res.skipped} skipped.`
+    if (res.sample_rows_skipped) msg += ` ${res.sample_rows_skipped} template sample row${res.sample_rows_skipped === 1 ? '' : 's'} ignored.`
     if (res.ticket_types_assigned) msg += ` ${res.ticket_types_assigned} ticket type${res.ticket_types_assigned === 1 ? '' : 's'} assigned.`
     if (res.addresses_added) msg += ` ${res.addresses_added} shipping address${res.addresses_added === 1 ? '' : 'es'} added.`
+    let warn = false
     if (res.unknown_ticket_types?.length) {
       msg += ` Unknown ticket types ignored: ${res.unknown_ticket_types.join(', ')} — create them in the Access tab, then re-import to assign.`
-      flash(msg, true)
-    } else {
-      flash(msg)
+      warn = true
     }
+    if (res.cap_note) {
+      msg += ` ${res.cap_note}`
+      warn = true
+    }
+    flash(msg, warn)
   }
 
   async function handleUpload(e) {

@@ -21,10 +21,13 @@ const CONTENT = {
         'Save. Open the event to see its tabs: Overview, Guests, Team, Invite.',
       ]},
       { id: 'org-guests', icon: '👥', title: 'Add your guest list', img: '/guide/admin-guests.png', steps: [
-        'Overview tab → upload a CSV/Excel, or paste a Google Sheets / OneDrive link.',
-        'Columns expected: first_name, last_name, email, phone.',
+        'Overview tab → Download template — it contains exactly the columns your event uses (ticket type, shipping address, …) with an Excel dropdown for ticket types.',
+        'Fill it in and Upload CSV/Excel. Your own list works too: column names match in any case or spacing (First Name = first_name), and email is optional.',
+        'Or paste a Google Sheets / OneDrive share link — import once, or save it as a source to auto-sync every minute while the event is Active.',
+        'Watch the sync status: red = sync failed; amber = imported with warnings (unknown ticket types, rows over your plan limit, bad phone numbers).',
+        'Re-importing never duplicates guests — it fills in missing phone numbers, ticket types, and addresses instead.',
         'Or add people one at a time in the Guests tab.',
-        'Free events allow up to 25 guests — an Event Pass raises the limit.',
+        'Free events allow up to 25 guests (imports included) — an Event Pass raises the limit.',
       ]},
       { id: 'org-rsvp', icon: '✉️', title: 'Set up RSVP & invite page', img: '/guide/admin-invite.png', steps: [
         'Invite tab → "Invite Page & RSVP".',
@@ -51,6 +54,26 @@ const CONTENT = {
         'Seating tab: create tables, auto-assign or place guests, reserve seats.',
         'Menu tab: add categories/items; guests pick meals; track catering.',
       ]},
+      { id: 'org-access', icon: '🎫', title: 'Venue Access: zones & ticket types (paid)', imgs: ['/guide/admin-access.png', '/guide/admin-access-analytics.png'], steps: [
+        'Overview → Features → turn on Access (requires an Event Pass).',
+        'Access tab → Zones: create areas (Main Hall, VIP Lounge, …) with optional capacity and direction mode (entry / exit / both).',
+        'Ticket types: create GA / VIP / Press and pick which zones each may enter — leave empty for all zones.',
+        'Assign: set a guest\'s ticket type one by one, or add a ticket_type column to your imported list / synced sheet.',
+        'Guests without a ticket type can enter every zone; capacity limits still apply.',
+        'Analytics: live occupancy per zone, peak arrival times, room-to-room flow, and each guest\'s journey through the venue.',
+      ]},
+      { id: 'org-logistics', icon: '📦', title: 'Logistics: ship merch & gifts (paid)', img: '/guide/admin-logistics.png', steps: [
+        'Overview → Features → turn on Logistics.',
+        'Logistics tab: create shipments — merch before the event or gifts after — and add their items.',
+        'Guest addresses come from RSVP (guests fill them in) or from the ship_address columns in your imported list.',
+        'Share the packing-list page with your fulfilment vendor — they see addresses and items, no login needed.',
+      ]},
+      { id: 'org-registry', icon: '🎁', title: 'Gift registry (paid)', img: '/guide/admin-registry.png', steps: [
+        'Overview → Features → turn on Registry.',
+        'Registry tab: add gift items (paste a store link to auto-fill details) and cash funds; write a welcome message.',
+        'Share the public registry link — guests mark what they\'ll bring so nobody doubles up.',
+        'No money moves through the platform — guests buy or give directly.',
+      ]},
       { id: 'org-team', icon: '🧑‍🤝‍🧑', title: 'Add your team', img: '/guide/admin-team.png', steps: [
         'Team tab → "Add a teammate" → enter email + role (Staff to scan, Admin to manage).',
         'They sign in with that email and the account links automatically.',
@@ -62,8 +85,8 @@ const CONTENT = {
         'Watch it live on the Dashboard.',
       ]},
       { id: 'org-upgrade', icon: '💳', title: 'Upgrade & credits', img: '/guide/pricing.png', steps: [
-        'Invite tab → Event Pass. Free = email-only, 25 guests, branding, no seating/menu/check-in.',
-        'Buy a pass to unlock SMS/WhatsApp, more guests, seating & menu, check-in, and remove branding.',
+        'Invite tab → Event Pass. Free = email-only, 25 guests, branding, no paid features.',
+        'Buy a pass to unlock SMS/WhatsApp, more guests, check-in, seating & menu, venue access zones, logistics, gift registry, and remove branding.',
         'Low on messages? Buy a credit top-up in the same panel. See all plans at /pricing.',
       ]},
     ],
@@ -86,6 +109,12 @@ const CONTENT = {
         'Already admitted — the ticket was used before.',
         'Not assigned / needs pass — ask the organizer.',
       ]},
+      { id: 'staff-zones', icon: '🚪', title: 'Zone scanning (Venue Access events)', img: '/guide/scanner-zone.png', steps: [
+        'If the event uses Venue Access, the Scanner shows a zone + direction picker — set it to where you\'re standing (e.g. Main Hall · In).',
+        'Each scan logs the guest in or out of that zone and shows Allowed (green) or Denied (red) with the live zone occupancy.',
+        'Denied reasons: the guest\'s ticket type isn\'t valid for this zone, or the zone is at capacity.',
+        'A guest\'s first allowed entry also checks them in for the event — no separate check-in scan needed.',
+      ]},
     ],
   },
   guest: {
@@ -103,6 +132,15 @@ const CONTENT = {
       { id: 'guest-ticket', icon: '🎟️', title: 'Get your ticket', steps: [
         'Once confirmed, your ticket QR is emailed to you.',
         'On the day, show the QR (phone or printed) at the entrance.',
+        'Some events use ticket types (e.g. VIP) and zones — your ticket controls which areas you can enter.',
+      ]},
+      { id: 'guest-extras', icon: '🍽️', title: 'Meals & plus-ones', steps: [
+        'If the host set a menu, pick your meal right on your ticket page before the deadline.',
+        'Coming as a couple? Use the partner option on your ticket to link your plus-one so you\'re seated together.',
+      ]},
+      { id: 'guest-registry', icon: '🎁', title: 'Gift registry', steps: [
+        'If the host shares a registry link, open it to browse gift ideas and cash funds.',
+        'Mark what you\'ll bring so others don\'t double up — you buy or give directly, not through the platform.',
       ]},
     ],
   },
@@ -158,12 +196,12 @@ function Topic({ t, open, onToggle, query }) {
               </li>
             ))}
           </ol>
-          {t.img && (
-            <a href={t.img} target="_blank" rel="noopener noreferrer" className="block">
-              <img src={t.img} alt={t.title} loading="lazy"
+          {(t.imgs || (t.img ? [t.img] : [])).map((src) => (
+            <a key={src} href={src} target="_blank" rel="noopener noreferrer" className="block">
+              <img src={src} alt={t.title} loading="lazy"
                 className="rounded-xl border border-slate-200 dark:border-slate-700 w-full hover:opacity-95 transition-opacity" />
             </a>
-          )}
+          ))}
         </div>
       )}
     </div>

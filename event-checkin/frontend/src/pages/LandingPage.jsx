@@ -25,7 +25,7 @@ const features = [
       </svg>
     ),
     title: 'Smart Guest Lists',
-    desc: 'Upload CSV or spreadsheets from Google Sheets and Excel. Duplicate detection keeps your list clean.',
+    desc: 'Bring your guest list in seconds — we keep it clean and ready to go.',
   },
   {
     icon: (
@@ -34,7 +34,7 @@ const features = [
       </svg>
     ),
     title: 'Instant QR Codes',
-    desc: "Generate personalized QR codes for every guest — they carry their ticket on their phone.",
+    desc: 'Every guest gets a personal ticket, right on their phone.',
   },
   {
     icon: (
@@ -43,7 +43,7 @@ const features = [
       </svg>
     ),
     title: 'WhatsApp, SMS & Email',
-    desc: 'Send invites and updates across WhatsApp, SMS, and email — meet guests on the channel they actually use.',
+    desc: 'Reach every guest on the channel they actually use.',
   },
   {
     icon: (
@@ -52,7 +52,7 @@ const features = [
       </svg>
     ),
     title: 'Self-Serve RSVP',
-    desc: 'A branded invite page where guests RSVP themselves — open links or unique per-guest links, confirm/decline, deadlines, and approvals.',
+    desc: 'A beautiful invite page where guests RSVP themselves.',
   },
   {
     icon: (
@@ -61,7 +61,34 @@ const features = [
       </svg>
     ),
     title: 'Seating & Menu',
-    desc: 'Assign tables and seats, capture meal choices, and track catering — all in one place for the event.',
+    desc: 'Plan tables, seats, and meals — all in one place.',
+  },
+  {
+    icon: (
+      <svg className="w-7 h-7 text-indigo-600 dark:text-indigo-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M15 5v2m0 4v2m0 4v2M5 5a2 2 0 00-2 2v3a2 2 0 110 4v3a2 2 0 002 2h14a2 2 0 002-2v-3a2 2 0 110-4V7a2 2 0 00-2-2H5z" />
+      </svg>
+    ),
+    title: 'Venue Access & Zones',
+    desc: 'Control who gets in where, with real-time insight into your venue.',
+  },
+  {
+    icon: (
+      <svg className="w-7 h-7 text-indigo-600 dark:text-indigo-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" />
+      </svg>
+    ),
+    title: 'Merch & Gift Logistics',
+    desc: 'Get merchandise and gifts to your guests, start to finish.',
+  },
+  {
+    icon: (
+      <svg className="w-7 h-7 text-indigo-600 dark:text-indigo-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M12 8v13m0-13V6a2 2 0 112 2h-2zm0 0V5.5A2.5 2.5 0 109.5 8H12zm-7 4h14M5 12a2 2 0 110-4h14a2 2 0 110 4M5 12v7a2 2 0 002 2h10a2 2 0 002-2v-7" />
+      </svg>
+    ),
+    title: 'Gift Registry',
+    desc: 'A shared registry of gifts and cash funds — no duplicates.',
   },
   {
     icon: (
@@ -70,7 +97,7 @@ const features = [
       </svg>
     ),
     title: 'Live Dashboard',
-    desc: 'Watch check-ins happen in real time. See admitted counts, pending guests, and a live admission feed.',
+    desc: 'Watch your event come to life in real time.',
   },
   {
     icon: (
@@ -79,7 +106,7 @@ const features = [
       </svg>
     ),
     title: 'Mobile Scanner',
-    desc: 'Scan guest QR codes from any phone or tablet. No app download needed — works right in the browser.',
+    desc: 'Check guests in from any phone — no app to install.',
   },
   {
     icon: (
@@ -88,16 +115,7 @@ const features = [
       </svg>
     ),
     title: 'Team Access',
-    desc: 'Assign scanning officials to events. Admins manage everything; officials see only what they need.',
-  },
-  {
-    icon: (
-      <svg className="w-7 h-7 text-indigo-600 dark:text-indigo-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
-      </svg>
-    ),
-    title: 'Secure by Default',
-    desc: 'Firebase Auth handles sign-in. Every QR token is unique and expires after check-in.',
+    desc: 'Add your team and control what each person can do.',
   },
 ]
 
@@ -160,7 +178,7 @@ export default function LandingPage() {
 
               <p className="mt-5 text-lg sm:text-xl text-slate-600 dark:text-slate-300 max-w-xl leading-relaxed">
                 Invitations, RSVPs, and check-in in one place — WhatsApp/SMS/email invites,
-                self-serve RSVP, seating &amp; menu, and QR check-in on the day.
+                self-serve RSVP, seating &amp; menu, zones &amp; access control, and QR check-in on the day.
                 <span className="block mt-2 text-base text-slate-500 dark:text-slate-400">Free to start · pay per event, no subscription.</span>
               </p>
 
@@ -233,7 +251,7 @@ export default function LandingPage() {
             </div>
           </div>
           <div className="mt-12 grid grid-cols-3 gap-4 max-w-xl">
-            {[['Invites & RSVP', 'WhatsApp · SMS · Email'], ['QR Check-In', 'Instant'], ['Seating & Menu', 'Built-in']].map(([label, sub]) => (
+            {[['Invites & RSVP', 'WhatsApp · SMS · Email'], ['QR Check-In', 'Zones & access control'], ['Seating, Menu & Registry', 'Built-in']].map(([label, sub]) => (
               <div key={label}>
                 <div className="text-sm font-bold text-slate-950 dark:text-white">{label}</div>
                 <div className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">{sub}</div>

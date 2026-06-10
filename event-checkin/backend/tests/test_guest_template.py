@@ -7,7 +7,7 @@ import io
 import csv
 
 import pytest
-from sqlalchemy import select
+from sqlalchemy import select, func
 
 from conftest import _Session
 from app.models import Event, Guest, TicketType
@@ -121,6 +121,92 @@ async def test_reimport_backfills_ticket_and_address(ctx):
         g = (await s.execute(select(Guest).where(Guest.email == "g@a.com"))).scalar_one()
     assert g.ticket_type_id is not None
     assert g.ship_city == "Geneva"
+
+
+@pytest.mark.asyncio
+async def test_headers_case_and_spacing_insensitive(ctx):
+    eid = ctx.ids["event_a"]
+    await _enable(eid, venue=True, ticket_names=["VIP"])
+    ctx.login(ctx.ids["user_a"])
+    r = await _upload(ctx, eid, (
+        "First Name,LAST_NAME,Email,Phone,Ticket Type\n"
+        "Clara,Oswald,clara@x.com,,VIP\n"
+    ))
+    body = r.json()
+    assert body["added"] == 1
+    assert body["ticket_types_assigned"] == 1
+
+    async with _Session() as s:
+        clara = (await s.execute(select(Guest).where(Guest.email == "clara@x.com"))).scalar_one()
+    assert clara.first_name == "Clara" and clara.ticket_type_id is not None
+
+
+@pytest.mark.asyncio
+async def test_import_without_email_column(ctx):
+    eid = ctx.ids["event_a"]
+    ctx.login(ctx.ids["user_a"])
+    csv_text = (
+        "first_name,last_name,phone\n"
+        "Donna,Noble,+18325550111\n"
+        "Wilfred,Mott,\n"
+    )
+    r = await _upload(ctx, eid, csv_text)
+    assert r.json()["added"] == 2
+    # Re-import the same rows — must dedupe, not duplicate
+    r = await _upload(ctx, eid, csv_text)
+    body = r.json()
+    assert body["added"] == 0 and body["skipped"] == 2
+
+    async with _Session() as s:
+        donna = (await s.execute(select(Guest).where(Guest.first_name == "Donna"))).scalar_one()
+    assert donna.email is None and donna.phone == "+18325550111"
+
+
+@pytest.mark.asyncio
+async def test_import_respects_guest_cap(ctx):
+    eid = ctx.ids["event_a"]  # free plan → FREE_GUEST_CAP=25; fixture seeds 1 guest
+    ctx.login(ctx.ids["user_a"])
+    rows = "\n".join(f"Guest,N{i},guest{i}@x.com," for i in range(30))
+    r = await _upload(ctx, eid, "first_name,last_name,email,phone\n" + rows + "\n")
+    body = r.json()
+    assert body["added"] == 24
+    assert body["over_cap"] == 6
+    assert "Event Pass" in body["cap_note"]
+
+    async with _Session() as s:
+        n = await s.scalar(select(func.count(Guest.id)).where(Guest.event_id == eid))
+    assert n == 25
+
+
+@pytest.mark.asyncio
+async def test_sample_rows_reported_separately(ctx):
+    eid = ctx.ids["event_a"]
+    ctx.login(ctx.ids["user_a"])
+    r = await _upload(ctx, eid, (
+        "first_name,last_name,email,phone\n"
+        "Jane,Doe,jane@example.com,\n"
+        "Amy,Pond,amy3@x.com,\n"
+    ))
+    body = r.json()
+    assert body["added"] == 1
+    assert body["sample_rows_skipped"] == 1
+
+
+@pytest.mark.asyncio
+async def test_xlsx_dropdown_uses_hidden_sheet(ctx):
+    import openpyxl
+    eid = ctx.ids["event_a"]
+    await _enable(eid, venue=True, ticket_names=["VIP, Gold", "GA"])  # comma in name
+    ctx.login(ctx.ids["user_a"])
+    r = await ctx.client.get(f"/api/events/{eid}/guests/template")
+    wb = openpyxl.load_workbook(io.BytesIO(r.content))
+    assert "TicketTypes" in wb.sheetnames
+    ref = wb["TicketTypes"]
+    assert ref.sheet_state == "hidden"
+    names = [row[0].value for row in ref.iter_rows()]
+    assert "VIP, Gold" in names  # comma survives intact
+    dvs = wb["Guests"].data_validations.dataValidation
+    assert any("TicketTypes!" in (dv.formula1 or "") for dv in dvs)
 
 
 @pytest.mark.asyncio

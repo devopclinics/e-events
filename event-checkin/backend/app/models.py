@@ -107,6 +107,9 @@ class Event(Base):
     source_sync_interval_seconds: Mapped[int] = mapped_column(Integer, default=60)
     source_last_sync_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     source_last_error: Mapped[str | None] = mapped_column(Text, nullable=True)
+    # Non-fatal issues from the last sync (rows over plan cap, unknown ticket
+    # types, bad phones) — the sync succeeded but the admin should know.
+    source_last_warning: Mapped[str | None] = mapped_column(Text, nullable=True)
 
     # ── Invite page & self-service RSVP ──────────────────────────────────────
     rsvp_enabled: Mapped[bool] = mapped_column(Boolean, default=False)

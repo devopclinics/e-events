@@ -10,7 +10,7 @@ from sqlalchemy import select
 from fastapi import HTTPException
 from .database import AsyncSessionLocal
 from .models import Event
-from .routers.guests import import_from_source_url
+from .routers.guests import import_from_source_url, import_warning_summary
 
 logger = logging.getLogger("sync_poller")
 
@@ -32,9 +32,10 @@ async def _sync_one(event_id: str) -> None:
             if not event or not event.source_url or event.status != "active":
                 return
             try:
-                await import_from_source_url(event.source_url, event_id, db)
+                result = await import_from_source_url(event.source_url, event_id, db)
                 event.source_last_sync_at = datetime.utcnow()
                 event.source_last_error = None
+                event.source_last_warning = import_warning_summary(result)
             except HTTPException as e:
                 event.source_last_sync_at = datetime.utcnow()
                 event.source_last_error = str(e.detail)

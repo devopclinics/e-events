@@ -12,7 +12,7 @@ from ..database import get_db
 from ..models import Event, Guest, TicketType, User
 from ..schemas import GuestOut, GuestCreate
 from ..auth import require_event_admin
-from ..entitlements import assert_within_guest_cap, can_use_paid_channels, take_message_credit
+from ..entitlements import assert_within_guest_cap, guest_limit, can_use_paid_channels, take_message_credit
 from services.qr_service import generate_qr_bytes
 from services.email_service import send_invite_email, send_manual_invite_email
 from services import messaging
@@ -182,16 +182,23 @@ _TEMPLATE_SAMPLE = {
 }
 
 
+def _norm_header(h: str) -> str:
+    """Normalize a CSV header: 'First Name', 'FIRST_NAME', 'first-name' →
+    'first_name'. Lets clients use their own list without renaming columns."""
+    return re.sub(r"[\s\-]+", "_", (h or "").strip().lower())
+
+
 async def _process_csv(text: str, event_id: str, db: AsyncSession):
     text = text.replace('\r\n', '\n').replace('\r', '\n')
     reader = csv.DictReader(io.StringIO(text))
-    fields = {(f or '').strip().lower() for f in (reader.fieldnames or [])}
-    missing = {'first_name', 'last_name', 'email'} - fields
+    fields = {_norm_header(f) for f in (reader.fieldnames or [])}
+    missing = {'first_name', 'last_name'} - fields
     if missing:
         raise HTTPException(
             400,
             f"CSV is missing required columns: {', '.join(sorted(missing))}. "
-            "Expected header: first_name,last_name,email,phone"
+            "Expected header: first_name,last_name,email,phone "
+            "(case/spacing doesn't matter; email is optional)"
         )
 
     # Add-on columns (matching the downloadable template) are honored only when
@@ -206,20 +213,29 @@ async def _process_csv(text: str, event_id: str, db: AsyncSession):
         )).scalars().all()
         tt_by_name = {t.name.strip().lower(): t.id for t in tts}
 
+    # Plan cap: bulk import must respect the same limit as single-add/RSVP.
+    cap = guest_limit(event) if event else None
+    current_count = 0
+    if cap is not None:
+        current_count = await db.scalar(
+            select(func.count(Guest.id)).where(Guest.event_id == event_id)
+        ) or 0
+
     added = skipped = invalid_phones = backfilled_phones = 0
-    tickets_assigned = addresses_added = 0
+    tickets_assigned = addresses_added = sample_rows = over_cap = 0
     unknown_tickets: set[str] = set()
-    for row in reader:
+    for raw_row in reader:
+        row = {_norm_header(k): (v or "") for k, v in raw_row.items() if k is not None}
         email = row.get("email", "").strip().lower()
         first = row.get("first_name", "").strip()
         last = row.get("last_name", "").strip()
-        if not email:
+        if not first and not last:
             skipped += 1
             continue
         # The sample row shipped in the template uses a reserved example.com
         # address — skip it so an undeleted sample never becomes a guest.
         if email.endswith("@example.com"):
-            skipped += 1
+            sample_rows += 1
             continue
 
         phone_raw = row.get("phone", "").strip()
@@ -241,15 +257,32 @@ async def _process_csv(text: str, event_id: str, db: AsyncSession):
         if want_shipping and (row.get("ship_address1") or "").strip():
             ship = {c: (row.get(c) or "").strip() or None for c in _SHIP_COLS}
 
-        # Deduplicate on (first_name + last_name + email) — same person twice
-        existing = (await db.execute(
-            select(Guest).where(
-                Guest.event_id == event_id,
-                Guest.email == email,
-                Guest.first_name == first,
-                Guest.last_name == last,
+        # Deduplicate on (first_name + last_name + email) — same person twice.
+        # Email-less rows (lists of names/phones) dedupe on name among guests
+        # with no email, preferring a phone match so two same-named guests with
+        # different numbers stay distinct.
+        if email:
+            existing = (await db.execute(
+                select(Guest).where(
+                    Guest.event_id == event_id,
+                    Guest.email == email,
+                    Guest.first_name == first,
+                    Guest.last_name == last,
+                )
+            )).scalar_one_or_none()
+        else:
+            candidates = (await db.execute(
+                select(Guest).where(
+                    Guest.event_id == event_id,
+                    Guest.email.is_(None),
+                    Guest.first_name == first,
+                    Guest.last_name == last,
+                )
+            )).scalars().all()
+            existing = (
+                next((c for c in candidates if normalized_phone and c.phone == normalized_phone), None)
+                or next((c for c in candidates if not c.phone or not normalized_phone), None)
             )
-        )).scalar_one_or_none()
         if existing:
             # Backfill missing fields on re-import — useful when the source spreadsheet
             # now has a phone number that was blank/invalid on the first import.
@@ -266,16 +299,20 @@ async def _process_csv(text: str, event_id: str, db: AsyncSession):
             skipped += 1
             continue
 
+        if cap is not None and current_count >= cap:
+            over_cap += 1
+            continue
         db.add(Guest(
             event_id=event_id,
             first_name=first,
             last_name=last,
-            email=email,
+            email=email or None,
             phone=normalized_phone,
             ticket_type_id=ticket_type_id,
             **ship,
         ))
         added += 1
+        current_count += 1
         if ticket_type_id:
             tickets_assigned += 1
         if ship:
@@ -298,7 +335,28 @@ async def _process_csv(text: str, event_id: str, db: AsyncSession):
             "Unknown ticket types were ignored — create them in the Access tab "
             "(or download a fresh template), then re-import to assign."
         )
+    if sample_rows:
+        result["sample_rows_skipped"] = sample_rows
+    if over_cap:
+        result["over_cap"] = over_cap
+        result["cap_note"] = (
+            f"This event's plan allows up to {cap} guests — {over_cap} row(s) "
+            "were not imported. Upgrade with an Event Pass to add more."
+        )
     return result
+
+
+def import_warning_summary(result: dict) -> str | None:
+    """One-line human-readable warnings from a _process_csv result — shown in
+    the sync-status UI so background sheet syncs don't swallow problems."""
+    parts = []
+    if result.get("over_cap"):
+        parts.append(result["cap_note"])
+    if result.get("unknown_ticket_types"):
+        parts.append("Unknown ticket types ignored: " + ", ".join(result["unknown_ticket_types"]))
+    if result.get("invalid_phones"):
+        parts.append(f"{result['invalid_phones']} phone(s) had an invalid format and were left blank")
+    return " · ".join(parts) or None
 
 
 @router.get("/{event_id}/guests/template")
@@ -353,16 +411,20 @@ async def download_guest_template(event_id: str, fmt: str = "xlsx", db: AsyncSes
     ws.freeze_panes = "A2"
 
     if tt_names and "ticket_type" in cols:
-        joined = ",".join(n.replace(",", " ") for n in tt_names)
-        # Excel caps inline validation lists at 255 chars — beyond that, ship
-        # the template without the dropdown (names still match on import).
-        if len(joined) <= 255:
-            dv = DataValidation(type="list", formula1=f'"{joined}"', allow_blank=True)
-            dv.error = "Pick one of the event's ticket types"
-            dv.prompt = "Ticket types: " + ", ".join(tt_names)
-            ws.add_data_validation(dv)
-            letter = get_column_letter(cols.index("ticket_type") + 1)
-            dv.add(f"{letter}2:{letter}1001")
+        # Names live on a hidden sheet and the dropdown references the range —
+        # unlike an inline list, this survives commas in names and any length.
+        ref = wb.create_sheet("TicketTypes")
+        for name in tt_names:
+            ref.append([name])
+        ref.sheet_state = "hidden"
+        dv = DataValidation(
+            type="list", formula1=f"=TicketTypes!$A$1:$A${len(tt_names)}", allow_blank=True,
+        )
+        dv.error = "Pick one of the event's ticket types"
+        dv.prompt = "Ticket types: " + ", ".join(tt_names)
+        ws.add_data_validation(dv)
+        letter = get_column_letter(cols.index("ticket_type") + 1)
+        dv.add(f"{letter}2:{letter}1001")
 
     buf = io.BytesIO()
     wb.save(buf)

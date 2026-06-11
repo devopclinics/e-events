@@ -9,7 +9,7 @@ from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Backgro
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func
 from ..database import get_db
-from ..models import Event, Guest, TicketType, User
+from ..models import Event, Guest, TicketType, GuestTag, GuestTagLink, User
 from ..schemas import GuestOut, GuestCreate
 from ..auth import require_event_admin
 from ..entitlements import assert_within_guest_cap, guest_limit, can_use_paid_channels, take_message_credit
@@ -166,6 +166,7 @@ def _template_columns(event: Event) -> list[str]:
     cols = ["first_name", "last_name", "email", "phone"]
     if event.venue_access_enabled:
         cols.append("ticket_type")
+        cols.append("tags")
     if event.logistics_enabled:
         cols.extend(_SHIP_COLS)
     return cols
@@ -176,6 +177,7 @@ def _template_columns(event: Event) -> list[str]:
 _TEMPLATE_SAMPLE = {
     "first_name": "Jane", "last_name": "Doe",
     "email": "jane@example.com", "phone": "+18325550100",
+    "tags": "VIP; Press",
     "ship_address1": "123 Main St", "ship_address2": "Apt 4B",
     "ship_city": "Houston", "ship_state": "TX",
     "ship_postal": "77002", "ship_country": "USA",
@@ -206,12 +208,47 @@ async def _process_csv(text: str, event_id: str, db: AsyncSession):
     event = await db.get(Event, event_id)
     want_ticket = bool(event and event.venue_access_enabled) and "ticket_type" in fields
     want_shipping = bool(event and event.logistics_enabled) and "ship_address1" in fields
+    want_tags = bool(event and event.venue_access_enabled) and "tags" in fields
     tt_by_name: dict[str, str] = {}
     if want_ticket:
         tts = (await db.execute(
             select(TicketType).where(TicketType.event_id == event_id)
         )).scalars().all()
         tt_by_name = {t.name.strip().lower(): t.id for t in tts}
+
+    # Tag-based classification: resolve names to ids (auto-creating new tags),
+    # and track existing links so re-imports don't duplicate.
+    tag_id_by_name: dict[str, str] = {}            # existing tags → real id
+    new_tag_by_name: dict[str, "GuestTag"] = {}    # created this run (id after flush)
+    existing_links: set[tuple[str, str]] = set()
+    pending_tags: list[tuple["Guest", list[str]]] = []   # (guest_obj, [name_key])
+    tags_assigned = tags_created = 0
+    if want_tags:
+        for t in (await db.execute(select(GuestTag).where(GuestTag.event_id == event_id))).scalars():
+            tag_id_by_name[t.name.strip().lower()] = t.id
+        existing_links = set((await db.execute(
+            select(GuestTagLink.guest_id, GuestTagLink.tag_id)
+            .join(GuestTag, GuestTag.id == GuestTagLink.tag_id)
+            .where(GuestTag.event_id == event_id))).all())
+
+    def _resolve_tag_keys(cell: str) -> list[str]:
+        """Return normalized tag name-keys for a row, auto-creating new tags
+        (ids assigned at the later flush)."""
+        nonlocal tags_created
+        keys: list[str] = []
+        for raw in re.split(r"[;,]", cell or ""):
+            nm = raw.strip()
+            if not nm:
+                continue
+            key = nm.lower()
+            if key not in tag_id_by_name and key not in new_tag_by_name:
+                tag = GuestTag(event_id=event_id, name=nm)
+                db.add(tag)
+                new_tag_by_name[key] = tag
+                tags_created += 1
+            if key not in keys:
+                keys.append(key)
+        return keys
 
     # Plan cap: bulk import must respect the same limit as single-add/RSVP.
     cap = guest_limit(event) if event else None
@@ -257,6 +294,8 @@ async def _process_csv(text: str, event_id: str, db: AsyncSession):
         if want_shipping and (row.get("ship_address1") or "").strip():
             ship = {c: (row.get(c) or "").strip() or None for c in _SHIP_COLS}
 
+        row_tag_keys = _resolve_tag_keys(row.get("tags", "")) if want_tags else []
+
         # Deduplicate on (first_name + last_name + email) — same person twice.
         # Email-less rows (lists of names/phones) dedupe on name among guests
         # with no email, preferring a phone match so two same-named guests with
@@ -296,13 +335,15 @@ async def _process_csv(text: str, event_id: str, db: AsyncSession):
                 for c in _SHIP_COLS:
                     setattr(existing, c, ship[c])
                 addresses_added += 1
+            if row_tag_keys:
+                pending_tags.append((existing, row_tag_keys))
             skipped += 1
             continue
 
         if cap is not None and current_count >= cap:
             over_cap += 1
             continue
-        db.add(Guest(
+        g = Guest(
             event_id=event_id,
             first_name=first,
             last_name=last,
@@ -310,13 +351,28 @@ async def _process_csv(text: str, event_id: str, db: AsyncSession):
             phone=normalized_phone,
             ticket_type_id=ticket_type_id,
             **ship,
-        ))
+        )
+        db.add(g)
         added += 1
         current_count += 1
         if ticket_type_id:
             tickets_assigned += 1
         if ship:
             addresses_added += 1
+        if row_tag_keys:
+            pending_tags.append((g, row_tag_keys))
+
+    # Insert guests + any new tags first (assigns their ids), then the
+    # guest↔tag links (FK-safe, deduped against pre-existing links).
+    if want_tags:
+        await db.flush()
+        for guest, keys in pending_tags:
+            for key in keys:
+                tid = tag_id_by_name.get(key) or new_tag_by_name[key].id
+                if (guest.id, tid) not in existing_links:
+                    db.add(GuestTagLink(guest_id=guest.id, tag_id=tid))
+                    existing_links.add((guest.id, tid))
+                    tags_assigned += 1
 
     await db.commit()
     result = {"added": added, "skipped": skipped}
@@ -329,6 +385,10 @@ async def _process_csv(text: str, event_id: str, db: AsyncSession):
         result["ticket_types_assigned"] = tickets_assigned
     if addresses_added:
         result["addresses_added"] = addresses_added
+    if tags_assigned:
+        result["tags_assigned"] = tags_assigned
+    if tags_created:
+        result["tags_created"] = tags_created
     if unknown_tickets:
         result["unknown_ticket_types"] = sorted(unknown_tickets)
         result["ticket_note"] = (

@@ -51,7 +51,7 @@ async def test_template_columns_follow_features(ctx):
     await _enable(ctx.ids["event_a"], venue=True, logistics=True, ticket_names=["VIP", "GA"])
     ctx.login(ctx.ids["user_a"])
     r = await ctx.client.get(f"/api/events/{ctx.ids['event_a']}/guests/template?fmt=csv")
-    assert _csv_header(r) == BASE_COLS + ["ticket_type"] + SHIP_COLS
+    assert _csv_header(r) == BASE_COLS + ["ticket_type", "tags"] + SHIP_COLS
     # Sample row carries one of the event's real ticket types
     rows = list(csv.DictReader(io.StringIO(r.text)))
     assert rows[0]["ticket_type"] in ("VIP", "GA")

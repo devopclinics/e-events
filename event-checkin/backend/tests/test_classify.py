@@ -83,6 +83,38 @@ async def test_open_zone_admits_everyone(ctx):
 
 
 @pytest.mark.asyncio
+async def test_import_tags_column_autocreates_and_assigns(ctx):
+    eid = ctx.ids["event_a"]
+    await _setup_access_event(ctx)  # venue access on
+    ctx.login(ctx.ids["user_a"])
+    r = await ctx.client.post(
+        f"/api/events/{eid}/guests/upload",
+        files={"file": ("g.csv", (
+            "first_name,last_name,email,tags\n"
+            "Neil,Gaiman,neil@x.com,VIP; Press\n"
+            "Tori,Amos,tori@x.com,VIP\n"
+        ).encode(), "text/csv")},
+    )
+    assert r.status_code == 200
+    body = r.json()
+    assert body["added"] == 2
+    assert body["tags_assigned"] == 3      # Neil: VIP+Press, Tori: VIP
+    assert body["tags_created"] == 2       # VIP, Press auto-created
+
+    # Tags now exist and are queryable; re-import doesn't duplicate links.
+    tags = (await ctx.client.get(f"/api/events/{eid}/tags")).json()
+    assert {t["name"] for t in tags} == {"VIP", "Press"}
+    r2 = await ctx.client.post(
+        f"/api/events/{eid}/guests/upload",
+        files={"file": ("g.csv", (
+            "first_name,last_name,email,tags\n"
+            "Neil,Gaiman,neil@x.com,VIP; Press\n"
+        ).encode(), "text/csv")},
+    )
+    assert "tags_assigned" not in r2.json()  # already linked → no new links
+
+
+@pytest.mark.asyncio
 async def test_requires_access_enabled_and_member(ctx):
     eid = ctx.ids["event_a"]
     # Not enabled yet → 400

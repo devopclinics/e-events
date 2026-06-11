@@ -4104,6 +4104,7 @@ export default function AdminPage() {
     let msg = `${res.added} guests added, ${res.skipped} skipped.`
     if (res.sample_rows_skipped) msg += ` ${res.sample_rows_skipped} template sample row${res.sample_rows_skipped === 1 ? '' : 's'} ignored.`
     if (res.ticket_types_assigned) msg += ` ${res.ticket_types_assigned} ticket type${res.ticket_types_assigned === 1 ? '' : 's'} assigned.`
+    if (res.tags_assigned) msg += ` ${res.tags_assigned} tag${res.tags_assigned === 1 ? '' : 's'} assigned${res.tags_created ? ` (${res.tags_created} new)` : ''}.`
     if (res.addresses_added) msg += ` ${res.addresses_added} shipping address${res.addresses_added === 1 ? '' : 'es'} added.`
     let warn = false
     if (res.unknown_ticket_types?.length) {

@@ -69,6 +69,30 @@ export default function KitchenPage() {
     }
     return [...m.entries()].sort((a, b) => b[1] - a[1])
   })()
+  // Per-table breakdown — what each table still needs (pending only) + progress.
+  const tableGroups = (() => {
+    const groups = new Map()
+    for (const g of guests) {
+      const t = g.table_name || '— No table'
+      if (!groups.has(t)) groups.set(t, [])
+      groups.get(t).push(g)
+    }
+    const out = []
+    for (const [name, list] of groups) {
+      const counts = new Map()
+      const bump = (k) => counts.set(k, (counts.get(k) || 0) + 1)
+      for (const g of list) {
+        if (g.meal_served) continue   // only what's left to prepare
+        for (const s of Object.values(g.single || {})) bump(s.item_name)
+        for (const s of Object.values(g.multi || {})) for (const n of (s.items || [])) bump(n)
+        for (const s of Object.values(g.combo || {})) bump(s.combination_name)
+      }
+      out.push({ name, items: [...counts.entries()].sort((a, b) => b[1] - a[1]),
+                 served: list.filter((g) => g.meal_served).length, total: list.length })
+    }
+    out.sort((a, b) => a.name.startsWith('—') ? 1 : b.name.startsWith('—') ? -1 : a.name.localeCompare(b.name, undefined, { numeric: true }))
+    return out
+  })()
   const tables = Array.from(new Set(guests.map((g) => g.table_name).filter(Boolean))).sort()
   const served = guests.filter((g) => g.meal_served).length
   const filtered = guests.filter((g) =>
@@ -110,6 +134,34 @@ export default function KitchenPage() {
               </div>
             )}
           </div>
+
+          {/* Per-table — what to send to each table */}
+          {tableGroups.length > 0 && (
+            <div className="bg-white dark:bg-slate-800 dark:border dark:border-slate-700/60 rounded-2xl shadow-sm p-5">
+              <h2 className="font-semibold dark:text-white mb-3">By table — to prepare</h2>
+              <div className="grid sm:grid-cols-2 gap-3">
+                {tableGroups.map((t) => (
+                  <div key={t.name} className="rounded-xl border border-slate-200 dark:border-slate-700 p-3">
+                    <div className="flex items-center justify-between mb-2">
+                      <span className="font-semibold text-sm dark:text-slate-100">{t.name}</span>
+                      <span className={`text-xs ${t.served === t.total ? 'text-green-600' : 'text-slate-400'}`}>{t.served}/{t.total} served</span>
+                    </div>
+                    {t.items.length === 0 ? (
+                      <span className="text-xs text-green-600">All served ✓</span>
+                    ) : (
+                      <div className="flex flex-wrap gap-1.5">
+                        {t.items.map(([item, n]) => (
+                          <span key={item} className="text-xs rounded-full bg-amber-50 dark:bg-amber-900/30 text-amber-700 dark:text-amber-300 px-2 py-1">
+                            {item} <strong>×{n}</strong>
+                          </span>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
 
           {/* Filters */}
           <div className="flex flex-wrap gap-2 items-center">

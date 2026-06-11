@@ -18,7 +18,8 @@ export const CONTENT = {
         'Fill it in and Upload CSV/Excel. Your own list works too: column names match in any case or spacing (First Name = first_name), and email is optional.',
         'Or paste a Google Sheets / OneDrive share link — import once, or save it as a source to auto-sync every minute while the event is Active.',
         'Watch the sync status: red = sync failed; amber = imported with warnings (unknown ticket types, rows over your plan limit, bad phone numbers).',
-        'Re-importing never duplicates guests — it fills in missing phone numbers, ticket types, and addresses instead.',
+        'Re-importing never duplicates guests — it fills in missing phone numbers, ticket types, addresses, and tags instead.',
+        'Venue Access events: add a "tags" column (e.g. "VIP; Press") to classify guests on import — unknown tags are created automatically and drive zone access.',
         'Or add people one at a time in the Guests tab.',
         'Free events allow up to 25 guests (imports included) — an Event Pass raises the limit.',
       ]},
@@ -55,6 +56,13 @@ export const CONTENT = {
         'Guests without a ticket type can enter every zone; capacity limits still apply.',
         'Analytics: live occupancy per zone, peak arrival times, room-to-room flow, and each guest\'s journey through the venue.',
       ]},
+      { id: 'org-access-rules', icon: '🏷️', title: 'Access Rules: tags & gates (paid)', steps: [
+        'Access Rules tab → Tags: create your own classifiers (VIP, Press, 21+, Speaker…). Optionally auto-fill a tag from an RSVP answer, then click "Sync from RSVP".',
+        'Assign: search a guest and toggle their tags — or import a "tags" column on your guest list.',
+        'Zone rules: pick which tags may enter each zone. A zone with no tags selected admits everyone; otherwise a guest needs at least one matching tag.',
+        'Gates: pin a scanner to a zone (location) + direction (Entry/Exit). Staff pick the gate once and just scan — the zone is auto-detected and the guest\'s tags are checked automatically.',
+        'Tags are the flexible, multi-value system (a guest can be VIP + Press); ticket types remain the simpler single-tier option.',
+      ]},
       { id: 'org-logistics', icon: '📦', title: 'Logistics: ship merch & gifts (paid)', img: '/media/admin-logistics.png', steps: [
         'Overview → Features → turn on Logistics.',
         'Logistics tab: create shipments — merch before the event or gifts after — and add their items.',
@@ -80,6 +88,7 @@ export const CONTENT = {
       { id: 'org-upgrade', icon: '💳', title: 'Upgrade & credits', img: '/media/pricing.png', steps: [
         'Invite tab → Event Pass. Free = email-only, 25 guests, branding, no paid features.',
         'Buy a pass to unlock SMS/WhatsApp, more guests, check-in, seating & menu, venue access zones, logistics, gift registry, and remove branding.',
+        'Want to try paid features first? On a new account the Admin panel shows a "Request free trial credits" banner — send it and we\'ll set you up.',
         'Low on messages? Buy a credit top-up in the same panel. See all plans at /pricing.',
       ]},
     ],
@@ -104,8 +113,9 @@ export const CONTENT = {
       ]},
       { id: 'staff-zones', icon: '🚪', title: 'Zone scanning (Venue Access events)', img: '/media/scanner-zone.png', steps: [
         'If the event uses Venue Access, the Scanner shows a zone + direction picker — set it to where you\'re standing (e.g. Main Hall · In).',
+        'Easier: if the organizer set up Gates, switch to "Gate" and pick your gate once — the zone and direction are filled in automatically for every scan.',
         'Each scan logs the guest in or out of that zone and shows Allowed (green) or Denied (red) with the live zone occupancy.',
-        'Denied reasons: the guest\'s ticket type isn\'t valid for this zone, or the zone is at capacity.',
+        'Denied reasons: the guest\'s ticket type or tags aren\'t valid for this zone, or the zone is at capacity.',
         'A guest\'s first allowed entry also checks them in for the event — no separate check-in scan needed.',
       ]},
     ],
@@ -148,6 +158,18 @@ export const CONTENT = {
       { id: 'op-grant', icon: '🎁', title: 'Comp events & credits', steps: [
         'Console → Overview lists every organization and its events.',
         'Comp an event onto a tier, or add message credits — one click, no payment.',
+      ]},
+      { id: 'op-trials', icon: '🎟️', title: 'Trial requests', steps: [
+        'Console → Trial requests: customers asking to try paid features land here (with contact, phone, event & use case).',
+        'Approve by comping one of their events onto a tier and/or adding credits. If they have no event yet, approve with no event selected — the grant applies to their next event automatically.',
+        'Approving or declining emails the requester the decision automatically.',
+      ]},
+      { id: 'op-accounts', icon: '🧑‍💼', title: 'Manage accounts', steps: [
+        'Console → Accounts: every organization with its members.',
+        'Suspend / reactivate an org (members lose access to its events) — reversible, no data loss.',
+        'Delete an org to permanently remove it and all its data (typed-name confirmation).',
+        'Per member: change role (owner/admin/staff), remove from the org, or suspend/delete the user — deleting also disables their sign-in.',
+        'Guards: you can\'t suspend/delete yourself, the last operator, or the default org.',
       ]},
       { id: 'op-pricing', icon: '💲', title: 'Edit pricing', steps: [
         'Console → Pricing: edit tiers/credit packs (price, credits, caps, active).',

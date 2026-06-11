@@ -813,6 +813,22 @@ class ZoneOccupancy(BaseModel):
     capacity: Optional[int] = None
 
 
+class TableReport(BaseModel):
+    name: str
+    capacity: Optional[int] = None
+    seated: int = 0
+    checked_in: int = 0
+    served: int = 0
+
+
+class MenuEventOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+    id: str
+    name: str
+    couples_name: Optional[str] = None
+    menu_enabled: bool = True
+
+
 class DashboardStats(BaseModel):
     total: int
     admitted: int
@@ -827,6 +843,7 @@ class DashboardStats(BaseModel):
     zones: list[ZoneOccupancy] = []
     catering_served: Optional[int] = None
     catering_total: Optional[int] = None
+    tables: list[TableReport] = []
 
 
 # ── Menu dashboard ────────────────────────────────────────────────────────────

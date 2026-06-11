@@ -5,8 +5,8 @@ from fastapi.responses import StreamingResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func
 from ..database import get_db
-from ..models import Guest, Event, User, Zone, MenuCategory
-from ..schemas import DashboardStats, GuestOut, ZoneOccupancy
+from ..models import Guest, Event, User, Zone, MenuCategory, SeatingTable
+from ..schemas import DashboardStats, GuestOut, ZoneOccupancy, TableReport
 from ..auth import require_dashboard_access
 from .access import zone_occupancy
 from . import sse_subscribers
@@ -55,12 +55,32 @@ async def get_dashboard(event_id: str, db: AsyncSession = Depends(get_db), _: Us
             catering_total = total
             catering_served = await _count(db, Guest.event_id == event_id, Guest.meal_served == True)
 
+    # Per-table report (only when seating enabled) — helps table-assigned staff.
+    tables: list[TableReport] = []
+    if event.seating_enabled:
+        trows = (await db.execute(
+            select(SeatingTable).where(SeatingTable.event_id == event_id)
+            .order_by(SeatingTable.name))).scalars().all()
+        agg = {tid: (n, ci, sv) for tid, n, ci, sv in (await db.execute(
+            select(
+                Guest.table_id,
+                func.count(Guest.id),
+                func.count(Guest.id).filter(Guest.admitted.is_(True)),
+                func.count(Guest.id).filter(Guest.meal_served.is_(True)),
+            ).where(Guest.event_id == event_id, Guest.table_id.isnot(None))
+            .group_by(Guest.table_id))).all()}
+        for t in trows:
+            n, ci, sv = agg.get(t.id, (0, 0, 0))
+            tables.append(TableReport(name=t.name, capacity=t.capacity,
+                                      seated=int(n), checked_in=int(ci), served=int(sv)))
+
     return DashboardStats(
         total=total, admitted=admitted_count, pending=total - admitted_count,
         admitted_guests=[GuestOut.model_validate(g) for g in admitted_guests],
         rsvp_confirmed=rsvp_confirmed, rsvp_declined=rsvp_declined,
         rsvp_pending=rsvp_pending, rsvp_invited=rsvp_invited,
         zones=zones, catering_served=catering_served, catering_total=catering_total,
+        tables=tables,
     )
 
 

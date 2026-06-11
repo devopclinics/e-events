@@ -184,6 +184,42 @@ export default function DashboardPage() {
             </Card>
           )}
 
+          {/* Per-table report — for table-assigned staff */}
+          {stats.tables && stats.tables.length > 0 && (
+            <Card title="By table">
+              <div className="overflow-x-auto -mx-1">
+                <table className="w-full text-sm">
+                  <thead className="text-xs uppercase text-slate-400">
+                    <tr>
+                      <th className="text-left font-semibold px-2 py-2">Table</th>
+                      <th className="text-right font-semibold px-2 py-2">Seated</th>
+                      <th className="text-right font-semibold px-2 py-2">Checked in</th>
+                      <th className="text-right font-semibold px-2 py-2">Served</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-gray-100 dark:divide-slate-700">
+                    {stats.tables.map((t) => {
+                      const full = t.capacity ? t.seated >= t.capacity : false
+                      return (
+                        <tr key={t.name}>
+                          <td className="px-2 py-2 font-medium dark:text-slate-100">
+                            {t.name}
+                            {t.capacity != null && <span className={`text-xs ml-2 ${full ? 'text-red-500' : 'text-slate-400'}`}>{t.seated}/{t.capacity}</span>}
+                          </td>
+                          <td className="px-2 py-2 text-right dark:text-slate-300">{t.seated}</td>
+                          <td className="px-2 py-2 text-right">
+                            <span className={t.checked_in === t.seated && t.seated > 0 ? 'text-green-600 font-semibold' : 'text-slate-500 dark:text-slate-400'}>{t.checked_in}</span>
+                          </td>
+                          <td className="px-2 py-2 text-right text-slate-500 dark:text-slate-400">{t.served}</td>
+                        </tr>
+                      )
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            </Card>
+          )}
+
           {/* Live activity feed */}
           <Card title="Recent check-ins" right={<button onClick={() => fetchStats(eventId)} className="text-xs text-teal-600 hover:underline">Refresh</button>}>
             {stats.admitted_guests.length === 0 ? (

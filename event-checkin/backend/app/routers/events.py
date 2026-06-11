@@ -11,7 +11,7 @@ from ..schemas import (
     OrgMemberInvite, OrgMemberOut, MemberRoleUpdate, UserOut, EventSourceUpdate,
     InviteSettingsUpdate, RSVPQuestionCreate, RSVPQuestionUpdate, RSVPQuestionOut,
     BroadcastRequest, BroadcastResult,
-    ManualInviteRequest, ManualInviteResult,
+    ManualInviteRequest, ManualInviteResult, MenuEventOut,
 )
 from ..auth import require_admin, require_event_admin, get_current_user, _org_role
 from ..entitlements import can_use_paid_channels, take_message_credit
@@ -108,6 +108,28 @@ async def list_events(
             .order_by(Event.created_at.desc())
         )
     return result.scalars().all()
+
+
+@router.get("/me/menu-events", response_model=list[MenuEventOut])
+async def my_menu_events(db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user)):
+    """Events whose menu/orders this user may view — used to gate the Kitchen
+    page and its 'Menu' nav link. Owner/admin see their orgs' menu events;
+    staff see only events where they were granted can_manage_menu."""
+    base = select(Event).where(Event.menu_enabled.is_(True), Event.is_paid.is_(True))
+    if user.is_platform_superadmin:
+        rows = (await db.execute(base.order_by(Event.created_at.desc()))).scalars().all()
+    else:
+        mgr = (await db.execute(
+            base.join(Membership, Membership.org_id == Event.org_id)
+            .where(Membership.user_id == user.id, Membership.role.in_(["owner", "admin"])))).scalars().all()
+        staff = (await db.execute(
+            base.join(EventUser, EventUser.event_id == Event.id)
+            .where(EventUser.user_id == user.id, EventUser.can_manage_menu.is_(True)))).scalars().all()
+        seen, rows = set(), []
+        for e in [*mgr, *staff]:
+            if e.id not in seen:
+                seen.add(e.id); rows.append(e)
+    return [MenuEventOut.model_validate(e) for e in rows]
 
 
 @router.get("/{event_id}", response_model=EventOut)

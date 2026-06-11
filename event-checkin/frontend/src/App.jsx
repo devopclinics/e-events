@@ -1,5 +1,6 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { Routes, Route, NavLink, useNavigate, Navigate } from 'react-router-dom'
+import { api } from './api'
 import { AuthProvider, useAuth } from './context/AuthContext'
 import { ThemeProvider, useTheme } from './context/ThemeContext'
 import ProtectedRoute from './components/ProtectedRoute'
@@ -62,6 +63,12 @@ function Nav() {
   const { user, logout } = useAuth()
   const navigate = useNavigate()
   const [open, setOpen] = useState(false)
+  const [hasMenu, setHasMenu] = useState(false)   // can the user see any menu/orders?
+
+  useEffect(() => {
+    if (!user) { setHasMenu(false); return }
+    api.myMenuEvents().then((evs) => setHasMenu((evs || []).length > 0)).catch(() => setHasMenu(false))
+  }, [user])
 
   const activeLink = 'bg-teal-50 text-teal-800 dark:bg-teal-400/10 dark:text-teal-100 font-semibold'
   const idleLink = 'text-slate-600 hover:bg-slate-100 hover:text-slate-950 dark:text-slate-300 dark:hover:bg-white/5 dark:hover:text-white'
@@ -77,7 +84,7 @@ function Nav() {
     ...(user?.role === 'admin' ? [{ to: '/admin', label: 'Admin', end: true }] : []),
     { to: '/dashboard', label: 'Dashboard' },
     { to: '/scanner', label: 'Scanner' },
-    { to: '/kitchen', label: 'Menu' },
+    ...(hasMenu ? [{ to: '/kitchen', label: 'Menu' }] : []),
     ...(user?.is_platform_superadmin ? [{ to: '/console', label: 'Console' }] : []),
     { to: '/help', label: 'Help' },
   ]

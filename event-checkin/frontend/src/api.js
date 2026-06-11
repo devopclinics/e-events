@@ -65,6 +65,7 @@ export const api = {
   removeMember:  (eventId, userId) => req('DELETE', `/events/${eventId}/members/${userId}`),
 
   // Guests
+  myMenuEvents:        ()                  => req('GET',  '/events/me/menu-events'),
   listGuests:          (eventId)           => req('GET',  `/events/${eventId}/guests`),
   downloadGuestTemplate: (eventId, fmt = 'xlsx') =>
     downloadFile(`/events/${eventId}/guests/template?fmt=${fmt}`, `guest-template.${fmt}`),

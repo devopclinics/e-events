@@ -27,11 +27,11 @@ export default function KitchenPage() {
   const [tableF, setTableF] = useState('all')
 
   useEffect(() => {
-    api.listEvents().then((evs) => {
-      const active = evs.filter((e) => e.menu_enabled)
-      setEvents(active.length ? active : evs)
-      if ((active.length ? active : evs).length === 1) setEventId((active.length ? active : evs)[0].id)
-    }).catch(() => {})
+    api.myMenuEvents().then((evs) => {
+      setEvents(evs)
+      if (evs.length === 1) setEventId(evs[0].id)
+      if (evs.length === 0) setErr('You don\'t have menu access for any event.')
+    }).catch((e) => setErr(e.message))
   }, [])
 
   const load = useCallback(async (id) => {

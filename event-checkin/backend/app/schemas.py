@@ -160,6 +160,64 @@ class GrantRequest(BaseModel):
     add_credits: Optional[int] = None   # add message credits
 
 
+# ── Guest tags & gates (tag-based zone access) ───────────────────────────────
+
+class GuestTagIn(BaseModel):
+    name: str
+    color: Optional[str] = None
+    rsvp_question_id: Optional[str] = None
+    rsvp_value: Optional[str] = None
+    sort_order: int = 0
+
+
+class GuestTagOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+    id: str
+    event_id: str
+    name: str
+    color: Optional[str] = None
+    rsvp_question_id: Optional[str] = None
+    rsvp_value: Optional[str] = None
+    sort_order: int = 0
+    guest_count: int = 0
+
+
+class TagIdList(BaseModel):
+    tag_ids: list[str] = []
+
+
+class GateIn(BaseModel):
+    name: str
+    zone_id: str
+    direction: Literal["in", "out"] = "in"
+
+
+class GateOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+    id: str
+    event_id: str
+    name: str
+    zone_id: str
+    zone_name: Optional[str] = None
+    direction: str
+    is_active: bool = True
+
+
+class GateScanRequest(BaseModel):
+    qr_token: str
+
+
+class GateScanResult(BaseModel):
+    status: str               # allowed | denied | invalid
+    message: str
+    allowed: bool = False
+    guest_name: Optional[str] = None
+    zone_name: Optional[str] = None
+    direction: Optional[str] = None
+    occupancy: Optional[int] = None
+    matched_tags: list[str] = []
+
+
 class TrialRequestCreate(BaseModel):
     contact_name: str
     phone: Optional[str] = None

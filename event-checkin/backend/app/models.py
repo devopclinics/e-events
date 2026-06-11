@@ -486,6 +486,60 @@ class AffiliateStore(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
 
 
+class GuestTag(Base):
+    """Customer-defined classifier for an event (e.g. 'Speaker', 'Press', '21+',
+    'Engineering'). Maps to zones via ZoneTagRule. Fully isolated from the
+    legacy ticket_type gating — this is the new tag-based access system."""
+    __tablename__ = "guest_tags"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+    event_id: Mapped[str] = mapped_column(String(36), ForeignKey("events.id"), index=True)
+    name: Mapped[str] = mapped_column(String(100))
+    color: Mapped[str | None] = mapped_column(String(20), nullable=True)
+    # Optional auto-source: guests whose RSVP answer to this question equals
+    # `rsvp_value` get this tag when synced. Null = manual/import assignment only.
+    rsvp_question_id: Mapped[str | None] = mapped_column(String(36), ForeignKey("rsvp_questions.id"), nullable=True)
+    rsvp_value: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    sort_order: Mapped[int] = mapped_column(Integer, default=0)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+
+
+class GuestTagLink(Base):
+    """A guest carries a tag (many-to-many)."""
+    __tablename__ = "guest_tag_links"
+    __table_args__ = (UniqueConstraint("guest_id", "tag_id", name="uq_guest_tag"),)
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+    guest_id: Mapped[str] = mapped_column(String(36), ForeignKey("guests.id"), index=True)
+    tag_id: Mapped[str] = mapped_column(String(36), ForeignKey("guest_tags.id"), index=True)
+
+
+class ZoneTagRule(Base):
+    """A zone permits a tag. A zone with no rules admits everyone; with rules,
+    a guest needs at least one matching tag (any-of)."""
+    __tablename__ = "zone_tag_rules"
+    __table_args__ = (UniqueConstraint("zone_id", "tag_id", name="uq_zone_tag"),)
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+    zone_id: Mapped[str] = mapped_column(String(36), ForeignKey("zones.id"), index=True)
+    tag_id: Mapped[str] = mapped_column(String(36), ForeignKey("guest_tags.id"), index=True)
+
+
+class Gate(Base):
+    """A scanner pinned to a zone + direction. Scanning at a gate auto-supplies
+    the zone (no manual pick) and auto-evaluates the guest's tags against the
+    zone's rules. Separate from the legacy/manual scan flows."""
+    __tablename__ = "gates"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+    event_id: Mapped[str] = mapped_column(String(36), ForeignKey("events.id"), index=True)
+    name: Mapped[str] = mapped_column(String(120))
+    zone_id: Mapped[str] = mapped_column(String(36), ForeignKey("zones.id"))
+    direction: Mapped[str] = mapped_column(String(4), default="in")  # "in" | "out"
+    is_active: Mapped[bool] = mapped_column(Boolean, default=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+
+
 class TrialRequest(Base):
     """A customer's request to try paid features for free. Submitted from the
     onboarding banner; an operator approves it in the Console by comping one of

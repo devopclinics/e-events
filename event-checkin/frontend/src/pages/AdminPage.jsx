@@ -3458,6 +3458,15 @@ function TeamPanel({ eventId }) {
     finally { setLoading(false) }
   }
 
+  async function toggleDashPerm(userId, current) {
+    setLoading(true)
+    try {
+      await api.updateMemberPermissions(eventId, userId, { can_view_dashboard: !current })
+      setMembers((prev) => prev.map((m) => m.user.id === userId ? { ...m, can_view_dashboard: !current } : m))
+    } catch (e) { setMsg(e.message) }
+    finally { setLoading(false) }
+  }
+
   const roleTag = (role) => (
     <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${role === 'admin' ? 'bg-indigo-100 text-indigo-700 dark:bg-indigo-900/50 dark:text-indigo-300' : 'bg-amber-100 text-amber-700 dark:bg-amber-900/50 dark:text-amber-300'}`}>
       {role}
@@ -3510,6 +3519,18 @@ function TeamPanel({ eventId }) {
                       }`}
                     >
                       Menu: {m.can_manage_menu ? 'Yes' : 'No'}
+                    </button>
+                    <button
+                      onClick={() => toggleDashPerm(m.user.id, m.can_view_dashboard)}
+                      disabled={loading}
+                      title="Can view the live dashboard"
+                      className={`text-xs px-2 py-0.5 rounded-full font-medium border transition-colors disabled:opacity-50 ${
+                        m.can_view_dashboard
+                          ? 'bg-green-100 text-green-700 border-green-200 dark:bg-green-900/40 dark:text-green-400 dark:border-green-800'
+                          : 'bg-gray-100 text-gray-500 border-gray-200 dark:bg-slate-700 dark:text-slate-400 dark:border-slate-600'
+                      }`}
+                    >
+                      Dashboard: {m.can_view_dashboard ? 'Yes' : 'No'}
                     </button>
                   </>
                 )}

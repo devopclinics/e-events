@@ -132,6 +132,7 @@ class EventMemberOut(BaseModel):
     assigned_at: datetime
     can_reassign_seats: bool
     can_manage_menu: bool = False
+    can_view_dashboard: bool = False
 
 
 class AssignUserRequest(BaseModel):
@@ -806,11 +807,26 @@ class PairRequest(BaseModel):
 
 # ── Dashboard ─────────────────────────────────────────────────────────────────
 
+class ZoneOccupancy(BaseModel):
+    name: str
+    inside: int
+    capacity: Optional[int] = None
+
+
 class DashboardStats(BaseModel):
     total: int
     admitted: int
     pending: int
     admitted_guests: list[GuestOut]
+    # RSVP breakdown (always present)
+    rsvp_confirmed: int = 0
+    rsvp_declined: int = 0
+    rsvp_pending: int = 0
+    rsvp_invited: int = 0
+    # Adaptive sections — only populated when the feature is enabled
+    zones: list[ZoneOccupancy] = []
+    catering_served: Optional[int] = None
+    catering_total: Optional[int] = None
 
 
 # ── Menu dashboard ────────────────────────────────────────────────────────────

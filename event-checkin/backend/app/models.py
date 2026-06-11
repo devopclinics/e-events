@@ -67,6 +67,8 @@ class EventUser(Base):
     assigned_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
     can_reassign_seats: Mapped[bool] = mapped_column(Boolean, default=False)
     can_manage_menu: Mapped[bool] = mapped_column(Boolean, default=False)
+    # Lets a non-admin staffer open the live event dashboard (admins always can).
+    can_view_dashboard: Mapped[bool] = mapped_column(Boolean, default=False)
 
     event: Mapped["Event"] = relationship("Event", back_populates="members")
     user: Mapped["User"] = relationship("User")

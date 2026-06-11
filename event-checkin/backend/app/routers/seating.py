@@ -303,5 +303,7 @@ async def update_member_permissions(
         eu.can_reassign_seats = bool(body["can_reassign_seats"])
     if "can_manage_menu" in body:
         eu.can_manage_menu = bool(body["can_manage_menu"])
+    if "can_view_dashboard" in body:
+        eu.can_view_dashboard = bool(body["can_view_dashboard"])
     await db.commit()
     return {"ok": True}

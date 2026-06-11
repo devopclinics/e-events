@@ -220,6 +220,31 @@ async def require_event_admin(
     return user
 
 
+async def require_dashboard_access(
+    event_id: str,
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+) -> User:
+    """Org owner/admin (or superadmin) always; a staffer only if granted
+    can_view_dashboard on this event."""
+    event = await db.get(Event, event_id)
+    if not event:
+        raise HTTPException(404, "Event not found")
+    if user.is_platform_superadmin:
+        return user
+    role = await _org_role(user, event.org_id, db)
+    if role is None:
+        raise HTTPException(404, "Event not found")
+    if role in ("owner", "admin"):
+        return user
+    from .models import EventUser
+    eu = await db.scalar(select(EventUser).where(
+        EventUser.event_id == event_id, EventUser.user_id == user.id))
+    if eu and eu.can_view_dashboard:
+        return user
+    raise HTTPException(403, "You don't have dashboard access for this event.")
+
+
 _PAID_REQUIRED = "This feature requires an Event Pass — upgrade this event to unlock it."
 
 

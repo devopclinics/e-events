@@ -1,23 +1,62 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
 import { api } from '../api'
 
-const STAT_TEXT = { indigo: 'text-indigo-600', green: 'text-green-600', amber: 'text-amber-600' }
-const STAT_BAR  = { indigo: 'bg-indigo-500',  green: 'bg-green-500',  amber: 'bg-amber-500'  }
-
-function StatCard({ label, value, total, color }) {
-  const pct = total > 0 ? Math.round((value / total) * 100) : 0
+// ── Small visual pieces ───────────────────────────────────────────────────────
+function Donut({ pct, label, sub }) {
+  const r = 52, c = 2 * Math.PI * r, off = c - (pct / 100) * c
   return (
-    <div className="bg-white dark:bg-slate-800 dark:border dark:border-slate-700/60 rounded-xl shadow p-5">
-      <div className={`text-4xl font-bold ${STAT_TEXT[color]}`}>{value}</div>
-      <div className="text-sm text-gray-500 dark:text-slate-400 mt-1">{label}</div>
-      {total > 0 && (
-        <div className="mt-3">
-          <div className="h-1.5 bg-gray-100 dark:bg-slate-700 rounded-full overflow-hidden">
-            <div className={`h-full ${STAT_BAR[color]} rounded-full transition-all`} style={{ width: `${pct}%` }} />
-          </div>
-          <div className="text-xs text-gray-400 dark:text-slate-500 mt-1">{pct}%</div>
-        </div>
-      )}
+    <div className="relative w-36 h-36 shrink-0">
+      <svg viewBox="0 0 120 120" className="w-36 h-36 -rotate-90">
+        <circle cx="60" cy="60" r={r} fill="none" strokeWidth="12" className="stroke-slate-100 dark:stroke-slate-700" />
+        <circle cx="60" cy="60" r={r} fill="none" strokeWidth="12" strokeLinecap="round"
+          className="stroke-teal-500 transition-all duration-700" strokeDasharray={c} strokeDashoffset={off} />
+      </svg>
+      <div className="absolute inset-0 flex flex-col items-center justify-center">
+        <div className="text-3xl font-extrabold text-slate-900 dark:text-white">{pct}%</div>
+        <div className="text-[11px] text-slate-500 dark:text-slate-400">{label}</div>
+        {sub && <div className="text-[11px] text-slate-400">{sub}</div>}
+      </div>
+    </div>
+  )
+}
+
+function Kpi({ label, value, accent = 'text-slate-900 dark:text-white' }) {
+  return (
+    <div className="bg-white dark:bg-slate-800 dark:border dark:border-slate-700/60 rounded-2xl shadow-sm p-4">
+      <div className={`text-3xl font-extrabold ${accent}`}>{value}</div>
+      <div className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">{label}</div>
+    </div>
+  )
+}
+
+function Bar({ segments }) {
+  const total = segments.reduce((s, x) => s + x.value, 0) || 1
+  return (
+    <div>
+      <div className="flex h-3 rounded-full overflow-hidden bg-slate-100 dark:bg-slate-700">
+        {segments.map((s) => s.value > 0 && (
+          <div key={s.label} className={s.color} style={{ width: `${(s.value / total) * 100}%` }} title={`${s.label}: ${s.value}`} />
+        ))}
+      </div>
+      <div className="flex flex-wrap gap-x-4 gap-y-1 mt-2 text-xs">
+        {segments.map((s) => (
+          <span key={s.label} className="flex items-center gap-1.5 text-slate-500 dark:text-slate-400">
+            <span className={`w-2.5 h-2.5 rounded-full ${s.color}`} /> {s.label} <strong className="text-slate-700 dark:text-slate-200">{s.value}</strong>
+          </span>
+        ))}
+      </div>
+    </div>
+  )
+}
+
+function Card({ title, children, right }) {
+  return (
+    <div className="bg-white dark:bg-slate-800 dark:border dark:border-slate-700/60 rounded-2xl shadow-sm p-5">
+      <div className="flex items-center justify-between mb-3">
+        <h2 className="font-semibold text-slate-900 dark:text-white">{title}</h2>
+        {right}
+      </div>
+      {children}
     </div>
   )
 }
@@ -26,163 +65,151 @@ export default function DashboardPage() {
   const [events, setEvents] = useState([])
   const [eventId, setEventId] = useState('')
   const [stats, setStats] = useState(null)
+  const [error, setError] = useState('')
   const [connected, setConnected] = useState(false)
   const esRef = useRef(null)
 
   useEffect(() => {
-    api.listEvents().then((evs) => {
-      setEvents(evs)
-      if (evs.length === 1) setEventId(evs[0].id)
-    })
+    api.listEvents().then((evs) => { setEvents(evs); if (evs.length === 1) setEventId(evs[0].id) }).catch(() => {})
   }, [])
 
   const fetchStats = useCallback(async (id) => {
     if (!id) return
-    try {
-      const data = await api.getDashboard(id)
-      setStats(data)
-    } catch (err) {
-      console.error(err)
-    }
+    try { setStats(await api.getDashboard(id)); setError('') }
+    catch (err) { setError(err.message || 'Could not load dashboard'); setStats(null) }
   }, [])
 
   useEffect(() => {
-    if (!eventId) return
+    if (!eventId) { setStats(null); setError(''); return }
     fetchStats(eventId)
+    const poll = setInterval(() => fetchStats(eventId), 20000)   // refresh zones/rsvp/catering
 
     if (esRef.current) esRef.current.close()
-
     const es = new EventSource(`/api/events/${eventId}/stream`)
     esRef.current = es
-
     es.onopen = () => setConnected(true)
     es.onerror = () => setConnected(false)
-
     es.onmessage = (e) => {
       const data = JSON.parse(e.data)
       if (data.type === 'admitted') {
         setStats((prev) => {
-          if (!prev) return prev
-          const already = prev.admitted_guests.find((g) => g.id === data.guest_id)
-          if (already) return prev
-          return {
-            ...prev,
-            admitted: prev.admitted + 1,
-            pending: prev.pending - 1,
-            admitted_guests: [
-              {
-                id: data.guest_id,
-                first_name: data.name.split(' ')[0],
-                last_name: data.name.split(' ').slice(1).join(' '),
-                email: data.email,
-                admitted_at: data.admitted_at,
-                admitted: true,
-              },
-              ...prev.admitted_guests,
-            ],
-          }
+          if (!prev || prev.admitted_guests.find((g) => g.id === data.guest_id)) return prev
+          return { ...prev, admitted: prev.admitted + 1, pending: Math.max(prev.pending - 1, 0),
+            admitted_guests: [{ id: data.guest_id, first_name: data.name.split(' ')[0],
+              last_name: data.name.split(' ').slice(1).join(' '), email: data.email,
+              admitted_at: data.admitted_at, admitted: true }, ...prev.admitted_guests] }
         })
       }
     }
-
-    return () => es.close()
+    return () => { es.close(); clearInterval(poll) }
   }, [eventId, fetchStats])
 
   const event = events.find((e) => e.id === eventId)
+  const pct = stats && stats.total > 0 ? Math.round((stats.admitted / stats.total) * 100) : 0
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 max-w-5xl mx-auto">
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-bold dark:text-white">Live Dashboard</h1>
         <div className="flex items-center gap-2">
           <span className={`w-2.5 h-2.5 rounded-full ${connected ? 'bg-green-500 animate-pulse' : 'bg-gray-300 dark:bg-slate-600'}`} />
-          <span className="text-xs text-gray-500 dark:text-slate-400">{connected ? 'Live' : 'Disconnected'}</span>
+          <span className="text-xs text-gray-500 dark:text-slate-400">{connected ? 'Live' : 'Offline'}</span>
         </div>
       </div>
 
       {events.length > 1 && (
-        <div className="bg-white dark:bg-slate-800 dark:border dark:border-slate-700/60 rounded-xl shadow p-4">
-          <select
-            className="w-full border border-gray-300 dark:border-slate-700 rounded-lg px-3 py-2 text-sm bg-white dark:bg-slate-700 text-gray-900 dark:text-white"
-            value={eventId}
-            onChange={(e) => setEventId(e.target.value)}
-          >
-            <option value="">— select event —</option>
-            {events.map((ev) => (
-              <option key={ev.id} value={ev.id}>{ev.couples_name ? `${ev.name} — ${ev.couples_name}` : ev.name}</option>
-            ))}
-          </select>
-        </div>
+        <select className="w-full border border-gray-300 dark:border-slate-700 rounded-xl px-3 py-2 text-sm bg-white dark:bg-slate-800 text-gray-900 dark:text-white"
+          value={eventId} onChange={(e) => setEventId(e.target.value)}>
+          <option value="">— select event —</option>
+          {events.map((ev) => <option key={ev.id} value={ev.id}>{ev.couples_name ? `${ev.name} — ${ev.couples_name}` : ev.name}</option>)}
+        </select>
       )}
 
       {event && (
-        <div className="bg-indigo-600 text-white rounded-xl px-6 py-4">
+        <div className="bg-gradient-to-br from-teal-600 to-cyan-700 text-white rounded-2xl px-6 py-5">
           <div className="text-xl font-bold">{event.name}</div>
-          <div className="text-indigo-200 text-sm mt-0.5">{event.couples_name ? `${event.couples_name} · ` : ''}{new Date(event.event_date).toLocaleDateString(undefined, { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}</div>
+          <div className="text-white/80 text-sm mt-0.5">{event.couples_name ? `${event.couples_name} · ` : ''}{new Date(event.event_date).toLocaleDateString(undefined, { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}</div>
         </div>
+      )}
+
+      {error && (
+        <div className="bg-amber-50 dark:bg-amber-900/30 border border-amber-200 dark:border-amber-800 text-amber-700 dark:text-amber-300 rounded-xl px-4 py-3 text-sm">{error}</div>
       )}
 
       {stats && (
         <>
-          <div className="grid grid-cols-3 gap-4">
-            <StatCard label="Total Guests" value={stats.total} total={stats.total} color="indigo" />
-            <StatCard label="Admitted" value={stats.admitted} total={stats.total} color="green" />
-            <StatCard label="Pending" value={stats.pending} total={stats.total} color="amber" />
+          {/* Hero: donut + KPIs */}
+          <div className="grid sm:grid-cols-[auto_1fr] gap-4 items-center bg-white dark:bg-slate-800 dark:border dark:border-slate-700/60 rounded-2xl shadow-sm p-5">
+            <Donut pct={pct} label="checked in" sub={`${stats.admitted}/${stats.total}`} />
+            <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 flex-1">
+              <Kpi label="Total guests" value={stats.total} />
+              <Kpi label="Checked in" value={stats.admitted} accent="text-green-600" />
+              <Kpi label="Not yet in" value={stats.pending} accent="text-amber-600" />
+              <Kpi label="RSVP confirmed" value={stats.rsvp_confirmed} accent="text-teal-600" />
+            </div>
           </div>
 
-          {/* Progress bar */}
-          <div className="bg-white dark:bg-slate-800 dark:border dark:border-slate-700/60 rounded-xl shadow p-5">
-            <div className="flex justify-between text-sm font-medium text-gray-600 dark:text-slate-300 mb-2">
-              <span>Check-In Progress</span>
-              <span>{stats.total > 0 ? Math.round((stats.admitted / stats.total) * 100) : 0}%</span>
-            </div>
-            <div className="h-4 bg-gray-100 dark:bg-slate-700 rounded-full overflow-hidden">
-              <div
-                className="h-full bg-green-500 rounded-full transition-all duration-500"
-                style={{ width: stats.total > 0 ? `${(stats.admitted / stats.total) * 100}%` : '0%' }}
-              />
-            </div>
-            <div className="text-xs text-gray-400 dark:text-slate-500 mt-1">{stats.admitted} of {stats.total} guests admitted</div>
-          </div>
+          {/* RSVP breakdown */}
+          {(stats.rsvp_confirmed + stats.rsvp_declined + stats.rsvp_pending + stats.rsvp_invited) > 0 && (
+            <Card title="RSVP status">
+              <Bar segments={[
+                { label: 'Confirmed', value: stats.rsvp_confirmed, color: 'bg-green-500' },
+                { label: 'Declined', value: stats.rsvp_declined, color: 'bg-red-400' },
+                { label: 'Pending', value: stats.rsvp_pending, color: 'bg-amber-400' },
+                { label: 'No reply', value: stats.rsvp_invited, color: 'bg-slate-300 dark:bg-slate-600' },
+              ]} />
+            </Card>
+          )}
 
-          {/* Live admitted list */}
-          <div className="bg-white dark:bg-slate-800 dark:border dark:border-slate-700/60 rounded-xl shadow overflow-hidden">
-            <div className="px-6 py-4 border-b dark:border-slate-700 flex items-center justify-between">
-              <h2 className="font-semibold dark:text-white">Admitted Guests</h2>
-              <button onClick={() => fetchStats(eventId)} className="text-xs text-indigo-600 hover:underline">Refresh</button>
-            </div>
+          {/* Venue access occupancy */}
+          {stats.zones && stats.zones.length > 0 && (
+            <Card title="Live zone occupancy">
+              <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+                {stats.zones.map((z) => (
+                  <div key={z.name} className="rounded-xl border border-slate-200 dark:border-slate-700 p-3 text-center">
+                    <div className="text-2xl font-extrabold text-teal-600">{z.inside}</div>
+                    <div className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">{z.name}{z.capacity != null ? ` · cap ${z.capacity}` : ''}</div>
+                  </div>
+                ))}
+              </div>
+            </Card>
+          )}
+
+          {/* Catering */}
+          {stats.catering_total != null && (
+            <Card title="Catering — meals served" right={<span className="text-xs text-slate-400">{stats.catering_served}/{stats.catering_total}</span>}>
+              <div className="h-3 rounded-full bg-slate-100 dark:bg-slate-700 overflow-hidden">
+                <div className="h-full bg-amber-500 rounded-full transition-all" style={{ width: stats.catering_total > 0 ? `${(stats.catering_served / stats.catering_total) * 100}%` : '0%' }} />
+              </div>
+            </Card>
+          )}
+
+          {/* Live activity feed */}
+          <Card title="Recent check-ins" right={<button onClick={() => fetchStats(eventId)} className="text-xs text-teal-600 hover:underline">Refresh</button>}>
             {stats.admitted_guests.length === 0 ? (
-              <div className="px-6 py-10 text-center text-gray-400 dark:text-slate-500 text-sm">No guests admitted yet.</div>
+              <div className="py-8 text-center text-gray-400 dark:text-slate-500 text-sm">No check-ins yet.</div>
             ) : (
-              <table className="w-full text-sm">
-                <thead className="bg-gray-50 dark:bg-slate-700 text-xs font-semibold text-gray-500 dark:text-slate-400 uppercase">
-                  <tr>
-                    <th className="px-4 py-3 text-left">#</th>
-                    <th className="px-4 py-3 text-left">Name</th>
-                    <th className="px-4 py-3 text-left">Email</th>
-                    <th className="px-4 py-3 text-right">Time</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-gray-100 dark:divide-slate-700">
-                  {stats.admitted_guests.map((g, i) => (
-                    <tr key={g.id || i} className="hover:bg-gray-50 dark:hover:bg-slate-700">
-                      <td className="px-4 py-3 text-gray-400 dark:text-slate-500">{stats.admitted - i}</td>
-                      <td className="px-4 py-3 font-medium dark:text-slate-100">{g.first_name} {g.last_name}</td>
-                      <td className="px-4 py-3 text-gray-500 dark:text-slate-400">{g.email}</td>
-                      <td className="px-4 py-3 text-right text-gray-500 dark:text-slate-400">
-                        {g.admitted_at ? new Date(g.admitted_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '—'}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+              <div className="divide-y divide-gray-100 dark:divide-slate-700 -mx-1">
+                {stats.admitted_guests.slice(0, 50).map((g, i) => (
+                  <div key={g.id || i} className="flex items-center gap-3 py-2.5 px-1">
+                    <div className="w-8 h-8 rounded-full bg-green-100 dark:bg-green-900/40 text-green-700 dark:text-green-300 grid place-items-center text-sm font-bold shrink-0">
+                      {(g.first_name || '?')[0].toUpperCase()}
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <div className="font-medium text-sm dark:text-slate-100 truncate">{g.first_name} {g.last_name}</div>
+                      <div className="text-xs text-slate-400 truncate">{g.email}</div>
+                    </div>
+                    <div className="text-xs text-slate-400 shrink-0">{g.admitted_at ? new Date(g.admitted_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '—'}</div>
+                  </div>
+                ))}
+              </div>
             )}
-          </div>
+          </Card>
         </>
       )}
 
       {!eventId && events.length === 0 && (
-        <div className="text-center py-16 text-gray-400 dark:text-slate-500">No events found. Create one in the Admin panel.</div>
+        <div className="text-center py-16 text-gray-400 dark:text-slate-500">No events available.</div>
       )}
     </div>
   )

@@ -192,7 +192,7 @@ async def list_members(
     )
     rows = result.all()
     return [
-        EventMemberOut(id=eu.id, user=UserOut.model_validate(u), assigned_at=eu.assigned_at, can_reassign_seats=eu.can_reassign_seats, can_manage_menu=eu.can_manage_menu)
+        EventMemberOut(id=eu.id, user=UserOut.model_validate(u), assigned_at=eu.assigned_at, can_reassign_seats=eu.can_reassign_seats, can_manage_menu=eu.can_manage_menu, can_view_dashboard=eu.can_view_dashboard)
         for eu, u in rows
     ]
 
@@ -230,7 +230,7 @@ async def assign_member(
     db.add(eu)
     await db.commit()
     await db.refresh(eu)
-    return EventMemberOut(id=eu.id, user=UserOut.model_validate(user), assigned_at=eu.assigned_at, can_reassign_seats=eu.can_reassign_seats, can_manage_menu=eu.can_manage_menu)
+    return EventMemberOut(id=eu.id, user=UserOut.model_validate(user), assigned_at=eu.assigned_at, can_reassign_seats=eu.can_reassign_seats, can_manage_menu=eu.can_manage_menu, can_view_dashboard=eu.can_view_dashboard)
 
 
 # ── Organization team (members of the event's org) ──────────────────────────────

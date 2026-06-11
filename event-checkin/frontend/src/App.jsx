@@ -16,6 +16,7 @@ import RegistryPage from './pages/RegistryPage'
 import PricingPage from './pages/PricingPage'
 import RefundPolicyPage from './pages/RefundPolicyPage'
 import ConsolePage from './pages/ConsolePage'
+import KitchenPage from './pages/KitchenPage'
 import HelpPage from './pages/HelpPage'
 
 // ── Preferred-view helpers ────────────────────────────────────────────────────
@@ -76,6 +77,7 @@ function Nav() {
     ...(user?.role === 'admin' ? [{ to: '/admin', label: 'Admin', end: true }] : []),
     { to: '/dashboard', label: 'Dashboard' },
     { to: '/scanner', label: 'Scanner' },
+    { to: '/kitchen', label: 'Menu' },
     ...(user?.is_platform_superadmin ? [{ to: '/console', label: 'Console' }] : []),
     { to: '/help', label: 'Help' },
   ]
@@ -194,6 +196,7 @@ function AppRoutes() {
                 <Route path="/admin" element={<ProtectedRoute adminOnly><AdminPage /></ProtectedRoute>} />
                 <Route path="/dashboard" element={<ProtectedRoute><DashboardPage /></ProtectedRoute>} />
                 <Route path="/scanner" element={<ProtectedRoute><ScannerPage /></ProtectedRoute>} />
+                <Route path="/kitchen" element={<ProtectedRoute><KitchenPage /></ProtectedRoute>} />
                 <Route path="/console" element={<ProtectedRoute><ConsolePage /></ProtectedRoute>} />
                 <Route path="/help" element={<ProtectedRoute><HelpPage /></ProtectedRoute>} />
                 <Route path="*" element={<Navigate to="/" replace />} />

@@ -1,0 +1,844 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>EventQR — Getting Started</title>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap');
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --teal:#0f766e;--teal2:#14b8a6;--teal3:#ccfbf1;
+  --ink:#0f172a;--muted:#64748b;--border:#e2e8f0;
+  --bg:#f8fafc;--white:#ffffff;
+  --accent:#6d28d9;--amber:#d97706;--green:#16a34a;--red:#dc2626;
+}
+body{font-family:'Inter',system-ui,sans-serif;background:#0f172a;display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:100vh;padding:16px}
+
+/* ── Player shell ── */
+.player{width:100%;max-width:860px;background:#1e293b;border-radius:16px;overflow:hidden;box-shadow:0 24px 80px rgba(0,0,0,.6)}
+
+/* ── Header ── */
+.player-header{background:#0f172a;padding:14px 22px;display:flex;align-items:center;justify-content:space-between}
+.logo{display:flex;align-items:center;gap:8px;font-weight:800;font-size:15px;color:white}
+.logo-box{width:28px;height:28px;border-radius:6px;background:var(--teal);display:grid;place-items:center;font-size:11px;font-weight:900;color:white}
+.player-title{font-size:13px;font-weight:600;color:#94a3b8}
+.player-link{font-size:11px;color:var(--teal2);text-decoration:none}
+.player-link:hover{text-decoration:underline}
+
+/* ── Stage ── */
+.stage{position:relative;aspect-ratio:16/9;background:#1e293b;overflow:hidden}
+
+/* ── Slides ── */
+.slide{position:absolute;inset:0;opacity:0;transition:opacity .5s ease;pointer-events:none;display:flex;flex-direction:column}
+.slide.active{opacity:1;pointer-events:auto}
+
+/* Step layout */
+.slide-inner{flex:1;display:grid;grid-template-columns:1fr 1.1fr;gap:0;overflow:hidden}
+.slide-text{padding:36px 36px 24px;display:flex;flex-direction:column;justify-content:center;gap:10px}
+.slide-visual{background:#0f172a;display:flex;align-items:center;justify-content:center;overflow:hidden;position:relative}
+.slide-num{font-size:10px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:var(--teal2)}
+.slide-heading{font-size:22px;font-weight:800;color:white;line-height:1.2}
+.slide-caption{font-size:13px;color:#94a3b8;line-height:1.65;flex:1}
+.slide-tip{background:rgba(20,184,166,.12);border:1px solid rgba(20,184,166,.25);border-radius:8px;padding:10px 14px;font-size:11.5px;color:var(--teal2);line-height:1.55;margin-top:4px}
+
+/* ── Cover slide ── */
+.cover-slide{background:linear-gradient(135deg,#0f172a 0%,#1e293b 100%);flex-direction:column;align-items:center;justify-content:center;text-align:center;gap:16px;padding:40px}
+.cover-slide .big-logo{width:64px;height:64px;border-radius:16px;background:var(--teal);display:grid;place-items:center;font-size:26px;font-weight:900;color:white;margin:0 auto}
+.cover-slide h1{font-size:32px;font-weight:900;color:white;line-height:1.15}
+.cover-slide .sub{font-size:15px;color:#94a3b8;max-width:480px;line-height:1.6}
+.cover-slide .steps-list{display:flex;gap:12px;flex-wrap:wrap;justify-content:center;margin-top:8px}
+.step-chip{background:rgba(20,184,166,.12);border:1px solid rgba(20,184,166,.3);border-radius:99px;padding:5px 14px;font-size:11px;font-weight:600;color:var(--teal2)}
+
+/* ── End slide ── */
+.end-slide{background:linear-gradient(135deg,#0f172a 0%,#1e293b 100%);flex-direction:column;align-items:center;justify-content:center;text-align:center;gap:16px;padding:40px}
+.end-slide h2{font-size:28px;font-weight:900;color:white}
+.end-slide .sub{font-size:14px;color:#94a3b8;max-width:440px;line-height:1.6}
+.cta-btn{display:inline-block;background:var(--teal);color:white;font-weight:700;font-size:14px;padding:12px 28px;border-radius:8px;text-decoration:none;margin-top:8px;transition:background .2s}
+.cta-btn:hover{background:#0d9488}
+
+/* ── Mock UI components ── */
+.mock-browser{background:#1e293b;border-radius:10px;overflow:hidden;width:90%;box-shadow:0 8px 32px rgba(0,0,0,.5);animation:floatIn .6s ease both}
+.mock-bar{background:#0f172a;padding:8px 12px;display:flex;align-items:center;gap:8px}
+.mock-dots{display:flex;gap:4px}
+.mock-dot{width:8px;height:8px;border-radius:50%}
+.mock-url{flex:1;background:#1e293b;border-radius:4px;padding:4px 10px;font-size:9px;color:#64748b;font-family:monospace}
+.mock-body{padding:16px}
+
+.mock-form{display:flex;flex-direction:column;gap:10px}
+.mock-input-group{display:flex;flex-direction:column;gap:3px}
+.mock-label{font-size:9px;font-weight:600;color:#94a3b8;text-transform:uppercase;letter-spacing:.06em}
+.mock-input{background:#0f172a;border:1px solid #334155;border-radius:6px;padding:8px 10px;font-size:11px;color:white}
+.mock-input.filled{border-color:var(--teal);color:white}
+.mock-btn{background:var(--teal);color:white;border:none;border-radius:6px;padding:9px;font-size:11px;font-weight:700;text-align:center;cursor:pointer}
+.mock-btn-outline{background:transparent;color:var(--teal2);border:1px solid var(--teal2);border-radius:6px;padding:9px;font-size:11px;font-weight:700;text-align:center}
+.mock-google{background:#fff;color:#374151;border:1px solid #e2e8f0;border-radius:6px;padding:9px;font-size:11px;font-weight:600;text-align:center;display:flex;align-items:center;justify-content:center;gap:6px}
+.g-icon{width:14px;height:14px;border-radius:50%;background:conic-gradient(#4285f4 0 25%,#ea4335 25% 50%,#fbbc04 50% 75%,#34a853 75%)}
+
+.mock-nav{background:#0f172a;padding:8px 14px;display:flex;align-items:center;gap:10px;border-bottom:1px solid #1e293b}
+.mock-nav-logo{font-size:10px;font-weight:800;color:white}
+.mock-nav-links{display:flex;gap:10px;margin-left:auto}
+.mock-nav-link{font-size:9px;color:#64748b;font-weight:500}
+.mock-nav-link.active{color:white}
+
+.mock-event-card{background:#0f172a;border:1px solid #1e293b;border-radius:8px;padding:12px 14px}
+.mock-event-title{font-size:12px;font-weight:700;color:white}
+.mock-event-meta{font-size:9.5px;color:#64748b;margin-top:2px}
+.mock-event-tabs{display:flex;gap:0;margin-top:10px;border-bottom:1px solid #1e293b}
+.mock-tab{font-size:9.5px;font-weight:600;padding:5px 10px;color:#64748b;cursor:pointer}
+.mock-tab.active{color:var(--teal2);border-bottom:2px solid var(--teal2)}
+
+.mock-guest-row{display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid #1e293b}
+.mock-avatar{width:22px;height:22px;border-radius:50%;background:linear-gradient(135deg,var(--teal),#a855f7);display:grid;place-items:center;font-size:8px;font-weight:700;color:white;flex-shrink:0}
+.mock-guest-name{font-size:10px;font-weight:600;color:white;flex:1}
+.mock-guest-status{font-size:8.5px;font-weight:600;padding:2px 6px;border-radius:99px}
+.mock-status-attending{background:#dcfce7;color:#166534}
+.mock-status-pending{background:#fef3c7;color:#92400e}
+.mock-status-no-reply{background:#f1f5f9;color:#64748b}
+
+.mock-qr{width:50px;height:50px;background:white;border-radius:4px;padding:4px;display:grid;grid-template-columns:repeat(5,1fr);gap:1px}
+.qr-cell{border-radius:1px}
+
+.mock-scanner{background:#0f172a;border-radius:8px;padding:16px;text-align:center}
+.scan-frame{width:80px;height:80px;border:2px solid var(--teal2);border-radius:4px;margin:0 auto 10px;position:relative;display:flex;align-items:center;justify-content:center;background:rgba(20,184,166,.05)}
+.scan-line{position:absolute;width:90%;height:1.5px;background:var(--teal2);animation:scanLine 2s linear infinite;box-shadow:0 0 8px var(--teal2)}
+@keyframes scanLine{0%{top:10%}100%{top:90%}}
+.scan-label{font-size:10px;color:#94a3b8}
+.scan-success{background:#dcfce7;border-radius:6px;padding:10px;display:flex;align-items:center;gap:8px;margin-top:10px}
+.scan-tick{width:22px;height:22px;border-radius:50%;background:var(--green);display:grid;place-items:center;color:white;font-size:12px;flex-shrink:0}
+.scan-success-text{font-size:10px;color:#166534;font-weight:600}
+
+.mock-dashboard{display:flex;flex-direction:column;gap:8px;padding:4px}
+.dash-stat-row{display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px}
+.dash-stat{background:#0f172a;border-radius:6px;padding:8px 10px;text-align:center}
+.dash-stat-val{font-size:16px;font-weight:800;color:var(--teal2)}
+.dash-stat-lbl{font-size:8.5px;color:#64748b;margin-top:2px}
+.dash-bar-wrap{background:#0f172a;border-radius:6px;padding:10px 12px}
+.dash-bar-label{font-size:8.5px;color:#94a3b8;margin-bottom:6px;display:flex;justify-content:space-between}
+.dash-bar-track{height:6px;background:#1e293b;border-radius:99px;overflow:hidden}
+.dash-bar-fill{height:100%;background:var(--teal);border-radius:99px;animation:barGrow 1.5s ease both .8s;transform-origin:left}
+@keyframes barGrow{from{width:0!important}}
+
+.mock-whatsapp{background:#0f172a;border-radius:8px;padding:12px;display:flex;flex-direction:column;gap:8px}
+.wa-header{display:flex;align-items:center;gap:8px}
+.wa-icon{width:28px;height:28px;border-radius:50%;background:#25d366;display:grid;place-items:center;color:white;font-size:14px}
+.wa-name{font-size:11px;font-weight:700;color:white}
+.wa-status{font-size:9px;color:#64748b}
+.wa-bubble{background:#1e293b;border-radius:0 8px 8px 8px;padding:9px 12px;max-width:85%}
+.wa-bubble-out{background:#005c4b;border-radius:8px 0 8px 8px;align-self:flex-end;max-width:85%}
+.wa-text{font-size:10px;color:#e2e8f0;line-height:1.5}
+.wa-time{font-size:8px;color:#64748b;text-align:right;margin-top:4px}
+.wa-qr-row{display:flex;align-items:center;gap:10px;background:#0f172a;border:1px solid #1e293b;border-radius:6px;padding:8px}
+.wa-qr-text{font-size:9.5px;color:#94a3b8;line-height:1.5;flex:1}
+
+.mock-invite-page{background:white;border-radius:8px;padding:14px;overflow:hidden}
+.invite-header{background:var(--teal);border-radius:6px;padding:14px;text-align:center;color:white;margin-bottom:10px}
+.invite-event-name{font-size:14px;font-weight:800}
+.invite-date{font-size:10px;opacity:.85;margin-top:2px}
+.invite-form-field{border:1px solid #e2e8f0;border-radius:6px;padding:7px 10px;font-size:10px;color:#374151;margin-bottom:6px}
+.invite-btn{background:var(--teal);color:white;border-radius:6px;padding:9px;font-size:11px;font-weight:700;text-align:center}
+
+@keyframes floatIn{from{opacity:0;transform:translateY(20px)}to{opacity:1;transform:translateY(0)}}
+@keyframes fadeInUp{from{opacity:0;transform:translateY(12px)}to{opacity:1;transform:translateY(0)}}
+.anim-1{animation:fadeInUp .5s ease both .2s}
+.anim-2{animation:fadeInUp .5s ease both .4s}
+.anim-3{animation:fadeInUp .5s ease both .6s}
+.anim-4{animation:fadeInUp .5s ease both .8s}
+
+/* ── Progress bar ── */
+.progress-wrap{height:3px;background:#0f172a}
+.progress-bar{height:100%;background:var(--teal2);transition:width .4s linear}
+
+/* ── Controls ── */
+.controls{background:#0f172a;padding:12px 20px;display:flex;align-items:center;gap:12px}
+.ctrl-btn{background:none;border:none;cursor:pointer;color:#94a3b8;display:flex;align-items:center;justify-content:center;width:32px;height:32px;border-radius:6px;transition:all .2s}
+.ctrl-btn:hover{background:#1e293b;color:white}
+.ctrl-btn svg{width:16px;height:16px}
+.ctrl-play{background:var(--teal);color:white;width:36px;height:36px;border-radius:50%}
+.ctrl-play:hover{background:#0d9488}
+.time-display{font-size:11px;color:#64748b;font-family:monospace;min-width:60px}
+.step-dots{display:flex;gap:5px;margin-left:auto}
+.step-dot{width:7px;height:7px;border-radius:50%;background:#1e293b;cursor:pointer;transition:background .2s}
+.step-dot.active{background:var(--teal2)}
+.step-dot:hover{background:#334155}
+.ctrl-speed{font-size:10px;font-weight:600;color:#64748b;cursor:pointer;padding:4px 8px;border-radius:4px;border:1px solid #1e293b;background:none;transition:all .2s}
+.ctrl-speed:hover{background:#1e293b;color:white}
+</style>
+</head>
+<body>
+
+<div class="player">
+
+  <!-- Header -->
+  <div class="player-header">
+    <div class="logo">
+      <div class="logo-box">EQ</div>
+      EventQR
+    </div>
+    <span class="player-title">Getting Started — Quick Tour</span>
+    <a class="player-link" href="https://events.vsgs.io/help" target="_blank">Full guide →</a>
+  </div>
+
+  <!-- Progress -->
+  <div class="progress-wrap">
+    <div class="progress-bar" id="progressBar" style="width:0%"></div>
+  </div>
+
+  <!-- Stage -->
+  <div class="stage" id="stage">
+
+    <!-- SLIDE 0: Cover -->
+    <div class="slide active" data-duration="5000">
+      <div class="cover-slide">
+        <div class="big-logo anim-1">EQ</div>
+        <h1 class="anim-2">Getting Started<br>with EventQR</h1>
+        <p class="sub anim-3">From invite to the door in minutes.<br>Follow along to run your first event end-to-end.</p>
+        <div class="steps-list anim-4">
+          <span class="step-chip">1 · Sign in</span>
+          <span class="step-chip">2 · Create event</span>
+          <span class="step-chip">3 · Add guests</span>
+          <span class="step-chip">4 · Send invites</span>
+          <span class="step-chip">5 · Track RSVPs</span>
+          <span class="step-chip">6 · Check-in day</span>
+          <span class="step-chip">7 · Live dashboard</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- SLIDE 1: Sign in -->
+    <div class="slide" data-duration="7000">
+      <div class="slide-inner">
+        <div class="slide-text">
+          <div class="slide-num anim-1">Step 1 of 7</div>
+          <h2 class="slide-heading anim-2">Sign in with Google<br>or email</h2>
+          <p class="slide-caption anim-3">
+            Head to <strong style="color:var(--teal2)">events.vsgs.io</strong> and hit <em>Get Started</em>.
+            Sign in with your Google account for the fastest setup — or create an account with any email.
+            You'll land straight in your Admin panel with your own organization, ready to go.
+          </p>
+          <div class="slide-tip anim-4">💡 No credit card needed. The free tier gets you started immediately.</div>
+        </div>
+        <div class="slide-visual">
+          <div class="mock-browser anim-1">
+            <div class="mock-bar">
+              <div class="mock-dots">
+                <div class="mock-dot" style="background:#ef4444"></div>
+                <div class="mock-dot" style="background:#f59e0b"></div>
+                <div class="mock-dot" style="background:#22c55e"></div>
+              </div>
+              <div class="mock-url">events.vsgs.io/login</div>
+            </div>
+            <div class="mock-body">
+              <div style="text-align:center;padding:8px 0 14px">
+                <div style="width:32px;height:32px;border-radius:8px;background:var(--teal);display:grid;place-items:center;font-size:12px;font-weight:900;color:white;margin:0 auto 8px">EQ</div>
+                <div style="font-size:13px;font-weight:800;color:white">EventQR</div>
+                <div style="font-size:9.5px;color:#64748b;margin-top:3px">Sign in to your account</div>
+              </div>
+              <div class="mock-google anim-2"><div class="g-icon"></div> Continue with Google</div>
+              <div style="text-align:center;font-size:9px;color:#475569;margin:10px 0">or sign in with email</div>
+              <div class="mock-form">
+                <div class="mock-input-group">
+                  <div class="mock-label">Email</div>
+                  <div class="mock-input filled">you@example.com</div>
+                </div>
+                <div class="mock-input-group">
+                  <div class="mock-label">Password</div>
+                  <div class="mock-input filled">••••••••</div>
+                </div>
+                <div class="mock-btn">Sign In</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- SLIDE 2: Create event -->
+    <div class="slide" data-duration="8000">
+      <div class="slide-inner">
+        <div class="slide-text">
+          <div class="slide-num anim-1">Step 2 of 7</div>
+          <h2 class="slide-heading anim-2">Create your event</h2>
+          <p class="slide-caption anim-3">
+            In the Admin panel, click <strong style="color:var(--teal2)">New Event</strong>. Enter your event name, host, date &amp; time, and base URL. Hit Save.
+            You'll see tabs: <em>Overview, Guests, Team, Invite</em> — everything you need in one place.
+          </p>
+          <div class="slide-tip anim-4">💡 Turn on features like Seating, Venue Access, Logistics &amp; Registry from the Overview → Features section.</div>
+        </div>
+        <div class="slide-visual">
+          <div class="mock-browser anim-1" style="width:92%">
+            <div class="mock-bar">
+              <div class="mock-dots">
+                <div class="mock-dot" style="background:#ef4444"></div>
+                <div class="mock-dot" style="background:#f59e0b"></div>
+                <div class="mock-dot" style="background:#22c55e"></div>
+              </div>
+              <div class="mock-url">events.vsgs.io/admin</div>
+            </div>
+            <div class="mock-nav">
+              <span class="mock-nav-logo">EQ EventQR</span>
+              <div class="mock-nav-links">
+                <span class="mock-nav-link active">Admin</span>
+                <span class="mock-nav-link">Scanner</span>
+                <span class="mock-nav-link">Dashboard</span>
+              </div>
+            </div>
+            <div class="mock-body">
+              <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
+                <div style="font-size:11px;font-weight:700;color:white">My Events</div>
+                <div class="mock-btn" style="padding:5px 12px;font-size:9.5px;width:auto">+ New Event</div>
+              </div>
+              <div class="mock-event-card anim-2">
+                <div style="display:flex;align-items:center;gap:8px">
+                  <div style="width:28px;height:28px;border-radius:6px;background:linear-gradient(135deg,var(--teal),#6d28d9);display:grid;place-items:center;font-size:11px">🎉</div>
+                  <div>
+                    <div class="mock-event-title">Amara &amp; David's Wedding</div>
+                    <div class="mock-event-meta">Sat 12 Jul 2026 · 350 guests</div>
+                  </div>
+                  <div style="margin-left:auto;background:#dcfce7;color:#166534;font-size:8.5px;font-weight:700;padding:2px 8px;border-radius:99px">Active</div>
+                </div>
+                <div class="mock-event-tabs">
+                  <div class="mock-tab active">Overview</div>
+                  <div class="mock-tab">Guests</div>
+                  <div class="mock-tab">Invite</div>
+                  <div class="mock-tab">Seating</div>
+                  <div class="mock-tab">Access</div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- SLIDE 3: Add guests -->
+    <div class="slide" data-duration="9000">
+      <div class="slide-inner">
+        <div class="slide-text">
+          <div class="slide-num anim-1">Step 3 of 7</div>
+          <h2 class="slide-heading anim-2">Add your guest list</h2>
+          <p class="slide-caption anim-3">
+            Go to <strong style="color:var(--teal2)">Overview → Download template</strong> — it has exactly the columns your event uses.
+            Fill it in and <em>Upload CSV/Excel</em>. Or paste a Google Sheets link to auto-sync every minute.
+            Re-importing never duplicates guests — it fills in missing details instead.
+          </p>
+          <div class="slide-tip anim-4">💡 Add a <em>tags</em> column (e.g. "VIP; Press") to automatically set zone access for each guest.</div>
+        </div>
+        <div class="slide-visual">
+          <div class="mock-browser anim-1" style="width:92%">
+            <div class="mock-bar">
+              <div class="mock-dots">
+                <div class="mock-dot" style="background:#ef4444"></div>
+                <div class="mock-dot" style="background:#f59e0b"></div>
+                <div class="mock-dot" style="background:#22c55e"></div>
+              </div>
+              <div class="mock-url">events.vsgs.io/admin — Guests</div>
+            </div>
+            <div class="mock-body">
+              <div style="display:flex;gap:6px;margin-bottom:10px">
+                <div class="mock-btn" style="padding:5px 10px;font-size:9px;flex:1">⬆ Upload CSV/Excel</div>
+                <div class="mock-btn-outline" style="padding:5px 10px;font-size:9px;flex:1">🔗 Google Sheet sync</div>
+                <div class="mock-btn-outline" style="padding:5px 10px;font-size:9px;flex:1">+ Add one</div>
+              </div>
+              <div class="mock-guest-row anim-2">
+                <div class="mock-avatar">AD</div>
+                <div class="mock-guest-name">Amara Diallo</div>
+                <div style="font-size:8.5px;color:#64748b;margin-right:4px">VIP</div>
+                <div class="mock-guest-status mock-status-attending">Attending ✓</div>
+              </div>
+              <div class="mock-guest-row anim-3">
+                <div class="mock-avatar" style="background:linear-gradient(135deg,#6d28d9,#ec4899)">KO</div>
+                <div class="mock-guest-name">Kemi Okonkwo</div>
+                <div style="font-size:8.5px;color:#64748b;margin-right:4px">GA</div>
+                <div class="mock-guest-status mock-status-pending">Pending</div>
+              </div>
+              <div class="mock-guest-row anim-4" style="border:none">
+                <div class="mock-avatar" style="background:linear-gradient(135deg,#d97706,#ef4444)">TF</div>
+                <div class="mock-guest-name">Taiwo Fashola</div>
+                <div style="font-size:8.5px;color:#64748b;margin-right:4px">Press</div>
+                <div class="mock-guest-status mock-status-no-reply">No reply</div>
+              </div>
+              <div style="text-align:center;font-size:9px;color:#475569;margin-top:6px">+ 347 more guests</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- SLIDE 4: Send invites (WhatsApp/SMS/Email) -->
+    <div class="slide" data-duration="9000">
+      <div class="slide-inner">
+        <div class="slide-text">
+          <div class="slide-num anim-1">Step 4 of 7</div>
+          <h2 class="slide-heading anim-2">Send invitations on<br>every channel</h2>
+          <p class="slide-caption anim-3">
+            In the <strong style="color:var(--teal2)">Invite tab</strong>, set up your RSVP page — pick Open (shared link) or Closed (unique per-guest link).
+            Then send via <strong>WhatsApp</strong>, <strong>SMS</strong>, or <strong>Email</strong>.
+            Guests get a branded invite with their personal QR ticket on confirmation — no app needed.
+          </p>
+          <div class="slide-tip anim-4">📱 WhatsApp is free for guests. SMS/WhatsApp sending uses message credits — email is always free.</div>
+        </div>
+        <div class="slide-visual">
+          <div class="mock-browser anim-1" style="width:92%">
+            <div class="mock-bar">
+              <div class="mock-dots">
+                <div class="mock-dot" style="background:#ef4444"></div>
+                <div class="mock-dot" style="background:#f59e0b"></div>
+                <div class="mock-dot" style="background:#22c55e"></div>
+              </div>
+              <div class="mock-url">WhatsApp → Guest</div>
+            </div>
+            <div class="mock-body" style="padding:10px">
+              <div class="mock-whatsapp">
+                <div class="wa-header">
+                  <div class="wa-icon">💬</div>
+                  <div><div class="wa-name">EventQR</div><div class="wa-status">via events.vsgs.io</div></div>
+                </div>
+                <div class="wa-bubble anim-2">
+                  <div class="wa-text">Hi <strong>Amara</strong>! 🎉 You're invited to <strong>Amara &amp; David's Wedding</strong> on Sat 12 Jul. RSVP &amp; get your ticket here:</div>
+                  <div class="wa-time">10:32 AM ✓✓</div>
+                </div>
+                <div class="wa-qr-row anim-3">
+                  <div class="mock-qr">
+                    <div class="qr-cell" style="background:#0f172a;grid-column:span 2;grid-row:span 2"></div>
+                    <div class="qr-cell" style="background:#0f172a"></div>
+                    <div class="qr-cell" style="background:#0f172a"></div>
+                    <div class="qr-cell" style="background:#0f172a;grid-column:span 3;grid-row:span 3"></div>
+                    <div class="qr-cell" style="background:#0f172a"></div>
+                    <div class="qr-cell" style="background:#0f172a;grid-column:span 2"></div>
+                    <div class="qr-cell" style="background:#0f172a"></div>
+                    <div class="qr-cell" style="background:#0f172a"></div>
+                    <div class="qr-cell" style="background:#0f172a"></div>
+                    <div class="qr-cell" style="background:#0f172a;grid-column:span 2;grid-row:span 2"></div>
+                  </div>
+                  <div class="wa-qr-text">Your personal ticket QR is ready. Show it at the entrance on the day. 🎟️<br><span style="color:var(--teal2)">events.vsgs.io/invite/amara-abc123</span></div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- SLIDE 5: Track RSVPs -->
+    <div class="slide" data-duration="8000">
+      <div class="slide-inner">
+        <div class="slide-text">
+          <div class="slide-num anim-1">Step 5 of 7</div>
+          <h2 class="slide-heading anim-2">Track RSVPs &amp;<br>approvals in real time</h2>
+          <p class="slide-caption anim-3">
+            The <strong style="color:var(--teal2)">Guests tab</strong> shows every person: Attending, Declined, Pending, or No Reply — plus their check-in status on the day.
+            If you turned on <em>Approval required</em>, approve or reject RSVPs one by one, or Approve all.
+            Use <em>Broadcast</em> to push updates (reminders, schedule changes) to any group.
+          </p>
+          <div class="slide-tip anim-4">📣 Broadcast targets: All guests · Attending · Declined · No-reply · Checked-in · Not checked-in.</div>
+        </div>
+        <div class="slide-visual">
+          <div class="mock-browser anim-1" style="width:92%">
+            <div class="mock-bar">
+              <div class="mock-dots">
+                <div class="mock-dot" style="background:#ef4444"></div>
+                <div class="mock-dot" style="background:#f59e0b"></div>
+                <div class="mock-dot" style="background:#22c55e"></div>
+              </div>
+              <div class="mock-url">events.vsgs.io/admin — RSVP Overview</div>
+            </div>
+            <div class="mock-body">
+              <div class="dash-stat-row anim-2">
+                <div class="dash-stat"><div class="dash-stat-val">218</div><div class="dash-stat-lbl">Attending</div></div>
+                <div class="dash-stat"><div class="dash-stat-val" style="color:#f59e0b">74</div><div class="dash-stat-lbl">Pending</div></div>
+                <div class="dash-stat"><div class="dash-stat-val" style="color:#64748b">58</div><div class="dash-stat-lbl">No reply</div></div>
+              </div>
+              <div class="dash-bar-wrap anim-3" style="margin-top:8px">
+                <div class="dash-bar-label"><span>RSVP rate</span><span style="color:var(--teal2)">218 / 350</span></div>
+                <div class="dash-bar-track"><div class="dash-bar-fill" style="width:62%"></div></div>
+              </div>
+              <div style="margin-top:10px;display:flex;gap:6px">
+                <div class="mock-btn" style="padding:6px 10px;font-size:9px;flex:1">📣 Broadcast to No-reply</div>
+                <div class="mock-btn-outline" style="padding:6px 10px;font-size:9px;flex:1">✓ Approve all</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- SLIDE 6: Check-in day -->
+    <div class="slide" data-duration="9000">
+      <div class="slide-inner">
+        <div class="slide-text">
+          <div class="slide-num anim-1">Step 6 of 7</div>
+          <h2 class="slide-heading anim-2">Check-in day —<br>just scan &amp; go</h2>
+          <p class="slide-caption anim-3">
+            Set the event to <strong style="color:var(--teal2)">Active</strong> in Overview, then open <em>Scanner</em> on any phone.
+            Point the camera at each guest's QR — admission is instant. No app install needed.
+            For Venue Access events, staff pick their gate once and every scan automatically checks the guest into the right zone.
+          </p>
+          <div class="slide-tip anim-4">🔐 VIP zones, backstage, restricted areas — each gate enforces ticket type &amp; tag rules automatically.</div>
+        </div>
+        <div class="slide-visual">
+          <div class="mock-browser anim-1" style="width:86%">
+            <div class="mock-bar">
+              <div class="mock-dots">
+                <div class="mock-dot" style="background:#ef4444"></div>
+                <div class="mock-dot" style="background:#f59e0b"></div>
+                <div class="mock-dot" style="background:#22c55e"></div>
+              </div>
+              <div class="mock-url">events.vsgs.io/scanner</div>
+            </div>
+            <div class="mock-body">
+              <div class="mock-scanner">
+                <div style="font-size:10px;font-weight:700;color:white;margin-bottom:10px;text-align:left">📍 Gate: Main Entrance · Entry</div>
+                <div class="scan-frame">
+                  <div class="scan-line"></div>
+                  <div style="font-size:22px;opacity:.3">▦</div>
+                </div>
+                <div class="scan-label">Point at guest's QR code</div>
+                <div class="scan-success anim-2">
+                  <div class="scan-tick">✓</div>
+                  <div>
+                    <div class="scan-success-text">Welcome, Amara Diallo!</div>
+                    <div style="font-size:8.5px;color:#16a34a">Admitted · Table 7 · Jollof Rice</div>
+                  </div>
+                </div>
+                <div style="display:flex;gap:6px;margin-top:8px">
+                  <div style="flex:1;background:#0f172a;border-radius:6px;padding:6px;text-align:center">
+                    <div style="font-size:14px;font-weight:800;color:var(--teal2)">143</div>
+                    <div style="font-size:8px;color:#64748b">Checked in</div>
+                  </div>
+                  <div style="flex:1;background:#0f172a;border-radius:6px;padding:6px;text-align:center">
+                    <div style="font-size:14px;font-weight:800;color:#f59e0b">75</div>
+                    <div style="font-size:8px;color:#64748b">Expected</div>
+                  </div>
+                  <div style="flex:1;background:#0f172a;border-radius:6px;padding:6px;text-align:center">
+                    <div style="font-size:14px;font-weight:800;color:#94a3b8">218</div>
+                    <div style="font-size:8px;color:#64748b">RSVP'd</div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- SLIDE 7: Live dashboard -->
+    <div class="slide" data-duration="9000">
+      <div class="slide-inner">
+        <div class="slide-text">
+          <div class="slide-num anim-1">Step 7 of 7</div>
+          <h2 class="slide-heading anim-2">Watch it all live<br>on the dashboard</h2>
+          <p class="slide-caption anim-3">
+            Open <strong style="color:var(--teal2)">Dashboard</strong> on any screen to see check-ins, RSVP breakdown, live zone occupancy, catering totals, and a per-table kitchen view — all updating in real time.
+            The kitchen staff role sees only meal orders by table, so your caterer knows exactly what to prepare.
+          </p>
+          <div class="slide-tip anim-4">📊 Post-event: venue analytics show peak arrival times, room-to-room flow, and each guest's journey.</div>
+        </div>
+        <div class="slide-visual">
+          <div class="mock-browser anim-1" style="width:92%">
+            <div class="mock-bar">
+              <div class="mock-dots">
+                <div class="mock-dot" style="background:#ef4444"></div>
+                <div class="mock-dot" style="background:#f59e0b"></div>
+                <div class="mock-dot" style="background:#22c55e"></div>
+              </div>
+              <div class="mock-url">events.vsgs.io/dashboard</div>
+            </div>
+            <div class="mock-body">
+              <div class="mock-dashboard">
+                <div class="dash-stat-row anim-2">
+                  <div class="dash-stat"><div class="dash-stat-val">143</div><div class="dash-stat-lbl">Checked in</div></div>
+                  <div class="dash-stat"><div class="dash-stat-val" style="color:#f59e0b">218</div><div class="dash-stat-lbl">RSVP'd</div></div>
+                  <div class="dash-stat"><div class="dash-stat-val" style="color:#a855f7">92</div><div class="dash-stat-lbl">In venue</div></div>
+                </div>
+                <div class="dash-bar-wrap anim-3">
+                  <div class="dash-bar-label"><span>Main Hall occupancy</span><span style="color:var(--teal2)">92 / 200</span></div>
+                  <div class="dash-bar-track"><div class="dash-bar-fill" style="width:46%"></div></div>
+                </div>
+                <div class="dash-bar-wrap anim-3" style="margin-top:6px">
+                  <div class="dash-bar-label"><span>VIP Lounge</span><span style="color:#a855f7">18 / 30</span></div>
+                  <div class="dash-bar-track"><div class="dash-bar-fill" style="width:60%;background:#a855f7"></div></div>
+                </div>
+                <div style="background:#0f172a;border-radius:6px;padding:8px 10px;margin-top:4px" class="anim-4">
+                  <div style="font-size:8.5px;color:#94a3b8;margin-bottom:5px">🍽️ Catering — Table 7</div>
+                  <div style="display:flex;gap:6px">
+                    <div style="flex:1;text-align:center"><div style="font-size:12px;font-weight:800;color:var(--teal2)">6</div><div style="font-size:7.5px;color:#64748b">Jollof Rice</div></div>
+                    <div style="flex:1;text-align:center"><div style="font-size:12px;font-weight:800;color:#f59e0b">4</div><div style="font-size:7.5px;color:#64748b">Fried Rice</div></div>
+                    <div style="flex:1;text-align:center"><div style="font-size:12px;font-weight:800;color:#a855f7">2</div><div style="font-size:7.5px;color:#64748b">Veggie</div></div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- SLIDE 8: End -->
+    <div class="slide" data-duration="8000">
+      <div class="end-slide">
+        <div style="font-size:48px" class="anim-1">🎉</div>
+        <h2 class="anim-2">You're ready to run your event.</h2>
+        <p class="sub anim-3">
+          Free tier gets you started instantly. Upgrade to an Event Pass to unlock WhatsApp/SMS, QR check-in, seating, zones, logistics &amp; more.
+        </p>
+        <div style="display:flex;gap:12px;flex-wrap:wrap;justify-content:center;margin-top:4px" class="anim-4">
+          <a class="cta-btn" href="https://events.vsgs.io" target="_blank">Get Started — Free</a>
+          <a class="cta-btn" style="background:#1e293b;border:1px solid #334155" href="https://events.vsgs.io/help" target="_blank">Full Guide</a>
+          <a class="cta-btn" style="background:#1e293b;border:1px solid #334155" href="https://events.vsgs.io/pricing" target="_blank">View Pricing</a>
+        </div>
+      </div>
+    </div>
+
+  </div><!-- /stage -->
+
+  <!-- Controls -->
+  <div class="controls">
+    <!-- Rewind -->
+    <button class="ctrl-btn" id="btnPrev" title="Previous">
+      <svg viewBox="0 0 24 24" fill="currentColor"><path d="M6 6h2v12H6zm3.5 6 8.5 6V6z"/></svg>
+    </button>
+    <!-- Play/Pause -->
+    <button class="ctrl-btn ctrl-play" id="btnPlay" title="Play / Pause">
+      <svg viewBox="0 0 24 24" fill="currentColor" id="iconPlay"><path d="M8 5v14l11-7z"/></svg>
+      <svg viewBox="0 0 24 24" fill="currentColor" id="iconPause" style="display:none"><path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z"/></svg>
+    </button>
+    <!-- Next -->
+    <button class="ctrl-btn" id="btnNext" title="Next">
+      <svg viewBox="0 0 24 24" fill="currentColor"><path d="M6 18l8.5-6L6 6v12zm2-8.14 5.51 3.64L8 17.14V9.86zM16 6h2v12h-2z"/></svg>
+    </button>
+
+    <span class="time-display" id="timeDisplay">0:00 / 1:12</span>
+
+    <button class="ctrl-speed" id="btnSpeed" title="Playback speed">1×</button>
+    <button class="ctrl-btn" id="btnMute" title="Mute / Unmute narration">
+      <svg viewBox="0 0 24 24" fill="currentColor" id="iconSound"><path d="M3 9v6h4l5 5V4L7 9H3zm13.5 3A4.5 4.5 0 0 0 14 7.97v8.05c1.48-.73 2.5-2.25 2.5-4.02zM14 3.23v2.06c2.89.86 5 3.54 5 6.71s-2.11 5.85-5 6.71v2.06c4.01-.91 7-4.49 7-8.77s-2.99-7.86-7-8.77z"/></svg>
+      <svg viewBox="0 0 24 24" fill="currentColor" id="iconMute" style="display:none"><path d="M16.5 12A4.5 4.5 0 0 0 14 7.97v2.21l2.45 2.45c.03-.2.05-.41.05-.63zm2.5 0c0 .94-.2 1.82-.54 2.64l1.51 1.51A8.796 8.796 0 0 0 21 12c0-4.28-2.99-7.86-7-8.77v2.06c2.89.86 5 3.54 5 6.71zM4.27 3L3 4.27 7.73 9H3v6h4l5 5v-6.73l4.25 4.25c-.67.52-1.42.93-2.25 1.18v2.06a8.99 8.99 0 0 0 3.69-1.81L19.73 21 21 19.73l-9-9L4.27 3zM12 4 9.91 6.09 12 8.18V4z"/></svg>
+    </button>
+
+    <div class="step-dots" id="stepDots"></div>
+  </div>
+
+</div><!-- /player -->
+
+<script>
+// ── Narration scripts (Web Speech API) ──────────────────────────────────────
+const NARRATION = [
+  // 0 — Cover
+  "Welcome to EventQR — the complete guest experience platform. In this short walkthrough, we'll cover everything you need to run your first event: from signing in, creating your event, adding guests, sending invitations, tracking RSVPs, checking guests in on the day, and monitoring everything live on the dashboard. Let's get started.",
+  // 1 — Sign in
+  "First, head to events dot vsgs dot io and click Get Started. You can sign in instantly with your Google account, or create an account with any email address. No credit card is required. Once you're in, you'll land straight in your Admin panel with your own organisation, ready to go.",
+  // 2 — Create event
+  "In the Admin panel, click New Event. Enter your event name, host, date and time, and a base URL. Hit Save. Your event opens with tabs across the top — Overview, Guests, Invite, Seating, Access, and more. From the Overview Features section you can turn on Seating, Venue Access zones, Logistics, and the Gift Registry at any time.",
+  // 3 — Add guests
+  "Now add your guest list. Go to Overview and click Download template — it contains exactly the columns your event uses, with dropdowns for ticket types. Fill it in and upload your CSV or Excel file. You can also paste a Google Sheets link to auto-sync your list every minute while the event is active. Re-importing never creates duplicate guests — it fills in any missing details instead. Add a tags column like V I P or Press to automatically set zone access for each guest.",
+  // 4 — Send invites
+  "With your guests added, head to the Invite tab to set up your R S V P page. Choose Open mode — one shared link for everyone — or Closed mode, which gives each guest their own unique personal link. Then send invitations via WhatsApp, S M S, or email. Each guest receives a branded invite with their personal Q R ticket automatically on confirmation. No app install is needed for guests or staff. Email is always free. WhatsApp and S M S use message credits.",
+  // 5 — Track RSVPs
+  "Back in the Guests tab you can see every person's status in real time — Attending, Declined, Pending, or No Reply — alongside their check-in status on the day. If you turned on approval required, you can approve or reject pending R S V Ps individually, or approve all at once. Use Broadcast to push a message to any group — for example, send a reminder to everyone who hasn't replied yet.",
+  // 6 — Check-in day
+  "On the day of your event, set it to Active in the Overview tab. Then open Scanner on any phone or tablet — no app needed, it runs right in the browser. Staff pick their gate once, then just point the camera at each guest's Q R code. Admission is instant. For Venue Access events, the gate automatically enforces ticket type and tag rules — V I P guests go to the V I P lounge, general admission stays in the main hall, and zone occupancy is tracked live.",
+  // 7 — Dashboard
+  "While your event is running, open the Dashboard on any screen to watch everything in real time. You'll see total check-ins, R S V P breakdown, live zone occupancy, catering totals by table, and a dedicated kitchen view so your catering staff know exactly what to prepare for each table. After the event, venue analytics show peak arrival times, room to room flow, and each guest's full journey through the venue.",
+  // 8 — End
+  "That's everything you need to run your first event with EventQR. The free tier gets you started immediately. When you're ready, upgrade to an Event Pass to unlock WhatsApp and S M S messaging, Q R check-in, seating, venue zones, logistics, and the gift registry. Visit events dot vsgs dot io to get started, or open the full guide for step-by-step details. Thanks for watching!"
+]
+
+// ── Speech engine ─────────────────────────────────────────────────────────────
+const synth = window.speechSynthesis
+let muted = false
+let currentUtterance = null
+
+function speak(idx) {
+  if (!synth || muted) return
+  synth.cancel()
+  const text = NARRATION[idx]
+  if (!text) return
+  const u = new SpeechSynthesisUtterance(text)
+  u.rate = speed * 0.95          // slightly slower than playback for clarity
+  u.pitch = 1.0
+  u.volume = 1.0
+  // Prefer a natural English voice when available
+  const voices = synth.getVoices()
+  const preferred = voices.find(v =>
+    /en[-_](US|GB|AU)/i.test(v.lang) && !v.name.toLowerCase().includes('google')
+  ) || voices.find(v => /en/i.test(v.lang))
+  if (preferred) u.voice = preferred
+  currentUtterance = u
+  synth.speak(u)
+}
+
+function stopSpeech() {
+  if (synth) synth.cancel()
+  currentUtterance = null
+}
+
+// ── Player ────────────────────────────────────────────────────────────────────
+const slides = Array.from(document.querySelectorAll('.slide'))
+const durations = slides.map(s => parseInt(s.dataset.duration, 10))
+const totalMs = durations.reduce((a,b)=>a+b,0)
+
+let current = 0
+let playing = false
+let elapsed = 0
+let lastTick = null
+let speed = 1
+let rafId = null
+
+const progressBar = document.getElementById('progressBar')
+const timeDisplay = document.getElementById('timeDisplay')
+const btnPlay = document.getElementById('btnPlay')
+const iconPlay = document.getElementById('iconPlay')
+const iconPause = document.getElementById('iconPause')
+const btnPrev = document.getElementById('btnPrev')
+const btnNext = document.getElementById('btnNext')
+const btnSpeed = document.getElementById('btnSpeed')
+const btnMute = document.getElementById('btnMute')
+const iconSound = document.getElementById('iconSound')
+const iconMute = document.getElementById('iconMute')
+const dotsWrap = document.getElementById('stepDots')
+
+// Build dots
+slides.forEach((_, i) => {
+  const d = document.createElement('div')
+  d.className = 'step-dot' + (i===0?' active':'')
+  d.addEventListener('click', () => goTo(i))
+  dotsWrap.appendChild(d)
+})
+
+function getDots() { return dotsWrap.querySelectorAll('.step-dot') }
+
+function goTo(idx, resetElapsed=true) {
+  slides[current].classList.remove('active')
+  getDots()[current].classList.remove('active')
+  current = Math.max(0, Math.min(slides.length-1, idx))
+  if (resetElapsed) elapsed = 0
+  slides[current].classList.add('active')
+  getDots()[current].classList.add('active')
+  updateHUD()
+  if (playing) speak(current)
+}
+
+function totalElapsedMs() {
+  let t = 0
+  for (let i=0;i<current;i++) t += durations[i]
+  return t + elapsed
+}
+
+function formatTime(ms) {
+  const s = Math.floor(ms/1000)
+  return `${Math.floor(s/60)}:${String(s%60).padStart(2,'0')}`
+}
+
+function updateHUD() {
+  const te = totalElapsedMs()
+  progressBar.style.width = (te/totalMs)*100 + '%'
+  timeDisplay.textContent = formatTime(te) + ' / ' + formatTime(totalMs)
+}
+
+function tick(ts) {
+  if (!playing) return
+  if (lastTick !== null) {
+    const delta = (ts - lastTick) * speed
+    elapsed += delta
+    if (elapsed >= durations[current]) {
+      if (current < slides.length-1) {
+        goTo(current+1)
+      } else {
+        elapsed = durations[current]
+        pause()
+        updateHUD()
+        return
+      }
+    }
+  }
+  lastTick = ts
+  updateHUD()
+  rafId = requestAnimationFrame(tick)
+}
+
+function play() {
+  if (current===slides.length-1 && elapsed>=durations[current]-50) goTo(0)
+  playing = true
+  lastTick = null
+  iconPlay.style.display='none'
+  iconPause.style.display=''
+  speak(current)
+  rafId = requestAnimationFrame(tick)
+}
+
+function pause() {
+  playing = false
+  lastTick = null
+  iconPlay.style.display=''
+  iconPause.style.display='none'
+  stopSpeech()
+  if (rafId) cancelAnimationFrame(rafId)
+}
+
+function toggle() { playing ? pause() : play() }
+
+btnPlay.addEventListener('click', toggle)
+btnPrev.addEventListener('click', () => { const wp=playing; pause(); goTo(current-1); if(wp) play() })
+btnNext.addEventListener('click', () => { const wp=playing; pause(); goTo(current+1); if(wp) play() })
+
+const speeds = [0.5,1,1.5,2]
+let speedIdx = 1
+btnSpeed.addEventListener('click', () => {
+  speedIdx = (speedIdx+1)%speeds.length
+  speed = speeds[speedIdx]
+  btnSpeed.textContent = speed + '×'
+  // Restart speech at new rate if playing
+  if (playing && !muted) speak(current)
+})
+
+btnMute.addEventListener('click', () => {
+  muted = !muted
+  iconSound.style.display = muted ? 'none' : ''
+  iconMute.style.display  = muted ? '' : 'none'
+  btnMute.title = muted ? 'Unmute narration' : 'Mute narration'
+  btnMute.style.color = muted ? 'var(--teal2)' : ''
+  if (muted) stopSpeech()
+  else if (playing) speak(current)
+})
+
+// Keyboard
+document.addEventListener('keydown', e => {
+  if (e.code==='Space')      { e.preventDefault(); toggle() }
+  if (e.code==='ArrowRight') btnNext.click()
+  if (e.code==='ArrowLeft')  btnPrev.click()
+  if (e.code==='KeyM')       btnMute.click()
+})
+
+// Seek via progress bar
+progressBar.parentElement.addEventListener('click', e => {
+  const rect = e.currentTarget.getBoundingClientRect()
+  const pct  = (e.clientX - rect.left) / rect.width
+  const targetMs = pct * totalMs
+  let acc = 0
+  for (let i=0;i<durations.length;i++) {
+    if (acc + durations[i] > targetMs) {
+      const wp = playing
+      pause()
+      current = i
+      elapsed = targetMs - acc
+      slides.forEach(s=>s.classList.remove('active'))
+      getDots().forEach(d=>d.classList.remove('active'))
+      slides[current].classList.add('active')
+      getDots()[current].classList.add('active')
+      updateHUD()
+      if (wp) play()
+      break
+    }
+    acc += durations[i]
+  }
+})
+
+// Voices may load async — refresh on voiceschanged
+if (synth) synth.addEventListener('voiceschanged', () => {})
+
+updateHUD()
+setTimeout(() => play(), 800)
+</script>
+</body>
+</html>

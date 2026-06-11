@@ -1,0 +1,1203 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>EventQR — Investor Pitch Deck v2</title>
+<style>
+  /* ── Reset & base ── */
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  :root {
+    --ink:    #0f172a;
+    --muted:  #64748b;
+    --accent: #6d28d9;
+    --accent2:#7c3aed;
+    --green:  #16a34a;
+    --amber:  #d97706;
+    --red:    #dc2626;
+    --bg:     #ffffff;
+    --bg2:    #f8f7ff;
+    --border: #e2e8f0;
+    --ng:     #008751;
+    --us:     #3b82f6;
+  }
+  @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap');
+  body {
+    font-family: 'Inter', system-ui, sans-serif;
+    background: #1e1e2e;
+    color: var(--ink);
+  }
+
+  /* ── Slide shell ── */
+  .slide {
+    width: 842px;
+    min-height: 596px;
+    background: var(--bg);
+    margin: 32px auto;
+    border-radius: 6px;
+    box-shadow: 0 8px 40px rgba(0,0,0,.45);
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    position: relative;
+    page-break-after: always;
+  }
+  .slide-body { flex: 1; display: flex; flex-direction: column; padding: 44px 52px 36px; }
+  .slide-body.row { flex-direction: row; gap: 32px; }
+  .slide-body.center { align-items: center; justify-content: center; text-align: center; }
+
+  /* ── Slide bar ── */
+  .bar { height: 5px; background: linear-gradient(90deg, var(--accent), #a855f7); }
+
+  /* ── Footer ── */
+  .foot {
+    height: 32px; background: var(--bg2);
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 0 52px; font-size: 10px; color: var(--muted);
+    border-top: 1px solid var(--border);
+  }
+
+  /* ── Typography ── */
+  .label { font-size: 10px; font-weight: 700; letter-spacing: .12em; text-transform: uppercase; color: var(--muted); margin-bottom: 6px; }
+  h1 { font-size: 38px; font-weight: 900; line-height: 1.1; color: var(--ink); }
+  h2 { font-size: 22px; font-weight: 800; color: var(--ink); margin-bottom: 6px; }
+  h3 { font-size: 15px; font-weight: 700; color: var(--ink); margin-bottom: 4px; }
+  p  { font-size: 13px; line-height: 1.65; color: #334155; }
+  .sub { font-size: 15px; font-weight: 400; color: var(--muted); line-height: 1.5; }
+  .accent { color: var(--accent); }
+  .green  { color: var(--green); }
+  .amber  { color: var(--amber); }
+  .badge {
+    display: inline-block; font-size: 9.5px; font-weight: 700;
+    padding: 2px 8px; border-radius: 99px; letter-spacing: .06em; text-transform: uppercase;
+  }
+  .badge-accent { background: #ede9fe; color: var(--accent); }
+  .badge-green  { background: #dcfce7; color: var(--green); }
+  .badge-amber  { background: #fef3c7; color: var(--amber); }
+  .badge-red    { background: #fee2e2; color: var(--red); }
+
+  /* ── Cover ── */
+  .cover-bg {
+    background: linear-gradient(135deg, var(--accent) 0%, #1e1b4b 100%);
+    color: white; padding: 64px 72px;
+    flex: 1; display: flex; flex-direction: column; justify-content: space-between;
+  }
+  .cover-bg h1 { color: white; font-size: 48px; }
+  .cover-bg .sub { color: rgba(255,255,255,.75); }
+  .logo-pill {
+    background: rgba(255,255,255,.15); border: 1px solid rgba(255,255,255,.25);
+    border-radius: 99px; display: inline-flex; align-items: center;
+    gap: 10px; padding: 10px 22px; font-size: 22px; font-weight: 900; color: white;
+    letter-spacing: -.01em;
+  }
+  .flags { font-size: 26px; margin-top: 12px; }
+  .cover-meta { font-size: 11px; color: rgba(255,255,255,.55); margin-top: 24px; }
+
+  /* ── Section label bar ── */
+  .section-label {
+    font-size: 9px; font-weight: 700; letter-spacing: .18em; text-transform: uppercase;
+    color: white; background: var(--accent); padding: 5px 52px;
+  }
+
+  /* ── Problem ── */
+  .problem-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin-top: 20px; }
+  .pain-card {
+    background: #fef2f2; border: 1px solid #fecaca; border-radius: 8px;
+    padding: 14px 16px;
+  }
+  .pain-card h3 { color: var(--red); font-size: 12.5px; }
+  .pain-card p  { font-size: 11.5px; color: #4b5563; margin-top: 4px; }
+  .cost-box {
+    background: #fef9c3; border: 1px solid #fde047; border-radius: 8px;
+    padding: 16px 20px; margin-top: 18px;
+  }
+
+  /* ── Solution ── */
+  .sol-grid { display: grid; grid-template-columns: repeat(3,1fr); gap: 14px; margin-top: 22px; }
+  .sol-card {
+    background: var(--bg2); border: 1px solid var(--border); border-radius: 10px;
+    padding: 18px 16px;
+  }
+  .sol-card .icon { font-size: 24px; margin-bottom: 8px; }
+  .sol-card h3 { font-size: 13px; color: var(--accent); }
+  .sol-card p  { font-size: 11px; color: var(--muted); margin-top: 5px; line-height: 1.55; }
+
+  /* ── Market ── */
+  .mkt-cols { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; margin-top: 22px; }
+  .mkt-card {
+    border-radius: 12px; padding: 22px 24px;
+  }
+  .mkt-card.ng { background: #f0fdf4; border: 1.5px solid #86efac; }
+  .mkt-card.us { background: #eff6ff; border: 1.5px solid #93c5fd; }
+  .mkt-card h2 { font-size: 16px; }
+  .mkt-card .big { font-size: 30px; font-weight: 900; }
+  .mkt-card.ng .big { color: var(--ng); }
+  .mkt-card.us .big { color: var(--us); }
+  .mkt-card ul { margin-top: 10px; padding-left: 16px; }
+  .mkt-card li { font-size: 11.5px; color: #374151; margin-bottom: 4px; }
+
+  .tam-row { display: flex; gap: 12px; margin-top: 22px; }
+  .tam-box {
+    flex: 1; border-radius: 10px; padding: 16px; text-align: center;
+  }
+  .tam-box.tam { background: #ede9fe; }
+  .tam-box.sam { background: #ddd6fe; }
+  .tam-box.som { background: #c4b5fd; }
+  .tam-box .val { font-size: 26px; font-weight: 900; color: var(--accent); }
+  .tam-box .lbl { font-size: 9px; font-weight: 700; letter-spacing: .1em; text-transform: uppercase; color: #7c3aed; margin-bottom: 4px; }
+  .tam-box .desc { font-size: 10px; color: #5b21b6; margin-top: 4px; line-height: 1.45; }
+
+  /* ── GTM ── */
+  .gtm-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; margin-top: 18px; }
+  .gtm-card {
+    background: var(--bg2); border: 1px solid var(--border); border-radius: 10px;
+    padding: 16px 18px;
+  }
+  .gtm-card .phase { font-size: 9px; font-weight: 700; letter-spacing: .1em; text-transform: uppercase; color: var(--accent); }
+  .gtm-card h3 { font-size: 13px; margin-top: 2px; }
+  .gtm-card ul { padding-left: 16px; margin-top: 8px; }
+  .gtm-card li { font-size: 11px; color: #374151; margin-bottom: 3px; line-height: 1.5; }
+
+  /* ── Competitive ── */
+  .comp-table { width: 100%; border-collapse: collapse; font-size: 11.5px; margin-top: 18px; }
+  .comp-table th {
+    font-size: 9.5px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase;
+    padding: 8px 10px; background: var(--bg2); color: var(--muted); border-bottom: 2px solid var(--border); text-align: center;
+  }
+  .comp-table th:first-child { text-align: left; }
+  .comp-table td { padding: 7px 10px; border-bottom: 1px solid var(--border); text-align: center; }
+  .comp-table td:first-child { text-align: left; font-weight: 500; }
+  .comp-table tr.eq-row td { background: #ede9fe; font-weight: 600; color: var(--accent); }
+  .comp-table tr:last-child td { border-bottom: none; }
+  .dot-full   { color: var(--green); font-size: 14px; }
+  .dot-partial { color: var(--amber); font-size: 14px; }
+  .dot-none   { color: #d1d5db; font-size: 14px; }
+
+  /* ── Business model ── */
+  .tier-stack { display: flex; flex-direction: column; gap: 12px; margin-top: 18px; }
+  .tier {
+    display: grid; grid-template-columns: 140px 1fr auto;
+    align-items: center; gap: 16px;
+    background: var(--bg2); border: 1px solid var(--border); border-radius: 10px;
+    padding: 14px 18px;
+  }
+  .tier-name { font-size: 13px; font-weight: 700; }
+  .tier-desc { font-size: 11.5px; color: #4b5563; line-height: 1.5; }
+  .tier-price { font-size: 17px; font-weight: 800; color: var(--accent); white-space: nowrap; text-align: right; }
+
+  /* ── Financials ── */
+  .fin-table { width: 100%; border-collapse: collapse; font-size: 11.5px; margin-top: 14px; }
+  .fin-table th {
+    font-size: 9.5px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase;
+    padding: 7px 12px; background: var(--ink); color: white; text-align: right;
+  }
+  .fin-table th:first-child { text-align: left; border-radius: 6px 0 0 0; }
+  .fin-table th:last-child { border-radius: 0 6px 0 0; }
+  .fin-table td { padding: 7px 12px; border-bottom: 1px solid var(--border); text-align: right; }
+  .fin-table td:first-child { text-align: left; font-weight: 500; color: var(--muted); }
+  .fin-table tr.total-row td { font-weight: 700; background: #f1f5f9; color: var(--ink); border-top: 2px solid var(--border); }
+  .fin-table tr.rev-row td { color: var(--green); font-weight: 600; }
+  .fin-note { font-size: 10px; color: var(--muted); margin-top: 8px; line-height: 1.5; }
+
+  .kpi-row { display: flex; gap: 14px; margin-top: 18px; }
+  .kpi { flex: 1; background: var(--bg2); border: 1px solid var(--border); border-radius: 10px; padding: 16px; text-align: center; }
+  .kpi .val { font-size: 24px; font-weight: 900; color: var(--accent); }
+  .kpi .lbl { font-size: 10px; color: var(--muted); margin-top: 3px; font-weight: 500; }
+
+  /* ── Traction ── */
+  .traction-grid { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 14px; margin-top: 18px; }
+  .metric-card {
+    background: var(--bg2); border: 1px solid var(--border); border-radius: 10px;
+    padding: 18px 16px; text-align: center;
+  }
+  .metric-card .val { font-size: 28px; font-weight: 900; color: var(--accent); }
+  .metric-card .lbl { font-size: 10px; color: var(--muted); margin-top: 3px; font-weight: 500; }
+
+  /* ── Team ── */
+  .team-grid { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 18px; margin-top: 22px; }
+  .team-card {
+    background: var(--bg2); border: 1px solid var(--border); border-radius: 10px;
+    padding: 20px 16px; text-align: center;
+  }
+  .avatar {
+    width: 60px; height: 60px; border-radius: 50%;
+    background: linear-gradient(135deg, var(--accent), #a855f7);
+    display: flex; align-items: center; justify-content: center;
+    font-size: 22px; font-weight: 900; color: white;
+    margin: 0 auto 12px;
+  }
+  .team-card .name { font-size: 14px; font-weight: 700; }
+  .team-card .role { font-size: 11px; color: var(--accent); font-weight: 600; margin-top: 2px; }
+  .team-card .bio  { font-size: 10.5px; color: var(--muted); margin-top: 8px; line-height: 1.5; }
+
+  /* ── Use of funds ── */
+  .fund-row { display: flex; gap: 0; margin-top: 20px; border-radius: 10px; overflow: hidden; border: 1px solid var(--border); }
+  .fund-seg { flex: 1; padding: 20px 16px; text-align: center; }
+  .fund-seg .pct { font-size: 26px; font-weight: 900; }
+  .fund-seg .name { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: .08em; margin-top: 4px; }
+  .fund-seg .amt  { font-size: 12px; font-weight: 600; margin-top: 6px; }
+  .fund-seg .items { font-size: 10px; color: #6b7280; margin-top: 8px; line-height: 1.55; }
+  .fund-seg:nth-child(1) { background: #ede9fe; }
+  .fund-seg:nth-child(2) { background: #ddd6fe; }
+  .fund-seg:nth-child(3) { background: #c4b5fd; }
+  .fund-seg:nth-child(4) { background: #a78bfa; }
+  .fund-seg:nth-child(1) .pct, .fund-seg:nth-child(1) .amt { color: var(--accent); }
+  .fund-seg:nth-child(2) .pct, .fund-seg:nth-child(2) .amt { color: #6d28d9; }
+  .fund-seg:nth-child(3) .pct, .fund-seg:nth-child(3) .amt { color: #5b21b6; }
+  .fund-seg:nth-child(4) .pct, .fund-seg:nth-child(4) .amt { color: #4c1d95; }
+
+  /* ── Ask ── */
+  .ask-card {
+    background: linear-gradient(135deg, var(--accent) 0%, #1e1b4b 100%);
+    border-radius: 14px; padding: 32px 36px; color: white; margin-top: 22px;
+    display: flex; flex-direction: column; gap: 20px;
+  }
+  .ask-cols { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 20px; }
+  .ask-col h3 { font-size: 13px; color: rgba(255,255,255,.75); font-weight: 500; margin-bottom: 8px; }
+  .ask-col ul { padding-left: 16px; }
+  .ask-col li { font-size: 11.5px; color: rgba(255,255,255,.9); margin-bottom: 4px; line-height: 1.5; }
+  .ask-amount { font-size: 44px; font-weight: 900; color: white; text-align: center; }
+  .ask-amount-lbl { font-size: 11px; color: rgba(255,255,255,.6); text-align: center; margin-top: -6px; letter-spacing: .1em; text-transform: uppercase; }
+
+  /* ── Moat ── */
+  .moat-cols { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; margin-top: 18px; }
+  .moat-item { display: flex; gap: 12px; align-items: flex-start; }
+  .moat-icon { font-size: 20px; flex-shrink: 0; }
+  .moat-item h3 { font-size: 13px; }
+  .moat-item p  { font-size: 11.5px; color: var(--muted); margin-top: 3px; line-height: 1.5; }
+
+  .live-pill {
+    display: inline-flex; align-items: center; gap: 6px;
+    background: #dcfce7; border: 1px solid #86efac; border-radius: 99px;
+    padding: 5px 14px; font-size: 11px; font-weight: 700; color: var(--green);
+  }
+  .live-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--green); animation: pulse 1.5s infinite; }
+  @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:.4} }
+
+  /* ── Disclaimer ── */
+  .disclaimer {
+    background: #fffbeb; border: 1px solid #fde68a; border-radius: 8px;
+    padding: 10px 14px; font-size: 9.5px; color: #92400e; margin-top: 14px; line-height: 1.55;
+  }
+
+  /* ── Print ── */
+  @media print {
+    body { background: white; }
+    .slide { box-shadow: none; margin: 0; border-radius: 0; }
+  }
+</style>
+</head>
+<body>
+
+<!-- ══════════════════════════════════════════════
+     SLIDE 1 — COVER
+══════════════════════════════════════════════ -->
+<div class="slide">
+  <div class="cover-bg">
+    <div>
+      <div class="logo-pill">EQ &nbsp;EventQR</div>
+      <div style="margin-top:32px">
+        <h1>The complete guest-experience<br>platform.</h1>
+        <p class="sub" style="margin-top:12px;max-width:540px">
+          From invite to the door, and everything inside — invitations, RSVP, WhatsApp/SMS, QR check-in,
+          venue zones, seating, catering, merch &amp; gift logistics, gift registry. One platform, pay per event.
+        </p>
+        <div class="flags">🇳🇬 &nbsp;🇺🇸</div>
+      </div>
+    </div>
+    <div>
+      <p class="cover-meta">Investor &amp; partner pitch · Confidential · June 2026 · events.vsgs.io · info@devopclinics.com</p>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════════════
+     SLIDE 2 — THE PROBLEM
+══════════════════════════════════════════════ -->
+<div class="slide">
+  <div class="bar"></div>
+  <div class="section-label">The Problem</div>
+  <div class="slide-body">
+    <div class="label">Running an event still means stitching 6 tools together</div>
+    <h2>Planners are flying blind — and guests feel it.</h2>
+
+    <div class="problem-grid">
+      <div class="pain-card">
+        <h3>📬 Invitations &amp; RSVP</h3>
+        <p>WhatsApp threads, paper cards, spreadsheets — no single source of truth for who's coming.</p>
+      </div>
+      <div class="pain-card">
+        <h3>🐌 Check-in chaos</h3>
+        <p>Printed list + pen = long queues, no real-time view, no audit trail.</p>
+      </div>
+      <div class="pain-card">
+        <h3>🔐 Manual access control</h3>
+        <p>VIP rooms, backstage, restricted zones — managed by memory and a bouncer with a clipboard.</p>
+      </div>
+      <div class="pain-card">
+        <h3>🍽️ Catering guesswork</h3>
+        <p>Meal headcount guessed — wasted food, unhappy guests, no per-table kitchen view.</p>
+      </div>
+      <div class="pain-card">
+        <h3>👗 Aso-ebi &amp; logistics chaos</h3>
+        <p>Merch orders, gifts, aso-ebi fabric distribution tracked off-platform in DMs and notes.</p>
+      </div>
+      <div class="pain-card">
+        <h3>📊 No live dashboard</h3>
+        <p>Organizers have zero visibility on the day — no occupancy, no RSVP-vs-actual view.</p>
+      </div>
+    </div>
+
+    <div class="cost-box">
+      <strong style="font-size:12px">The cost:</strong>
+      <span style="font-size:11.5px;color:#713f12"> Planners juggle 6+ tools (ticketing apps, invite tools, spreadsheets, group chats). Data is fragmented, the guest experience suffers, and there is no system of record for the event. Social celebrations (weddings, owambe) and corporate events share the same pain — and no single tool serves both markets well.</span>
+    </div>
+  </div>
+  <div class="foot"><span>EventQR · Confidential</span><span>2</span></div>
+</div>
+
+<!-- ══════════════════════════════════════════════
+     SLIDE 3 — THE SOLUTION
+══════════════════════════════════════════════ -->
+<div class="slide">
+  <div class="bar"></div>
+  <div class="section-label">The Solution</div>
+  <div class="slide-body">
+    <div class="label">One platform for the whole event lifecycle</div>
+    <h2>EventQR replaces every tool — from invite to the door to the table.</h2>
+
+    <div class="sol-grid">
+      <div class="sol-card">
+        <div class="icon">✉️</div>
+        <h3>Invite &amp; RSVP</h3>
+        <p>Branded pages, open or per-guest links, WhatsApp / SMS / email, approvals &amp; deadlines, CSV/Google Sheet import.</p>
+      </div>
+      <div class="sol-card">
+        <div class="icon">🎟️</div>
+        <h3>QR Check-in</h3>
+        <p>Personal QR per guest; instant admission from any phone — no app required for guests or staff.</p>
+      </div>
+      <div class="sol-card">
+        <div class="icon">🚪</div>
+        <h3>Venue Access &amp; Zones</h3>
+        <p>Zones + tag/ticket rules + gates; scan in/out, live occupancy &amp; flow — VIP, backstage, general.</p>
+      </div>
+      <div class="sol-card">
+        <div class="icon">🍽️</div>
+        <h3>Seating &amp; Catering</h3>
+        <p>Tables &amp; auto-seating; guests pick meals; live kitchen orders streamed by table to kitchen view.</p>
+      </div>
+      <div class="sol-card">
+        <div class="icon">📦</div>
+        <h3>Logistics &amp; Registry</h3>
+        <p>Ship aso-ebi/merch &amp; gifts; mark-only gift registry &amp; cash funds; fulfillment tracking.</p>
+      </div>
+      <div class="sol-card">
+        <div class="icon">📊</div>
+        <h3>Live Dashboard</h3>
+        <p>Real-time check-in, RSVP, occupancy, catering &amp; per-table reporting — for planner and operator.</p>
+      </div>
+    </div>
+  </div>
+  <div class="foot"><span>EventQR · Confidential</span><span>3</span></div>
+</div>
+
+<!-- ══════════════════════════════════════════════
+     SLIDE 4 — REACH EVERY GUEST (Email / SMS / WhatsApp)
+══════════════════════════════════════════════ -->
+<div class="slide">
+  <div class="bar"></div>
+  <div class="section-label">Product · Reach Every Guest</div>
+  <div class="slide-body">
+    <div class="label">Self-serve RSVP on the channel guests actually use</div>
+    <h2>WhatsApp, SMS &amp; Email — not a bolt-on. The delivery engine.</h2>
+
+    <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:16px;margin-top:20px">
+
+      <div style="background:#f0fdf4;border:1.5px solid #86efac;border-radius:12px;padding:20px 18px">
+        <div style="font-size:28px;margin-bottom:10px">💬</div>
+        <h3 style="color:#16a34a;font-size:14px">WhatsApp</h3>
+        <p style="font-size:11.5px;color:#374151;margin-top:6px;line-height:1.6">
+          The #1 communication channel in Nigeria — <strong>90%+ smartphone penetration</strong>. Branded invite messages, QR ticket delivery, RSVP confirmations, reminders and day-of broadcasts sent directly into the chat guests already check first.
+        </p>
+        <div style="margin-top:12px;background:#dcfce7;border-radius:8px;padding:8px 12px;font-size:10.5px;color:#166534;font-weight:600">
+          🇳🇬 Nigeria edge — guests respond to WhatsApp. Email goes unread.
+        </div>
+      </div>
+
+      <div style="background:#eff6ff;border:1.5px solid #93c5fd;border-radius:12px;padding:20px 18px">
+        <div style="font-size:28px;margin-bottom:10px">📱</div>
+        <h3 style="color:#1d4ed8;font-size:14px">SMS</h3>
+        <p style="font-size:11.5px;color:#374151;margin-top:6px;line-height:1.6">
+          Works without data or internet — critical for <strong>rural venues, large outdoor events and guests on basic phones</strong>. Admission confirmation, table assignment and event updates reach every guest, no smartphone required.
+        </p>
+        <div style="margin-top:12px;background:#dbeafe;border-radius:8px;padding:8px 12px;font-size:10.5px;color:#1e40af;font-weight:600">
+          📡 Zero data required — works in low-signal venues.
+        </div>
+      </div>
+
+      <div style="background:#faf5ff;border:1.5px solid #d8b4fe;border-radius:12px;padding:20px 18px">
+        <div style="font-size:28px;margin-bottom:10px">✉️</div>
+        <h3 style="color:#7c3aed;font-size:14px">Email</h3>
+        <p style="font-size:11.5px;color:#374151;margin-top:6px;line-height:1.6">
+          Branded invite pages with inline QR ticket, deadline reminders, auto-confirmation on RSVP, and post-event follow-up. Free tier runs on email only — the zero-friction entry point that converts organizers to paid.
+        </p>
+        <div style="margin-top:12px;background:#ede9fe;border-radius:8px;padding:8px 12px;font-size:10.5px;color:#5b21b6;font-weight:600">
+          🆓 Free tier — email invites up to 25 guests, no credit card.
+        </div>
+      </div>
+    </div>
+
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-top:16px">
+      <div style="background:var(--bg2);border:1px solid var(--border);border-radius:10px;padding:16px 18px">
+        <h3 style="font-size:13px;margin-bottom:10px">📅 Full guest lifecycle messaging</h3>
+        <div style="display:flex;flex-direction:column;gap:7px">
+          <div style="display:flex;align-items:center;gap:10px;font-size:11.5px;color:#374151"><span style="background:#ede9fe;border-radius:99px;padding:2px 10px;font-size:10px;font-weight:700;color:var(--accent)">Invite</span> Branded invite with RSVP link + per-guest QR</div>
+          <div style="display:flex;align-items:center;gap:10px;font-size:11.5px;color:#374151"><span style="background:#dcfce7;border-radius:99px;padding:2px 10px;font-size:10px;font-weight:700;color:#16a34a">Confirm</span> Instant confirmation with QR ticket on RSVP</div>
+          <div style="display:flex;align-items:center;gap:10px;font-size:11.5px;color:#374151"><span style="background:#fef3c7;border-radius:99px;padding:2px 10px;font-size:10px;font-weight:700;color:#d97706">Remind</span> 24hr &amp; 1hr before — automated, zero planner effort</div>
+          <div style="display:flex;align-items:center;gap:10px;font-size:11.5px;color:#374151"><span style="background:#dbeafe;border-radius:99px;padding:2px 10px;font-size:10px;font-weight:700;color:#1d4ed8">Admit</span> Check-in confirmation with table &amp; seat info</div>
+          <div style="display:flex;align-items:center;gap:10px;font-size:11.5px;color:#374151"><span style="background:#fee2e2;border-radius:99px;padding:2px 10px;font-size:10px;font-weight:700;color:#dc2626">Broadcast</span> Host can push live updates to all guests mid-event</div>
+        </div>
+      </div>
+
+      <div style="background:var(--bg2);border:1px solid var(--border);border-radius:10px;padding:16px 18px">
+        <h3 style="font-size:13px;margin-bottom:10px">💳 Message credits — recurring revenue</h3>
+        <p style="font-size:11.5px;color:#374151;line-height:1.6;margin-bottom:10px">
+          SMS &amp; WhatsApp sends are billed from a pre-purchased credit balance — <strong>top-ups drive recurring revenue</strong> independent of event-pass sales. ~40% gross margin on credits after provider cost.
+        </p>
+        <div style="display:flex;gap:10px">
+          <div style="flex:1;background:#dcfce7;border-radius:8px;padding:10px;text-align:center">
+            <div style="font-size:18px;font-weight:900;color:#16a34a">$0.04</div>
+            <div style="font-size:9.5px;color:#166534;font-weight:600;margin-top:2px">per message (US)</div>
+          </div>
+          <div style="flex:1;background:#f0fdf4;border-radius:8px;padding:10px;text-align:center">
+            <div style="font-size:18px;font-weight:900;color:#16a34a">₦20</div>
+            <div style="font-size:9.5px;color:#166534;font-weight:600;margin-top:2px">per message (NG)</div>
+          </div>
+          <div style="flex:1;background:#ede9fe;border-radius:8px;padding:10px;text-align:center">
+            <div style="font-size:18px;font-weight:900;color:var(--accent)">~40%</div>
+            <div style="font-size:9.5px;color:#5b21b6;font-weight:600;margin-top:2px">gross margin</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="foot"><span>EventQR · Confidential</span><span>4</span></div>
+</div>
+
+<!-- ══════════════════════════════════════════════
+     SLIDE 5 — MARKET OPPORTUNITY (was 4)
+══════════════════════════════════════════════ -->
+<div class="slide">
+  <div class="bar"></div>
+  <div class="section-label">Market Opportunity</div>
+  <div class="slide-body">
+    <div class="label">Two large, under-served markets — one platform</div>
+    <h2>A $14.5B global software TAM with two high-growth wedges.</h2>
+
+    <div class="mkt-cols">
+      <div class="mkt-card ng">
+        <h2>🇳🇬 Nigeria &amp; West Africa</h2>
+        <div class="big">$6B+</div>
+        <p style="font-size:11px;color:#166534;font-weight:600">Nigerian social events industry (annual)</p>
+        <ul>
+          <li>~1.2M weddings/year — among highest globally per capita</li>
+          <li>$2B+ aso-ebi &amp; gift economy alone</li>
+          <li>Avg wedding: 300–500 guests, $10K–$80K spend</li>
+          <li>~90% WhatsApp smartphone penetration</li>
+          <li>Tooling today: WhatsApp + spreadsheets + cash</li>
+          <li><strong>Edge:</strong> WhatsApp-first, Naira pricing (Paystack), aso-ebi &amp; family-event seating</li>
+        </ul>
+      </div>
+      <div class="mkt-card us">
+        <h2>🇺🇸 United States</h2>
+        <div class="big">$70B+</div>
+        <p style="font-size:11px;color:#1e40af;font-weight:600">US wedding industry (annual, The Knot 2024)</p>
+        <ul>
+          <li>2.5M weddings/year; avg spend $35,000</li>
+          <li>$400B+ corporate &amp; association events market</li>
+          <li>Event management software: $14.5B (2024) → $28.3B by 2030 at 11.1% CAGR</li>
+          <li>Still fragments across ticketing, invite &amp; check-in tools</li>
+          <li><strong>Edge:</strong> Full-stack at SMB pricing; no lock-in subscription</li>
+        </ul>
+      </div>
+    </div>
+
+    <div class="tam-row">
+      <div class="tam-box tam">
+        <div class="lbl">TAM</div>
+        <div class="val">$14.5B</div>
+        <div class="desc">Global event management software<br><em>(Grand View Research, 2024)</em></div>
+      </div>
+      <div class="tam-box sam">
+        <div class="lbl">SAM</div>
+        <div class="val">$4.8B</div>
+        <div class="desc">US SMB social events + Nigeria digital events — organizer-facing software</div>
+      </div>
+      <div class="tam-box som">
+        <div class="lbl">SOM — Year 3</div>
+        <div class="val">$12M ARR</div>
+        <div class="desc">120K events at blended $100 ARPE — 0.25% SAM penetration</div>
+      </div>
+    </div>
+  </div>
+  <div class="foot"><span>EventQR · Confidential</span><span>5</span></div>
+</div>
+
+<!-- ══════════════════════════════════════════════
+     SLIDE 6 — GO-TO-MARKET
+══════════════════════════════════════════════ -->
+<div class="slide">
+  <div class="bar"></div>
+  <div class="section-label">Go-to-Market Strategy</div>
+  <div class="slide-body">
+    <div class="label">Focused beachhead → expand</div>
+    <h2>Win Nigeria weddings. Win US boutique venues. Scale from there.</h2>
+
+    <div class="gtm-grid">
+      <div class="gtm-card">
+        <div class="phase">Phase 1 — Q3 2026 · Nigeria Launch</div>
+        <h3>🇳🇬 Lagos Weddings &amp; Owambe</h3>
+        <ul>
+          <li>Partner with 10 top Lagos event planners as design partners (free tier + dedicated onboarding)</li>
+          <li>Instagram &amp; TikTok content marketing — showcase day-of experience</li>
+          <li>WhatsApp community seeding via planners &amp; aso-ebi groups</li>
+          <li>Paystack-native payments, Naira pricing removes friction</li>
+          <li><strong>Target:</strong> 500 events, 200K guests in 6 months</li>
+        </ul>
+      </div>
+      <div class="gtm-card">
+        <div class="phase">Phase 1 — Q3 2026 · US Launch</div>
+        <h3>🇺🇸 Boutique Venues &amp; Planners</h3>
+        <ul>
+          <li>Partner with 5 boutique venues in Atlanta &amp; Houston (high Nigerian diaspora density)</li>
+          <li>Referral incentive: venues earn commission per event booked through platform</li>
+          <li>SEO + Google Ads targeting "event check-in software SMB"</li>
+          <li>AppSumo / ProductHunt launch for PLG awareness</li>
+          <li><strong>Target:</strong> 250 events in 6 months</li>
+        </ul>
+      </div>
+      <div class="gtm-card">
+        <div class="phase">Phase 2 — Q1 2027 · Growth</div>
+        <h3>📈 Scale &amp; Repeat Organizers</h3>
+        <ul>
+          <li>Self-serve onboarding funnel (free → paid conversion via feature gates)</li>
+          <li>Planner certification program — certified EventQR pros earn referrals</li>
+          <li>Expand to Abuja, Port Harcourt; New York, Houston</li>
+          <li>API integrations: venue booking platforms, florists, caterers</li>
+          <li><strong>Target:</strong> 8,000 events/yr, $500K ARR</li>
+        </ul>
+      </div>
+      <div class="gtm-card">
+        <div class="phase">Phase 3 — 2028 · Enterprise &amp; Expansion</div>
+        <h3>🏢 Corporate &amp; West Africa</h3>
+        <ul>
+          <li>Corporate tier: custom domains, SSO, data residency (GDPR / nLPD)</li>
+          <li>Expand to Ghana, Kenya; deepen US corporate events</li>
+          <li>Venue SaaS white-label licensing</li>
+          <li>Logistics API for aso-ebi &amp; gifting platforms</li>
+          <li><strong>Target:</strong> 50K events/yr, $2.5M+ ARR</li>
+        </ul>
+      </div>
+    </div>
+
+    <div class="disclaimer">
+      ⚡ Customer acquisition cost (CAC) assumptions: Nigeria ≈ $8 via planner partnerships &amp; WhatsApp; US ≈ $45 via digital ads + venue referral. Target LTV:CAC ≥ 8:1 by Year 2 at repeat-organizer rates.
+    </div>
+  </div>
+  <div class="foot"><span>EventQR · Confidential</span><span>6</span></div>
+</div>
+
+<!-- ══════════════════════════════════════════════
+     SLIDE 7 — COMPETITIVE LANDSCAPE
+══════════════════════════════════════════════ -->
+<div class="slide">
+  <div class="bar"></div>
+  <div class="section-label">Competitive Landscape</div>
+  <div class="slide-body">
+    <div class="label">Everyone owns a slice. Nobody owns the whole event.</div>
+    <h2>EventQR is the only end-to-end platform for both markets.</h2>
+
+    <table class="comp-table">
+      <thead>
+        <tr>
+          <th>Capability</th>
+          <th>EventQR</th>
+          <th>Eventbrite</th>
+          <th>Cvent</th>
+          <th>zkipster</th>
+          <th>Partiful / Luma</th>
+          <th>RSVPify / Zola</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr class="eq-row">
+          <td>Invitations &amp; RSVP</td>
+          <td><span class="dot-full">●</span></td>
+          <td><span class="dot-none">○</span></td>
+          <td><span class="dot-partial">◐</span></td>
+          <td><span class="dot-full">●</span></td>
+          <td><span class="dot-partial">◐</span></td>
+          <td><span class="dot-full">●</span></td>
+        </tr>
+        <tr class="eq-row">
+          <td>WhatsApp / SMS / Email</td>
+          <td><span class="dot-full">●</span></td>
+          <td><span class="dot-partial">◐</span></td>
+          <td><span class="dot-none">○</span></td>
+          <td><span class="dot-none">○</span></td>
+          <td><span class="dot-partial">◐</span></td>
+          <td><span class="dot-partial">◐</span></td>
+        </tr>
+        <tr class="eq-row">
+          <td>QR ticket check-in</td>
+          <td><span class="dot-full">●</span></td>
+          <td><span class="dot-full">●</span></td>
+          <td><span class="dot-none">○</span></td>
+          <td><span class="dot-full">●</span></td>
+          <td><span class="dot-partial">◐</span></td>
+          <td><span class="dot-none">○</span></td>
+        </tr>
+        <tr class="eq-row">
+          <td>Multi-zone access control</td>
+          <td><span class="dot-full">●</span></td>
+          <td><span class="dot-none">○</span></td>
+          <td><span class="dot-none">○</span></td>
+          <td><span class="dot-partial">◐</span></td>
+          <td><span class="dot-none">○</span></td>
+          <td><span class="dot-none">○</span></td>
+        </tr>
+        <tr class="eq-row">
+          <td>Seating &amp; auto-assign</td>
+          <td><span class="dot-full">●</span></td>
+          <td><span class="dot-none">○</span></td>
+          <td><span class="dot-none">○</span></td>
+          <td><span class="dot-none">○</span></td>
+          <td><span class="dot-none">○</span></td>
+          <td><span class="dot-none">○</span></td>
+        </tr>
+        <tr class="eq-row">
+          <td>Menu / catering orders</td>
+          <td><span class="dot-full">●</span></td>
+          <td><span class="dot-none">○</span></td>
+          <td><span class="dot-none">○</span></td>
+          <td><span class="dot-none">○</span></td>
+          <td><span class="dot-none">○</span></td>
+          <td><span class="dot-none">○</span></td>
+        </tr>
+        <tr class="eq-row">
+          <td>Merch &amp; gift logistics</td>
+          <td><span class="dot-full">●</span></td>
+          <td><span class="dot-none">○</span></td>
+          <td><span class="dot-none">○</span></td>
+          <td><span class="dot-none">○</span></td>
+          <td><span class="dot-none">○</span></td>
+          <td><span class="dot-none">○</span></td>
+        </tr>
+        <tr class="eq-row">
+          <td>Local NGN payments</td>
+          <td><span class="dot-full">●</span></td>
+          <td><span class="dot-none">○</span></td>
+          <td><span class="dot-none">○</span></td>
+          <td><span class="dot-none">○</span></td>
+          <td><span class="dot-none">○</span></td>
+          <td><span class="dot-none">○</span></td>
+        </tr>
+        <tr class="eq-row">
+          <td>Pay-per-event (no subscription)</td>
+          <td><span class="dot-full">●</span></td>
+          <td><span class="dot-partial">◐</span></td>
+          <td><span class="dot-none">○</span></td>
+          <td><span class="dot-none">○</span></td>
+          <td><span class="dot-full">●</span></td>
+          <td><span class="dot-partial">◐</span></td>
+        </tr>
+      </tbody>
+    </table>
+    <p style="font-size:10px;color:var(--muted);margin-top:8px">
+      ● full &nbsp; ◐ partial &nbsp; ○ none &nbsp;·&nbsp; Comparison reflects publicly-positioned capabilities as of June 2026; review before external use.
+    </p>
+  </div>
+  <div class="foot"><span>EventQR · Confidential</span><span>7</span></div>
+</div>
+
+<!-- ══════════════════════════════════════════════
+     SLIDE 8 — MOAT & DIFFERENTIATION
+══════════════════════════════════════════════ -->
+<div class="slide">
+  <div class="bar"></div>
+  <div class="section-label">Moat &amp; Differentiation</div>
+  <div class="slide-body">
+    <div style="display:flex;align-items:center;gap:16px;margin-bottom:4px">
+      <h2 style="margin:0">Why EventQR wins and keeps winning</h2>
+      <div class="live-pill"><div class="live-dot"></div> Live &amp; deployed</div>
+    </div>
+    <p class="sub" style="font-size:12px">Not a concept — full platform is deployed at events.vsgs.io, multi-tenant, with billing, messaging providers, and an operator console.</p>
+
+    <div class="moat-cols">
+      <div class="moat-item">
+        <div class="moat-icon">🗃️</div>
+        <div>
+          <h3>End-to-end system of record</h3>
+          <p>One dataset from invite → door → table. No context lost between tools. Organizers see everything in one dashboard.</p>
+        </div>
+      </div>
+      <div class="moat-item">
+        <div class="moat-icon">🌍</div>
+        <div>
+          <h3>Dual-market by design</h3>
+          <p>WhatsApp-first + Naira (Paystack) for Nigeria; premium check-in + USD Stripe for the US. Not bolted on — core to the architecture.</p>
+        </div>
+      </div>
+      <div class="moat-item">
+        <div class="moat-icon">🔐</div>
+        <div>
+          <h3>Access intelligence no one else offers</h3>
+          <p>Tag-driven zones &amp; gates that enterprise ticketing tools charge $15K+/yr for — available at SMB pricing.</p>
+        </div>
+      </div>
+      <div class="moat-item">
+        <div class="moat-icon">🍛</div>
+        <div>
+          <h3>Operations others ignore</h3>
+          <p>Catering-by-table, aso-ebi/merch logistics, gift registry. These are the unsexy workflows that create organizer lock-in.</p>
+        </div>
+      </div>
+      <div class="moat-item">
+        <div class="moat-icon">💳</div>
+        <div>
+          <h3>Frictionless pricing</h3>
+          <p>Free to start, pay per event, no annual contract. Zero activation barrier drives top-of-funnel growth.</p>
+        </div>
+      </div>
+      <div class="moat-item">
+        <div class="moat-icon">🏢</div>
+        <div>
+          <h3>Multi-tenant ops console</h3>
+          <p>Orgs, staff roles (scan / menu / dashboard), operator console — enables agency &amp; venue white-labeling as an upsell.</p>
+        </div>
+      </div>
+    </div>
+
+    <div style="background:var(--bg2);border:1px solid var(--border);border-radius:10px;padding:14px 18px;margin-top:16px;display:flex;gap:24px;flex-wrap:wrap">
+      <span style="font-size:11px;color:var(--muted)"><strong style="color:var(--ink)">Shipped:</strong> Invites · RSVP · QR check-in · Zones &amp; gates · Seating · Catering · Logistics · Registry · Live dashboard · WhatsApp/SMS/Email · Billing (USD &amp; NGN) · Multi-tenant &amp; roles · Operator console · Trials &amp; comps</span>
+    </div>
+  </div>
+  <div class="foot"><span>EventQR · Confidential</span><span>8</span></div>
+</div>
+
+<!-- ══════════════════════════════════════════════
+     SLIDE 9 — BUSINESS MODEL & PRICING
+══════════════════════════════════════════════ -->
+<div class="slide">
+  <div class="bar"></div>
+  <div class="section-label">Business Model</div>
+  <div class="slide-body">
+    <div class="label">Revenue scales with events, not seats</div>
+    <h2>Pay-per-event with upsell on messages, capacity &amp; enterprise.</h2>
+
+    <div class="tier-stack">
+      <div class="tier">
+        <div>
+          <div class="tier-name">🆓 Free Tier</div>
+          <span class="badge badge-green">Top of funnel</span>
+        </div>
+        <div class="tier-desc">Email invites only, up to 25 guests, EventQR branding. Entry point for first-time organizers — no credit card required.</div>
+        <div class="tier-price">$0 / ₦0</div>
+      </div>
+      <div class="tier">
+        <div>
+          <div class="tier-name">🎟️ Starter Event Pass</div>
+          <span class="badge badge-accent">Per event · up to 150 guests</span>
+        </div>
+        <div class="tier-desc">SMS/WhatsApp, QR check-in, seating, venue access, logistics, registry, no branding. For social celebrations &amp; small corporates.</div>
+        <div class="tier-price">$49 / ₦25,000</div>
+      </div>
+      <div class="tier">
+        <div>
+          <div class="tier-name">🎪 Pro Event Pass</div>
+          <span class="badge badge-accent">Per event · up to 500 guests</span>
+        </div>
+        <div class="tier-desc">Everything in Starter + unlimited zones &amp; gates, custom domain, kitchen view, venue analytics &amp; per-guest journey reporting.</div>
+        <div class="tier-price">$129 / ₦65,000</div>
+      </div>
+      <div class="tier">
+        <div>
+          <div class="tier-name">🏟️ Grand Event Pass</div>
+          <span class="badge badge-amber">Per event · 500+ guests</span>
+        </div>
+        <div class="tier-desc">Everything in Pro + dedicated success manager, SLA, custom integrations, data export, priority support.</div>
+        <div class="tier-price">$299+ / ₦150,000+</div>
+      </div>
+      <div class="tier" style="background:#f0fdf4;border-color:#86efac">
+        <div>
+          <div class="tier-name">💬 Message Credits</div>
+          <span class="badge badge-green">Add-on · ongoing margin</span>
+        </div>
+        <div class="tier-desc">Top-up bundles for WhatsApp &amp; SMS sends. 100 msgs from $4 / ₦2,000. ~40% gross margin on credits after provider cost.</div>
+        <div class="tier-price">$0.04 / msg</div>
+      </div>
+    </div>
+
+    <div class="kpi-row" style="margin-top:14px">
+      <div class="kpi"><div class="val">~75%</div><div class="lbl">Gross Margin (Event Pass)</div></div>
+      <div class="kpi"><div class="val">~40%</div><div class="lbl">Gross Margin (Credits)</div></div>
+      <div class="kpi"><div class="val">&lt;2 days</div><div class="lbl">Payback period (CAC)</div></div>
+      <div class="kpi"><div class="val">0</div><div class="lbl">Annual contract / lock-in</div></div>
+    </div>
+  </div>
+  <div class="foot"><span>EventQR · Confidential</span><span>9</span></div>
+</div>
+
+<!-- ══════════════════════════════════════════════
+     SLIDE 10 — FINANCIAL PROJECTIONS
+══════════════════════════════════════════════ -->
+<div class="slide">
+  <div class="bar"></div>
+  <div class="section-label">Financial Projections</div>
+  <div class="slide-body">
+    <div class="label">Bottom-up event-volume model · post-seed baseline</div>
+    <h2>Path to $19M ARR by Year 5 on 280K annual events.</h2>
+
+    <table class="fin-table">
+      <thead>
+        <tr>
+          <th style="text-align:left">Metric</th>
+          <th>Y1 (2027)</th>
+          <th>Y2 (2028)</th>
+          <th>Y3 (2029)</th>
+          <th>Y4 (2030)</th>
+          <th>Y5 (2031)</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>🇳🇬 Nigeria events</td>
+          <td>500</td>
+          <td>5,000</td>
+          <td>22,000</td>
+          <td>60,000</td>
+          <td>170,000</td>
+        </tr>
+        <tr>
+          <td>🇺🇸 US events</td>
+          <td>500</td>
+          <td>3,000</td>
+          <td>13,000</td>
+          <td>40,000</td>
+          <td>110,000</td>
+        </tr>
+        <tr>
+          <td>Total events / year</td>
+          <td>1,000</td>
+          <td>8,000</td>
+          <td>35,000</td>
+          <td>100,000</td>
+          <td>280,000</td>
+        </tr>
+        <tr>
+          <td>ARPE — Nigeria (blended USD)</td>
+          <td>$15</td>
+          <td>$16</td>
+          <td>$17</td>
+          <td>$18</td>
+          <td>$20</td>
+        </tr>
+        <tr>
+          <td>ARPE — US (blended)</td>
+          <td>$150</td>
+          <td>$155</td>
+          <td>$160</td>
+          <td>$165</td>
+          <td>$170</td>
+        </tr>
+        <tr class="rev-row">
+          <td>Nigeria Revenue</td>
+          <td>$7.5K</td>
+          <td>$80K</td>
+          <td>$374K</td>
+          <td>$1.08M</td>
+          <td>$3.4M</td>
+        </tr>
+        <tr class="rev-row">
+          <td>US Revenue</td>
+          <td>$75K</td>
+          <td>$465K</td>
+          <td>$2.08M</td>
+          <td>$6.6M</td>
+          <td>$18.7M</td>
+        </tr>
+        <tr class="rev-row">
+          <td>Message Credits &amp; Add-ons (est. 25% uplift)</td>
+          <td>$20K</td>
+          <td>$136K</td>
+          <td>$614K</td>
+          <td>$1.92M</td>
+          <td>$5.5M</td>
+        </tr>
+        <tr class="total-row">
+          <td>Total Revenue</td>
+          <td>$103K</td>
+          <td>$681K</td>
+          <td>$3.07M</td>
+          <td>$9.6M</td>
+          <td>$27.6M</td>
+        </tr>
+        <tr>
+          <td>Gross Margin (~70% blended)</td>
+          <td>$72K</td>
+          <td>$477K</td>
+          <td>$2.15M</td>
+          <td>$6.7M</td>
+          <td>$19.3M</td>
+        </tr>
+        <tr>
+          <td>OpEx (team, infra, S&amp;M)</td>
+          <td>$600K</td>
+          <td>$900K</td>
+          <td>$1.4M</td>
+          <td>$2.8M</td>
+          <td>$5.1M</td>
+        </tr>
+        <tr class="total-row">
+          <td>EBITDA</td>
+          <td>($528K)</td>
+          <td>($423K)</td>
+          <td>$750K</td>
+          <td>$3.9M</td>
+          <td>$14.2M</td>
+        </tr>
+      </tbody>
+    </table>
+
+    <div class="fin-note">
+      ARPE = Average Revenue Per Event (blended Event Pass + message credits). Nigeria ARPE assumes ₦ pricing equivalent at $1 = ₦1,600 (hedge: ₦ revenue partially offsets FX risk). OpEx includes seed headcount of ~8 FTEs by Y2.
+      Projections are forward-looking estimates and subject to significant uncertainty — for illustrative purposes only.
+    </div>
+  </div>
+  <div class="foot"><span>EventQR · Confidential</span><span>10</span></div>
+</div>
+
+<!-- ══════════════════════════════════════════════
+     SLIDE 11 — STATUS & TRACTION
+══════════════════════════════════════════════ -->
+<div class="slide">
+  <div class="bar"></div>
+  <div class="section-label">Status &amp; Traction</div>
+  <div class="slide-body">
+    <div style="display:flex;align-items:center;gap:14px;margin-bottom:18px">
+      <h2 style="margin:0">Product complete &amp; deployed — ready to scale</h2>
+      <div class="live-pill"><div class="live-dot"></div> Live at events.vsgs.io</div>
+    </div>
+
+    <div class="traction-grid">
+      <div class="metric-card">
+        <div class="val" style="color:var(--green)">✅ Live</div>
+        <div class="lbl">Full platform deployed (multi-tenant)</div>
+      </div>
+      <div class="metric-card">
+        <div class="val">50</div>
+        <div class="lbl">Events powered to date</div>
+      </div>
+      <div class="metric-card">
+        <div class="val">Early</div>
+        <div class="lbl">Revenue stage — seeking first paying events</div>
+      </div>
+    </div>
+
+    <div style="margin-top:20px;display:grid;grid-template-columns:1fr 1fr;gap:16px">
+      <div>
+        <h3 style="font-size:13px;margin-bottom:10px">✅ Shipped &amp; running</h3>
+        <ul style="list-style:none;padding:0;display:flex;flex-direction:column;gap:6px">
+          <li style="font-size:11.5px;color:#374151">✔ Multi-tenant orgs, staff roles, operator console</li>
+          <li style="font-size:11.5px;color:#374151">✔ Payments: USD (Stripe) &amp; NGN (Paystack), message-credit billing</li>
+          <li style="font-size:11.5px;color:#374151">✔ Comps &amp; trials engine</li>
+          <li style="font-size:11.5px;color:#374151">✔ WhatsApp / SMS / email provider integrations</li>
+          <li style="font-size:11.5px;color:#374151">✔ Full QR check-in, zones, seating, catering, registry</li>
+        </ul>
+      </div>
+      <div>
+        <h3 style="font-size:13px;margin-bottom:10px">🔜 Near-term roadmap</h3>
+        <ul style="list-style:none;padding:0;display:flex;flex-direction:column;gap:6px">
+          <li style="font-size:11.5px;color:#374151">→ 10 design-partner planners (Lagos + Houston)</li>
+          <li style="font-size:11.5px;color:#374151">→ Native iOS / Android scanner app</li>
+          <li style="font-size:11.5px;color:#374151">→ Offline check-in mode (poor-connectivity venues)</li>
+          <li style="font-size:11.5px;color:#374151">→ GDPR / Swiss-nLPD kit &amp; data residency for enterprise</li>
+          <li style="font-size:11.5px;color:#374151">→ Venue &amp; caterer API integrations</li>
+        </ul>
+      </div>
+    </div>
+
+    <div class="disclaimer">
+      Platform has powered 50 events. Currently in pre-revenue / design-partner stage — first paid events targeted Q3 2026.
+    </div>
+  </div>
+  <div class="foot"><span>EventQR · Confidential</span><span>11</span></div>
+</div>
+
+<!-- ══════════════════════════════════════════════
+     SLIDE 12 — TEAM
+══════════════════════════════════════════════ -->
+<div class="slide">
+  <div class="bar"></div>
+  <div class="section-label">Team</div>
+  <div class="slide-body">
+    <div class="label">The builders behind the platform</div>
+    <h2>Experienced, cross-market, already shipping.</h2>
+
+    <div class="team-grid">
+      <div class="team-card">
+        <div class="avatar">O</div>
+        <div class="name">Onaolapo</div>
+        <div class="role">Founder &amp; CEO · Product &amp; Strategy</div>
+        <div class="bio">15 years in event management &amp; planning, combined with deep IT and tech expertise. Intimately understands both the organizer's pain and the technology to solve it — a rare dual-market founder who has lived the problem firsthand across Nigeria and the US.</div>
+      </div>
+      <div class="team-card" style="background:#f8f7ff;border:1.5px dashed #c4b5fd">
+        <div class="avatar" style="background:#e2e8f0;color:#94a3b8">+</div>
+        <div class="name" style="color:#94a3b8">CTO / Lead Engineer</div>
+        <div class="role" style="color:#a5b4fc">Engineering &amp; Architecture — Hiring</div>
+        <div class="bio" style="color:#94a3b8">Actively seeking a technical co-founder or senior engineer with full-stack / mobile background. Platform is already live and multi-tenant — ideal candidate accelerates native app &amp; API roadmap.</div>
+      </div>
+      <div class="team-card" style="background:#f8f7ff;border:1.5px dashed #c4b5fd">
+        <div class="avatar" style="background:#e2e8f0;color:#94a3b8">+</div>
+        <div class="name" style="color:#94a3b8">GTM / Commercial Lead</div>
+        <div class="role" style="color:#a5b4fc">Sales, Partnerships &amp; Growth — Hiring</div>
+        <div class="bio" style="color:#94a3b8">Seeking a commercial lead with planner network in Lagos and/or Houston. Seed funding will accelerate this hire as a Day 1 priority.</div>
+      </div>
+    </div>
+
+    <div style="background:#f0fdf4;border:1px solid #86efac;border-radius:10px;padding:18px 20px;margin-top:20px">
+      <h3 style="font-size:13px;color:#166534;margin-bottom:8px">🌱 Why this team wins</h3>
+      <p style="font-size:11.5px;color:#166534;line-height:1.6">
+        Onaolapo brings 15 years of on-the-ground event management experience — he has personally run large-scale events across Nigeria and understands every friction point the platform solves. The product is built, live, and has already powered 50 events. Seed capital funds go-to-market and team expansion, not product discovery.
+      </p>
+    </div>
+  </div>
+  <div class="foot"><span>EventQR · Confidential</span><span>12</span></div>
+</div>
+
+<!-- ══════════════════════════════════════════════
+     SLIDE 13 — USE OF FUNDS
+══════════════════════════════════════════════ -->
+<div class="slide">
+  <div class="bar"></div>
+  <div class="section-label">Use of Funds</div>
+  <div class="slide-body">
+    <div class="label">$850K seed round · 18-month runway</div>
+    <h2>Deploying capital to reach $500K ARR and Series A metrics.</h2>
+
+    <div class="fund-row">
+      <div class="fund-seg">
+        <div class="pct">40%</div>
+        <div class="name">Sales &amp; Marketing</div>
+        <div class="amt">$340K</div>
+        <div class="items">
+          Lagos planner partnerships<br>
+          US digital acquisition (Google, Meta)<br>
+          Planner certification program<br>
+          ProductHunt / AppSumo launch<br>
+          Design partners (10 NG, 5 US)
+        </div>
+      </div>
+      <div class="fund-seg">
+        <div class="pct">25%</div>
+        <div class="name">Engineering</div>
+        <div class="amt">$213K</div>
+        <div class="items">
+          iOS / Android scanner app<br>
+          Offline mode for poor connectivity<br>
+          Venue &amp; caterer API integrations<br>
+          Performance &amp; infra scaling<br>
+          Enterprise data residency (GDPR)
+        </div>
+      </div>
+      <div class="fund-seg">
+        <div class="pct">20%</div>
+        <div class="name">Operations &amp; CS</div>
+        <div class="amt">$170K</div>
+        <div class="items">
+          Customer success &amp; onboarding<br>
+          Lagos &amp; Houston on-ground ops<br>
+          Venue &amp; planner partnerships<br>
+          Support tooling &amp; SLAs<br>
+          Community management
+        </div>
+      </div>
+      <div class="fund-seg">
+        <div class="pct">15%</div>
+        <div class="name">Legal &amp; Compliance</div>
+        <div class="amt">$127K</div>
+        <div class="items">
+          GDPR / nLPD &amp; data residency<br>
+          Nigeria NDPR compliance<br>
+          IP protection &amp; incorporation<br>
+          Payment licensing (NG &amp; US)<br>
+          Contracts &amp; terms
+        </div>
+      </div>
+    </div>
+
+    <div class="kpi-row">
+      <div class="kpi"><div class="val">18 mo</div><div class="lbl">Runway at raise</div></div>
+      <div class="kpi"><div class="val">$500K</div><div class="lbl">ARR target at Series A</div></div>
+      <div class="kpi"><div class="val">8,000</div><div class="lbl">Events/year at milestone</div></div>
+      <div class="kpi"><div class="val">~8 FTEs</div><div class="lbl">Team at end of seed period</div></div>
+    </div>
+  </div>
+  <div class="foot"><span>EventQR · Confidential</span><span>13</span></div>
+</div>
+
+<!-- ══════════════════════════════════════════════
+     SLIDE 14 — THE ASK
+══════════════════════════════════════════════ -->
+<div class="slide">
+  <div class="bar"></div>
+  <div class="section-label">The Ask</div>
+  <div class="slide-body center">
+    <div style="width:100%">
+      <div class="label" style="text-align:center">Partner with us to own the guest experience across Nigeria &amp; the US</div>
+
+      <div class="ask-card">
+        <div>
+          <div class="ask-amount">$850,000</div>
+          <div class="ask-amount-lbl">Seed Round · Pre-money valuation negotiable · SAFEs or priced round</div>
+        </div>
+        <div class="ask-cols">
+          <div class="ask-col">
+            <h3>💼 Investors</h3>
+            <ul>
+              <li>Raising to fund go-to-market, dual-market expansion, and engineering roadmap</li>
+              <li>18-month runway to $500K ARR &amp; Series A readiness</li>
+              <li>Seeking lead check $250K–$500K with strategic Africa or events-tech angle</li>
+            </ul>
+          </div>
+          <div class="ask-col">
+            <h3>🎉 Event Planners</h3>
+            <ul>
+              <li>Run your next event end-to-end — free to start</li>
+              <li>Design partner program: early access + white-glove onboarding</li>
+              <li>Lagos &amp; Houston cohort now open</li>
+            </ul>
+          </div>
+          <div class="ask-col">
+            <h3>🤝 Partners</h3>
+            <ul>
+              <li>Venues: revenue-share on events booked via platform</li>
+              <li>Caterers: kitchen integration API</li>
+              <li>Payment &amp; logistics integrations welcome</li>
+            </ul>
+          </div>
+        </div>
+      </div>
+
+      <div style="margin-top:24px;text-align:center">
+        <div style="font-size:22px;font-weight:900;color:var(--accent)">EQ EventQR</div>
+        <div style="font-size:13px;color:var(--muted);margin-top:4px">events.vsgs.io &nbsp;·&nbsp; info@devopclinics.com</div>
+      </div>
+    </div>
+  </div>
+  <div class="foot"><span>EventQR · Confidential · June 2026</span><span>14</span></div>
+</div>
+
+</body>
+</html>

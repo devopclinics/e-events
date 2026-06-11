@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 
@@ -7,38 +7,70 @@ import { CONTENT } from '../guideContent.mjs'
 // ── UI ───────────────────────────────────────────────────────────────────────
 
 function Topic({ t, open, onToggle, query }) {
+  // Highlight a plain string — returns string when no query, JSX fragment otherwise.
   const hl = (s) => {
-    if (!query) return s
-    const i = s.toLowerCase().indexOf(query.toLowerCase())
+    if (!query || typeof s !== 'string') return s
+    const lower = s.toLowerCase()
+    const q = query.toLowerCase()
+    const i = lower.indexOf(q)
     if (i < 0) return s
-    return <>{s.slice(0, i)}<mark className="bg-yellow-200 dark:bg-yellow-500/40 rounded px-0.5">{s.slice(i, i + query.length)}</mark>{s.slice(i + query.length)}</>
+    return (
+      <>
+        {s.slice(0, i)}
+        <mark className="bg-yellow-200 dark:bg-yellow-500/40 rounded px-0.5">{s.slice(i, i + q.length)}</mark>
+        {s.slice(i + q.length)}
+      </>
+    )
   }
+
+  const images = t.imgs || (t.img ? [t.img] : [])
+  const tipBadge = t.tip ? (
+    <div className="rounded-xl bg-teal-50 dark:bg-teal-900/30 border border-teal-200 dark:border-teal-700 px-4 py-3 text-sm text-teal-800 dark:text-teal-200">
+      💡 {t.tip}
+    </div>
+  ) : null
+  const warnBadge = t.warn ? (
+    <div className="rounded-xl bg-amber-50 dark:bg-amber-900/30 border border-amber-200 dark:border-amber-700 px-4 py-3 text-sm text-amber-800 dark:text-amber-200">
+      ⚠️ {t.warn}
+    </div>
+  ) : null
+
   return (
     <div id={t.id} className="scroll-mt-24 rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 overflow-hidden">
       <button onClick={onToggle}
         className="w-full flex items-center gap-3 px-5 py-4 text-left hover:bg-slate-50 dark:hover:bg-slate-700/50 transition-colors">
         <span className="text-xl leading-none">{t.icon}</span>
-        <span className="font-semibold text-slate-900 dark:text-white flex-1">{hl(t.title)}</span>
-        <svg className={`w-5 h-5 text-slate-400 transition-transform ${open ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <div className="flex-1 min-w-0">
+          <span className="font-semibold text-slate-900 dark:text-white">{hl(t.title)}</span>
+          {t.badge && <span className="ml-2 text-xs font-semibold px-2 py-0.5 rounded-full bg-teal-100 dark:bg-teal-900 text-teal-700 dark:text-teal-300">{t.badge}</span>}
+        </div>
+        <svg className={`w-5 h-5 text-slate-400 shrink-0 transition-transform ${open ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
         </svg>
       </button>
       {open && (
         <div className="px-5 pb-5 pt-1 space-y-4">
+          {t.intro && <p className="text-sm text-slate-600 dark:text-slate-400 leading-relaxed">{t.intro}</p>}
+          {tipBadge}
+          {warnBadge}
           <ol className="space-y-3">
             {t.steps.map((s, i) => (
               <li key={i} className="flex gap-3">
-                <span className="shrink-0 w-6 h-6 rounded-full bg-teal-600 text-white text-xs font-bold flex items-center justify-center">{i + 1}</span>
-                <span className="text-sm text-slate-700 dark:text-slate-300 leading-relaxed pt-0.5">{hl(s)}</span>
+                <span className="shrink-0 w-6 h-6 rounded-full bg-teal-600 text-white text-xs font-bold flex items-center justify-center mt-0.5">{i + 1}</span>
+                <span className="text-sm text-slate-700 dark:text-slate-300 leading-relaxed">{hl(s)}</span>
               </li>
             ))}
           </ol>
-          {(t.imgs || (t.img ? [t.img] : [])).map((src) => (
-            <a key={src} href={src} target="_blank" rel="noopener noreferrer" className="block">
-              <img src={src} alt={t.title} loading="lazy"
-                className="rounded-xl border border-slate-200 dark:border-slate-700 w-full hover:opacity-95 transition-opacity" />
-            </a>
-          ))}
+          {images.length > 0 && (
+            <div className={`grid gap-3 ${images.length > 1 ? 'sm:grid-cols-2' : ''}`}>
+              {images.map((src) => (
+                <a key={src} href={src} target="_blank" rel="noopener noreferrer" className="block">
+                  <img src={src} alt={t.title} loading="lazy" onError={(e) => { e.currentTarget.style.display = 'none' }}
+                    className="rounded-xl border border-slate-200 dark:border-slate-700 w-full hover:opacity-95 transition-opacity" />
+                </a>
+              ))}
+            </div>
+          )}
         </div>
       )}
     </div>
@@ -51,8 +83,6 @@ export default function HelpPage({ publicMode = false }) {
   const isAdmin = user?.role === 'admin'
 
   const roles = useMemo(() => {
-    // Public /guide: show the organizer/staff/guest guides to anyone (no
-    // operator section, no account required).
     if (publicMode) return ['organizer', 'staff', 'guest']
     const r = []
     if (isAdmin || isSuper) r.push('organizer')
@@ -61,9 +91,15 @@ export default function HelpPage({ publicMode = false }) {
     return r
   }, [isAdmin, isSuper, publicMode])
 
+  // Keep role in sync when user data loads (fixes race where role initialises
+  // as 'staff' because user is null on first render, then isAdmin becomes true)
   const [role, setRole] = useState(roles[0] || 'guest')
+  useEffect(() => {
+    if (!roles.includes(role)) setRole(roles[0] || 'guest')
+  }, [roles]) // eslint-disable-line react-hooks/exhaustive-deps
+
   const [query, setQuery] = useState('')
-  const data = CONTENT[role]
+  const data = CONTENT[role] || CONTENT['guest']
 
   const topics = useMemo(() => {
     if (!query.trim()) return data.topics
@@ -123,17 +159,24 @@ export default function HelpPage({ publicMode = false }) {
         </div>
       </div>
 
-      {/* Getting-started video — shown on the organizer guide */}
+      {/* Getting-started interactive tour — shown on the organizer guide */}
       {role === 'organizer' && (
-        <div className="mb-6 rounded-2xl overflow-hidden border border-slate-200 dark:border-slate-700 bg-black">
-          <video
-            src="/media/getting-started.webm"
-            controls
-            preload="metadata"
-            poster="/media/admin-overview.png"
-            className="w-full block aspect-video"
-          />
-        </div>
+        <a
+          href="/media/getting-started.html"
+          target="_blank"
+          rel="noopener noreferrer"
+          className="mb-6 flex items-center gap-4 rounded-2xl border border-slate-200 dark:border-slate-700 bg-slate-900 hover:bg-slate-800 transition-colors overflow-hidden cursor-pointer group"
+        >
+          <div className="flex-shrink-0 w-32 sm:w-44 h-24 bg-gradient-to-br from-teal-600 to-cyan-700 flex items-center justify-center">
+            <svg className="w-12 h-12 text-white/90 group-hover:scale-110 transition-transform" viewBox="0 0 24 24" fill="currentColor">
+              <path d="M8 5v14l11-7z"/>
+            </svg>
+          </div>
+          <div className="py-4 pr-4">
+            <div className="font-bold text-white text-sm sm:text-base">▶ Getting Started — Interactive Tour</div>
+            <div className="text-slate-400 text-xs sm:text-sm mt-1">7-step walkthrough with audio narration · ~1 min · opens in new tab</div>
+          </div>
+        </a>
       )}
 
       {/* Search */}

@@ -1505,6 +1505,216 @@ function ticketTint(c) {
   return m[c] || m.slate
 }
 
+// ── Access Rules: tags → zones, gates (tag-based access add-on) ──────────────
+function AccessRulesPanel({ eventId }) {
+  const [view, setView] = useState('tags')   // tags | assign | zones | gates
+  const [tags, setTags] = useState([])
+  const [zones, setZones] = useState([])
+  const [questions, setQuestions] = useState([])
+  const [msg, setMsg] = useState('')
+
+  const field = 'border border-gray-300 dark:border-slate-700 rounded-lg px-3 py-2 text-sm bg-white dark:bg-slate-700 text-gray-900 dark:text-white'
+  function flash(m, isErr) { setMsg((isErr ? '⚠ ' : '') + m); setTimeout(() => setMsg(''), 3000) }
+  function loadTags() { api.listTags(eventId).then(setTags).catch((e) => flash(e.message, true)) }
+
+  useEffect(() => {
+    loadTags()
+    api.listZones(eventId).then(setZones).catch(() => {})
+    api.listRSVPQuestions(eventId).then(setQuestions).catch(() => {})
+  }, [eventId]) // eslint-disable-line
+
+  const TABS = [['tags', 'Tags'], ['assign', 'Assign'], ['zones', 'Zone rules'], ['gates', 'Gates']]
+  return (
+    <div className="bg-white dark:bg-slate-800 dark:border dark:border-slate-700/60 rounded-xl shadow p-6 space-y-4">
+      <div className="flex items-center justify-between flex-wrap gap-2">
+        <div>
+          <h2 className="font-semibold text-base dark:text-white">🏷️ Access Rules</h2>
+          <p className="text-xs text-gray-500 dark:text-slate-400">Tag guests (from RSVP / import / manually), allow tags into zones, and bind scanners to gates for auto-zone scanning.</p>
+        </div>
+        <div className="flex gap-1 flex-wrap">
+          {TABS.map(([k, label]) => (
+            <button key={k} onClick={() => setView(k)}
+              className={`px-3 py-1.5 rounded-lg text-xs font-semibold ${view === k ? 'bg-teal-600 text-white' : 'bg-gray-100 dark:bg-slate-700 text-gray-600 dark:text-slate-300'}`}>{label}</button>
+          ))}
+        </div>
+      </div>
+      {msg && <div className="text-xs text-teal-600 dark:text-teal-400">{msg}</div>}
+
+      {view === 'tags' && <TagsView eventId={eventId} tags={tags} questions={questions} field={field} reload={loadTags} flash={flash} />}
+      {view === 'assign' && <TagAssignView eventId={eventId} tags={tags} flash={flash} />}
+      {view === 'zones' && <ZoneRulesView eventId={eventId} tags={tags} zones={zones} flash={flash} />}
+      {view === 'gates' && <GatesView eventId={eventId} zones={zones} field={field} flash={flash} />}
+    </div>
+  )
+}
+
+function TagsView({ eventId, tags, questions, field, reload, flash }) {
+  const [form, setForm] = useState({ name: '', color: '#0ea5e9', rsvp_question_id: '', rsvp_value: '' })
+  async function add() {
+    if (!form.name.trim()) return
+    try {
+      await api.createTag(eventId, {
+        name: form.name.trim(), color: form.color,
+        rsvp_question_id: form.rsvp_question_id || null,
+        rsvp_value: form.rsvp_value.trim() || null,
+      })
+      setForm({ name: '', color: '#0ea5e9', rsvp_question_id: '', rsvp_value: '' }); reload()
+    } catch (e) { flash(e.message, true) }
+  }
+  return (
+    <div className="space-y-3">
+      <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-2 items-end">
+        <input className={field} placeholder="Tag name (e.g. VIP, Press, 21+)" value={form.name} onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))} />
+        <input type="color" className="h-9 w-14 rounded border border-gray-300 dark:border-slate-700" value={form.color} onChange={(e) => setForm((f) => ({ ...f, color: e.target.value }))} />
+        <button onClick={add} className="bg-teal-600 text-white rounded-lg px-4 py-2 text-sm font-semibold hover:bg-teal-700">+ Add tag</button>
+      </div>
+      <div className="text-[11px] text-gray-500 dark:text-slate-400">Optional auto-tag from an RSVP answer:</div>
+      <div className="grid sm:grid-cols-3 gap-2 items-end">
+        <select className={field} value={form.rsvp_question_id} onChange={(e) => setForm((f) => ({ ...f, rsvp_question_id: e.target.value }))}>
+          <option value="">— no RSVP mapping —</option>
+          {questions.map((q) => <option key={q.id} value={q.id}>{q.question}</option>)}
+        </select>
+        <input className={field} placeholder="…answer equals (e.g. Yes)" value={form.rsvp_value} onChange={(e) => setForm((f) => ({ ...f, rsvp_value: e.target.value }))} />
+        <button onClick={() => api.syncRsvpTags(eventId).then((r) => flash(`Synced — ${r.linked} tag link(s) added.`)).catch((e) => flash(e.message, true))}
+          className="bg-white dark:bg-slate-700 border border-gray-300 dark:border-slate-600 text-gray-700 dark:text-slate-200 rounded-lg px-4 py-2 text-sm font-semibold">Sync from RSVP</button>
+      </div>
+      <div className="divide-y divide-gray-100 dark:divide-slate-700">
+        {tags.map((t) => (
+          <div key={t.id} className="py-2 flex items-center gap-3 text-sm">
+            <span className="w-3 h-3 rounded-full" style={{ background: t.color || '#94a3b8' }} />
+            <span className="font-medium dark:text-slate-100">{t.name}</span>
+            <span className="text-xs text-slate-400">{t.guest_count} guest(s){t.rsvp_question_id ? ' · from RSVP' : ''}</span>
+            <button onClick={() => api.deleteTag(eventId, t.id).then(reload).catch((e) => flash(e.message, true))}
+              className="ml-auto text-xs text-red-500 hover:text-red-700">Delete</button>
+          </div>
+        ))}
+        {tags.length === 0 && <div className="text-xs text-slate-400 py-2">No tags yet.</div>}
+      </div>
+    </div>
+  )
+}
+
+function TagAssignView({ eventId, tags, flash }) {
+  const [guests, setGuests] = useState([])
+  const [search, setSearch] = useState('')
+  const [sel, setSel] = useState(null)     // selected guest id
+  const [guestTags, setGuestTags] = useState([])
+
+  useEffect(() => { api.listGuests(eventId).then(setGuests).catch(() => {}) }, [eventId])
+  function pick(g) {
+    setSel(g.id)
+    api.getGuestTags(eventId, g.id).then(setGuestTags).catch(() => setGuestTags([]))
+  }
+  function toggle(tagId) {
+    const next = guestTags.includes(tagId) ? guestTags.filter((x) => x !== tagId) : [...guestTags, tagId]
+    setGuestTags(next)
+    api.setGuestTags(eventId, sel, next).catch((e) => flash(e.message, true))
+  }
+  const filtered = guests.filter((g) => `${g.first_name} ${g.last_name} ${g.email || ''}`.toLowerCase().includes(search.toLowerCase()))
+  return (
+    <div className="grid sm:grid-cols-2 gap-4">
+      <div>
+        <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search guests…"
+          className="w-full border border-gray-300 dark:border-slate-700 rounded-lg px-3 py-2 text-sm bg-white dark:bg-slate-700 text-gray-900 dark:text-white mb-2" />
+        <div className="max-h-64 overflow-y-auto divide-y divide-gray-100 dark:divide-slate-700 border border-gray-100 dark:border-slate-700 rounded-lg">
+          {filtered.slice(0, 100).map((g) => (
+            <button key={g.id} onClick={() => pick(g)}
+              className={`w-full text-left px-3 py-2 text-sm ${sel === g.id ? 'bg-teal-50 dark:bg-teal-900/30' : 'hover:bg-gray-50 dark:hover:bg-slate-700/50'}`}>
+              {g.first_name} {g.last_name}<span className="text-xs text-slate-400 ml-2">{g.email}</span>
+            </button>
+          ))}
+        </div>
+      </div>
+      <div>
+        {sel ? (
+          <div className="flex flex-wrap gap-2">
+            {tags.map((t) => (
+              <button key={t.id} onClick={() => toggle(t.id)}
+                className={`px-3 py-1.5 rounded-full text-xs font-semibold border ${guestTags.includes(t.id) ? 'bg-teal-600 text-white border-teal-600' : 'bg-white dark:bg-slate-700 text-gray-600 dark:text-slate-300 border-gray-300 dark:border-slate-600'}`}>
+                {t.name}
+              </button>
+            ))}
+            {tags.length === 0 && <div className="text-xs text-slate-400">Create tags first.</div>}
+          </div>
+        ) : <div className="text-xs text-slate-400">Pick a guest to set their tags.</div>}
+      </div>
+    </div>
+  )
+}
+
+function ZoneRulesView({ eventId, tags, zones, flash }) {
+  const [rules, setRules] = useState({})   // zoneId -> [tagId]
+  useEffect(() => {
+    zones.forEach((z) => api.getZoneTags(eventId, z.id).then((ids) => setRules((r) => ({ ...r, [z.id]: ids }))).catch(() => {}))
+  }, [zones, eventId]) // eslint-disable-line
+  function toggle(zoneId, tagId) {
+    const cur = rules[zoneId] || []
+    const next = cur.includes(tagId) ? cur.filter((x) => x !== tagId) : [...cur, tagId]
+    setRules((r) => ({ ...r, [zoneId]: next }))
+    api.setZoneTags(eventId, zoneId, next).catch((e) => flash(e.message, true))
+  }
+  return (
+    <div className="space-y-4">
+      <p className="text-xs text-gray-500 dark:text-slate-400">A zone with no tags selected admits everyone. Otherwise a guest needs at least one matching tag.</p>
+      {zones.map((z) => (
+        <div key={z.id} className="border border-gray-100 dark:border-slate-700 rounded-lg p-3">
+          <div className="font-medium text-sm dark:text-slate-100 mb-2">{z.name}</div>
+          <div className="flex flex-wrap gap-2">
+            {tags.map((t) => (
+              <button key={t.id} onClick={() => toggle(z.id, t.id)}
+                className={`px-3 py-1.5 rounded-full text-xs font-semibold border ${(rules[z.id] || []).includes(t.id) ? 'bg-teal-600 text-white border-teal-600' : 'bg-white dark:bg-slate-700 text-gray-600 dark:text-slate-300 border-gray-300 dark:border-slate-600'}`}>
+                {t.name}
+              </button>
+            ))}
+            {tags.length === 0 && <div className="text-xs text-slate-400">Create tags first.</div>}
+          </div>
+        </div>
+      ))}
+      {zones.length === 0 && <div className="text-xs text-slate-400">Create zones in the Access tab first.</div>}
+    </div>
+  )
+}
+
+function GatesView({ eventId, zones, field, flash }) {
+  const [gates, setGates] = useState([])
+  const [form, setForm] = useState({ name: '', zone_id: '', direction: 'in' })
+  function load() { api.listGates(eventId).then(setGates).catch(() => {}) }
+  useEffect(load, [eventId]) // eslint-disable-line
+  async function add() {
+    if (!form.name.trim() || !form.zone_id) { flash('Name and zone are required.', true); return }
+    try { await api.createGate(eventId, form); setForm({ name: '', zone_id: '', direction: 'in' }); load() }
+    catch (e) { flash(e.message, true) }
+  }
+  return (
+    <div className="space-y-3">
+      <p className="text-xs text-gray-500 dark:text-slate-400">A gate pins a scanner to a zone (location) + direction. Staff pick the gate once; every scan auto-registers there and checks the guest's tags.</p>
+      <div className="grid sm:grid-cols-4 gap-2 items-end">
+        <input className={field} placeholder="Gate name (e.g. VIP Door)" value={form.name} onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))} />
+        <select className={field} value={form.zone_id} onChange={(e) => setForm((f) => ({ ...f, zone_id: e.target.value }))}>
+          <option value="">— zone / location —</option>
+          {zones.map((z) => <option key={z.id} value={z.id}>{z.name}</option>)}
+        </select>
+        <select className={field} value={form.direction} onChange={(e) => setForm((f) => ({ ...f, direction: e.target.value }))}>
+          <option value="in">Entry →</option>
+          <option value="out">← Exit</option>
+        </select>
+        <button onClick={add} className="bg-teal-600 text-white rounded-lg px-4 py-2 text-sm font-semibold hover:bg-teal-700">+ Add gate</button>
+      </div>
+      <div className="divide-y divide-gray-100 dark:divide-slate-700">
+        {gates.map((g) => (
+          <div key={g.id} className="py-2 flex items-center gap-3 text-sm">
+            <span className="font-medium dark:text-slate-100">{g.name}</span>
+            <span className="text-xs text-slate-400">{g.zone_name} · {g.direction === 'out' ? 'Exit ←' : 'Entry →'}</span>
+            <button onClick={() => api.deleteGate(eventId, g.id).then(load).catch((e) => flash(e.message, true))}
+              className="ml-auto text-xs text-red-500 hover:text-red-700">Delete</button>
+          </div>
+        ))}
+        {gates.length === 0 && <div className="text-xs text-slate-400 py-2">No gates yet.</div>}
+      </div>
+    </div>
+  )
+}
+
 function AccessPanel({ eventId }) {
   const [view, setView] = useState('zones')   // zones | tickets | assign | analytics
   const [zones, setZones] = useState([])
@@ -4155,6 +4365,7 @@ export default function AdminPage() {
               ...(event.logistics_enabled ? [{ id: 'logistics', label: '📦 Logistics' }] : []),
               ...(event.registry_enabled ? [{ id: 'registry', label: '🎁 Registry' }] : []),
               ...(event.venue_access_enabled ? [{ id: 'access', label: '🎟️ Access' }] : []),
+              ...(event.venue_access_enabled ? [{ id: 'rules', label: '🏷️ Access Rules' }] : []),
             ]}
           />
 
@@ -4355,6 +4566,10 @@ export default function AdminPage() {
 
           {activeTab === 'access' && event.venue_access_enabled && (
             <AccessPanel eventId={selectedId} />
+          )}
+
+          {activeTab === 'rules' && event.venue_access_enabled && (
+            <AccessRulesPanel eventId={selectedId} />
           )}
 
           {/* Guest list */}

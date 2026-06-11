@@ -223,6 +223,22 @@ export const api = {
   guestJourney:        (eventId, gid)       => req('GET',    `/events/${eventId}/guests/${gid}/journey`),
   scanZone:            (qrToken, body)      => req('POST',   `/scan/${qrToken}/zone`, body),
 
+  // Tag-based zone access (classify module)
+  listTags:        (eventId)              => req('GET',    `/events/${eventId}/tags`),
+  createTag:       (eventId, data)        => req('POST',   `/events/${eventId}/tags`, data),
+  updateTag:       (eventId, id, data)    => req('PUT',    `/events/${eventId}/tags/${id}`, data),
+  deleteTag:       (eventId, id)          => req('DELETE', `/events/${eventId}/tags/${id}`),
+  getGuestTags:    (eventId, gid)         => req('GET',    `/events/${eventId}/guests/${gid}/tags`),
+  setGuestTags:    (eventId, gid, tagIds) => req('PUT',    `/events/${eventId}/guests/${gid}/tags`, { tag_ids: tagIds }),
+  syncRsvpTags:    (eventId)              => req('POST',   `/events/${eventId}/tags/sync`),
+  getZoneTags:     (eventId, zid)         => req('GET',    `/events/${eventId}/zones/${zid}/tags`),
+  setZoneTags:     (eventId, zid, tagIds) => req('PUT',    `/events/${eventId}/zones/${zid}/tags`, { tag_ids: tagIds }),
+  listGates:       (eventId)              => req('GET',    `/events/${eventId}/gates`),
+  createGate:      (eventId, data)        => req('POST',   `/events/${eventId}/gates`, data),
+  updateGate:      (eventId, id, data)    => req('PUT',    `/events/${eventId}/gates/${id}`, data),
+  deleteGate:      (eventId, id)          => req('DELETE', `/events/${eventId}/gates/${id}`),
+  scanGate:        (eventId, gateId, qrToken) => req('POST', `/events/${eventId}/gates/${gateId}/scan`, { qr_token: qrToken }),
+
   // Public registry (no auth) — resolved by unguessable token
   getRegistryPage:      (token)              => req('GET',    `/registry/${token}`),
   claimRegistryItem:    (token, itemId, data) => req('POST',  `/registry/${token}/items/${itemId}/claim`, data),

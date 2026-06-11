@@ -262,10 +262,15 @@ export default function ScannerPage() {
   const [zones, setZones] = useState([])
   const [zoneId, setZoneId] = useState('')
   const [direction, setDirection] = useState('in')
+  // Gate mode (tag-based auto-zone). 'gate' when gates exist, else 'zone'.
+  const [gates, setGates] = useState([])
+  const [gateId, setGateId] = useState('')
+  const [scanBy, setScanBy] = useState('gate')
 
   const selectedEvent = events.find((e) => e.id === eventId)
   const accessMode = !!selectedEvent?.venue_access_enabled
   const selectedZone = zones.find((z) => z.id === zoneId)
+  const selectedGate = gates.find((g) => g.id === gateId)
 
   useEffect(() => {
     api.listEvents().then((evs) => {
@@ -274,11 +279,15 @@ export default function ScannerPage() {
     })
   }, [])
 
-  // Load zones only for venue-access events.
+  // Load zones + gates only for venue-access events.
   useEffect(() => {
-    setZoneId(''); setZones([])
+    setZoneId(''); setZones([]); setGateId(''); setGates([])
     if (eventId && selectedEvent?.venue_access_enabled) {
       api.listZones(eventId).then(setZones).catch(() => {})
+      api.listGates(eventId).then((g) => {
+        setGates(g)
+        setScanBy(g.length ? 'gate' : 'zone')
+      }).catch(() => setScanBy('zone'))
     }
   }, [eventId]) // eslint-disable-line
 
@@ -286,7 +295,22 @@ export default function ScannerPage() {
     const token = extractToken(raw)
     setLoading(true)
     try {
-      if (accessMode) {
+      if (accessMode && scanBy === 'gate') {
+        if (!gateId) { setResult({ zoneMode: true, status: 'invalid', message: 'Pick a gate first.' }); return }
+        const res = await api.scanGate(eventId, gateId, token)
+        setResult({
+          zoneMode: true,
+          status: res.status === 'invalid' ? 'invalid' : 'ok',
+          denied: !res.allowed,
+          guest_name: res.guest_name,
+          ticket_type: res.matched_tags?.length ? res.matched_tags.join(', ') : undefined,
+          zone_name: res.zone_name,
+          direction: res.direction,
+          occupancy: res.occupancy,
+          deny_reason: res.allowed ? undefined : res.message,
+          message: res.message,
+        })
+      } else if (accessMode) {
         if (!zoneId) { setResult({ zoneMode: true, status: 'invalid', message: 'Pick a zone first.' }); return }
         const body = { zone_id: zoneId }
         if (selectedZone?.direction_mode === 'both') body.direction = direction
@@ -330,21 +354,48 @@ export default function ScannerPage() {
 
       {accessMode && (
         <div className="bg-white dark:bg-slate-800 dark:border dark:border-slate-700/60 rounded-xl shadow p-4 space-y-3">
-          <div>
-            <label className="block text-xs font-semibold text-gray-600 dark:text-slate-300 mb-1">🎟️ Scanning zone</label>
-            <select className="w-full border border-gray-300 dark:border-slate-700 rounded-lg px-3 py-2 text-sm bg-white dark:bg-slate-700 text-gray-900 dark:text-white"
-              value={zoneId} onChange={(e) => setZoneId(e.target.value)}>
-              <option value="">— select zone —</option>
-              {zones.map((z) => <option key={z.id} value={z.id}>{z.name} · inside {z.occupancy}{z.capacity != null ? `/${z.capacity}` : ''}</option>)}
-            </select>
-          </div>
-          {selectedZone?.direction_mode === 'both' && (
+          {gates.length > 0 && (
             <div className="flex gap-2">
-              {[['in', 'Entry →'], ['out', '← Exit']].map(([d, label]) => (
-                <button key={d} onClick={() => setDirection(d)}
-                  className={`flex-1 py-2 rounded-lg text-sm font-semibold ${direction === d ? 'bg-indigo-600 text-white' : 'bg-gray-100 dark:bg-slate-700 text-gray-600 dark:text-slate-300'}`}>{label}</button>
+              {[['gate', '🚪 Gate'], ['zone', '🎟️ Zone (manual)']].map(([m, label]) => (
+                <button key={m} onClick={() => setScanBy(m)}
+                  className={`flex-1 py-1.5 rounded-lg text-xs font-semibold ${scanBy === m ? 'bg-teal-600 text-white' : 'bg-gray-100 dark:bg-slate-700 text-gray-600 dark:text-slate-300'}`}>{label}</button>
               ))}
             </div>
+          )}
+
+          {scanBy === 'gate' && gates.length > 0 ? (
+            <div>
+              <label className="block text-xs font-semibold text-gray-600 dark:text-slate-300 mb-1">🚪 Gate (zone + direction auto-detected)</label>
+              <select className="w-full border border-gray-300 dark:border-slate-700 rounded-lg px-3 py-2 text-sm bg-white dark:bg-slate-700 text-gray-900 dark:text-white"
+                value={gateId} onChange={(e) => setGateId(e.target.value)}>
+                <option value="">— select gate —</option>
+                {gates.map((g) => <option key={g.id} value={g.id}>{g.name} · {g.zone_name} · {g.direction === 'out' ? 'Exit ←' : 'Entry →'}</option>)}
+              </select>
+              {selectedGate && (
+                <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
+                  Access is decided automatically from each guest's tags.
+                </p>
+              )}
+            </div>
+          ) : (
+            <>
+              <div>
+                <label className="block text-xs font-semibold text-gray-600 dark:text-slate-300 mb-1">🎟️ Scanning zone</label>
+                <select className="w-full border border-gray-300 dark:border-slate-700 rounded-lg px-3 py-2 text-sm bg-white dark:bg-slate-700 text-gray-900 dark:text-white"
+                  value={zoneId} onChange={(e) => setZoneId(e.target.value)}>
+                  <option value="">— select zone —</option>
+                  {zones.map((z) => <option key={z.id} value={z.id}>{z.name} · inside {z.occupancy}{z.capacity != null ? `/${z.capacity}` : ''}</option>)}
+                </select>
+              </div>
+              {selectedZone?.direction_mode === 'both' && (
+                <div className="flex gap-2">
+                  {[['in', 'Entry →'], ['out', '← Exit']].map(([d, label]) => (
+                    <button key={d} onClick={() => setDirection(d)}
+                      className={`flex-1 py-2 rounded-lg text-sm font-semibold ${direction === d ? 'bg-indigo-600 text-white' : 'bg-gray-100 dark:bg-slate-700 text-gray-600 dark:text-slate-300'}`}>{label}</button>
+                  ))}
+                </div>
+              )}
+            </>
           )}
         </div>
       )}

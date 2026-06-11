@@ -4029,6 +4029,43 @@ function TrialBanner({ events, user }) {
   )
 }
 
+// Grouped left-rail navigation (replaces the flat tab strip). Collapses to a
+// labelled dropdown on mobile.
+function Sidebar({ active, onChange, groups }) {
+  return (
+    <>
+      <select
+        className="lg:hidden w-full border border-gray-300 dark:border-slate-700 rounded-xl px-3 py-2.5 text-sm font-medium bg-white dark:bg-slate-800 text-gray-900 dark:text-white mb-2"
+        value={active} onChange={(e) => onChange(e.target.value)}>
+        {groups.map((g) => (
+          <optgroup key={g.label} label={g.label}>
+            {g.items.map((it) => <option key={it.id} value={it.id}>{it.label}{it.count != null ? ` (${it.count})` : ''}</option>)}
+          </optgroup>
+        ))}
+      </select>
+      <aside className="hidden lg:block lg:sticky lg:top-20 space-y-4 self-start">
+        {groups.map((g) => (
+          <div key={g.label}>
+            <div className="text-[11px] font-semibold uppercase tracking-wider text-slate-400 px-2 mb-1">{g.label}</div>
+            <div className="space-y-0.5">
+              {g.items.map((it) => {
+                const on = active === it.id
+                return (
+                  <button key={it.id} onClick={() => onChange(it.id)}
+                    className={`w-full flex items-center justify-between gap-2 px-3 py-2 rounded-lg text-sm text-left transition-colors ${on ? 'bg-teal-50 text-teal-800 dark:bg-teal-900/30 dark:text-teal-200 font-semibold' : 'text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700/50'}`}>
+                    <span>{it.icon ? `${it.icon} ` : ''}{it.label}</span>
+                    {it.count != null && <span className={`text-xs ${on ? 'text-teal-600' : 'text-slate-400'}`}>{it.count}</span>}
+                  </button>
+                )
+              })}
+            </div>
+          </div>
+        ))}
+      </aside>
+    </>
+  )
+}
+
 export default function AdminPage() {
   const { user } = useAuth()
   const [events, setEvents] = useState([])
@@ -4374,22 +4411,29 @@ export default function AdminPage() {
       {event && (
         <>
           <OnboardingChecklist event={event} stats={stats} onTab={setActiveTab} />
-          <TabBar
-            active={activeTab}
-            onChange={setActiveTab}
-            tabs={[
-              { id: 'overview', label: 'Overview' },
-              { id: 'guests',   label: 'Guests', count: guests.length },
-              { id: 'team',     label: 'Team' },
-              { id: 'invite',   label: '✉️ Invite' },
-              ...(event.seating_enabled ? [{ id: 'seating', label: 'Seating' }] : []),
-              ...(event.menu_enabled    ? [{ id: 'menu',    label: 'Menu' }]    : []),
-              ...(event.logistics_enabled ? [{ id: 'logistics', label: '📦 Logistics' }] : []),
-              ...(event.registry_enabled ? [{ id: 'registry', label: '🎁 Registry' }] : []),
-              ...(event.venue_access_enabled ? [{ id: 'access', label: '🎟️ Access' }] : []),
-              ...(event.venue_access_enabled ? [{ id: 'rules', label: '🏷️ Access Rules' }] : []),
-            ]}
-          />
+          <div className="lg:grid lg:grid-cols-[15rem_1fr] lg:gap-6 lg:items-start">
+            <Sidebar active={activeTab} onChange={setActiveTab} groups={[
+              { label: 'Setup', items: [
+                { id: 'overview', label: 'Overview', icon: '🏠' },
+                { id: 'guests', label: 'Guests', icon: '👥', count: guests.length },
+                { id: 'invite', label: 'Invites', icon: '✉️' },
+              ]},
+              ...(event.venue_access_enabled ? [{ label: 'Venue & access', items: [
+                { id: 'access', label: 'Zones & tickets', icon: '🎟️' },
+                { id: 'rules', label: 'Tags & gates', icon: '🏷️' },
+              ]}] : []),
+              ...((event.seating_enabled || event.menu_enabled || event.logistics_enabled || event.registry_enabled) ? [{ label: 'Add-ons', items: [
+                ...(event.seating_enabled ? [{ id: 'seating', label: 'Seating', icon: '🪑' }] : []),
+                ...(event.menu_enabled ? [{ id: 'menu', label: 'Menu', icon: '🍽️' }] : []),
+                ...(event.logistics_enabled ? [{ id: 'logistics', label: 'Logistics', icon: '📦' }] : []),
+                ...(event.registry_enabled ? [{ id: 'registry', label: 'Registry', icon: '🎁' }] : []),
+              ]}] : []),
+              { label: 'Team & settings', items: [
+                { id: 'team', label: 'Team', icon: '🧑‍🤝‍🧑' },
+                { id: 'features', label: 'Features & messaging', icon: '⚙️' },
+              ]},
+            ]} />
+            <div className="space-y-6 min-w-0 mt-4 lg:mt-0">
 
           {activeTab === 'overview' && <>
 
@@ -4404,9 +4448,26 @@ export default function AdminPage() {
               <strong>Active</strong> → scanning enabled &nbsp;·&nbsp;
               <strong>Ended</strong> → read-only record
             </p>
-            <FeatureToggles event={event} onChanged={updateEvent} />
-            <ChannelToggles event={event} onChanged={updateEvent} />
           </div>
+
+          </>}
+
+          {activeTab === 'features' && (
+            <div className="bg-white dark:bg-slate-800 dark:border dark:border-slate-700/60 rounded-xl shadow p-6 space-y-5">
+              <div>
+                <h2 className="font-semibold text-base dark:text-white">Features &amp; add-ons</h2>
+                <p className="text-xs text-gray-400 dark:text-slate-500 mt-1">Turn paid add-ons on or off — enabled features appear in the sidebar. Requires an Event Pass.</p>
+                <FeatureToggles event={event} onChanged={updateEvent} />
+              </div>
+              <div className="border-t dark:border-slate-700 pt-5">
+                <h2 className="font-semibold text-base dark:text-white">Messaging channels</h2>
+                <p className="text-xs text-gray-400 dark:text-slate-500 mt-1">Which channels fire for invites &amp; admission notifications.</p>
+                <ChannelToggles event={event} onChanged={updateEvent} />
+              </div>
+            </div>
+          )}
+
+          {activeTab === 'overview' && <>
 
           {/* Live spreadsheet sync */}
           <SourceSyncPanel
@@ -4792,6 +4853,8 @@ export default function AdminPage() {
               </div>
             )
           })()}
+            </div>
+          </div>
         </>
       )}
     </div>

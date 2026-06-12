@@ -59,16 +59,10 @@ function ThemeToggle({ className = '' }) {
 
 // ── Mobile-friendly Nav ───────────────────────────────────────────────────────
 
-function Nav() {
+function Nav({ hasMenu }) {
   const { user, logout } = useAuth()
   const navigate = useNavigate()
   const [open, setOpen] = useState(false)
-  const [hasMenu, setHasMenu] = useState(false)   // can the user see any menu/orders?
-
-  useEffect(() => {
-    if (!user) { setHasMenu(false); return }
-    api.myMenuEvents().then((evs) => setHasMenu((evs || []).length > 0)).catch(() => setHasMenu(false))
-  }, [user])
 
   const activeLink = 'bg-teal-50 text-teal-800 dark:bg-teal-400/10 dark:text-teal-100 font-semibold'
   const idleLink = 'text-slate-600 hover:bg-slate-100 hover:text-slate-950 dark:text-slate-300 dark:hover:bg-white/5 dark:hover:text-white'
@@ -84,7 +78,7 @@ function Nav() {
     ...(user?.role === 'admin' ? [{ to: '/admin', label: 'Admin', end: true }] : []),
     { to: '/dashboard', label: 'Dashboard' },
     { to: '/scanner', label: 'Scanner' },
-    ...(hasMenu ? [{ to: '/kitchen', label: 'Menu' }] : []),
+    ...(hasMenu ? [{ to: '/kitchen', label: 'Kitchen' }] : []),
     ...(user?.is_platform_superadmin ? [{ to: '/console', label: 'Console' }] : []),
     { to: '/help', label: 'Help' },
   ]
@@ -163,6 +157,45 @@ function Nav() {
   )
 }
 
+// ── Mobile day-of bottom bar ───────────────────────────────────────────────────
+function MobileTabBar({ user, hasMenu }) {
+  if (!user) return null
+  const items = [
+    ...(user.role === 'admin' ? [{ to: '/admin', label: 'Admin', icon: '🗂️' }] : []),
+    { to: '/dashboard', label: 'Live', icon: '📊' },
+    { to: '/scanner', label: 'Scan', icon: '🎟️' },
+    ...(hasMenu ? [{ to: '/kitchen', label: 'Kitchen', icon: '🍽️' }] : []),
+  ]
+  return (
+    <nav className="sm:hidden fixed bottom-0 inset-x-0 z-50 bg-white/95 dark:bg-slate-900/95 backdrop-blur border-t border-slate-200 dark:border-slate-800 flex">
+      {items.map((it) => (
+        <NavLink key={it.to} to={it.to} end
+          className={({ isActive }) => `flex-1 flex flex-col items-center gap-0.5 py-2.5 text-[11px] font-medium ${isActive ? 'text-teal-600 dark:text-teal-400' : 'text-slate-500 dark:text-slate-400'}`}>
+          <span className="text-lg leading-none">{it.icon}</span>{it.label}
+        </NavLink>
+      ))}
+    </nav>
+  )
+}
+
+// Authenticated shell: nav + content + mobile bottom bar. Fetches the user's
+// menu access once and shares it with both nav surfaces.
+function AuthedLayout({ children }) {
+  const { user } = useAuth()
+  const [hasMenu, setHasMenu] = useState(false)
+  useEffect(() => {
+    if (!user) { setHasMenu(false); return }
+    api.myMenuEvents().then((evs) => setHasMenu((evs || []).length > 0)).catch(() => setHasMenu(false))
+  }, [user])
+  return (
+    <>
+      <Nav hasMenu={hasMenu} />
+      <main className="flex-1 max-w-7xl mx-auto w-full px-4 sm:px-6 py-8 pb-24 sm:pb-8">{children}</main>
+      <MobileTabBar user={user} hasMenu={hasMenu} />
+    </>
+  )
+}
+
 // ── Routes ────────────────────────────────────────────────────────────────────
 
 function AppRoutes() {
@@ -196,20 +229,17 @@ function AppRoutes() {
       <Route
         path="*"
         element={
-          <>
-            <Nav />
-            <main className="flex-1 max-w-7xl mx-auto w-full px-4 sm:px-6 py-8">
-              <Routes>
-                <Route path="/admin" element={<ProtectedRoute adminOnly><AdminPage /></ProtectedRoute>} />
-                <Route path="/dashboard" element={<ProtectedRoute><DashboardPage /></ProtectedRoute>} />
-                <Route path="/scanner" element={<ProtectedRoute><ScannerPage /></ProtectedRoute>} />
-                <Route path="/kitchen" element={<ProtectedRoute><KitchenPage /></ProtectedRoute>} />
-                <Route path="/console" element={<ProtectedRoute><ConsolePage /></ProtectedRoute>} />
-                <Route path="/help" element={<ProtectedRoute><HelpPage /></ProtectedRoute>} />
-                <Route path="*" element={<Navigate to="/" replace />} />
-              </Routes>
-            </main>
-          </>
+          <AuthedLayout>
+            <Routes>
+              <Route path="/admin" element={<ProtectedRoute adminOnly><AdminPage /></ProtectedRoute>} />
+              <Route path="/dashboard" element={<ProtectedRoute><DashboardPage /></ProtectedRoute>} />
+              <Route path="/scanner" element={<ProtectedRoute><ScannerPage /></ProtectedRoute>} />
+              <Route path="/kitchen" element={<ProtectedRoute><KitchenPage /></ProtectedRoute>} />
+              <Route path="/console" element={<ProtectedRoute><ConsolePage /></ProtectedRoute>} />
+              <Route path="/help" element={<ProtectedRoute><HelpPage /></ProtectedRoute>} />
+              <Route path="*" element={<Navigate to="/" replace />} />
+            </Routes>
+          </AuthedLayout>
         }
       />
     </Routes>

@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from 'react'
 import { Html5Qrcode } from 'html5-qrcode'
 import { api } from '../api'
+import { useCurrentEvent } from '../hooks/useCurrentEvent'
 
 function ZoneResultCard({ result, onReset }) {
   const denied = result.denied || result.status === 'invalid'
@@ -254,7 +255,7 @@ function extractToken(raw) {
 
 export default function ScannerPage() {
   const [events, setEvents] = useState([])
-  const [eventId, setEventId] = useState('')
+  const [eventId, setEventId] = useCurrentEvent()
   const [result, setResult] = useState(null)
   const [loading, setLoading] = useState(false)
   const [scanKey, setScanKey] = useState(0)
@@ -275,9 +276,9 @@ export default function ScannerPage() {
   useEffect(() => {
     api.listEvents().then((evs) => {
       setEvents(evs)
-      if (evs.length === 1) setEventId(evs[0].id)
+      if (!evs.some((e) => e.id === eventId)) setEventId(evs.length === 1 ? evs[0].id : '')
     })
-  }, [])
+  }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
   // Load zones + gates only for venue-access events.
   useEffect(() => {

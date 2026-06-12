@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
 import { api } from '../api'
+import { useCurrentEvent } from '../hooks/useCurrentEvent'
 
 // ── Small visual pieces ───────────────────────────────────────────────────────
 function Donut({ pct, label, sub }) {
@@ -63,15 +64,18 @@ function Card({ title, children, right }) {
 
 export default function DashboardPage() {
   const [events, setEvents] = useState([])
-  const [eventId, setEventId] = useState('')
+  const [eventId, setEventId] = useCurrentEvent()
   const [stats, setStats] = useState(null)
   const [error, setError] = useState('')
   const [connected, setConnected] = useState(false)
   const esRef = useRef(null)
 
   useEffect(() => {
-    api.listEvents().then((evs) => { setEvents(evs); if (evs.length === 1) setEventId(evs[0].id) }).catch(() => {})
-  }, [])
+    api.listEvents().then((evs) => {
+      setEvents(evs)
+      if (!evs.some((e) => e.id === eventId)) setEventId(evs.length === 1 ? evs[0].id : '')
+    }).catch(() => {})
+  }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
   const fetchStats = useCallback(async (id) => {
     if (!id) return

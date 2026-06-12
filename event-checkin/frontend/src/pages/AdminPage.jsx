@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from 'react'
 import { api } from '../api'
 import { useAuth } from '../context/AuthContext'
+import { useCurrentEvent } from '../hooks/useCurrentEvent'
 
 // ── helpers ──────────────────────────────────────────────────────────────────
 
@@ -4069,7 +4070,7 @@ function Sidebar({ active, onChange, groups }) {
 export default function AdminPage() {
   const { user } = useAuth()
   const [events, setEvents] = useState([])
-  const [selectedId, setSelectedId] = useState('')
+  const [selectedId, setSelectedId] = useCurrentEvent()
   const [showForm, setShowForm] = useState(false)
   const [editing, setEditing] = useState(false)
   const [guests, setGuests] = useState([])
@@ -4086,7 +4087,10 @@ export default function AdminPage() {
   const PAGE_SIZE = 50
   const event = events.find((e) => e.id === selectedId)
 
-  useEffect(() => { api.listEvents().then(setEvents).catch(console.error) }, [])
+  useEffect(() => { api.listEvents().then((evs) => {
+    setEvents(evs)
+    if (selectedId && !evs.some((e) => e.id === selectedId)) setSelectedId('')
+  }).catch(console.error) }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
   // Returning from a successful Event Pass checkout (Stripe/Paystack).
   useEffect(() => {

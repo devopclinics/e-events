@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from 'react'
 import { api } from '../api'
+import { useCurrentEvent } from '../hooks/useCurrentEvent'
 
 // Staff-facing catering/orders view. Visible to anyone the organizer granted
 // menu access (can_manage_menu) — the API enforces it; this page just surfaces
@@ -18,7 +19,7 @@ function choicePills(g) {
 
 export default function KitchenPage() {
   const [events, setEvents] = useState([])
-  const [eventId, setEventId] = useState('')
+  const [eventId, setEventId] = useCurrentEvent()
   const [data, setData] = useState(null)
   const [err, setErr] = useState('')
   const [loading, setLoading] = useState(false)
@@ -29,10 +30,10 @@ export default function KitchenPage() {
   useEffect(() => {
     api.myMenuEvents().then((evs) => {
       setEvents(evs)
-      if (evs.length === 1) setEventId(evs[0].id)
+      if (!evs.some((e) => e.id === eventId)) setEventId(evs.length === 1 ? evs[0].id : '')
       if (evs.length === 0) setErr('You don\'t have menu access for any event.')
     }).catch((e) => setErr(e.message))
-  }, [])
+  }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
   const load = useCallback(async (id) => {
     if (!id) return

@@ -3870,31 +3870,6 @@ function RsvpStatusBadge({ status }) {
 
 // ── AdminPage ─────────────────────────────────────────────────────────────────
 
-function TabBar({ tabs, active, onChange }) {
-  return (
-    <div className="bg-white dark:bg-slate-800 dark:border dark:border-slate-700/60 rounded-xl shadow overflow-hidden">
-      <div className="flex overflow-x-auto border-b dark:border-slate-700">
-        {tabs.map((t) => {
-          const isActive = active === t.id
-          return (
-            <button key={t.id} onClick={() => onChange(t.id)}
-              className={`shrink-0 px-4 sm:px-5 py-3 text-sm font-semibold transition-colors border-b-2 -mb-px ${
-                isActive
-                  ? 'border-teal-500 text-teal-700 dark:text-teal-300 bg-teal-50/50 dark:bg-teal-900/20'
-                  : 'border-transparent text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-white hover:bg-slate-50 dark:hover:bg-slate-700/50'
-              }`}>
-              {t.label}
-              {typeof t.count === 'number' && (
-                <span className={`ml-1.5 text-xs ${isActive ? 'text-teal-600' : 'text-slate-400'}`}>· {t.count}</span>
-              )}
-            </button>
-          )
-        })}
-      </div>
-    </div>
-  )
-}
-
 // ── Trial / plans onboarding banner ───────────────────────────────────────────
 function trialMoney(amount, currency) {
   const major = (amount || 0) / 100

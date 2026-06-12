@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import { Routes, Route, NavLink, useNavigate, Navigate } from 'react-router-dom'
 import { api } from './api'
+import { useCurrentEvent } from './hooks/useCurrentEvent'
 import { AuthProvider, useAuth } from './context/AuthContext'
 import { ThemeProvider, useTheme } from './context/ThemeContext'
 import ProtectedRoute from './components/ProtectedRoute'
@@ -59,7 +60,7 @@ function ThemeToggle({ className = '' }) {
 
 // ── Mobile-friendly Nav ───────────────────────────────────────────────────────
 
-function Nav({ hasMenu }) {
+function Nav({ hasMenu, eventName }) {
   const { user, logout } = useAuth()
   const navigate = useNavigate()
   const [open, setOpen] = useState(false)
@@ -97,6 +98,14 @@ function Nav({ hasMenu }) {
             <NavLink key={to} to={to} end={end} className={linkCls}>{label}</NavLink>
           ))}
         </div>
+
+        {/* Current-event breadcrumb — the shared context, click to manage */}
+        {eventName && (
+          <NavLink to="/admin" title="Current event — manage"
+            className="hidden md:flex items-center gap-1.5 max-w-[14rem] truncate px-3 py-1.5 rounded-full text-xs font-semibold bg-teal-50 text-teal-700 dark:bg-teal-900/30 dark:text-teal-200 hover:bg-teal-100 dark:hover:bg-teal-900/50">
+            <span>📅</span><span className="truncate">{eventName}</span>
+          </NavLink>
+        )}
 
         <div className="ml-auto flex items-center gap-2">
           {/* User info — desktop */}
@@ -183,13 +192,23 @@ function MobileTabBar({ user, hasMenu }) {
 function AuthedLayout({ children }) {
   const { user } = useAuth()
   const [hasMenu, setHasMenu] = useState(false)
+  const [currentEventId] = useCurrentEvent()
+  const [eventName, setEventName] = useState('')
+
   useEffect(() => {
     if (!user) { setHasMenu(false); return }
     api.myMenuEvents().then((evs) => setHasMenu((evs || []).length > 0)).catch(() => setHasMenu(false))
   }, [user])
+
+  // Resolve the current event's name for the top-bar breadcrumb (live).
+  useEffect(() => {
+    if (!user || !currentEventId) { setEventName(''); return }
+    api.listEvents().then((evs) => setEventName(evs.find((e) => e.id === currentEventId)?.name || '')).catch(() => {})
+  }, [user, currentEventId])
+
   return (
     <>
-      <Nav hasMenu={hasMenu} />
+      <Nav hasMenu={hasMenu} eventName={eventName} />
       <main className="flex-1 max-w-7xl mx-auto w-full px-4 sm:px-6 py-8 pb-24 sm:pb-8">{children}</main>
       <MobileTabBar user={user} hasMenu={hasMenu} />
     </>

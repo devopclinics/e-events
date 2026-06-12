@@ -26,8 +26,9 @@ export const CONTENT = {
         steps: [
           'In Admin, click New Event.',
           'Enter the event name, an optional host/organiser display name, date & time, and a base URL slug (used in invite links).',
-          'Save. Open the event — you\'ll see tabs: Overview, Guests, Invite, Seating, Access, Logistics, Registry, Team.',
-          'Under Overview → Features, toggle on the features you need: Seating, Menu, Venue Access, Logistics, Gift Registry. Each requires an Event Pass.',
+          'Save. Open the event — navigation is a left sidebar grouped into Setup (Overview, Guests, Invites), Venue & access, Add-ons (Seating, Menu, Logistics, Registry), and Team & settings. On a phone the sidebar becomes a dropdown.',
+          'Under Team &amp; settings → Features, toggle on the features you need: Seating, Menu, Venue Access, Logistics, Gift Registry. Each requires an Event Pass — once enabled it appears in the sidebar.',
+          'The event you pick is remembered across Dashboard, Scanner and Kitchen — you only choose it once. The current event shows as a chip in the top bar.',
           'Set the event to Draft while preparing, Active on the day to enable scanning, and Closed afterwards.',
           'You can create multiple events — each is independent with its own guest list and settings.',
         ],
@@ -116,7 +117,7 @@ export const CONTENT = {
         badge: 'Paid',
         intro: 'Assign tables, let guests pick meals, and give your kitchen a live order view.',
         steps: [
-          'Overview → Features → turn on Seating and/or Menu (requires an Event Pass).',
+          'Team &amp; settings → Features → turn on Seating and/or Menu (requires an Event Pass).',
           'Seating tab → Create tables: set a name (Table 1, Head Table, VIP Round…), capacity, and optionally a section label.',
           'Use Auto-assign to fill tables automatically by RSVP order, or drag guests to specific seats manually.',
           'Reserve seats: mark seats as unavailable (blocked for a VIP arrival, accessibility needs, etc.).',
@@ -134,7 +135,7 @@ export const CONTENT = {
         imgs: ['/media/admin-access.png', '/media/admin-access-analytics.png'],
         intro: 'Control which guests can enter which areas of your venue — enforced automatically at every scan.',
         steps: [
-          'Overview → Features → turn on Access (requires an Event Pass).',
+          'Team &amp; settings → Features → turn on Access (requires an Event Pass).',
           'Access tab → Zones: create the areas in your venue — Main Hall, VIP Lounge, Backstage, Kitchen, etc. Set an optional capacity limit and direction mode (Entry only / Exit only / Both).',
           'Ticket types: create tiers — GA (General Admission), VIP, Press, Staff, Speaker. For each type, choose which zones they may enter. Leave empty to allow all zones.',
           'Assign ticket types: set a guest\'s type one by one from their profile, or include a ticket_type column in your imported spreadsheet.',
@@ -149,7 +150,7 @@ export const CONTENT = {
         badge: 'Paid',
         img: '/media/admin-logistics.png',
         steps: [
-          'Overview → Features → turn on Logistics.',
+          'Team &amp; settings → Features → turn on Logistics.',
           'Logistics tab → New Shipment. Name it (e.g. "Aso-ebi fabric", "Welcome bag", "Gift delivery").',
           'Add items to the shipment — each with a name, optional size/variant, and quantity.',
           'Guest addresses: collected automatically if you turned on address collection in RSVP settings, or import them via the ship_address columns in your guest list.',
@@ -164,7 +165,7 @@ export const CONTENT = {
         badge: 'Paid',
         img: '/media/admin-registry.png',
         steps: [
-          'Overview → Features → turn on Registry.',
+          'Team &amp; settings → Features → turn on Registry.',
           'Registry tab → Add items: paste a store link and the platform auto-fills the title, image, and price. Or add cash funds (e.g. "Honeymoon fund", "New home contribution").',
           'Write a welcome message shown at the top of the registry page.',
           'Share the public registry link directly — paste it in WhatsApp, add it to your invite page, or print it on physical invites.',
@@ -253,7 +254,7 @@ export const CONTENT = {
           'Guest getting "Already admitted": the QR was used at a previous gate. Check their check-in log (Guest profile) to see where they were scanned. This is normal — just admit them manually if it was an error.',
           'Zone showing Denied: the guest\'s ticket type or tags don\'t permit entry to that zone. Check the guest\'s ticket type in their profile and compare with the zone rules in the Access tab.',
           'Credits ran out during a bulk send: buy a top-up in Admin → Message Credits and resume the send from Bulk RSVP invites using "Remind no-reply" (this targets only guests who haven\'t received the invite yet).',
-          'Can\'t see Seating / Access tabs: these features must be turned on in Overview → Features, and require an Event Pass.',
+          'Can\'t see Seating / Access tabs: these features must be turned on in Team &amp; settings → Features, and require an Event Pass.',
           'Staff can\'t see the event in Scanner: they must be added in Team tab AND assigned to this specific event.',
           'RSVP deadline passed but guests are still submitting: the deadline blocks new RSVPs from the public invite page. You can still add or approve guests manually from the Admin.',
         ],

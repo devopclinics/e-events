@@ -24,7 +24,7 @@ function ZoneResultCard({ result, onReset }) {
         {result.message && !result.guest_name && <div className="text-sm mt-2">{result.message}</div>}
         {!denied && result.occupancy != null && <div className="text-xs opacity-90 mt-2">Now inside this zone: {result.occupancy}</div>}
       </div>
-      <button onClick={onReset} className="mt-4 w-full bg-indigo-600 text-white py-3 rounded-xl font-bold hover:bg-indigo-700">Scan next</button>
+      <button onClick={onReset} className="mt-4 w-full bg-indigo-600 text-white py-3 rounded-xl font-bold hover:bg-indigo-700">Check in next guest</button>
     </div>
   )
 }
@@ -71,7 +71,7 @@ function ResultCard({ result, onReset }) {
         onClick={onReset}
         className="mt-8 bg-white/20 hover:bg-white/30 text-white font-semibold px-8 py-3 rounded-xl transition-colors"
       >
-        Scan Next Guest
+        Check in next guest
       </button>
     </div>
   )
@@ -197,7 +197,7 @@ function QrScanner({ onScan }) {
           disabled={starting}
           className="w-full bg-teal-600 text-white px-4 py-3 rounded-lg font-semibold hover:bg-teal-700 disabled:opacity-60"
         >
-          {starting ? 'Requesting camera…' : '📷 Start Camera'}
+          {starting ? 'Requesting camera...' : 'Start camera'}
         </button>
       )}
 
@@ -272,6 +272,7 @@ export default function ScannerPage() {
   const accessMode = !!selectedEvent?.venue_access_enabled
   const selectedZone = zones.find((z) => z.id === zoneId)
   const selectedGate = gates.find((g) => g.id === gateId)
+  const scanningReady = !!selectedEvent && selectedEvent.status === 'active'
 
   useEffect(() => {
     api.listEvents().then((evs) => {
@@ -335,7 +336,12 @@ export default function ScannerPage() {
 
   return (
     <div className="max-w-lg mx-auto space-y-6">
-      <h1 className="text-2xl font-bold text-center dark:text-white">Check-In Scanner</h1>
+      <div className="text-center space-y-1">
+        <h1 className="text-2xl font-bold dark:text-white">Guest check-in</h1>
+        <p className="text-sm text-gray-500 dark:text-slate-400">
+          {scanningReady ? "Start the camera and point it at a guest's QR code." : 'Choose an active event before scanning guests.'}
+        </p>
+      </div>
 
       {events.length > 1 && (
         <div className="bg-white dark:bg-slate-800 dark:border dark:border-slate-700/60 rounded-xl shadow p-4">
@@ -357,7 +363,7 @@ export default function ScannerPage() {
         <div className="bg-white dark:bg-slate-800 dark:border dark:border-slate-700/60 rounded-xl shadow p-4 space-y-3">
           {gates.length > 0 && (
             <div className="flex gap-2">
-              {[['gate', '🚪 Gate'], ['zone', '🎟️ Zone (manual)']].map(([m, label]) => (
+              {[['gate', 'Gate'], ['zone', 'Area (manual)']].map(([m, label]) => (
                 <button key={m} onClick={() => setScanBy(m)}
                   className={`flex-1 py-1.5 rounded-lg text-xs font-semibold ${scanBy === m ? 'bg-teal-600 text-white' : 'bg-gray-100 dark:bg-slate-700 text-gray-600 dark:text-slate-300'}`}>{label}</button>
               ))}
@@ -366,7 +372,7 @@ export default function ScannerPage() {
 
           {scanBy === 'gate' && gates.length > 0 ? (
             <div>
-              <label className="block text-xs font-semibold text-gray-600 dark:text-slate-300 mb-1">🚪 Gate (zone + direction auto-detected)</label>
+              <label className="block text-xs font-semibold text-gray-600 dark:text-slate-300 mb-1">Where are you checking guests in?</label>
               <select className="w-full border border-gray-300 dark:border-slate-700 rounded-lg px-3 py-2 text-sm bg-white dark:bg-slate-700 text-gray-900 dark:text-white"
                 value={gateId} onChange={(e) => setGateId(e.target.value)}>
                 <option value="">— select gate —</option>
@@ -374,14 +380,14 @@ export default function ScannerPage() {
               </select>
               {selectedGate && (
                 <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
-                  Access is decided automatically from each guest's tags.
+                  EventQR checks each guest's ticket rules automatically.
                 </p>
               )}
             </div>
           ) : (
             <>
               <div>
-                <label className="block text-xs font-semibold text-gray-600 dark:text-slate-300 mb-1">🎟️ Scanning zone</label>
+                <label className="block text-xs font-semibold text-gray-600 dark:text-slate-300 mb-1">Entry area</label>
                 <select className="w-full border border-gray-300 dark:border-slate-700 rounded-lg px-3 py-2 text-sm bg-white dark:bg-slate-700 text-gray-900 dark:text-white"
                   value={zoneId} onChange={(e) => setZoneId(e.target.value)}>
                   <option value="">— select zone —</option>
@@ -412,18 +418,30 @@ export default function ScannerPage() {
         {!loading && result && result.zoneMode && <ZoneResultCard result={result} onReset={reset} />}
         {!loading && result && !result.zoneMode && <ResultCard result={result} onReset={reset} />}
 
-        {!loading && !result && (
+        {!loading && !result && !scanningReady && (
+          <div className="rounded-xl border border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-900/30 px-4 py-5 text-center">
+            <div className="font-semibold text-amber-900 dark:text-amber-100">
+              {selectedEvent ? `This event is ${selectedEvent.status}.` : 'No event selected.'}
+            </div>
+            <p className="text-sm text-amber-700 dark:text-amber-300 mt-1">
+              Start the event in Event Setup to enable QR scanning.
+            </p>
+          </div>
+        )}
+
+        {!loading && !result && scanningReady && (
           <div>
             <p className="text-center text-sm text-gray-500 dark:text-slate-400 mb-4">
-              Tap <strong>Start Camera</strong>, then point at the guest's QR code.
+              Keep the QR code inside the square until you see a result.
             </p>
             <QrScanner key={scanKey} onScan={handleScan} />
           </div>
         )}
       </div>
 
+      {scanningReady && (
       <div className="bg-white dark:bg-slate-800 dark:border dark:border-slate-700/60 rounded-xl shadow p-4">
-        <p className="text-xs font-semibold text-gray-600 dark:text-slate-300 mb-2">Manual Token Entry</p>
+        <p className="text-xs font-semibold text-gray-600 dark:text-slate-300 mb-2">Look up by QR link or code</p>
         <form
           onSubmit={(e) => {
             e.preventDefault()
@@ -435,14 +453,15 @@ export default function ScannerPage() {
         >
           <input
             name="token"
-            placeholder="Paste QR token or URL…"
+            placeholder="Paste QR link or code..."
             className="flex-1 border border-gray-300 dark:border-slate-700 rounded-lg px-3 py-2 text-sm bg-white dark:bg-slate-700 text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-slate-500"
           />
           <button type="submit" className="bg-indigo-600 text-white px-4 py-2 rounded-lg text-sm font-semibold">
-            Submit
+            Check in
           </button>
         </form>
       </div>
+      )}
     </div>
   )
 }

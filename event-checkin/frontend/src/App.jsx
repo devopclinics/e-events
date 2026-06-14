@@ -76,10 +76,10 @@ function Nav({ hasMenu, eventName }) {
   }
 
   const links = [
-    ...(user?.role === 'admin' ? [{ to: '/admin', label: 'Admin', end: true }] : []),
-    { to: '/dashboard', label: 'Dashboard' },
-    { to: '/scanner', label: 'Scanner' },
-    ...(hasMenu ? [{ to: '/kitchen', label: 'Kitchen' }] : []),
+    ...(user?.role === 'admin' ? [{ to: '/admin', label: 'Event Setup', end: true }] : []),
+    { to: '/dashboard', label: 'Results' },
+    { to: '/scanner', label: 'Check-in' },
+    ...(hasMenu ? [{ to: '/kitchen', label: 'Orders' }] : []),
     ...(user?.is_platform_superadmin ? [{ to: '/console', label: 'Console' }] : []),
     { to: '/help', label: 'Help' },
   ]
@@ -87,10 +87,14 @@ function Nav({ hasMenu, eventName }) {
   return (
     <nav className="app-nav sticky top-0 z-50 backdrop-blur">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 flex items-center h-16 gap-3">
-        <span className="flex items-center gap-2 text-slate-950 dark:text-white font-bold text-lg mr-2 tracking-tight">
+        <NavLink
+          to={user ? getPreferredView(user.role) : '/'}
+          className="flex items-center gap-2 text-slate-950 dark:text-white font-bold text-lg mr-2 tracking-tight rounded-md focus:outline-none focus:ring-2 focus:ring-teal-500 focus:ring-offset-2 dark:focus:ring-offset-slate-950"
+          aria-label="Go to EventQR home"
+        >
           <span className="grid h-8 w-8 place-items-center rounded-md bg-teal-600 text-white text-sm">EQ</span>
           EventQR
-        </span>
+        </NavLink>
 
         {/* Desktop links */}
         <div className="hidden sm:flex items-center gap-1">
@@ -170,10 +174,10 @@ function Nav({ hasMenu, eventName }) {
 function MobileTabBar({ user, hasMenu }) {
   if (!user) return null
   const items = [
-    ...(user.role === 'admin' ? [{ to: '/admin', label: 'Admin', icon: '🗂️' }] : []),
-    { to: '/dashboard', label: 'Live', icon: '📊' },
-    { to: '/scanner', label: 'Scan', icon: '🎟️' },
-    ...(hasMenu ? [{ to: '/kitchen', label: 'Kitchen', icon: '🍽️' }] : []),
+    ...(user.role === 'admin' ? [{ to: '/admin', label: 'Setup', icon: '🗂️' }] : []),
+    { to: '/dashboard', label: 'Results', icon: '📊' },
+    { to: '/scanner', label: 'Check-in', icon: '🎟️' },
+    ...(hasMenu ? [{ to: '/kitchen', label: 'Orders', icon: '☑' }] : []),
   ]
   return (
     <nav className="sm:hidden fixed bottom-0 inset-x-0 z-50 bg-white/95 dark:bg-slate-900/95 backdrop-blur border-t border-slate-200 dark:border-slate-800 flex">

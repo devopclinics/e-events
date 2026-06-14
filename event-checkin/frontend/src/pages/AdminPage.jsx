@@ -134,10 +134,10 @@ function FeatureToggles({ event, onChanged }) {
   const [loading, setLoading] = useState(false)
 
   const [err, setErr] = useState('')
-  const locked = !event.is_paid   // seating/menu are paid-plan features
+  const locked = !event.is_paid   // seating/orders are paid-plan features
 
   async function toggle(key) {
-    if (locked) { setErr('Seating and menu require an Event Pass — upgrade this event first.'); return }
+    if (locked) { setErr('Seating and orders require an Event Pass — upgrade this event first.'); return }
     setLoading(true); setErr('')
     try {
       const updated = await api.toggleFeatures(event.id, { [key]: !event[key] })
@@ -148,13 +148,13 @@ function FeatureToggles({ event, onChanged }) {
 
   return (
     <div className="flex flex-wrap gap-3 pt-3 border-t dark:border-slate-700 mt-3">
-      <span className="text-xs font-semibold text-gray-500 dark:text-slate-400 self-center">Features:</span>
+      <span className="text-xs font-semibold text-gray-500 dark:text-slate-400 self-center">Event extras:</span>
       {[
         { key: 'seating_enabled', label: 'Seating' },
-        { key: 'menu_enabled',    label: 'Menu' },
-        { key: 'logistics_enabled', label: 'Logistics' },
-        { key: 'registry_enabled', label: 'Registry' },
-        { key: 'venue_access_enabled', label: 'Access' },
+        { key: 'menu_enabled',    label: 'Orders' },
+        { key: 'logistics_enabled', label: 'Deliveries' },
+        { key: 'registry_enabled', label: 'Gift list' },
+        { key: 'venue_access_enabled', label: 'Entry rules' },
       ].map(({ key, label }) => (
         <button
           key={key}
@@ -475,7 +475,7 @@ function SeatingPanel({ eventId }) {
                             <span className="flex-1 dark:text-slate-200 truncate">{s.name}</span>
                             {s.is_vip && <VipBadge />}
                             {s.admitted && <span className="text-xs text-green-600 shrink-0" title="Arrived">✓</span>}
-                            {s.meal_served && <span className="text-xs text-amber-600 shrink-0" title="Meal served">🍽</span>}
+                            {s.meal_served && <span className="text-xs text-amber-600 shrink-0" title="Order served">✓</span>}
                           </>
                         ) : (
                           <span className="flex-1 text-xs italic text-teal-600 dark:text-teal-400">+ reserve</span>
@@ -982,9 +982,9 @@ function LogisticsPanel({ eventId }) {
     <div className="bg-white dark:bg-slate-800 dark:border dark:border-slate-700/60 rounded-xl shadow p-6 space-y-4">
       <div className="flex items-center justify-between flex-wrap gap-2">
         <div>
-          <h2 className="font-semibold text-base dark:text-white">📦 Logistics</h2>
+          <h2 className="font-semibold text-base dark:text-white">📦 Deliveries</h2>
           <p className="text-xs text-gray-500 dark:text-slate-400 mt-0.5">
-            Collect shipping addresses & sizes, then hand a packing list to your vendor. Guests enter their address on the RSVP page.
+            Collect shipping addresses and sizes on the RSVP form, then send a packing list to your vendor.
           </p>
         </div>
         <button onClick={() => setForm({ name: '', phase: 'pre', collect_size: true, auto_add: true, size_options: 'S, M, L, XL, 2XL', notes: '', vendor_name: '', vendor_email: '', vendor_phone: '' })}
@@ -1315,11 +1315,11 @@ function RegistryPanel({ eventId, event }) {
     <div className="bg-white dark:bg-slate-800 dark:border dark:border-slate-700/60 rounded-xl shadow p-6 space-y-4">
       <div className="flex items-center justify-between flex-wrap gap-2">
         <div>
-          <h2 className="font-semibold text-base dark:text-white">🎁 Gift Registry</h2>
+          <h2 className="font-semibold text-base dark:text-white">🎁 Gift list</h2>
           <p className="text-xs text-gray-500 dark:text-slate-400 mt-0.5">Mark-only — guests buy from your links or send cash to your own details. No money passes through EventQR.</p>
         </div>
         <div className="flex gap-2">
-          <button onClick={() => { if (!registryUrl) return flash('Preparing link…'); navigator.clipboard?.writeText(registryUrl); flash('Registry link copied.') }}
+          <button onClick={() => { if (!registryUrl) return flash('Preparing link...'); navigator.clipboard?.writeText(registryUrl); flash('Gift list link copied.') }}
             className="text-xs border border-gray-300 dark:border-slate-600 px-3 py-1.5 rounded-lg dark:text-slate-200 hover:bg-gray-50 dark:hover:bg-slate-700">Copy registry link</button>
           <button onClick={() => (showClaims ? setShowClaims(false) : loadClaims())}
             className="text-xs border border-gray-300 dark:border-slate-600 px-3 py-1.5 rounded-lg dark:text-slate-200 hover:bg-gray-50 dark:hover:bg-slate-700">{showClaims ? 'Hide claims' : 'Claims & pledges'}</button>
@@ -1466,7 +1466,7 @@ function RegistryPanel({ eventId, event }) {
 
           {form.kind === 'link' && (
             <div>
-              <label className="block text-xs font-semibold text-gray-600 dark:text-slate-300 mb-1">Registry URL *</label>
+              <label className="block text-xs font-semibold text-gray-600 dark:text-slate-300 mb-1">Gift link *</label>
               <input className={`${fieldCls} w-full`} value={form.external_url} onChange={(e) => setForm((f) => ({ ...f, external_url: e.target.value }))} placeholder="https://www.amazon.com/wedding/registry/…" />
             </div>
           )}
@@ -1812,7 +1812,7 @@ function AccessPanel({ eventId }) {
     <div className="bg-white dark:bg-slate-800 dark:border dark:border-slate-700/60 rounded-xl shadow p-6 space-y-4">
       <div className="flex items-center justify-between flex-wrap gap-2">
         <div>
-          <h2 className="font-semibold text-base dark:text-white">🎟️ Venue Access</h2>
+          <h2 className="font-semibold text-base dark:text-white">🎟️ Entry areas</h2>
           <p className="text-xs text-gray-500 dark:text-slate-400 mt-0.5">Zones, ticket types, live occupancy, room flow, peak times & guest journeys. Officials scan in/out per zone.</p>
         </div>
         <div className="flex gap-1 flex-wrap">
@@ -2144,7 +2144,7 @@ function MenuPanel({ eventId }) {
   return (
     <div className="bg-white dark:bg-slate-800 dark:border dark:border-slate-700/60 rounded-xl shadow p-6 space-y-4">
       <div className="flex items-center justify-between flex-wrap gap-2">
-        <h2 className="font-semibold text-base dark:text-white">Menu</h2>
+        <h2 className="font-semibold text-base dark:text-white">Orders</h2>
         <div className="flex gap-2">
           <button
             onClick={showSummary ? () => setShowSummary(false) : loadSummary}
@@ -2162,7 +2162,7 @@ function MenuPanel({ eventId }) {
       </div>
 
       {categories.length === 0 && !catForm && (
-        <p className="text-sm text-gray-400 dark:text-slate-500">No menu categories yet. Add a category to get started.</p>
+        <p className="text-sm text-gray-400 dark:text-slate-500">No order categories yet. Add a category such as Drinks, Meals, Shirts, or Gift Bags.</p>
       )}
 
       <div className="space-y-3">
@@ -2302,9 +2302,9 @@ function MenuPanel({ eventId }) {
       {catForm && (
         <form onSubmit={saveCat} className="flex flex-wrap gap-2 items-end bg-gray-50 dark:bg-slate-700 rounded-lg p-3 border dark:border-slate-600">
           <div>
-            <label className="block text-xs font-semibold text-gray-600 dark:text-slate-300 mb-1">Category Name</label>
+            <label className="block text-xs font-semibold text-gray-600 dark:text-slate-300 mb-1">Category name</label>
             <input value={catForm.name} onChange={(e) => setCatForm((f) => ({ ...f, name: e.target.value }))} required
-              className={fieldCls} placeholder="Main Course" />
+              className={fieldCls} placeholder="Drinks, Meals, Shirts..." />
           </div>
           <div>
             <label className="block text-xs font-semibold text-gray-600 dark:text-slate-300 mb-1">Sort Order</label>
@@ -2360,7 +2360,7 @@ function MenuPanel({ eventId }) {
 
       {showSummary && summary && (
         <div className="pt-3 border-t dark:border-slate-700 space-y-4">
-          <h3 className="text-sm font-semibold dark:text-white">Selection Summary</h3>
+        <h3 className="text-sm font-semibold dark:text-white">Order summary</h3>
           {summary.map((cat) => (
             <div key={cat.id}>
               <div className="text-xs font-semibold text-gray-500 dark:text-slate-400 uppercase mb-1.5">{cat.category}</div>
@@ -2390,11 +2390,11 @@ function ItemForm({ form, fieldCls, loading, onChange, onSubmit, onCancel }) {
   return (
     <form onSubmit={onSubmit} className="px-4 py-3 flex flex-wrap gap-2 items-end bg-gray-50 dark:bg-slate-700/50">
       <div>
-        <label className="block text-xs font-semibold text-gray-600 dark:text-slate-300 mb-1">Item Name</label>
+        <label className="block text-xs font-semibold text-gray-600 dark:text-slate-300 mb-1">Item name</label>
         <input
           value={form.name}
           onChange={(e) => onChange({ name: e.target.value })}
-          required className={fieldCls} placeholder="Chicken Breast"
+          required className={fieldCls} placeholder="Water, Coffee, Chicken, T-shirt..."
         />
       </div>
       <div className="flex-1 min-w-0">
@@ -2503,7 +2503,7 @@ function MenuDashboard({ eventId }) {
   }
 
   // Group filtered guests by table name (unassigned guests go to a synthetic '— unassigned —' bucket)
-  // and compute per-table item totals so the kitchen can see "Table 5: Rice ×3, Dodo ×5" at a glance.
+  // and compute per-table item totals so staff can see "Table 5: Rice ×3, Water ×5" at a glance.
   function buildTableGroups(guestList) {
     const buckets = new Map()
     for (const g of guestList) {
@@ -2546,7 +2546,7 @@ function MenuDashboard({ eventId }) {
     <div className="bg-white dark:bg-slate-800 dark:border dark:border-slate-700/60 rounded-xl shadow p-6 space-y-4 border-l-4 border-l-amber-500">
       <div className="flex items-center justify-between flex-wrap gap-2">
         <div className="flex items-center gap-2">
-          <h2 className="font-semibold text-base dark:text-white">Menu Dashboard</h2>
+          <h2 className="font-semibold text-base dark:text-white">Orders dashboard</h2>
           <button onClick={() => setOpen((v) => !v)}
             className="text-xs text-indigo-600 dark:text-indigo-400 hover:underline">
             {open ? '▲ Hide' : '▼ Show'}
@@ -2735,7 +2735,7 @@ function MenuDashboard({ eventId }) {
                     <th className="px-4 py-2 text-left">Table / Seat</th>
                     <th className="px-4 py-2 text-center">Admitted</th>
                     <th className="px-4 py-2 text-left">Choices</th>
-                    <th className="px-4 py-2 text-center">Meal served</th>
+                    <th className="px-4 py-2 text-center">Order served</th>
                     <th className="px-4 py-2 text-center">Action</th>
                   </tr>
                 </thead>
@@ -2899,7 +2899,7 @@ function InvitePanel({ event, onChanged }) {
   return (
     <div className="bg-white dark:bg-slate-800 dark:border dark:border-slate-700/60 rounded-xl shadow p-6 space-y-6">
       <div className="flex items-center justify-between">
-        <h2 className="font-semibold text-base dark:text-white">Invite Page &amp; RSVP</h2>
+        <h2 className="font-semibold text-base dark:text-white">Invitation page &amp; RSVP</h2>
         <a
           href={inviteUrl}
           target="_blank"
@@ -2912,7 +2912,7 @@ function InvitePanel({ event, onChanged }) {
 
       {/* Share link */}
       <div>
-        <label className="block text-xs font-semibold text-slate-500 dark:text-slate-400 mb-1">Share link</label>
+        <label className="block text-xs font-semibold text-slate-500 dark:text-slate-400 mb-1">Public RSVP link</label>
         <div className="flex gap-2">
           <input readOnly value={inviteUrl} className={`${inputCls} text-slate-500`} />
           <button
@@ -2941,7 +2941,7 @@ function InvitePanel({ event, onChanged }) {
         ) : (
           <label className={`flex flex-col items-center justify-center gap-2 w-full h-28 rounded-xl border-2 border-dashed border-slate-300 dark:border-slate-600 cursor-pointer hover:border-teal-500 transition-colors ${uploading ? 'opacity-50 pointer-events-none' : ''}`}>
             <span className="text-2xl">🖼️</span>
-            <span className="text-xs text-slate-500 dark:text-slate-400">{uploading ? 'Uploading…' : 'Click to upload (JPEG, PNG, WebP — max 10 MB)'}</span>
+            <span className="text-xs text-slate-500 dark:text-slate-400">{uploading ? 'Uploading...' : 'Upload an image for the invitation page'}</span>
             <input type="file" accept="image/jpeg,image/png,image/webp,image/gif" className="hidden" onChange={(e) => uploadCover(e.target.files?.[0])} />
           </label>
         )}
@@ -2951,15 +2951,15 @@ function InvitePanel({ event, onChanged }) {
       <div className="grid sm:grid-cols-2 gap-4">
         <div className="flex items-center gap-2">
           <input id="rsvp_enabled" type="checkbox" checked={form.rsvp_enabled} onChange={set('rsvp_enabled')} className="w-4 h-4 accent-teal-600" />
-          <label htmlFor="rsvp_enabled" className="text-sm font-medium text-slate-700 dark:text-slate-300 cursor-pointer">Enable RSVP form</label>
+          <label htmlFor="rsvp_enabled" className="text-sm font-medium text-slate-700 dark:text-slate-300 cursor-pointer">Accept RSVPs on this page</label>
         </div>
         <div className="flex items-center gap-2">
           <input id="collect_phone" type="checkbox" checked={form.rsvp_collect_phone} onChange={set('rsvp_collect_phone')} className="w-4 h-4 accent-teal-600" />
-          <label htmlFor="collect_phone" className="text-sm font-medium text-slate-700 dark:text-slate-300 cursor-pointer">Collect phone number</label>
+          <label htmlFor="collect_phone" className="text-sm font-medium text-slate-700 dark:text-slate-300 cursor-pointer">Ask for phone number</label>
         </div>
         <div className="flex items-center gap-2">
           <input id="collect_email" type="checkbox" checked={form.rsvp_collect_email} onChange={set('rsvp_collect_email')} className="w-4 h-4 accent-teal-600" />
-          <label htmlFor="collect_email" className="text-sm font-medium text-slate-700 dark:text-slate-300 cursor-pointer">Collect email address</label>
+          <label htmlFor="collect_email" className="text-sm font-medium text-slate-700 dark:text-slate-300 cursor-pointer">Ask for email address</label>
         </div>
         <div>
           <label className="block text-xs font-semibold text-slate-500 dark:text-slate-400 mb-1">Theme</label>
@@ -2968,14 +2968,14 @@ function InvitePanel({ event, onChanged }) {
           </select>
         </div>
         <div>
-          <label className="block text-xs font-semibold text-slate-500 dark:text-slate-400 mb-1">Max RSVPs (leave blank = unlimited)</label>
+          <label className="block text-xs font-semibold text-slate-500 dark:text-slate-400 mb-1">Guest limit (blank = no limit)</label>
           <input type="number" min="0" value={form.rsvp_capacity} onChange={set('rsvp_capacity')} className={inputCls} placeholder="e.g. 100" />
         </div>
         <div>
-          <label className="block text-xs font-semibold text-slate-500 dark:text-slate-400 mb-1">Invitation mode</label>
+          <label className="block text-xs font-semibold text-slate-500 dark:text-slate-400 mb-1">Who can RSVP?</label>
           <select value={form.invite_mode} onChange={set('invite_mode')} className={inputCls}>
-            <option value="open">Open — anyone with the event link can RSVP</option>
-            <option value="closed">Closed — invited guests only (personal links)</option>
+            <option value="open">Anyone with the event link</option>
+            <option value="closed">Only guests with a personal invite link</option>
           </select>
         </div>
         <div>
@@ -2986,7 +2986,7 @@ function InvitePanel({ event, onChanged }) {
 
       {form.invite_mode === 'closed' && (
         <div className="rounded-lg bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 px-3 py-2 text-xs text-amber-800 dark:text-amber-300">
-          🔒 Closed mode: the public event link is disabled. Each guest gets a unique RSVP link — use the <span className="font-semibold">Invite</span> tab to send them, or copy a guest's link from the list. They confirm or decline, and their ticket QR is issued only after they confirm.
+          Only personal links can RSVP. Send them from <span className="font-semibold">Invites &amp; RSVP</span>, or copy a guest's link from the Guests tab. Tickets are issued after the guest confirms.
         </div>
       )}
 
@@ -2994,14 +2994,14 @@ function InvitePanel({ event, onChanged }) {
         <div className="flex items-start gap-2">
           <input id="require_approval" type="checkbox" checked={form.rsvp_require_approval} onChange={set('rsvp_require_approval')} className="w-4 h-4 mt-0.5 accent-teal-600" />
           <label htmlFor="require_approval" className="text-sm text-slate-700 dark:text-slate-300 cursor-pointer">
-            <span className="font-medium">Require approval for RSVPs</span>
-            <span className="block text-xs text-slate-500 dark:text-slate-400">Self-registrations land as “Pending” — no ticket is sent until you approve them in the Guests tab.</span>
+            <span className="font-medium">Review RSVPs before sending tickets</span>
+            <span className="block text-xs text-slate-500 dark:text-slate-400">New RSVPs show as "Pending". Approve them in Guests to send tickets.</span>
           </label>
         </div>
       )}
 
       <div>
-        <label className="block text-xs font-semibold text-slate-500 dark:text-slate-400 mb-1">Invite message (shown on invite page)</label>
+        <label className="block text-xs font-semibold text-slate-500 dark:text-slate-400 mb-1">Message for guests</label>
         <textarea rows={3} value={form.invite_message} onChange={set('invite_message')} className={inputCls} placeholder="Add a personal message to your guests…" />
       </div>
 
@@ -3010,13 +3010,13 @@ function InvitePanel({ event, onChanged }) {
 
       <button onClick={save} disabled={loading}
         className="bg-teal-600 hover:bg-teal-700 text-white px-4 py-2 rounded-lg text-sm font-semibold disabled:opacity-50">
-        {loading ? 'Saving…' : 'Save Settings'}
+        {loading ? 'Saving...' : 'Save invitation page'}
       </button>
 
       {/* RSVP questions */}
       <div className="border-t dark:border-slate-700 pt-4 space-y-3">
-        <h3 className="text-sm font-semibold text-slate-700 dark:text-slate-300">RSVP Questions</h3>
-        {questions.length === 0 && <p className="text-xs text-slate-400">No questions yet.</p>}
+        <h3 className="text-sm font-semibold text-slate-700 dark:text-slate-300">Questions for guests</h3>
+        {questions.length === 0 && <p className="text-xs text-slate-400">No extra questions. Guests will only answer the basics.</p>}
         {questions.map((q) => (
           <div key={q.id} className="flex items-center justify-between gap-3 bg-slate-50 dark:bg-slate-700/50 rounded-lg px-3 py-2 text-sm">
             <div>
@@ -3031,7 +3031,7 @@ function InvitePanel({ event, onChanged }) {
           <input
             value={newQ.question}
             onChange={(e) => setNewQ((p) => ({ ...p, question: e.target.value }))}
-            placeholder="Question text…"
+            placeholder="Question to ask guests..."
             className={`${inputCls} sm:col-span-2`}
           />
           <select value={newQ.question_type} onChange={(e) => setNewQ((p) => ({ ...p, question_type: e.target.value }))} className={inputCls}>
@@ -3055,7 +3055,7 @@ function InvitePanel({ event, onChanged }) {
           </label>
           <button onClick={addQuestion}
             className="bg-slate-100 dark:bg-slate-700 border border-slate-300 dark:border-slate-600 text-slate-700 dark:text-slate-200 px-3 py-1.5 rounded-lg text-xs font-semibold hover:bg-slate-200 dark:hover:bg-slate-600">
-            + Add Question
+            Add question
           </button>
         </div>
       </div>
@@ -3110,9 +3110,9 @@ function ManualInvitePanel({ event }) {
   return (
     <div className="bg-white dark:bg-slate-800 dark:border dark:border-slate-700/60 rounded-xl shadow p-6 space-y-5">
       <div>
-        <h2 className="font-semibold text-base dark:text-white">✉️ Send Invites</h2>
+        <h2 className="font-semibold text-base dark:text-white">✉️ Send invitations by hand</h2>
         <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
-          Manually invite people by typing their email or phone. They'll receive a link to your RSVP page.
+          Add people one at a time when they are not already in your guest spreadsheet.
         </p>
       </div>
 
@@ -3129,7 +3129,7 @@ function ManualInvitePanel({ event }) {
           value={contactInput}
           onChange={(e) => setContactInput(e.target.value)}
           onKeyDown={(e) => e.key === 'Enter' && addRecipient()}
-          placeholder="Email or phone (+1...)"
+          placeholder="Email or phone"
           className={`${inputCls} flex-1 min-w-[180px]`}
         />
         <button
@@ -3176,7 +3176,7 @@ function ManualInvitePanel({ event }) {
 
       <button onClick={send} disabled={loading || recipients.length === 0}
         className="bg-teal-600 hover:bg-teal-700 text-white px-4 py-2 rounded-lg text-sm font-semibold disabled:opacity-50">
-        {loading ? 'Sending…' : `📨 Send Invite${recipients.length > 1 ? 's' : ''}${recipients.length > 0 ? ` (${recipients.length})` : ''}`}
+        {loading ? 'Sending...' : `Send invitation${recipients.length > 1 ? 's' : ''}${recipients.length > 0 ? ` (${recipients.length})` : ''}`}
       </button>
     </div>
   )
@@ -3512,14 +3512,14 @@ function TeamPanel({ eventId }) {
                     <button
                       onClick={() => toggleMenuPerm(m.user.id, m.can_manage_menu)}
                       disabled={loading}
-                      title="Can manage menu"
+                      title="Can manage orders"
                       className={`text-xs px-2 py-0.5 rounded-full font-medium border transition-colors disabled:opacity-50 ${
                         m.can_manage_menu
                           ? 'bg-green-100 text-green-700 border-green-200 dark:bg-green-900/40 dark:text-green-400 dark:border-green-800'
                           : 'bg-gray-100 text-gray-500 border-gray-200 dark:bg-slate-700 dark:text-slate-400 dark:border-slate-600'
                       }`}
                     >
-                      Menu: {m.can_manage_menu ? 'Yes' : 'No'}
+                      Orders: {m.can_manage_menu ? 'Yes' : 'No'}
                     </button>
                     <button
                       onClick={() => toggleDashPerm(m.user.id, m.can_view_dashboard)}
@@ -3650,33 +3650,33 @@ function EventForm({ initial, onSave, onCancel }) {
     <form onSubmit={submit} className="space-y-4">
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
         <div>
-          <label className="block text-xs font-semibold text-gray-600 mb-1">Event Name *</label>
-          <input className={field} value={form.name} onChange={set('name')} required placeholder="Annual Gala / Acme Conference / Birthday Party" />
+          <label htmlFor="event-name" className="block text-xs font-semibold text-gray-600 mb-1">Event Name *</label>
+          <input id="event-name" className={field} value={form.name} onChange={set('name')} required placeholder="Annual Gala / Acme Conference / Birthday Party" />
         </div>
         <div>
-          <label className="block text-xs font-semibold text-gray-600 mb-1">Host / Organizer</label>
-          <input className={field} value={form.couples_name} onChange={set('couples_name')} placeholder="e.g. Acme Corp, The Smiths, John &amp; Jane" />
+          <label htmlFor="event-host" className="block text-xs font-semibold text-gray-600 mb-1">Host / Organizer</label>
+          <input id="event-host" className={field} value={form.couples_name} onChange={set('couples_name')} placeholder="e.g. Acme Corp, The Smiths, John &amp; Jane" />
         </div>
         <div>
-          <label className="block text-xs font-semibold text-gray-600 mb-1">Event Date *</label>
-          <input className={field} type="datetime-local" value={form.event_date?.slice(0, 16) || ''} onChange={set('event_date')} required />
+          <label htmlFor="event-date" className="block text-xs font-semibold text-gray-600 mb-1">Event Date *</label>
+          <input id="event-date" className={field} type="datetime-local" value={form.event_date?.slice(0, 16) || ''} onChange={set('event_date')} required />
         </div>
         <div>
-          <label className="block text-xs font-semibold text-gray-600 mb-1">App Base URL *</label>
-          <input className={field} value={form.checkin_base_url} onChange={set('checkin_base_url')} required placeholder="https://events.vsgs.io" />
+          <label htmlFor="event-base-url" className="block text-xs font-semibold text-gray-600 mb-1">App Base URL *</label>
+          <input id="event-base-url" className={field} value={form.checkin_base_url} onChange={set('checkin_base_url')} required placeholder="https://events.vsgs.io" />
         </div>
         <div>
-          <label className="block text-xs font-semibold text-gray-600 mb-1">Venue</label>
-          <input className={field} value={form.venue_name || ''} onChange={set('venue_name')} placeholder="e.g. Grand Ballroom" />
+          <label htmlFor="event-venue" className="block text-xs font-semibold text-gray-600 mb-1">Venue</label>
+          <input id="event-venue" className={field} value={form.venue_name || ''} onChange={set('venue_name')} placeholder="e.g. Grand Ballroom" />
         </div>
         <div>
-          <label className="block text-xs font-semibold text-gray-600 mb-1">Venue address</label>
-          <input className={field} value={form.venue_address || ''} onChange={set('venue_address')} placeholder="Street, city" />
+          <label htmlFor="event-venue-address" className="block text-xs font-semibold text-gray-600 mb-1">Venue address</label>
+          <input id="event-venue-address" className={field} value={form.venue_address || ''} onChange={set('venue_address')} placeholder="Street, city" />
         </div>
       </div>
       <div>
-        <label className="block text-xs font-semibold text-gray-600 mb-1">Description</label>
-        <textarea className={field} rows={2} value={form.description || ''} onChange={set('description')} />
+        <label htmlFor="event-description" className="block text-xs font-semibold text-gray-600 mb-1">Description</label>
+        <textarea id="event-description" className={field} rows={2} value={form.description || ''} onChange={set('description')} />
       </div>
       {error && <p className="text-red-600 text-sm">{error}</p>}
       <div className="flex gap-3">
@@ -3726,11 +3726,11 @@ function SourceSyncPanel({ event, onSave, onSyncNow, loading }) {
     <div className="bg-white dark:bg-slate-800 dark:border dark:border-slate-700/60 rounded-xl shadow p-6 space-y-4">
       <div className="flex items-center justify-between flex-wrap gap-2">
         <div>
-          <h2 className="font-semibold text-base dark:text-white">Live Spreadsheet Sync</h2>
+          <h2 className="font-semibold text-base dark:text-white">Guest spreadsheet sync</h2>
           <p className="text-xs text-gray-500 dark:text-slate-400 mt-1">
-            Paste a Google Sheets or OneDrive share URL. While the event is <strong>Active</strong>,
-            the server re-imports it every {event.source_sync_interval_seconds || 60} seconds and
-            adds any new guests. Existing guests are never removed.
+            Paste a Google Sheets or OneDrive share link. While the event is <strong>Active</strong>,
+            EventQR checks it every {event.source_sync_interval_seconds || 60} seconds and adds new guests.
+            Existing guests stay untouched.
           </p>
         </div>
         {polling && (
@@ -3817,41 +3817,89 @@ function Badge({ on, labels }) {
 
 function OnboardingChecklist({ event, stats, onTab }) {
   const key = `onb_${event.id}`
-  const [dismissed, setDismissed] = useState(() => localStorage.getItem(key) === '1')
-  if (dismissed) return null
+  // Non-destructive: "Hide" collapses to a re-expandable progress pill rather
+  // than deleting the only guide. We persist the collapsed state, never a
+  // permanent dismissal.
+  const [collapsed, setCollapsed] = useState(() => localStorage.getItem(key) === '1')
   const items = [
     { label: 'Create your event', done: true },
-    { label: 'Add your guest list', done: stats.total > 0, tab: 'overview' },
-    { label: 'Set up the RSVP & invite page', done: !!event.rsvp_enabled, tab: 'invite' },
-    { label: 'Send invitations', done: stats.invited > 0, tab: 'invite' },
-    { label: 'Upgrade to an Event Pass', done: !!event.is_paid, tab: 'invite' },
+    { label: 'Import your guests', action: 'Import guests', hint: 'Upload a spreadsheet, connect Google Sheets, or download the template to fill in.', done: stats.total > 0, tab: 'overview' },
+    { label: 'Turn on the RSVP form', action: 'Set up RSVP', hint: 'Let guests confirm or decline straight from their invite.', done: !!event.rsvp_enabled, tab: 'invite' },
+    { label: 'Send invitations', action: 'Send invites', hint: 'Email, SMS, or WhatsApp each guest their personal pass.', done: stats.invited > 0, tab: 'invite' },
+    { label: 'Enable check-in with an Event Pass', action: 'Choose pass', hint: 'Activate door scanning by choosing an Event Pass.', done: !!event.is_paid, tab: 'invite' },
+    { label: 'Turn on your event extras', action: 'Add extras', hint: 'Optional: seating, orders, deliveries, gift list, or entry rules.', done: !!(event.seating_enabled || event.menu_enabled || event.logistics_enabled || event.registry_enabled || event.venue_access_enabled), tab: 'features' },
   ]
   const doneCount = items.filter((i) => i.done).length
   const pct = Math.round((doneCount / items.length) * 100)
   const allDone = doneCount === items.length
+  // The single step we actively guide the user toward right now.
+  const currentIdx = items.findIndex((i) => !i.done)
+
+  function setCollapsedPersist(v) {
+    if (v) localStorage.setItem(key, '1'); else localStorage.removeItem(key)
+    setCollapsed(v)
+  }
+
+  // Collapsed → a thin progress pill that re-expands on click (never a dead end).
+  if (collapsed) {
+    return (
+      <button onClick={() => setCollapsedPersist(false)}
+        className="w-full flex items-center gap-3 rounded-xl border border-teal-200 dark:border-teal-800 bg-teal-50/60 dark:bg-teal-900/20 px-4 py-2.5 text-left hover:bg-teal-100/60 dark:hover:bg-teal-800/30 transition-colors">
+        <span className="text-sm font-semibold text-slate-700 dark:text-slate-200">{allDone ? "You're all set" : 'Finish setup'}</span>
+        <div className="flex-1 h-1.5 rounded-full bg-teal-100 dark:bg-teal-900/40 overflow-hidden">
+          <div className="h-full bg-teal-600 transition-all duration-500" style={{ width: `${pct}%` }} />
+        </div>
+        <span className="text-xs text-slate-500 dark:text-slate-400">{doneCount}/{items.length}</span>
+      </button>
+    )
+  }
+
   return (
     <div className="rounded-2xl border border-teal-200 dark:border-teal-800 bg-teal-50/60 dark:bg-teal-900/20 p-5">
       <div className="flex items-start justify-between gap-3">
         <div>
-          <h3 className="font-bold text-slate-900 dark:text-white">{allDone ? "🎉 You're all set!" : 'Get this event ready'}</h3>
+          <h3 className="font-bold text-slate-900 dark:text-white">{allDone ? "You're all set" : 'Get this event ready'}</h3>
           <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">{doneCount} of {items.length} complete</p>
         </div>
-        <button onClick={() => { localStorage.setItem(key, '1'); setDismissed(true) }}
-          className="text-xs text-slate-400 hover:text-slate-600 dark:hover:text-slate-200">Dismiss</button>
+        <button onClick={() => setCollapsedPersist(true)}
+          className="text-xs text-slate-400 hover:text-slate-600 dark:hover:text-slate-200">{allDone ? 'Dismiss' : 'Hide'}</button>
       </div>
       <div className="mt-3 h-2 rounded-full bg-teal-100 dark:bg-teal-900/40 overflow-hidden">
         <div className="h-full bg-teal-600 transition-all duration-500" style={{ width: `${pct}%` }} />
       </div>
-      <ul className="mt-4 space-y-2.5">
-        {items.map((it, i) => (
-          <li key={i} className="flex items-center gap-3 text-sm">
-            <span className={`shrink-0 w-5 h-5 rounded-full flex items-center justify-center text-[11px] font-bold ${it.done ? 'bg-teal-600 text-white' : 'border-2 border-slate-300 dark:border-slate-600 text-transparent'}`}>✓</span>
-            <span className={`flex-1 ${it.done ? 'text-slate-400 line-through' : 'text-slate-700 dark:text-slate-200'}`}>{it.label}</span>
-            {!it.done && it.tab && (
-              <button onClick={() => onTab(it.tab)} className="text-xs font-semibold text-teal-600 hover:underline">Do it →</button>
-            )}
-          </li>
-        ))}
+      <ul className="mt-4 space-y-1.5">
+        {items.map((it, i) => {
+          const isCurrent = i === currentIdx
+          // The current step shows its own primary button, so its row isn't
+          // clickable — avoids an interactive element nested in another.
+          const rowClickable = !it.done && it.tab && !isCurrent
+          return (
+            <li key={i}>
+              <div
+                onClick={rowClickable ? () => onTab(it.tab) : undefined}
+                onKeyDown={rowClickable ? (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onTab(it.tab) } } : undefined}
+                role={rowClickable ? 'button' : undefined}
+                tabIndex={rowClickable ? 0 : undefined}
+                className={`rounded-lg px-2.5 py-2 transition-colors ${rowClickable ? 'cursor-pointer hover:bg-teal-100/70 dark:hover:bg-teal-800/30' : ''} ${isCurrent ? 'bg-white dark:bg-slate-800/70 ring-1 ring-teal-300 dark:ring-teal-700 shadow-sm' : ''}`}
+              >
+                <div className="flex items-center gap-3 text-sm">
+                  <span className={`shrink-0 w-5 h-5 rounded-full flex items-center justify-center text-[11px] font-bold ${it.done ? 'bg-teal-600 text-white' : 'border-2 border-slate-300 dark:border-slate-600 text-transparent'}`}>✓</span>
+                  <span className={`flex-1 ${it.done ? 'text-slate-400 line-through' : isCurrent ? 'font-semibold text-slate-900 dark:text-white' : 'text-slate-700 dark:text-slate-200'}`}>{it.label}</span>
+                  {rowClickable && (
+                    <span className="text-xs font-semibold text-teal-600">{it.action} →</span>
+                  )}
+                </div>
+                {isCurrent && it.hint && (
+                  <div className="mt-1.5 pl-8 flex items-center justify-between gap-3">
+                    <p className="text-xs text-slate-500 dark:text-slate-400">{it.hint}</p>
+                    <button onClick={() => onTab(it.tab)}
+                      className="shrink-0 bg-teal-600 text-white px-3 py-1.5 rounded-lg text-xs font-semibold hover:bg-teal-700">{it.action} →</button>
+                  </div>
+                )}
+              </div>
+            </li>
+          )
+        })}
       </ul>
     </div>
   )
@@ -4010,7 +4058,11 @@ function TrialBanner({ events, user }) {
 function Sidebar({ active, onChange, groups }) {
   return (
     <>
+      <label htmlFor="setup-section" className="lg:hidden block text-xs font-semibold text-slate-500 dark:text-slate-400 mb-1">
+        Setup section
+      </label>
       <select
+        id="setup-section"
         className="lg:hidden w-full border border-gray-300 dark:border-slate-700 rounded-xl px-3 py-2.5 text-sm font-medium bg-white dark:bg-slate-800 text-gray-900 dark:text-white mb-2"
         value={active} onChange={(e) => onChange(e.target.value)}>
         {groups.map((g) => (
@@ -4329,14 +4381,14 @@ export default function AdminPage() {
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-bold dark:text-white">Admin Panel</h1>
+        <h1 className="text-2xl font-bold dark:text-white">Event Setup</h1>
         <button onClick={() => { setShowForm(true); setEditing(false) }}
           className="bg-indigo-600 text-white px-4 py-2 rounded-lg text-sm font-semibold hover:bg-indigo-700">
-          + New Event
+          New Event
         </button>
       </div>
 
-      <TrialBanner events={events} user={user} />
+      {!event && <TrialBanner events={events} user={user} />}
 
       {showForm && (
         <div className="bg-white dark:bg-slate-800 dark:border dark:border-slate-700/60 rounded-xl shadow p-6">
@@ -4347,7 +4399,7 @@ export default function AdminPage() {
 
       {events.length > 0 && (
         <div className="bg-white dark:bg-slate-800 dark:border dark:border-slate-700/60 rounded-xl shadow p-6">
-          <label className="block text-xs font-semibold text-gray-600 dark:text-slate-300 mb-2">Select Event</label>
+          <label className="block text-xs font-semibold text-gray-600 dark:text-slate-300 mb-2">Current event</label>
           <div className="flex gap-3 items-center">
             <select className="border border-gray-300 dark:border-slate-700 rounded-lg px-3 py-2 text-sm flex-1 bg-white dark:bg-slate-700 text-gray-900 dark:text-white"
               value={selectedId}
@@ -4393,19 +4445,19 @@ export default function AdminPage() {
           <div className="lg:grid lg:grid-cols-[15rem_1fr] lg:gap-6 lg:items-start">
             <Sidebar active={activeTab} onChange={setActiveTab} groups={[
               { label: 'Setup', items: [
-                { id: 'overview', label: 'Overview', icon: '🏠' },
+                { id: 'overview', label: 'Start here', icon: '🏠' },
                 { id: 'guests', label: 'Guests', icon: '👥', count: guests.length },
-                { id: 'invite', label: 'Invites', icon: '✉️' },
+                { id: 'invite', label: 'Invites & RSVP', icon: '✉️' },
               ]},
               ...(event.venue_access_enabled ? [{ label: 'Venue & access', items: [
-                { id: 'access', label: 'Zones & tickets', icon: '🎟️' },
-                { id: 'rules', label: 'Tags & gates', icon: '🏷️' },
+                { id: 'access', label: 'Entry areas', icon: '🎟️' },
+                { id: 'rules', label: 'Entry rules', icon: '🏷️' },
               ]}] : []),
               ...((event.seating_enabled || event.menu_enabled || event.logistics_enabled || event.registry_enabled) ? [{ label: 'Add-ons', items: [
                 ...(event.seating_enabled ? [{ id: 'seating', label: 'Seating', icon: '🪑' }] : []),
-                ...(event.menu_enabled ? [{ id: 'menu', label: 'Menu', icon: '🍽️' }] : []),
-                ...(event.logistics_enabled ? [{ id: 'logistics', label: 'Logistics', icon: '📦' }] : []),
-                ...(event.registry_enabled ? [{ id: 'registry', label: 'Registry', icon: '🎁' }] : []),
+                ...(event.menu_enabled ? [{ id: 'menu', label: 'Orders', icon: '☑' }] : []),
+                ...(event.logistics_enabled ? [{ id: 'logistics', label: 'Deliveries', icon: '📦' }] : []),
+                ...(event.registry_enabled ? [{ id: 'registry', label: 'Gift list', icon: '🎁' }] : []),
               ]}] : []),
               { label: 'Team & settings', items: [
                 { id: 'team', label: 'Team', icon: '🧑‍🤝‍🧑' },
@@ -4419,7 +4471,7 @@ export default function AdminPage() {
           {/* Status controls */}
           <div className="bg-white dark:bg-slate-800 dark:border dark:border-slate-700/60 rounded-xl shadow p-6">
             <div className="flex items-center justify-between flex-wrap gap-3">
-              <h2 className="font-semibold text-base dark:text-white">Event Status</h2>
+            <h2 className="font-semibold text-base dark:text-white">Event status</h2>
               <StatusControls event={event} onChanged={updateEvent} />
             </div>
             <p className="text-xs text-gray-400 dark:text-slate-500 mt-3">
@@ -4434,8 +4486,8 @@ export default function AdminPage() {
           {activeTab === 'features' && (
             <div className="bg-white dark:bg-slate-800 dark:border dark:border-slate-700/60 rounded-xl shadow p-6 space-y-5">
               <div>
-                <h2 className="font-semibold text-base dark:text-white">Features &amp; add-ons</h2>
-                <p className="text-xs text-gray-400 dark:text-slate-500 mt-1">Turn paid add-ons on or off — enabled features appear in the sidebar. Requires an Event Pass.</p>
+              <h2 className="font-semibold text-base dark:text-white">Event extras</h2>
+              <p className="text-xs text-gray-400 dark:text-slate-500 mt-1">Turn optional tools on or off. Enabled tools appear in the sidebar. Requires an Event Pass.</p>
                 <FeatureToggles event={event} onChanged={updateEvent} />
               </div>
               <div className="border-t dark:border-slate-700 pt-5">
@@ -4448,15 +4500,9 @@ export default function AdminPage() {
 
           {activeTab === 'overview' && <>
 
-          {/* Live spreadsheet sync */}
-          <SourceSyncPanel
-            event={event}
-            onSave={handleSaveSource}
-            onSyncNow={handleSyncNow}
-            loading={loading}
-          />
-
-          {/* Stats */}
+          {/* Stats — hidden until there's data, so a fresh event leads with the
+              one action that matters (importing guests) instead of four zeros. */}
+          {stats.total > 0 && (
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
             {[
               { label: 'Total Guests', value: stats.total, cls: 'text-indigo-600' },
@@ -4470,10 +4516,16 @@ export default function AdminPage() {
               </div>
             ))}
           </div>
+          )}
 
           {/* Guest management */}
           <div className="bg-white dark:bg-slate-800 dark:border dark:border-slate-700/60 rounded-xl shadow p-6 space-y-4">
-            <h2 className="font-semibold text-base dark:text-white">Guest Management</h2>
+            <div>
+              <h2 className="font-semibold text-base dark:text-white">Import guests</h2>
+              <p className="text-xs text-gray-500 dark:text-slate-400 mt-1">
+                Start with a spreadsheet template, upload a file, or connect a shared sheet.
+              </p>
+            </div>
 
             {/* Import row */}
             <div className="flex flex-wrap gap-3 items-center">
@@ -4481,7 +4533,7 @@ export default function AdminPage() {
                 <input type="file" accept=".csv,.xlsx,.xls" ref={fileRef} onChange={handleUpload} className="hidden" />
                 <button onClick={() => fileRef.current.click()} disabled={loading}
                   className="bg-white dark:bg-slate-700 border border-gray-300 dark:border-slate-700 text-gray-700 dark:text-slate-200 px-4 py-2 rounded-lg text-sm font-medium hover:bg-gray-50 dark:hover:bg-slate-700 disabled:opacity-50">
-                  Upload CSV
+                  Upload guest file
                 </button>
                 <span className="text-xs text-gray-400 dark:text-slate-500 ml-2">
                   {['first_name, last_name, email, phone',
@@ -4491,13 +4543,13 @@ export default function AdminPage() {
               </div>
               <button onClick={() => setShowUrlInput((v) => !v)} disabled={loading}
                 className="bg-white dark:bg-slate-700 border border-gray-300 dark:border-slate-700 text-gray-700 dark:text-slate-200 px-4 py-2 rounded-lg text-sm font-medium hover:bg-gray-50 dark:hover:bg-slate-700 disabled:opacity-50">
-                📋 Import from Google Sheets / Excel
+                Import from Google Sheets or Excel
               </button>
               <div className="flex items-center gap-1">
                 <button onClick={() => handleDownloadTemplate('xlsx')} disabled={loading}
                   className="bg-white dark:bg-slate-700 border border-gray-300 dark:border-slate-700 text-gray-700 dark:text-slate-200 px-4 py-2 rounded-lg text-sm font-medium hover:bg-gray-50 dark:hover:bg-slate-700 disabled:opacity-50"
                   title="Excel template with the columns this event imports — includes a ticket-type dropdown when Venue Access is on">
-                  ⬇ Download template
+                  Download template
                 </button>
                 <button onClick={() => handleDownloadTemplate('csv')} disabled={loading}
                   className="text-xs text-gray-400 dark:text-slate-500 hover:text-teal-600 dark:hover:text-teal-400 px-1 disabled:opacity-50"
@@ -4528,7 +4580,7 @@ export default function AdminPage() {
             {showUrlInput && (
               <p className="text-xs text-gray-400 dark:text-slate-500">
                 Google Sheets: share with "Anyone with link can view". OneDrive/Excel: use Share → Copy link with "Anyone with the link can view", not the browser address bar URL.
-                Sheet must have columns: <strong>first_name, last_name, email, phone</strong>
+                The sheet must include <strong>first_name, last_name, email, phone</strong>. Extra columns are ignored unless an add-on uses them.
               </p>
             )}
 
@@ -4536,12 +4588,12 @@ export default function AdminPage() {
             <div className="flex flex-wrap gap-3 pt-1 border-t dark:border-slate-700">
               <button onClick={handleGenQR} disabled={loading || stats.total === 0}
                 className="bg-blue-600 text-white px-4 py-2 rounded-lg text-sm font-semibold hover:bg-blue-700 disabled:opacity-50">
-                Generate QR Codes
+                Generate QR codes
               </button>
               <button onClick={() => handleSendBatch({ force: false, label: 'Send unsent' })}
                 disabled={loading || stats.total === 0 || stats.total - stats.invited === 0}
                 className="bg-amber-500 text-white px-4 py-2 rounded-lg text-sm font-semibold hover:bg-amber-600 disabled:opacity-50">
-                Send to Unsent ({stats.total - stats.invited})
+                Send invitations ({stats.total - stats.invited})
               </button>
               <button onClick={() => {
                   if (!confirm(`Re-send invite to ALL ${stats.total} guests, including those already invited?`)) return
@@ -4549,10 +4601,28 @@ export default function AdminPage() {
                 }}
                 disabled={loading || stats.total === 0}
                 className="bg-white dark:bg-slate-700 border border-amber-300 dark:border-amber-700 text-amber-700 dark:text-amber-300 px-4 py-2 rounded-lg text-sm font-semibold hover:bg-amber-50 dark:hover:bg-slate-600 disabled:opacity-50">
-                Resend to All
+                Resend to all
               </button>
             </div>
           </div>
+
+          {/* Live spreadsheet sync — advanced; collapsed by default so it never
+              competes with the primary import step. Auto-opens once configured. */}
+          <details className="group" open={!!event.source_url}>
+            <summary className="cursor-pointer select-none inline-flex items-center gap-2 text-sm font-medium text-slate-600 dark:text-slate-300 hover:text-teal-600 dark:hover:text-teal-400">
+              <span className="text-slate-400 transition-transform group-open:rotate-90">▸</span>
+              Advanced · live spreadsheet sync
+              {event.source_url && <span className="ml-1 text-xs font-semibold text-teal-600">· connected</span>}
+            </summary>
+            <div className="mt-3">
+              <SourceSyncPanel
+                event={event}
+                onSave={handleSaveSource}
+                onSyncNow={handleSyncNow}
+                loading={loading}
+              />
+            </div>
+          </details>
 
           </>}{/* end overview tab */}
 
@@ -4566,9 +4636,9 @@ export default function AdminPage() {
               return (
                 <div className="bg-white dark:bg-slate-800 dark:border dark:border-slate-700/60 rounded-xl shadow p-6 space-y-4">
                   <div>
-                    <h2 className="font-semibold text-base dark:text-white">✉️ Bulk RSVP invites</h2>
+                    <h2 className="font-semibold text-base dark:text-white">✉️ Send personal RSVP links</h2>
                     <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
-                      Send each guest their personal RSVP link across the event's enabled channels (email / SMS / WhatsApp). They confirm or decline — tickets are issued only after they confirm.
+                      Each guest receives their own RSVP link. They can confirm or decline, and tickets are issued after confirmation.
                     </p>
                   </div>
                   <div className="flex flex-wrap gap-3">
@@ -4576,7 +4646,7 @@ export default function AdminPage() {
                       onClick={() => handleSendBatch({ ids: notInvited.map((g) => g.id), force: true, label: 'RSVP invites' })}
                       disabled={loading || notInvited.length === 0}
                       className={`bg-teal-600 text-white hover:bg-teal-700 ${btn}`}>
-                      Send to not-yet-invited ({notInvited.length})
+                      Send first invitations ({notInvited.length})
                     </button>
                     <button
                       onClick={() => {
@@ -4586,7 +4656,7 @@ export default function AdminPage() {
                       }}
                       disabled={loading || noReply.length === 0}
                       className={`bg-amber-500 text-white hover:bg-amber-600 ${btn}`}>
-                      Remind no-reply ({noReply.length})
+                      Remind guests with no reply ({noReply.length})
                     </button>
                     <button
                       onClick={() => {
@@ -4638,7 +4708,7 @@ export default function AdminPage() {
           {activeTab === 'guests' && guests.length === 0 && (
             <div className="bg-white dark:bg-slate-800 dark:border dark:border-slate-700/60 rounded-xl shadow p-10 text-center">
               <p className="text-sm text-slate-500 dark:text-slate-400">
-                No guests yet. Go to <button onClick={() => setActiveTab('overview')} className="text-teal-600 hover:underline font-semibold">Overview</button> to upload a CSV, import from Google Sheets / OneDrive, or paste in a URL to sync.
+                No guests yet. Go to <button onClick={() => setActiveTab('overview')} className="text-teal-600 hover:underline font-semibold">Start here</button> to upload a guest file, connect Google Sheets, or download the template.
               </p>
             </div>
           )}

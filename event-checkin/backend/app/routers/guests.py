@@ -102,6 +102,19 @@ def _google_sheets_csv_url(url: str) -> str | None:
     return f"https://docs.google.com/spreadsheets/d/{sheet_id}/export?format=csv&gid={gid}"
 
 
+def _google_sheets_xlsx_url(url: str) -> str | None:
+    """Whole-workbook xlsx export URL for a Google Sheets share URL.
+
+    Unlike format=csv, this also works for .xlsx files that were uploaded to
+    Drive but never converted to a native Google Sheet (their share links carry
+    rtpof=true). For those, format=csv returns HTTP 400, so this is the fallback.
+    """
+    m = re.search(r"/spreadsheets/d/([a-zA-Z0-9_-]+)", url)
+    if not m:
+        return None
+    return f"https://docs.google.com/spreadsheets/d/{m.group(1)}/export?format=xlsx"
+
+
 def _normalize_excel_url(url: str) -> str:
     """For OneDrive / SharePoint URLs, ensure ?download=1 is set so the
     redirect chain serves the raw file instead of the web viewer."""
@@ -127,6 +140,13 @@ async def _fetch_sheet_csv(url: str) -> tuple[bytes, str]:
             headers={"User-Agent": _BROWSER_UA, "Accept": "*/*"},
         ) as client:
             resp = await client.get(fetch_url)
+            # Uploaded-but-unconverted .xlsx files (share links carry rtpof=true)
+            # reject format=csv with HTTP 400. Retry as whole-workbook xlsx, which
+            # the _decode_csv_bytes pipeline handles transparently.
+            if resp.status_code == 400 and google_url:
+                xlsx_url = _google_sheets_xlsx_url(url)
+                if xlsx_url:
+                    resp = await client.get(xlsx_url)
     except Exception as e:
         raise HTTPException(400, f"Failed to reach spreadsheet URL: {e}")
 

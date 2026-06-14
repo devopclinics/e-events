@@ -2,9 +2,9 @@ import { useState, useEffect, useCallback } from 'react'
 import { api } from '../api'
 import { useCurrentEvent } from '../hooks/useCurrentEvent'
 
-// Staff-facing catering/orders view. Visible to anyone the organizer granted
+// Staff-facing orders view. Visible to anyone the organizer granted
 // menu access (can_manage_menu) — the API enforces it; this page just surfaces
-// the orders so kitchen/catering staff don't need full Admin access.
+// the orders so fulfillment staff don't need full Admin access.
 
 function choicePills(g) {
   const out = []
@@ -31,7 +31,7 @@ export default function KitchenPage() {
     api.myMenuEvents().then((evs) => {
       setEvents(evs)
       if (!evs.some((e) => e.id === eventId)) setEventId(evs.length === 1 ? evs[0].id : '')
-      if (evs.length === 0) setErr('You don\'t have menu access for any event.')
+      if (evs.length === 0) setErr('You don\'t have order access for any event.')
     }).catch((e) => setErr(e.message))
   }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -105,7 +105,7 @@ export default function KitchenPage() {
 
   return (
     <div className="max-w-4xl mx-auto space-y-5">
-      <h1 className="text-2xl font-bold dark:text-white">🍽️ Kitchen — Orders</h1>
+      <h1 className="text-2xl font-bold dark:text-white">Orders</h1>
 
       {events.length > 1 && (
         <select className="w-full border border-gray-300 dark:border-slate-700 rounded-xl px-3 py-2 text-sm bg-white dark:bg-slate-800 text-gray-900 dark:text-white"
@@ -119,7 +119,7 @@ export default function KitchenPage() {
 
       {data && (
         <>
-          {ev && <div className="text-sm text-slate-500 dark:text-slate-400">{ev.name} · {served}/{guests.length} meals served</div>}
+          {ev && <div className="text-sm text-slate-500 dark:text-slate-400">{ev.name} · {served}/{guests.length} orders served</div>}
 
           {/* To prepare */}
           <div className="bg-white dark:bg-slate-800 dark:border dark:border-slate-700/60 rounded-2xl shadow-sm p-5">

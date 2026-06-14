@@ -7,9 +7,9 @@ import { getPreferredView, setPreferredView } from '../App'
 
 function ViewPicker({ role, onPick }) {
   const views = [
-    ...(role === 'admin' ? [{ key: 'admin',     icon: 'AD', label: 'Admin Panel',  desc: 'Manage events, upload guests, send invites' }] : []),
-    { key: 'dashboard', icon: 'DB', label: 'Dashboard',    desc: 'Live check-in stats and admitted guests' },
-    { key: 'scanner',   icon: 'QR', label: 'QR Scanner',   desc: 'Scan guest QR codes at the entrance' },
+    ...(role === 'admin' ? [{ key: 'admin',     icon: 'SET', label: 'Event Setup',  desc: 'Create events, import guests, and send invitations' }] : []),
+    { key: 'dashboard', icon: 'RES', label: 'Results',    desc: 'RSVP progress, check-ins, and attendance' },
+    { key: 'scanner',   icon: 'QR', label: 'Check-in',   desc: 'Scan guest QR codes at the entrance' },
   ]
   return (
     <div className="app-shell min-h-screen flex items-center justify-center p-4">
@@ -128,12 +128,12 @@ export default function LoginPage() {
 
         <form onSubmit={submit} className="space-y-4">
           <div>
-            <label className="block text-xs font-semibold text-gray-600 dark:text-slate-300 mb-1">Email</label>
-            <input className={field} type="email" value={form.email} onChange={set('email')} required autoComplete="email" />
+            <label htmlFor="login-email" className="block text-xs font-semibold text-gray-600 dark:text-slate-300 mb-1">Email</label>
+            <input id="login-email" className={field} type="email" value={form.email} onChange={set('email')} required autoComplete="email" />
           </div>
           <div>
-            <label className="block text-xs font-semibold text-gray-600 dark:text-slate-300 mb-1">Password</label>
-            <input className={field} type="password" value={form.password} onChange={set('password')} required autoComplete="current-password" />
+            <label htmlFor="login-password" className="block text-xs font-semibold text-gray-600 dark:text-slate-300 mb-1">Password</label>
+            <input id="login-password" className={field} type="password" value={form.password} onChange={set('password')} required autoComplete="current-password" />
           </div>
           {error && <p className="text-red-600 text-sm">{error}</p>}
           <button type="submit" disabled={loading}

@@ -114,10 +114,13 @@ export default function DashboardPage() {
   return (
     <div className="space-y-6 max-w-5xl mx-auto">
       <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-bold dark:text-white">Live Dashboard</h1>
+        <div>
+          <h1 className="text-2xl font-bold dark:text-white">Event Results</h1>
+          <p className="text-sm text-gray-500 dark:text-slate-400 mt-1">Track RSVPs, check-ins, and live attendance.</p>
+        </div>
         <div className="flex items-center gap-2">
           <span className={`w-2.5 h-2.5 rounded-full ${connected ? 'bg-green-500 animate-pulse' : 'bg-gray-300 dark:bg-slate-600'}`} />
-          <span className="text-xs text-gray-500 dark:text-slate-400">{connected ? 'Live' : 'Offline'}</span>
+          <span className="text-xs text-gray-500 dark:text-slate-400">{connected ? 'Live updates on' : 'Refreshing every 20s'}</span>
         </div>
       </div>
 
@@ -142,6 +145,14 @@ export default function DashboardPage() {
 
       {stats && (
         <>
+          {stats.total === 0 ? (
+            <Card title="No guests yet">
+              <div className="py-6 text-center text-sm text-slate-500 dark:text-slate-400">
+                Import guests in Event Setup to start tracking RSVPs, invitations, and check-ins.
+              </div>
+            </Card>
+          ) : (
+          <>
           {/* Hero: donut + KPIs */}
           <div className="grid sm:grid-cols-[auto_1fr] gap-4 items-center bg-white dark:bg-slate-800 dark:border dark:border-slate-700/60 rounded-2xl shadow-sm p-5">
             <Donut pct={pct} label="checked in" sub={`${stats.admitted}/${stats.total}`} />
@@ -155,7 +166,7 @@ export default function DashboardPage() {
 
           {/* RSVP breakdown */}
           {(stats.rsvp_confirmed + stats.rsvp_declined + stats.rsvp_pending + stats.rsvp_invited) > 0 && (
-            <Card title="RSVP status">
+            <Card title="RSVP progress">
               <Bar segments={[
                 { label: 'Confirmed', value: stats.rsvp_confirmed, color: 'bg-green-500' },
                 { label: 'Declined', value: stats.rsvp_declined, color: 'bg-red-400' },
@@ -163,6 +174,8 @@ export default function DashboardPage() {
                 { label: 'No reply', value: stats.rsvp_invited, color: 'bg-slate-300 dark:bg-slate-600' },
               ]} />
             </Card>
+          )}
+          </>
           )}
 
           {/* Venue access occupancy */}
@@ -179,9 +192,9 @@ export default function DashboardPage() {
             </Card>
           )}
 
-          {/* Catering */}
+          {/* Orders */}
           {stats.catering_total != null && (
-            <Card title="Catering — meals served" right={<span className="text-xs text-slate-400">{stats.catering_served}/{stats.catering_total}</span>}>
+            <Card title="Orders served" right={<span className="text-xs text-slate-400">{stats.catering_served}/{stats.catering_total}</span>}>
               <div className="h-3 rounded-full bg-slate-100 dark:bg-slate-700 overflow-hidden">
                 <div className="h-full bg-amber-500 rounded-full transition-all" style={{ width: stats.catering_total > 0 ? `${(stats.catering_served / stats.catering_total) * 100}%` : '0%' }} />
               </div>
@@ -227,7 +240,9 @@ export default function DashboardPage() {
           {/* Live activity feed */}
           <Card title="Recent check-ins" right={<button onClick={() => fetchStats(eventId)} className="text-xs text-teal-600 hover:underline">Refresh</button>}>
             {stats.admitted_guests.length === 0 ? (
-              <div className="py-8 text-center text-gray-400 dark:text-slate-500 text-sm">No check-ins yet.</div>
+              <div className="py-8 text-center text-gray-400 dark:text-slate-500 text-sm">
+                No check-ins yet. When staff scan tickets, arrivals will appear here.
+              </div>
             ) : (
               <div className="divide-y divide-gray-100 dark:divide-slate-700 -mx-1">
                 {stats.admitted_guests.slice(0, 50).map((g, i) => (
@@ -249,7 +264,10 @@ export default function DashboardPage() {
       )}
 
       {!eventId && events.length === 0 && (
-        <div className="text-center py-16 text-gray-400 dark:text-slate-500">No events available.</div>
+        <div className="text-center py-16 text-gray-400 dark:text-slate-500">
+          <div className="font-semibold text-slate-600 dark:text-slate-300">No events yet</div>
+          <div className="text-sm mt-1">Create an event in Event Setup to see RSVP and check-in results here.</div>
+        </div>
       )}
     </div>
   )

@@ -6,9 +6,9 @@ function MenuLockedCard() {
   return (
     <div className="border-2 border-amber-300 bg-amber-50 dark:bg-amber-900/20 rounded-xl p-5 text-center">
       <div className="text-3xl mb-2">🔒</div>
-      <p className="font-bold text-amber-800 dark:text-amber-200">Menu unlocks at check-in</p>
+      <p className="font-bold text-amber-800 dark:text-amber-200">Order selection unlocks at check-in</p>
       <p className="text-sm text-slate-600 dark:text-slate-300 mt-1">
-        Show your QR code to the check-in official. Once you're admitted, you'll be able to pick your meal here.
+        Show your QR code to the check-in official. Once you're admitted, you'll be able to choose your items here.
       </p>
     </div>
   )
@@ -268,7 +268,7 @@ function MenuSelection({ token, categories, initialChoices, mealServed }) {
     setError('')
     try {
       await api.submitMenuChoice(token, { single, multi, combo })
-      setMsg(hasExistingChoice ? 'Selection updated!' : 'Menu selection saved!')
+      setMsg(hasExistingChoice ? 'Selection updated!' : 'Order selection saved!')
       setTimeout(() => setMsg(''), 4000)
     } catch (err) {
       setError(err.message)
@@ -280,8 +280,8 @@ function MenuSelection({ token, categories, initialChoices, mealServed }) {
   if (mealServed) {
     return (
       <div className="border-2 border-amber-300 bg-amber-50 dark:bg-amber-900/20 rounded-lg p-4 text-center">
-        <p className="text-sm text-amber-700 dark:text-amber-200 font-semibold">Your meal has been served — selection is locked</p>
-        <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">Enjoy your meal!</p>
+        <p className="text-sm text-amber-700 dark:text-amber-200 font-semibold">Your order has been served — selection is locked</p>
+        <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">You're all set.</p>
       </div>
     )
   }
@@ -292,9 +292,9 @@ function MenuSelection({ token, categories, initialChoices, mealServed }) {
         <div className="flex items-center gap-2">
           <span className="text-2xl">🍽️</span>
           <div>
-            <h3 className="text-base font-bold">Pick your meal</h3>
+            <h3 className="text-base font-bold">Pick your items</h3>
             <p className="text-xs text-amber-50">
-              {hasExistingChoice ? 'Tap any option to change your choice.' : 'Tap to select what you want to eat.'}
+              {hasExistingChoice ? 'Tap any option to change your choice.' : 'Tap to choose what you want.'}
             </p>
           </div>
         </div>

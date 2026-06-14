@@ -263,7 +263,7 @@ function RSVPForm({ event, theme, onConfirmed }) {
         disabled={loading}
         className={`w-full rounded-xl py-3 text-white font-bold text-sm tracking-wide transition-colors disabled:opacity-50 ${t.btn}`}
       >
-        {loading ? 'Submitting…' : '✉️ RSVP Now'}
+        {loading ? 'Submitting...' : 'Confirm RSVP'}
       </button>
     </form>
   )
@@ -275,7 +275,6 @@ function ConfirmView({ confirm, event, theme }) {
   const t = THEMES[theme] || THEMES.default
   return (
     <div className="text-center space-y-4 py-4">
-      <div className="text-5xl">🎉</div>
       <div>
         <div className="text-xl font-bold text-slate-900 dark:text-white">
           You're on the list, {confirm.first_name}!
@@ -295,7 +294,6 @@ function ConfirmView({ confirm, event, theme }) {
 function PendingView({ confirm }) {
   return (
     <div className="text-center space-y-3 py-4">
-      <div className="text-5xl">⏳</div>
       <div className="text-xl font-bold text-slate-900 dark:text-white">Thanks, {confirm.first_name}!</div>
       <div className="text-sm text-slate-500 dark:text-slate-400">{confirm.message}</div>
       <div className="text-xs text-slate-400 dark:text-slate-500">
@@ -308,7 +306,6 @@ function PendingView({ confirm }) {
 function DeclinedView({ confirm }) {
   return (
     <div className="text-center space-y-3 py-4">
-      <div className="text-5xl">💌</div>
       <div className="text-xl font-bold text-slate-900 dark:text-white">
         Thanks, {confirm.first_name}.
       </div>
@@ -434,7 +431,7 @@ function TokenRSVPForm({ event, prefill, token, theme, onDone }) {
           disabled={!!loading}
           className={`w-full rounded-xl py-3 text-white font-bold text-sm tracking-wide transition-colors disabled:opacity-50 ${t.btn}`}
         >
-          {loading === 'confirmed' ? 'Confirming…' : '✅ Confirm attendance'}
+          {loading === 'confirmed' ? 'Confirming...' : 'Confirm attendance'}
         </button>
         <button
           type="button"
@@ -583,7 +580,6 @@ export default function InvitePage() {
               /* ── Personalised (closed-mode) invite ── */
               deadlinePassed ? (
                 <div className="text-center py-4 space-y-1">
-                  <div className="text-3xl">⏰</div>
                   <div className="text-sm font-semibold text-slate-600 dark:text-slate-300">RSVP has closed for this event.</div>
                   {tokenMeta.already_responded && (
                     <div className="text-xs text-slate-400 dark:text-slate-500">
@@ -608,18 +604,15 @@ export default function InvitePage() {
               </div>
             ) : event.invite_mode === 'closed' ? (
               <div className="text-center py-4 space-y-1">
-                <div className="text-3xl">🔒</div>
                 <div className="text-sm font-semibold text-slate-600 dark:text-slate-300">This event is by invitation only.</div>
                 <div className="text-xs text-slate-400 dark:text-slate-500">Please use the personal invite link sent to you.</div>
               </div>
             ) : deadlinePassed ? (
               <div className="text-center py-4 space-y-1">
-                <div className="text-3xl">⏰</div>
                 <div className="text-sm font-semibold text-slate-600 dark:text-slate-300">RSVP has closed for this event.</div>
               </div>
             ) : atCapacity ? (
               <div className="text-center py-4">
-                <div className="text-3xl mb-2">😔</div>
                 <div className="text-sm font-semibold text-red-600 dark:text-red-400">This event is at capacity.</div>
               </div>
             ) : (
@@ -637,7 +630,7 @@ export default function InvitePage() {
         <div className="pb-6 text-center">
           <a href={`/registry/${event.registry_token}`}
             className="inline-flex items-center gap-2 bg-white/80 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-full px-5 py-2.5 text-sm font-semibold text-slate-700 dark:text-slate-200 hover:bg-white dark:hover:bg-slate-700 shadow-sm">
-            🎁 View our gift registry
+            View gift list
           </a>
         </div>
       )}

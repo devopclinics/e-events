@@ -134,7 +134,6 @@ export default function HelpPage({ publicMode = false }) {
             EventQR
           </Link>
           <div className="flex items-center gap-1 text-sm">
-            <a href="/media/guide.pdf" className="px-3 py-2 rounded-md text-slate-600 dark:text-slate-300 hover:text-teal-700 dark:hover:text-teal-300">⬇ PDF</a>
             <Link to="/pricing" className="px-3 py-2 rounded-md text-slate-600 dark:text-slate-300 hover:text-teal-700 dark:hover:text-teal-300">Pricing</Link>
             <Link to="/login" className="px-3 py-2 rounded-md text-slate-600 dark:text-slate-300 hover:text-teal-700 dark:hover:text-teal-300">Sign in</Link>
             <Link to="/register" className="px-4 py-2 rounded-lg bg-teal-600 text-white font-semibold hover:bg-teal-700">Get started</Link>

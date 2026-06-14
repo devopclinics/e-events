@@ -60,8 +60,8 @@ const features = [
         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M3 10h18M3 10l1.5-5.5A1 1 0 015.46 4h13.08a1 1 0 01.96.5L21 10M5 10v9a1 1 0 001 1h12a1 1 0 001-1v-9M9 14h6" />
       </svg>
     ),
-    title: 'Seating & Menu',
-    desc: 'Plan tables, seats, and meals — all in one place.',
+    title: 'Seating & Orders',
+    desc: 'Plan tables, seats, and guest orders — meals, drinks, gifts, or anything else.',
   },
   {
     icon: (
@@ -69,7 +69,7 @@ const features = [
         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M15 5v2m0 4v2m0 4v2M5 5a2 2 0 00-2 2v3a2 2 0 110 4v3a2 2 0 002 2h14a2 2 0 002-2v-3a2 2 0 110-4V7a2 2 0 00-2-2H5z" />
       </svg>
     ),
-    title: 'Venue Access & Zones',
+    title: 'Entry Areas & Rules',
     desc: 'Control who gets in where, with real-time insight into your venue.',
   },
   {
@@ -78,7 +78,7 @@ const features = [
         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" />
       </svg>
     ),
-    title: 'Merch & Gift Logistics',
+    title: 'Deliveries & Gifts',
     desc: 'Get merchandise and gifts to your guests, start to finish.',
   },
   {
@@ -87,7 +87,7 @@ const features = [
         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M12 8v13m0-13V6a2 2 0 112 2h-2zm0 0V5.5A2.5 2.5 0 109.5 8H12zm-7 4h14M5 12a2 2 0 110-4h14a2 2 0 110 4M5 12v7a2 2 0 002 2h10a2 2 0 002-2v-7" />
       </svg>
     ),
-    title: 'Gift Registry',
+    title: 'Gift List',
     desc: 'A shared registry of gifts and cash funds — no duplicates.',
   },
   {
@@ -96,7 +96,7 @@ const features = [
         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
       </svg>
     ),
-    title: 'Live Dashboard',
+    title: 'Live Results',
     desc: 'Watch your event come to life in real time.',
   },
   {
@@ -251,7 +251,7 @@ export default function LandingPage() {
             </div>
           </div>
           <div className="mt-12 grid grid-cols-3 gap-4 max-w-xl">
-            {[['Invites & RSVP', 'WhatsApp · SMS · Email'], ['QR Check-In', 'Zones & access control'], ['Seating, Menu & Registry', 'Built-in']].map(([label, sub]) => (
+            {[['Invites & RSVP', 'WhatsApp · SMS · Email'], ['QR Check-In', 'Entry rules'], ['Seating, Orders & Gift list', 'Built-in']].map(([label, sub]) => (
               <div key={label}>
                 <div className="text-sm font-bold text-slate-950 dark:text-white">{label}</div>
                 <div className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">{sub}</div>

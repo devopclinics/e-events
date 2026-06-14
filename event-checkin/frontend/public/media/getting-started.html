@@ -200,7 +200,7 @@ body{font-family:'Inter',system-ui,sans-serif;background:#0f172a;display:flex;fl
           <span class="step-chip">4 · Send invites</span>
           <span class="step-chip">5 · Track RSVPs</span>
           <span class="step-chip">6 · Check-in day</span>
-          <span class="step-chip">7 · Live dashboard</span>
+          <span class="step-chip">7 · Results</span>
         </div>
       </div>
     </div>
@@ -214,7 +214,7 @@ body{font-family:'Inter',system-ui,sans-serif;background:#0f172a;display:flex;fl
           <p class="slide-caption anim-3">
             Head to <strong style="color:var(--teal2)">events.vsgs.io</strong> and hit <em>Get Started</em>.
             Sign in with your Google account for the fastest setup — or create an account with any email.
-            You'll land straight in your Admin panel with your own organization, ready to go.
+            You'll land straight in Event Setup with your own organization, ready to go.
           </p>
           <div class="slide-tip anim-4">💡 No credit card needed. The free tier gets you started immediately.</div>
         </div>
@@ -260,10 +260,10 @@ body{font-family:'Inter',system-ui,sans-serif;background:#0f172a;display:flex;fl
           <div class="slide-num anim-1">Step 2 of 7</div>
           <h2 class="slide-heading anim-2">Create your event</h2>
           <p class="slide-caption anim-3">
-            In the Admin panel, click <strong style="color:var(--teal2)">New Event</strong>. Enter your event name, host, date &amp; time, and base URL. Hit Save.
-            You'll see tabs: <em>Overview, Guests, Team, Invite</em> — everything you need in one place.
+            In Event Setup, click <strong style="color:var(--teal2)">New Event</strong>. Enter your event name, host, date &amp; time, and base URL. Hit Save.
+            You'll see sections for <em>Start here, Guests, Invites &amp; RSVP, Seating, Orders, Entry areas, Deliveries, Gift list, and Team</em> — everything you need in one place.
           </p>
-          <div class="slide-tip anim-4">💡 Turn on features like Seating, Venue Access, Logistics &amp; Registry from the Overview → Features section.</div>
+          <div class="slide-tip anim-4">💡 Turn on features like Seating, Orders, Entry areas, Deliveries &amp; Gift list from Team &amp; settings → Features.</div>
         </div>
         <div class="slide-visual">
           <div class="mock-browser anim-1" style="width:92%">
@@ -278,9 +278,9 @@ body{font-family:'Inter',system-ui,sans-serif;background:#0f172a;display:flex;fl
             <div class="mock-nav">
               <span class="mock-nav-logo">EQ EventQR</span>
               <div class="mock-nav-links">
-                <span class="mock-nav-link active">Admin</span>
-                <span class="mock-nav-link">Scanner</span>
-                <span class="mock-nav-link">Dashboard</span>
+                <span class="mock-nav-link active">Event Setup</span>
+                <span class="mock-nav-link">Check-in</span>
+                <span class="mock-nav-link">Results</span>
               </div>
             </div>
             <div class="mock-body">
@@ -298,11 +298,11 @@ body{font-family:'Inter',system-ui,sans-serif;background:#0f172a;display:flex;fl
                   <div style="margin-left:auto;background:#dcfce7;color:#166534;font-size:8.5px;font-weight:700;padding:2px 8px;border-radius:99px">Active</div>
                 </div>
                 <div class="mock-event-tabs">
-                  <div class="mock-tab active">Overview</div>
+                  <div class="mock-tab active">Start here</div>
                   <div class="mock-tab">Guests</div>
-                  <div class="mock-tab">Invite</div>
+                  <div class="mock-tab">Invites</div>
                   <div class="mock-tab">Seating</div>
-                  <div class="mock-tab">Access</div>
+                  <div class="mock-tab">Entry</div>
                 </div>
               </div>
             </div>
@@ -318,11 +318,11 @@ body{font-family:'Inter',system-ui,sans-serif;background:#0f172a;display:flex;fl
           <div class="slide-num anim-1">Step 3 of 7</div>
           <h2 class="slide-heading anim-2">Add your guest list</h2>
           <p class="slide-caption anim-3">
-            Go to <strong style="color:var(--teal2)">Overview → Download template</strong> — it has exactly the columns your event uses.
-            Fill it in and <em>Upload CSV/Excel</em>. Or paste a Google Sheets link to auto-sync every minute.
+            Go to <strong style="color:var(--teal2)">Start here → Download template</strong> — it has exactly the columns your event uses.
+            Fill it in and <em>Upload guest file</em>. Or paste a Google Sheets link and set a sync interval.
             Re-importing never duplicates guests — it fills in missing details instead.
           </p>
-          <div class="slide-tip anim-4">💡 Add a <em>tags</em> column (e.g. "VIP; Press") to automatically set zone access for each guest.</div>
+          <div class="slide-tip anim-4">💡 Add a <em>tags</em> column (e.g. "VIP; Press") to automatically set entry access for each guest.</div>
         </div>
         <div class="slide-visual">
           <div class="mock-browser anim-1" style="width:92%">
@@ -372,7 +372,7 @@ body{font-family:'Inter',system-ui,sans-serif;background:#0f172a;display:flex;fl
           <div class="slide-num anim-1">Step 4 of 7</div>
           <h2 class="slide-heading anim-2">Send invitations on<br>every channel</h2>
           <p class="slide-caption anim-3">
-            In the <strong style="color:var(--teal2)">Invite tab</strong>, set up your RSVP page — pick Open (shared link) or Closed (unique per-guest link).
+            In <strong style="color:var(--teal2)">Invites &amp; RSVP</strong>, set up your RSVP page — pick anyone with the event link or personal invite links.
             Then send via <strong>WhatsApp</strong>, <strong>SMS</strong>, or <strong>Email</strong>.
             Guests get a branded invite with their personal QR ticket on confirmation — no app needed.
           </p>
@@ -441,7 +441,7 @@ body{font-family:'Inter',system-ui,sans-serif;background:#0f172a;display:flex;fl
                 <div class="mock-dot" style="background:#f59e0b"></div>
                 <div class="mock-dot" style="background:#22c55e"></div>
               </div>
-              <div class="mock-url">events.vsgs.io/admin — RSVP Overview</div>
+              <div class="mock-url">events.vsgs.io/setup — RSVP status</div>
             </div>
             <div class="mock-body">
               <div class="dash-stat-row anim-2">
@@ -470,9 +470,9 @@ body{font-family:'Inter',system-ui,sans-serif;background:#0f172a;display:flex;fl
           <div class="slide-num anim-1">Step 6 of 7</div>
           <h2 class="slide-heading anim-2">Check-in day —<br>just scan &amp; go</h2>
           <p class="slide-caption anim-3">
-            Set the event to <strong style="color:var(--teal2)">Active</strong> in Overview, then open <em>Scanner</em> on any phone.
+            Set the event to <strong style="color:var(--teal2)">Active</strong> in Start here, then open <em>Check-in</em> on any phone.
             Point the camera at each guest's QR — admission is instant. No app install needed.
-            For Venue Access events, staff pick their gate once and every scan automatically checks the guest into the right zone.
+            For Entry areas events, staff pick their gate once and every scan automatically checks the guest into the right area.
           </p>
           <div class="slide-tip anim-4">🔐 VIP zones, backstage, restricted areas — each gate enforces ticket type &amp; tag rules automatically.</div>
         </div>
@@ -484,7 +484,7 @@ body{font-family:'Inter',system-ui,sans-serif;background:#0f172a;display:flex;fl
                 <div class="mock-dot" style="background:#f59e0b"></div>
                 <div class="mock-dot" style="background:#22c55e"></div>
               </div>
-              <div class="mock-url">events.vsgs.io/scanner</div>
+              <div class="mock-url">events.vsgs.io/check-in</div>
             </div>
             <div class="mock-body">
               <div class="mock-scanner">
@@ -522,15 +522,15 @@ body{font-family:'Inter',system-ui,sans-serif;background:#0f172a;display:flex;fl
       </div>
     </div>
 
-    <!-- SLIDE 7: Live dashboard -->
+    <!-- SLIDE 7: Results -->
     <div class="slide" data-duration="9000">
       <div class="slide-inner">
         <div class="slide-text">
           <div class="slide-num anim-1">Step 7 of 7</div>
-          <h2 class="slide-heading anim-2">Watch it all live<br>on the dashboard</h2>
+          <h2 class="slide-heading anim-2">Watch it all live<br>in Results</h2>
           <p class="slide-caption anim-3">
-            Open <strong style="color:var(--teal2)">Dashboard</strong> on any screen to see check-ins, RSVP breakdown, live zone occupancy, catering totals, and a per-table kitchen view — all updating in real time.
-            The kitchen staff role sees only meal orders by table, so your caterer knows exactly what to prepare.
+            Open <strong style="color:var(--teal2)">Results</strong> on any screen to see check-ins, RSVP breakdown, live area occupancy, order totals, and per-table choices — all updating in real time.
+            Orders access gives staff a focused view of meals, drinks, gifts, or other guest choices by table.
           </p>
           <div class="slide-tip anim-4">📊 Post-event: venue analytics show peak arrival times, room-to-room flow, and each guest's journey.</div>
         </div>
@@ -542,7 +542,7 @@ body{font-family:'Inter',system-ui,sans-serif;background:#0f172a;display:flex;fl
                 <div class="mock-dot" style="background:#f59e0b"></div>
                 <div class="mock-dot" style="background:#22c55e"></div>
               </div>
-              <div class="mock-url">events.vsgs.io/dashboard</div>
+              <div class="mock-url">events.vsgs.io/results</div>
             </div>
             <div class="mock-body">
               <div class="mock-dashboard">
@@ -560,7 +560,7 @@ body{font-family:'Inter',system-ui,sans-serif;background:#0f172a;display:flex;fl
                   <div class="dash-bar-track"><div class="dash-bar-fill" style="width:60%;background:#a855f7"></div></div>
                 </div>
                 <div style="background:#0f172a;border-radius:6px;padding:8px 10px;margin-top:4px" class="anim-4">
-                  <div style="font-size:8.5px;color:#94a3b8;margin-bottom:5px">🍽️ Catering — Table 7</div>
+                  <div style="font-size:8.5px;color:#94a3b8;margin-bottom:5px">🍽️ Orders — Table 7</div>
                   <div style="display:flex;gap:6px">
                     <div style="flex:1;text-align:center"><div style="font-size:12px;font-weight:800;color:var(--teal2)">6</div><div style="font-size:7.5px;color:#64748b">Jollof Rice</div></div>
                     <div style="flex:1;text-align:center"><div style="font-size:12px;font-weight:800;color:#f59e0b">4</div><div style="font-size:7.5px;color:#64748b">Fried Rice</div></div>
@@ -580,7 +580,7 @@ body{font-family:'Inter',system-ui,sans-serif;background:#0f172a;display:flex;fl
         <div style="font-size:48px" class="anim-1">🎉</div>
         <h2 class="anim-2">You're ready to run your event.</h2>
         <p class="sub anim-3">
-          Free tier gets you started instantly. Upgrade to an Event Pass to unlock WhatsApp/SMS, QR check-in, seating, zones, logistics &amp; more.
+          Free tier gets you started instantly. Upgrade to an Event Pass to unlock WhatsApp/SMS, QR check-in, seating, entry areas, deliveries &amp; more.
         </p>
         <div style="display:flex;gap:12px;flex-wrap:wrap;justify-content:center;margin-top:4px" class="anim-4">
           <a class="cta-btn" href="https://events.vsgs.io" target="_blank">Get Started — Free</a>
@@ -625,23 +625,23 @@ body{font-family:'Inter',system-ui,sans-serif;background:#0f172a;display:flex;fl
 // ── Narration scripts (Web Speech API) ──────────────────────────────────────
 const NARRATION = [
   // 0 — Cover
-  "Welcome to EventQR — the complete guest experience platform. In this short walkthrough, we'll cover everything you need to run your first event: from signing in, creating your event, adding guests, sending invitations, tracking RSVPs, checking guests in on the day, and monitoring everything live on the dashboard. Let's get started.",
+  "Welcome to EventQR — the complete guest experience platform. In this short walkthrough, we'll cover everything you need to run your first event: from signing in, creating your event, adding guests, sending invitations, tracking RSVPs, checking guests in on the day, and monitoring everything live in Results. Let's get started.",
   // 1 — Sign in
-  "First, head to events dot vsgs dot io and click Get Started. You can sign in instantly with your Google account, or create an account with any email address. No credit card is required. Once you're in, you'll land straight in your Admin panel with your own organisation, ready to go.",
+  "First, head to events dot vsgs dot io and click Get Started. You can sign in instantly with your Google account, or create an account with any email address. No credit card is required. Once you're in, you'll land straight in Event Setup with your own organisation, ready to go.",
   // 2 — Create event
-  "In the Admin panel, click New Event. Enter your event name, host, date and time, and a base URL. Hit Save. Your event opens with tabs across the top — Overview, Guests, Invite, Seating, Access, and more. From the Overview Features section you can turn on Seating, Venue Access zones, Logistics, and the Gift Registry at any time.",
+  "In Event Setup, click New Event. Enter your event name, host, date and time, and a base URL. Hit Save. Your event opens with sections for Start here, Guests, Invites and R S V P, Seating, Orders, Entry areas, Deliveries, Gift list, and Team. From Team and settings you can turn on Seating, Orders, Entry areas, Deliveries, and Gift list at any time.",
   // 3 — Add guests
-  "Now add your guest list. Go to Overview and click Download template — it contains exactly the columns your event uses, with dropdowns for ticket types. Fill it in and upload your CSV or Excel file. You can also paste a Google Sheets link to auto-sync your list every minute while the event is active. Re-importing never creates duplicate guests — it fills in any missing details instead. Add a tags column like V I P or Press to automatically set zone access for each guest.",
+  "Now add your guest list. Go to Start here and click Download template — it contains exactly the columns your event uses, with dropdowns for ticket types. Fill it in and upload your guest file. You can also paste a Google Sheets link and set a sync interval while the event is active. Re-importing never creates duplicate guests — it fills in any missing details instead. Add a tags column like V I P or Press to automatically set area access for each guest.",
   // 4 — Send invites
-  "With your guests added, head to the Invite tab to set up your R S V P page. Choose Open mode — one shared link for everyone — or Closed mode, which gives each guest their own unique personal link. Then send invitations via WhatsApp, S M S, or email. Each guest receives a branded invite with their personal Q R ticket automatically on confirmation. No app install is needed for guests or staff. Email is always free. WhatsApp and S M S use message credits.",
+  "With your guests added, head to Invites and R S V P to set up your R S V P page. Choose anyone with the event link for one shared link, or personal invite links for unique per-guest links. Then send invitations via WhatsApp, S M S, or email. Each guest receives a branded invite with their personal Q R ticket automatically on confirmation. No app install is needed for guests or staff. Email is always free. WhatsApp and S M S use message credits.",
   // 5 — Track RSVPs
   "Back in the Guests tab you can see every person's status in real time — Attending, Declined, Pending, or No Reply — alongside their check-in status on the day. If you turned on approval required, you can approve or reject pending R S V Ps individually, or approve all at once. Use Broadcast to push a message to any group — for example, send a reminder to everyone who hasn't replied yet.",
   // 6 — Check-in day
-  "On the day of your event, set it to Active in the Overview tab. Then open Scanner on any phone or tablet — no app needed, it runs right in the browser. Staff pick their gate once, then just point the camera at each guest's Q R code. Admission is instant. For Venue Access events, the gate automatically enforces ticket type and tag rules — V I P guests go to the V I P lounge, general admission stays in the main hall, and zone occupancy is tracked live.",
-  // 7 — Dashboard
-  "While your event is running, open the Dashboard on any screen to watch everything in real time. You'll see total check-ins, R S V P breakdown, live zone occupancy, catering totals by table, and a dedicated kitchen view so your catering staff know exactly what to prepare for each table. After the event, venue analytics show peak arrival times, room to room flow, and each guest's full journey through the venue.",
+  "On the day of your event, set it to Active in Start here. Then open Check-in on any phone or tablet — no app needed, it runs right in the browser. Staff pick their gate once, then just point the camera at each guest's Q R code. Admission is instant. For Entry areas events, the gate automatically enforces ticket type and tag rules — V I P guests go to the V I P lounge, general admission stays in the main hall, and area occupancy is tracked live.",
+  // 7 — Results
+  "While your event is running, open Results on any screen to watch everything in real time. You'll see total check-ins, R S V P breakdown, live area occupancy, order totals by table, and a dedicated Orders view so staff know exactly what to prepare or fulfil for each table. After the event, venue analytics show peak arrival times, room to room flow, and each guest's full journey through the venue.",
   // 8 — End
-  "That's everything you need to run your first event with EventQR. The free tier gets you started immediately. When you're ready, upgrade to an Event Pass to unlock WhatsApp and S M S messaging, Q R check-in, seating, venue zones, logistics, and the gift registry. Visit events dot vsgs dot io to get started, or open the full guide for step-by-step details. Thanks for watching!"
+  "That's everything you need to run your first event with EventQR. The free tier gets you started immediately. When you're ready, upgrade to an Event Pass to unlock WhatsApp and S M S messaging, Q R check-in, seating, entry areas, deliveries, and the gift list. Visit events dot vsgs dot io to get started, or open the full guide for step-by-step details. Thanks for watching!"
 ]
 
 // ── Speech engine ─────────────────────────────────────────────────────────────

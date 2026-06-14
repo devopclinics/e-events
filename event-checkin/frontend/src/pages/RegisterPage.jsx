@@ -7,9 +7,9 @@ import { setPreferredView } from '../App'
 
 function ViewPicker({ role, onPick }) {
   const views = [
-    ...(role === 'admin' ? [{ key: 'admin',     icon: 'AD', label: 'Admin Panel',  desc: 'Manage events, upload guests, send invites' }] : []),
-    { key: 'dashboard', icon: 'DB', label: 'Dashboard',    desc: 'Live check-in stats and admitted guests' },
-    { key: 'scanner',   icon: 'QR', label: 'QR Scanner',   desc: 'Scan guest QR codes at the entrance' },
+    ...(role === 'admin' ? [{ key: 'admin',     icon: 'SET', label: 'Event Setup',  desc: 'Create events, import guests, and send invitations' }] : []),
+    { key: 'dashboard', icon: 'RES', label: 'Results',    desc: 'RSVP progress, check-ins, and attendance' },
+    { key: 'scanner',   icon: 'QR', label: 'Check-in',   desc: 'Scan guest QR codes at the entrance' },
   ]
   return (
     <div className="app-shell min-h-screen flex items-center justify-center p-4">
@@ -121,16 +121,16 @@ export default function RegisterPage() {
 
         <form onSubmit={submit} className="space-y-4">
           <div>
-            <label className="block text-xs font-semibold text-gray-600 dark:text-slate-300 mb-1">Full Name</label>
-            <input className={field} value={form.name} onChange={set('name')} required placeholder="Jane Smith" />
+            <label htmlFor="register-name" className="block text-xs font-semibold text-gray-600 dark:text-slate-300 mb-1">Full Name</label>
+            <input id="register-name" className={field} value={form.name} onChange={set('name')} required placeholder="Jane Smith" />
           </div>
           <div>
-            <label className="block text-xs font-semibold text-gray-600 dark:text-slate-300 mb-1">Email</label>
-            <input className={field} type="email" value={form.email} onChange={set('email')} required autoComplete="email" />
+            <label htmlFor="register-email" className="block text-xs font-semibold text-gray-600 dark:text-slate-300 mb-1">Email</label>
+            <input id="register-email" className={field} type="email" value={form.email} onChange={set('email')} required autoComplete="email" />
           </div>
           <div>
-            <label className="block text-xs font-semibold text-gray-600 dark:text-slate-300 mb-1">Password</label>
-            <input className={field} type="password" value={form.password} onChange={set('password')} required autoComplete="new-password" placeholder="Min. 6 characters" />
+            <label htmlFor="register-password" className="block text-xs font-semibold text-gray-600 dark:text-slate-300 mb-1">Password</label>
+            <input id="register-password" className={field} type="password" value={form.password} onChange={set('password')} required autoComplete="new-password" placeholder="Min. 6 characters" />
           </div>
           {error && <p className="text-red-600 text-sm">{error}</p>}
           <button type="submit" disabled={loading}

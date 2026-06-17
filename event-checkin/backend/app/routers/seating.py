@@ -2,7 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func
 from ..database import get_db
-from ..models import Event, SeatingTable, Guest, EventUser, User
+from ..models import Event, SeatingTable, Guest, EventUser, User, TableGroup, TableGroupTable
 from ..schemas import SeatingTableCreate, SeatingTableOut, SeatAssignRequest
 from ..auth import require_admin, get_current_user, require_official
 
@@ -41,20 +41,52 @@ def _first_free(taken: set[int], held: set[int], capacity: int, skip_held: bool)
     return None
 
 
-async def assign_next_seat(guest: Guest, db: AsyncSession) -> None:
+async def assign_next_seat(guest: Guest, db: AsyncSession) -> str | None:
     """First-come-first-served seat assignment honoring couple pairings.
 
-    Mutates guest.table_id / guest.seat_number / guest.held_seat in-place.
-    Caller is responsible for commit. No-op if guest already has a table.
+    If the guest has an assigned table group, only tables in that group are
+    considered. Mutates guest.table_id / guest.seat_number / guest.held_seat
+    in-place. Caller is responsible for commit. No-op if guest already has a
+    table.
+
+    Returns None on success, or an error message string if the guest cannot
+    be seated (e.g. no untagged tables available for an untagged guest).
     """
     if guest.table_id:
-        return
+        return None
 
-    tables = (await db.execute(
-        select(SeatingTable).where(SeatingTable.event_id == guest.event_id).order_by(SeatingTable.name)
-    )).scalars().all()
+    # Build the pool of candidate tables: group-restricted or untagged-only.
+    if guest.table_group_id:
+        group_table_ids_rows = (await db.execute(
+            select(TableGroupTable.table_id).where(TableGroupTable.table_group_id == guest.table_group_id)
+        )).scalars().all()
+        group_table_ids = set(group_table_ids_rows)
+        tables = (await db.execute(
+            select(SeatingTable)
+            .where(
+                SeatingTable.event_id == guest.event_id,
+                SeatingTable.id.in_(group_table_ids),
+            )
+            .order_by(SeatingTable.name)
+        )).scalars().all()
+    else:
+        # Exclude tables that belong to any group — those are reserved for tagged guests.
+        grouped_table_ids = (await db.execute(
+            select(TableGroupTable.table_id)
+        )).scalars().all()
+        tables = (await db.execute(
+            select(SeatingTable)
+            .where(
+                SeatingTable.event_id == guest.event_id,
+                SeatingTable.id.notin_(grouped_table_ids),
+            )
+            .order_by(SeatingTable.name)
+        )).scalars().all()
+
     if not tables:
-        return  # nothing we can do; admit without seat
+        if not guest.table_group_id:
+            return "No available table found for this guest. Please contact the organizer."
+        return None  # tagged guest with no group tables — admit without seat
 
     partner = await db.get(Guest, guest.partner_guest_id) if guest.partner_guest_id else None
 
@@ -77,7 +109,7 @@ async def assign_next_seat(guest: Guest, db: AsyncSession) -> None:
                 # Release partner's hold now that we're sitting next to them.
                 if partner.held_seat == str(target):
                     partner.held_seat = None
-                return
+                return None
         # Partner's table is full — fall through to find any seat for this guest
 
     # Case 2 — guest is paired but partner not yet arrived: find table with
@@ -91,7 +123,7 @@ async def assign_next_seat(guest: Guest, db: AsyncSession) -> None:
                     guest.table_id = table.id
                     guest.seat_number = str(n)
                     guest.held_seat = str(n + 1)
-                    return
+                    return None
         # No table has 2 contiguous seats — fall through to solo placement
 
     # Case 3 — solo guest, or paired fallback: lowest free non-held seat.
@@ -101,7 +133,7 @@ async def assign_next_seat(guest: Guest, db: AsyncSession) -> None:
         if seat is not None:
             guest.table_id = table.id
             guest.seat_number = str(seat)
-            return
+            return None
 
     # Last resort: every table is full when held seats are honored.
     # Take a held seat from the lowest table to avoid turning the guest away.
@@ -111,8 +143,11 @@ async def assign_next_seat(guest: Guest, db: AsyncSession) -> None:
         if seat is not None:
             guest.table_id = table.id
             guest.seat_number = str(seat)
-            return
-    # No capacity anywhere — leave guest unseated.
+            return None
+    # No capacity anywhere — deny untagged guests; tagged guests admit without seat.
+    if not guest.table_group_id:
+        return "All available tables are full. Please contact the organizer."
+    return None
 
 
 # ── Tables CRUD ───────────────────────────────────────────────────────────────
@@ -128,6 +163,9 @@ async def list_tables(event_id: str, db: AsyncSession = Depends(get_db), _: User
 async def create_table(event_id: str, data: SeatingTableCreate, db: AsyncSession = Depends(get_db), _: User = Depends(require_admin)):
     if not await db.get(Event, event_id):
         raise HTTPException(404, "Event not found")
+    existing = await db.scalar(select(SeatingTable).where(SeatingTable.event_id == event_id, SeatingTable.name == data.name))
+    if existing:
+        raise HTTPException(409, f"A table named '{data.name}' already exists for this event")
     table = SeatingTable(event_id=event_id, name=data.name, capacity=data.capacity)
     db.add(table)
     await db.commit()
@@ -140,6 +178,10 @@ async def update_table(event_id: str, table_id: str, data: SeatingTableCreate, d
     table = await db.get(SeatingTable, table_id)
     if not table or table.event_id != event_id:
         raise HTTPException(404, "Table not found")
+    if data.name != table.name:
+        conflict = await db.scalar(select(SeatingTable).where(SeatingTable.event_id == event_id, SeatingTable.name == data.name))
+        if conflict:
+            raise HTTPException(409, f"A table named '{data.name}' already exists for this event")
     table.name = data.name
     table.capacity = data.capacity
     await db.commit()
@@ -258,6 +300,31 @@ async def assign_seat(
 
     guest.table_id = body.table_id
     guest.seat_number = body.seat_number
+
+    if body.table_id:
+        # Find which group (if any) owns this table.
+        owning_membership = await db.scalar(
+            select(TableGroupTable).where(TableGroupTable.table_id == body.table_id)
+        )
+
+        if guest.table_group_id:
+            # Guest already has a group — enforce they stay in it.
+            if owning_membership and owning_membership.table_group_id != guest.table_group_id:
+                group = await db.get(TableGroup, guest.table_group_id)
+                group_name = group.name if group else guest.table_group_id
+                raise HTTPException(
+                    400,
+                    f"Guest is assigned to '{group_name}' and cannot be seated at this table.",
+                )
+        else:
+            # Guest has no group — auto-assign them to the table's group.
+            if owning_membership:
+                guest.table_group_id = owning_membership.table_group_id
+    else:
+        # Clearing the seat — also clear auto-assigned group if it was set implicitly.
+        # (We leave it so organizer can still see the assignment; clearing is explicit via Edit.)
+        pass
+
     await db.commit()
     return {"ok": True, "table_id": guest.table_id, "seat_number": guest.seat_number}
 

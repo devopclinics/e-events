@@ -62,11 +62,13 @@ class Event(Base):
     members: Mapped[list["EventUser"]] = relationship("EventUser", back_populates="event", cascade="all, delete-orphan")
     guests: Mapped[list["Guest"]] = relationship("Guest", back_populates="event", cascade="all, delete-orphan")
     tables: Mapped[list["SeatingTable"]] = relationship("SeatingTable", back_populates="event", cascade="all, delete-orphan")
+    table_groups: Mapped[list["TableGroup"]] = relationship("TableGroup", back_populates="event", cascade="all, delete-orphan")
     menu_categories: Mapped[list["MenuCategory"]] = relationship("MenuCategory", back_populates="event", cascade="all, delete-orphan")
 
 
 class SeatingTable(Base):
     __tablename__ = "seating_tables"
+    __table_args__ = (UniqueConstraint("event_id", "name", name="uq_seating_table_event_name"),)
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
     event_id: Mapped[str] = mapped_column(String(36), ForeignKey("events.id"))
@@ -75,6 +77,38 @@ class SeatingTable(Base):
 
     event: Mapped["Event"] = relationship("Event", back_populates="tables")
     guests: Mapped[list["Guest"]] = relationship("Guest", back_populates="table")
+    group_memberships: Mapped[list["TableGroupTable"]] = relationship("TableGroupTable", back_populates="table", cascade="all, delete-orphan")
+
+
+class TableGroup(Base):
+    """A named grouping of tables within an event. Guests can be assigned to a
+    group so the seating engine and scanner restrict them to tables in that group."""
+    __tablename__ = "table_groups"
+    __table_args__ = (UniqueConstraint("event_id", "tag", name="uq_table_group_event_tag"),)
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+    event_id: Mapped[str] = mapped_column(String(36), ForeignKey("events.id"))
+    name: Mapped[str] = mapped_column(String(100))
+    tag: Mapped[str] = mapped_column(String(50))   # short label used in imports
+    description: Mapped[str | None] = mapped_column(Text, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    event: Mapped["Event"] = relationship("Event", back_populates="table_groups")
+    memberships: Mapped[list["TableGroupTable"]] = relationship("TableGroupTable", back_populates="group", cascade="all, delete-orphan")
+    guests: Mapped[list["Guest"]] = relationship("Guest", back_populates="table_group")
+
+
+class TableGroupTable(Base):
+    """Junction — which tables belong to a TableGroup."""
+    __tablename__ = "table_group_tables"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+    table_group_id: Mapped[str] = mapped_column(String(36), ForeignKey("table_groups.id"))
+    table_id: Mapped[str] = mapped_column(String(36), ForeignKey("seating_tables.id"))
+
+    group: Mapped["TableGroup"] = relationship("TableGroup", back_populates="memberships")
+    table: Mapped["SeatingTable"] = relationship("SeatingTable", back_populates="group_memberships")
 
 
 class MenuCategory(Base):
@@ -180,7 +214,40 @@ class Guest(Base):
     # (the visible toggle satisfies TCR's "opt-in workflow" documentation).
     sms_consent: Mapped[bool] = mapped_column(Boolean, default=True)
     whatsapp_consent: Mapped[bool] = mapped_column(Boolean, default=True)
+    # Table group assignment — restricts which tables the guest can sit at.
+    table_group_id: Mapped[str | None] = mapped_column(String(36), ForeignKey("table_groups.id"), nullable=True)
 
     event: Mapped["Event"] = relationship("Event", back_populates="guests")
     table: Mapped["SeatingTable | None"] = relationship("SeatingTable", back_populates="guests")
+    table_group: Mapped["TableGroup | None"] = relationship("TableGroup", back_populates="guests")
     menu_choices: Mapped[list["GuestMenuChoice"]] = relationship("GuestMenuChoice", cascade="all, delete-orphan")
+
+
+class MessageTemplate(Base):
+    """Customizable outbound message template.
+
+    Scope hierarchy (highest priority first):
+      event  → org (reserved for future multi-tenant use)  → platform
+
+    The template_service looks up the most specific override and falls back to
+    the platform default if none exists.
+    """
+    __tablename__ = "message_templates"
+    __table_args__ = (
+        UniqueConstraint("scope", "event_id", "template_key", name="uq_msg_template"),
+    )
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+    # "platform" | "event"
+    scope: Mapped[str] = mapped_column(String(20), default="platform")
+    # null for platform-scope templates; event.id for event-scope overrides
+    event_id: Mapped[str | None] = mapped_column(String(36), ForeignKey("events.id"), nullable=True)
+    template_key: Mapped[str] = mapped_column(String(100))   # e.g. "invite_email"
+    subject: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    email_body: Mapped[str | None] = mapped_column(Text, nullable=True)
+    sms_body: Mapped[str | None] = mapped_column(Text, nullable=True)
+    whatsapp_body: Mapped[str | None] = mapped_column(Text, nullable=True)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    updated_by: Mapped[str | None] = mapped_column(String(255), nullable=True)   # user email
+
+    event: Mapped["Event | None"] = relationship("Event")

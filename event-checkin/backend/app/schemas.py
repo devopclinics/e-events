@@ -1,6 +1,6 @@
 from pydantic import BaseModel, ConfigDict, EmailStr, field_validator
 from datetime import datetime, timezone
-from typing import Optional, Literal
+from typing import Optional, Literal, Any
 
 
 # ── Auth ─────────────────────────────────────────────────────────────────────
@@ -73,6 +73,28 @@ class EventSourceUpdate(BaseModel):
     source_sync_interval_seconds: Optional[int] = None
 
 
+class EventResetRequest(BaseModel):
+    confirm_text: str
+    clear_guests: bool = True
+    clear_assignments: bool = True
+    clear_tables: bool = False
+    clear_table_groups: bool = False
+    clear_menu: bool = False
+    clear_templates: bool = False
+    reset_status_to_draft: bool = False
+
+
+class EventResetResult(BaseModel):
+    ok: bool = True
+    event_id: str
+    guests_deleted: int = 0
+    assignments_cleared: int = 0
+    tables_deleted: int = 0
+    table_groups_deleted: int = 0
+    menu_rows_deleted: int = 0
+    templates_deleted: int = 0
+
+
 class EventOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
@@ -120,6 +142,40 @@ class SeatingTableOut(BaseModel):
     name: str
     capacity: int
     assigned_count: int = 0
+
+
+# ── Table Groups ──────────────────────────────────────────────────────────────
+
+class TableGroupCreate(BaseModel):
+    name: str
+    tag: str
+    description: Optional[str] = None
+    table_ids: Optional[list[str]] = None
+
+
+class TableGroupUpdate(BaseModel):
+    name: Optional[str] = None
+    tag: Optional[str] = None
+    description: Optional[str] = None
+    table_ids: Optional[list[str]] = None   # replaces current memberships
+
+
+class TableGroupOut(BaseModel):
+    id: str
+    event_id: str
+    name: str
+    tag: str
+    description: Optional[str] = None
+    created_at: datetime
+    table_ids: list[str] = []
+    table_names: list[str] = []
+    total_capacity: int = 0
+    tagged_guest_count: int = 0
+    assigned_seat_count: int = 0
+
+
+class TableGroupAssignRequest(BaseModel):
+    guest_ids: list[str]
 
 
 class SeatAssignRequest(BaseModel):
@@ -218,6 +274,9 @@ class GuestUpdate(BaseModel):
     is_vip: Optional[bool] = None
     sms_consent: Optional[bool] = None
     whatsapp_consent: Optional[bool] = None
+    # Pass the group's UUID to assign, or explicitly pass null to clear.
+    # Uses model_fields_set so omitting the field means "don't change".
+    table_group_id: Optional[str] = None
 
 
 class GuestOut(BaseModel):
@@ -241,12 +300,14 @@ class GuestOut(BaseModel):
     is_vip: bool = False
     sms_consent: bool = True
     whatsapp_consent: bool = True
+    table_group_id: Optional[str] = None
+    table_group_name: Optional[str] = None
 
 
 # ── Scanner ──────────────────────────────────────────────────────────────────
 
 class ScanResult(BaseModel):
-    status: str  # admitted | already_admitted | invalid | not_active | not_assigned
+    status: str  # admitted | already_admitted | invalid | not_active | not_assigned | no_seat_available | group_mismatch
     message: str
     guest: Optional[GuestOut] = None
     table_name: Optional[str] = None
@@ -332,3 +393,54 @@ class MenuDashboardOut(BaseModel):
     item_totals: list[MenuItemTotal]
     combination_totals: list[MenuCombinationTotal]
     guests: list[MenuDashboardGuest]
+
+
+# ── Message Templates ─────────────────────────────────────────────────────────
+
+class MessageTemplateUpsert(BaseModel):
+    subject: Optional[str] = None
+    email_body: Optional[str] = None
+    sms_body: Optional[str] = None
+    whatsapp_body: Optional[str] = None
+
+
+class MessageTemplateOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: str
+    scope: str          # "platform" | "event"
+    event_id: Optional[str] = None
+    template_key: str
+    subject: Optional[str] = None
+    email_body: Optional[str] = None
+    sms_body: Optional[str] = None
+    whatsapp_body: Optional[str] = None
+    updated_at: datetime
+    updated_by: Optional[str] = None
+    is_default: bool = False    # True when this is the platform default row
+
+
+class TemplatePreviewRequest(BaseModel):
+    template_key: str
+    event_id: Optional[str] = None
+    # Override specific fields for preview (uses stored template otherwise)
+    subject: Optional[str] = None
+    email_body: Optional[str] = None
+    sms_body: Optional[str] = None
+    whatsapp_body: Optional[str] = None
+    # Sample data overrides
+    sample_data: Optional[dict[str, Any]] = None
+
+
+class TemplatePreviewOut(BaseModel):
+    subject: Optional[str] = None
+    email_body: Optional[str] = None
+    sms_body: Optional[str] = None
+    whatsapp_body: Optional[str] = None
+
+
+class TemplateTestSendRequest(BaseModel):
+    template_key: str
+    event_id: Optional[str] = None
+    channel: Literal["email", "sms", "whatsapp"]
+    recipient: str   # email address or phone number

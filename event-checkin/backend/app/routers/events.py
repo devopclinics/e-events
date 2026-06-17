@@ -1,10 +1,10 @@
 from datetime import datetime
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select
+from sqlalchemy import select, delete, update
 from ..database import get_db
-from ..models import Event, EventUser, User
-from ..schemas import EventCreate, EventUpdate, EventOut, EventMemberOut, AssignUserRequest, UserOut, EventSourceUpdate
+from ..models import Event, EventUser, User, Guest, SeatingTable, TableGroup, TableGroupTable, MenuCategory, MenuItem, MenuCombination, MenuCombinationItem, GuestMenuChoice, MessageTemplate
+from ..schemas import EventCreate, EventUpdate, EventOut, EventMemberOut, AssignUserRequest, UserOut, EventSourceUpdate, EventResetRequest, EventResetResult
 from ..auth import require_admin, get_current_user
 from .guests import import_from_source_url, _normalize_phone
 from services import messaging
@@ -23,7 +23,7 @@ async def _get_accessible_event(event_id: str, user: User, db: AsyncSession) -> 
     event = await db.get(Event, event_id)
     if not event:
         raise HTTPException(404, "Event not found")
-    if user.role != "admin":
+    if user.role not in ("admin", "super_admin"):
         assigned = await db.scalar(
             select(EventUser).where(EventUser.event_id == event_id, EventUser.user_id == user.id)
         )
@@ -55,7 +55,7 @@ async def list_events(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    if current_user.role == "admin":
+    if current_user.role in ("admin", "super_admin"):
         result = await db.execute(select(Event).order_by(Event.created_at.desc()))
     else:
         result = await db.execute(
@@ -104,6 +104,100 @@ async def delete_event(
         raise HTTPException(404, "Event not found")
     await db.delete(event)
     await db.commit()
+
+
+@router.post("/{event_id}/reset-data", response_model=EventResetResult)
+async def reset_event_data(
+    event_id: str,
+    body: EventResetRequest,
+    db: AsyncSession = Depends(get_db),
+    _: User = Depends(require_admin),
+):
+    """Dangerous operation: clear event data in-place while keeping the event record."""
+    if (body.confirm_text or "").strip().upper() != "RESET":
+        raise HTTPException(400, "confirm_text must be RESET")
+
+    event = await db.get(Event, event_id)
+    if not event:
+        raise HTTPException(404, "Event not found")
+
+    guests_deleted = 0
+    assignments_cleared = 0
+    tables_deleted = 0
+    groups_deleted = 0
+    menu_rows_deleted = 0
+    templates_deleted = 0
+
+    if body.clear_assignments:
+        res = await db.execute(
+            update(Guest)
+            .where(Guest.event_id == event_id)
+            .values(
+                admitted=False,
+                admitted_at=None,
+                admit_notified=False,
+                table_id=None,
+                seat_number=None,
+                held_seat=None,
+                partner_guest_id=None,
+                meal_served=False,
+            )
+        )
+        assignments_cleared = int(res.rowcount or 0)
+
+    if body.clear_guests:
+        guest_ids_subq = select(Guest.id).where(Guest.event_id == event_id)
+        await db.execute(delete(GuestMenuChoice).where(GuestMenuChoice.guest_id.in_(guest_ids_subq)))
+        res = await db.execute(delete(Guest).where(Guest.event_id == event_id))
+        guests_deleted = int(res.rowcount or 0)
+
+    if body.clear_table_groups:
+        group_ids_subq = select(TableGroup.id).where(TableGroup.event_id == event_id)
+        await db.execute(update(Guest).where(Guest.event_id == event_id).values(table_group_id=None))
+        await db.execute(delete(TableGroupTable).where(TableGroupTable.table_group_id.in_(group_ids_subq)))
+        res = await db.execute(delete(TableGroup).where(TableGroup.event_id == event_id))
+        groups_deleted = int(res.rowcount or 0)
+
+    if body.clear_tables:
+        table_ids_subq = select(SeatingTable.id).where(SeatingTable.event_id == event_id)
+        await db.execute(update(Guest).where(Guest.event_id == event_id).values(table_id=None, seat_number=None, held_seat=None))
+        await db.execute(delete(TableGroupTable).where(TableGroupTable.table_id.in_(table_ids_subq)))
+        res = await db.execute(delete(SeatingTable).where(SeatingTable.event_id == event_id))
+        tables_deleted = int(res.rowcount or 0)
+
+    if body.clear_menu:
+        cat_ids_subq = select(MenuCategory.id).where(MenuCategory.event_id == event_id)
+        combo_ids_subq = select(MenuCombination.id).where(MenuCombination.event_id == event_id)
+        c1 = await db.execute(delete(GuestMenuChoice).where(GuestMenuChoice.category_id.in_(cat_ids_subq)))
+        c2 = await db.execute(delete(MenuCombinationItem).where(MenuCombinationItem.combination_id.in_(combo_ids_subq)))
+        c3 = await db.execute(delete(MenuCombination).where(MenuCombination.event_id == event_id))
+        c4 = await db.execute(delete(MenuItem).where(MenuItem.event_id == event_id))
+        c5 = await db.execute(delete(MenuCategory).where(MenuCategory.event_id == event_id))
+        menu_rows_deleted = sum(int(c.rowcount or 0) for c in (c1, c2, c3, c4, c5))
+
+    if body.clear_templates:
+        res = await db.execute(
+            delete(MessageTemplate).where(
+                MessageTemplate.event_id == event_id,
+                MessageTemplate.scope == "event",
+            )
+        )
+        templates_deleted = int(res.rowcount or 0)
+
+    if body.reset_status_to_draft:
+        event.status = "draft"
+
+    await db.commit()
+
+    return EventResetResult(
+        event_id=event_id,
+        guests_deleted=guests_deleted,
+        assignments_cleared=assignments_cleared,
+        tables_deleted=tables_deleted,
+        table_groups_deleted=groups_deleted,
+        menu_rows_deleted=menu_rows_deleted,
+        templates_deleted=templates_deleted,
+    )
 
 
 # ── Status ────────────────────────────────────────────────────────────────────

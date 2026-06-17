@@ -4,11 +4,12 @@ import { api } from '../api'
 
 function ResultCard({ result, onReset }) {
   const cfg = {
-    admitted:        { bg: 'bg-green-500',  icon: '✓', heading: 'ADMITTED' },
-    already_admitted:{ bg: 'bg-amber-500',  icon: '⚠', heading: 'ALREADY ADMITTED' },
-    invalid:         { bg: 'bg-red-500',    icon: '✕', heading: 'INVALID QR CODE' },
-    not_active:      { bg: 'bg-slate-600',  icon: '⏸', heading: 'EVENT NOT ACTIVE' },
-    not_assigned:    { bg: 'bg-orange-500', icon: '🚫', heading: 'NOT ASSIGNED' },
+    admitted:          { bg: 'bg-green-500',  icon: '✓', heading: 'ADMITTED' },
+    already_admitted:  { bg: 'bg-amber-500',  icon: '⚠', heading: 'ALREADY ADMITTED' },
+    invalid:           { bg: 'bg-red-500',    icon: '✕', heading: 'INVALID QR CODE' },
+    not_active:        { bg: 'bg-slate-600',  icon: '⏸', heading: 'EVENT NOT ACTIVE' },
+    not_assigned:      { bg: 'bg-orange-500', icon: '🚫', heading: 'NOT ASSIGNED' },
+    no_seat_available: { bg: 'bg-red-700',    icon: '🚫', heading: 'ENTRY DENIED — CONTACT ORGANIZER' },
   }[result.status] || { bg: 'bg-gray-500', icon: '?', heading: 'UNKNOWN' }
 
   return (

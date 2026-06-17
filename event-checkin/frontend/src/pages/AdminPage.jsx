@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from 'react'
 import { api } from '../api'
+import { useAuth } from '../context/AuthContext'
 
 // ── helpers ──────────────────────────────────────────────────────────────────
 
@@ -160,6 +161,204 @@ function FeatureToggles({ event, onChanged }) {
           {label} {event[key] ? 'ON' : 'OFF'}
         </button>
       ))}
+    </div>
+  )
+}
+
+// ── Table Groups Panel ────────────────────────────────────────────────────────
+
+function TableGroupsPanel({ eventId }) {
+  const [groups, setGroups] = useState([])
+  const [form, setForm] = useState(null)   // null | { id?, name, tag, description, table_ids }
+  const [loading, setLoading] = useState(false)
+  const [msg, setMsg] = useState('')
+  const [tables, setTables] = useState([])
+
+  const fieldCls = 'border border-gray-300 dark:border-slate-700 rounded-lg px-3 py-2 text-sm bg-white dark:bg-slate-700 text-gray-900 dark:text-white w-full'
+
+  const loadGroups = () => api.listTableGroups(eventId).then(setGroups).catch(console.error)
+  const loadTables = () => api.listTables(eventId).then(setTables).catch(console.error)
+
+  useEffect(() => {
+    loadGroups()
+    loadTables()
+  }, [eventId])
+
+  // Tables already claimed by groups OTHER than the one currently being edited.
+  const takenByOtherGroups = new Set(
+    groups
+      .filter((g) => g.id !== form?.id)
+      .flatMap((g) => g.table_ids)
+  )
+  // Only show tables that are free (not in another group), plus tables already
+  // belonging to the group currently being edited.
+  const availableTables = tables.filter((t) => !takenByOtherGroups.has(t.id))
+
+  // Re-fetch tables fresh whenever the form opens so newly-added tables appear.
+  async function openCreate() {
+    await loadTables()
+    setForm({ name: '', tag: '', description: '', table_ids: [] })
+  }
+
+  async function openEdit(g) {
+    await loadTables()
+    setForm({ id: g.id, name: g.name, tag: g.tag, description: g.description || '', table_ids: [...g.table_ids] })
+  }
+
+  async function saveGroup(e) {
+    e.preventDefault()
+    setLoading(true); setMsg('')
+    try {
+      const payload = {
+        name: form.name,
+        tag: form.tag,
+        description: form.description || null,
+        table_ids: form.table_ids || [],
+      }
+      if (form.id) {
+        await api.updateTableGroup(eventId, form.id, payload)
+      } else {
+        await api.createTableGroup(eventId, payload)
+      }
+      setForm(null)
+      await loadGroups()
+    } catch (err) { setMsg(err.message) }
+    finally { setLoading(false) }
+  }
+
+  async function deleteGroup(id) {
+    if (!confirm('Delete this table group? Guests assigned to it will have their group cleared first.')) return
+    setLoading(true)
+    try {
+      await api.deleteTableGroup(eventId, id)
+      await loadGroups()
+    } catch (err) { setMsg(err.message) }
+    finally { setLoading(false) }
+  }
+
+  function toggleTable(tableId) {
+    setForm((f) => {
+      const ids = f.table_ids || []
+      return { ...f, table_ids: ids.includes(tableId) ? ids.filter((id) => id !== tableId) : [...ids, tableId] }
+    })
+  }
+
+  return (
+    <div className="bg-white dark:bg-slate-800 dark:border dark:border-slate-700/60 rounded-xl shadow p-6 space-y-4 mt-6">
+      <div className="flex items-center justify-between">
+        <h2 className="font-semibold text-base dark:text-white">Table Groups</h2>
+        <button onClick={openCreate} disabled={loading}
+          className="bg-indigo-600 text-white px-3 py-1.5 rounded-lg text-xs font-semibold hover:bg-indigo-700">
+          + Group
+        </button>
+      </div>
+
+      {groups.length === 0 && !form ? (
+        <p className="text-sm text-gray-400 dark:text-slate-500">
+          No table groups yet. Groups let you cluster tables (e.g. "VIP Tables") and restrict guests to them.
+        </p>
+      ) : (
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm">
+            <thead className="bg-gray-50 dark:bg-slate-700 text-xs font-semibold text-gray-500 dark:text-slate-400 uppercase">
+              <tr>
+                <th className="px-4 py-2 text-left">Name</th>
+                <th className="px-4 py-2 text-left">Tag</th>
+                <th className="px-4 py-2 text-left">Tables</th>
+                <th className="px-4 py-2 text-center">Capacity</th>
+                <th className="px-4 py-2 text-center">Guests Tagged</th>
+                <th className="px-4 py-2 text-center">Actions</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-gray-100 dark:divide-slate-700">
+              {groups.map((g) => (
+                <tr key={g.id} className="hover:bg-gray-50 dark:hover:bg-slate-700">
+                  <td className="px-4 py-2.5 font-medium dark:text-slate-100">{g.name}</td>
+                  <td className="px-4 py-2.5">
+                    <code className="text-xs bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300 px-1.5 py-0.5 rounded">{g.tag}</code>
+                  </td>
+                  <td className="px-4 py-2.5 text-xs text-gray-600 dark:text-slate-400">
+                    {g.table_names.length ? g.table_names.join(', ') : <span className="italic text-gray-400">none</span>}
+                  </td>
+                  <td className="px-4 py-2.5 text-center dark:text-slate-300">{g.total_capacity}</td>
+                  <td className="px-4 py-2.5 text-center">
+                    <span className={`text-xs font-semibold ${g.tagged_guest_count > g.total_capacity ? 'text-red-500' : 'text-green-600'}`}>
+                      {g.tagged_guest_count}
+                    </span>
+                    {g.tagged_guest_count > g.total_capacity && (
+                      <span className="ml-1 text-xs text-red-400" title="More guests than seats">⚠</span>
+                    )}
+                  </td>
+                  <td className="px-4 py-2.5 text-center">
+                    <div className="flex justify-center gap-3">
+                      <button onClick={() => openEdit(g)}
+                        className="text-xs text-indigo-600 hover:underline">Edit</button>
+                      <button onClick={() => deleteGroup(g.id)} disabled={loading}
+                        className="text-xs text-red-400 hover:text-red-600 disabled:opacity-40">Delete</button>
+                    </div>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+
+      {form && (
+        <form onSubmit={saveGroup} className="bg-gray-50 dark:bg-slate-700 rounded-lg p-4 border dark:border-slate-600 space-y-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div>
+              <label className="block text-xs font-semibold text-gray-600 dark:text-slate-300 mb-1">Group Name</label>
+              <input value={form.name} onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))} required
+                className={fieldCls} placeholder="VIP Tables" />
+            </div>
+            <div>
+              <label className="block text-xs font-semibold text-gray-600 dark:text-slate-300 mb-1">
+                Tag <span className="text-gray-400 font-normal">(used in CSV import)</span>
+              </label>
+              <input value={form.tag} onChange={(e) => setForm((f) => ({ ...f, tag: e.target.value }))} required
+                className={fieldCls} placeholder="vip_tables" />
+            </div>
+          </div>
+          <div>
+            <label className="block text-xs font-semibold text-gray-600 dark:text-slate-300 mb-1">Description (optional)</label>
+            <input value={form.description} onChange={(e) => setForm((f) => ({ ...f, description: e.target.value }))}
+              className={fieldCls} placeholder="Reserved for VIP guests" />
+          </div>
+          <div>
+            <label className="block text-xs font-semibold text-gray-600 dark:text-slate-300 mb-2">Tables in this group</label>
+            <div className="flex flex-wrap gap-2">
+              {availableTables.length === 0 && (
+                <span className="text-xs text-gray-400 italic">
+                  {tables.length === 0 ? 'No tables created yet' : 'All tables are already assigned to other groups'}
+                </span>
+              )}
+              {availableTables.map((t) => {
+                const on = (form.table_ids || []).includes(t.id)
+                return (
+                  <button key={t.id} type="button" onClick={() => toggleTable(t.id)}
+                    className={`px-3 py-1 rounded-full text-xs font-semibold border transition-colors ${
+                      on ? 'bg-indigo-600 border-indigo-600 text-white' : 'bg-white dark:bg-slate-800 border-gray-300 dark:border-slate-600 text-gray-700 dark:text-slate-300 hover:border-indigo-400'
+                    }`}>
+                    {t.name}
+                  </button>
+                )
+              })}
+            </div>
+          </div>
+          {msg && <p className="text-xs text-red-500">{msg}</p>}
+          <div className="flex gap-2">
+            <button type="submit" disabled={loading}
+              className="bg-indigo-600 text-white px-4 py-2 rounded-lg text-sm font-semibold hover:bg-indigo-700 disabled:opacity-50">
+              {form.id ? 'Save' : 'Create'}
+            </button>
+            <button type="button" onClick={() => { setForm(null); setMsg('') }}
+              className="px-4 py-2 border border-gray-300 dark:border-slate-600 rounded-lg text-sm dark:text-slate-300 hover:bg-gray-100 dark:hover:bg-slate-600">
+              Cancel
+            </button>
+          </div>
+        </form>
+      )}
     </div>
   )
 }
@@ -1974,7 +2173,7 @@ function TabBar({ tabs, active, onChange }) {
 
 // ── Edit Guest Modal ──────────────────────────────────────────────────────────
 
-function EditGuestModal({ guest, onSave, onClose, loading }) {
+function EditGuestModal({ guest, tableGroups = [], onSave, onClose, loading }) {
   const [form, setForm] = useState({
     first_name: guest.first_name || '',
     last_name:  guest.last_name  || '',
@@ -1983,6 +2182,7 @@ function EditGuestModal({ guest, onSave, onClose, loading }) {
     is_vip:     guest.is_vip     || false,
     sms_consent: guest.sms_consent !== false,
     whatsapp_consent: guest.whatsapp_consent !== false,
+    table_group_id: guest.table_group_id || '',
   })
 
   function handleSubmit(e) {
@@ -1995,6 +2195,7 @@ function EditGuestModal({ guest, onSave, onClose, loading }) {
       is_vip:     form.is_vip,
       sms_consent: form.sms_consent,
       whatsapp_consent: form.whatsapp_consent,
+      table_group_id: form.table_group_id || null,
     })
   }
 
@@ -2031,6 +2232,18 @@ function EditGuestModal({ guest, onSave, onClose, loading }) {
             <input className={inputCls} value={form.phone} placeholder="+14155550123"
               onChange={(e) => setForm((f) => ({ ...f, phone: e.target.value }))} />
           </div>
+          {tableGroups.length > 0 && (
+            <div>
+              <label className="block text-xs font-medium text-slate-500 dark:text-slate-400 mb-1">Table group</label>
+              <select className={inputCls} value={form.table_group_id}
+                onChange={(e) => setForm((f) => ({ ...f, table_group_id: e.target.value }))}>
+                <option value="">— None —</option>
+                {tableGroups.map((tg) => (
+                  <option key={tg.id} value={tg.id}>{tg.name} ({tg.tag})</option>
+                ))}
+              </select>
+            </div>
+          )}
           <div className="flex flex-wrap gap-4 pt-1">
             <label className="flex items-center gap-2 text-sm text-slate-700 dark:text-slate-300 cursor-pointer">
               <input type="checkbox" checked={form.is_vip}
@@ -2064,12 +2277,293 @@ function EditGuestModal({ guest, onSave, onClose, loading }) {
   )
 }
 
+// ── Message Templates Panel ───────────────────────────────────────────────────
+
+const TEMPLATE_LABELS = {
+  invite_email:           'Invite Email',
+  invite_reminder:        'Invite Reminder',
+  admission_confirmation: 'Admission Confirmation',
+  rsvp_confirmation:      'RSVP Confirmed',
+  rsvp_decline:           'RSVP Decline',
+  approval_pending:       'Approval Pending',
+  approval_accepted:      'Approval Accepted',
+  approval_rejected:      'Approval Rejected',
+}
+
+const PLACEHOLDERS = [
+  'guest_first_name','guest_last_name','guest_full_name',
+  'event_name','event_date','event_time',
+  'organizer_name','rsvp_link','ticket_link',
+  'table_name','seat_number','table_group',
+]
+
+function MessageTemplatesPanel({ eventId }) {
+  const [templates, setTemplates] = useState([])
+  const [selected, setSelected] = useState(null)   // template_key
+  const [form, setForm] = useState(null)            // {subject,email_body,sms_body,whatsapp_body}
+  const [preview, setPreview] = useState(null)
+  const [tab, setTab] = useState('email')           // email|sms|whatsapp
+  const [saving, setSaving] = useState(false)
+  const [msg, setMsg] = useState('')
+  const [err, setErr] = useState('')
+  const [testRecipient, setTestRecipient] = useState('')
+  const [testChannel, setTestChannel] = useState('email')
+  const [testing, setTesting] = useState(false)
+
+  const fieldCls = 'w-full border border-gray-300 dark:border-slate-600 rounded-lg px-3 py-2 text-sm bg-white dark:bg-slate-700 text-gray-900 dark:text-white font-mono'
+
+  const load = async () => {
+    try {
+      const rows = await api.listTemplates(eventId)
+      setTemplates(rows)
+    } catch(e) { setErr(e.message) }
+  }
+
+  useEffect(() => { load() }, [eventId])
+
+  function selectTemplate(key) {
+    const row = templates.find((t) => t.template_key === key)
+    setSelected(key)
+    setForm({
+      subject:       row?.subject       ?? '',
+      email_body:    row?.email_body    ?? '',
+      sms_body:      row?.sms_body      ?? '',
+      whatsapp_body: row?.whatsapp_body ?? '',
+    })
+    setPreview(null); setMsg(''); setErr('')
+  }
+
+  async function save(e) {
+    e.preventDefault()
+    setSaving(true); setErr(''); setMsg('')
+    try {
+      await api.upsertTemplate(selected, form, eventId)
+      setMsg('Template saved.')
+      await load()
+      setTimeout(() => setMsg(''), 3000)
+    } catch(e) { setErr(e.message) }
+    finally { setSaving(false) }
+  }
+
+  async function reset() {
+    if (!confirm('Reset this template to the platform default?')) return
+    setSaving(true); setErr('')
+    try {
+      await api.resetTemplate(selected, eventId)
+      setMsg('Reset to default.')
+      await load()
+      selectTemplate(selected)
+      setTimeout(() => setMsg(''), 3000)
+    } catch(e) { setErr(e.message) }
+    finally { setSaving(false) }
+  }
+
+  async function loadPreview() {
+    try {
+      // Only pass fields that have been explicitly filled in — empty strings
+      // should fall through to the stored/default template, not blank it out.
+      const overrides = {}
+      if (form.subject?.trim())       overrides.subject       = form.subject
+      if (form.email_body?.trim())    overrides.email_body    = form.email_body
+      if (form.sms_body?.trim())      overrides.sms_body      = form.sms_body
+      if (form.whatsapp_body?.trim()) overrides.whatsapp_body = form.whatsapp_body
+      const res = await api.previewTemplate({
+        template_key: selected,
+        event_id: eventId,
+        ...overrides,
+      })
+      setPreview(res)
+    } catch(e) { setErr(e.message) }
+  }
+
+  async function sendTest() {
+    if (!testRecipient.trim()) return
+    setTesting(true); setErr('')
+    try {
+      await api.testSendTemplate({
+        template_key: selected,
+        event_id: eventId,
+        channel: testChannel,
+        recipient: testRecipient.trim(),
+      })
+      setMsg(`Test ${testChannel} sent to ${testRecipient}`)
+      setTimeout(() => setMsg(''), 4000)
+    } catch(e) { setErr(e.message) }
+    finally { setTesting(false) }
+  }
+
+  return (
+    <div className="space-y-4">
+      <div className="bg-white dark:bg-slate-800 dark:border dark:border-slate-700/60 rounded-xl shadow p-6">
+        <h2 className="font-semibold text-base dark:text-white mb-1">Message Templates</h2>
+        <p className="text-xs text-gray-500 dark:text-slate-400 mb-4">
+          Customize the emails, SMS and WhatsApp messages sent to guests. Event-level overrides take priority over platform defaults.
+          Use <code className="bg-gray-100 dark:bg-slate-700 px-1 rounded">{'{{placeholder}}'}</code> tokens for dynamic values.
+        </p>
+
+        <div className="flex flex-col sm:flex-row gap-4">
+          {/* Template list */}
+          <div className="sm:w-56 shrink-0">
+            <p className="text-xs font-semibold text-gray-500 dark:text-slate-400 uppercase tracking-wide mb-2">Templates</p>
+            <ul className="space-y-1">
+              {Object.entries(TEMPLATE_LABELS).map(([key, label]) => {
+                const row = templates.find((t) => t.template_key === key)
+                const isCustom = row && !row.is_default
+                return (
+                  <li key={key}>
+                    <button
+                      onClick={() => selectTemplate(key)}
+                      className={`w-full text-left px-3 py-2 rounded-lg text-sm transition-colors ${
+                        selected === key
+                          ? 'bg-indigo-600 text-white'
+                          : 'hover:bg-gray-100 dark:hover:bg-slate-700 text-gray-700 dark:text-slate-200'
+                      }`}>
+                      <span>{label}</span>
+                      {isCustom && (
+                        <span className={`ml-2 text-[10px] font-semibold uppercase px-1.5 py-0.5 rounded ${
+                          selected === key ? 'bg-indigo-500 text-white' : 'bg-indigo-100 dark:bg-indigo-900/40 text-indigo-700 dark:text-indigo-300'
+                        }`}>custom</span>
+                      )}
+                    </button>
+                  </li>
+                )
+              })}
+            </ul>
+          </div>
+
+          {/* Editor */}
+          {selected && form ? (
+            <div className="flex-1 space-y-4">
+              <div className="flex items-center justify-between flex-wrap gap-2">
+                <p className="font-semibold text-sm dark:text-white">{TEMPLATE_LABELS[selected]}</p>
+                <div className="flex gap-2">
+                  {['email','sms','whatsapp'].map((ch) => (
+                    <button key={ch} onClick={() => setTab(ch)}
+                      className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors ${
+                        tab === ch ? 'bg-indigo-600 text-white' : 'bg-gray-100 dark:bg-slate-700 text-gray-600 dark:text-slate-300 hover:bg-gray-200 dark:hover:bg-slate-600'
+                      }`}>
+                      {ch.toUpperCase()}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Placeholders chip row */}
+              <div className="flex flex-wrap gap-1">
+                {PLACEHOLDERS.map((p) => (
+                  <code key={p} className="text-[10px] bg-amber-50 dark:bg-amber-900/20 text-amber-700 dark:text-amber-300 border border-amber-200 dark:border-amber-700 px-1.5 py-0.5 rounded cursor-pointer hover:bg-amber-100 dark:hover:bg-amber-900/40"
+                    title={`Copy {{${p}}}`}
+                    onClick={() => navigator.clipboard?.writeText(`{{${p}}}`)}>
+                    {`{{${p}}}`}
+                  </code>
+                ))}
+              </div>
+
+              <form onSubmit={save} className="space-y-3">
+                {tab === 'email' && (
+                  <>
+                    <div>
+                      <label className="block text-xs font-semibold text-gray-600 dark:text-slate-300 mb-1">Subject</label>
+                      <input value={form.subject} onChange={(e) => setForm((f) => ({ ...f, subject: e.target.value }))}
+                        className={fieldCls} placeholder="Subject line…" />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-semibold text-gray-600 dark:text-slate-300 mb-1">Email Body</label>
+                      <textarea rows={10} value={form.email_body}
+                        onChange={(e) => setForm((f) => ({ ...f, email_body: e.target.value }))}
+                        className={`${fieldCls} resize-y`} placeholder="Email body…" />
+                    </div>
+                  </>
+                )}
+                {tab === 'sms' && (
+                  <div>
+                    <label className="block text-xs font-semibold text-gray-600 dark:text-slate-300 mb-1">SMS Body</label>
+                    <textarea rows={5} value={form.sms_body}
+                      onChange={(e) => setForm((f) => ({ ...f, sms_body: e.target.value }))}
+                      className={`${fieldCls} resize-y`} placeholder="SMS body…" />
+                    <p className="text-xs text-gray-400 mt-1">{(form.sms_body || '').length} chars</p>
+                  </div>
+                )}
+                {tab === 'whatsapp' && (
+                  <div>
+                    <label className="block text-xs font-semibold text-gray-600 dark:text-slate-300 mb-1">WhatsApp Body</label>
+                    <textarea rows={7} value={form.whatsapp_body}
+                      onChange={(e) => setForm((f) => ({ ...f, whatsapp_body: e.target.value }))}
+                      className={`${fieldCls} resize-y`} placeholder="WhatsApp body…" />
+                  </div>
+                )}
+
+                {err && <p className="text-xs text-red-500">{err}</p>}
+                {msg && <p className="text-xs text-green-600 dark:text-green-400 font-semibold">{msg}</p>}
+
+                <div className="flex flex-wrap gap-2 pt-1">
+                  <button type="submit" disabled={saving}
+                    className="bg-indigo-600 text-white px-4 py-2 rounded-lg text-sm font-semibold hover:bg-indigo-700 disabled:opacity-50">
+                    {saving ? 'Saving…' : 'Save'}
+                  </button>
+                  <button type="button" onClick={loadPreview}
+                    className="bg-white dark:bg-slate-700 border border-gray-300 dark:border-slate-600 text-gray-700 dark:text-slate-200 px-4 py-2 rounded-lg text-sm font-semibold hover:bg-gray-50">
+                    Preview
+                  </button>
+                  <button type="button" onClick={reset} disabled={saving}
+                    className="text-sm text-gray-500 dark:text-slate-400 hover:underline ml-1">
+                    Reset to default
+                  </button>
+                </div>
+              </form>
+
+              {/* Preview pane */}
+              {preview && (
+                <div className="border dark:border-slate-700 rounded-lg p-4 bg-gray-50 dark:bg-slate-900 space-y-2">
+                  <p className="text-xs font-semibold text-gray-500 dark:text-slate-400 uppercase">Preview</p>
+                  {tab === 'email' && <>
+                    {preview.subject && <p className="text-sm font-semibold dark:text-white">Subject: {preview.subject}</p>}
+                    <pre className="text-xs text-gray-700 dark:text-slate-300 whitespace-pre-wrap font-sans">{preview.email_body}</pre>
+                  </>}
+                  {tab === 'sms' && <pre className="text-xs text-gray-700 dark:text-slate-300 whitespace-pre-wrap font-sans">{preview.sms_body}</pre>}
+                  {tab === 'whatsapp' && <pre className="text-xs text-gray-700 dark:text-slate-300 whitespace-pre-wrap font-sans">{preview.whatsapp_body}</pre>}
+                </div>
+              )}
+
+              {/* Test send */}
+              <div className="border-t dark:border-slate-700 pt-3 space-y-2">
+                <p className="text-xs font-semibold text-gray-500 dark:text-slate-400 uppercase">Test Send</p>
+                <div className="flex gap-2 flex-wrap">
+                  <select value={testChannel} onChange={(e) => setTestChannel(e.target.value)}
+                    className="border border-gray-300 dark:border-slate-600 rounded-lg px-2 py-1.5 text-sm bg-white dark:bg-slate-700 text-gray-700 dark:text-slate-200">
+                    <option value="email">Email</option>
+                    <option value="sms">SMS</option>
+                    <option value="whatsapp">WhatsApp</option>
+                  </select>
+                  <input value={testRecipient} onChange={(e) => setTestRecipient(e.target.value)}
+                    placeholder={testChannel === 'email' ? 'test@example.com' : '+14155550123'}
+                    className="flex-1 min-w-40 border border-gray-300 dark:border-slate-600 rounded-lg px-3 py-1.5 text-sm bg-white dark:bg-slate-700 text-gray-900 dark:text-white" />
+                  <button onClick={sendTest} disabled={testing || !testRecipient.trim()}
+                    className="bg-teal-600 text-white px-4 py-1.5 rounded-lg text-sm font-semibold hover:bg-teal-700 disabled:opacity-50">
+                    {testing ? 'Sending…' : 'Send test'}
+                  </button>
+                </div>
+              </div>
+            </div>
+          ) : (
+            <div className="flex-1 flex items-center justify-center text-sm text-gray-400 dark:text-slate-500">
+              Select a template from the list to edit it.
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  )
+}
+
 export default function AdminPage() {
+  const { user } = useAuth()
   const [events, setEvents] = useState([])
   const [selectedId, setSelectedId] = useState('')
   const [showForm, setShowForm] = useState(false)
   const [editing, setEditing] = useState(false)
   const [guests, setGuests] = useState([])
+  const [tableGroups, setTableGroups] = useState([])
   const [loading, setLoading] = useState(false)
   const [msg, setMsg] = useState('')
   const [error, setError] = useState('')
@@ -2090,8 +2584,9 @@ export default function AdminPage() {
     setPage(0)
     setSelectedGuests(new Set())
     setActiveTab('overview')
-    if (!selectedId) return setGuests([])
+    if (!selectedId) { setGuests([]); setTableGroups([]); return }
     api.listGuests(selectedId).then(setGuests).catch(console.error)
+    api.listTableGroups(selectedId).then(setTableGroups).catch(console.error)
   }, [selectedId])
 
   // Poll the event list every 15s while a sync-enabled event is selected,
@@ -2145,6 +2640,34 @@ export default function AdminPage() {
     } catch (err) { flash(err.message, true) }
   }
 
+  async function handleResetEventData() {
+    if (!event) return
+    const confirmText = prompt('Type RESET to clear all guests and seat assignments for this event.') || ''
+    if (confirmText.trim().toUpperCase() !== 'RESET') {
+      flash('Reset cancelled. Confirmation text did not match.', true)
+      return
+    }
+    setLoading(true)
+    try {
+      const res = await api.resetEventData(selectedId, {
+        confirm_text: 'RESET',
+        clear_guests: true,
+        clear_assignments: true,
+        clear_tables: false,
+        clear_table_groups: false,
+        clear_menu: false,
+        clear_templates: false,
+        reset_status_to_draft: false,
+      })
+      setGuests(await api.listGuests(selectedId))
+      flash(`Reset complete. Guests deleted: ${res.guests_deleted}. Assignments cleared: ${res.assignments_cleared}.`)
+    } catch (err) {
+      flash(err.message, true)
+    } finally {
+      setLoading(false)
+    }
+  }
+
   async function handleUpload(e) {
     const file = e.target.files[0]
     if (!file) return
@@ -2182,6 +2705,32 @@ export default function AdminPage() {
     try {
       const res = await api.sendInvitesBatch(selectedId, ids, force)
       flash(`${label}: ${res.queued} invite${res.queued === 1 ? '' : 's'} queued.`)
+      setGuests(await api.listGuests(selectedId))
+      setSelectedGuests(new Set())
+    } catch (err) { flash(err.message, true) }
+    finally { setLoading(false) }
+  }
+
+  async function handleBulkAssignGroup(groupId) {
+    if (!groupId) return
+    setLoading(true)
+    try {
+      const res = await api.assignGuestsToGroup(selectedId, groupId, [...selectedGuests])
+      flash(`Assigned ${res.updated} guest(s) to table group.`)
+      setGuests(await api.listGuests(selectedId))
+      setSelectedGuests(new Set())
+    } catch (err) { flash(err.message, true) }
+    finally { setLoading(false) }
+  }
+
+  async function handleBulkClearGroup() {
+    setLoading(true)
+    try {
+      // Clear group for all selected guests by iterating groups
+      for (const g of guests.filter((g) => selectedGuests.has(g.id) && g.table_group_id)) {
+        await api.clearGuestsFromGroup(selectedId, g.table_group_id, [g.id])
+      }
+      flash('Table group cleared for selected guests.')
       setGuests(await api.listGuests(selectedId))
       setSelectedGuests(new Set())
     } catch (err) { flash(err.message, true) }
@@ -2315,6 +2864,12 @@ export default function AdminPage() {
                 <button onClick={() => setEditing(!editing)} className="text-sm text-indigo-600 hover:underline whitespace-nowrap">
                   {editing ? 'Cancel' : 'Edit'}
                 </button>
+                {['admin', 'super_admin'].includes(user?.role) && (
+                  <button onClick={handleResetEventData} disabled={loading}
+                    className="text-sm text-orange-600 hover:text-orange-700 hover:underline whitespace-nowrap disabled:opacity-50">
+                    Reset Data
+                  </button>
+                )}
                 <button onClick={handleDeleteEvent}
                   className="text-sm text-red-500 hover:text-red-700 hover:underline whitespace-nowrap">
                   Delete
@@ -2349,6 +2904,7 @@ export default function AdminPage() {
               { id: 'team',     label: 'Team' },
               ...(event.seating_enabled ? [{ id: 'seating', label: 'Seating' }] : []),
               ...(event.menu_enabled    ? [{ id: 'menu',    label: 'Menu' }]    : []),
+              { id: 'templates', label: 'Messages' },
             ]}
           />
 
@@ -2394,22 +2950,37 @@ export default function AdminPage() {
 
           {/* Guest management */}
           <div className="bg-white dark:bg-slate-800 dark:border dark:border-slate-700/60 rounded-xl shadow p-6 space-y-4">
-            <h2 className="font-semibold text-base dark:text-white">Guest Management</h2>
-
-            {/* Import row */}
-            <div className="flex flex-wrap gap-3 items-center">
+            <div className="flex items-center justify-between flex-wrap gap-2">
               <div>
+                <h2 className="font-semibold text-base dark:text-white">Import guests</h2>
+                <p className="text-xs text-gray-400 dark:text-slate-500 mt-0.5">Start with a spreadsheet template, upload a file, or connect a shared sheet.</p>
+              </div>
+            </div>
+
+            {/* Upload + Google Sheets row */}
+            <div className="flex flex-wrap gap-3 items-center">
+              <div className="flex items-center gap-2">
                 <input type="file" accept=".csv,.xlsx,.xls" ref={fileRef} onChange={handleUpload} className="hidden" />
                 <button onClick={() => fileRef.current.click()} disabled={loading}
                   className="bg-white dark:bg-slate-700 border border-gray-300 dark:border-slate-700 text-gray-700 dark:text-slate-200 px-4 py-2 rounded-lg text-sm font-medium hover:bg-gray-50 dark:hover:bg-slate-700 disabled:opacity-50">
-                  Upload CSV
+                  Upload guest file
                 </button>
-                <span className="text-xs text-gray-400 dark:text-slate-500 ml-2">first_name, last_name, email, phone</span>
+                <span className="text-xs text-gray-400 dark:text-slate-500">first_name, last_name, email, phone, table_group</span>
               </div>
               <button onClick={() => setShowUrlInput((v) => !v)} disabled={loading}
                 className="bg-white dark:bg-slate-700 border border-gray-300 dark:border-slate-700 text-gray-700 dark:text-slate-200 px-4 py-2 rounded-lg text-sm font-medium hover:bg-gray-50 dark:hover:bg-slate-700 disabled:opacity-50">
-                📋 Import from Google Sheets / Excel
+                Import from Google Sheets or Excel
               </button>
+            </div>
+
+            {/* Download template row */}
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => api.downloadImportTemplate(selectedId).catch((e) => alert(e.message))}
+                className="bg-white dark:bg-slate-700 border border-gray-300 dark:border-slate-700 text-gray-700 dark:text-slate-200 px-4 py-2 rounded-lg text-sm font-medium hover:bg-gray-50 dark:hover:bg-slate-700">
+                Download template
+              </button>
+              <span className="text-xs text-gray-400 dark:text-slate-500">CSV</span>
             </div>
 
             {/* Spreadsheet URL input */}
@@ -2463,12 +3034,17 @@ export default function AdminPage() {
 
           {activeTab === 'team' && <TeamPanel eventId={selectedId} />}
 
-          {activeTab === 'seating' && event.seating_enabled && <SeatingPanel eventId={selectedId} />}
+          {activeTab === 'seating' && event.seating_enabled && <>
+            <SeatingPanel eventId={selectedId} />
+            <TableGroupsPanel eventId={selectedId} />
+          </>}
 
           {activeTab === 'menu' && event.menu_enabled && <>
             <MenuPanel eventId={selectedId} />
             <MenuDashboard eventId={selectedId} />
           </>}
+
+          {activeTab === 'templates' && <MessageTemplatesPanel eventId={selectedId} />}
 
           {/* Guest list */}
           {activeTab === 'guests' && guests.length === 0 && (
@@ -2496,6 +3072,24 @@ export default function AdminPage() {
                       className="bg-indigo-600 text-white px-3 py-1.5 rounded-lg text-xs font-semibold hover:bg-indigo-700 disabled:opacity-50">
                       Send invite to selected
                     </button>
+                    {event?.seating_enabled && tableGroups.length > 0 && (
+                      <div className="flex items-center gap-1">
+                        <select
+                          defaultValue=""
+                          onChange={(e) => { if (e.target.value) handleBulkAssignGroup(e.target.value) }}
+                          disabled={loading}
+                          className="border border-indigo-300 dark:border-indigo-700 rounded-lg px-2 py-1.5 text-xs bg-white dark:bg-slate-800 text-gray-700 dark:text-slate-200 disabled:opacity-50">
+                          <option value="">Assign to group…</option>
+                          {tableGroups.map((g) => (
+                            <option key={g.id} value={g.id}>{g.name}</option>
+                          ))}
+                        </select>
+                        <button onClick={handleBulkClearGroup} disabled={loading}
+                          className="text-xs text-gray-500 dark:text-slate-400 hover:underline disabled:opacity-40 ml-1">
+                          Clear group
+                        </button>
+                      </div>
+                    )}
                     <button
                       onClick={() => setSelectedGuests(new Set())}
                       className="text-xs text-gray-600 dark:text-slate-300 hover:underline ml-auto">
@@ -2536,6 +3130,9 @@ export default function AdminPage() {
                         <th className="px-4 py-3 text-center">QR</th>
                         <th className="px-4 py-3 text-center">Invited</th>
                         <th className="px-4 py-3 text-center">Admitted</th>
+                        {event?.seating_enabled && tableGroups.length > 0 && (
+                          <th className="px-4 py-3 text-center">Table Group</th>
+                        )}
                         <th className="px-4 py-3 text-center">Actions</th>
                       </tr>
                     </thead>
@@ -2564,6 +3161,15 @@ export default function AdminPage() {
                                 </span>
                               : <Badge on={false} labels={['', 'Pending']} />}
                           </td>
+                          {event?.seating_enabled && tableGroups.length > 0 && (
+                            <td className="px-4 py-3 text-center">
+                              {g.table_group_id ? (
+                                <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-indigo-100 dark:bg-indigo-900/40 text-indigo-700 dark:text-indigo-300">
+                                  {g.table_group_name || tableGroups.find((tg) => tg.id === g.table_group_id)?.name || '—'}
+                                </span>
+                              ) : <span className="text-gray-400 text-xs">—</span>}
+                            </td>
+                          )}
                           <td className="px-4 py-3 text-center">
                             <div className="flex items-center justify-center gap-3">
                               {g.qr_generated_at && (
@@ -2643,6 +3249,7 @@ export default function AdminPage() {
       {editingGuest && (
         <EditGuestModal
           guest={editingGuest}
+          tableGroups={tableGroups}
           loading={loading}
           onSave={(data) => handleUpdateGuest(editingGuest.id, data)}
           onClose={() => setEditingGuest(null)}

@@ -35,6 +35,7 @@ export const api = {
   createEvent:  (data)       => req('POST',   '/events', data),
   updateEvent:  (id, data)   => req('PUT',    `/events/${id}`, data),
   deleteEvent:  (id)         => req('DELETE', `/events/${id}`),
+  resetEventData:(id, data)  => req('POST',   `/events/${id}/reset-data`, data),
   changeStatus: (id, status) => req('PATCH',  `/events/${id}/status`, { status }),
   updateSource: (id, data)   => req('PUT',    `/events/${id}/source`, data),
   syncNow:      (id)         => req('POST',   `/events/${id}/sync-now`),
@@ -56,6 +57,37 @@ export const api = {
   deleteGuest:         (eventId, guestId)  => req('DELETE', `/events/${eventId}/guests/${guestId}`),
   resendInvite:        (eventId, guestId)  => req('POST',   `/events/${eventId}/guests/${guestId}/resend-invite`),
   guestQrUrl:          (eventId, guestId)  => `${BASE}/events/${eventId}/guests/${guestId}/qr.png`,
+  downloadImportTemplate: async (eventId) => {
+    const token = await getToken()
+    const res = await fetch(`${BASE}/events/${eventId}/guests/import-template`, {
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
+    })
+    if (!res.ok) throw new Error('Download failed')
+    const blob = await res.blob()
+    const cd = res.headers.get('Content-Disposition') || ''
+    const match = cd.match(/filename="?([^"]+)"?/)
+    const filename = match ? match[1] : 'import-template.csv'
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url; a.download = filename; a.click()
+    URL.revokeObjectURL(url)
+  },
+  exportGuests: async (eventId) => {
+    const token = await getToken()
+    const res = await fetch(`${BASE}/events/${eventId}/guests/export`, {
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
+    })
+    if (!res.ok) throw new Error('Export failed')
+    const blob = await res.blob()
+    const cd = res.headers.get('Content-Disposition') || ''
+    const match = cd.match(/filename="?([^"]+)"?/)
+    const filename = match ? match[1] : 'guests.csv'
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url; a.download = filename; a.click()
+    URL.revokeObjectURL(url)
+  },
+
   uploadGuests: (eventId, file) => {
     const fd = new FormData()
     fd.append('file', file)
@@ -83,6 +115,14 @@ export const api = {
   assignSeat:              (eventId, guestId, body)    => req('PATCH',  `/events/${eventId}/guests/${guestId}/seat`, body),
   markMealServed:          (eventId, guestId)          => req('PATCH',  `/events/${eventId}/guests/${guestId}/meal-served`),
   updateMemberPermissions: (eventId, userId, body)     => req('PATCH',  `/events/${eventId}/members/${userId}/permissions`, body),
+
+  // Table Groups
+  listTableGroups:       (eventId)                      => req('GET',    `/events/${eventId}/table-groups`),
+  createTableGroup:      (eventId, data)                => req('POST',   `/events/${eventId}/table-groups`, data),
+  updateTableGroup:      (eventId, groupId, data)       => req('PUT',    `/events/${eventId}/table-groups/${groupId}`, data),
+  deleteTableGroup:      (eventId, groupId)             => req('DELETE', `/events/${eventId}/table-groups/${groupId}`),
+  assignGuestsToGroup:   (eventId, groupId, guestIds)   => req('POST',   `/events/${eventId}/table-groups/${groupId}/assign-guests`, { guest_ids: guestIds }),
+  clearGuestsFromGroup:  (eventId, groupId, guestIds)   => req('DELETE', `/events/${eventId}/table-groups/${groupId}/assign-guests`, { guest_ids: guestIds }),
 
   // Menu (admin)
   listMenuCategories: (eventId)              => req('GET',    `/events/${eventId}/menu-categories`),
@@ -139,4 +179,12 @@ export const api = {
   // Users
   listUsers:      ()             => req('GET', '/auth/users'),
   updateUserRole: (userId, role) => req('PUT', `/auth/users/${userId}/role?role=${role}`),
+
+  // Message Templates
+  listTemplates:    (eventId)                   => req('GET',    `/templates${eventId ? `?event_id=${eventId}` : ''}`),
+  getTemplate:      (key, eventId)              => req('GET',    `/templates/${key}${eventId ? `?event_id=${eventId}` : ''}`),
+  upsertTemplate:   (key, data, eventId)        => req('PUT',    `/templates/${key}${eventId ? `?event_id=${eventId}` : ''}`, data),
+  resetTemplate:    (key, eventId)              => req('DELETE', `/templates/${key}${eventId ? `?event_id=${eventId}` : ''}`),
+  previewTemplate:  (data)                      => req('POST',   `/templates/preview`, data),
+  testSendTemplate: (data)                      => req('POST',   `/templates/test-send`, data),
 }

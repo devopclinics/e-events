@@ -603,7 +603,7 @@ export default function ScanAutoPage() {
             <StatusBadge status={status} />
           </div>
           <div className="mt-8">
-            <p className="text-teal-200 text-xs uppercase font-semibold mb-1">You're invited to</p>
+            <p className="text-teal-200 text-xs uppercase font-semibold mb-1">QR CODE FOR </p>
             <h1 className="text-white text-2xl font-bold leading-tight">{event?.name || 'Event'}</h1>
             <p className="text-slate-300 text-sm mt-1 italic">{event?.couples_name}</p>
             {eventDate && (

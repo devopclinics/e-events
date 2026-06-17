@@ -39,6 +39,55 @@ SCHEMA_PATCHES: list[str] = [
     # Original table created the column NOT NULL; auto-patch only adds columns,
     # so this constraint-drop has to live here.
     "ALTER TABLE guest_menu_choices ALTER COLUMN menu_item_id DROP NOT NULL",
+    # Prevent duplicate table names within the same event.
+    # First rename any pre-existing duplicates (e.g. "Table 1" → "Table 1 (2)")
+    # so the unique constraint can be created without a UniqueViolationError.
+    """
+    WITH dups AS (
+        SELECT id,
+               name || ' (' || ROW_NUMBER() OVER (PARTITION BY event_id, name ORDER BY id) || ')' AS new_name,
+               ROW_NUMBER() OVER (PARTITION BY event_id, name ORDER BY id) AS rn
+        FROM seating_tables
+    )
+    UPDATE seating_tables
+    SET name = dups.new_name
+    FROM dups
+    WHERE seating_tables.id = dups.id
+      AND dups.rn > 1;
+    """,
+    """
+    DO $$ BEGIN
+        IF NOT EXISTS (
+            SELECT 1 FROM pg_constraint WHERE conname = 'uq_seating_table_event_name'
+        ) THEN
+            ALTER TABLE seating_tables ADD CONSTRAINT uq_seating_table_event_name UNIQUE (event_id, name);
+        END IF;
+    END $$;
+    """,
+    # ── Table Groups ──────────────────────────────────────────────────────────
+    # table_groups and table_group_tables are new tables — create_all handles
+    # them. The guest.table_group_id FK is auto-patched by the ORM diff.
+    # Unique constraint on table_groups.tag per event.
+    """
+    DO $$ BEGIN
+        IF NOT EXISTS (
+            SELECT 1 FROM pg_constraint WHERE conname = 'uq_table_group_event_tag'
+        ) THEN
+            ALTER TABLE table_groups ADD CONSTRAINT uq_table_group_event_tag UNIQUE (event_id, tag);
+        END IF;
+    END $$;
+    """,
+    # ── Message Templates ─────────────────────────────────────────────────────
+    # message_templates is a new table — create_all handles it.
+    """
+    DO $$ BEGIN
+        IF NOT EXISTS (
+            SELECT 1 FROM pg_constraint WHERE conname = 'uq_msg_template'
+        ) THEN
+            ALTER TABLE message_templates ADD CONSTRAINT uq_msg_template UNIQUE (scope, event_id, template_key);
+        END IF;
+    END $$;
+    """,
 ]
 
 

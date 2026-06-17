@@ -15,8 +15,14 @@ class Settings(BaseSettings):
     smtp_tls: bool = True
     email_from: str = "noreply@event.com"
 
-    # Messaging provider switch: 'bird' | 'twilio' | '' (off)
+    # Messaging provider switch: 'bird' | 'twilio' | 'sns' | '' (off)
     messaging_provider: str = ""
+
+    # AWS SNS (SMS only — no WhatsApp)
+    aws_access_key_id: str = ""
+    aws_secret_access_key: str = ""
+    aws_region: str = "us-east-1"
+    aws_sns_sender_id: str = ""   # Optional alphanumeric sender ID (e.g. "EventQR")
 
     twilio_account_sid: str = ""
     twilio_auth_token: str = ""

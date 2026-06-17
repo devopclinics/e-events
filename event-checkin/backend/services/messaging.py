@@ -29,7 +29,7 @@ async def send_invite_sms(*, phone: str, first_name: str, event_name: str, ticke
     if not _channel_ready("sms", phone):
         return
     date_str = event_date.strftime("%a %d %b") if event_date else ""
-    body = f"Hi {first_name}! You're invited to {event_name}" + (f" on {date_str}" if date_str else "") + f". Your ticket: {ticket_url}"
+    body = f"Hi {first_name}! QR Code For {event_name}" + (f" on {date_str}" if date_str else "") + f". Your ticket: {ticket_url}"
     await _send_sms(phone, body)
 
 
@@ -66,6 +66,20 @@ async def send_admission_whatsapp(*, phone: str, first_name: str, event_name: st
     )
 
 
+async def send_template_sms(*, phone: str, body: str) -> None:
+    """Send SMS using custom template body (already rendered with {{placeholders}})."""
+    if not _channel_ready("sms", phone):
+        return
+    await _send_sms(phone, body)
+
+
+async def send_template_whatsapp(*, phone: str, body: str) -> None:
+    """Send WhatsApp using custom template body (already rendered with {{placeholders}})."""
+    if not _channel_ready("whatsapp", phone):
+        return
+    await _send_whatsapp_text(phone, body)
+
+
 # ── internal: routing ─────────────────────────────────────────────────────────
 
 def _channel_ready(channel: str, phone: str | None) -> bool:
@@ -92,7 +106,35 @@ def _channel_ready(channel: str, phone: str | None) -> bool:
         if channel == "whatsapp" and not settings.twilio_whatsapp_from:
             return False
         return True
+    if provider == "sns":
+        if channel == "whatsapp":
+            return False  # SNS does not support WhatsApp
+        if not settings.aws_access_key_id or not settings.aws_secret_access_key:
+            logger.warning("SNS configured but missing AWS credentials — skipping %s", channel)
+            return False
+        return True
     return False  # provider unset → silent no-op
+
+
+# ── internal: AWS SNS ─────────────────────────────────────────────────────────
+
+def _sns_send_sync(phone: str, body: str) -> None:
+    try:
+        import boto3
+        client = boto3.client(
+            "sns",
+            region_name=settings.aws_region,
+            aws_access_key_id=settings.aws_access_key_id,
+            aws_secret_access_key=settings.aws_secret_access_key,
+        )
+        attrs: dict = {
+            "AWS.SNS.SMS.SMSType": {"DataType": "String", "StringValue": "Transactional"},
+        }
+        if settings.aws_sns_sender_id:
+            attrs["AWS.SNS.SMS.SenderID"] = {"DataType": "String", "StringValue": settings.aws_sns_sender_id}
+        client.publish(PhoneNumber=phone, Message=body, MessageAttributes=attrs)
+    except Exception:
+        logger.exception("AWS SNS send failed (to=%s)", phone)
 
 
 # ── internal: Bird ────────────────────────────────────────────────────────────
@@ -138,6 +180,8 @@ async def _send_sms(phone: str, body: str) -> None:
         })
     elif provider == "twilio":
         await asyncio.to_thread(_twilio_send_sync, settings.twilio_from_number, phone, body=body)
+    elif provider == "sns":
+        await asyncio.to_thread(_sns_send_sync, phone, body)
 
 
 async def _send_whatsapp_template(*, phone: str, kind: str, params: list[str]) -> None:
@@ -176,3 +220,17 @@ async def _send_whatsapp_template(*, phone: str, kind: str, params: list[str]) -
         else:
             body = " | ".join(params)  # sandbox fallback for testing
             await asyncio.to_thread(_twilio_send_sync, settings.twilio_whatsapp_from, to_addr, body=body)
+
+
+async def _send_whatsapp_text(phone: str, body: str) -> None:
+    """Send WhatsApp using plain text body (for custom templates)."""
+    provider = (settings.messaging_provider or "").lower()
+    if provider == "bird":
+        await _bird_post(settings.bird_whatsapp_channel_id, {
+            "receiver": _bird_recipient(phone),
+            "body": {"type": "text", "text": {"text": body}},
+        })
+    elif provider == "twilio":
+        to_addr = phone if phone.startswith("whatsapp:") else f"whatsapp:{phone}"
+        await asyncio.to_thread(_twilio_send_sync, settings.twilio_whatsapp_from, to_addr, body=body)
+

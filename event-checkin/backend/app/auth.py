@@ -19,9 +19,15 @@ def _ensure_firebase():
         return
     if not settings.firebase_credentials:
         raise HTTPException(503, "Firebase not configured — set FIREBASE_CREDENTIALS in .env")
-    cred_data = json.loads(settings.firebase_credentials)
-    cred = credentials.Certificate(cred_data)
-    _firebase_app = firebase_admin.initialize_app(cred)
+    try:
+        cred_data = json.loads(settings.firebase_credentials)
+        cred = credentials.Certificate(cred_data)
+        _firebase_app = firebase_admin.initialize_app(cred)
+    except ValueError:
+        # App already initialized (e.g. concurrent startup requests) — grab it.
+        _firebase_app = firebase_admin.get_app()
+    except Exception as exc:
+        raise HTTPException(503, f"Firebase initialization failed: {exc}")
 
 
 bearer = HTTPBearer(auto_error=False)
@@ -66,12 +72,18 @@ async def get_current_user(
 
 
 async def require_admin(user: User = Depends(get_current_user)) -> User:
-    if user.role != "admin":
+    if user.role not in ("admin", "super_admin"):
         raise HTTPException(403, "Admin access required")
     return user
 
 
+async def require_super_admin(user: User = Depends(get_current_user)) -> User:
+    if user.role != "super_admin":
+        raise HTTPException(403, "Super admin access required")
+    return user
+
+
 async def require_official(user: User = Depends(get_current_user)) -> User:
-    if user.role not in ("admin", "official"):
+    if user.role not in ("admin", "super_admin", "official"):
         raise HTTPException(403, "Access denied")
     return user

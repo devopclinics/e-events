@@ -2,13 +2,14 @@ from datetime import datetime
 from fastapi import APIRouter, Depends, BackgroundTasks, HTTPException
 from fastapi.responses import Response
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select
+from sqlalchemy import select, func
 from ..database import get_db
-from ..models import Guest, Event, EventUser, User, SeatingTable, MenuCategory, MenuItem, GuestMenuChoice, MenuCombination, MenuCombinationItem
+from ..models import Guest, Event, EventUser, User, SeatingTable, MenuCategory, MenuItem, GuestMenuChoice, MenuCombination, MenuCombinationItem, TableGroup, TableGroupTable, MessageTemplate
 from ..schemas import ScanResult, GuestOut, TicketView, EventBrief, MenuCategoryOut, MenuItemOut, MenuCombinationOut, MenuCombinationItemOut, GuestMenuSubmit, PartnerInfo, PairRequest
 from ..auth import require_official
-from services.email_service import send_admission_email
+from services.email_service import send_admission_email, send_template_email
 from services import messaging
+from services import template_service as _ts
 from services.qr_service import generate_qr_bytes
 from . import broadcast
 from .seating import assign_next_seat
@@ -82,6 +83,88 @@ async def _load_menu(event_id: str, guest_id: str, db: AsyncSession):
     return menu_out, choices
 
 
+async def _dispatch_admission_message(background_tasks: BackgroundTasks, event: Event, guest: Guest, table_name: str | None, db: AsyncSession) -> None:
+    """Fan out admission confirmation across enabled channels for this event.
+    Uses the organizer's custom message template when one has been saved;
+    falls back to the hardcoded functions otherwise."""
+    # Resolve the admission_confirmation template and check for an event-level override.
+    resolved = await _ts.resolve_template("admission_confirmation", event.id, db)
+
+    ticket_url = f"{event.checkin_base_url.rstrip('/')}/scan/{guest.qr_token}" if event.checkin_base_url else ""
+
+    ctx = {
+        "guest_first_name": guest.first_name,
+        "guest_last_name":  guest.last_name,
+        "guest_full_name":  f"{guest.first_name} {guest.last_name}",
+        "event_name":       event.name,
+        "event_date":       event.event_date.strftime("%A, %d %B %Y") if event.event_date else "",
+        "check_in_time":    local_hhmm(guest.admitted_at) if guest.admitted_at else "",
+        "organizer_name":   event.couples_name or event.name,
+        "ticket_link":      ticket_url,
+        # Preserve a marker that email_service can swap with inline CID QR HTML.
+        "qr_code":          "{{qr_code_image}}",
+        "table_name":       table_name or "",
+        "seat_number":      guest.seat_number or "",
+        "table_group":      "",
+    }
+
+    if event.notify_email:
+        if resolved.get("email_body"):
+            rendered = _ts.render_template(resolved, ctx)
+            background_tasks.add_task(
+                send_template_email,
+                guest.email,
+                rendered.get("subject") or f"Welcome to {event.name}!",
+                rendered.get("email_body") or "",
+                guest.qr_token,
+                event.checkin_base_url,
+            )
+        else:
+            guest_data = {
+                "first_name": guest.first_name,
+                "last_name":  guest.last_name,
+                "email":      guest.email,
+                "phone":      guest.phone,
+                "admitted_at": guest.admitted_at,
+                "table_name": table_name,
+                "seat_number": guest.seat_number,
+            }
+            background_tasks.add_task(send_admission_email, guest_data)
+
+    if event.notify_sms and guest.phone and guest.sms_consent:
+        if resolved.get("sms_body"):
+            rendered = _ts.render_template(resolved, ctx)
+            background_tasks.add_task(
+                messaging.send_template_sms,
+                phone=guest.phone,
+                body=rendered.get("sms_body") or "",
+            )
+        else:
+            background_tasks.add_task(
+                messaging.send_admission_sms,
+                phone=guest.phone, first_name=guest.first_name,
+                event_name=event.name,
+                admitted_at=guest.admitted_at,
+                table_name=table_name, seat_number=guest.seat_number,
+            )
+
+    if event.notify_whatsapp and guest.phone and guest.whatsapp_consent:
+        if resolved.get("whatsapp_body"):
+            rendered = _ts.render_template(resolved, ctx)
+            background_tasks.add_task(
+                messaging.send_template_whatsapp,
+                phone=guest.phone,
+                body=rendered.get("whatsapp_body") or "",
+            )
+        else:
+            background_tasks.add_task(
+                messaging.send_admission_whatsapp,
+                phone=guest.phone, first_name=guest.first_name,
+                event_name=event.name,
+                table_name=table_name, seat_number=guest.seat_number,
+            )
+
+
 @router.get("/{qr_token}/ticket", response_model=TicketView)
 async def view_ticket(qr_token: str, db: AsyncSession = Depends(get_db)):
     """Public — guest views their digital ticket."""
@@ -122,12 +205,16 @@ async def view_ticket(qr_token: str, db: AsyncSession = Depends(get_db)):
                 email=p.email, admitted=p.admitted,
             )
 
+    # Only show table/seat after check-in (when admitted).
+    visible_table_name = table_name if guest.admitted else None
+    visible_seat_number = guest.seat_number if guest.admitted else None
+
     return TicketView(
         status="admitted" if guest.admitted else "valid",
         guest=GuestOut.model_validate(guest),
         event=event_brief,
-        table_name=table_name,
-        seat_number=guest.seat_number,
+        table_name=visible_table_name,
+        seat_number=visible_seat_number,
         menu_locked=menu_locked,
         menu_categories=menu_categories,
         guest_choices=guest_choices,
@@ -187,8 +274,27 @@ async def scan_qr(
 
     # First-come-first-served seat assignment if this guest has no seat yet.
     # Honors couple pairings (see assign_next_seat in seating.py).
+    # assign_next_seat already respects table_group_id.
     if event and event.seating_enabled and not guest.table_id:
-        await assign_next_seat(guest, db)
+        seat_error = await assign_next_seat(guest, db)
+        if seat_error:
+            return ScanResult(status="no_seat_available", message=seat_error)
+
+    # If guest now has a table, validate it's inside their assigned group.
+    if guest.table_id and guest.table_group_id:
+        membership = await db.scalar(
+            select(TableGroupTable).where(
+                TableGroupTable.table_group_id == guest.table_group_id,
+                TableGroupTable.table_id == guest.table_id,
+            )
+        )
+        if not membership:
+            group = await db.get(TableGroup, guest.table_group_id)
+            group_name = group.name if group else "their assigned group"
+            return ScanResult(
+                status="group_mismatch",
+                message=f"Guest is assigned to '{group_name}' and cannot be checked into this table.",
+            )
 
     # Resolve table name (after possible assignment) for the result card + email.
     table_name = None
@@ -232,23 +338,10 @@ async def scan_qr(
         "ticket_url": ticket_url,
         "menu_enabled": bool(event and event.menu_enabled),
     }
-    if event.notify_email:
-        background_tasks.add_task(send_admission_email, guest_data)
-    if event.notify_sms and guest.phone and guest.sms_consent:
-        background_tasks.add_task(
-            messaging.send_admission_sms,
-            phone=guest.phone, first_name=guest.first_name,
-            event_name=event.name if event else "the event",
-            admitted_at=guest.admitted_at,
-            table_name=table_name, seat_number=guest.seat_number,
-        )
-    if event.notify_whatsapp and guest.phone and guest.whatsapp_consent:
-        background_tasks.add_task(
-            messaging.send_admission_whatsapp,
-            phone=guest.phone, first_name=guest.first_name,
-            event_name=event.name if event else "the event",
-            table_name=table_name, seat_number=guest.seat_number,
-        )
+    
+    # Dispatch admission confirmation using custom templates (if defined at event level).
+    if event:
+        await _dispatch_admission_message(background_tasks, event, guest, table_name, db)
 
     broadcast(guest.event_id, {
         "type": "admitted",

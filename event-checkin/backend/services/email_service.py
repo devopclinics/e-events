@@ -1,5 +1,6 @@
 import html as _html
 import logging
+import re
 from datetime import datetime
 from email.mime.image import MIMEImage
 from email.mime.multipart import MIMEMultipart
@@ -113,6 +114,111 @@ async def send_invite_email(
     """
 
     msg.attach(MIMEText(body, "html"))
+    img_part = MIMEImage(qr_bytes)
+    img_part.add_header("Content-ID", "<qrcode>")
+    img_part.add_header("Content-Disposition", "inline", filename="invite-qr.png")
+    msg.attach(img_part)
+
+    await _send(msg)
+
+
+async def send_plain_email(to: str, subject: str, body: str):
+    """Send a plain-text email with a custom subject and body.
+    Used by the message template test-send feature.
+    """
+    msg = MIMEMultipart("alternative")
+    msg["Subject"] = subject or "(no subject)"
+    msg["From"] = settings.email_from
+    msg["To"] = to
+    # Plain text part
+    msg.attach(MIMEText(body or "", "plain", "utf-8"))
+    # Minimal HTML part — wraps body in <pre> so line-breaks are preserved.
+    safe_body = _html.escape(body or "")
+    html_body = (
+        '<html><body style="font-family:sans-serif;font-size:14px;color:#111;">'
+        f'<pre style="white-space:pre-wrap;font-family:inherit">{safe_body}</pre>'
+        "</body></html>"
+    )
+    msg.attach(MIMEText(html_body, "html", "utf-8"))
+    await _send(msg)
+
+
+async def send_template_email(
+    to: str,
+    subject: str,
+    body: str,
+    qr_token: str,
+    checkin_base_url: str,
+):
+    """Send a customised invite email that embeds the guest's QR code inline.
+
+    The organizer's body text is rendered into a clean HTML email.
+    Line breaks are preserved.  The QR code image is attached inline (CID)
+    and a fallback ticket URL is appended below the body.
+    """
+    qr_bytes = generate_qr_bytes(qr_token, checkin_base_url)
+    ticket_url = f"{checkin_base_url.rstrip('/')}/scan/{qr_token}"
+
+    body_text = body or ""
+    looks_like_html = bool(re.search(r"<\s*[a-zA-Z][^>]*>", body_text))
+
+    # If template body already contains HTML, preserve it.
+    # Otherwise treat it as plain text and convert line breaks for HTML rendering.
+    qr_image_html = (
+        '<img src="cid:qrcode" alt="Your QR Code" '
+        'style="width:172px;height:172px;display:block;margin:0 auto;border-radius:10px;" />'
+    )
+
+    qr_block = f"""
+    <div style="text-align:center;margin:22px auto 16px;">
+      {qr_image_html}
+    </div>
+    <p style="text-align:center;margin:0 0 14px 0;">
+      <a href="{ticket_url}"
+         style="color:#0f766e;font-size:14px;font-weight:600;text-decoration:none;">
+        View your ticket online ->
+      </a>
+    </p>
+    """
+
+    if looks_like_html:
+        body_html = body_text.replace("{{qr_code_image}}", qr_image_html)
+        qr_inline = "{{qr_code_image}}" in body_text
+        plain_body = re.sub(r"<[^>]+>", "", body_text)
+        plain_body = _html.unescape(plain_body).strip()
+        if qr_inline:
+            html = body_html
+        elif re.search(r"</body>", body_html, flags=re.IGNORECASE):
+            html = re.sub(r"</body>", qr_block + "</body>", body_html, count=1, flags=re.IGNORECASE)
+        else:
+            html = (
+                '<html><body style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;padding:18px;color:#111;">'
+                + body_html
+                + qr_block
+                + "</body></html>"
+            )
+    else:
+        plain_body = body_text
+        html_body = _html.escape(body_text).replace("\n", "<br>")
+        html = f"""
+        <html>
+        <body style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;padding:18px;color:#111;">
+          <div style="white-space:pre-wrap;font-size:15px;line-height:1.6;">{html_body}</div>
+          {qr_block}
+        </body>
+        </html>
+        """
+
+    msg = MIMEMultipart("related")
+    msg["Subject"] = subject or "(no subject)"
+    msg["From"] = settings.email_from
+    msg["To"] = to
+
+    alt = MIMEMultipart("alternative")
+    alt.attach(MIMEText(plain_body or "", "plain", "utf-8"))
+    alt.attach(MIMEText(html, "html", "utf-8"))
+    msg.attach(alt)
+
     img_part = MIMEImage(qr_bytes)
     img_part.add_header("Content-ID", "<qrcode>")
     img_part.add_header("Content-Disposition", "inline", filename="invite-qr.png")

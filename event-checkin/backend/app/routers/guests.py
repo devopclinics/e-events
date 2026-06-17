@@ -8,11 +8,11 @@ from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Backgro
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 from ..database import get_db
-from ..models import Event, Guest, User
+from ..models import Event, Guest, User, TableGroup
 from ..schemas import GuestOut, GuestCreate, GuestUpdate
 from ..auth import require_admin
 from services.qr_service import generate_qr_bytes
-from services.email_service import send_invite_email
+from services.email_service import send_invite_email, send_plain_email, send_template_email
 from services import messaging
 
 router = APIRouter()
@@ -164,7 +164,19 @@ async def _process_csv(text: str, event_id: str, db: AsyncSession):
             "Expected header: first_name,last_name,email,phone"
         )
 
-    added = skipped = invalid_phones = backfilled_phones = 0
+    # Detect table-group column (any of the supported aliases)
+    _TG_ALIASES = {'table_group', 'table_tag', 'assigned_table_tag', 'assigned_table_group'}
+    tg_col = next((f for f in (reader.fieldnames or []) if (f or '').strip().lower() in _TG_ALIASES), None)
+
+    # Pre-load all table groups for this event keyed by normalised tag.
+    tg_by_tag: dict[str, str] = {}  # tag → group.id
+    if tg_col:
+        tg_rows = (await db.execute(
+            select(TableGroup).where(TableGroup.event_id == event_id)
+        )).scalars().all()
+        tg_by_tag = {g.tag: g.id for g in tg_rows}
+
+    added = skipped = invalid_phones = backfilled_phones = tg_unknown = 0
     for row in reader:
         email = row.get("email", "").strip().lower()
         first = row.get("first_name", "").strip()
@@ -180,6 +192,16 @@ async def _process_csv(text: str, event_id: str, db: AsyncSession):
             if normalized_phone is None:
                 invalid_phones += 1
 
+        # Resolve table group ID from import column.
+        table_group_id: str | None = None
+        if tg_col:
+            raw_tag = (row.get(tg_col) or "").strip().lower().replace(" ", "_")
+            if raw_tag:
+                if raw_tag in tg_by_tag:
+                    table_group_id = tg_by_tag[raw_tag]
+                else:
+                    tg_unknown += 1
+
         # Deduplicate on (first_name + last_name + email) — same person twice
         existing = (await db.execute(
             select(Guest).where(
@@ -190,12 +212,19 @@ async def _process_csv(text: str, event_id: str, db: AsyncSession):
             )
         )).scalar_one_or_none()
         if existing:
-            # Backfill missing fields on re-import — useful when the source spreadsheet
-            # now has a phone number that was blank/invalid on the first import.
+            # Backfill missing fields on re-import.
+            changed = False
             if not existing.phone and normalized_phone:
                 existing.phone = normalized_phone
                 backfilled_phones += 1
-            skipped += 1
+                changed = True
+            if table_group_id and existing.table_group_id != table_group_id:
+                existing.table_group_id = table_group_id
+                changed = True
+            if not changed:
+                skipped += 1
+            else:
+                skipped += 1  # still counts as skipped (not a new row)
             continue
 
         db.add(Guest(
@@ -204,6 +233,7 @@ async def _process_csv(text: str, event_id: str, db: AsyncSession):
             last_name=last,
             email=email,
             phone=normalized_phone,
+            table_group_id=table_group_id,
         ))
         added += 1
 
@@ -214,6 +244,9 @@ async def _process_csv(text: str, event_id: str, db: AsyncSession):
     if invalid_phones:
         result["invalid_phones"] = invalid_phones
         result["phone_note"] = "Phones with invalid format were cleared (must be E.164 e.g. +447911123456)"
+    if tg_unknown:
+        result["unknown_table_groups"] = tg_unknown
+        result["table_group_note"] = "Some table group tags were not found for this event and were ignored"
     return result
 
 
@@ -228,23 +261,63 @@ async def upload_guests(event_id: str, file: UploadFile = File(...), db: AsyncSe
     return await _process_csv(text, event_id, db)
 
 
-def _dispatch_invite(background_tasks: BackgroundTasks, event: Event, guest: Guest) -> None:
-    """Fan out an invite across enabled channels for this event. Channel modules
-    no-op silently when contact info is missing or creds aren't configured."""
+async def _dispatch_invite(background_tasks: BackgroundTasks, event: Event, guest: Guest, db) -> None:
+    """Fan out an invite across enabled channels for this event.
+    Uses the organizer's custom message template when one has been saved;
+    falls back to the rich HTML email with embedded QR code otherwise."""
+    from services import template_service as _ts
+    from ..models import MessageTemplate as _MT
+    from sqlalchemy import func as _func
+
     ticket_url = f"{event.checkin_base_url.rstrip('/')}/scan/{guest.qr_token}"
+    event_date_str = event.event_date.strftime("%A, %d %B %Y") if event.event_date else ""
+
+    # Resolve the invite_email template and check for an event-level override.
+    resolved = await _ts.resolve_template("invite_email", event.id, db)
+    has_custom = bool(await db.scalar(
+        select(_func.count(_MT.id)).where(
+            _MT.template_key == "invite_email",
+            _MT.scope == "event",
+            _MT.event_id == event.id,
+        )
+    ))
 
     if event.notify_email:
-        guest_data = {
-            "first_name": guest.first_name,
-            "last_name":  guest.last_name,
-            "email":      guest.email,
-            "qr_token":   guest.qr_token,
-        }
-        background_tasks.add_task(
-            send_invite_email,
-            guest_data, event.name, event.couples_name, event.checkin_base_url, event.event_date,
-            event.seating_enabled, event.menu_enabled,
-        )
+        if has_custom and resolved.get("email_body"):
+            ctx = {
+                "guest_first_name": guest.first_name,
+                "guest_last_name":  guest.last_name,
+                "guest_full_name":  f"{guest.first_name} {guest.last_name}",
+                "event_name":       event.name,
+                "event_date":       event_date_str,
+                "organizer_name":   event.couples_name or event.name,
+                "ticket_link":      ticket_url,
+                "rsvp_link":        ticket_url,
+                "table_name":       "",
+                "seat_number":      "",
+                "table_group":      "",
+            }
+            rendered = _ts.render_template(resolved, ctx)
+            background_tasks.add_task(
+                send_template_email,
+                guest.email,
+                rendered.get("subject") or f"Your Invitation — {event.name}",
+                rendered.get("email_body") or "",
+                guest.qr_token,
+                event.checkin_base_url,
+            )
+        else:
+            guest_data = {
+                "first_name": guest.first_name,
+                "last_name":  guest.last_name,
+                "email":      guest.email,
+                "qr_token":   guest.qr_token,
+            }
+            background_tasks.add_task(
+                send_invite_email,
+                guest_data, event.name, event.couples_name, event.checkin_base_url, event.event_date,
+                event.seating_enabled, event.menu_enabled,
+            )
 
     if event.notify_sms and guest.phone and guest.sms_consent:
         background_tasks.add_task(
@@ -317,7 +390,109 @@ async def list_guests(event_id: str, db: AsyncSession = Depends(get_db), _: User
     result = await db.execute(
         select(Guest).where(Guest.event_id == event_id).order_by(Guest.last_name, Guest.first_name)
     )
-    return result.scalars().all()
+    guests = result.scalars().all()
+
+    tg_rows = (await db.execute(
+        select(TableGroup).where(TableGroup.event_id == event_id)
+    )).scalars().all()
+    tg_name_by_id = {tg.id: tg.name for tg in tg_rows}
+
+    out: list[GuestOut] = []
+    for g in guests:
+        payload = GuestOut.model_validate(g)
+        out.append(payload.model_copy(update={"table_group_name": tg_name_by_id.get(g.table_group_id)}))
+    return out
+
+
+@router.get("/{event_id}/guests/import-template")
+async def download_import_template(
+    event_id: str,
+    db: AsyncSession = Depends(get_db),
+    _: User = Depends(require_admin),
+):
+    """Download a blank CSV template pre-populated with all supported columns
+    and any existing table-group tags so the organizer can fill it in."""
+    event = await db.get(Event, event_id)
+    if not event:
+        raise HTTPException(404, "Event not found")
+
+    # Fetch existing table groups so we can embed the valid tags as a comment row.
+    tg_rows = (await db.execute(
+        select(TableGroup).where(TableGroup.event_id == event_id).order_by(TableGroup.name)
+    )).scalars().all()
+
+    out = io.StringIO()
+    writer = csv.writer(out)
+
+    # Header row — all columns the importer understands.
+    writer.writerow(["first_name", "last_name", "email", "phone", "table_group"])
+
+    # One hint row per table group so the organizer knows the valid tag values.
+    if tg_rows:
+        for tg in tg_rows:
+            writer.writerow([
+                f"# Example: {tg.name}",
+                "",
+                "",
+                "",
+                tg.tag,
+            ])
+    else:
+        writer.writerow(["# Example", "Guest", "guest@example.com", "+14155550123", ""])
+
+    filename = f"import-template-{event.name.replace(' ', '_')}.csv"
+    return Response(
+        content=out.getvalue(),
+        media_type="text/csv",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
+
+
+@router.get("/{event_id}/guests/export")
+async def export_guests(
+    event_id: str,
+    db: AsyncSession = Depends(get_db),
+    _: User = Depends(require_admin),
+):
+    """Export the full guest list as CSV including table-group assignments."""
+    event = await db.get(Event, event_id)
+    if not event:
+        raise HTTPException(404, "Event not found")
+
+    guests = (await db.execute(
+        select(Guest).where(Guest.event_id == event_id).order_by(Guest.last_name, Guest.first_name)
+    )).scalars().all()
+
+    # Build a tag lookup for table groups.
+    tg_rows = (await db.execute(
+        select(TableGroup).where(TableGroup.event_id == event_id)
+    )).scalars().all()
+    tg_tag_by_id = {tg.id: tg.tag for tg in tg_rows}
+
+    out = io.StringIO()
+    writer = csv.writer(out)
+    writer.writerow([
+        "first_name", "last_name", "email", "phone",
+        "table_group", "admitted", "qr_generated", "invite_sent",
+    ])
+    for g in guests:
+        writer.writerow([
+            g.first_name,
+            g.last_name,
+            g.email,
+            g.phone or "",
+            tg_tag_by_id.get(g.table_group_id, "") if g.table_group_id else "",
+            "yes" if g.admitted else "no",
+            "yes" if g.qr_generated_at else "no",
+            "yes" if g.invite_sent_at else "no",
+        ])
+
+    filename = f"guests-{event.name.replace(' ', '_')}.csv"
+    return Response(
+        content=out.getvalue(),
+        media_type="text/csv",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
 
 
 @router.patch("/{event_id}/guests/{guest_id}", response_model=GuestOut)
@@ -348,6 +523,17 @@ async def update_guest(
         guest.sms_consent = data.sms_consent
     if data.whatsapp_consent is not None:
         guest.whatsapp_consent = data.whatsapp_consent
+    # Only update table_group_id if the field was explicitly sent in the request.
+    if 'table_group_id' in data.model_fields_set:
+        if data.table_group_id is None:
+            guest.table_group_id = None
+        else:
+            # Validate the group belongs to this event.
+            from ..models import TableGroup as TG
+            tg = await db.get(TG, data.table_group_id)
+            if not tg or tg.event_id != event_id:
+                raise HTTPException(400, "Table group not found for this event")
+            guest.table_group_id = data.table_group_id
     await db.commit()
     await db.refresh(guest)
     return guest
@@ -396,7 +582,7 @@ async def send_invites(event_id: str, background_tasks: BackgroundTasks, db: Asy
     guests = result.scalars().all()
 
     for guest in guests:
-        _dispatch_invite(background_tasks, event, guest)
+        await _dispatch_invite(background_tasks, event, guest, db)
         guest.invite_sent_at = datetime.utcnow()
 
     await db.commit()
@@ -439,7 +625,7 @@ async def send_invites_batch(
         # Auto-generate QR timestamp on first send so it can also be a no-op for never-touched guests.
         if not guest.qr_generated_at:
             guest.qr_generated_at = now
-        _dispatch_invite(background_tasks, event, guest)
+        await _dispatch_invite(background_tasks, event, guest, db)
         guest.invite_sent_at = now
         queued += 1
 
@@ -458,7 +644,7 @@ async def resend_invite(event_id: str, guest_id: str, background_tasks: Backgrou
     if not guest.qr_generated_at:
         raise HTTPException(400, "Generate QR codes first before sending invites")
 
-    _dispatch_invite(background_tasks, event, guest)
+    await _dispatch_invite(background_tasks, event, guest, db)
     guest.invite_sent_at = datetime.utcnow()
     await db.commit()
     return {"ok": True}

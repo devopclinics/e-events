@@ -85,9 +85,24 @@ async def assign_next_seat(guest: Guest, db: AsyncSession) -> None:
     """First-come-first-served seat assignment honoring couple pairings.
 
     Mutates guest.table_id / guest.seat_number / guest.held_seat in-place.
-    Caller is responsible for commit. No-op if guest already has a table.
+    Caller is responsible for commit.
     """
-    if guest.table_id:
+    # Already fully seated (table AND seat) — nothing to do.
+    if guest.table_id and guest.seat_number:
+        return
+
+    # Pre-assigned to a table but no seat yet (e.g. manual table assignment, or
+    # after an event reset that cleared seats) — give them a seat inside that
+    # table instead of leaving them seatless. (ported from prod)
+    if guest.table_id and not guest.seat_number:
+        pre_table = await db.get(SeatingTable, guest.table_id)
+        if pre_table:
+            taken, held = await _seat_state(pre_table, db)
+            seat = _first_free(taken, held, pre_table.capacity, skip_held=True)
+            if seat is None:
+                seat = _first_free(taken, set(), pre_table.capacity, skip_held=False)
+            if seat is not None:
+                guest.seat_number = str(seat)
         return
 
     tables = (await db.execute(

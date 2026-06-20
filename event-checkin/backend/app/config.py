@@ -37,6 +37,12 @@ class Settings(BaseSettings):
     bird_whatsapp_channel_id: str = ""
     bird_whatsapp_invite_template: str = ""           # Bird template name or project ID for invite
     bird_whatsapp_admission_template: str = ""        # Bird template name or project ID for admission
+    bird_mms_channel_id: str = ""                     # Bird MMS channel (image-capable)
+
+    # ClickSend (MMS-capable provider used in prod). Empty = disabled.
+    clicksend_username: str = ""
+    clicksend_api_key: str = ""
+    clicksend_from: str = ""
 
     # ── Billing (Phase 3) — Event Pass checkout. Empty = provider disabled. ──
     # Public base used to build checkout return URLs (defaults to frontend_url).

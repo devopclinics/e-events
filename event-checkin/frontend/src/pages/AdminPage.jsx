@@ -201,6 +201,19 @@ function SelfCheckinPanel({ event, onChanged, onFlash }) {
     setTimeout(() => setCopied(false), 1800)
   }
 
+  async function downloadQR() {
+    if (!code) return
+    try {
+      const resp = await fetch(api.selfCheckinQrUrl(code))
+      const blob = await resp.blob()
+      const a = document.createElement('a')
+      a.href = URL.createObjectURL(blob)
+      a.download = `self-checkin-qr-${code}.png`
+      document.body.appendChild(a); a.click(); a.remove()
+      URL.revokeObjectURL(a.href)
+    } catch (e) { onFlash?.(e.message, true) }
+  }
+
   return (
     <div className="border-t dark:border-slate-700 pt-5 space-y-4">
       <div className="flex items-center justify-between gap-3 flex-wrap">
@@ -234,10 +247,16 @@ function SelfCheckinPanel({ event, onChanged, onFlash }) {
               </button>
             </div>
           </div>
-          <a href={api.selfCheckinQrUrl(code)} target="_blank" rel="noopener noreferrer"
-            className="justify-self-center rounded-lg bg-white p-2 shadow-sm">
-            <img src={api.selfCheckinQrUrl(code)} alt="Self check-in QR code" className="h-32 w-32" />
-          </a>
+          <div className="justify-self-center flex flex-col items-center gap-2">
+            <a href={api.selfCheckinQrUrl(code)} target="_blank" rel="noopener noreferrer"
+              className="rounded-lg bg-white p-2 shadow-sm">
+              <img src={api.selfCheckinQrUrl(code)} alt="Self check-in QR code" className="h-32 w-32" />
+            </a>
+            <button onClick={downloadQR}
+              className="text-xs font-semibold text-teal-600 dark:text-teal-400 hover:underline">
+              ⬇ Download QR
+            </button>
+          </div>
         </div>
       )}
     </div>
@@ -4658,6 +4677,110 @@ const RESET_OPTIONS = [
   { key: 'tables',            label: 'Tables',                 hint: 'Delete the seating tables' },
 ]
 
+// ── Message Delivery card + Send History (ported from prod) ─────────────────────
+
+function MessageDeliveryCard({ guests, onJump }) {
+  const [openBatch, setOpenBatch] = useState(null)
+  const delivered = guests.filter((g) => g.invite_status === 'sent')
+  const failed = guests.filter((g) => g.invite_status === 'failed')
+  const notSent = guests.filter((g) => !g.invite_sent_at)
+  const noPhone = guests.filter((g) => !g.phone)
+
+  // Group sent guests into batches — a new batch when the gap exceeds 10 minutes.
+  const batches = (() => {
+    const sent = guests.filter((g) => g.invite_sent_at)
+      .sort((a, b) => new Date(a.invite_sent_at) - new Date(b.invite_sent_at))
+    const out = []
+    let cur = null
+    for (const g of sent) {
+      const t = new Date(g.invite_sent_at)
+      if (!cur || t - cur.endTime > 10 * 60 * 1000) {
+        cur = { startTime: t, endTime: t, guests: [] }
+        out.push(cur)
+      }
+      cur.endTime = t
+      cur.guests.push(g)
+    }
+    return out.reverse()
+  })()
+
+  const Tile = ({ label, count, cls, onClick }) => (
+    <button onClick={onClick} disabled={!onClick}
+      className={`rounded-lg p-3 text-left ${cls} ${onClick ? 'hover:opacity-90 cursor-pointer' : 'cursor-default'}`}>
+      <div className="text-2xl font-bold">{count}</div>
+      <div className="text-xs font-medium opacity-80">{label}</div>
+    </button>
+  )
+
+  return (
+    <div className="bg-white dark:bg-slate-800 dark:border dark:border-slate-700/60 rounded-xl shadow p-6 space-y-4">
+      <h2 className="font-semibold text-base dark:text-white">Message delivery</h2>
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+        <Tile label="Delivered" count={delivered.length} cls="bg-green-50 dark:bg-green-900/20 text-green-700 dark:text-green-300" onClick={() => onJump({ invited: 'sent' })} />
+        <Tile label="Failed" count={failed.length} cls="bg-red-50 dark:bg-red-900/20 text-red-700 dark:text-red-300" onClick={() => onJump({ invited: 'failed' })} />
+        <Tile label="Not sent yet" count={notSent.length} cls="bg-amber-50 dark:bg-amber-900/20 text-amber-700 dark:text-amber-300" onClick={() => onJump({ invited: 'unsent' })} />
+        <Tile label="No phone" count={noPhone.length} cls="bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300" />
+      </div>
+
+      {batches.length > 0 && (
+        <div>
+          <div className="text-[11px] font-semibold uppercase text-gray-400 dark:text-slate-500 mb-2">Send history</div>
+          <div className="space-y-1.5">
+            {batches.map((b, i) => {
+              const sentN = b.guests.filter((g) => g.invite_status !== 'failed').length
+              const failN = b.guests.length - sentN
+              return (
+                <div key={i} className="border dark:border-slate-700 rounded-lg">
+                  <button onClick={() => setOpenBatch(openBatch === i ? null : i)}
+                    className="w-full flex items-center justify-between gap-2 px-3 py-2 text-sm">
+                    <span className="dark:text-slate-200">{new Date(b.startTime).toLocaleString([], { dateStyle: 'medium', timeStyle: 'short' })}</span>
+                    <span className="text-xs text-gray-500 dark:text-slate-400">
+                      {b.guests.length} guest{b.guests.length === 1 ? '' : 's'} · <span className="text-green-600">{sentN} sent</span>{failN ? <> · <span className="text-red-500">{failN} failed</span></> : null} {openBatch === i ? '▲' : '▼'}
+                    </span>
+                  </button>
+                  {openBatch === i && (
+                    <div className="px-3 pb-2 flex flex-wrap gap-1">
+                      {b.guests.map((g) => (
+                        <span key={g.id} className={`text-[11px] px-1.5 py-0.5 rounded ${
+                          g.invite_status === 'failed' ? 'bg-red-100 dark:bg-red-900/40 text-red-700 dark:text-red-300' : 'bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300'
+                        }`}>
+                          {g.first_name} {g.last_name}{g.invite_status === 'failed' ? ' ✕' : ''}
+                        </span>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )
+            })}
+          </div>
+        </div>
+      )}
+
+      {notSent.length > 0 && (
+        <div>
+          <div className="text-[11px] font-semibold uppercase text-gray-400 dark:text-slate-500 mb-2">Not sent yet</div>
+          <div className="flex flex-wrap gap-1">
+            {notSent.map((g) => (
+              <span key={g.id} className="text-[11px] px-1.5 py-0.5 rounded bg-amber-100 dark:bg-amber-900/40 text-amber-700 dark:text-amber-300">{g.first_name} {g.last_name}</span>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {failed.length > 0 && (
+        <div>
+          <div className="text-[11px] font-semibold uppercase text-gray-400 dark:text-slate-500 mb-2">Failed (no reachable channel)</div>
+          <div className="flex flex-wrap gap-1">
+            {failed.map((g) => (
+              <span key={g.id} className="text-[11px] px-1.5 py-0.5 rounded bg-red-100 dark:bg-red-900/40 text-red-700 dark:text-red-300">{g.first_name} {g.last_name}</span>
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
+
 // ── Edit Guest Modal (ported from prod) ─────────────────────────────────────────
 
 function EditGuestModal({ guest, onSave, onClose, loading }) {
@@ -4831,6 +4954,7 @@ export default function AdminPage() {
   const [activeTab, setActiveTab] = useState('overview')
   const [tableGroups, setTableGroups] = useState([])
   const [groupFilter, setGroupFilter] = useState('')   // '' = all, 'none' = unassigned
+  const [guestFilter, setGuestFilter] = useState({ invited: 'all', admitted: 'all', qr: 'all' })
   const [showReset, setShowReset] = useState(false)
   const [editingGuest, setEditingGuest] = useState(null)
   const fileRef = useRef()
@@ -5146,6 +5270,10 @@ export default function AdminPage() {
     invited: guests.filter((g) => g.invite_sent_at).length,
     admitted: guests.filter((g) => g.admitted).length,
     pending: guests.filter((g) => g.rsvp_status === 'pending').length,
+    delivered: guests.filter((g) => g.invite_status === 'sent').length,
+    failed: guests.filter((g) => g.invite_status === 'failed').length,
+    notSent: guests.filter((g) => !g.invite_sent_at).length,
+    noPhone: guests.filter((g) => !g.phone).length,
   }
 
   return (
@@ -5289,6 +5417,22 @@ export default function AdminPage() {
                       <span className="block text-xs text-gray-400 dark:text-slate-500">Adds a “Manual” tab on the Scanner so staff can admit guests by searching name or phone.</span>
                     </span>
                   </label>
+                  <label className="mt-3 flex items-start gap-2 cursor-pointer">
+                    <input type="checkbox" checked={!!event.notify_mms}
+                      onChange={async (e) => {
+                        const val = e.target.checked
+                        try {
+                          await api.adminSetMms(event.id, val)
+                          updateEvent({ ...event, notify_mms: val })
+                          flash(`MMS ticket card ${val ? 'enabled' : 'disabled'}.`)
+                        } catch (err) { flash(err.message, true) }
+                      }}
+                      className="mt-0.5 w-4 h-4 accent-indigo-600" />
+                    <span>
+                      <span className="text-sm font-medium text-slate-700 dark:text-slate-200">MMS ticket card</span>
+                      <span className="block text-xs text-gray-400 dark:text-slate-500">Sends the styled ticket-card image by MMS at check-in (needs an MMS-capable provider configured).</span>
+                    </span>
+                  </label>
                 </div>
               )}
 
@@ -5350,6 +5494,13 @@ export default function AdminPage() {
               </div>
             ))}
           </div>
+          )}
+
+          {stats.total > 0 && (
+            <MessageDeliveryCard
+              guests={guests}
+              onJump={(patch) => { setGuestFilter({ invited: 'all', admitted: 'all', qr: 'all', ...patch }); setPage(0); setActiveTab('guests') }}
+            />
           )}
 
           {/* Guest management */}
@@ -5552,9 +5703,20 @@ export default function AdminPage() {
             </div>
           )}
           {activeTab === 'guests' && guests.length > 0 && (() => {
-            const filteredGuests = groupFilter === '' ? guests
+            const byGroup = groupFilter === '' ? guests
               : groupFilter === 'none' ? guests.filter((g) => !g.assigned_table_group_id)
               : guests.filter((g) => g.assigned_table_group_id === groupFilter)
+            const filteredGuests = byGroup.filter((g) => {
+              if (guestFilter.invited === 'sent'   && g.invite_status !== 'sent')   return false
+              if (guestFilter.invited === 'failed' && g.invite_status !== 'failed') return false
+              if (guestFilter.invited === 'unsent' && g.invite_sent_at)             return false
+              if (guestFilter.admitted === 'yes'   && !g.admitted)                  return false
+              if (guestFilter.admitted === 'no'    && g.admitted)                   return false
+              if (guestFilter.qr === 'pending'     && g.qr_generated_at)            return false
+              return true
+            })
+            const anyFilter = guestFilter.invited !== 'all' || guestFilter.admitted !== 'all' || guestFilter.qr !== 'all'
+            const setGF = (patch) => { setGuestFilter((f) => ({ ...f, ...patch })); setPage(0) }
             const totalPages = Math.ceil(filteredGuests.length / PAGE_SIZE)
             const pageGuests = filteredGuests.slice(page * PAGE_SIZE, (page + 1) * PAGE_SIZE)
             const pageSelectedCount = pageGuests.filter((g) => selectedGuests.has(g.id)).length
@@ -5583,6 +5745,12 @@ export default function AdminPage() {
                       className="bg-indigo-600 text-white px-3 py-1.5 rounded-lg text-xs font-semibold hover:bg-indigo-700 disabled:opacity-50">
                       Send invite to selected
                     </button>
+                    {pageAllSelected && selectedGuests.size < filteredGuests.length && (
+                      <button onClick={() => setSelectedGuests(new Set(filteredGuests.map((g) => g.id)))}
+                        className="text-xs text-indigo-600 dark:text-indigo-300 underline font-semibold">
+                        Select all {filteredGuests.length} guests
+                      </button>
+                    )}
                     {event?.seating_enabled && tableGroups.length > 0 && (
                       <select
                         defaultValue=""
@@ -5623,6 +5791,30 @@ export default function AdminPage() {
                       <button onClick={() => setPage((p) => Math.min(totalPages - 1, p + 1))} disabled={page === totalPages - 1}
                         className="px-2 py-1 border dark:border-slate-700 rounded text-gray-600 dark:text-slate-300 disabled:opacity-40 hover:bg-gray-50 dark:hover:bg-slate-700 text-sm">→</button>
                     </div>
+                  )}
+                </div>
+
+                {/* Filter chips */}
+                <div className="px-4 sm:px-6 py-2 border-b dark:border-slate-700 flex items-center gap-2 flex-wrap text-xs">
+                  {[
+                    ['Delivered', guestFilter.invited === 'sent',   () => setGF({ invited: guestFilter.invited === 'sent' ? 'all' : 'sent' }),   'bg-green-600'],
+                    ['Failed',    guestFilter.invited === 'failed', () => setGF({ invited: guestFilter.invited === 'failed' ? 'all' : 'failed' }), 'bg-red-600'],
+                    ['Not sent',  guestFilter.invited === 'unsent', () => setGF({ invited: guestFilter.invited === 'unsent' ? 'all' : 'unsent' }), 'bg-amber-600'],
+                    ['Admitted',  guestFilter.admitted === 'yes',   () => setGF({ admitted: guestFilter.admitted === 'yes' ? 'all' : 'yes' }),    'bg-teal-600'],
+                    ['Not admitted', guestFilter.admitted === 'no', () => setGF({ admitted: guestFilter.admitted === 'no' ? 'all' : 'no' }),     'bg-slate-600'],
+                    ['No QR',     guestFilter.qr === 'pending',     () => setGF({ qr: guestFilter.qr === 'pending' ? 'all' : 'pending' }),       'bg-slate-600'],
+                  ].map(([label, active, onClick, color]) => (
+                    <button key={label} onClick={onClick}
+                      className={`px-2.5 py-1 rounded-full font-semibold border ${
+                        active ? `${color} text-white border-transparent`
+                               : 'bg-white dark:bg-slate-700 text-gray-600 dark:text-slate-300 border-gray-300 dark:border-slate-600'
+                      }`}>
+                      {label}
+                    </button>
+                  ))}
+                  {anyFilter && (
+                    <button onClick={() => setGF({ invited: 'all', admitted: 'all', qr: 'all' })}
+                      className="text-gray-500 dark:text-slate-400 hover:underline ml-1">Clear filters</button>
                   )}
                 </div>
 
@@ -5675,7 +5867,11 @@ export default function AdminPage() {
                             </td>
                           )}
                           <td className="px-4 py-3 text-center"><Badge on={!!g.qr_generated_at} labels={['Ready', 'Pending']} /></td>
-                          <td className="px-4 py-3 text-center"><Badge on={!!g.invite_sent_at} labels={['Sent', 'Unsent']} /></td>
+                          <td className="px-4 py-3 text-center">
+                            {g.invite_status === 'failed'
+                              ? <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-700">Failed</span>
+                              : <Badge on={!!g.invite_sent_at} labels={['Sent', 'Unsent']} />}
+                          </td>
                           <td className="px-4 py-3 text-center"><RsvpStatusBadge status={g.rsvp_status} /></td>
                           <td className="px-4 py-3 text-center">
                             {g.admitted

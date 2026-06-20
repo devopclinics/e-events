@@ -101,6 +101,7 @@ class EventOut(BaseModel):
     notify_email: bool = True
     notify_sms: bool = True
     notify_whatsapp: bool = True
+    notify_mms: bool = False
     enforce_table_groups: bool = True
     manual_checkin_enabled: bool = False
     self_checkin_enabled: bool = False
@@ -842,6 +843,7 @@ class GuestOut(BaseModel):
     qr_token: str
     qr_generated_at: Optional[datetime]
     invite_sent_at: Optional[datetime]
+    invite_status: Optional[str] = None
     invite_token: Optional[str] = None
     rsvp_status: str = "invited"
     rsvp_responded_at: Optional[datetime] = None

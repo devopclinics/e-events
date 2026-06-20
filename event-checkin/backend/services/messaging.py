@@ -109,6 +109,84 @@ async def send_custom_sms(*, phone: str, body: str) -> None:
     await _send_sms(phone, body)
 
 
+# ── MMS (image ticket card) ─────────────────────────────────────────────────────
+
+def mms_ready() -> bool:
+    """Whether an MMS-capable provider is configured. Used to gate the channel."""
+    provider = (settings.messaging_provider or "").lower()
+    if settings.clicksend_username and settings.clicksend_api_key:
+        return True
+    if provider == "twilio" and settings.twilio_account_sid and settings.twilio_from_number:
+        return True
+    if provider == "bird" and settings.bird_access_key and settings.bird_mms_channel_id:
+        return True
+    return False
+
+
+async def send_mms(*, phone: str, body: str, media_url: str) -> None:
+    """Send an MMS (text body + image at media_url) via the configured provider.
+    ClickSend is preferred when configured (prod), else the active provider's MMS
+    path. Never raises — logs and returns on failure."""
+    if not phone or not str(phone).strip() or not media_url:
+        return
+    # ClickSend takes precedence when credentials exist (prod's MMS provider).
+    if settings.clicksend_username and settings.clicksend_api_key:
+        await _clicksend_mms(phone, body, media_url)
+        return
+    provider = (settings.messaging_provider or "").lower()
+    if provider == "twilio":
+        await _twilio_mms(phone, body, media_url)
+    elif provider == "bird":
+        await _bird_mms(phone, body, media_url)
+    else:
+        logger.info("MMS requested but no MMS-capable provider configured — skipping")
+
+
+async def _clicksend_mms(phone: str, body: str, media_url: str) -> None:
+    import base64
+    auth = base64.b64encode(f"{settings.clicksend_username}:{settings.clicksend_api_key}".encode()).decode()
+    payload = {
+        "media_file": media_url,  # collection-level; ClickSend fetches it directly
+        "messages": [{
+            "source": "python",
+            "from": settings.clicksend_from or None,
+            "to": phone,
+            "body": body or " ",            # must be non-empty or MISSING_REQUIRED_FIELDS
+            "subject": (body[:20] or "Ticket"),
+        }],
+    }
+    try:
+        async with httpx.AsyncClient(timeout=20) as c:
+            r = await c.post("https://rest.clicksend.com/v3/mms/send",
+                             headers={"Authorization": f"Basic {auth}", "Content-Type": "application/json"},
+                             json=payload)
+            if r.status_code >= 400:
+                logger.warning("ClickSend MMS → HTTP %s: %s", r.status_code, r.text[:300])
+    except Exception:
+        logger.exception("ClickSend MMS request failed")
+
+
+def _twilio_mms_sync(to_addr: str, body: str, media_url: str) -> None:
+    try:
+        from twilio.rest import Client
+        client = Client(settings.twilio_account_sid, settings.twilio_auth_token)
+        client.messages.create(from_=settings.twilio_from_number, to=to_addr, body=body or "", media_url=[media_url])
+    except Exception:
+        logger.exception("Twilio MMS send failed (to=%s)", to_addr)
+
+
+async def _twilio_mms(phone: str, body: str, media_url: str) -> None:
+    await asyncio.to_thread(_twilio_mms_sync, phone, body, media_url)
+
+
+async def _bird_mms(phone: str, body: str, media_url: str) -> None:
+    # Bird image message. Channel/account must be MMS-capable — verify in prod.
+    await _bird_post(settings.bird_mms_channel_id, {
+        "receiver": _bird_recipient(phone),
+        "body": {"type": "image", "image": {"images": [{"mediaUrl": media_url}], "text": body or ""}},
+    })
+
+
 async def send_custom_whatsapp(*, phone: str, body: str) -> None:
     """Send a fully-rendered WhatsApp body as plain text (template engine).
 

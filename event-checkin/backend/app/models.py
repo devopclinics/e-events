@@ -111,6 +111,8 @@ class Event(Base):
     notify_email: Mapped[bool] = mapped_column(Boolean, default=True)
     notify_sms: Mapped[bool] = mapped_column(Boolean, default=True)
     notify_whatsapp: Mapped[bool] = mapped_column(Boolean, default=True)
+    # MMS (image ticket card). Superadmin-only per-event toggle; off by default.
+    notify_mms: Mapped[bool] = mapped_column(Boolean, default=False)
     # Table Groups add-on: when True (default), a guest with an assigned table
     # group may only be seated/checked-in at tables inside that group. Events
     # with no table groups are unaffected regardless of this flag.
@@ -338,6 +340,9 @@ class Guest(Base):
     qr_token: Mapped[str] = mapped_column(String(36), unique=True, default=lambda: str(uuid.uuid4()))
     qr_generated_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     invite_sent_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    # Delivery outcome at last dispatch: None (never sent) | "sent" (>=1 channel
+    # fired) | "failed" (no reachable channel). Powers the Message Delivery card.
+    invite_status: Mapped[str | None] = mapped_column(String(20), nullable=True)
     # Per-guest RSVP invite-link token (closed mode). Generated when the invite
     # is sent; distinct from qr_token (the post-confirmation ticket credential).
     invite_token: Mapped[str | None] = mapped_column(String(36), nullable=True)

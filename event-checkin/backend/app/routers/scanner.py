@@ -257,7 +257,8 @@ async def perform_admission(guest, event, background_tasks, db) -> ScanResult:
 
     # First-come-first-served seat assignment if this guest has no seat yet.
     # Honors couple pairings + table-group restrictions (see assign_next_seat).
-    if event and event.seating_enabled and not guest.table_id:
+    # Keyed on seat_number (not table_id) so pre-assigned-table guests still get a seat.
+    if event and event.seating_enabled and not guest.seat_number:
         await assign_next_seat(guest, db)
         # Table Groups: a grouped guest who couldn't be seated within their group
         # (group full / has no tables) is turned away with a clear message rather
@@ -351,6 +352,14 @@ async def perform_admission(guest, event, background_tasks, db) -> ScanResult:
                 event_name=event.name if event else "the event",
                 table_name=table_name, seat_number=guest.seat_number,
             )
+    # MMS (image ticket card) — super-admin-enabled per event. Sends the styled
+    # admitted card fetched directly from /api/scan/{token}/card.jpg.
+    if (paid and event.notify_mms and guest.phone and guest.sms_consent
+            and messaging.mms_ready() and event.checkin_base_url and take_message_credit(event)):
+        mms_text = (template_channel_text(overrides, "admission_confirmation", "sms", tmpl_ctx)
+                    or f"Welcome {guest.first_name}! You're checked in to {event.name}.")
+        card_url = f"{event.checkin_base_url.rstrip('/')}/api/scan/{guest.qr_token}/card.jpg?admitted=true"
+        background_tasks.add_task(messaging.send_mms, phone=guest.phone, body=mms_text, media_url=card_url)
     await db.commit()  # persist message-credit decrements
 
     broadcast(guest.event_id, {
@@ -433,7 +442,7 @@ async def scan_qr_zone(
         guest.admitted = True
         guest.admitted_at = datetime.utcnow()
         guest.admit_notified = True
-        if event.seating_enabled and not guest.table_id:
+        if event.seating_enabled and not guest.seat_number:
             await assign_next_seat(guest, db)
     await db.commit()
 

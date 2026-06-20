@@ -178,6 +178,22 @@ async def set_manual_checkin(
     return {"ok": True, "manual_checkin_enabled": ev.manual_checkin_enabled}
 
 
+@router.patch("/events/{event_id}/mms")
+async def set_mms(
+    event_id: str,
+    body: ActiveToggle,
+    _: User = Depends(require_superadmin),
+    db: AsyncSession = Depends(get_db),
+):
+    """Superadmin-only: turn the MMS (image ticket card) channel on/off."""
+    ev = await db.get(Event, event_id)
+    if not ev:
+        raise HTTPException(404, "Event not found")
+    ev.notify_mms = bool(body.active)
+    await db.commit()
+    return {"ok": True, "notify_mms": ev.notify_mms}
+
+
 @router.post("/events/{event_id}/grant")
 async def grant(event_id: str, body: GrantRequest, _: User = Depends(require_superadmin), db: AsyncSession = Depends(get_db)):
     """Comp an event onto a tier and/or add message credits — no payment."""

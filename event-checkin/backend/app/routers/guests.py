@@ -355,35 +355,22 @@ async def _process_csv(text: str, event_id: str, db: AsyncSession):
         row_tag_keys = _resolve_tag_keys(row.get("tags", "")) if want_tags else []
         row_group_key = _ensure_group_key(row) if want_groups else None
 
-        # Deduplicate on (first_name + last_name + email) — same person twice.
-        # Email-less rows (lists of names/phones) dedupe on name among guests
-        # with no email, preferring a phone match so two same-named guests with
-        # different numbers stay distinct.
-        if email:
-            existing = (await db.execute(
-                select(Guest).where(
-                    Guest.event_id == event_id,
-                    Guest.email == email,
-                    Guest.first_name == first,
-                    Guest.last_name == last,
-                )
-            )).scalar_one_or_none()
-        else:
-            candidates = (await db.execute(
-                select(Guest).where(
-                    Guest.event_id == event_id,
-                    Guest.email.is_(None),
-                    Guest.first_name == first,
-                    Guest.last_name == last,
-                )
-            )).scalars().all()
-            existing = (
-                next((c for c in candidates if normalized_phone and c.phone == normalized_phone), None)
-                or next((c for c in candidates if not c.phone or not normalized_phone), None)
+        # Deduplicate on first_name + last_name only (case-insensitive). Email is
+        # NOT part of the key: spreadsheet re-syncs that change/add an email used
+        # to create duplicate guests (count inflation). Email is treated as a
+        # backfill field instead. (ported from prod)
+        existing = (await db.execute(
+            select(Guest).where(
+                Guest.event_id == event_id,
+                func.lower(Guest.first_name) == first.lower(),
+                func.lower(Guest.last_name) == last.lower(),
             )
+        )).scalars().first()
         if existing:
             # Backfill missing fields on re-import — useful when the source spreadsheet
-            # now has a phone number that was blank/invalid on the first import.
+            # now has an email/phone that was blank on the first import.
+            if not existing.email and email:
+                existing.email = email
             if not existing.phone and normalized_phone:
                 existing.phone = normalized_phone
                 backfilled_phones += 1
@@ -608,7 +595,7 @@ async def upload_guests(event_id: str, file: UploadFile = File(...), db: AsyncSe
     return await _process_csv(text, event_id, db)
 
 
-def _dispatch_invite(background_tasks: BackgroundTasks, event: Event, guest: Guest, overrides: dict | None = None) -> None:
+def _dispatch_invite(background_tasks: BackgroundTasks, event: Event, guest: Guest, overrides: dict | None = None) -> bool:
     """Fan out an invite across enabled channels for this event. Channel modules
     no-op silently when contact info is missing or creds aren't configured.
 
@@ -617,17 +604,20 @@ def _dispatch_invite(background_tasks: BackgroundTasks, event: Event, guest: Gue
     they confirm. In open mode we send the ticket directly, as before.
 
     `overrides` carries any customizable-template overrides for the event; when a
-    channel has none, the default sender is used (unchanged behavior)."""
+    channel has none, the default sender is used (unchanged behavior).
+
+    Returns True if at least one channel was dispatched, False if the guest had no
+    reachable channel (used to set invite_status sent/failed)."""
     if event.invite_mode == "closed":
-        _dispatch_rsvp_invite(background_tasks, event, guest, overrides)
-        return
+        return _dispatch_rsvp_invite(background_tasks, event, guest, overrides)
 
     ticket_url = f"{event.checkin_base_url.rstrip('/')}/scan/{guest.qr_token}"
     paid_channels = can_use_paid_channels(event)
     overrides = overrides or {}
     ctx = build_template_context(event, guest, extras={"ticket_link": ticket_url, "qr_code": ticket_url})
+    dispatched = False
 
-    if event.notify_email:
+    if event.notify_email and guest.email:
         ov = overrides.get("ticket_qr")
         guest_data = {
             "first_name": guest.first_name,
@@ -641,6 +631,7 @@ def _dispatch_invite(background_tasks: BackgroundTasks, event: Event, guest: Gue
             event.seating_enabled, event.menu_enabled,
             ov.subject if ov else None, ov.email_body if ov else None,
         )
+        dispatched = True
 
     if paid_channels and event.notify_sms and guest.phone and guest.sms_consent and take_message_credit(event):
         sms_text = template_channel_text(overrides, "sms_invitation", "sms", ctx)
@@ -652,6 +643,7 @@ def _dispatch_invite(background_tasks: BackgroundTasks, event: Event, guest: Gue
                 phone=guest.phone, first_name=guest.first_name,
                 event_name=event.name, ticket_url=ticket_url, event_date=event.event_date,
             )
+        dispatched = True
 
     if paid_channels and event.notify_whatsapp and guest.phone and guest.whatsapp_consent and take_message_credit(event):
         wa_text = template_channel_text(overrides, "whatsapp_invitation", "whatsapp", ctx)
@@ -663,12 +655,16 @@ def _dispatch_invite(background_tasks: BackgroundTasks, event: Event, guest: Gue
                 phone=guest.phone, first_name=guest.first_name,
                 event_name=event.name, ticket_url=ticket_url, event_date=event.event_date,
             )
+        dispatched = True
+
+    return dispatched
 
 
-def _dispatch_rsvp_invite(background_tasks: BackgroundTasks, event: Event, guest: Guest, overrides: dict | None = None) -> None:
+def _dispatch_rsvp_invite(background_tasks: BackgroundTasks, event: Event, guest: Guest, overrides: dict | None = None) -> bool:
     """Closed-mode invite: send the guest their personal RSVP link. Generates a
     one-per-guest invite_token on first send (mutation persisted by the caller's
-    commit). No ticket/QR yet — that's issued when they confirm."""
+    commit). No ticket/QR yet — that's issued when they confirm. Returns True if
+    at least one channel fired."""
     if not guest.invite_token:
         guest.invite_token = str(uuid.uuid4())
     invite_url = f"{event.checkin_base_url.rstrip('/')}/r/{guest.invite_token}"
@@ -676,6 +672,7 @@ def _dispatch_rsvp_invite(background_tasks: BackgroundTasks, event: Event, guest
     paid_channels = can_use_paid_channels(event)
     overrides = overrides or {}
     ctx = build_template_context(event, guest, extras={"rsvp_link": invite_url})
+    dispatched = False
 
     if event.notify_email and guest.email:
         subj, body = template_email_override(overrides, "rsvp_invitation", ctx)
@@ -688,6 +685,7 @@ def _dispatch_rsvp_invite(background_tasks: BackgroundTasks, event: Event, guest
                 event_name=event.name, event_date=event.event_date,
                 invite_message=event.invite_message,
             )
+        dispatched = True
 
     if paid_channels and event.notify_sms and guest.phone and guest.sms_consent and take_message_credit(event):
         sms_text = template_channel_text(overrides, "rsvp_invitation", "sms", ctx)
@@ -699,6 +697,7 @@ def _dispatch_rsvp_invite(background_tasks: BackgroundTasks, event: Event, guest
                 phone=guest.phone, name=name,
                 event_name=event.name, invite_url=invite_url,
             )
+        dispatched = True
 
     if paid_channels and event.notify_whatsapp and guest.phone and guest.whatsapp_consent and take_message_credit(event):
         wa_text = template_channel_text(overrides, "rsvp_invitation", "whatsapp", ctx)
@@ -710,6 +709,9 @@ def _dispatch_rsvp_invite(background_tasks: BackgroundTasks, event: Event, guest
                 phone=guest.phone, name=name,
                 event_name=event.name, invite_url=invite_url,
             )
+        dispatched = True
+
+    return dispatched
 
 
 async def import_from_source_url(url: str, event_id: str, db: AsyncSession) -> dict:
@@ -987,8 +989,9 @@ async def send_invites(event_id: str, background_tasks: BackgroundTasks, db: Asy
 
     overrides = await load_overrides(event_id, db)
     for guest in guests:
-        _dispatch_invite(background_tasks, event, guest, overrides)
+        ok = _dispatch_invite(background_tasks, event, guest, overrides)
         guest.invite_sent_at = datetime.utcnow()
+        guest.invite_status = "sent" if ok else "failed"
 
     await db.commit()
     return {"queued": len(guests)}
@@ -1031,8 +1034,9 @@ async def send_invites_batch(
         # Auto-generate QR timestamp on first send so it can also be a no-op for never-touched guests.
         if not guest.qr_generated_at:
             guest.qr_generated_at = now
-        _dispatch_invite(background_tasks, event, guest, overrides)
+        ok = _dispatch_invite(background_tasks, event, guest, overrides)
         guest.invite_sent_at = now
+        guest.invite_status = "sent" if ok else "failed"
         queued += 1
 
     await db.commit()
@@ -1051,8 +1055,9 @@ async def resend_invite(event_id: str, guest_id: str, background_tasks: Backgrou
     if event.invite_mode != "closed" and not guest.qr_generated_at:
         raise HTTPException(400, "Generate QR codes first before sending invites")
 
-    _dispatch_invite(background_tasks, event, guest, await load_overrides(event_id, db))
+    ok = _dispatch_invite(background_tasks, event, guest, await load_overrides(event_id, db))
     guest.invite_sent_at = datetime.utcnow()
+    guest.invite_status = "sent" if ok else "failed"
     await db.commit()
     return {"ok": True}
 
@@ -1073,7 +1078,8 @@ async def approve_rsvp(event_id: str, guest_id: str, background_tasks: Backgroun
     if not guest.qr_generated_at:
         guest.qr_generated_at = now
     guest.invite_sent_at = now
-    _dispatch_invite(background_tasks, event, guest, await load_overrides(event_id, db))
+    ok = _dispatch_invite(background_tasks, event, guest, await load_overrides(event_id, db))
+    guest.invite_status = "sent" if ok else "failed"
     await db.commit()
     return {"ok": True, "rsvp_status": "confirmed"}
 

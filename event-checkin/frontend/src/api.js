@@ -144,6 +144,7 @@ export const api = {
   searchGuests:  (eventId, q) => req('GET', `/events/${eventId}/guests/search?q=${encodeURIComponent(q)}`),
   manualCheckin: (eventId, guestId) => req('POST', `/events/${eventId}/guests/${guestId}/checkin`),
   adminSetManualCheckin: (eventId, active) => req('PATCH', `/admin/events/${eventId}/manual-checkin`, { active }),
+  adminSetMms: (eventId, active) => req('PATCH', `/admin/events/${eventId}/mms`, { active }),
   setSelfCheckin: (eventId, active) => req('PATCH', `/events/${eventId}/self-checkin`, { active }),
 
   // Public self check-in

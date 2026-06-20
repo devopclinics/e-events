@@ -150,6 +150,50 @@ async def ticket_qr_image(qr_token: str, db: AsyncSession = Depends(get_db)):
     return Response(content=generate_qr_bytes(qr_token, base_url), media_type="image/png")
 
 
+@router.get("/{qr_token}/card.jpg")
+async def ticket_card_image(
+    qr_token: str,
+    admitted: bool = False,
+    db: AsyncSession = Depends(get_db),
+):
+    """Public — styled ticket-card JPEG mirroring the in-app ticket (ported from
+    prod). Usable as a shareable/printable card or future MMS media."""
+    import asyncio as _asyncio
+    from services.ticket_card import generate_ticket_card
+
+    guest = (await db.execute(select(Guest).where(Guest.qr_token == qr_token))).scalar_one_or_none()
+    if not guest:
+        return Response(status_code=404)
+    event = await db.get(Event, guest.event_id)
+    if not event:
+        return Response(status_code=404)
+
+    base_url = event.checkin_base_url or "https://events.vsgs.io"
+    qr_bytes = generate_qr_bytes(qr_token, base_url)
+
+    table_name = ""
+    if guest.table_id:
+        tbl = await db.get(SeatingTable, guest.table_id)
+        if tbl:
+            table_name = tbl.name
+
+    card = await _asyncio.to_thread(
+        generate_ticket_card,
+        event_name=event.name,
+        couples_name=event.couples_name or "",
+        event_date=event.event_date,
+        venue_name=event.venue_name or "",
+        venue_address=event.venue_address or "",
+        guest_first_name=guest.first_name,
+        guest_last_name=guest.last_name or "",
+        qr_png_bytes=qr_bytes,
+        admitted=admitted,
+        table_name=table_name,
+        seat_number=guest.seat_number or "",
+    )
+    return Response(content=card, media_type="image/jpeg", headers={"Cache-Control": "no-store"})
+
+
 @router.post("/{qr_token}", response_model=ScanResult)
 async def scan_qr(
     qr_token: str,

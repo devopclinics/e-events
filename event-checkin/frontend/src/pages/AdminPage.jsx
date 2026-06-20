@@ -3660,8 +3660,9 @@ function MessageTemplatesPanel({ eventId }) {
       email_body: it.effective.email_body || '',
       sms_body: it.effective.sms_body || '',
       whatsapp_body: it.effective.whatsapp_body || '',
+      mms_body: it.effective.mms_body || '',
     })
-    setTestChannel(it.channels[0] || 'email')
+    setTestChannel((it.channels.filter((c) => c !== 'mms')[0]) || 'email')
   }
 
   function insertVar(field, v) {
@@ -3675,6 +3676,7 @@ function MessageTemplatesPanel({ eventId }) {
       if (meta.channels.includes('email')) { payload.subject = draft.subject; payload.email_body = draft.email_body }
       if (meta.channels.includes('sms')) payload.sms_body = draft.sms_body
       if (meta.channels.includes('whatsapp')) payload.whatsapp_body = draft.whatsapp_body
+      if (meta.channels.includes('mms')) payload.mms_body = draft.mms_body
       const updated = await api.saveTemplate(eventId, sel, payload)
       setMeta(updated); setMsg('Saved.'); setTimeout(() => setMsg(''), 3000)
       await reloadList(); api.templateAudit(eventId).then(setAudit).catch(() => {})
@@ -3800,12 +3802,19 @@ function MessageTemplatesPanel({ eventId }) {
                 </div>
               )}
 
-              {/* Test send */}
+              {meta.channels.includes('mms') && (
+                <div>
+                  <label className="block text-xs font-semibold text-gray-600 dark:text-slate-300 mb-1">MMS body (caption sent with the ticket-card image)</label>
+                  <textarea value={draft.mms_body} onChange={(e) => setDraft((d) => ({ ...d, mms_body: e.target.value }))} rows={2} className={fieldCls} />
+                </div>
+              )}
+
+              {/* Test send (MMS isn't test-sendable — it needs a guest's card) */}
               <div className="border-t dark:border-slate-700 pt-3 flex flex-wrap items-end gap-2">
                 <div>
                   <label className="block text-xs font-semibold text-gray-600 dark:text-slate-300 mb-1">Test send</label>
                   <select value={testChannel} onChange={(e) => setTestChannel(e.target.value)} className="border dark:border-slate-600 rounded-lg px-2 py-2 text-sm bg-white dark:bg-slate-700 dark:text-slate-200">
-                    {meta.channels.map((c) => <option key={c} value={c}>{c}</option>)}
+                    {meta.channels.filter((c) => c !== 'mms').map((c) => <option key={c} value={c}>{c}</option>)}
                   </select>
                 </div>
                 <input value={testTo} onChange={(e) => setTestTo(e.target.value)} placeholder={testChannel === 'email' ? 'you@example.com' : '+1832...'} className={`${fieldCls} flex-1 min-w-[10rem]`} />
@@ -3821,6 +3830,7 @@ function MessageTemplatesPanel({ eventId }) {
                   </>)}
                   {meta.channels.includes('sms') && <div className="mt-2 text-sm dark:text-slate-200">📱 {preview.sms_body}</div>}
                   {meta.channels.includes('whatsapp') && <div className="mt-1 text-sm dark:text-slate-200">💬 {preview.whatsapp_body}</div>}
+                  {meta.channels.includes('mms') && <div className="mt-1 text-sm dark:text-slate-200">🖼️ {preview.mms_body} <span className="text-xs text-gray-400">(+ ticket card image)</span></div>}
                 </div>
               )}
             </div>

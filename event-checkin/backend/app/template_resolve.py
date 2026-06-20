@@ -20,7 +20,8 @@ async def load_overrides(event_id: str, db: AsyncSession) -> dict[str, MessageTe
 def _body(ov: MessageTemplate | None, channel: str) -> str | None:
     if ov is None:
         return None
-    body = {"email": ov.email_body, "sms": ov.sms_body, "whatsapp": ov.whatsapp_body}.get(channel)
+    body = {"email": ov.email_body, "sms": ov.sms_body,
+            "whatsapp": ov.whatsapp_body, "mms": ov.mms_body}.get(channel)
     return body or None
 
 

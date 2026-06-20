@@ -33,7 +33,7 @@ _TOKEN_RE = re.compile(r"\{\{\s*([a-zA-Z0-9_]+)\s*\}\}")
 # ── Template registry ──────────────────────────────────────────────────────────
 
 def _t(label, channels, *, subject=None, email_body=None, sms_body=None,
-       whatsapp_body=None, placeholders=None, required=None, email_kind="full",
+       whatsapp_body=None, mms_body=None, placeholders=None, required=None, email_kind="full",
        group="General", note=None):
     return {
         "label": label,
@@ -42,6 +42,7 @@ def _t(label, channels, *, subject=None, email_body=None, sms_body=None,
         "email_body": email_body,
         "sms_body": sms_body,
         "whatsapp_body": whatsapp_body,
+        "mms_body": mms_body,
         "placeholders": placeholders or PLACEHOLDERS,
         "required": required or [],
         "email_kind": email_kind,
@@ -170,13 +171,15 @@ TEMPLATE_DEFS: dict[str, dict] = {
     ),
     # ── Day-of / operational ────────────────────────────────────────────────────
     "admission_confirmation": _t(
-        "Check-in confirmation", ["email", "sms", "whatsapp"], group="Day-of",
+        "Check-in confirmation", ["email", "sms", "whatsapp", "mms"], group="Day-of",
         email_kind="block",
         subject="You're checked in — {{event_name}}",
         email_body="<p>Welcome, {{guest_first_name}}! You have been successfully admitted.</p>",
         sms_body="Welcome {{guest_first_name}}! You're checked in to {{event_name}}. Table: {{table_name}}.",
         whatsapp_body="Welcome {{guest_first_name}}! You're checked in. Table: {{table_name}}.",
-        note="The seating/menu blocks are added automatically; edit the subject and intro copy here.",
+        mms_body="Welcome {{guest_first_name}}! You're checked in to {{event_name}}. Table: {{table_name}}. Your ticket card is attached.",
+        note=("The seating/menu blocks are added automatically; edit the subject and intro copy here. "
+              "The MMS body is the caption sent with the ticket-card image."),
     ),
     "broadcast": _t(
         "Event update / broadcast", ["email", "sms", "whatsapp"], group="Day-of",

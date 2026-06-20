@@ -359,6 +359,7 @@ class MessageTemplateSave(BaseModel):
     email_body: Optional[str] = None
     sms_body: Optional[str] = None
     whatsapp_body: Optional[str] = None
+    mms_body: Optional[str] = None
 
 
 class TemplatePreviewRequest(MessageTemplateSave):

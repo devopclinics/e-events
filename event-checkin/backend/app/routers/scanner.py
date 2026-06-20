@@ -356,7 +356,8 @@ async def perform_admission(guest, event, background_tasks, db) -> ScanResult:
     # admitted card fetched directly from /api/scan/{token}/card.jpg.
     if (paid and event.notify_mms and guest.phone and guest.sms_consent
             and messaging.mms_ready() and event.checkin_base_url and take_message_credit(event)):
-        mms_text = (template_channel_text(overrides, "admission_confirmation", "sms", tmpl_ctx)
+        mms_text = (template_channel_text(overrides, "admission_confirmation", "mms", tmpl_ctx)
+                    or template_channel_text(overrides, "admission_confirmation", "sms", tmpl_ctx)
                     or f"Welcome {guest.first_name}! You're checked in to {event.name}.")
         card_url = f"{event.checkin_base_url.rstrip('/')}/api/scan/{guest.qr_token}/card.jpg?admitted=true"
         background_tasks.add_task(messaging.send_mms, phone=guest.phone, body=mms_text, media_url=card_url)

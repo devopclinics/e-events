@@ -45,6 +45,7 @@ def _effective(spec: dict, ov: MessageTemplate | None) -> dict:
         "email_body": pick("email_body"),
         "sms_body": pick("sms_body"),
         "whatsapp_body": pick("whatsapp_body"),
+        "mms_body": pick("mms_body"),
     }
 
 
@@ -65,10 +66,12 @@ def _meta(key: str, spec: dict, ov: MessageTemplate | None) -> dict:
             "email_body": spec.get("email_body"),
             "sms_body": spec.get("sms_body"),
             "whatsapp_body": spec.get("whatsapp_body"),
+            "mms_body": spec.get("mms_body"),
         },
         "override": None if ov is None else {
             "subject": ov.subject, "email_body": ov.email_body,
             "sms_body": ov.sms_body, "whatsapp_body": ov.whatsapp_body,
+            "mms_body": ov.mms_body,
             "updated_at": ov.updated_at.isoformat() if ov.updated_at else None,
         },
         "effective": eff,
@@ -113,7 +116,8 @@ async def get_template(event_id: str, key: str, db: AsyncSession = Depends(get_d
 def _validate(key: str, spec: dict, data: MessageTemplateSave) -> None:
     """Reject saves that drop a required placeholder from a non-empty body, or
     that target a channel the template doesn't use."""
-    by_channel = {"email": data.email_body, "sms": data.sms_body, "whatsapp": data.whatsapp_body}
+    by_channel = {"email": data.email_body, "sms": data.sms_body,
+                  "whatsapp": data.whatsapp_body, "mms": data.mms_body}
     for channel, body in by_channel.items():
         if body and channel not in spec["channels"]:
             raise HTTPException(400, f"This template does not use the {channel} channel")
@@ -143,6 +147,7 @@ async def save_template(event_id: str, key: str, data: MessageTemplateSave,
     ov.email_body = email_body
     ov.sms_body = data.sms_body
     ov.whatsapp_body = data.whatsapp_body
+    ov.mms_body = data.mms_body
     ov.updated_at = datetime.utcnow()
     ov.updated_by = user.id
 
@@ -151,6 +156,7 @@ async def save_template(event_id: str, key: str, data: MessageTemplateSave,
         snapshot=json.dumps({
             "subject": ov.subject, "email_body": ov.email_body,
             "sms_body": ov.sms_body, "whatsapp_body": ov.whatsapp_body,
+            "mms_body": ov.mms_body,
         }),
         changed_by=user.id, changed_by_email=user.email,
     ))
@@ -185,11 +191,13 @@ def _render_draft(event, key: str, spec: dict, data: MessageTemplateSave, ov: Me
     email_body = data.email_body if data.email_body is not None else eff["email_body"]
     sms_body = data.sms_body if data.sms_body is not None else eff["sms_body"]
     wa_body = data.whatsapp_body if data.whatsapp_body is not None else eff["whatsapp_body"]
+    mms_body = data.mms_body if data.mms_body is not None else eff["mms_body"]
     return {
         "subject": tpl.render(subject, ctx),
         "email_body": tpl.render(email_body, ctx),
         "sms_body": tpl.render(sms_body, ctx),
         "whatsapp_body": tpl.render(wa_body, ctx),
+        "mms_body": tpl.render(mms_body, ctx),
     }
 
 
@@ -218,6 +226,11 @@ async def test_send_template(event_id: str, key: str, data: TemplateTestSendRequ
     event = await db.get(Event, event_id)
     if not event:
         raise HTTPException(404, "Event not found")
+
+    if data.channel == "mms":
+        # The MMS card needs a specific guest's QR, so it can't be test-sent in
+        # isolation. The body is verifiable via Preview; real MMS fires at check-in.
+        raise HTTPException(400, "MMS can't be test-sent here — use Preview; it sends with the ticket card at check-in.")
 
     rendered = _render_draft(event, key, spec, data, await _override(event_id, key, db))
     if data.channel == "email":

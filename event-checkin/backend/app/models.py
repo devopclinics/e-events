@@ -687,6 +687,7 @@ class MessageTemplate(Base):
     email_body: Mapped[str | None] = mapped_column(Text, nullable=True)
     sms_body: Mapped[str | None] = mapped_column(Text, nullable=True)
     whatsapp_body: Mapped[str | None] = mapped_column(Text, nullable=True)
+    mms_body: Mapped[str | None] = mapped_column(Text, nullable=True)
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
     updated_by: Mapped[str | None] = mapped_column(String(36), ForeignKey("users.id"), nullable=True)
 

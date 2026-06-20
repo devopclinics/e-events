@@ -227,9 +227,185 @@ function extractToken(raw) {
   }
 }
 
+// ── Manual check-in: guest search + confirm ───────────────────────────────────
+
+function GuestCard({ guest, onSelect }) {
+  return (
+    <button
+      onClick={() => onSelect(guest)}
+      className={`w-full text-left p-3 rounded-xl border-2 transition-all ${
+        guest.admitted
+          ? 'border-amber-300 bg-amber-50 dark:bg-amber-900/20 dark:border-amber-600 opacity-80'
+          : 'border-slate-200 dark:border-slate-600 hover:border-indigo-400 hover:bg-indigo-50 dark:hover:bg-indigo-900/20'
+      }`}
+    >
+      <div className="flex items-center justify-between">
+        <div>
+          <p className="font-semibold text-slate-900 dark:text-white text-sm">
+            {guest.first_name} {guest.last_name}
+            {guest.is_vip && <span className="ml-2 text-xs bg-yellow-100 text-yellow-800 dark:bg-yellow-800 dark:text-yellow-100 px-1.5 py-0.5 rounded font-bold">VIP</span>}
+          </p>
+          {guest.phone && <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">{guest.phone}</p>}
+          {(guest.table_name || guest.seat_number) && (
+            <p className="text-xs text-indigo-600 dark:text-indigo-300 mt-0.5">
+              {guest.table_name}{guest.seat_number ? ` · Seat ${guest.seat_number}` : ''}
+            </p>
+          )}
+        </div>
+        <div className="shrink-0 ml-3">
+          {guest.admitted ? (
+            <span className="text-xs bg-amber-200 text-amber-800 dark:bg-amber-700 dark:text-amber-100 px-2 py-1 rounded-full font-semibold">
+              Admitted
+            </span>
+          ) : (
+            <span className="text-xs bg-slate-100 text-slate-600 dark:bg-slate-700 dark:text-slate-300 px-2 py-1 rounded-full">
+              Tap to admit
+            </span>
+          )}
+        </div>
+      </div>
+      {guest.admitted && guest.admitted_at && (
+        <p className="text-xs text-amber-600 dark:text-amber-400 mt-1">
+          Checked in at {new Date(guest.admitted_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+        </p>
+      )}
+    </button>
+  )
+}
+
+function ConfirmCheckin({ guest, eventId, onResult, onCancel }) {
+  const [loading, setLoading] = useState(false)
+
+  async function confirm() {
+    setLoading(true)
+    try {
+      const res = await api.manualCheckin(eventId, guest.id)
+      onResult(res)
+    } catch (err) {
+      onResult({ status: 'invalid', message: err.message })
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  return (
+    <div className="space-y-4">
+      <div className="text-center py-2">
+        <p className="text-sm text-slate-500 dark:text-slate-400 mb-1">Confirm check-in for</p>
+        <p className="text-xl font-bold text-slate-900 dark:text-white">{guest.first_name} {guest.last_name}</p>
+        {guest.phone && <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">{guest.phone}</p>}
+        {guest.table_name && (
+          <p className="text-sm text-indigo-600 dark:text-indigo-300 mt-1">
+            {guest.table_name}{guest.seat_number ? ` · Seat ${guest.seat_number}` : ''}
+          </p>
+        )}
+      </div>
+      <button
+        onClick={confirm}
+        disabled={loading}
+        className="w-full bg-green-600 hover:bg-green-700 text-white font-bold py-4 rounded-xl text-lg disabled:opacity-50 transition-colors"
+      >
+        {loading ? 'Checking in…' : 'Confirm Check-In'}
+      </button>
+      <button
+        onClick={onCancel}
+        className="w-full text-slate-500 dark:text-slate-400 text-sm py-2 hover:underline"
+      >
+        Cancel — go back to search
+      </button>
+    </div>
+  )
+}
+
+function ManualCheckinTab({ eventId }) {
+  const [query, setQuery] = useState('')
+  const [guests, setGuests] = useState([])
+  const [searching, setSearching] = useState(false)
+  const [selected, setSelected] = useState(null)
+  const [result, setResult] = useState(null)
+  const debounceRef = useRef(null)
+
+  function handleQueryChange(val) {
+    setQuery(val)
+    setSelected(null)
+    setResult(null)
+    clearTimeout(debounceRef.current)
+    if (!val.trim()) { setGuests([]); return }
+    debounceRef.current = setTimeout(async () => {
+      setSearching(true)
+      try {
+        const res = await api.searchGuests(eventId, val.trim())
+        setGuests(res)
+      } catch { setGuests([]) }
+      finally { setSearching(false) }
+    }, 300)
+  }
+
+  function reset() {
+    setQuery('')
+    setGuests([])
+    setSelected(null)
+    setResult(null)
+  }
+
+  if (result) {
+    return (
+      <div className="space-y-4">
+        <ResultCard result={result} onReset={reset} />
+      </div>
+    )
+  }
+
+  if (selected) {
+    return (
+      <ConfirmCheckin
+        guest={selected}
+        eventId={eventId}
+        onResult={setResult}
+        onCancel={() => setSelected(null)}
+      />
+    )
+  }
+
+  return (
+    <div className="space-y-3">
+      <input
+        autoFocus
+        value={query}
+        onChange={(e) => handleQueryChange(e.target.value)}
+        placeholder="Search by name or phone number…"
+        className="w-full border border-slate-300 dark:border-slate-600 rounded-xl px-4 py-3 text-sm bg-white dark:bg-slate-700 text-slate-900 dark:text-white placeholder-slate-400"
+      />
+      {searching && (
+        <p className="text-center text-sm text-slate-400 py-2">Searching…</p>
+      )}
+      {!searching && query && guests.length === 0 && (
+        <p className="text-center text-sm text-slate-500 dark:text-slate-400 py-4">
+          No guest found — check spelling or try phone number.
+        </p>
+      )}
+      {guests.length > 0 && (
+        <div className="space-y-2">
+          {guests.map((g) => (
+            <GuestCard
+              key={g.id}
+              guest={g}
+              onSelect={(g) => !g.admitted && setSelected(g)}
+            />
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
+
+// ── Main ScannerPage ──────────────────────────────────────────────────────────
+
 export default function ScannerPage() {
   const [events, setEvents] = useState([])
   const [eventId, setEventId] = useState('')
+  const [activeEvent, setActiveEvent] = useState(null)
+  const [tab, setTab] = useState('qr')
   const [result, setResult] = useState(null)
   const [loading, setLoading] = useState(false)
   const [scanKey, setScanKey] = useState(0)
@@ -237,9 +413,19 @@ export default function ScannerPage() {
   useEffect(() => {
     api.listEvents().then((evs) => {
       setEvents(evs)
-      if (evs.length === 1) setEventId(evs[0].id)
+      if (evs.length === 1) {
+        setEventId(evs[0].id)
+        setActiveEvent(evs[0])
+      }
     })
   }, [])
+
+  function handleEventChange(id) {
+    setEventId(id)
+    setActiveEvent(events.find((e) => e.id === id) || null)
+    setResult(null)
+    setTab('qr')
+  }
 
   async function handleScan(raw) {
     const token = extractToken(raw)
@@ -259,6 +445,16 @@ export default function ScannerPage() {
     setScanKey((k) => k + 1)
   }
 
+  const manualEnabled = activeEvent?.manual_checkin_enabled
+  const selfEnabled   = activeEvent?.self_checkin_enabled && activeEvent?.event_code
+
+  const tabs = [
+    { key: 'qr',      label: 'QR Scan' },
+    ...(manualEnabled ? [{ key: 'manual', label: 'Manual' }] : []),
+    ...(selfEnabled   ? [{ key: 'eventqr', label: 'Event QR' }] : []),
+  ]
+  const showTabs = tabs.length > 1
+
   return (
     <div className="max-w-lg mx-auto space-y-6">
       <h1 className="text-2xl font-bold text-center dark:text-white">Check-In Scanner</h1>
@@ -269,7 +465,7 @@ export default function ScannerPage() {
           <select
             className="w-full border border-gray-300 dark:border-slate-700 rounded-lg px-3 py-2 text-sm bg-white dark:bg-slate-700 text-gray-900 dark:text-white"
             value={eventId}
-            onChange={(e) => setEventId(e.target.value)}
+            onChange={(e) => handleEventChange(e.target.value)}
           >
             <option value="">— select event —</option>
             {events.map((ev) => (
@@ -279,47 +475,99 @@ export default function ScannerPage() {
         </div>
       )}
 
-      <div className="bg-white dark:bg-slate-800 dark:border dark:border-slate-700/60 rounded-xl shadow p-6">
-        {loading && (
-          <div className="text-center py-8">
-            <div className="inline-block w-10 h-10 border-4 border-indigo-500 border-t-transparent rounded-full animate-spin" />
-            <p className="mt-3 text-gray-600 dark:text-slate-400">Checking in…</p>
+      <div className="bg-white dark:bg-slate-800 dark:border dark:border-slate-700/60 rounded-xl shadow overflow-hidden">
+        {showTabs && (
+          <div className="flex border-b border-slate-200 dark:border-slate-700">
+            {tabs.map(({ key, label }) => (
+              <button
+                key={key}
+                onClick={() => { setTab(key); setResult(null); setScanKey((k) => k + 1) }}
+                className={`flex-1 py-3 text-sm font-semibold transition-colors ${
+                  tab === key
+                    ? 'border-b-2 border-indigo-600 text-indigo-600 dark:text-indigo-400'
+                    : 'text-slate-500 dark:text-slate-400 hover:text-slate-700'
+                }`}
+              >
+                {label}
+              </button>
+            ))}
           </div>
         )}
 
-        {!loading && result && <ResultCard result={result} onReset={reset} />}
+        <div className="p-6">
+          {tab === 'qr' && (
+            <>
+              {loading && (
+                <div className="text-center py-8">
+                  <div className="inline-block w-10 h-10 border-4 border-indigo-500 border-t-transparent rounded-full animate-spin" />
+                  <p className="mt-3 text-gray-600 dark:text-slate-400">Checking in…</p>
+                </div>
+              )}
+              {!loading && result && <ResultCard result={result} onReset={reset} />}
+              {!loading && !result && (
+                <div>
+                  <p className="text-center text-sm text-gray-500 dark:text-slate-400 mb-4">
+                    Tap <strong>Start Camera</strong>, then point at the guest's QR code.
+                  </p>
+                  <QrScanner key={scanKey} onScan={handleScan} />
+                </div>
+              )}
+            </>
+          )}
 
-        {!loading && !result && (
-          <div>
-            <p className="text-center text-sm text-gray-500 dark:text-slate-400 mb-4">
-              Tap <strong>Start Camera</strong>, then point at the guest's QR code.
-            </p>
-            <QrScanner key={scanKey} onScan={handleScan} />
-          </div>
-        )}
+          {tab === 'manual' && eventId && (
+            <ManualCheckinTab key={eventId} eventId={eventId} />
+          )}
+
+          {tab === 'eventqr' && activeEvent?.event_code && (
+            <div className="flex flex-col items-center gap-4 py-2">
+              <p className="text-sm text-gray-500 dark:text-slate-400 text-center">
+                Show this to guests — they scan it with their phone to check in themselves.
+              </p>
+              <img
+                src={`https://api.qrserver.com/v1/create-qr-code/?size=260x260&data=${encodeURIComponent(window.location.origin + '/e/' + activeEvent.event_code)}`}
+                alt="Event self check-in QR"
+                className="w-56 h-56 rounded-xl border-4 border-teal-400"
+              />
+              <div className="text-center">
+                <p className="font-mono font-bold text-lg text-teal-600 dark:text-teal-400 tracking-widest">
+                  {activeEvent.event_code}
+                </p>
+                <button
+                  onClick={() => navigator.clipboard.writeText(`${window.location.origin}/e/${activeEvent.event_code}`)}
+                  className="mt-1 text-xs text-teal-500 underline"
+                >
+                  Copy link
+                </button>
+              </div>
+            </div>
+          )}
+        </div>
       </div>
 
-      <div className="bg-white dark:bg-slate-800 dark:border dark:border-slate-700/60 rounded-xl shadow p-4">
-        <p className="text-xs font-semibold text-gray-600 dark:text-slate-300 mb-2">Manual Token Entry</p>
-        <form
-          onSubmit={(e) => {
-            e.preventDefault()
-            const token = e.target.token.value.trim()
-            if (token) handleScan(token)
-            e.target.reset()
-          }}
-          className="flex gap-2"
-        >
-          <input
-            name="token"
-            placeholder="Paste QR token or URL…"
-            className="flex-1 border border-gray-300 dark:border-slate-700 rounded-lg px-3 py-2 text-sm bg-white dark:bg-slate-700 text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-slate-500"
-          />
-          <button type="submit" className="bg-indigo-600 text-white px-4 py-2 rounded-lg text-sm font-semibold">
-            Submit
-          </button>
-        </form>
-      </div>
+      {tab === 'qr' && !result && (
+        <div className="bg-white dark:bg-slate-800 dark:border dark:border-slate-700/60 rounded-xl shadow p-4">
+          <p className="text-xs font-semibold text-gray-600 dark:text-slate-300 mb-2">Manual Token Entry</p>
+          <form
+            onSubmit={(e) => {
+              e.preventDefault()
+              const token = e.target.token.value.trim()
+              if (token) handleScan(token)
+              e.target.reset()
+            }}
+            className="flex gap-2"
+          >
+            <input
+              name="token"
+              placeholder="Paste QR token or URL…"
+              className="flex-1 border border-gray-300 dark:border-slate-700 rounded-lg px-3 py-2 text-sm bg-white dark:bg-slate-700 text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-slate-500"
+            />
+            <button type="submit" className="bg-indigo-600 text-white px-4 py-2 rounded-lg text-sm font-semibold">
+              Submit
+            </button>
+          </form>
+        </div>
+      )}
     </div>
   )
 }

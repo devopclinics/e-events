@@ -5,7 +5,7 @@ from sqlalchemy import select, delete, update
 from ..database import get_db
 from ..models import Event, EventUser, User, Guest, SeatingTable, TableGroup, TableGroupTable, MenuCategory, MenuItem, MenuCombination, MenuCombinationItem, GuestMenuChoice, MessageTemplate
 from ..schemas import EventCreate, EventUpdate, EventOut, EventMemberOut, AssignUserRequest, UserOut, EventSourceUpdate, EventResetRequest, EventResetResult
-from ..auth import require_admin, get_current_user
+from ..auth import require_admin, require_super_admin, get_current_user
 from .guests import import_from_source_url, _normalize_phone
 from services import messaging
 
@@ -393,9 +393,79 @@ async def toggle_features(
         event.seating_enabled = bool(body["seating_enabled"])
     if "menu_enabled" in body:
         event.menu_enabled = bool(body["menu_enabled"])
-    for k in ("notify_email", "notify_sms", "notify_whatsapp"):
+    for k in ("notify_email", "notify_sms", "notify_mms", "notify_whatsapp"):
         if k in body:
             setattr(event, k, bool(body[k]))
+    await db.commit()
+    await db.refresh(event)
+    return event
+
+
+@router.patch("/{event_id}/self-checkin", response_model=EventOut)
+async def toggle_self_checkin(
+    event_id: str,
+    body: dict,
+    db: AsyncSession = Depends(get_db),
+    _: User = Depends(require_admin),
+):
+    """Enable or disable guest self check-in via event code."""
+    event = await db.get(Event, event_id)
+    if not event:
+        raise HTTPException(404, "Event not found")
+    if "enabled" not in body:
+        raise HTTPException(400, "Body must contain { enabled: bool }")
+
+    enable = bool(body["enabled"])
+    event.self_checkin_enabled = enable
+
+    # Auto-generate event code on first enable
+    if enable and not event.event_code:
+        from .self_checkin import gen_event_code
+        while True:
+            code = gen_event_code()
+            existing = (await db.execute(
+                select(Event).where(Event.event_code == code)
+            )).scalar_one_or_none()
+            if not existing:
+                event.event_code = code
+                break
+
+    await db.commit()
+    await db.refresh(event)
+    return event
+
+
+@router.patch("/{event_id}/manual-checkin", response_model=EventOut)
+async def toggle_manual_checkin(
+    event_id: str,
+    body: dict,
+    db: AsyncSession = Depends(get_db),
+    _: User = Depends(require_admin),
+):
+    event = await db.get(Event, event_id)
+    if not event:
+        raise HTTPException(404, "Event not found")
+    if "enabled" not in body:
+        raise HTTPException(400, "Body must contain { enabled: bool }")
+    event.manual_checkin_enabled = bool(body["enabled"])
+    await db.commit()
+    await db.refresh(event)
+    return event
+
+
+@router.patch("/{event_id}/partner-pairing", response_model=EventOut)
+async def toggle_partner_pairing(
+    event_id: str,
+    body: dict,
+    db: AsyncSession = Depends(get_db),
+    _: User = Depends(require_admin),
+):
+    event = await db.get(Event, event_id)
+    if not event:
+        raise HTTPException(404, "Event not found")
+    if "enabled" not in body:
+        raise HTTPException(400, "Body must contain { enabled: bool }")
+    event.partner_pairing_enabled = bool(body["enabled"])
     await db.commit()
     await db.refresh(event)
     return event

@@ -6,7 +6,7 @@ from .database import engine
 from .config import settings
 from .routers import events, guests, scanner, dashboard, seating, menu
 from .routers import auth as auth_router
-from .routers import table_groups, templates
+from .routers import table_groups, templates, self_checkin
 from . import sync_poller, db_migrate
 
 
@@ -47,6 +47,7 @@ app.include_router(menu.router,        prefix="/api/events", tags=["menu"])
 app.include_router(scanner.router,     prefix="/api/scan",   tags=["scanner"])
 app.include_router(dashboard.router,   prefix="/api/events", tags=["dashboard"])
 app.include_router(templates.router,   prefix="/api",        tags=["templates"])
+app.include_router(self_checkin.router, prefix="/api/e",      tags=["self-checkin"])
 
 
 @app.get("/api/health")

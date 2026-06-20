@@ -25,6 +25,10 @@ DEFAULTS: dict[str, dict[str, Any]] = {
             "Hi {{guest_first_name}}, you're invited to {{event_name}} on {{event_date}}. "
             "Your ticket: {{ticket_link}}"
         ),
+        "mms_body": (
+            "Hi {{guest_first_name}}! Your QR ticket for {{event_name}} on {{event_date}} is attached. "
+            "Tap to view online: {{ticket_link}}"
+        ),
         "whatsapp_body": (
             "Hi {{guest_first_name}} 👋\n\nYou're invited to *{{event_name}}* on {{event_date}}.\n\n"
             "Your personal QR ticket:\n{{ticket_link}}\n\nSee you there!"
@@ -39,6 +43,10 @@ DEFAULTS: dict[str, dict[str, Any]] = {
         ),
         "sms_body": (
             "Reminder: {{event_name}} is on {{event_date}}. Your ticket: {{ticket_link}}"
+        ),
+        "mms_body": (
+            "Reminder: {{event_name}} is on {{event_date}}. Your QR ticket is attached. "
+            "View online: {{ticket_link}}"
         ),
         "whatsapp_body": (
             "Hi {{guest_first_name}} 👋 Reminder: *{{event_name}}* is on {{event_date}}.\n\nTicket: {{ticket_link}}"
@@ -240,5 +248,6 @@ async def resolve_template(
         "subject":        (override.subject        if override and override.subject        is not None else defaults.get("subject")),
         "email_body":     (override.email_body     if override and override.email_body     is not None else defaults.get("email_body")),
         "sms_body":       (override.sms_body       if override and override.sms_body       is not None else defaults.get("sms_body")),
+        "mms_body":       (override.mms_body       if override and override.mms_body       is not None else defaults.get("mms_body")),
         "whatsapp_body":  (override.whatsapp_body  if override and override.whatsapp_body  is not None else defaults.get("whatsapp_body")),
     }

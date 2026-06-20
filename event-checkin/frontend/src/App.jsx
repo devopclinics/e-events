@@ -7,6 +7,7 @@ import AdminPage from './pages/AdminPage'
 import ScannerPage from './pages/ScannerPage'
 import DashboardPage from './pages/DashboardPage'
 import ScanAutoPage from './pages/ScanAutoPage'
+import SelfCheckinPage from './pages/SelfCheckinPage'
 import LoginPage from './pages/LoginPage'
 import RegisterPage from './pages/RegisterPage'
 import LandingPage from './pages/LandingPage'
@@ -155,6 +156,7 @@ function AppRoutes() {
       <Route path="/login" element={<LoginPage />} />
       <Route path="/register" element={<RegisterPage />} />
       <Route path="/scan/:token" element={<ScanAutoPage />} />
+      <Route path="/e/:code" element={<SelfCheckinPage />} />
 
       {/* Landing page: show to guests, redirect logged-in users */}
       <Route path="/"

@@ -40,6 +40,8 @@ class Event(Base):
     couples_name: Mapped[str] = mapped_column(String(255))
     event_date: Mapped[datetime] = mapped_column(DateTime)
     description: Mapped[str | None] = mapped_column(Text, nullable=True)
+    venue_name: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    venue_address: Mapped[str | None] = mapped_column(String(500), nullable=True)
     checkin_base_url: Mapped[str] = mapped_column(String(500))
     status: Mapped[str] = mapped_column(String(20), default="draft")
     seating_enabled: Mapped[bool] = mapped_column(Boolean, default=False)
@@ -49,7 +51,12 @@ class Event(Base):
     # Twilio creds) decides whether a channel is actually wired.
     notify_email: Mapped[bool] = mapped_column(Boolean, default=True)
     notify_sms: Mapped[bool] = mapped_column(Boolean, default=True)
+    notify_mms: Mapped[bool] = mapped_column(Boolean, default=False)
     notify_whatsapp: Mapped[bool] = mapped_column(Boolean, default=True)
+    manual_checkin_enabled: Mapped[bool] = mapped_column(Boolean, default=False)
+    self_checkin_enabled: Mapped[bool] = mapped_column(Boolean, default=False)
+    partner_pairing_enabled: Mapped[bool] = mapped_column(Boolean, default=True)
+    event_code: Mapped[str | None] = mapped_column(String(20), unique=True, nullable=True, index=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
 
     # Live guest-list sync from a Google Sheets / OneDrive / Excel Online URL.
@@ -194,6 +201,8 @@ class Guest(Base):
     qr_token: Mapped[str] = mapped_column(String(36), unique=True, default=lambda: str(uuid.uuid4()))
     qr_generated_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     invite_sent_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    # 'sent' = at least one channel dispatched OK, 'failed' = all channels failed or no contact info
+    invite_status: Mapped[str | None] = mapped_column(String(20), nullable=True)
     admitted: Mapped[bool] = mapped_column(Boolean, default=False)
     admitted_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     admit_notified: Mapped[bool] = mapped_column(Boolean, default=False)
@@ -246,6 +255,7 @@ class MessageTemplate(Base):
     subject: Mapped[str | None] = mapped_column(String(500), nullable=True)
     email_body: Mapped[str | None] = mapped_column(Text, nullable=True)
     sms_body: Mapped[str | None] = mapped_column(Text, nullable=True)
+    mms_body: Mapped[str | None] = mapped_column(Text, nullable=True)
     whatsapp_body: Mapped[str | None] = mapped_column(Text, nullable=True)
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
     updated_by: Mapped[str | None] = mapped_column(String(255), nullable=True)   # user email

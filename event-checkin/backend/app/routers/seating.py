@@ -1,9 +1,14 @@
+import csv
+import io
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func
 from ..database import get_db
 from ..models import Event, SeatingTable, Guest, EventUser, User, TableGroup, TableGroupTable
-from ..schemas import SeatingTableCreate, SeatingTableOut, SeatAssignRequest
+from ..schemas import (
+    SeatingTableCreate, SeatingTableOut, SeatAssignRequest,
+    BulkTableImportRequest, BulkTableImportResult, BulkImportError, BulkTableRow,
+)
 from ..auth import require_admin, get_current_user, require_official
 
 router = APIRouter()
@@ -52,8 +57,21 @@ async def assign_next_seat(guest: Guest, db: AsyncSession) -> str | None:
     Returns None on success, or an error message string if the guest cannot
     be seated (e.g. no untagged tables available for an untagged guest).
     """
-    if guest.table_id:
+    if guest.table_id and guest.seat_number:
         return None
+
+    # Guest was pre-assigned to a specific table (e.g. from spreadsheet import)
+    # but has no seat number yet — assign the next free seat on that table.
+    if guest.table_id and not guest.seat_number:
+        pre_table = await db.get(SeatingTable, guest.table_id)
+        if pre_table:
+            taken, held = await _seat_state(pre_table, db)
+            seat = _first_free(taken, held, pre_table.capacity, skip_held=True)
+            if seat is None:
+                seat = _first_free(taken, set(), pre_table.capacity, skip_held=False)
+            if seat is not None:
+                guest.seat_number = str(seat)
+            return None
 
     # Build the pool of candidate tables: group-restricted or untagged-only.
     if guest.table_group_id:
@@ -171,6 +189,124 @@ async def create_table(event_id: str, data: SeatingTableCreate, db: AsyncSession
     await db.commit()
     await db.refresh(table)
     return SeatingTableOut(id=table.id, event_id=table.event_id, name=table.name, capacity=table.capacity, assigned_count=0)
+
+
+def _parse_table_csv(csv_text: str) -> list[BulkTableRow]:
+    """Parse CSV text into BulkTableRow objects. Accepts header or no header."""
+    rows = []
+    reader = csv.DictReader(io.StringIO(csv_text.strip()))
+    # Try header-less if DictReader fields don't look right
+    if reader.fieldnames and len(reader.fieldnames) >= 2:
+        name_key = next((f for f in reader.fieldnames if 'name' in f.lower()), reader.fieldnames[0])
+        cap_key  = next((f for f in reader.fieldnames if 'cap' in f.lower()), reader.fieldnames[1])
+        for row in reader:
+            rows.append(BulkTableRow(name=(row.get(name_key) or '').strip(), capacity=int((row.get(cap_key) or '0').strip())))
+    else:
+        for line in csv_text.strip().splitlines():
+            parts = [p.strip() for p in line.split(',')]
+            if len(parts) >= 2:
+                try:
+                    rows.append(BulkTableRow(name=parts[0], capacity=int(parts[1])))
+                except ValueError:
+                    pass  # header row or bad row — skip
+    return rows
+
+
+@router.post("/{event_id}/tables/bulk", response_model=BulkTableImportResult, status_code=201)
+async def bulk_create_tables(
+    event_id: str,
+    data: BulkTableImportRequest,
+    db: AsyncSession = Depends(get_db),
+    _: User = Depends(require_admin),
+):
+    if not await db.get(Event, event_id):
+        raise HTTPException(404, "Event not found")
+
+    # Parse rows from JSON or CSV
+    if data.csv_text:
+        try:
+            raw_rows = _parse_table_csv(data.csv_text)
+        except Exception as exc:
+            raise HTTPException(400, f"CSV parse error: {exc}")
+    elif data.rows:
+        raw_rows = data.rows
+    else:
+        raise HTTPException(400, "Provide either rows (JSON array) or csv_text")
+
+    if not raw_rows:
+        raise HTTPException(400, "No rows found in input")
+
+    # Fetch existing table names for this event
+    existing_names: set[str] = set(
+        (await db.execute(select(SeatingTable.name).where(SeatingTable.event_id == event_id))).scalars().all()
+    )
+
+    errors: list[BulkImportError] = []
+    to_create: list[SeatingTable] = []
+    seen_in_payload: set[str] = set()
+    skipped = 0
+
+    for i, row in enumerate(raw_rows, start=1):
+        name = row.name.strip()
+        capacity = row.capacity
+
+        # Validation
+        if not name:
+            errors.append(BulkImportError(row=i, reason="name is required", data={"name": name, "capacity": capacity}))
+            if data.mode == "strict":
+                break
+            continue
+        if capacity < 1:
+            errors.append(BulkImportError(row=i, reason=f"capacity must be ≥ 1 (got {capacity})", data={"name": name, "capacity": capacity}))
+            if data.mode == "strict":
+                break
+            continue
+
+        # Duplicate within payload
+        norm = name.lower()
+        if norm in seen_in_payload:
+            errors.append(BulkImportError(row=i, reason=f"duplicate name '{name}' in import", data={"name": name}))
+            if data.mode == "strict":
+                break
+            continue
+        seen_in_payload.add(norm)
+
+        # Duplicate against DB
+        if any(e.lower() == norm for e in existing_names):
+            if data.on_duplicate == "error":
+                errors.append(BulkImportError(row=i, reason=f"table '{name}' already exists", data={"name": name}))
+                if data.mode == "strict":
+                    break
+            else:
+                skipped += 1
+            continue
+
+        to_create.append(SeatingTable(event_id=event_id, name=name, capacity=capacity))
+
+    if data.mode == "strict" and errors:
+        return BulkTableImportResult(created=0, skipped=0, errors=errors, dry_run=data.dry_run)
+
+    if data.dry_run:
+        return BulkTableImportResult(
+            created=len(to_create),
+            skipped=skipped,
+            errors=errors,
+            dry_run=True,
+        )
+
+    for table in to_create:
+        db.add(table)
+    await db.flush()
+    created_ids = [t.id for t in to_create]
+    await db.commit()
+
+    return BulkTableImportResult(
+        created=len(to_create),
+        skipped=skipped,
+        errors=errors,
+        created_ids=created_ids,
+        dry_run=False,
+    )
 
 
 @router.put("/{event_id}/tables/{table_id}", response_model=SeatingTableOut)

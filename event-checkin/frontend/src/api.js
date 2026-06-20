@@ -110,6 +110,7 @@ export const api = {
   createTable:             (eventId, data)             => req('POST',   `/events/${eventId}/tables`, data),
   updateTable:             (eventId, tableId, data)    => req('PUT',    `/events/${eventId}/tables/${tableId}`, data),
   deleteTable:             (eventId, tableId)          => req('DELETE', `/events/${eventId}/tables/${tableId}`),
+  bulkImportTables:        (eventId, data)             => req('POST',   `/events/${eventId}/tables/bulk`, data),
   getSeatingChart:         (eventId)                   => req('GET',    `/events/${eventId}/seating`),
   autoAssign:              (eventId, clear = false)    => req('POST',   `/events/${eventId}/seating/auto-assign?clear=${clear}`),
   assignSeat:              (eventId, guestId, body)    => req('PATCH',  `/events/${eventId}/guests/${guestId}/seat`, body),
@@ -123,6 +124,7 @@ export const api = {
   deleteTableGroup:      (eventId, groupId)             => req('DELETE', `/events/${eventId}/table-groups/${groupId}`),
   assignGuestsToGroup:   (eventId, groupId, guestIds)   => req('POST',   `/events/${eventId}/table-groups/${groupId}/assign-guests`, { guest_ids: guestIds }),
   clearGuestsFromGroup:  (eventId, groupId, guestIds)   => req('DELETE', `/events/${eventId}/table-groups/${groupId}/assign-guests`, { guest_ids: guestIds }),
+  bulkImportTableGroups: (eventId, data)                => req('POST',   `/events/${eventId}/table-groups/bulk`, data),
 
   // Menu (admin)
   listMenuCategories: (eventId)              => req('GET',    `/events/${eventId}/menu-categories`),
@@ -142,6 +144,22 @@ export const api = {
 
   // Scanner
   scan: (token) => req('POST', `/scan/${token}`),
+  searchGuests: (eventId, q) => req('GET', `/events/${eventId}/guests/search?q=${encodeURIComponent(q)}`),
+  manualCheckin: (eventId, guestId) => req('POST', `/events/${eventId}/guests/${guestId}/manual-checkin`),
+  toggleManualCheckin: (eventId, enabled) => req('PATCH', `/events/${eventId}/manual-checkin`, { enabled }),
+  toggleSelfCheckin: (eventId, enabled) => req('PATCH', `/events/${eventId}/self-checkin`, { enabled }),
+  togglePartnerPairing: (eventId, enabled) => req('PATCH', `/events/${eventId}/partner-pairing`, { enabled }),
+
+  // Self check-in (public — no auth)
+  selfCheckinEvent: (code) => fetch(`/api/e/${code}`).then((r) => r.json()),
+  selfCheckinSearch: (code, query) =>
+    fetch(`/api/e/${code}/search`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ query }),
+    }).then((r) => r.json()),
+  selfCheckinConfirm: (code, guestId) =>
+    fetch(`/api/e/${code}/checkin/${guestId}`, { method: 'POST' }).then((r) => r.json()),
 
   // Ticket (public)
   viewTicket: (token) => fetch(`/api/scan/${token}/ticket`).then((r) => r.json()),

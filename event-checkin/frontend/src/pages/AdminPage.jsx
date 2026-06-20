@@ -74,7 +74,7 @@ function ChannelToggles({ event, onChanged }) {
     finally { setLoading(false) }
   }
   async function sendTest(channel) {
-    const phone = prompt(`Send a test ${channel.toUpperCase()} to which number?\n(US 10-digit or full E.164 e.g. +18327941707)`)
+    const phone = prompt(`Send a test ${channel.toUpperCase()} to which number?\n(E.164 format, e.g. +12015550123)`)
     if (!phone || !phone.trim()) return
     setTesting(channel); setTestMsg('')
     try {
@@ -85,8 +85,9 @@ function ChannelToggles({ event, onChanged }) {
     finally { setTesting(null) }
   }
   const channels = [
-    { key: 'notify_email',    label: 'Email',    icon: '✉', test: null },
+    { key: 'notify_email',    label: 'Email',    icon: '✉',  test: null },
     { key: 'notify_sms',      label: 'SMS',      icon: '📱', test: 'sms' },
+    { key: 'notify_mms',      label: 'MMS',      icon: '🖼', test: null },
     { key: 'notify_whatsapp', label: 'WhatsApp', icon: '💬', test: 'whatsapp' },
   ]
   return (
@@ -123,7 +124,7 @@ function ChannelToggles({ event, onChanged }) {
         </div>
       )}
       <p className="text-[10px] text-gray-400 dark:text-slate-500 italic">
-        SMS / WhatsApp need a phone number on each guest + provider creds in .env
+        SMS / MMS / WhatsApp need a phone number on each guest + provider creds in .env. MMS (ClickSend) sends the QR code image + invite text — US/CA/AU only.
       </p>
     </div>
   )
@@ -165,6 +166,149 @@ function FeatureToggles({ event, onChanged }) {
   )
 }
 
+function PartnerPairingToggle({ event, onChanged }) {
+  const [loading, setLoading] = useState(false)
+
+  async function toggle() {
+    setLoading(true)
+    try {
+      const updated = await api.togglePartnerPairing(event.id, !event.partner_pairing_enabled)
+      onChanged(updated)
+    } catch (e) { console.error(e) }
+    finally { setLoading(false) }
+  }
+
+  return (
+    <div className="flex items-center gap-3 pt-3 border-t dark:border-slate-700 mt-3">
+      <span className="text-xs font-semibold text-gray-500 dark:text-slate-400">Partner Pairing:</span>
+      <button
+        onClick={toggle}
+        disabled={loading}
+        className={`px-3 py-1.5 rounded-lg text-xs font-semibold border transition-colors disabled:opacity-50 ${
+          event.partner_pairing_enabled
+            ? 'bg-pink-500 text-white border-pink-500 hover:bg-pink-600'
+            : 'bg-white dark:bg-slate-700 text-gray-600 dark:text-slate-300 border-gray-300 dark:border-slate-600 hover:bg-gray-50 dark:hover:bg-slate-600'
+        }`}
+      >
+        {event.partner_pairing_enabled !== false ? 'ON' : 'OFF'}
+      </button>
+      <span className="text-[10px] text-gray-400 dark:text-slate-500 italic">
+        Allows guests to link their ticket to a partner's ticket
+      </span>
+    </div>
+  )
+}
+
+function ManualCheckinToggle({ event, onChanged }) {
+  const [loading, setLoading] = useState(false)
+
+  async function toggle() {
+    setLoading(true)
+    try {
+      const updated = await api.toggleManualCheckin(event.id, !event.manual_checkin_enabled)
+      onChanged(updated)
+    } catch (e) { console.error(e) }
+    finally { setLoading(false) }
+  }
+
+  return (
+    <div className="flex items-center gap-3 pt-3 border-t dark:border-slate-700 mt-3">
+      <span className="text-xs font-semibold text-gray-500 dark:text-slate-400">Manual Check-in:</span>
+      <button
+        onClick={toggle}
+        disabled={loading}
+        className={`px-3 py-1.5 rounded-lg text-xs font-semibold border transition-colors disabled:opacity-50 ${
+          event.manual_checkin_enabled
+            ? 'bg-orange-500 text-white border-orange-500 hover:bg-orange-600'
+            : 'bg-white dark:bg-slate-700 text-gray-600 dark:text-slate-300 border-gray-300 dark:border-slate-600 hover:bg-gray-50 dark:hover:bg-slate-600'
+        }`}
+      >
+        {event.manual_checkin_enabled ? 'ON' : 'OFF'}
+      </button>
+      <span className="text-[10px] text-gray-400 dark:text-slate-500 italic">
+        Allows staff to check in guests by name search (no QR needed)
+      </span>
+    </div>
+  )
+}
+
+function SelfCheckinToggle({ event, onChanged }) {
+  const [loading, setLoading] = useState(false)
+
+  async function toggle() {
+    setLoading(true)
+    try {
+      const updated = await api.toggleSelfCheckin(event.id, !event.self_checkin_enabled)
+      onChanged(updated)
+    } catch (e) { console.error(e) }
+    finally { setLoading(false) }
+  }
+
+  async function downloadQR() {
+    const url = `https://api.qrserver.com/v1/create-qr-code/?size=600x600&data=${encodeURIComponent(window.location.origin + '/e/' + event.event_code)}`
+    const resp = await fetch(url)
+    const blob = await resp.blob()
+    const a = document.createElement('a')
+    a.href = URL.createObjectURL(blob)
+    a.download = `self-checkin-qr-${event.event_code}.png`
+    a.click()
+    URL.revokeObjectURL(a.href)
+  }
+
+  return (
+    <div className="flex flex-col gap-2 pt-3 border-t dark:border-slate-700 mt-3">
+      <div className="flex items-center gap-3">
+        <span className="text-xs font-semibold text-gray-500 dark:text-slate-400">Self Check-in:</span>
+        <button
+          onClick={toggle}
+          disabled={loading}
+          className={`px-3 py-1.5 rounded-lg text-xs font-semibold border transition-colors disabled:opacity-50 ${
+            event.self_checkin_enabled
+              ? 'bg-teal-500 text-white border-teal-500 hover:bg-teal-600'
+              : 'bg-white dark:bg-slate-700 text-gray-600 dark:text-slate-300 border-gray-300 dark:border-slate-600 hover:bg-gray-50 dark:hover:bg-slate-600'
+          }`}
+        >
+          {event.self_checkin_enabled ? 'ON' : 'OFF'}
+        </button>
+        <span className="text-[10px] text-gray-400 dark:text-slate-500 italic">
+          Guests check themselves in by scanning one QR code at the door
+        </span>
+      </div>
+      {event.self_checkin_enabled && event.event_code && (
+        <div className="ml-0 mt-1 flex flex-col gap-1 bg-teal-50 dark:bg-teal-900/20 rounded-lg p-3">
+          <div className="flex items-center gap-2">
+            <span className="text-xs text-gray-500 dark:text-slate-400">Event code:</span>
+            <span className="font-mono font-bold text-sm text-teal-700 dark:text-teal-300 tracking-widest">
+              {event.event_code}
+            </span>
+            <button
+              onClick={() => navigator.clipboard.writeText(`${window.location.origin}/e/${event.event_code}`)}
+              className="text-[10px] text-teal-600 dark:text-teal-400 underline"
+            >
+              Copy link
+            </button>
+          </div>
+          <p className="text-[10px] text-gray-400 dark:text-slate-500">
+            Print this QR or share the link: <span className="font-mono">{window.location.origin}/e/{event.event_code}</span>
+          </p>
+          <div className="mt-1 flex items-end gap-3">
+            <img
+              src={`https://api.qrserver.com/v1/create-qr-code/?size=160x160&data=${encodeURIComponent(window.location.origin + '/e/' + event.event_code)}`}
+              alt="Self check-in QR"
+              className="w-28 h-28 rounded border border-teal-200 dark:border-teal-700"
+            />
+            <button
+              onClick={downloadQR}
+              className="text-xs bg-teal-600 hover:bg-teal-700 text-white px-3 py-1.5 rounded-lg font-semibold">
+              Download QR
+            </button>
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
+
 // ── Table Groups Panel ────────────────────────────────────────────────────────
 
 function TableGroupsPanel({ eventId }) {
@@ -173,6 +317,7 @@ function TableGroupsPanel({ eventId }) {
   const [loading, setLoading] = useState(false)
   const [msg, setMsg] = useState('')
   const [tables, setTables] = useState([])
+  const [showBulk, setShowBulk] = useState(false)
 
   const fieldCls = 'border border-gray-300 dark:border-slate-700 rounded-lg px-3 py-2 text-sm bg-white dark:bg-slate-700 text-gray-900 dark:text-white w-full'
 
@@ -245,12 +390,18 @@ function TableGroupsPanel({ eventId }) {
 
   return (
     <div className="bg-white dark:bg-slate-800 dark:border dark:border-slate-700/60 rounded-xl shadow p-6 space-y-4 mt-6">
-      <div className="flex items-center justify-between">
+      <div className="flex items-center justify-between flex-wrap gap-2">
         <h2 className="font-semibold text-base dark:text-white">Table Groups</h2>
-        <button onClick={openCreate} disabled={loading}
-          className="bg-indigo-600 text-white px-3 py-1.5 rounded-lg text-xs font-semibold hover:bg-indigo-700">
-          + Group
-        </button>
+        <div className="flex gap-2">
+          <button onClick={() => setShowBulk(true)} disabled={loading}
+            className="bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-200 border border-slate-300 dark:border-slate-600 px-3 py-1.5 rounded-lg text-xs font-semibold hover:bg-slate-200 dark:hover:bg-slate-600">
+            + Bulk Import
+          </button>
+          <button onClick={openCreate} disabled={loading}
+            className="bg-indigo-600 text-white px-3 py-1.5 rounded-lg text-xs font-semibold hover:bg-indigo-700">
+            + Group
+          </button>
+        </div>
       </div>
 
       {groups.length === 0 && !form ? (
@@ -359,11 +510,297 @@ function TableGroupsPanel({ eventId }) {
           </div>
         </form>
       )}
+
+      {showBulk && (
+        <BulkImportModal
+          title="Bulk Import Table Groups"
+          template={GROUP_CSV_TEMPLATE}
+          onClose={() => setShowBulk(false)}
+          onSubmit={async (payload) => {
+            const res = await api.bulkImportTableGroups(eventId, payload)
+            if (!payload.dry_run && res.created > 0) {
+              await loadGroups()
+              await loadTables()
+              setMsg(`Imported ${res.created} group${res.created !== 1 ? 's' : ''}.`)
+              setTimeout(() => setMsg(''), 4000)
+            }
+            return res
+          }}
+        />
+      )}
+    </div>
+  )
+}
+
+// ── Bulk Import Modals ────────────────────────────────────────────────────────
+
+const TABLE_CSV_TEMPLATE = `name,capacity
+Table 1,10
+Table 2,8
+Table 3,12`
+
+const GROUP_CSV_TEMPLATE = `name,tag,description,tables
+VIP Tables,vip,Reserved for VIP guests,"Table 1,Table 2"
+Family Tables,family,Family section,"Table 3,Table 4"`
+
+function BulkImportModal({ title, template, onClose, onSubmit }) {
+  const [csvText, setCsvText]   = useState(template)
+  const [mode, setMode]         = useState('lenient')
+  const [dryRun, setDryRun]     = useState(true)
+  const [result, setResult]     = useState(null)
+  const [loading, setLoading]   = useState(false)
+  const [error, setError]       = useState(null)
+  const fileRef = useRef(null)
+
+  async function run(dry) {
+    setLoading(true); setError(null); setResult(null)
+    try {
+      const res = await onSubmit({ csv_text: csvText, mode, dry_run: dry })
+      setResult({ ...res, dry_run: dry })
+      if (!dry) setDryRun(false)
+    } catch (e) {
+      setError(e.message || 'Import failed')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  function handleFile(e) {
+    const file = e.target.files[0]
+    if (!file) return
+    const reader = new FileReader()
+    reader.onload = (ev) => setCsvText(ev.target.result)
+    reader.readAsText(file)
+    e.target.value = ''
+  }
+
+  const canCommit = result && result.dry_run && result.created > 0 && result.errors.length === 0
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/60 backdrop-blur-sm" onClick={onClose}>
+      <div onClick={(e) => e.stopPropagation()}
+        className="bg-white dark:bg-slate-900 dark:border dark:border-slate-700 rounded-xl shadow-2xl w-full max-w-2xl max-h-[90vh] flex flex-col overflow-hidden">
+
+        {/* Header */}
+        <div className="px-5 py-4 border-b dark:border-slate-700 flex items-center justify-between shrink-0">
+          <h3 className="font-bold text-slate-900 dark:text-white">{title}</h3>
+          <button onClick={onClose} className="text-slate-400 hover:text-slate-700 dark:hover:text-white text-2xl leading-none">×</button>
+        </div>
+
+        <div className="overflow-y-auto flex-1 p-5 space-y-4">
+          {/* CSV editor */}
+          <div>
+            <div className="flex items-center justify-between mb-1">
+              <label className="text-xs font-semibold text-gray-600 dark:text-slate-300">CSV Data</label>
+              <div className="flex gap-2">
+                <button onClick={() => setCsvText(template)} className="text-[10px] text-indigo-500 hover:underline">Reset template</button>
+                <button onClick={() => fileRef.current?.click()} className="text-[10px] text-indigo-500 hover:underline">Upload file</button>
+                <input ref={fileRef} type="file" accept=".csv,.txt" className="hidden" onChange={handleFile} />
+              </div>
+            </div>
+            <textarea
+              value={csvText}
+              onChange={(e) => { setCsvText(e.target.value); setResult(null) }}
+              rows={10}
+              className="w-full font-mono text-xs border border-gray-200 dark:border-slate-700 rounded-lg p-3 bg-gray-50 dark:bg-slate-800 text-gray-900 dark:text-white resize-y focus:outline-none focus:ring-2 focus:ring-indigo-400"
+            />
+          </div>
+
+          {/* Options */}
+          <div className="flex flex-wrap gap-4">
+            <div>
+              <label className="text-xs font-semibold text-gray-600 dark:text-slate-300 block mb-1">Mode</label>
+              <div className="flex gap-2">
+                {['lenient', 'strict'].map((m) => (
+                  <button key={m} onClick={() => setMode(m)}
+                    className={`px-3 py-1 text-xs rounded-full border font-semibold transition-colors ${
+                      mode === m
+                        ? 'bg-indigo-600 text-white border-indigo-600'
+                        : 'bg-white dark:bg-slate-800 text-gray-600 dark:text-slate-300 border-gray-300 dark:border-slate-600'
+                    }`}>
+                    {m === 'lenient' ? 'Lenient (skip errors)' : 'Strict (all or nothing)'}
+                  </button>
+                ))}
+              </div>
+            </div>
+          </div>
+
+          {error && <p className="text-sm text-red-500 bg-red-50 dark:bg-red-900/20 rounded p-2">{error}</p>}
+
+          {/* Result preview */}
+          {result && (
+            <div className={`rounded-lg border p-4 space-y-2 ${
+              result.errors.length > 0
+                ? 'bg-amber-50 dark:bg-amber-900/20 border-amber-300 dark:border-amber-700'
+                : 'bg-green-50 dark:bg-green-900/20 border-green-300 dark:border-green-700'
+            }`}>
+              <div className="flex gap-4 text-sm font-semibold">
+                <span className="text-green-700 dark:text-green-400">✓ {result.created} {result.dry_run ? 'would be created' : 'created'}</span>
+                {result.skipped > 0 && <span className="text-amber-600 dark:text-amber-400">↷ {result.skipped} skipped (duplicate)</span>}
+                {result.errors.length > 0 && <span className="text-red-600 dark:text-red-400">✕ {result.errors.length} error{result.errors.length !== 1 ? 's' : ''}</span>}
+              </div>
+              {result.errors.length > 0 && (
+                <div className="overflow-x-auto">
+                  <table className="w-full text-xs">
+                    <thead>
+                      <tr className="text-left text-gray-500 dark:text-slate-400">
+                        <th className="pr-4 py-1">Row</th>
+                        <th className="py-1">Reason</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {result.errors.map((e, idx) => (
+                        <tr key={idx} className="text-red-700 dark:text-red-400">
+                          <td className="pr-4 py-0.5 font-mono">{e.row}</td>
+                          <td className="py-0.5">{e.reason}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+
+        {/* Footer */}
+        <div className="px-5 py-4 border-t dark:border-slate-700 flex gap-2 justify-end shrink-0">
+          <button onClick={onClose}
+            className="px-4 py-2 border border-gray-300 dark:border-slate-600 rounded-lg text-sm dark:text-slate-300 hover:bg-gray-100 dark:hover:bg-slate-700">
+            Close
+          </button>
+          <button onClick={() => run(true)} disabled={loading}
+            className="px-4 py-2 bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-200 border border-slate-300 dark:border-slate-600 rounded-lg text-sm font-semibold hover:bg-slate-200 dark:hover:bg-slate-600 disabled:opacity-50">
+            {loading && dryRun ? 'Validating…' : 'Validate (dry run)'}
+          </button>
+          <button onClick={() => run(false)} disabled={loading || (!canCommit && result != null && !result.dry_run === false)}
+            className="px-4 py-2 bg-indigo-600 text-white rounded-lg text-sm font-semibold hover:bg-indigo-700 disabled:opacity-50">
+            {loading && !dryRun ? 'Importing…' : 'Import'}
+          </button>
+        </div>
+      </div>
     </div>
   )
 }
 
 // ── Seating Panel ─────────────────────────────────────────────────────────────
+
+function MessageDeliveryCard({ guests }) {
+  const [expandedBatch, setExpandedBatch] = useState(null)
+
+  // Group sent guests into batches: new batch if gap > 10 minutes
+  const batches = (() => {
+    const sent = guests
+      .filter((g) => g.invite_sent_at)
+      .sort((a, b) => new Date(a.invite_sent_at) - new Date(b.invite_sent_at))
+    const result = []
+    let current = null
+    for (const g of sent) {
+      const t = new Date(g.invite_sent_at)
+      if (!current || t - current.endTime > 10 * 60 * 1000) {
+        current = { startTime: t, endTime: t, guests: [] }
+        result.push(current)
+      }
+      current.endTime = t
+      current.guests.push(g)
+    }
+    return result.reverse() // most recent first
+  })()
+
+  const failedGuests = guests.filter((g) => g.invite_status === 'failed')
+
+  const fmtDate = (d) => d.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })
+  const fmtTime = (d) => d.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' })
+
+  return (
+    <div className="bg-white dark:bg-slate-800 dark:border dark:border-slate-700/60 rounded-xl shadow p-5 space-y-4">
+      <h2 className="font-semibold text-sm dark:text-white">Message Delivery</h2>
+
+      {/* Summary tiles */}
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+        {[
+          { label: 'Delivered', value: guests.filter((g) => g.invite_status === 'sent').length, cls: 'text-green-600 dark:text-green-400', bg: 'bg-green-50 dark:bg-green-900/20' },
+          { label: 'Failed', value: failedGuests.length, cls: 'text-red-600 dark:text-red-400', bg: 'bg-red-50 dark:bg-red-900/20' },
+          { label: 'Not sent yet', value: guests.filter((g) => !g.invite_sent_at).length, cls: 'text-amber-600 dark:text-amber-400', bg: 'bg-amber-50 dark:bg-amber-900/20' },
+          { label: 'No phone', value: guests.filter((g) => !g.phone).length, cls: 'text-slate-500 dark:text-slate-400', bg: 'bg-slate-50 dark:bg-slate-700/40' },
+        ].map(({ label, value, cls, bg }) => (
+          <div key={label} className={`${bg} rounded-lg p-3 text-center`}>
+            <div className={`text-2xl font-bold ${cls}`}>{value}</div>
+            <div className="text-xs text-gray-500 dark:text-slate-400 mt-0.5">{label}</div>
+          </div>
+        ))}
+      </div>
+
+      {/* Send history */}
+      {batches.length > 0 && (
+        <div className="pt-3 border-t dark:border-slate-700">
+          <p className="text-xs font-semibold text-slate-600 dark:text-slate-300 mb-2">
+            Send History ({batches.length} batch{batches.length !== 1 ? 'es' : ''})
+          </p>
+          <div className="space-y-1.5">
+            {batches.map((batch, i) => {
+              const bFailed = batch.guests.filter((g) => g.invite_status === 'failed').length
+              const bSent   = batch.guests.length - bFailed
+              const isOpen  = expandedBatch === i
+              return (
+                <div key={i} className="border dark:border-slate-700 rounded-lg overflow-hidden">
+                  <button
+                    onClick={() => setExpandedBatch(isOpen ? null : i)}
+                    className="w-full flex items-center justify-between px-3 py-2 text-left hover:bg-slate-50 dark:hover:bg-slate-700/50 transition-colors">
+                    <div className="flex items-center gap-3 flex-wrap">
+                      <span className="text-xs font-semibold text-slate-700 dark:text-slate-200">
+                        {fmtDate(batch.startTime)} — {fmtTime(batch.startTime)}
+                      </span>
+                      <span className="text-xs text-slate-500 dark:text-slate-400">
+                        {batch.guests.length} guest{batch.guests.length !== 1 ? 's' : ''}
+                      </span>
+                      <span className="text-xs text-green-600 dark:text-green-400 font-medium">{bSent} sent</span>
+                      {bFailed > 0 && (
+                        <span className="text-xs text-red-600 dark:text-red-400 font-medium">{bFailed} failed</span>
+                      )}
+                    </div>
+                    <span className="text-slate-400 dark:text-slate-500 text-xs ml-2">{isOpen ? '▲' : '▼'}</span>
+                  </button>
+                  {isOpen && (
+                    <div className="px-3 pb-3 pt-1 bg-slate-50 dark:bg-slate-900/30 border-t dark:border-slate-700">
+                      <div className="flex flex-wrap gap-1.5 max-h-36 overflow-y-auto">
+                        {batch.guests.map((g) => (
+                          <span key={g.id} className={`text-xs px-2 py-0.5 rounded-full ${
+                            g.invite_status === 'failed'
+                              ? 'bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-300'
+                              : 'bg-white dark:bg-slate-700 text-slate-600 dark:text-slate-300 border border-slate-200 dark:border-slate-600'
+                          }`}>
+                            {g.first_name} {g.last_name}{g.invite_status === 'failed' ? ' ✕' : ''}
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )
+            })}
+          </div>
+        </div>
+      )}
+
+      {/* Failed list */}
+      {failedGuests.length > 0 && (
+        <div className="pt-3 border-t dark:border-slate-700">
+          <p className="text-xs font-semibold text-red-600 dark:text-red-400 mb-2">
+            Failed — no reachable channel ({failedGuests.length}):
+          </p>
+          <div className="flex flex-wrap gap-1.5 max-h-28 overflow-y-auto">
+            {failedGuests.map((g) => (
+              <span key={g.id} className="text-xs bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-300 px-2 py-0.5 rounded-full">
+                {g.first_name} {g.last_name}
+              </span>
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
 
 function VipBadge({ className = '' }) {
   return (
@@ -384,6 +821,7 @@ function SeatingPanel({ eventId }) {
   const [form, setForm]           = useState(null)
   const [loading, setLoading]     = useState(false)
   const [msg, setMsg]             = useState('')
+  const [showBulk, setShowBulk]   = useState(false)
   // Reserve modal — when admin clicks an empty seat we open a guest picker.
   const [assignSlot, setAssignSlot] = useState(null)  // {tableId, tableName, seat}
   const [allGuests, setAllGuests]   = useState([])
@@ -516,6 +954,10 @@ function SeatingPanel({ eventId }) {
           <button onClick={() => autoAssign(true)} disabled={loading || tables.length === 0}
             className="bg-amber-500 text-white px-3 py-1.5 rounded-lg text-xs font-semibold hover:bg-amber-600 disabled:opacity-50">
             Reassign All
+          </button>
+          <button onClick={() => setShowBulk(true)} disabled={loading}
+            className="bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-200 border border-slate-300 dark:border-slate-600 px-3 py-1.5 rounded-lg text-xs font-semibold hover:bg-slate-200 dark:hover:bg-slate-600">
+            + Bulk Import
           </button>
           <button onClick={() => setForm({ name: '', capacity: 10 })} disabled={loading}
             className="bg-indigo-600 text-white px-3 py-1.5 rounded-lg text-xs font-semibold hover:bg-indigo-700">
@@ -653,6 +1095,25 @@ function SeatingPanel({ eventId }) {
           onPick={reserveSeat}
           onAddVvip={addVvipAndReserve}
           onClose={() => { setAssignSlot(null); setGuestQuery('') }}
+        />
+      )}
+
+      {showBulk && (
+        <BulkImportModal
+          title="Bulk Import Tables"
+          template={TABLE_CSV_TEMPLATE}
+          onClose={() => setShowBulk(false)}
+          onSubmit={async (payload) => {
+            const res = await api.bulkImportTables(eventId, payload)
+            if (!payload.dry_run && res.created > 0) {
+              const fresh = await api.listTables(eventId)
+              setTables(fresh)
+              if (showChart) loadChart()
+              setMsg(`Imported ${res.created} table${res.created !== 1 ? 's' : ''}.`)
+              setTimeout(() => setMsg(''), 4000)
+            }
+            return res
+          }}
         />
       )}
     </div>
@@ -1970,7 +2431,7 @@ function utcToLocal(utcStr) {
 
 function EventForm({ initial, onSave, onCancel }) {
   const [form, setForm] = useState(
-    initial || { name: '', couples_name: '', event_date: '', description: '', checkin_base_url: window.location.origin }
+    initial || { name: '', couples_name: '', event_date: '', description: '', venue_name: '', venue_address: '', checkin_base_url: window.location.origin }
   )
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
@@ -2008,6 +2469,16 @@ function EventForm({ initial, onSave, onCancel }) {
           <input className={field} value={form.checkin_base_url} onChange={set('checkin_base_url')} required placeholder="https://events.nihlah.io" />
         </div>
       </div>
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+        <div>
+          <label className="block text-xs font-semibold text-gray-600 mb-1">Venue Name</label>
+          <input className={field} value={form.venue_name || ''} onChange={set('venue_name')} placeholder="Grand Ballroom" />
+        </div>
+        <div>
+          <label className="block text-xs font-semibold text-gray-600 mb-1">Venue Address</label>
+          <input className={field} value={form.venue_address || ''} onChange={set('venue_address')} placeholder="123 Main St, New York, NY" />
+        </div>
+      </div>
       <div>
         <label className="block text-xs font-semibold text-gray-600 mb-1">Description</label>
         <textarea className={field} rows={2} value={form.description || ''} onChange={set('description')} />
@@ -2042,19 +2513,39 @@ function SourceSyncPanel({ event, onSave, onSyncNow, loading }) {
   const [url, setUrl] = useState(event.source_url || '')
   const [interval, setInterval] = useState(event.source_sync_interval_seconds || 60)
   const [tick, setTick] = useState(0)
+  const [syncResult, setSyncResult] = useState(null)
+  const [showSkipped, setShowSkipped] = useState(false)
 
   useEffect(() => { setUrl(event.source_url || '') }, [event.id, event.source_url])
   useEffect(() => { setInterval(event.source_sync_interval_seconds || 60) }, [event.id, event.source_sync_interval_seconds])
 
-  // Re-render once a second so "X seconds ago" stays live.
   useEffect(() => {
     const id = window.setInterval(() => setTick((t) => t + 1), 1000)
     return () => window.clearInterval(id)
   }, [])
 
+  async function handleSync() {
+    setSyncResult(null)
+    setShowSkipped(false)
+    const res = await onSyncNow()
+    if (res) setSyncResult(res)
+  }
+
+  function downloadSkipped() {
+    if (!syncResult?.skipped_rows?.length) return
+    const rows = [['row', 'first_name', 'last_name', 'reason'],
+      ...syncResult.skipped_rows.map(r => [r.row, r.first_name, r.last_name, r.reason])]
+    const csv = rows.map(r => r.join(',')).join('\n')
+    const a = document.createElement('a')
+    a.href = 'data:text/csv,' + encodeURIComponent(csv)
+    a.download = 'skipped_guests.csv'
+    a.click()
+  }
+
   const dirty = url.trim() !== (event.source_url || '') ||
     Number(interval) !== (event.source_sync_interval_seconds || 60)
   const polling = event.status === 'active' && !!event.source_url
+  const skippedRows = syncResult?.skipped_rows || []
 
   return (
     <div className="bg-white dark:bg-slate-800 dark:border dark:border-slate-700/60 rounded-xl shadow p-6 space-y-4">
@@ -2105,7 +2596,7 @@ function SourceSyncPanel({ event, onSave, onSyncNow, loading }) {
           Save
         </button>
         <button
-          onClick={onSyncNow}
+          onClick={handleSync}
           disabled={loading || !event.source_url}
           className="bg-white dark:bg-slate-700 border border-gray-300 dark:border-slate-700 text-gray-700 dark:text-slate-200 px-4 py-2 rounded-lg text-sm font-medium hover:bg-gray-50 dark:hover:bg-slate-600 disabled:opacity-50">
           {loading ? 'Syncing…' : 'Sync now'}
@@ -2127,6 +2618,79 @@ function SourceSyncPanel({ event, onSave, onSyncNow, loading }) {
           {event.source_last_error}
         </div>
       )}
+
+      {/* Sync result summary */}
+      {syncResult && (
+        <div className="border border-gray-100 dark:border-slate-700 rounded-lg p-3 space-y-2">
+          <div className="flex flex-wrap gap-3 text-xs font-semibold">
+            <span className="text-green-600 dark:text-green-400">✓ {syncResult.added} added</span>
+            {syncResult.skipped > 0 && (
+              <span className="text-amber-600 dark:text-amber-400">↷ {syncResult.skipped} skipped</span>
+            )}
+            {syncResult.skipped_duplicate > 0 && (
+              <span className="text-amber-500 dark:text-amber-400">· {syncResult.skipped_duplicate} duplicate</span>
+            )}
+            {syncResult.skipped_blank_name > 0 && (
+              <span className="text-gray-400">· {syncResult.skipped_blank_name} blank rows</span>
+            )}
+            {syncResult.backfilled_phones > 0 && (
+              <span className="text-blue-500 dark:text-blue-400">· {syncResult.backfilled_phones} phones filled</span>
+            )}
+            {syncResult.invalid_phones > 0 && (
+              <span className="text-orange-500">· {syncResult.invalid_phones} invalid phones</span>
+            )}
+          </div>
+
+          {skippedRows.length > 0 && (
+            <div>
+              <div className="flex items-center gap-3">
+                <button
+                  onClick={() => setShowSkipped((s) => !s)}
+                  className="text-xs text-indigo-500 hover:underline">
+                  {showSkipped ? '▲ Hide skipped rows' : `▼ Show ${skippedRows.length} skipped row${skippedRows.length !== 1 ? 's' : ''}`}
+                </button>
+                <button onClick={downloadSkipped} className="text-xs text-gray-400 hover:text-gray-600 dark:hover:text-slate-300 hover:underline">
+                  Download CSV
+                </button>
+              </div>
+
+              {showSkipped && (
+                <div className="mt-2 overflow-x-auto max-h-48 overflow-y-auto rounded border border-gray-100 dark:border-slate-700">
+                  <table className="w-full text-xs">
+                    <thead className="bg-gray-50 dark:bg-slate-700 sticky top-0">
+                      <tr>
+                        <th className="px-3 py-1.5 text-left text-gray-500 dark:text-slate-400 font-semibold">Row</th>
+                        <th className="px-3 py-1.5 text-left text-gray-500 dark:text-slate-400 font-semibold">First Name</th>
+                        <th className="px-3 py-1.5 text-left text-gray-500 dark:text-slate-400 font-semibold">Last Name</th>
+                        <th className="px-3 py-1.5 text-left text-gray-500 dark:text-slate-400 font-semibold">Reason</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-gray-100 dark:divide-slate-700">
+                      {skippedRows.map((r, i) => (
+                        <tr key={i} className="hover:bg-gray-50 dark:hover:bg-slate-700">
+                          <td className="px-3 py-1.5 font-mono text-gray-400">{r.row}</td>
+                          <td className="px-3 py-1.5 dark:text-slate-200">{r.first_name || <span className="italic text-gray-400">—</span>}</td>
+                          <td className="px-3 py-1.5 dark:text-slate-200">{r.last_name || <span className="italic text-gray-400">—</span>}</td>
+                          <td className="px-3 py-1.5">
+                            <span className={`px-1.5 py-0.5 rounded-full text-[10px] font-semibold ${
+                              r.reason === 'duplicate'
+                                ? 'bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-400'
+                                : 'bg-gray-100 text-gray-500 dark:bg-slate-700 dark:text-slate-400'
+                            }`}>
+                              {r.reason}
+                            </span>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+      )}
+
       {!polling && event.source_url && (
         <p className="text-xs text-gray-400 dark:text-slate-500">
           Auto-sync starts when you set the event to <strong>Active</strong>.
@@ -2300,7 +2864,7 @@ const PLACEHOLDERS = [
 function MessageTemplatesPanel({ eventId }) {
   const [templates, setTemplates] = useState([])
   const [selected, setSelected] = useState(null)   // template_key
-  const [form, setForm] = useState(null)            // {subject,email_body,sms_body,whatsapp_body}
+  const [form, setForm] = useState(null)            // {subject,email_body,sms_body,mms_body,whatsapp_body}
   const [preview, setPreview] = useState(null)
   const [tab, setTab] = useState('email')           // email|sms|whatsapp
   const [saving, setSaving] = useState(false)
@@ -2328,6 +2892,7 @@ function MessageTemplatesPanel({ eventId }) {
       subject:       row?.subject       ?? '',
       email_body:    row?.email_body    ?? '',
       sms_body:      row?.sms_body      ?? '',
+      mms_body:      row?.mms_body      ?? '',
       whatsapp_body: row?.whatsapp_body ?? '',
     })
     setPreview(null); setMsg(''); setErr('')
@@ -2366,6 +2931,7 @@ function MessageTemplatesPanel({ eventId }) {
       if (form.subject?.trim())       overrides.subject       = form.subject
       if (form.email_body?.trim())    overrides.email_body    = form.email_body
       if (form.sms_body?.trim())      overrides.sms_body      = form.sms_body
+      if (form.mms_body?.trim())      overrides.mms_body      = form.mms_body
       if (form.whatsapp_body?.trim()) overrides.whatsapp_body = form.whatsapp_body
       const res = await api.previewTemplate({
         template_key: selected,
@@ -2437,7 +3003,7 @@ function MessageTemplatesPanel({ eventId }) {
               <div className="flex items-center justify-between flex-wrap gap-2">
                 <p className="font-semibold text-sm dark:text-white">{TEMPLATE_LABELS[selected]}</p>
                 <div className="flex gap-2">
-                  {['email','sms','whatsapp'].map((ch) => (
+                  {['email','sms','mms','whatsapp'].map((ch) => (
                     <button key={ch} onClick={() => setTab(ch)}
                       className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors ${
                         tab === ch ? 'bg-indigo-600 text-white' : 'bg-gray-100 dark:bg-slate-700 text-gray-600 dark:text-slate-300 hover:bg-gray-200 dark:hover:bg-slate-600'
@@ -2484,6 +3050,15 @@ function MessageTemplatesPanel({ eventId }) {
                     <p className="text-xs text-gray-400 mt-1">{(form.sms_body || '').length} chars</p>
                   </div>
                 )}
+                {tab === 'mms' && (
+                  <div>
+                    <label className="block text-xs font-semibold text-gray-600 dark:text-slate-300 mb-1">MMS Body</label>
+                    <textarea rows={5} value={form.mms_body}
+                      onChange={(e) => setForm((f) => ({ ...f, mms_body: e.target.value }))}
+                      className={`${fieldCls} resize-y`} placeholder="MMS body — guest's QR code image will be attached automatically…" />
+                    <p className="text-xs text-gray-400 mt-1">{(form.mms_body || '').length} chars · QR image attached automatically</p>
+                  </div>
+                )}
                 {tab === 'whatsapp' && (
                   <div>
                     <label className="block text-xs font-semibold text-gray-600 dark:text-slate-300 mb-1">WhatsApp Body</label>
@@ -2521,6 +3096,7 @@ function MessageTemplatesPanel({ eventId }) {
                     <pre className="text-xs text-gray-700 dark:text-slate-300 whitespace-pre-wrap font-sans">{preview.email_body}</pre>
                   </>}
                   {tab === 'sms' && <pre className="text-xs text-gray-700 dark:text-slate-300 whitespace-pre-wrap font-sans">{preview.sms_body}</pre>}
+                  {tab === 'mms' && <pre className="text-xs text-gray-700 dark:text-slate-300 whitespace-pre-wrap font-sans">{preview.mms_body}</pre>}
                   {tab === 'whatsapp' && <pre className="text-xs text-gray-700 dark:text-slate-300 whitespace-pre-wrap font-sans">{preview.whatsapp_body}</pre>}
                 </div>
               )}
@@ -2533,6 +3109,7 @@ function MessageTemplatesPanel({ eventId }) {
                     className="border border-gray-300 dark:border-slate-600 rounded-lg px-2 py-1.5 text-sm bg-white dark:bg-slate-700 text-gray-700 dark:text-slate-200">
                     <option value="email">Email</option>
                     <option value="sms">SMS</option>
+                    <option value="mms">MMS</option>
                     <option value="whatsapp">WhatsApp</option>
                   </select>
                   <input value={testRecipient} onChange={(e) => setTestRecipient(e.target.value)}
@@ -2573,6 +3150,7 @@ export default function AdminPage() {
   const [selectedGuests, setSelectedGuests] = useState(new Set())
   const [activeTab, setActiveTab] = useState('overview')
   const [editingGuest, setEditingGuest] = useState(null)
+  const [guestSearch, setGuestSearch] = useState('')
   const fileRef = useRef()
 
   const PAGE_SIZE = 50
@@ -2783,11 +3361,10 @@ export default function AdminPage() {
     setLoading(true)
     try {
       const res = await api.syncNow(selectedId)
-      flash(`Synced: ${res.added} added, ${res.skipped} skipped.`)
       setGuests(await api.listGuests(selectedId))
-      // Refresh the event so last_sync_at updates locally.
       const refreshed = await api.listEvents()
       setEvents(refreshed)
+      return res
     } catch (err) { flash(err.message, true) }
     finally { setLoading(false) }
   }
@@ -2826,6 +3403,8 @@ export default function AdminPage() {
     qr: guests.filter((g) => g.qr_generated_at).length,
     invited: guests.filter((g) => g.invite_sent_at).length,
     admitted: guests.filter((g) => g.admitted).length,
+    noPhone: guests.filter((g) => !g.phone).length,
+    notInvited: guests.filter((g) => !g.invite_sent_at).length,
   }
 
   return (
@@ -2923,6 +3502,15 @@ export default function AdminPage() {
             </p>
             <FeatureToggles event={event} onChanged={updateEvent} />
             <ChannelToggles event={event} onChanged={updateEvent} />
+            {['admin', 'super_admin'].includes(user?.role) && (
+              <ManualCheckinToggle event={event} onChanged={updateEvent} />
+            )}
+            {['admin', 'super_admin'].includes(user?.role) && (
+              <SelfCheckinToggle event={event} onChanged={updateEvent} />
+            )}
+            {['admin', 'super_admin'].includes(user?.role) && (
+              <PartnerPairingToggle event={event} onChanged={updateEvent} />
+            )}
           </div>
 
           {/* Live spreadsheet sync */}
@@ -2947,6 +3535,9 @@ export default function AdminPage() {
               </div>
             ))}
           </div>
+
+          {/* Message delivery breakdown + history */}
+          {guests.length > 0 && <MessageDeliveryCard guests={guests} />}
 
           {/* Guest management */}
           <div className="bg-white dark:bg-slate-800 dark:border dark:border-slate-700/60 rounded-xl shadow p-6 space-y-4">
@@ -3055,17 +3646,38 @@ export default function AdminPage() {
             </div>
           )}
           {activeTab === 'guests' && guests.length > 0 && (() => {
-            const totalPages = Math.ceil(guests.length / PAGE_SIZE)
-            const pageGuests = guests.slice(page * PAGE_SIZE, (page + 1) * PAGE_SIZE)
+            const q = guestSearch.trim().toLowerCase()
+            const filteredGuests = q
+              ? guests.filter((g) => {
+                  const name = `${g.first_name || ''} ${g.last_name || ''}`.toLowerCase()
+                  return name.includes(q) || (g.email || '').toLowerCase().includes(q) || (g.phone || '').includes(q)
+                })
+              : guests
+            const totalPages = Math.ceil(filteredGuests.length / PAGE_SIZE)
+            const safePage = Math.min(page, Math.max(0, totalPages - 1))
+            const pageGuests = filteredGuests.slice(safePage * PAGE_SIZE, (safePage + 1) * PAGE_SIZE)
             const pageSelectedCount = pageGuests.filter((g) => selectedGuests.has(g.id)).length
             const pageAllSelected = pageGuests.length > 0 && pageSelectedCount === pageGuests.length
             return (
               <div className="bg-white dark:bg-slate-800 dark:border dark:border-slate-700/60 rounded-xl shadow overflow-hidden">
                 {selectedGuests.size > 0 && (
-                  <div className="px-4 sm:px-6 py-3 bg-indigo-50 dark:bg-indigo-900/30 border-b border-indigo-200 dark:border-indigo-800 flex items-center gap-3 flex-wrap">
+                  <div className="px-4 sm:px-6 py-3 bg-indigo-50 dark:bg-indigo-900/30 border-b border-indigo-200 dark:border-indigo-800 flex flex-col gap-2">
+                    <div className="flex items-center gap-3 flex-wrap">
                     <span className="text-sm font-semibold text-indigo-900 dark:text-indigo-100">
                       {selectedGuests.size} selected
                     </span>
+                    {pageAllSelected && selectedGuests.size < filteredGuests.length && (
+                      <button
+                        onClick={() => setSelectedGuests(new Set(filteredGuests.map((g) => g.id)))}
+                        className="text-xs text-indigo-600 dark:text-indigo-400 underline font-semibold">
+                        Select all {filteredGuests.length} guests
+                      </button>
+                    )}
+                    {selectedGuests.size === filteredGuests.length && filteredGuests.length > PAGE_SIZE && (
+                      <span className="text-xs text-indigo-600 dark:text-indigo-400 font-semibold">
+                        All {filteredGuests.length} guests selected
+                      </span>
+                    )}
                     <button
                       onClick={() => handleSendBatch({ ids: [...selectedGuests], force: true, label: 'Send to selected' })}
                       disabled={loading}
@@ -3095,19 +3707,39 @@ export default function AdminPage() {
                       className="text-xs text-gray-600 dark:text-slate-300 hover:underline ml-auto">
                       Clear selection
                     </button>
+                    </div>
                   </div>
                 )}
-                <div className="px-4 sm:px-6 py-4 border-b dark:border-slate-700 flex items-center justify-between gap-2">
-                  <h2 className="font-semibold text-sm sm:text-base dark:text-white">Guest List ({guests.length})</h2>
+                <div className="px-4 sm:px-6 py-4 border-b dark:border-slate-700 flex flex-col sm:flex-row items-start sm:items-center gap-3">
+                  <h2 className="font-semibold text-sm sm:text-base dark:text-white shrink-0">
+                    Guest List ({q ? `${filteredGuests.length} of ${guests.length}` : guests.length})
+                  </h2>
+                  <input
+                    type="search"
+                    value={guestSearch}
+                    onChange={(e) => { setGuestSearch(e.target.value); setPage(0) }}
+                    placeholder="Search by name, email or phone…"
+                    className="flex-1 border border-gray-300 dark:border-slate-600 rounded-lg px-3 py-1.5 text-sm bg-white dark:bg-slate-700 text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-slate-400 min-w-0"
+                  />
                   {totalPages > 1 && (
-                    <div className="flex items-center gap-2">
-                      <button onClick={() => setPage((p) => Math.max(0, p - 1))} disabled={page === 0}
+                    <div className="flex items-center gap-2 shrink-0">
+                      <button onClick={() => setPage((p) => Math.max(0, p - 1))} disabled={safePage === 0}
                         className="px-2 py-1 border dark:border-slate-700 rounded text-gray-600 dark:text-slate-300 disabled:opacity-40 hover:bg-gray-50 dark:hover:bg-slate-700 text-sm">←</button>
-                      <span className="text-gray-500 dark:text-slate-400 text-xs">{page + 1} / {totalPages}</span>
-                      <button onClick={() => setPage((p) => Math.min(totalPages - 1, p + 1))} disabled={page === totalPages - 1}
+                      <span className="text-gray-500 dark:text-slate-400 text-xs">{safePage + 1} / {totalPages}</span>
+                      <button onClick={() => setPage((p) => Math.min(totalPages - 1, p + 1))} disabled={safePage === totalPages - 1}
                         className="px-2 py-1 border dark:border-slate-700 rounded text-gray-600 dark:text-slate-300 disabled:opacity-40 hover:bg-gray-50 dark:hover:bg-slate-700 text-sm">→</button>
                     </div>
                   )}
+                </div>
+
+                {/* Delivery stats bar */}
+                <div className="px-4 sm:px-6 py-2 bg-slate-50 dark:bg-slate-900/40 border-b dark:border-slate-700 flex flex-wrap gap-x-5 gap-y-1 text-xs">
+                  <span className="text-slate-500 dark:text-slate-400">Total: <strong className="text-slate-700 dark:text-slate-200">{filteredGuests.length}</strong></span>
+                  <span className="text-green-600 dark:text-green-400">Delivered: <strong>{filteredGuests.filter((g) => g.invite_status === 'sent').length}</strong></span>
+                  <span className="text-red-600 dark:text-red-400">Failed: <strong>{filteredGuests.filter((g) => g.invite_status === 'failed').length}</strong></span>
+                  <span className="text-amber-600 dark:text-amber-400">Not sent: <strong>{filteredGuests.filter((g) => !g.invite_sent_at).length}</strong></span>
+                  <span className="text-slate-400 dark:text-slate-500">No phone: <strong>{filteredGuests.filter((g) => !g.phone).length}</strong></span>
+                  <span className="text-teal-600 dark:text-teal-400">Admitted: <strong>{filteredGuests.filter((g) => g.admitted).length}</strong></span>
                 </div>
 
                 {/* Desktop table */}
@@ -3127,6 +3759,7 @@ export default function AdminPage() {
                         </th>
                         <th className="px-4 py-3 text-left">Name</th>
                         <th className="px-4 py-3 text-left">Email</th>
+                        <th className="px-4 py-3 text-left">Phone</th>
                         <th className="px-4 py-3 text-center">QR</th>
                         <th className="px-4 py-3 text-center">Invited</th>
                         <th className="px-4 py-3 text-center">Admitted</th>
@@ -3152,8 +3785,13 @@ export default function AdminPage() {
                             <span className="inline-flex items-center gap-2">{g.first_name} {g.last_name}{g.is_vip && <VipBadge />}</span>
                           </td>
                           <td className="px-4 py-3 text-gray-500 dark:text-slate-400 text-xs">{g.email}</td>
+                          <td className="px-4 py-3 text-gray-500 dark:text-slate-400 text-xs font-mono">{g.phone || <span className="text-gray-300 dark:text-slate-600">—</span>}</td>
                           <td className="px-4 py-3 text-center"><Badge on={!!g.qr_generated_at} labels={['Ready', 'Pending']} /></td>
-                          <td className="px-4 py-3 text-center"><Badge on={!!g.invite_sent_at} labels={['Sent', 'Unsent']} /></td>
+                          <td className="px-4 py-3 text-center">
+                            {g.invite_status === 'failed'
+                              ? <span className="inline-block px-2 py-0.5 rounded-full text-xs font-semibold bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-300">Failed</span>
+                              : <Badge on={!!g.invite_sent_at} labels={['Sent', 'Unsent']} />}
+                          </td>
                           <td className="px-4 py-3 text-center">
                             {g.admitted
                               ? <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-700">
@@ -3208,6 +3846,7 @@ export default function AdminPage() {
                           <div>
                             <div className="font-semibold text-sm dark:text-slate-100 flex items-center gap-2">{g.first_name} {g.last_name}{g.is_vip && <VipBadge />}</div>
                             <div className="text-xs text-gray-500 dark:text-slate-400 break-all">{g.email}</div>
+                            {g.phone && <div className="text-xs text-gray-400 dark:text-slate-500 font-mono">{g.phone}</div>}
                           </div>
                         </div>
                         {g.admitted && (

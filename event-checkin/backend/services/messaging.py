@@ -10,6 +10,7 @@ provider can't take down the invite/admission background tasks. The fan-out
 in routers iterates enabled channels per event and dispatches in parallel.
 """
 import asyncio
+import io
 import logging
 from datetime import datetime
 
@@ -66,6 +67,45 @@ async def send_admission_whatsapp(*, phone: str, first_name: str, event_name: st
     )
 
 
+async def send_invite_mms(
+    *,
+    phone: str,
+    body: str,
+    media_url: str,
+    subject: str = "",
+    # optional ticket card fields — if provided, generate a styled card instead of raw QR
+    event_name: str = "",
+    couples_name: str = "",
+    event_date: datetime | None = None,
+    venue_name: str = "",
+    venue_address: str = "",
+    guest_first_name: str = "",
+    guest_last_name: str = "",
+    admitted: bool = False,
+    table_name: str = "",
+    seat_number: str = "",
+) -> None:
+    """Send MMS (image + text) via ClickSend. US/CA/AU only."""
+    if not _channel_ready("mms", phone):
+        return
+    if event_name and guest_first_name:
+        try:
+            # Derive card URL from the QR media_url — swap /qr.png for /card.jpg
+            # Our server generates the card on-demand; ClickSend fetches it directly.
+            # This skips the ~4s ClickSend upload step entirely.
+            card_url = media_url.replace("/qr.png", "/card.jpg")
+            if admitted:
+                card_url += "?admitted=true"
+            await _clicksend_mms_send(
+                phone=phone, body=body or subject or "Your ticket is attached.",
+                subject=subject, direct_url=card_url,
+            )
+            return
+        except Exception:
+            logger.exception("MMS send failed — falling back to raw QR")
+    await _clicksend_mms_send(phone=phone, body=body, media_url=media_url, subject=subject)
+
+
 async def send_template_sms(*, phone: str, body: str) -> None:
     """Send SMS using custom template body (already rendered with {{placeholders}})."""
     if not _channel_ready("sms", phone):
@@ -111,6 +151,13 @@ def _channel_ready(channel: str, phone: str | None) -> bool:
             return False  # SNS does not support WhatsApp
         if not settings.aws_access_key_id or not settings.aws_secret_access_key:
             logger.warning("SNS configured but missing AWS credentials — skipping %s", channel)
+            return False
+        return True
+    if provider == "clicksend":
+        if channel == "whatsapp":
+            return False  # ClickSend SMS/MMS only
+        if not settings.clicksend_username or not settings.clicksend_api_key.strip():
+            logger.warning("ClickSend configured but missing username/api_key — skipping %s", channel)
             return False
         return True
     return False  # provider unset → silent no-op
@@ -169,6 +216,95 @@ def _twilio_send_sync(from_addr: str, to_addr: str, **kwargs) -> None:
         logger.exception("Twilio send failed (to=%s)", to_addr)
 
 
+# ── internal: ClickSend ───────────────────────────────────────────────────────
+
+async def _clicksend_send(phone: str, body: str) -> None:
+    url = "https://rest.clicksend.com/v3/sms/send"
+    msg: dict = {"source": "sdk", "to": phone, "body": body}
+    if settings.clicksend_from.strip():
+        msg["from"] = settings.clicksend_from.strip()
+    payload = {"messages": [msg]}
+    try:
+        async with httpx.AsyncClient(timeout=15) as c:
+            r = await c.post(
+                url,
+                json=payload,
+                auth=(settings.clicksend_username, settings.clicksend_api_key.strip()),
+            )
+            data = r.json()
+            if r.status_code >= 400:
+                logger.warning("ClickSend → HTTP %s: %s", r.status_code, r.text[:300])
+            else:
+                msg = data.get("data", {}).get("messages", [{}])[0]
+                status = msg.get("status", "unknown")
+                if status != "SUCCESS":
+                    logger.warning("ClickSend message status=%s to=%s", status, phone)
+    except Exception:
+        logger.exception("ClickSend request failed (to=%s)", phone)
+
+
+# ── internal: ClickSend MMS ───────────────────────────────────────────────────
+
+async def _clicksend_upload_media(image_url: str, client: httpx.AsyncClient) -> str:
+    """Download image from url and upload to ClickSend (converts PNG→JPG).
+    Returns the hosted URL suitable for MMS media_file."""
+    img_resp = await client.get(image_url, timeout=10)
+    img_resp.raise_for_status()
+    upload_resp = await client.post(
+        "https://rest.clicksend.com/v3/uploads?convert=mms",
+        files={"file": ("image.png", img_resp.content, "image/png")},
+        auth=(settings.clicksend_username, settings.clicksend_api_key.strip()),
+    )
+    upload_resp.raise_for_status()
+    hosted_url = upload_resp.json()["data"]["_url"]
+    return hosted_url
+
+
+async def _clicksend_mms_send(
+    phone: str, body: str, subject: str = "",
+    media_url: str = "", card_bytes: bytes = b"", direct_url: str = "",
+) -> None:
+    auth = (settings.clicksend_username, settings.clicksend_api_key.strip())
+    msg: dict = {
+        "source": "sdk",
+        "to": phone,
+        "body": body,
+        "subject": subject or "Your Event Ticket",
+    }
+    if settings.clicksend_from.strip():
+        msg["from"] = settings.clicksend_from.strip()
+    else:
+        logger.warning("CLICKSEND_FROM not set — MMS may be rejected by ClickSend")
+    try:
+        async with httpx.AsyncClient(timeout=30) as c:
+            if direct_url:
+                # Our server hosts the card — pass URL directly, no upload needed.
+                hosted_url = direct_url
+            elif card_bytes:
+                up = await c.post(
+                    "https://rest.clicksend.com/v3/uploads?convert=mms",
+                    files={"file": ("ticket.jpg", card_bytes, "image/jpeg")},
+                    auth=auth,
+                )
+                up.raise_for_status()
+                hosted_url = up.json()["data"]["_url"]
+            else:
+                hosted_url = await _clicksend_upload_media(media_url, c)
+            payload = {"media_file": hosted_url, "messages": [msg]}
+            r = await c.post("https://rest.clicksend.com/v3/mms/send", json=payload, auth=auth)
+            if r.status_code >= 400:
+                logger.warning("ClickSend MMS → HTTP %s: %s", r.status_code, r.text[:500])
+            else:
+                msg_data = r.json().get("data", {}).get("messages", [{}])[0]
+                status = msg_data.get("status", "unknown")
+                if status != "SUCCESS":
+                    logger.warning("ClickSend MMS status=%s detail=%s to=%s", status, msg_data, phone)
+                else:
+                    logger.info("ClickSend MMS sent OK to=%s", phone)
+    except Exception:
+        logger.exception("ClickSend MMS request failed (to=%s)", phone)
+
+
 # ── internal: dispatchers ─────────────────────────────────────────────────────
 
 async def _send_sms(phone: str, body: str) -> None:
@@ -180,6 +316,8 @@ async def _send_sms(phone: str, body: str) -> None:
         })
     elif provider == "twilio":
         await asyncio.to_thread(_twilio_send_sync, settings.twilio_from_number, phone, body=body)
+    elif provider == "clicksend":
+        await _clicksend_send(phone, body)
     elif provider == "sns":
         await asyncio.to_thread(_sns_send_sync, phone, body)
 

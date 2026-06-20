@@ -40,6 +40,8 @@ class EventCreate(BaseModel):
     couples_name: str
     event_date: datetime
     description: Optional[str] = None
+    venue_name: Optional[str] = None
+    venue_address: Optional[str] = None
     checkin_base_url: str
 
     @field_validator("event_date", mode="after")
@@ -55,9 +57,12 @@ class EventUpdate(BaseModel):
     couples_name: Optional[str] = None
     event_date: Optional[datetime] = None
     description: Optional[str] = None
+    venue_name: Optional[str] = None
+    venue_address: Optional[str] = None
     checkin_base_url: Optional[str] = None
     notify_email: Optional[bool] = None
     notify_sms: Optional[bool] = None
+    notify_mms: Optional[bool] = None
     notify_whatsapp: Optional[bool] = None
 
     @field_validator("event_date", mode="after")
@@ -103,13 +108,20 @@ class EventOut(BaseModel):
     couples_name: str
     event_date: datetime
     description: Optional[str]
+    venue_name: Optional[str] = None
+    venue_address: Optional[str] = None
     checkin_base_url: str
     status: str
     seating_enabled: bool
     menu_enabled: bool
     notify_email: bool = True
     notify_sms: bool = True
+    notify_mms: bool = False
     notify_whatsapp: bool = True
+    manual_checkin_enabled: bool = False
+    self_checkin_enabled: bool = False
+    partner_pairing_enabled: bool = True
+    event_code: Optional[str] = None
     created_at: datetime
     source_url: Optional[str] = None
     source_sync_interval_seconds: int = 60
@@ -181,6 +193,58 @@ class TableGroupAssignRequest(BaseModel):
 class SeatAssignRequest(BaseModel):
     table_id: Optional[str] = None
     seat_number: Optional[str] = None
+
+
+# ── Bulk import ───────────────────────────────────────────────────────────────
+
+class BulkImportError(BaseModel):
+    row: int
+    reason: str
+    data: Optional[dict] = None
+
+
+class BulkTableRow(BaseModel):
+    name: str
+    capacity: int
+
+
+class BulkTableImportRequest(BaseModel):
+    rows: Optional[list[BulkTableRow]] = None   # JSON path
+    csv_text: Optional[str] = None              # CSV path
+    mode: str = "lenient"                       # "strict" | "lenient"
+    dry_run: bool = False
+    on_duplicate: str = "skip"                  # "skip" | "error"
+
+
+class BulkTableImportResult(BaseModel):
+    created: int
+    skipped: int
+    errors: list[BulkImportError] = []
+    created_ids: list[str] = []
+    dry_run: bool = False
+
+
+class BulkTableGroupRow(BaseModel):
+    name: str
+    tag: str
+    description: Optional[str] = None
+    tables: Optional[str] = None    # comma-separated table names
+
+
+class BulkTableGroupImportRequest(BaseModel):
+    rows: Optional[list[BulkTableGroupRow]] = None
+    csv_text: Optional[str] = None
+    mode: str = "lenient"
+    dry_run: bool = False
+    on_duplicate: str = "skip"      # "skip" | "error"
+
+
+class BulkTableGroupImportResult(BaseModel):
+    created: int
+    skipped: int
+    errors: list[BulkImportError] = []
+    created_ids: list[str] = []
+    dry_run: bool = False
 
 
 # ── Menu ─────────────────────────────────────────────────────────────────────
@@ -291,6 +355,7 @@ class GuestOut(BaseModel):
     qr_token: str
     qr_generated_at: Optional[datetime]
     invite_sent_at: Optional[datetime]
+    invite_status: Optional[str] = None
     admitted: bool
     admitted_at: Optional[datetime]
     admit_notified: bool
@@ -314,6 +379,20 @@ class ScanResult(BaseModel):
     seat_number: Optional[str] = None
 
 
+class GuestSearchResult(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: str
+    first_name: str
+    last_name: str
+    phone: Optional[str] = None
+    table_name: Optional[str] = None
+    seat_number: Optional[str] = None
+    admitted: bool
+    admitted_at: Optional[datetime] = None
+    is_vip: bool = False
+
+
 class EventBrief(BaseModel):
     name: str
     couples_name: str
@@ -322,7 +401,11 @@ class EventBrief(BaseModel):
     seating_enabled: bool = False
     menu_enabled: bool = False
     notify_sms: bool = True
+    notify_mms: bool = False
     notify_whatsapp: bool = True
+    partner_pairing_enabled: bool = True
+    venue_name: Optional[str] = None
+    venue_address: Optional[str] = None
 
 
 class PartnerInfo(BaseModel):
@@ -401,6 +484,7 @@ class MessageTemplateUpsert(BaseModel):
     subject: Optional[str] = None
     email_body: Optional[str] = None
     sms_body: Optional[str] = None
+    mms_body: Optional[str] = None
     whatsapp_body: Optional[str] = None
 
 
@@ -414,6 +498,7 @@ class MessageTemplateOut(BaseModel):
     subject: Optional[str] = None
     email_body: Optional[str] = None
     sms_body: Optional[str] = None
+    mms_body: Optional[str] = None
     whatsapp_body: Optional[str] = None
     updated_at: datetime
     updated_by: Optional[str] = None
@@ -427,6 +512,7 @@ class TemplatePreviewRequest(BaseModel):
     subject: Optional[str] = None
     email_body: Optional[str] = None
     sms_body: Optional[str] = None
+    mms_body: Optional[str] = None
     whatsapp_body: Optional[str] = None
     # Sample data overrides
     sample_data: Optional[dict[str, Any]] = None
@@ -436,11 +522,36 @@ class TemplatePreviewOut(BaseModel):
     subject: Optional[str] = None
     email_body: Optional[str] = None
     sms_body: Optional[str] = None
+    mms_body: Optional[str] = None
     whatsapp_body: Optional[str] = None
 
 
 class TemplateTestSendRequest(BaseModel):
     template_key: str
     event_id: Optional[str] = None
-    channel: Literal["email", "sms", "whatsapp"]
-    recipient: str   # email address or phone number
+    channel: Literal["email", "sms", "mms", "whatsapp"]
+
+
+# ── Self check-in ─────────────────────────────────────────────────────────────
+
+class SelfCheckinEventInfo(BaseModel):
+    name: str
+    couples_name: str
+    event_date: datetime
+    status: str
+
+
+class SelfCheckinMatch(BaseModel):
+    id: str
+    first_name: str
+    last_name: str
+    admitted: bool
+    admitted_at: Optional[datetime] = None
+
+
+class SelfCheckinResult(BaseModel):
+    status: str  # admitted | already_admitted | not_found | not_active | no_seat_available
+    message: str
+    table_name: Optional[str] = None
+    seat_number: Optional[str] = None
+    recipient: Optional[str] = None  # email address or phone number

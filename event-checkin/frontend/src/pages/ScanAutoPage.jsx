@@ -611,6 +611,19 @@ export default function ScanAutoPage() {
                 {eventDate.toLocaleDateString(undefined, { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}
               </p>
             )}
+            {(event?.venue_name || event?.venue_address) && (
+              <p className="text-slate-400 text-xs mt-1">
+                📍{' '}
+                <a
+                  href={`https://maps.google.com/?q=${encodeURIComponent([event.venue_name, event.venue_address].filter(Boolean).join(', '))}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="underline hover:text-teal-300 transition-colors"
+                >
+                  {[event.venue_name, event.venue_address].filter(Boolean).join(', ')}
+                </a>
+              </p>
+            )}
           </div>
         </div>
 
@@ -671,8 +684,8 @@ export default function ScanAutoPage() {
             </div>
           )}
 
-          {/* Partner pairing — only when seating is enabled and guest not yet seated */}
-          {event?.seating_enabled && status !== 'admitted' && (
+          {/* Partner pairing — only when enabled, seating is on, and guest not yet seated */}
+          {event?.partner_pairing_enabled !== false && event?.seating_enabled && status !== 'admitted' && (
             <PartnerPairing
               token={token}
               partner={partner}

@@ -1,16 +1,19 @@
 import csv
 import io
+import logging
 import re
 import httpx
+
+logger = logging.getLogger(__name__)
 from datetime import datetime
 from urllib.parse import urlparse
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, BackgroundTasks, Response, Body
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 from ..database import get_db
-from ..models import Event, Guest, User, TableGroup
-from ..schemas import GuestOut, GuestCreate, GuestUpdate
-from ..auth import require_admin
+from ..models import Event, Guest, User, TableGroup, SeatingTable, EventUser
+from ..schemas import GuestOut, GuestCreate, GuestUpdate, GuestSearchResult, ScanResult
+from ..auth import require_admin, require_official
 from services.qr_service import generate_qr_bytes
 from services.email_service import send_invite_email, send_plain_email, send_template_email
 from services import messaging
@@ -26,11 +29,9 @@ def _normalize_phone(raw: str, default_country_code: str = "1") -> str | None:
     """Coerce a freeform phone string into E.164.
 
     Accepts: '+1 832-794-1707', '(832) 794-1707', '8327941707',
-             '18327941707', '+18327941707'.
-    Returns: '+18327941707' or None if the digits don't look like a valid number.
-
-    `default_country_code` is used when the input has no '+' and looks like a
-    local number. Defaults to US (1) — change if your event audience is elsewhere.
+             '18327941707', '+18327941707',
+             '08012345678' (Nigerian trunk prefix → +2348012345678).
+    Returns E.164 string or None if unrecognisable.
     """
     if not raw:
         return None
@@ -40,15 +41,15 @@ def _normalize_phone(raw: str, default_country_code: str = "1") -> str | None:
     if cleaned.startswith('+'):
         candidate = cleaned
     elif cleaned.startswith('00'):
-        # Some countries write international as 00<cc>... — treat as +<cc>...
         candidate = '+' + cleaned[2:]
+    elif len(cleaned) == 11 and cleaned.startswith('0'):
+        # Nigerian (and other West African) trunk-prefix format: 0XXXXXXXXXX → +234XXXXXXXXXX
+        candidate = '+234' + cleaned[1:]
     elif len(cleaned) == 10 and default_country_code == "1":
-        # Bare US 10-digit number
         candidate = '+1' + cleaned
     elif len(cleaned) == 11 and cleaned.startswith('1') and default_country_code == "1":
         candidate = '+' + cleaned
     else:
-        # Could be a longer non-US number missing its + — assume international and prepend.
         candidate = '+' + cleaned
     return candidate if _E164_RE.match(candidate) else None
 
@@ -60,12 +61,34 @@ _BROWSER_UA = (
 )
 
 
+_GUEST_HEADER_COLS = {"first_name", "last_name", "email"}
+
 def _xlsx_to_csv_text(raw: bytes) -> str:
-    """Convert xlsx binary to CSV-like text."""
+    """Convert xlsx binary to CSV-like text.
+
+    When the workbook has multiple sheets, pick the first sheet whose header
+    row contains all required guest columns. Falls back to the active sheet
+    so existing single-sheet workbooks are unaffected.
+    """
     import openpyxl
     wb = openpyxl.load_workbook(io.BytesIO(raw), read_only=True, data_only=True)
-    ws = wb.active
-    rows = list(ws.iter_rows(values_only=True))
+
+    def _sheet_has_guest_header(ws) -> bool:
+        for row in ws.iter_rows(min_row=1, max_row=5, values_only=True):
+            cells = {str(c).strip().lower() for c in row if c is not None}
+            if _GUEST_HEADER_COLS.issubset(cells):
+                return True
+        return False
+
+    # Prefer the first sheet that looks like a guest list
+    chosen = wb.active
+    for name in wb.sheetnames:
+        ws = wb[name]
+        if _sheet_has_guest_header(ws):
+            chosen = ws
+            break
+
+    rows = list(chosen.iter_rows(values_only=True))
     if not rows:
         raise HTTPException(400, "Excel file is empty")
     out = io.StringIO()
@@ -156,7 +179,7 @@ async def _process_csv(text: str, event_id: str, db: AsyncSession):
     text = text.replace('\r\n', '\n').replace('\r', '\n')
     reader = csv.DictReader(io.StringIO(text))
     fields = {(f or '').strip().lower() for f in (reader.fieldnames or [])}
-    missing = {'first_name', 'last_name', 'email'} - fields
+    missing = {'first_name'} - fields
     if missing:
         raise HTTPException(
             400,
@@ -164,9 +187,18 @@ async def _process_csv(text: str, event_id: str, db: AsyncSession):
             "Expected header: first_name,last_name,email,phone"
         )
 
+    # Detect phone column (any common alias)
+    _PHONE_ALIASES = {'phone', 'phone_number', 'phone number', 'mobile', 'mobile_number',
+                      'mobile number', 'cell', 'cell_phone', 'cell phone', 'telephone', 'tel', 'contact'}
+    phone_col = next((f for f in (reader.fieldnames or []) if (f or '').strip().lower() in _PHONE_ALIASES), None)
+
     # Detect table-group column (any of the supported aliases)
     _TG_ALIASES = {'table_group', 'table_tag', 'assigned_table_tag', 'assigned_table_group'}
     tg_col = next((f for f in (reader.fieldnames or []) if (f or '').strip().lower() in _TG_ALIASES), None)
+
+    # Detect table column (specific table within a group)
+    _TABLE_ALIASES = {'table', 'table_name', 'table name', 'assigned_table', 'assigned table', 'seat_table'}
+    table_col = next((f for f in (reader.fieldnames or []) if (f or '').strip().lower() in _TABLE_ALIASES), None)
 
     # Pre-load all table groups for this event keyed by normalised tag.
     tg_by_tag: dict[str, str] = {}  # tag → group.id
@@ -176,16 +208,26 @@ async def _process_csv(text: str, event_id: str, db: AsyncSession):
         )).scalars().all()
         tg_by_tag = {g.tag: g.id for g in tg_rows}
 
+    # Pre-load all tables for this event keyed by normalised name.
+    table_by_name: dict[str, str] = {}  # lower(name) → table.id
+    if table_col:
+        tbl_rows = (await db.execute(
+            select(SeatingTable).where(SeatingTable.event_id == event_id)
+        )).scalars().all()
+        table_by_name = {t.name.strip().lower(): t.id for t in tbl_rows}
+
     added = skipped = invalid_phones = backfilled_phones = tg_unknown = 0
-    for row in reader:
+    skipped_rows: list[dict] = []   # {row, first_name, last_name, reason}
+    for row_num, row in enumerate(reader, start=2):  # start=2: row 1 is the header
         email = row.get("email", "").strip().lower()
         first = row.get("first_name", "").strip()
         last = row.get("last_name", "").strip()
-        if not email:
+        if not first:
             skipped += 1
+            skipped_rows.append({"row": row_num, "first_name": first, "last_name": last, "reason": "blank first_name"})
             continue
 
-        phone_raw = row.get("phone", "").strip()
+        phone_raw = (row.get(phone_col) or "").strip() if phone_col else ""
         normalized_phone: str | None = None
         if phone_raw:
             normalized_phone = _normalize_phone(phone_raw)
@@ -202,29 +244,37 @@ async def _process_csv(text: str, event_id: str, db: AsyncSession):
                 else:
                     tg_unknown += 1
 
-        # Deduplicate on (first_name + last_name + email) — same person twice
+        # Resolve specific table ID from import column.
+        table_id: str | None = None
+        if table_col:
+            raw_table = (row.get(table_col) or "").strip().lower()
+            if raw_table and raw_table in table_by_name:
+                table_id = table_by_name[raw_table]
+
+        # Deduplicate: match on first+last name (case-insensitive).
+        # Email is NOT used as a match key — it can differ between syncs and would
+        # create false duplicates when a guest was previously imported without an email.
+        from sqlalchemy import func as _func
         existing = (await db.execute(
             select(Guest).where(
                 Guest.event_id == event_id,
-                Guest.email == email,
-                Guest.first_name == first,
-                Guest.last_name == last,
+                _func.lower(Guest.first_name) == first.lower(),
+                _func.lower(Guest.last_name) == last.lower(),
             )
         )).scalar_one_or_none()
         if existing:
-            # Backfill missing fields on re-import.
-            changed = False
-            if not existing.phone and normalized_phone:
+            # Backfill / correct any fields that improved in the spreadsheet.
+            if normalized_phone and existing.phone != normalized_phone:
                 existing.phone = normalized_phone
                 backfilled_phones += 1
-                changed = True
+            if email and existing.email != email:
+                existing.email = email
             if table_group_id and existing.table_group_id != table_group_id:
                 existing.table_group_id = table_group_id
-                changed = True
-            if not changed:
-                skipped += 1
-            else:
-                skipped += 1  # still counts as skipped (not a new row)
+            if table_id and existing.table_id != table_id:
+                existing.table_id = table_id
+            skipped += 1
+            skipped_rows.append({"row": row_num, "first_name": first, "last_name": last, "reason": "duplicate"})
             continue
 
         db.add(Guest(
@@ -234,11 +284,24 @@ async def _process_csv(text: str, event_id: str, db: AsyncSession):
             email=email,
             phone=normalized_phone,
             table_group_id=table_group_id,
+            table_id=table_id,
         ))
         added += 1
 
     await db.commit()
+    skipped_blank = sum(1 for r in skipped_rows if r["reason"] == "blank first_name")
+    skipped_duplicate = sum(1 for r in skipped_rows if r["reason"] == "duplicate")
+    logger.info(
+        "Import result event=%s added=%d skipped=%d blank=%d duplicate=%d invalid_phones=%d tg_unknown=%d",
+        event_id, added, skipped, skipped_blank, skipped_duplicate, invalid_phones, tg_unknown,
+    )
     result = {"added": added, "skipped": skipped}
+    if skipped_rows:
+        result["skipped_rows"] = skipped_rows[:100]  # cap at 100 to keep response size sane
+    if skipped_blank:
+        result["skipped_blank_name"] = skipped_blank
+    if skipped_duplicate:
+        result["skipped_duplicate"] = skipped_duplicate
     if backfilled_phones:
         result["backfilled_phones"] = backfilled_phones
     if invalid_phones:
@@ -261,8 +324,9 @@ async def upload_guests(event_id: str, file: UploadFile = File(...), db: AsyncSe
     return await _process_csv(text, event_id, db)
 
 
-async def _dispatch_invite(background_tasks: BackgroundTasks, event: Event, guest: Guest, db) -> None:
+async def _dispatch_invite(background_tasks: BackgroundTasks, event: Event, guest: Guest, db) -> bool:
     """Fan out an invite across enabled channels for this event.
+    Returns True if at least one channel was dispatched (i.e. guest is reachable).
     Uses the organizer's custom message template when one has been saved;
     falls back to the rich HTML email with embedded QR code otherwise."""
     from services import template_service as _ts
@@ -282,7 +346,10 @@ async def _dispatch_invite(background_tasks: BackgroundTasks, event: Event, gues
         )
     ))
 
-    if event.notify_email:
+    dispatched = False
+
+    if event.notify_email and guest.email:
+        dispatched = True
         if has_custom and resolved.get("email_body"):
             ctx = {
                 "guest_first_name": guest.first_name,
@@ -320,18 +387,93 @@ async def _dispatch_invite(background_tasks: BackgroundTasks, event: Event, gues
             )
 
     if event.notify_sms and guest.phone and guest.sms_consent:
+        dispatched = True
+        sms_body = resolved.get("sms_body")
+        if sms_body:
+            ctx = {
+                "guest_first_name": guest.first_name,
+                "guest_last_name":  guest.last_name,
+                "guest_full_name":  f"{guest.first_name} {guest.last_name}",
+                "event_name":       event.name,
+                "event_date":       event_date_str,
+                "organizer_name":   event.couples_name or event.name,
+                "ticket_link":      ticket_url,
+                "rsvp_link":        ticket_url,
+                "table_name": "", "seat_number": "", "table_group": "",
+            }
+            rendered_sms = _ts.render(sms_body, ctx)
+            background_tasks.add_task(messaging.send_template_sms, phone=guest.phone, body=rendered_sms)
+        else:
+            background_tasks.add_task(
+                messaging.send_invite_sms,
+                phone=guest.phone, first_name=guest.first_name,
+                event_name=event.name, ticket_url=ticket_url, event_date=event.event_date,
+            )
+
+    if event.notify_mms and guest.phone and guest.sms_consent:
+        dispatched = True
+        qr_image_url = f"{event.checkin_base_url.rstrip('/')}/api/scan/{guest.qr_token}/qr.png"
+        mms_template_body = resolved.get("mms_body") or resolved.get("sms_body")
+        ctx = {
+            "guest_first_name": guest.first_name,
+            "guest_last_name":  guest.last_name,
+            "guest_full_name":  f"{guest.first_name} {guest.last_name}",
+            "event_name":       event.name,
+            "event_date":       event_date_str,
+            "organizer_name":   event.couples_name or event.name,
+            "ticket_link":      ticket_url,
+            "rsvp_link":        ticket_url,
+            "table_name": "", "seat_number": "", "table_group": "",
+        }
+        if mms_template_body:
+            mms_body = _ts.render(mms_template_body, ctx)
+        else:
+            date_str = event.event_date.strftime("%a %d %b") if event.event_date else ""
+            mms_body = (
+                f"Hi {guest.first_name}! Your QR ticket for {event.name}"
+                + (f" on {date_str}" if date_str else "")
+                + f". Tap to view: {ticket_url}"
+            )
         background_tasks.add_task(
-            messaging.send_invite_sms,
-            phone=guest.phone, first_name=guest.first_name,
-            event_name=event.name, ticket_url=ticket_url, event_date=event.event_date,
+            messaging.send_invite_mms,
+            phone=guest.phone,
+            body=mms_body,
+            media_url=qr_image_url,
+            subject=event.name,
+            event_name=event.name,
+            couples_name=event.couples_name or "",
+            event_date=event.event_date,
+            venue_name=event.venue_name or "",
+            venue_address=event.venue_address or "",
+            guest_first_name=guest.first_name,
+            guest_last_name=guest.last_name or "",
         )
 
     if event.notify_whatsapp and guest.phone and guest.whatsapp_consent:
-        background_tasks.add_task(
-            messaging.send_invite_whatsapp,
-            phone=guest.phone, first_name=guest.first_name,
-            event_name=event.name, ticket_url=ticket_url, event_date=event.event_date,
-        )
+        dispatched = True
+        wa_body = resolved.get("whatsapp_body")
+        if wa_body:
+            ctx = {
+                "guest_first_name": guest.first_name,
+                "guest_last_name":  guest.last_name,
+                "guest_full_name":  f"{guest.first_name} {guest.last_name}",
+                "event_name":       event.name,
+                "event_date":       event_date_str,
+                "organizer_name":   event.couples_name or event.name,
+                "ticket_link":      ticket_url,
+                "rsvp_link":        ticket_url,
+                "table_name": "", "seat_number": "", "table_group": "",
+            }
+            rendered_wa = _ts.render(wa_body, ctx)
+            background_tasks.add_task(messaging.send_template_whatsapp, phone=guest.phone, body=rendered_wa)
+        else:
+            background_tasks.add_task(
+                messaging.send_invite_whatsapp,
+                phone=guest.phone, first_name=guest.first_name,
+                event_name=event.name, ticket_url=ticket_url, event_date=event.event_date,
+            )
+
+    return dispatched
 
 
 async def import_from_source_url(url: str, event_id: str, db: AsyncSession) -> dict:
@@ -424,21 +566,22 @@ async def download_import_template(
     out = io.StringIO()
     writer = csv.writer(out)
 
+    # Fetch tables so we can embed names as hints too.
+    tbl_rows = (await db.execute(
+        select(SeatingTable).where(SeatingTable.event_id == event_id).order_by(SeatingTable.name)
+    )).scalars().all()
+
     # Header row — all columns the importer understands.
-    writer.writerow(["first_name", "last_name", "email", "phone", "table_group"])
+    writer.writerow(["first_name", "last_name", "email", "phone", "table_group", "table"])
 
     # One hint row per table group so the organizer knows the valid tag values.
-    if tg_rows:
+    if tg_rows or tbl_rows:
         for tg in tg_rows:
-            writer.writerow([
-                f"# Example: {tg.name}",
-                "",
-                "",
-                "",
-                tg.tag,
-            ])
+            writer.writerow([f"# Group example: {tg.name}", "", "", "", tg.tag, ""])
+        for tbl in tbl_rows[:5]:  # cap at 5 hint rows
+            writer.writerow([f"# Table example: {tbl.name}", "", "", "", "", tbl.name])
     else:
-        writer.writerow(["# Example", "Guest", "guest@example.com", "+14155550123", ""])
+        writer.writerow(["# Example", "Guest", "guest@example.com", "+14155550123", "", ""])
 
     filename = f"import-template-{event.name.replace(' ', '_')}.csv"
     return Response(
@@ -582,8 +725,9 @@ async def send_invites(event_id: str, background_tasks: BackgroundTasks, db: Asy
     guests = result.scalars().all()
 
     for guest in guests:
-        await _dispatch_invite(background_tasks, event, guest, db)
+        ok = await _dispatch_invite(background_tasks, event, guest, db)
         guest.invite_sent_at = datetime.utcnow()
+        guest.invite_status = "sent" if ok else "failed"
 
     await db.commit()
     return {"queued": len(guests)}
@@ -625,8 +769,9 @@ async def send_invites_batch(
         # Auto-generate QR timestamp on first send so it can also be a no-op for never-touched guests.
         if not guest.qr_generated_at:
             guest.qr_generated_at = now
-        await _dispatch_invite(background_tasks, event, guest, db)
+        ok = await _dispatch_invite(background_tasks, event, guest, db)
         guest.invite_sent_at = now
+        guest.invite_status = "sent" if ok else "failed"
         queued += 1
 
     await db.commit()
@@ -644,8 +789,9 @@ async def resend_invite(event_id: str, guest_id: str, background_tasks: Backgrou
     if not guest.qr_generated_at:
         raise HTTPException(400, "Generate QR codes first before sending invites")
 
-    await _dispatch_invite(background_tasks, event, guest, db)
+    ok = await _dispatch_invite(background_tasks, event, guest, db)
     guest.invite_sent_at = datetime.utcnow()
+    guest.invite_status = "sent" if ok else "failed"
     await db.commit()
     return {"ok": True}
 
@@ -658,3 +804,155 @@ async def get_guest_qr(event_id: str, guest_id: str, db: AsyncSession = Depends(
     event = await db.get(Event, event_id)
     qr_bytes = generate_qr_bytes(guest.qr_token, event.checkin_base_url)
     return Response(content=qr_bytes, media_type="image/png")
+
+
+# ── Manual check-in: guest search ─────────────────────────────────────────────
+
+@router.get("/{event_id}/guests/search", response_model=list[GuestSearchResult])
+async def search_guests(
+    event_id: str,
+    q: str = "",
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_official),
+):
+    """Search guests by first name, last name, or phone number (partial match).
+    Used by the manual check-in flow on the scanner page.
+    """
+    event = await db.get(Event, event_id)
+    if not event:
+        raise HTTPException(404, "Event not found")
+
+    if current_user.role == "official":
+        assigned = await db.scalar(
+            select(EventUser).where(EventUser.event_id == event_id, EventUser.user_id == current_user.id)
+        )
+        if not assigned:
+            raise HTTPException(403, "You are not assigned to this event")
+
+    term = (q or "").strip()
+    if not term:
+        return []
+
+    from sqlalchemy import or_
+    guests = (await db.execute(
+        select(Guest).where(
+            Guest.event_id == event_id,
+            or_(
+                Guest.first_name.ilike(f"%{term}%"),
+                Guest.last_name.ilike(f"%{term}%"),
+                Guest.phone.ilike(f"%{term}%"),
+            )
+        ).order_by(Guest.last_name, Guest.first_name).limit(20)
+    )).scalars().all()
+
+    results = []
+    for g in guests:
+        table_name = None
+        if g.table_id:
+            tbl = await db.get(SeatingTable, g.table_id)
+            if tbl:
+                table_name = tbl.name
+        results.append(GuestSearchResult(
+            id=g.id,
+            first_name=g.first_name,
+            last_name=g.last_name,
+            phone=g.phone,
+            table_name=table_name,
+            seat_number=g.seat_number,
+            admitted=g.admitted,
+            admitted_at=g.admitted_at,
+            is_vip=g.is_vip,
+        ))
+    return results
+
+
+# ── Manual check-in: admit guest by ID ────────────────────────────────────────
+
+@router.post("/{event_id}/guests/{guest_id}/manual-checkin", response_model=ScanResult)
+async def manual_checkin(
+    event_id: str,
+    guest_id: str,
+    background_tasks: BackgroundTasks,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_official),
+):
+    """Admit a guest without scanning their QR code.
+    Requires manual_checkin_enabled on the event (super admin toggle).
+    """
+    event = await db.get(Event, event_id)
+    if not event:
+        raise HTTPException(404, "Event not found")
+
+    if not event.manual_checkin_enabled:
+        raise HTTPException(403, "Manual check-in is not enabled for this event")
+
+    if event.status != "active":
+        label = "has not started yet" if event.status == "draft" else "has ended"
+        return ScanResult(status="not_active", message=f"'{event.name}' {label}. Check-in is disabled.")
+
+    if current_user.role == "official":
+        assigned = await db.scalar(
+            select(EventUser).where(EventUser.event_id == event_id, EventUser.user_id == current_user.id)
+        )
+        if not assigned:
+            raise HTTPException(403, "You are not assigned to this event")
+
+    guest = await db.get(Guest, guest_id)
+    if not guest or guest.event_id != event_id:
+        raise HTTPException(404, "Guest not found")
+
+    if guest.admitted:
+        from app.timeutil import local_hhmm
+        admitted_time = local_hhmm(guest.admitted_at) or "unknown"
+        table_name = None
+        if guest.table_id:
+            tbl = await db.get(SeatingTable, guest.table_id)
+            if tbl:
+                table_name = tbl.name
+        return ScanResult(
+            status="already_admitted",
+            message=f"{guest.first_name} {guest.last_name} was already admitted at {admitted_time}.",
+            guest=GuestOut.model_validate(guest),
+            table_name=table_name,
+            seat_number=guest.seat_number,
+        )
+
+    # Seat assignment — same logic as QR scan.
+    if event.seating_enabled and not guest.table_id:
+        from .seating import assign_next_seat
+        seat_error = await assign_next_seat(guest, db)
+        if seat_error:
+            return ScanResult(status="no_seat_available", message=seat_error)
+
+    table_name = None
+    if guest.table_id:
+        tbl = await db.get(SeatingTable, guest.table_id)
+        if tbl:
+            table_name = tbl.name
+
+    guest.admitted = True
+    guest.admitted_at = datetime.utcnow()
+    guest.admit_notified = True
+    await db.commit()
+    await db.refresh(guest)
+
+    # Notifications + broadcast — same as QR scan.
+    from .scanner import _dispatch_admission_message
+    await _dispatch_admission_message(background_tasks, event, guest, table_name, db)
+
+    from . import broadcast
+    broadcast(event_id, {
+        "type": "admitted",
+        "guest_id": guest.id,
+        "name": f"{guest.first_name} {guest.last_name}",
+        "email": guest.email,
+        "admitted_at": guest.admitted_at.isoformat(),
+    })
+
+    return ScanResult(
+        status="admitted",
+        message=f"Welcome, {guest.first_name} {guest.last_name}! You are admitted.",
+        guest=GuestOut.model_validate(guest),
+        table_name=table_name,
+        seat_number=guest.seat_number,
+    )

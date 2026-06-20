@@ -38,15 +38,17 @@ def _sanitize_html(text: str | None) -> str | None:
 
 
 def _to_out(row: MessageTemplate, is_default: bool = False) -> MessageTemplateOut:
+    defaults = template_service.DEFAULTS.get(row.template_key, {})
     return MessageTemplateOut(
         id=row.id,
         scope=row.scope,
         event_id=row.event_id,
         template_key=row.template_key,
-        subject=row.subject,
-        email_body=row.email_body,
-        sms_body=row.sms_body,
-        whatsapp_body=row.whatsapp_body,
+        subject=row.subject if row.subject is not None else defaults.get("subject"),
+        email_body=row.email_body if row.email_body is not None else defaults.get("email_body"),
+        sms_body=row.sms_body if row.sms_body is not None else defaults.get("sms_body"),
+        mms_body=row.mms_body if row.mms_body is not None else defaults.get("mms_body"),
+        whatsapp_body=row.whatsapp_body if row.whatsapp_body is not None else defaults.get("whatsapp_body"),
         updated_at=row.updated_at,
         updated_by=row.updated_by,
         is_default=is_default,
@@ -103,6 +105,7 @@ async def list_templates(
                 subject=defaults.get("subject"),
                 email_body=defaults.get("email_body"),
                 sms_body=defaults.get("sms_body"),
+                mms_body=defaults.get("mms_body"),
                 whatsapp_body=defaults.get("whatsapp_body"),
                 updated_at=datetime.utcnow(),
                 updated_by=None,
@@ -194,6 +197,8 @@ async def upsert_template(
         row.email_body = _sanitize_html(data.email_body)
     if data.sms_body is not None:
         row.sms_body = data.sms_body
+    if data.mms_body is not None:
+        row.mms_body = data.mms_body
     if data.whatsapp_body is not None:
         row.whatsapp_body = data.whatsapp_body
 
@@ -242,6 +247,7 @@ async def preview_template(
         "subject":       data.subject       if data.subject       is not None else resolved.get("subject"),
         "email_body":    data.email_body    if data.email_body    is not None else resolved.get("email_body"),
         "sms_body":      data.sms_body      if data.sms_body      is not None else resolved.get("sms_body"),
+        "mms_body":      data.mms_body      if data.mms_body      is not None else resolved.get("mms_body"),
         "whatsapp_body": data.whatsapp_body if data.whatsapp_body is not None else resolved.get("whatsapp_body"),
     }
 
@@ -317,6 +323,38 @@ async def test_send_template(
             body_override=rendered.get("sms_body"),
         )
         return {"sent": True, "channel": "sms", "recipient": data.recipient}
+
+    elif data.channel == "mms":
+        mms_body = rendered.get("mms_body") or rendered.get("sms_body") or f"Test MMS for {event_name}"
+        qr_url = ctx["ticket_link"].replace("/scan/", "/api/scan/") + "/qr.png"
+        mms_kwargs: dict = {}
+        if data.event_id and ev:
+            from app.models import Guest as _Guest
+            sample_guest = (await db.execute(
+                select(_Guest).where(
+                    _Guest.event_id == data.event_id,
+                    _Guest.qr_generated_at.isnot(None),
+                ).limit(1)
+            )).scalar_one_or_none()
+            if sample_guest:
+                qr_url = f"{ev.checkin_base_url.rstrip('/')}/api/scan/{sample_guest.qr_token}/qr.png"
+                mms_kwargs = dict(
+                    event_name=ev.name,
+                    couples_name=ev.couples_name or "",
+                    event_date=ev.event_date,
+                    venue_name=ev.venue_name or "",
+                    venue_address=ev.venue_address or "",
+                    guest_first_name=sample_guest.first_name,
+                    guest_last_name=sample_guest.last_name or "",
+                )
+        await messaging.send_invite_mms(
+            phone=data.recipient,
+            body=mms_body,
+            media_url=qr_url,
+            subject=event_name,
+            **mms_kwargs,
+        )
+        return {"sent": True, "channel": "mms", "recipient": data.recipient}
 
     elif data.channel == "whatsapp":
         await messaging.send_invite_whatsapp(

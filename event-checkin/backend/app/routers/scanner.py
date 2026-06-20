@@ -148,6 +148,34 @@ async def _dispatch_admission_message(background_tasks: BackgroundTasks, event: 
                 table_name=table_name, seat_number=guest.seat_number,
             )
 
+    if event.notify_mms and guest.phone and guest.sms_consent:
+        mms_body = resolved.get("mms_body") or resolved.get("sms_body")
+        if mms_body:
+            rendered = _ts.render_template(resolved, ctx)
+            body = rendered.get("mms_body") or rendered.get("sms_body") or ""
+        else:
+            seat_info = f", Seat {guest.seat_number}" if guest.seat_number else ""
+            table_info = f" — {table_name}{seat_info}" if table_name else ""
+            body = f"Welcome, {guest.first_name}! You've been checked in to {event.name}{table_info}. Enjoy the event!"
+        qr_url = f"{event.checkin_base_url.rstrip('/')}/api/scan/{guest.qr_token}/qr.png"
+        background_tasks.add_task(
+            messaging.send_invite_mms,
+            phone=guest.phone,
+            body=body,
+            media_url=qr_url,
+            subject=f"Welcome to {event.name}!",
+            event_name=event.name,
+            couples_name=event.couples_name or "",
+            event_date=event.event_date,
+            venue_name=event.venue_name or "",
+            venue_address=event.venue_address or "",
+            guest_first_name=guest.first_name,
+            guest_last_name=guest.last_name or "",
+            admitted=True,
+            table_name=table_name or "",
+            seat_number=guest.seat_number or "",
+        )
+
     if event.notify_whatsapp and guest.phone and guest.whatsapp_consent:
         if resolved.get("whatsapp_body"):
             rendered = _ts.render_template(resolved, ctx)
@@ -181,7 +209,11 @@ async def view_ticket(qr_token: str, db: AsyncSession = Depends(get_db)):
         seating_enabled=event.seating_enabled,
         menu_enabled=event.menu_enabled,
         notify_sms=event.notify_sms,
+        notify_mms=event.notify_mms,
         notify_whatsapp=event.notify_whatsapp,
+        partner_pairing_enabled=event.partner_pairing_enabled,
+        venue_name=event.venue_name,
+        venue_address=event.venue_address,
     ) if event else None
 
     table_name = None
@@ -233,6 +265,53 @@ async def ticket_qr_image(qr_token: str, db: AsyncSession = Depends(get_db)):
     return Response(content=generate_qr_bytes(qr_token, base_url), media_type="image/png")
 
 
+@router.get("/{qr_token}/card.jpg")
+async def ticket_card_image(
+    qr_token: str,
+    admitted: bool = False,
+    db: AsyncSession = Depends(get_db),
+):
+    """Public — styled ticket card JPEG used as MMS media attachment."""
+    import asyncio as _asyncio
+    from services.ticket_card import generate_ticket_card
+
+    guest = (await db.execute(select(Guest).where(Guest.qr_token == qr_token))).scalar_one_or_none()
+    if not guest:
+        return Response(status_code=404)
+    event = await db.get(Event, guest.event_id)
+    if not event:
+        return Response(status_code=404)
+
+    base_url = event.checkin_base_url or "https://events.nihlah.io"
+    qr_bytes = generate_qr_bytes(qr_token, base_url)
+
+    table_name = ""
+    if guest.table_id:
+        tbl = await db.get(SeatingTable, guest.table_id)
+        if tbl:
+            table_name = tbl.name
+
+    card = await _asyncio.to_thread(
+        generate_ticket_card,
+        event_name=event.name,
+        couples_name=event.couples_name or "",
+        event_date=event.event_date,
+        venue_name=event.venue_name or "",
+        venue_address=event.venue_address or "",
+        guest_first_name=guest.first_name,
+        guest_last_name=guest.last_name or "",
+        qr_png_bytes=qr_bytes,
+        admitted=admitted,
+        table_name=table_name,
+        seat_number=guest.seat_number or "",
+    )
+    return Response(
+        content=card,
+        media_type="image/jpeg",
+        headers={"Cache-Control": "no-store"},
+    )
+
+
 @router.post("/{qr_token}", response_model=ScanResult)
 async def scan_qr(
     qr_token: str,
@@ -275,7 +354,7 @@ async def scan_qr(
     # First-come-first-served seat assignment if this guest has no seat yet.
     # Honors couple pairings (see assign_next_seat in seating.py).
     # assign_next_seat already respects table_group_id.
-    if event and event.seating_enabled and not guest.table_id:
+    if event and event.seating_enabled and not guest.seat_number:
         seat_error = await assign_next_seat(guest, db)
         if seat_error:
             return ScanResult(status="no_seat_available", message=seat_error)

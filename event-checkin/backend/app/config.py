@@ -15,8 +15,12 @@ class Settings(BaseSettings):
     smtp_tls: bool = True
     email_from: str = "noreply@event.com"
 
-    # Messaging provider switch: 'bird' | 'twilio' | 'sns' | '' (off)
+    # Messaging provider switch: 'bird' | 'twilio' | 'sns' | 'clicksend' | '' (off)
     messaging_provider: str = ""
+
+    clicksend_username: str = ""
+    clicksend_api_key: str = ""
+    clicksend_from: str = ""  # optional sender name or number (alphanumeric in NG, number in US)
 
     # AWS SNS (SMS only — no WhatsApp)
     aws_access_key_id: str = ""

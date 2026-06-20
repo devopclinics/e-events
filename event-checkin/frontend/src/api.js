@@ -78,6 +78,7 @@ export const api = {
   sendInvites:         (eventId)           => req('POST', `/events/${eventId}/guests/send-invites`),
   sendInvitesBatch:    (eventId, guestIds, force = false) =>
     req('POST', `/events/${eventId}/guests/send-batch`, { guest_ids: guestIds, force }),
+  updateGuest:         (eventId, guestId, data) => req('PATCH', `/events/${eventId}/guests/${guestId}`, data),
   deleteGuest:         (eventId, guestId)  => req('DELETE', `/events/${eventId}/guests/${guestId}`),
   resendInvite:        (eventId, guestId)  => req('POST',   `/events/${eventId}/guests/${guestId}/resend-invite`),
   ensureInviteToken:   (eventId, guestId)  => req('POST',   `/events/${eventId}/guests/${guestId}/invite-token`),

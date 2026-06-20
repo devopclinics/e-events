@@ -11,7 +11,7 @@ from sqlalchemy import select, func
 from ..database import get_db
 from sqlalchemy import or_
 from ..models import Event, Guest, TicketType, GuestTag, GuestTagLink, User, TableGroup, SeatingTable
-from ..schemas import GuestOut, GuestCreate, BulkAssignGroupRequest, ScanResult
+from ..schemas import GuestOut, GuestCreate, GuestUpdate, BulkAssignGroupRequest, ScanResult
 from ..auth import require_event_admin, require_official
 from ..entitlements import assert_within_guest_cap, guest_limit, can_use_paid_channels, take_message_credit
 from services.qr_service import generate_qr_bytes
@@ -814,6 +814,40 @@ async def bulk_assign_table_group(
         updated += 1
     await db.commit()
     return {"ok": True, "updated": updated, "table_group_id": body.table_group_id}
+
+
+@router.patch("/{event_id}/guests/{guest_id}", response_model=GuestOut)
+async def update_guest(
+    event_id: str,
+    guest_id: str,
+    data: GuestUpdate,
+    db: AsyncSession = Depends(get_db),
+    _: User = Depends(require_event_admin),
+):
+    """Edit a guest's core fields from the admin guest-edit modal (ported from prod)."""
+    guest = await db.get(Guest, guest_id)
+    if not guest or guest.event_id != event_id:
+        raise HTTPException(404, "Guest not found")
+    if data.first_name is not None:
+        guest.first_name = data.first_name.strip()
+    if data.last_name is not None:
+        guest.last_name = data.last_name.strip()
+    if data.email is not None:
+        guest.email = data.email.strip() or None
+    if data.phone is not None:
+        phone = _normalize_phone(data.phone.strip()) if data.phone.strip() else None
+        if data.phone.strip() and phone is None:
+            raise HTTPException(400, "Invalid phone format — use E.164 e.g. +447911123456")
+        guest.phone = phone
+    if data.is_vip is not None:
+        guest.is_vip = data.is_vip
+    if data.sms_consent is not None:
+        guest.sms_consent = data.sms_consent
+    if data.whatsapp_consent is not None:
+        guest.whatsapp_consent = data.whatsapp_consent
+    await db.commit()
+    await db.refresh(guest)
+    return guest
 
 
 # ── Manual check-in (no QR) ─────────────────────────────────────────────────────

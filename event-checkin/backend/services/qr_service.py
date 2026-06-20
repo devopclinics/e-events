@@ -3,8 +3,8 @@ import qrcode
 import qrcode.constants
 
 
-def generate_qr_bytes(qr_token: str, base_url: str) -> bytes:
-    url = f"{base_url.rstrip('/')}/scan/{qr_token}"
+def generate_qr_for_url(url: str) -> bytes:
+    """QR PNG encoding an arbitrary URL (used for the self check-in event link)."""
     qr = qrcode.QRCode(
         version=1,
         error_correction=qrcode.constants.ERROR_CORRECT_M,
@@ -17,3 +17,7 @@ def generate_qr_bytes(qr_token: str, base_url: str) -> bytes:
     buf = io.BytesIO()
     img.save(buf, format="PNG")
     return buf.getvalue()
+
+
+def generate_qr_bytes(qr_token: str, base_url: str) -> bytes:
+    return generate_qr_for_url(f"{base_url.rstrip('/')}/scan/{qr_token}")

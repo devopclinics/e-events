@@ -101,6 +101,38 @@ async def send_simple_email(to_email: str, subject: str, html_body: str):
     await _send(msg)
 
 
+def _invite_pairing_cta(ticket_url: str) -> str:
+    return (
+        '<table style="width:100%;margin:24px 0;border:1px solid #fce7f3;'
+        'border-radius:12px;border-collapse:separate;overflow:hidden;">'
+        '<tr><td style="padding:14px 16px;">'
+        '<div style="font-weight:700;color:#9d174d;font-size:14px;">'
+        'Coming with your spouse or partner?</div>'
+        '<div style="color:#6b7280;font-size:13px;margin-top:2px;">'
+        'Pair up so we seat you together at check-in.</div>'
+        f'<a href="{ticket_url}" style="display:inline-block;margin-top:10px;'
+        'background:#ec4899;color:white;text-decoration:none;padding:8px 16px;'
+        'border-radius:8px;font-size:13px;font-weight:700;">Pair with my partner →</a>'
+        '</td></tr></table>'
+    )
+
+
+def _invite_menu_cta(ticket_url: str) -> str:
+    return (
+        '<table style="width:100%;margin:24px 0;border:1px solid #fde68a;'
+        'border-radius:12px;border-collapse:separate;overflow:hidden;">'
+        '<tr><td style="padding:14px 16px;">'
+        '<div style="font-weight:700;color:#92400e;font-size:14px;">'
+        '🍽️ Pick your meal in advance</div>'
+        '<div style="color:#6b7280;font-size:13px;margin-top:2px;">'
+        'Choose what you want to eat. You can change it any time before the event.</div>'
+        f'<a href="{ticket_url}" style="display:inline-block;margin-top:10px;'
+        'background:#f59e0b;color:white;text-decoration:none;padding:8px 16px;'
+        'border-radius:8px;font-size:13px;font-weight:700;">Choose menu →</a>'
+        '</td></tr></table>'
+    )
+
+
 async def send_invite_email(
     guest_data: dict,
     event_name: str,
@@ -109,75 +141,50 @@ async def send_invite_email(
     event_date: datetime,
     seating_enabled: bool = False,
     menu_enabled: bool = False,
+    override_subject: str | None = None,
+    override_body: str | None = None,
 ):
+    """Render the ticket-QR invite from the message template (event override or
+    the code default in TEMPLATE_DEFS) — all wording lives in the template. The
+    QR image, pairing and menu buttons are injected via the {{qr_code}},
+    {{pairing_cta}} and {{menu_cta}} placeholders."""
+    from services import templates as tpl
+
     msg = MIMEMultipart("related")
-    msg["Subject"] = f"Your Invitation — {event_name}"
-    msg["From"] = settings.email_from
-    msg["To"] = guest_data["email"]
-
     qr_bytes = generate_qr_bytes(guest_data["qr_token"], checkin_base_url)
-    date_str = event_date.strftime("%A, %d %B %Y")
     ticket_url = f"{checkin_base_url.rstrip('/')}/scan/{guest_data['qr_token']}"
+    date_str = event_date.strftime("%A, %d %B %Y") if event_date else ""
 
-    first = _html.escape(guest_data["first_name"])
-    last  = _html.escape(guest_data["last_name"])
-    e_name    = _html.escape(event_name)
-    e_couple  = _html.escape(couples_name)
+    spec = tpl.TEMPLATE_DEFS["ticket_qr"]
+    subject_tmpl = override_subject or spec["subject"]
+    body_tmpl = override_body or spec["email_body"]
 
-    # ── Pre-event actions block (pairing + menu) ─────────────────────────────
-    cta_rows: list[str] = []
-    if seating_enabled:
-        cta_rows.append(
-            '<tr><td style="padding:14px 16px;border-bottom:1px solid #fce7f3;">'
-            '<div style="font-weight:700;color:#9d174d;font-size:14px;">'
-            'Coming with your spouse or partner?</div>'
-            '<div style="color:#6b7280;font-size:13px;margin-top:2px;">'
-            'Pair up so we seat you together at check-in.</div>'
-            f'<a href="{ticket_url}" style="display:inline-block;margin-top:10px;'
-            'background:#ec4899;color:white;text-decoration:none;padding:8px 16px;'
-            'border-radius:8px;font-size:13px;font-weight:700;">Pair with my partner →</a>'
-            '</td></tr>'
-        )
-    if menu_enabled:
-        cta_rows.append(
-            '<tr><td style="padding:14px 16px;">'
-            '<div style="font-weight:700;color:#92400e;font-size:14px;">'
-            '🍽️ Pick your meal in advance</div>'
-            '<div style="color:#6b7280;font-size:13px;margin-top:2px;">'
-            'Choose what you want to eat. You can change it any time before the event.</div>'
-            f'<a href="{ticket_url}" style="display:inline-block;margin-top:10px;'
-            'background:#f59e0b;color:white;text-decoration:none;padding:8px 16px;'
-            'border-radius:8px;font-size:13px;font-weight:700;">Choose menu →</a>'
-            '</td></tr>'
-        )
-    cta_html = (
-        f'<table style="width:100%;margin:24px 0;border:1px solid #e5e7eb;'
-        f'border-radius:12px;border-collapse:separate;overflow:hidden;">{"".join(cta_rows)}</table>'
-        if cta_rows else ""
+    first = _html.escape(guest_data.get("first_name", "") or "")
+    last = _html.escape(guest_data.get("last_name", "") or "")
+    ctx = {
+        # Text fields are HTML-escaped; the *_cta / qr_code fields are trusted HTML.
+        "guest_first_name": first,
+        "guest_last_name": last,
+        "guest_full_name": f"{first} {last}".strip(),
+        "event_name": _html.escape(event_name or ""),
+        "event_date": _html.escape(date_str),
+        "organizer_name": _html.escape(couples_name or ""),
+        "ticket_link": ticket_url,
+        "qr_code": '<img src="cid:qrcode" alt="Your QR Code" style="width:220px;height:220px;" />',
+        "pairing_cta": _invite_pairing_cta(ticket_url) if seating_enabled else "",
+        "menu_cta": _invite_menu_cta(ticket_url) if menu_enabled else "",
+    }
+
+    subject = tpl.render(subject_tmpl, ctx) or f"Your Invitation — {event_name}"
+    inner = tpl.render(body_tmpl, ctx)
+    body = (
+        '<html><body style="font-family: Arial, sans-serif; max-width: 600px; '
+        f'margin: 0 auto; padding: 20px;">{inner}</body></html>'
     )
 
-    body = f"""
-    <html>
-    <body style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
-      <h1 style="color: #1a1a2e;">You're Invited!</h1>
-      <p>Dear <strong>{first} {last}</strong>,</p>
-      <p>We are delighted to invite you to <strong>{e_name}</strong> on <strong>{date_str}</strong>.</p>
-      <p>Please present the QR code below at the entrance on the day of the event:</p>
-      <div style="text-align: center; margin: 30px 0;">
-        <img src="cid:qrcode" alt="Your QR Code" style="width: 220px; height: 220px;" />
-      </div>
-      <p style="text-align:center;margin:0 0 24px 0;">
-        <a href="{ticket_url}" style="color:#0f766e;font-size:14px;font-weight:600;text-decoration:none;">
-          View your ticket online →
-        </a>
-      </p>
-      {cta_html}
-      <p style="color: #666; font-size: 14px;">This QR code is unique to you — please do not share it.</p>
-      <p>With love,<br/><strong>{e_couple}</strong></p>
-    </body>
-    </html>
-    """
-
+    msg["Subject"] = subject
+    msg["From"] = settings.email_from
+    msg["To"] = guest_data["email"]
     msg.attach(MIMEText(body, "html"))
     img_part = MIMEImage(qr_bytes)
     img_part.add_header("Content-ID", "<qrcode>")
@@ -189,7 +196,7 @@ async def send_invite_email(
 
 async def send_admission_email(guest_data: dict):
     msg = MIMEMultipart()
-    msg["Subject"] = "You're Admitted!"
+    msg["Subject"] = guest_data.get("subject_override") or "You're Admitted!"
     msg["From"] = settings.email_from
     msg["To"] = guest_data["email"]
 
@@ -266,12 +273,17 @@ async def send_admission_email(guest_data: dict):
         if admitted_time else ""
     )
 
+    intro_override = guest_data.get("intro_block_override")
+    intro_html = intro_override or (
+        f'<h1 style="margin:0 0 8px 0;">Welcome, {first}!</h1>'
+        '<p style="font-size: 18px; margin:0;">You have been successfully admitted.</p>'
+    )
+
     body = f"""
     <html>
     <body style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
       <div style="background: #22c55e; color: white; padding: 30px; border-radius: 12px; text-align: center;">
-        <h1 style="margin:0 0 8px 0;">Welcome, {first}!</h1>
-        <p style="font-size: 18px; margin:0;">You have been successfully admitted.</p>
+        {intro_html}
         {time_html}
         {seating_html}
       </div>

@@ -20,6 +20,8 @@ import RefundPolicyPage from './pages/RefundPolicyPage'
 import ConsolePage from './pages/ConsolePage'
 import KitchenPage from './pages/KitchenPage'
 import HelpPage from './pages/HelpPage'
+import MediaPage from './pages/MediaPage'
+import SelfCheckinPage from './pages/SelfCheckinPage'
 
 // ── Preferred-view helpers ────────────────────────────────────────────────────
 
@@ -81,6 +83,7 @@ function Nav({ hasMenu, eventName }) {
     { to: '/scanner', label: 'Check-in' },
     ...(hasMenu ? [{ to: '/kitchen', label: 'Orders' }] : []),
     ...(user?.is_platform_superadmin ? [{ to: '/console', label: 'Console' }] : []),
+    ...(user?.is_platform_superadmin ? [{ to: '/media-library', label: 'Media' }] : []),
     { to: '/help', label: 'Help' },
   ]
 
@@ -229,8 +232,10 @@ function AppRoutes() {
       <Route path="/login" element={<LoginPage />} />
       <Route path="/register" element={<RegisterPage />} />
       <Route path="/scan/:token" element={<ScanAutoPage />} />
+      {/* Public self check-in — no auth required */}
+      <Route path="/e/:code" element={<SelfCheckinPage />} />
       {/* Public invite page — no auth required */}
-      <Route path="/e/:eventId" element={<InvitePage />} />
+      <Route path="/invite/:eventId" element={<InvitePage />} />
       {/* Personalised (closed-mode) invite link — no auth required */}
       <Route path="/r/:token" element={<InvitePage />} />
       {/* Public vendor packing list — no auth required */}
@@ -259,6 +264,7 @@ function AppRoutes() {
               <Route path="/scanner" element={<ProtectedRoute><ScannerPage /></ProtectedRoute>} />
               <Route path="/kitchen" element={<ProtectedRoute><KitchenPage /></ProtectedRoute>} />
               <Route path="/console" element={<ProtectedRoute><ConsolePage /></ProtectedRoute>} />
+              <Route path="/media-library" element={<ProtectedRoute><MediaPage /></ProtectedRoute>} />
               <Route path="/help" element={<ProtectedRoute><HelpPage /></ProtectedRoute>} />
               <Route path="*" element={<Navigate to="/" replace />} />
             </Routes>

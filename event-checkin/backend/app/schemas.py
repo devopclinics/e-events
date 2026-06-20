@@ -101,6 +101,10 @@ class EventOut(BaseModel):
     notify_email: bool = True
     notify_sms: bool = True
     notify_whatsapp: bool = True
+    enforce_table_groups: bool = True
+    manual_checkin_enabled: bool = False
+    self_checkin_enabled: bool = False
+    event_code: Optional[str] = None
     created_at: datetime
     source_url: Optional[str] = None
     source_sync_interval_seconds: int = 60
@@ -316,6 +320,89 @@ class SeatingTableOut(BaseModel):
 class SeatAssignRequest(BaseModel):
     table_id: Optional[str] = None
     seat_number: Optional[str] = None
+
+
+class TableGroupCreate(BaseModel):
+    name: str
+    tag: Optional[str] = None          # defaults to name when omitted
+    description: Optional[str] = None
+    table_ids: Optional[list[str]] = None  # optional member tables at create time
+
+
+class TableGroupOut(BaseModel):
+    id: str
+    event_id: str
+    name: str
+    tag: str
+    description: Optional[str] = None
+    table_ids: list[str] = []
+    assigned_guest_count: int = 0
+    total_seats: int = 0
+    remaining_seats: int = 0
+    over_capacity: bool = False
+
+
+class TableGroupTablesUpdate(BaseModel):
+    table_ids: list[str] = []
+
+
+class BulkAssignGroupRequest(BaseModel):
+    guest_ids: list[str]
+    table_group_id: Optional[str] = None  # None clears the assignment
+
+
+# ── Message templates ──────────────────────────────────────────────────────────
+
+class MessageTemplateSave(BaseModel):
+    subject: Optional[str] = None
+    email_body: Optional[str] = None
+    sms_body: Optional[str] = None
+    whatsapp_body: Optional[str] = None
+
+
+class TemplatePreviewRequest(MessageTemplateSave):
+    """Draft fields to render with sample data (renders unsaved edits)."""
+    pass
+
+
+class TemplateTestSendRequest(MessageTemplateSave):
+    channel: str                 # "email" | "sms" | "whatsapp"
+    to: str                      # email address or phone number
+
+
+# ── Public self check-in (event code) ───────────────────────────────────────────
+
+class SelfCheckinSearch(BaseModel):
+    query: str
+
+
+class SelfCheckinGuest(BaseModel):
+    id: str
+    name: str            # full name only — no phone/email exposed publicly
+
+
+class SelfCheckinResult(BaseModel):
+    status: str          # ok | not_active | invalid | admitted | already_admitted | denied
+    message: Optional[str] = None
+    name: Optional[str] = None            # event name (info call)
+    guests: list[SelfCheckinGuest] = []   # search results
+    admitted_guest: Optional[str] = None  # full name on a successful check-in
+    table_name: Optional[str] = None
+    seat_number: Optional[str] = None
+    admitted_at: Optional[datetime] = None
+
+
+# ── Superadmin: reset event data ────────────────────────────────────────────────
+
+class EventResetRequest(BaseModel):
+    """What a superadmin reset should clear. Each flag is independent; the event
+    record and its settings/templates are always kept."""
+    guests: bool = False                 # delete all guests (+ their menu/rsvp/tags/shipments/scans)
+    checkins: bool = False               # clear admitted/served flags + delete scan log
+    seat_assignments: bool = False       # clear table/seat/held-seat on guests
+    group_assignments: bool = False      # clear guests' assigned table group
+    table_groups: bool = False           # delete table groups + memberships
+    tables: bool = False                 # delete seating tables
 
 
 # ── Logistics / Fulfillment ───────────────────────────────────────────────────
@@ -729,6 +816,7 @@ class GuestCreate(BaseModel):
     email: Optional[str] = ""   # empty allowed for VVIP walk-ins with no contact email
     phone: Optional[str] = None
     is_vip: bool = False
+    assigned_table_group_id: Optional[str] = None
 
 
 class GuestOut(BaseModel):
@@ -751,6 +839,8 @@ class GuestOut(BaseModel):
     admit_notified: bool
     table_id: Optional[str] = None
     seat_number: Optional[str] = None
+    assigned_table_group_id: Optional[str] = None
+    table_group_name: Optional[str] = None
     meal_served: bool = False
     is_vip: bool = False
     ticket_type_id: Optional[str] = None
@@ -864,7 +954,7 @@ class MenuCombinationTotal(BaseModel):
 class MenuDashboardGuest(BaseModel):
     guest_id: str
     name: str
-    email: str
+    email: Optional[str] = None
     table_name: Optional[str] = None
     seat_number: Optional[str] = None
     admitted: bool

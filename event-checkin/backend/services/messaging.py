@@ -102,6 +102,23 @@ async def send_manual_invite_whatsapp(*, phone: str, name: str, event_name: str,
     await _send_sms_as_whatsapp(phone, body)
 
 
+async def send_custom_sms(*, phone: str, body: str) -> None:
+    """Send a fully-rendered SMS body (used by the customizable-template engine)."""
+    if not _channel_ready("sms", phone):
+        return
+    await _send_sms(phone, body)
+
+
+async def send_custom_whatsapp(*, phone: str, body: str) -> None:
+    """Send a fully-rendered WhatsApp body as plain text (template engine).
+
+    Like broadcasts this uses the free-text path, so it only delivers inside an
+    open WhatsApp session / sandbox (no registered template)."""
+    if not _channel_ready("whatsapp", phone):
+        return
+    await _send_sms_as_whatsapp(phone, body)
+
+
 # ── internal: routing ─────────────────────────────────────────────────────────
 
 def _channel_ready(channel: str, phone: str | None) -> bool:

@@ -175,6 +175,75 @@ function FeatureToggles({ event, onChanged }) {
   )
 }
 
+function SelfCheckinPanel({ event, onChanged, onFlash }) {
+  const [loading, setLoading] = useState(false)
+  const [copied, setCopied] = useState(false)
+  const code = event.event_code
+  const url = code ? api.selfCheckinUrl(code) : ''
+
+  async function toggle() {
+    setLoading(true)
+    try {
+      const updated = await api.setSelfCheckin(event.id, !event.self_checkin_enabled)
+      onChanged(updated)
+      onFlash?.(`Self check-in ${updated.self_checkin_enabled ? 'enabled' : 'disabled'}.`)
+    } catch (e) {
+      onFlash?.(e.message, true)
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  async function copyLink() {
+    if (!url) return
+    await navigator.clipboard.writeText(url)
+    setCopied(true)
+    setTimeout(() => setCopied(false), 1800)
+  }
+
+  return (
+    <div className="border-t dark:border-slate-700 pt-5 space-y-4">
+      <div className="flex items-center justify-between gap-3 flex-wrap">
+        <div>
+          <h2 className="font-semibold text-base dark:text-white">Check-in options</h2>
+          <p className="text-xs text-gray-400 dark:text-slate-500 mt-1">Let guests scan one event QR and find themselves by name or phone.</p>
+        </div>
+        <button onClick={toggle} disabled={loading}
+          className={`px-4 py-2 rounded-lg text-sm font-semibold border transition-colors disabled:opacity-50 ${
+            event.self_checkin_enabled
+              ? 'bg-emerald-600 text-white border-emerald-600 hover:bg-emerald-700'
+              : 'bg-white dark:bg-slate-700 text-gray-700 dark:text-slate-200 border-gray-300 dark:border-slate-600 hover:bg-gray-50 dark:hover:bg-slate-600'
+          }`}>
+          Self Check-in: {event.self_checkin_enabled ? 'ON' : 'OFF'}
+        </button>
+      </div>
+
+      {event.self_checkin_enabled && code && (
+        <div className="rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900/40 p-4 grid gap-4 sm:grid-cols-[1fr_auto] sm:items-center">
+          <div className="min-w-0 space-y-2">
+            <div>
+              <div className="text-xs font-semibold text-slate-500 dark:text-slate-400">Event code</div>
+              <div className="text-xl font-bold tracking-widest text-slate-950 dark:text-white">{code}</div>
+            </div>
+            <div className="flex gap-2">
+              <input readOnly value={url}
+                className="min-w-0 flex-1 rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 px-3 py-2 text-xs text-slate-600 dark:text-slate-300" />
+              <button onClick={copyLink}
+                className="shrink-0 rounded-lg bg-slate-900 dark:bg-slate-100 px-3 py-2 text-xs font-semibold text-white dark:text-slate-900">
+                {copied ? 'Copied' : 'Copy'}
+              </button>
+            </div>
+          </div>
+          <a href={api.selfCheckinQrUrl(code)} target="_blank" rel="noopener noreferrer"
+            className="justify-self-center rounded-lg bg-white p-2 shadow-sm">
+            <img src={api.selfCheckinQrUrl(code)} alt="Self check-in QR code" className="h-32 w-32" />
+          </a>
+        </div>
+      )}
+    </div>
+  )
+}
+
 // ── Seating Panel ─────────────────────────────────────────────────────────────
 
 function VipBadge({ className = '' }) {
@@ -503,6 +572,171 @@ function SeatingPanel({ eventId }) {
           onAddVvip={addVvipAndReserve}
           onClose={() => { setAssignSlot(null); setGuestQuery('') }}
         />
+      )}
+    </div>
+  )
+}
+
+// ── Table Groups panel ─────────────────────────────────────────────────────────
+// Group existing tables under a tag and assign guests to the group. Guests with a
+// group can only be seated/checked-in at tables in that group (enforced server-side).
+
+function TableGroupsPanel({ eventId }) {
+  const [groups, setGroups] = useState([])
+  const [tables, setTables] = useState([])
+  const [form, setForm]     = useState(null)   // {id?, name, tag, description, table_ids:[]}
+  const [loading, setLoading] = useState(false)
+  const [err, setErr]       = useState('')
+
+  const fieldCls = 'border border-gray-300 dark:border-slate-700 rounded-lg px-3 py-2 text-sm bg-white dark:bg-slate-700 text-gray-900 dark:text-white'
+
+  async function reload() {
+    try {
+      const [g, t] = await Promise.all([api.listTableGroups(eventId), api.listTables(eventId)])
+      setGroups(g); setTables(t)
+    } catch (e) { setErr(e.message) }
+  }
+  useEffect(() => { reload() }, [eventId])
+
+  const tableName = (id) => tables.find((t) => t.id === id)?.name || id
+
+  function toggleTable(id) {
+    setForm((f) => {
+      const has = f.table_ids.includes(id)
+      return { ...f, table_ids: has ? f.table_ids.filter((x) => x !== id) : [...f.table_ids, id] }
+    })
+  }
+
+  async function save(e) {
+    e.preventDefault()
+    setLoading(true); setErr('')
+    try {
+      const payload = {
+        name: form.name.trim(),
+        tag: (form.tag || '').trim() || form.name.trim(),
+        description: form.description?.trim() || null,
+        table_ids: form.table_ids,
+      }
+      if (form.id) await api.updateTableGroup(eventId, form.id, payload)
+      else await api.createTableGroup(eventId, payload)
+      setForm(null)
+      await reload()
+    } catch (e) { setErr(e.message) }
+    finally { setLoading(false) }
+  }
+
+  async function remove(id) {
+    if (!confirm('Delete this table group?')) return
+    setLoading(true); setErr('')
+    try {
+      await api.deleteTableGroup(eventId, id)
+      await reload()
+    } catch (e) { setErr(e.message) }   // 409 surfaces the "reassign first" message
+    finally { setLoading(false) }
+  }
+
+  return (
+    <div className="bg-white dark:bg-slate-800 dark:border dark:border-slate-700/60 rounded-xl shadow p-6 space-y-4 mt-6">
+      <div className="flex items-center justify-between flex-wrap gap-2">
+        <div>
+          <h2 className="font-semibold text-base dark:text-white">Table Groups</h2>
+          <p className="text-xs text-gray-400 dark:text-slate-500 mt-1">
+            Group tables (e.g. VIP, Family) and tag guests to them. Tagged guests can only be seated within their group.
+          </p>
+        </div>
+        <button onClick={() => setForm({ name: '', tag: '', description: '', table_ids: [] })} disabled={loading}
+          className="bg-indigo-600 text-white px-3 py-1.5 rounded-lg text-xs font-semibold hover:bg-indigo-700">
+          + Table Group
+        </button>
+      </div>
+
+      {err && <p className="text-sm text-red-500">{err}</p>}
+
+      {groups.length === 0 && !form ? (
+        <p className="text-sm text-gray-400 dark:text-slate-500">No table groups yet.</p>
+      ) : (
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          {groups.map((g) => (
+            <div key={g.id} className="border dark:border-slate-700 rounded-lg p-3">
+              <div className="flex justify-between items-start gap-2">
+                <div>
+                  <div className="font-semibold text-sm dark:text-white">{g.name}</div>
+                  <span className="inline-block mt-0.5 text-[11px] font-mono bg-indigo-50 dark:bg-indigo-900/30 text-indigo-700 dark:text-indigo-300 px-1.5 py-0.5 rounded">{g.tag}</span>
+                </div>
+                <div className="flex gap-3 shrink-0">
+                  <button onClick={() => setForm({ id: g.id, name: g.name, tag: g.tag, description: g.description || '', table_ids: g.table_ids || [] })}
+                    className="text-xs text-indigo-600 hover:underline">Edit</button>
+                  <button onClick={() => remove(g.id)} disabled={loading}
+                    className="text-xs text-red-400 hover:text-red-600 disabled:opacity-40">Delete</button>
+                </div>
+              </div>
+              {g.description && <p className="text-xs text-gray-500 dark:text-slate-400 mt-1">{g.description}</p>}
+              <div className="mt-2 text-xs text-gray-500 dark:text-slate-400">
+                Tables: {(g.table_ids || []).length ? (g.table_ids).map(tableName).join(', ') : <span className="italic">none</span>}
+              </div>
+              <div className="mt-1 flex items-center gap-3 text-xs">
+                <span className="dark:text-slate-300">👤 {g.assigned_guest_count} assigned</span>
+                <span className={g.remaining_seats < 0 ? 'text-red-500 font-semibold' : 'text-green-600'}>
+                  {g.remaining_seats} of {g.total_seats} seats free
+                </span>
+              </div>
+              {g.over_capacity && (
+                <p className="mt-1 text-xs text-red-500">⚠ More guests assigned than available seats in this group.</p>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
+
+      {form && (
+        <form onSubmit={save} className="bg-gray-50 dark:bg-slate-700 rounded-lg p-3 border dark:border-slate-600 space-y-3">
+          <div className="flex flex-wrap gap-2">
+            <div>
+              <label className="block text-xs font-semibold text-gray-600 dark:text-slate-300 mb-1">Group name</label>
+              <input value={form.name} onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))} required
+                className={fieldCls} placeholder="VIP Tables" />
+            </div>
+            <div>
+              <label className="block text-xs font-semibold text-gray-600 dark:text-slate-300 mb-1">Tag (for import/assign)</label>
+              <input value={form.tag} onChange={(e) => setForm((f) => ({ ...f, tag: e.target.value }))}
+                className={`${fieldCls} w-40`} placeholder="VIP" />
+            </div>
+            <div className="flex-1 min-w-[12rem]">
+              <label className="block text-xs font-semibold text-gray-600 dark:text-slate-300 mb-1">Description</label>
+              <input value={form.description} onChange={(e) => setForm((f) => ({ ...f, description: e.target.value }))}
+                className={`${fieldCls} w-full`} placeholder="Optional" />
+            </div>
+          </div>
+          <div>
+            <label className="block text-xs font-semibold text-gray-600 dark:text-slate-300 mb-1">Tables in this group</label>
+            {tables.length === 0 ? (
+              <p className="text-xs text-gray-400">Create tables first (in Seating above).</p>
+            ) : (
+              <div className="flex flex-wrap gap-2">
+                {tables.map((t) => (
+                  <button key={t.id} type="button" onClick={() => toggleTable(t.id)}
+                    className={`text-xs px-2.5 py-1 rounded-full border ${
+                      form.table_ids.includes(t.id)
+                        ? 'bg-indigo-600 text-white border-indigo-600'
+                        : 'bg-white dark:bg-slate-800 text-gray-600 dark:text-slate-300 border-gray-300 dark:border-slate-600'
+                    }`}>
+                    {t.name} <span className="opacity-60">({t.capacity})</span>
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+          <div className="flex gap-2">
+            <button type="submit" disabled={loading}
+              className="bg-indigo-600 text-white px-4 py-2 rounded-lg text-sm font-semibold hover:bg-indigo-700 disabled:opacity-50">
+              {form.id ? 'Save' : 'Create'}
+            </button>
+            <button type="button" onClick={() => setForm(null)}
+              className="px-4 py-2 border border-gray-300 dark:border-slate-600 rounded-lg text-sm dark:text-slate-300 hover:bg-gray-100 dark:hover:bg-slate-600">
+              Cancel
+            </button>
+          </div>
+        </form>
       )}
     </div>
   )
@@ -2805,6 +3039,21 @@ const INVITE_THEMES = [
   { id: 'forest',   label: 'Forest' },
 ]
 
+const RSVP_QUESTION_TYPES = [
+  { value: 'text', label: 'Short answer' },
+  { value: 'select', label: 'Multiple choice' },
+  { value: 'boolean', label: 'Yes / No' },
+]
+
+const RSVP_QUESTION_PRESETS = [
+  { label: 'Dietary restriction', question: 'Do you have any dietary restrictions?', question_type: 'text', options: '', is_required: false },
+  { label: 'Meal choice', question: 'Please choose your meal', question_type: 'select', options: 'Chicken, Fish, Vegetarian, No meal', is_required: true },
+  { label: 'Plus-one', question: 'Will you be bringing a plus-one?', question_type: 'boolean', options: '', is_required: false },
+  { label: 'T-shirt size', question: 'What is your T-shirt size?', question_type: 'select', options: 'XS, S, M, L, XL, XXL', is_required: false },
+  { label: 'Accessibility needs', question: 'Do you need any accessibility assistance?', question_type: 'text', options: '', is_required: false },
+  { label: 'Company name', question: 'What company or organization are you representing?', question_type: 'text', options: '', is_required: false },
+]
+
 function InvitePanel({ event, onChanged }) {
   const [form, setForm] = useState({
     rsvp_enabled:      event.rsvp_enabled      ?? false,
@@ -2848,6 +3097,10 @@ function InvitePanel({ event, onChanged }) {
 
   async function addQuestion() {
     if (!newQ.question.trim()) return
+    if (newQ.question_type === 'select' && !newQ.options.split(',').map((s) => s.trim()).filter(Boolean).length) {
+      setErr('Add at least one option for a multiple choice question.')
+      return
+    }
     try {
       const payload = {
         question: newQ.question.trim(),
@@ -2862,6 +3115,17 @@ function InvitePanel({ event, onChanged }) {
       setQuestions((p) => [...p, q])
       setNewQ({ question: '', question_type: 'text', options: '', is_required: false })
     } catch (e) { setErr(e.message) }
+  }
+
+  function applyQuestionPreset(value) {
+    const preset = RSVP_QUESTION_PRESETS.find((p) => p.label === value)
+    if (!preset) return
+    setNewQ({
+      question: preset.question,
+      question_type: preset.question_type,
+      options: preset.options,
+      is_required: preset.is_required,
+    })
   }
 
   async function deleteQuestion(qId) {
@@ -2947,56 +3211,95 @@ function InvitePanel({ event, onChanged }) {
         )}
       </div>
 
-      {/* Settings form */}
+      {/* RSVP mode — one clear choice */}
+      <div>
+        <label className="block text-xs font-semibold text-slate-500 dark:text-slate-400 mb-2">How do you want to invite guests?</label>
+        <div className="grid sm:grid-cols-2 gap-3">
+          <button type="button"
+            onClick={() => setForm((p) => ({ ...p, rsvp_enabled: false, invite_mode: 'open', rsvp_require_approval: false }))}
+            className={`text-left rounded-xl border-2 p-4 transition-colors ${
+              !form.rsvp_enabled
+                ? 'border-teal-500 bg-teal-50 dark:bg-teal-900/20'
+                : 'border-slate-200 dark:border-slate-700 hover:border-slate-300 dark:hover:border-slate-600'
+            }`}>
+            <div className="font-semibold text-sm dark:text-white flex items-center gap-2">
+              {!form.rsvp_enabled && <span className="text-teal-600">✓</span>} Skip RSVP
+            </div>
+            <div className="text-xs text-slate-500 dark:text-slate-400 mt-1">
+              Send everyone their ticket (QR) straight away. No replies or confirmations needed.
+            </div>
+          </button>
+          <button type="button"
+            onClick={() => setForm((p) => ({ ...p, rsvp_enabled: true }))}
+            className={`text-left rounded-xl border-2 p-4 transition-colors ${
+              form.rsvp_enabled
+                ? 'border-teal-500 bg-teal-50 dark:bg-teal-900/20'
+                : 'border-slate-200 dark:border-slate-700 hover:border-slate-300 dark:hover:border-slate-600'
+            }`}>
+            <div className="font-semibold text-sm dark:text-white flex items-center gap-2">
+              {form.rsvp_enabled && <span className="text-teal-600">✓</span>} With RSVP
+            </div>
+            <div className="text-xs text-slate-500 dark:text-slate-400 mt-1">
+              Ask guests to confirm first; tickets/updates follow. Adds an RSVP form to the invite page.
+            </div>
+          </button>
+        </div>
+      </div>
+
+      {/* Page styling — always relevant */}
       <div className="grid sm:grid-cols-2 gap-4">
-        <div className="flex items-center gap-2">
-          <input id="rsvp_enabled" type="checkbox" checked={form.rsvp_enabled} onChange={set('rsvp_enabled')} className="w-4 h-4 accent-teal-600" />
-          <label htmlFor="rsvp_enabled" className="text-sm font-medium text-slate-700 dark:text-slate-300 cursor-pointer">Accept RSVPs on this page</label>
-        </div>
-        <div className="flex items-center gap-2">
-          <input id="collect_phone" type="checkbox" checked={form.rsvp_collect_phone} onChange={set('rsvp_collect_phone')} className="w-4 h-4 accent-teal-600" />
-          <label htmlFor="collect_phone" className="text-sm font-medium text-slate-700 dark:text-slate-300 cursor-pointer">Ask for phone number</label>
-        </div>
-        <div className="flex items-center gap-2">
-          <input id="collect_email" type="checkbox" checked={form.rsvp_collect_email} onChange={set('rsvp_collect_email')} className="w-4 h-4 accent-teal-600" />
-          <label htmlFor="collect_email" className="text-sm font-medium text-slate-700 dark:text-slate-300 cursor-pointer">Ask for email address</label>
-        </div>
         <div>
           <label className="block text-xs font-semibold text-slate-500 dark:text-slate-400 mb-1">Theme</label>
           <select value={form.invite_theme} onChange={set('invite_theme')} className={inputCls}>
             {INVITE_THEMES.map((t) => <option key={t.id} value={t.id}>{t.label}</option>)}
           </select>
         </div>
-        <div>
-          <label className="block text-xs font-semibold text-slate-500 dark:text-slate-400 mb-1">Guest limit (blank = no limit)</label>
-          <input type="number" min="0" value={form.rsvp_capacity} onChange={set('rsvp_capacity')} className={inputCls} placeholder="e.g. 100" />
-        </div>
-        <div>
-          <label className="block text-xs font-semibold text-slate-500 dark:text-slate-400 mb-1">Who can RSVP?</label>
-          <select value={form.invite_mode} onChange={set('invite_mode')} className={inputCls}>
-            <option value="open">Anyone with the event link</option>
-            <option value="closed">Only guests with a personal invite link</option>
-          </select>
-        </div>
-        <div>
-          <label className="block text-xs font-semibold text-slate-500 dark:text-slate-400 mb-1">RSVP deadline (optional)</label>
-          <input type="datetime-local" value={form.rsvp_deadline} onChange={set('rsvp_deadline')} className={inputCls} />
-        </div>
       </div>
 
-      {form.invite_mode === 'closed' && (
-        <div className="rounded-lg bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 px-3 py-2 text-xs text-amber-800 dark:text-amber-300">
-          Only personal links can RSVP. Send them from <span className="font-semibold">Invites &amp; RSVP</span>, or copy a guest's link from the Guests tab. Tickets are issued after the guest confirms.
-        </div>
-      )}
+      {/* RSVP-only settings — hidden entirely in Skip-RSVP mode */}
+      {form.rsvp_enabled && (
+        <div className="space-y-4 rounded-xl border border-slate-200 dark:border-slate-700 p-4">
+          <div className="grid sm:grid-cols-2 gap-4">
+            <div className="flex items-center gap-2">
+              <input id="collect_phone" type="checkbox" checked={form.rsvp_collect_phone} onChange={set('rsvp_collect_phone')} className="w-4 h-4 accent-teal-600" />
+              <label htmlFor="collect_phone" className="text-sm font-medium text-slate-700 dark:text-slate-300 cursor-pointer">Ask for phone number</label>
+            </div>
+            <div className="flex items-center gap-2">
+              <input id="collect_email" type="checkbox" checked={form.rsvp_collect_email} onChange={set('rsvp_collect_email')} className="w-4 h-4 accent-teal-600" />
+              <label htmlFor="collect_email" className="text-sm font-medium text-slate-700 dark:text-slate-300 cursor-pointer">Ask for email address</label>
+            </div>
+            <div>
+              <label className="block text-xs font-semibold text-slate-500 dark:text-slate-400 mb-1">Guest limit (blank = no limit)</label>
+              <input type="number" min="0" value={form.rsvp_capacity} onChange={set('rsvp_capacity')} className={inputCls} placeholder="e.g. 100" />
+            </div>
+            <div>
+              <label className="block text-xs font-semibold text-slate-500 dark:text-slate-400 mb-1">Who can RSVP?</label>
+              <select value={form.invite_mode} onChange={set('invite_mode')} className={inputCls}>
+                <option value="open">Anyone with the event link</option>
+                <option value="closed">Only guests with a personal invite link</option>
+              </select>
+            </div>
+            <div>
+              <label className="block text-xs font-semibold text-slate-500 dark:text-slate-400 mb-1">RSVP deadline (optional)</label>
+              <input type="datetime-local" value={form.rsvp_deadline} onChange={set('rsvp_deadline')} className={inputCls} />
+            </div>
+          </div>
 
-      {form.invite_mode === 'open' && (
-        <div className="flex items-start gap-2">
-          <input id="require_approval" type="checkbox" checked={form.rsvp_require_approval} onChange={set('rsvp_require_approval')} className="w-4 h-4 mt-0.5 accent-teal-600" />
-          <label htmlFor="require_approval" className="text-sm text-slate-700 dark:text-slate-300 cursor-pointer">
-            <span className="font-medium">Review RSVPs before sending tickets</span>
-            <span className="block text-xs text-slate-500 dark:text-slate-400">New RSVPs show as "Pending". Approve them in Guests to send tickets.</span>
-          </label>
+          {form.invite_mode === 'closed' && (
+            <div className="rounded-lg bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 px-3 py-2 text-xs text-amber-800 dark:text-amber-300">
+              Only personal links can RSVP. Send them from <span className="font-semibold">Invites &amp; RSVP</span>, or copy a guest's link from the Guests tab. Tickets are issued after the guest confirms.
+            </div>
+          )}
+
+          {form.invite_mode === 'open' && (
+            <div className="flex items-start gap-2">
+              <input id="require_approval" type="checkbox" checked={form.rsvp_require_approval} onChange={set('rsvp_require_approval')} className="w-4 h-4 mt-0.5 accent-teal-600" />
+              <label htmlFor="require_approval" className="text-sm text-slate-700 dark:text-slate-300 cursor-pointer">
+                <span className="font-medium">Review RSVPs before sending tickets</span>
+                <span className="block text-xs text-slate-500 dark:text-slate-400">New RSVPs show as "Pending". Approve them in Guests to send tickets.</span>
+              </label>
+            </div>
+          )}
         </div>
       )}
 
@@ -3027,26 +3330,43 @@ function InvitePanel({ event, onChanged }) {
           </div>
         ))}
         {/* Add question form */}
-        <div className="grid sm:grid-cols-3 gap-2">
+        <div className="grid sm:grid-cols-[1fr_auto] gap-2">
+          <select
+            value=""
+            onChange={(e) => applyQuestionPreset(e.target.value)}
+            className={inputCls}
+            aria-label="Question preset"
+          >
+            <option value="">Use a common question...</option>
+            {RSVP_QUESTION_PRESETS.map((p) => <option key={p.label} value={p.label}>{p.label}</option>)}
+          </select>
+          <select
+            value={newQ.question_type}
+            onChange={(e) => setNewQ((p) => ({ ...p, question_type: e.target.value, options: e.target.value === 'select' ? p.options : '' }))}
+            className="border border-gray-300 dark:border-slate-600 rounded-lg px-3 py-2 text-sm bg-white dark:bg-slate-700 text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-teal-500 min-w-[11rem]"
+            aria-label="Question type"
+          >
+            {RSVP_QUESTION_TYPES.map((t) => <option key={t.value} value={t.value}>{t.label}</option>)}
+          </select>
+        </div>
+        <div>
           <input
             value={newQ.question}
             onChange={(e) => setNewQ((p) => ({ ...p, question: e.target.value }))}
             placeholder="Question to ask guests..."
-            className={`${inputCls} sm:col-span-2`}
-          />
-          <select value={newQ.question_type} onChange={(e) => setNewQ((p) => ({ ...p, question_type: e.target.value }))} className={inputCls}>
-            <option value="text">Text</option>
-            <option value="select">Select</option>
-            <option value="boolean">Yes/No</option>
-          </select>
-        </div>
-        {newQ.question_type === 'select' && (
-          <input
-            value={newQ.options}
-            onChange={(e) => setNewQ((p) => ({ ...p, options: e.target.value }))}
-            placeholder="Options (comma separated): Option A, Option B"
             className={inputCls}
           />
+        </div>
+        {newQ.question_type === 'select' && (
+          <div className="space-y-1">
+            <input
+              value={newQ.options}
+              onChange={(e) => setNewQ((p) => ({ ...p, options: e.target.value }))}
+              placeholder="Choices, comma separated: Chicken, Fish, Vegetarian"
+              className={inputCls}
+            />
+            <p className="text-[11px] text-slate-400">Guests will choose one option from this list.</p>
+          </div>
         )}
         <div className="flex items-center gap-4">
           <label className="flex items-center gap-2 text-xs text-slate-600 dark:text-slate-400 cursor-pointer">
@@ -3286,6 +3606,219 @@ function BillingPanel({ event }) {
         </>
       )}
       {err && <div className="text-xs text-red-600 dark:text-red-400">{err}</div>}
+    </div>
+  )
+}
+
+// ── Message Templates panel ─────────────────────────────────────────────────────
+// View and customize the outbound messages (email/SMS/WhatsApp) per event.
+// Event override → platform default; unedited templates send the built-in copy.
+
+function MessageTemplatesPanel({ eventId }) {
+  const [items, setItems]     = useState([])
+  const [sel, setSel]         = useState(null)   // selected template key
+  const [draft, setDraft]     = useState(null)   // {subject, email_body, sms_body, whatsapp_body}
+  const [meta, setMeta]       = useState(null)   // full meta for selected
+  const [preview, setPreview] = useState(null)
+  const [audit, setAudit]     = useState([])
+  const [loading, setLoading] = useState(false)
+  const [msg, setMsg]         = useState('')
+  const [err, setErr]         = useState('')
+  const [testTo, setTestTo]   = useState('')
+  const [testChannel, setTestChannel] = useState('email')
+
+  const fieldCls = 'border border-gray-300 dark:border-slate-700 rounded-lg px-3 py-2 text-sm bg-white dark:bg-slate-700 text-gray-900 dark:text-white w-full'
+
+  async function reloadList() {
+    try { setItems(await api.listTemplates(eventId)) } catch (e) { setErr(e.message) }
+  }
+  useEffect(() => { reloadList(); api.templateAudit(eventId).then(setAudit).catch(() => {}) }, [eventId])
+
+  function openTemplate(it) {
+    setSel(it.key); setMeta(it); setMsg(''); setErr(''); setPreview(null)
+    setDraft({
+      subject: it.effective.subject || '',
+      email_body: it.effective.email_body || '',
+      sms_body: it.effective.sms_body || '',
+      whatsapp_body: it.effective.whatsapp_body || '',
+    })
+    setTestChannel(it.channels[0] || 'email')
+  }
+
+  function insertVar(field, v) {
+    setDraft((d) => ({ ...d, [field]: (d[field] || '') + `{{${v}}}` }))
+  }
+
+  async function save() {
+    setLoading(true); setErr(''); setMsg('')
+    try {
+      const payload = {}
+      if (meta.channels.includes('email')) { payload.subject = draft.subject; payload.email_body = draft.email_body }
+      if (meta.channels.includes('sms')) payload.sms_body = draft.sms_body
+      if (meta.channels.includes('whatsapp')) payload.whatsapp_body = draft.whatsapp_body
+      const updated = await api.saveTemplate(eventId, sel, payload)
+      setMeta(updated); setMsg('Saved.'); setTimeout(() => setMsg(''), 3000)
+      await reloadList(); api.templateAudit(eventId).then(setAudit).catch(() => {})
+    } catch (e) { setErr(e.message) }
+    finally { setLoading(false) }
+  }
+
+  async function reset() {
+    if (!confirm('Reset this template to the platform default?')) return
+    setLoading(true); setErr('')
+    try {
+      const updated = await api.resetTemplate(eventId, sel)
+      openTemplate(updated); setMsg('Reset to default.'); setTimeout(() => setMsg(''), 3000)
+      await reloadList(); api.templateAudit(eventId).then(setAudit).catch(() => {})
+    } catch (e) { setErr(e.message) }
+    finally { setLoading(false) }
+  }
+
+  async function doPreview() {
+    setErr('')
+    try { setPreview(await api.previewTemplate(eventId, sel, draft)) } catch (e) { setErr(e.message) }
+  }
+
+  async function doTestSend() {
+    if (!testTo.trim()) { setErr('Enter a destination address/number'); return }
+    setLoading(true); setErr(''); setMsg('')
+    try {
+      await api.testSendTemplate(eventId, sel, { ...draft, channel: testChannel, to: testTo.trim() })
+      setMsg(`Test ${testChannel} sent to ${testTo}.`); setTimeout(() => setMsg(''), 4000)
+    } catch (e) { setErr(e.message) }
+    finally { setLoading(false) }
+  }
+
+  // Group templates for the list.
+  const grouped = items.reduce((acc, it) => { (acc[it.group] = acc[it.group] || []).push(it); return acc }, {})
+
+  return (
+    <div className="bg-white dark:bg-slate-800 dark:border dark:border-slate-700/60 rounded-xl shadow p-6">
+      <h2 className="font-semibold text-base dark:text-white">✏️ Message Templates</h2>
+      <p className="text-xs text-gray-400 dark:text-slate-500 mt-1">
+        Customize the emails, SMS and WhatsApp messages this event sends. Unedited templates use the platform default.
+      </p>
+      {err && <p className="text-sm text-red-500 mt-2">{err}</p>}
+      {msg && <p className="text-sm text-green-600 mt-2">{msg}</p>}
+
+      <div className="mt-4 grid grid-cols-1 lg:grid-cols-3 gap-5">
+        {/* List */}
+        <div className="lg:col-span-1 space-y-4">
+          {Object.entries(grouped).map(([group, list]) => (
+            <div key={group}>
+              <div className="text-[11px] font-semibold uppercase text-gray-400 dark:text-slate-500 mb-1">{group}</div>
+              <div className="space-y-1">
+                {list.map((it) => (
+                  <button key={it.key} onClick={() => openTemplate(it)}
+                    className={`w-full text-left px-3 py-2 rounded-lg text-sm flex items-center justify-between gap-2 ${
+                      sel === it.key ? 'bg-indigo-50 dark:bg-indigo-900/30 text-indigo-700 dark:text-indigo-200'
+                                     : 'hover:bg-gray-50 dark:hover:bg-slate-700 dark:text-slate-200'
+                    }`}>
+                    <span className="truncate">{it.label}</span>
+                    {it.source === 'event-customized'
+                      ? <span className="text-[10px] bg-amber-100 dark:bg-amber-900/40 text-amber-700 dark:text-amber-300 px-1.5 py-0.5 rounded shrink-0">Custom</span>
+                      : <span className="text-[10px] text-gray-400 shrink-0">Default</span>}
+                  </button>
+                ))}
+              </div>
+            </div>
+          ))}
+        </div>
+
+        {/* Editor */}
+        <div className="lg:col-span-2">
+          {!draft ? (
+            <p className="text-sm text-gray-400 dark:text-slate-500">Select a message to edit.</p>
+          ) : (
+            <div className="space-y-3">
+              <div className="flex items-center justify-between flex-wrap gap-2">
+                <div className="font-semibold text-sm dark:text-white">{meta.label}</div>
+                <div className="flex gap-2">
+                  <button onClick={doPreview} className="text-xs px-3 py-1.5 rounded-lg border border-gray-300 dark:border-slate-600 dark:text-slate-200 hover:bg-gray-50 dark:hover:bg-slate-700">Preview</button>
+                  <button onClick={save} disabled={loading} className="text-xs px-3 py-1.5 rounded-lg bg-indigo-600 text-white font-semibold hover:bg-indigo-700 disabled:opacity-50">Save</button>
+                  {meta.source === 'event-customized' && (
+                    <button onClick={reset} disabled={loading} className="text-xs px-3 py-1.5 rounded-lg border border-red-300 text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20">Reset</button>
+                  )}
+                </div>
+              </div>
+              {meta.note && <p className="text-xs text-amber-600 dark:text-amber-400">ℹ {meta.note}</p>}
+
+              {/* Placeholder palette */}
+              <div className="flex flex-wrap gap-1">
+                {meta.placeholders.map((p) => (
+                  <code key={p} className="text-[10px] bg-gray-100 dark:bg-slate-700 text-gray-600 dark:text-slate-300 px-1.5 py-0.5 rounded">{`{{${p}}}`}</code>
+                ))}
+              </div>
+
+              {meta.channels.includes('email') && (<>
+                <div>
+                  <label className="block text-xs font-semibold text-gray-600 dark:text-slate-300 mb-1">Email subject</label>
+                  <input value={draft.subject} onChange={(e) => setDraft((d) => ({ ...d, subject: e.target.value }))} className={fieldCls} />
+                </div>
+                <div>
+                  <div className="flex items-center justify-between mb-1">
+                    <label className="block text-xs font-semibold text-gray-600 dark:text-slate-300">Email body (HTML)</label>
+                    <select onChange={(e) => { if (e.target.value) { insertVar('email_body', e.target.value); e.target.value = '' } }} className="text-[11px] border dark:border-slate-600 rounded bg-white dark:bg-slate-700 dark:text-slate-200">
+                      <option value="">+ insert variable</option>
+                      {meta.placeholders.map((p) => <option key={p} value={p}>{p}</option>)}
+                    </select>
+                  </div>
+                  <textarea value={draft.email_body} onChange={(e) => setDraft((d) => ({ ...d, email_body: e.target.value }))} rows={6} className={`${fieldCls} font-mono text-xs`} />
+                </div>
+              </>)}
+
+              {meta.channels.includes('sms') && (
+                <div>
+                  <label className="block text-xs font-semibold text-gray-600 dark:text-slate-300 mb-1">SMS body</label>
+                  <textarea value={draft.sms_body} onChange={(e) => setDraft((d) => ({ ...d, sms_body: e.target.value }))} rows={2} className={fieldCls} />
+                </div>
+              )}
+
+              {meta.channels.includes('whatsapp') && (
+                <div>
+                  <label className="block text-xs font-semibold text-gray-600 dark:text-slate-300 mb-1">WhatsApp body</label>
+                  <textarea value={draft.whatsapp_body} onChange={(e) => setDraft((d) => ({ ...d, whatsapp_body: e.target.value }))} rows={2} className={fieldCls} />
+                </div>
+              )}
+
+              {/* Test send */}
+              <div className="border-t dark:border-slate-700 pt-3 flex flex-wrap items-end gap-2">
+                <div>
+                  <label className="block text-xs font-semibold text-gray-600 dark:text-slate-300 mb-1">Test send</label>
+                  <select value={testChannel} onChange={(e) => setTestChannel(e.target.value)} className="border dark:border-slate-600 rounded-lg px-2 py-2 text-sm bg-white dark:bg-slate-700 dark:text-slate-200">
+                    {meta.channels.map((c) => <option key={c} value={c}>{c}</option>)}
+                  </select>
+                </div>
+                <input value={testTo} onChange={(e) => setTestTo(e.target.value)} placeholder={testChannel === 'email' ? 'you@example.com' : '+1832...'} className={`${fieldCls} flex-1 min-w-[10rem]`} />
+                <button onClick={doTestSend} disabled={loading} className="text-xs px-3 py-2 rounded-lg border border-gray-300 dark:border-slate-600 dark:text-slate-200 hover:bg-gray-50 dark:hover:bg-slate-700">Send test</button>
+              </div>
+
+              {preview && (
+                <div className="border dark:border-slate-700 rounded-lg p-3 bg-gray-50 dark:bg-slate-900/40">
+                  <div className="text-[11px] font-semibold uppercase text-gray-400 mb-2">Preview (sample data)</div>
+                  {meta.channels.includes('email') && (<>
+                    <div className="text-xs text-gray-500 dark:text-slate-400">Subject: <span className="dark:text-slate-200">{preview.subject}</span></div>
+                    <div className="mt-1 bg-white dark:bg-slate-800 rounded p-2 text-sm dark:text-slate-200" dangerouslySetInnerHTML={{ __html: preview.email_body }} />
+                  </>)}
+                  {meta.channels.includes('sms') && <div className="mt-2 text-sm dark:text-slate-200">📱 {preview.sms_body}</div>}
+                  {meta.channels.includes('whatsapp') && <div className="mt-1 text-sm dark:text-slate-200">💬 {preview.whatsapp_body}</div>}
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+      </div>
+
+      {audit.length > 0 && (
+        <div className="mt-6 border-t dark:border-slate-700 pt-3">
+          <div className="text-[11px] font-semibold uppercase text-gray-400 dark:text-slate-500 mb-2">Recent changes</div>
+          <ul className="space-y-1 text-xs text-gray-500 dark:text-slate-400">
+            {audit.slice(0, 8).map((a, i) => (
+              <li key={i}>{a.action === 'reset' ? 'Reset' : 'Saved'} <span className="font-mono">{a.template_key}</span> — {a.changed_by_email || 'unknown'} · {a.changed_at ? new Date(a.changed_at).toLocaleString() : ''}</li>
+            ))}
+          </ul>
+        </div>
+      )}
     </div>
   )
 }
@@ -3821,23 +4354,64 @@ function OnboardingChecklist({ event, stats, onTab }) {
   // than deleting the only guide. We persist the collapsed state, never a
   // permanent dismissal.
   const [collapsed, setCollapsed] = useState(() => localStorage.getItem(key) === '1')
-  const items = [
+  // Required steps gate a working event — these drive completion and the
+  // "You're all set" state.
+  const required = [
     { label: 'Create your event', done: true },
     { label: 'Import your guests', action: 'Import guests', hint: 'Upload a spreadsheet, connect Google Sheets, or download the template to fill in.', done: stats.total > 0, tab: 'overview' },
     { label: 'Turn on the RSVP form', action: 'Set up RSVP', hint: 'Let guests confirm or decline straight from their invite.', done: !!event.rsvp_enabled, tab: 'invite' },
     { label: 'Send invitations', action: 'Send invites', hint: 'Email, SMS, or WhatsApp each guest their personal pass.', done: stats.invited > 0, tab: 'invite' },
     { label: 'Enable check-in with an Event Pass', action: 'Choose pass', hint: 'Activate door scanning by choosing an Event Pass.', done: !!event.is_paid, tab: 'invite' },
+  ]
+  // Optional — a discovery nudge only. Never counts toward completion, so a host
+  // who doesn't want extras can still reach 100%.
+  const optional = [
     { label: 'Turn on your event extras', action: 'Add extras', hint: 'Optional: seating, orders, deliveries, gift list, or entry rules.', done: !!(event.seating_enabled || event.menu_enabled || event.logistics_enabled || event.registry_enabled || event.venue_access_enabled), tab: 'features' },
   ]
-  const doneCount = items.filter((i) => i.done).length
-  const pct = Math.round((doneCount / items.length) * 100)
-  const allDone = doneCount === items.length
-  // The single step we actively guide the user toward right now.
-  const currentIdx = items.findIndex((i) => !i.done)
+  const doneCount = required.filter((i) => i.done).length
+  const pct = Math.round((doneCount / required.length) * 100)
+  const allDone = doneCount === required.length
+  // The single required step we actively guide the user toward right now.
+  const currentIdx = required.findIndex((i) => !i.done)
 
   function setCollapsedPersist(v) {
     if (v) localStorage.setItem(key, '1'); else localStorage.removeItem(key)
     setCollapsed(v)
+  }
+
+  // Shared row renderer. `isCurrent` gets the highlighted card + inline primary
+  // button; `optional` rows show their hint muted instead.
+  const renderRow = (it, { isCurrent = false, optional = false } = {}) => {
+    // The current step shows its own primary button, so its row isn't clickable
+    // — avoids an interactive element nested in another.
+    const rowClickable = !it.done && it.tab && !isCurrent
+    return (
+      <div
+        onClick={rowClickable ? () => onTab(it.tab) : undefined}
+        onKeyDown={rowClickable ? (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onTab(it.tab) } } : undefined}
+        role={rowClickable ? 'button' : undefined}
+        tabIndex={rowClickable ? 0 : undefined}
+        className={`rounded-lg px-2.5 py-2 transition-colors ${rowClickable ? 'cursor-pointer hover:bg-teal-100/70 dark:hover:bg-teal-800/30' : ''} ${isCurrent ? 'bg-white dark:bg-slate-800/70 ring-1 ring-teal-300 dark:ring-teal-700 shadow-sm' : ''}`}
+      >
+        <div className="flex items-center gap-3 text-sm">
+          <span className={`shrink-0 w-5 h-5 rounded-full flex items-center justify-center text-[11px] font-bold ${it.done ? 'bg-teal-600 text-white' : 'border-2 border-slate-300 dark:border-slate-600 text-transparent'}`}>✓</span>
+          <span className={`flex-1 ${it.done ? 'text-slate-400 line-through' : isCurrent ? 'font-semibold text-slate-900 dark:text-white' : 'text-slate-700 dark:text-slate-200'}`}>{it.label}</span>
+          {rowClickable && (
+            <span className="text-xs font-semibold text-teal-600">{it.action} →</span>
+          )}
+        </div>
+        {isCurrent && it.hint && (
+          <div className="mt-1.5 pl-8 flex items-center justify-between gap-3">
+            <p className="text-xs text-slate-500 dark:text-slate-400">{it.hint}</p>
+            <button onClick={() => onTab(it.tab)}
+              className="shrink-0 bg-teal-600 text-white px-3 py-1.5 rounded-lg text-xs font-semibold hover:bg-teal-700">{it.action} →</button>
+          </div>
+        )}
+        {optional && !it.done && it.hint && (
+          <p className="mt-1 pl-8 text-xs text-slate-400 dark:text-slate-500">{it.hint}</p>
+        )}
+      </div>
+    )
   }
 
   // Collapsed → a thin progress pill that re-expands on click (never a dead end).
@@ -3849,7 +4423,7 @@ function OnboardingChecklist({ event, stats, onTab }) {
         <div className="flex-1 h-1.5 rounded-full bg-teal-100 dark:bg-teal-900/40 overflow-hidden">
           <div className="h-full bg-teal-600 transition-all duration-500" style={{ width: `${pct}%` }} />
         </div>
-        <span className="text-xs text-slate-500 dark:text-slate-400">{doneCount}/{items.length}</span>
+        <span className="text-xs text-slate-500 dark:text-slate-400">{doneCount}/{required.length}</span>
       </button>
     )
   }
@@ -3859,7 +4433,7 @@ function OnboardingChecklist({ event, stats, onTab }) {
       <div className="flex items-start justify-between gap-3">
         <div>
           <h3 className="font-bold text-slate-900 dark:text-white">{allDone ? "You're all set" : 'Get this event ready'}</h3>
-          <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">{doneCount} of {items.length} complete</p>
+          <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">{doneCount} of {required.length} complete</p>
         </div>
         <button onClick={() => setCollapsedPersist(true)}
           className="text-xs text-slate-400 hover:text-slate-600 dark:hover:text-slate-200">{allDone ? 'Dismiss' : 'Hide'}</button>
@@ -3868,39 +4442,18 @@ function OnboardingChecklist({ event, stats, onTab }) {
         <div className="h-full bg-teal-600 transition-all duration-500" style={{ width: `${pct}%` }} />
       </div>
       <ul className="mt-4 space-y-1.5">
-        {items.map((it, i) => {
-          const isCurrent = i === currentIdx
-          // The current step shows its own primary button, so its row isn't
-          // clickable — avoids an interactive element nested in another.
-          const rowClickable = !it.done && it.tab && !isCurrent
-          return (
-            <li key={i}>
-              <div
-                onClick={rowClickable ? () => onTab(it.tab) : undefined}
-                onKeyDown={rowClickable ? (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onTab(it.tab) } } : undefined}
-                role={rowClickable ? 'button' : undefined}
-                tabIndex={rowClickable ? 0 : undefined}
-                className={`rounded-lg px-2.5 py-2 transition-colors ${rowClickable ? 'cursor-pointer hover:bg-teal-100/70 dark:hover:bg-teal-800/30' : ''} ${isCurrent ? 'bg-white dark:bg-slate-800/70 ring-1 ring-teal-300 dark:ring-teal-700 shadow-sm' : ''}`}
-              >
-                <div className="flex items-center gap-3 text-sm">
-                  <span className={`shrink-0 w-5 h-5 rounded-full flex items-center justify-center text-[11px] font-bold ${it.done ? 'bg-teal-600 text-white' : 'border-2 border-slate-300 dark:border-slate-600 text-transparent'}`}>✓</span>
-                  <span className={`flex-1 ${it.done ? 'text-slate-400 line-through' : isCurrent ? 'font-semibold text-slate-900 dark:text-white' : 'text-slate-700 dark:text-slate-200'}`}>{it.label}</span>
-                  {rowClickable && (
-                    <span className="text-xs font-semibold text-teal-600">{it.action} →</span>
-                  )}
-                </div>
-                {isCurrent && it.hint && (
-                  <div className="mt-1.5 pl-8 flex items-center justify-between gap-3">
-                    <p className="text-xs text-slate-500 dark:text-slate-400">{it.hint}</p>
-                    <button onClick={() => onTab(it.tab)}
-                      className="shrink-0 bg-teal-600 text-white px-3 py-1.5 rounded-lg text-xs font-semibold hover:bg-teal-700">{it.action} →</button>
-                  </div>
-                )}
-              </div>
-            </li>
-          )
-        })}
+        {required.map((it, i) => (
+          <li key={i}>{renderRow(it, { isCurrent: i === currentIdx })}</li>
+        ))}
       </ul>
+      <div className="mt-3 pt-3 border-t border-teal-200/70 dark:border-teal-800/70">
+        <p className="px-2.5 mb-1.5 text-[11px] font-semibold uppercase tracking-wide text-slate-400 dark:text-slate-500">Optional</p>
+        <ul className="space-y-1.5">
+          {optional.map((it, i) => (
+            <li key={i}>{renderRow(it, { optional: true })}</li>
+          ))}
+        </ul>
+      </div>
     </div>
   )
 }
@@ -4094,6 +4647,81 @@ function Sidebar({ active, onChange, groups }) {
   )
 }
 
+// ── Reset event data (superadmin) ───────────────────────────────────────────────
+
+const RESET_OPTIONS = [
+  { key: 'guests',            label: 'Guests',                 hint: 'Delete all guests (+ their menu, RSVP answers, tags, shipments, scans)' },
+  { key: 'checkins',          label: 'Check-ins',              hint: 'Clear admitted/served status and the scan log' },
+  { key: 'seat_assignments',  label: 'Seat assignments',       hint: 'Clear each guest’s table & seat' },
+  { key: 'group_assignments', label: 'Table-group tags',       hint: 'Clear each guest’s assigned table group' },
+  { key: 'table_groups',      label: 'Table groups',           hint: 'Delete the table groups themselves' },
+  { key: 'tables',            label: 'Tables',                 hint: 'Delete the seating tables' },
+]
+
+function ResetEventModal({ event, onClose, onDone }) {
+  const [flags, setFlags] = useState({})
+  const [confirm, setConfirm] = useState('')
+  const [loading, setLoading] = useState(false)
+  const [err, setErr] = useState('')
+
+  const anyChecked = Object.values(flags).some(Boolean)
+  const canReset = anyChecked && confirm.trim().toUpperCase() === 'RESET'
+
+  async function run() {
+    setLoading(true); setErr('')
+    try {
+      const res = await api.adminResetEvent(event.id, flags)
+      onDone(res.cleared || {})
+    } catch (e) { setErr(e.message); setLoading(false) }
+  }
+
+  return (
+    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4" onClick={onClose}>
+      <div className="bg-white dark:bg-slate-800 rounded-xl shadow-xl max-w-md w-full p-6 space-y-4" onClick={(e) => e.stopPropagation()}>
+        <div>
+          <h2 className="font-semibold text-base text-red-600 dark:text-red-400">Reset “{event.name}”</h2>
+          <p className="text-xs text-gray-500 dark:text-slate-400 mt-1">
+            Choose what to permanently delete. This can’t be undone. The event and its settings/templates are kept.
+          </p>
+        </div>
+
+        <div className="space-y-2">
+          {RESET_OPTIONS.map((o) => (
+            <label key={o.key} className="flex items-start gap-2 cursor-pointer">
+              <input type="checkbox" checked={!!flags[o.key]}
+                onChange={(e) => setFlags((f) => ({ ...f, [o.key]: e.target.checked }))}
+                className="mt-0.5 w-4 h-4 accent-red-600" />
+              <span>
+                <span className="text-sm font-medium text-slate-700 dark:text-slate-200">{o.label}</span>
+                <span className="block text-xs text-gray-400 dark:text-slate-500">{o.hint}</span>
+              </span>
+            </label>
+          ))}
+        </div>
+
+        <div>
+          <label className="block text-xs font-semibold text-gray-500 dark:text-slate-400 mb-1">
+            Type <span className="font-mono text-red-600">RESET</span> to confirm
+          </label>
+          <input value={confirm} onChange={(e) => setConfirm(e.target.value)}
+            className="border border-gray-300 dark:border-slate-700 rounded-lg px-3 py-2 text-sm bg-white dark:bg-slate-700 text-gray-900 dark:text-white w-full"
+            placeholder="RESET" />
+        </div>
+
+        {err && <p className="text-sm text-red-500">{err}</p>}
+
+        <div className="flex gap-2 justify-end">
+          <button onClick={onClose} className="px-4 py-2 border border-gray-300 dark:border-slate-600 rounded-lg text-sm dark:text-slate-300 hover:bg-gray-100 dark:hover:bg-slate-700">Cancel</button>
+          <button onClick={run} disabled={!canReset || loading}
+            className="px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg text-sm font-semibold disabled:opacity-40">
+            {loading ? 'Resetting…' : 'Reset selected data'}
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
 export default function AdminPage() {
   const { user } = useAuth()
   const [events, setEvents] = useState([])
@@ -4109,6 +4737,9 @@ export default function AdminPage() {
   const [showUrlInput, setShowUrlInput] = useState(false)
   const [selectedGuests, setSelectedGuests] = useState(new Set())
   const [activeTab, setActiveTab] = useState('overview')
+  const [tableGroups, setTableGroups] = useState([])
+  const [groupFilter, setGroupFilter] = useState('')   // '' = all, 'none' = unassigned
+  const [showReset, setShowReset] = useState(false)
   const fileRef = useRef()
 
   const PAGE_SIZE = 50
@@ -4134,8 +4765,10 @@ export default function AdminPage() {
     setPage(0)
     setSelectedGuests(new Set())
     setActiveTab('overview')
-    if (!selectedId) return setGuests([])
+    setGroupFilter('')
+    if (!selectedId) { setGuests([]); setTableGroups([]); return }
     api.listGuests(selectedId).then(setGuests).catch(console.error)
+    api.listTableGroups(selectedId).then(setTableGroups).catch(() => setTableGroups([]))
   }, [selectedId])
 
   // Poll the event list every 15s while a sync-enabled event is selected,
@@ -4160,6 +4793,39 @@ export default function AdminPage() {
 
   function updateEvent(updated) {
     setEvents((prev) => prev.map((e) => (e.id === updated.id ? updated : e)))
+  }
+
+  function handleExportGuests() {
+    const cols = ['first_name', 'last_name', 'email', 'phone', 'rsvp_status', 'admitted']
+    if (event?.seating_enabled) cols.push('table_group')
+    const esc = (v) => {
+      const s = v === null || v === undefined ? '' : String(v)
+      return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s
+    }
+    const rows = guests.map((g) => {
+      const base = [g.first_name, g.last_name, g.email, g.phone, g.rsvp_status, g.admitted ? 'yes' : 'no']
+      if (event?.seating_enabled) base.push(g.table_group_name || '')
+      return base.map(esc).join(',')
+    })
+    const csv = [cols.join(','), ...rows].join('\n')
+    const blob = new Blob([csv], { type: 'text/csv' })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url; a.download = `guests-${event?.name || 'event'}.csv`
+    document.body.appendChild(a); a.click(); a.remove(); URL.revokeObjectURL(url)
+  }
+
+  async function handleBulkAssignGroup(groupId) {
+    const ids = [...selectedGuests]
+    if (ids.length === 0) return
+    setLoading(true)
+    try {
+      await api.bulkAssignTableGroup(selectedId, ids, groupId || null)
+      const [gs, tg] = await Promise.all([api.listGuests(selectedId), api.listTableGroups(selectedId)])
+      setGuests(gs); setTableGroups(tg); setSelectedGuests(new Set())
+      flash(groupId ? 'Table group assigned.' : 'Table group cleared.')
+    } catch (e) { flash(e.message, true) }
+    finally { setLoading(false) }
   }
 
   async function handleCreate(data) {
@@ -4461,6 +5127,7 @@ export default function AdminPage() {
               ]}] : []),
               { label: 'Team & settings', items: [
                 { id: 'team', label: 'Team', icon: '🧑‍🤝‍🧑' },
+                { id: 'messages', label: 'Messages', icon: '✏️' },
                 { id: 'features', label: 'Features & messaging', icon: '⚙️' },
               ]},
             ]} />
@@ -4495,7 +5162,61 @@ export default function AdminPage() {
                 <p className="text-xs text-gray-400 dark:text-slate-500 mt-1">Which channels fire for invites &amp; admission notifications.</p>
                 <ChannelToggles event={event} onChanged={updateEvent} />
               </div>
+
+              <SelfCheckinPanel event={event} onChanged={updateEvent} onFlash={flash} />
+
+              {user?.is_platform_superadmin && (
+                <div className="border-t dark:border-slate-700 pt-5">
+                  <h2 className="font-semibold text-base text-indigo-600 dark:text-indigo-400">Operator settings</h2>
+                  <p className="text-xs text-gray-400 dark:text-slate-500 mt-1">Visible only to platform operators.</p>
+                  <label className="mt-3 flex items-start gap-2 cursor-pointer">
+                    <input type="checkbox" checked={!!event.manual_checkin_enabled}
+                      onChange={async (e) => {
+                        const val = e.target.checked
+                        try {
+                          await api.adminSetManualCheckin(event.id, val)
+                          updateEvent({ ...event, manual_checkin_enabled: val })
+                          flash(`Manual check-in ${val ? 'enabled' : 'disabled'}.`)
+                        } catch (err) { flash(err.message, true) }
+                      }}
+                      className="mt-0.5 w-4 h-4 accent-indigo-600" />
+                    <span>
+                      <span className="text-sm font-medium text-slate-700 dark:text-slate-200">Manual check-in (no QR)</span>
+                      <span className="block text-xs text-gray-400 dark:text-slate-500">Adds a “Manual” tab on the Scanner so staff can admit guests by searching name or phone.</span>
+                    </span>
+                  </label>
+                </div>
+              )}
+
+              {user?.is_platform_superadmin && (
+                <div className="border-t border-red-200 dark:border-red-900/50 pt-5">
+                  <h2 className="font-semibold text-base text-red-600 dark:text-red-400">⚠ Danger zone (operator only)</h2>
+                  <p className="text-xs text-gray-400 dark:text-slate-500 mt-1">
+                    Reset operational data for this event so it can be reused or re-tested. The event and its settings are kept.
+                  </p>
+                  <button onClick={() => setShowReset(true)}
+                    className="mt-3 bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded-lg text-sm font-semibold">
+                    Reset event data…
+                  </button>
+                </div>
+              )}
             </div>
+          )}
+
+          {showReset && (
+            <ResetEventModal
+              event={event}
+              onClose={() => setShowReset(false)}
+              onDone={async (cleared) => {
+                setShowReset(false)
+                const [gs, tg] = await Promise.all([
+                  api.listGuests(selectedId).catch(() => guests),
+                  api.listTableGroups(selectedId).catch(() => []),
+                ])
+                setGuests(gs); setTableGroups(tg); setSelectedGuests(new Set())
+                flash('Event data reset: ' + (Object.keys(cleared).length ? JSON.stringify(cleared) : 'nothing to clear'))
+              }}
+            />
           )}
 
           {activeTab === 'overview' && <>
@@ -4681,7 +5402,12 @@ export default function AdminPage() {
             <BroadcastPanel event={event} />
           </>}
 
-          {activeTab === 'seating' && event.seating_enabled && <SeatingPanel eventId={selectedId} />}
+          {activeTab === 'seating' && event.seating_enabled && <>
+            <SeatingPanel eventId={selectedId} />
+            <TableGroupsPanel eventId={selectedId} />
+          </>}
+
+          {activeTab === 'messages' && <MessageTemplatesPanel eventId={selectedId} event={event} />}
 
           {activeTab === 'menu' && event.menu_enabled && <>
             <MenuPanel eventId={selectedId} />
@@ -4713,8 +5439,11 @@ export default function AdminPage() {
             </div>
           )}
           {activeTab === 'guests' && guests.length > 0 && (() => {
-            const totalPages = Math.ceil(guests.length / PAGE_SIZE)
-            const pageGuests = guests.slice(page * PAGE_SIZE, (page + 1) * PAGE_SIZE)
+            const filteredGuests = groupFilter === '' ? guests
+              : groupFilter === 'none' ? guests.filter((g) => !g.assigned_table_group_id)
+              : guests.filter((g) => g.assigned_table_group_id === groupFilter)
+            const totalPages = Math.ceil(filteredGuests.length / PAGE_SIZE)
+            const pageGuests = filteredGuests.slice(page * PAGE_SIZE, (page + 1) * PAGE_SIZE)
             const pageSelectedCount = pageGuests.filter((g) => selectedGuests.has(g.id)).length
             const pageAllSelected = pageGuests.length > 0 && pageSelectedCount === pageGuests.length
             return (
@@ -4741,6 +5470,17 @@ export default function AdminPage() {
                       className="bg-indigo-600 text-white px-3 py-1.5 rounded-lg text-xs font-semibold hover:bg-indigo-700 disabled:opacity-50">
                       Send invite to selected
                     </button>
+                    {event?.seating_enabled && tableGroups.length > 0 && (
+                      <select
+                        defaultValue=""
+                        onChange={(e) => { const v = e.target.value; e.target.value = ''; if (v) handleBulkAssignGroup(v === 'none' ? null : v) }}
+                        disabled={loading}
+                        className="text-xs border border-indigo-300 dark:border-indigo-700 rounded-lg px-2 py-1.5 bg-white dark:bg-slate-700 dark:text-slate-200">
+                        <option value="">Assign table group…</option>
+                        {tableGroups.map((tg) => <option key={tg.id} value={tg.id}>{tg.name}</option>)}
+                        <option value="none">— Clear group —</option>
+                      </select>
+                    )}
                     <button
                       onClick={() => setSelectedGuests(new Set())}
                       className="text-xs text-gray-600 dark:text-slate-300 hover:underline ml-auto">
@@ -4748,8 +5488,20 @@ export default function AdminPage() {
                     </button>
                   </div>
                 )}
-                <div className="px-4 sm:px-6 py-4 border-b dark:border-slate-700 flex items-center justify-between gap-2">
-                  <h2 className="font-semibold text-sm sm:text-base dark:text-white">Guest List ({guests.length})</h2>
+                <div className="px-4 sm:px-6 py-4 border-b dark:border-slate-700 flex items-center justify-between gap-2 flex-wrap">
+                  <h2 className="font-semibold text-sm sm:text-base dark:text-white">Guest List ({filteredGuests.length}{groupFilter ? ` of ${guests.length}` : ''})</h2>
+                  {event?.seating_enabled && tableGroups.length > 0 && (
+                    <select value={groupFilter} onChange={(e) => { setGroupFilter(e.target.value); setPage(0) }}
+                      className="text-xs border dark:border-slate-700 rounded-lg px-2 py-1.5 bg-white dark:bg-slate-700 dark:text-slate-200">
+                      <option value="">All table groups</option>
+                      <option value="none">Unassigned</option>
+                      {tableGroups.map((tg) => <option key={tg.id} value={tg.id}>{tg.name}</option>)}
+                    </select>
+                  )}
+                  <button onClick={handleExportGuests}
+                    className="text-xs px-2.5 py-1.5 rounded-lg border border-gray-300 dark:border-slate-700 dark:text-slate-200 hover:bg-gray-50 dark:hover:bg-slate-700">
+                    ⬇ Export CSV
+                  </button>
                   {totalPages > 1 && (
                     <div className="flex items-center gap-2">
                       <button onClick={() => setPage((p) => Math.max(0, p - 1))} disabled={page === 0}
@@ -4778,6 +5530,7 @@ export default function AdminPage() {
                         </th>
                         <th className="px-4 py-3 text-left">Name</th>
                         <th className="px-4 py-3 text-left">Email</th>
+                        {event?.seating_enabled && <th className="px-4 py-3 text-left">Table Group</th>}
                         <th className="px-4 py-3 text-center">QR</th>
                         <th className="px-4 py-3 text-center">Invited</th>
                         <th className="px-4 py-3 text-center">RSVP</th>
@@ -4801,6 +5554,13 @@ export default function AdminPage() {
                             <span className="inline-flex items-center gap-2">{g.first_name} {g.last_name}{g.is_vip && <VipBadge />}</span>
                           </td>
                           <td className="px-4 py-3 text-gray-500 dark:text-slate-400 text-xs">{g.email}</td>
+                          {event?.seating_enabled && (
+                            <td className="px-4 py-3 text-xs">
+                              {g.table_group_name
+                                ? <span className="inline-block bg-indigo-50 dark:bg-indigo-900/30 text-indigo-700 dark:text-indigo-300 px-1.5 py-0.5 rounded">{g.table_group_name}</span>
+                                : <span className="text-gray-300 dark:text-slate-600">—</span>}
+                            </td>
+                          )}
                           <td className="px-4 py-3 text-center"><Badge on={!!g.qr_generated_at} labels={['Ready', 'Pending']} /></td>
                           <td className="px-4 py-3 text-center"><Badge on={!!g.invite_sent_at} labels={['Sent', 'Unsent']} /></td>
                           <td className="px-4 py-3 text-center"><RsvpStatusBadge status={g.rsvp_status} /></td>
@@ -4859,6 +5619,9 @@ export default function AdminPage() {
                           <div>
                             <div className="font-semibold text-sm dark:text-slate-100 flex items-center gap-2">{g.first_name} {g.last_name}{g.is_vip && <VipBadge />}</div>
                             <div className="text-xs text-gray-500 dark:text-slate-400 break-all">{g.email}</div>
+                            {event?.seating_enabled && g.table_group_name && (
+                              <div className="mt-1 inline-block text-[11px] bg-indigo-50 dark:bg-indigo-900/30 text-indigo-700 dark:text-indigo-300 px-1.5 py-0.5 rounded">{g.table_group_name}</div>
+                            )}
                           </div>
                         </div>
                         {g.admitted && (

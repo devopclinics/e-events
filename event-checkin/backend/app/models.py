@@ -111,6 +111,19 @@ class Event(Base):
     notify_email: Mapped[bool] = mapped_column(Boolean, default=True)
     notify_sms: Mapped[bool] = mapped_column(Boolean, default=True)
     notify_whatsapp: Mapped[bool] = mapped_column(Boolean, default=True)
+    # Table Groups add-on: when True (default), a guest with an assigned table
+    # group may only be seated/checked-in at tables inside that group. Events
+    # with no table groups are unaffected regardless of this flag.
+    enforce_table_groups: Mapped[bool] = mapped_column(Boolean, default=True)
+    # Manual check-in: when on, staff can admit a guest by searching name/phone
+    # (no QR). Superadmin-toggled per event; off by default.
+    manual_checkin_enabled: Mapped[bool] = mapped_column(Boolean, default=False)
+    # Self check-in: guests admit themselves via a public page found by a short
+    # event_code (no login). Off by default; code generated on enable/create.
+    self_checkin_enabled: Mapped[bool] = mapped_column(Boolean, default=False)
+    # Short, human-shareable code (8 chars, no confusable letters). Unique;
+    # nullable so existing events backfill lazily when self check-in is enabled.
+    event_code: Mapped[str | None] = mapped_column(String(16), unique=True, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
 
     # Live guest-list sync from a Google Sheets / OneDrive / Excel Online URL.
@@ -211,6 +224,36 @@ class SeatingTable(Base):
     guests: Mapped[list["Guest"]] = relationship("Guest", back_populates="table")
 
 
+class TableGroup(Base):
+    """A named, tagged group of tables (e.g. 'VIP Tables', 'Family Tables').
+    Guests assigned to a group may only be seated at tables in that group when
+    the event has `enforce_table_groups` on. Mirrors the GuestTag pattern but a
+    guest belongs to at most one table group."""
+    __tablename__ = "table_groups"
+    __table_args__ = (UniqueConstraint("event_id", "tag", name="uq_table_group_event_tag"),)
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+    event_id: Mapped[str] = mapped_column(String(36), ForeignKey("events.id"), index=True)
+    name: Mapped[str] = mapped_column(String(120))
+    # Import/assignment label (e.g. "VIP"). Unique per event, case-insensitive
+    # uniqueness enforced in the router.
+    tag: Mapped[str] = mapped_column(String(120))
+    description: Mapped[str | None] = mapped_column(Text, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+
+class TableGroupTable(Base):
+    """Membership of a table in a table group. A table belongs to at most one
+    group (enforced by the unique constraint on table_id)."""
+    __tablename__ = "table_group_tables"
+    __table_args__ = (UniqueConstraint("table_id", name="uq_table_group_table_table"),)
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+    table_group_id: Mapped[str] = mapped_column(String(36), ForeignKey("table_groups.id"), index=True)
+    table_id: Mapped[str] = mapped_column(String(36), ForeignKey("seating_tables.id"), index=True)
+
+
 class MenuCategory(Base):
     __tablename__ = "menu_categories"
 
@@ -307,6 +350,9 @@ class Guest(Base):
     # Seating
     table_id: Mapped[str | None] = mapped_column(String(36), ForeignKey("seating_tables.id"), nullable=True)
     seat_number: Mapped[str | None] = mapped_column(String(20), nullable=True)
+    # Table Groups: optional restriction to a group of tables. Nullable — guests
+    # without a group follow the default seating behavior.
+    assigned_table_group_id: Mapped[str | None] = mapped_column(String(36), ForeignKey("table_groups.id"), nullable=True)
     # Couple/party — mutual link to another guest in the same event.
     # When the first partner is seated and the second hasn't arrived, the
     # adjacent seat is reserved via `held_seat` so other FCFS arrivals skip it.
@@ -616,3 +662,40 @@ class ScanEvent(Base):
     scanned_by: Mapped[str | None] = mapped_column(String(36), ForeignKey("users.id"), nullable=True)
     denied: Mapped[bool] = mapped_column(Boolean, default=False)
     deny_reason: Mapped[str | None] = mapped_column(String(255), nullable=True)
+
+
+# ── Customizable message templates ─────────────────────────────────────────────
+
+class MessageTemplate(Base):
+    """An event-level override of an outbound message. Platform defaults live in
+    code (services/templates.py::TEMPLATE_DEFS); a row here exists only when an
+    organizer has customized a template for an event. Resolution is
+    event-override → code default. Null body columns fall back to the default for
+    that channel."""
+    __tablename__ = "message_templates"
+    __table_args__ = (UniqueConstraint("event_id", "template_key", name="uq_message_template_event_key"),)
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+    event_id: Mapped[str] = mapped_column(String(36), ForeignKey("events.id"), index=True)
+    template_key: Mapped[str] = mapped_column(String(60), index=True)
+    subject: Mapped[str | None] = mapped_column(Text, nullable=True)
+    email_body: Mapped[str | None] = mapped_column(Text, nullable=True)
+    sms_body: Mapped[str | None] = mapped_column(Text, nullable=True)
+    whatsapp_body: Mapped[str | None] = mapped_column(Text, nullable=True)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    updated_by: Mapped[str | None] = mapped_column(String(36), ForeignKey("users.id"), nullable=True)
+
+
+class MessageTemplateAudit(Base):
+    """Append-only history of who changed (or reset) a template and when. Stores a
+    JSON snapshot of the saved override (null = reset to default)."""
+    __tablename__ = "message_template_audits"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+    event_id: Mapped[str] = mapped_column(String(36), ForeignKey("events.id"), index=True)
+    template_key: Mapped[str] = mapped_column(String(60), index=True)
+    action: Mapped[str] = mapped_column(String(20))  # "save" | "reset"
+    snapshot: Mapped[str | None] = mapped_column(Text, nullable=True)  # JSON of saved fields
+    changed_by: Mapped[str | None] = mapped_column(String(36), ForeignKey("users.id"), nullable=True)
+    changed_by_email: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    changed_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, index=True)

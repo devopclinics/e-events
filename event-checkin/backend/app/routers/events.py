@@ -1,5 +1,6 @@
 from datetime import datetime
 import os
+import secrets
 import uuid as _uuid
 from fastapi import APIRouter, BackgroundTasks, Depends, File, HTTPException, UploadFile
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -13,17 +14,37 @@ from ..schemas import (
     BroadcastRequest, BroadcastResult,
     ManualInviteRequest, ManualInviteResult, MenuEventOut,
 )
+from ..schemas import ActiveToggle
 from ..auth import require_admin, require_event_admin, get_current_user, _org_role
 from ..entitlements import can_use_paid_channels, take_message_credit
 from .guests import import_from_source_url, import_warning_summary, _normalize_phone
 from services import messaging
-from services.email_service import send_manual_invite_email, send_broadcast_email
+from services.email_service import send_manual_invite_email, send_broadcast_email, send_simple_email
+from ..template_resolve import load_overrides, channel_text, email_override
+from services.templates import build_context as build_template_context
 
 UPLOADS_DIR = "/app/uploads"
 ALLOWED_IMAGE_TYPES = {"image/jpeg", "image/png", "image/webp", "image/gif"}
 MAX_IMAGE_SIZE = 10 * 1024 * 1024  # 10 MB
 
 router = APIRouter()
+
+# Event-code alphabet: uppercase, no confusable characters (0 O 1 I L).
+_CODE_ALPHABET = "ABCDEFGHJKMNPQRSTUVWXYZ23456789"
+
+
+def _gen_code(n: int = 8) -> str:
+    return "".join(secrets.choice(_CODE_ALPHABET) for _ in range(n))
+
+
+async def unique_event_code(db: AsyncSession) -> str:
+    """A code not already used by another event (retries on the rare collision)."""
+    for _ in range(10):
+        code = _gen_code()
+        if not await db.scalar(select(Event.id).where(Event.event_code == code)):
+            return code
+    return _gen_code(10)  # extremely unlikely fallback
+
 
 VALID_STATUSES = {"draft", "active", "ended"}
 STATUS_TRANSITIONS = {
@@ -67,6 +88,7 @@ async def create_event(
     if not org_id:
         raise HTTPException(403, "You don't belong to an organization")
     event = Event(**data.model_dump(), org_id=org_id)
+    event.event_code = await unique_event_code(db)
     db.add(event)
     await db.flush()
     # Auto-assign creator so they appear in their own event member list
@@ -465,6 +487,24 @@ async def toggle_features(
     return event
 
 
+@router.patch("/{event_id}/self-checkin", response_model=EventOut)
+async def toggle_self_checkin(
+    event_id: str,
+    body: ActiveToggle,
+    db: AsyncSession = Depends(get_db),
+    _: User = Depends(require_event_admin),
+):
+    event = await db.get(Event, event_id)
+    if not event:
+        raise HTTPException(404, "Event not found")
+    event.self_checkin_enabled = bool(body.active)
+    if event.self_checkin_enabled and not event.event_code:
+        event.event_code = await unique_event_code(db)
+    await db.commit()
+    await db.refresh(event)
+    return event
+
+
 # ── Invite page settings ──────────────────────────────────────────────────────
 
 @router.put("/{event_id}/invite-settings", response_model=EventOut)
@@ -595,6 +635,13 @@ async def broadcast_message(
     want_email = "email" in data.channels
     want_phone = "sms" in data.channels or "whatsapp" in data.channels
 
+    # Customizable-template overrides for the broadcast message (if any). When a
+    # channel has no override we fall through to the default send_broadcast_* path.
+    overrides = await load_overrides(event_id, db)
+
+    def _ctx(guest):
+        return build_template_context(event, guest, extras={"message": data.message})
+
     queued = skipped_no_contact = skipped_no_consent = skipped_no_credits = 0
 
     for guest in guests:
@@ -602,35 +649,50 @@ async def broadcast_message(
         credit_blocked = False
 
         if want_email and guest.email:
-            background_tasks.add_task(
-                send_broadcast_email,
-                email=guest.email,
-                first_name=guest.first_name,
-                message=data.message,
-                event_name=event.name,
-            )
+            subj, body = email_override(overrides, "broadcast", _ctx(guest))
+            if body is not None:
+                background_tasks.add_task(
+                    send_simple_email, guest.email,
+                    subj or f"Update — {event.name}", body,
+                )
+            else:
+                background_tasks.add_task(
+                    send_broadcast_email,
+                    email=guest.email,
+                    first_name=guest.first_name,
+                    message=data.message,
+                    event_name=event.name,
+                )
             sent_any = True
 
         if guest.phone:
             if "sms" in data.channels and guest.sms_consent:
                 if take_message_credit(event):
-                    background_tasks.add_task(
-                        messaging.send_broadcast_sms,
-                        phone=guest.phone,
-                        first_name=guest.first_name,
-                        message=data.message,
-                    )
+                    sms_text = channel_text(overrides, "broadcast", "sms", _ctx(guest))
+                    if sms_text is not None:
+                        background_tasks.add_task(messaging.send_custom_sms, phone=guest.phone, body=sms_text)
+                    else:
+                        background_tasks.add_task(
+                            messaging.send_broadcast_sms,
+                            phone=guest.phone,
+                            first_name=guest.first_name,
+                            message=data.message,
+                        )
                     sent_any = True
                 else:
                     credit_blocked = True
             if "whatsapp" in data.channels and guest.whatsapp_consent:
                 if take_message_credit(event):
-                    background_tasks.add_task(
-                        messaging.send_broadcast_whatsapp,
-                        phone=guest.phone,
-                        first_name=guest.first_name,
-                        message=data.message,
-                    )
+                    wa_text = channel_text(overrides, "broadcast", "whatsapp", _ctx(guest))
+                    if wa_text is not None:
+                        background_tasks.add_task(messaging.send_custom_whatsapp, phone=guest.phone, body=wa_text)
+                    else:
+                        background_tasks.add_task(
+                            messaging.send_broadcast_whatsapp,
+                            phone=guest.phone,
+                            first_name=guest.first_name,
+                            message=data.message,
+                        )
                     sent_any = True
                 else:
                     credit_blocked = True

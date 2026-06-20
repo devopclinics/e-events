@@ -33,9 +33,10 @@ function ResultCard({ result, onReset }) {
   const cfg = {
     admitted:        { bg: 'bg-green-500',  icon: '✓', heading: 'ADMITTED' },
     already_admitted:{ bg: 'bg-amber-500',  icon: '⚠', heading: 'ALREADY ADMITTED' },
-    invalid:         { bg: 'bg-red-500',    icon: '✕', heading: 'INVALID QR CODE' },
+    invalid:         { bg: 'bg-red-500',    icon: '✕', heading: 'NOT FOUND' },
     not_active:      { bg: 'bg-slate-600',  icon: '⏸', heading: 'EVENT NOT ACTIVE' },
     not_assigned:    { bg: 'bg-orange-500', icon: '🚫', heading: 'NOT ASSIGNED' },
+    denied:          { bg: 'bg-red-500',    icon: '🚫', heading: 'CANNOT SEAT' },
   }[result.status] || { bg: 'bg-gray-500', icon: '?', heading: 'UNKNOWN' }
 
   return (
@@ -253,6 +254,142 @@ function extractToken(raw) {
   }
 }
 
+function ManualCheckin({ eventId, onResult }) {
+  const [q, setQ] = useState('')
+  const [results, setResults] = useState([])
+  const [searching, setSearching] = useState(false)
+  const [confirm, setConfirm] = useState(null)   // guest pending confirmation
+  const [busy, setBusy] = useState(false)
+  const [err, setErr] = useState('')
+
+  // Debounced search across name + phone.
+  useEffect(() => {
+    const term = q.trim()
+    if (term.length < 2) { setResults([]); setSearching(false); return }
+    let active = true
+    setSearching(true)
+    const t = setTimeout(async () => {
+      try {
+        const r = await api.searchGuests(eventId, term)
+        if (active) setResults(r)
+      } catch (e) { if (active) setErr(e.message) }
+      finally { if (active) setSearching(false) }
+    }, 250)
+    return () => { active = false; clearTimeout(t) }
+  }, [q, eventId])
+
+  async function doCheckin(guest) {
+    setBusy(true); setErr('')
+    try {
+      onResult(await api.manualCheckin(eventId, guest.id))
+    } catch (e) { setErr(e.message); setBusy(false) }
+  }
+
+  const inputCls = 'w-full border border-gray-300 dark:border-slate-700 rounded-lg px-3 py-3 text-base bg-white dark:bg-slate-700 text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-slate-500'
+
+  // Confirmation screen.
+  if (confirm) {
+    return (
+      <div className="text-center space-y-4 py-2">
+        <p className="text-sm text-gray-500 dark:text-slate-400">Check in</p>
+        <p className="text-2xl font-bold dark:text-white flex items-center justify-center gap-2">
+          {confirm.full_name}
+          {confirm.is_vip && <span className="text-[10px] bg-amber-100 text-amber-700 px-1.5 py-0.5 rounded-full align-middle">VIP</span>}
+        </p>
+        {(confirm.table_name || confirm.seat_number) && (
+          <p className="text-sm text-gray-500 dark:text-slate-400">
+            {confirm.table_name && <>Table <strong>{confirm.table_name}</strong></>}
+            {confirm.seat_number && <> · Seat <strong>{confirm.seat_number}</strong></>}
+          </p>
+        )}
+        {err && <p className="text-sm text-red-500">{err}</p>}
+        <div className="flex gap-3 justify-center pt-2">
+          <button onClick={() => { setConfirm(null); setErr('') }}
+            className="px-6 py-3 rounded-xl border border-gray-300 dark:border-slate-600 text-gray-700 dark:text-slate-200 font-semibold hover:bg-gray-100 dark:hover:bg-slate-700">
+            Cancel
+          </button>
+          <button onClick={() => doCheckin(confirm)} disabled={busy}
+            className="px-8 py-3 rounded-xl bg-green-600 hover:bg-green-700 text-white font-bold disabled:opacity-50">
+            {busy ? 'Checking in…' : 'Confirm'}
+          </button>
+        </div>
+      </div>
+    )
+  }
+
+  return (
+    <div className="space-y-3">
+      <input value={q} onChange={(e) => setQ(e.target.value)} autoFocus
+        placeholder="Search name or phone…" className={inputCls} />
+      {searching && <p className="text-xs text-gray-400 dark:text-slate-500">Searching…</p>}
+      {err && <p className="text-sm text-red-500">{err}</p>}
+      {q.trim().length >= 2 && !searching && results.length === 0 && (
+        <p className="text-sm text-gray-400 dark:text-slate-500 text-center py-6">No matching guests.</p>
+      )}
+      <div className="space-y-2">
+        {results.map((g) => (
+          <button key={g.id} disabled={g.admitted} onClick={() => setConfirm(g)}
+            className={`w-full text-left rounded-lg border px-3 py-2.5 flex items-center justify-between gap-2 ${
+              g.admitted
+                ? 'border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-900/20 cursor-default'
+                : 'border-gray-200 dark:border-slate-700 hover:bg-teal-50 dark:hover:bg-teal-900/20'
+            }`}>
+            <div className="min-w-0">
+              <div className="font-semibold dark:text-slate-100 flex items-center gap-2 truncate">
+                {g.full_name}
+                {g.is_vip && <span className="text-[10px] bg-amber-100 text-amber-700 px-1.5 py-0.5 rounded-full">VIP</span>}
+              </div>
+              <div className="text-xs text-gray-500 dark:text-slate-400 truncate">
+                {g.phone_masked || 'no phone'}
+                {g.table_name ? ` · Table ${g.table_name}${g.seat_number ? ` seat ${g.seat_number}` : ''}` : ''}
+              </div>
+            </div>
+            {g.admitted
+              ? <span className="text-xs text-amber-600 dark:text-amber-400 font-semibold shrink-0">
+                  Admitted{g.admitted_at ? ` ${new Date(g.admitted_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}` : ''}
+                </span>
+              : <span className="text-teal-600 dark:text-teal-400 text-sm font-semibold shrink-0">Check in →</span>}
+          </button>
+        ))}
+      </div>
+    </div>
+  )
+}
+
+function EventQrPanel({ event }) {
+  const [copied, setCopied] = useState(false)
+  const code = event?.event_code
+  const url = code ? api.selfCheckinUrl(code) : ''
+
+  async function copyLink() {
+    if (!url) return
+    await navigator.clipboard.writeText(url)
+    setCopied(true)
+    setTimeout(() => setCopied(false), 1800)
+  }
+
+  if (!code) {
+    return (
+      <div className="rounded-xl border border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-900/30 px-4 py-5 text-center">
+        <div className="font-semibold text-amber-900 dark:text-amber-100">Event code is being generated.</div>
+        <p className="text-sm text-amber-700 dark:text-amber-300 mt-1">Refresh this event after enabling self check-in.</p>
+      </div>
+    )
+  }
+
+  return (
+    <button type="button" onClick={copyLink}
+      className="w-full text-center rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900/50 p-4 hover:border-teal-400">
+      <p className="text-sm font-semibold text-slate-700 dark:text-slate-200">{event.name}</p>
+      <img src={api.selfCheckinQrUrl(code)} alt="Event self check-in QR code"
+        className="mx-auto my-4 h-64 w-64 rounded-lg bg-white p-3" />
+      <p className="text-base font-bold text-slate-950 dark:text-white">Hold this up for guests to scan</p>
+      <p className="mt-2 break-all text-xs text-slate-500 dark:text-slate-400">{url}</p>
+      {copied && <p className="mt-2 text-xs font-semibold text-teal-600 dark:text-teal-400">Link copied</p>}
+    </button>
+  )
+}
+
 export default function ScannerPage() {
   const [events, setEvents] = useState([])
   const [eventId, setEventId] = useCurrentEvent()
@@ -267,9 +404,12 @@ export default function ScannerPage() {
   const [gates, setGates] = useState([])
   const [gateId, setGateId] = useState('')
   const [scanBy, setScanBy] = useState('gate')
+  const [mode, setMode] = useState('qr')   // 'qr' | 'manual' (when manual check-in is enabled)
 
   const selectedEvent = events.find((e) => e.id === eventId)
   const accessMode = !!selectedEvent?.venue_access_enabled
+  const manualEnabled = !!selectedEvent?.manual_checkin_enabled
+  const selfCheckinEnabled = !!selectedEvent?.self_checkin_enabled
   const selectedZone = zones.find((z) => z.id === zoneId)
   const selectedGate = gates.find((g) => g.id === gateId)
   const scanningReady = !!selectedEvent && selectedEvent.status === 'active'
@@ -283,7 +423,7 @@ export default function ScannerPage() {
 
   // Load zones + gates only for venue-access events.
   useEffect(() => {
-    setZoneId(''); setZones([]); setGateId(''); setGates([])
+    setZoneId(''); setZones([]); setGateId(''); setGates([]); setMode('qr')
     if (eventId && selectedEvent?.venue_access_enabled) {
       api.listZones(eventId).then(setZones).catch(() => {})
       api.listGates(eventId).then((g) => {
@@ -431,10 +571,34 @@ export default function ScannerPage() {
 
         {!loading && !result && scanningReady && (
           <div>
-            <p className="text-center text-sm text-gray-500 dark:text-slate-400 mb-4">
-              Keep the QR code inside the square until you see a result.
-            </p>
-            <QrScanner key={scanKey} onScan={handleScan} />
+            {(manualEnabled || selfCheckinEnabled) && (
+              <div className="flex gap-2 mb-4">
+                {[
+                  ['qr', 'QR Scan'],
+                  ...(manualEnabled ? [['manual', 'Manual']] : []),
+                  ...(selfCheckinEnabled ? [['eventqr', 'Event QR']] : []),
+                ].map(([m, label]) => (
+                  <button key={m} onClick={() => setMode(m)}
+                    className={`flex-1 py-2 rounded-lg text-sm font-semibold ${
+                      mode === m ? 'bg-teal-600 text-white' : 'bg-gray-100 dark:bg-slate-700 text-gray-600 dark:text-slate-300'
+                    }`}>
+                    {label}
+                  </button>
+                ))}
+              </div>
+            )}
+            {selfCheckinEnabled && mode === 'eventqr' ? (
+              <EventQrPanel event={selectedEvent} />
+            ) : manualEnabled && mode === 'manual' ? (
+              <ManualCheckin eventId={eventId} onResult={(res) => setResult(res)} />
+            ) : (
+              <>
+                <p className="text-center text-sm text-gray-500 dark:text-slate-400 mb-4">
+                  Keep the QR code inside the square until you see a result.
+                </p>
+                <QrScanner key={scanKey} onScan={handleScan} />
+              </>
+            )}
           </div>
         )}
       </div>

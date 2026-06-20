@@ -9,12 +9,16 @@ from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Backgro
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func
 from ..database import get_db
-from ..models import Event, Guest, TicketType, GuestTag, GuestTagLink, User
-from ..schemas import GuestOut, GuestCreate
-from ..auth import require_event_admin
+from sqlalchemy import or_
+from ..models import Event, Guest, TicketType, GuestTag, GuestTagLink, User, TableGroup, SeatingTable
+from ..schemas import GuestOut, GuestCreate, BulkAssignGroupRequest, ScanResult
+from ..auth import require_event_admin, require_official
 from ..entitlements import assert_within_guest_cap, guest_limit, can_use_paid_channels, take_message_credit
 from services.qr_service import generate_qr_bytes
-from services.email_service import send_invite_email, send_manual_invite_email
+from services.email_service import send_invite_email, send_manual_invite_email, send_simple_email
+from ..template_resolve import load_overrides, channel_text as template_channel_text, email_override as template_email_override
+from services.templates import build_context as build_template_context
+from .scanner import checkin_guard, perform_admission
 from services import messaging
 
 router = APIRouter()
@@ -187,6 +191,8 @@ def _template_columns(event: Event) -> list[str]:
     if event.venue_access_enabled:
         cols.append("ticket_type")
         cols.append("tags")
+    if event.seating_enabled:
+        cols.append("table_group")
     if event.logistics_enabled:
         cols.extend(_SHIP_COLS)
     return cols
@@ -197,7 +203,7 @@ def _template_columns(event: Event) -> list[str]:
 _TEMPLATE_SAMPLE = {
     "first_name": "Jane", "last_name": "Doe",
     "email": "jane@example.com", "phone": "+18325550100",
-    "tags": "VIP; Press",
+    "tags": "VIP; Press", "table_group": "VIP Tables",
     "ship_address1": "123 Main St", "ship_address2": "Apt 4B",
     "ship_city": "Houston", "ship_state": "TX",
     "ship_postal": "77002", "ship_country": "USA",
@@ -229,6 +235,38 @@ async def _process_csv(text: str, event_id: str, db: AsyncSession):
     want_ticket = bool(event and event.venue_access_enabled) and "ticket_type" in fields
     want_shipping = bool(event and event.logistics_enabled) and "ship_address1" in fields
     want_tags = bool(event and event.venue_access_enabled) and "tags" in fields
+    # Table-group assignment: any of these header aliases maps a guest to a group
+    # (auto-creating the group if it doesn't exist yet).
+    _GROUP_HEADERS = ("table_group", "table_tag", "assigned_table_tag")
+    want_groups = bool(event and event.seating_enabled) and any(h in fields for h in _GROUP_HEADERS)
+    group_id_by_key: dict[str, str] = {}        # tag/name (lower) → existing group id
+    new_groups_by_key: dict[str, "TableGroup"] = {}  # created this run
+    groups_assigned = groups_created = 0
+    if want_groups:
+        for grp in (await db.execute(select(TableGroup).where(TableGroup.event_id == event_id))).scalars():
+            group_id_by_key[grp.tag.strip().lower()] = grp.id
+            group_id_by_key.setdefault(grp.name.strip().lower(), grp.id)
+
+    def _ensure_group_key(row: dict) -> str | None:
+        """Return the lowercased group key for a row's table-group cell,
+        auto-creating the group object on first sight. None when no cell set."""
+        nonlocal groups_created
+        cell = ""
+        for h in _GROUP_HEADERS:
+            cell = (row.get(h) or "").strip()
+            if cell:
+                break
+        if not cell:
+            return None
+        key = cell.lower()
+        if key not in group_id_by_key and key not in new_groups_by_key:
+            grp = TableGroup(event_id=event_id, name=cell, tag=cell)
+            db.add(grp)
+            new_groups_by_key[key] = grp
+            groups_created += 1
+        return key
+
+    pending_groups: list[tuple["Guest", str]] = []  # (guest, group key) resolved post-flush
     tt_by_name: dict[str, str] = {}
     if want_ticket:
         tts = (await db.execute(
@@ -315,6 +353,7 @@ async def _process_csv(text: str, event_id: str, db: AsyncSession):
             ship = {c: (row.get(c) or "").strip() or None for c in _SHIP_COLS}
 
         row_tag_keys = _resolve_tag_keys(row.get("tags", "")) if want_tags else []
+        row_group_key = _ensure_group_key(row) if want_groups else None
 
         # Deduplicate on (first_name + last_name + email) — same person twice.
         # Email-less rows (lists of names/phones) dedupe on name among guests
@@ -357,6 +396,8 @@ async def _process_csv(text: str, event_id: str, db: AsyncSession):
                 addresses_added += 1
             if row_tag_keys:
                 pending_tags.append((existing, row_tag_keys))
+            if row_group_key and not existing.assigned_table_group_id:
+                pending_groups.append((existing, row_group_key))
             skipped += 1
             continue
 
@@ -381,6 +422,8 @@ async def _process_csv(text: str, event_id: str, db: AsyncSession):
             addresses_added += 1
         if row_tag_keys:
             pending_tags.append((g, row_tag_keys))
+        if row_group_key:
+            pending_groups.append((g, row_group_key))
 
     # Insert guests + any new tags first (assigns their ids), then the
     # guest↔tag links (FK-safe, deduped against pre-existing links).
@@ -393,6 +436,16 @@ async def _process_csv(text: str, event_id: str, db: AsyncSession):
                     db.add(GuestTagLink(guest_id=guest.id, tag_id=tid))
                     existing_links.add((guest.id, tid))
                     tags_assigned += 1
+
+    # Resolve table-group keys to ids (after flush so newly-created groups have
+    # ids) and stamp each guest's single group FK.
+    if want_groups:
+        await db.flush()
+        for guest, key in pending_groups:
+            gid = group_id_by_key.get(key) or (new_groups_by_key[key].id if key in new_groups_by_key else None)
+            if gid:
+                guest.assigned_table_group_id = gid
+                groups_assigned += 1
 
     await db.commit()
     result = {"added": added, "skipped": skipped}
@@ -409,6 +462,10 @@ async def _process_csv(text: str, event_id: str, db: AsyncSession):
         result["tags_assigned"] = tags_assigned
     if tags_created:
         result["tags_created"] = tags_created
+    if groups_assigned:
+        result["table_groups_assigned"] = groups_assigned
+    if groups_created:
+        result["table_groups_created"] = groups_created
     if unknown_tickets:
         result["unknown_ticket_types"] = sorted(unknown_tickets)
         result["ticket_note"] = (
@@ -457,7 +514,16 @@ async def download_guest_template(event_id: str, fmt: str = "xlsx", db: AsyncSes
             select(TicketType.name).where(TicketType.event_id == event_id)
             .order_by(TicketType.sort_order, TicketType.name)
         )).scalars())
-    sample = {**_TEMPLATE_SAMPLE, "ticket_type": tt_names[0] if tt_names else ""}
+    # Existing table-group names — offered as an Excel dropdown so clients pick a
+    # real group instead of free-typing (new names still auto-create on import).
+    tg_names: list[str] = []
+    if event.seating_enabled:
+        tg_names = list((await db.execute(
+            select(TableGroup.name).where(TableGroup.event_id == event_id).order_by(TableGroup.name)
+        )).scalars())
+    sample = {**_TEMPLATE_SAMPLE,
+              "ticket_type": tt_names[0] if tt_names else "",
+              "table_group": tg_names[0] if tg_names else _TEMPLATE_SAMPLE.get("table_group", "")}
     sample_row = [sample.get(c, "") for c in cols]
 
     if fmt == "csv":
@@ -506,6 +572,22 @@ async def download_guest_template(event_id: str, fmt: str = "xlsx", db: AsyncSes
         letter = get_column_letter(cols.index("ticket_type") + 1)
         dv.add(f"{letter}2:{letter}1001")
 
+    if tg_names and "table_group" in cols:
+        ref = wb.create_sheet("TableGroups")
+        for name in tg_names:
+            ref.append([name])
+        ref.sheet_state = "hidden"
+        dv = DataValidation(
+            type="list", formula1=f"=TableGroups!$A$1:$A${len(tg_names)}", allow_blank=True,
+        )
+        # Not an error — clients may legitimately add a brand-new group, which
+        # auto-creates on import. The dropdown is just a convenience.
+        dv.showErrorMessage = False
+        dv.prompt = "Existing groups: " + ", ".join(tg_names) + " (or type a new one)"
+        ws.add_data_validation(dv)
+        letter = get_column_letter(cols.index("table_group") + 1)
+        dv.add(f"{letter}2:{letter}1001")
+
     buf = io.BytesIO()
     wb.save(buf)
     return Response(
@@ -526,21 +608,27 @@ async def upload_guests(event_id: str, file: UploadFile = File(...), db: AsyncSe
     return await _process_csv(text, event_id, db)
 
 
-def _dispatch_invite(background_tasks: BackgroundTasks, event: Event, guest: Guest) -> None:
+def _dispatch_invite(background_tasks: BackgroundTasks, event: Event, guest: Guest, overrides: dict | None = None) -> None:
     """Fan out an invite across enabled channels for this event. Channel modules
     no-op silently when contact info is missing or creds aren't configured.
 
     In closed (invitation-only) mode we send the guest their personal RSVP link
     (/r/{invite_token}) rather than a ticket — the ticket QR is issued only after
-    they confirm. In open mode we send the ticket directly, as before."""
+    they confirm. In open mode we send the ticket directly, as before.
+
+    `overrides` carries any customizable-template overrides for the event; when a
+    channel has none, the default sender is used (unchanged behavior)."""
     if event.invite_mode == "closed":
-        _dispatch_rsvp_invite(background_tasks, event, guest)
+        _dispatch_rsvp_invite(background_tasks, event, guest, overrides)
         return
 
     ticket_url = f"{event.checkin_base_url.rstrip('/')}/scan/{guest.qr_token}"
     paid_channels = can_use_paid_channels(event)
+    overrides = overrides or {}
+    ctx = build_template_context(event, guest, extras={"ticket_link": ticket_url, "qr_code": ticket_url})
 
     if event.notify_email:
+        ov = overrides.get("ticket_qr")
         guest_data = {
             "first_name": guest.first_name,
             "last_name":  guest.last_name,
@@ -551,24 +639,33 @@ def _dispatch_invite(background_tasks: BackgroundTasks, event: Event, guest: Gue
             send_invite_email,
             guest_data, event.name, event.couples_name, event.checkin_base_url, event.event_date,
             event.seating_enabled, event.menu_enabled,
+            ov.subject if ov else None, ov.email_body if ov else None,
         )
 
     if paid_channels and event.notify_sms and guest.phone and guest.sms_consent and take_message_credit(event):
-        background_tasks.add_task(
-            messaging.send_invite_sms,
-            phone=guest.phone, first_name=guest.first_name,
-            event_name=event.name, ticket_url=ticket_url, event_date=event.event_date,
-        )
+        sms_text = template_channel_text(overrides, "sms_invitation", "sms", ctx)
+        if sms_text is not None:
+            background_tasks.add_task(messaging.send_custom_sms, phone=guest.phone, body=sms_text)
+        else:
+            background_tasks.add_task(
+                messaging.send_invite_sms,
+                phone=guest.phone, first_name=guest.first_name,
+                event_name=event.name, ticket_url=ticket_url, event_date=event.event_date,
+            )
 
     if paid_channels and event.notify_whatsapp and guest.phone and guest.whatsapp_consent and take_message_credit(event):
-        background_tasks.add_task(
-            messaging.send_invite_whatsapp,
-            phone=guest.phone, first_name=guest.first_name,
-            event_name=event.name, ticket_url=ticket_url, event_date=event.event_date,
-        )
+        wa_text = template_channel_text(overrides, "whatsapp_invitation", "whatsapp", ctx)
+        if wa_text is not None:
+            background_tasks.add_task(messaging.send_custom_whatsapp, phone=guest.phone, body=wa_text)
+        else:
+            background_tasks.add_task(
+                messaging.send_invite_whatsapp,
+                phone=guest.phone, first_name=guest.first_name,
+                event_name=event.name, ticket_url=ticket_url, event_date=event.event_date,
+            )
 
 
-def _dispatch_rsvp_invite(background_tasks: BackgroundTasks, event: Event, guest: Guest) -> None:
+def _dispatch_rsvp_invite(background_tasks: BackgroundTasks, event: Event, guest: Guest, overrides: dict | None = None) -> None:
     """Closed-mode invite: send the guest their personal RSVP link. Generates a
     one-per-guest invite_token on first send (mutation persisted by the caller's
     commit). No ticket/QR yet — that's issued when they confirm."""
@@ -577,28 +674,42 @@ def _dispatch_rsvp_invite(background_tasks: BackgroundTasks, event: Event, guest
     invite_url = f"{event.checkin_base_url.rstrip('/')}/r/{guest.invite_token}"
     name = f"{guest.first_name} {guest.last_name}".strip() or "Guest"
     paid_channels = can_use_paid_channels(event)
+    overrides = overrides or {}
+    ctx = build_template_context(event, guest, extras={"rsvp_link": invite_url})
 
     if event.notify_email and guest.email:
-        background_tasks.add_task(
-            send_manual_invite_email,
-            name=name, email=guest.email, invite_url=invite_url,
-            event_name=event.name, event_date=event.event_date,
-            invite_message=event.invite_message,
-        )
+        subj, body = template_email_override(overrides, "rsvp_invitation", ctx)
+        if body is not None:
+            background_tasks.add_task(send_simple_email, guest.email, subj or f"You're invited — {event.name}", body)
+        else:
+            background_tasks.add_task(
+                send_manual_invite_email,
+                name=name, email=guest.email, invite_url=invite_url,
+                event_name=event.name, event_date=event.event_date,
+                invite_message=event.invite_message,
+            )
 
     if paid_channels and event.notify_sms and guest.phone and guest.sms_consent and take_message_credit(event):
-        background_tasks.add_task(
-            messaging.send_manual_invite_sms,
-            phone=guest.phone, name=name,
-            event_name=event.name, invite_url=invite_url,
-        )
+        sms_text = template_channel_text(overrides, "rsvp_invitation", "sms", ctx)
+        if sms_text is not None:
+            background_tasks.add_task(messaging.send_custom_sms, phone=guest.phone, body=sms_text)
+        else:
+            background_tasks.add_task(
+                messaging.send_manual_invite_sms,
+                phone=guest.phone, name=name,
+                event_name=event.name, invite_url=invite_url,
+            )
 
     if paid_channels and event.notify_whatsapp and guest.phone and guest.whatsapp_consent and take_message_credit(event):
-        background_tasks.add_task(
-            messaging.send_manual_invite_whatsapp,
-            phone=guest.phone, name=name,
-            event_name=event.name, invite_url=invite_url,
-        )
+        wa_text = template_channel_text(overrides, "rsvp_invitation", "whatsapp", ctx)
+        if wa_text is not None:
+            background_tasks.add_task(messaging.send_custom_whatsapp, phone=guest.phone, body=wa_text)
+        else:
+            background_tasks.add_task(
+                messaging.send_manual_invite_whatsapp,
+                phone=guest.phone, name=name,
+                event_name=event.name, invite_url=invite_url,
+            )
 
 
 async def import_from_source_url(url: str, event_id: str, db: AsyncSession) -> dict:
@@ -648,7 +759,15 @@ async def add_guest(event_id: str, data: GuestCreate, db: AsyncSession = Depends
     count = await db.scalar(select(func.count()).where(Guest.event_id == event_id)) or 0
     assert_within_guest_cap(event, count)
 
-    guest = Guest(event_id=event_id, first_name=first, last_name=last, email=email, phone=phone, is_vip=bool(data.is_vip))
+    group_id = None
+    if data.assigned_table_group_id:
+        grp = await db.get(TableGroup, data.assigned_table_group_id)
+        if not grp or grp.event_id != event_id:
+            raise HTTPException(404, "Table group not found for this event")
+        group_id = grp.id
+
+    guest = Guest(event_id=event_id, first_name=first, last_name=last, email=email,
+                  phone=phone, is_vip=bool(data.is_vip), assigned_table_group_id=group_id)
     db.add(guest)
     await db.commit()
     await db.refresh(guest)
@@ -660,7 +779,134 @@ async def list_guests(event_id: str, db: AsyncSession = Depends(get_db), _: User
     result = await db.execute(
         select(Guest).where(Guest.event_id == event_id).order_by(Guest.last_name, Guest.first_name)
     )
-    return result.scalars().all()
+    guests = result.scalars().all()
+    # Decorate with the (non-mapped) table-group name so the guest list / export
+    # can show it without an extra round-trip.
+    names = dict((await db.execute(
+        select(TableGroup.id, TableGroup.name).where(TableGroup.event_id == event_id)
+    )).all())
+    for g in guests:
+        g.table_group_name = names.get(g.assigned_table_group_id)
+    return guests
+
+
+@router.post("/{event_id}/guests/bulk-assign-group")
+async def bulk_assign_table_group(
+    event_id: str,
+    body: BulkAssignGroupRequest,
+    db: AsyncSession = Depends(get_db),
+    _: User = Depends(require_event_admin),
+):
+    """Assign (or clear, when table_group_id is null) a table group for one or
+    many guests. Used by the guest profile and the Guests-tab bulk action."""
+    if not await db.get(Event, event_id):
+        raise HTTPException(404, "Event not found")
+    if body.table_group_id is not None:
+        grp = await db.get(TableGroup, body.table_group_id)
+        if not grp or grp.event_id != event_id:
+            raise HTTPException(404, "Table group not found for this event")
+    updated = 0
+    for gid in body.guest_ids:
+        guest = await db.get(Guest, gid)
+        if not guest or guest.event_id != event_id:
+            continue
+        guest.assigned_table_group_id = body.table_group_id
+        updated += 1
+    await db.commit()
+    return {"ok": True, "updated": updated, "table_group_id": body.table_group_id}
+
+
+# ── Manual check-in (no QR) ─────────────────────────────────────────────────────
+
+def _mask_phone(phone: str | None) -> str | None:
+    """Show only the last 4 digits, mask the rest (privacy on the search list)."""
+    if not phone:
+        return None
+    digits = "".join(ch for ch in phone if ch.isdigit())
+    if len(digits) <= 4:
+        return phone
+    return "•" * (len(digits) - 4) + digits[-4:]
+
+
+@router.get("/{event_id}/guests/search")
+async def search_guests(
+    event_id: str,
+    q: str = "",
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_official),
+):
+    """Manual check-in search: partial, case-insensitive match across first name,
+    last name (incl. full name) and phone, all at once. Gated to events with
+    manual check-in on and to staff assigned to the event."""
+    event = await db.get(Event, event_id)
+    if not event:
+        raise HTTPException(404, "Event not found")
+    if not event.manual_checkin_enabled:
+        raise HTTPException(403, "Manual check-in is not enabled for this event")
+    blocked = await checkin_guard(event, current_user, db)
+    if blocked:
+        raise HTTPException(403, blocked.message)
+
+    term = (q or "").strip().lower()
+    if len(term) < 2:
+        return []
+    p = f"%{term}%"
+    rows = (await db.execute(
+        select(Guest).where(
+            Guest.event_id == event_id,
+            or_(
+                func.lower(Guest.first_name).like(p),
+                func.lower(Guest.last_name).like(p),
+                func.lower(Guest.first_name + " " + Guest.last_name).like(p),
+                func.lower(func.coalesce(Guest.phone, "")).like(p),
+            ),
+        ).order_by(Guest.admitted, Guest.last_name, Guest.first_name).limit(25)
+    )).scalars().all()
+
+    table_ids = {g.table_id for g in rows if g.table_id}
+    names: dict[str, str] = {}
+    if table_ids:
+        names = dict((await db.execute(
+            select(SeatingTable.id, SeatingTable.name).where(SeatingTable.id.in_(table_ids))
+        )).all())
+
+    return [{
+        "id": g.id,
+        "first_name": g.first_name,
+        "last_name": g.last_name,
+        "full_name": f"{g.first_name} {g.last_name}".strip(),
+        "phone_masked": _mask_phone(g.phone),
+        "table_name": names.get(g.table_id),
+        "seat_number": g.seat_number,
+        "is_vip": g.is_vip,
+        "admitted": g.admitted,
+        "admitted_at": g.admitted_at.isoformat() if g.admitted_at else None,
+        "rsvp_status": g.rsvp_status,
+    } for g in rows]
+
+
+@router.post("/{event_id}/guests/{guest_id}/checkin", response_model=ScanResult)
+async def manual_checkin(
+    event_id: str,
+    guest_id: str,
+    background_tasks: BackgroundTasks,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_official),
+):
+    """Admit a guest by id (manual check-in) — runs the exact same admission flow
+    as a QR scan (seat assignment, notifications, SSE broadcast)."""
+    event = await db.get(Event, event_id)
+    if not event:
+        raise HTTPException(404, "Event not found")
+    if not event.manual_checkin_enabled:
+        raise HTTPException(403, "Manual check-in is not enabled for this event")
+    guest = await db.get(Guest, guest_id)
+    if not guest or guest.event_id != event_id:
+        return ScanResult(status="invalid", message="Guest not found for this event.")
+    blocked = await checkin_guard(event, current_user, db)
+    if blocked:
+        return blocked
+    return await perform_admission(guest, event, background_tasks, db)
 
 
 @router.delete("/{event_id}/guests/{guest_id}", status_code=204)
@@ -705,8 +951,9 @@ async def send_invites(event_id: str, background_tasks: BackgroundTasks, db: Asy
     )
     guests = result.scalars().all()
 
+    overrides = await load_overrides(event_id, db)
     for guest in guests:
-        _dispatch_invite(background_tasks, event, guest)
+        _dispatch_invite(background_tasks, event, guest, overrides)
         guest.invite_sent_at = datetime.utcnow()
 
     await db.commit()
@@ -745,11 +992,12 @@ async def send_invites_batch(
 
     queued = 0
     now = datetime.utcnow()
+    overrides = await load_overrides(event_id, db)
     for guest in guests:
         # Auto-generate QR timestamp on first send so it can also be a no-op for never-touched guests.
         if not guest.qr_generated_at:
             guest.qr_generated_at = now
-        _dispatch_invite(background_tasks, event, guest)
+        _dispatch_invite(background_tasks, event, guest, overrides)
         guest.invite_sent_at = now
         queued += 1
 
@@ -769,7 +1017,7 @@ async def resend_invite(event_id: str, guest_id: str, background_tasks: Backgrou
     if event.invite_mode != "closed" and not guest.qr_generated_at:
         raise HTTPException(400, "Generate QR codes first before sending invites")
 
-    _dispatch_invite(background_tasks, event, guest)
+    _dispatch_invite(background_tasks, event, guest, await load_overrides(event_id, db))
     guest.invite_sent_at = datetime.utcnow()
     await db.commit()
     return {"ok": True}
@@ -791,7 +1039,7 @@ async def approve_rsvp(event_id: str, guest_id: str, background_tasks: Backgroun
     if not guest.qr_generated_at:
         guest.qr_generated_at = now
     guest.invite_sent_at = now
-    _dispatch_invite(background_tasks, event, guest)
+    _dispatch_invite(background_tasks, event, guest, await load_overrides(event_id, db))
     await db.commit()
     return {"ok": True, "rsvp_status": "confirmed"}
 

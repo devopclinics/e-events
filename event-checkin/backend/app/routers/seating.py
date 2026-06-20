@@ -2,16 +2,56 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func
 from ..database import get_db
-from ..models import Event, SeatingTable, Guest, EventUser, User
-from ..schemas import SeatingTableCreate, SeatingTableOut, SeatAssignRequest
+from ..models import Event, SeatingTable, Guest, EventUser, User, TableGroup, TableGroupTable
+from ..schemas import (
+    SeatingTableCreate, SeatingTableOut, SeatAssignRequest,
+    TableGroupCreate, TableGroupOut, TableGroupTablesUpdate,
+)
 from ..auth import require_paid_event_admin, require_paid_event_member, is_org_manager
 
 router = APIRouter()
 
 
+async def group_table_ids(group_id: str, db: AsyncSession) -> set[str]:
+    """Set of table ids that belong to a table group."""
+    rows = (await db.execute(
+        select(TableGroupTable.table_id).where(TableGroupTable.table_group_id == group_id)
+    )).scalars().all()
+    return set(rows)
+
+
 async def _table_out(table: SeatingTable, db: AsyncSession) -> SeatingTableOut:
     count = await db.scalar(select(func.count(Guest.id)).where(Guest.table_id == table.id)) or 0
     return SeatingTableOut(id=table.id, event_id=table.event_id, name=table.name, capacity=table.capacity, category=table.category, assigned_count=count)
+
+
+def _clean_table_name(name: str) -> str:
+    cleaned = " ".join((name or "").split())
+    if not cleaned:
+        raise HTTPException(400, "Table name is required")
+    return cleaned
+
+
+async def _ensure_unique_table_name(
+    event_id: str,
+    name: str,
+    db: AsyncSession,
+    *,
+    exclude_id: str | None = None,
+) -> str:
+    cleaned = _clean_table_name(name)
+    conditions = [
+        SeatingTable.event_id == event_id,
+        func.lower(SeatingTable.name) == cleaned.lower(),
+    ]
+    if exclude_id:
+        conditions.append(SeatingTable.id != exclude_id)
+    existing = await db.scalar(
+        select(SeatingTable).where(*conditions)
+    )
+    if existing:
+        raise HTTPException(409, f'A table named "{cleaned}" already exists for this event')
+    return cleaned
 
 
 # ── First-come-first-served seat picker (used by scanner.py at admit time) ────
@@ -55,6 +95,18 @@ async def assign_next_seat(guest: Guest, db: AsyncSession) -> None:
     )).scalars().all()
     if not tables:
         return  # nothing we can do; admit without seat
+
+    # Table Groups: if this guest is assigned to a group and the event enforces
+    # it, restrict the candidate tables to that group's tables. All downstream
+    # FCFS/partner/held-seat/capacity logic then operates on this subset, so the
+    # existing rules are preserved unchanged. Guests with no group are unaffected.
+    if guest.assigned_table_group_id:
+        event = await db.get(Event, guest.event_id)
+        if event is None or event.enforce_table_groups:
+            allowed_ids = await group_table_ids(guest.assigned_table_group_id, db)
+            tables = [t for t in tables if t.id in allowed_ids]
+            if not tables:
+                return  # group has no tables / is full → leave unseated
 
     partner = await db.get(Guest, guest.partner_guest_id) if guest.partner_guest_id else None
 
@@ -128,7 +180,8 @@ async def list_tables(event_id: str, db: AsyncSession = Depends(get_db), _: User
 async def create_table(event_id: str, data: SeatingTableCreate, db: AsyncSession = Depends(get_db), _: User = Depends(require_paid_event_admin)):
     if not await db.get(Event, event_id):
         raise HTTPException(404, "Event not found")
-    table = SeatingTable(event_id=event_id, name=data.name, capacity=data.capacity, category=data.category)
+    name = await _ensure_unique_table_name(event_id, data.name, db)
+    table = SeatingTable(event_id=event_id, name=name, capacity=data.capacity, category=data.category)
     db.add(table)
     await db.commit()
     await db.refresh(table)
@@ -140,7 +193,7 @@ async def update_table(event_id: str, table_id: str, data: SeatingTableCreate, d
     table = await db.get(SeatingTable, table_id)
     if not table or table.event_id != event_id:
         raise HTTPException(404, "Table not found")
-    table.name = data.name
+    table.name = await _ensure_unique_table_name(event_id, data.name, db, exclude_id=table_id)
     table.capacity = data.capacity
     table.category = data.category
     await db.commit()
@@ -159,6 +212,135 @@ async def delete_table(event_id: str, table_id: str, db: AsyncSession = Depends(
         g.table_id = None
         g.seat_number = None
     await db.delete(table)
+    await db.commit()
+
+
+# ── Table Groups ──────────────────────────────────────────────────────────────
+
+def _clean_group_name(name: str) -> str:
+    cleaned = " ".join((name or "").split())
+    if not cleaned:
+        raise HTTPException(400, "Table group name is required")
+    return cleaned
+
+
+async def _ensure_unique_group_tag(event_id: str, tag: str, db: AsyncSession, *, exclude_id: str | None = None) -> str:
+    cleaned = " ".join((tag or "").split())
+    if not cleaned:
+        raise HTTPException(400, "Table group tag is required")
+    conditions = [TableGroup.event_id == event_id, func.lower(TableGroup.tag) == cleaned.lower()]
+    if exclude_id:
+        conditions.append(TableGroup.id != exclude_id)
+    if await db.scalar(select(TableGroup).where(*conditions)):
+        raise HTTPException(409, f'A table group with tag "{cleaned}" already exists for this event')
+    return cleaned
+
+
+async def _set_group_tables(group: TableGroup, table_ids: list[str], event_id: str, db: AsyncSession) -> None:
+    """Replace a group's member tables. Validates ownership and single-group rule."""
+    wanted = [tid for tid in dict.fromkeys(table_ids or [])]  # dedupe, keep order
+    for tid in wanted:
+        table = await db.get(SeatingTable, tid)
+        if not table or table.event_id != event_id:
+            raise HTTPException(404, f"Table {tid} not found for this event")
+        owner = await db.scalar(
+            select(TableGroupTable).where(
+                TableGroupTable.table_id == tid,
+                TableGroupTable.table_group_id != group.id,
+            )
+        )
+        if owner:
+            raise HTTPException(409, f'"{table.name}" already belongs to another table group')
+    # Wipe and re-add.
+    await db.execute(
+        TableGroupTable.__table__.delete().where(TableGroupTable.table_group_id == group.id)
+    )
+    for tid in wanted:
+        db.add(TableGroupTable(table_group_id=group.id, table_id=tid))
+
+
+async def _group_out(group: TableGroup, db: AsyncSession) -> TableGroupOut:
+    table_ids = list(await group_table_ids(group.id, db))
+    total_seats = 0
+    if table_ids:
+        total_seats = await db.scalar(
+            select(func.coalesce(func.sum(SeatingTable.capacity), 0)).where(SeatingTable.id.in_(table_ids))
+        ) or 0
+    assigned = await db.scalar(
+        select(func.count(Guest.id)).where(Guest.assigned_table_group_id == group.id)
+    ) or 0
+    return TableGroupOut(
+        id=group.id, event_id=group.event_id, name=group.name, tag=group.tag,
+        description=group.description, table_ids=table_ids,
+        assigned_guest_count=int(assigned), total_seats=int(total_seats),
+        remaining_seats=int(total_seats) - int(assigned),
+        over_capacity=int(assigned) > int(total_seats),
+    )
+
+
+@router.get("/{event_id}/table-groups", response_model=list[TableGroupOut])
+async def list_table_groups(event_id: str, db: AsyncSession = Depends(get_db), _: User = Depends(require_paid_event_member)):
+    groups = (await db.execute(
+        select(TableGroup).where(TableGroup.event_id == event_id).order_by(TableGroup.name)
+    )).scalars().all()
+    return [await _group_out(g, db) for g in groups]
+
+
+@router.post("/{event_id}/table-groups", response_model=TableGroupOut, status_code=201)
+async def create_table_group(event_id: str, data: TableGroupCreate, db: AsyncSession = Depends(get_db), _: User = Depends(require_paid_event_admin)):
+    if not await db.get(Event, event_id):
+        raise HTTPException(404, "Event not found")
+    name = _clean_group_name(data.name)
+    tag = await _ensure_unique_group_tag(event_id, data.tag or name, db)
+    group = TableGroup(event_id=event_id, name=name, tag=tag, description=data.description)
+    db.add(group)
+    await db.flush()
+    if data.table_ids:
+        await _set_group_tables(group, data.table_ids, event_id, db)
+    await db.commit()
+    await db.refresh(group)
+    return await _group_out(group, db)
+
+
+@router.put("/{event_id}/table-groups/{group_id}", response_model=TableGroupOut)
+async def update_table_group(event_id: str, group_id: str, data: TableGroupCreate, db: AsyncSession = Depends(get_db), _: User = Depends(require_paid_event_admin)):
+    group = await db.get(TableGroup, group_id)
+    if not group or group.event_id != event_id:
+        raise HTTPException(404, "Table group not found")
+    group.name = _clean_group_name(data.name)
+    group.tag = await _ensure_unique_group_tag(event_id, data.tag or group.name, db, exclude_id=group_id)
+    group.description = data.description
+    if data.table_ids is not None:
+        await _set_group_tables(group, data.table_ids, event_id, db)
+    await db.commit()
+    await db.refresh(group)
+    return await _group_out(group, db)
+
+
+@router.put("/{event_id}/table-groups/{group_id}/tables", response_model=TableGroupOut)
+async def set_table_group_tables(event_id: str, group_id: str, data: TableGroupTablesUpdate, db: AsyncSession = Depends(get_db), _: User = Depends(require_paid_event_admin)):
+    group = await db.get(TableGroup, group_id)
+    if not group or group.event_id != event_id:
+        raise HTTPException(404, "Table group not found")
+    await _set_group_tables(group, data.table_ids, event_id, db)
+    await db.commit()
+    await db.refresh(group)
+    return await _group_out(group, db)
+
+
+@router.delete("/{event_id}/table-groups/{group_id}", status_code=204)
+async def delete_table_group(event_id: str, group_id: str, db: AsyncSession = Depends(get_db), _: User = Depends(require_paid_event_admin)):
+    group = await db.get(TableGroup, group_id)
+    if not group or group.event_id != event_id:
+        raise HTTPException(404, "Table group not found")
+    assigned = await db.scalar(select(func.count(Guest.id)).where(Guest.assigned_table_group_id == group_id)) or 0
+    if assigned:
+        raise HTTPException(
+            409,
+            f"{assigned} guest(s) are assigned to this group — reassign them first, then delete.",
+        )
+    await db.execute(TableGroupTable.__table__.delete().where(TableGroupTable.table_group_id == group_id))
+    await db.delete(group)
     await db.commit()
 
 
@@ -216,18 +398,14 @@ async def auto_assign(event_id: str, clear: bool = False, db: AsyncSession = Dep
         select(Guest).where(Guest.event_id == event_id, Guest.table_id.is_(None)).order_by(Guest.last_name, Guest.first_name)
     )).scalars().all()
 
-    # Build ordered slots across all tables
-    slots: list[tuple[SeatingTable, str]] = []
-    for table in tables:
-        current = await db.scalar(select(func.count(Guest.id)).where(Guest.table_id == table.id)) or 0
-        for seat in range(current + 1, table.capacity + 1):
-            slots.append((table, str(seat)))
-
+    # Seat each guest via the shared FCFS picker so table-group restrictions,
+    # partner pairing, held seats and capacity are all honored consistently.
     assigned_count = 0
-    for guest, (table, seat_num) in zip(unassigned, slots):
-        guest.table_id = table.id
-        guest.seat_number = seat_num
-        assigned_count += 1
+    for guest in unassigned:
+        await assign_next_seat(guest, db)
+        if guest.table_id:
+            assigned_count += 1
+        await db.flush()
 
     await db.commit()
     return {"assigned": assigned_count, "unassigned": len(unassigned) - assigned_count}
@@ -257,6 +435,18 @@ async def assign_seat(
         table = await db.get(SeatingTable, body.table_id)
         if not table or table.event_id != event_id:
             raise HTTPException(404, "Table not found")
+
+        # Table Groups: a grouped guest may only be seated within their group.
+        if guest.assigned_table_group_id and (_ev is None or _ev.enforce_table_groups):
+            allowed_ids = await group_table_ids(guest.assigned_table_group_id, db)
+            if body.table_id not in allowed_ids:
+                group = await db.get(TableGroup, guest.assigned_table_group_id)
+                gname = group.name if group else "their table group"
+                raise HTTPException(
+                    409,
+                    f"{guest.first_name} {guest.last_name} is assigned to "
+                    f"'{gname}' and cannot be seated at this table.",
+                )
 
     guest.table_id = body.table_id
     guest.seat_number = body.seat_number

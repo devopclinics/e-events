@@ -4,7 +4,7 @@ from fastapi.responses import Response
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func
 from ..database import get_db
-from ..models import Guest, Event, EventUser, User, SeatingTable, MenuCategory, MenuItem, GuestMenuChoice, MenuCombination, MenuCombinationItem, Zone, TicketType, ScanEvent
+from ..models import Guest, Event, EventUser, User, SeatingTable, MenuCategory, MenuItem, GuestMenuChoice, MenuCombination, MenuCombinationItem, Zone, TicketType, ScanEvent, TableGroup
 from ..schemas import ScanResult, GuestOut, TicketView, EventBrief, MenuCategoryOut, MenuItemOut, MenuCombinationOut, MenuCombinationItemOut, GuestMenuSubmit, PartnerInfo, PairRequest, ScanZoneRequest, ScanZoneResult
 from ..auth import require_official, _org_role
 from .access import zone_occupancy, ticket_allows
@@ -15,6 +15,8 @@ from services.qr_service import generate_qr_bytes
 from . import broadcast
 from .seating import assign_next_seat
 from ..timeutil import local_hhmm
+from ..template_resolve import load_overrides, channel_text as template_channel_text, email_override as template_email_override
+from services.templates import build_context as build_template_context
 
 router = APIRouter()
 
@@ -158,32 +160,42 @@ async def scan_qr(
     guest = (await db.execute(select(Guest).where(Guest.qr_token == qr_token))).scalar_one_or_none()
     if not guest:
         return ScanResult(status="invalid", message="Invalid QR code. This ticket was not found.")
-
     event = await db.get(Event, guest.event_id)
+    blocked = await checkin_guard(event, current_user, db)
+    if blocked:
+        return blocked
+    return await perform_admission(guest, event, background_tasks, db)
 
+
+async def checkin_guard(event, current_user, db) -> ScanResult | None:
+    """Shared validity + tenant/assignment check for QR and manual check-in.
+    Returns a ScanResult to short-circuit on failure, or None when allowed.
+    Org owners/admins can check in any of their events; staff must be assigned."""
     if event and event.status != "active":
         label = "has not started yet" if event.status == "draft" else "has ended"
-        return ScanResult(status="not_active", message=f"'{event.name}' {label}. Scanning is disabled.")
-
+        return ScanResult(status="not_active", message=f"'{event.name}' {label}. Check-in is disabled.")
     if event and not event.is_paid:
         return ScanResult(
             status="not_active",
             message="This event needs an Event Pass to run check-in. Upgrade it in the admin panel.",
         )
-
-    # Tenant + assignment check: scanner must belong to this event's org. Org
-    # owners/admins can scan any of their events; staff must be assigned to it.
     if not current_user.is_platform_superadmin:
         org_role = await _org_role(current_user, event.org_id if event else None, db)
         if org_role is None:
             return ScanResult(status="not_assigned", message="You are not assigned to this event.")
         if org_role == "staff":
             assigned = await db.scalar(
-                select(EventUser).where(EventUser.event_id == guest.event_id, EventUser.user_id == current_user.id)
+                select(EventUser).where(EventUser.event_id == event.id, EventUser.user_id == current_user.id)
             )
             if not assigned:
                 return ScanResult(status="not_assigned", message="You are not assigned to this event.")
+    return None
 
+
+async def perform_admission(guest, event, background_tasks, db) -> ScanResult:
+    """Admit a guest — seat assignment (incl. table-group rules), admitted flags,
+    notifications, and SSE broadcast. Shared by QR scan and manual check-in.
+    Caller must have already validated the event + access (see checkin_guard)."""
     if guest.admitted:
         admitted_time = local_hhmm(guest.admitted_at) or "unknown"
         table_name = None
@@ -200,9 +212,23 @@ async def scan_qr(
         )
 
     # First-come-first-served seat assignment if this guest has no seat yet.
-    # Honors couple pairings (see assign_next_seat in seating.py).
+    # Honors couple pairings + table-group restrictions (see assign_next_seat).
     if event and event.seating_enabled and not guest.table_id:
         await assign_next_seat(guest, db)
+        # Table Groups: a grouped guest who couldn't be seated within their group
+        # (group full / has no tables) is turned away with a clear message rather
+        # than seated outside their group.
+        if guest.assigned_table_group_id and event.enforce_table_groups and not guest.table_id:
+            grp = await db.get(TableGroup, guest.assigned_table_group_id)
+            gname = grp.name if grp else "their table group"
+            # Nothing was mutated (the guest stays un-admitted, un-seated), so we
+            # can return the denial without committing.
+            return ScanResult(
+                status="denied",
+                message=f"Table group '{gname}' capacity reached — no seat available for "
+                        f"{guest.first_name} {guest.last_name}.",
+                guest=GuestOut.model_validate(guest),
+            )
 
     # Resolve table name (after possible assignment) for the result card + email.
     table_name = None
@@ -247,23 +273,40 @@ async def scan_qr(
         "menu_enabled": bool(event and event.menu_enabled),
     }
     paid = can_use_paid_channels(event) if event else False
+    # Customizable-template overrides for the check-in messages (fall back to the
+    # built-in copy when a channel has no override).
+    overrides = await load_overrides(event.id, db) if event else {}
+    tmpl_ctx = build_template_context(
+        event, guest, extras={"table_name": table_name or "", "ticket_link": ticket_url or "", "qr_code": ticket_url or ""}
+    )
     if event.notify_email:
+        subj, intro = template_email_override(overrides, "admission_confirmation", tmpl_ctx)
+        guest_data["subject_override"] = subj
+        guest_data["intro_block_override"] = intro
         background_tasks.add_task(send_admission_email, guest_data)
     if paid and event.notify_sms and guest.phone and guest.sms_consent and take_message_credit(event):
-        background_tasks.add_task(
-            messaging.send_admission_sms,
-            phone=guest.phone, first_name=guest.first_name,
-            event_name=event.name if event else "the event",
-            admitted_at=guest.admitted_at,
-            table_name=table_name, seat_number=guest.seat_number,
-        )
+        sms_text = template_channel_text(overrides, "admission_confirmation", "sms", tmpl_ctx)
+        if sms_text is not None:
+            background_tasks.add_task(messaging.send_custom_sms, phone=guest.phone, body=sms_text)
+        else:
+            background_tasks.add_task(
+                messaging.send_admission_sms,
+                phone=guest.phone, first_name=guest.first_name,
+                event_name=event.name if event else "the event",
+                admitted_at=guest.admitted_at,
+                table_name=table_name, seat_number=guest.seat_number,
+            )
     if paid and event.notify_whatsapp and guest.phone and guest.whatsapp_consent and take_message_credit(event):
-        background_tasks.add_task(
-            messaging.send_admission_whatsapp,
-            phone=guest.phone, first_name=guest.first_name,
-            event_name=event.name if event else "the event",
-            table_name=table_name, seat_number=guest.seat_number,
-        )
+        wa_text = template_channel_text(overrides, "admission_confirmation", "whatsapp", tmpl_ctx)
+        if wa_text is not None:
+            background_tasks.add_task(messaging.send_custom_whatsapp, phone=guest.phone, body=wa_text)
+        else:
+            background_tasks.add_task(
+                messaging.send_admission_whatsapp,
+                phone=guest.phone, first_name=guest.first_name,
+                event_name=event.name if event else "the event",
+                table_name=table_name, seat_number=guest.seat_number,
+            )
     await db.commit()  # persist message-credit decrements
 
     broadcast(guest.event_id, {

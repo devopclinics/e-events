@@ -24,7 +24,10 @@ async function req(method, path, body) {
   }
   if (!res.ok) {
     const err = await res.json().catch(() => ({ detail: res.statusText }))
-    throw new Error(err.detail || res.statusText)
+    const detail = Array.isArray(err.detail)
+      ? err.detail.map((d) => d.msg || JSON.stringify(d)).join('; ')
+      : err.detail
+    throw new Error(detail || res.statusText)
   }
   return res.status === 204 ? null : res.json()
 }
@@ -109,6 +112,15 @@ export const api = {
   markMealServed:          (eventId, guestId)          => req('PATCH',  `/events/${eventId}/guests/${guestId}/meal-served`),
   updateMemberPermissions: (eventId, userId, body)     => req('PATCH',  `/events/${eventId}/members/${userId}/permissions`, body),
 
+  // Table Groups (seating)
+  listTableGroups:    (eventId)              => req('GET',    `/events/${eventId}/table-groups`),
+  createTableGroup:   (eventId, data)        => req('POST',   `/events/${eventId}/table-groups`, data),
+  updateTableGroup:   (eventId, id, data)    => req('PUT',    `/events/${eventId}/table-groups/${id}`, data),
+  setTableGroupTables:(eventId, id, tableIds)=> req('PUT',    `/events/${eventId}/table-groups/${id}/tables`, { table_ids: tableIds }),
+  deleteTableGroup:   (eventId, id)          => req('DELETE', `/events/${eventId}/table-groups/${id}`),
+  bulkAssignTableGroup:(eventId, guestIds, tableGroupId) =>
+    req('POST', `/events/${eventId}/guests/bulk-assign-group`, { guest_ids: guestIds, table_group_id: tableGroupId }),
+
   // Menu (admin)
   listMenuCategories: (eventId)              => req('GET',    `/events/${eventId}/menu-categories`),
   createMenuCategory: (eventId, data)        => req('POST',   `/events/${eventId}/menu-categories`, data),
@@ -127,6 +139,26 @@ export const api = {
 
   // Scanner
   scan: (token) => req('POST', `/scan/${token}`),
+  // Manual check-in (no QR)
+  searchGuests:  (eventId, q) => req('GET', `/events/${eventId}/guests/search?q=${encodeURIComponent(q)}`),
+  manualCheckin: (eventId, guestId) => req('POST', `/events/${eventId}/guests/${guestId}/checkin`),
+  adminSetManualCheckin: (eventId, active) => req('PATCH', `/admin/events/${eventId}/manual-checkin`, { active }),
+  setSelfCheckin: (eventId, active) => req('PATCH', `/events/${eventId}/self-checkin`, { active }),
+
+  // Public self check-in
+  selfCheckinInfo: (code) =>
+    fetch(`${BASE}/e/${encodeURIComponent(code)}`).then((r) => r.json()),
+  selfCheckinSearch: (code, query) =>
+    fetch(`${BASE}/e/${encodeURIComponent(code)}/search`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ query }),
+    }).then((r) => (r.ok ? r.json() : r.json().then((e) => Promise.reject(new Error(e.detail))))),
+  selfCheckinAdmit: (code, guestId) =>
+    fetch(`${BASE}/e/${encodeURIComponent(code)}/checkin/${encodeURIComponent(guestId)}`, { method: 'POST' })
+      .then((r) => (r.ok ? r.json() : r.json().then((e) => Promise.reject(new Error(e.detail))))),
+  selfCheckinUrl: (code) => `${window.location.origin}/e/${code}`,
+  selfCheckinQrUrl: (code) => `${BASE}/e/${encodeURIComponent(code)}/qr.png`,
 
   // Ticket (public)
   viewTicket: (token) => fetch(`/api/scan/${token}/ticket`).then((r) => r.json()),
@@ -179,6 +211,15 @@ export const api = {
   deleteRSVPQuestion:   (eventId, qId)         => req('DELETE', `/events/${eventId}/rsvp-questions/${qId}`),
   // Broadcast (admin)
   broadcast: (eventId, data) => req('POST', `/events/${eventId}/broadcast`, data),
+
+  // Message templates (admin)
+  listTemplates:    (eventId)            => req('GET',    `/events/${eventId}/templates`),
+  getTemplate:      (eventId, key)       => req('GET',    `/events/${eventId}/templates/${key}`),
+  saveTemplate:     (eventId, key, data) => req('PUT',    `/events/${eventId}/templates/${key}`, data),
+  resetTemplate:    (eventId, key)       => req('DELETE', `/events/${eventId}/templates/${key}`),
+  previewTemplate:  (eventId, key, data) => req('POST',   `/events/${eventId}/templates/${key}/preview`, data),
+  testSendTemplate: (eventId, key, data) => req('POST',   `/events/${eventId}/templates/${key}/test-send`, data),
+  templateAudit:    (eventId)            => req('GET',    `/events/${eventId}/templates/audit`),
 
   // Logistics / Fulfillment (admin)
   listShipments:       (eventId)            => req('GET',    `/events/${eventId}/shipments`),
@@ -268,6 +309,7 @@ export const api = {
   adminSetUserActive:  (userId, active)    => req('PATCH',  `/admin/users/${userId}/active`, { active }),
   adminDeleteUser:     (userId)            => req('DELETE', `/admin/users/${userId}`),
   adminGrant:          (eventId, body) => req('POST',   `/admin/events/${eventId}/grant`, body),
+  adminResetEvent:     (eventId, body) => req('POST',   `/admin/events/${eventId}/reset`, body),
   adminListOperators:  ()              => req('GET',    '/admin/operators'),
   adminAddOperator:    (email)         => req('POST',   '/admin/operators', { email }),
   adminRemoveOperator: (userId)        => req('DELETE', `/admin/operators/${userId}`),
@@ -298,5 +340,5 @@ export const api = {
   },
   deleteCoverImage: (eventId) => req('DELETE', `/events/${eventId}/upload-cover`),
   // Invite page public URL helper (no auth needed)
-  inviteUrl: (eventId) => `${window.location.origin}/e/${eventId}`,
+  inviteUrl: (eventId) => `${window.location.origin}/invite/${eventId}`,
 }

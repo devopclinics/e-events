@@ -23,6 +23,7 @@ from ..schemas import (
 )
 from services import messaging
 from services.email_service import send_invite_email
+from ..template_resolve import load_overrides
 from .guests import _normalize_phone
 from ..entitlements import assert_within_guest_cap, can_use_paid_channels, take_message_credit
 
@@ -194,12 +195,14 @@ def _send_rsvp_invite(
     background_tasks: BackgroundTasks,
     event: Event,
     guest: Guest,
+    overrides: dict | None = None,
 ) -> None:
     """Fan out invite notifications across the channels enabled on this event.
     SMS/WhatsApp require a paid event and consume one message credit each;
     email is always allowed. Caller must commit to persist credit decrements."""
     ticket_url = f"{event.checkin_base_url.rstrip('/')}/scan/{guest.qr_token}"
     paid_channels = can_use_paid_channels(event)
+    ov = (overrides or {}).get("ticket_qr")
 
     if event.notify_email and guest.email:
         background_tasks.add_task(
@@ -209,6 +212,7 @@ def _send_rsvp_invite(
             event.name, event.couples_name, event.checkin_base_url,
             event.event_date,
             event.seating_enabled, event.menu_enabled,
+            ov.subject if ov else None, ov.email_body if ov else None,
         )
 
     if paid_channels and event.notify_sms and guest.phone and guest.sms_consent and take_message_credit(event):
@@ -333,7 +337,7 @@ async def submit_rsvp(
         )
 
     # Approved automatically — fire the ticket in the background.
-    _send_rsvp_invite(background_tasks, event, guest)
+    _send_rsvp_invite(background_tasks, event, guest, await load_overrides(event.id, db))
     await db.commit()  # persist any message-credit decrements
     return RSVPConfirm(
         id=guest.id,
@@ -423,7 +427,7 @@ async def submit_invite_token_rsvp(
         await db.commit()
         await db.refresh(guest)
         # Issue the ticket now that they've confirmed.
-        _send_rsvp_invite(background_tasks, event, guest)
+        _send_rsvp_invite(background_tasks, event, guest, await load_overrides(event.id, db))
         await db.commit()  # persist any message-credit decrements
         message = "You're confirmed! Check your email for your ticket."
     else:

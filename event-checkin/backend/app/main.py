@@ -6,14 +6,15 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from .database import engine
 from .config import settings
-from .routers import events, guests, scanner, dashboard, seating, menu, logistics, registry, access, trials, classify, messaging
+from .routers import events, guests, scanner, dashboard, seating, menu, logistics, registry, access, trials, classify, messaging, templates as templates_router, self_checkin
 from .routers import auth as auth_router
 from .routers import invite as invite_router
 from .routers import billing as billing_router
 from .routers import admin as admin_router
 from . import sync_poller, db_migrate
 
-UPLOADS_DIR = "/app/uploads"
+# Override with UPLOADS_DIR for local/test runs; defaults to the in-container path.
+UPLOADS_DIR = os.environ.get("UPLOADS_DIR", "/app/uploads")
 
 
 @asynccontextmanager
@@ -62,6 +63,8 @@ app.include_router(billing_router.router, prefix="/api/billing", tags=["billing"
 app.include_router(trials.router, prefix="/api", tags=["trials"])
 app.include_router(admin_router.router, prefix="/api/admin", tags=["admin"])
 app.include_router(messaging.router, prefix="/api/messaging", tags=["messaging"])
+app.include_router(templates_router.router, prefix="/api/events", tags=["templates"])
+app.include_router(self_checkin.router, prefix="/api/e", tags=["self-checkin"])
 
 # Serve uploaded files (cover images, etc.)
 os.makedirs(UPLOADS_DIR, exist_ok=True)

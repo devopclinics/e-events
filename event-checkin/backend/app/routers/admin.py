@@ -6,14 +6,16 @@ without code: see all tenants, comp/credit events, manage operators, edit pricin
 from datetime import datetime
 
 from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks
-from sqlalchemy import select, desc, func, text
+from sqlalchemy import select, desc, func, text, delete, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..database import get_db
-from ..models import Organization, Event, User, Membership, PricingPlan, AffiliateStore, TrialRequest
+from ..models import (Organization, Event, User, Membership, PricingPlan, AffiliateStore, TrialRequest,
+                      Guest, ScanEvent, GuestTagLink, GuestShipment, GuestMenuChoice, RSVPAnswer,
+                      SeatingTable, TableGroup, TableGroupTable)
 from ..schemas import (GrantRequest, OperatorInvite, PlanUpsert, UserOut,
                        AffiliateStoreIn, AffiliateStoreOut, TrialRequestOut, TrialResolve,
-                       AccountOrgOut, AccountMemberOut, ActiveToggle, MemberRole)
+                       AccountOrgOut, AccountMemberOut, ActiveToggle, MemberRole, EventResetRequest)
 from ..auth import require_superadmin, set_firebase_disabled, delete_firebase_user
 from ..billing import get_plan, apply_purchase
 from services.email_service import send_simple_email
@@ -76,6 +78,104 @@ async def overview(_: User = Depends(require_superadmin), db: AsyncSession = Dep
         }
         for o in orgs
     ]
+
+
+@router.post("/events/{event_id}/reset")
+async def reset_event_data(
+    event_id: str,
+    body: EventResetRequest,
+    _: User = Depends(require_superadmin),
+    db: AsyncSession = Depends(get_db),
+):
+    """Superadmin-only: wipe selected operational data for an event so it can be
+    reused/re-tested. The event record + its settings/templates are always kept.
+    Each flag is independent; deletes run in FK-safe order. Returns counts."""
+    ev = await db.get(Event, event_id)
+    if not ev:
+        raise HTTPException(404, "Event not found")
+
+    gids = select(Guest.id).where(Guest.event_id == event_id).scalar_subquery()
+    cleared: dict = {}
+
+    async def _count(model, *where) -> int:
+        return int(await db.scalar(select(func.count()).select_from(model).where(*where)) or 0)
+
+    # ── Check-ins / scan log ──
+    if body.checkins or body.guests:
+        c = await _count(ScanEvent, ScanEvent.event_id == event_id)
+        await db.execute(delete(ScanEvent).where(ScanEvent.event_id == event_id))
+        if c:
+            cleared["scans"] = c
+    if body.checkins and not body.guests:
+        await db.execute(update(Guest).where(Guest.event_id == event_id).values(
+            admitted=False, admitted_at=None, admit_notified=False, meal_served=False))
+        cleared["checkins_reset"] = True
+
+    # ── Seat assignments (kept guests) ──
+    if (body.seat_assignments or body.tables) and not body.guests:
+        await db.execute(update(Guest).where(Guest.event_id == event_id).values(
+            table_id=None, seat_number=None, held_seat=None))
+        if body.seat_assignments:
+            cleared["seat_assignments_cleared"] = True
+
+    # ── Table-group assignments (kept guests) ──
+    if (body.group_assignments or body.table_groups) and not body.guests:
+        await db.execute(update(Guest).where(Guest.event_id == event_id).values(assigned_table_group_id=None))
+        if body.group_assignments:
+            cleared["group_assignments_cleared"] = True
+
+    # ── Guests (+ all guest-owned rows), FK-safe order ──
+    if body.guests:
+        c = await _count(Guest, Guest.event_id == event_id)
+        await db.execute(delete(GuestTagLink).where(GuestTagLink.guest_id.in_(gids)))
+        await db.execute(delete(GuestShipment).where(GuestShipment.guest_id.in_(gids)))
+        await db.execute(delete(GuestMenuChoice).where(GuestMenuChoice.guest_id.in_(gids)))
+        await db.execute(delete(RSVPAnswer).where(RSVPAnswer.guest_id.in_(gids)))
+        await db.execute(update(Guest).where(Guest.event_id == event_id).values(partner_guest_id=None))
+        await db.execute(delete(Guest).where(Guest.event_id == event_id))
+        cleared["guests"] = c
+
+    # ── Table groups ──
+    if body.table_groups:
+        if not body.guests:
+            await db.execute(update(Guest).where(Guest.event_id == event_id).values(assigned_table_group_id=None))
+        grp_ids = select(TableGroup.id).where(TableGroup.event_id == event_id).scalar_subquery()
+        c = await _count(TableGroup, TableGroup.event_id == event_id)
+        await db.execute(delete(TableGroupTable).where(TableGroupTable.table_group_id.in_(grp_ids)))
+        await db.execute(delete(TableGroup).where(TableGroup.event_id == event_id))
+        if c:
+            cleared["table_groups"] = c
+
+    # ── Tables ──
+    if body.tables:
+        if not body.guests:
+            await db.execute(update(Guest).where(Guest.event_id == event_id).values(
+                table_id=None, seat_number=None, held_seat=None))
+        tbl_ids = select(SeatingTable.id).where(SeatingTable.event_id == event_id).scalar_subquery()
+        c = await _count(SeatingTable, SeatingTable.event_id == event_id)
+        await db.execute(delete(TableGroupTable).where(TableGroupTable.table_id.in_(tbl_ids)))
+        await db.execute(delete(SeatingTable).where(SeatingTable.event_id == event_id))
+        if c:
+            cleared["tables"] = c
+
+    await db.commit()
+    return {"ok": True, "event_id": event_id, "cleared": cleared}
+
+
+@router.patch("/events/{event_id}/manual-checkin")
+async def set_manual_checkin(
+    event_id: str,
+    body: ActiveToggle,
+    _: User = Depends(require_superadmin),
+    db: AsyncSession = Depends(get_db),
+):
+    """Superadmin-only: turn manual (no-QR) check-in on/off for an event."""
+    ev = await db.get(Event, event_id)
+    if not ev:
+        raise HTTPException(404, "Event not found")
+    ev.manual_checkin_enabled = bool(body.active)
+    await db.commit()
+    return {"ok": True, "manual_checkin_enabled": ev.manual_checkin_enabled}
 
 
 @router.post("/events/{event_id}/grant")

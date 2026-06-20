@@ -1,13 +1,13 @@
 import asyncio
 import json
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import StreamingResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func
 from ..database import get_db
 from ..models import Guest, Event, User, Zone, MenuCategory, SeatingTable
 from ..schemas import DashboardStats, GuestOut, ZoneOccupancy, TableReport
-from ..auth import require_dashboard_access
+from ..auth import require_dashboard_access, verify_token_user, user_has_dashboard_access
 from .access import zone_occupancy
 from . import sse_subscribers
 
@@ -85,10 +85,20 @@ async def get_dashboard(event_id: str, db: AsyncSession = Depends(get_db), _: Us
 
 
 @router.get("/{event_id}/stream")
-async def event_stream(event_id: str, db: AsyncSession = Depends(get_db), _: User = Depends(require_dashboard_access)):
+async def event_stream(
+    event_id: str,
+    token: str = Query(..., description="Firebase ID token (EventSource can't send auth headers)"),
+    db: AsyncSession = Depends(get_db),
+):
+    # EventSource can't set an Authorization header, so the token comes as a query
+    # param and is verified here (ported from prod a077c15, using main's
+    # dashboard-access rule incl. grantable staff access).
+    user = await verify_token_user(token, db)
     event = await db.get(Event, event_id)
     if not event:
         raise HTTPException(404, "Event not found")
+    if not await user_has_dashboard_access(user, event, db):
+        raise HTTPException(403, "You don't have dashboard access for this event.")
 
     queue: asyncio.Queue = asyncio.Queue(maxsize=100)
     if event_id not in sse_subscribers:

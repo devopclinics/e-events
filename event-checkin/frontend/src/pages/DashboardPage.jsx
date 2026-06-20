@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
 import { api } from '../api'
+import { auth } from '../firebase'
 import { useCurrentEvent } from '../hooks/useCurrentEvent'
 
 // ── Small visual pieces ───────────────────────────────────────────────────────
@@ -89,23 +90,32 @@ export default function DashboardPage() {
     const poll = setInterval(() => fetchStats(eventId), 20000)   // refresh zones/rsvp/catering
 
     if (esRef.current) esRef.current.close()
-    const es = new EventSource(`/api/events/${eventId}/stream`)
-    esRef.current = es
-    es.onopen = () => setConnected(true)
-    es.onerror = () => setConnected(false)
-    es.onmessage = (e) => {
-      const data = JSON.parse(e.data)
-      if (data.type === 'admitted') {
-        setStats((prev) => {
-          if (!prev || prev.admitted_guests.find((g) => g.id === data.guest_id)) return prev
-          return { ...prev, admitted: prev.admitted + 1, pending: Math.max(prev.pending - 1, 0),
-            admitted_guests: [{ id: data.guest_id, first_name: data.name.split(' ')[0],
-              last_name: data.name.split(' ').slice(1).join(' '), email: data.email,
-              admitted_at: data.admitted_at, admitted: true }, ...prev.admitted_guests] }
-        })
+    // EventSource can't send an Authorization header, so we pass the Firebase
+    // token as a query param (token-authenticated SSE; see dashboard.py).
+    let es
+    let closed = false
+    ;(async () => {
+      let token = ''
+      try { token = (await auth.currentUser?.getIdToken()) || '' } catch { /* not signed in */ }
+      if (closed) return
+      es = new EventSource(`/api/events/${eventId}/stream?token=${encodeURIComponent(token)}`)
+      esRef.current = es
+      es.onopen = () => setConnected(true)
+      es.onerror = () => setConnected(false)
+      es.onmessage = (e) => {
+        const data = JSON.parse(e.data)
+        if (data.type === 'admitted') {
+          setStats((prev) => {
+            if (!prev || prev.admitted_guests.find((g) => g.id === data.guest_id)) return prev
+            return { ...prev, admitted: prev.admitted + 1, pending: Math.max(prev.pending - 1, 0),
+              admitted_guests: [{ id: data.guest_id, first_name: data.name.split(' ')[0],
+                last_name: data.name.split(' ').slice(1).join(' '), email: data.email,
+                admitted_at: data.admitted_at, admitted: true }, ...prev.admitted_guests] }
+          })
+        }
       }
-    }
-    return () => { es.close(); clearInterval(poll) }
+    })()
+    return () => { closed = true; if (es) es.close(); clearInterval(poll) }
   }, [eventId, fetchStats])
 
   const event = events.find((e) => e.id === eventId)

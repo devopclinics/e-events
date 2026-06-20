@@ -245,6 +245,42 @@ async def require_dashboard_access(
     raise HTTPException(403, "You don't have dashboard access for this event.")
 
 
+async def verify_token_user(token: str, db: AsyncSession) -> User:
+    """Resolve a User from a raw Firebase ID token. For SSE/EventSource, which
+    can't send an Authorization header so passes the token as a query param.
+    Mirrors get_current_user's verification but takes the token as an argument
+    (does not provision new accounts)."""
+    _ensure_firebase()
+    try:
+        decoded = firebase_auth.verify_id_token(token)
+    except Exception:
+        raise HTTPException(401, "Invalid or expired token")
+    firebase_uid = decoded["uid"]
+    email = (decoded.get("email") or "").lower()
+    user = await db.scalar(select(User).where(User.firebase_uid == firebase_uid))
+    if not user and email:
+        user = await db.scalar(select(User).where(User.email == email))
+    if not user:
+        raise HTTPException(403, "User not found")
+    if not user.is_active:
+        raise HTTPException(403, "This account has been suspended. Contact support.")
+    return user
+
+
+async def user_has_dashboard_access(user: User, event: Event, db: AsyncSession) -> bool:
+    """Same rule as require_dashboard_access, but for an already-resolved user
+    (used by the token-authenticated SSE stream)."""
+    if user.is_platform_superadmin:
+        return True
+    role = await _org_role(user, event.org_id, db)
+    if role in ("owner", "admin"):
+        return True
+    from .models import EventUser
+    eu = await db.scalar(select(EventUser).where(
+        EventUser.event_id == event.id, EventUser.user_id == user.id))
+    return bool(eu and eu.can_view_dashboard)
+
+
 _PAID_REQUIRED = "This feature requires an Event Pass — upgrade this event to unlock it."
 
 

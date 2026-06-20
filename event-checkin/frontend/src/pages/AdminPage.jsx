@@ -783,6 +783,26 @@ function MessageDeliveryCard({ guests }) {
         </div>
       )}
 
+      {/* Not sent list */}
+      {(() => {
+        const unsentGuests = guests.filter((g) => !g.invite_sent_at)
+        if (!unsentGuests.length) return null
+        return (
+          <div className="pt-3 border-t dark:border-slate-700">
+            <p className="text-xs font-semibold text-amber-600 dark:text-amber-400 mb-2">
+              Not sent yet ({unsentGuests.length}):
+            </p>
+            <div className="flex flex-wrap gap-1.5 max-h-28 overflow-y-auto">
+              {unsentGuests.map((g) => (
+                <span key={g.id} className="text-xs bg-amber-50 dark:bg-amber-900/20 text-amber-700 dark:text-amber-300 border border-amber-200 dark:border-amber-800 px-2 py-0.5 rounded-full">
+                  {g.first_name} {g.last_name}{!g.phone && !g.email ? ' (no contact)' : ''}
+                </span>
+              ))}
+            </div>
+          </div>
+        )
+      })()}
+
       {/* Failed list */}
       {failedGuests.length > 0 && (
         <div className="pt-3 border-t dark:border-slate-700">
@@ -3151,6 +3171,7 @@ export default function AdminPage() {
   const [activeTab, setActiveTab] = useState('overview')
   const [editingGuest, setEditingGuest] = useState(null)
   const [guestSearch, setGuestSearch] = useState('')
+  const [guestFilter, setGuestFilter] = useState({ invited: 'all', admitted: 'all', qr: 'all' })
   const fileRef = useRef()
 
   const PAGE_SIZE = 50
@@ -3647,12 +3668,20 @@ export default function AdminPage() {
           )}
           {activeTab === 'guests' && guests.length > 0 && (() => {
             const q = guestSearch.trim().toLowerCase()
-            const filteredGuests = q
-              ? guests.filter((g) => {
-                  const name = `${g.first_name || ''} ${g.last_name || ''}`.toLowerCase()
-                  return name.includes(q) || (g.email || '').toLowerCase().includes(q) || (g.phone || '').includes(q)
-                })
-              : guests
+            const filteredGuests = guests.filter((g) => {
+              if (q) {
+                const name = `${g.first_name || ''} ${g.last_name || ''}`.toLowerCase()
+                if (!name.includes(q) && !(g.email || '').toLowerCase().includes(q) && !(g.phone || '').includes(q)) return false
+              }
+              if (guestFilter.invited === 'sent'    && g.invite_status !== 'sent')    return false
+              if (guestFilter.invited === 'failed'  && g.invite_status !== 'failed')  return false
+              if (guestFilter.invited === 'unsent'  && g.invite_sent_at)              return false
+              if (guestFilter.admitted === 'yes'    && !g.admitted)                   return false
+              if (guestFilter.admitted === 'no'     && g.admitted)                    return false
+              if (guestFilter.qr === 'ready'        && !g.qr_generated_at)            return false
+              if (guestFilter.qr === 'pending'      && g.qr_generated_at)             return false
+              return true
+            })
             const totalPages = Math.ceil(filteredGuests.length / PAGE_SIZE)
             const safePage = Math.min(page, Math.max(0, totalPages - 1))
             const pageGuests = filteredGuests.slice(safePage * PAGE_SIZE, (safePage + 1) * PAGE_SIZE)
@@ -3710,36 +3739,73 @@ export default function AdminPage() {
                     </div>
                   </div>
                 )}
-                <div className="px-4 sm:px-6 py-4 border-b dark:border-slate-700 flex flex-col sm:flex-row items-start sm:items-center gap-3">
-                  <h2 className="font-semibold text-sm sm:text-base dark:text-white shrink-0">
-                    Guest List ({q ? `${filteredGuests.length} of ${guests.length}` : guests.length})
-                  </h2>
-                  <input
-                    type="search"
-                    value={guestSearch}
-                    onChange={(e) => { setGuestSearch(e.target.value); setPage(0) }}
-                    placeholder="Search by name, email or phone…"
-                    className="flex-1 border border-gray-300 dark:border-slate-600 rounded-lg px-3 py-1.5 text-sm bg-white dark:bg-slate-700 text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-slate-400 min-w-0"
-                  />
-                  {totalPages > 1 && (
-                    <div className="flex items-center gap-2 shrink-0">
-                      <button onClick={() => setPage((p) => Math.max(0, p - 1))} disabled={safePage === 0}
-                        className="px-2 py-1 border dark:border-slate-700 rounded text-gray-600 dark:text-slate-300 disabled:opacity-40 hover:bg-gray-50 dark:hover:bg-slate-700 text-sm">←</button>
-                      <span className="text-gray-500 dark:text-slate-400 text-xs">{safePage + 1} / {totalPages}</span>
-                      <button onClick={() => setPage((p) => Math.min(totalPages - 1, p + 1))} disabled={safePage === totalPages - 1}
-                        className="px-2 py-1 border dark:border-slate-700 rounded text-gray-600 dark:text-slate-300 disabled:opacity-40 hover:bg-gray-50 dark:hover:bg-slate-700 text-sm">→</button>
-                    </div>
-                  )}
+                <div className="px-4 sm:px-6 py-3 border-b dark:border-slate-700 flex flex-col gap-2">
+                  {/* Search + pagination row */}
+                  <div className="flex flex-col sm:flex-row items-start sm:items-center gap-2">
+                    <h2 className="font-semibold text-sm sm:text-base dark:text-white shrink-0">
+                      Guest List ({filteredGuests.length}{filteredGuests.length !== guests.length ? ` of ${guests.length}` : ''})
+                    </h2>
+                    <input
+                      type="search"
+                      value={guestSearch}
+                      onChange={(e) => { setGuestSearch(e.target.value); setPage(0) }}
+                      placeholder="Search by name, email or phone…"
+                      className="flex-1 border border-gray-300 dark:border-slate-600 rounded-lg px-3 py-1.5 text-sm bg-white dark:bg-slate-700 text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-slate-400 min-w-0"
+                    />
+                    {totalPages > 1 && (
+                      <div className="flex items-center gap-2 shrink-0">
+                        <button onClick={() => setPage((p) => Math.max(0, p - 1))} disabled={safePage === 0}
+                          className="px-2 py-1 border dark:border-slate-700 rounded text-gray-600 dark:text-slate-300 disabled:opacity-40 hover:bg-gray-50 dark:hover:bg-slate-700 text-sm">←</button>
+                        <span className="text-gray-500 dark:text-slate-400 text-xs">{safePage + 1} / {totalPages}</span>
+                        <button onClick={() => setPage((p) => Math.min(totalPages - 1, p + 1))} disabled={safePage === totalPages - 1}
+                          className="px-2 py-1 border dark:border-slate-700 rounded text-gray-600 dark:text-slate-300 disabled:opacity-40 hover:bg-gray-50 dark:hover:bg-slate-700 text-sm">→</button>
+                      </div>
+                    )}
+                  </div>
+                  {/* Filter chips row */}
+                  {(() => {
+                    const setF = (key, val) => { setGuestFilter((f) => ({ ...f, [key]: val })); setPage(0) }
+                    const chip = (key, val, label, activeColor) => {
+                      const active = guestFilter[key] === val
+                      return (
+                        <button key={val}
+                          onClick={() => setF(key, active ? 'all' : val)}
+                          className={`px-2.5 py-1 rounded-full text-xs font-medium border transition-colors ${
+                            active ? activeColor : 'border-slate-300 dark:border-slate-600 text-slate-500 dark:text-slate-400 hover:border-slate-400 dark:hover:border-slate-500'
+                          }`}>
+                          {label}
+                        </button>
+                      )
+                    }
+                    const hasFilter = guestFilter.invited !== 'all' || guestFilter.admitted !== 'all' || guestFilter.qr !== 'all'
+                    return (
+                      <div className="flex flex-wrap items-center gap-1.5">
+                        <span className="text-xs text-slate-400 dark:text-slate-500 shrink-0">Filter:</span>
+                        {chip('invited', 'sent',   'Delivered',  'bg-green-100 dark:bg-green-900/30 border-green-400 dark:border-green-600 text-green-700 dark:text-green-300')}
+                        {chip('invited', 'failed',  'Failed',     'bg-red-100 dark:bg-red-900/30 border-red-400 dark:border-red-600 text-red-700 dark:text-red-300')}
+                        {chip('invited', 'unsent',  'Not sent',   'bg-amber-100 dark:bg-amber-900/30 border-amber-400 dark:border-amber-600 text-amber-700 dark:text-amber-300')}
+                        {chip('admitted', 'yes',    'Admitted',   'bg-teal-100 dark:bg-teal-900/30 border-teal-400 dark:border-teal-600 text-teal-700 dark:text-teal-300')}
+                        {chip('admitted', 'no',     'Not admitted','bg-slate-100 dark:bg-slate-700 border-slate-400 dark:border-slate-500 text-slate-700 dark:text-slate-200')}
+                        {chip('qr', 'pending',      'No QR',      'bg-blue-100 dark:bg-blue-900/30 border-blue-400 dark:border-blue-600 text-blue-700 dark:text-blue-300')}
+                        {hasFilter && (
+                          <button onClick={() => { setGuestFilter({ invited: 'all', admitted: 'all', qr: 'all' }); setPage(0) }}
+                            className="text-xs text-slate-400 dark:text-slate-500 hover:text-slate-600 dark:hover:text-slate-300 underline ml-1">
+                            Clear filters
+                          </button>
+                        )}
+                      </div>
+                    )
+                  })()}
                 </div>
 
                 {/* Delivery stats bar */}
                 <div className="px-4 sm:px-6 py-2 bg-slate-50 dark:bg-slate-900/40 border-b dark:border-slate-700 flex flex-wrap gap-x-5 gap-y-1 text-xs">
                   <span className="text-slate-500 dark:text-slate-400">Total: <strong className="text-slate-700 dark:text-slate-200">{filteredGuests.length}</strong></span>
-                  <span className="text-green-600 dark:text-green-400">Delivered: <strong>{filteredGuests.filter((g) => g.invite_status === 'sent').length}</strong></span>
-                  <span className="text-red-600 dark:text-red-400">Failed: <strong>{filteredGuests.filter((g) => g.invite_status === 'failed').length}</strong></span>
-                  <span className="text-amber-600 dark:text-amber-400">Not sent: <strong>{filteredGuests.filter((g) => !g.invite_sent_at).length}</strong></span>
-                  <span className="text-slate-400 dark:text-slate-500">No phone: <strong>{filteredGuests.filter((g) => !g.phone).length}</strong></span>
-                  <span className="text-teal-600 dark:text-teal-400">Admitted: <strong>{filteredGuests.filter((g) => g.admitted).length}</strong></span>
+                  <button onClick={() => { setGuestFilter((f) => ({ ...f, invited: 'sent' })); setPage(0) }} className="text-green-600 dark:text-green-400 hover:underline text-left">Delivered: <strong>{guests.filter((g) => g.invite_status === 'sent').length}</strong></button>
+                  <button onClick={() => { setGuestFilter((f) => ({ ...f, invited: 'failed' })); setPage(0) }} className="text-red-600 dark:text-red-400 hover:underline text-left">Failed: <strong>{guests.filter((g) => g.invite_status === 'failed').length}</strong></button>
+                  <button onClick={() => { setGuestFilter((f) => ({ ...f, invited: 'unsent' })); setPage(0) }} className="text-amber-600 dark:text-amber-400 hover:underline text-left">Not sent: <strong>{guests.filter((g) => !g.invite_sent_at).length}</strong></button>
+                  <span className="text-slate-400 dark:text-slate-500">No phone: <strong>{guests.filter((g) => !g.phone).length}</strong></span>
+                  <button onClick={() => { setGuestFilter((f) => ({ ...f, admitted: 'yes' })); setPage(0) }} className="text-teal-600 dark:text-teal-400 hover:underline text-left">Admitted: <strong>{guests.filter((g) => g.admitted).length}</strong></button>
                 </div>
 
                 {/* Desktop table */}

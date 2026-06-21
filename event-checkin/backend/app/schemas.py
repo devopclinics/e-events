@@ -102,6 +102,7 @@ class EventOut(BaseModel):
     notify_sms: bool = True
     notify_whatsapp: bool = True
     notify_mms: bool = False
+    notify_rsvp_responses: bool = False
     enforce_table_groups: bool = True
     manual_checkin_enabled: bool = False
     self_checkin_enabled: bool = False

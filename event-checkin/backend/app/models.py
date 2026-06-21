@@ -113,6 +113,9 @@ class Event(Base):
     notify_whatsapp: Mapped[bool] = mapped_column(Boolean, default=True)
     # MMS (image ticket card). Superadmin-only per-event toggle; off by default.
     notify_mms: Mapped[bool] = mapped_column(Boolean, default=False)
+    # Send a notice to a guest when they decline / are rejected. Off by default
+    # (previously silent); organizer opt-in.
+    notify_rsvp_responses: Mapped[bool] = mapped_column(Boolean, default=False)
     # Table Groups add-on: when True (default), a guest with an assigned table
     # group may only be seated/checked-in at tables inside that group. Events
     # with no table groups are unaffected regardless of this flag.

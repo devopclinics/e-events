@@ -1124,7 +1124,7 @@ async def reject_rsvp(event_id: str, guest_id: str, background_tasks: Background
         raise HTTPException(404, "Guest not found")
     guest.rsvp_status = "declined"
     guest.rsvp_responded_at = datetime.utcnow()
-    if event:
+    if event and event.notify_rsvp_responses:
         dispatch_simple_notice(background_tasks, event, guest, "approval_rejected",
                                await load_overrides(event_id, db))
     await db.commit()

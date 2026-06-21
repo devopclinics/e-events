@@ -5403,6 +5403,18 @@ export default function AdminPage() {
                 <h2 className="font-semibold text-base dark:text-white">Messaging channels</h2>
                 <p className="text-xs text-gray-400 dark:text-slate-500 mt-1">Which channels fire for invites &amp; admission notifications.</p>
                 <ChannelToggles event={event} onChanged={updateEvent} />
+                <label className="mt-4 flex items-start gap-2 cursor-pointer">
+                  <input type="checkbox" checked={!!event.notify_rsvp_responses}
+                    onChange={async (e) => {
+                      try { updateEvent(await api.toggleFeatures(event.id, { notify_rsvp_responses: e.target.checked })) }
+                      catch (err) { flash(err.message, true) }
+                    }}
+                    className="mt-0.5 w-4 h-4 accent-teal-600" />
+                  <span>
+                    <span className="text-sm font-medium text-slate-700 dark:text-slate-200">Notify guests who decline or are rejected</span>
+                    <span className="block text-xs text-gray-400 dark:text-slate-500">Off by default. When on, declined/rejected guests get a polite notice (edit the wording in Messages → RSVP decline / Approval rejected).</span>
+                  </span>
+                </label>
               </div>
 
               <SelfCheckinPanel event={event} onChanged={updateEvent} onFlash={flash} />

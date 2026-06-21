@@ -479,7 +479,7 @@ async def toggle_features(
         # Mint the public registry token on first enable.
         if event.registry_enabled and not event.registry_token:
             event.registry_token = str(_uuid.uuid4())
-    for k in ("notify_email", "notify_sms", "notify_whatsapp"):
+    for k in ("notify_email", "notify_sms", "notify_whatsapp", "notify_rsvp_responses"):
         if k in body:
             setattr(event, k, bool(body[k]))
     await db.commit()

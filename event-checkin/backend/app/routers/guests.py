@@ -16,7 +16,7 @@ from ..auth import require_event_admin, require_official
 from ..entitlements import assert_within_guest_cap, guest_limit, can_use_paid_channels, take_message_credit
 from services.qr_service import generate_qr_bytes
 from services.email_service import send_invite_email, send_manual_invite_email, send_simple_email
-from ..template_resolve import load_overrides, channel_text as template_channel_text, email_override as template_email_override
+from ..template_resolve import load_overrides, channel_text as template_channel_text, email_override as template_email_override, channel_text_or_default as template_channel_or_default, email_or_default as template_email_or_default
 from services.templates import build_context as build_template_context
 from .scanner import checkin_guard, perform_admission
 from services import messaging
@@ -657,6 +657,15 @@ def _dispatch_invite(background_tasks: BackgroundTasks, event: Event, guest: Gue
             )
         dispatched = True
 
+    # MMS (ticket card) at invite time — super-admin-enabled per event.
+    if (paid_channels and event.notify_mms and guest.phone and guest.sms_consent
+            and messaging.mms_ready() and event.checkin_base_url and take_message_credit(event)):
+        mms_text = (template_channel_or_default(overrides, "mms_invitation", "mms", ctx)
+                    or f"Hi {guest.first_name}! You're invited to {event.name}.")
+        card_url = f"{event.checkin_base_url.rstrip('/')}/api/scan/{guest.qr_token}/card.jpg"
+        background_tasks.add_task(messaging.send_mms, phone=guest.phone, body=mms_text, media_url=card_url)
+        dispatched = True
+
     return dispatched
 
 
@@ -712,6 +721,27 @@ def _dispatch_rsvp_invite(background_tasks: BackgroundTasks, event: Event, guest
         dispatched = True
 
     return dispatched
+
+
+def dispatch_simple_notice(background_tasks: BackgroundTasks, event: Event, guest: Guest,
+                           key: str, overrides: dict, extras: dict | None = None) -> bool:
+    """Send a simple notification template (email + SMS) to a guest — used for
+    decline/rejected confirmations. Gated by the event's channel flags; uses the
+    event override or the registry default. Returns True if anything was scheduled."""
+    ctx = build_template_context(event, guest, extras=extras or {})
+    sent = False
+    if event.notify_email and guest.email:
+        subj, body = template_email_or_default(overrides, key, ctx)
+        if body:
+            background_tasks.add_task(send_simple_email, guest.email, subj or event.name, body)
+            sent = True
+    if (can_use_paid_channels(event) and event.notify_sms and guest.phone
+            and guest.sms_consent and take_message_credit(event)):
+        sms = template_channel_or_default(overrides, key, "sms", ctx)
+        if sms:
+            background_tasks.add_task(messaging.send_custom_sms, phone=guest.phone, body=sms)
+            sent = True
+    return sent
 
 
 async def import_from_source_url(url: str, event_id: str, db: AsyncSession) -> dict:
@@ -1085,14 +1115,18 @@ async def approve_rsvp(event_id: str, guest_id: str, background_tasks: Backgroun
 
 
 @router.post("/{event_id}/guests/{guest_id}/reject")
-async def reject_rsvp(event_id: str, guest_id: str, db: AsyncSession = Depends(get_db), _: User = Depends(require_event_admin)):
-    """Reject a pending RSVP — marks the guest declined (no ticket). Keeps the
-    record so the planner has a history; use delete to remove entirely."""
+async def reject_rsvp(event_id: str, guest_id: str, background_tasks: BackgroundTasks, db: AsyncSession = Depends(get_db), _: User = Depends(require_event_admin)):
+    """Reject a pending RSVP — marks the guest declined (no ticket) and notifies
+    them via the 'approval_rejected' template. Keeps the record for history."""
+    event = await db.get(Event, event_id)
     guest = await db.get(Guest, guest_id)
     if not guest or guest.event_id != event_id:
         raise HTTPException(404, "Guest not found")
     guest.rsvp_status = "declined"
     guest.rsvp_responded_at = datetime.utcnow()
+    if event:
+        dispatch_simple_notice(background_tasks, event, guest, "approval_rejected",
+                               await load_overrides(event_id, db))
     await db.commit()
     return {"ok": True, "rsvp_status": "declined"}
 

@@ -91,6 +91,11 @@ TEMPLATE_DEFS: dict[str, dict] = {
         whatsapp_body="Hi {{guest_first_name}}! You're invited to {{event_name}} on {{event_date}}. Your ticket: {{ticket_link}}",
         required=["ticket_link"],
     ),
+    "mms_invitation": _t(
+        "MMS invitation (ticket card)", ["mms"], group="Invitations",
+        mms_body="Hi {{guest_first_name}}! You're invited to {{event_name}} on {{event_date}}. Your ticket card is attached — show it at the door.",
+        note="Sent with the ticket-card image when MMS is on. Fires at invite time (super-admin MMS toggle).",
+    ),
     "rsvp_invitation": _t(
         "RSVP invitation (manual)", ["email", "sms", "whatsapp"], group="Invitations",
         subject="You're invited — {{event_name}}",
@@ -129,13 +134,14 @@ TEMPLATE_DEFS: dict[str, dict] = {
         whatsapp_body="You're confirmed for {{event_name}} on {{event_date}}. See you there!",
     ),
     "rsvp_decline": _t(
-        "RSVP decline confirmation", ["email"], group="RSVP",
+        "RSVP decline confirmation", ["email", "sms"], group="RSVP",
         subject="We'll miss you — {{event_name}}",
         email_body=(
             "<p>Hi <strong>{{guest_first_name}}</strong>,</p>"
             "<p>Thanks for letting us know you can't make {{event_name}}. "
             "We'll miss you!</p>"
         ),
+        sms_body="Hi {{guest_first_name}}, thanks for letting us know you can't make {{event_name}}. We'll miss you!",
     ),
     # ── Approval workflow ───────────────────────────────────────────────────────
     "approval_pending": _t(
@@ -161,13 +167,14 @@ TEMPLATE_DEFS: dict[str, dict] = {
         whatsapp_body="Approved! Your ticket for {{event_name}}: {{ticket_link}}",
     ),
     "approval_rejected": _t(
-        "Approval rejected", ["email"], group="Approval",
+        "Approval rejected", ["email", "sms"], group="Approval",
         subject="Update on your RSVP — {{event_name}}",
         email_body=(
             "<p>Hi <strong>{{guest_first_name}}</strong>,</p>"
             "<p>Thank you for your interest in {{event_name}}. Unfortunately we're "
             "unable to confirm your place at this time.</p>"
         ),
+        sms_body="Hi {{guest_first_name}}, thank you for your interest in {{event_name}}. Unfortunately we're unable to confirm your place at this time.",
     ),
     # ── Day-of / operational ────────────────────────────────────────────────────
     "admission_confirmation": _t(
@@ -196,20 +203,22 @@ TEMPLATE_DEFS: dict[str, dict] = {
     ),
     # ── Add-ons ─────────────────────────────────────────────────────────────────
     "logistics_notification": _t(
-        "Logistics / shipping notification", ["email"], group="Add-ons",
+        "Logistics / shipping notification", ["email", "sms"], group="Add-ons",
         subject="Shipping update — {{event_name}}",
         email_body=(
             "<p>Hi <strong>{{guest_first_name}}</strong>,</p>"
             "<p>Your item for {{event_name}} is on its way.</p>"
         ),
+        sms_body="Hi {{guest_first_name}}, your item for {{event_name}} is on its way.",
     ),
     "registry_message": _t(
-        "Gift registry message", ["email"], group="Add-ons",
+        "Gift registry message", ["email", "sms"], group="Add-ons",
         subject="Gift registry — {{event_name}}",
         email_body=(
             "<p>Thank you for celebrating {{event_name}} with us. "
             "If you'd like to give a gift, our registry is below.</p>"
         ),
+        sms_body="Thank you for celebrating {{event_name}} with us. If you'd like to give a gift, our registry is at {{rsvp_link}}.",
         note="Shown on the public registry page / registry emails.",
     ),
 }

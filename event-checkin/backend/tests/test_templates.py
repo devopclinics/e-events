@@ -66,8 +66,8 @@ async def test_save_rejects_missing_required_placeholder(ctx):
 async def test_save_rejects_wrong_channel(ctx):
     ctx.login(ctx.ids["superadmin"])
     ev = ctx.ids["event_a"]
-    # rsvp_decline is email-only.
-    bad = await ctx.client.put(f"/api/events/{ev}/templates/rsvp_decline",
+    # ticket_qr is email-only — an SMS body is rejected.
+    bad = await ctx.client.put(f"/api/events/{ev}/templates/ticket_qr",
                                json={"sms_body": "hi"})
     assert bad.status_code == 400
 

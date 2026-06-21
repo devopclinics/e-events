@@ -431,6 +431,9 @@ async def submit_invite_token_rsvp(
         await db.commit()  # persist any message-credit decrements
         message = "You're confirmed! Check your email for your ticket."
     else:
+        # Guest declined — send the decline-confirmation template (email + SMS).
+        from .guests import dispatch_simple_notice
+        dispatch_simple_notice(background_tasks, event, guest, "rsvp_decline", await load_overrides(event.id, db))
         await db.commit()
         await db.refresh(guest)
         message = "Thanks for letting us know — we'll miss you!"

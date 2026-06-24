@@ -54,6 +54,7 @@ async def _group_out(group: TableGroup, db: AsyncSession) -> TableGroupOut:
         name=group.name,
         tag=group.tag,
         description=group.description,
+        sort_order=group.sort_order,
         created_at=group.created_at,
         table_ids=[t.id for t in rows],
         table_names=[t.name for t in rows],
@@ -72,7 +73,7 @@ async def list_table_groups(
     _: User = Depends(get_current_user),
 ):
     groups = (await db.execute(
-        select(TableGroup).where(TableGroup.event_id == event_id).order_by(TableGroup.name)
+        select(TableGroup).where(TableGroup.event_id == event_id).order_by(TableGroup.sort_order, TableGroup.name)
     )).scalars().all()
     return [await _group_out(g, db) for g in groups]
 
@@ -99,6 +100,7 @@ async def create_table_group(
         name=data.name.strip(),
         tag=tag,
         description=data.description,
+        sort_order=data.sort_order,
     )
     db.add(group)
     await db.flush()  # get group.id
@@ -144,6 +146,8 @@ async def update_table_group(
         group.tag = new_tag
     if data.description is not None:
         group.description = data.description
+    if data.sort_order is not None:
+        group.sort_order = data.sort_order
 
     # Replace table memberships if provided
     if data.table_ids is not None:

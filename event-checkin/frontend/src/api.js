@@ -147,6 +147,8 @@ export const api = {
   searchGuests: (eventId, q) => req('GET', `/events/${eventId}/guests/search?q=${encodeURIComponent(q)}`),
   manualCheckin: (eventId, guestId) => req('POST', `/events/${eventId}/guests/${guestId}/manual-checkin`),
   toggleManualCheckin: (eventId, enabled) => req('PATCH', `/events/${eventId}/manual-checkin`, { enabled }),
+  toggleWalkIn: (eventId, enabled) => req('PATCH', `/events/${eventId}/walk-in`, { enabled }),
+  setWalkInGroup: (eventId, tableGroupId) => req('PATCH', `/events/${eventId}/walk-in-group`, { table_group_id: tableGroupId }),
   toggleSelfCheckin: (eventId, enabled) => req('PATCH', `/events/${eventId}/self-checkin`, { enabled }),
   togglePartnerPairing: (eventId, enabled) => req('PATCH', `/events/${eventId}/partner-pairing`, { enabled }),
 

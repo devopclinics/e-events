@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react'
+import React, { useState, useEffect, useRef } from 'react'
 import { api } from '../api'
 import { useAuth } from '../context/AuthContext'
 
@@ -232,6 +232,68 @@ function ManualCheckinToggle({ event, onChanged }) {
   )
 }
 
+function WalkInToggle({ event, tableGroups, onChanged }) {
+  const [loading, setLoading] = useState(false)
+  const [groupLoading, setGroupLoading] = useState(false)
+
+  async function toggle() {
+    setLoading(true)
+    try {
+      const updated = await api.toggleWalkIn(event.id, !event.walk_in_enabled)
+      onChanged(updated)
+    } catch (e) { console.error(e) }
+    finally { setLoading(false) }
+  }
+
+  async function handleGroupChange(e) {
+    const groupId = e.target.value || null
+    setGroupLoading(true)
+    try {
+      const updated = await api.setWalkInGroup(event.id, groupId)
+      onChanged(updated)
+    } catch (e) { console.error(e) }
+    finally { setGroupLoading(false) }
+  }
+
+  return (
+    <div className="flex flex-col gap-2 pt-3 border-t dark:border-slate-700 mt-3">
+      <div className="flex items-center gap-3">
+        <span className="text-xs font-semibold text-gray-500 dark:text-slate-400">Walk-in Guests:</span>
+        <button
+          onClick={toggle}
+          disabled={loading}
+          className={`px-3 py-1.5 rounded-lg text-xs font-semibold border transition-colors disabled:opacity-50 ${
+            event.walk_in_enabled
+              ? 'bg-amber-500 text-white border-amber-500 hover:bg-amber-600'
+              : 'bg-white dark:bg-slate-700 text-gray-600 dark:text-slate-300 border-gray-300 dark:border-slate-600 hover:bg-gray-50 dark:hover:bg-slate-600'
+          }`}
+        >
+          {event.walk_in_enabled ? 'ON' : 'OFF'}
+        </button>
+        <span className="text-[10px] text-gray-400 dark:text-slate-500 italic">
+          Allows staff to add &amp; admit guests not on the list
+        </span>
+      </div>
+      {event.walk_in_enabled && (
+        <div className="ml-0 flex items-center gap-2 bg-amber-50 dark:bg-amber-900/20 rounded-lg px-3 py-2">
+          <span className="text-xs font-semibold text-amber-700 dark:text-amber-300 shrink-0">Walk-in Table Group:</span>
+          <select
+            value={event.walk_in_table_group_id || ''}
+            onChange={handleGroupChange}
+            disabled={groupLoading}
+            className="flex-1 text-xs border border-amber-300 dark:border-amber-700 rounded-lg px-2 py-1.5 bg-white dark:bg-slate-700 text-gray-800 dark:text-white disabled:opacity-50"
+          >
+            <option value="">— Auto-assign from any table —</option>
+            {tableGroups.map((g) => (
+              <option key={g.id} value={g.id}>{g.name}</option>
+            ))}
+          </select>
+        </div>
+      )}
+    </div>
+  )
+}
+
 function SelfCheckinToggle({ event, onChanged }) {
   const [loading, setLoading] = useState(false)
 
@@ -341,13 +403,20 @@ function TableGroupsPanel({ eventId }) {
 
   // Re-fetch tables fresh whenever the form opens so newly-added tables appear.
   async function openCreate() {
-    await loadTables()
-    setForm({ name: '', tag: '', description: '', table_ids: [] })
+    const fresh = await api.listTables(eventId)
+    setTables(fresh)
+    setForm({ name: '', tag: '', description: '', sort_order: 0, table_ids: [], table_orders: {} })
   }
 
   async function openEdit(g) {
-    await loadTables()
-    setForm({ id: g.id, name: g.name, tag: g.tag, description: g.description || '', table_ids: [...g.table_ids] })
+    const fresh = await api.listTables(eventId)
+    setTables(fresh)
+    // Pre-fill table_orders from each table's current sort_order
+    const orders = {}
+    for (const t of fresh) {
+      if (g.table_ids.includes(t.id)) orders[t.id] = t.sort_order ?? 0
+    }
+    setForm({ id: g.id, name: g.name, tag: g.tag, description: g.description || '', sort_order: g.sort_order ?? 0, table_ids: [...g.table_ids], table_orders: orders })
   }
 
   async function saveGroup(e) {
@@ -358,6 +427,7 @@ function TableGroupsPanel({ eventId }) {
         name: form.name,
         tag: form.tag,
         description: form.description || null,
+        sort_order: Number(form.sort_order) || 0,
         table_ids: form.table_ids || [],
       }
       if (form.id) {
@@ -365,8 +435,17 @@ function TableGroupsPanel({ eventId }) {
       } else {
         await api.createTableGroup(eventId, payload)
       }
+      // Persist per-table sort orders
+      const orderEntries = Object.entries(form.table_orders || {})
+      for (const [tableId, order] of orderEntries) {
+        const t = tables.find((t) => t.id === tableId)
+        if (t && Number(order) !== (t.sort_order ?? 0)) {
+          await api.updateTable(eventId, tableId, { name: t.name, capacity: t.capacity, sort_order: Number(order) || 0 })
+        }
+      }
       setForm(null)
       await loadGroups()
+      await loadTables()
     } catch (err) { setMsg(err.message) }
     finally { setLoading(false) }
   }
@@ -384,7 +463,15 @@ function TableGroupsPanel({ eventId }) {
   function toggleTable(tableId) {
     setForm((f) => {
       const ids = f.table_ids || []
-      return { ...f, table_ids: ids.includes(tableId) ? ids.filter((id) => id !== tableId) : [...ids, tableId] }
+      const orders = { ...(f.table_orders || {}) }
+      if (ids.includes(tableId)) {
+        delete orders[tableId]
+        return { ...f, table_ids: ids.filter((id) => id !== tableId), table_orders: orders }
+      } else {
+        const t = tables.find((t) => t.id === tableId)
+        orders[tableId] = t?.sort_order ?? 0
+        return { ...f, table_ids: [...ids, tableId], table_orders: orders }
+      }
     })
   }
 
@@ -413,6 +500,7 @@ function TableGroupsPanel({ eventId }) {
           <table className="w-full text-sm">
             <thead className="bg-gray-50 dark:bg-slate-700 text-xs font-semibold text-gray-500 dark:text-slate-400 uppercase">
               <tr>
+                <th className="px-4 py-2 text-center">Order</th>
                 <th className="px-4 py-2 text-left">Name</th>
                 <th className="px-4 py-2 text-left">Tag</th>
                 <th className="px-4 py-2 text-left">Tables</th>
@@ -423,45 +511,114 @@ function TableGroupsPanel({ eventId }) {
             </thead>
             <tbody className="divide-y divide-gray-100 dark:divide-slate-700">
               {groups.map((g) => (
-                <tr key={g.id} className="hover:bg-gray-50 dark:hover:bg-slate-700">
-                  <td className="px-4 py-2.5 font-medium dark:text-slate-100">{g.name}</td>
-                  <td className="px-4 py-2.5">
-                    <code className="text-xs bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300 px-1.5 py-0.5 rounded">{g.tag}</code>
-                  </td>
-                  <td className="px-4 py-2.5 text-xs text-gray-600 dark:text-slate-400">
-                    {g.table_names.length ? g.table_names.join(', ') : <span className="italic text-gray-400">none</span>}
-                  </td>
-                  <td className="px-4 py-2.5 text-center dark:text-slate-300">{g.total_capacity}</td>
-                  <td className="px-4 py-2.5 text-center">
-                    <span className={`text-xs font-semibold ${g.tagged_guest_count > g.total_capacity ? 'text-red-500' : 'text-green-600'}`}>
-                      {g.tagged_guest_count}
-                    </span>
-                    {g.tagged_guest_count > g.total_capacity && (
-                      <span className="ml-1 text-xs text-red-400" title="More guests than seats">⚠</span>
-                    )}
-                  </td>
-                  <td className="px-4 py-2.5 text-center">
-                    <div className="flex justify-center gap-3">
-                      <button onClick={() => openEdit(g)}
-                        className="text-xs text-indigo-600 hover:underline">Edit</button>
-                      <button onClick={() => deleteGroup(g.id)} disabled={loading}
-                        className="text-xs text-red-400 hover:text-red-600 disabled:opacity-40">Delete</button>
-                    </div>
-                  </td>
-                </tr>
+                <React.Fragment key={g.id}>
+                  <tr className="hover:bg-gray-50 dark:hover:bg-slate-700">
+                    <td className="px-4 py-2.5 text-center text-xs font-mono text-gray-400 dark:text-slate-500">{g.sort_order ?? 0}</td>
+                    <td className="px-4 py-2.5 font-medium dark:text-slate-100">{g.name}</td>
+                    <td className="px-4 py-2.5">
+                      <code className="text-xs bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300 px-1.5 py-0.5 rounded">{g.tag}</code>
+                    </td>
+                    <td className="px-4 py-2.5 text-xs text-gray-600 dark:text-slate-400">
+                      {g.table_names.length ? g.table_names.join(', ') : <span className="italic text-gray-400">none</span>}
+                    </td>
+                    <td className="px-4 py-2.5 text-center dark:text-slate-300">{g.total_capacity}</td>
+                    <td className="px-4 py-2.5 text-center">
+                      <span className={`text-xs font-semibold ${g.tagged_guest_count > g.total_capacity ? 'text-red-500' : 'text-green-600'}`}>
+                        {g.tagged_guest_count}
+                      </span>
+                      {g.tagged_guest_count > g.total_capacity && (
+                        <span className="ml-1 text-xs text-red-400" title="More guests than seats">⚠</span>
+                      )}
+                    </td>
+                    <td className="px-4 py-2.5 text-center">
+                      <div className="flex justify-center gap-3">
+                        <button onClick={() => form?.id === g.id ? setForm(null) : openEdit(g)}
+                          className="text-xs text-indigo-600 hover:underline">{form?.id === g.id ? 'Cancel' : 'Edit'}</button>
+                        <button onClick={() => deleteGroup(g.id)} disabled={loading}
+                          className="text-xs text-red-400 hover:text-red-600 disabled:opacity-40">Delete</button>
+                      </div>
+                    </td>
+                  </tr>
+                  {form?.id === g.id && (
+                    <tr>
+                      <td colSpan={7} className="px-4 py-3 bg-indigo-50 dark:bg-slate-700/60 border-b border-indigo-100 dark:border-slate-600">
+                        <form onSubmit={saveGroup} className="space-y-3">
+                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                            <div>
+                              <label className="block text-xs font-semibold text-gray-600 dark:text-slate-300 mb-1">Group Name</label>
+                              <input value={form.name} onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))} required
+                                className={fieldCls} placeholder="VIP Tables" />
+                            </div>
+                            <div>
+                              <label className="block text-xs font-semibold text-gray-600 dark:text-slate-300 mb-1">Tag</label>
+                              <input value={form.tag} onChange={(e) => setForm((f) => ({ ...f, tag: e.target.value }))} required
+                                className={fieldCls} placeholder="vip_tables" />
+                            </div>
+                          </div>
+                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                            <div>
+                              <label className="block text-xs font-semibold text-gray-600 dark:text-slate-300 mb-1">Description (optional)</label>
+                              <input value={form.description} onChange={(e) => setForm((f) => ({ ...f, description: e.target.value }))}
+                                className={fieldCls} placeholder="Reserved for VIP guests" />
+                            </div>
+                            <div>
+                              <label className="block text-xs font-semibold text-gray-600 dark:text-slate-300 mb-1">Order <span className="text-gray-400 font-normal">(lower fills first)</span></label>
+                              <input type="number" min="0" value={form.sort_order ?? 0}
+                                onChange={(e) => setForm((f) => ({ ...f, sort_order: e.target.value }))}
+                                className={fieldCls} />
+                            </div>
+                          </div>
+                          <div>
+                            <label className="block text-xs font-semibold text-gray-600 dark:text-slate-300 mb-2">Tables in this group <span className="text-gray-400 font-normal">(order = fill priority, lower first)</span></label>
+                            <div className="flex flex-wrap gap-2">
+                              {availableTables.map((t) => {
+                                const on = (form.table_ids || []).includes(t.id)
+                                return (
+                                  <div key={t.id} className="flex items-center gap-1">
+                                    <button type="button" onClick={() => toggleTable(t.id)}
+                                      className={`px-2.5 py-1 rounded-lg text-xs font-medium border transition-colors ${on ? 'bg-indigo-600 text-white border-indigo-600' : 'bg-white dark:bg-slate-700 text-gray-700 dark:text-slate-300 border-gray-300 dark:border-slate-600 hover:border-indigo-400'}`}>
+                                      {t.name}
+                                    </button>
+                                    {on && (
+                                      <input type="number" min="0"
+                                        value={form.table_orders?.[t.id] ?? 0}
+                                        onChange={(e) => setForm((f) => ({ ...f, table_orders: { ...f.table_orders, [t.id]: e.target.value } }))}
+                                        className="w-14 text-xs border border-indigo-300 dark:border-indigo-700 rounded px-1.5 py-1 bg-white dark:bg-slate-700 text-gray-800 dark:text-white"
+                                        title="Fill order" />
+                                    )}
+                                  </div>
+                                )
+                              })}
+                            </div>
+                          </div>
+                          <div className="flex gap-2">
+                            <button type="submit" disabled={loading}
+                              className="bg-indigo-600 text-white px-4 py-2 rounded-lg text-sm font-semibold hover:bg-indigo-700 disabled:opacity-50">
+                              Save
+                            </button>
+                            <button type="button" onClick={() => setForm(null)}
+                              className="px-4 py-2 border border-gray-300 dark:border-slate-600 rounded-lg text-sm dark:text-slate-300 hover:bg-gray-100 dark:hover:bg-slate-600">
+                              Cancel
+                            </button>
+                          </div>
+                        </form>
+                      </td>
+                    </tr>
+                  )}
+                </React.Fragment>
               ))}
             </tbody>
           </table>
         </div>
       )}
 
-      {form && (
+      {form && !form.id && (
         <form onSubmit={saveGroup} className="bg-gray-50 dark:bg-slate-700 rounded-lg p-4 border dark:border-slate-600 space-y-3">
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div>
               <label className="block text-xs font-semibold text-gray-600 dark:text-slate-300 mb-1">Group Name</label>
               <input value={form.name} onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))} required
-                className={fieldCls} placeholder="VIP Tables" />
+                className={fieldCls} placeholder="VIP Tables" autoFocus />
             </div>
             <div>
               <label className="block text-xs font-semibold text-gray-600 dark:text-slate-300 mb-1">
@@ -471,13 +628,23 @@ function TableGroupsPanel({ eventId }) {
                 className={fieldCls} placeholder="vip_tables" />
             </div>
           </div>
-          <div>
-            <label className="block text-xs font-semibold text-gray-600 dark:text-slate-300 mb-1">Description (optional)</label>
-            <input value={form.description} onChange={(e) => setForm((f) => ({ ...f, description: e.target.value }))}
-              className={fieldCls} placeholder="Reserved for VIP guests" />
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div>
+              <label className="block text-xs font-semibold text-gray-600 dark:text-slate-300 mb-1">Description (optional)</label>
+              <input value={form.description} onChange={(e) => setForm((f) => ({ ...f, description: e.target.value }))}
+                className={fieldCls} placeholder="Reserved for VIP guests" />
+            </div>
+            <div>
+              <label className="block text-xs font-semibold text-gray-600 dark:text-slate-300 mb-1">
+                Order <span className="text-gray-400 font-normal">(lower fills first)</span>
+              </label>
+              <input type="number" min="0" value={form.sort_order ?? 0}
+                onChange={(e) => setForm((f) => ({ ...f, sort_order: e.target.value }))}
+                className={fieldCls} placeholder="0" />
+            </div>
           </div>
           <div>
-            <label className="block text-xs font-semibold text-gray-600 dark:text-slate-300 mb-2">Tables in this group</label>
+            <label className="block text-xs font-semibold text-gray-600 dark:text-slate-300 mb-2">Tables in this group <span className="text-gray-400 font-normal">(order = fill priority, lower first)</span></label>
             <div className="flex flex-wrap gap-2">
               {availableTables.length === 0 && (
                 <span className="text-xs text-gray-400 italic">
@@ -487,12 +654,21 @@ function TableGroupsPanel({ eventId }) {
               {availableTables.map((t) => {
                 const on = (form.table_ids || []).includes(t.id)
                 return (
-                  <button key={t.id} type="button" onClick={() => toggleTable(t.id)}
-                    className={`px-3 py-1 rounded-full text-xs font-semibold border transition-colors ${
-                      on ? 'bg-indigo-600 border-indigo-600 text-white' : 'bg-white dark:bg-slate-800 border-gray-300 dark:border-slate-600 text-gray-700 dark:text-slate-300 hover:border-indigo-400'
-                    }`}>
-                    {t.name}
-                  </button>
+                  <div key={t.id} className="flex items-center gap-1">
+                    <button key={t.id} type="button" onClick={() => toggleTable(t.id)}
+                      className={`px-3 py-1 rounded-full text-xs font-semibold border transition-colors ${
+                        on ? 'bg-indigo-600 border-indigo-600 text-white' : 'bg-white dark:bg-slate-800 border-gray-300 dark:border-slate-600 text-gray-700 dark:text-slate-300 hover:border-indigo-400'
+                      }`}>
+                      {t.name}
+                    </button>
+                    {on && (
+                      <input type="number" min="0"
+                        value={form.table_orders?.[t.id] ?? 0}
+                        onChange={(e) => setForm((f) => ({ ...f, table_orders: { ...f.table_orders, [t.id]: e.target.value } }))}
+                        className="w-14 text-xs border border-indigo-300 dark:border-indigo-700 rounded px-1.5 py-1 bg-white dark:bg-slate-700 text-gray-800 dark:text-white"
+                        title="Fill order" />
+                    )}
+                  </div>
                 )
               })}
             </div>
@@ -501,7 +677,7 @@ function TableGroupsPanel({ eventId }) {
           <div className="flex gap-2">
             <button type="submit" disabled={loading}
               className="bg-indigo-600 text-white px-4 py-2 rounded-lg text-sm font-semibold hover:bg-indigo-700 disabled:opacity-50">
-              {form.id ? 'Save' : 'Create'}
+              Create
             </button>
             <button type="button" onClick={() => { setForm(null); setMsg('') }}
               className="px-4 py-2 border border-gray-300 dark:border-slate-600 rounded-lg text-sm dark:text-slate-300 hover:bg-gray-100 dark:hover:bg-slate-600">
@@ -822,6 +998,90 @@ function MessageDeliveryCard({ guests }) {
   )
 }
 
+function AddGuestModal({ eventId, onSaved, onClose }) {
+  const [form, setForm] = useState({ first_name: '', last_name: '', email: '', phone: '', is_vip: false })
+  const [sendInvite, setSendInvite] = useState(false)
+  const [saving, setSaving] = useState(false)
+  const [err, setErr] = useState('')
+
+  const set = (k, v) => setForm((f) => ({ ...f, [k]: v }))
+
+  async function handleSubmit(e) {
+    e.preventDefault()
+    if (!form.first_name.trim() || !form.last_name.trim()) {
+      setErr('First and last name are required.')
+      return
+    }
+    setSaving(true)
+    setErr('')
+    try {
+      const guest = await api.addGuest(eventId, form)
+      if (sendInvite) {
+        await api.generateQR(eventId)
+        await api.resendInvite(eventId, guest.id)
+      }
+      onSaved()
+    } catch (e) {
+      setErr(e.message || 'Failed to add guest.')
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  const inputCls = 'w-full border border-gray-300 dark:border-slate-600 rounded-lg px-3 py-2 text-sm bg-white dark:bg-slate-700 text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-teal-500'
+  const labelCls = 'block text-xs font-semibold text-gray-600 dark:text-slate-300 mb-1'
+
+  return (
+    <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4" onClick={(e) => e.target === e.currentTarget && onClose()}>
+      <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-2xl w-full max-w-md">
+        <div className="flex items-center justify-between px-6 py-4 border-b dark:border-slate-700">
+          <h2 className="font-bold text-base dark:text-white">Add Guest Manually</h2>
+          <button onClick={onClose} className="text-gray-400 hover:text-gray-600 dark:hover:text-slate-200 text-xl leading-none">×</button>
+        </div>
+        <form onSubmit={handleSubmit} className="px-6 py-5 space-y-4">
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className={labelCls}>First Name *</label>
+              <input className={inputCls} value={form.first_name} onChange={(e) => set('first_name', e.target.value)} placeholder="First" required />
+            </div>
+            <div>
+              <label className={labelCls}>Last Name *</label>
+              <input className={inputCls} value={form.last_name} onChange={(e) => set('last_name', e.target.value)} placeholder="Last" required />
+            </div>
+          </div>
+          <div>
+            <label className={labelCls}>Email</label>
+            <input className={inputCls} type="email" value={form.email} onChange={(e) => set('email', e.target.value)} placeholder="guest@email.com" />
+          </div>
+          <div>
+            <label className={labelCls}>Phone <span className="text-gray-400 font-normal">(E.164 format, e.g. +18321234567)</span></label>
+            <input className={inputCls} type="tel" value={form.phone} onChange={(e) => set('phone', e.target.value)} placeholder="+1..." />
+          </div>
+          <div className="flex items-center gap-2">
+            <input type="checkbox" id="ag-vip" checked={form.is_vip} onChange={(e) => set('is_vip', e.target.checked)} className="cursor-pointer" />
+            <label htmlFor="ag-vip" className="text-sm text-gray-700 dark:text-slate-300 cursor-pointer">Mark as VIP</label>
+          </div>
+          <div className="flex items-center gap-2 pt-1 border-t dark:border-slate-700">
+            <input type="checkbox" id="ag-invite" checked={sendInvite} onChange={(e) => setSendInvite(e.target.checked)} className="cursor-pointer" />
+            <label htmlFor="ag-invite" className="text-sm text-gray-700 dark:text-slate-300 cursor-pointer">Generate QR &amp; send invite immediately</label>
+          </div>
+          {err && <p className="text-xs text-red-600 dark:text-red-400">{err}</p>}
+          <div className="flex gap-3 pt-1">
+            <button type="submit" disabled={saving}
+              className="flex-1 bg-teal-600 hover:bg-teal-700 text-white py-2.5 rounded-lg text-sm font-semibold disabled:opacity-50">
+              {saving ? 'Saving…' : 'Add Guest'}
+            </button>
+            <button type="button" onClick={onClose}
+              className="px-4 py-2.5 rounded-lg text-sm font-semibold border border-gray-300 dark:border-slate-600 text-gray-600 dark:text-slate-300 hover:bg-gray-50 dark:hover:bg-slate-700">
+              Cancel
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  )
+}
+
 function VipBadge({ className = '' }) {
   return (
     <span className={`inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wide bg-purple-100 text-purple-700 dark:bg-purple-900/40 dark:text-purple-300 ${className}`}
@@ -924,13 +1184,13 @@ function SeatingPanel({ eventId }) {
     e.preventDefault()
     setLoading(true)
     try {
-      const payload = { name: form.name, capacity: Number(form.capacity) }
+      const payload = { name: form.name, capacity: Number(form.capacity), sort_order: Number(form.sort_order) || 0 }
       if (form.id) {
         const updated = await api.updateTable(eventId, form.id, payload)
-        setTables((prev) => prev.map((t) => (t.id === form.id ? updated : t)))
+        setTables((prev) => prev.map((t) => (t.id === form.id ? updated : t)).sort((a, b) => (a.sort_order - b.sort_order) || a.name.localeCompare(b.name)))
       } else {
         const created = await api.createTable(eventId, payload)
-        setTables((prev) => [...prev, created])
+        setTables((prev) => [...prev, created].sort((a, b) => (a.sort_order - b.sort_order) || a.name.localeCompare(b.name)))
       }
       setForm(null)
       if (showChart) loadChart()
@@ -993,6 +1253,7 @@ function SeatingPanel({ eventId }) {
           <table className="w-full text-sm">
             <thead className="bg-gray-50 dark:bg-slate-700 text-xs font-semibold text-gray-500 dark:text-slate-400 uppercase">
               <tr>
+                <th className="px-4 py-2 text-center">Order</th>
                 <th className="px-4 py-2 text-left">Table</th>
                 <th className="px-4 py-2 text-center">Capacity</th>
                 <th className="px-4 py-2 text-center">Assigned</th>
@@ -1001,51 +1262,96 @@ function SeatingPanel({ eventId }) {
             </thead>
             <tbody className="divide-y divide-gray-100 dark:divide-slate-700">
               {tables.map((t) => (
-                <tr key={t.id} className="hover:bg-gray-50 dark:hover:bg-slate-700">
-                  <td className="px-4 py-2.5 font-medium dark:text-slate-100">{t.name}</td>
-                  <td className="px-4 py-2.5 text-center dark:text-slate-300">{t.capacity}</td>
-                  <td className="px-4 py-2.5 text-center">
-                    <span className={`text-xs font-semibold ${t.assigned_count >= t.capacity ? 'text-red-500' : 'text-green-600'}`}>
-                      {t.assigned_count}/{t.capacity}
-                    </span>
-                  </td>
-                  <td className="px-4 py-2.5 text-center">
-                    <div className="flex justify-center gap-3">
-                      <button onClick={() => setForm({ id: t.id, name: t.name, capacity: t.capacity })}
-                        className="text-xs text-indigo-600 hover:underline">Edit</button>
-                      <button onClick={() => deleteTable(t.id)} disabled={loading}
-                        className="text-xs text-red-400 hover:text-red-600 disabled:opacity-40">Delete</button>
-                    </div>
+                <React.Fragment key={t.id}>
+                  <tr className="hover:bg-gray-50 dark:hover:bg-slate-700">
+                    <td className="px-4 py-2.5 text-center text-xs font-mono text-gray-400 dark:text-slate-500">{t.sort_order ?? 0}</td>
+                    <td className="px-4 py-2.5 font-medium dark:text-slate-100">{t.name}</td>
+                    <td className="px-4 py-2.5 text-center dark:text-slate-300">{t.capacity}</td>
+                    <td className="px-4 py-2.5 text-center">
+                      <span className={`text-xs font-semibold ${t.assigned_count >= t.capacity ? 'text-red-500' : 'text-green-600'}`}>
+                        {t.assigned_count}/{t.capacity}
+                      </span>
+                    </td>
+                    <td className="px-4 py-2.5 text-center">
+                      <div className="flex justify-center gap-3">
+                        <button onClick={() => setForm(form?.id === t.id ? null : { id: t.id, name: t.name, capacity: t.capacity, sort_order: t.sort_order ?? 0 })}
+                          className="text-xs text-indigo-600 hover:underline">{form?.id === t.id ? 'Cancel' : 'Edit'}</button>
+                        <button onClick={() => deleteTable(t.id)} disabled={loading}
+                          className="text-xs text-red-400 hover:text-red-600 disabled:opacity-40">Delete</button>
+                      </div>
+                    </td>
+                  </tr>
+                  {form?.id === t.id && (
+                    <tr>
+                      <td colSpan={5} className="px-4 py-3 bg-indigo-50 dark:bg-slate-700/60 border-b border-indigo-100 dark:border-slate-600">
+                        <form onSubmit={saveTable} className="flex flex-wrap gap-2 items-end">
+                          <div>
+                            <label className="block text-xs font-semibold text-gray-600 dark:text-slate-300 mb-1">Table Name</label>
+                            <input value={form.name} onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))} required
+                              className={fieldCls} placeholder="Table 1" />
+                          </div>
+                          <div>
+                            <label className="block text-xs font-semibold text-gray-600 dark:text-slate-300 mb-1">Capacity</label>
+                            <input type="number" min="1" max="200" value={form.capacity}
+                              onChange={(e) => setForm((f) => ({ ...f, capacity: e.target.value }))} required
+                              className={`${fieldCls} w-24`} />
+                          </div>
+                          <div>
+                            <label className="block text-xs font-semibold text-gray-600 dark:text-slate-300 mb-1">Order</label>
+                            <input type="number" min="0" value={form.sort_order ?? 0}
+                              onChange={(e) => setForm((f) => ({ ...f, sort_order: e.target.value }))}
+                              className={`${fieldCls} w-20`} />
+                          </div>
+                          <button type="submit" disabled={loading}
+                            className="bg-indigo-600 text-white px-4 py-2 rounded-lg text-sm font-semibold hover:bg-indigo-700 disabled:opacity-50">
+                            Save
+                          </button>
+                          <button type="button" onClick={() => setForm(null)}
+                            className="px-4 py-2 border border-gray-300 dark:border-slate-600 rounded-lg text-sm dark:text-slate-300 hover:bg-gray-100 dark:hover:bg-slate-600">
+                            Cancel
+                          </button>
+                        </form>
+                      </td>
+                    </tr>
+                  )}
+                </React.Fragment>
+              ))}
+              {form && !form.id && (
+                <tr>
+                  <td colSpan={5} className="px-4 py-3 bg-indigo-50 dark:bg-slate-700/60">
+                    <form onSubmit={saveTable} className="flex flex-wrap gap-2 items-end">
+                      <div>
+                        <label className="block text-xs font-semibold text-gray-600 dark:text-slate-300 mb-1">Table Name</label>
+                        <input value={form.name} onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))} required
+                          className={fieldCls} placeholder="Table 1" autoFocus />
+                      </div>
+                      <div>
+                        <label className="block text-xs font-semibold text-gray-600 dark:text-slate-300 mb-1">Capacity</label>
+                        <input type="number" min="1" max="200" value={form.capacity}
+                          onChange={(e) => setForm((f) => ({ ...f, capacity: e.target.value }))} required
+                          className={`${fieldCls} w-24`} />
+                      </div>
+                      <div>
+                        <label className="block text-xs font-semibold text-gray-600 dark:text-slate-300 mb-1">Order</label>
+                        <input type="number" min="0" value={form.sort_order ?? 0}
+                          onChange={(e) => setForm((f) => ({ ...f, sort_order: e.target.value }))}
+                          className={`${fieldCls} w-20`} />
+                      </div>
+                      <button type="submit" disabled={loading}
+                        className="bg-indigo-600 text-white px-4 py-2 rounded-lg text-sm font-semibold hover:bg-indigo-700 disabled:opacity-50">
+                        Add
+                      </button>
+                      <button type="button" onClick={() => setForm(null)}
+                        className="px-4 py-2 border border-gray-300 dark:border-slate-600 rounded-lg text-sm dark:text-slate-300 hover:bg-gray-100 dark:hover:bg-slate-600">
+                        Cancel
+                      </button>
+                    </form>
                   </td>
                 </tr>
-              ))}
+              )}
             </tbody>
           </table>
         </div>
-      )}
-
-      {form && (
-        <form onSubmit={saveTable} className="flex flex-wrap gap-2 items-end bg-gray-50 dark:bg-slate-700 rounded-lg p-3 border dark:border-slate-600">
-          <div>
-            <label className="block text-xs font-semibold text-gray-600 dark:text-slate-300 mb-1">Table Name</label>
-            <input value={form.name} onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))} required
-              className={fieldCls} placeholder="Table 1" />
-          </div>
-          <div>
-            <label className="block text-xs font-semibold text-gray-600 dark:text-slate-300 mb-1">Capacity</label>
-            <input type="number" min="1" max="200" value={form.capacity}
-              onChange={(e) => setForm((f) => ({ ...f, capacity: e.target.value }))} required
-              className={`${fieldCls} w-24`} />
-          </div>
-          <button type="submit" disabled={loading}
-            className="bg-indigo-600 text-white px-4 py-2 rounded-lg text-sm font-semibold hover:bg-indigo-700 disabled:opacity-50">
-            {form.id ? 'Save' : 'Add'}
-          </button>
-          <button type="button" onClick={() => setForm(null)}
-            className="px-4 py-2 border border-gray-300 dark:border-slate-600 rounded-lg text-sm dark:text-slate-300 hover:bg-gray-100 dark:hover:bg-slate-600">
-            Cancel
-          </button>
-        </form>
       )}
 
       {tables.length > 0 && (
@@ -3159,6 +3465,7 @@ export default function AdminPage() {
   const [selectedId, setSelectedId] = useState('')
   const [showForm, setShowForm] = useState(false)
   const [editing, setEditing] = useState(false)
+  const [showAddGuest, setShowAddGuest] = useState(false)
   const [guests, setGuests] = useState([])
   const [tableGroups, setTableGroups] = useState([])
   const [loading, setLoading] = useState(false)
@@ -3527,6 +3834,9 @@ export default function AdminPage() {
               <ManualCheckinToggle event={event} onChanged={updateEvent} />
             )}
             {['admin', 'super_admin'].includes(user?.role) && (
+              <WalkInToggle event={event} tableGroups={tableGroups} onChanged={updateEvent} />
+            )}
+            {['admin', 'super_admin'].includes(user?.role) && (
               <SelfCheckinToggle event={event} onChanged={updateEvent} />
             )}
             {['admin', 'super_admin'].includes(user?.role) && (
@@ -3752,6 +4062,11 @@ export default function AdminPage() {
                       placeholder="Search by name, email or phone…"
                       className="flex-1 border border-gray-300 dark:border-slate-600 rounded-lg px-3 py-1.5 text-sm bg-white dark:bg-slate-700 text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-slate-400 min-w-0"
                     />
+                    <button
+                      onClick={() => setShowAddGuest(true)}
+                      className="shrink-0 flex items-center gap-1.5 bg-teal-600 hover:bg-teal-700 text-white px-3 py-1.5 rounded-lg text-sm font-semibold">
+                      <span className="text-base leading-none">+</span> Add Guest
+                    </button>
                     {totalPages > 1 && (
                       <div className="flex items-center gap-2 shrink-0">
                         <button onClick={() => setPage((p) => Math.max(0, p - 1))} disabled={safePage === 0}
@@ -3958,6 +4273,18 @@ export default function AdminPage() {
           loading={loading}
           onSave={(data) => handleUpdateGuest(editingGuest.id, data)}
           onClose={() => setEditingGuest(null)}
+        />
+      )}
+
+      {showAddGuest && (
+        <AddGuestModal
+          eventId={selectedId}
+          onSaved={async () => {
+            setShowAddGuest(false)
+            setGuests(await api.listGuests(selectedId))
+            flash('Guest added successfully.')
+          }}
+          onClose={() => setShowAddGuest(false)}
         />
       )}
     </div>

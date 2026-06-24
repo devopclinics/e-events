@@ -49,6 +49,9 @@ app.include_router(dashboard.router,   prefix="/api/events", tags=["dashboard"])
 app.include_router(templates.router,   prefix="/api",        tags=["templates"])
 app.include_router(self_checkin.router, prefix="/api/e",      tags=["self-checkin"])
 
+from .routers import webhooks
+app.include_router(webhooks.router,     prefix="/api/webhooks", tags=["webhooks"])
+
 
 @app.get("/api/health")
 async def health():

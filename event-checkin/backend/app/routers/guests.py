@@ -883,7 +883,7 @@ async def manual_checkin(
     if not event:
         raise HTTPException(404, "Event not found")
 
-    if not event.manual_checkin_enabled:
+    if not event.manual_checkin_enabled and not event.walk_in_enabled:
         raise HTTPException(403, "Manual check-in is not enabled for this event")
 
     if event.status != "active":
@@ -917,12 +917,19 @@ async def manual_checkin(
             seat_number=guest.seat_number,
         )
 
+    # For walk-in guests with no group yet, auto-assign to the event's walk-in table group.
+    if event.walk_in_enabled and event.walk_in_table_group_id and not guest.table_group_id and not guest.table_id:
+        guest.table_group_id = event.walk_in_table_group_id
+
     # Seat assignment — same logic as QR scan.
-    if event.seating_enabled and not guest.table_id:
+    if event.seating_enabled:
         from .seating import assign_next_seat
-        seat_error = await assign_next_seat(guest, db)
-        if seat_error:
-            return ScanResult(status="no_seat_available", message=seat_error)
+        if not guest.table_id:
+            seat_error = await assign_next_seat(guest, db)
+            if seat_error:
+                return ScanResult(status="no_seat_available", message=seat_error)
+        elif not guest.seat_number:
+            await assign_next_seat(guest, db)
 
     table_name = None
     if guest.table_id:

@@ -16,7 +16,7 @@ router = APIRouter()
 
 async def _table_out(table: SeatingTable, db: AsyncSession) -> SeatingTableOut:
     count = await db.scalar(select(func.count(Guest.id)).where(Guest.table_id == table.id)) or 0
-    return SeatingTableOut(id=table.id, event_id=table.event_id, name=table.name, capacity=table.capacity, assigned_count=count)
+    return SeatingTableOut(id=table.id, event_id=table.event_id, name=table.name, capacity=table.capacity, assigned_count=count, sort_order=table.sort_order)
 
 
 # ── First-come-first-served seat picker (used by scanner.py at admit time) ────
@@ -85,7 +85,7 @@ async def assign_next_seat(guest: Guest, db: AsyncSession) -> str | None:
                 SeatingTable.event_id == guest.event_id,
                 SeatingTable.id.in_(group_table_ids),
             )
-            .order_by(SeatingTable.name)
+            .order_by(SeatingTable.sort_order, SeatingTable.name)
         )).scalars().all()
     else:
         # Exclude tables that belong to any group — those are reserved for tagged guests.
@@ -98,7 +98,7 @@ async def assign_next_seat(guest: Guest, db: AsyncSession) -> str | None:
                 SeatingTable.event_id == guest.event_id,
                 SeatingTable.id.notin_(grouped_table_ids),
             )
-            .order_by(SeatingTable.name)
+            .order_by(SeatingTable.sort_order, SeatingTable.name)
         )).scalars().all()
 
     if not tables:
@@ -172,7 +172,7 @@ async def assign_next_seat(guest: Guest, db: AsyncSession) -> str | None:
 
 @router.get("/{event_id}/tables", response_model=list[SeatingTableOut])
 async def list_tables(event_id: str, db: AsyncSession = Depends(get_db), _: User = Depends(get_current_user)):
-    result = await db.execute(select(SeatingTable).where(SeatingTable.event_id == event_id).order_by(SeatingTable.name))
+    result = await db.execute(select(SeatingTable).where(SeatingTable.event_id == event_id).order_by(SeatingTable.sort_order, SeatingTable.name))
     tables = result.scalars().all()
     return [await _table_out(t, db) for t in tables]
 
@@ -184,11 +184,11 @@ async def create_table(event_id: str, data: SeatingTableCreate, db: AsyncSession
     existing = await db.scalar(select(SeatingTable).where(SeatingTable.event_id == event_id, SeatingTable.name == data.name))
     if existing:
         raise HTTPException(409, f"A table named '{data.name}' already exists for this event")
-    table = SeatingTable(event_id=event_id, name=data.name, capacity=data.capacity)
+    table = SeatingTable(event_id=event_id, name=data.name, capacity=data.capacity, sort_order=data.sort_order)
     db.add(table)
     await db.commit()
     await db.refresh(table)
-    return SeatingTableOut(id=table.id, event_id=table.event_id, name=table.name, capacity=table.capacity, assigned_count=0)
+    return SeatingTableOut(id=table.id, event_id=table.event_id, name=table.name, capacity=table.capacity, assigned_count=0, sort_order=table.sort_order)
 
 
 def _parse_table_csv(csv_text: str) -> list[BulkTableRow]:
@@ -320,6 +320,7 @@ async def update_table(event_id: str, table_id: str, data: SeatingTableCreate, d
             raise HTTPException(409, f"A table named '{data.name}' already exists for this event")
     table.name = data.name
     table.capacity = data.capacity
+    table.sort_order = data.sort_order
     await db.commit()
     await db.refresh(table)
     return await _table_out(table, db)
@@ -344,7 +345,7 @@ async def delete_table(event_id: str, table_id: str, db: AsyncSession = Depends(
 @router.get("/{event_id}/seating")
 async def seating_chart(event_id: str, db: AsyncSession = Depends(get_db), _: User = Depends(get_current_user)):
     """Full chart: each table with all seat slots (filled and empty)."""
-    tables = (await db.execute(select(SeatingTable).where(SeatingTable.event_id == event_id).order_by(SeatingTable.name))).scalars().all()
+    tables = (await db.execute(select(SeatingTable).where(SeatingTable.event_id == event_id).order_by(SeatingTable.sort_order, SeatingTable.name))).scalars().all()
     guests = (await db.execute(select(Guest).where(Guest.event_id == event_id, Guest.table_id.isnot(None)))).scalars().all()
 
     by_table: dict[str, list] = {}
@@ -385,7 +386,7 @@ async def auto_assign(event_id: str, clear: bool = False, db: AsyncSession = Dep
             g.seat_number = None
         await db.flush()
 
-    tables = (await db.execute(select(SeatingTable).where(SeatingTable.event_id == event_id).order_by(SeatingTable.name))).scalars().all()
+    tables = (await db.execute(select(SeatingTable).where(SeatingTable.event_id == event_id).order_by(SeatingTable.sort_order, SeatingTable.name))).scalars().all()
     if not tables:
         raise HTTPException(400, "No tables defined — create tables first")
 

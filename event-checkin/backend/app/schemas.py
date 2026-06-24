@@ -119,6 +119,8 @@ class EventOut(BaseModel):
     notify_mms: bool = False
     notify_whatsapp: bool = True
     manual_checkin_enabled: bool = False
+    walk_in_enabled: bool = False
+    walk_in_table_group_id: Optional[str] = None
     self_checkin_enabled: bool = False
     partner_pairing_enabled: bool = True
     event_code: Optional[str] = None
@@ -146,6 +148,7 @@ class AssignUserRequest(BaseModel):
 class SeatingTableCreate(BaseModel):
     name: str
     capacity: int
+    sort_order: int = 0
 
 
 class SeatingTableOut(BaseModel):
@@ -154,6 +157,7 @@ class SeatingTableOut(BaseModel):
     name: str
     capacity: int
     assigned_count: int = 0
+    sort_order: int = 0
 
 
 # ── Table Groups ──────────────────────────────────────────────────────────────
@@ -162,6 +166,7 @@ class TableGroupCreate(BaseModel):
     name: str
     tag: str
     description: Optional[str] = None
+    sort_order: int = 0
     table_ids: Optional[list[str]] = None
 
 
@@ -169,6 +174,7 @@ class TableGroupUpdate(BaseModel):
     name: Optional[str] = None
     tag: Optional[str] = None
     description: Optional[str] = None
+    sort_order: Optional[int] = None
     table_ids: Optional[list[str]] = None   # replaces current memberships
 
 
@@ -178,6 +184,7 @@ class TableGroupOut(BaseModel):
     name: str
     tag: str
     description: Optional[str] = None
+    sort_order: int = 0
     created_at: datetime
     table_ids: list[str] = []
     table_names: list[str] = []
@@ -436,10 +443,31 @@ class PairRequest(BaseModel):
 
 # ── Dashboard ─────────────────────────────────────────────────────────────────
 
+class TableStat(BaseModel):
+    id: str
+    name: str
+    capacity: int
+    assigned: int      # guests with this table_id
+    seated: int        # guests with a seat_number on this table
+    admitted: int      # admitted guests at this table
+
 class DashboardStats(BaseModel):
     total: int
     admitted: int
     pending: int
+    invited: int
+    invite_failed: int
+    no_qr: int
+    vip_total: int
+    vip_admitted: int
+    no_phone: int
+    last_admitted_at: Optional[datetime] = None
+    admitted_timeline: list[dict] = []   # [{label, count}] — 15-min buckets last 2h
+    seating_enabled: bool = False
+    tables: list[TableStat] = []
+    total_seats: int = 0
+    seats_assigned: int = 0
+    seats_seated: int = 0
     admitted_guests: list[GuestOut]
 
 

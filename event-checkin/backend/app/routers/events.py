@@ -453,6 +453,41 @@ async def toggle_manual_checkin(
     return event
 
 
+@router.patch("/{event_id}/walk-in", response_model=EventOut)
+async def toggle_walk_in(
+    event_id: str,
+    body: dict,
+    db: AsyncSession = Depends(get_db),
+    _: User = Depends(require_admin),
+):
+    event = await db.get(Event, event_id)
+    if not event:
+        raise HTTPException(404, "Event not found")
+    if "enabled" not in body:
+        raise HTTPException(400, "Body must contain { enabled: bool }")
+    event.walk_in_enabled = bool(body["enabled"])
+    await db.commit()
+    await db.refresh(event)
+    return event
+
+
+@router.patch("/{event_id}/walk-in-group", response_model=EventOut)
+async def set_walk_in_group(
+    event_id: str,
+    body: dict,
+    db: AsyncSession = Depends(get_db),
+    _: User = Depends(require_admin),
+):
+    event = await db.get(Event, event_id)
+    if not event:
+        raise HTTPException(404, "Event not found")
+    group_id = body.get("table_group_id") or None
+    event.walk_in_table_group_id = group_id
+    await db.commit()
+    await db.refresh(event)
+    return event
+
+
 @router.patch("/{event_id}/partner-pairing", response_model=EventOut)
 async def toggle_partner_pairing(
     event_id: str,

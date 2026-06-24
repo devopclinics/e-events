@@ -317,17 +317,73 @@ function ConfirmCheckin({ guest, eventId, onResult, onCancel }) {
   )
 }
 
-function ManualCheckinTab({ eventId }) {
+function WalkInForm({ eventId, prefillName, walkInGroupName, onResult, onCancel }) {
+  const parts = prefillName.trim().split(/\s+/)
+  const [firstName, setFirstName] = useState(parts[0] || '')
+  const [lastName, setLastName] = useState(parts.slice(1).join(' ') || '')
+  const [phone, setPhone] = useState('')
+  const [saving, setSaving] = useState(false)
+  const [err, setErr] = useState('')
+
+  async function handleSubmit(e) {
+    e.preventDefault()
+    if (!firstName.trim() || !lastName.trim()) { setErr('First and last name required.'); return }
+    setSaving(true)
+    setErr('')
+    try {
+      const guest = await api.addGuest(eventId, { first_name: firstName.trim(), last_name: lastName.trim(), phone: phone.trim() || undefined })
+      const res = await api.manualCheckin(eventId, guest.id)
+      onResult(res)
+    } catch (e) {
+      setErr(e.message || 'Failed to add walk-in guest.')
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  const inputCls = 'w-full border border-slate-300 dark:border-slate-600 rounded-xl px-4 py-3 text-sm bg-white dark:bg-slate-700 text-slate-900 dark:text-white placeholder-slate-400'
+
+  return (
+    <form onSubmit={handleSubmit} className="space-y-3">
+      <div className="text-center pb-1">
+        <p className="font-bold text-slate-800 dark:text-white">Register Walk-in Guest</p>
+        <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+          {walkInGroupName
+            ? `Will be seated from: ${walkInGroupName}`
+            : 'Will be auto-assigned a seat'}
+        </p>
+      </div>
+      <div className="grid grid-cols-2 gap-2">
+        <input className={inputCls} placeholder="First name" value={firstName} onChange={(e) => setFirstName(e.target.value)} required />
+        <input className={inputCls} placeholder="Last name" value={lastName} onChange={(e) => setLastName(e.target.value)} required />
+      </div>
+      <input className={inputCls} placeholder="Phone (optional)" type="tel" value={phone} onChange={(e) => setPhone(e.target.value)} />
+      {err && <p className="text-xs text-red-500">{err}</p>}
+      <button type="submit" disabled={saving}
+        className="w-full bg-green-600 hover:bg-green-700 text-white font-bold py-4 rounded-xl text-lg disabled:opacity-50 transition-colors">
+        {saving ? 'Adding & checking in…' : 'Add & Check In'}
+      </button>
+      <button type="button" onClick={onCancel}
+        className="w-full text-slate-500 dark:text-slate-400 text-sm py-2 hover:underline">
+        Cancel — go back to search
+      </button>
+    </form>
+  )
+}
+
+function ManualCheckinTab({ eventId, walkInEnabled, walkInGroupName }) {
   const [query, setQuery] = useState('')
   const [guests, setGuests] = useState([])
   const [searching, setSearching] = useState(false)
   const [selected, setSelected] = useState(null)
+  const [showWalkIn, setShowWalkIn] = useState(false)
   const [result, setResult] = useState(null)
   const debounceRef = useRef(null)
 
   function handleQueryChange(val) {
     setQuery(val)
     setSelected(null)
+    setShowWalkIn(false)
     setResult(null)
     clearTimeout(debounceRef.current)
     if (!val.trim()) { setGuests([]); return }
@@ -345,27 +401,17 @@ function ManualCheckinTab({ eventId }) {
     setQuery('')
     setGuests([])
     setSelected(null)
+    setShowWalkIn(false)
     setResult(null)
   }
 
-  if (result) {
-    return (
-      <div className="space-y-4">
-        <ResultCard result={result} onReset={reset} />
-      </div>
-    )
-  }
+  if (result) return <div className="space-y-4"><ResultCard result={result} onReset={reset} /></div>
 
-  if (selected) {
-    return (
-      <ConfirmCheckin
-        guest={selected}
-        eventId={eventId}
-        onResult={setResult}
-        onCancel={() => setSelected(null)}
-      />
-    )
-  }
+  if (showWalkIn) return <WalkInForm eventId={eventId} prefillName={query} walkInGroupName={walkInGroupName} onResult={setResult} onCancel={() => setShowWalkIn(false)} />
+
+  if (selected) return <ConfirmCheckin guest={selected} eventId={eventId} onResult={setResult} onCancel={() => setSelected(null)} />
+
+  const noResults = !searching && query.trim().length >= 2 && guests.length === 0
 
   return (
     <div className="space-y-3">
@@ -376,22 +422,26 @@ function ManualCheckinTab({ eventId }) {
         placeholder="Search by name or phone number…"
         className="w-full border border-slate-300 dark:border-slate-600 rounded-xl px-4 py-3 text-sm bg-white dark:bg-slate-700 text-slate-900 dark:text-white placeholder-slate-400"
       />
-      {searching && (
-        <p className="text-center text-sm text-slate-400 py-2">Searching…</p>
-      )}
-      {!searching && query && guests.length === 0 && (
-        <p className="text-center text-sm text-slate-500 dark:text-slate-400 py-4">
-          No guest found — check spelling or try phone number.
-        </p>
+      {searching && <p className="text-center text-sm text-slate-400 py-2">Searching…</p>}
+      {noResults && (
+        <div className="text-center py-4 space-y-3">
+          <p className="text-sm text-slate-500 dark:text-slate-400">No guest found for "{query}"</p>
+          {walkInEnabled && (
+            <button
+              onClick={() => setShowWalkIn(true)}
+              className="w-full bg-amber-500 hover:bg-amber-600 text-white font-bold py-3 rounded-xl text-sm transition-colors">
+              + Register as Walk-in Guest
+            </button>
+          )}
+          {!walkInEnabled && (
+            <p className="text-xs text-slate-400 dark:text-slate-500 italic">Walk-in registration is disabled for this event.</p>
+          )}
+        </div>
       )}
       {guests.length > 0 && (
         <div className="space-y-2">
           {guests.map((g) => (
-            <GuestCard
-              key={g.id}
-              guest={g}
-              onSelect={(g) => !g.admitted && setSelected(g)}
-            />
+            <GuestCard key={g.id} guest={g} onSelect={(g) => !g.admitted && setSelected(g)} />
           ))}
         </div>
       )}
@@ -405,6 +455,7 @@ export default function ScannerPage() {
   const [events, setEvents] = useState([])
   const [eventId, setEventId] = useState('')
   const [activeEvent, setActiveEvent] = useState(null)
+  const [tableGroups, setTableGroups] = useState([])
   const [tab, setTab] = useState('qr')
   const [result, setResult] = useState(null)
   const [loading, setLoading] = useState(false)
@@ -416,6 +467,7 @@ export default function ScannerPage() {
       if (evs.length === 1) {
         setEventId(evs[0].id)
         setActiveEvent(evs[0])
+        api.listTableGroups(evs[0].id).then(setTableGroups).catch(() => {})
       }
     })
   }, [])
@@ -425,6 +477,7 @@ export default function ScannerPage() {
     setActiveEvent(events.find((e) => e.id === id) || null)
     setResult(null)
     setTab('qr')
+    if (id) api.listTableGroups(id).then(setTableGroups).catch(() => {})
   }
 
   async function handleScan(raw) {
@@ -445,12 +498,15 @@ export default function ScannerPage() {
     setScanKey((k) => k + 1)
   }
 
-  const manualEnabled = activeEvent?.manual_checkin_enabled
-  const selfEnabled   = activeEvent?.self_checkin_enabled && activeEvent?.event_code
+  const manualEnabled    = activeEvent?.manual_checkin_enabled
+  const walkInEnabled    = activeEvent?.walk_in_enabled
+  const selfEnabled      = activeEvent?.self_checkin_enabled && activeEvent?.event_code
+  const walkInGroup      = tableGroups.find((g) => g.id === activeEvent?.walk_in_table_group_id)
+  const walkInGroupName  = walkInGroup?.name || null
 
   const tabs = [
     { key: 'qr',      label: 'QR Scan' },
-    ...(manualEnabled ? [{ key: 'manual', label: 'Manual' }] : []),
+    ...((manualEnabled || walkInEnabled) && eventId ? [{ key: 'manual', label: 'Manual / Walk-in' }] : []),
     ...(selfEnabled   ? [{ key: 'eventqr', label: 'Event QR' }] : []),
   ]
   const showTabs = tabs.length > 1
@@ -516,7 +572,7 @@ export default function ScannerPage() {
           )}
 
           {tab === 'manual' && eventId && (
-            <ManualCheckinTab key={eventId} eventId={eventId} />
+            <ManualCheckinTab key={eventId} eventId={eventId} walkInEnabled={walkInEnabled} walkInGroupName={walkInGroupName} />
           )}
 
           {tab === 'eventqr' && activeEvent?.event_code && (

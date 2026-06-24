@@ -54,6 +54,7 @@ async def send_invite_whatsapp(*, phone: str, first_name: str, event_name: str, 
         phone=phone,
         kind="invite",
         params=[first_name, event_name, date_str, ticket_url],
+        named_params={"firstName": first_name, "eventName": event_name, "eventDate": date_str, "ticketUrl": ticket_url},
     )
 
 
@@ -64,6 +65,7 @@ async def send_admission_whatsapp(*, phone: str, first_name: str, event_name: st
         phone=phone,
         kind="admission",
         params=[first_name, event_name, table_name or "—", seat_number or "—"],
+        named_params={"firstName": first_name, "eventName": event_name, "tableName": table_name or "—", "seatNumber": seat_number or "—"},
     )
 
 
@@ -127,14 +129,32 @@ def _channel_ready(channel: str, phone: str | None) -> bool:
     no phone, or no creds for the chosen provider."""
     if not phone or not str(phone).strip():
         return False
+
+    # WhatsApp uses its own provider setting (whatsapp_provider) so it can
+    # run alongside ClickSend for SMS/MMS.
+    if channel == "whatsapp":
+        wa_provider = (settings.whatsapp_provider or "").lower()
+        if wa_provider == "meta":
+            if not settings.meta_whatsapp_token or not settings.meta_phone_number_id:
+                logger.warning("Meta WhatsApp configured but missing token/phone_number_id")
+                return False
+            return True
+        if wa_provider == "bird":
+            if not settings.bird_access_key or not settings.bird_workspace_id or not settings.bird_whatsapp_channel_id:
+                return False
+            return True
+        if wa_provider == "twilio":
+            if not settings.twilio_account_sid or not settings.twilio_auth_token or not settings.twilio_whatsapp_from:
+                return False
+            return True
+        return False  # no whatsapp provider set
+
     provider = (settings.messaging_provider or "").lower()
     if provider == "bird":
         if not settings.bird_access_key or not settings.bird_workspace_id:
             logger.warning("Bird configured but missing access_key/workspace_id — skipping %s", channel)
             return False
         if channel == "sms" and not settings.bird_sms_channel_id:
-            return False
-        if channel == "whatsapp" and not settings.bird_whatsapp_channel_id:
             return False
         return True
     if provider == "twilio":
@@ -143,19 +163,13 @@ def _channel_ready(channel: str, phone: str | None) -> bool:
             return False
         if channel == "sms" and not settings.twilio_from_number:
             return False
-        if channel == "whatsapp" and not settings.twilio_whatsapp_from:
-            return False
         return True
     if provider == "sns":
-        if channel == "whatsapp":
-            return False  # SNS does not support WhatsApp
         if not settings.aws_access_key_id or not settings.aws_secret_access_key:
             logger.warning("SNS configured but missing AWS credentials — skipping %s", channel)
             return False
         return True
     if provider == "clicksend":
-        if channel == "whatsapp":
-            return False  # ClickSend SMS/MMS only
         if not settings.clicksend_username or not settings.clicksend_api_key.strip():
             logger.warning("ClickSend configured but missing username/api_key — skipping %s", channel)
             return False
@@ -322,25 +336,90 @@ async def _send_sms(phone: str, body: str) -> None:
         await asyncio.to_thread(_sns_send_sync, phone, body)
 
 
-async def _send_whatsapp_template(*, phone: str, kind: str, params: list[str]) -> None:
-    """kind: 'invite' | 'admission' — picks template name (Bird) or SID (Twilio)."""
-    provider = (settings.messaging_provider or "").lower()
-    if provider == "bird":
+async def _meta_wa_post(payload: dict) -> None:
+    """Send a WhatsApp message via Meta Cloud API."""
+    url = f"https://graph.facebook.com/v19.0/{settings.meta_phone_number_id}/messages"
+    headers = {
+        "Authorization": f"Bearer {settings.meta_whatsapp_token}",
+        "Content-Type": "application/json",
+    }
+    try:
+        async with httpx.AsyncClient(timeout=15) as c:
+            r = await c.post(url, headers=headers, json=payload)
+            if r.status_code >= 400:
+                logger.warning("Meta WhatsApp → HTTP %s: %s", r.status_code, r.text[:400])
+            else:
+                logger.info("Meta WhatsApp sent OK to=%s", payload.get("to"))
+    except Exception:
+        logger.exception("Meta WhatsApp request failed")
+
+
+def _e164(phone: str) -> str:
+    """Strip spaces/dashes/parens — Meta requires E.164 format with no spaces."""
+    import re
+    digits = re.sub(r"[^\d+]", "", phone)
+    return digits if digits.startswith("+") else f"+{digits}"
+
+
+async def _send_whatsapp_template(*, phone: str, kind: str, params: list[str], named_params: dict | None = None) -> None:
+    """kind: 'invite' | 'admission' — picks template name per provider."""
+    wa_provider = (settings.whatsapp_provider or "").lower()
+    if wa_provider == "meta":
+        template_name = (
+            settings.meta_wa_invite_template if kind == "invite"
+            else settings.meta_wa_admission_template
+        )
+        if not template_name:
+            logger.warning("Meta WhatsApp %s template name not set — skipping", kind)
+            return
+        components = [
+            {
+                "type": "body",
+                "parameters": [{"type": "text", "text": p} for p in params],
+            }
+        ] if params else []
+        await _meta_wa_post({
+            "messaging_product": "whatsapp",
+            "to": _e164(phone),
+            "type": "template",
+            "template": {
+                "name": template_name,
+                "language": {"code": settings.meta_wa_language},
+                "components": components,
+            },
+        })
+        return
+
+    if wa_provider == "bird":
         template = (
             settings.bird_whatsapp_invite_template if kind == "invite"
             else settings.bird_whatsapp_admission_template
         )
+        version = (
+            settings.bird_whatsapp_invite_version if kind == "invite"
+            else settings.bird_whatsapp_admission_version
+        )
         if not template:
             logger.warning("Bird WhatsApp %s template not set — skipping", kind)
             return
+        # Bird expects variables as a flat {key: value} object, not an array.
+        variables = (
+            named_params
+            if named_params
+            else {str(i + 1): v for i, v in enumerate(params)}
+        )
+        template_payload = {
+            "projectId": template,
+            "locale": "en",
+            "variables": variables,
+        }
+        if version:
+            template_payload["version"] = version
         await _bird_post(settings.bird_whatsapp_channel_id, {
             "receiver": _bird_recipient(phone),
-            "template": {
-                "projectId": template,
-                "variables": [{"key": str(i + 1), "value": v} for i, v in enumerate(params)],
-            },
+            "template": template_payload,
         })
-    elif provider == "twilio":
+    elif wa_provider == "twilio":
         sid = (
             settings.twilio_whatsapp_invite_template_sid if kind == "invite"
             else settings.twilio_whatsapp_admission_template_sid
@@ -362,6 +441,16 @@ async def _send_whatsapp_template(*, phone: str, kind: str, params: list[str]) -
 
 async def _send_whatsapp_text(phone: str, body: str) -> None:
     """Send WhatsApp using plain text body (for custom templates)."""
+    wa_provider = (settings.whatsapp_provider or "").lower()
+    if wa_provider == "meta":
+        await _meta_wa_post({
+            "messaging_product": "whatsapp",
+            "to": _e164(phone),
+            "type": "text",
+            "text": {"body": body, "preview_url": False},
+        })
+        return
+
     provider = (settings.messaging_provider or "").lower()
     if provider == "bird":
         await _bird_post(settings.bird_whatsapp_channel_id, {

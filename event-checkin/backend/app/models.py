@@ -54,6 +54,8 @@ class Event(Base):
     notify_mms: Mapped[bool] = mapped_column(Boolean, default=False)
     notify_whatsapp: Mapped[bool] = mapped_column(Boolean, default=True)
     manual_checkin_enabled: Mapped[bool] = mapped_column(Boolean, default=False)
+    walk_in_enabled: Mapped[bool] = mapped_column(Boolean, default=False)
+    walk_in_table_group_id: Mapped[str | None] = mapped_column(String(36), nullable=True)
     self_checkin_enabled: Mapped[bool] = mapped_column(Boolean, default=False)
     partner_pairing_enabled: Mapped[bool] = mapped_column(Boolean, default=True)
     event_code: Mapped[str | None] = mapped_column(String(20), unique=True, nullable=True, index=True)
@@ -81,6 +83,7 @@ class SeatingTable(Base):
     event_id: Mapped[str] = mapped_column(String(36), ForeignKey("events.id"))
     name: Mapped[str] = mapped_column(String(100))
     capacity: Mapped[int] = mapped_column(Integer)
+    sort_order: Mapped[int] = mapped_column(Integer, default=0)
 
     event: Mapped["Event"] = relationship("Event", back_populates="tables")
     guests: Mapped[list["Guest"]] = relationship("Guest", back_populates="table")
@@ -98,6 +101,7 @@ class TableGroup(Base):
     name: Mapped[str] = mapped_column(String(100))
     tag: Mapped[str] = mapped_column(String(50))   # short label used in imports
     description: Mapped[str | None] = mapped_column(Text, nullable=True)
+    sort_order: Mapped[int] = mapped_column(Integer, default=0)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 

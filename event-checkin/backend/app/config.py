@@ -15,8 +15,10 @@ class Settings(BaseSettings):
     smtp_tls: bool = True
     email_from: str = "noreply@event.com"
 
-    # Messaging provider switch: 'bird' | 'twilio' | 'sns' | 'clicksend' | '' (off)
+    # SMS/MMS provider: 'bird' | 'twilio' | 'sns' | 'clicksend' | '' (off)
     messaging_provider: str = ""
+    # WhatsApp provider (separate from SMS): 'meta' | 'bird' | 'twilio' | '' (off)
+    whatsapp_provider: str = ""
 
     clicksend_username: str = ""
     clicksend_api_key: str = ""
@@ -35,12 +37,23 @@ class Settings(BaseSettings):
     twilio_whatsapp_invite_template_sid: str = ""     # Content SID for invite template (prod only)
     twilio_whatsapp_admission_template_sid: str = ""  # Content SID for admission template (prod only)
 
+    # Meta WhatsApp Cloud API
+    meta_whatsapp_token: str = ""          # Permanent or temporary access token
+    meta_phone_number_id: str = ""         # Phone Number ID from Meta dashboard
+    meta_waba_id: str = ""                 # WhatsApp Business Account ID
+    meta_wa_invite_template: str = ""      # Approved template name for invites
+    meta_wa_admission_template: str = ""   # Approved template name for admission
+    meta_wa_language: str = "en_US"        # Template language code
+    meta_wa_verify_token: str = ""         # Webhook verify token (you set this, Meta sends it back)
+
     bird_access_key: str = ""
     bird_workspace_id: str = ""
     bird_sms_channel_id: str = ""
     bird_whatsapp_channel_id: str = ""
-    bird_whatsapp_invite_template: str = ""           # Bird template name or project ID for invite
-    bird_whatsapp_admission_template: str = ""        # Bird template name or project ID for admission
+    bird_whatsapp_invite_template: str = ""     # Bird template project ID for invite
+    bird_whatsapp_invite_version: str = ""      # Bird template published version ID for invite
+    bird_whatsapp_admission_template: str = ""  # Bird template project ID for admission
+    bird_whatsapp_admission_version: str = ""   # Bird template published version ID for admission
 
     class Config:
         env_file = ".env"

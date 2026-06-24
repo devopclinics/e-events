@@ -487,6 +487,36 @@ async def toggle_features(
     return event
 
 
+@router.patch("/{event_id}/walk-in", response_model=EventOut)
+async def set_walk_in(event_id: str, body: dict, db: AsyncSession = Depends(get_db), _: User = Depends(require_event_admin)):
+    """Enable/disable door walk-in registration. Body: {active: bool}."""
+    event = await db.get(Event, event_id)
+    if not event:
+        raise HTTPException(404, "Event not found")
+    event.walk_in_enabled = bool(body.get("active"))
+    await db.commit()
+    await db.refresh(event)
+    return event
+
+
+@router.patch("/{event_id}/walk-in-group", response_model=EventOut)
+async def set_walk_in_group(event_id: str, body: dict, db: AsyncSession = Depends(get_db), _: User = Depends(require_event_admin)):
+    """Set the table group walk-ins are auto-assigned to. Body: {table_group_id}."""
+    event = await db.get(Event, event_id)
+    if not event:
+        raise HTTPException(404, "Event not found")
+    gid = body.get("table_group_id") or None
+    if gid:
+        from ..models import TableGroup
+        grp = await db.get(TableGroup, gid)
+        if not grp or grp.event_id != event_id:
+            raise HTTPException(404, "Table group not found for this event")
+    event.walk_in_table_group_id = gid
+    await db.commit()
+    await db.refresh(event)
+    return event
+
+
 @router.patch("/{event_id}/self-checkin", response_model=EventOut)
 async def toggle_self_checkin(
     event_id: str,

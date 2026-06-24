@@ -103,6 +103,8 @@ class EventOut(BaseModel):
     notify_whatsapp: bool = True
     notify_mms: bool = False
     notify_rsvp_responses: bool = False
+    walk_in_enabled: bool = False
+    walk_in_table_group_id: Optional[str] = None
     enforce_table_groups: bool = True
     manual_checkin_enabled: bool = False
     self_checkin_enabled: bool = False
@@ -308,6 +310,7 @@ class SeatingTableCreate(BaseModel):
     name: str
     capacity: int
     category: Optional[str] = None
+    sort_order: Optional[int] = None
 
 
 class SeatingTableOut(BaseModel):
@@ -316,6 +319,7 @@ class SeatingTableOut(BaseModel):
     name: str
     capacity: int
     category: Optional[str] = None
+    sort_order: int = 0
     assigned_count: int = 0
 
 
@@ -328,7 +332,9 @@ class TableGroupCreate(BaseModel):
     name: str
     tag: Optional[str] = None          # defaults to name when omitted
     description: Optional[str] = None
+    sort_order: Optional[int] = None
     table_ids: Optional[list[str]] = None  # optional member tables at create time
+    table_orders: Optional[dict[str, int]] = None  # {table_id: sort_order} saved on group edit
 
 
 class TableGroupOut(BaseModel):
@@ -337,6 +343,7 @@ class TableGroupOut(BaseModel):
     name: str
     tag: str
     description: Optional[str] = None
+    sort_order: int = 0
     table_ids: list[str] = []
     assigned_guest_count: int = 0
     total_seats: int = 0
@@ -351,6 +358,16 @@ class TableGroupTablesUpdate(BaseModel):
 class BulkAssignGroupRequest(BaseModel):
     guest_ids: list[str]
     table_group_id: Optional[str] = None  # None clears the assignment
+
+
+class WalkInRegister(BaseModel):
+    first_name: str
+    last_name: Optional[str] = ""
+    phone: Optional[str] = None
+
+
+class WalkInGroupUpdate(BaseModel):
+    table_group_id: Optional[str] = None
 
 
 # ── Message templates ──────────────────────────────────────────────────────────

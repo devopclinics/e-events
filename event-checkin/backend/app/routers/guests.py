@@ -11,7 +11,7 @@ from sqlalchemy import select, func
 from ..database import get_db
 from sqlalchemy import or_
 from ..models import Event, Guest, TicketType, GuestTag, GuestTagLink, User, TableGroup, SeatingTable
-from ..schemas import GuestOut, GuestCreate, GuestUpdate, BulkAssignGroupRequest, ScanResult
+from ..schemas import GuestOut, GuestCreate, GuestUpdate, BulkAssignGroupRequest, ScanResult, WalkInRegister
 from ..auth import require_event_admin, require_official
 from ..entitlements import assert_within_guest_cap, guest_limit, can_use_paid_channels, take_message_credit
 from services.qr_service import generate_qr_bytes
@@ -949,6 +949,38 @@ async def search_guests(
         "admitted_at": g.admitted_at.isoformat() if g.admitted_at else None,
         "rsvp_status": g.rsvp_status,
     } for g in rows]
+
+
+@router.post("/{event_id}/guests/walk-in", response_model=ScanResult)
+async def register_walk_in(
+    event_id: str,
+    body: WalkInRegister,
+    background_tasks: BackgroundTasks,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_official),
+):
+    """Register a walk-in guest at the door: create the guest, auto-assign them to
+    the event's walk-in table group, and admit — all in one step (no QR)."""
+    event = await db.get(Event, event_id)
+    if not event:
+        raise HTTPException(404, "Event not found")
+    if not event.walk_in_enabled:
+        raise HTTPException(403, "Walk-in registration is not enabled for this event")
+    blocked = await checkin_guard(event, current_user, db)
+    if blocked:
+        return blocked
+    first = (body.first_name or "").strip()
+    if not first:
+        raise HTTPException(400, "Guest name is required")
+    phone = _normalize_phone(body.phone.strip()) if (body.phone or "").strip() else None
+    guest = Guest(
+        event_id=event_id, first_name=first, last_name=(body.last_name or "").strip(),
+        phone=phone, qr_generated_at=datetime.utcnow(),
+        assigned_table_group_id=event.walk_in_table_group_id or None,
+    )
+    db.add(guest)
+    await db.flush()
+    return await perform_admission(guest, event, background_tasks, db)
 
 
 @router.post("/{event_id}/guests/{guest_id}/checkin", response_model=ScanResult)

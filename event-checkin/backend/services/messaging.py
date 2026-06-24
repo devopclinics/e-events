@@ -53,6 +53,7 @@ async def send_invite_whatsapp(*, phone: str, first_name: str, event_name: str, 
         phone=phone,
         kind="invite",
         params=[first_name, event_name, date_str, ticket_url],
+        var_keys=["firstName", "eventName", "eventDate", "ticketUrl"],
     )
 
 
@@ -63,6 +64,7 @@ async def send_admission_whatsapp(*, phone: str, first_name: str, event_name: st
         phone=phone,
         kind="admission",
         params=[first_name, event_name, table_name or "—", seat_number or "—"],
+        var_keys=["firstName", "eventName", "tableName", "seatNumber"],
     )
 
 
@@ -199,12 +201,19 @@ async def send_custom_whatsapp(*, phone: str, body: str) -> None:
 
 # ── internal: routing ─────────────────────────────────────────────────────────
 
+def _wa_provider() -> str:
+    """WhatsApp provider — its own setting, falling back to messaging_provider.
+    (Bug fix: WhatsApp used to read messaging_provider, so a clicksend SMS setup
+    silently dropped WhatsApp even when Bird was configured for it.)"""
+    return (settings.whatsapp_provider or settings.messaging_provider or "").lower()
+
+
 def _channel_ready(channel: str, phone: str | None) -> bool:
     """Return False (silently) when there's no point trying — no provider,
     no phone, or no creds for the chosen provider."""
     if not phone or not str(phone).strip():
         return False
-    provider = (settings.messaging_provider or "").lower()
+    provider = _wa_provider() if channel == "whatsapp" else (settings.messaging_provider or "").lower()
     if provider == "bird":
         if not settings.bird_access_key or not settings.bird_workspace_id:
             logger.warning("Bird configured but missing access_key/workspace_id — skipping %s", channel)
@@ -271,9 +280,12 @@ async def _send_sms(phone: str, body: str) -> None:
         await asyncio.to_thread(_twilio_send_sync, settings.twilio_from_number, phone, body=body)
 
 
-async def _send_whatsapp_template(*, phone: str, kind: str, params: list[str]) -> None:
-    """kind: 'invite' | 'admission' — picks template name (Bird) or SID (Twilio)."""
-    provider = (settings.messaging_provider or "").lower()
+async def _send_whatsapp_template(*, phone: str, kind: str, params: list[str],
+                                  var_keys: list[str] | None = None) -> None:
+    """kind: 'invite' | 'admission' — picks template name (Bird) or SID (Twilio).
+    `var_keys` names Bird template variables (e.g. firstName/eventName/…); falls
+    back to positional 1,2,3 when not given."""
+    provider = _wa_provider()
     if provider == "bird":
         template = (
             settings.bird_whatsapp_invite_template if kind == "invite"
@@ -282,11 +294,15 @@ async def _send_whatsapp_template(*, phone: str, kind: str, params: list[str]) -
         if not template:
             logger.warning("Bird WhatsApp %s template not set — skipping", kind)
             return
+        keys = var_keys or [str(i + 1) for i in range(len(params))]
+        # Bird requires variables as a flat {key: value} object + a locale.
+        variables = {k: v for k, v in zip(keys, params)}
         await _bird_post(settings.bird_whatsapp_channel_id, {
             "receiver": _bird_recipient(phone),
             "template": {
                 "projectId": template,
-                "variables": [{"key": str(i + 1), "value": v} for i, v in enumerate(params)],
+                "locale": "en",
+                "variables": variables,
             },
         })
     elif provider == "twilio":
@@ -312,7 +328,7 @@ async def _send_whatsapp_template(*, phone: str, kind: str, params: list[str]) -
 async def _send_sms_as_whatsapp(phone: str, body: str) -> None:
     """Send a plain-text message via the WhatsApp channel (used for broadcasts
     where no template is registered)."""
-    provider = (settings.messaging_provider or "").lower()
+    provider = _wa_provider()
     if provider == "bird":
         await _bird_post(settings.bird_whatsapp_channel_id, {
             "receiver": _bird_recipient(phone),

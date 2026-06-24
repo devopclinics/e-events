@@ -387,7 +387,8 @@ function SeatingPanel({ eventId }) {
     e.preventDefault()
     setLoading(true)
     try {
-      const payload = { name: form.name, capacity: Number(form.capacity), category: form.category?.trim() || null }
+      const payload = { name: form.name, capacity: Number(form.capacity), category: form.category?.trim() || null,
+                        sort_order: form.sort_order === '' || form.sort_order == null ? 0 : Number(form.sort_order) }
       if (form.id) {
         const updated = await api.updateTable(eventId, form.id, payload)
         setTables((prev) => prev.map((t) => (t.id === form.id ? updated : t)))
@@ -438,7 +439,7 @@ function SeatingPanel({ eventId }) {
             className="bg-amber-500 text-white px-3 py-1.5 rounded-lg text-xs font-semibold hover:bg-amber-600 disabled:opacity-50">
             Reassign All
           </button>
-          <button onClick={() => setForm({ name: '', capacity: 10, category: '' })} disabled={loading}
+          <button onClick={() => setForm({ name: '', capacity: 10, category: '', sort_order: tables.length })} disabled={loading}
             className="bg-indigo-600 text-white px-3 py-1.5 rounded-lg text-xs font-semibold hover:bg-indigo-700">
             + Table
           </button>
@@ -452,6 +453,7 @@ function SeatingPanel({ eventId }) {
           <table className="w-full text-sm">
             <thead className="bg-gray-50 dark:bg-slate-700 text-xs font-semibold text-gray-500 dark:text-slate-400 uppercase">
               <tr>
+                <th className="px-4 py-2 text-center">Order</th>
                 <th className="px-4 py-2 text-left">Table</th>
                 <th className="px-4 py-2 text-center">Category</th>
                 <th className="px-4 py-2 text-center">Capacity</th>
@@ -462,6 +464,7 @@ function SeatingPanel({ eventId }) {
             <tbody className="divide-y divide-gray-100 dark:divide-slate-700">
               {tables.map((t) => (
                 <tr key={t.id} className="hover:bg-gray-50 dark:hover:bg-slate-700">
+                  <td className="px-4 py-2.5 text-center text-xs text-gray-400 dark:text-slate-500">{t.sort_order ?? 0}</td>
                   <td className="px-4 py-2.5 font-medium dark:text-slate-100">{t.name}</td>
                   <td className="px-4 py-2.5 text-center">
                     {t.category ? <CategoryBadge value={t.category} /> : <span className="text-xs text-gray-300 dark:text-slate-600">—</span>}
@@ -474,7 +477,7 @@ function SeatingPanel({ eventId }) {
                   </td>
                   <td className="px-4 py-2.5 text-center">
                     <div className="flex justify-center gap-3">
-                      <button onClick={() => setForm({ id: t.id, name: t.name, capacity: t.capacity, category: t.category || '' })}
+                      <button onClick={() => setForm({ id: t.id, name: t.name, capacity: t.capacity, category: t.category || '', sort_order: t.sort_order ?? 0 })}
                         className="text-xs text-indigo-600 hover:underline">Edit</button>
                       <button onClick={() => deleteTable(t.id)} disabled={loading}
                         className="text-xs text-red-400 hover:text-red-600 disabled:opacity-40">Delete</button>
@@ -508,6 +511,12 @@ function SeatingPanel({ eventId }) {
             <input type="number" min="1" max="200" value={form.capacity}
               onChange={(e) => setForm((f) => ({ ...f, capacity: e.target.value }))} required
               className={`${fieldCls} w-24`} />
+          </div>
+          <div>
+            <label className="block text-xs font-semibold text-gray-600 dark:text-slate-300 mb-1">Order</label>
+            <input type="number" min="0" value={form.sort_order ?? 0}
+              onChange={(e) => setForm((f) => ({ ...f, sort_order: e.target.value }))}
+              className={`${fieldCls} w-20`} title="Lower numbers come first" />
           </div>
           <button type="submit" disabled={loading}
             className="bg-indigo-600 text-white px-4 py-2 rounded-lg text-sm font-semibold hover:bg-indigo-700 disabled:opacity-50">
@@ -634,7 +643,9 @@ function TableGroupsPanel({ eventId }) {
         name: form.name.trim(),
         tag: (form.tag || '').trim() || form.name.trim(),
         description: form.description?.trim() || null,
+        sort_order: form.sort_order === '' || form.sort_order == null ? 0 : Number(form.sort_order),
         table_ids: form.table_ids,
+        table_orders: Object.fromEntries(form.table_ids.map((id) => [id, Number(form.table_orders?.[id] ?? 0)])),
       }
       if (form.id) await api.updateTableGroup(eventId, form.id, payload)
       else await api.createTableGroup(eventId, payload)
@@ -663,7 +674,7 @@ function TableGroupsPanel({ eventId }) {
             Group tables (e.g. VIP, Family) and tag guests to them. Tagged guests can only be seated within their group.
           </p>
         </div>
-        <button onClick={() => setForm({ name: '', tag: '', description: '', table_ids: [] })} disabled={loading}
+        <button onClick={() => setForm({ name: '', tag: '', description: '', sort_order: groups.length, table_ids: [], table_orders: {} })} disabled={loading}
           className="bg-indigo-600 text-white px-3 py-1.5 rounded-lg text-xs font-semibold hover:bg-indigo-700">
           + Table Group
         </button>
@@ -679,11 +690,11 @@ function TableGroupsPanel({ eventId }) {
             <div key={g.id} className="border dark:border-slate-700 rounded-lg p-3">
               <div className="flex justify-between items-start gap-2">
                 <div>
-                  <div className="font-semibold text-sm dark:text-white">{g.name}</div>
+                  <div className="font-semibold text-sm dark:text-white">{g.name} <span className="text-[11px] font-normal text-gray-400">· order {g.sort_order ?? 0}</span></div>
                   <span className="inline-block mt-0.5 text-[11px] font-mono bg-indigo-50 dark:bg-indigo-900/30 text-indigo-700 dark:text-indigo-300 px-1.5 py-0.5 rounded">{g.tag}</span>
                 </div>
                 <div className="flex gap-3 shrink-0">
-                  <button onClick={() => setForm({ id: g.id, name: g.name, tag: g.tag, description: g.description || '', table_ids: g.table_ids || [] })}
+                  <button onClick={() => setForm({ id: g.id, name: g.name, tag: g.tag, description: g.description || '', sort_order: g.sort_order ?? 0, table_ids: g.table_ids || [], table_orders: Object.fromEntries((g.table_ids || []).map((id) => [id, tables.find((t) => t.id === id)?.sort_order ?? 0])) })}
                     className="text-xs text-indigo-600 hover:underline">Edit</button>
                   <button onClick={() => remove(g.id)} disabled={loading}
                     className="text-xs text-red-400 hover:text-red-600 disabled:opacity-40">Delete</button>
@@ -720,6 +731,12 @@ function TableGroupsPanel({ eventId }) {
               <input value={form.tag} onChange={(e) => setForm((f) => ({ ...f, tag: e.target.value }))}
                 className={`${fieldCls} w-40`} placeholder="VIP" />
             </div>
+            <div>
+              <label className="block text-xs font-semibold text-gray-600 dark:text-slate-300 mb-1">Order</label>
+              <input type="number" min="0" value={form.sort_order ?? 0}
+                onChange={(e) => setForm((f) => ({ ...f, sort_order: e.target.value }))}
+                className={`${fieldCls} w-20`} title="Lower numbers come first" />
+            </div>
             <div className="flex-1 min-w-[12rem]">
               <label className="block text-xs font-semibold text-gray-600 dark:text-slate-300 mb-1">Description</label>
               <input value={form.description} onChange={(e) => setForm((f) => ({ ...f, description: e.target.value }))}
@@ -745,6 +762,21 @@ function TableGroupsPanel({ eventId }) {
               </div>
             )}
           </div>
+          {form.table_ids.length > 0 && (
+            <div>
+              <label className="block text-xs font-semibold text-gray-600 dark:text-slate-300 mb-1">Order of tables in this group</label>
+              <div className="flex flex-wrap gap-2">
+                {form.table_ids.map((id) => (
+                  <div key={id} className="flex items-center gap-1 text-xs">
+                    <span className="dark:text-slate-300">{tableName(id)}</span>
+                    <input type="number" min="0" value={form.table_orders?.[id] ?? 0}
+                      onChange={(e) => setForm((f) => ({ ...f, table_orders: { ...f.table_orders, [id]: e.target.value } }))}
+                      className={`${fieldCls} w-16 py-1`} />
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
           <div className="flex gap-2">
             <button type="submit" disabled={loading}
               className="bg-indigo-600 text-white px-4 py-2 rounded-lg text-sm font-semibold hover:bg-indigo-700 disabled:opacity-50">
@@ -756,6 +788,61 @@ function TableGroupsPanel({ eventId }) {
             </button>
           </div>
         </form>
+      )}
+    </div>
+  )
+}
+
+// ── Walk-in toggle (ported from prod) ───────────────────────────────────────────
+// Lets staff register walk-in guests at the door (Scanner → Manual). New walk-ins
+// are auto-assigned to a chosen table group.
+
+function WalkInToggle({ event, onChanged, onFlash }) {
+  const [groups, setGroups] = useState([])
+  const [loading, setLoading] = useState(false)
+  useEffect(() => { api.listTableGroups(event.id).then(setGroups).catch(() => setGroups([])) }, [event.id])
+
+  async function toggle() {
+    setLoading(true)
+    try {
+      const updated = await api.setWalkIn(event.id, !event.walk_in_enabled)
+      onChanged(updated)
+      onFlash?.(`Walk-in registration ${updated.walk_in_enabled ? 'enabled' : 'disabled'}.`)
+    } catch (e) { onFlash?.(e.message, true) }
+    finally { setLoading(false) }
+  }
+
+  async function setGroup(gid) {
+    try {
+      onChanged(await api.setWalkInGroup(event.id, gid || null))
+    } catch (e) { onFlash?.(e.message, true) }
+  }
+
+  return (
+    <div className="bg-white dark:bg-slate-800 dark:border dark:border-slate-700/60 rounded-xl shadow p-6 space-y-3 mt-6">
+      <div className="flex items-center justify-between gap-3 flex-wrap">
+        <div>
+          <h2 className="font-semibold text-base dark:text-white">Walk-in guests</h2>
+          <p className="text-xs text-gray-400 dark:text-slate-500 mt-1">Let staff register guests who arrive without an invite (Scanner → Manual tab).</p>
+        </div>
+        <button onClick={toggle} disabled={loading}
+          className={`px-4 py-2 rounded-lg text-sm font-semibold border transition-colors disabled:opacity-50 ${
+            event.walk_in_enabled
+              ? 'bg-amber-500 text-white border-amber-500 hover:bg-amber-600'
+              : 'bg-white dark:bg-slate-700 text-gray-700 dark:text-slate-200 border-gray-300 dark:border-slate-600 hover:bg-gray-50 dark:hover:bg-slate-600'
+          }`}>
+          Walk-ins: {event.walk_in_enabled ? 'ON' : 'OFF'}
+        </button>
+      </div>
+      {event.walk_in_enabled && (
+        <div>
+          <label className="block text-xs font-semibold text-gray-600 dark:text-slate-300 mb-1">Auto-assign walk-ins to table group</label>
+          <select value={event.walk_in_table_group_id || ''} onChange={(e) => setGroup(e.target.value)}
+            className="border border-gray-300 dark:border-slate-700 rounded-lg px-3 py-2 text-sm bg-white dark:bg-slate-700 text-gray-900 dark:text-white">
+            <option value="">— none (seat anywhere) —</option>
+            {groups.map((g) => <option key={g.id} value={g.id}>{g.name}</option>)}
+          </select>
+        </div>
       )}
     </div>
   )
@@ -4791,6 +4878,84 @@ function MessageDeliveryCard({ guests, onJump }) {
   )
 }
 
+// ── Add Guest Modal (ported from prod) ──────────────────────────────────────────
+
+function AddGuestModal({ onSave, onClose, loading }) {
+  const [form, setForm] = useState({
+    first_name: '', last_name: '', email: '', phone: '', is_vip: false, send_invite: false,
+  })
+  const inputCls = 'w-full border border-slate-300 dark:border-slate-700 rounded-lg px-3 py-2 text-sm bg-white dark:bg-slate-800 text-slate-900 dark:text-white'
+
+  function handleSubmit(e) {
+    e.preventDefault()
+    onSave({
+      first_name: form.first_name.trim(),
+      last_name: form.last_name.trim(),
+      email: form.email.trim(),
+      phone: form.phone.trim() || null,
+      is_vip: form.is_vip,
+    }, form.send_invite)
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/60 backdrop-blur-sm" onClick={onClose}>
+      <div onClick={(e) => e.stopPropagation()}
+        className="bg-white dark:bg-slate-900 dark:border dark:border-slate-700 rounded-xl shadow-2xl w-full max-w-md">
+        <div className="px-5 py-4 border-b dark:border-slate-700 flex items-center justify-between">
+          <h3 className="font-bold text-slate-900 dark:text-white">Add guest</h3>
+          <button onClick={onClose} className="text-slate-400 hover:text-slate-700 dark:hover:text-white text-2xl leading-none">×</button>
+        </div>
+        <form onSubmit={handleSubmit} className="p-5 space-y-3">
+          <div className="grid grid-cols-2 gap-2">
+            <div>
+              <label className="block text-xs font-medium text-slate-500 dark:text-slate-400 mb-1">First name *</label>
+              <input autoFocus required className={inputCls} value={form.first_name}
+                onChange={(e) => setForm((f) => ({ ...f, first_name: e.target.value }))} />
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-slate-500 dark:text-slate-400 mb-1">Last name *</label>
+              <input required className={inputCls} value={form.last_name}
+                onChange={(e) => setForm((f) => ({ ...f, last_name: e.target.value }))} />
+            </div>
+          </div>
+          <div>
+            <label className="block text-xs font-medium text-slate-500 dark:text-slate-400 mb-1">Email</label>
+            <input type="email" className={inputCls} value={form.email}
+              onChange={(e) => setForm((f) => ({ ...f, email: e.target.value }))} />
+          </div>
+          <div>
+            <label className="block text-xs font-medium text-slate-500 dark:text-slate-400 mb-1">Phone (E.164, e.g. +14155550123)</label>
+            <input className={inputCls} value={form.phone} placeholder="+14155550123"
+              onChange={(e) => setForm((f) => ({ ...f, phone: e.target.value }))} />
+          </div>
+          <div className="flex flex-wrap gap-4 pt-1">
+            <label className="flex items-center gap-2 text-sm text-slate-700 dark:text-slate-300 cursor-pointer">
+              <input type="checkbox" checked={form.is_vip}
+                onChange={(e) => setForm((f) => ({ ...f, is_vip: e.target.checked }))} />
+              VIP
+            </label>
+            <label className="flex items-center gap-2 text-sm text-slate-700 dark:text-slate-300 cursor-pointer">
+              <input type="checkbox" checked={form.send_invite}
+                onChange={(e) => setForm((f) => ({ ...f, send_invite: e.target.checked }))} />
+              Send invite now
+            </label>
+          </div>
+          <div className="flex gap-2 pt-2">
+            <button type="submit" disabled={loading || !form.first_name.trim() || !form.last_name.trim()}
+              className="flex-1 bg-indigo-600 hover:bg-indigo-700 text-white font-semibold py-2.5 rounded-lg disabled:opacity-50 text-sm">
+              {loading ? 'Adding…' : 'Add guest'}
+            </button>
+            <button type="button" onClick={onClose}
+              className="px-4 py-2.5 rounded-lg border border-slate-300 dark:border-slate-600 text-sm text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800">
+              Cancel
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  )
+}
+
 // ── Edit Guest Modal (ported from prod) ─────────────────────────────────────────
 
 function EditGuestModal({ guest, onSave, onClose, loading }) {
@@ -4967,6 +5132,7 @@ export default function AdminPage() {
   const [guestFilter, setGuestFilter] = useState({ invited: 'all', admitted: 'all', qr: 'all' })
   const [showReset, setShowReset] = useState(false)
   const [editingGuest, setEditingGuest] = useState(null)
+  const [showAddGuest, setShowAddGuest] = useState(false)
   const fileRef = useRef()
 
   const PAGE_SIZE = 50
@@ -5199,6 +5365,18 @@ export default function AdminPage() {
       // Refresh the event so last_sync_at updates locally.
       const refreshed = await api.listEvents()
       setEvents(refreshed)
+    } catch (err) { flash(err.message, true) }
+    finally { setLoading(false) }
+  }
+
+  async function handleAddGuest(data, sendInvite) {
+    setLoading(true)
+    try {
+      const created = await api.addGuest(selectedId, data)
+      if (sendInvite) await api.sendInvitesBatch(selectedId, [created.id], true)
+      setGuests(await api.listGuests(selectedId))
+      setShowAddGuest(false)
+      flash(sendInvite ? 'Guest added and invite sent.' : 'Guest added.')
     } catch (err) { flash(err.message, true) }
     finally { setLoading(false) }
   }
@@ -5498,6 +5676,14 @@ export default function AdminPage() {
             />
           )}
 
+          {showAddGuest && (
+            <AddGuestModal
+              loading={loading}
+              onSave={handleAddGuest}
+              onClose={() => setShowAddGuest(false)}
+            />
+          )}
+
           {activeTab === 'overview' && <>
 
           {/* Stats — hidden until there's data, so a fresh event leads with the
@@ -5691,6 +5877,7 @@ export default function AdminPage() {
           {activeTab === 'seating' && event.seating_enabled && <>
             <SeatingPanel eventId={selectedId} />
             <TableGroupsPanel eventId={selectedId} />
+            <WalkInToggle event={event} onChanged={updateEvent} onFlash={flash} />
           </>}
 
           {activeTab === 'messages' && <MessageTemplatesPanel eventId={selectedId} event={event} />}
@@ -5718,10 +5905,12 @@ export default function AdminPage() {
 
           {/* Guest list */}
           {activeTab === 'guests' && guests.length === 0 && (
-            <div className="bg-white dark:bg-slate-800 dark:border dark:border-slate-700/60 rounded-xl shadow p-10 text-center">
+            <div className="bg-white dark:bg-slate-800 dark:border dark:border-slate-700/60 rounded-xl shadow p-10 text-center space-y-3">
               <p className="text-sm text-slate-500 dark:text-slate-400">
                 No guests yet. Go to <button onClick={() => setActiveTab('overview')} className="text-teal-600 hover:underline font-semibold">Start here</button> to upload a guest file, connect Google Sheets, or download the template.
               </p>
+              <button onClick={() => setShowAddGuest(true)}
+                className="bg-indigo-600 text-white px-4 py-2 rounded-lg text-sm font-semibold hover:bg-indigo-700">+ Add guest</button>
             </div>
           )}
           {activeTab === 'guests' && guests.length > 0 && (() => {
@@ -5801,6 +5990,10 @@ export default function AdminPage() {
                       {tableGroups.map((tg) => <option key={tg.id} value={tg.id}>{tg.name}</option>)}
                     </select>
                   )}
+                  <button onClick={() => setShowAddGuest(true)}
+                    className="text-xs px-2.5 py-1.5 rounded-lg bg-indigo-600 text-white font-semibold hover:bg-indigo-700">
+                    + Add guest
+                  </button>
                   <button onClick={handleExportGuests}
                     className="text-xs px-2.5 py-1.5 rounded-lg border border-gray-300 dark:border-slate-700 dark:text-slate-200 hover:bg-gray-50 dark:hover:bg-slate-700">
                     ⬇ Export CSV

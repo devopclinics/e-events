@@ -116,6 +116,11 @@ class Event(Base):
     # Send a notice to a guest when they decline / are rejected. Off by default
     # (previously silent); organizer opt-in.
     notify_rsvp_responses: Mapped[bool] = mapped_column(Boolean, default=False)
+    # Walk-in registration at the door (Scanner → Manual). Off by default. New
+    # walk-ins are auto-assigned to walk_in_table_group_id. Stored as a plain
+    # String (no FK) to avoid an extra Event↔TableGroup mapper relationship.
+    walk_in_enabled: Mapped[bool] = mapped_column(Boolean, default=False)
+    walk_in_table_group_id: Mapped[str | None] = mapped_column(String(36), nullable=True)
     # Table Groups add-on: when True (default), a guest with an assigned table
     # group may only be seated/checked-in at tables inside that group. Events
     # with no table groups are unaffected regardless of this flag.
@@ -224,6 +229,8 @@ class SeatingTable(Base):
     # Optional seating category/restriction label (e.g. Male, Female, Kids,
     # Youth, VIP). Display-only guidance for manual seat assignment.
     category: Mapped[str | None] = mapped_column(String(50), nullable=True)
+    # Display + FCFS-fill order (lower first), then name.
+    sort_order: Mapped[int] = mapped_column(Integer, default=0)
 
     event: Mapped["Event"] = relationship("Event", back_populates="tables")
     guests: Mapped[list["Guest"]] = relationship("Guest", back_populates="table")
@@ -244,6 +251,7 @@ class TableGroup(Base):
     # uniqueness enforced in the router.
     tag: Mapped[str] = mapped_column(String(120))
     description: Mapped[str | None] = mapped_column(Text, nullable=True)
+    sort_order: Mapped[int] = mapped_column(Integer, default=0)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 

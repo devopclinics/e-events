@@ -23,6 +23,9 @@ class Settings(BaseSettings):
 
     # Messaging provider switch: 'bird' | 'twilio' | '' (off)
     messaging_provider: str = ""
+    # Optional per-channel override for WhatsApp (e.g. SMS via ClickSend but
+    # WhatsApp via Bird). Falls back to messaging_provider when empty.
+    whatsapp_provider: str = ""
 
     twilio_account_sid: str = ""
     twilio_auth_token: str = ""

@@ -22,7 +22,8 @@ async def group_table_ids(group_id: str, db: AsyncSession) -> set[str]:
 
 async def _table_out(table: SeatingTable, db: AsyncSession) -> SeatingTableOut:
     count = await db.scalar(select(func.count(Guest.id)).where(Guest.table_id == table.id)) or 0
-    return SeatingTableOut(id=table.id, event_id=table.event_id, name=table.name, capacity=table.capacity, category=table.category, assigned_count=count)
+    return SeatingTableOut(id=table.id, event_id=table.event_id, name=table.name, capacity=table.capacity,
+                           category=table.category, sort_order=table.sort_order or 0, assigned_count=count)
 
 
 def _clean_table_name(name: str) -> str:
@@ -106,7 +107,7 @@ async def assign_next_seat(guest: Guest, db: AsyncSession) -> None:
         return
 
     tables = (await db.execute(
-        select(SeatingTable).where(SeatingTable.event_id == guest.event_id).order_by(SeatingTable.name)
+        select(SeatingTable).where(SeatingTable.event_id == guest.event_id).order_by(SeatingTable.sort_order, SeatingTable.name)
     )).scalars().all()
     if not tables:
         return  # nothing we can do; admit without seat
@@ -186,7 +187,7 @@ async def assign_next_seat(guest: Guest, db: AsyncSession) -> None:
 
 @router.get("/{event_id}/tables", response_model=list[SeatingTableOut])
 async def list_tables(event_id: str, db: AsyncSession = Depends(get_db), _: User = Depends(require_paid_event_member)):
-    result = await db.execute(select(SeatingTable).where(SeatingTable.event_id == event_id).order_by(SeatingTable.name))
+    result = await db.execute(select(SeatingTable).where(SeatingTable.event_id == event_id).order_by(SeatingTable.sort_order, SeatingTable.name))
     tables = result.scalars().all()
     return [await _table_out(t, db) for t in tables]
 
@@ -196,11 +197,12 @@ async def create_table(event_id: str, data: SeatingTableCreate, db: AsyncSession
     if not await db.get(Event, event_id):
         raise HTTPException(404, "Event not found")
     name = await _ensure_unique_table_name(event_id, data.name, db)
-    table = SeatingTable(event_id=event_id, name=name, capacity=data.capacity, category=data.category)
+    table = SeatingTable(event_id=event_id, name=name, capacity=data.capacity, category=data.category,
+                         sort_order=data.sort_order or 0)
     db.add(table)
     await db.commit()
     await db.refresh(table)
-    return SeatingTableOut(id=table.id, event_id=table.event_id, name=table.name, capacity=table.capacity, category=table.category, assigned_count=0)
+    return await _table_out(table, db)
 
 
 @router.put("/{event_id}/tables/{table_id}", response_model=SeatingTableOut)
@@ -211,6 +213,8 @@ async def update_table(event_id: str, table_id: str, data: SeatingTableCreate, d
     table.name = await _ensure_unique_table_name(event_id, data.name, db, exclude_id=table_id)
     table.capacity = data.capacity
     table.category = data.category
+    if data.sort_order is not None:
+        table.sort_order = data.sort_order
     await db.commit()
     await db.refresh(table)
     return await _table_out(table, db)
@@ -274,19 +278,32 @@ async def _set_group_tables(group: TableGroup, table_ids: list[str], event_id: s
         db.add(TableGroupTable(table_group_id=group.id, table_id=tid))
 
 
+async def _apply_table_orders(orders: dict[str, int] | None, event_id: str, db: AsyncSession) -> None:
+    """Set each table's sort_order from a {table_id: order} map (group edit)."""
+    if not orders:
+        return
+    for tid, order in orders.items():
+        t = await db.get(SeatingTable, tid)
+        if t and t.event_id == event_id:
+            t.sort_order = int(order)
+
+
 async def _group_out(group: TableGroup, db: AsyncSession) -> TableGroupOut:
-    table_ids = list(await group_table_ids(group.id, db))
-    total_seats = 0
-    if table_ids:
-        total_seats = await db.scalar(
-            select(func.coalesce(func.sum(SeatingTable.capacity), 0)).where(SeatingTable.id.in_(table_ids))
-        ) or 0
+    # Member tables ordered by their sort_order, then name.
+    rows = (await db.execute(
+        select(SeatingTable.id, SeatingTable.capacity)
+        .join(TableGroupTable, TableGroupTable.table_id == SeatingTable.id)
+        .where(TableGroupTable.table_group_id == group.id)
+        .order_by(SeatingTable.sort_order, SeatingTable.name)
+    )).all()
+    table_ids = [r[0] for r in rows]
+    total_seats = sum(int(r[1]) for r in rows)
     assigned = await db.scalar(
         select(func.count(Guest.id)).where(Guest.assigned_table_group_id == group.id)
     ) or 0
     return TableGroupOut(
         id=group.id, event_id=group.event_id, name=group.name, tag=group.tag,
-        description=group.description, table_ids=table_ids,
+        description=group.description, sort_order=group.sort_order or 0, table_ids=table_ids,
         assigned_guest_count=int(assigned), total_seats=int(total_seats),
         remaining_seats=int(total_seats) - int(assigned),
         over_capacity=int(assigned) > int(total_seats),
@@ -296,7 +313,7 @@ async def _group_out(group: TableGroup, db: AsyncSession) -> TableGroupOut:
 @router.get("/{event_id}/table-groups", response_model=list[TableGroupOut])
 async def list_table_groups(event_id: str, db: AsyncSession = Depends(get_db), _: User = Depends(require_paid_event_member)):
     groups = (await db.execute(
-        select(TableGroup).where(TableGroup.event_id == event_id).order_by(TableGroup.name)
+        select(TableGroup).where(TableGroup.event_id == event_id).order_by(TableGroup.sort_order, TableGroup.name)
     )).scalars().all()
     return [await _group_out(g, db) for g in groups]
 
@@ -307,11 +324,13 @@ async def create_table_group(event_id: str, data: TableGroupCreate, db: AsyncSes
         raise HTTPException(404, "Event not found")
     name = _clean_group_name(data.name)
     tag = await _ensure_unique_group_tag(event_id, data.tag or name, db)
-    group = TableGroup(event_id=event_id, name=name, tag=tag, description=data.description)
+    group = TableGroup(event_id=event_id, name=name, tag=tag, description=data.description,
+                       sort_order=data.sort_order or 0)
     db.add(group)
     await db.flush()
     if data.table_ids:
         await _set_group_tables(group, data.table_ids, event_id, db)
+    await _apply_table_orders(data.table_orders, event_id, db)
     await db.commit()
     await db.refresh(group)
     return await _group_out(group, db)
@@ -325,8 +344,11 @@ async def update_table_group(event_id: str, group_id: str, data: TableGroupCreat
     group.name = _clean_group_name(data.name)
     group.tag = await _ensure_unique_group_tag(event_id, data.tag or group.name, db, exclude_id=group_id)
     group.description = data.description
+    if data.sort_order is not None:
+        group.sort_order = data.sort_order
     if data.table_ids is not None:
         await _set_group_tables(group, data.table_ids, event_id, db)
+    await _apply_table_orders(data.table_orders, event_id, db)
     await db.commit()
     await db.refresh(group)
     return await _group_out(group, db)
@@ -364,7 +386,7 @@ async def delete_table_group(event_id: str, group_id: str, db: AsyncSession = De
 @router.get("/{event_id}/seating")
 async def seating_chart(event_id: str, db: AsyncSession = Depends(get_db), _: User = Depends(require_paid_event_member)):
     """Full chart: each table with all seat slots (filled and empty)."""
-    tables = (await db.execute(select(SeatingTable).where(SeatingTable.event_id == event_id).order_by(SeatingTable.name))).scalars().all()
+    tables = (await db.execute(select(SeatingTable).where(SeatingTable.event_id == event_id).order_by(SeatingTable.sort_order, SeatingTable.name))).scalars().all()
     guests = (await db.execute(select(Guest).where(Guest.event_id == event_id, Guest.table_id.isnot(None)))).scalars().all()
 
     by_table: dict[str, list] = {}
@@ -405,7 +427,7 @@ async def auto_assign(event_id: str, clear: bool = False, db: AsyncSession = Dep
             g.seat_number = None
         await db.flush()
 
-    tables = (await db.execute(select(SeatingTable).where(SeatingTable.event_id == event_id).order_by(SeatingTable.name))).scalars().all()
+    tables = (await db.execute(select(SeatingTable).where(SeatingTable.event_id == event_id).order_by(SeatingTable.sort_order, SeatingTable.name))).scalars().all()
     if not tables:
         raise HTTPException(400, "No tables defined — create tables first")
 

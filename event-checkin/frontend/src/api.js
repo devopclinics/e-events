@@ -143,6 +143,10 @@ export const api = {
   // Manual check-in (no QR)
   searchGuests:  (eventId, q) => req('GET', `/events/${eventId}/guests/search?q=${encodeURIComponent(q)}`),
   manualCheckin: (eventId, guestId) => req('POST', `/events/${eventId}/guests/${guestId}/checkin`),
+  // Walk-in
+  setWalkIn:      (eventId, active) => req('PATCH', `/events/${eventId}/walk-in`, { active }),
+  setWalkInGroup: (eventId, tableGroupId) => req('PATCH', `/events/${eventId}/walk-in-group`, { table_group_id: tableGroupId }),
+  registerWalkIn: (eventId, data) => req('POST', `/events/${eventId}/guests/walk-in`, data),
   adminSetManualCheckin: (eventId, active) => req('PATCH', `/admin/events/${eventId}/manual-checkin`, { active }),
   adminSetMms: (eventId, active) => req('PATCH', `/admin/events/${eventId}/mms`, { active }),
   setSelfCheckin: (eventId, active) => req('PATCH', `/events/${eventId}/self-checkin`, { active }),

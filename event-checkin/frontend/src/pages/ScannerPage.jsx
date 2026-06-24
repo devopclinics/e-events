@@ -254,13 +254,25 @@ function extractToken(raw) {
   }
 }
 
-function ManualCheckin({ eventId, onResult }) {
+function ManualCheckin({ eventId, onResult, walkInEnabled }) {
   const [q, setQ] = useState('')
   const [results, setResults] = useState([])
   const [searching, setSearching] = useState(false)
   const [confirm, setConfirm] = useState(null)   // guest pending confirmation
   const [busy, setBusy] = useState(false)
   const [err, setErr] = useState('')
+  const [walkIn, setWalkIn] = useState(false)
+  const [wf, setWf] = useState({ first_name: '', last_name: '', phone: '' })
+
+  async function doRegisterWalkIn(e) {
+    e.preventDefault()
+    setBusy(true); setErr('')
+    try {
+      onResult(await api.registerWalkIn(eventId, {
+        first_name: wf.first_name.trim(), last_name: wf.last_name.trim(), phone: wf.phone.trim() || null,
+      }))
+    } catch (e) { setErr(e.message); setBusy(false) }
+  }
 
   // Debounced search across name + phone.
   useEffect(() => {
@@ -317,10 +329,44 @@ function ManualCheckin({ eventId, onResult }) {
     )
   }
 
+  // Walk-in registration form.
+  if (walkIn) {
+    return (
+      <form onSubmit={doRegisterWalkIn} className="space-y-3">
+        <p className="text-sm font-semibold dark:text-white">Register walk-in guest</p>
+        <div className="grid grid-cols-2 gap-2">
+          <input autoFocus required value={wf.first_name} onChange={(e) => setWf((f) => ({ ...f, first_name: e.target.value }))}
+            placeholder="First name *" className={inputCls} />
+          <input value={wf.last_name} onChange={(e) => setWf((f) => ({ ...f, last_name: e.target.value }))}
+            placeholder="Last name" className={inputCls} />
+        </div>
+        <input value={wf.phone} onChange={(e) => setWf((f) => ({ ...f, phone: e.target.value }))}
+          placeholder="Phone (optional)" className={inputCls} />
+        {err && <p className="text-sm text-red-500">{err}</p>}
+        <div className="flex gap-2">
+          <button type="submit" disabled={busy || !wf.first_name.trim()}
+            className="flex-1 bg-amber-500 hover:bg-amber-600 text-white font-bold py-3 rounded-xl disabled:opacity-50">
+            {busy ? 'Registering…' : 'Register & check in'}
+          </button>
+          <button type="button" onClick={() => { setWalkIn(false); setErr('') }}
+            className="px-5 py-3 rounded-xl border border-gray-300 dark:border-slate-600 text-gray-700 dark:text-slate-200">
+            Cancel
+          </button>
+        </div>
+      </form>
+    )
+  }
+
   return (
     <div className="space-y-3">
       <input value={q} onChange={(e) => setQ(e.target.value)} autoFocus
         placeholder="Search name or phone…" className={inputCls} />
+      {walkInEnabled && (
+        <button onClick={() => { setWalkIn(true); setErr('') }}
+          className="w-full bg-amber-50 dark:bg-amber-900/20 text-amber-700 dark:text-amber-300 border border-amber-300 dark:border-amber-800 rounded-lg py-2 text-sm font-semibold hover:bg-amber-100 dark:hover:bg-amber-900/40">
+          + Register as Walk-in Guest
+        </button>
+      )}
       {searching && <p className="text-xs text-gray-400 dark:text-slate-500">Searching…</p>}
       {err && <p className="text-sm text-red-500">{err}</p>}
       {q.trim().length >= 2 && !searching && results.length === 0 && (
@@ -590,7 +636,7 @@ export default function ScannerPage() {
             {selfCheckinEnabled && mode === 'eventqr' ? (
               <EventQrPanel event={selectedEvent} />
             ) : manualEnabled && mode === 'manual' ? (
-              <ManualCheckin eventId={eventId} onResult={(res) => setResult(res)} />
+              <ManualCheckin eventId={eventId} walkInEnabled={!!selectedEvent?.walk_in_enabled} onResult={(res) => setResult(res)} />
             ) : (
               <>
                 <p className="text-center text-sm text-gray-500 dark:text-slate-400 mb-4">

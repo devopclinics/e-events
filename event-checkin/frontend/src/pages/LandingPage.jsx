@@ -271,11 +271,7 @@ export default function LandingPage() {
               </p>
               <div className="mt-8 flex flex-col sm:flex-row gap-3">
                 <PrimaryCta />
-                <a href="#showcase"
-                  className="inline-flex items-center justify-center gap-2 border border-slate-300 dark:border-slate-600 text-slate-800 dark:text-slate-100 px-6 py-3 rounded-xl font-semibold text-sm hover:bg-white dark:hover:bg-slate-900 transition-colors">
-                  <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20"><path d="M6.3 2.8A1 1 0 004.8 3.6v12.8a1 1 0 001.5.86l10.5-6.4a1 1 0 000-1.72L6.3 2.8z" /></svg>
-                  Watch Demo
-                </a>
+                <SecondaryCta />
               </div>
               <p className="mt-6 text-sm text-slate-500 dark:text-slate-400 max-w-md">
                 Free for small events. Built for weddings, galas, community programs, and private ceremonies.

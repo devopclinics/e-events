@@ -89,7 +89,7 @@ const eventTypes = [
 
 const tabs = [
   { key: 'checkin', label: 'Check-in', img: '/media/help-check-in.png', alt: 'EventQR mobile scanner verifying a guest',
-    title: 'Scan, verify, and welcome', body: 'Staff scan a QR with any phone. The guest is verified instantly — name, table, seat and access status, with duplicates blocked.' },
+    title: 'Table & seat-aware check-in', body: 'When a guest is scanned, staff instantly see their name, RSVP status, table, seat and access permission — duplicates blocked. Built for weddings, galas and formal events, not just a QR reader.' },
   { key: 'access', label: 'Tables & access', img: '/media/help-entry-areas.png', alt: 'Entry areas, zones and ticket rules in EventQR',
     title: 'Control where every guest belongs', body: 'Assign guests to tables, seats, family groups, VIP areas or vendor zones. On scan, staff see exactly where the guest goes — and whether they’re allowed in.' },
   { key: 'dashboard', label: 'Live dashboard', img: '/media/help-results.png', alt: 'Real-time attendance dashboard in EventQR',
@@ -205,7 +205,7 @@ function Shot({ src, alt, className = '' }) {
 }
 
 // ── CTAs ────────────────────────────────────────────────────────────────────────
-function PrimaryCta({ children = 'Create Test Event', className = '' }) {
+function PrimaryCta({ children = 'Create Free Event', className = '' }) {
   return (
     <Link to="/register"
       className={`inline-flex items-center justify-center gap-2 bg-teal-600 text-white px-6 py-3 rounded-xl font-semibold text-sm hover:bg-teal-700 transition-colors shadow-lg shadow-teal-900/20 ${className}`}>
@@ -240,7 +240,7 @@ export default function LandingPage() {
             <span className="font-bold text-lg tracking-tight text-slate-950 dark:text-white">EventQR</span>
           </a>
           <nav className="hidden md:flex items-center gap-6 mr-2">
-            {[['#problem', 'Why'], ['#features', 'Features'], ['#event-types', 'Event types'], ['#how', 'How it works']].map(([href, label]) => (
+            {[['#problem', 'Why'], ['#features', 'Features'], ['#event-types', 'Event types'], ['#showcase', 'Demo']].map(([href, label]) => (
               <a key={href} href={href} className="text-sm font-medium text-slate-600 dark:text-slate-300 hover:text-teal-700 dark:hover:text-teal-300 transition-colors">{label}</a>
             ))}
             <Link to="/pricing" className="text-sm font-medium text-slate-600 dark:text-slate-300 hover:text-teal-700 dark:hover:text-teal-300 transition-colors">Pricing</Link>
@@ -249,7 +249,7 @@ export default function LandingPage() {
             {dark ? <SunIcon /> : <MoonIcon />}
           </button>
           <Link to="/login" className="hidden sm:inline text-sm font-medium text-slate-600 dark:text-slate-300 hover:text-teal-700 dark:hover:text-teal-300 transition-colors">Sign In</Link>
-          <Link to="/register" className="text-sm font-semibold bg-teal-600 text-white px-4 py-2 rounded-lg hover:bg-teal-700 transition-colors">Create Test Event</Link>
+          <Link to="/register" className="text-sm font-semibold bg-teal-600 text-white px-4 py-2 rounded-lg hover:bg-teal-700 transition-colors">Create Free Event</Link>
         </div>
       </header>
 
@@ -261,23 +261,25 @@ export default function LandingPage() {
             <div>
               <div className="inline-flex items-center gap-2 bg-white dark:bg-slate-900 text-teal-800 dark:text-teal-200 text-xs font-semibold px-3 py-1.5 rounded-full border border-teal-200/80 dark:border-teal-800/80 mb-6 shadow-sm">
                 <span className="w-1.5 h-1.5 bg-emerald-500 rounded-full animate-pulse" />
-                Beautiful guest experience · serious check-in control
+                Create · Invite · Seat · Check in
               </div>
               <h1 className="text-4xl sm:text-5xl lg:text-6xl font-extrabold tracking-tight text-slate-950 dark:text-white leading-[1.05]">
-                Check in every guest with <span className="bg-gradient-to-r from-teal-600 to-emerald-500 bg-clip-text text-transparent">confidence.</span>
+                Event check-in without the <span className="bg-gradient-to-r from-teal-600 to-emerald-500 bg-clip-text text-transparent">crowd at the door.</span>
               </h1>
               <p className="mt-6 text-lg sm:text-xl text-slate-600 dark:text-slate-300 max-w-xl leading-relaxed">
-                EventQR helps you send personal QR tickets, verify guests instantly, manage tables and seats, and track attendance live — all from one simple event dashboard.
+                Send QR tickets, manage RSVPs, assign tables and seats, and let your staff check guests in from any phone.
               </p>
               <div className="mt-8 flex flex-col sm:flex-row gap-3">
                 <PrimaryCta />
-                <SecondaryCta />
+                <a href="#showcase"
+                  className="inline-flex items-center justify-center gap-2 border border-slate-300 dark:border-slate-600 text-slate-800 dark:text-slate-100 px-6 py-3 rounded-xl font-semibold text-sm hover:bg-white dark:hover:bg-slate-900 transition-colors">
+                  <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20"><path d="M6.3 2.8A1 1 0 004.8 3.6v12.8a1 1 0 001.5.86l10.5-6.4a1 1 0 000-1.72L6.3 2.8z" /></svg>
+                  Watch Demo
+                </a>
               </div>
-              <div className="mt-6 flex flex-wrap items-center gap-x-5 gap-y-2 text-sm text-slate-500 dark:text-slate-400">
-                {['No app to install', 'Free to start', 'Pay per event'].map((t) => (
-                  <span key={t} className="inline-flex items-center gap-1.5"><Check className="w-4 h-4 text-emerald-500" /> {t}</span>
-                ))}
-              </div>
+              <p className="mt-6 text-sm text-slate-500 dark:text-slate-400 max-w-md">
+                Free for small events. Built for weddings, galas, community programs, and private ceremonies.
+              </p>
             </div>
             <LiveScanDemo />
           </div>
@@ -347,7 +349,7 @@ export default function LandingPage() {
       </section>
 
       {/* ── Interactive showcase (carousel) ── */}
-      <section className="py-20 bg-slate-50 dark:bg-slate-900/40 border-t border-slate-100 dark:border-slate-800">
+      <section id="showcase" className="scroll-mt-16 py-20 bg-slate-50 dark:bg-slate-900/40 border-t border-slate-100 dark:border-slate-800">
         <div className="max-w-6xl mx-auto px-4 sm:px-6">
           <Reveal className="text-center mb-10">
             <h2 className="text-3xl sm:text-4xl font-bold text-slate-950 dark:text-white">See EventQR in action</h2>
@@ -509,7 +511,7 @@ export default function LandingPage() {
         <div className="max-w-3xl mx-auto px-4 sm:px-6 text-center">
           <Reveal>
             <h2 className="text-3xl sm:text-5xl font-bold text-slate-950 dark:text-white">Ready to make check-in the easiest part of your event?</h2>
-            <p className="mt-5 text-lg text-slate-600 dark:text-slate-400">Set up a test event in minutes. Free to start — pay per event, no subscription.</p>
+            <p className="mt-5 text-lg text-slate-600 dark:text-slate-400">Create. Invite. Seat. Check in. One simple platform to manage your guests from RSVP to entrance — free for small events.</p>
             <div className="mt-8 flex flex-col sm:flex-row gap-3 justify-center">
               <PrimaryCta className="px-8 py-4 text-base" />
               <SecondaryCta className="px-8 py-4 text-base" />

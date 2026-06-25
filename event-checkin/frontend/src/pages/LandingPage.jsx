@@ -471,7 +471,8 @@ export default function LandingPage() {
         </div>
       </section>
 
-      {/* ── Trust & proof ── */}
+      {/* ── Trust & proof — hidden until we have real stats / testimonials / client logos.
+           Re-enable this section (and fill in real numbers, quotes, and logo images) when available.
       <section className="py-20 bg-slate-950 text-white relative overflow-hidden">
         <div aria-hidden="true" className="absolute inset-0 opacity-25 bg-[radial-gradient(40rem_18rem_at_50%_0%,rgba(16,185,129,0.4),transparent)]" />
         <div className="relative max-w-5xl mx-auto px-4 sm:px-6">
@@ -486,9 +487,9 @@ export default function LandingPage() {
           <Reveal>
             <figure className="max-w-2xl mx-auto text-center">
               <blockquote className="text-xl sm:text-2xl font-medium leading-relaxed">
-                “EventQR helped us manage guest entry smoothly and reduced confusion at the door.”
+                EventQR helped us manage guest entry smoothly and reduced confusion at the door.
               </blockquote>
-              <figcaption className="mt-4 text-sm text-slate-400">Event organizer · placeholder testimonial</figcaption>
+              <figcaption className="mt-4 text-sm text-slate-400">Event organizer</figcaption>
             </figure>
           </Reveal>
           <Reveal className="mt-12">
@@ -501,6 +502,7 @@ export default function LandingPage() {
           </Reveal>
         </div>
       </section>
+      */}
 
       {/* ── Final CTA ── */}
       <section className="py-24 border-t border-slate-100 dark:border-slate-800">

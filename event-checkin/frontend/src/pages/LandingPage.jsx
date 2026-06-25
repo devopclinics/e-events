@@ -502,6 +502,41 @@ export default function LandingPage() {
       </section>
       */}
 
+      {/* ── Tailored solution ── */}
+      <section className="py-20 border-t border-slate-100 dark:border-slate-800">
+        <div className="max-w-5xl mx-auto px-4 sm:px-6">
+          <Reveal>
+            <div className="relative overflow-hidden rounded-3xl bg-slate-950 text-white p-8 sm:p-12">
+              <div aria-hidden="true" className="absolute inset-0 opacity-40 bg-[radial-gradient(36rem_18rem_at_85%_-20%,rgba(45,212,191,0.45),transparent)]" />
+              <div className="relative grid lg:grid-cols-[1.5fr_1fr] gap-8 items-center">
+                <div>
+                  <p className="text-sm font-semibold uppercase tracking-wide text-teal-400">Tailored solutions</p>
+                  <h2 className="mt-2 text-3xl sm:text-4xl font-bold">We have a tailored solution for your needs. Let’s talk.</h2>
+                  <p className="mt-4 text-slate-300 leading-relaxed max-w-xl">
+                    Large weddings, multi-day conferences, community programs, custom access rules, branding, special seating, or an integration — tell us how your event runs and we’ll set EventQR up around it, with you.
+                  </p>
+                  <div className="mt-5 flex flex-wrap gap-2">
+                    {['Custom access & VIP rules', 'Bulk guest onboarding', 'Branding & messaging', 'Hands-on setup support'].map((t) => (
+                      <span key={t} className="rounded-full bg-white/10 px-3 py-1 text-xs font-medium">{t}</span>
+                    ))}
+                  </div>
+                </div>
+                <div className="flex flex-col gap-3 lg:items-end">
+                  <a href={`mailto:${CONTACT_EMAIL}?subject=Tailored%20solution%20%E2%80%94%20EventQR`}
+                    className="inline-flex items-center justify-center gap-2 bg-teal-500 text-white px-6 py-3 rounded-xl font-semibold text-sm hover:bg-teal-400 transition-colors shadow-lg shadow-teal-900/30">
+                    Let’s talk <Arrow />
+                  </a>
+                  <a {...demoProps}
+                    className="inline-flex items-center justify-center gap-2 border border-white/25 text-white px-6 py-3 rounded-xl font-semibold text-sm hover:bg-white/10 transition-colors">
+                    Book a Demo
+                  </a>
+                </div>
+              </div>
+            </div>
+          </Reveal>
+        </div>
+      </section>
+
       {/* ── Final CTA ── */}
       <section className="py-24 border-t border-slate-100 dark:border-slate-800">
         <div className="max-w-3xl mx-auto px-4 sm:px-6 text-center">

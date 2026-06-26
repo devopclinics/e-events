@@ -139,6 +139,10 @@ class Event(Base):
     # Live guest-list sync from a Google Sheets / OneDrive / Excel Online URL.
     # Polled every source_sync_interval_seconds while the event is "active".
     source_url: Mapped[str | None] = mapped_column(String(1000), nullable=True)
+    # Master on/off switch for the poll. When False the poller skips this event
+    # entirely (so an organizer can pause a noisy/finished sync without clearing
+    # the source URL). Defaults True so existing events keep syncing unchanged.
+    source_sync_enabled: Mapped[bool] = mapped_column(Boolean, default=True)
     source_sync_interval_seconds: Mapped[int] = mapped_column(Integer, default=60)
     source_last_sync_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     source_last_error: Mapped[str | None] = mapped_column(Text, nullable=True)
@@ -363,6 +367,10 @@ class Guest(Base):
     admitted: Mapped[bool] = mapped_column(Boolean, default=False)
     admitted_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     admit_notified: Mapped[bool] = mapped_column(Boolean, default=False)
+    # True when the guest wasn't on the original list: added at the door via the
+    # walk-in kiosk or the "Add Guest" button with walk-in checked. Powers the
+    # dashboard "Walk-ins / Manual" stat + the WALK-IN badge.
+    is_walk_in: Mapped[bool] = mapped_column(Boolean, default=False)
     # Seating
     table_id: Mapped[str | None] = mapped_column(String(36), ForeignKey("seating_tables.id"), nullable=True)
     seat_number: Mapped[str | None] = mapped_column(String(20), nullable=True)

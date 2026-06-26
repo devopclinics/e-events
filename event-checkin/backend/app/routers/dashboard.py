@@ -26,6 +26,7 @@ async def get_dashboard(event_id: str, db: AsyncSession = Depends(get_db), _: Us
 
     total = await _count(db, Guest.event_id == event_id)
     admitted_count = await _count(db, Guest.event_id == event_id, Guest.admitted == True)
+    walk_in_count = await _count(db, Guest.event_id == event_id, Guest.is_walk_in == True)
 
     admitted_guests = (await db.execute(
         select(Guest).where(Guest.event_id == event_id, Guest.admitted == True)
@@ -76,6 +77,7 @@ async def get_dashboard(event_id: str, db: AsyncSession = Depends(get_db), _: Us
 
     return DashboardStats(
         total=total, admitted=admitted_count, pending=total - admitted_count,
+        walk_in=walk_in_count,
         admitted_guests=[GuestOut.model_validate(g) for g in admitted_guests],
         rsvp_confirmed=rsvp_confirmed, rsvp_declined=rsvp_declined,
         rsvp_pending=rsvp_pending, rsvp_invited=rsvp_invited,

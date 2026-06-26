@@ -799,7 +799,8 @@ async def add_guest(event_id: str, data: GuestCreate, db: AsyncSession = Depends
         group_id = grp.id
 
     guest = Guest(event_id=event_id, first_name=first, last_name=last, email=email,
-                  phone=phone, is_vip=bool(data.is_vip), assigned_table_group_id=group_id)
+                  phone=phone, is_vip=bool(data.is_vip), assigned_table_group_id=group_id,
+                  is_walk_in=bool(data.is_walk_in))
     db.add(guest)
     await db.commit()
     await db.refresh(guest)
@@ -877,6 +878,34 @@ async def update_guest(
         guest.sms_consent = data.sms_consent
     if data.whatsapp_consent is not None:
         guest.whatsapp_consent = data.whatsapp_consent
+
+    # Manual table/seat assignment. "" clears; a value validates the table and
+    # guards against double-booking the same seat (409).
+    if data.table_id is not None:
+        new_table_id = data.table_id.strip() or None
+        if new_table_id:
+            table = await db.get(SeatingTable, new_table_id)
+            if not table or table.event_id != event_id:
+                raise HTTPException(404, "Table not found for this event")
+        guest.table_id = new_table_id
+        if new_table_id is None:
+            guest.seat_number = None  # no table → no seat
+    if data.seat_number is not None:
+        guest.seat_number = data.seat_number.strip() or None
+
+    # Reject a seat already held by another guest on the same table.
+    if guest.table_id and guest.seat_number:
+        clash = await db.scalar(
+            select(Guest).where(
+                Guest.event_id == event_id,
+                Guest.table_id == guest.table_id,
+                Guest.seat_number == guest.seat_number,
+                Guest.id != guest.id,
+            )
+        )
+        if clash:
+            raise HTTPException(409, f"Seat {guest.seat_number} on that table is already taken by {clash.first_name} {clash.last_name}.")
+
     await db.commit()
     await db.refresh(guest)
     return guest
@@ -977,6 +1006,7 @@ async def register_walk_in(
         event_id=event_id, first_name=first, last_name=(body.last_name or "").strip(),
         phone=phone, qr_generated_at=datetime.utcnow(),
         assigned_table_group_id=event.walk_in_table_group_id or None,
+        is_walk_in=True,
     )
     db.add(guest)
     await db.flush()

@@ -259,7 +259,7 @@ async def perform_admission(guest, event, background_tasks, db) -> ScanResult:
     # Honors couple pairings + table-group restrictions (see assign_next_seat).
     # Keyed on seat_number (not table_id) so pre-assigned-table guests still get a seat.
     if event and event.seating_enabled and not guest.seat_number:
-        await assign_next_seat(guest, db)
+        seat_error = await assign_next_seat(guest, db)
         # Table Groups: a grouped guest who couldn't be seated within their group
         # (group full / has no tables) is turned away with a clear message rather
         # than seated outside their group.
@@ -272,6 +272,15 @@ async def perform_admission(guest, event, background_tasks, db) -> ScanResult:
                 status="denied",
                 message=f"Table group '{gname}' capacity reached — no seat available for "
                         f"{guest.first_name} {guest.last_name}.",
+                guest=GuestOut.model_validate(guest),
+            )
+        # Strict seating: an ungrouped guest who still has no seat (their pre-
+        # assigned table is full, or every table is full) is blocked rather than
+        # admitted seatless. Nothing was committed, so they stay un-admitted.
+        if seat_error and not guest.seat_number:
+            return ScanResult(
+                status="no_seat_available",
+                message=f"No seat available for {guest.first_name} {guest.last_name}: {seat_error}",
                 guest=GuestOut.model_validate(guest),
             )
 
@@ -369,6 +378,7 @@ async def perform_admission(guest, event, background_tasks, db) -> ScanResult:
         "name": f"{guest.first_name} {guest.last_name}",
         "email": guest.email,
         "admitted_at": guest.admitted_at.isoformat(),
+        "is_walk_in": bool(guest.is_walk_in),
     })
 
     return ScanResult(

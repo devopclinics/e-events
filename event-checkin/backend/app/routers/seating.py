@@ -82,15 +82,22 @@ def _first_free(taken: set[int], held: set[int], capacity: int, skip_held: bool)
     return None
 
 
-async def assign_next_seat(guest: Guest, db: AsyncSession) -> None:
+async def assign_next_seat(guest: Guest, db: AsyncSession) -> str | None:
     """First-come-first-served seat assignment honoring couple pairings.
 
     Mutates guest.table_id / guest.seat_number / guest.held_seat in-place.
     Caller is responsible for commit.
+
+    Returns None on success (guest seated, or nothing to do). Returns a short
+    human-readable error string when the guest genuinely cannot be seated
+    (pre-assigned table full, their table group full, or every table full) so
+    admission paths can block instead of silently admitting a seatless guest.
+    A guest at an event with no tables configured is *not* an error — we return
+    None and the caller admits them without a seat (seating simply isn't used).
     """
     # Already fully seated (table AND seat) — nothing to do.
     if guest.table_id and guest.seat_number:
-        return
+        return None
 
     # Pre-assigned to a table but no seat yet (e.g. manual table assignment, or
     # after an event reset that cleared seats) — give them a seat inside that
@@ -104,13 +111,16 @@ async def assign_next_seat(guest: Guest, db: AsyncSession) -> None:
                 seat = _first_free(taken, set(), pre_table.capacity, skip_held=False)
             if seat is not None:
                 guest.seat_number = str(seat)
-        return
+                return None
+            # Pre-assigned table is full — block rather than admit seatless.
+            return f"{pre_table.name} is full — no seat available."
+        return None  # dangling table_id; don't block admission
 
     tables = (await db.execute(
         select(SeatingTable).where(SeatingTable.event_id == guest.event_id).order_by(SeatingTable.sort_order, SeatingTable.name)
     )).scalars().all()
     if not tables:
-        return  # nothing we can do; admit without seat
+        return None  # no tables configured; admit without seat (seating unused)
 
     # Table Groups: if this guest is assigned to a group and the event enforces
     # it, restrict the candidate tables to that group's tables. All downstream
@@ -122,7 +132,9 @@ async def assign_next_seat(guest: Guest, db: AsyncSession) -> None:
             allowed_ids = await group_table_ids(guest.assigned_table_group_id, db)
             tables = [t for t in tables if t.id in allowed_ids]
             if not tables:
-                return  # group has no tables / is full → leave unseated
+                grp = await db.get(TableGroup, guest.assigned_table_group_id)
+                gname = grp.name if grp else "their table group"
+                return f"Table group '{gname}' is full — no seat available."
 
     partner = await db.get(Guest, guest.partner_guest_id) if guest.partner_guest_id else None
 
@@ -145,7 +157,7 @@ async def assign_next_seat(guest: Guest, db: AsyncSession) -> None:
                 # Release partner's hold now that we're sitting next to them.
                 if partner.held_seat == str(target):
                     partner.held_seat = None
-                return
+                return None
         # Partner's table is full — fall through to find any seat for this guest
 
     # Case 2 — guest is paired but partner not yet arrived: find table with
@@ -159,7 +171,7 @@ async def assign_next_seat(guest: Guest, db: AsyncSession) -> None:
                     guest.table_id = table.id
                     guest.seat_number = str(n)
                     guest.held_seat = str(n + 1)
-                    return
+                    return None
         # No table has 2 contiguous seats — fall through to solo placement
 
     # Case 3 — solo guest, or paired fallback: lowest free non-held seat.
@@ -169,7 +181,7 @@ async def assign_next_seat(guest: Guest, db: AsyncSession) -> None:
         if seat is not None:
             guest.table_id = table.id
             guest.seat_number = str(seat)
-            return
+            return None
 
     # Last resort: every table is full when held seats are honored.
     # Take a held seat from the lowest table to avoid turning the guest away.
@@ -179,7 +191,10 @@ async def assign_next_seat(guest: Guest, db: AsyncSession) -> None:
         if seat is not None:
             guest.table_id = table.id
             guest.seat_number = str(seat)
-            return
+            return None
+
+    # Every table is full — block rather than admit a seatless guest.
+    return "All tables are full — no seat available."
     # No capacity anywhere — leave guest unseated.
 
 

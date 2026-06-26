@@ -79,6 +79,7 @@ class EventUpdate(BaseModel):
 class EventSourceUpdate(BaseModel):
     source_url: Optional[str] = None
     source_sync_interval_seconds: Optional[int] = None
+    source_sync_enabled: Optional[bool] = None
 
 
 class EventOut(BaseModel):
@@ -112,6 +113,7 @@ class EventOut(BaseModel):
     created_at: datetime
     source_url: Optional[str] = None
     source_sync_interval_seconds: int = 60
+    source_sync_enabled: bool = True
     source_last_sync_at: Optional[datetime] = None
     source_last_error: Optional[str] = None
     source_last_warning: Optional[str] = None
@@ -402,7 +404,7 @@ class SelfCheckinGuest(BaseModel):
 
 
 class SelfCheckinResult(BaseModel):
-    status: str          # ok | not_active | invalid | admitted | already_admitted | denied
+    status: str          # ok | not_active | invalid | admitted | already_admitted | denied | no_seat_available
     message: Optional[str] = None
     name: Optional[str] = None            # event name (info call)
     guests: list[SelfCheckinGuest] = []   # search results
@@ -837,6 +839,7 @@ class GuestCreate(BaseModel):
     phone: Optional[str] = None
     is_vip: bool = False
     assigned_table_group_id: Optional[str] = None
+    is_walk_in: bool = False   # added at the door, not on the original list
 
 
 class GuestUpdate(BaseModel):
@@ -848,6 +851,10 @@ class GuestUpdate(BaseModel):
     is_vip: Optional[bool] = None
     sms_consent: Optional[bool] = None
     whatsapp_consent: Optional[bool] = None
+    # Manual seating from the edit modal. Send "" to clear a table/seat; a non-empty
+    # seat on an occupied (table, seat) pair returns 409.
+    table_id: Optional[str] = None
+    seat_number: Optional[str] = None
 
 
 class GuestOut(BaseModel):
@@ -875,6 +882,7 @@ class GuestOut(BaseModel):
     table_group_name: Optional[str] = None
     meal_served: bool = False
     is_vip: bool = False
+    is_walk_in: bool = False
     ticket_type_id: Optional[str] = None
     sms_consent: bool = True
     whatsapp_consent: bool = True
@@ -955,6 +963,7 @@ class DashboardStats(BaseModel):
     total: int
     admitted: int
     pending: int
+    walk_in: int = 0   # guests added at the door (kiosk or manual walk-in)
     admitted_guests: list[GuestOut]
     # RSVP breakdown (always present)
     rsvp_confirmed: int = 0

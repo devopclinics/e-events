@@ -4353,7 +4353,7 @@ function relativeTime(iso) {
   return `${Math.floor(s / 86400)}d ago`
 }
 
-function SourceSyncPanel({ event, onSave, onSyncNow, loading }) {
+function SourceSyncPanel({ event, onSave, onSyncNow, onToggleSync, loading }) {
   const [url, setUrl] = useState(event.source_url || '')
   const [interval, setInterval] = useState(event.source_sync_interval_seconds || 60)
   const [tick, setTick] = useState(0)
@@ -4369,7 +4369,9 @@ function SourceSyncPanel({ event, onSave, onSyncNow, loading }) {
 
   const dirty = url.trim() !== (event.source_url || '') ||
     Number(interval) !== (event.source_sync_interval_seconds || 60)
-  const polling = event.status === 'active' && !!event.source_url
+  // Master switch — backfilled true for existing events, so treat undefined as on.
+  const enabled = event.source_sync_enabled !== false
+  const polling = event.status === 'active' && !!event.source_url && enabled
 
   return (
     <div className="bg-white dark:bg-slate-800 dark:border dark:border-slate-700/60 rounded-xl shadow p-6 space-y-4">
@@ -4382,12 +4384,31 @@ function SourceSyncPanel({ event, onSave, onSyncNow, loading }) {
             Existing guests stay untouched.
           </p>
         </div>
-        {polling && (
-          <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-green-50 dark:bg-green-900/40 text-green-700 dark:text-green-300">
-            <span className="w-2 h-2 rounded-full bg-green-500 animate-pulse" />
-            Listening
-          </span>
-        )}
+        <div className="flex items-center gap-2">
+          {polling && (
+            <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-green-50 dark:bg-green-900/40 text-green-700 dark:text-green-300">
+              <span className="w-2 h-2 rounded-full bg-green-500 animate-pulse" />
+              Listening
+            </span>
+          )}
+          {!enabled && (
+            <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-amber-50 dark:bg-amber-900/40 text-amber-700 dark:text-amber-300">
+              <span className="w-2 h-2 rounded-full bg-amber-500" />
+              Paused
+            </span>
+          )}
+          {/* Master on/off — pauses the poll without clearing the URL. */}
+          <button
+            type="button"
+            role="switch"
+            aria-checked={enabled}
+            onClick={() => onToggleSync?.(!enabled)}
+            title={enabled ? 'Sync is on — click to pause' : 'Sync is paused — click to resume'}
+            className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${enabled ? 'bg-green-500' : 'bg-gray-300 dark:bg-slate-600'}`}>
+            <span className={`inline-block h-5 w-5 transform rounded-full bg-white shadow transition-transform ${enabled ? 'translate-x-5' : 'translate-x-1'}`} />
+          </button>
+          <span className="text-xs font-medium text-gray-600 dark:text-slate-300 w-14">{enabled ? 'Sync On' : 'Sync Off'}</span>
+        </div>
       </div>
 
       <div className="flex flex-col sm:flex-row gap-2">
@@ -4421,7 +4442,8 @@ function SourceSyncPanel({ event, onSave, onSyncNow, loading }) {
         </button>
         <button
           onClick={onSyncNow}
-          disabled={loading || !event.source_url}
+          disabled={loading || !event.source_url || !enabled}
+          title={!enabled ? 'Turn Sync on to poll the spreadsheet' : undefined}
           className="bg-white dark:bg-slate-700 border border-gray-300 dark:border-slate-700 text-gray-700 dark:text-slate-200 px-4 py-2 rounded-lg text-sm font-medium hover:bg-gray-50 dark:hover:bg-slate-600 disabled:opacity-50">
           {loading ? 'Syncing…' : 'Sync now'}
         </button>
@@ -4447,7 +4469,12 @@ function SourceSyncPanel({ event, onSave, onSyncNow, loading }) {
           ⚠ {event.source_last_warning}
         </div>
       )}
-      {!polling && event.source_url && (
+      {!enabled && event.source_url && (
+        <p className="text-xs text-amber-600 dark:text-amber-400">
+          Sync is paused. The spreadsheet link is saved but won’t be polled until you turn Sync on.
+        </p>
+      )}
+      {enabled && !polling && event.source_url && (
         <p className="text-xs text-gray-400 dark:text-slate-500">
           Auto-sync starts when you set the event to <strong>Active</strong>.
         </p>
@@ -4958,7 +4985,7 @@ function AddGuestModal({ onSave, onClose, loading }) {
 
 // ── Edit Guest Modal (ported from prod) ─────────────────────────────────────────
 
-function EditGuestModal({ guest, onSave, onClose, loading }) {
+function EditGuestModal({ guest, eventId, seatingEnabled, onSave, onClose, loading }) {
   const [form, setForm] = useState({
     first_name: guest.first_name || '',
     last_name:  guest.last_name  || '',
@@ -4967,11 +4994,22 @@ function EditGuestModal({ guest, onSave, onClose, loading }) {
     is_vip:     guest.is_vip     || false,
     sms_consent: guest.sms_consent !== false,
     whatsapp_consent: guest.whatsapp_consent !== false,
+    table_id:   guest.table_id   || '',
+    seat_number: guest.seat_number || '',
   })
+  const [tables, setTables] = useState([])
+
+  // Load the event's tables so seat assignment can offer a real picker.
+  useEffect(() => {
+    if (!seatingEnabled || !eventId) return
+    let alive = true
+    api.listTables(eventId).then((t) => { if (alive) setTables(t) }).catch(() => {})
+    return () => { alive = false }
+  }, [eventId, seatingEnabled])
 
   function handleSubmit(e) {
     e.preventDefault()
-    onSave({
+    const payload = {
       first_name: form.first_name.trim(),
       last_name:  form.last_name.trim(),
       email:      form.email.trim(),
@@ -4979,7 +5017,13 @@ function EditGuestModal({ guest, onSave, onClose, loading }) {
       is_vip:     form.is_vip,
       sms_consent: form.sms_consent,
       whatsapp_consent: form.whatsapp_consent,
-    })
+    }
+    // Only send seating fields when the feature is on (server treats "" as clear).
+    if (seatingEnabled) {
+      payload.table_id = form.table_id
+      payload.seat_number = form.table_id ? form.seat_number.trim() : ''
+    }
+    onSave(payload)
   }
 
   const inputCls = 'w-full border border-slate-300 dark:border-slate-700 rounded-lg px-3 py-2 text-sm bg-white dark:bg-slate-800 text-slate-900 dark:text-white'
@@ -5032,6 +5076,27 @@ function EditGuestModal({ guest, onSave, onClose, loading }) {
               WhatsApp consent
             </label>
           </div>
+
+          {seatingEnabled && (
+            <div className="grid grid-cols-2 gap-2 pt-1 border-t dark:border-slate-700 mt-1">
+              <div>
+                <label className="block text-xs font-medium text-slate-500 dark:text-slate-400 mb-1 mt-2">Table</label>
+                <select className={inputCls} value={form.table_id}
+                  onChange={(e) => setForm((f) => ({ ...f, table_id: e.target.value, seat_number: e.target.value ? f.seat_number : '' }))}>
+                  <option value="">— No table —</option>
+                  {tables.map((t) => (
+                    <option key={t.id} value={t.id}>{t.name}{t.capacity != null ? ` (${t.assigned_count ?? 0}/${t.capacity})` : ''}</option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-slate-500 dark:text-slate-400 mb-1 mt-2">Seat</label>
+                <input className={inputCls} value={form.seat_number} disabled={!form.table_id} placeholder="e.g. 4"
+                  onChange={(e) => setForm((f) => ({ ...f, seat_number: e.target.value }))} />
+              </div>
+            </div>
+          )}
+
           <div className="flex gap-2 pt-2">
             <button type="submit" disabled={loading || !form.first_name.trim() || !form.last_name.trim()}
               className="flex-1 bg-indigo-600 hover:bg-indigo-700 text-white font-semibold py-2.5 rounded-lg disabled:opacity-50 text-sm">
@@ -5356,6 +5421,14 @@ export default function AdminPage() {
     } catch (err) { flash(err.message, true) }
   }
 
+  async function handleToggleSync(enabled) {
+    try {
+      const updated = await api.updateSource(selectedId, { source_sync_enabled: enabled })
+      updateEvent(updated)
+      flash(enabled ? 'Sync turned on.' : 'Sync paused — the spreadsheet will not be polled.')
+    } catch (err) { flash(err.message, true) }
+  }
+
   async function handleSyncNow() {
     setLoading(true)
     try {
@@ -5670,6 +5743,8 @@ export default function AdminPage() {
           {editingGuest && (
             <EditGuestModal
               guest={editingGuest}
+              eventId={selectedId}
+              seatingEnabled={!!event?.seating_enabled}
               loading={loading}
               onSave={(data) => handleUpdateGuest(editingGuest.id, data)}
               onClose={() => setEditingGuest(null)}
@@ -5812,6 +5887,7 @@ export default function AdminPage() {
                 event={event}
                 onSave={handleSaveSource}
                 onSyncNow={handleSyncNow}
+                onToggleSync={handleToggleSync}
                 loading={loading}
               />
             </div>

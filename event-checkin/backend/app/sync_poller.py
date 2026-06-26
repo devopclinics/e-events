@@ -29,7 +29,7 @@ async def _sync_one(event_id: str) -> None:
     try:
         async with AsyncSessionLocal() as db:
             event = await db.get(Event, event_id)
-            if not event or not event.source_url or event.status != "active":
+            if not event or not event.source_url or event.status != "active" or not event.source_sync_enabled:
                 return
             try:
                 result = await import_from_source_url(event.source_url, event_id, db)
@@ -53,7 +53,11 @@ async def _tick() -> None:
     now = datetime.utcnow()
     async with AsyncSessionLocal() as db:
         result = await db.execute(
-            select(Event).where(Event.status == "active", Event.source_url.is_not(None))
+            select(Event).where(
+                Event.status == "active",
+                Event.source_url.is_not(None),
+                Event.source_sync_enabled.is_(True),
+            )
         )
         events = result.scalars().all()
 

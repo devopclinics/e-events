@@ -126,6 +126,12 @@ export default function SelfCheckinPage() {
           {formatTime(checkin.admitted_at) && <div className="mt-1">Checked in at {formatTime(checkin.admitted_at)}</div>}
         </StatusCard>
       )
+    } else if (checkin.status === 'no_seat_available') {
+      body = (
+        <StatusCard tone="red" title="No seat available">
+          {checkin.message || 'Please speak to the organizer to be seated.'}
+        </StatusCard>
+      )
     } else {
       body = (
         <StatusCard tone="red" title="Not on the list">

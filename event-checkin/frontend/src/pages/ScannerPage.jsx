@@ -32,17 +32,20 @@ function ZoneResultCard({ result, onReset }) {
 function ResultCard({ result, onReset }) {
   const cfg = {
     admitted:        { bg: 'bg-green-500',  icon: '✓', heading: 'ADMITTED' },
-    already_admitted:{ bg: 'bg-amber-500',  icon: '⚠', heading: 'ALREADY ADMITTED' },
+    // Already-admitted is the most common door mistake (a double-scan), so make
+    // it loud: bold orange + a thick ring + a big icon so staff can't miss it.
+    already_admitted:{ bg: 'bg-orange-500', ring: 'ring-4 ring-orange-300', icon: '‼', heading: 'ALREADY CHECKED IN', big: true },
     invalid:         { bg: 'bg-red-500',    icon: '✕', heading: 'NOT FOUND' },
     not_active:      { bg: 'bg-slate-600',  icon: '⏸', heading: 'EVENT NOT ACTIVE' },
     not_assigned:    { bg: 'bg-orange-500', icon: '🚫', heading: 'NOT ASSIGNED' },
     denied:          { bg: 'bg-red-500',    icon: '🚫', heading: 'CANNOT SEAT' },
+    no_seat_available:{ bg: 'bg-red-600',   icon: '🚫', heading: 'NO SEAT AVAILABLE' },
   }[result.status] || { bg: 'bg-gray-500', icon: '?', heading: 'UNKNOWN' }
 
   return (
-    <div className={`${cfg.bg} text-white rounded-2xl p-8 text-center shadow-2xl`}>
-      <div className="text-7xl font-bold mb-2">{cfg.icon}</div>
-      <div className="text-2xl font-bold mb-1">{cfg.heading}</div>
+    <div className={`${cfg.bg} ${cfg.ring || ''} text-white rounded-2xl p-8 text-center shadow-2xl`}>
+      <div className={`${cfg.big ? 'text-8xl' : 'text-7xl'} font-bold mb-2 leading-none`}>{cfg.icon}</div>
+      <div className={`${cfg.big ? 'text-3xl' : 'text-2xl'} font-bold mb-1`}>{cfg.heading}</div>
       {result.guest && (
         <div className="mt-4 text-xl font-semibold">
           {result.guest.first_name} {result.guest.last_name}
@@ -53,6 +56,12 @@ function ResultCard({ result, onReset }) {
         <p className="mt-1 text-white/75 text-sm">
           {new Date(result.guest.admitted_at).toLocaleTimeString()}
         </p>
+      )}
+      {result.guest?.admitted_at && result.status === 'already_admitted' && (
+        <div className="mt-4 inline-block bg-black/25 rounded-xl px-5 py-3">
+          <div className="text-xs uppercase tracking-wide text-white/80">Checked in at</div>
+          <div className="text-2xl font-bold">{new Date(result.guest.admitted_at).toLocaleTimeString()}</div>
+        </div>
       )}
       {(result.table_name || result.seat_number) && (
         <div className="mt-3 flex justify-center gap-4 text-sm text-white/90">

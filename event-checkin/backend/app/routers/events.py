@@ -364,6 +364,8 @@ async def update_event_source(
     if body.source_sync_interval_seconds is not None:
         # Clamp to a sane range; OneDrive is happy at 60s but reject sub-15s.
         event.source_sync_interval_seconds = max(15, min(body.source_sync_interval_seconds, 3600))
+    if body.source_sync_enabled is not None:
+        event.source_sync_enabled = body.source_sync_enabled
     await db.commit()
     await db.refresh(event)
     return event

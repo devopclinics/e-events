@@ -51,6 +51,15 @@ function Bar({ segments }) {
   )
 }
 
+// Table fill status → colour. Green = has space, Amber = filling up (≥70%),
+// Red = full. Mirrors the legend under the "By table" card.
+function tableFill(seated, capacity) {
+  if (!capacity) return { dot: 'bg-slate-300 dark:bg-slate-600', text: 'text-slate-400' }
+  if (seated >= capacity) return { dot: 'bg-red-500', text: 'text-red-500' }
+  if (seated / capacity >= 0.7) return { dot: 'bg-amber-500', text: 'text-amber-600' }
+  return { dot: 'bg-green-500', text: 'text-green-600' }
+}
+
 function Card({ title, children, right }) {
   return (
     <div className="bg-white dark:bg-slate-800 dark:border dark:border-slate-700/60 rounded-2xl shadow-sm p-5">
@@ -108,9 +117,10 @@ export default function DashboardPage() {
           setStats((prev) => {
             if (!prev || prev.admitted_guests.find((g) => g.id === data.guest_id)) return prev
             return { ...prev, admitted: prev.admitted + 1, pending: Math.max(prev.pending - 1, 0),
+              walk_in: (prev.walk_in || 0) + (data.is_walk_in ? 1 : 0),
               admitted_guests: [{ id: data.guest_id, first_name: data.name.split(' ')[0],
                 last_name: data.name.split(' ').slice(1).join(' '), email: data.email,
-                admitted_at: data.admitted_at, admitted: true }, ...prev.admitted_guests] }
+                admitted_at: data.admitted_at, admitted: true, is_walk_in: !!data.is_walk_in }, ...prev.admitted_guests] }
           })
         }
       }
@@ -171,6 +181,8 @@ export default function DashboardPage() {
               <Kpi label="Checked in" value={stats.admitted} accent="text-green-600" />
               <Kpi label="Not yet in" value={stats.pending} accent="text-amber-600" />
               <Kpi label="RSVP confirmed" value={stats.rsvp_confirmed} accent="text-teal-600" />
+              {/* Door additions — only surfaced once someone has actually walked in. */}
+              {stats.walk_in > 0 && <Kpi label="Walk-ins / Manual" value={stats.walk_in} accent="text-blue-600" />}
             </div>
           </div>
 
@@ -213,7 +225,13 @@ export default function DashboardPage() {
 
           {/* Per-table report — for table-assigned staff */}
           {stats.tables && stats.tables.length > 0 && (
-            <Card title="By table">
+            <Card title="By table" right={
+              <div className="flex items-center gap-3 text-[11px] text-slate-500 dark:text-slate-400">
+                <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-full bg-green-500" />Space</span>
+                <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-full bg-amber-500" />Filling</span>
+                <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-full bg-red-500" />Full</span>
+              </div>
+            }>
               <div className="overflow-x-auto -mx-1">
                 <table className="w-full text-sm">
                   <thead className="text-xs uppercase text-slate-400">
@@ -226,12 +244,15 @@ export default function DashboardPage() {
                   </thead>
                   <tbody className="divide-y divide-gray-100 dark:divide-slate-700">
                     {stats.tables.map((t) => {
-                      const full = t.capacity ? t.seated >= t.capacity : false
+                      const fill = tableFill(t.seated, t.capacity)
                       return (
                         <tr key={t.name}>
                           <td className="px-2 py-2 font-medium dark:text-slate-100">
-                            {t.name}
-                            {t.capacity != null && <span className={`text-xs ml-2 ${full ? 'text-red-500' : 'text-slate-400'}`}>{t.seated}/{t.capacity}</span>}
+                            <span className="inline-flex items-center gap-2">
+                              <span className={`w-2.5 h-2.5 rounded-full shrink-0 ${fill.dot}`} title={t.capacity ? `${t.seated}/${t.capacity}` : 'no capacity set'} />
+                              {t.name}
+                              {t.capacity != null && <span className={`text-xs ${fill.text}`}>{t.seated}/{t.capacity}</span>}
+                            </span>
                           </td>
                           <td className="px-2 py-2 text-right dark:text-slate-300">{t.seated}</td>
                           <td className="px-2 py-2 text-right">
@@ -261,7 +282,12 @@ export default function DashboardPage() {
                       {(g.first_name || '?')[0].toUpperCase()}
                     </div>
                     <div className="flex-1 min-w-0">
-                      <div className="font-medium text-sm dark:text-slate-100 truncate">{g.first_name} {g.last_name}</div>
+                      <div className="font-medium text-sm dark:text-slate-100 truncate flex items-center gap-1.5">
+                        <span className="truncate">{g.first_name} {g.last_name}</span>
+                        {g.is_walk_in && (
+                          <span className="shrink-0 rounded-full bg-blue-100 dark:bg-blue-900/40 text-blue-700 dark:text-blue-300 px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide">Walk-in</span>
+                        )}
+                      </div>
                       <div className="text-xs text-slate-400 truncate">{g.email}</div>
                     </div>
                     <div className="text-xs text-slate-400 shrink-0">{g.admitted_at ? new Date(g.admitted_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '—'}</div>

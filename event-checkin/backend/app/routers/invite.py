@@ -3,6 +3,8 @@
 Endpoints:
   GET  /api/invite/{event_id}              — public event page data + questions
   POST /api/invite/{event_id}/rsvp         — open-mode self-registration → QR
+  GET  /api/invite/link/{rsvp_token}       — public event page by share token
+  POST /api/invite/link/{rsvp_token}/rsvp  — open-mode self-registration by token
   GET  /api/invite/token/{invite_token}    — personalised (closed-mode) page
   POST /api/invite/token/{invite_token}/rsvp — invited guest confirms / declines
 """
@@ -38,6 +40,17 @@ async def _get_public_event(event_id: str, db: AsyncSession) -> Event:
     event = await db.get(Event, event_id)
     if not event:
         raise HTTPException(404, "Event not found")
+    if event.status == "ended":
+        raise HTTPException(410, "This event has ended")
+    return event
+
+
+async def _get_public_event_by_rsvp_token(rsvp_token: str, db: AsyncSession) -> Event:
+    event = (await db.execute(
+        select(Event).where(Event.rsvp_token == rsvp_token).limit(1)
+    )).scalar_one_or_none()
+    if not event:
+        raise HTTPException(404, "RSVP link not found")
     if event.status == "ended":
         raise HTTPException(410, "This event has ended")
     return event
@@ -173,6 +186,7 @@ async def _invite_page_out(event: Event, db: AsyncSession) -> InvitePageOut:
         couples_name=event.couples_name,
         event_date=event.event_date,
         description=event.description,
+        rsvp_token=event.rsvp_token,
         invite_theme=event.invite_theme,
         invite_message=event.invite_message,
         invite_cover_image=event.invite_cover_image,
@@ -238,6 +252,13 @@ def _send_rsvp_invite(
 async def get_invite_page(event_id: str, db: AsyncSession = Depends(get_db)):
     """Return the public event page — theme, copy, questions, capacity status."""
     event = await _get_public_event(event_id, db)
+    return await _invite_page_out(event, db)
+
+
+@router.get("/link/{rsvp_token}", response_model=InvitePageOut)
+async def get_invite_page_by_link(rsvp_token: str, db: AsyncSession = Depends(get_db)):
+    """Return the public event page through the unguessable RSVP share link."""
+    event = await _get_public_event_by_rsvp_token(rsvp_token, db)
     return await _invite_page_out(event, db)
 
 
@@ -347,6 +368,18 @@ async def submit_rsvp(
         rsvp_status="confirmed",
         message="RSVP confirmed! Check your email for your ticket.",
     )
+
+
+@router.post("/link/{rsvp_token}/rsvp", response_model=RSVPConfirm, status_code=201)
+async def submit_rsvp_by_link(
+    rsvp_token: str,
+    data: RSVPSubmit,
+    background_tasks: BackgroundTasks,
+    db: AsyncSession = Depends(get_db),
+):
+    """Self-service RSVP through the unguessable public share link."""
+    event = await _get_public_event_by_rsvp_token(rsvp_token, db)
+    return await submit_rsvp(event.id, data, background_tasks, db)
 
 
 # ── Personalised (closed-mode) invite links ─────────────────────────────────

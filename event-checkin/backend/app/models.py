@@ -152,6 +152,11 @@ class Event(Base):
 
     # ── Invite page & self-service RSVP ──────────────────────────────────────
     rsvp_enabled: Mapped[bool] = mapped_column(Boolean, default=False)
+    # Unguessable open-RSVP share token. This powers /rsvp/{token}; older
+    # event-id invite URLs remain supported for compatibility.
+    rsvp_token: Mapped[str | None] = mapped_column(
+        String(36), unique=True, nullable=True, default=lambda: str(uuid.uuid4())
+    )
     # Theme key: "default" | "gold" | "rose" | "midnight" | "forest"
     invite_theme: Mapped[str] = mapped_column(String(50), default="default")
     invite_message: Mapped[str | None] = mapped_column(Text, nullable=True)

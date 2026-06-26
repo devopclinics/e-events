@@ -108,6 +108,10 @@ SCHEMA_PATCHES: list[str] = [
             ("credits_2000","pack", "2,000 message credits","NULL",2000, 6000,  6000000,  3),
         ]
     ],
+    # RSVP links: backfill an unguessable share token on older events and add a
+    # uniqueness constraint where the auto-patcher only added the bare column.
+    "UPDATE events SET rsvp_token = gen_random_uuid()::text WHERE rsvp_token IS NULL",
+    "CREATE UNIQUE INDEX IF NOT EXISTS ix_events_rsvp_token_unique ON events (rsvp_token)",
 ]
 
 

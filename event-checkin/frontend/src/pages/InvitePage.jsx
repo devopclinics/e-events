@@ -182,7 +182,10 @@ function RSVPForm({ event, theme, onConfirmed }) {
     setError('')
     setLoading(true)
     try {
-      const res = await fetch(`/api/invite/${event.id}/rsvp`, {
+      const path = event.rsvp_token
+        ? `/api/invite/link/${event.rsvp_token}/rsvp`
+        : `/api/invite/${event.id}/rsvp`
+      const res = await fetch(path, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -449,8 +452,9 @@ function TokenRSVPForm({ event, prefill, token, theme, onDone }) {
 // ── Page ──────────────────────────────────────────────────────────────────────
 
 export default function InvitePage() {
-  const { eventId, token } = useParams()
+  const { eventId, token, rsvpToken } = useParams()
   const tokenMode = !!token
+  const rsvpLinkMode = !!rsvpToken
   const [event, setEvent] = useState(null)
   const [guest, setGuest] = useState(null)
   const [tokenMeta, setTokenMeta] = useState({ deadline_passed: false, already_responded: false })
@@ -459,11 +463,15 @@ export default function InvitePage() {
   const [confirmed, setConfirmed] = useState(null)
 
   useEffect(() => {
-    const url = tokenMode ? `/api/invite/token/${token}` : `/api/invite/${eventId}`
+    const url = tokenMode
+      ? `/api/invite/token/${token}`
+      : rsvpLinkMode
+        ? `/api/invite/link/${rsvpToken}`
+        : `/api/invite/${eventId}`
     fetch(url)
       .then((r) => {
         if (r.status === 410) throw new Error('This event has ended.')
-        if (r.status === 404) throw new Error(tokenMode ? 'This invite link is not valid.' : 'Event not found.')
+        if (r.status === 404) throw new Error(tokenMode || rsvpLinkMode ? 'This RSVP link is not valid.' : 'Event not found.')
         if (!r.ok) throw new Error('Something went wrong.')
         return r.json()
       })
@@ -478,7 +486,7 @@ export default function InvitePage() {
       })
       .catch((e) => setError(e.message))
       .finally(() => setLoading(false))
-  }, [eventId, token, tokenMode])
+  }, [eventId, token, tokenMode, rsvpToken, rsvpLinkMode])
 
   if (loading) return (
     <div className="min-h-screen flex items-center justify-center bg-slate-100 dark:bg-slate-900">

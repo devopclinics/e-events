@@ -89,6 +89,7 @@ async def create_event(
         raise HTTPException(403, "You don't belong to an organization")
     event = Event(**data.model_dump(), org_id=org_id)
     event.event_code = await unique_event_code(db)
+    event.rsvp_token = event.rsvp_token or str(_uuid.uuid4())
     db.add(event)
     await db.flush()
     # Auto-assign creator so they appear in their own event member list
@@ -549,8 +550,28 @@ async def update_invite_settings(
     event = await db.get(Event, event_id)
     if not event:
         raise HTTPException(404, "Event not found")
+    if not event.rsvp_token:
+        event.rsvp_token = str(_uuid.uuid4())
     for field, value in data.model_dump(exclude_none=True).items():
         setattr(event, field, value)
+    await db.commit()
+    await db.refresh(event)
+    return event
+
+
+@router.post("/{event_id}/rsvp-link", response_model=EventOut)
+async def generate_rsvp_link(
+    event_id: str,
+    body: dict | None = None,
+    db: AsyncSession = Depends(get_db),
+    _: User = Depends(require_event_admin),
+):
+    """Mint or rotate the open RSVP share token for this event."""
+    event = await db.get(Event, event_id)
+    if not event:
+        raise HTTPException(404, "Event not found")
+    if not event.rsvp_token or bool((body or {}).get("regenerate")):
+        event.rsvp_token = str(_uuid.uuid4())
     await db.commit()
     await db.refresh(event)
     return event
@@ -766,7 +787,10 @@ async def send_manual_invites(
     if not data.recipients:
         raise HTTPException(400, "No recipients provided")
 
-    invite_url = f"{event.checkin_base_url.rstrip('/')}/e/{event_id}"
+    if not event.rsvp_token:
+        event.rsvp_token = str(_uuid.uuid4())
+        await db.flush()
+    invite_url = f"{event.checkin_base_url.rstrip('/')}/rsvp/{event.rsvp_token}"
     paid_channels = can_use_paid_channels(event)
 
     sent = skipped = 0

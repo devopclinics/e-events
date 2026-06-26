@@ -210,6 +210,7 @@ export const api = {
 
   // ── Invite page settings (admin) ──────────────────────────────────────────
   updateInviteSettings: (eventId, data) => req('PUT',  `/events/${eventId}/invite-settings`, data),
+  generateRSVPLink:     (eventId, regenerate = false) => req('POST', `/events/${eventId}/rsvp-link`, { regenerate }),
   // RSVP questions CRUD (admin)
   listRSVPQuestions:    (eventId)              => req('GET',    `/events/${eventId}/rsvp-questions`),
   createRSVPQuestion:   (eventId, data)        => req('POST',   `/events/${eventId}/rsvp-questions`, data),
@@ -346,5 +347,12 @@ export const api = {
   },
   deleteCoverImage: (eventId) => req('DELETE', `/events/${eventId}/upload-cover`),
   // Invite page public URL helper (no auth needed)
-  inviteUrl: (eventId) => `${window.location.origin}/invite/${eventId}`,
+  inviteUrl: (eventOrId) => {
+    if (eventOrId && typeof eventOrId === 'object') {
+      return eventOrId.rsvp_token
+        ? `${window.location.origin}/rsvp/${eventOrId.rsvp_token}`
+        : `${window.location.origin}/invite/${eventOrId.id}`
+    }
+    return `${window.location.origin}/invite/${eventOrId}`
+  },
 }

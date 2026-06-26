@@ -119,6 +119,7 @@ class EventOut(BaseModel):
     source_last_warning: Optional[str] = None
     # Invite / RSVP
     rsvp_enabled: bool = False
+    rsvp_token: Optional[str] = None
     invite_theme: str = "default"
     invite_message: Optional[str] = None
     rsvp_collect_phone: bool = True
@@ -1064,6 +1065,7 @@ class InvitePageOut(BaseModel):
     description: Optional[str]
     invite_theme: str
     invite_message: Optional[str]
+    rsvp_token: Optional[str] = None
     rsvp_enabled: bool
     rsvp_collect_phone: bool
     rsvp_collect_email: bool

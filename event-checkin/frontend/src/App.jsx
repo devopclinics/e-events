@@ -236,6 +236,7 @@ function AppRoutes() {
       <Route path="/e/:code" element={<SelfCheckinPage />} />
       {/* Public invite page — no auth required */}
       <Route path="/invite/:eventId" element={<InvitePage />} />
+      <Route path="/rsvp/:rsvpToken" element={<InvitePage />} />
       {/* Personalised (closed-mode) invite link — no auth required */}
       <Route path="/r/:token" element={<InvitePage />} />
       {/* Public vendor packing list — no auth required */}

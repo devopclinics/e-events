@@ -72,6 +72,23 @@ class EventUser(Base):
 
     event: Mapped["Event"] = relationship("Event", back_populates="members")
     user: Mapped["User"] = relationship("User")
+    sections: Mapped[list["EventUserSection"]] = relationship(
+        "EventUserSection", cascade="all, delete-orphan", passive_deletes=True
+    )
+
+
+class EventUserSection(Base):
+    """A team member's allowed sections (table groups) for section-based scanning.
+
+    NO rows for a member = unrestricted ("All sections"). Exactly one allowed
+    section → the scanner auto-routes their check-ins there with no picker; two or
+    more (or All) → the scanner shows a picker limited to the allowed sections."""
+    __tablename__ = "event_user_sections"
+    __table_args__ = (UniqueConstraint("event_user_id", "table_group_id", name="uq_event_user_section"),)
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+    event_user_id: Mapped[str] = mapped_column(String(36), ForeignKey("event_users.id", ondelete="CASCADE"), index=True)
+    table_group_id: Mapped[str] = mapped_column(String(36), ForeignKey("table_groups.id", ondelete="CASCADE"), index=True)
 
 
 class Event(Base):

@@ -2,7 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func
 from ..database import get_db
-from ..models import Event, SeatingTable, Guest, EventUser, User, TableGroup, TableGroupTable
+from ..models import Event, SeatingTable, Guest, EventUser, EventUserSection, User, TableGroup, TableGroupTable
 from ..schemas import (
     SeatingTableCreate, SeatingTableOut, SeatAssignRequest,
     TableGroupCreate, TableGroupOut, TableGroupTablesUpdate,
@@ -392,6 +392,9 @@ async def delete_table_group(event_id: str, group_id: str, db: AsyncSession = De
             f"{assigned} guest(s) are assigned to this group — reassign them first, then delete.",
         )
     await db.execute(TableGroupTable.__table__.delete().where(TableGroupTable.table_group_id == group_id))
+    # Drop any team-member section assignments pointing at this group (explicit so
+    # it works on sqlite test DBs too, not just via Postgres ON DELETE CASCADE).
+    await db.execute(EventUserSection.__table__.delete().where(EventUserSection.table_group_id == group_id))
     await db.delete(group)
     await db.commit()
 
@@ -549,3 +552,32 @@ async def update_member_permissions(
         eu.can_view_dashboard = bool(body["can_view_dashboard"])
     await db.commit()
     return {"ok": True}
+
+
+@router.put("/{event_id}/members/{user_id}/sections")
+async def set_member_sections(
+    event_id: str,
+    user_id: str,
+    body: dict,
+    db: AsyncSession = Depends(get_db),
+    _: User = Depends(require_paid_event_admin),
+):
+    """Set the table groups (sections) this member is allowed to check guests into.
+    Body: {table_group_ids: [...]}. An empty list = unrestricted ("All sections")."""
+    eu = await db.scalar(select(EventUser).where(EventUser.event_id == event_id, EventUser.user_id == user_id))
+    if not eu:
+        raise HTTPException(404, "Member not found")
+    ids = list(dict.fromkeys(body.get("table_group_ids") or []))  # de-dupe, keep order
+    if ids:
+        valid = set((await db.execute(
+            select(TableGroup.id).where(TableGroup.event_id == event_id, TableGroup.id.in_(ids))
+        )).scalars())
+        bad = [i for i in ids if i not in valid]
+        if bad:
+            raise HTTPException(404, "One or more sections are not table groups on this event")
+    # Replace the member's section set.
+    await db.execute(EventUserSection.__table__.delete().where(EventUserSection.event_user_id == eu.id))
+    for tg_id in ids:
+        db.add(EventUserSection(event_user_id=eu.id, table_group_id=tg_id))
+    await db.commit()
+    return {"ok": True, "section_group_ids": ids}

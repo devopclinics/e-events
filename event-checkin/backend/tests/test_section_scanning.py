@@ -4,7 +4,7 @@ so existing walk-in / manual behavior is unchanged."""
 import pytest
 from sqlalchemy import delete
 
-from app.models import Event, Guest
+from app.models import Event, Guest, User, Membership, EventUser, EventUserSection
 from conftest import _Session
 
 
@@ -33,6 +33,23 @@ async def _group(ctx, ev, name):
 async def _group_of(guest_id):
     async with _Session() as s:
         return (await s.get(Guest, guest_id)).assigned_table_group_id
+
+
+async def _staff_with_sections(ctx, event_id, email, section_ids):
+    """An official assigned to the event, restricted to the given sections
+    (empty = all). Returns the User for ctx.login()."""
+    async with _Session() as s:
+        u = User(name=email.split("@")[0], email=email, role="official")
+        s.add(u)
+        await s.flush()
+        s.add(Membership(org_id=ctx.ids["org_a"], user_id=u.id, role="staff"))
+        eu = EventUser(event_id=event_id, user_id=u.id)
+        s.add(eu)
+        await s.flush()
+        for gid in section_ids:
+            s.add(EventUserSection(event_user_id=eu.id, table_group_id=gid))
+        await s.commit()
+        return u
 
 
 @pytest.mark.asyncio
@@ -123,6 +140,90 @@ async def test_manual_checkin_ignores_section_when_mode_off(ctx):
     r = await ctx.client.post(f"/api/events/{ev}/guests/{g['id']}/checkin?table_group_id={grp}")
     assert r.status_code == 200
     assert await _group_of(g["id"]) is None
+
+
+@pytest.mark.asyncio
+async def test_assigned_member_auto_routes_walk_in(ctx):
+    """A staffer restricted to exactly one section auto-routes there with no pick."""
+    await _prep(ctx.ids["event_a"], section_mode=True)
+    ctx.login(ctx.ids["superadmin"])
+    ev = ctx.ids["event_a"]
+    men = await _group(ctx, ev, "Men")
+    await _group(ctx, ev, "Women")
+    staff = await _staff_with_sections(ctx, ev, "door-men@a.com", [men])
+
+    ctx.login(staff)
+    r = await ctx.client.post(f"/api/events/{ev}/guests/walk-in", json={"first_name": "Auto"})
+    assert r.status_code == 200 and r.json()["status"] == "admitted", r.text
+    assert await _group_of(r.json()["guest"]["id"]) == men
+
+
+@pytest.mark.asyncio
+async def test_assigned_member_blocked_from_other_section(ctx):
+    await _prep(ctx.ids["event_a"], section_mode=True)
+    ctx.login(ctx.ids["superadmin"])
+    ev = ctx.ids["event_a"]
+    men = await _group(ctx, ev, "Men")
+    women = await _group(ctx, ev, "Women")
+    staff = await _staff_with_sections(ctx, ev, "door-men2@a.com", [men])
+
+    ctx.login(staff)
+    r = await ctx.client.post(f"/api/events/{ev}/guests/walk-in",
+                              json={"first_name": "X", "table_group_id": women})
+    assert r.status_code == 403
+
+
+@pytest.mark.asyncio
+async def test_unrestricted_member_needs_explicit_pick(ctx):
+    """An 'All'/multi staffer doesn't auto-route — guest stays ungrouped unless a
+    section is explicitly picked."""
+    await _prep(ctx.ids["event_a"], section_mode=True)
+    ctx.login(ctx.ids["superadmin"])
+    ev = ctx.ids["event_a"]
+    men = await _group(ctx, ev, "Men")
+    await _group(ctx, ev, "Women")
+    staff = await _staff_with_sections(ctx, ev, "roamer@a.com", [])  # All sections
+
+    ctx.login(staff)
+    r = await ctx.client.post(f"/api/events/{ev}/guests/walk-in", json={"first_name": "NoPick"})
+    assert r.status_code == 200 and r.json()["status"] == "admitted"
+    assert await _group_of(r.json()["guest"]["id"]) is None
+
+    r2 = await ctx.client.post(f"/api/events/{ev}/guests/walk-in",
+                               json={"first_name": "Pick", "table_group_id": men})
+    assert await _group_of(r2.json()["guest"]["id"]) == men
+
+
+@pytest.mark.asyncio
+async def test_set_member_sections_validates_event(ctx):
+    await _prep(ctx.ids["event_a"], section_mode=True)
+    ctx.login(ctx.ids["superadmin"])
+    ev = ctx.ids["event_a"]
+    await _group(ctx, ev, "Men")
+    staff = await _staff_with_sections(ctx, ev, "val@a.com", [])
+
+    bad = await ctx.client.put(f"/api/events/{ev}/members/{staff.id}/sections",
+                               json={"table_group_ids": ["not-a-group"]})
+    assert bad.status_code == 404
+
+
+@pytest.mark.asyncio
+async def test_my_sections_filters_to_assignment(ctx):
+    await _prep(ctx.ids["event_a"], section_mode=True)
+    ctx.login(ctx.ids["superadmin"])
+    ev = ctx.ids["event_a"]
+    men = await _group(ctx, ev, "Men")
+    women = await _group(ctx, ev, "Women")
+    staff = await _staff_with_sections(ctx, ev, "mysec@a.com", [men])
+
+    ctx.login(staff)
+    mine = (await ctx.client.get(f"/api/events/{ev}/my-sections")).json()
+    assert mine["section_mode_enabled"] is True
+    assert [s["id"] for s in mine["sections"]] == [men]
+
+    ctx.login(ctx.ids["superadmin"])
+    allsec = (await ctx.client.get(f"/api/events/{ev}/my-sections")).json()
+    assert {s["id"] for s in allsec["sections"]} == {men, women}
 
 
 @pytest.mark.asyncio

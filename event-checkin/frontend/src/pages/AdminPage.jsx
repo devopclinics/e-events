@@ -4095,6 +4095,7 @@ function BroadcastPanel({ event }) {
 function TeamPanel({ eventId }) {
   const [members, setMembers] = useState([])
   const [orgMembers, setOrgMembers] = useState([])
+  const [groups, setGroups] = useState([])   // table groups = scanner sections
   const [selectedUserId, setSelectedUserId] = useState('')
   const [invite, setInvite] = useState({ email: '', role: 'staff' })
   const [loading, setLoading] = useState(false)
@@ -4106,8 +4107,25 @@ function TeamPanel({ eventId }) {
 
   useEffect(() => {
     api.listMembers(eventId).then(setMembers).catch(console.error)
+    api.listTableGroups(eventId).then(setGroups).catch(() => setGroups([]))
     loadOrgMembers()
   }, [eventId])
+
+  // Section assignment: which table groups a member may check guests into on the
+  // scanner. Empty = all sections. Exactly one = that staffer auto-routes there.
+  async function setSections(userId, ids) {
+    setLoading(true)
+    try {
+      await api.setMemberSections(eventId, userId, ids)
+      setMembers((prev) => prev.map((m) => m.user.id === userId ? { ...m, section_group_ids: ids } : m))
+    } catch (e) { setMsg(e.message) }
+    finally { setLoading(false) }
+  }
+
+  function toggleSection(m, gid) {
+    const cur = m.section_group_ids || []
+    setSections(m.user.id, cur.includes(gid) ? cur.filter((x) => x !== gid) : [...cur, gid])
+  }
 
   const assignedIds = new Set(members.map((m) => m.user.id))
   const unassigned = orgMembers.map((om) => om.user).filter((u) => !assignedIds.has(u.id))
@@ -4240,6 +4258,39 @@ function TeamPanel({ eventId }) {
                       Dashboard: {m.can_view_dashboard ? 'Yes' : 'No'}
                     </button>
                   </>
+                )}
+                {groups.length > 0 && (
+                  <div className="flex items-center gap-1 flex-wrap">
+                    <span className="text-xs text-gray-400 dark:text-slate-500">Sections:</span>
+                    <button
+                      onClick={() => setSections(m.user.id, [])}
+                      disabled={loading}
+                      title="Can check guests into any section"
+                      className={`text-xs px-2 py-0.5 rounded-full font-medium border transition-colors disabled:opacity-50 ${
+                        (m.section_group_ids || []).length === 0
+                          ? 'bg-indigo-100 text-indigo-700 border-indigo-200 dark:bg-indigo-900/40 dark:text-indigo-300 dark:border-indigo-800'
+                          : 'bg-gray-100 text-gray-500 border-gray-200 dark:bg-slate-700 dark:text-slate-400 dark:border-slate-600'
+                      }`}
+                    >
+                      All
+                    </button>
+                    {groups.map((g) => {
+                      const on = (m.section_group_ids || []).includes(g.id)
+                      return (
+                        <button key={g.id}
+                          onClick={() => toggleSection(m, g.id)}
+                          disabled={loading}
+                          className={`text-xs px-2 py-0.5 rounded-full font-medium border transition-colors disabled:opacity-50 ${
+                            on
+                              ? 'bg-teal-100 text-teal-700 border-teal-200 dark:bg-teal-900/40 dark:text-teal-300 dark:border-teal-800'
+                              : 'bg-gray-100 text-gray-500 border-gray-200 dark:bg-slate-700 dark:text-slate-400 dark:border-slate-600'
+                          }`}
+                        >
+                          {g.name}
+                        </button>
+                      )
+                    })}
+                  </div>
                 )}
                 <button onClick={() => remove(m.user.id)} disabled={loading}
                   className="text-xs text-red-400 hover:text-red-600 disabled:opacity-40 px-2 py-1 rounded hover:bg-red-50 dark:hover:bg-red-950">

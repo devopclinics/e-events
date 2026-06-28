@@ -6,7 +6,7 @@ from fastapi import APIRouter, BackgroundTasks, Depends, File, HTTPException, Up
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 from ..database import get_db
-from ..models import Event, EventUser, Guest, Membership, Organization, RSVPQuestion, User
+from ..models import Event, EventUser, EventUserSection, Guest, Membership, Organization, RSVPQuestion, TableGroup, User
 from ..schemas import (
     EventCreate, EventUpdate, EventOut, EventMemberOut, AssignUserRequest,
     OrgMemberInvite, OrgMemberOut, MemberRoleUpdate, UserOut, EventSourceUpdate,
@@ -236,8 +236,15 @@ async def list_members(
         .order_by(EventUser.assigned_at)
     )
     rows = result.all()
+    # Batch-load each member's allowed sections (empty list = all sections).
+    sections_by_eu: dict[str, list[str]] = {}
+    for eu_id, tg_id in await db.execute(
+        select(EventUserSection.event_user_id, EventUserSection.table_group_id)
+        .where(EventUserSection.event_user_id.in_([eu.id for eu, _ in rows] or [""]))
+    ):
+        sections_by_eu.setdefault(eu_id, []).append(tg_id)
     return [
-        EventMemberOut(id=eu.id, user=UserOut.model_validate(u), assigned_at=eu.assigned_at, can_reassign_seats=eu.can_reassign_seats, can_manage_menu=eu.can_manage_menu, can_view_dashboard=eu.can_view_dashboard)
+        EventMemberOut(id=eu.id, user=UserOut.model_validate(u), assigned_at=eu.assigned_at, can_reassign_seats=eu.can_reassign_seats, can_manage_menu=eu.can_manage_menu, can_view_dashboard=eu.can_view_dashboard, section_group_ids=sections_by_eu.get(eu.id, []))
         for eu, u in rows
     ]
 
@@ -412,6 +419,7 @@ async def remove_member(
     )
     if not eu:
         raise HTTPException(404, "Assignment not found")
+    await db.execute(EventUserSection.__table__.delete().where(EventUserSection.event_user_id == eu.id))
     await db.delete(eu)
     await db.commit()
 

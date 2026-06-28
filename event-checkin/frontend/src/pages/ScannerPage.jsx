@@ -263,7 +263,7 @@ function extractToken(raw) {
   }
 }
 
-function ManualCheckin({ eventId, onResult, walkInEnabled, sectionMode, sectionId }) {
+function ManualCheckin({ eventId, onResult, walkInEnabled, sectionMode, sectionId, sectionPickable }) {
   const [q, setQ] = useState('')
   const [results, setResults] = useState([])
   const [searching, setSearching] = useState(false)
@@ -369,7 +369,7 @@ function ManualCheckin({ eventId, onResult, walkInEnabled, sectionMode, sectionI
 
   return (
     <div className="space-y-3">
-      {sectionMode && !sectionId && (
+      {sectionMode && sectionPickable && !sectionId && (
         <div className="rounded-lg border border-amber-300 dark:border-amber-800 bg-amber-50 dark:bg-amber-900/20 px-3 py-2 text-xs text-amber-800 dark:text-amber-200">
           Pick your section above first — guests without a table group are seated in the active section.
         </div>
@@ -500,15 +500,20 @@ export default function ScannerPage() {
     }
   }, [eventId]) // eslint-disable-line
 
-  // Section-based scanning: load the event's table groups (sections) and restore
-  // any section this device already picked for this event (sessionStorage).
+  // Section-based scanning: load the sections this staffer is allowed to check
+  // into (admin-assigned). Exactly one → auto-route, no picker. Two+ → restore any
+  // earlier pick (sessionStorage) and show a picker limited to the allowed set.
   useEffect(() => {
     setTableGroups([]); setSectionId('')
     if (eventId && selectedEvent?.section_mode_enabled) {
-      api.listTableGroups(eventId).then((groups) => {
-        setTableGroups(groups)
-        const saved = sessionStorage.getItem(`scanner_section:${eventId}`)
-        if (saved && groups.some((g) => g.id === saved)) setSectionId(saved)
+      api.myEventSections(eventId).then(({ sections }) => {
+        setTableGroups(sections)
+        if (sections.length === 1) {
+          setSectionId(sections[0].id)
+        } else if (sections.length > 1) {
+          const saved = sessionStorage.getItem(`scanner_section:${eventId}`)
+          if (saved && sections.some((g) => g.id === saved)) setSectionId(saved)
+        }
       }).catch(() => {})
     }
   }, [eventId]) // eslint-disable-line
@@ -635,24 +640,39 @@ export default function ScannerPage() {
 
       {sectionMode && scanningReady && (
         <div className="bg-white dark:bg-slate-800 dark:border dark:border-slate-700/60 rounded-xl shadow p-4">
-          <label className="block text-xs font-semibold text-gray-600 dark:text-slate-300 mb-1">
-            Which section / entrance are you at?
-          </label>
-          <select
-            className="w-full border border-gray-300 dark:border-slate-700 rounded-lg px-3 py-2 text-sm bg-white dark:bg-slate-700 text-gray-900 dark:text-white"
-            value={sectionId}
-            onChange={(e) => chooseSection(e.target.value)}
-          >
-            <option value="">— select section —</option>
-            {tableGroups.map((g) => (
-              <option key={g.id} value={g.id}>{g.name}</option>
-            ))}
-          </select>
-          <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
-            {sectionId
-              ? 'Walk-ins and ungrouped guests checked in here are seated in this section.'
-              : 'Pick your section once — it applies to every check-in on this device.'}
-          </p>
+          {tableGroups.length === 1 ? (
+            <p className="text-sm dark:text-slate-200">
+              Section: <strong>{tableGroups[0].name}</strong>
+              <span className="block text-xs text-slate-500 dark:text-slate-400 mt-1">
+                Assigned to you — walk-ins and ungrouped guests you check in are seated here.
+              </span>
+            </p>
+          ) : tableGroups.length > 1 ? (
+            <>
+              <label className="block text-xs font-semibold text-gray-600 dark:text-slate-300 mb-1">
+                Which section / entrance are you at?
+              </label>
+              <select
+                className="w-full border border-gray-300 dark:border-slate-700 rounded-lg px-3 py-2 text-sm bg-white dark:bg-slate-700 text-gray-900 dark:text-white"
+                value={sectionId}
+                onChange={(e) => chooseSection(e.target.value)}
+              >
+                <option value="">— select section —</option>
+                {tableGroups.map((g) => (
+                  <option key={g.id} value={g.id}>{g.name}</option>
+                ))}
+              </select>
+              <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
+                {sectionId
+                  ? 'Walk-ins and ungrouped guests checked in here are seated in this section.'
+                  : 'Pick your section once — it applies to every check-in on this device.'}
+              </p>
+            </>
+          ) : (
+            <p className="text-xs text-amber-700 dark:text-amber-300">
+              No section is assigned to you yet — ask an admin to assign one on the Event Team page.
+            </p>
+          )}
         </div>
       )}
 
@@ -700,7 +720,8 @@ export default function ScannerPage() {
               <EventQrPanel event={selectedEvent} />
             ) : manualEnabled && mode === 'manual' ? (
               <ManualCheckin eventId={eventId} walkInEnabled={!!selectedEvent?.walk_in_enabled}
-                sectionMode={sectionMode} sectionId={sectionId} onResult={(res) => setResult(res)} />
+                sectionMode={sectionMode} sectionId={sectionId} sectionPickable={tableGroups.length > 1}
+                onResult={(res) => setResult(res)} />
             ) : (
               <>
                 <p className="text-center text-sm text-gray-500 dark:text-slate-400 mb-4">

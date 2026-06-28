@@ -145,6 +145,9 @@ class EventMemberOut(BaseModel):
     can_reassign_seats: bool
     can_manage_menu: bool = False
     can_view_dashboard: bool = False
+    # Allowed sections (table group ids) for section-based scanning.
+    # Empty = unrestricted ("All sections").
+    section_group_ids: list[str] = []
 
 
 class AssignUserRequest(BaseModel):

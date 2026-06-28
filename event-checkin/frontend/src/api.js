@@ -112,6 +112,7 @@ export const api = {
   assignSeat:              (eventId, guestId, body)    => req('PATCH',  `/events/${eventId}/guests/${guestId}/seat`, body),
   markMealServed:          (eventId, guestId)          => req('PATCH',  `/events/${eventId}/guests/${guestId}/meal-served`),
   updateMemberPermissions: (eventId, userId, body)     => req('PATCH',  `/events/${eventId}/members/${userId}/permissions`, body),
+  setMemberSections:       (eventId, userId, ids)      => req('PUT',    `/events/${eventId}/members/${userId}/sections`, { table_group_ids: ids }),
 
   // Table Groups (seating)
   listTableGroups:    (eventId)              => req('GET',    `/events/${eventId}/table-groups`),
@@ -143,6 +144,8 @@ export const api = {
   // Manual check-in (no QR)
   searchGuests:  (eventId, q) => req('GET', `/events/${eventId}/guests/search?q=${encodeURIComponent(q)}`),
   manualCheckin: (eventId, guestId, tableGroupId) => req('POST', `/events/${eventId}/guests/${guestId}/checkin${tableGroupId ? `?table_group_id=${encodeURIComponent(tableGroupId)}` : ''}`),
+  // Section-based scanning: sections (table groups) the signed-in staffer may check into.
+  myEventSections: (eventId) => req('GET', `/events/${eventId}/my-sections`),
   // Walk-in
   setWalkIn:      (eventId, active) => req('PATCH', `/events/${eventId}/walk-in`, { active }),
   setWalkInGroup: (eventId, tableGroupId) => req('PATCH', `/events/${eventId}/walk-in-group`, { table_group_id: tableGroupId }),

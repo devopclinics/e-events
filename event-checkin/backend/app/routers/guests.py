@@ -10,7 +10,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func
 from ..database import get_db
 from sqlalchemy import or_
-from ..models import Event, Guest, TicketType, GuestTag, GuestTagLink, User, TableGroup, SeatingTable
+from ..models import Event, Guest, TicketType, GuestTag, GuestTagLink, User, TableGroup, SeatingTable, EventUser, EventUserSection
 from ..schemas import GuestOut, GuestCreate, GuestUpdate, BulkAssignGroupRequest, ScanResult, WalkInRegister
 from ..auth import require_event_admin, require_official
 from ..entitlements import assert_within_guest_cap, guest_limit, can_use_paid_channels, take_message_credit
@@ -980,19 +980,43 @@ async def search_guests(
     } for g in rows]
 
 
-async def _resolve_section_group(event, section_id, db) -> str | None:
-    """Resolve which table group a door check-in routes to.
+async def _allowed_section_ids(event_id, user, db) -> set[str] | None:
+    """The table-group ids this user may route door check-ins into, or None when
+    unrestricted (all sections). Unrestricted = the member has no per-section rows,
+    which also covers admins/superadmins who have no EventUser row for the event."""
+    eu = await db.scalar(select(EventUser).where(EventUser.event_id == event_id, EventUser.user_id == user.id))
+    if not eu:
+        return None
+    ids = set((await db.execute(
+        select(EventUserSection.table_group_id).where(EventUserSection.event_user_id == eu.id)
+    )).scalars())
+    return ids or None
 
-    Section mode ON  → the scanner's active section (validated against the event),
-                        falling back to walk_in_table_group_id if none was passed.
-    Section mode OFF → the event's single walk_in_table_group_id (unchanged).
-    Returns None when no group applies.
+
+async def _member_section(event, user, section_id, db) -> str | None:
+    """Resolve which section (table group) a door check-in routes to under section
+    mode, honoring the staffer's assignment:
+      - a chosen section is validated and must be one they're allowed;
+      - with no choice, auto-route only when they're restricted to exactly one.
     """
-    if event.section_mode_enabled and section_id:
+    allowed = await _allowed_section_ids(event.id, user, db)
+    if section_id:
+        if allowed is not None and section_id not in allowed:
+            raise HTTPException(403, "You are not assigned to this section")
         grp = await db.get(TableGroup, section_id)
         if not grp or grp.event_id != event.id:
             raise HTTPException(404, "Section not found for this event")
         return section_id
+    if allowed is not None and len(allowed) == 1:
+        return next(iter(allowed))
+    return None
+
+
+async def _resolve_section_group(event, user, section_id, db) -> str | None:
+    """Walk-in routing. Section mode ON → the staffer's assigned/active section;
+    OFF → the event's single walk_in_table_group_id (unchanged legacy behavior)."""
+    if event.section_mode_enabled:
+        return await _member_section(event, user, section_id, db)
     return event.walk_in_table_group_id or None
 
 
@@ -1019,7 +1043,7 @@ async def register_walk_in(
     first = (body.first_name or "").strip()
     if not first:
         raise HTTPException(400, "Guest name is required")
-    group_id = await _resolve_section_group(event, body.table_group_id, db)
+    group_id = await _resolve_section_group(event, current_user, body.table_group_id, db)
     phone = _normalize_phone(body.phone.strip()) if (body.phone or "").strip() else None
     guest = Guest(
         event_id=event_id, first_name=first, last_name=(body.last_name or "").strip(),
@@ -1058,13 +1082,37 @@ async def manual_checkin(
     blocked = await checkin_guard(event, current_user, db)
     if blocked:
         return blocked
-    if (event.section_mode_enabled and table_group_id
-            and not guest.assigned_table_group_id):
-        grp = await db.get(TableGroup, table_group_id)
-        if not grp or grp.event_id != event_id:
-            raise HTTPException(404, "Section not found for this event")
-        guest.assigned_table_group_id = table_group_id
+    if event.section_mode_enabled and not guest.assigned_table_group_id:
+        sec = await _member_section(event, current_user, table_group_id, db)
+        if sec:
+            guest.assigned_table_group_id = sec
     return await perform_admission(guest, event, background_tasks, db)
+
+
+@router.get("/{event_id}/my-sections")
+async def my_sections(
+    event_id: str,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_official),
+):
+    """Sections (table groups) the signed-in staffer may check guests into on the
+    scanner. Restricted members get only their assigned sections; everyone else
+    (unassigned/admin) gets all of the event's groups. One result → auto-route on
+    the device; two or more → the device shows a picker limited to these."""
+    event = await db.get(Event, event_id)
+    if not event:
+        raise HTTPException(404, "Event not found")
+    groups = (await db.execute(
+        select(TableGroup).where(TableGroup.event_id == event_id)
+        .order_by(TableGroup.sort_order, TableGroup.name)
+    )).scalars().all()
+    allowed = await _allowed_section_ids(event_id, current_user, db)
+    if allowed is not None:
+        groups = [g for g in groups if g.id in allowed]
+    return {
+        "section_mode_enabled": bool(event.section_mode_enabled),
+        "sections": [{"id": g.id, "name": g.name} for g in groups],
+    }
 
 
 @router.delete("/{event_id}/guests/{guest_id}", status_code=204)

@@ -125,6 +125,13 @@ class Event(Base):
     # group may only be seated/checked-in at tables inside that group. Events
     # with no table groups are unaffected regardless of this flag.
     enforce_table_groups: Mapped[bool] = mapped_column(Boolean, default=True)
+    # Section-based scanning add-on: when True, each scanner device picks one
+    # table group ("section", e.g. men's/women's entrance) per session. Walk-ins
+    # and group-less manual check-ins at that device route to the active section
+    # instead of the single walk_in_table_group_id. Off by default; only
+    # meaningful for events that have table groups. Guests with a pre-assigned
+    # group keep it (the section never overrides an existing assignment).
+    section_mode_enabled: Mapped[bool] = mapped_column(Boolean, default=False)
     # Manual check-in: when on, staff can admit a guest by searching name/phone
     # (no QR). Superadmin-toggled per event; off by default.
     manual_checkin_enabled: Mapped[bool] = mapped_column(Boolean, default=False)

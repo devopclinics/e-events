@@ -482,6 +482,19 @@ async def toggle_features(
         # Mint the public registry token on first enable.
         if event.registry_enabled and not event.registry_token:
             event.registry_token = str(_uuid.uuid4())
+    if "section_mode_enabled" in body:
+        enable = bool(body["section_mode_enabled"])
+        if enable:
+            # Only meaningful with table groups to use as sections.
+            from ..models import TableGroup
+            has_group = (await db.execute(
+                select(TableGroup.id).where(TableGroup.event_id == event_id).limit(1)
+            )).first()
+            if not has_group:
+                raise HTTPException(
+                    400, "Add at least one table group before enabling section mode."
+                )
+        event.section_mode_enabled = enable
     for k in ("notify_email", "notify_sms", "notify_whatsapp", "notify_rsvp_responses"):
         if k in body:
             setattr(event, k, bool(body[k]))

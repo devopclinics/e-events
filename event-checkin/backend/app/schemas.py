@@ -107,6 +107,7 @@ class EventOut(BaseModel):
     walk_in_enabled: bool = False
     walk_in_table_group_id: Optional[str] = None
     enforce_table_groups: bool = True
+    section_mode_enabled: bool = False
     manual_checkin_enabled: bool = False
     self_checkin_enabled: bool = False
     event_code: Optional[str] = None
@@ -367,6 +368,9 @@ class WalkInRegister(BaseModel):
     first_name: str
     last_name: Optional[str] = ""
     phone: Optional[str] = None
+    # Section-based scanning: the scanner device's active section (table group).
+    # Used in place of the event's walk_in_table_group_id when section mode is on.
+    table_group_id: Optional[str] = None
 
 
 class WalkInGroupUpdate(BaseModel):

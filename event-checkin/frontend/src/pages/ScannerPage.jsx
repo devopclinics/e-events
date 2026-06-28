@@ -263,7 +263,7 @@ function extractToken(raw) {
   }
 }
 
-function ManualCheckin({ eventId, onResult, walkInEnabled }) {
+function ManualCheckin({ eventId, onResult, walkInEnabled, sectionMode, sectionId }) {
   const [q, setQ] = useState('')
   const [results, setResults] = useState([])
   const [searching, setSearching] = useState(false)
@@ -279,6 +279,7 @@ function ManualCheckin({ eventId, onResult, walkInEnabled }) {
     try {
       onResult(await api.registerWalkIn(eventId, {
         first_name: wf.first_name.trim(), last_name: wf.last_name.trim(), phone: wf.phone.trim() || null,
+        table_group_id: sectionMode ? (sectionId || null) : null,
       }))
     } catch (e) { setErr(e.message); setBusy(false) }
   }
@@ -302,7 +303,7 @@ function ManualCheckin({ eventId, onResult, walkInEnabled }) {
   async function doCheckin(guest) {
     setBusy(true); setErr('')
     try {
-      onResult(await api.manualCheckin(eventId, guest.id))
+      onResult(await api.manualCheckin(eventId, guest.id, sectionMode ? sectionId : null))
     } catch (e) { setErr(e.message); setBusy(false) }
   }
 
@@ -368,6 +369,11 @@ function ManualCheckin({ eventId, onResult, walkInEnabled }) {
 
   return (
     <div className="space-y-3">
+      {sectionMode && !sectionId && (
+        <div className="rounded-lg border border-amber-300 dark:border-amber-800 bg-amber-50 dark:bg-amber-900/20 px-3 py-2 text-xs text-amber-800 dark:text-amber-200">
+          Pick your section above first — guests without a table group are seated in the active section.
+        </div>
+      )}
       <input value={q} onChange={(e) => setQ(e.target.value)} autoFocus
         placeholder="Search name or phone…" className={inputCls} />
       {walkInEnabled && (
@@ -460,11 +466,17 @@ export default function ScannerPage() {
   const [gateId, setGateId] = useState('')
   const [scanBy, setScanBy] = useState('gate')
   const [mode, setMode] = useState('qr')   // 'qr' | 'manual' (when manual check-in is enabled)
+  // Section-based scanning: this device's active section (a table group), picked
+  // once per session and persisted per-event in sessionStorage. Walk-ins and
+  // group-less manual check-ins route here.
+  const [tableGroups, setTableGroups] = useState([])
+  const [sectionId, setSectionId] = useState('')
 
   const selectedEvent = events.find((e) => e.id === eventId)
   const accessMode = !!selectedEvent?.venue_access_enabled
   const manualEnabled = !!selectedEvent?.manual_checkin_enabled
   const selfCheckinEnabled = !!selectedEvent?.self_checkin_enabled
+  const sectionMode = !!selectedEvent?.section_mode_enabled
   const selectedZone = zones.find((z) => z.id === zoneId)
   const selectedGate = gates.find((g) => g.id === gateId)
   const scanningReady = !!selectedEvent && selectedEvent.status === 'active'
@@ -487,6 +499,25 @@ export default function ScannerPage() {
       }).catch(() => setScanBy('zone'))
     }
   }, [eventId]) // eslint-disable-line
+
+  // Section-based scanning: load the event's table groups (sections) and restore
+  // any section this device already picked for this event (sessionStorage).
+  useEffect(() => {
+    setTableGroups([]); setSectionId('')
+    if (eventId && selectedEvent?.section_mode_enabled) {
+      api.listTableGroups(eventId).then((groups) => {
+        setTableGroups(groups)
+        const saved = sessionStorage.getItem(`scanner_section:${eventId}`)
+        if (saved && groups.some((g) => g.id === saved)) setSectionId(saved)
+      }).catch(() => {})
+    }
+  }, [eventId]) // eslint-disable-line
+
+  function chooseSection(id) {
+    setSectionId(id)
+    if (id) sessionStorage.setItem(`scanner_section:${eventId}`, id)
+    else sessionStorage.removeItem(`scanner_section:${eventId}`)
+  }
 
   async function handleScan(raw) {
     const token = extractToken(raw)
@@ -602,6 +633,29 @@ export default function ScannerPage() {
         </div>
       )}
 
+      {sectionMode && scanningReady && (
+        <div className="bg-white dark:bg-slate-800 dark:border dark:border-slate-700/60 rounded-xl shadow p-4">
+          <label className="block text-xs font-semibold text-gray-600 dark:text-slate-300 mb-1">
+            Which section / entrance are you at?
+          </label>
+          <select
+            className="w-full border border-gray-300 dark:border-slate-700 rounded-lg px-3 py-2 text-sm bg-white dark:bg-slate-700 text-gray-900 dark:text-white"
+            value={sectionId}
+            onChange={(e) => chooseSection(e.target.value)}
+          >
+            <option value="">— select section —</option>
+            {tableGroups.map((g) => (
+              <option key={g.id} value={g.id}>{g.name}</option>
+            ))}
+          </select>
+          <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
+            {sectionId
+              ? 'Walk-ins and ungrouped guests checked in here are seated in this section.'
+              : 'Pick your section once — it applies to every check-in on this device.'}
+          </p>
+        </div>
+      )}
+
       <div className="bg-white dark:bg-slate-800 dark:border dark:border-slate-700/60 rounded-xl shadow p-6">
         {loading && (
           <div className="text-center py-8">
@@ -645,7 +699,8 @@ export default function ScannerPage() {
             {selfCheckinEnabled && mode === 'eventqr' ? (
               <EventQrPanel event={selectedEvent} />
             ) : manualEnabled && mode === 'manual' ? (
-              <ManualCheckin eventId={eventId} walkInEnabled={!!selectedEvent?.walk_in_enabled} onResult={(res) => setResult(res)} />
+              <ManualCheckin eventId={eventId} walkInEnabled={!!selectedEvent?.walk_in_enabled}
+                sectionMode={sectionMode} sectionId={sectionId} onResult={(res) => setResult(res)} />
             ) : (
               <>
                 <p className="text-center text-sm text-gray-500 dark:text-slate-400 mb-4">

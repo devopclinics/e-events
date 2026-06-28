@@ -142,7 +142,7 @@ export const api = {
   scan: (token) => req('POST', `/scan/${token}`),
   // Manual check-in (no QR)
   searchGuests:  (eventId, q) => req('GET', `/events/${eventId}/guests/search?q=${encodeURIComponent(q)}`),
-  manualCheckin: (eventId, guestId) => req('POST', `/events/${eventId}/guests/${guestId}/checkin`),
+  manualCheckin: (eventId, guestId, tableGroupId) => req('POST', `/events/${eventId}/guests/${guestId}/checkin${tableGroupId ? `?table_group_id=${encodeURIComponent(tableGroupId)}` : ''}`),
   // Walk-in
   setWalkIn:      (eventId, active) => req('PATCH', `/events/${eventId}/walk-in`, { active }),
   setWalkInGroup: (eventId, tableGroupId) => req('PATCH', `/events/${eventId}/walk-in-group`, { table_group_id: tableGroupId }),

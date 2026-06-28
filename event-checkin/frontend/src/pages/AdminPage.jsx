@@ -818,6 +818,16 @@ function WalkInToggle({ event, onChanged, onFlash }) {
     } catch (e) { onFlash?.(e.message, true) }
   }
 
+  async function toggleSection() {
+    setLoading(true)
+    try {
+      const updated = await api.toggleFeatures(event.id, { section_mode_enabled: !event.section_mode_enabled })
+      onChanged(updated)
+      onFlash?.(`Section scanning ${updated.section_mode_enabled ? 'enabled' : 'disabled'}.`)
+    } catch (e) { onFlash?.(e.message, true) }
+    finally { setLoading(false) }
+  }
+
   return (
     <div className="bg-white dark:bg-slate-800 dark:border dark:border-slate-700/60 rounded-xl shadow p-6 space-y-3 mt-6">
       <div className="flex items-center justify-between gap-3 flex-wrap">
@@ -834,7 +844,7 @@ function WalkInToggle({ event, onChanged, onFlash }) {
           Walk-ins: {event.walk_in_enabled ? 'ON' : 'OFF'}
         </button>
       </div>
-      {event.walk_in_enabled && (
+      {event.walk_in_enabled && !event.section_mode_enabled && (
         <div>
           <label className="block text-xs font-semibold text-gray-600 dark:text-slate-300 mb-1">Auto-assign walk-ins to table group</label>
           <select value={event.walk_in_table_group_id || ''} onChange={(e) => setGroup(e.target.value)}
@@ -842,6 +852,36 @@ function WalkInToggle({ event, onChanged, onFlash }) {
             <option value="">— none (seat anywhere) —</option>
             {groups.map((g) => <option key={g.id} value={g.id}>{g.name}</option>)}
           </select>
+        </div>
+      )}
+
+      {/* Section-based scanning: only useful with table groups to use as sections
+          (e.g. men's / women's entrance). Each scanner device picks one section
+          per shift; replaces the single walk-in group while on. */}
+      {groups.length > 0 && (
+        <div className="border-t border-gray-100 dark:border-slate-700/60 pt-3">
+          <div className="flex items-center justify-between gap-3 flex-wrap">
+            <div>
+              <h3 className="font-semibold text-sm dark:text-white">Section scanning</h3>
+              <p className="text-xs text-gray-400 dark:text-slate-500 mt-1">
+                Each scanner device picks a section (table group) for its shift. Walk-ins and ungrouped
+                manual check-ins at that device are seated in that section.
+              </p>
+            </div>
+            <button onClick={toggleSection} disabled={loading}
+              className={`px-4 py-2 rounded-lg text-sm font-semibold border transition-colors disabled:opacity-50 ${
+                event.section_mode_enabled
+                  ? 'bg-teal-600 text-white border-teal-600 hover:bg-teal-700'
+                  : 'bg-white dark:bg-slate-700 text-gray-700 dark:text-slate-200 border-gray-300 dark:border-slate-600 hover:bg-gray-50 dark:hover:bg-slate-600'
+              }`}>
+              Sections: {event.section_mode_enabled ? 'ON' : 'OFF'}
+            </button>
+          </div>
+          {event.section_mode_enabled && (
+            <p className="text-xs text-teal-700 dark:text-teal-300 mt-2">
+              The per-device section replaces the single walk-in group while this is on.
+            </p>
+          )}
         </div>
       )}
     </div>

@@ -980,6 +980,22 @@ async def search_guests(
     } for g in rows]
 
 
+async def _resolve_section_group(event, section_id, db) -> str | None:
+    """Resolve which table group a door check-in routes to.
+
+    Section mode ON  → the scanner's active section (validated against the event),
+                        falling back to walk_in_table_group_id if none was passed.
+    Section mode OFF → the event's single walk_in_table_group_id (unchanged).
+    Returns None when no group applies.
+    """
+    if event.section_mode_enabled and section_id:
+        grp = await db.get(TableGroup, section_id)
+        if not grp or grp.event_id != event.id:
+            raise HTTPException(404, "Section not found for this event")
+        return section_id
+    return event.walk_in_table_group_id or None
+
+
 @router.post("/{event_id}/guests/walk-in", response_model=ScanResult)
 async def register_walk_in(
     event_id: str,
@@ -989,7 +1005,9 @@ async def register_walk_in(
     current_user: User = Depends(require_official),
 ):
     """Register a walk-in guest at the door: create the guest, auto-assign them to
-    the event's walk-in table group, and admit — all in one step (no QR)."""
+    a table group, and admit — all in one step (no QR). When section mode is on the
+    guest is routed to the scanner's active section (body.table_group_id); otherwise
+    to the event's single walk_in_table_group_id."""
     event = await db.get(Event, event_id)
     if not event:
         raise HTTPException(404, "Event not found")
@@ -1001,11 +1019,12 @@ async def register_walk_in(
     first = (body.first_name or "").strip()
     if not first:
         raise HTTPException(400, "Guest name is required")
+    group_id = await _resolve_section_group(event, body.table_group_id, db)
     phone = _normalize_phone(body.phone.strip()) if (body.phone or "").strip() else None
     guest = Guest(
         event_id=event_id, first_name=first, last_name=(body.last_name or "").strip(),
         phone=phone, qr_generated_at=datetime.utcnow(),
-        assigned_table_group_id=event.walk_in_table_group_id or None,
+        assigned_table_group_id=group_id,
         is_walk_in=True,
     )
     db.add(guest)
@@ -1018,11 +1037,16 @@ async def manual_checkin(
     event_id: str,
     guest_id: str,
     background_tasks: BackgroundTasks,
+    table_group_id: str | None = None,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_official),
 ):
     """Admit a guest by id (manual check-in) — runs the exact same admission flow
-    as a QR scan (seat assignment, notifications, SSE broadcast)."""
+    as a QR scan (seat assignment, notifications, SSE broadcast).
+
+    Section mode: if the device passes its active section (table_group_id) and the
+    guest has NO table group yet, route them into that section. A guest who already
+    has a group keeps it — the section never overrides an existing assignment."""
     event = await db.get(Event, event_id)
     if not event:
         raise HTTPException(404, "Event not found")
@@ -1034,6 +1058,12 @@ async def manual_checkin(
     blocked = await checkin_guard(event, current_user, db)
     if blocked:
         return blocked
+    if (event.section_mode_enabled and table_group_id
+            and not guest.assigned_table_group_id):
+        grp = await db.get(TableGroup, table_group_id)
+        if not grp or grp.event_id != event_id:
+            raise HTTPException(404, "Section not found for this event")
+        guest.assigned_table_group_id = table_group_id
     return await perform_admission(guest, event, background_tasks, db)
 
 

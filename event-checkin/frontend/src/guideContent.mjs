@@ -20,6 +20,20 @@ export const CONTENT = {
         tip: 'The free tier includes email invites, RSVP tracking, and up to 25 guests. Upgrade to an Event Pass to unlock SMS/WhatsApp, QR check-in, seating, entry areas, and more.',
       },
       {
+        id: 'org-rsvp-only', icon: '⚡', title: 'Just need RSVPs? Start here',
+        intro: 'Only collecting RSVPs — no tickets, seating, or check-in? This is the shortest path, and it runs on the free plan. You only ever touch two tabs.',
+        steps: [
+          'Create your event: Event Setup → New Event → enter a name and date. Leave every paid add-on (Seating, Orders, Entry rules, Deliveries, Gift list) OFF — for RSVP-only you don\'t need any of them, and they stay hidden from your sidebar.',
+          'Turn on your RSVP page: Invites & RSVP → Invitation page & RSVP. Pick "Anyone with event link" for the simplest setup (one link anyone can use), or "Only guests with a personal invite link" if you need a precise, no-forwarding headcount.',
+          'Make it yours: add a welcome message, cover image, an optional RSVP deadline, a maximum RSVP count, and any custom questions (dietary, plus-one, t-shirt size…). Click "Preview invite page" to see exactly what guests will see.',
+          'Get guests in — two ways: (a) simplest — just copy the public event link and share it yourself on WhatsApp, email, or socials; or (b) add a guest list (Guests → Add guest, or upload a spreadsheet) and send personal links from Invites & RSVP.',
+          'Watch responses roll in: the Guests tab shows each guest as Attending, Declined, Pending, or No reply — updating live. That is your headcount, no extra steps.',
+          'Optional — approvals: if you turned on "Approval required," confirm or reject each RSVP from the Guests tab (or use "Approve all").',
+          'That\'s it. No check-in, scanning, or seating to set up — ignore every other tab. The same event can grow later (add tickets, seating, or check-in) without starting over.',
+        ],
+        tip: 'RSVP-only fits the free plan: email invites + up to 25 guests, no Event Pass needed. Upgrade only if you want SMS/WhatsApp invites, a bigger guest list, or to add check-in/seating to the very same event later.',
+      },
+      {
         id: 'org-create', icon: '📅', title: 'Create your event',
         img: '/media/help-event-setup.png',
         intro: 'Each event is a self-contained workspace with its own guests, invites, settings, and day-of tools.',

@@ -20,6 +20,10 @@ class Settings(BaseSettings):
     email_from: str = "noreply@event.com"
     # If set, email is sent via the Resend HTTP API instead of SMTP.
     resend_api_key: str = ""
+    # If set, email is sent via Bird's Email API before falling back to SMTP.
+    # Example: https://email.us-west-2.api.bird.com/api
+    bird_email_api_base: str = ""
+    bird_email_channel_id: str = ""
 
     # Messaging provider switch: 'bird' | 'twilio' | '' (off)
     messaging_provider: str = ""

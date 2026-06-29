@@ -959,6 +959,35 @@ class TableReport(BaseModel):
     served: int = 0
 
 
+class DashboardBreakdown(BaseModel):
+    name: str
+    total: int = 0
+    admitted: int = 0
+    pending: int = 0
+    capacity: Optional[int] = None
+
+
+class DashboardTimelinePoint(BaseModel):
+    label: str
+    count: int
+
+
+class DashboardInviteDelivery(BaseModel):
+    sent: int = 0
+    failed: int = 0
+    unsent: int = 0
+
+
+class DashboardContactStats(BaseModel):
+    email_available: int = 0
+    phone_available: int = 0
+    both_available: int = 0
+    no_contact: int = 0
+    invite_sent: int = 0
+    invite_failed: int = 0
+    responses_received: int = 0
+
+
 class MenuEventOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)
     id: str
@@ -978,6 +1007,14 @@ class DashboardStats(BaseModel):
     rsvp_declined: int = 0
     rsvp_pending: int = 0
     rsvp_invited: int = 0
+    vip_total: int = 0
+    vip_admitted: int = 0
+    invite_delivery: DashboardInviteDelivery = DashboardInviteDelivery()
+    contact_stats: DashboardContactStats = DashboardContactStats()
+    arrival_timeline: list[DashboardTimelinePoint] = []
+    pending_guests: list[GuestOut] = []
+    ticket_types: list[DashboardBreakdown] = []
+    table_groups: list[DashboardBreakdown] = []
     # Adaptive sections — only populated when the feature is enabled
     zones: list[ZoneOccupancy] = []
     catering_served: Optional[int] = None

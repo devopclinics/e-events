@@ -5,8 +5,8 @@ from fastapi.responses import StreamingResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func
 from ..database import get_db
-from ..models import Guest, Event, User, Zone, MenuCategory, SeatingTable
-from ..schemas import DashboardStats, GuestOut, ZoneOccupancy, TableReport
+from ..models import Guest, Event, User, Zone, MenuCategory, SeatingTable, TicketType, TableGroup
+from ..schemas import DashboardStats, GuestOut, ZoneOccupancy, TableReport, DashboardBreakdown, DashboardTimelinePoint, DashboardInviteDelivery, DashboardContactStats
 from ..auth import require_dashboard_access, verify_token_user, user_has_dashboard_access
 from .access import zone_occupancy
 from . import sse_subscribers
@@ -32,12 +32,113 @@ async def get_dashboard(event_id: str, db: AsyncSession = Depends(get_db), _: Us
         select(Guest).where(Guest.event_id == event_id, Guest.admitted == True)
         .order_by(Guest.admitted_at.desc())
     )).scalars().all()
+    pending_guests = (await db.execute(
+        select(Guest).where(Guest.event_id == event_id, Guest.admitted == False)
+        .order_by(Guest.is_vip.desc(), Guest.last_name, Guest.first_name)
+        .limit(50)
+    )).scalars().all()
 
     # RSVP breakdown
     rsvp_confirmed = await _count(db, Guest.event_id == event_id, Guest.rsvp_status == "confirmed")
     rsvp_declined = await _count(db, Guest.event_id == event_id, Guest.rsvp_status == "declined")
     rsvp_pending = await _count(db, Guest.event_id == event_id, Guest.rsvp_status == "pending")
     rsvp_invited = await _count(db, Guest.event_id == event_id, Guest.rsvp_status == "invited")
+    vip_total = await _count(db, Guest.event_id == event_id, Guest.is_vip == True)
+    vip_admitted = await _count(db, Guest.event_id == event_id, Guest.is_vip == True, Guest.admitted == True)
+    invite_delivery = DashboardInviteDelivery(
+        sent=await _count(db, Guest.event_id == event_id, Guest.invite_status == "sent"),
+        failed=await _count(db, Guest.event_id == event_id, Guest.invite_status == "failed"),
+        unsent=await _count(db, Guest.event_id == event_id, Guest.invite_status.is_(None), Guest.invite_sent_at.is_(None)),
+    )
+    email_available = await _count(db, Guest.event_id == event_id, Guest.email.isnot(None), Guest.email != "")
+    phone_available = await _count(db, Guest.event_id == event_id, Guest.phone.isnot(None), Guest.phone != "")
+    both_available = await _count(
+        db,
+        Guest.event_id == event_id,
+        Guest.email.isnot(None), Guest.email != "",
+        Guest.phone.isnot(None), Guest.phone != "",
+    )
+    contact_stats = DashboardContactStats(
+        email_available=email_available,
+        phone_available=phone_available,
+        both_available=both_available,
+        no_contact=await _count(
+            db,
+            Guest.event_id == event_id,
+            (Guest.email.is_(None) | (Guest.email == "")),
+            (Guest.phone.is_(None) | (Guest.phone == "")),
+        ),
+        invite_sent=invite_delivery.sent,
+        invite_failed=invite_delivery.failed,
+        responses_received=await _count(
+            db,
+            Guest.event_id == event_id,
+            (Guest.rsvp_responded_at.isnot(None) | Guest.rsvp_status.in_(["confirmed", "declined", "pending"])),
+        ),
+    )
+
+    admitted_by_hour: dict[str, int] = {}
+    for guest in admitted_guests:
+        if not guest.admitted_at:
+            continue
+        hour = guest.admitted_at.replace(minute=0, second=0, microsecond=0)
+        admitted_by_hour[hour.isoformat()] = admitted_by_hour.get(hour.isoformat(), 0) + 1
+    arrival_timeline = [
+        DashboardTimelinePoint(label=label, count=count)
+        for label, count in sorted(admitted_by_hour.items())
+    ]
+
+    ticket_types: list[DashboardBreakdown] = []
+    ttype_rows = (await db.execute(
+        select(TicketType).where(TicketType.event_id == event_id, TicketType.is_active == True)
+        .order_by(TicketType.sort_order, TicketType.name)
+    )).scalars().all()
+    ttype_agg = {tid: (n, ci) for tid, n, ci in (await db.execute(
+        select(
+            Guest.ticket_type_id,
+            func.count(Guest.id),
+            func.count(Guest.id).filter(Guest.admitted.is_(True)),
+        ).where(Guest.event_id == event_id, Guest.ticket_type_id.isnot(None))
+        .group_by(Guest.ticket_type_id)
+    )).all()}
+    for ticket in ttype_rows:
+        n, ci = ttype_agg.get(ticket.id, (0, 0))
+        ticket_types.append(DashboardBreakdown(
+            name=ticket.name, total=int(n), admitted=int(ci), pending=max(int(n) - int(ci), 0),
+            capacity=ticket.capacity,
+        ))
+    unassigned_ticket_total = await _count(db, Guest.event_id == event_id, Guest.ticket_type_id.is_(None))
+    if unassigned_ticket_total:
+        unassigned_ticket_admitted = await _count(db, Guest.event_id == event_id, Guest.ticket_type_id.is_(None), Guest.admitted == True)
+        ticket_types.append(DashboardBreakdown(
+            name="Unassigned", total=unassigned_ticket_total, admitted=unassigned_ticket_admitted,
+            pending=max(unassigned_ticket_total - unassigned_ticket_admitted, 0),
+        ))
+
+    table_groups: list[DashboardBreakdown] = []
+    group_rows = (await db.execute(
+        select(TableGroup).where(TableGroup.event_id == event_id).order_by(TableGroup.sort_order, TableGroup.name)
+    )).scalars().all()
+    group_agg = {gid: (n, ci) for gid, n, ci in (await db.execute(
+        select(
+            Guest.assigned_table_group_id,
+            func.count(Guest.id),
+            func.count(Guest.id).filter(Guest.admitted.is_(True)),
+        ).where(Guest.event_id == event_id, Guest.assigned_table_group_id.isnot(None))
+        .group_by(Guest.assigned_table_group_id)
+    )).all()}
+    for group in group_rows:
+        n, ci = group_agg.get(group.id, (0, 0))
+        table_groups.append(DashboardBreakdown(
+            name=group.name, total=int(n), admitted=int(ci), pending=max(int(n) - int(ci), 0),
+        ))
+    unassigned_group_total = await _count(db, Guest.event_id == event_id, Guest.assigned_table_group_id.is_(None))
+    if unassigned_group_total and group_rows:
+        unassigned_group_admitted = await _count(db, Guest.event_id == event_id, Guest.assigned_table_group_id.is_(None), Guest.admitted == True)
+        table_groups.append(DashboardBreakdown(
+            name="No section", total=unassigned_group_total, admitted=unassigned_group_admitted,
+            pending=max(unassigned_group_total - unassigned_group_admitted, 0),
+        ))
 
     # Venue-access live occupancy (only when enabled)
     zones: list[ZoneOccupancy] = []
@@ -81,6 +182,13 @@ async def get_dashboard(event_id: str, db: AsyncSession = Depends(get_db), _: Us
         admitted_guests=[GuestOut.model_validate(g) for g in admitted_guests],
         rsvp_confirmed=rsvp_confirmed, rsvp_declined=rsvp_declined,
         rsvp_pending=rsvp_pending, rsvp_invited=rsvp_invited,
+        vip_total=vip_total, vip_admitted=vip_admitted,
+        invite_delivery=invite_delivery,
+        contact_stats=contact_stats,
+        arrival_timeline=arrival_timeline,
+        pending_guests=[GuestOut.model_validate(g) for g in pending_guests],
+        ticket_types=ticket_types,
+        table_groups=table_groups,
         zones=zones, catering_served=catering_served, catering_total=catering_total,
         tables=tables,
     )

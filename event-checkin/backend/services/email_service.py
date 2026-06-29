@@ -2,6 +2,7 @@ import base64
 import html as _html
 import logging
 from datetime import datetime
+from email.utils import getaddresses
 from email.mime.application import MIMEApplication
 from email.mime.image import MIMEImage
 from email.mime.multipart import MIMEMultipart
@@ -61,6 +62,106 @@ async def _send_via_resend(msg: MIMEMultipart):
     r.raise_for_status()
 
 
+def _first_html_text(msg: MIMEMultipart) -> tuple[str | None, str | None]:
+    html = text = None
+    for part in msg.walk():
+        ctype = part.get_content_type()
+        if part.is_multipart():
+            continue
+        raw = part.get_payload(decode=True)
+        if not raw:
+            continue
+        decoded = raw.decode(part.get_content_charset() or "utf-8", "replace")
+        if ctype == "text/html" and html is None:
+            html = decoded
+        elif ctype == "text/plain" and text is None:
+            text = decoded
+    return html, text
+
+
+def _parse_email_header(value: str) -> tuple[str, str]:
+    parsed = getaddresses([value or ""])
+    if not parsed:
+        return "", ""
+    name, email = parsed[0]
+    return name or "", email or ""
+
+
+def _bird_payload(msg: MIMEMultipart) -> dict:
+    """Convert MIME to Bird's Email API transmission payload.
+
+    EventQR renders templates before delivery, so substitutions stay disabled.
+    Inline images use the Content-ID as their Bird name so cid:qrcode continues
+    to work for QR-ticket emails.
+    """
+    from_name, from_email = _parse_email_header(msg["From"])
+    recipients = []
+    for name, email in getaddresses([msg["To"] or ""]):
+        if email:
+            recipients.append({"address": {"email": email, "name": name or email}})
+
+    html, text = _first_html_text(msg)
+    content = {
+        "from": {"email": from_email, "name": from_name or from_email},
+        "subject": msg["Subject"] or "",
+    }
+    if html:
+        content["html"] = html
+    if text:
+        content["text"] = text
+
+    attachments = []
+    inline_images = []
+    for part in msg.walk():
+        if part.is_multipart() or part.get_content_maintype() == "text":
+            continue
+        raw = part.get_payload(decode=True)
+        if not raw:
+            continue
+        encoded = base64.b64encode(raw).decode()
+        filename = part.get_filename() or "attachment"
+        if part.get_content_maintype() == "image":
+            cid = (part.get("Content-ID") or "").strip("<>")
+            inline_images.append({
+                "name": cid or filename,
+                "type": part.get_content_type(),
+                "data": encoded,
+            })
+        elif part.get_content_disposition() == "attachment":
+            attachments.append({
+                "name": filename,
+                "type": part.get_content_type(),
+                "data": encoded,
+            })
+    if attachments:
+        content["attachments"] = attachments
+    if inline_images:
+        content["inline_images"] = inline_images
+
+    return {
+        "options": {
+            "transactional": True,
+            "open_tracking": False,
+            "click_tracking": False,
+            "perform_substitutions": False,
+        },
+        "recipients": recipients,
+        "content": content,
+    }
+
+
+async def _send_via_bird(msg: MIMEMultipart):
+    base = settings.bird_email_api_base.rstrip("/")
+    url = f"{base}/workspaces/{settings.bird_workspace_id}/reach/transmissions"
+    headers = {
+        "Authorization": f"AccessKey {settings.bird_access_key}",
+        "Content-Type": "application/json",
+    }
+    async with httpx.AsyncClient(timeout=30) as c:
+        r = await c.post(url, json=_bird_payload(msg), headers=headers)
+    r.raise_for_status()
+
+
 async def _send(msg: MIMEMultipart):
     if not (msg["To"] or "").strip():
         logger.info("Skipping email — recipient has no email address (likely a VVIP walk-in)")
@@ -71,6 +172,12 @@ async def _send(msg: MIMEMultipart):
             await _send_via_resend(msg)
         except Exception:
             logger.exception("Resend send failed for %s", msg["To"])
+        return
+    if settings.bird_email_api_base and settings.bird_workspace_id and settings.bird_access_key:
+        try:
+            await _send_via_bird(msg)
+        except Exception:
+            logger.exception("Bird email send failed for %s", msg["To"])
         return
     if not settings.smtp_host:
         logger.warning("Email not configured — skipping email to %s", msg["To"])
@@ -418,4 +525,3 @@ async def send_broadcast_email(*, email: str, first_name: str, message: str, eve
 
     msg.attach(MIMEText(body, "html"))
     await _send(msg)
-

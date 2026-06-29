@@ -484,7 +484,19 @@ async def toggle_features(
     if "logistics_enabled" in body:
         event.logistics_enabled = bool(body["logistics_enabled"])
     if "venue_access_enabled" in body:
-        event.venue_access_enabled = bool(body["venue_access_enabled"])
+        enable = bool(body["venue_access_enabled"])
+        # Entry rules (zone scanning) and Section scanning both drive the scanner,
+        # but on different paths: Entry rules own the QR/gate path (and skip
+        # seating), Section scanning routes walk-in/manual check-ins into a table
+        # group. Running both at once seats some guests and not others depending
+        # on how they were scanned — incoherent. Keep them mutually exclusive.
+        if enable and event.section_mode_enabled:
+            raise HTTPException(
+                400,
+                "Turn off Section scanning first — Entry rules and Section scanning "
+                "drive the scanner differently and can't run on the same event.",
+            )
+        event.venue_access_enabled = enable
     if "registry_enabled" in body:
         event.registry_enabled = bool(body["registry_enabled"])
         # Mint the public registry token on first enable.
@@ -493,6 +505,14 @@ async def toggle_features(
     if "section_mode_enabled" in body:
         enable = bool(body["section_mode_enabled"])
         if enable:
+            # Mutually exclusive with Entry rules / Venue access (see note above).
+            if event.venue_access_enabled:
+                raise HTTPException(
+                    400,
+                    "Turn off Entry rules (Venue access) first — Entry rules and "
+                    "Section scanning drive the scanner differently and can't run "
+                    "on the same event.",
+                )
             # Only meaningful with table groups to use as sections.
             from ..models import TableGroup
             has_group = (await db.execute(

@@ -856,20 +856,20 @@ function WalkInToggle({ event, onChanged, onFlash }) {
       )}
 
       {/* Section-based scanning: only useful with table groups to use as sections
-          (e.g. men's / women's entrance). Each scanner device picks one section
-          per shift; replaces the single walk-in group while on. */}
+          (e.g. men's / women's entrance). An admin assigns each staff member a
+          section on the Event Team page; replaces the single walk-in group while on. */}
       {groups.length > 0 && (
         <div className="border-t border-gray-100 dark:border-slate-700/60 pt-3">
           <div className="flex items-center justify-between gap-3 flex-wrap">
             <div>
               <h3 className="font-semibold text-sm dark:text-white">Section scanning</h3>
               <p className="text-xs text-gray-400 dark:text-slate-500 mt-1">
-                Each scanner device picks a section (table group) for its shift. Walk-ins and ungrouped
-                manual check-ins at that device are seated in that section.
+                Assign each staff member a section (table group) on the Event Team page. Walk-ins and
+                ungrouped manual check-ins they handle are seated in their section.
               </p>
             </div>
-            <button onClick={toggleSection} disabled={loading}
-              className={`px-4 py-2 rounded-lg text-sm font-semibold border transition-colors disabled:opacity-50 ${
+            <button onClick={toggleSection} disabled={loading || (!event.section_mode_enabled && event.venue_access_enabled)}
+              className={`px-4 py-2 rounded-lg text-sm font-semibold border transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${
                 event.section_mode_enabled
                   ? 'bg-teal-600 text-white border-teal-600 hover:bg-teal-700'
                   : 'bg-white dark:bg-slate-700 text-gray-700 dark:text-slate-200 border-gray-300 dark:border-slate-600 hover:bg-gray-50 dark:hover:bg-slate-600'
@@ -877,9 +877,15 @@ function WalkInToggle({ event, onChanged, onFlash }) {
               Sections: {event.section_mode_enabled ? 'ON' : 'OFF'}
             </button>
           </div>
+          {!event.section_mode_enabled && event.venue_access_enabled && (
+            <p className="text-xs text-amber-600 dark:text-amber-400 mt-2">
+              Entry rules is on for this event. Turn it off first — Entry rules and Section
+              scanning can’t run on the same event.
+            </p>
+          )}
           {event.section_mode_enabled && (
             <p className="text-xs text-teal-700 dark:text-teal-300 mt-2">
-              The per-device section replaces the single walk-in group while this is on.
+              Each staffer’s assigned section replaces the single walk-in group while this is on.
             </p>
           )}
         </div>

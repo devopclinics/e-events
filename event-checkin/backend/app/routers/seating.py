@@ -503,8 +503,43 @@ async def assign_seat(
                     f"'{gname}' and cannot be seated at this table.",
                 )
 
+        # Capacity guard: a table can't hold more guests than it has seats. This
+        # catches table-only assignments (no seat number), which the seat-clash
+        # check below can't see. Counts other guests already on the table; the
+        # guest themselves is excluded so re-seating within the table is fine.
+        # (The QR/manual scan path enforces capacity separately via
+        # assign_next_seat, so it is unaffected.)
+        if guest.table_id != body.table_id:
+            others = await db.scalar(
+                select(func.count(Guest.id)).where(
+                    Guest.table_id == body.table_id, Guest.id != guest_id
+                )
+            ) or 0
+            if others >= table.capacity:
+                raise HTTPException(409, f"{table.name} is full (capacity {table.capacity}).")
+
     guest.table_id = body.table_id
     guest.seat_number = body.seat_number
+
+    # Reject a seat already held by another guest on the same table — keeps this
+    # path consistent with the guest-edit modal (guests.py::update_guest) so the
+    # seating chart can't silently double-book a seat.
+    if guest.table_id and guest.seat_number:
+        clash = await db.scalar(
+            select(Guest).where(
+                Guest.event_id == event_id,
+                Guest.table_id == guest.table_id,
+                Guest.seat_number == guest.seat_number,
+                Guest.id != guest.id,
+            )
+        )
+        if clash:
+            raise HTTPException(
+                409,
+                f"Seat {guest.seat_number} on that table is already taken by "
+                f"{clash.first_name} {clash.last_name}.",
+            )
+
     await db.commit()
     return {"ok": True, "table_id": guest.table_id, "seat_number": guest.seat_number}
 

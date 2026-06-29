@@ -243,3 +243,26 @@ async def test_toggle_requires_a_table_group(ctx):
     # Disabling is always allowed.
     off = await ctx.client.patch(f"/api/events/{ev}/features", json={"section_mode_enabled": False})
     assert off.status_code == 200 and off.json()["section_mode_enabled"] is False
+
+
+@pytest.mark.asyncio
+async def test_section_mode_and_venue_access_are_mutually_exclusive(ctx):
+    """Entry rules (venue access) and Section scanning drive the scanner on
+    different paths and can't both be on for one event."""
+    await _prep(ctx.ids["event_a"], section_mode=False)
+    ctx.login(ctx.ids["superadmin"])
+    ev = ctx.ids["event_a"]
+    await _group(ctx, ev, "Men")
+
+    # Section on while venue access on → blocked.
+    on = await ctx.client.patch(f"/api/events/{ev}/features", json={"venue_access_enabled": True})
+    assert on.status_code == 200 and on.json()["venue_access_enabled"] is True
+    bad = await ctx.client.patch(f"/api/events/{ev}/features", json={"section_mode_enabled": True})
+    assert bad.status_code == 400
+
+    # And the reverse: venue access on while section mode on → blocked.
+    await ctx.client.patch(f"/api/events/{ev}/features", json={"venue_access_enabled": False})
+    ok = await ctx.client.patch(f"/api/events/{ev}/features", json={"section_mode_enabled": True})
+    assert ok.status_code == 200 and ok.json()["section_mode_enabled"] is True
+    bad2 = await ctx.client.patch(f"/api/events/{ev}/features", json={"venue_access_enabled": True})
+    assert bad2.status_code == 400

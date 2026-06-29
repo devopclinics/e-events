@@ -887,6 +887,17 @@ async def update_guest(
             table = await db.get(SeatingTable, new_table_id)
             if not table or table.event_id != event_id:
                 raise HTTPException(404, "Table not found for this event")
+            # Capacity guard: don't over-fill a table. Only enforced when moving
+            # the guest onto a different table; counts other guests already there
+            # (incl. table-only assignments the seat-clash check below can't see).
+            if guest.table_id != new_table_id:
+                others = await db.scalar(
+                    select(func.count(Guest.id)).where(
+                        Guest.table_id == new_table_id, Guest.id != guest.id
+                    )
+                ) or 0
+                if others >= table.capacity:
+                    raise HTTPException(409, f"{table.name} is full (capacity {table.capacity}).")
         guest.table_id = new_table_id
         if new_table_id is None:
             guest.seat_number = None  # no table → no seat

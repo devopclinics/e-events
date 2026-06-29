@@ -8,6 +8,7 @@ from urllib.parse import urlparse
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, BackgroundTasks, Response, Body
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func
+from sqlalchemy.exc import IntegrityError
 from ..database import get_db
 from sqlalchemy import or_
 from ..models import Event, Guest, TicketType, GuestTag, GuestTagLink, User, TableGroup, SeatingTable, EventUser, EventUserSection
@@ -898,26 +899,43 @@ async def update_guest(
                 ) or 0
                 if others >= table.capacity:
                     raise HTTPException(409, f"{table.name} is full (capacity {table.capacity}).")
+    # Resolve the intended final (table, seat) so the clash check runs on the
+    # would-be values BEFORE we mutate `guest` — otherwise the query autoflushes
+    # our pending change into the unique index and raises there.
+    final_table = new_table_id if data.table_id is not None else guest.table_id
+    if data.table_id is not None and new_table_id is None:
+        final_seat = None  # no table → no seat
+    elif data.seat_number is not None:
+        final_seat = data.seat_number.strip() or None
+    else:
+        final_seat = guest.seat_number
+
+    # Reject a seat already held by another guest on the same table.
+    if final_table and final_seat:
+        clash = await db.scalar(
+            select(Guest).where(
+                Guest.event_id == event_id,
+                Guest.table_id == final_table,
+                Guest.seat_number == final_seat,
+                Guest.id != guest.id,
+            )
+        )
+        if clash:
+            raise HTTPException(409, f"Seat {final_seat} on that table is already taken by {clash.first_name} {clash.last_name}.")
+
+    if data.table_id is not None:
         guest.table_id = new_table_id
         if new_table_id is None:
             guest.seat_number = None  # no table → no seat
     if data.seat_number is not None:
         guest.seat_number = data.seat_number.strip() or None
 
-    # Reject a seat already held by another guest on the same table.
-    if guest.table_id and guest.seat_number:
-        clash = await db.scalar(
-            select(Guest).where(
-                Guest.event_id == event_id,
-                Guest.table_id == guest.table_id,
-                Guest.seat_number == guest.seat_number,
-                Guest.id != guest.id,
-            )
-        )
-        if clash:
-            raise HTTPException(409, f"Seat {guest.seat_number} on that table is already taken by {clash.first_name} {clash.last_name}.")
-
-    await db.commit()
+    # Unique index backstop for a concurrent seat grab between check and commit.
+    try:
+        await db.commit()
+    except IntegrityError:
+        await db.rollback()
+        raise HTTPException(409, f"Seat {guest.seat_number} on that table was just taken — refresh and pick another seat.")
     await db.refresh(guest)
     return guest
 

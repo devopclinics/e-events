@@ -1,6 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func
+from sqlalchemy.exc import IntegrityError
 from ..database import get_db
 from ..models import Event, SeatingTable, Guest, EventUser, EventUserSection, User, TableGroup, TableGroupTable
 from ..schemas import (
@@ -518,29 +519,41 @@ async def assign_seat(
             if others >= table.capacity:
                 raise HTTPException(409, f"{table.name} is full (capacity {table.capacity}).")
 
-    guest.table_id = body.table_id
-    guest.seat_number = body.seat_number
-
     # Reject a seat already held by another guest on the same table — keeps this
     # path consistent with the guest-edit modal (guests.py::update_guest) so the
-    # seating chart can't silently double-book a seat.
-    if guest.table_id and guest.seat_number:
+    # seating chart can't silently double-book a seat. Checked on the *intended*
+    # values before mutating `guest`, so the query doesn't autoflush our pending
+    # change into the unique index.
+    if body.table_id and body.seat_number:
         clash = await db.scalar(
             select(Guest).where(
                 Guest.event_id == event_id,
-                Guest.table_id == guest.table_id,
-                Guest.seat_number == guest.seat_number,
-                Guest.id != guest.id,
+                Guest.table_id == body.table_id,
+                Guest.seat_number == body.seat_number,
+                Guest.id != guest_id,
             )
         )
         if clash:
             raise HTTPException(
                 409,
-                f"Seat {guest.seat_number} on that table is already taken by "
+                f"Seat {body.seat_number} on that table is already taken by "
                 f"{clash.first_name} {clash.last_name}.",
             )
 
-    await db.commit()
+    guest.table_id = body.table_id
+    guest.seat_number = body.seat_number
+
+    # The check above closes the common case; the unique index is the backstop
+    # against a concurrent assignment that slips between check and commit.
+    try:
+        await db.commit()
+    except IntegrityError:
+        await db.rollback()
+        raise HTTPException(
+            409,
+            f"Seat {body.seat_number} on that table was just taken — "
+            "refresh and pick another seat.",
+        )
     return {"ok": True, "table_id": guest.table_id, "seat_number": guest.seat_number}
 
 

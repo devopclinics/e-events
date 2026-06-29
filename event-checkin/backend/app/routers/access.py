@@ -214,6 +214,16 @@ async def assign_ticket_type(event_id: str, gid: str, data: GuestTicketAssign,
         tt = await db.get(TicketType, data.ticket_type_id)
         if not tt or tt.event_id != event_id:
             raise HTTPException(404, "Ticket type not found")
+        # Capacity: a ticket class holds at most `capacity` guests. Only checked
+        # when newly assigning this ticket (re-saving the same one is a no-op).
+        if tt.capacity is not None and g.ticket_type_id != tt.id:
+            held = await db.scalar(
+                select(func.count(Guest.id)).where(
+                    Guest.ticket_type_id == tt.id, Guest.id != gid
+                )
+            ) or 0
+            if held >= tt.capacity:
+                raise HTTPException(409, f"{tt.name} is sold out (capacity {tt.capacity}).")
     g.ticket_type_id = data.ticket_type_id
     await db.commit()
     if not g.ticket_type_id:

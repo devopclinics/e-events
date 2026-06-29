@@ -3,6 +3,7 @@ from fastapi import APIRouter, Depends, BackgroundTasks, HTTPException
 from fastapi.responses import Response
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func
+from sqlalchemy.exc import IntegrityError
 from ..database import get_db
 from ..models import Guest, Event, EventUser, User, SeatingTable, MenuCategory, MenuItem, GuestMenuChoice, MenuCombination, MenuCombinationItem, Zone, TicketType, ScanEvent, TableGroup
 from ..schemas import ScanResult, GuestOut, TicketView, EventBrief, MenuCategoryOut, MenuItemOut, MenuCombinationOut, MenuCombinationItemOut, GuestMenuSubmit, PartnerInfo, PairRequest, ScanZoneRequest, ScanZoneResult
@@ -283,6 +284,19 @@ async def perform_admission(guest, event, background_tasks, db) -> ScanResult:
                 message=f"No seat available for {guest.first_name} {guest.last_name}: {seat_error}",
                 guest=GuestOut.model_validate(guest),
             )
+        # Surface a concurrent seat collision at a controlled point: the
+        # table-name lookup below would otherwise autoflush our freshly-picked
+        # seat and raise mid-flight if another scanner just took it.
+        if guest.table_id and guest.seat_number:
+            try:
+                await db.flush()
+            except IntegrityError:
+                await db.rollback()
+                return ScanResult(
+                    status="no_seat_available",
+                    message=f"That seat was just taken — please scan "
+                            f"{guest.first_name} {guest.last_name} again.",
+                )
 
     # Resolve table name (after possible assignment) for the result card + email.
     table_name = None
@@ -294,7 +308,18 @@ async def perform_admission(guest, event, background_tasks, db) -> ScanResult:
     guest.admitted = True
     guest.admitted_at = datetime.utcnow()
     guest.admit_notified = True
-    await db.commit()
+    try:
+        await db.commit()
+    except IntegrityError:
+        # Another scanner grabbed this exact seat between our FCFS pick and our
+        # commit (the unique index rejected the duplicate). Roll back and ask for
+        # a re-scan rather than 500 — the next scan picks the now-correct seat.
+        await db.rollback()
+        return ScanResult(
+            status="no_seat_available",
+            message=f"That seat was just taken — please scan {guest.first_name} "
+                    f"{guest.last_name} again.",
+        )
     await db.refresh(guest)
 
     # Look up menu choices for this guest as "Category: Item" pairs.

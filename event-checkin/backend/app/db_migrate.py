@@ -112,6 +112,22 @@ SCHEMA_PATCHES: list[str] = [
     # uniqueness constraint where the auto-patcher only added the bare column.
     "UPDATE events SET rsvp_token = gen_random_uuid()::text WHERE rsvp_token IS NULL",
     "CREATE UNIQUE INDEX IF NOT EXISTS ix_events_rsvp_token_unique ON events (rsvp_token)",
+
+    # Seat uniqueness: a (event, table, seat) triple holds at most one guest.
+    # 1) Free any duplicate seats the pre-constraint code may have created —
+    #    keep the earliest-admitted guest at the seat, null the seat on the rest
+    #    so they get reseated on next scan. Idempotent (no-op once clean).
+    "UPDATE guests SET seat_number = NULL WHERE id IN ("
+    "SELECT id FROM (SELECT id, ROW_NUMBER() OVER ("
+    "PARTITION BY event_id, table_id, seat_number "
+    "ORDER BY admitted_at IS NULL, admitted_at, id) AS rn "
+    "FROM guests WHERE table_id IS NOT NULL AND seat_number IS NOT NULL) d "
+    "WHERE d.rn > 1)",
+    # 2) Add the partial unique index (mirrors the ORM Index on Guest, which only
+    #    create_all'd on fresh DBs; existing prod tables get it here).
+    "CREATE UNIQUE INDEX IF NOT EXISTS uq_guest_table_seat ON guests "
+    "(event_id, table_id, seat_number) "
+    "WHERE table_id IS NOT NULL AND seat_number IS NOT NULL",
 ]
 
 

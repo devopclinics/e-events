@@ -1,6 +1,6 @@
 import uuid
 from datetime import datetime
-from sqlalchemy import String, Boolean, DateTime, ForeignKey, Integer, Text, UniqueConstraint
+from sqlalchemy import String, Boolean, DateTime, ForeignKey, Integer, Text, UniqueConstraint, Index, text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from .database import Base
 
@@ -373,6 +373,20 @@ class MenuCombinationItem(Base):
 
 class Guest(Base):
     __tablename__ = "guests"
+    __table_args__ = (
+        # A given seat at a table holds at most one guest. Partial unique index
+        # (only rows where BOTH table and seat are set) so the many guests with
+        # no table/seat don't collide on NULLs. This is the DB-level backstop for
+        # the application checks in seating.py/guests.py — it holds even under
+        # concurrency (two doors seating at the same instant). Mirrored for
+        # existing prod tables by a SCHEMA_PATCHES entry (db_migrate.py).
+        Index(
+            "uq_guest_table_seat", "event_id", "table_id", "seat_number",
+            unique=True,
+            sqlite_where=text("table_id IS NOT NULL AND seat_number IS NOT NULL"),
+            postgresql_where=text("table_id IS NOT NULL AND seat_number IS NOT NULL"),
+        ),
+    )
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
     event_id: Mapped[str] = mapped_column(String(36), ForeignKey("events.id"))

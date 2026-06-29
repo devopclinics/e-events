@@ -191,6 +191,41 @@ async def test_table_only_assignment_respects_capacity(ctx):
     assert reseat.status_code == 200, reseat.text
 
 
+# ── 2c. DB-level backstop: the unique index rejects a duplicate seat ───────────
+
+@pytest.mark.asyncio
+async def test_db_rejects_duplicate_seat_even_bypassing_app_checks(ctx):
+    """The partial unique index is the concurrency backstop: even a write that
+    skips the application-level guards cannot double-book a (table, seat)."""
+    from sqlalchemy.exc import IntegrityError
+    ev = ctx.ids["event_a"]
+    await _setup_event(ev, seating_enabled=True)
+    ctx.login(ctx.ids["superadmin"])
+    tid = await _table(ctx, ev, "T", 10)
+    a, _ = await _guest(ctx, ev, "A")
+    b, _ = await _guest(ctx, ev, "B")
+
+    async with _Session() as s:
+        (await s.get(Guest, a)).table_id = tid
+        (await s.get(Guest, a)).seat_number = "1"
+        await s.commit()
+
+    # Forcing B onto the same (table, seat) directly must raise at the DB.
+    with pytest.raises(IntegrityError):
+        async with _Session() as s:
+            g = await s.get(Guest, b)
+            g.table_id = tid
+            g.seat_number = "1"
+            await s.commit()
+
+    # A different seat at the same table is fine.
+    async with _Session() as s:
+        g = await s.get(Guest, b)
+        g.table_id = tid
+        g.seat_number = "2"
+        await s.commit()
+
+
 # ── 3. Table-group enforcement ─────────────────────────────────────────────────
 
 @pytest.mark.asyncio

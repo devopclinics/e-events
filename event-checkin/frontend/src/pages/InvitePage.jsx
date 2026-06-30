@@ -65,11 +65,105 @@ function fmtTime(iso) {
   return d.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' })
 }
 
+function eventTitle(event) {
+  return event?.name || 'This special event'
+}
+
+function venueText(event) {
+  return event?.venue || event?.location || event?.address || ''
+}
+
+function hostText(event) {
+  return event?.host_name || event?.organizer_name || event?.couples_name || ''
+}
+
+function deadlineText(event) {
+  return event?.rsvp_deadline ? fmtDate(event.rsvp_deadline) : ''
+}
+
+function scrollToRsvp() {
+  document.getElementById('rsvp')?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+}
+
+function PrimaryButton({ children, className = '', ...props }) {
+  return (
+    <button
+      {...props}
+      className={`inline-flex min-h-12 items-center justify-center rounded-2xl bg-teal-500 px-6 py-3 text-sm font-extrabold text-slate-950 shadow-lg shadow-teal-950/20 transition hover:-translate-y-0.5 hover:bg-teal-300 focus:outline-none focus:ring-4 focus:ring-teal-300/35 disabled:pointer-events-none disabled:opacity-55 ${className}`}
+    >
+      {children}
+    </button>
+  )
+}
+
+function SecondaryButton({ children, className = '', ...props }) {
+  return (
+    <button
+      {...props}
+      className={`inline-flex min-h-12 items-center justify-center rounded-2xl border border-white/15 bg-white/8 px-6 py-3 text-sm font-bold text-white transition hover:-translate-y-0.5 hover:bg-white/14 focus:outline-none focus:ring-4 focus:ring-teal-300/25 disabled:pointer-events-none disabled:opacity-55 ${className}`}
+    >
+      {children}
+    </button>
+  )
+}
+
+function EventPoster({ event }) {
+  const title = eventTitle(event)
+  if (event.invite_cover_image) {
+    return (
+      <div className="relative">
+        <div className="absolute -inset-4 rounded-[2rem] bg-teal-300/15 blur-2xl" />
+        <div className="relative overflow-hidden rounded-[1.5rem] border border-white/12 bg-slate-950 shadow-2xl shadow-black/35">
+          <img
+            src={event.invite_cover_image}
+            alt={`${title} event flyer`}
+            className="aspect-[4/5] w-full object-cover"
+          />
+        </div>
+      </div>
+    )
+  }
+
+  return (
+    <div className="relative">
+      <div className="absolute -inset-4 rounded-[2rem] bg-teal-300/15 blur-2xl" />
+      <div className="relative flex aspect-[4/5] w-full flex-col justify-between overflow-hidden rounded-[1.5rem] border border-white/12 bg-[linear-gradient(145deg,#0f172a,#113f46_52%,#14b8a6)] p-7 shadow-2xl shadow-black/35">
+        <div className="h-16 w-16 rounded-2xl border border-white/20 bg-white/10" />
+        <div>
+          <div className="mb-3 text-xs font-extrabold uppercase tracking-[0.28em] text-teal-100">You're invited</div>
+          <div className="text-4xl font-extrabold leading-tight text-white">{title}</div>
+          {event.event_date && <div className="mt-5 text-sm font-semibold text-teal-50">{fmtDate(event.event_date)}</div>}
+        </div>
+      </div>
+    </div>
+  )
+}
+
+function DetailRow({ icon, label, value }) {
+  if (!value) return null
+  return (
+    <div className="flex gap-3 rounded-2xl border border-white/10 bg-white/[0.06] p-4">
+      <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-teal-300/15 text-lg" aria-hidden="true">{icon}</span>
+      <div>
+        <div className="text-xs font-extrabold uppercase tracking-[0.16em] text-slate-400">{label}</div>
+        <div className="mt-1 text-sm font-semibold leading-relaxed text-white">{value}</div>
+      </div>
+    </div>
+  )
+}
+
+function StatusBox({ children }) {
+  return (
+    <div className="rounded-2xl border border-teal-300/25 bg-teal-300/10 px-4 py-3 text-sm leading-relaxed text-teal-50">
+      {children}
+    </div>
+  )
+}
+
 // ── Question input components ──────────────────────────────────────────────────
 
 function QuestionField({ question, value, onChange, theme }) {
-  const t = THEMES[theme] || THEMES.default
-  const baseInput = `w-full rounded-lg border px-3 py-2 text-sm bg-white dark:bg-slate-700 text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-offset-0 ${t.border}`
+  const baseInput = 'w-full min-h-12 rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-950 placeholder-slate-400 focus:outline-none focus:ring-4 focus:ring-teal-300/20'
 
   if (question.question_type === 'boolean') {
     return (
@@ -78,10 +172,10 @@ function QuestionField({ question, value, onChange, theme }) {
           type="checkbox"
           checked={value === 'yes'}
           onChange={(e) => onChange(e.target.checked ? 'yes' : 'no')}
-          className="w-4 h-4 accent-current"
+          className="h-5 w-5 accent-teal-500"
         />
-        <span className={`text-sm font-medium ${t.accent}`}>{question.question}</span>
-        {question.is_required && <span className="text-red-500 text-xs">*</span>}
+        <span className="text-sm font-semibold text-slate-800">{question.question}</span>
+        {question.is_required && <span className="text-red-500 text-xs" aria-label="required">*</span>}
       </label>
     )
   }
@@ -91,9 +185,9 @@ function QuestionField({ question, value, onChange, theme }) {
     try { options = JSON.parse(question.options || '[]') } catch { /* noop */ }
     return (
       <div>
-        <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">
+        <label className="mb-2 block text-sm font-bold text-slate-700">
           {question.question}
-          {question.is_required && <span className="text-red-500 ml-1">*</span>}
+          {question.is_required && <span className="ml-1 text-red-500" aria-label="required">*</span>}
         </label>
         <select
           value={value || ''}
@@ -101,7 +195,7 @@ function QuestionField({ question, value, onChange, theme }) {
           className={baseInput}
           required={question.is_required}
         >
-          <option value="">— Select —</option>
+          <option value="">Select an option</option>
           {options.map((o) => <option key={o} value={o}>{o}</option>)}
         </select>
       </div>
@@ -111,16 +205,16 @@ function QuestionField({ question, value, onChange, theme }) {
   // default: text
   return (
     <div>
-      <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">
+      <label className="mb-2 block text-sm font-bold text-slate-700">
         {question.question}
-        {question.is_required && <span className="text-red-500 ml-1">*</span>}
+        {question.is_required && <span className="ml-1 text-red-500" aria-label="required">*</span>}
       </label>
       <input
         type="text"
         value={value || ''}
         onChange={(e) => onChange(e.target.value)}
         className={baseInput}
-        placeholder="Your answer…"
+        placeholder="Your answer"
         required={question.is_required}
       />
     </div>
@@ -137,8 +231,8 @@ function ShippingSection({ shipping, addr, setAddr, sizes, setSizes, inputCls, a
   const withSize = (shipping.shipments || []).filter((s) => s.collect_size)
   return (
     <div className="space-y-3 pt-1">
-      <div className={`text-xs font-semibold uppercase tracking-wide ${accent}`}>Shipping details</div>
-      <p className="text-xs text-slate-500 dark:text-slate-400 -mt-1">Where should we ship your item(s)?</p>
+      <div className={`text-xs font-extrabold uppercase tracking-[0.18em] ${accent}`}>Shipping details</div>
+      <p className="-mt-1 text-sm text-slate-500">Where should we ship your item(s)?</p>
       <input className={inputCls} placeholder="Street address" value={addr.ship_address1 || ''} onChange={sa('ship_address1')} />
       <input className={inputCls} placeholder="Apartment, suite (optional)" value={addr.ship_address2 || ''} onChange={sa('ship_address2')} />
       <div className="grid grid-cols-2 gap-3">
@@ -151,10 +245,10 @@ function ShippingSection({ shipping, addr, setAddr, sizes, setSizes, inputCls, a
       </div>
       {withSize.map((s) => (
         <div key={s.shipment_id}>
-          <label className="block text-xs font-semibold text-slate-500 dark:text-slate-400 mb-1">{s.name} — size</label>
+          <label className="mb-2 block text-sm font-bold text-slate-700">{s.name} size</label>
           {s.size_options?.length ? (
             <select className={inputCls} value={sizes[s.shipment_id] || ''} onChange={(e) => setSizes((p) => ({ ...p, [s.shipment_id]: e.target.value }))}>
-              <option value="">Select a size…</option>
+              <option value="">Select a size</option>
               {s.size_options.map((o) => <option key={o} value={o}>{o}</option>)}
             </select>
           ) : (
@@ -169,6 +263,7 @@ function ShippingSection({ shipping, addr, setAddr, sizes, setSizes, inputCls, a
 function RSVPForm({ event, theme, onConfirmed }) {
   const t = THEMES[theme] || THEMES.default
   const [form, setForm] = useState({ first_name: '', last_name: '', email: '', phone: '' })
+  const [choice, setChoice] = useState('')
   const [answers, setAnswers] = useState({})
   const [shipAddr, setShipAddr] = useState({})
   const [sizes, setSizes] = useState({})
@@ -208,87 +303,143 @@ function RSVPForm({ event, theme, onConfirmed }) {
     }
   }
 
-  const inputCls = `w-full rounded-lg border px-3 py-2.5 text-sm bg-white dark:bg-slate-700 text-slate-900 dark:text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-offset-0 ${t.border}`
+  const inputCls = 'w-full min-h-12 rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-950 placeholder-slate-400 focus:outline-none focus:ring-4 focus:ring-teal-300/20'
 
   return (
-    <form onSubmit={handleSubmit} className="space-y-4">
-      <div className="grid grid-cols-2 gap-3">
-        <div>
-          <label className="block text-xs font-semibold text-slate-500 dark:text-slate-400 mb-1">First name *</label>
-          <input required value={form.first_name} onChange={set('first_name')} className={inputCls} placeholder="Jane" />
-        </div>
-        <div>
-          <label className="block text-xs font-semibold text-slate-500 dark:text-slate-400 mb-1">Last name *</label>
-          <input required value={form.last_name} onChange={set('last_name')} className={inputCls} placeholder="Smith" />
-        </div>
+    <div className="space-y-5">
+      <div>
+        <h2 className="text-2xl font-extrabold text-slate-950">Will you be attending?</h2>
+        <p className="mt-2 text-sm leading-relaxed text-slate-500">Let the host know so they can prepare your spot and QR admission ticket.</p>
       </div>
 
-      {event.rsvp_collect_email !== false && (
-        <div>
-          <label className="block text-xs font-semibold text-slate-500 dark:text-slate-400 mb-1">Email *</label>
-          <input required type="email" value={form.email} onChange={set('email')} className={inputCls} placeholder="jane@example.com" />
+      <div className="grid gap-3 sm:grid-cols-2">
+        <button
+          type="button"
+          onClick={() => setChoice('yes')}
+          className={`rounded-2xl border p-4 text-left transition focus:outline-none focus:ring-4 focus:ring-teal-300/20 ${choice === 'yes' ? 'border-teal-400 bg-teal-50 shadow-lg shadow-teal-950/5' : 'border-slate-200 bg-white hover:border-teal-200 hover:bg-slate-50'}`}
+        >
+          <div className="text-lg font-extrabold text-slate-950">Yes, I'll be there</div>
+          <div className="mt-1 text-sm text-slate-500">Confirm my RSVP</div>
+        </button>
+        <button
+          type="button"
+          onClick={() => setChoice('no')}
+          className={`rounded-2xl border p-4 text-left transition focus:outline-none focus:ring-4 focus:ring-teal-300/20 ${choice === 'no' ? 'border-slate-400 bg-slate-100' : 'border-slate-200 bg-white hover:border-slate-300 hover:bg-slate-50'}`}
+        >
+          <div className="text-lg font-extrabold text-slate-950">Sorry, I can't make it</div>
+          <div className="mt-1 text-sm text-slate-500">No ticket needed</div>
+        </button>
+      </div>
+
+      {choice === 'no' && (
+        <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm leading-relaxed text-slate-600">
+          Thanks for letting the host know. This shared RSVP page does not collect declined responses, so there is nothing else to submit here.
         </div>
       )}
 
-      {event.rsvp_collect_phone && (
-        <div>
-          <label className="block text-xs font-semibold text-slate-500 dark:text-slate-400 mb-1">Phone (optional)</label>
-          <input type="tel" value={form.phone} onChange={set('phone')} className={inputCls} placeholder="+1 (832) 000-0000" />
-        </div>
+      {choice === 'yes' && (
+        <form onSubmit={handleSubmit} className="space-y-5">
+          <div className="grid gap-4 sm:grid-cols-2">
+            <div>
+              <label className="mb-2 block text-sm font-bold text-slate-700">First name <span className="text-red-500">*</span></label>
+              <input required value={form.first_name} onChange={set('first_name')} className={inputCls} placeholder="Jane" />
+            </div>
+            <div>
+              <label className="mb-2 block text-sm font-bold text-slate-700">Last name <span className="text-red-500">*</span></label>
+              <input required value={form.last_name} onChange={set('last_name')} className={inputCls} placeholder="Smith" />
+            </div>
+          </div>
+
+          {event.rsvp_collect_email !== false && (
+            <div>
+              <label className="mb-2 block text-sm font-bold text-slate-700">Email <span className="text-red-500">*</span></label>
+              <input required type="email" value={form.email} onChange={set('email')} className={inputCls} placeholder="jane@example.com" />
+            </div>
+          )}
+
+          {event.rsvp_collect_phone && (
+            <div>
+              <label className="mb-2 block text-sm font-bold text-slate-700">Phone <span className="text-slate-400">(optional)</span></label>
+              <input type="tel" value={form.phone} onChange={set('phone')} className={inputCls} placeholder="+1 (832) 000-0000" />
+            </div>
+          )}
+
+          {event.questions?.length > 0 && (
+            <div className="space-y-4 pt-1">
+              <div className={`text-xs font-extrabold uppercase tracking-[0.18em] ${t.accent}`}>A few quick questions</div>
+              {event.questions.map((q) => (
+                <QuestionField
+                  key={q.id}
+                  question={q}
+                  value={answers[q.id] || ''}
+                  onChange={(v) => setAnswers((p) => ({ ...p, [q.id]: v }))}
+                  theme={theme}
+                />
+              ))}
+            </div>
+          )}
+
+          <ShippingSection shipping={event.shipping} addr={shipAddr} setAddr={setShipAddr}
+            sizes={sizes} setSizes={setSizes} inputCls={inputCls} accent={t.accent} />
+
+          {error && (
+            <div className="rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-medium text-red-700">
+              {error}
+            </div>
+          )}
+
+          <PrimaryButton type="submit" disabled={loading} className="w-full">
+            {loading ? 'Confirming...' : 'Confirm My RSVP'}
+          </PrimaryButton>
+        </form>
       )}
-
-      {event.questions?.length > 0 && (
-        <div className="space-y-3 pt-1">
-          <div className={`text-xs font-semibold uppercase tracking-wide ${t.accent}`}>A few quick questions</div>
-          {event.questions.map((q) => (
-            <QuestionField
-              key={q.id}
-              question={q}
-              value={answers[q.id] || ''}
-              onChange={(v) => setAnswers((p) => ({ ...p, [q.id]: v }))}
-              theme={theme}
-            />
-          ))}
-        </div>
-      )}
-
-      <ShippingSection shipping={event.shipping} addr={shipAddr} setAddr={setShipAddr}
-        sizes={sizes} setSizes={setSizes} inputCls={inputCls} accent={t.accent} />
-
-      {error && (
-        <div className="rounded-lg bg-red-50 dark:bg-red-900/30 border border-red-200 dark:border-red-800 px-3 py-2 text-sm text-red-700 dark:text-red-300">
-          {error}
-        </div>
-      )}
-
-      <button
-        type="submit"
-        disabled={loading}
-        className={`w-full rounded-xl py-3 text-white font-bold text-sm tracking-wide transition-colors disabled:opacity-50 ${t.btn}`}
-      >
-        {loading ? 'Submitting...' : 'Confirm RSVP'}
-      </button>
-    </form>
+    </div>
   )
 }
 
 // ── Confirmation view ─────────────────────────────────────────────────────────
 
 function ConfirmView({ confirm, event, theme }) {
-  const t = THEMES[theme] || THEMES.default
+  const ticketUrl = confirm.qr_token ? `/scan/${confirm.qr_token}` : ''
   return (
-    <div className="text-center space-y-4 py-4">
+    <div className="space-y-5">
       <div>
-        <div className="text-xl font-bold text-slate-900 dark:text-white">
-          You're on the list, {confirm.first_name}!
+        <div className="text-2xl font-extrabold text-slate-950">You're all set, {confirm.first_name}.</div>
+        <div className="mt-2 text-sm leading-relaxed text-slate-500">{confirm.message || 'Your RSVP has been confirmed. Your personal QR code will be used for admission.'}</div>
+      </div>
+      <div className="rounded-3xl border border-slate-200 bg-slate-50 p-5">
+        <div className="flex items-start justify-between gap-4">
+          <div>
+            <div className="text-xs font-extrabold uppercase tracking-[0.18em] text-teal-700">Your QR ticket is ready</div>
+            <div className="mt-2 text-lg font-extrabold text-slate-950">{eventTitle(event)}</div>
+            <div className="mt-1 text-sm font-semibold text-slate-500">{confirm.first_name} {confirm.last_name}</div>
+          </div>
+          <div className="rounded-2xl border border-slate-200 bg-white px-3 py-2 text-xs font-extrabold uppercase tracking-wide text-teal-700">
+            Attending
+          </div>
         </div>
-        <div className="text-sm text-slate-500 dark:text-slate-400 mt-1">{confirm.message}</div>
+        {confirm.qr_token && (
+          <div className="mt-5 rounded-2xl border border-slate-200 bg-white p-4 text-center">
+            <img
+              src={`/api/scan/${confirm.qr_token}/qr.png`}
+              alt="Your QR ticket code"
+              className="mx-auto h-44 w-44"
+            />
+            <div className="mt-3 text-xs font-mono font-bold text-slate-500">Ticket ID {confirm.qr_token.split('-')[0].toUpperCase()}</div>
+          </div>
+        )}
+        <div className="mt-4 text-sm font-semibold text-slate-600">Show this at the entrance for check-in.</div>
       </div>
-      <div className={`rounded-xl border px-4 py-3 text-sm ${t.badge} ${t.border}`}>
-        Your ticket QR code has been emailed to you. Bring it on the day.
-      </div>
-      <div className="text-xs text-slate-400 dark:text-slate-500">
-        Ticket ID: <code className="font-mono">{confirm.qr_token.split('-')[0].toUpperCase()}</code>
+      <div className="grid gap-3 sm:grid-cols-3">
+        {ticketUrl && <a href={ticketUrl} className="inline-flex min-h-11 items-center justify-center rounded-xl bg-slate-950 px-4 py-2 text-sm font-bold text-white transition hover:bg-slate-800">View My QR Ticket</a>}
+        <button type="button" onClick={() => window.print()} className="inline-flex min-h-11 items-center justify-center rounded-xl border border-slate-200 px-4 py-2 text-sm font-bold text-slate-700 transition hover:bg-slate-50">Save Ticket</button>
+        <button
+          type="button"
+          onClick={() => navigator.share?.({ title: eventTitle(event), url: window.location.href })}
+          className="inline-flex min-h-11 items-center justify-center rounded-xl border border-slate-200 px-4 py-2 text-sm font-bold text-slate-700 transition hover:bg-slate-50"
+        >
+          Share Invitation
+        </button>
       </div>
     </div>
   )
@@ -296,10 +447,10 @@ function ConfirmView({ confirm, event, theme }) {
 
 function PendingView({ confirm }) {
   return (
-    <div className="text-center space-y-3 py-4">
-      <div className="text-xl font-bold text-slate-900 dark:text-white">Thanks, {confirm.first_name}!</div>
-      <div className="text-sm text-slate-500 dark:text-slate-400">{confirm.message}</div>
-      <div className="text-xs text-slate-400 dark:text-slate-500">
+    <div className="rounded-3xl border border-amber-200 bg-amber-50 p-5">
+      <div className="text-2xl font-extrabold text-slate-950">Thanks, {confirm.first_name}.</div>
+      <div className="mt-2 text-sm leading-relaxed text-slate-600">{confirm.message}</div>
+      <div className="mt-4 text-sm font-semibold text-amber-800">
         You'll receive your ticket by email once the host confirms your spot.
       </div>
     </div>
@@ -308,12 +459,12 @@ function PendingView({ confirm }) {
 
 function DeclinedView({ confirm }) {
   return (
-    <div className="text-center space-y-3 py-4">
-      <div className="text-xl font-bold text-slate-900 dark:text-white">
+    <div className="rounded-3xl border border-slate-200 bg-slate-50 p-5">
+      <div className="text-2xl font-extrabold text-slate-950">
         Thanks, {confirm.first_name}.
       </div>
-      <div className="text-sm text-slate-500 dark:text-slate-400">{confirm.message}</div>
-      <div className="text-xs text-slate-400 dark:text-slate-500">
+      <div className="mt-2 text-sm leading-relaxed text-slate-600">{confirm.message}</div>
+      <div className="mt-4 text-sm font-semibold text-slate-500">
         Changed your mind? You can still confirm below until the RSVP deadline.
       </div>
     </div>
@@ -336,8 +487,8 @@ function TokenRSVPForm({ event, prefill, token, theme, onDone }) {
   const [error, setError] = useState('')
 
   const set = (k) => (e) => setForm((p) => ({ ...p, [k]: e.target.value }))
-  const inputCls = `w-full rounded-lg border px-3 py-2.5 text-sm bg-white dark:bg-slate-700 text-slate-900 dark:text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-offset-0 ${t.border}`
-  const lockedCls = `w-full rounded-lg border px-3 py-2.5 text-sm bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400 cursor-not-allowed ${t.border}`
+  const inputCls = 'w-full min-h-12 rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-950 placeholder-slate-400 focus:outline-none focus:ring-4 focus:ring-teal-300/20'
+  const lockedCls = 'w-full min-h-12 cursor-not-allowed rounded-2xl border border-slate-200 bg-slate-100 px-4 py-3 text-sm text-slate-500'
 
   async function submit(status) {
     setError('')
@@ -377,35 +528,40 @@ function TokenRSVPForm({ event, prefill, token, theme, onDone }) {
   }
 
   return (
-    <div className="space-y-4">
-      <div className="grid grid-cols-2 gap-3">
+    <div className="space-y-5">
+      <div>
+        <h2 className="text-2xl font-extrabold text-slate-950">Will you be attending?</h2>
+        <p className="mt-2 text-sm leading-relaxed text-slate-500">Confirm your spot or let the host know you can't make it.</p>
+      </div>
+
+      <div className="grid gap-4 sm:grid-cols-2">
         <div>
-          <label className="block text-xs font-semibold text-slate-500 dark:text-slate-400 mb-1">First name *</label>
+          <label className="mb-2 block text-sm font-bold text-slate-700">First name <span className="text-red-500">*</span></label>
           <input value={form.first_name} onChange={set('first_name')} className={inputCls} placeholder="Jane" />
         </div>
         <div>
-          <label className="block text-xs font-semibold text-slate-500 dark:text-slate-400 mb-1">Last name *</label>
+          <label className="mb-2 block text-sm font-bold text-slate-700">Last name <span className="text-red-500">*</span></label>
           <input value={form.last_name} onChange={set('last_name')} className={inputCls} placeholder="Smith" />
         </div>
       </div>
 
       {prefill.email && (
         <div>
-          <label className="block text-xs font-semibold text-slate-500 dark:text-slate-400 mb-1">Email</label>
+          <label className="mb-2 block text-sm font-bold text-slate-700">Email</label>
           <input value={prefill.email} disabled readOnly className={lockedCls} />
         </div>
       )}
 
       {event.rsvp_collect_phone && (
         <div>
-          <label className="block text-xs font-semibold text-slate-500 dark:text-slate-400 mb-1">Phone (optional)</label>
+          <label className="mb-2 block text-sm font-bold text-slate-700">Phone <span className="text-slate-400">(optional)</span></label>
           <input type="tel" value={form.phone} onChange={set('phone')} className={inputCls} placeholder="+1 (832) 000-0000" />
         </div>
       )}
 
       {event.questions?.length > 0 && (
-        <div className="space-y-3 pt-1">
-          <div className={`text-xs font-semibold uppercase tracking-wide ${t.accent}`}>A few quick questions</div>
+        <div className="space-y-4 pt-1">
+          <div className={`text-xs font-extrabold uppercase tracking-[0.18em] ${t.accent}`}>A few quick questions</div>
           {event.questions.map((q) => (
             <QuestionField
               key={q.id}
@@ -422,27 +578,27 @@ function TokenRSVPForm({ event, prefill, token, theme, onDone }) {
         sizes={sizes} setSizes={setSizes} inputCls={inputCls} accent={t.accent} />
 
       {error && (
-        <div className="rounded-lg bg-red-50 dark:bg-red-900/30 border border-red-200 dark:border-red-800 px-3 py-2 text-sm text-red-700 dark:text-red-300">
+        <div className="rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-medium text-red-700">
           {error}
         </div>
       )}
 
-      <div className="flex flex-col gap-2">
-        <button
+      <div className="grid gap-3 sm:grid-cols-2">
+        <PrimaryButton
           type="button"
           onClick={() => submit('confirmed')}
           disabled={!!loading}
-          className={`w-full rounded-xl py-3 text-white font-bold text-sm tracking-wide transition-colors disabled:opacity-50 ${t.btn}`}
+          className="w-full"
         >
-          {loading === 'confirmed' ? 'Confirming...' : 'Confirm attendance'}
-        </button>
+          {loading === 'confirmed' ? 'Confirming...' : 'Confirm My RSVP'}
+        </PrimaryButton>
         <button
           type="button"
           onClick={() => submit('declined')}
           disabled={!!loading}
-          className="w-full rounded-xl py-2.5 text-sm font-semibold text-slate-500 dark:text-slate-400 border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors disabled:opacity-50"
+          className="inline-flex min-h-12 items-center justify-center rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-bold text-slate-600 transition hover:bg-slate-50 focus:outline-none focus:ring-4 focus:ring-teal-300/20 disabled:pointer-events-none disabled:opacity-55"
         >
-          {loading === 'declined' ? 'Submitting…' : "Can't make it"}
+          {loading === 'declined' ? 'Submitting...' : "I Can't Attend"}
         </button>
       </div>
     </div>

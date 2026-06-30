@@ -1,12 +1,13 @@
 import base64
 import html as _html
 import logging
-from datetime import datetime
+from datetime import datetime, timedelta, timezone
 from email.utils import getaddresses
 from email.mime.application import MIMEApplication
 from email.mime.image import MIMEImage
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
+from urllib.parse import quote_plus, urlencode, urljoin
 
 import aiosmtplib
 import httpx
@@ -90,7 +91,7 @@ def _parse_email_header(value: str) -> tuple[str, str]:
 def _bird_payload(msg: MIMEMultipart) -> dict:
     """Convert MIME to Bird's Email API transmission payload.
 
-    EventQR renders templates before delivery, so substitutions stay disabled.
+    Festio renders templates before delivery, so substitutions stay disabled.
     Inline images use the Content-ID as their Bird name so cid:qrcode continues
     to work for QR-ticket emails.
     """
@@ -240,6 +241,130 @@ def _invite_menu_cta(ticket_url: str) -> str:
     )
 
 
+def _fmt_event_date(dt: datetime | None) -> str:
+    if not dt:
+        return ""
+    try:
+        return dt.strftime("%A, %B %-d, %Y")
+    except ValueError:
+        return dt.strftime("%A, %B %d, %Y").replace(" 0", " ")
+
+
+def _fmt_event_time(dt: datetime | None) -> str:
+    if not dt:
+        return ""
+    try:
+        return dt.strftime("%-I:%M %p")
+    except ValueError:
+        return dt.strftime("%I:%M %p").lstrip("0")
+
+
+def _abs_url(base_url: str, value: str | None) -> str:
+    if not value:
+        return ""
+    value = str(value).strip()
+    if value.startswith(("http://", "https://", "cid:")):
+        return value
+    return urljoin(base_url.rstrip("/") + "/", value.lstrip("/"))
+
+
+def _detail_row(label: str, value_html: str) -> str:
+    return (
+        '<tr>'
+        '<td valign="top" width="110" style="font-family:Arial,Helvetica,sans-serif;'
+        'color:#64748b;font-size:12px;line-height:18px;font-weight:800;'
+        'text-transform:uppercase;letter-spacing:.8px;padding:10px 18px;'
+        'border-top:1px solid #e2e8f0;">'
+        f'{_html.escape(label)}</td>'
+        '<td valign="top" style="font-family:Arial,Helvetica,sans-serif;color:#172033;'
+        'font-size:15px;line-height:22px;font-weight:700;padding:10px 18px;'
+        'border-top:1px solid #e2e8f0;">'
+        f'{value_html}</td>'
+        '</tr>'
+    )
+
+
+def _secondary_link(label: str, href: str) -> str:
+    if not href:
+        return ""
+    return (
+        f'<a href="{_html.escape(href, quote=True)}" '
+        'style="font-family:Arial,Helvetica,sans-serif;color:#0f766e;'
+        'text-decoration:underline;font-size:14px;font-weight:700;margin:0 8px;">'
+        f'{_html.escape(label)}</a>'
+    )
+
+
+def _calendar_link(event_name: str, event_date: datetime | None, venue: str) -> str:
+    if not event_date:
+        return ""
+    start = event_date if event_date.tzinfo else event_date.replace(tzinfo=timezone.utc)
+    end = start + timedelta(hours=3)
+    params = {
+        "action": "TEMPLATE",
+        "text": event_name or "Event",
+        "dates": f"{start.astimezone(timezone.utc).strftime('%Y%m%dT%H%M%SZ')}/"
+                 f"{end.astimezone(timezone.utc).strftime('%Y%m%dT%H%M%SZ')}",
+    }
+    if venue:
+        params["location"] = venue
+    return "https://calendar.google.com/calendar/render?" + urlencode(params)
+
+
+def _ticket_plain_text(ctx: dict) -> str:
+    parts = [
+        f"You're invited to {ctx['event_name']}",
+        "",
+        f"Hi {ctx['guest_first_name'] or 'there'},",
+        "",
+        f"You are invited to {ctx['event_name']} on {ctx['event_date']}"
+        + (f" at {ctx['event_time']}." if ctx["event_time"] else "."),
+        "",
+        "Please show your personal QR ticket at the entrance for admission.",
+        "",
+        "Event details:",
+        f"Date: {ctx['event_date']}",
+    ]
+    if ctx["event_time"]:
+        parts.append(f"Time: {ctx['event_time']}")
+    parts.append(f"Venue: {ctx['venue_text']}")
+    if ctx["organizer_name"]:
+        parts.append(f"Host: {ctx['organizer_name']}")
+    parts.extend([
+        "",
+        "View your ticket:",
+        ctx["ticket_link"],
+    ])
+    if ctx.get("calendar_link"):
+        parts.extend(["", "Add to Calendar:", ctx["calendar_link"]])
+    if ctx.get("directions_link"):
+        parts.extend(["", "Get Directions:", ctx["directions_link"]])
+    parts.extend([
+        "",
+        "This QR code is unique to you. Please do not share it.",
+        "",
+        "With love,",
+        ctx["organizer_name"] or "Festio",
+    ])
+    return "\n".join(parts)
+
+
+def _custom_email_shell(inner: str) -> str:
+    """Keep older organizer-customized full-body templates readable."""
+    return (
+        '<table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" '
+        'style="width:100%;background:#f4f7fb;margin:0;padding:0;">'
+        '<tr><td align="center" style="padding:24px 12px;">'
+        '<table role="presentation" width="600" cellspacing="0" cellpadding="0" border="0" '
+        'style="width:100%;max-width:600px;border-collapse:separate;background:#ffffff;'
+        'border-radius:14px;border:1px solid #e2e8f0;">'
+        '<tr><td style="font-family:Arial,Helvetica,sans-serif;color:#172033;'
+        'font-size:15px;line-height:24px;padding:28px;">'
+        f'{inner}'
+        '</td></tr></table></td></tr></table>'
+    )
+
+
 async def send_invite_email(
     guest_data: dict,
     event_name: str,
@@ -250,6 +375,12 @@ async def send_invite_email(
     menu_enabled: bool = False,
     override_subject: str | None = None,
     override_body: str | None = None,
+    venue_name: str | None = None,
+    venue_address: str | None = None,
+    admission_note: str | None = None,
+    event_image: str | None = None,
+    rsvp_link: str | None = None,
+    support_email: str | None = None,
 ):
     """Render the ticket-QR invite from the message template (event override or
     the code default in TEMPLATE_DEFS) — all wording lives in the template. The
@@ -260,7 +391,20 @@ async def send_invite_email(
     msg = MIMEMultipart("related")
     qr_bytes = generate_qr_bytes(guest_data["qr_token"], checkin_base_url)
     ticket_url = f"{checkin_base_url.rstrip('/')}/scan/{guest_data['qr_token']}"
-    date_str = event_date.strftime("%A, %d %B %Y") if event_date else ""
+    date_str = _fmt_event_date(event_date)
+    time_str = _fmt_event_time(event_date)
+    venue_name = (venue_name or "").strip()
+    venue_address = (venue_address or "").strip()
+    venue_text = " - ".join([p for p in [venue_name, venue_address] if p]) or "Venue details coming soon."
+    venue_html = _html.escape(venue_name or "Venue details coming soon.")
+    if venue_address:
+        venue_html += f'<br><span style="font-weight:400;color:#64748b;">{_html.escape(venue_address)}</span>'
+    event_image_url = _abs_url(checkin_base_url, event_image)
+    calendar_url = _calendar_link(event_name, event_date, venue_text if venue_name or venue_address else "")
+    directions_url = (
+        "https://www.google.com/maps/search/?api=1&query=" + quote_plus(venue_text)
+        if venue_name or venue_address else ""
+    )
 
     spec = tpl.TEMPLATE_DEFS["ticket_qr"]
     subject_tmpl = override_subject or spec["subject"]
@@ -275,24 +419,70 @@ async def send_invite_email(
         "guest_full_name": f"{first} {last}".strip(),
         "event_name": _html.escape(event_name or ""),
         "event_date": _html.escape(date_str),
+        "event_time": _html.escape(time_str),
         "organizer_name": _html.escape(couples_name or ""),
+        "venue_name": _html.escape(venue_name),
+        "venue_address": _html.escape(venue_address),
+        "event_location": _html.escape(venue_address),
+        "venue_text": _html.escape(venue_text),
         "ticket_link": ticket_url,
-        "qr_code": '<img src="cid:qrcode" alt="Your QR Code" style="width:220px;height:220px;" />',
+        "rsvp_link": rsvp_link or "",
+        "event_image": event_image_url,
+        "preview_text": "Your personal QR ticket is ready. Show it at the entrance for admission.",
+        "qr_code": (
+            '<img src="cid:qrcode" alt="Your admission QR code" width="240" height="240" '
+            'style="display:block;width:240px;height:240px;border:0;outline:none;text-decoration:none;" />'
+        ),
+        "event_image_block": (
+            '<tr><td>'
+            f'<img src="{_html.escape(event_image_url, quote=True)}" alt="{_html.escape(event_name or "Event")} image" '
+            'width="600" style="display:block;width:100%;max-width:600px;height:auto;border:0;outline:none;text-decoration:none;" />'
+            '</td></tr>'
+            if event_image_url else ""
+        ),
+        "event_time_row": _detail_row("Time", _html.escape(time_str)) if time_str else "",
+        "venue_row": _detail_row("Venue", venue_html),
+        "host_row": _detail_row("Host", _html.escape(couples_name)) if couples_name else "",
+        "admission_instruction": _html.escape(
+            (admission_note or "").strip() or "Please bring this email with you for admission."
+        ),
+        "calendar_link": calendar_url,
+        "calendar_link_block": _secondary_link("Add to Calendar", calendar_url),
+        "directions_link": directions_url,
+        "directions_link_block": _secondary_link("Get Directions", directions_url),
         "pairing_cta": _invite_pairing_cta(ticket_url) if seating_enabled else "",
         "menu_cta": _invite_menu_cta(ticket_url) if menu_enabled else "",
+        "support_email": _html.escape(support_email or settings.email_from or ""),
     }
 
-    subject = tpl.render(subject_tmpl, ctx) or f"Your Invitation — {event_name}"
+    subject = tpl.render(subject_tmpl, ctx) or f"You're invited to {event_name}"
     inner = tpl.render(body_tmpl, ctx)
+    if override_body:
+        inner = _custom_email_shell(inner)
+    text_body = _ticket_plain_text(ctx)
     body = (
-        '<html><body style="font-family: Arial, sans-serif; max-width: 600px; '
-        f'margin: 0 auto; padding: 20px;">{inner}</body></html>'
+        '<!doctype html><html><head><meta http-equiv="Content-Type" content="text/html; charset=utf-8">'
+        '<meta name="viewport" content="width=device-width, initial-scale=1.0">'
+        '<style>@media only screen and (max-width: 620px) {'
+        'table[width="600"]{width:100% !important;}'
+        'h1{font-size:28px !important;line-height:34px !important;}'
+        '}</style></head>'
+        '<body style="margin:0;padding:0;background:#f4f7fb;font-family:Arial,Helvetica,sans-serif;">'
+        '<div style="display:none;font-size:1px;color:#f4f7fb;line-height:1px;max-height:0;'
+        'max-width:0;opacity:0;overflow:hidden;">'
+        f'{_html.escape(ctx["preview_text"])}'
+        '</div>'
+        f'{inner}'
+        '</body></html>'
     )
 
     msg["Subject"] = subject
     msg["From"] = settings.email_from
     msg["To"] = guest_data["email"]
-    msg.attach(MIMEText(body, "html"))
+    alt = MIMEMultipart("alternative")
+    alt.attach(MIMEText(text_body, "plain", "utf-8"))
+    alt.attach(MIMEText(body, "html", "utf-8"))
+    msg.attach(alt)
     img_part = MIMEImage(qr_bytes)
     img_part.add_header("Content-ID", "<qrcode>")
     img_part.add_header("Content-Disposition", "inline", filename="invite-qr.png")

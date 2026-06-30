@@ -15,7 +15,7 @@ function ViewPicker({ role, onPick }) {
     <div className="app-shell min-h-screen flex items-center justify-center p-4">
       <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl shadow-xl w-full max-w-md p-8">
         <div className="text-center mb-6">
-          <div className="mx-auto mb-4 grid h-12 w-12 place-items-center rounded-lg bg-teal-600 text-white font-bold">EQ</div>
+          <div className="mx-auto mb-4 grid h-12 w-12 place-items-center rounded-lg bg-teal-600 text-white font-bold">F</div>
           <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Welcome back!</h1>
           <p className="text-gray-500 dark:text-slate-400 text-sm mt-2">Choose your default view.</p>
         </div>
@@ -105,7 +105,7 @@ export default function LoginPage() {
           <div className="inline-flex items-center justify-center w-14 h-14 bg-teal-600 rounded-lg mb-4 text-white font-bold">
             EQ
           </div>
-          <h1 className="text-2xl font-bold text-gray-900 dark:text-white">EventQR</h1>
+          <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Festio</h1>
           <p className="text-gray-500 dark:text-slate-400 text-sm mt-1">Sign in to your account</p>
         </div>
 

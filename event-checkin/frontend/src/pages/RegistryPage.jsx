@@ -131,7 +131,7 @@ export default function RegistryPage() {
           <p className="text-center text-slate-400">The registry is being set up — check back soon.</p>
         )}
 
-        <p className="text-xs text-slate-400 text-center mt-10">Powered by EventQR</p>
+        <p className="text-xs text-slate-400 text-center mt-10">Powered by Festio</p>
       </div>
 
       {claimFor && <ClaimModal token={token} item={claimFor} onClose={() => setClaimFor(null)} onDone={afterClaim} />}
@@ -202,7 +202,7 @@ function ClaimModal({ token, item, onClose, onDone }) {
         <button disabled={busy} className="w-full bg-rose-500 text-white rounded-lg py-2.5 text-sm font-bold hover:bg-rose-600 disabled:opacity-50">
           {busy ? 'Saving…' : isFund ? "I've sent / pledge this" : "Mark as reserved"}
         </button>
-        <p className="text-[11px] text-slate-400 text-center">EventQR doesn't process payments — you give directly.</p>
+        <p className="text-[11px] text-slate-400 text-center">Festio doesn't process payments — you give directly.</p>
       </form>
     </div>
   )

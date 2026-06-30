@@ -93,10 +93,10 @@ function Nav({ hasMenu, eventName }) {
         <NavLink
           to={user ? getPreferredView(user.role) : '/'}
           className="flex items-center gap-2 text-slate-950 dark:text-white font-bold text-lg mr-2 tracking-tight rounded-md focus:outline-none focus:ring-2 focus:ring-teal-500 focus:ring-offset-2 dark:focus:ring-offset-slate-950"
-          aria-label="Go to EventQR home"
+          aria-label="Go to Festio home"
         >
-          <span className="grid h-8 w-8 place-items-center rounded-md bg-teal-600 text-white text-sm">EQ</span>
-          EventQR
+          <span className="grid h-8 w-8 place-items-center rounded-md bg-teal-600 text-white text-sm">F</span>
+          Festio
         </NavLink>
 
         {/* Desktop links */}

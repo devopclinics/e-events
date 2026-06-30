@@ -108,5 +108,5 @@ async def self_checkin_qr(event_code: str, db: AsyncSession = Depends(get_db)):
     ev = await _event_by_code(event_code, db)
     if not ev or not ev.event_code or not ev.self_checkin_enabled:
         return Response(status_code=404)
-    base = (ev.checkin_base_url or "https://events.vsgs.io").rstrip("/")
+    base = (ev.checkin_base_url or "https://festio.events").rstrip("/")
     return Response(content=generate_qr_for_url(f"{base}/e/{ev.event_code}"), media_type="image/png")

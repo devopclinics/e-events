@@ -7,7 +7,7 @@ import { useTheme } from '../context/ThemeContext'
 // it in a new tab; until then the button opens an email.
 const DEMO_URL = ''
 const CONTACT_EMAIL = 'info@devopclinics.com'
-const demoHref = DEMO_URL || `mailto:${CONTACT_EMAIL}?subject=Book%20a%20demo%20%E2%80%94%20EventQR`
+const demoHref = DEMO_URL || `mailto:${CONTACT_EMAIL}?subject=Book%20a%20demo%20%E2%80%94%20Festio`
 const demoProps = DEMO_URL ? { href: DEMO_URL, target: '_blank', rel: 'noopener noreferrer' } : { href: demoHref }
 
 // ── Icons ─────────────────────────────────────────────────────────────────────
@@ -57,7 +57,7 @@ const problems = [
 ]
 
 const steps = [
-  { n: '1', title: 'Add your guests', desc: 'Upload a spreadsheet, sync a Google Sheet, or add guests by hand. Assign tables, seats, groups, VIP tags, or access zones.', img: '/media/help-guests.png', alt: 'EventQR guest list with tables, groups and VIP tags' },
+  { n: '1', title: 'Add your guests', desc: 'Upload a spreadsheet, sync a Google Sheet, or add guests by hand. Assign tables, seats, groups, VIP tags, or access zones.', img: '/media/help-guests.png', alt: 'Festio guest list with tables, groups and VIP tags' },
   { n: '2', title: 'Send personal QR tickets', desc: 'Every guest gets a unique QR ticket by email, SMS, WhatsApp — or an MMS ticket card. No app to install.', img: '/media/help-invites-rsvp.png', alt: 'Sending personalized QR invitations by email, SMS and WhatsApp' },
   { n: '3', title: 'Scan and welcome', desc: 'At the door, staff scan the QR with any phone. The guest is verified instantly with their table, seat and access.', img: '/media/help-check-in.png', alt: 'Staff scanning a guest QR code to check them in' },
 ]
@@ -88,13 +88,13 @@ const eventTypes = [
 ]
 
 const tabs = [
-  { key: 'rsvp', label: 'Invites & RSVP', intent: 'rsvp', cta: 'Start collecting RSVPs — free', img: '/media/help-invites-rsvp.png', alt: 'Personalized invitations and RSVP page in EventQR',
+  { key: 'rsvp', label: 'Invites & RSVP', intent: 'rsvp', cta: 'Start collecting RSVPs — free', img: '/media/help-invites-rsvp.png', alt: 'Personalized invitations and RSVP page in Festio',
     title: 'Invitations and RSVPs, done', body: 'Build your invite page, collect RSVPs and approvals, and send personal tickets by email, SMS, WhatsApp or MMS. Edit every message, preview it, and test before the whole list goes out. Free for small events.' },
-  { key: 'checkin', label: 'Check-in', intent: 'checkin', cta: 'Set up check-in', img: '/media/help-check-in.png', alt: 'EventQR mobile scanner verifying a guest',
+  { key: 'checkin', label: 'Check-in', intent: 'checkin', cta: 'Set up check-in', img: '/media/help-check-in.png', alt: 'Festio mobile scanner verifying a guest',
     title: 'Table & seat-aware check-in', body: 'When a guest is scanned, staff instantly see their name, RSVP status, table, seat and access permission — duplicates blocked. Built for weddings, galas and formal events, not just a QR reader.' },
-  { key: 'access', label: 'Tables & access', intent: 'seating', cta: 'Set up seating & access', img: '/media/help-entry-areas.png', alt: 'Entry areas, zones and ticket rules in EventQR',
+  { key: 'access', label: 'Tables & access', intent: 'seating', cta: 'Set up seating & access', img: '/media/help-entry-areas.png', alt: 'Entry areas, zones and ticket rules in Festio',
     title: 'Control where every guest belongs', body: 'Assign guests to tables, seats, family groups, VIP areas or vendor zones. On scan, staff see exactly where the guest goes — and whether they’re allowed in.' },
-  { key: 'dashboard', label: 'Live dashboard', intent: 'dashboard', cta: 'See the live dashboard', img: '/media/help-results.png', alt: 'Real-time attendance dashboard in EventQR',
+  { key: 'dashboard', label: 'Live dashboard', intent: 'dashboard', cta: 'See the live dashboard', img: '/media/help-results.png', alt: 'Real-time attendance dashboard in Festio',
     title: 'Know what is happening at the door', body: 'Total invited, checked-in, pending, VIP arrivals and table-level attendance — updating live as guests walk in.' },
 ]
 
@@ -133,7 +133,7 @@ function LiveScanDemo() {
             <div className="w-16 h-1.5 rounded-full bg-slate-700" />
           </div>
           <div className="relative bg-slate-900 px-4 pt-4 pb-5">
-            <div className="text-[10px] uppercase tracking-wider text-teal-300 font-semibold text-center mb-3">EventQR Scanner</div>
+            <div className="text-[10px] uppercase tracking-wider text-teal-300 font-semibold text-center mb-3">Festio Scanner</div>
             {/* QR target */}
             <div className="relative mx-auto w-36 h-36 rounded-xl bg-white p-2.5 shadow-inner">
               <div className="grid h-full w-full grid-cols-5 gap-1">
@@ -236,8 +236,8 @@ export default function LandingPage() {
       <header className="app-nav sticky top-0 z-50 backdrop-blur border-b border-slate-200/70 dark:border-slate-800/80">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 h-16 flex items-center gap-4">
           <a href="#top" className="flex items-center gap-2 mr-auto">
-            <div className="w-8 h-8 bg-gradient-to-br from-teal-500 to-emerald-600 rounded-lg flex items-center justify-center text-white text-sm font-bold shadow">EQ</div>
-            <span className="font-bold text-lg tracking-tight text-slate-950 dark:text-white">EventQR</span>
+            <div className="w-8 h-8 bg-gradient-to-br from-teal-500 to-emerald-600 rounded-lg flex items-center justify-center text-white text-sm font-bold shadow">F</div>
+            <span className="font-bold text-lg tracking-tight text-slate-950 dark:text-white">Festio</span>
           </a>
           <nav className="hidden md:flex items-center gap-6 mr-2">
             {[['#problem', 'Why'], ['#features', 'Features'], ['#event-types', 'Event types'], ['#showcase', 'Demo']].map(([href, label]) => (
@@ -287,7 +287,7 @@ export default function LandingPage() {
       <section id="problem" className="py-20 border-t border-slate-100 dark:border-slate-800">
         <div className="max-w-5xl mx-auto px-4 sm:px-6">
           <Reveal className="text-center max-w-2xl mx-auto">
-            <p className="text-sm font-semibold uppercase tracking-wide text-rose-500">Before EventQR</p>
+            <p className="text-sm font-semibold uppercase tracking-wide text-rose-500">Before Festio</p>
             <h2 className="mt-2 text-3xl sm:text-4xl font-bold text-slate-950 dark:text-white">The entrance should not be the most stressful part of your event.</h2>
           </Reveal>
           <div className="mt-12 grid sm:grid-cols-2 gap-4">
@@ -308,7 +308,7 @@ export default function LandingPage() {
         <div aria-hidden="true" className="absolute inset-0 opacity-30 bg-[radial-gradient(40rem_20rem_at_50%_-10%,rgba(45,212,191,0.4),transparent)]" />
         <div className="relative max-w-3xl mx-auto px-4 sm:px-6 text-center">
           <Reveal>
-            <p className="text-sm font-semibold uppercase tracking-wide text-teal-400">After EventQR</p>
+            <p className="text-sm font-semibold uppercase tracking-wide text-teal-400">After Festio</p>
             <h2 className="mt-2 text-3xl sm:text-5xl font-bold">One QR code. One scan. Full control.</h2>
             <p className="mt-5 text-lg text-slate-300 leading-relaxed">
               Every guest gets a unique QR ticket. Staff verify them in a second — table, seat, group and access appear instantly, duplicates are blocked, and you watch every arrival live.
@@ -349,7 +349,7 @@ export default function LandingPage() {
       <section id="showcase" className="scroll-mt-16 py-20 bg-slate-50 dark:bg-slate-900/40 border-t border-slate-100 dark:border-slate-800">
         <div className="max-w-6xl mx-auto px-4 sm:px-6">
           <Reveal className="text-center mb-10">
-            <h2 className="text-3xl sm:text-4xl font-bold text-slate-950 dark:text-white">See EventQR in action</h2>
+            <h2 className="text-3xl sm:text-4xl font-bold text-slate-950 dark:text-white">See Festio in action</h2>
             <p className="mt-3 text-slate-500 dark:text-slate-400 text-lg">The real product — RSVPs, check-in, seating and a live dashboard.</p>
           </Reveal>
           <div className="flex flex-wrap justify-center gap-2 mb-8">
@@ -420,7 +420,7 @@ export default function LandingPage() {
               ))}
             </ul>
           </Reveal>
-          <Reveal delay={120}><Shot src="/media/help-entry-areas.png" alt="EventQR entry areas, zones and ticket access rules" /></Reveal>
+          <Reveal delay={120}><Shot src="/media/help-entry-areas.png" alt="Festio entry areas, zones and ticket access rules" /></Reveal>
         </div>
       </section>
 
@@ -435,7 +435,7 @@ export default function LandingPage() {
             </p>
             <div className="mt-8"><PrimaryCta to="/register?intent=dashboard" /></div>
           </Reveal>
-          <Reveal delay={120} className="lg:order-1"><Shot src="/media/help-results.png" alt="EventQR real-time attendance dashboard" /></Reveal>
+          <Reveal delay={120} className="lg:order-1"><Shot src="/media/help-results.png" alt="Festio real-time attendance dashboard" /></Reveal>
         </div>
       </section>
 
@@ -449,7 +449,7 @@ export default function LandingPage() {
               No searching for names or asking question after question. Staff greet each guest confidently with their verified details, table information and admission status — in seconds.
             </p>
           </Reveal>
-          <Reveal delay={120}><Shot src="/media/help-guest-invite.png" alt="A guest's personal QR ticket in EventQR" /></Reveal>
+          <Reveal delay={120}><Shot src="/media/help-guest-invite.png" alt="A guest's personal QR ticket in Festio" /></Reveal>
         </div>
       </section>
 
@@ -489,7 +489,7 @@ export default function LandingPage() {
           <Reveal>
             <figure className="max-w-2xl mx-auto text-center">
               <blockquote className="text-xl sm:text-2xl font-medium leading-relaxed">
-                EventQR helped us manage guest entry smoothly and reduced confusion at the door.
+                Festio helped us manage guest entry smoothly and reduced confusion at the door.
               </blockquote>
               <figcaption className="mt-4 text-sm text-slate-400">Event organizer</figcaption>
             </figure>
@@ -517,7 +517,7 @@ export default function LandingPage() {
                   <p className="text-sm font-semibold uppercase tracking-wide text-teal-400">Tailored solutions</p>
                   <h2 className="mt-2 text-3xl sm:text-4xl font-bold">We have a tailored solution for your needs. Let’s talk.</h2>
                   <p className="mt-4 text-slate-300 leading-relaxed max-w-xl">
-                    Large weddings, multi-day conferences, community programs, custom access rules, branding, special seating, or an integration — tell us how your event runs and we’ll set EventQR up around it, with you.
+                    Large weddings, multi-day conferences, community programs, custom access rules, branding, special seating, or an integration — tell us how your event runs and we’ll set Festio up around it, with you.
                   </p>
                   <div className="mt-5 flex flex-wrap gap-2">
                     {['Custom access & VIP rules', 'Bulk guest onboarding', 'Branding & messaging', 'Hands-on setup support'].map((t) => (
@@ -526,7 +526,7 @@ export default function LandingPage() {
                   </div>
                 </div>
                 <div className="flex flex-col gap-3 lg:items-end">
-                  <a href={`mailto:${CONTACT_EMAIL}?subject=Tailored%20solution%20%E2%80%94%20EventQR`}
+                  <a href={`mailto:${CONTACT_EMAIL}?subject=Tailored%20solution%20%E2%80%94%20Festio`}
                     className="inline-flex items-center justify-center gap-2 bg-teal-500 text-white px-6 py-3 rounded-xl font-semibold text-sm hover:bg-teal-400 transition-colors shadow-lg shadow-teal-900/30">
                     Let’s talk <Arrow />
                   </a>
@@ -562,15 +562,15 @@ export default function LandingPage() {
       <footer className="border-t border-slate-100 dark:border-slate-800 py-10">
         <div className="max-w-6xl mx-auto px-4 sm:px-6 flex flex-col sm:flex-row items-center justify-between gap-4">
           <div className="flex items-center gap-2">
-            <div className="w-7 h-7 bg-gradient-to-br from-teal-500 to-emerald-600 rounded-lg grid place-items-center text-white text-xs font-bold">EQ</div>
-            <span className="font-semibold text-slate-900 dark:text-white">EventQR</span>
+            <div className="w-7 h-7 bg-gradient-to-br from-teal-500 to-emerald-600 rounded-lg grid place-items-center text-white text-xs font-bold">F</div>
+            <span className="font-semibold text-slate-900 dark:text-white">Festio</span>
           </div>
           <div className="flex items-center gap-5 text-sm text-slate-500 dark:text-slate-400">
             <Link to="/pricing" className="hover:text-teal-600">Pricing</Link>
             <Link to="/login" className="hover:text-teal-600">Sign in</Link>
             <a {...demoProps} className="hover:text-teal-600">Book a demo</a>
           </div>
-          <p className="text-xs text-slate-400 dark:text-slate-500">© {new Date().getFullYear()} EventQR. All rights reserved.</p>
+          <p className="text-xs text-slate-400 dark:text-slate-500">© {new Date().getFullYear()} Festio. All rights reserved.</p>
         </div>
       </footer>
     </div>

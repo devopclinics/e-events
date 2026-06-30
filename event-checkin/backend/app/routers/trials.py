@@ -71,10 +71,10 @@ async def submit_trial_request(
     if user.email:
         background_tasks.add_task(
             send_simple_email, user.email,
-            "We got your trial request — EventQR",
+            "We got your trial request — Festio",
             f"<p>Hi {req.contact_name},</p><p>Thanks for requesting a free trial of "
-            "EventQR's paid features. Our team will review it and set you up shortly — "
-            "you'll get an email once it's approved.</p><p>— The EventQR team</p>",
+            "Festio's paid features. Our team will review it and set you up shortly — "
+            "you'll get an email once it's approved.</p><p>— The Festio team</p>",
         )
     for op_email in await _operator_emails(db):
         background_tasks.add_task(

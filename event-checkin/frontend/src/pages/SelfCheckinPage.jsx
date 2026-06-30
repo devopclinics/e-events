@@ -189,7 +189,7 @@ export default function SelfCheckinPage() {
     <main className="min-h-screen bg-slate-100 dark:bg-slate-950 px-4 py-8">
       <div className="mx-auto max-w-md space-y-6">
         <div className="text-center">
-          <div className="mx-auto mb-3 grid h-10 w-10 place-items-center rounded-xl bg-teal-600 text-sm font-bold text-white">EQ</div>
+          <div className="mx-auto mb-3 grid h-10 w-10 place-items-center rounded-xl bg-teal-600 text-sm font-bold text-white">F</div>
           <h1 className="text-2xl font-bold text-slate-950 dark:text-white">{eventName || 'Event check-in'}</h1>
           {pageStatus === 'ok' && <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">Find your name to check in.</p>}
         </div>

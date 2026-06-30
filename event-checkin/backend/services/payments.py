@@ -36,7 +36,7 @@ async def stripe_create_checkout(
         "line_items[0][quantity]": "1",
         "line_items[0][price_data][currency]": currency.lower(),
         "line_items[0][price_data][unit_amount]": str(amount),
-        "line_items[0][price_data][product_data][name]": f"EventQR — {tier_key}",
+        "line_items[0][price_data][product_data][name]": f"Festio — {tier_key}",
         "metadata[event_id]": event_id,
         "metadata[tier_key]": tier_key,
         # A receipt/invoice the customer can download (also satisfies records).

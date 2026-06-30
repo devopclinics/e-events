@@ -557,15 +557,15 @@ async def resolve_trial_request(req_id: str, body: TrialResolve,
             note = f"<p>Note: {req.resolution_note}</p>" if req.resolution_note else ""
             background_tasks.add_task(
                 send_simple_email, requester.email,
-                "Your EventQR trial is approved 🎉",
+                "Your Festio trial is approved 🎉",
                 f"<p>Hi {req.contact_name},</p><p>Good news — your trial request is approved."
-                f"{extra}</p>{note}<p>Sign in to get started.</p><p>— The EventQR team</p>",
+                f"{extra}</p>{note}<p>Sign in to get started.</p><p>— The Festio team</p>",
             )
         else:
             note = f"<p>{req.resolution_note}</p>" if req.resolution_note else ""
             background_tasks.add_task(
                 send_simple_email, requester.email,
-                "About your EventQR trial request",
+                "About your Festio trial request",
                 f"<p>Hi {req.contact_name},</p><p>Thanks for your interest. We're not able to "
                 f"approve this trial request right now.</p>{note}"
                 "<p>You can still start free, or reply with more details.</p>",

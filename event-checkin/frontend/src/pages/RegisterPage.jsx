@@ -15,8 +15,8 @@ function ViewPicker({ role, onPick }) {
     <div className="app-shell min-h-screen flex items-center justify-center p-4">
       <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl shadow-xl w-full max-w-md p-8">
         <div className="text-center mb-6">
-          <div className="mx-auto mb-4 grid h-12 w-12 place-items-center rounded-lg bg-teal-600 text-white font-bold">EQ</div>
-          <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Welcome to EventQR!</h1>
+          <div className="mx-auto mb-4 grid h-12 w-12 place-items-center rounded-lg bg-teal-600 text-white font-bold">F</div>
+          <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Welcome to Festio!</h1>
           <p className="text-gray-500 dark:text-slate-400 text-sm mt-2">Choose the view you want to open by default when you sign in.</p>
         </div>
         <div className="space-y-3">
@@ -99,7 +99,7 @@ export default function RegisterPage() {
             EQ
           </div>
           <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Create Account</h1>
-          <p className="text-gray-500 dark:text-slate-400 text-sm mt-1">Join EventQR as an official</p>
+          <p className="text-gray-500 dark:text-slate-400 text-sm mt-1">Join Festio as an official</p>
         </div>
 
         <button onClick={signUpWithGoogle} disabled={loading}

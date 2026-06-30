@@ -3,21 +3,21 @@ import { useAuth } from '../context/AuthContext'
 
 const PDFS = [
   {
-    title: 'EventQR Introductory Guide',
+    title: 'Festio Introductory Guide',
     description: 'Short product introduction covering setup, invites, RSVP, check-in, results, and paid operations.',
     href: '/media/eventqr-intro-target-audience.pdf',
     filename: 'eventqr-intro-target-audience.pdf',
     type: 'PDF',
   },
   {
-    title: 'EventQR One-Pager',
+    title: 'Festio One-Pager',
     description: 'Compact sales handout for quick sharing.',
     href: '/media/eventqr-onepager.pdf',
     filename: 'eventqr-onepager.pdf',
     type: 'PDF',
   },
   {
-    title: 'EventQR Pitch Deck',
+    title: 'Festio Pitch Deck',
     description: 'Longer investor/product pitch deck.',
     href: '/media/eventqr-pitch.pdf',
     filename: 'eventqr-pitch.pdf',
@@ -139,7 +139,7 @@ export default function MediaPage() {
       <div>
         <h1 className="text-2xl font-bold text-slate-950 dark:text-white">Media Library</h1>
         <p className="mt-2 text-sm text-slate-500 dark:text-slate-400">
-          Operator-only links for viewing and downloading EventQR PDFs, HTML tours, and product screenshots.
+          Operator-only links for viewing and downloading Festio PDFs, HTML tours, and product screenshots.
         </p>
       </div>
 

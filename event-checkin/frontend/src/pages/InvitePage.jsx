@@ -833,7 +833,7 @@ export default function InvitePage() {
     setConfirmed(c)
     if (storageKey && c && typeof localStorage !== 'undefined') {
       try {
-        const rec = { rsvp_status: c.rsvp_status, first_name: c.first_name }
+        const rec = { rsvp_status: c.rsvp_status, first_name: c.first_name, qr_token: c.qr_token || '' }
         localStorage.setItem(storageKey, JSON.stringify(rec))
         setPrior(rec)
       } catch { /* ignore storage errors */ }
@@ -846,7 +846,7 @@ export default function InvitePage() {
       : rsvpLinkMode
         ? `/api/invite/link/${rsvpToken}`
         : `/api/invite/${eventId}`
-    fetch(url)
+    fetch(url, { cache: 'no-store' })
       .then((r) => {
         if (r.status === 410) throw new Error('This event has ended.')
         if (r.status === 404) throw new Error(tokenMode || rsvpLinkMode ? 'This RSVP link is not valid.' : 'Event not found.')
@@ -898,7 +898,10 @@ export default function InvitePage() {
     ? confirmed.qr_token
     : tokenMode && tokenMeta.already_responded && guest?.rsvp_status === 'confirmed'
       ? token
+      : prior?.rsvp_status === 'confirmed' && prior?.qr_token
+        ? prior.qr_token
       : ''
+  const hasGuestHub = !!guestHubToken
 
   let rsvpPanel
   if (confirmed) {
@@ -961,7 +964,9 @@ export default function InvitePage() {
             ? 'You let the host know you cannot make it.'
             : prior.rsvp_status === 'pending'
               ? 'Your RSVP is awaiting host approval.'
-              : 'You are on the guest list. Your ticket was sent to you.'}
+              : prior.qr_token
+                ? 'You are on the guest list. Your Guest Hub is available below.'
+                : 'You are on the guest list. Your ticket was sent to you.'}
         </div>
         <div className="mt-4 text-sm font-semibold text-slate-500">Need to change it? Contact the host.</div>
       </div>
@@ -975,7 +980,7 @@ export default function InvitePage() {
       <header className="px-5 py-6 sm:px-6">
         <div className="mx-auto flex max-w-[1180px] items-center justify-between">
           <span className="text-sm font-extrabold uppercase tracking-[0.24em] text-teal-100">You're invited</span>
-          <span className="rounded-full border border-white/10 bg-white/[0.08] px-4 py-2 text-sm font-bold text-white/85">EventQR</span>
+          <span className="rounded-full border border-white/10 bg-white/[0.08] px-4 py-2 text-sm font-bold text-white/85">Festio</span>
         </div>
       </header>
 
@@ -1000,11 +1005,19 @@ export default function InvitePage() {
             </div>
 
             <div className="flex flex-col gap-3 sm:flex-row">
-              <PrimaryButton type="button" onClick={scrollToRsvp}>Confirm My RSVP</PrimaryButton>
+              <PrimaryButton type="button" onClick={() => document.getElementById(hasGuestHub ? 'guest-hub' : 'rsvp')?.scrollIntoView({ behavior: 'smooth' })}>
+                {hasGuestHub ? 'Open Guest Hub' : 'Confirm My RSVP'}
+              </PrimaryButton>
               <SecondaryButton type="button" onClick={() => document.getElementById('details')?.scrollIntoView({ behavior: 'smooth' })}>View Event Details</SecondaryButton>
             </div>
           </div>
         </section>
+
+        {hasGuestHub && (
+          <section id="guest-hub" className="scroll-mt-6 py-6">
+            <GuestHub event={event} accessToken={guestHubToken} />
+          </section>
+        )}
 
         <section id="details" className="grid gap-6 py-8 md:grid-cols-[minmax(0,1.55fr)_minmax(300px,0.75fr)]">
           <div className="rounded-3xl border border-white/10 bg-white/[0.07] p-6 shadow-xl shadow-black/10 backdrop-blur sm:p-7">
@@ -1039,12 +1052,12 @@ export default function InvitePage() {
           </div>
         </section>
 
-        <GuestHub event={event} accessToken={guestHubToken} />
+        {!hasGuestHub && <GuestHub event={event} accessToken={guestHubToken} />}
       </main>
 
       {!event.is_paid && (
         <footer className="pb-6 text-center text-xs font-semibold text-slate-500">
-          Powered by EventQR
+          Powered by Festio
         </footer>
       )}
     </div>

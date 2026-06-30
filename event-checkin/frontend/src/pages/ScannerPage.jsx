@@ -240,7 +240,7 @@ function iosCameraHelp(err) {
     if (isIOS) {
       lines.push('iPhone fix:')
       lines.push('1. Settings → Safari → Camera → set to "Ask" or "Allow"')
-      lines.push('2. Settings → Safari → Advanced → Website Data → search "vsgs.io" → delete')
+      lines.push('2. Settings → Safari → Advanced → Website Data → search "festio.events" → delete')
       lines.push('3. Reload this page and tap Start Camera again')
     } else {
       lines.push('Tap the camera icon in the address bar and choose "Allow" for this site, then reload.')
@@ -611,7 +611,7 @@ export default function ScannerPage() {
               </select>
               {selectedGate && (
                 <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
-                  EventQR checks each guest's ticket rules automatically.
+                  Festio checks each guest's ticket rules automatically.
                 </p>
               )}
             </div>

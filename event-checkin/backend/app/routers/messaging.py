@@ -5,7 +5,7 @@ message as it moves through its lifecycle (queued → sent → delivered, or fai
 undelivered). Configure this endpoint as the **Status Callback URL** on the
 Twilio Messaging Service (or phone number) sending the traffic:
 
-    https://events.vsgs.io/api/messaging/twilio/status
+    https://festio.events/api/messaging/twilio/status
 
 The handler is intentionally forgiving: it always returns 204 so Twilio doesn't
 retry/queue on transient app errors, and signature validation is enforced only

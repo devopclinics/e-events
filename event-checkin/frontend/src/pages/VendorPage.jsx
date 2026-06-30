@@ -94,7 +94,7 @@ export default function VendorPage() {
           </table>
         </div>
 
-        <p className="text-xs text-slate-400 text-center mt-4">Shared securely via EventQR · read-only</p>
+        <p className="text-xs text-slate-400 text-center mt-4">Shared securely via Festio · read-only</p>
       </div>
     </div>
   )

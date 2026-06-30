@@ -9,7 +9,7 @@ export default function RefundPolicyPage() {
 
         <div className="space-y-4 text-sm text-slate-700 dark:text-slate-300 mt-4">
           <p>
-            EventQR sells one-time <strong>Event Passes</strong> and <strong>message-credit
+            Festio sells one-time <strong>Event Passes</strong> and <strong>message-credit
             top-ups</strong> per event. The following applies to those purchases.
           </p>
           <h2 className="font-semibold text-slate-900 dark:text-white">Event Passes</h2>

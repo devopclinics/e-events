@@ -147,7 +147,7 @@ async def ticket_qr_image(qr_token: str, db: AsyncSession = Depends(get_db)):
     if not guest:
         return Response(status_code=404)
     event = await db.get(Event, guest.event_id)
-    base_url = event.checkin_base_url if event else "https://events.vsgs.io"
+    base_url = event.checkin_base_url if event else "https://festio.events"
     return Response(content=generate_qr_bytes(qr_token, base_url), media_type="image/png")
 
 
@@ -169,7 +169,7 @@ async def ticket_card_image(
     if not event:
         return Response(status_code=404)
 
-    base_url = event.checkin_base_url or "https://events.vsgs.io"
+    base_url = event.checkin_base_url or "https://festio.events"
     qr_bytes = generate_qr_bytes(qr_token, base_url)
 
     table_name = ""

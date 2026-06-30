@@ -704,7 +704,7 @@ export default function ScanAutoPage() {
         </div>
       </div>
 
-      <p className="fixed bottom-4 text-slate-400 text-xs text-center w-full">Powered by EventQR</p>
+      <p className="fixed bottom-4 text-slate-400 text-xs text-center w-full">Powered by Festio</p>
     </div>
   )
 }

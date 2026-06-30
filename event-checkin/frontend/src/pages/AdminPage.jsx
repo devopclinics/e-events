@@ -1924,7 +1924,7 @@ function RegistryPanel({ eventId, event }) {
       <div className="flex items-center justify-between flex-wrap gap-2">
         <div>
           <h2 className="font-semibold text-base dark:text-white">🎁 Gift list</h2>
-          <p className="text-xs text-gray-500 dark:text-slate-400 mt-0.5">Mark-only — guests buy from your links or send cash to your own details. No money passes through EventQR.</p>
+          <p className="text-xs text-gray-500 dark:text-slate-400 mt-0.5">Mark-only — guests buy from your links or send cash to your own details. No money passes through Festio.</p>
         </div>
         <div className="flex gap-2">
           <button onClick={() => { if (!registryUrl) return flash('Preparing link...'); navigator.clipboard?.writeText(registryUrl); flash('Gift list link copied.') }}
@@ -4648,7 +4648,7 @@ function EventForm({ initial, onSave, onCancel }) {
         </div>
         <div>
           <label htmlFor="event-base-url" className="block text-xs font-semibold text-gray-600 mb-1">App Base URL *</label>
-          <input id="event-base-url" className={field} value={form.checkin_base_url} onChange={set('checkin_base_url')} required placeholder="https://events.vsgs.io" />
+          <input id="event-base-url" className={field} value={form.checkin_base_url} onChange={set('checkin_base_url')} required placeholder="https://festio.events" />
         </div>
         <div>
           <label htmlFor="event-venue" className="block text-xs font-semibold text-gray-600 mb-1">Venue</label>
@@ -4727,7 +4727,7 @@ function SourceSyncPanel({ event, onSave, onSyncNow, onToggleSync, loading }) {
           <h2 className="font-semibold text-base dark:text-white">Guest spreadsheet sync</h2>
           <p className="text-xs text-gray-500 dark:text-slate-400 mt-1">
             Paste a Google Sheets or OneDrive share link. While the event is <strong>Active</strong>,
-            EventQR checks it every {event.source_sync_interval_seconds || 60} seconds and adds new guests.
+            Festio checks it every {event.source_sync_interval_seconds || 60} seconds and adds new guests.
             Existing guests stay untouched.
           </p>
         </div>

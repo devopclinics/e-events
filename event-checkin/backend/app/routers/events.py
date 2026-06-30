@@ -448,13 +448,13 @@ async def send_test_message(
     try:
         if channel == "sms":
             await messaging.send_invite_sms(
-                phone=phone, first_name="EventQR",
+                phone=phone, first_name="Festio",
                 event_name=f"{event.name} (TEST)",
                 ticket_url=ticket_url, event_date=event.event_date,
             )
         else:
             await messaging.send_invite_whatsapp(
-                phone=phone, first_name="EventQR",
+                phone=phone, first_name="Festio",
                 event_name=f"{event.name} (TEST)",
                 ticket_url=ticket_url, event_date=event.event_date,
             )

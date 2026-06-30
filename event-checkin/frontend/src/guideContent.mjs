@@ -11,7 +11,7 @@ export const CONTENT = {
         id: 'org-start', icon: '🚀', title: 'Get started',
         intro: 'Everything begins with a free account — no credit card required.',
         steps: [
-          'Go to events.vsgs.io and click Get Started.',
+          'Go to festio.events and click Get Started.',
           'Sign in with Google (fastest) or create an account with any email address.',
           'You land straight in Event Setup with your own organisation already created.',
           'Click New Event to create your first event — you can run a free event with up to 25 guests right away.',
@@ -46,7 +46,7 @@ export const CONTENT = {
           'Set the event to Draft while preparing, Active on the day to enable check-in, and Ended afterwards.',
           'You can create multiple events — each is independent with its own guest list and settings.',
         ],
-        tip: 'The base URL slug is used in all invite and RSVP links (e.g. events.vsgs.io/invite/your-slug). Keep it short and memorable.',
+        tip: 'The base URL slug is used in all invite and RSVP links (e.g. festio.events/invite/your-slug). Keep it short and memorable.',
       },
       {
         id: 'org-guests', icon: '👥', title: 'Add your guest list',
@@ -201,7 +201,7 @@ export const CONTENT = {
           'Write a welcome message shown at the top of the gift list page.',
           'Share the public gift list link directly — paste it in WhatsApp, add it to your invite page, or print it on physical invites.',
           'Guests mark what they\'ll bring (or how much they\'re contributing) so nobody doubles up.',
-          'No money moves through EventQR — guests purchase or give directly to you. The gift list is purely a wish-list coordination tool.',
+          'No money moves through Festio — guests purchase or give directly to you. The gift list is purely a wish-list coordination tool.',
           'You can see who has claimed each item from the Gift list tab.',
         ],
       },
@@ -256,8 +256,8 @@ export const CONTENT = {
         id: 'org-upgrade', icon: '💳', title: 'Event Pass & message credits',
         img: '/media/help-event-pass.png',
         steps: [
-          'Free tier: email invites, up to 25 guests, EventQR branding on invite pages, no paid features.',
-          'Event Pass: buy per event in Invites & RSVP → Event Pass. Unlocks SMS/WhatsApp invites, more guests, QR check-in, seating & orders, entry areas, deliveries, gift list, and removes EventQR branding.',
+          'Free tier: email invites, up to 25 guests, Festio branding on invite pages, no paid features.',
+          'Event Pass: buy per event in Invites & RSVP → Event Pass. Unlocks SMS/WhatsApp invites, more guests, QR check-in, seating & orders, entry areas, deliveries, gift list, and removes Festio branding.',
           'Event Passes are tiered by guest cap — choose the tier that fits your event size. You can upgrade to a higher tier if your guest list grows.',
           'Message credits: buy in the Event Pass area. Credits are shared across all your events. 1 credit = 1 SMS or 1 WhatsApp message to 1 guest.',
           'Low on credits mid-event? Buy a top-up instantly from Event Setup — credits are available immediately.',
@@ -310,7 +310,7 @@ export const CONTENT = {
         id: 'staff-join', icon: '🔑', title: 'Get set up before the event',
         steps: [
           'Your organiser adds you by email in the event\'s Team tab. Make sure they use your exact sign-in email.',
-          'Sign in at events.vsgs.io with that email. Your account links to their organisation automatically.',
+          'Sign in at festio.events with that email. Your account links to their organisation automatically.',
           'You\'ll see the events you\'ve been assigned to in the Check-in screen.',
           'Open Check-in on the device you\'ll use on the day and confirm you can see the event. Do this at least the day before.',
           'Grant camera permission: the browser will ask the first time you start the camera. Allow it — if you accidentally denied, go to your browser Settings → Site permissions → Camera and re-enable it.',
@@ -444,7 +444,7 @@ export const CONTENT = {
         steps: [
           'If the host shares a registry link, open it to browse their gift wishlist and cash contribution funds.',
           'Click "I\'ll bring this" on any item to claim it — others will see it\'s taken so nobody buys duplicates.',
-          'For cash funds: the host\'s payment details or instructions are shown — you transfer directly, not through EventQR.',
+          'For cash funds: the host\'s payment details or instructions are shown — you transfer directly, not through Festio.',
           'You can unclaim an item if your plans change — just return to the registry link and untick.',
           'No account or login required to view or claim items.',
         ],
@@ -530,7 +530,7 @@ export const CONTENT = {
         id: 'op-operators', icon: '👤', title: 'Manage operators',
         steps: [
           'Console → Operators: lists all accounts with platform superadmin access.',
-          'Add an operator: enter their email address. They must already have a EventQR account.',
+          'Add an operator: enter their email address. They must already have a Festio account.',
           'Revoke an operator: removes their superadmin access. You cannot revoke your own access.',
           'Keep the operator list minimal — operator accounts have unrestricted access to all organisations and data.',
         ],

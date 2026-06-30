@@ -7,7 +7,7 @@ from fastapi import HTTPException
 
 from .models import Event
 
-# Free events: email-only invites, capped guest list, EventQR branding.
+# Free events: email-only invites, capped guest list, Festio branding.
 FREE_GUEST_CAP = 25
 
 

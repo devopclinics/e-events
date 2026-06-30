@@ -88,14 +88,14 @@ const eventTypes = [
 ]
 
 const tabs = [
-  { key: 'checkin', label: 'Check-in', img: '/media/help-check-in.png', alt: 'EventQR mobile scanner verifying a guest',
+  { key: 'rsvp', label: 'Invites & RSVP', intent: 'rsvp', cta: 'Start collecting RSVPs — free', img: '/media/help-invites-rsvp.png', alt: 'Personalized invitations and RSVP page in EventQR',
+    title: 'Invitations and RSVPs, done', body: 'Build your invite page, collect RSVPs and approvals, and send personal tickets by email, SMS, WhatsApp or MMS. Edit every message, preview it, and test before the whole list goes out. Free for small events.' },
+  { key: 'checkin', label: 'Check-in', intent: 'checkin', cta: 'Set up check-in', img: '/media/help-check-in.png', alt: 'EventQR mobile scanner verifying a guest',
     title: 'Table & seat-aware check-in', body: 'When a guest is scanned, staff instantly see their name, RSVP status, table, seat and access permission — duplicates blocked. Built for weddings, galas and formal events, not just a QR reader.' },
-  { key: 'access', label: 'Tables & access', img: '/media/help-entry-areas.png', alt: 'Entry areas, zones and ticket rules in EventQR',
+  { key: 'access', label: 'Tables & access', intent: 'seating', cta: 'Set up seating & access', img: '/media/help-entry-areas.png', alt: 'Entry areas, zones and ticket rules in EventQR',
     title: 'Control where every guest belongs', body: 'Assign guests to tables, seats, family groups, VIP areas or vendor zones. On scan, staff see exactly where the guest goes — and whether they’re allowed in.' },
-  { key: 'dashboard', label: 'Live dashboard', img: '/media/help-results.png', alt: 'Real-time attendance dashboard in EventQR',
+  { key: 'dashboard', label: 'Live dashboard', intent: 'dashboard', cta: 'See the live dashboard', img: '/media/help-results.png', alt: 'Real-time attendance dashboard in EventQR',
     title: 'Know what is happening at the door', body: 'Total invited, checked-in, pending, VIP arrivals and table-level attendance — updating live as guests walk in.' },
-  { key: 'messaging', label: 'Messaging', img: '/media/help-invites-rsvp.png', alt: 'Personalized invitations and message templates in EventQR',
-    title: 'Reach every guest, your way', body: 'Send personal QR tickets by email, SMS, WhatsApp or MMS. Edit every message, preview it, and test before the whole list goes out.' },
 ]
 
 // ── Animated "live scan" hero demo ──────────────────────────────────────────────
@@ -205,9 +205,9 @@ function Shot({ src, alt, className = '' }) {
 }
 
 // ── CTAs ────────────────────────────────────────────────────────────────────────
-function PrimaryCta({ children = 'Create Free Event', className = '' }) {
+function PrimaryCta({ children = 'Create Free Event', to = '/register', className = '' }) {
   return (
-    <Link to="/register"
+    <Link to={to}
       className={`inline-flex items-center justify-center gap-2 bg-teal-600 text-white px-6 py-3 rounded-xl font-semibold text-sm hover:bg-teal-700 transition-colors shadow-lg shadow-teal-900/20 ${className}`}>
       {children} <Arrow />
     </Link>
@@ -224,7 +224,7 @@ function SecondaryCta({ children = 'Book a Demo', className = '' }) {
 
 export default function LandingPage() {
   const { dark, toggle } = useTheme()
-  const [tab, setTab] = useState('checkin')
+  const [tab, setTab] = useState('rsvp')
   const active = tabs.find((t) => t.key === tab) || tabs[0]
 
   return (
@@ -261,20 +261,21 @@ export default function LandingPage() {
             <div>
               <div className="inline-flex items-center gap-2 bg-white dark:bg-slate-900 text-teal-800 dark:text-teal-200 text-xs font-semibold px-3 py-1.5 rounded-full border border-teal-200/80 dark:border-teal-800/80 mb-6 shadow-sm">
                 <span className="w-1.5 h-1.5 bg-emerald-500 rounded-full animate-pulse" />
-                Create · Invite · Seat · Check in
+                RSVP · Invite · Seat · Check in
               </div>
               <h1 className="text-4xl sm:text-5xl lg:text-6xl font-extrabold tracking-tight text-slate-950 dark:text-white leading-[1.05]">
-                Event check-in without the <span className="bg-gradient-to-r from-teal-600 to-emerald-500 bg-clip-text text-transparent">crowd at the door.</span>
+                Run your whole event — <span className="bg-gradient-to-r from-teal-600 to-emerald-500 bg-clip-text text-transparent">from RSVP to the door.</span>
               </h1>
               <p className="mt-6 text-lg sm:text-xl text-slate-600 dark:text-slate-300 max-w-xl leading-relaxed">
-                Send QR tickets, manage RSVPs, assign tables and seats, and let your staff check guests in from any phone.
+                Collect RSVPs, send QR tickets, assign tables and seats, and check guests in from any phone — all in one place.
               </p>
               <div className="mt-8 flex flex-col sm:flex-row gap-3">
                 <PrimaryCta />
                 <SecondaryCta />
               </div>
               <p className="mt-6 text-sm text-slate-500 dark:text-slate-400 max-w-md">
-                Free for small events. Built for weddings, galas, community programs, and private ceremonies.
+                Free for small events — weddings, galas, community programs and ceremonies.{' '}
+                <Link to="/register?intent=rsvp" className="font-semibold text-teal-600 dark:text-teal-400 hover:underline">Just need RSVPs? Start free →</Link>
               </p>
             </div>
             <LiveScanDemo />
@@ -349,7 +350,7 @@ export default function LandingPage() {
         <div className="max-w-6xl mx-auto px-4 sm:px-6">
           <Reveal className="text-center mb-10">
             <h2 className="text-3xl sm:text-4xl font-bold text-slate-950 dark:text-white">See EventQR in action</h2>
-            <p className="mt-3 text-slate-500 dark:text-slate-400 text-lg">The real product — check-in, tables, dashboard and messaging.</p>
+            <p className="mt-3 text-slate-500 dark:text-slate-400 text-lg">The real product — RSVPs, check-in, seating and a live dashboard.</p>
           </Reveal>
           <div className="flex flex-wrap justify-center gap-2 mb-8">
             {tabs.map((t) => (
@@ -364,7 +365,10 @@ export default function LandingPage() {
             <div>
               <h3 className="text-2xl font-bold text-slate-950 dark:text-white">{active.title}</h3>
               <p className="mt-3 text-slate-600 dark:text-slate-300 leading-relaxed">{active.body}</p>
-              <div className="mt-6"><SecondaryCta>Book a Demo</SecondaryCta></div>
+              <div className="mt-6 flex flex-wrap gap-3">
+                <PrimaryCta to={`/register?intent=${active.intent}`}>{active.cta}</PrimaryCta>
+                <SecondaryCta>Book a Demo</SecondaryCta>
+              </div>
             </div>
           </div>
         </div>
@@ -374,8 +378,8 @@ export default function LandingPage() {
       <section id="features" className="py-20 border-t border-slate-100 dark:border-slate-800">
         <div className="max-w-6xl mx-auto px-4 sm:px-6">
           <Reveal className="text-center mb-14">
-            <h2 className="text-3xl sm:text-4xl font-bold text-slate-950 dark:text-white">Everything you need at the door</h2>
-            <p className="mt-3 text-slate-500 dark:text-slate-400 text-lg max-w-xl mx-auto">Built for real events, not just online RSVPs.</p>
+            <h2 className="text-3xl sm:text-4xl font-bold text-slate-950 dark:text-white">Everything you need, from invite to entrance</h2>
+            <p className="mt-3 text-slate-500 dark:text-slate-400 text-lg max-w-xl mx-auto">RSVPs, invitations, seating, access and the door — one platform for the whole event.</p>
           </Reveal>
           <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-5">
             {features.map(({ t, d }, i) => (
@@ -429,7 +433,7 @@ export default function LandingPage() {
             <p className="mt-4 text-slate-600 dark:text-slate-300 leading-relaxed">
               Monitor total invited guests, checked-in guests, pending arrivals, VIP arrivals and table-level attendance in real time — from anywhere.
             </p>
-            <div className="mt-8"><PrimaryCta /></div>
+            <div className="mt-8"><PrimaryCta to="/register?intent=dashboard" /></div>
           </Reveal>
           <Reveal delay={120} className="lg:order-1"><Shot src="/media/help-results.png" alt="EventQR real-time attendance dashboard" /></Reveal>
         </div>
@@ -541,8 +545,8 @@ export default function LandingPage() {
       <section className="py-24 border-t border-slate-100 dark:border-slate-800">
         <div className="max-w-3xl mx-auto px-4 sm:px-6 text-center">
           <Reveal>
-            <h2 className="text-3xl sm:text-5xl font-bold text-slate-950 dark:text-white">Ready to make check-in the easiest part of your event?</h2>
-            <p className="mt-5 text-lg text-slate-600 dark:text-slate-400">Create. Invite. Seat. Check in. One simple platform to manage your guests from RSVP to entrance — free for small events.</p>
+            <h2 className="text-3xl sm:text-5xl font-bold text-slate-950 dark:text-white">Ready to run your whole event from one place?</h2>
+            <p className="mt-5 text-lg text-slate-600 dark:text-slate-400">RSVP. Invite. Seat. Check in. One simple platform to manage your guests from the first RSVP to the door — free for small events.</p>
             <div className="mt-8 flex flex-col sm:flex-row gap-3 justify-center">
               <PrimaryCta className="px-8 py-4 text-base" />
               <SecondaryCta className="px-8 py-4 text-base" />

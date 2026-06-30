@@ -5252,6 +5252,72 @@ function EditGuestModal({ guest, eventId, seatingEnabled, onSave, onClose, loadi
   )
 }
 
+// Read-only guest view: details + answers to the custom RSVP questions.
+function ViewGuestModal({ guest, eventId, onClose }) {
+  const [answers, setAnswers] = useState(null)
+  useEffect(() => {
+    if (!eventId || !guest?.id) return
+    let alive = true
+    api.guestRsvpAnswers(eventId, guest.id)
+      .then((a) => { if (alive) setAnswers(a) })
+      .catch(() => { if (alive) setAnswers([]) })
+    return () => { alive = false }
+  }, [eventId, guest?.id])
+
+  const rows = [
+    ['Email', guest.email],
+    ['Phone', guest.phone],
+    ['RSVP', guest.rsvp_status],
+    ['Checked in', guest.admitted ? 'Yes' : 'No'],
+    ['Table group', guest.table_group_name],
+    ['Seat', guest.seat_number],
+    ['VIP', guest.is_vip ? 'Yes' : null],
+  ].filter(([, v]) => v)
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/60 backdrop-blur-sm" onClick={onClose}>
+      <div onClick={(e) => e.stopPropagation()}
+        className="bg-white dark:bg-slate-900 dark:border dark:border-slate-700 rounded-xl shadow-2xl w-full max-w-md max-h-[85vh] overflow-y-auto">
+        <div className="px-5 py-4 border-b dark:border-slate-700 flex items-center justify-between">
+          <h3 className="font-bold text-slate-900 dark:text-white">{guest.first_name} {guest.last_name}</h3>
+          <button onClick={onClose} className="text-slate-400 hover:text-slate-700 dark:hover:text-white text-2xl leading-none">×</button>
+        </div>
+        <div className="p-5 space-y-4">
+          <div>
+            {rows.map(([label, value]) => (
+              <div key={label} className="flex justify-between gap-4 py-1.5 border-b border-slate-100 dark:border-slate-700/60 last:border-0">
+                <span className="text-xs text-slate-500 dark:text-slate-400">{label}</span>
+                <span className="text-sm text-slate-800 dark:text-slate-200 text-right break-words">{value}</span>
+              </div>
+            ))}
+          </div>
+          <div>
+            <p className="text-xs font-semibold text-slate-500 dark:text-slate-400 mb-2">RSVP answers</p>
+            {answers === null ? (
+              <p className="text-sm text-slate-400">Loading…</p>
+            ) : answers.length === 0 ? (
+              <p className="text-sm text-slate-400 dark:text-slate-500">No custom questions answered.</p>
+            ) : (
+              <dl className="space-y-2">
+                {answers.map((a, i) => (
+                  <div key={i}>
+                    <dt className="text-xs text-slate-500 dark:text-slate-400">{a.question}</dt>
+                    <dd className="text-sm text-slate-800 dark:text-slate-200 break-words">{a.answer || '—'}</dd>
+                  </div>
+                ))}
+              </dl>
+            )}
+          </div>
+          <button onClick={onClose}
+            className="w-full py-2.5 rounded-lg border border-slate-300 dark:border-slate-600 text-sm text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800">
+            Close
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
 function ResetEventModal({ event, onClose, onDone }) {
   const [flags, setFlags] = useState({})
   const [confirm, setConfirm] = useState('')
@@ -5336,6 +5402,7 @@ export default function AdminPage() {
   const [guestFilter, setGuestFilter] = useState({ invited: 'all', admitted: 'all', qr: 'all' })
   const [showReset, setShowReset] = useState(false)
   const [editingGuest, setEditingGuest] = useState(null)
+  const [viewingGuest, setViewingGuest] = useState(null)
   const [showAddGuest, setShowAddGuest] = useState(false)
   const fileRef = useRef()
 
@@ -5877,6 +5944,14 @@ export default function AdminPage() {
             />
           )}
 
+          {viewingGuest && (
+            <ViewGuestModal
+              guest={viewingGuest}
+              eventId={selectedId}
+              onClose={() => setViewingGuest(null)}
+            />
+          )}
+
           {showAddGuest && (
             <AddGuestModal
               loading={loading}
@@ -6319,6 +6394,8 @@ export default function AdminPage() {
                                 <button onClick={() => handleResendInvite(g.id)} disabled={loading}
                                   className="text-xs text-amber-600 hover:underline disabled:opacity-40">Resend</button>
                               )}
+                              <button onClick={() => setViewingGuest(g)}
+                                className="text-xs text-slate-500 dark:text-slate-300 hover:underline">View</button>
                               <button onClick={() => setEditingGuest(g)} disabled={loading}
                                 className="text-xs text-teal-600 hover:underline disabled:opacity-40">Edit</button>
                               <button onClick={() => handleDeleteGuest(g.id)} disabled={loading}
@@ -6384,6 +6461,8 @@ export default function AdminPage() {
                           <button onClick={() => handleResendInvite(g.id)} disabled={loading}
                             className="text-xs text-amber-600 hover:underline disabled:opacity-40">Resend invite</button>
                         )}
+                        <button onClick={() => setViewingGuest(g)}
+                          className="text-xs text-slate-500 dark:text-slate-300 hover:underline">View</button>
                         <button onClick={() => setEditingGuest(g)} disabled={loading}
                           className="text-xs text-teal-600 hover:underline disabled:opacity-40">Edit</button>
                         <button onClick={() => handleDeleteGuest(g.id)} disabled={loading}

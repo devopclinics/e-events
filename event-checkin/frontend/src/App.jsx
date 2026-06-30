@@ -17,6 +17,8 @@ import VendorPage from './pages/VendorPage'
 import RegistryPage from './pages/RegistryPage'
 import PricingPage from './pages/PricingPage'
 import RefundPolicyPage from './pages/RefundPolicyPage'
+import PrivacyPage from './pages/PrivacyPage'
+import TermsPage from './pages/TermsPage'
 import ConsolePage from './pages/ConsolePage'
 import KitchenPage from './pages/KitchenPage'
 import HelpPage from './pages/HelpPage'
@@ -246,6 +248,8 @@ function AppRoutes() {
       {/* Public marketing pages — no auth required */}
       <Route path="/pricing" element={<PricingPage />} />
       <Route path="/refund-policy" element={<RefundPolicyPage />} />
+      <Route path="/privacy" element={<PrivacyPage />} />
+      <Route path="/terms" element={<TermsPage />} />
       {/* Unlisted public help — shareable with prospects, no account needed */}
       <Route path="/guide" element={<HelpPage publicMode />} />
 

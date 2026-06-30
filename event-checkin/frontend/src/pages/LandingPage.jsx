@@ -106,7 +106,7 @@ function LogoMark({ size = 'h-9 w-9', text = 'text-sm' }) {
 
 const trustChips = [
   'RSVP', 'Guest Management', 'Seating', 'Messaging', 'QR Passes',
-  'Check-In', 'Live Dashboard', 'Orders', 'Registry', 'Deliveries',
+  'Check-In', 'Live Dashboard', 'Orders', 'Gift List', 'Registry', 'Deliveries',
 ]
 
 const problemCards = [
@@ -116,6 +116,7 @@ const problemCards = [
   'Tables and seats cause confusion',
   'Staff keep calling the organizer',
   'Meal choices live in separate forms',
+  'Gift claims and deliveries are tracked manually',
   'Guest questions are scattered',
   'No live view of attendance or access',
   'VIPs and restricted areas are hard to control',
@@ -155,7 +156,28 @@ const pillars = [
   {
     title: 'Meals, Gifts & Logistics',
     copy: 'Menu selections, kitchen views, table totals, registry, shipments, vendors, and exports.',
-    items: ['Orders dashboard', 'Gift claims', 'Vendor fulfillment'],
+    items: ['Guest menu orders', 'Gift list/registry', 'Deliveries and vendor exports'],
+  },
+]
+
+const addOnHighlights = [
+  {
+    id: 'orders',
+    title: 'Orders',
+    copy: 'Collect meal choices, group items by category, see table totals, and track what has been served.',
+    points: ['Menu categories', 'Guest selections', 'Kitchen view', 'Served tracking'],
+  },
+  {
+    id: 'gift-list',
+    title: 'Gift List & Registry',
+    copy: 'Publish gift options, track item claims, manage cash funds, and keep registry activity tied to the guest list.',
+    points: ['Gift items', 'Registry message', 'Cash funds', 'Claim tracking'],
+  },
+  {
+    id: 'deliveries',
+    title: 'Deliveries',
+    copy: 'Manage shipments, packing status, vendor share pages, shipping addresses, and fulfillment exports.',
+    points: ['Shipment items', 'Vendor page', 'Packing status', 'XLSX exports'],
   },
 ]
 
@@ -244,12 +266,20 @@ const detailSections = [
     alt: 'Festio orders view with meal totals by table',
   },
   {
-    id: 'registry-deliveries',
-    eyebrow: 'Gifts, registry, and deliveries',
-    title: 'Handle the details beyond the door.',
-    copy: 'Manage gift registries, item claims, cash funds, shipments, guest shipping addresses, vendor fulfillment, packing status, and exports from the same event workspace.',
-    points: ['Gift registry', 'Registry message/settings', 'Store link unfurling', 'Cash funds', 'Guest item claims', 'Admin claim tracking', 'Deliveries add-on', 'Shipments', 'Shipment items', 'Vendor share page', 'Vendor XLSX export', 'Admin XLSX export'],
-    alt: 'Festio delivery and fulfillment tools for vendors',
+    id: 'gift-list',
+    eyebrow: 'Gift list and registry',
+    title: 'Gift lists that stay tied to guests.',
+    copy: 'Publish registry options, track item claims, manage cash funds, add store links, and keep gift activity connected to the guest record.',
+    points: ['Gift registry', 'Registry message/settings', 'Store link unfurling', 'Cash funds', 'Guest item claims', 'Admin claim tracking', 'Claim reports', 'Registry exports'],
+    alt: 'Festio gift list and registry claim tracking workspace',
+  },
+  {
+    id: 'deliveries',
+    eyebrow: 'Deliveries and fulfillment',
+    title: 'Coordinate shipments, vendors, and pickup details.',
+    copy: 'Manage delivery add-ons, shipment items, guest shipping addresses, vendor share pages, packing status, and exportable fulfillment reports.',
+    points: ['Deliveries add-on', 'Shipments', 'Shipment items', 'Guest shipping addresses', 'Vendor share page', 'Packing status', 'Vendor XLSX export', 'Admin XLSX export'],
+    alt: 'Festio delivery and vendor fulfillment workspace',
   },
   {
     id: 'analytics',
@@ -372,6 +402,21 @@ function HeroVisual() {
                 <div className="flex justify-between"><span>Served</span><strong>58%</strong></div>
               </div>
             </div>
+            <div className="rounded-xl bg-white/10 p-3 md:col-span-3">
+              <div className="grid gap-3 sm:grid-cols-3">
+                {[
+                  ['Gift List', '38 claims', '12 registry items'],
+                  ['Deliveries', '4 shipments', 'Vendor shared'],
+                  ['Guest orders', '128 choices', 'By table'],
+                ].map(([label, value, note]) => (
+                  <div key={label} className="rounded-lg bg-white/[0.07] p-3">
+                    <div className="text-[10px] font-bold uppercase tracking-wider text-slate-400">{label}</div>
+                    <div className="mt-1 text-sm font-black text-white">{value}</div>
+                    <div className="text-xs text-slate-300">{note}</div>
+                  </div>
+                ))}
+              </div>
+            </div>
           </div>
         </div>
       </div>
@@ -461,14 +506,23 @@ const mockups = {
     panelTitle: 'Menu choices',
     panel: ['Meals', 'Drinks', 'Gift pickup', 'Combinations'],
   },
-  'registry-deliveries': {
-    title: 'Gifts & Deliveries',
+  'gift-list': {
+    title: 'Gift List & Registry',
+    status: 'Claims live',
+    stats: [['Gift items', '12'], ['Claims', '38'], ['Cash funds', '2']],
+    listTitle: 'Registry activity',
+    rows: [['Welcome tote', 'Reserved', '5 guests'], ['Speaker set', 'Claimed', 'Am Ami'], ['Cash fund', '$1,240', 'Open']],
+    panelTitle: 'Registry tools',
+    panel: ['Gift item', 'Cash fund', 'Store link', 'Claim report'],
+  },
+  deliveries: {
+    title: 'Deliveries',
     status: 'Vendor shared',
-    stats: [['Claims', '38'], ['Shipments', '4'], ['Packed', '72%']],
-    listTitle: 'Fulfillment',
-    rows: [['Welcome tote', '5 guests', 'Packed'], ['Aso-ebi', '48 guests', 'In progress'], ['Gift list', '12 items', 'Claimed']],
-    panelTitle: 'Vendor tools',
-    panel: ['Share page', 'XLSX export', 'Addresses', 'Packing status'],
+    stats: [['Shipments', '4'], ['Items', '86'], ['Packed', '72%']],
+    listTitle: 'Shipment tracking',
+    rows: [['Aso-ebi', '48 guests', 'In progress'], ['Welcome tote', '20 boxes', 'Packed'], ['Vendor pickup', 'Friday', 'Scheduled']],
+    panelTitle: 'Fulfillment',
+    panel: ['Vendor page', 'Addresses', 'Packing list', 'XLSX export'],
   },
   analytics: {
     title: 'Live Results',
@@ -590,6 +644,7 @@ export default function LandingPage() {
           </a>
           <nav className="hidden items-center gap-6 lg:flex" aria-label="Primary">
             <a href="#features" className="text-sm font-bold text-slate-600 hover:text-slate-950 dark:text-slate-300 dark:hover:text-white">Features</a>
+            <a href="#addons" className="text-sm font-bold text-slate-600 hover:text-slate-950 dark:text-slate-300 dark:hover:text-white">Add-ons</a>
             <a href="#guest-journey" className="text-sm font-bold text-slate-600 hover:text-slate-950 dark:text-slate-300 dark:hover:text-white">Guest Journey</a>
             <a href="#event-types" className="text-sm font-bold text-slate-600 hover:text-slate-950 dark:text-slate-300 dark:hover:text-white">Event Types</a>
             <Link to="/pricing" className="text-sm font-bold text-slate-600 hover:text-slate-950 dark:text-slate-300 dark:hover:text-white">Pricing</Link>
@@ -677,6 +732,31 @@ export default function LandingPage() {
                     <h3 className="mt-5 text-xl font-black text-slate-950 dark:text-white">{pillar.title}</h3>
                     <p className="mt-3 text-sm leading-6 text-slate-600 dark:text-slate-300">{pillar.copy}</p>
                     <PointList points={pillar.items} compact />
+                  </article>
+                </Reveal>
+              ))}
+            </div>
+          </div>
+        </section>
+
+        <section id="addons" className="border-y border-slate-900/10 bg-white py-20 dark:border-white/10 dark:bg-slate-900/35">
+          <div className="mx-auto max-w-7xl px-4 sm:px-6">
+            <Reveal>
+              <SectionHeader
+                center
+                eyebrow="Orders, gifts, registry, and deliveries"
+                title="Festio manages the details that usually live outside the guest list."
+                copy="Meals, gift claims, registry activity, shipments, vendor fulfillment, and table service all stay connected to the same event workspace."
+              />
+            </Reveal>
+            <div className="mt-12 grid gap-8 lg:grid-cols-3">
+              {addOnHighlights.map((item, index) => (
+                <Reveal key={item.id} delay={index * 80}>
+                  <article className="h-full rounded-2xl border border-slate-200 bg-[#fbf7ef] p-5 shadow-sm dark:border-white/10 dark:bg-slate-950">
+                    <ProductMockup type={item.id} alt={`Festio ${item.title} preview`} />
+                    <h3 className="mt-6 text-2xl font-black text-slate-950 dark:text-white">{item.title}</h3>
+                    <p className="mt-3 text-sm leading-6 text-slate-600 dark:text-slate-300">{item.copy}</p>
+                    <PointList points={item.points} compact />
                   </article>
                 </Reveal>
               ))}

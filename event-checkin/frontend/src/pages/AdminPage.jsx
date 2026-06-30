@@ -4436,21 +4436,21 @@ function EventForm({ initial, onSave, onCancel }) {
           <label htmlFor="event-venue-address" className="block text-xs font-semibold text-gray-600 mb-1">Venue address</label>
           <input id="event-venue-address" className={field} value={form.venue_address || ''} onChange={set('venue_address')} placeholder="Street, city" />
         </div>
+        <div className="sm:col-span-2">
+          <label htmlFor="event-admission-note" className="block text-xs font-semibold text-gray-600 mb-1">Admission note shown on invite page</label>
+          <textarea
+            id="event-admission-note"
+            className={field}
+            rows={2}
+            value={form.admission_note || ''}
+            onChange={set('admission_note')}
+            placeholder="e.g. Show your QR ticket at the entrance for check-in."
+          />
+        </div>
       </div>
       <div>
         <label htmlFor="event-description" className="block text-xs font-semibold text-gray-600 mb-1">Description</label>
         <textarea id="event-description" className={field} rows={2} value={form.description || ''} onChange={set('description')} />
-      </div>
-      <div>
-        <label htmlFor="event-admission-note" className="block text-xs font-semibold text-gray-600 mb-1">Admission note</label>
-        <textarea
-          id="event-admission-note"
-          className={field}
-          rows={2}
-          value={form.admission_note || ''}
-          onChange={set('admission_note')}
-          placeholder="e.g. Show your QR ticket at the entrance for check-in."
-        />
       </div>
       {error && <p className="text-red-600 text-sm">{error}</p>}
       <div className="flex gap-3">

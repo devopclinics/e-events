@@ -6267,6 +6267,21 @@ export default function AdminPage() {
                       {tableGroups.map((tg) => <option key={tg.id} value={tg.id}>{tg.name}</option>)}
                     </select>
                   )}
+                  <button onClick={() => handleSendBatch({ force: false, label: 'Send unsent' })}
+                    disabled={loading || stats.total - stats.invited === 0}
+                    title={stats.total - stats.invited === 0 ? 'Everyone has been invited' : 'Send to everyone not yet invited'}
+                    className="text-xs px-2.5 py-1.5 rounded-lg bg-amber-500 text-white font-semibold hover:bg-amber-600 disabled:opacity-50">
+                    ✉ Send invitations ({stats.total - stats.invited})
+                  </button>
+                  <button onClick={() => {
+                      if (stats.total === 0) return
+                      if (!confirm(`Re-send the invite to ALL ${stats.total} guests, including those already invited?`)) return
+                      handleSendBatch({ force: true, label: 'Resend all' })
+                    }}
+                    disabled={loading || stats.total === 0}
+                    className="text-xs px-2.5 py-1.5 rounded-lg border border-amber-300 dark:border-amber-700 text-amber-700 dark:text-amber-300 hover:bg-amber-50 dark:hover:bg-slate-700 disabled:opacity-50">
+                    Resend to all
+                  </button>
                   <button onClick={() => setShowAddGuest(true)}
                     className="text-xs px-2.5 py-1.5 rounded-lg bg-indigo-600 text-white font-semibold hover:bg-indigo-700">
                     + Add guest

@@ -13,7 +13,7 @@ import uuid
 from datetime import datetime
 
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException
-from sqlalchemy import func, select
+from sqlalchemy import func, select, or_
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..database import get_db
@@ -297,20 +297,7 @@ async def submit_rsvp(
 
     email = data.email.lower().strip() if data.email else None
 
-    # Duplicate guard (only when email is provided). Use .first() rather than
-    # scalar_one_or_none(): a synced guest list can legitimately already hold
-    # multiple rows for the same email (repeated sheet imports), and
-    # scalar_one_or_none() raises MultipleResultsFound in that case → 500.
-    if email:
-        existing = (await db.execute(
-            select(Guest.id)
-            .where(Guest.event_id == event_id, Guest.email == email)
-            .limit(1)
-        )).first()
-        if existing:
-            raise HTTPException(409, "You've already RSVP'd for this event")
-
-    # Validate / normalise phone
+    # Validate / normalise phone first, so we can de-dupe on it too.
     phone: str | None = None
     if data.phone and data.phone.strip():
         phone = _normalize_phone(data.phone.strip())
@@ -319,6 +306,26 @@ async def submit_rsvp(
                 422,
                 "Phone format not recognised. Use E.164 (e.g. +18327941707) or US 10-digit.",
             )
+
+    # Duplicate guard: block a repeat RSVP from the same email OR phone, so a
+    # guest can't keep submitting (and re-triggering their ticket). Uses .first()
+    # (not scalar_one_or_none) because a synced sheet can legitimately hold
+    # multiple rows for one contact. With neither email nor phone the submission
+    # is anonymous — the page-side "already RSVP'd" guard covers the common
+    # re-submit there.
+    dup_filters = []
+    if email:
+        dup_filters.append(Guest.email == email)
+    if phone:
+        dup_filters.append(Guest.phone == phone)
+    if dup_filters:
+        existing = (await db.execute(
+            select(Guest.id)
+            .where(Guest.event_id == event_id, or_(*dup_filters))
+            .limit(1)
+        )).first()
+        if existing:
+            raise HTTPException(409, "You've already RSVP'd for this event")
 
     # When the event requires approval, self-registrations land as "pending":
     # no ticket is issued until a planner approves. Otherwise confirm instantly.

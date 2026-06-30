@@ -462,6 +462,25 @@ export default function InvitePage() {
   const [error, setError] = useState('')
   const [confirmed, setConfirmed] = useState(null)
 
+  // Anonymous shared/open links can't know who you are on load, so we remember a
+  // prior RSVP in this browser and show an "already RSVP'd" message instead of
+  // the form again. (Personal token links are identified server-side, above.)
+  const storageKey = tokenMode ? null : `eqr_rsvp:${rsvpToken || eventId}`
+  const [prior, setPrior] = useState(() => {
+    if (!storageKey || typeof localStorage === 'undefined') return null
+    try { const v = localStorage.getItem(storageKey); return v ? JSON.parse(v) : null } catch { return null }
+  })
+  function handleConfirmed(c) {
+    setConfirmed(c)
+    if (storageKey && c && typeof localStorage !== 'undefined') {
+      try {
+        const rec = { rsvp_status: c.rsvp_status, first_name: c.first_name }
+        localStorage.setItem(storageKey, JSON.stringify(rec))
+        setPrior(rec)
+      } catch { /* ignore storage errors */ }
+    }
+  }
+
   useEffect(() => {
     const url = tokenMode
       ? `/api/invite/token/${token}`
@@ -623,10 +642,22 @@ export default function InvitePage() {
               <div className="text-center py-4">
                 <div className="text-sm font-semibold text-red-600 dark:text-red-400">This event is at capacity.</div>
               </div>
+            ) : prior ? (
+              <div className="text-center py-4 space-y-2">
+                <div className="text-xl font-bold text-slate-900 dark:text-white">You've already RSVP'd{prior.first_name ? `, ${prior.first_name}` : ''}.</div>
+                <div className="text-sm text-slate-500 dark:text-slate-400">
+                  {prior.rsvp_status === 'declined'
+                    ? 'You let the host know you can’t make it.'
+                    : prior.rsvp_status === 'pending'
+                      ? 'Your RSVP is awaiting the host’s approval.'
+                      : 'You’re on the guest list — your ticket was sent to you.'}
+                </div>
+                <div className="text-xs text-slate-400 dark:text-slate-500">Need to change it? Contact the host.</div>
+              </div>
             ) : (
               <>
                 <div className={`text-sm font-bold ${t.accent}`}>RSVP</div>
-                <RSVPForm event={event} theme={theme} onConfirmed={setConfirmed} />
+                <RSVPForm event={event} theme={theme} onConfirmed={handleConfirmed} />
               </>
             )}
           </div>

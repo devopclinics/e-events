@@ -5112,6 +5112,7 @@ function EditGuestModal({ guest, eventId, seatingEnabled, onSave, onClose, loadi
     seat_number: guest.seat_number || '',
   })
   const [tables, setTables] = useState([])
+  const [rsvpAnswers, setRsvpAnswers] = useState(null)
 
   // Load the event's tables so seat assignment can offer a real picker.
   useEffect(() => {
@@ -5120,6 +5121,16 @@ function EditGuestModal({ guest, eventId, seatingEnabled, onSave, onClose, loadi
     api.listTables(eventId).then((t) => { if (alive) setTables(t) }).catch(() => {})
     return () => { alive = false }
   }, [eventId, seatingEnabled])
+
+  // The guest's answers to the event's custom RSVP questions (read-only).
+  useEffect(() => {
+    if (!eventId || !guest?.id) return
+    let alive = true
+    api.guestRsvpAnswers(eventId, guest.id)
+      .then((a) => { if (alive) setRsvpAnswers(a) })
+      .catch(() => { if (alive) setRsvpAnswers([]) })
+    return () => { alive = false }
+  }, [eventId, guest?.id])
 
   function handleSubmit(e) {
     e.preventDefault()
@@ -5208,6 +5219,20 @@ function EditGuestModal({ guest, eventId, seatingEnabled, onSave, onClose, loadi
                 <input className={inputCls} value={form.seat_number} disabled={!form.table_id} placeholder="e.g. 4"
                   onChange={(e) => setForm((f) => ({ ...f, seat_number: e.target.value }))} />
               </div>
+            </div>
+          )}
+
+          {rsvpAnswers && rsvpAnswers.length > 0 && (
+            <div className="pt-3 border-t dark:border-slate-700 mt-1">
+              <p className="text-xs font-semibold text-slate-500 dark:text-slate-400 mb-2">RSVP answers</p>
+              <dl className="space-y-2">
+                {rsvpAnswers.map((a, i) => (
+                  <div key={i}>
+                    <dt className="text-xs text-slate-500 dark:text-slate-400">{a.question}</dt>
+                    <dd className="text-sm text-slate-800 dark:text-slate-200 break-words">{a.answer || '—'}</dd>
+                  </div>
+                ))}
+              </dl>
             </div>
           )}
 
@@ -5367,24 +5392,11 @@ export default function AdminPage() {
     setEvents((prev) => prev.map((e) => (e.id === updated.id ? updated : e)))
   }
 
-  function handleExportGuests() {
-    const cols = ['first_name', 'last_name', 'email', 'phone', 'rsvp_status', 'admitted']
-    if (event?.seating_enabled) cols.push('table_group')
-    const esc = (v) => {
-      const s = v === null || v === undefined ? '' : String(v)
-      return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s
-    }
-    const rows = guests.map((g) => {
-      const base = [g.first_name, g.last_name, g.email, g.phone, g.rsvp_status, g.admitted ? 'yes' : 'no']
-      if (event?.seating_enabled) base.push(g.table_group_name || '')
-      return base.map(esc).join(',')
-    })
-    const csv = [cols.join(','), ...rows].join('\n')
-    const blob = new Blob([csv], { type: 'text/csv' })
-    const url = URL.createObjectURL(blob)
-    const a = document.createElement('a')
-    a.href = url; a.download = `guests-${event?.name || 'event'}.csv`
-    document.body.appendChild(a); a.click(); a.remove(); URL.revokeObjectURL(url)
+  // Server-side export so the file includes each guest's RSVP-question answers
+  // (the in-memory guest list doesn't carry them), with proper escaping.
+  async function handleExportGuests() {
+    try { await api.downloadGuestList(selectedId, 'csv') }
+    catch (err) { flash(err.message, true) }
   }
 
   async function handleBulkAssignGroup(groupId) {

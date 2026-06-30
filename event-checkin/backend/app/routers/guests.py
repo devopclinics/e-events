@@ -11,7 +11,7 @@ from sqlalchemy import select, func
 from sqlalchemy.exc import IntegrityError
 from ..database import get_db
 from sqlalchemy import or_
-from ..models import Event, Guest, TicketType, GuestTag, GuestTagLink, User, TableGroup, SeatingTable, EventUser, EventUserSection
+from ..models import Event, Guest, TicketType, GuestTag, GuestTagLink, User, TableGroup, SeatingTable, EventUser, EventUserSection, RSVPQuestion, RSVPAnswer
 from ..schemas import GuestOut, GuestCreate, GuestUpdate, BulkAssignGroupRequest, ScanResult, WalkInRegister
 from ..auth import require_event_admin, require_official
 from ..entitlements import assert_within_guest_cap, guest_limit, can_use_paid_channels, take_message_credit
@@ -585,6 +585,97 @@ async def download_guest_template(event_id: str, fmt: str = "xlsx", db: AsyncSes
     )
 
 
+@router.get("/{event_id}/guests/export")
+async def export_guests(
+    event_id: str,
+    fmt: str = "csv",
+    db: AsyncSession = Depends(get_db),
+    _: User = Depends(require_event_admin),
+):
+    """Download the full guest list — including each guest's answers to the
+    event's custom RSVP questions (one column per question). CSV or XLSX."""
+    event = await db.get(Event, event_id)
+    if not event:
+        raise HTTPException(404, "Event not found")
+    if fmt not in ("csv", "xlsx"):
+        raise HTTPException(400, "fmt must be csv or xlsx")
+
+    guests = (await db.execute(
+        select(Guest).where(Guest.event_id == event_id).order_by(Guest.last_name, Guest.first_name)
+    )).scalars().all()
+    tnames = dict((await db.execute(
+        select(SeatingTable.id, SeatingTable.name).where(SeatingTable.event_id == event_id))).all())
+    gnames = dict((await db.execute(
+        select(TableGroup.id, TableGroup.name).where(TableGroup.event_id == event_id))).all())
+    ttnames = dict((await db.execute(
+        select(TicketType.id, TicketType.name).where(TicketType.event_id == event_id))).all())
+    questions = (await db.execute(
+        select(RSVPQuestion).where(RSVPQuestion.event_id == event_id)
+        .order_by(RSVPQuestion.sort_order, RSVPQuestion.question))).scalars().all()
+    # One pass over all answers for this event → {(guest_id, question_id): answer}.
+    answers: dict[tuple[str, str], str] = {}
+    for gid, qid, ans in (await db.execute(
+        select(RSVPAnswer.guest_id, RSVPAnswer.question_id, RSVPAnswer.answer)
+        .join(Guest, Guest.id == RSVPAnswer.guest_id)
+        .where(Guest.event_id == event_id)
+    )).all():
+        answers[(gid, qid)] = ans
+
+    base_cols = ["First name", "Last name", "Email", "Phone", "RSVP status",
+                 "Checked in", "Table", "Seat", "Group", "Ticket type", "VIP"]
+    cols = base_cols + [q.question for q in questions]
+
+    def row_for(g: Guest) -> list[str]:
+        row = [
+            g.first_name or "", g.last_name or "", g.email or "", g.phone or "",
+            g.rsvp_status or "", "Yes" if g.admitted else "No",
+            tnames.get(g.table_id, "") if g.table_id else "",
+            g.seat_number or "",
+            gnames.get(g.assigned_table_group_id, "") if g.assigned_table_group_id else "",
+            ttnames.get(g.ticket_type_id, "") if g.ticket_type_id else "",
+            "Yes" if g.is_vip else "No",
+        ]
+        row += [answers.get((g.id, q.id), "") for q in questions]
+        return row
+
+    rows = [row_for(g) for g in guests]
+
+    if fmt == "csv":
+        out = io.StringIO()
+        writer = csv.writer(out)
+        writer.writerow(cols)
+        writer.writerows(rows)
+        return Response(
+            out.getvalue(),
+            media_type="text/csv; charset=utf-8",
+            headers={"Content-Disposition": 'attachment; filename="guest-list.csv"'},
+        )
+
+    import openpyxl
+    from openpyxl.styles import Font, PatternFill
+    from openpyxl.utils import get_column_letter
+
+    wb = openpyxl.Workbook()
+    ws = wb.active
+    ws.title = "Guests"
+    ws.append(cols)
+    for i, col in enumerate(cols, 1):
+        cell = ws.cell(row=1, column=i)
+        cell.font = Font(bold=True, color="FFFFFF")
+        cell.fill = PatternFill("solid", fgColor="0F766E")
+        ws.column_dimensions[get_column_letter(i)].width = max(len(str(col)) + 2, 14)
+    for row in rows:
+        ws.append(row)
+    ws.freeze_panes = "A2"
+    buf = io.BytesIO()
+    wb.save(buf)
+    return Response(
+        buf.getvalue(),
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers={"Content-Disposition": 'attachment; filename="guest-list.xlsx"'},
+    )
+
+
 @router.post("/{event_id}/guests/upload")
 async def upload_guests(event_id: str, file: UploadFile = File(...), db: AsyncSession = Depends(get_db), _: User = Depends(require_event_admin)):
     event = await db.get(Event, event_id)
@@ -822,6 +913,28 @@ async def list_guests(event_id: str, db: AsyncSession = Depends(get_db), _: User
     for g in guests:
         g.table_group_name = names.get(g.assigned_table_group_id)
     return guests
+
+
+@router.get("/{event_id}/guests/{guest_id}/rsvp-answers")
+async def guest_rsvp_answers(
+    event_id: str,
+    guest_id: str,
+    db: AsyncSession = Depends(get_db),
+    _: User = Depends(require_event_admin),
+):
+    """The guest's answers to the event's custom RSVP questions, ordered as the
+    questions appear on the invite page. Read-only — for the organizer to review
+    in the guest detail panel."""
+    guest = await db.get(Guest, guest_id)
+    if not guest or guest.event_id != event_id:
+        raise HTTPException(404, "Guest not found")
+    rows = (await db.execute(
+        select(RSVPQuestion.question, RSVPQuestion.question_type, RSVPAnswer.answer)
+        .join(RSVPAnswer, RSVPAnswer.question_id == RSVPQuestion.id)
+        .where(RSVPAnswer.guest_id == guest_id, RSVPQuestion.event_id == event_id)
+        .order_by(RSVPQuestion.sort_order, RSVPQuestion.question)
+    )).all()
+    return [{"question": q, "question_type": qt, "answer": a} for q, qt, a in rows]
 
 
 @router.post("/{event_id}/guests/bulk-assign-group")

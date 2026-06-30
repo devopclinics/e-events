@@ -72,6 +72,8 @@ export const api = {
   listGuests:          (eventId)           => req('GET',  `/events/${eventId}/guests`),
   downloadGuestTemplate: (eventId, fmt = 'xlsx') =>
     downloadFile(`/events/${eventId}/guests/template?fmt=${fmt}`, `guest-template.${fmt}`),
+  downloadGuestList: (eventId, fmt = 'csv') =>
+    downloadFile(`/events/${eventId}/guests/export?fmt=${fmt}`, `guest-list.${fmt}`),
   importGuestsFromUrl: (eventId, url)      => req('POST', `/events/${eventId}/guests/import-url`, { url }),
   addGuest:            (eventId, data)     => req('POST', `/events/${eventId}/guests`, data),
   generateQR:          (eventId)           => req('POST', `/events/${eventId}/guests/generate-qr`),
@@ -79,6 +81,7 @@ export const api = {
   sendInvitesBatch:    (eventId, guestIds, force = false) =>
     req('POST', `/events/${eventId}/guests/send-batch`, { guest_ids: guestIds, force }),
   updateGuest:         (eventId, guestId, data) => req('PATCH', `/events/${eventId}/guests/${guestId}`, data),
+  guestRsvpAnswers:    (eventId, guestId)  => req('GET',  `/events/${eventId}/guests/${guestId}/rsvp-answers`),
   deleteGuest:         (eventId, guestId)  => req('DELETE', `/events/${eventId}/guests/${guestId}`),
   resendInvite:        (eventId, guestId)  => req('POST',   `/events/${eventId}/guests/${guestId}/resend-invite`),
   ensureInviteToken:   (eventId, guestId)  => req('POST',   `/events/${eventId}/guests/${guestId}/invite-token`),

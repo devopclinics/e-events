@@ -1,576 +1,754 @@
-import { useState, useEffect, useRef } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { useTheme } from '../context/ThemeContext'
 
-// ── Config ──────────────────────────────────────────────────────────────────────
-// Set DEMO_URL to a scheduler link (Calendly / Cal.com) to make "Book a Demo" open
-// it in a new tab; until then the button opens an email.
 const DEMO_URL = ''
 const CONTACT_EMAIL = 'info@devopclinics.com'
 const demoHref = DEMO_URL || `mailto:${CONTACT_EMAIL}?subject=Book%20a%20demo%20%E2%80%94%20Festio`
 const demoProps = DEMO_URL ? { href: DEMO_URL, target: '_blank', rel: 'noopener noreferrer' } : { href: demoHref }
 
-// ── Icons ─────────────────────────────────────────────────────────────────────
 function SunIcon() {
-  return (<svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20"><path fillRule="evenodd" d="M10 2a1 1 0 011 1v1a1 1 0 11-2 0V3a1 1 0 011-1zm4 8a4 4 0 11-8 0 4 4 0 018 0zm-.464 4.95l.707.707a1 1 0 001.414-1.414l-.707-.707a1 1 0 00-1.414 1.414zm2.12-10.607a1 1 0 010 1.414l-.706.707a1 1 0 11-1.414-1.414l.707-.707a1 1 0 011.414 0zM17 11a1 1 0 100-2h-1a1 1 0 100 2h1zm-7 4a1 1 0 011 1v1a1 1 0 11-2 0v-1a1 1 0 011-1zM5.05 6.464A1 1 0 106.465 5.05l-.708-.707a1 1 0 00-1.414 1.414l.707.707zm1.414 8.486l-.707.707a1 1 0 01-1.414-1.414l.707-.707a1 1 0 011.414 1.414zM4 11a1 1 0 100-2H3a1 1 0 000 2h1z" clipRule="evenodd" /></svg>)
-}
-function MoonIcon() {
-  return (<svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20"><path d="M17.293 13.293A8 8 0 016.707 2.707a8.001 8.001 0 1010.586 10.586z" /></svg>)
-}
-function Arrow({ className = 'w-4 h-4' }) {
-  return (<svg className={className} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7l5 5m0 0l-5 5m5-5H6" /></svg>)
-}
-function Check({ className = 'w-5 h-5' }) {
-  return (<svg className={className} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.4} d="M5 13l4 4L19 7" /></svg>)
+  return (
+    <svg className="h-5 w-5" fill="currentColor" viewBox="0 0 20 20" aria-hidden="true">
+      <path fillRule="evenodd" d="M10 2a1 1 0 011 1v1a1 1 0 11-2 0V3a1 1 0 011-1zm4 8a4 4 0 11-8 0 4 4 0 018 0zm-.464 4.95l.707.707a1 1 0 001.414-1.414l-.707-.707a1 1 0 00-1.414 1.414zm2.12-10.607a1 1 0 010 1.414l-.706.707a1 1 0 11-1.414-1.414l.707-.707a1 1 0 011.414 0zM17 11a1 1 0 100-2h-1a1 1 0 100 2h1zm-7 4a1 1 0 011 1v1a1 1 0 11-2 0v-1a1 1 0 011-1zM5.05 6.464A1 1 0 106.465 5.05l-.708-.707a1 1 0 00-1.414 1.414l.707.707zm1.414 8.486l-.707.707a1 1 0 01-1.414-1.414l.707-.707a1 1 0 011.414 1.414zM4 11a1 1 0 100-2H3a1 1 0 000 2h1z" clipRule="evenodd" />
+    </svg>
+  )
 }
 
-// ── Scroll reveal ───────────────────────────────────────────────────────────────
+function MoonIcon() {
+  return (
+    <svg className="h-5 w-5" fill="currentColor" viewBox="0 0 20 20" aria-hidden="true">
+      <path d="M17.293 13.293A8 8 0 016.707 2.707a8.001 8.001 0 1010.586 10.586z" />
+    </svg>
+  )
+}
+
+function ArrowIcon({ className = 'h-4 w-4' }) {
+  return (
+    <svg className={className} fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.2} d="M13 7l5 5m0 0l-5 5m5-5H6" />
+    </svg>
+  )
+}
+
+function CheckIcon({ className = 'h-5 w-5' }) {
+  return (
+    <svg className={className} fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.4} d="M5 13l4 4L19 7" />
+    </svg>
+  )
+}
+
 function Reveal({ children, className = '', delay = 0 }) {
   const ref = useRef(null)
   const [shown, setShown] = useState(false)
+
   useEffect(() => {
     const el = ref.current
     if (!el) return
-    if (typeof IntersectionObserver === 'undefined') { setShown(true); return }
+    if (typeof IntersectionObserver === 'undefined') {
+      setShown(true)
+      return
+    }
     const io = new IntersectionObserver((entries) => {
-      entries.forEach((e) => { if (e.isIntersecting) { setShown(true); io.disconnect() } })
-    }, { threshold: 0.12 })
+      entries.forEach((entry) => {
+        if (entry.isIntersecting) {
+          setShown(true)
+          io.disconnect()
+        }
+      })
+    }, { threshold: 0.1 })
     io.observe(el)
     return () => io.disconnect()
   }, [])
+
   return (
-    <div ref={ref} style={{ transitionDelay: `${delay}ms` }}
-      className={`transition-all duration-700 ease-out ${shown ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-6'} ${className}`}>
+    <div
+      ref={ref}
+      style={{ transitionDelay: `${delay}ms` }}
+      className={`transition-all duration-700 ease-out ${shown ? 'translate-y-0 opacity-100' : 'translate-y-6 opacity-0'} ${className}`}
+    >
       {children}
     </div>
   )
 }
 
-// ── Data ────────────────────────────────────────────────────────────────────────
-const problems = [
-  'Long lines while staff hunt through paper lists and spreadsheets',
-  'Guests arrive with screenshots, forwarded invites, or misspelled names',
-  'Duplicate and shared invites slip through',
-  'Table and seat assignments cause confusion at the door',
-  'Staff keep calling and messaging the organizer',
-  'No live view of who has actually arrived',
-]
-
-const steps = [
-  { n: '1', title: 'Add your guests', desc: 'Upload a spreadsheet, sync a Google Sheet, or add guests by hand. Assign tables, seats, groups, VIP tags, or access zones.', img: '/media/help-guests.png', alt: 'Festio guest list with tables, groups and VIP tags' },
-  { n: '2', title: 'Send personal QR tickets', desc: 'Every guest gets a unique QR ticket by email, SMS, WhatsApp — or an MMS ticket card. No app to install.', img: '/media/help-invites-rsvp.png', alt: 'Sending personalized QR invitations by email, SMS and WhatsApp' },
-  { n: '3', title: 'Scan and welcome', desc: 'At the door, staff scan the QR with any phone. The guest is verified instantly with their table, seat and access.', img: '/media/help-check-in.png', alt: 'Staff scanning a guest QR code to check them in' },
-]
-
-const features = [
-  { t: 'Unique QR tickets', d: 'Every guest gets a personal, unguessable QR ticket — never a shared link.' },
-  { t: 'Fast mobile check-in', d: 'Scan with any phone browser. Admission in under a second. No app to install.' },
-  { t: 'Tables & seat assignment', d: 'Place guests at the right table and seat — shown the instant they scan.' },
-  { t: 'Guest groups & tags', d: 'Family, sponsors, press, staff — tag guests and group their tables.' },
-  { t: 'VIP & restricted access', d: 'Zones, gates and ticket rules decide who gets into each area.' },
-  { t: 'Duplicate entry blocked', d: 'Forwarded or re-used tickets are caught — "already admitted" on the spot.' },
-  { t: 'Real-time dashboard', d: 'Watch invited, admitted, pending and VIP arrivals update live at the door.' },
-  { t: 'Custom event messages', d: 'Edit every email, SMS, WhatsApp and MMS — preview and test before you send.' },
-  { t: 'Staff-friendly scanner', d: 'A clean scan view with clear allow / deny results anyone can use.' },
-  { t: 'Exportable guest records', d: 'Download the full guest list and attendance after the event.' },
-]
-
-const moreFeatures = ['Manual check-in (no QR)', 'Self check-in by event code', 'Walk-in registration', 'RSVP & approvals', 'Broadcasts', 'Deliveries & gifts', 'Gift registry', 'Team roles']
-
-const eventTypes = [
-  { icon: '💍', t: 'Weddings & Nikkah', d: 'Seat families together with table groups and plus-one pairing.' },
-  { icon: '🥂', t: 'Galas & banquets', d: 'VIP access, reserved tables, and live arrivals at a glance.' },
-  { icon: '🎤', t: 'Conferences & seminars', d: 'Badges, entry zones and gates for sessions and halls.' },
-  { icon: '🕌', t: 'Community & religious', d: 'Welcome large crowds fast — manual, self and walk-in check-in.' },
-  { icon: '🏆', t: 'Fundraisers & awards', d: 'Track donors and honorees with VIP tags and live attendance.' },
-  { icon: '🎉', t: 'Private parties', d: 'Beautiful invites and a guest list that runs itself at the door.' },
-  { icon: '🏢', t: 'Corporate events', d: 'Controlled access, team roles, and exportable attendance records.' },
-]
-
-const tabs = [
-  { key: 'rsvp', label: 'Invites & RSVP', intent: 'rsvp', cta: 'Start collecting RSVPs — free', img: '/media/help-invites-rsvp.png', alt: 'Personalized invitations and RSVP page in Festio',
-    title: 'Invitations and RSVPs, done', body: 'Build your invite page, collect RSVPs and approvals, and send personal tickets by email, SMS, WhatsApp or MMS. Edit every message, preview it, and test before the whole list goes out. Free for small events.' },
-  { key: 'checkin', label: 'Check-in', intent: 'checkin', cta: 'Set up check-in', img: '/media/help-check-in.png', alt: 'Festio mobile scanner verifying a guest',
-    title: 'Table & seat-aware check-in', body: 'When a guest is scanned, staff instantly see their name, RSVP status, table, seat and access permission — duplicates blocked. Built for weddings, galas and formal events, not just a QR reader.' },
-  { key: 'access', label: 'Tables & access', intent: 'seating', cta: 'Set up seating & access', img: '/media/help-entry-areas.png', alt: 'Entry areas, zones and ticket rules in Festio',
-    title: 'Control where every guest belongs', body: 'Assign guests to tables, seats, family groups, VIP areas or vendor zones. On scan, staff see exactly where the guest goes — and whether they’re allowed in.' },
-  { key: 'dashboard', label: 'Live dashboard', intent: 'dashboard', cta: 'See the live dashboard', img: '/media/help-results.png', alt: 'Real-time attendance dashboard in Festio',
-    title: 'Know what is happening at the door', body: 'Total invited, checked-in, pending, VIP arrivals and table-level attendance — updating live as guests walk in.' },
-]
-
-// ── Animated "live scan" hero demo ──────────────────────────────────────────────
-function LiveScanDemo() {
-  // 0 idle → 1 scanning → 2 verified → 3 seated, then loop.
-  const [step, setStep] = useState(0)
-  const [count, setCount] = useState(317)
-  useEffect(() => {
-    const reduce = typeof window !== 'undefined' && window.matchMedia
-      && window.matchMedia('(prefers-reduced-motion: reduce)').matches
-    if (reduce) { setStep(3); return }
-    const seq = [1200, 1100, 1400, 1600] // ms per step
-    let i = 0
-    let timer
-    const tick = () => {
-      i = (i + 1) % 4
-      setStep(i)
-      if (i === 2) setCount((c) => c + 1)
-      timer = setTimeout(tick, seq[i])
-    }
-    timer = setTimeout(tick, seq[0])
-    return () => clearTimeout(timer)
-  }, [])
-
-  const verified = step >= 2
-
-  return (
-    <div className="relative">
-      {/* glow */}
-      <div className="absolute -inset-6 bg-gradient-to-tr from-teal-400/20 via-emerald-300/10 to-amber-300/20 blur-3xl rounded-[2rem]" aria-hidden="true" />
-      <div className="relative grid sm:grid-cols-[auto_1fr] gap-4 items-stretch">
-        {/* Phone scanner */}
-        <div className="mx-auto w-[210px] rounded-[2rem] border-[6px] border-slate-900 dark:border-slate-700 bg-slate-950 shadow-2xl overflow-hidden">
-          <div className="h-6 bg-slate-950 flex items-center justify-center">
-            <div className="w-16 h-1.5 rounded-full bg-slate-700" />
-          </div>
-          <div className="relative bg-slate-900 px-4 pt-4 pb-5">
-            <div className="text-[10px] uppercase tracking-wider text-teal-300 font-semibold text-center mb-3">Festio Scanner</div>
-            {/* QR target */}
-            <div className="relative mx-auto w-36 h-36 rounded-xl bg-white p-2.5 shadow-inner">
-              <div className="grid h-full w-full grid-cols-5 gap-1">
-                {Array.from({ length: 25 }).map((_, i) => (
-                  <span key={i} className={`rounded-[2px] ${[0,1,2,4,5,9,10,12,14,15,19,20,22,23,24,6,18].includes(i) ? 'bg-slate-950' : 'bg-slate-200'}`} />
-                ))}
-              </div>
-              {/* scan sweep */}
-              <div className={`pointer-events-none absolute inset-x-2 h-0.5 bg-teal-400 shadow-[0_0_12px_2px_rgba(45,212,191,0.8)] transition-opacity ${step === 1 ? 'opacity-100 animate-[scan_1.1s_ease-in-out_infinite]' : 'opacity-0'}`} style={{ top: '0.6rem' }} />
-              {/* corners */}
-              {['top-1 left-1 border-t-2 border-l-2','top-1 right-1 border-t-2 border-r-2','bottom-1 left-1 border-b-2 border-l-2','bottom-1 right-1 border-b-2 border-r-2'].map((c) => (
-                <span key={c} className={`absolute w-4 h-4 border-teal-400 ${c}`} />
-              ))}
-            </div>
-            <div className={`mt-3 text-center text-xs font-semibold transition-colors ${verified ? 'text-emerald-400' : 'text-slate-400'}`}>
-              {step === 1 ? 'Scanning…' : verified ? '✓ Verified' : 'Point at QR code'}
-            </div>
-          </div>
-        </div>
-
-        {/* Result card */}
-        <div className="rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 shadow-xl p-5 flex flex-col justify-center min-h-[230px]">
-          <div className={`transition-all duration-500 ${verified ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-3'}`}>
-            <div className="flex items-center gap-3">
-              <span className="grid place-items-center w-11 h-11 rounded-full bg-emerald-500 text-white shrink-0">
-                <Check />
-              </span>
-              <div>
-                <div className="text-lg font-bold text-slate-950 dark:text-white leading-tight">Amara Okafor</div>
-                <div className="text-xs font-semibold text-emerald-600 dark:text-emerald-400">Admitted · just now</div>
-              </div>
-            </div>
-            <div className={`mt-4 flex flex-wrap gap-2 transition-all duration-500 ${step >= 3 ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-2'}`}>
-              {[['Table', 'VIP-2'], ['Seat', '4'], ['Group', 'Family'], ['Access', 'Main hall']].map(([k, v]) => (
-                <span key={k} className="text-xs rounded-full bg-slate-100 dark:bg-slate-800 px-2.5 py-1 text-slate-700 dark:text-slate-200">
-                  {k}: <strong className="text-slate-950 dark:text-white">{v}</strong>
-                </span>
-              ))}
-            </div>
-          </div>
-          <div className="mt-5 pt-4 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between">
-            <div>
-              <div className="text-2xl font-extrabold text-slate-950 dark:text-white tabular-nums">{count}<span className="text-sm font-medium text-slate-400"> / 426</span></div>
-              <div className="text-[11px] uppercase tracking-wide text-slate-400 font-semibold">Checked in · live</div>
-            </div>
-            <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-50 dark:bg-emerald-950/50 px-2.5 py-1 text-[11px] font-semibold text-emerald-700 dark:text-emerald-300">
-              <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse" /> Live
-            </span>
-          </div>
-        </div>
-      </div>
-    </div>
-  )
-}
-
-// ── Device frame for real screenshots ───────────────────────────────────────────
-function Shot({ src, alt, className = '' }) {
-  return (
-    <div className={`rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 shadow-2xl overflow-hidden ${className}`}>
-      <div className="flex items-center gap-1.5 px-3 py-2 border-b border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950/60">
-        <span className="w-2.5 h-2.5 rounded-full bg-rose-400" />
-        <span className="w-2.5 h-2.5 rounded-full bg-amber-400" />
-        <span className="w-2.5 h-2.5 rounded-full bg-emerald-400" />
-      </div>
-      <img src={src} alt={alt} loading="lazy"
-        className="w-full block bg-white dark:opacity-95" />
-    </div>
-  )
-}
-
-// ── CTAs ────────────────────────────────────────────────────────────────────────
 function PrimaryCta({ children = 'Create Free Event', to = '/register', className = '' }) {
   return (
-    <Link to={to}
-      className={`inline-flex items-center justify-center gap-2 bg-teal-600 text-white px-6 py-3 rounded-xl font-semibold text-sm hover:bg-teal-700 transition-colors shadow-lg shadow-teal-900/20 ${className}`}>
-      {children} <Arrow />
+    <Link
+      to={to}
+      className={`inline-flex min-h-12 items-center justify-center gap-2 rounded-xl bg-teal-500 px-6 py-3 text-sm font-extrabold text-slate-950 shadow-lg shadow-teal-950/20 transition hover:-translate-y-0.5 hover:bg-teal-300 focus:outline-none focus:ring-2 focus:ring-teal-400 focus:ring-offset-2 dark:focus:ring-offset-slate-950 ${className}`}
+    >
+      {children}
+      <ArrowIcon />
     </Link>
   )
 }
+
 function SecondaryCta({ children = 'Book a Demo', className = '' }) {
   return (
-    <a {...demoProps}
-      className={`inline-flex items-center justify-center gap-2 border border-slate-300 dark:border-slate-600 text-slate-800 dark:text-slate-100 px-6 py-3 rounded-xl font-semibold text-sm hover:bg-white dark:hover:bg-slate-900 transition-colors ${className}`}>
+    <a
+      {...demoProps}
+      className={`inline-flex min-h-12 items-center justify-center gap-2 rounded-xl border border-slate-300 bg-white/70 px-6 py-3 text-sm font-extrabold text-slate-900 shadow-sm transition hover:-translate-y-0.5 hover:border-teal-400 hover:bg-white focus:outline-none focus:ring-2 focus:ring-teal-400 focus:ring-offset-2 dark:border-white/15 dark:bg-white/5 dark:text-white dark:hover:bg-white/10 dark:focus:ring-offset-slate-950 ${className}`}
+    >
       {children}
     </a>
   )
 }
 
+function LogoMark({ size = 'h-9 w-9', text = 'text-sm' }) {
+  return (
+    <span className={`${size} ${text} grid place-items-center rounded-xl bg-gradient-to-br from-teal-400 via-emerald-400 to-amber-300 font-black text-slate-950 shadow-sm`}>
+      F
+    </span>
+  )
+}
+
+const trustChips = [
+  'RSVP', 'Guest Management', 'Seating', 'Messaging', 'QR Passes',
+  'Check-In', 'Live Dashboard', 'Orders', 'Registry', 'Deliveries',
+]
+
+const problemCards = [
+  'Guest lists get messy',
+  'RSVPs are hard to track',
+  'Invite links get forwarded',
+  'Tables and seats cause confusion',
+  'Staff keep calling the organizer',
+  'Meal choices live in separate forms',
+  'Guest questions are scattered',
+  'No live view of attendance or access',
+  'VIPs and restricted areas are hard to control',
+]
+
+const pillars = [
+  {
+    title: 'Create & Manage Events',
+    copy: 'Create events, manage lifecycle, configure details, and control feature toggles.',
+    items: ['Multi-event workspace', 'Draft, Active, Ended, Reopen', 'Venue and host details'],
+  },
+  {
+    title: 'Invite & RSVP',
+    copy: 'Public/private RSVP pages, personal links, deadlines, limits, approvals, and questions.',
+    items: ['Open or closed RSVP', 'Capacity controls', 'Approval workflows'],
+  },
+  {
+    title: 'Guest Management',
+    copy: 'Manual entry, CSV/XLSX upload, sync, duplicate handling, tags, profiles, and status.',
+    items: ['Import templates', 'Guest profiles', 'RSVP answers'],
+  },
+  {
+    title: 'Seating & Access',
+    copy: 'Tables, seats, sections, auto-assignment, partner pairing, zones, gates, and VIP rules.',
+    items: ['Table groups', 'Zone permissions', 'Capacity rules'],
+  },
+  {
+    title: 'Messaging & Guest Hub',
+    copy: 'Templates, email/SMS/WhatsApp/MMS, broadcasts, announcements, guest chat, and inbox.',
+    items: ['Editable templates', 'Message Host', 'Admin moderation'],
+  },
+  {
+    title: 'Check-In & Live Operations',
+    copy: 'QR scanning, search, walk-ins, self check-in, denied reasons, occupancy, and staff roles.',
+    items: ['Phone scanner', 'Duplicate protection', 'Live operations'],
+  },
+  {
+    title: 'Meals, Gifts & Logistics',
+    copy: 'Menu selections, kitchen views, table totals, registry, shipments, vendors, and exports.',
+    items: ['Orders dashboard', 'Gift claims', 'Vendor fulfillment'],
+  },
+]
+
+const journey = [
+  ['Create the event', 'Set event name, host, date, venue, address, description, and public event settings.'],
+  ['Add or import guests', 'Upload spreadsheets, sync lists, remove duplicates, and assign pass types, tags, tables, and groups.'],
+  ['Collect RSVPs', 'Use public or private RSVP pages, approval workflows, deadlines, custom questions, and capacity limits.'],
+  ['Send Festio Passes', 'Send personalized QR passes by email, SMS, WhatsApp, or MMS after approval or confirmation.'],
+  ['Engage guests', 'Use Guest Hub, announcements, message host, chat, reminders, and notification preferences.'],
+  ['Manage event details', 'Handle seating, menu choices, orders, gifts, deliveries, vendors, and staff roles.'],
+  ['Scan and operate live', 'Staff scan guests, manage gates and zones, approve walk-ins, prevent duplicates, and view live dashboards.'],
+  ['Export and review', 'Export guest lists, attendance, table reports, catering summaries, vendor reports, and event records.'],
+]
+
+const detailSections = [
+  {
+    id: 'command-center',
+    eyebrow: 'Organizer command center',
+    title: 'A command center for every event you manage.',
+    copy: 'Festio gives organizers one workspace to manage events, teams, roles, guests, feature toggles, message credits, paid unlocks, and live operations without jumping between tools.',
+    points: ['Organization workspace', 'Multi-event management', 'Draft/Active/Ended/Reopen lifecycle', 'Team roles', 'Staff assignment', 'Staff permissions', 'Event pass unlocks', 'Message credit balance', 'Trial request flow'],
+    image: '/media/help-event-setup.png',
+    alt: 'Festio event setup workspace showing event controls',
+  },
+  {
+    id: 'guest-database',
+    eyebrow: 'Guest database',
+    title: 'Turn your guest list into a live event database.',
+    copy: 'Import, clean, segment, approve, tag, seat, message, and track every guest from one place.',
+    points: ['Manual guest add', 'CSV/XLSX upload', 'Import template', 'Export guest list', 'Google Sheets/OneDrive sync', 'Duplicate handling', 'RSVP status', 'Guest profiles', 'RSVP answers', 'Check-in history', 'Ticket types', 'Tags', 'Table groups', 'Personal invite links', 'Resend invites'],
+    image: '/media/help-guests.png',
+    alt: 'Festio guest database with RSVP status and guest records',
+  },
+  {
+    id: 'rsvp',
+    eyebrow: 'RSVP and invitations',
+    title: 'RSVPs that match how your event actually works.',
+    copy: 'Run open or private RSVPs, set deadlines, control capacity, approve guests, collect custom answers, and automatically issue QR passes only when guests are accepted.',
+    points: ['Public RSVP page', 'Personal invite links', 'Open/shared RSVP link', 'Closed/private RSVP mode', 'RSVP deadline', 'Max RSVP capacity', 'Approval-required RSVP mode', 'Custom RSVP questions', 'Cover/flyer image', 'RSVP theme/message', 'Attending/declined flow', 'RSVP update before deadline', 'No-reply reminders', 'Broadcasts to guest segments'],
+    image: '/media/help-invites-rsvp.png',
+    alt: 'Festio invitation and RSVP setup screen',
+  },
+  {
+    id: 'messaging',
+    eyebrow: 'Messaging and templates',
+    title: 'Every message, under your control.',
+    copy: 'Customize invitations, reminders, QR pass emails, RSVP confirmations, approval messages, broadcasts, admission alerts, and check-in confirmations across email, SMS, WhatsApp, and MMS.',
+    points: ['Editable templates', 'Template preview', 'Test send', 'Reset to default', 'Variable helper list', 'Template audit history', 'Plain-text fallback', 'SMS/WhatsApp/MMS support', 'Notification consent preferences'],
+    image: '/media/help-invites-rsvp.png',
+    alt: 'Festio messaging and invite tools',
+  },
+  {
+    id: 'guest-hub',
+    eyebrow: 'Guest pass and Guest Hub',
+    title: 'Give guests one beautiful place for everything.',
+    copy: 'Each confirmed guest can access a personal pass page with their QR pass, event details, menu choices, partner pairing, notification preferences, updates, host messages, and chat when enabled.',
+    points: ['Public pass page by QR token', 'QR code display', 'Pass status', 'Event details', 'Menu/order selection', 'Partner/plus-one pairing', 'Guest Hub', 'Event updates', 'Message host', 'Guest chat', 'Attending-only chat', 'Admin moderation'],
+    image: '/media/help-guest-invite.png',
+    alt: 'Festio guest pass and event invite page',
+  },
+  {
+    id: 'seating',
+    eyebrow: 'Seating',
+    title: 'Seat guests without confusion.',
+    copy: 'Create tables, set capacity, assign seats manually or automatically, reserve seats, group tables by section, pair partners, and prevent double-booking or over-capacity mistakes.',
+    points: ['Tables', 'Capacity', 'Seating chart', 'Manual assignment', 'Auto assignment', 'Seat reservation', 'Table groups/sections', 'Bulk assignment', 'Partner pairing', 'Double-booking prevention', 'Staff section assignment'],
+    image: '/media/help-orders.png',
+    alt: 'Festio seating and orders workspace',
+  },
+  {
+    id: 'check-in',
+    eyebrow: 'Access and check-in',
+    title: 'Scan, verify, and guide guests instantly.',
+    copy: 'Use phone-based scanning, manual search, self check-in, walk-in registration, gate rules, zones, pass permissions, and duplicate protection to manage entry with confidence.',
+    points: ['Browser scanner', 'Camera QR scanning', 'Manual check-in/search', 'Admitted, already admitted, denied, invalid', 'Active-event requirement', 'Duplicate-scan protection', 'Admission notifications', 'Walk-in registration', 'Self check-in', 'Staff scanner permissions', 'Section/gate/zone scanning', 'Access denied reasons'],
+    image: '/media/help-check-in.png',
+    alt: 'Festio mobile QR pass scanner for event check-in',
+  },
+  {
+    id: 'access-rules',
+    eyebrow: 'Venue access rules',
+    title: 'Access control for real venues.',
+    copy: 'Create zones, gates, pass permissions, tag requirements, capacity rules, entry/exit modes, and live occupancy tracking for complex venues and VIP areas.',
+    points: ['Zones/areas', 'Zone capacity', 'Entry/exit/both direction modes', 'Ticket type permissions', 'Guest tag requirements', 'Gate scan mode', 'Live occupancy', 'Peak arrival analytics', 'Zone flow analytics', 'Guest journey history'],
+    image: '/media/help-entry-areas.png',
+    alt: 'Festio venue access areas and gate rules',
+  },
+  {
+    id: 'orders',
+    eyebrow: 'Orders and menu',
+    title: 'Meals and service, connected to the guest list.',
+    copy: 'Let guests choose meals, manage menu categories and combinations, track orders by table, generate kitchen views, and mark meals served.',
+    points: ['Menu categories', 'Menu items', 'Menu combinations', 'Guest menu choices', 'Public guest menu selection', 'Menu deadline behavior', 'Orders dashboard', 'Per-table order totals', 'Kitchen/orders view', 'Mark meal served'],
+    image: '/media/help-orders-view.png',
+    alt: 'Festio orders view with meal totals by table',
+  },
+  {
+    id: 'registry-deliveries',
+    eyebrow: 'Gifts, registry, and deliveries',
+    title: 'Handle the details beyond the door.',
+    copy: 'Manage gift registries, item claims, cash funds, shipments, guest shipping addresses, vendor fulfillment, packing status, and exports from the same event workspace.',
+    points: ['Gift registry', 'Registry message/settings', 'Store link unfurling', 'Cash funds', 'Guest item claims', 'Admin claim tracking', 'Deliveries add-on', 'Shipments', 'Shipment items', 'Vendor share page', 'Vendor XLSX export', 'Admin XLSX export'],
+    image: '/media/help-deliveries.png',
+    alt: 'Festio delivery and fulfillment tools for vendors',
+  },
+  {
+    id: 'analytics',
+    eyebrow: 'Live dashboard and analytics',
+    title: 'Know what is happening while it is happening.',
+    copy: 'Track RSVPs, invite delivery, contact completeness, check-ins, VIP arrivals, pending guests, table reports, catering summaries, occupancy, and guest flow live.',
+    points: ['Total guest count', 'RSVP breakdown', 'Confirmed/declined/pending/no-reply', 'Checked-in count', 'Recent admitted guests', 'Pending guests', 'Invite delivery stats', 'Contact completeness', 'Check-in timeline', 'VIP stats', 'Ticket-type breakdown', 'Table-group breakdown', 'Per-table reports', 'Catering/order summary', 'Live auto-refresh/SSE', 'Venue occupancy analytics'],
+    image: '/media/help-results.png',
+    alt: 'Festio live event dashboard and attendance analytics',
+  },
+]
+
+const eventTypes = [
+  ['Weddings & Nikkah/Aqdu', 'Manage family lists, approvals, table groups, partner pairing, meals, QR passes, and a calm guest arrival.'],
+  ['Galas & banquets', 'Coordinate VIP guests, reserved tables, sponsors, catered service, access areas, and live arrival reporting.'],
+  ['Conferences & seminars', 'Run check-in, sessions, pass types, staff roles, attendee messaging, and exportable attendance records.'],
+  ['Community & religious events', 'Handle large guest lists, RSVPs, self check-in, volunteers, seating sections, and announcements.'],
+  ['Fundraisers & award nights', 'Track donors, nominees, VIPs, table assignments, guest communication, and attendance in one dashboard.'],
+  ['Private parties', 'Create a polished invite, collect RSVPs, send QR passes, message guests, and avoid door confusion.'],
+  ['Corporate events', 'Control registrations, access, teams, check-in records, messaging, and event reporting with operational clarity.'],
+  ['Multi-zone venue events', 'Use zones, gates, pass permissions, tag requirements, capacity limits, and occupancy analytics.'],
+  ['Catered events', 'Collect menu choices, manage combinations, view per-table totals, and track served meals.'],
+  ['Vendor-supported events', 'Coordinate deliveries, packing lists, vendor share pages, registry claims, and fulfillment exports.'],
+]
+
+const comparisonRows = [
+  ['Branded RSVP page', true, false, true],
+  ['Guest import/sync', false, false, true],
+  ['Approval workflow', 'Some', false, true],
+  ['QR passes', false, true, true],
+  ['Seating/table assignment', false, false, true],
+  ['Guest messaging', 'Basic', false, true],
+  ['Guest Hub/chat', false, false, true],
+  ['Zone/gate access rules', false, 'Basic', true],
+  ['Menu/orders', false, false, true],
+  ['Registry/deliveries', false, false, true],
+  ['Live analytics', false, 'Basic', true],
+  ['Team/staff roles', false, 'Basic', true],
+]
+
+function HeroVisual() {
+  const stats = [
+    ['RSVP yes', '318'],
+    ['Checked in', '146'],
+    ['VIP inside', '42'],
+  ]
+  return (
+    <div className="relative" aria-label="Festio organizer dashboard, QR pass, seating, messaging, and orders preview">
+      <div className="absolute -inset-6 rounded-[2rem] bg-gradient-to-tr from-teal-300/30 via-amber-200/20 to-purple-300/25 blur-3xl" aria-hidden="true" />
+      <div className="relative rounded-[1.75rem] border border-white/50 bg-white/85 p-4 shadow-2xl shadow-slate-950/15 backdrop-blur dark:border-white/10 dark:bg-slate-900/85">
+        <div className="rounded-2xl bg-slate-950 p-4 text-white">
+          <div className="flex items-center justify-between gap-3 border-b border-white/10 pb-3">
+            <div>
+              <div className="text-xs font-bold uppercase tracking-[0.22em] text-teal-300">Live Command Center</div>
+              <div className="mt-1 text-lg font-black">Electron Jubilee</div>
+            </div>
+            <div className="rounded-full bg-emerald-400/15 px-3 py-1 text-xs font-bold text-emerald-200">Active</div>
+          </div>
+
+          <div className="mt-4 grid gap-3 sm:grid-cols-3">
+            {stats.map(([label, value]) => (
+              <div key={label} className="rounded-xl bg-white/10 p-3">
+                <div className="text-[10px] font-bold uppercase tracking-wider text-slate-400">{label}</div>
+                <div className="mt-1 text-2xl font-black tabular-nums">{value}</div>
+              </div>
+            ))}
+          </div>
+
+          <div className="mt-4 grid gap-3 lg:grid-cols-[1.1fr_0.9fr]">
+            <div className="rounded-xl bg-white p-3 text-slate-950">
+              <div className="mb-2 flex items-center justify-between">
+                <div className="text-xs font-black uppercase tracking-wider text-slate-500">Guest list</div>
+                <div className="text-xs font-bold text-teal-700">Sync OK</div>
+              </div>
+              {[
+                ['Am Ami', 'Attending', 'VIP', 'Table A2'],
+                ['Mina Bello', 'Pending', 'Press', 'Review'],
+                ['Tobi Khan', 'Checked in', 'Family', 'Seat 8'],
+              ].map((row) => (
+                <div key={row[0]} className="grid grid-cols-[1.2fr_0.9fr_0.7fr_0.9fr] items-center gap-2 border-t border-slate-100 py-2 text-[11px]">
+                  {row.map((cell, index) => (
+                    <span key={cell} className={index === 0 ? 'font-black' : 'text-slate-600'}>{cell}</span>
+                  ))}
+                </div>
+              ))}
+            </div>
+
+            <div className="rounded-xl bg-gradient-to-br from-teal-300 to-emerald-300 p-3 text-slate-950">
+              <div className="text-xs font-black uppercase tracking-wider">Festio Pass</div>
+              <div className="mt-2 rounded-lg bg-white p-3">
+                <div className="grid aspect-square grid-cols-5 gap-1">
+                  {Array.from({ length: 25 }).map((_, i) => (
+                    <span key={i} className={`rounded-sm ${[0, 1, 2, 4, 5, 7, 9, 10, 12, 14, 16, 19, 20, 21, 23, 24].includes(i) ? 'bg-slate-950' : 'bg-slate-200'}`} />
+                  ))}
+                </div>
+              </div>
+              <div className="mt-2 text-sm font-black">Am Ami</div>
+              <div className="text-xs font-bold">VIP Gate · Table A2</div>
+            </div>
+          </div>
+
+          <div className="mt-3 grid gap-3 md:grid-cols-3">
+            <div className="rounded-xl bg-white/10 p-3">
+              <div className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Seating</div>
+              <div className="mt-2 grid grid-cols-4 gap-1.5">
+                {Array.from({ length: 12 }).map((_, i) => (
+                  <span key={i} className={`h-6 rounded ${i < 9 ? 'bg-teal-300' : 'bg-white/20'}`} />
+                ))}
+              </div>
+            </div>
+            <div className="rounded-xl bg-white/10 p-3">
+              <div className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Guest Hub</div>
+              <div className="mt-2 rounded-lg bg-white/10 p-2 text-xs text-slate-200">Announcement sent: Doors open at 5:30 PM.</div>
+              <div className="mt-2 rounded-lg bg-teal-300/20 p-2 text-xs text-teal-100">3 guest questions waiting</div>
+            </div>
+            <div className="rounded-xl bg-white/10 p-3">
+              <div className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Orders</div>
+              <div className="mt-2 space-y-2 text-xs">
+                <div className="flex justify-between"><span>Jollof</span><strong>96</strong></div>
+                <div className="flex justify-between"><span>Veg plate</span><strong>32</strong></div>
+                <div className="flex justify-between"><span>Served</span><strong>58%</strong></div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+function Shot({ src, alt, className = '' }) {
+  return (
+    <div className={`overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-xl shadow-slate-950/5 dark:border-white/10 dark:bg-slate-900 ${className}`}>
+      <div className="flex items-center gap-1.5 border-b border-slate-200 bg-slate-50 px-4 py-3 dark:border-white/10 dark:bg-slate-950/70">
+        <span className="h-2.5 w-2.5 rounded-full bg-rose-400" />
+        <span className="h-2.5 w-2.5 rounded-full bg-amber-400" />
+        <span className="h-2.5 w-2.5 rounded-full bg-emerald-400" />
+      </div>
+      <img src={src} alt={alt} loading="lazy" className="block w-full bg-white dark:opacity-95" />
+    </div>
+  )
+}
+
+function SectionHeader({ eyebrow, title, copy, center = false }) {
+  return (
+    <div className={center ? 'mx-auto max-w-3xl text-center' : 'max-w-3xl'}>
+      {eyebrow && <p className="text-sm font-black uppercase tracking-[0.2em] text-teal-700 dark:text-teal-300">{eyebrow}</p>}
+      <h2 className="mt-3 text-3xl font-black tracking-tight text-slate-950 dark:text-white sm:text-4xl lg:text-5xl">{title}</h2>
+      {copy && <p className="mt-4 text-base leading-8 text-slate-600 dark:text-slate-300 sm:text-lg">{copy}</p>}
+    </div>
+  )
+}
+
+function PointList({ points, compact = false }) {
+  return (
+    <div className={`flex flex-wrap gap-2 ${compact ? 'mt-5' : 'mt-7'}`}>
+      {points.map((point) => (
+        <span key={point} className="rounded-full border border-slate-200 bg-white px-3 py-1.5 text-xs font-bold text-slate-700 shadow-sm dark:border-white/10 dark:bg-white/5 dark:text-slate-200">
+          {point}
+        </span>
+      ))}
+    </div>
+  )
+}
+
+function ValueIcon({ label }) {
+  return (
+    <span className="grid h-11 w-11 shrink-0 place-items-center rounded-xl bg-teal-50 text-sm font-black text-teal-800 dark:bg-teal-400/10 dark:text-teal-200">
+      {label}
+    </span>
+  )
+}
+
+function ComparisonCell({ value, highlight = false }) {
+  if (value === true) {
+    return <span className={`inline-flex h-7 w-7 items-center justify-center rounded-full ${highlight ? 'bg-teal-400 text-slate-950' : 'bg-emerald-100 text-emerald-700 dark:bg-emerald-400/10 dark:text-emerald-300'}`}><CheckIcon className="h-4 w-4" /></span>
+  }
+  if (value === false) {
+    return <span className="text-xl font-black text-slate-300 dark:text-slate-700">-</span>
+  }
+  return <span className="text-xs font-bold text-slate-500 dark:text-slate-400">{value}</span>
+}
+
 export default function LandingPage() {
   const { dark, toggle } = useTheme()
-  const [tab, setTab] = useState('rsvp')
-  const active = tabs.find((t) => t.key === tab) || tabs[0]
 
   return (
-    <div className="app-shell min-h-screen text-slate-900 dark:text-white">
-      {/* keyframes for the scan sweep */}
-      <style>{`@keyframes scan{0%{top:0.6rem}50%{top:7.4rem}100%{top:0.6rem}}`}</style>
-
-      {/* Nav */}
-      <header className="app-nav sticky top-0 z-50 backdrop-blur border-b border-slate-200/70 dark:border-slate-800/80">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 h-16 flex items-center gap-4">
-          <a href="#top" className="flex items-center gap-2 mr-auto">
-            <div className="w-8 h-8 bg-gradient-to-br from-teal-500 to-emerald-600 rounded-lg flex items-center justify-center text-white text-sm font-bold shadow">F</div>
-            <span className="font-bold text-lg tracking-tight text-slate-950 dark:text-white">Festio</span>
+    <div className="min-h-screen bg-[#fbf7ef] text-slate-900 dark:bg-slate-950 dark:text-white">
+      <header className="sticky top-0 z-50 border-b border-slate-900/10 bg-[#fbf7ef]/90 backdrop-blur dark:border-white/10 dark:bg-slate-950/90">
+        <div className="mx-auto flex h-16 max-w-7xl items-center gap-4 px-4 sm:px-6">
+          <a href="#top" className="mr-auto flex items-center gap-2 rounded-md focus:outline-none focus:ring-2 focus:ring-teal-500 focus:ring-offset-2 dark:focus:ring-offset-slate-950" aria-label="Festio home">
+            <LogoMark />
+            <span className="text-lg font-black tracking-tight">Festio</span>
           </a>
-          <nav className="hidden md:flex items-center gap-6 mr-2">
-            {[['#problem', 'Why'], ['#features', 'Features'], ['#event-types', 'Event types'], ['#showcase', 'Demo']].map(([href, label]) => (
-              <a key={href} href={href} className="text-sm font-medium text-slate-600 dark:text-slate-300 hover:text-teal-700 dark:hover:text-teal-300 transition-colors">{label}</a>
-            ))}
-            <Link to="/pricing" className="text-sm font-medium text-slate-600 dark:text-slate-300 hover:text-teal-700 dark:hover:text-teal-300 transition-colors">Pricing</Link>
+          <nav className="hidden items-center gap-6 lg:flex" aria-label="Primary">
+            <a href="#features" className="text-sm font-bold text-slate-600 hover:text-slate-950 dark:text-slate-300 dark:hover:text-white">Features</a>
+            <a href="#guest-journey" className="text-sm font-bold text-slate-600 hover:text-slate-950 dark:text-slate-300 dark:hover:text-white">Guest Journey</a>
+            <a href="#event-types" className="text-sm font-bold text-slate-600 hover:text-slate-950 dark:text-slate-300 dark:hover:text-white">Event Types</a>
+            <Link to="/pricing" className="text-sm font-bold text-slate-600 hover:text-slate-950 dark:text-slate-300 dark:hover:text-white">Pricing</Link>
+            <a href="#demo" className="text-sm font-bold text-slate-600 hover:text-slate-950 dark:text-slate-300 dark:hover:text-white">Demo</a>
           </nav>
-          <button onClick={toggle} className="p-2 rounded-lg text-gray-500 dark:text-slate-400 hover:bg-gray-100 dark:hover:bg-slate-800 transition-colors" aria-label="Toggle theme">
+          <button onClick={toggle} className="rounded-lg p-2 text-slate-500 transition hover:bg-white hover:text-slate-950 dark:text-slate-300 dark:hover:bg-white/10 dark:hover:text-white" aria-label="Toggle theme">
             {dark ? <SunIcon /> : <MoonIcon />}
           </button>
-          <Link to="/login" className="hidden sm:inline text-sm font-medium text-slate-600 dark:text-slate-300 hover:text-teal-700 dark:hover:text-teal-300 transition-colors">Sign In</Link>
-          <Link to="/register" className="text-sm font-semibold bg-teal-600 text-white px-4 py-2 rounded-lg hover:bg-teal-700 transition-colors">Create Free Event</Link>
+          <Link to="/login" className="hidden text-sm font-extrabold text-slate-700 hover:text-slate-950 dark:text-slate-200 dark:hover:text-white sm:inline">Sign In</Link>
+          <PrimaryCta className="min-h-10 px-4 py-2 shadow-none">Create Free Event</PrimaryCta>
         </div>
       </header>
 
-      {/* ── Hero ── */}
-      <section id="top" className="relative overflow-hidden">
-        <div aria-hidden="true" className="absolute inset-0 -z-10 bg-gradient-to-b from-teal-50/70 via-white to-white dark:from-slate-900 dark:via-slate-950 dark:to-slate-950" />
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 py-14 sm:py-20 lg:py-24">
-          <div className="grid lg:grid-cols-[1.05fr_1fr] gap-12 lg:gap-16 items-center">
-            <div>
-              <div className="inline-flex items-center gap-2 bg-white dark:bg-slate-900 text-teal-800 dark:text-teal-200 text-xs font-semibold px-3 py-1.5 rounded-full border border-teal-200/80 dark:border-teal-800/80 mb-6 shadow-sm">
-                <span className="w-1.5 h-1.5 bg-emerald-500 rounded-full animate-pulse" />
-                RSVP · Invite · Seat · Check in
-              </div>
-              <h1 className="text-4xl sm:text-5xl lg:text-6xl font-extrabold tracking-tight text-slate-950 dark:text-white leading-[1.05]">
-                Run your whole event — <span className="bg-gradient-to-r from-teal-600 to-emerald-500 bg-clip-text text-transparent">from RSVP to the door.</span>
+      <main>
+        <section id="top" className="relative overflow-hidden">
+          <div className="absolute inset-0 -z-10 bg-[radial-gradient(60rem_30rem_at_80%_5%,rgba(45,212,191,.24),transparent),radial-gradient(38rem_28rem_at_10%_5%,rgba(245,158,11,.16),transparent)]" aria-hidden="true" />
+          <div className="mx-auto grid max-w-7xl items-center gap-12 px-4 py-16 sm:px-6 sm:py-20 lg:grid-cols-[1.02fr_0.98fr] lg:py-24">
+            <Reveal>
+              <p className="inline-flex rounded-full border border-teal-200 bg-white/80 px-4 py-2 text-xs font-black uppercase tracking-[0.2em] text-teal-800 shadow-sm dark:border-teal-400/20 dark:bg-white/5 dark:text-teal-200">
+                The guest operating system for modern events
+              </p>
+              <h1 className="mt-7 max-w-4xl text-5xl font-black tracking-tight text-slate-950 dark:text-white sm:text-6xl lg:text-7xl">
+                Run every guest moment from invite to exit.
               </h1>
-              <p className="mt-6 text-lg sm:text-xl text-slate-600 dark:text-slate-300 max-w-xl leading-relaxed">
-                Collect RSVPs, send QR tickets, assign tables and seats, and check guests in from any phone — all in one place.
+              <p className="mt-6 max-w-2xl text-lg leading-8 text-slate-700 dark:text-slate-300 sm:text-xl">
+                Festio helps organizers create events, manage guests, collect RSVPs, send QR passes, assign seats, message attendees, control access, manage meals, and track attendance live from one simple dashboard.
               </p>
-              <div className="mt-8 flex flex-col sm:flex-row gap-3">
-                <PrimaryCta />
-                <SecondaryCta />
+              <div className="mt-8 flex flex-col gap-3 sm:flex-row">
+                <PrimaryCta className="px-7 py-4 text-base" />
+                <SecondaryCta className="px-7 py-4 text-base" />
               </div>
-              <p className="mt-6 text-sm text-slate-500 dark:text-slate-400 max-w-md">
-                Free for small events — weddings, galas, community programs and ceremonies.{' '}
-                <Link to="/register?intent=rsvp" className="font-semibold text-teal-600 dark:text-teal-400 hover:underline">Just need RSVPs? Start free →</Link>
-              </p>
-            </div>
-            <LiveScanDemo />
+              <div className="mt-8 flex max-w-2xl flex-wrap gap-2" aria-label="Festio product capabilities">
+                {trustChips.map((chip) => (
+                  <span key={chip} className="rounded-full border border-slate-200 bg-white/80 px-3 py-1.5 text-xs font-black text-slate-700 shadow-sm dark:border-white/10 dark:bg-white/5 dark:text-slate-200">
+                    {chip}
+                  </span>
+                ))}
+              </div>
+            </Reveal>
+            <Reveal delay={120}>
+              <HeroVisual />
+            </Reveal>
           </div>
-        </div>
-      </section>
+        </section>
 
-      {/* ── Problem ── */}
-      <section id="problem" className="py-20 border-t border-slate-100 dark:border-slate-800">
-        <div className="max-w-5xl mx-auto px-4 sm:px-6">
-          <Reveal className="text-center max-w-2xl mx-auto">
-            <p className="text-sm font-semibold uppercase tracking-wide text-rose-500">Before Festio</p>
-            <h2 className="mt-2 text-3xl sm:text-4xl font-bold text-slate-950 dark:text-white">The entrance should not be the most stressful part of your event.</h2>
-          </Reveal>
-          <div className="mt-12 grid sm:grid-cols-2 gap-4">
-            {problems.map((p, i) => (
-              <Reveal key={p} delay={i * 60}>
-                <div className="flex items-start gap-3 rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-4">
-                  <span className="grid place-items-center w-7 h-7 rounded-full bg-rose-100 dark:bg-rose-950/60 text-rose-500 shrink-0 mt-0.5 font-bold text-sm">✕</span>
-                  <p className="text-slate-700 dark:text-slate-300 text-sm leading-relaxed">{p}</p>
-                </div>
-              </Reveal>
-            ))}
-          </div>
-        </div>
-      </section>
-
-      {/* ── Solution ── */}
-      <section className="py-20 bg-slate-950 text-white relative overflow-hidden">
-        <div aria-hidden="true" className="absolute inset-0 opacity-30 bg-[radial-gradient(40rem_20rem_at_50%_-10%,rgba(45,212,191,0.4),transparent)]" />
-        <div className="relative max-w-3xl mx-auto px-4 sm:px-6 text-center">
-          <Reveal>
-            <p className="text-sm font-semibold uppercase tracking-wide text-teal-400">After Festio</p>
-            <h2 className="mt-2 text-3xl sm:text-5xl font-bold">One QR code. One scan. Full control.</h2>
-            <p className="mt-5 text-lg text-slate-300 leading-relaxed">
-              Every guest gets a unique QR ticket. Staff verify them in a second — table, seat, group and access appear instantly, duplicates are blocked, and you watch every arrival live.
-            </p>
-            <div className="mt-8 flex flex-wrap justify-center gap-2">
-              {['No more paper lists', 'No more confusion at the door', 'See attendance live'].map((t) => (
-                <span key={t} className="rounded-full bg-white/10 px-4 py-2 text-sm font-medium backdrop-blur">{t}</span>
-              ))}
-            </div>
-          </Reveal>
-        </div>
-      </section>
-
-      {/* ── How it works ── */}
-      <section id="how" className="py-20 border-t border-slate-100 dark:border-slate-800">
-        <div className="max-w-6xl mx-auto px-4 sm:px-6">
-          <Reveal className="text-center mb-14">
-            <h2 className="text-3xl sm:text-4xl font-bold text-slate-950 dark:text-white">From guest list to welcome in three steps</h2>
-          </Reveal>
-          <div className="grid lg:grid-cols-3 gap-8">
-            {steps.map(({ n, title, desc, img, alt }, i) => (
-              <Reveal key={n} delay={i * 100}>
-                <div className="h-full flex flex-col">
-                  <Shot src={img} alt={alt} className="mb-5" />
-                  <div className="flex items-center gap-3 mb-2">
-                    <span className="grid place-items-center w-8 h-8 rounded-full bg-teal-600 text-white font-bold text-sm shrink-0">{n}</span>
-                    <h3 className="font-bold text-lg text-slate-950 dark:text-white">{title}</h3>
+        <section id="problem" className="border-y border-slate-900/10 bg-white py-20 dark:border-white/10 dark:bg-slate-900/35">
+          <div className="mx-auto max-w-7xl px-4 sm:px-6">
+            <Reveal>
+              <SectionHeader
+                center
+                eyebrow="Before Festio"
+                title="Your event should not run on spreadsheets, screenshots, and group chats."
+                copy="When the guest data is scattered, every small change becomes a staff question, a host interruption, or a slow line at the door."
+              />
+            </Reveal>
+            <div className="mt-12 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+              {problemCards.map((problem, index) => (
+                <Reveal key={problem} delay={(index % 3) * 70}>
+                  <div className="h-full rounded-2xl border border-slate-200 bg-[#fbf7ef] p-5 shadow-sm dark:border-white/10 dark:bg-slate-950">
+                    <div className="mb-4 grid h-9 w-9 place-items-center rounded-full bg-rose-100 text-sm font-black text-rose-700 dark:bg-rose-400/10 dark:text-rose-300">!</div>
+                    <h3 className="text-base font-black text-slate-950 dark:text-white">{problem}</h3>
+                    <p className="mt-2 text-sm leading-6 text-slate-600 dark:text-slate-400">Festio connects this workflow back to the same live guest record.</p>
                   </div>
-                  <p className="text-sm text-slate-600 dark:text-slate-400 leading-relaxed">{desc}</p>
-                </div>
-              </Reveal>
-            ))}
-          </div>
-        </div>
-      </section>
-
-      {/* ── Interactive showcase (carousel) ── */}
-      <section id="showcase" className="scroll-mt-16 py-20 bg-slate-50 dark:bg-slate-900/40 border-t border-slate-100 dark:border-slate-800">
-        <div className="max-w-6xl mx-auto px-4 sm:px-6">
-          <Reveal className="text-center mb-10">
-            <h2 className="text-3xl sm:text-4xl font-bold text-slate-950 dark:text-white">See Festio in action</h2>
-            <p className="mt-3 text-slate-500 dark:text-slate-400 text-lg">The real product — RSVPs, check-in, seating and a live dashboard.</p>
-          </Reveal>
-          <div className="flex flex-wrap justify-center gap-2 mb-8">
-            {tabs.map((t) => (
-              <button key={t.key} onClick={() => setTab(t.key)}
-                className={`px-4 py-2 rounded-full text-sm font-semibold transition-colors ${tab === t.key ? 'bg-teal-600 text-white shadow' : 'bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300 border border-slate-200 dark:border-slate-700 hover:border-teal-400'}`}>
-                {t.label}
-              </button>
-            ))}
-          </div>
-          <div className="grid lg:grid-cols-[1.3fr_1fr] gap-8 items-center">
-            <Shot key={active.key} src={active.img} alt={active.alt} />
-            <div>
-              <h3 className="text-2xl font-bold text-slate-950 dark:text-white">{active.title}</h3>
-              <p className="mt-3 text-slate-600 dark:text-slate-300 leading-relaxed">{active.body}</p>
-              <div className="mt-6 flex flex-wrap gap-3">
-                <PrimaryCta to={`/register?intent=${active.intent}`}>{active.cta}</PrimaryCta>
-                <SecondaryCta>Book a Demo</SecondaryCta>
-              </div>
-            </div>
-          </div>
-        </div>
-      </section>
-
-      {/* ── Features ── */}
-      <section id="features" className="py-20 border-t border-slate-100 dark:border-slate-800">
-        <div className="max-w-6xl mx-auto px-4 sm:px-6">
-          <Reveal className="text-center mb-14">
-            <h2 className="text-3xl sm:text-4xl font-bold text-slate-950 dark:text-white">Everything you need, from invite to entrance</h2>
-            <p className="mt-3 text-slate-500 dark:text-slate-400 text-lg max-w-xl mx-auto">RSVPs, invitations, seating, access and the door — one platform for the whole event.</p>
-          </Reveal>
-          <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-5">
-            {features.map(({ t, d }, i) => (
-              <Reveal key={t} delay={(i % 3) * 80}>
-                <div className="h-full bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl p-6 hover:shadow-lg hover:-translate-y-0.5 transition-all">
-                  <div className="w-11 h-11 rounded-lg bg-teal-50 dark:bg-teal-950/50 grid place-items-center mb-4 text-teal-600 dark:text-teal-300">
-                    <Check className="w-6 h-6" />
-                  </div>
-                  <h3 className="font-semibold text-slate-950 dark:text-white mb-1.5">{t}</h3>
-                  <p className="text-sm text-slate-600 dark:text-slate-400 leading-relaxed">{d}</p>
-                </div>
-              </Reveal>
-            ))}
-          </div>
-          <Reveal className="mt-8 flex flex-wrap justify-center gap-2">
-            <span className="text-sm text-slate-500 dark:text-slate-400 mr-1 self-center">And more:</span>
-            {moreFeatures.map((m) => (
-              <span key={m} className="rounded-full border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-3 py-1 text-xs font-medium text-slate-600 dark:text-slate-300">{m}</span>
-            ))}
-          </Reveal>
-        </div>
-      </section>
-
-      {/* ── Table & access control (differentiator) ── */}
-      <section className="py-20 bg-slate-50 dark:bg-slate-900/40 border-t border-slate-100 dark:border-slate-800">
-        <div className="max-w-6xl mx-auto px-4 sm:px-6 grid lg:grid-cols-2 gap-12 items-center">
-          <Reveal>
-            <p className="text-sm font-semibold uppercase tracking-wide text-amber-600 dark:text-amber-400">The differentiator</p>
-            <h2 className="mt-2 text-3xl sm:text-4xl font-bold text-slate-950 dark:text-white">Control where every guest belongs.</h2>
-            <p className="mt-4 text-slate-600 dark:text-slate-300 leading-relaxed">
-              Assign guests to tables, seats, family groups, VIP areas, vendor sections or reserved zones. When a guest is scanned, staff immediately see where they should go — and whether they’re allowed into that area.
-            </p>
-            <ul className="mt-6 space-y-3">
-              {['Table groups & tag-based seating', 'VIP and restricted zones with gates', 'Plus-one pairing keeps couples together', 'Out-of-zone guests are flagged on scan'].map((t) => (
-                <li key={t} className="flex items-start gap-2 text-sm text-slate-700 dark:text-slate-300">
-                  <Check className="w-5 h-5 text-emerald-500 shrink-0 mt-0.5" /> {t}
-                </li>
-              ))}
-            </ul>
-          </Reveal>
-          <Reveal delay={120}><Shot src="/media/help-entry-areas.png" alt="Festio entry areas, zones and ticket access rules" /></Reveal>
-        </div>
-      </section>
-
-      {/* ── Real-time dashboard ── */}
-      <section className="py-20 border-t border-slate-100 dark:border-slate-800">
-        <div className="max-w-6xl mx-auto px-4 sm:px-6 grid lg:grid-cols-2 gap-12 items-center">
-          <Reveal className="lg:order-2">
-            <p className="text-sm font-semibold uppercase tracking-wide text-teal-600 dark:text-teal-400">Live visibility</p>
-            <h2 className="mt-2 text-3xl sm:text-4xl font-bold text-slate-950 dark:text-white">Know what is happening at the door.</h2>
-            <p className="mt-4 text-slate-600 dark:text-slate-300 leading-relaxed">
-              Monitor total invited guests, checked-in guests, pending arrivals, VIP arrivals and table-level attendance in real time — from anywhere.
-            </p>
-            <div className="mt-8"><PrimaryCta to="/register?intent=dashboard" /></div>
-          </Reveal>
-          <Reveal delay={120} className="lg:order-1"><Shot src="/media/help-results.png" alt="Festio real-time attendance dashboard" /></Reveal>
-        </div>
-      </section>
-
-      {/* ── Guest experience ── */}
-      <section className="py-20 bg-slate-50 dark:bg-slate-900/40 border-t border-slate-100 dark:border-slate-800">
-        <div className="max-w-6xl mx-auto px-4 sm:px-6 grid lg:grid-cols-2 gap-12 items-center">
-          <Reveal>
-            <p className="text-sm font-semibold uppercase tracking-wide text-emerald-600 dark:text-emerald-400">Guest experience</p>
-            <h2 className="mt-2 text-3xl sm:text-4xl font-bold text-slate-950 dark:text-white">Make guests feel expected.</h2>
-            <p className="mt-4 text-slate-600 dark:text-slate-300 leading-relaxed">
-              No searching for names or asking question after question. Staff greet each guest confidently with their verified details, table information and admission status — in seconds.
-            </p>
-          </Reveal>
-          <Reveal delay={120}><Shot src="/media/help-guest-invite.png" alt="A guest's personal QR ticket in Festio" /></Reveal>
-        </div>
-      </section>
-
-      {/* ── Event types ── */}
-      <section id="event-types" className="py-20 border-t border-slate-100 dark:border-slate-800">
-        <div className="max-w-6xl mx-auto px-4 sm:px-6">
-          <Reveal className="text-center mb-14">
-            <h2 className="text-3xl sm:text-4xl font-bold text-slate-950 dark:text-white">Made for every kind of event</h2>
-          </Reveal>
-          <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-5">
-            {eventTypes.map(({ icon, t, d }, i) => (
-              <Reveal key={t} delay={(i % 3) * 80}>
-                <div className="h-full rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-6 hover:shadow-lg transition-shadow">
-                  <div className="text-3xl mb-3">{icon}</div>
-                  <h3 className="font-semibold text-slate-950 dark:text-white mb-1.5">{t}</h3>
-                  <p className="text-sm text-slate-600 dark:text-slate-400 leading-relaxed">{d}</p>
-                </div>
-              </Reveal>
-            ))}
-          </div>
-        </div>
-      </section>
-
-      {/* ── Trust & proof — hidden until we have real stats / testimonials / client logos.
-           Re-enable this section (and fill in real numbers, quotes, and logo images) when available.
-      <section className="py-20 bg-slate-950 text-white relative overflow-hidden">
-        <div aria-hidden="true" className="absolute inset-0 opacity-25 bg-[radial-gradient(40rem_18rem_at_50%_0%,rgba(16,185,129,0.4),transparent)]" />
-        <div className="relative max-w-5xl mx-auto px-4 sm:px-6">
-          <Reveal className="grid grid-cols-3 gap-4 text-center mb-14">
-            {[['50k+', 'Guests checked in'], ['1,000+', 'Events run'], ['<1s', 'Per scan']].map(([n, l]) => (
-              <div key={l}>
-                <div className="text-3xl sm:text-5xl font-extrabold bg-gradient-to-r from-teal-400 to-emerald-300 bg-clip-text text-transparent">{n}</div>
-                <div className="mt-1 text-xs sm:text-sm text-slate-400">{l}</div>
-              </div>
-            ))}
-          </Reveal>
-          <Reveal>
-            <figure className="max-w-2xl mx-auto text-center">
-              <blockquote className="text-xl sm:text-2xl font-medium leading-relaxed">
-                Festio helped us manage guest entry smoothly and reduced confusion at the door.
-              </blockquote>
-              <figcaption className="mt-4 text-sm text-slate-400">Event organizer</figcaption>
-            </figure>
-          </Reveal>
-          <Reveal className="mt-12">
-            <p className="text-center text-xs uppercase tracking-wide text-slate-500 mb-4">Trusted by event teams</p>
-            <div className="flex flex-wrap justify-center items-center gap-3 opacity-70">
-              {Array.from({ length: 5 }).map((_, i) => (
-                <div key={i} className="h-10 w-28 rounded-lg bg-white/5 border border-white/10 grid place-items-center text-[10px] text-slate-500">Your logo</div>
+                </Reveal>
               ))}
             </div>
-          </Reveal>
-        </div>
-      </section>
-      */}
+          </div>
+        </section>
 
-      {/* ── Tailored solution ── */}
-      <section className="py-20 border-t border-slate-100 dark:border-slate-800">
-        <div className="max-w-5xl mx-auto px-4 sm:px-6">
-          <Reveal>
-            <div className="relative overflow-hidden rounded-3xl bg-slate-950 text-white p-8 sm:p-12">
-              <div aria-hidden="true" className="absolute inset-0 opacity-40 bg-[radial-gradient(36rem_18rem_at_85%_-20%,rgba(45,212,191,0.45),transparent)]" />
-              <div className="relative grid lg:grid-cols-[1.5fr_1fr] gap-8 items-center">
-                <div>
-                  <p className="text-sm font-semibold uppercase tracking-wide text-teal-400">Tailored solutions</p>
-                  <h2 className="mt-2 text-3xl sm:text-4xl font-bold">We have a tailored solution for your needs. Let’s talk.</h2>
-                  <p className="mt-4 text-slate-300 leading-relaxed max-w-xl">
-                    Large weddings, multi-day conferences, community programs, custom access rules, branding, special seating, or an integration — tell us how your event runs and we’ll set Festio up around it, with you.
-                  </p>
-                  <div className="mt-5 flex flex-wrap gap-2">
-                    {['Custom access & VIP rules', 'Bulk guest onboarding', 'Branding & messaging', 'Hands-on setup support'].map((t) => (
-                      <span key={t} className="rounded-full bg-white/10 px-3 py-1 text-xs font-medium">{t}</span>
+        <section id="features" className="py-20">
+          <div className="mx-auto max-w-7xl px-4 sm:px-6">
+            <Reveal>
+              <SectionHeader
+                center
+                eyebrow="Platform overview"
+                title="One platform for the full guest journey."
+                copy="Plan, invite, seat, message, admit, serve, and track every guest without stitching together five separate tools."
+              />
+            </Reveal>
+            <div className="mt-12 grid gap-5 md:grid-cols-2 xl:grid-cols-4">
+              {pillars.map((pillar, index) => (
+                <Reveal key={pillar.title} delay={(index % 4) * 70}>
+                  <article className={`h-full rounded-2xl border border-slate-200 bg-white p-6 shadow-sm transition hover:-translate-y-1 hover:shadow-xl dark:border-white/10 dark:bg-slate-900 ${index === 0 || index === 6 ? 'xl:col-span-2' : ''}`}>
+                    <ValueIcon label={`0${index + 1}`} />
+                    <h3 className="mt-5 text-xl font-black text-slate-950 dark:text-white">{pillar.title}</h3>
+                    <p className="mt-3 text-sm leading-6 text-slate-600 dark:text-slate-300">{pillar.copy}</p>
+                    <PointList points={pillar.items} compact />
+                  </article>
+                </Reveal>
+              ))}
+            </div>
+          </div>
+        </section>
+
+        <section id="guest-journey" className="border-y border-slate-900/10 bg-slate-950 py-20 text-white dark:border-white/10">
+          <div className="mx-auto max-w-7xl px-4 sm:px-6">
+            <Reveal>
+              <SectionHeader
+                center
+                eyebrow="Guest journey"
+                title="From first invite to final arrival, every step is connected."
+                copy="A guest RSVP can become a pass, a table assignment, a meal order, a message thread, an access rule, and a live dashboard update."
+              />
+            </Reveal>
+            <div className="mt-14 grid gap-5 md:grid-cols-2 lg:grid-cols-4">
+              {journey.map(([title, copy], index) => (
+                <Reveal key={title} delay={(index % 4) * 70}>
+                  <article className="relative h-full rounded-2xl border border-white/10 bg-white/[0.06] p-5">
+                    <div className="mb-5 grid h-10 w-10 place-items-center rounded-full bg-teal-300 text-sm font-black text-slate-950">{index + 1}</div>
+                    <h3 className="text-lg font-black">{title}</h3>
+                    <p className="mt-3 text-sm leading-6 text-slate-300">{copy}</p>
+                  </article>
+                </Reveal>
+              ))}
+            </div>
+          </div>
+        </section>
+
+        <div id="demo">
+          {detailSections.map((section, index) => (
+            <section key={section.id} id={section.id} className={`scroll-mt-20 py-20 ${index % 2 ? 'bg-white dark:bg-slate-900/35' : ''}`}>
+              <div className="mx-auto grid max-w-7xl items-center gap-10 px-4 sm:px-6 lg:grid-cols-2">
+                <Reveal className={index % 2 ? 'lg:order-2' : ''}>
+                  <SectionHeader eyebrow={section.eyebrow} title={section.title} copy={section.copy} />
+                  <PointList points={section.points} />
+                  {index === 2 && (
+                    <div className="mt-8 flex flex-col gap-3 sm:flex-row">
+                      <PrimaryCta to="/register?intent=rsvp">Create RSVP Page</PrimaryCta>
+                      <SecondaryCta>Book a Demo</SecondaryCta>
+                    </div>
+                  )}
+                </Reveal>
+                <Reveal delay={120} className={index % 2 ? 'lg:order-1' : ''}>
+                  <Shot src={section.image} alt={section.alt} />
+                </Reveal>
+              </div>
+            </section>
+          ))}
+        </div>
+
+        <section id="event-types" className="border-y border-slate-900/10 bg-white py-20 dark:border-white/10 dark:bg-slate-900/35">
+          <div className="mx-auto max-w-7xl px-4 sm:px-6">
+            <Reveal>
+              <SectionHeader
+                center
+                eyebrow="Event types"
+                title="Built for events that need more than a basic RSVP form."
+                copy="Festio works for social, cultural, corporate, community, catered, and venue-based events where guest operations matter."
+              />
+            </Reveal>
+            <div className="mt-12 grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
+              {eventTypes.map(([title, copy], index) => (
+                <Reveal key={title} delay={(index % 3) * 70}>
+                  <article className="h-full rounded-2xl border border-slate-200 bg-[#fbf7ef] p-6 shadow-sm dark:border-white/10 dark:bg-slate-950">
+                    <h3 className="text-lg font-black text-slate-950 dark:text-white">{title}</h3>
+                    <p className="mt-3 text-sm leading-6 text-slate-600 dark:text-slate-300">{copy}</p>
+                  </article>
+                </Reveal>
+              ))}
+            </div>
+          </div>
+        </section>
+
+        <section className="py-20">
+          <div className="mx-auto max-w-6xl px-4 sm:px-6">
+            <Reveal>
+              <SectionHeader
+                center
+                eyebrow="Comparison"
+                title="More than invites. More than check-in."
+                copy="Basic tools handle one slice of the event. Festio connects the guest record across the full operation."
+              />
+            </Reveal>
+            <Reveal className="mt-12 overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm dark:border-white/10 dark:bg-slate-900">
+              <div className="overflow-x-auto">
+                <table className="min-w-[760px] w-full border-collapse text-left">
+                  <thead>
+                    <tr className="border-b border-slate-200 bg-slate-50 dark:border-white/10 dark:bg-slate-950/60">
+                      <th scope="col" className="px-5 py-4 text-sm font-black text-slate-950 dark:text-white">Capability</th>
+                      <th scope="col" className="px-5 py-4 text-center text-sm font-black text-slate-600 dark:text-slate-300">Basic RSVP tools</th>
+                      <th scope="col" className="px-5 py-4 text-center text-sm font-black text-slate-600 dark:text-slate-300">QR check-in tools</th>
+                      <th scope="col" className="px-5 py-4 text-center text-sm font-black text-teal-700 dark:text-teal-300">Festio</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {comparisonRows.map(([capability, rsvp, checkin, festio]) => (
+                      <tr key={capability} className="border-b border-slate-100 last:border-0 dark:border-white/10">
+                        <th scope="row" className="px-5 py-4 text-sm font-bold text-slate-800 dark:text-slate-100">{capability}</th>
+                        <td className="px-5 py-4 text-center"><ComparisonCell value={rsvp} /></td>
+                        <td className="px-5 py-4 text-center"><ComparisonCell value={checkin} /></td>
+                        <td className="px-5 py-4 text-center"><ComparisonCell value={festio} highlight /></td>
+                      </tr>
                     ))}
+                  </tbody>
+                </table>
+              </div>
+            </Reveal>
+          </div>
+        </section>
+
+        <section className="border-y border-slate-900/10 bg-slate-950 py-20 text-white dark:border-white/10">
+          <div className="mx-auto max-w-7xl px-4 sm:px-6">
+            <Reveal>
+              <SectionHeader
+                center
+                eyebrow="Trust"
+                title="Built for real event operations."
+                copy="Festio is designed for the moments when guests are arriving, staff need answers, and the organizer needs one reliable source of truth."
+              />
+            </Reveal>
+            <div className="mt-12 grid gap-5 md:grid-cols-3">
+              {[
+                ['Real event screenshots', 'Use product views for guest lists, RSVP setup, scan results, entry rules, orders, and dashboard proof.'],
+                ['Customer testimonials', '"Festio helped us manage RSVPs, seating, check-in, and guest communication without the usual confusion at the door."'],
+                ['Security and control', 'Unique QR passes, role-based access, staff permissions, private links, audit history, and exportable records.'],
+              ].map(([title, copy]) => (
+                <Reveal key={title}>
+                  <article className="h-full rounded-2xl border border-white/10 bg-white/[0.06] p-6">
+                    <h3 className="text-lg font-black">{title}</h3>
+                    <p className="mt-3 text-sm leading-6 text-slate-300">{copy}</p>
+                  </article>
+                </Reveal>
+              ))}
+            </div>
+            <div className="mt-8 grid gap-4 sm:grid-cols-3">
+              {['Guests processed', 'Events managed', 'Organizer quotes'].map((label) => (
+                <div key={label} className="rounded-2xl border border-white/10 bg-white/[0.04] p-5 text-center">
+                  <div className="text-3xl font-black text-teal-300">Add data</div>
+                  <div className="mt-1 text-xs font-bold uppercase tracking-wider text-slate-400">{label}</div>
+                </div>
+              ))}
+            </div>
+          </div>
+        </section>
+
+        <section className="py-20">
+          <div className="mx-auto max-w-5xl px-4 sm:px-6">
+            <Reveal>
+              <div className="overflow-hidden rounded-[2rem] border border-slate-200 bg-white p-8 shadow-xl shadow-slate-950/5 dark:border-white/10 dark:bg-slate-900 sm:p-12">
+                <div className="grid gap-8 lg:grid-cols-[1.3fr_0.7fr] lg:items-center">
+                  <div>
+                    <p className="text-sm font-black uppercase tracking-[0.2em] text-teal-700 dark:text-teal-300">Pricing</p>
+                    <h2 className="mt-3 text-3xl font-black tracking-tight text-slate-950 dark:text-white sm:text-4xl">Start simple. Add power when your event needs it.</h2>
+                    <p className="mt-4 text-base leading-8 text-slate-600 dark:text-slate-300">
+                      Use Festio for small events, then unlock advanced features like messaging credits, access rules, seating, orders, registry, deliveries, and premium support as your event grows.
+                    </p>
+                  </div>
+                  <div className="flex flex-col gap-3">
+                    <Link to="/pricing" className="inline-flex min-h-12 items-center justify-center gap-2 rounded-xl bg-slate-950 px-6 py-3 text-sm font-extrabold text-white transition hover:bg-slate-800 dark:bg-white dark:text-slate-950 dark:hover:bg-slate-200">
+                      View Pricing <ArrowIcon />
+                    </Link>
+                    <PrimaryCta />
+                    <SecondaryCta />
                   </div>
                 </div>
-                <div className="flex flex-col gap-3 lg:items-end">
-                  <a href={`mailto:${CONTACT_EMAIL}?subject=Tailored%20solution%20%E2%80%94%20Festio`}
-                    className="inline-flex items-center justify-center gap-2 bg-teal-500 text-white px-6 py-3 rounded-xl font-semibold text-sm hover:bg-teal-400 transition-colors shadow-lg shadow-teal-900/30">
-                    Let’s talk <Arrow />
-                  </a>
-                  <a {...demoProps}
-                    className="inline-flex items-center justify-center gap-2 border border-white/25 text-white px-6 py-3 rounded-xl font-semibold text-sm hover:bg-white/10 transition-colors">
-                    Book a Demo
-                  </a>
-                </div>
               </div>
-            </div>
-          </Reveal>
-        </div>
-      </section>
+            </Reveal>
+          </div>
+        </section>
 
-      {/* ── Final CTA ── */}
-      <section className="py-24 border-t border-slate-100 dark:border-slate-800">
-        <div className="max-w-3xl mx-auto px-4 sm:px-6 text-center">
-          <Reveal>
-            <h2 className="text-3xl sm:text-5xl font-bold text-slate-950 dark:text-white">Ready to run your whole event from one place?</h2>
-            <p className="mt-5 text-lg text-slate-600 dark:text-slate-400">RSVP. Invite. Seat. Check in. One simple platform to manage your guests from the first RSVP to the door — free for small events.</p>
-            <div className="mt-8 flex flex-col sm:flex-row gap-3 justify-center">
-              <PrimaryCta className="px-8 py-4 text-base" />
-              <SecondaryCta className="px-8 py-4 text-base" />
-            </div>
-            <p className="mt-4 text-sm text-slate-400 dark:text-slate-500">
-              Questions? <a className="text-teal-600 hover:underline" href={`mailto:${CONTACT_EMAIL}`}>{CONTACT_EMAIL}</a>
-            </p>
-          </Reveal>
-        </div>
-      </section>
+        <section className="border-t border-slate-900/10 py-24 dark:border-white/10">
+          <div className="mx-auto max-w-4xl px-4 text-center sm:px-6">
+            <Reveal>
+              <h2 className="text-4xl font-black tracking-tight text-slate-950 dark:text-white sm:text-5xl">Ready to run your event with less confusion and more control?</h2>
+              <p className="mt-5 text-lg leading-8 text-slate-600 dark:text-slate-300">
+                Create your event, invite your guests, manage the details, and see everything live with Festio.
+              </p>
+              <div className="mt-8 flex flex-col justify-center gap-3 sm:flex-row">
+                <PrimaryCta className="px-8 py-4 text-base" />
+                <SecondaryCta className="px-8 py-4 text-base" />
+              </div>
+            </Reveal>
+          </div>
+        </section>
+      </main>
 
-      {/* Footer */}
-      <footer className="border-t border-slate-100 dark:border-slate-800 py-10">
-        <div className="max-w-6xl mx-auto px-4 sm:px-6 flex flex-col sm:flex-row items-center justify-between gap-4">
+      <footer className="border-t border-slate-900/10 bg-white py-10 dark:border-white/10 dark:bg-slate-950">
+        <div className="mx-auto flex max-w-7xl flex-col gap-5 px-4 sm:px-6 lg:flex-row lg:items-center lg:justify-between">
           <div className="flex items-center gap-2">
-            <div className="w-7 h-7 bg-gradient-to-br from-teal-500 to-emerald-600 rounded-lg grid place-items-center text-white text-xs font-bold">F</div>
-            <span className="font-semibold text-slate-900 dark:text-white">Festio</span>
+            <LogoMark size="h-8 w-8" text="text-xs" />
+            <div>
+              <div className="font-black text-slate-950 dark:text-white">Festio</div>
+              <div className="text-xs font-medium text-slate-500 dark:text-slate-400">Guest management for modern events</div>
+            </div>
           </div>
-          <div className="flex items-center gap-5 text-sm text-slate-500 dark:text-slate-400">
-            <Link to="/pricing" className="hover:text-teal-600">Pricing</Link>
-            <Link to="/login" className="hover:text-teal-600">Sign in</Link>
-            <a {...demoProps} className="hover:text-teal-600">Book a demo</a>
-          </div>
-          <p className="text-xs text-slate-400 dark:text-slate-500">© {new Date().getFullYear()} Festio. All rights reserved.</p>
+          <nav className="flex flex-wrap gap-5 text-sm font-bold text-slate-500 dark:text-slate-400" aria-label="Footer">
+            <a href="#features" className="hover:text-teal-700 dark:hover:text-teal-300">Features</a>
+            <a href="#guest-journey" className="hover:text-teal-700 dark:hover:text-teal-300">Guest Journey</a>
+            <Link to="/pricing" className="hover:text-teal-700 dark:hover:text-teal-300">Pricing</Link>
+            <Link to="/login" className="hover:text-teal-700 dark:hover:text-teal-300">Sign in</Link>
+            <a {...demoProps} className="hover:text-teal-700 dark:hover:text-teal-300">Book a demo</a>
+          </nav>
+          <p className="text-xs font-medium text-slate-400 dark:text-slate-500">© {new Date().getFullYear()} Festio. All rights reserved.</p>
         </div>
       </footer>
     </div>

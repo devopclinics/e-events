@@ -416,7 +416,7 @@ function ConfirmView({ confirm, event }) {
       <div className="rounded-3xl border border-slate-200 bg-slate-50 p-5">
         <div className="flex items-start justify-between gap-4">
           <div>
-            <div className="text-xs font-extrabold uppercase tracking-[0.18em] text-teal-700">Your QR ticket is ready</div>
+            <div className="text-xs font-extrabold uppercase tracking-[0.18em] text-teal-700">Your QR pass is ready</div>
             <div className="mt-2 text-lg font-extrabold text-slate-950">{eventTitle(event)}</div>
             <div className="mt-1 text-sm font-semibold text-slate-500">{confirm.first_name} {confirm.last_name}</div>
           </div>
@@ -428,7 +428,7 @@ function ConfirmView({ confirm, event }) {
           <div className="mt-5 rounded-2xl border border-slate-200 bg-white p-4 text-center">
             <img
               src={`/api/scan/${confirm.qr_token}/qr.png`}
-              alt="Your QR ticket code"
+              alt="Your QR pass code"
               className="mx-auto h-44 w-44"
             />
             <div className="mt-3 text-xs font-mono font-bold text-slate-500">Ticket ID {confirm.qr_token.split('-')[0].toUpperCase()}</div>
@@ -682,7 +682,7 @@ function GuestHub({ event, accessToken }) {
         <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
           <div>
             <h2 className="text-3xl font-extrabold">Guest Hub</h2>
-            <p className="mt-2 text-sm leading-6 text-slate-300">Your event updates, QR ticket, and messages in one place.</p>
+            <p className="mt-2 text-sm leading-6 text-slate-300">Your event updates, QR pass, and messages in one place.</p>
           </div>
           {hub?.guest?.rsvp_status && (
             <span className="w-fit rounded-full bg-teal-300/15 px-3 py-1 text-xs font-extrabold uppercase tracking-wide text-teal-100">
@@ -1001,7 +1001,7 @@ export default function InvitePage() {
             <div className="grid gap-4 sm:grid-cols-2">
               <DetailRow icon="📅" label="When" value={heroWhen} />
               <DetailRow icon="📍" label="Location" value={venue || 'Venue details coming soon'} />
-              <DetailRow icon="🎟️" label="Admission" value="QR ticket at entry" />
+              <DetailRow icon="🎟️" label="Admission" value="QR pass at entry" />
             </div>
 
             <div className="flex flex-col gap-3 sm:flex-row">

@@ -22,6 +22,14 @@ def _qr_part(msg):
     return None
 
 
+def _part_text(msg, content_type):
+    return next(
+        p.get_payload(decode=True).decode()
+        for p in msg.walk()
+        if p.get_content_type() == content_type
+    )
+
+
 @pytest.mark.asyncio
 async def test_invite_email_attaches_qr_with_defaults(monkeypatch):
     sent = _capture(monkeypatch)
@@ -30,12 +38,17 @@ async def test_invite_email_attaches_qr_with_defaults(monkeypatch):
         "Spring Gala", "The Hosts", "https://events.example", datetime(2026, 9, 1),
     )
     msg = sent["msg"]
-    assert msg["Subject"] == "Your Invitation — Spring Gala"
+    assert msg["Subject"] == "You're invited to Spring Gala"
     assert _qr_part(msg) is not None                     # QR image attached
-    html = next(p.get_payload(decode=True).decode() for p in msg.walk()
-                if p.get_content_type() == "text/html")
+    html = _part_text(msg, "text/html")
+    text = _part_text(msg, "text/plain")
     assert 'cid:qrcode' in html                          # QR referenced in body
     assert '/scan/tok-123' in html                       # ticket link present
+    assert "View My Ticket" in html
+    assert "Your Admission QR Code" in html
+    assert "Venue details coming soon." in html
+    assert "View your ticket:" in text
+    assert "/scan/tok-123" in text
 
 
 @pytest.mark.asyncio
@@ -54,8 +67,7 @@ async def test_invite_email_overrides_keep_qr(monkeypatch):
     msg = sent["msg"]
     assert msg["Subject"] == "Custom subject for Spring Gala!"   # subject placeholders render
     assert _qr_part(msg) is not None                              # QR still attached
-    html = next(p.get_payload(decode=True).decode() for p in msg.walk()
-                if p.get_content_type() == "text/html")
+    html = _part_text(msg, "text/html")
     assert "Welcome, special guest Ada." in html                 # custom wording rendered
     assert 'cid:qrcode' in html and '/scan/tok-9' in html        # QR + ticket link present
 
@@ -69,7 +81,28 @@ async def test_invite_email_pairing_cta_only_when_seating(monkeypatch):
         "Spring Gala", "The Hosts", "https://events.example", datetime(2026, 9, 1),
         True, False,   # seating on, menu off
     )
-    html = next(p.get_payload(decode=True).decode() for p in sent["msg"].walk()
-                if p.get_content_type() == "text/html")
+    html = _part_text(sent["msg"], "text/html")
     assert "Pair with my partner" in html
     assert "Choose menu" not in html
+
+
+@pytest.mark.asyncio
+async def test_invite_email_renders_event_metadata_blocks(monkeypatch):
+    sent = _capture(monkeypatch)
+    await email_service.send_invite_email(
+        {"first_name": "Am", "last_name": "Ami", "email": "am@x.com", "qr_token": "tok-venue"},
+        "Electron Jubilee", "Electron", "https://events.example", datetime(2026, 8, 18, 18, 0),
+        venue_name="The Electron Place",
+        venue_address="655 Faiwt wa, jaty, tx",
+        admission_note="Bring this QR ticket for fast entry.",
+        event_image="/api/uploads/events/flyer.png",
+    )
+    html = _part_text(sent["msg"], "text/html")
+    text = _part_text(sent["msg"], "text/plain")
+    assert "The Electron Place" in html
+    assert "655 Faiwt wa, jaty, tx" in html
+    assert "Bring this QR ticket for fast entry." in html
+    assert 'src="https://events.example/api/uploads/events/flyer.png"' in html
+    assert "Add to Calendar" in html
+    assert "Get Directions" in html
+    assert "Venue: The Electron Place - 655 Faiwt wa, jaty, tx" in text

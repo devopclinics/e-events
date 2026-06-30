@@ -1,20 +1,12 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 32 32" role="img" aria-label="Festio">
-  <rect width="32" height="32" rx="7" fill="#0d9488"/>
-  <g fill="#ffffff">
-    <!-- finder patterns (QR corners) -->
-    <path d="M5 5h7v7H5z"/><rect x="6.5" y="6.5" width="4" height="4" fill="#0d9488"/><rect x="7.75" y="7.75" width="1.5" height="1.5"/>
-    <path d="M20 5h7v7h-7z"/><rect x="21.5" y="6.5" width="4" height="4" fill="#0d9488"/><rect x="22.75" y="7.75" width="1.5" height="1.5"/>
-    <path d="M5 20h7v7H5z"/><rect x="6.5" y="21.5" width="4" height="4" fill="#0d9488"/><rect x="7.75" y="22.75" width="1.5" height="1.5"/>
-    <!-- data modules -->
-    <rect x="15" y="6" width="2" height="2"/>
-    <rect x="15" y="10" width="2" height="2"/>
-    <rect x="15" y="15" width="2" height="2"/>
-    <rect x="19" y="15" width="2" height="2"/>
-    <rect x="23" y="15" width="2" height="2"/>
-    <rect x="19" y="19" width="2" height="2"/>
-    <rect x="23" y="19" width="2" height="2"/>
-    <rect x="15" y="23" width="2" height="2"/>
-    <rect x="19" y="23" width="2" height="2"/>
-    <rect x="23" y="23" width="2" height="2"/>
-  </g>
+<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 64 64" role="img" aria-label="Festio">
+  <defs>
+    <linearGradient id="g" x1="10" y1="8" x2="56" y2="58" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#2dd4bf"/>
+      <stop offset="0.55" stop-color="#10b981"/>
+      <stop offset="1" stop-color="#fbbf24"/>
+    </linearGradient>
+  </defs>
+  <rect width="64" height="64" rx="16" fill="#07111f"/>
+  <rect x="6" y="6" width="52" height="52" rx="14" fill="url(#g)"/>
+  <path fill="#07111f" d="M21 16h25v8H31v7h12v8H31v14H21z"/>
 </svg>

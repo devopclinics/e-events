@@ -96,7 +96,7 @@ export default function RegisterPage() {
       <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl shadow-xl w-full max-w-md p-8">
         <div className="text-center mb-6">
           <div className="inline-flex items-center justify-center w-14 h-14 bg-teal-600 rounded-lg mb-4 text-white font-bold">
-            EQ
+            F
           </div>
           <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Create Account</h1>
           <p className="text-gray-500 dark:text-slate-400 text-sm mt-1">Join Festio as an official</p>

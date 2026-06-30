@@ -230,6 +230,8 @@ def _send_rsvp_invite(
             event.event_date,
             event.seating_enabled, event.menu_enabled,
             ov.subject if ov else None, ov.email_body if ov else None,
+            event.venue_name, event.venue_address, event.admission_note,
+            event.invite_cover_image,
         )
 
     if paid_channels and event.notify_sms and guest.phone and guest.sms_consent and take_message_credit(event):

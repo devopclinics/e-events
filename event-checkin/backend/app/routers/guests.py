@@ -722,6 +722,8 @@ def _dispatch_invite(background_tasks: BackgroundTasks, event: Event, guest: Gue
             guest_data, event.name, event.couples_name, event.checkin_base_url, event.event_date,
             event.seating_enabled, event.menu_enabled,
             ov.subject if ov else None, ov.email_body if ov else None,
+            event.venue_name, event.venue_address, event.admission_note,
+            event.invite_cover_image,
         )
         dispatched = True
 

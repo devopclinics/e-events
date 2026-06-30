@@ -4666,7 +4666,7 @@ function EventForm({ initial, onSave, onCancel }) {
             rows={2}
             value={form.admission_note || ''}
             onChange={set('admission_note')}
-            placeholder="e.g. Show your QR ticket at the entrance for check-in."
+            placeholder="e.g. Show your QR pass at the entrance for check-in."
           />
         </div>
       </div>

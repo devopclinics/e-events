@@ -10,6 +10,7 @@ services:
     depends_on:
       - frontend
       - backend
+      - messaging-service
     restart: unless-stopped
 
   # ── React frontend ─────────────────────────────────────────────────────────
@@ -28,6 +29,28 @@ services:
     depends_on:
       db:
         condition: service_healthy
+    restart: unless-stopped
+
+  # ── Guest Hub / event communication service ───────────────────────────────
+  messaging-service:
+    build: ./messaging-service
+    image: dclinics/events:messaging-1.0.0
+    env_file: ./backend/.env
+    environment:
+      PORT: 8001
+      MESSAGING_ENABLED: ${MESSAGING_ENABLED:-true}
+      EVENT_CHAT_ENABLED: ${EVENT_CHAT_ENABLED:-false}
+      DIRECT_HOST_MESSAGES_ENABLED: ${DIRECT_HOST_MESSAGES_ENABLED:-true}
+      ANNOUNCEMENTS_ENABLED: ${ANNOUNCEMENTS_ENABLED:-true}
+      REALTIME_MESSAGING_ENABLED: ${REALTIME_MESSAGING_ENABLED:-false}
+    depends_on:
+      db:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "python - <<'PY'\nimport urllib.request\nurllib.request.urlopen('http://localhost:8001/health', timeout=3).read()\nPY"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
     restart: unless-stopped
 
   # ── PostgreSQL ─────────────────────────────────────────────────────────────

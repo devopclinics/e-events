@@ -1,6 +1,6 @@
 import uuid
 from datetime import datetime
-from sqlalchemy import String, Boolean, DateTime, ForeignKey, Integer, Text, UniqueConstraint, Index, text
+from sqlalchemy import String, Boolean, DateTime, ForeignKey, Integer, Text, UniqueConstraint, Index, text, JSON
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from .database import Base
 
@@ -474,6 +474,106 @@ class RSVPQuestion(Base):
 
     event: Mapped["Event"] = relationship("Event", back_populates="rsvp_questions")
     answers: Mapped[list["RSVPAnswer"]] = relationship("RSVPAnswer", cascade="all, delete-orphan")
+
+
+# ── Guest communication / Guest Hub ───────────────────────────────────────────
+
+class EventGuestMessagingSettings(Base):
+    __tablename__ = "event_guest_messaging_settings"
+    __table_args__ = (UniqueConstraint("event_id", name="uq_event_guest_messaging_settings_event"),)
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+    event_id: Mapped[str] = mapped_column(String(36), ForeignKey("events.id"), index=True)
+    announcements_enabled: Mapped[bool] = mapped_column(Boolean, default=True)
+    direct_host_messages_enabled: Mapped[bool] = mapped_column(Boolean, default=True)
+    guest_chat_enabled: Mapped[bool] = mapped_column(Boolean, default=False)
+    guest_chat_posting_enabled: Mapped[bool] = mapped_column(Boolean, default=True)
+    attending_only_chat: Mapped[bool] = mapped_column(Boolean, default=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+
+class EventMessageThread(Base):
+    __tablename__ = "event_message_threads"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+    event_id: Mapped[str] = mapped_column(String(36), ForeignKey("events.id"), index=True)
+    thread_type: Mapped[str] = mapped_column(String(30), index=True)  # announcement | direct | group_chat
+    guest_id: Mapped[str | None] = mapped_column(String(36), ForeignKey("guests.id"), nullable=True, index=True)
+    title: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    created_by_type: Mapped[str] = mapped_column(String(30), default="system")
+    created_by_id: Mapped[str | None] = mapped_column(String(36), nullable=True)
+    is_active: Mapped[bool] = mapped_column(Boolean, default=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+
+class EventMessage(Base):
+    __tablename__ = "event_messages"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+    event_id: Mapped[str] = mapped_column(String(36), ForeignKey("events.id"), index=True)
+    thread_id: Mapped[str | None] = mapped_column(String(36), ForeignKey("event_message_threads.id"), nullable=True, index=True)
+    sender_type: Mapped[str] = mapped_column(String(30))  # organizer | guest | system
+    sender_id: Mapped[str | None] = mapped_column(String(36), nullable=True)
+    guest_id: Mapped[str | None] = mapped_column(String(36), ForeignKey("guests.id"), nullable=True, index=True)
+    message_type: Mapped[str] = mapped_column(String(30), index=True)  # announcement | direct | group_chat | system
+    body: Mapped[str] = mapped_column(Text)
+    status: Mapped[str] = mapped_column(String(20), default="active", index=True)
+    message_metadata: Mapped[dict | None] = mapped_column(JSON, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+
+class EventAnnouncement(Base):
+    __tablename__ = "event_announcements"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+    event_id: Mapped[str] = mapped_column(String(36), ForeignKey("events.id"), index=True)
+    title: Mapped[str] = mapped_column(String(255))
+    body: Mapped[str] = mapped_column(Text)
+    audience_type: Mapped[str] = mapped_column(String(40), default="attending_only", index=True)
+    audience_filter: Mapped[dict | None] = mapped_column(JSON, nullable=True)
+    send_in_app: Mapped[bool] = mapped_column(Boolean, default=True)
+    send_email: Mapped[bool] = mapped_column(Boolean, default=False)
+    send_sms: Mapped[bool] = mapped_column(Boolean, default=False)
+    send_whatsapp: Mapped[bool] = mapped_column(Boolean, default=False)
+    scheduled_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    sent_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    created_by: Mapped[str | None] = mapped_column(String(36), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+
+class EventMessageRead(Base):
+    __tablename__ = "event_message_reads"
+    __table_args__ = (UniqueConstraint("message_id", "guest_id", "admin_user_id", name="uq_event_message_read_actor"),)
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+    event_id: Mapped[str] = mapped_column(String(36), ForeignKey("events.id"), index=True)
+    message_id: Mapped[str] = mapped_column(String(36), ForeignKey("event_messages.id"), index=True)
+    guest_id: Mapped[str | None] = mapped_column(String(36), ForeignKey("guests.id"), nullable=True, index=True)
+    admin_user_id: Mapped[str | None] = mapped_column(String(36), ForeignKey("users.id"), nullable=True, index=True)
+    read_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+
+
+class EventMessageDeliveryLog(Base):
+    __tablename__ = "event_message_delivery_logs"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+    event_id: Mapped[str] = mapped_column(String(36), ForeignKey("events.id"), index=True)
+    message_id: Mapped[str | None] = mapped_column(String(36), ForeignKey("event_messages.id"), nullable=True, index=True)
+    announcement_id: Mapped[str | None] = mapped_column(String(36), ForeignKey("event_announcements.id"), nullable=True, index=True)
+    guest_id: Mapped[str | None] = mapped_column(String(36), ForeignKey("guests.id"), nullable=True, index=True)
+    channel: Mapped[str] = mapped_column(String(30), default="in_app")
+    recipient: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    status: Mapped[str] = mapped_column(String(30), default="pending", index=True)
+    provider: Mapped[str | None] = mapped_column(String(60), nullable=True)
+    provider_message_id: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    error_message: Mapped[str | None] = mapped_column(Text, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
 
 class RSVPAnswer(Base):

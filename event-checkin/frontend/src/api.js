@@ -225,6 +225,24 @@ export const api = {
   // Broadcast (admin)
   broadcast: (eventId, data) => req('POST', `/events/${eventId}/broadcast`, data),
 
+  // Guest Hub / event communication (messaging-service)
+  guestHub: (eventId, token) =>
+    fetch(`${BASE}/messaging/events/${encodeURIComponent(eventId)}/guest-hub?token=${encodeURIComponent(token)}`)
+      .then((r) => (r.ok ? r.json() : r.json().then((e) => Promise.reject(new Error(e.detail || 'Event updates are temporarily unavailable.'))))),
+  sendGuestDirectMessage: (eventId, token, body) =>
+    fetch(`${BASE}/messaging/events/${encodeURIComponent(eventId)}/messages/direct?token=${encodeURIComponent(token)}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ body }),
+    }).then((r) => (r.ok ? r.json() : r.json().then((e) => Promise.reject(new Error(e.detail || 'Message could not be sent.'))))),
+  messagingSettings: (eventId) => req('GET', `/messaging/admin/events/${eventId}/messaging/settings`),
+  updateMessagingSettings: (eventId, data) => req('PATCH', `/messaging/admin/events/${eventId}/messaging/settings`, data),
+  listAnnouncements: (eventId) => req('GET', `/messaging/admin/events/${eventId}/announcements`),
+  createAnnouncement: (eventId, data) => req('POST', `/messaging/admin/events/${eventId}/announcements`, data),
+  messageInbox: (eventId) => req('GET', `/messaging/admin/events/${eventId}/messages/inbox`),
+  messageThread: (eventId, threadId) => req('GET', `/messaging/admin/events/${eventId}/messages/inbox/${threadId}`),
+  replyMessageThread: (eventId, threadId, body) => req('POST', `/messaging/admin/events/${eventId}/messages/inbox/${threadId}/reply`, { body }),
+
   // Message templates (admin)
   listTemplates:    (eventId)            => req('GET',    `/events/${eventId}/templates`),
   getTemplate:      (eventId, key)       => req('GET',    `/events/${eventId}/templates/${key}`),

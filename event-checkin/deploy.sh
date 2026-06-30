@@ -80,6 +80,7 @@ echo -e "\n${BOLD}EventQR Deployment Pipeline${NC}"
 echo    "  Version  : ${VERSION}"
 echo    "  Registry : ${REGISTRY}"
 echo    "  Compose  : ${PROD_COMPOSE}"
+echo    "  Services : backend, frontend, messaging"
 echo    "  Keep tags: last ${KEEP_VERSIONS} per service"
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -123,6 +124,14 @@ if $DO_BUILD; then
     "${SCRIPT_DIR}/frontend"
   ok "Frontend built → ${REGISTRY}:frontend-${VERSION}"
 
+  info "Building messaging-service..."
+  docker build $NO_CACHE \
+    "${BUILD_ARGS[@]}" \
+    --tag "${REGISTRY}:messaging-${VERSION}" \
+    --tag "${REGISTRY}:messaging-latest" \
+    "${SCRIPT_DIR}/messaging-service"
+  ok "Messaging service built → ${REGISTRY}:messaging-${VERSION}"
+
   # ── PHASE 2 — Push to Docker Hub ────────────────────────────────────────────
   step "2/6  Pushing images to Docker Hub"
 
@@ -134,7 +143,9 @@ if $DO_BUILD; then
     "${REGISTRY}:backend-${VERSION}" \
     "${REGISTRY}:backend-latest" \
     "${REGISTRY}:frontend-${VERSION}" \
-    "${REGISTRY}:frontend-latest"; do
+    "${REGISTRY}:frontend-latest" \
+    "${REGISTRY}:messaging-${VERSION}" \
+    "${REGISTRY}:messaging-latest"; do
     info "Pushing ${tag}..."
     docker push "$tag"
     ok "Pushed ${tag}"
@@ -210,6 +221,7 @@ if $DO_BUILD; then
 
   prune_service_tags "backend"
   prune_service_tags "frontend"
+  prune_service_tags "messaging"
 
   # Remove the dangling local build cache (optional, frees disk)
   info "Pruning dangling local image layers..."
@@ -224,7 +236,7 @@ if $DO_DEPLOY; then
 
   # ── Phase 4a — Pull new images ──────────────────────────────────────────────
   step "4/6  Pulling images from Docker Hub"
-  APP_VERSION="$VERSION" docker compose -f "$PROD_COMPOSE" pull backend frontend
+  APP_VERSION="$VERSION" docker compose -f "$PROD_COMPOSE" pull backend frontend messaging-service
   ok "Images pulled"
 
   # ── Phase 4b — Run DB migration in a one-off container ──────────────────────

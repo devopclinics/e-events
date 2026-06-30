@@ -60,6 +60,176 @@ function StatusControls({ event, onChanged }) {
   )
 }
 
+function GuestCommunicationPanel({ event }) {
+  const [settings, setSettings] = useState(null)
+  const [announcements, setAnnouncements] = useState([])
+  const [inbox, setInbox] = useState([])
+  const [thread, setThread] = useState(null)
+  const [draft, setDraft] = useState({ title: '', body: '', audience_type: 'attending_only' })
+  const [reply, setReply] = useState('')
+  const [msg, setMsg] = useState('')
+  const [err, setErr] = useState('')
+  const [loading, setLoading] = useState(false)
+
+  async function load() {
+    setErr('')
+    try {
+      const [s, a, i] = await Promise.all([
+        api.messagingSettings(event.id),
+        api.listAnnouncements(event.id),
+        api.messageInbox(event.id),
+      ])
+      setSettings(s); setAnnouncements(a); setInbox(i)
+    } catch (e) {
+      setErr(e.message || 'Guest communication is temporarily unavailable.')
+    }
+  }
+
+  useEffect(() => {
+    if (!event?.id) return
+    load()
+    const id = setInterval(load, 30000)
+    return () => clearInterval(id)
+  }, [event?.id])
+
+  async function saveSetting(key, value) {
+    setLoading(true); setErr(''); setMsg('')
+    try {
+      setSettings(await api.updateMessagingSettings(event.id, { [key]: value }))
+      setMsg('Settings saved.')
+    } catch (e) { setErr(e.message) }
+    finally { setLoading(false) }
+  }
+
+  async function sendAnnouncement(e) {
+    e.preventDefault()
+    if (!draft.title.trim() || !draft.body.trim()) return
+    setLoading(true); setErr(''); setMsg('')
+    try {
+      const sent = await api.createAnnouncement(event.id, draft)
+      setAnnouncements((p) => [sent, ...p])
+      setDraft({ title: '', body: '', audience_type: 'attending_only' })
+      setMsg(`Announcement sent to ${sent.reached ?? 0} guest${sent.reached === 1 ? '' : 's'}.`)
+    } catch (e) { setErr(e.message) }
+    finally { setLoading(false) }
+  }
+
+  async function openThread(threadId) {
+    setErr('')
+    try { setThread(await api.messageThread(event.id, threadId)) }
+    catch (e) { setErr(e.message) }
+  }
+
+  async function sendReply(e) {
+    e.preventDefault()
+    if (!reply.trim() || !thread) return
+    setLoading(true); setErr(''); setMsg('')
+    try {
+      await api.replyMessageThread(event.id, thread.thread_id, reply.trim())
+      setReply('')
+      await openThread(thread.thread_id)
+      await load()
+      setMsg('Reply sent.')
+    } catch (e) { setErr(e.message) }
+    finally { setLoading(false) }
+  }
+
+  const field = 'w-full rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-700 px-3 py-2 text-sm text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-teal-500'
+
+  return (
+    <div className="space-y-6">
+      <div className="bg-white dark:bg-slate-800 dark:border dark:border-slate-700/60 rounded-xl shadow p-6">
+        <div className="flex items-start justify-between gap-4">
+          <div>
+            <h2 className="font-semibold text-base dark:text-white">Guest Communication</h2>
+            <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">Send event updates and respond to guest questions. Messaging never blocks RSVP or QR admission.</p>
+          </div>
+          <button onClick={load} className="text-xs font-semibold text-teal-600 hover:underline">Refresh</button>
+        </div>
+        {err && <div className="mt-4 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">{err}</div>}
+        {msg && <div className="mt-4 rounded-lg border border-green-200 bg-green-50 px-3 py-2 text-sm text-green-700">{msg}</div>}
+        {settings && (
+          <div className="mt-5 grid gap-3 sm:grid-cols-3">
+            {[
+              ['announcements_enabled', 'Event Updates'],
+              ['direct_host_messages_enabled', 'Message Host'],
+              ['guest_chat_enabled', 'Guest Chat'],
+            ].map(([key, label]) => (
+              <label key={key} className="flex items-center gap-2 rounded-lg border border-slate-200 dark:border-slate-700 px-3 py-2 text-sm dark:text-slate-200">
+                <input type="checkbox" checked={!!settings[key]} disabled={loading} onChange={(e) => saveSetting(key, e.target.checked)} className="h-4 w-4 accent-teal-600" />
+                {label}
+              </label>
+            ))}
+          </div>
+        )}
+      </div>
+
+      <div className="grid gap-6 lg:grid-cols-[1fr_0.9fr]">
+        <div className="bg-white dark:bg-slate-800 dark:border dark:border-slate-700/60 rounded-xl shadow p-6">
+          <h3 className="font-semibold text-base dark:text-white">Announcements</h3>
+          <form onSubmit={sendAnnouncement} className="mt-4 space-y-3">
+            <input className={field} value={draft.title} onChange={(e) => setDraft((p) => ({ ...p, title: e.target.value }))} placeholder="Update title, e.g. Parking Update" maxLength={255} />
+            <textarea className={field} rows={4} value={draft.body} onChange={(e) => setDraft((p) => ({ ...p, body: e.target.value }))} placeholder="Write a warm update for your guests..." maxLength={5000} />
+            <div className="flex flex-col gap-3 sm:flex-row">
+              <select className={field} value={draft.audience_type} onChange={(e) => setDraft((p) => ({ ...p, audience_type: e.target.value }))}>
+                <option value="attending_only">Attending only</option>
+                <option value="all_invited">All invited</option>
+                <option value="declined_only">Declined only</option>
+                <option value="checked_in_only">Checked in</option>
+                <option value="not_checked_in">Not checked in</option>
+              </select>
+              <button disabled={loading || !draft.title.trim() || !draft.body.trim()} className="rounded-lg bg-teal-600 px-4 py-2 text-sm font-semibold text-white hover:bg-teal-700 disabled:opacity-50">
+                Send update
+              </button>
+            </div>
+          </form>
+          <div className="mt-5 space-y-3">
+            {announcements.length ? announcements.map((a) => (
+              <div key={a.id} className="rounded-lg border border-slate-200 dark:border-slate-700 p-3">
+                <div className="font-semibold text-sm dark:text-white">{a.title}</div>
+                <p className="mt-1 text-sm text-slate-600 dark:text-slate-300">{a.body}</p>
+                <div className="mt-2 text-[11px] font-semibold uppercase tracking-wide text-slate-400">{a.audience_type?.replaceAll('_', ' ')}</div>
+              </div>
+            )) : <p className="text-sm text-slate-400 mt-4">No announcements yet.</p>}
+          </div>
+        </div>
+
+        <div className="bg-white dark:bg-slate-800 dark:border dark:border-slate-700/60 rounded-xl shadow p-6">
+          <h3 className="font-semibold text-base dark:text-white">Guest Inbox</h3>
+          <div className="mt-4 space-y-2">
+            {inbox.length ? inbox.map((t) => (
+              <button key={t.thread_id} onClick={() => openThread(t.thread_id)} className="w-full rounded-lg border border-slate-200 dark:border-slate-700 p-3 text-left hover:bg-slate-50 dark:hover:bg-slate-700">
+                <div className="flex items-center justify-between gap-3">
+                  <span className="font-semibold text-sm dark:text-white">{t.guest_name}</span>
+                  <span className="text-[11px] text-slate-400">{t.rsvp_status}</span>
+                </div>
+                <p className="mt-1 truncate text-sm text-slate-500 dark:text-slate-400">{t.last_message}</p>
+              </button>
+            )) : <p className="text-sm text-slate-400">No guest messages yet.</p>}
+          </div>
+          {thread && (
+            <div className="mt-5 border-t border-slate-200 dark:border-slate-700 pt-4">
+              <div className="font-semibold text-sm dark:text-white">{thread.guest?.name}</div>
+              <div className="mt-3 max-h-64 space-y-2 overflow-auto">
+                {thread.messages.map((m) => (
+                  <div key={m.id} className={`rounded-lg px-3 py-2 text-sm ${m.sender_type === 'organizer' ? 'bg-teal-50 text-teal-900 dark:bg-teal-900/30 dark:text-teal-100' : 'bg-slate-100 text-slate-700 dark:bg-slate-700 dark:text-slate-200'}`}>
+                    <div className="text-[11px] font-bold uppercase tracking-wide opacity-70">{m.sender_name}</div>
+                    <div className="mt-1">{m.body}</div>
+                  </div>
+                ))}
+              </div>
+              <form onSubmit={sendReply} className="mt-3 flex gap-2">
+                <input className={field} value={reply} onChange={(e) => setReply(e.target.value)} placeholder="Reply to guest..." />
+                <button disabled={loading || !reply.trim()} className="rounded-lg bg-teal-600 px-4 py-2 text-sm font-semibold text-white hover:bg-teal-700 disabled:opacity-50">Reply</button>
+              </form>
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  )
+}
+
 // ── Feature Toggles ───────────────────────────────────────────────────────────
 
 function ChannelToggles({ event, onChanged }) {
@@ -5811,6 +5981,7 @@ export default function AdminPage() {
                 { id: 'overview', label: 'Start here', icon: '🏠' },
                 { id: 'guests', label: 'Guests', icon: '👥', count: guests.length },
                 { id: 'invite', label: 'Invites & RSVP', icon: '✉️' },
+                { id: 'communication', label: 'Guest Communication', icon: '💬' },
               ]},
               ...(event.venue_access_enabled ? [{ label: 'Venue & access', items: [
                 { id: 'access', label: 'Entry areas', icon: '🎟️' },
@@ -6108,6 +6279,8 @@ export default function AdminPage() {
           </>}{/* end overview tab */}
 
           {activeTab === 'team' && <TeamPanel eventId={selectedId} />}
+
+          {activeTab === 'communication' && <GuestCommunicationPanel event={event} />}
 
           {activeTab === 'invite' && <>
             {event.invite_mode === 'closed' && (() => {

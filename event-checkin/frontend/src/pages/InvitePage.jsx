@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react'
 import { useParams } from 'react-router-dom'
+import { api } from '../api'
 
 // ── Theme definitions ─────────────────────────────────────────────────────────
 
@@ -610,6 +611,142 @@ function TokenRSVPForm({ event, prefill, token, theme, onDone }) {
   )
 }
 
+function GuestHub({ event, accessToken }) {
+  const [hub, setHub] = useState(null)
+  const [error, setError] = useState('')
+  const [message, setMessage] = useState('')
+  const [sending, setSending] = useState(false)
+
+  useEffect(() => {
+    if (!event?.id || !accessToken) return
+    let cancelled = false
+    async function load() {
+      try {
+        const data = await api.guestHub(event.id, accessToken)
+        if (!cancelled) { setHub(data); setError('') }
+      } catch {
+        if (!cancelled) setError('Event updates are temporarily unavailable.')
+      }
+    }
+    load()
+    const id = setInterval(load, 25000)
+    return () => { cancelled = true; clearInterval(id) }
+  }, [event?.id, accessToken])
+
+  async function sendMessage(e) {
+    e.preventDefault()
+    if (!message.trim()) return
+    setSending(true)
+    try {
+      const sent = await api.sendGuestDirectMessage(event.id, accessToken, message.trim())
+      setHub((h) => h ? { ...h, direct_messages: [...(h.direct_messages || []), sent] } : h)
+      setMessage('')
+      setError('')
+    } catch (err) {
+      setError(err.message)
+    } finally {
+      setSending(false)
+    }
+  }
+
+  if (!accessToken) return null
+
+  return (
+    <section className="py-2">
+      <div className="mx-auto w-full max-w-[900px] rounded-[1.65rem] border border-white/12 bg-white/[0.08] p-5 text-white shadow-2xl shadow-black/20 backdrop-blur sm:p-7">
+        <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+          <div>
+            <h2 className="text-3xl font-extrabold">Guest Hub</h2>
+            <p className="mt-2 text-sm leading-6 text-slate-300">Your event updates, QR ticket, and messages in one place.</p>
+          </div>
+          {hub?.guest?.rsvp_status && (
+            <span className="w-fit rounded-full bg-teal-300/15 px-3 py-1 text-xs font-extrabold uppercase tracking-wide text-teal-100">
+              {hub.guest.rsvp_status === 'confirmed' ? 'Attending' : hub.guest.rsvp_status}
+            </span>
+          )}
+        </div>
+
+        {error && <div className="mt-5 rounded-2xl border border-amber-300/25 bg-amber-300/10 px-4 py-3 text-sm text-amber-50">{error}</div>}
+
+        <div className="mt-6 grid gap-4 md:grid-cols-3">
+          <div className="rounded-2xl border border-white/10 bg-white/[0.07] p-4">
+            <div className="text-xs font-extrabold uppercase tracking-[0.16em] text-slate-400">Your RSVP</div>
+            <div className="mt-3 text-lg font-extrabold">{hub?.guest?.name || 'Guest'}</div>
+            {hub?.guest?.table_name && (
+              <p className="mt-2 text-sm text-slate-300">
+                Table: <span className="font-bold text-white">{hub.guest.table_name}</span>
+                {hub.guest.seat_number ? ` · Seat ${hub.guest.seat_number}` : ''}
+              </p>
+            )}
+            {hub?.guest?.qr_token && (
+              <a href={`/scan/${hub.guest.qr_token}`} className="mt-4 inline-flex min-h-10 items-center justify-center rounded-xl bg-teal-400 px-4 py-2 text-sm font-extrabold text-slate-950 hover:bg-teal-300">
+                View QR Ticket
+              </a>
+            )}
+          </div>
+
+          <div className="rounded-2xl border border-white/10 bg-white/[0.07] p-4 md:col-span-2">
+            <div className="flex items-center justify-between gap-3">
+              <h3 className="text-lg font-extrabold">Event Updates</h3>
+              {!!hub?.announcements?.length && <span className="rounded-full bg-teal-300/15 px-2.5 py-1 text-xs font-bold text-teal-100">{hub.announcements.length}</span>}
+            </div>
+            <div className="mt-4 space-y-3">
+              {hub?.announcements?.length ? hub.announcements.map((a) => (
+                <div key={a.id} className="rounded-xl border border-white/10 bg-slate-950/20 p-3">
+                  <div className="font-bold">{a.title}</div>
+                  <p className="mt-1 text-sm leading-6 text-slate-300">{a.body}</p>
+                </div>
+              )) : (
+                <p className="text-sm leading-6 text-slate-400">No updates yet. Important event messages will appear here.</p>
+              )}
+            </div>
+          </div>
+        </div>
+
+        <div className="mt-4 rounded-2xl border border-white/10 bg-white/[0.07] p-4">
+          <h3 className="text-lg font-extrabold">Message Host</h3>
+          <p className="mt-1 text-sm text-slate-300">Have a question for the organizer?</p>
+          <div className="mt-4 max-h-56 space-y-2 overflow-auto">
+            {hub?.direct_messages?.length ? hub.direct_messages.map((m) => (
+              <div key={m.id} className={`rounded-xl px-3 py-2 text-sm ${m.sender_type === 'guest' ? 'ml-auto max-w-[85%] bg-teal-300/15 text-teal-50' : 'mr-auto max-w-[85%] bg-white/10 text-slate-100'}`}>
+                <div className="mb-1 text-[11px] font-bold uppercase tracking-wide text-slate-400">{m.sender_name}</div>
+                <div className="leading-6">{m.body}</div>
+              </div>
+            )) : (
+              <p className="text-sm text-slate-400">No messages yet.</p>
+            )}
+          </div>
+          {hub?.capabilities?.direct_host_messages ? (
+            <form onSubmit={sendMessage} className="mt-4 flex flex-col gap-2 sm:flex-row">
+              <input
+                value={message}
+                onChange={(e) => setMessage(e.target.value)}
+                maxLength={1000}
+                placeholder="Ask the host a question..."
+                className="min-h-11 flex-1 rounded-xl border border-white/15 bg-slate-950/25 px-4 py-2 text-sm text-white placeholder-slate-400 focus:outline-none focus:ring-4 focus:ring-teal-300/20"
+              />
+              <button disabled={sending || !message.trim()} className="min-h-11 rounded-xl bg-teal-400 px-5 py-2 text-sm font-extrabold text-slate-950 hover:bg-teal-300 disabled:opacity-50">
+                {sending ? 'Sending...' : 'Send'}
+              </button>
+            </form>
+          ) : (
+            <div className="mt-4 rounded-xl border border-white/10 bg-slate-950/20 px-3 py-2 text-sm text-slate-400">
+              Message Host unlocks after your RSVP is confirmed.
+            </div>
+          )}
+        </div>
+
+        <div className="mt-4 rounded-2xl border border-white/10 bg-slate-950/20 p-4">
+          <h3 className="text-lg font-extrabold">Guest Chat</h3>
+          <p className="mt-1 text-sm text-slate-400">
+            {hub?.capabilities?.guest_chat ? 'Guest chat is enabled for this event.' : 'Guest chat is not enabled for this event.'}
+          </p>
+        </div>
+      </div>
+    </section>
+  )
+}
+
 // ── Page ──────────────────────────────────────────────────────────────────────
 
 export default function InvitePage() {
@@ -696,6 +833,11 @@ export default function InvitePage() {
   const admissionNote = event.admission_note || 'Your RSVP generates a personal QR code. Please bring it with you for check-in at the entrance.'
   const heroWhen = [dateLabel, timeLabel].filter(Boolean).join(' · ')
   const capacityLabel = event.rsvp_capacity != null ? `${event.rsvp_count} / ${event.rsvp_capacity} spots claimed` : ''
+  const guestHubToken = confirmed?.rsvp_status === 'confirmed'
+    ? confirmed.qr_token
+    : tokenMode && tokenMeta.already_responded && guest?.rsvp_status === 'confirmed'
+      ? token
+      : ''
 
   let rsvpPanel
   if (confirmed) {
@@ -835,6 +977,8 @@ export default function InvitePage() {
             {rsvpPanel}
           </div>
         </section>
+
+        <GuestHub event={event} accessToken={guestHubToken} />
       </main>
 
       {!event.is_paid && (

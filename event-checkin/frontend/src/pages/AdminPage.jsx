@@ -64,6 +64,7 @@ function GuestCommunicationPanel({ event }) {
   const [settings, setSettings] = useState(null)
   const [announcements, setAnnouncements] = useState([])
   const [inbox, setInbox] = useState([])
+  const [chatMessages, setChatMessages] = useState([])
   const [thread, setThread] = useState(null)
   const [draft, setDraft] = useState({ title: '', body: '', audience_type: 'attending_only' })
   const [reply, setReply] = useState('')
@@ -74,12 +75,13 @@ function GuestCommunicationPanel({ event }) {
   async function load() {
     setErr('')
     try {
-      const [s, a, i] = await Promise.all([
+      const [s, a, i, c] = await Promise.all([
         api.messagingSettings(event.id),
         api.listAnnouncements(event.id),
         api.messageInbox(event.id),
+        api.guestChatMessages(event.id),
       ])
-      setSettings(s); setAnnouncements(a); setInbox(i)
+      setSettings(s); setAnnouncements(a); setInbox(i); setChatMessages(c)
     } catch (e) {
       setErr(e.message || 'Guest communication is temporarily unavailable.')
     }
@@ -134,6 +136,16 @@ function GuestCommunicationPanel({ event }) {
     finally { setLoading(false) }
   }
 
+  async function moderateChatMessage(messageId, status) {
+    setLoading(true); setErr(''); setMsg('')
+    try {
+      const updated = await api.moderateGuestChatMessage(event.id, messageId, status)
+      setChatMessages((p) => p.map((m) => m.id === messageId ? updated : m))
+      setMsg(status === 'hidden' ? 'Chat message hidden.' : 'Chat message restored.')
+    } catch (e) { setErr(e.message) }
+    finally { setLoading(false) }
+  }
+
   const field = 'w-full rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-700 px-3 py-2 text-sm text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-teal-500'
 
   return (
@@ -149,11 +161,13 @@ function GuestCommunicationPanel({ event }) {
         {err && <div className="mt-4 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">{err}</div>}
         {msg && <div className="mt-4 rounded-lg border border-green-200 bg-green-50 px-3 py-2 text-sm text-green-700">{msg}</div>}
         {settings && (
-          <div className="mt-5 grid gap-3 sm:grid-cols-3">
+          <div className="mt-5 grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
             {[
               ['announcements_enabled', 'Event Updates'],
               ['direct_host_messages_enabled', 'Message Host'],
               ['guest_chat_enabled', 'Guest Chat'],
+              ['guest_chat_posting_enabled', 'Allow Guest Posts'],
+              ['attending_only_chat', 'Attending Only'],
             ].map(([key, label]) => (
               <label key={key} className="flex items-center gap-2 rounded-lg border border-slate-200 dark:border-slate-700 px-3 py-2 text-sm dark:text-slate-200">
                 <input type="checkbox" checked={!!settings[key]} disabled={loading} onChange={(e) => saveSetting(key, e.target.checked)} className="h-4 w-4 accent-teal-600" />
@@ -224,6 +238,37 @@ function GuestCommunicationPanel({ event }) {
               </form>
             </div>
           )}
+        </div>
+      </div>
+
+      <div className="bg-white dark:bg-slate-800 dark:border dark:border-slate-700/60 rounded-xl shadow p-6">
+        <div className="flex items-start justify-between gap-4">
+          <div>
+            <h3 className="font-semibold text-base dark:text-white">Guest Chat Moderation</h3>
+            <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">Hide messages that should not appear in the guest-facing chat.</p>
+          </div>
+          <span className="rounded-full bg-slate-100 px-2.5 py-1 text-xs font-semibold text-slate-500 dark:bg-slate-700 dark:text-slate-300">
+            {chatMessages.filter((m) => m.status === 'active').length} visible
+          </span>
+        </div>
+        <div className="mt-4 space-y-3">
+          {chatMessages.length ? chatMessages.map((m) => (
+            <div key={m.id} className={`rounded-lg border p-3 ${m.status === 'hidden' ? 'border-amber-200 bg-amber-50 dark:border-amber-900/50 dark:bg-amber-950/20' : 'border-slate-200 dark:border-slate-700'}`}>
+              <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+                <div>
+                  <div className="text-xs font-bold uppercase tracking-wide text-slate-400">{m.sender_name} · {m.status}</div>
+                  <p className="mt-1 text-sm text-slate-700 dark:text-slate-200">{m.body}</p>
+                </div>
+                <button
+                  disabled={loading}
+                  onClick={() => moderateChatMessage(m.id, m.status === 'hidden' ? 'active' : 'hidden')}
+                  className="rounded-lg border border-slate-300 px-3 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-50 dark:border-slate-600 dark:text-slate-200 dark:hover:bg-slate-700"
+                >
+                  {m.status === 'hidden' ? 'Restore' : 'Hide'}
+                </button>
+              </div>
+            </div>
+          )) : <p className="text-sm text-slate-400">No guest chat messages yet.</p>}
         </div>
       </div>
     </div>

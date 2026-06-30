@@ -53,6 +53,7 @@ Guest routes:
 
 - `GET /api/messaging/events/{event_id}/guest-hub?token={invite_or_qr_token}`
 - `POST /api/messaging/events/{event_id}/messages/direct?token={invite_or_qr_token}`
+- `POST /api/messaging/events/{event_id}/messages/chat?token={invite_or_qr_token}`
 
 Admin routes:
 
@@ -63,6 +64,8 @@ Admin routes:
 - `GET /api/messaging/admin/events/{event_id}/messages/inbox`
 - `GET /api/messaging/admin/events/{event_id}/messages/inbox/{thread_id}`
 - `POST /api/messaging/admin/events/{event_id}/messages/inbox/{thread_id}/reply`
+- `GET /api/messaging/admin/events/{event_id}/messages/chat`
+- `PATCH /api/messaging/admin/events/{event_id}/messages/chat/{message_id}`
 
 ## Phase 1 Scope
 
@@ -70,6 +73,8 @@ Implemented:
 
 - Event Updates / announcements
 - Direct guest-to-host messages
+- Guest-to-guest chat with host-controlled posting
+- Basic guest chat moderation
 - Admin Guest Communication tab
 - Guest Hub after confirmed RSVP
 - Shared DB tables for future delivery/read tracking
@@ -78,8 +83,6 @@ Implemented:
 
 Deferred:
 
-- Open guest chat UI and posting
-- Moderation actions UI
 - Email/SMS/WhatsApp delivery adapters
 - Scheduled announcements
 - WebSocket/SSE realtime

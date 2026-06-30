@@ -235,6 +235,12 @@ export const api = {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ body }),
     }).then((r) => (r.ok ? r.json() : r.json().then((e) => Promise.reject(new Error(e.detail || 'Message could not be sent.'))))),
+  sendGuestChatMessage: (eventId, token, body) =>
+    fetch(`${BASE}/messaging/events/${encodeURIComponent(eventId)}/messages/chat?token=${encodeURIComponent(token)}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ body }),
+    }).then((r) => (r.ok ? r.json() : r.json().then((e) => Promise.reject(new Error(e.detail || 'Chat message could not be sent.'))))),
   messagingSettings: (eventId) => req('GET', `/messaging/admin/events/${eventId}/messaging/settings`),
   updateMessagingSettings: (eventId, data) => req('PATCH', `/messaging/admin/events/${eventId}/messaging/settings`, data),
   listAnnouncements: (eventId) => req('GET', `/messaging/admin/events/${eventId}/announcements`),
@@ -242,6 +248,8 @@ export const api = {
   messageInbox: (eventId) => req('GET', `/messaging/admin/events/${eventId}/messages/inbox`),
   messageThread: (eventId, threadId) => req('GET', `/messaging/admin/events/${eventId}/messages/inbox/${threadId}`),
   replyMessageThread: (eventId, threadId, body) => req('POST', `/messaging/admin/events/${eventId}/messages/inbox/${threadId}/reply`, { body }),
+  guestChatMessages: (eventId) => req('GET', `/messaging/admin/events/${eventId}/messages/chat`),
+  moderateGuestChatMessage: (eventId, messageId, status) => req('PATCH', `/messaging/admin/events/${eventId}/messages/chat/${messageId}`, { status }),
 
   // Message templates (admin)
   listTemplates:    (eventId)            => req('GET',    `/events/${eventId}/templates`),

@@ -615,7 +615,9 @@ function GuestHub({ event, accessToken }) {
   const [hub, setHub] = useState(null)
   const [error, setError] = useState('')
   const [message, setMessage] = useState('')
+  const [chatMessage, setChatMessage] = useState('')
   const [sending, setSending] = useState(false)
+  const [sendingChat, setSendingChat] = useState(false)
 
   useEffect(() => {
     if (!event?.id || !accessToken) return
@@ -646,6 +648,22 @@ function GuestHub({ event, accessToken }) {
       setError(err.message)
     } finally {
       setSending(false)
+    }
+  }
+
+  async function sendChat(e) {
+    e.preventDefault()
+    if (!chatMessage.trim()) return
+    setSendingChat(true)
+    try {
+      const sent = await api.sendGuestChatMessage(event.id, accessToken, chatMessage.trim())
+      setHub((h) => h ? { ...h, chat_messages: [...(h.chat_messages || []), sent] } : h)
+      setChatMessage('')
+      setError('')
+    } catch (err) {
+      setError(err.message)
+    } finally {
+      setSendingChat(false)
     }
   }
 
@@ -738,9 +756,43 @@ function GuestHub({ event, accessToken }) {
 
         <div className="mt-4 rounded-2xl border border-white/10 bg-slate-950/20 p-4">
           <h3 className="text-lg font-extrabold">Guest Chat</h3>
-          <p className="mt-1 text-sm text-slate-400">
-            {hub?.capabilities?.guest_chat ? 'Guest chat is enabled for this event.' : 'Guest chat is not enabled for this event.'}
-          </p>
+          <p className="mt-1 text-sm text-slate-400">A shared space for attending guests.</p>
+          {hub?.capabilities?.guest_chat ? (
+            <>
+              <div className="mt-4 max-h-64 space-y-2 overflow-auto">
+                {hub?.chat_messages?.length ? hub.chat_messages.map((m) => (
+                  <div key={m.id} className={`rounded-xl px-3 py-2 text-sm ${m.guest_id === hub?.guest?.id ? 'ml-auto max-w-[85%] bg-teal-300/15 text-teal-50' : 'mr-auto max-w-[85%] bg-white/10 text-slate-100'}`}>
+                    <div className="mb-1 text-[11px] font-bold uppercase tracking-wide text-slate-400">{m.sender_name}</div>
+                    <div className="leading-6">{m.body}</div>
+                  </div>
+                )) : (
+                  <p className="text-sm text-slate-400">No guest chat messages yet.</p>
+                )}
+              </div>
+              {hub?.capabilities?.guest_chat_posting ? (
+                <form onSubmit={sendChat} className="mt-4 flex flex-col gap-2 sm:flex-row">
+                  <input
+                    value={chatMessage}
+                    onChange={(e) => setChatMessage(e.target.value)}
+                    maxLength={1000}
+                    placeholder="Send a message to guests..."
+                    className="min-h-11 flex-1 rounded-xl border border-white/15 bg-slate-950/25 px-4 py-2 text-sm text-white placeholder-slate-400 focus:outline-none focus:ring-4 focus:ring-teal-300/20"
+                  />
+                  <button disabled={sendingChat || !chatMessage.trim()} className="min-h-11 rounded-xl bg-white px-5 py-2 text-sm font-extrabold text-slate-950 hover:bg-slate-100 disabled:opacity-50">
+                    {sendingChat ? 'Sending...' : 'Send'}
+                  </button>
+                </form>
+              ) : (
+                <div className="mt-4 rounded-xl border border-white/10 bg-slate-950/20 px-3 py-2 text-sm text-slate-400">
+                  Guest Chat posting is paused by the host.
+                </div>
+              )}
+            </>
+          ) : (
+            <div className="mt-4 rounded-xl border border-white/10 bg-slate-950/20 px-3 py-2 text-sm text-slate-400">
+              Guest Chat is not enabled for this event.
+            </div>
+          )}
         </div>
       </div>
     </section>

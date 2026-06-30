@@ -357,6 +357,7 @@ def _message_out(m: EventMessage, guest_name: str | None = None) -> dict[str, An
     return {
         "id": m.id,
         "sender_type": m.sender_type,
+        "guest_id": m.guest_id,
         "sender_name": guest_name if m.sender_type == "guest" else ("Host" if m.sender_type == "organizer" else "EventQR"),
         "message_type": m.message_type,
         "body": m.body,
@@ -375,6 +376,10 @@ class AnnouncementIn(BaseModel):
 
 class MessageIn(BaseModel):
     body: str
+
+
+class MessageModerationPatch(BaseModel):
+    status: str
 
 
 class SettingsPatch(BaseModel):
@@ -421,6 +426,7 @@ async def guest_hub(event_id: str, token: str = Query(...), db: AsyncSession = D
             if await _announcement_visible(ann, guest, db):
                 anns.append({"id": ann.id, "title": ann.title, "body": ann.body, "created_at": ann.created_at.isoformat()})
     direct = await _direct_messages(event_id, guest, db)
+    chat_enabled = bool(cfg.guest_chat_enabled and (guest.rsvp_status == "confirmed" or not cfg.attending_only_chat))
     return {
         "guest": {
             "id": guest.id,
@@ -441,10 +447,12 @@ async def guest_hub(event_id: str, token: str = Query(...), db: AsyncSession = D
         "capabilities": {
             "announcements": bool(cfg.announcements_enabled),
             "direct_host_messages": bool(cfg.direct_host_messages_enabled and guest.rsvp_status == "confirmed"),
-            "guest_chat": bool(cfg.guest_chat_enabled and (guest.rsvp_status == "confirmed" or not cfg.attending_only_chat)),
+            "guest_chat": chat_enabled,
+            "guest_chat_posting": bool(chat_enabled and cfg.guest_chat_posting_enabled),
         },
         "announcements": anns,
         "direct_messages": direct,
+        "chat_messages": await _chat_messages(event_id, db) if chat_enabled else [],
     }
 
 
@@ -473,6 +481,43 @@ async def _direct_messages(event_id: str, guest: Guest, db: AsyncSession) -> lis
     return [_message_out(m, _display_name(guest)) for m in rows]
 
 
+async def _chat_thread(event_id: str, db: AsyncSession, create: bool = False) -> EventMessageThread | None:
+    thread = await db.scalar(select(EventMessageThread).where(
+        EventMessageThread.event_id == event_id,
+        EventMessageThread.thread_type == "group_chat",
+        EventMessageThread.is_active.is_(True),
+    ))
+    if not thread and create:
+        thread = EventMessageThread(event_id=event_id, thread_type="group_chat", title="Guest Chat", created_by_type="system")
+        db.add(thread)
+        await db.flush()
+    return thread
+
+
+async def _chat_messages(event_id: str, db: AsyncSession, include_hidden: bool = False) -> list[dict[str, Any]]:
+    thread = await _chat_thread(event_id, db)
+    if not thread:
+        return []
+    where = [
+        EventMessage.thread_id == thread.id,
+        EventMessage.message_type == "group_chat",
+        EventMessage.status != "deleted",
+    ]
+    if not include_hidden:
+        where.append(EventMessage.status == "active")
+    rows = (await db.execute(
+        select(EventMessage, Guest)
+        .outerjoin(Guest, Guest.id == EventMessage.guest_id)
+        .where(and_(*where))
+        .order_by(EventMessage.created_at.desc())
+        .limit(80)
+    )).all()
+    return [
+        _message_out(message, _display_name(guest) if guest else None)
+        for message, guest in reversed(rows)
+    ]
+
+
 @app.post("/api/messaging/events/{event_id}/messages/direct")
 async def guest_direct_message(event_id: str, payload: MessageIn, token: str = Query(...), db: AsyncSession = Depends(get_db)):
     _ensure_enabled()
@@ -484,6 +529,35 @@ async def guest_direct_message(event_id: str, payload: MessageIn, token: str = Q
     thread = await _direct_thread(event_id, guest, db, create=True)
     body = _clean(payload.body, settings.message_max_length)
     msg = EventMessage(event_id=event_id, thread_id=thread.id, sender_type="guest", sender_id=guest.id, guest_id=guest.id, message_type="direct", body=body)
+    thread.updated_at = datetime.utcnow()
+    db.add(msg)
+    await db.commit()
+    await db.refresh(msg)
+    return _message_out(msg, _display_name(guest))
+
+
+@app.post("/api/messaging/events/{event_id}/messages/chat")
+async def guest_chat_message(event_id: str, payload: MessageIn, token: str = Query(...), db: AsyncSession = Depends(get_db)):
+    _ensure_enabled()
+    guest = await guest_by_token(event_id, token, db)
+    cfg = await get_settings(event_id, db)
+    if not cfg.guest_chat_enabled:
+        raise HTTPException(403, "Guest Chat is disabled for this event")
+    if cfg.attending_only_chat and guest.rsvp_status != "confirmed":
+        raise HTTPException(403, "Guest Chat is only available to attending guests")
+    if not cfg.guest_chat_posting_enabled:
+        raise HTTPException(403, "Guest Chat posting is paused")
+    _rate_limit(f"chat:{guest.id}", settings.guest_chat_rate_limit)
+    thread = await _chat_thread(event_id, db, create=True)
+    msg = EventMessage(
+        event_id=event_id,
+        thread_id=thread.id,
+        sender_type="guest",
+        sender_id=guest.id,
+        guest_id=guest.id,
+        message_type="group_chat",
+        body=_clean(payload.body, settings.message_max_length),
+    )
     thread.updated_at = datetime.utcnow()
     db.add(msg)
     await db.commit()
@@ -605,3 +679,35 @@ async def admin_reply(event_id: str, thread_id: str, payload: MessageIn, user: U
     await db.commit()
     await db.refresh(msg)
     return _message_out(msg)
+
+
+@app.get("/api/messaging/admin/events/{event_id}/messages/chat")
+async def admin_chat_messages(event_id: str, user: User = Depends(current_user), db: AsyncSession = Depends(get_db)):
+    await require_event_admin(event_id, user, db)
+    return await _chat_messages(event_id, db, include_hidden=True)
+
+
+@app.patch("/api/messaging/admin/events/{event_id}/messages/chat/{message_id}")
+async def admin_moderate_chat_message(
+    event_id: str,
+    message_id: str,
+    patch: MessageModerationPatch,
+    user: User = Depends(current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    await require_event_admin(event_id, user, db)
+    if patch.status not in {"active", "hidden"}:
+        raise HTTPException(422, "Status must be active or hidden")
+    msg = await db.scalar(select(EventMessage).where(
+        EventMessage.id == message_id,
+        EventMessage.event_id == event_id,
+        EventMessage.message_type == "group_chat",
+    ))
+    if not msg:
+        raise HTTPException(404, "Chat message not found")
+    msg.status = patch.status
+    msg.updated_at = datetime.utcnow()
+    await db.commit()
+    await db.refresh(msg)
+    guest = await db.get(Guest, msg.guest_id) if msg.guest_id else None
+    return _message_out(msg, _display_name(guest) if guest else None)

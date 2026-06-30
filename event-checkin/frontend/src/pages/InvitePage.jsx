@@ -694,6 +694,7 @@ export default function InvitePage() {
   const deadline = deadlineText(event)
   const about = event.description || event.invite_message || 'We are excited to celebrate this special occasion with family and friends. Please RSVP so we can prepare properly for your attendance.'
   const admissionNote = event.admission_note || 'Your RSVP generates a personal QR code. Please bring it with you for check-in at the entrance.'
+  const heroWhen = [dateLabel, timeLabel].filter(Boolean).join(' · ')
   const capacityLabel = event.rsvp_capacity != null ? `${event.rsvp_count} / ${event.rsvp_capacity} spots claimed` : ''
 
   let rsvpPanel
@@ -790,10 +791,9 @@ export default function InvitePage() {
             </div>
 
             <div className="grid gap-4 sm:grid-cols-2">
-              <DetailRow icon="📅" label="Date" value={dateLabel} />
-              <DetailRow icon="🕐" label="Time" value={timeLabel} />
+              <DetailRow icon="📅" label="When" value={heroWhen} />
               <DetailRow icon="📍" label="Location" value={venue || 'Venue details coming soon'} />
-              <DetailRow icon="🎟️" label="Admission" value={admissionNote} />
+              <DetailRow icon="🎟️" label="Admission" value="QR ticket at entry" />
             </div>
 
             <div className="flex flex-col gap-3 sm:flex-row">

@@ -65,16 +65,29 @@ function fmtTime(iso) {
   return d.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' })
 }
 
+function isGenericEventName(value) {
+  const name = (value || '').trim().toLowerCase()
+  return !name || ['event', 'e-event', 'new event', 'untitled event', 'test event'].includes(name)
+}
+
 function eventTitle(event) {
-  return event?.name || 'This special event'
+  const name = (event?.name || '').trim()
+  if (!isGenericEventName(name)) return name
+  const text = `${event?.description || ''} ${event?.invite_message || ''}`.toLowerCase()
+  if (text.includes('birthday')) return 'Birthday Celebration'
+  return 'Special Celebration'
 }
 
 function venueText(event) {
-  return event?.venue_name || event?.venue || event?.location || event?.venue_address || event?.address || ''
+  const name = event?.venue_name || event?.venue || event?.location || ''
+  const address = event?.venue_address || event?.address || ''
+  if (name && address && name !== address) return `${name} · ${address}`
+  return name || address
 }
 
 function hostText(event) {
-  return event?.host_name || event?.organizer_name || event?.couples_name || ''
+  const host = event?.host_name || event?.organizer_name || event?.couples_name || ''
+  return isGenericEventName(host) ? '' : host
 }
 
 function deadlineText(event) {
@@ -89,7 +102,7 @@ function PrimaryButton({ children, className = '', ...props }) {
   return (
     <button
       {...props}
-      className={`inline-flex min-h-12 items-center justify-center rounded-2xl bg-teal-500 px-6 py-3 text-sm font-extrabold text-slate-950 shadow-lg shadow-teal-950/20 transition hover:-translate-y-0.5 hover:bg-teal-300 focus:outline-none focus:ring-4 focus:ring-teal-300/35 disabled:pointer-events-none disabled:opacity-55 ${className}`}
+      className={`inline-flex min-h-14 items-center justify-center rounded-2xl bg-teal-400 px-7 py-3.5 text-base font-extrabold text-slate-950 shadow-xl shadow-teal-950/25 transition hover:-translate-y-0.5 hover:bg-teal-300 hover:shadow-2xl hover:shadow-teal-950/30 focus:outline-none focus:ring-4 focus:ring-teal-300/35 disabled:pointer-events-none disabled:opacity-55 ${className}`}
     >
       {children}
     </button>
@@ -100,7 +113,7 @@ function SecondaryButton({ children, className = '', ...props }) {
   return (
     <button
       {...props}
-      className={`inline-flex min-h-12 items-center justify-center rounded-2xl border border-white/15 bg-white/[0.08] px-6 py-3 text-sm font-bold text-white transition hover:-translate-y-0.5 hover:bg-white/[0.14] focus:outline-none focus:ring-4 focus:ring-teal-300/25 disabled:pointer-events-none disabled:opacity-55 ${className}`}
+      className={`inline-flex min-h-14 items-center justify-center rounded-2xl border border-white/15 bg-white/[0.08] px-7 py-3.5 text-base font-bold text-white transition hover:-translate-y-0.5 hover:bg-white/[0.14] focus:outline-none focus:ring-4 focus:ring-teal-300/25 disabled:pointer-events-none disabled:opacity-55 ${className}`}
     >
       {children}
     </button>
@@ -111,9 +124,9 @@ function EventPoster({ event }) {
   const title = eventTitle(event)
   if (event.invite_cover_image) {
     return (
-      <div className="relative">
-        <div className="absolute -inset-4 rounded-[2rem] bg-teal-300/15 blur-2xl" />
-        <div className="relative overflow-hidden rounded-[1.5rem] border border-white/[0.12] bg-slate-950 shadow-2xl shadow-black/35">
+      <div className="relative mx-auto w-full max-w-[420px]">
+        <div className="absolute -inset-5 rounded-[2rem] bg-teal-300/20 blur-3xl" />
+        <div className="relative overflow-hidden rounded-[1.6rem] border border-white/[0.14] bg-slate-950 shadow-2xl shadow-black/45">
           <img
             src={event.invite_cover_image}
             alt={`${title} event flyer`}
@@ -125,13 +138,13 @@ function EventPoster({ event }) {
   }
 
   return (
-    <div className="relative">
-      <div className="absolute -inset-4 rounded-[2rem] bg-teal-300/15 blur-2xl" />
-      <div className="relative flex aspect-[4/5] w-full flex-col justify-between overflow-hidden rounded-[1.5rem] border border-white/[0.12] bg-[linear-gradient(145deg,#0f172a,#113f46_52%,#14b8a6)] p-7 shadow-2xl shadow-black/35">
+    <div className="relative mx-auto w-full max-w-[420px]">
+      <div className="absolute -inset-5 rounded-[2rem] bg-teal-300/20 blur-3xl" />
+      <div className="relative flex aspect-[4/5] w-full flex-col justify-between overflow-hidden rounded-[1.6rem] border border-white/[0.14] bg-[linear-gradient(145deg,#0f172a,#113f46_52%,#14b8a6)] p-8 shadow-2xl shadow-black/45">
         <div className="h-16 w-16 rounded-2xl border border-white/20 bg-white/10" />
         <div>
           <div className="mb-3 text-xs font-extrabold uppercase tracking-[0.28em] text-teal-100">You're invited</div>
-          <div className="text-4xl font-extrabold leading-tight text-white">{title}</div>
+          <div className="text-4xl font-extrabold leading-tight text-white sm:text-5xl">{title}</div>
           {event.event_date && <div className="mt-5 text-sm font-semibold text-teal-50">{fmtDate(event.event_date)}</div>}
         </div>
       </div>
@@ -142,11 +155,11 @@ function EventPoster({ event }) {
 function DetailRow({ icon, label, value }) {
   if (!value) return null
   return (
-    <div className="flex gap-3 rounded-2xl border border-white/10 bg-white/[0.06] p-4">
-      <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-teal-300/15 text-lg" aria-hidden="true">{icon}</span>
+    <div className="flex gap-3 rounded-2xl border border-white/10 bg-white/[0.07] p-4">
+      <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-teal-300/15 text-lg" aria-hidden="true">{icon}</span>
       <div>
         <div className="text-xs font-extrabold uppercase tracking-[0.16em] text-slate-400">{label}</div>
-        <div className="mt-1 text-sm font-semibold leading-relaxed text-white">{value}</div>
+        <div className="mt-1 text-sm font-semibold leading-relaxed text-white sm:text-[15px]">{value}</div>
       </div>
     </div>
   )
@@ -742,7 +755,7 @@ export default function InvitePage() {
           {prior.rsvp_status === 'declined'
             ? 'You let the host know you cannot make it.'
             : prior.rsvp_status === 'pending'
-              ? 'Your RSVP is awaiting the host approval.'
+              ? 'Your RSVP is awaiting host approval.'
               : 'You are on the guest list. Your ticket was sent to you.'}
         </div>
         <div className="mt-4 text-sm font-semibold text-slate-500">Need to change it? Contact the host.</div>
@@ -753,29 +766,29 @@ export default function InvitePage() {
   }
 
   return (
-    <div className="invite-page min-h-screen bg-[radial-gradient(circle_at_18%_0%,rgba(20,184,166,0.22),transparent_34rem),linear-gradient(140deg,#07111f_0%,#0f172a_48%,#132f38_100%)] text-white">
-      <header className="px-5 py-5">
-        <div className="mx-auto flex max-w-6xl items-center justify-between">
-          <span className="text-xs font-extrabold uppercase tracking-[0.26em] text-teal-100">You're invited</span>
-          <span className="rounded-full border border-white/10 bg-white/[0.08] px-3 py-1.5 text-xs font-bold text-white/80">EventQR</span>
+    <div className="invite-page min-h-screen bg-[radial-gradient(circle_at_18%_0%,rgba(20,184,166,0.24),transparent_36rem),linear-gradient(140deg,#07111f_0%,#0f172a_48%,#132f38_100%)] text-white">
+      <header className="px-5 py-6 sm:px-6">
+        <div className="mx-auto flex max-w-[1180px] items-center justify-between">
+          <span className="text-sm font-extrabold uppercase tracking-[0.24em] text-teal-100">You're invited</span>
+          <span className="rounded-full border border-white/10 bg-white/[0.08] px-4 py-2 text-sm font-bold text-white/85">EventQR</span>
         </div>
       </header>
 
-      <main className="mx-auto max-w-6xl px-5 pb-14">
-        <section className="grid items-center gap-9 py-5 md:grid-cols-[0.92fr_1.08fr] md:py-12">
+      <main className="mx-auto max-w-[1180px] px-5 pb-16 sm:px-6">
+        <section className="grid items-center gap-10 py-7 md:grid-cols-[minmax(320px,420px)_minmax(0,1fr)] md:gap-12 lg:gap-16 lg:py-14">
           <EventPoster event={event} />
 
-          <div className="space-y-7">
+          <div className="space-y-8">
             <div>
-              <div className="mb-3 text-sm font-extrabold uppercase tracking-[0.22em] text-teal-200">You're invited to</div>
-              <h1 className="max-w-3xl text-4xl font-extrabold leading-[1.04] text-white sm:text-5xl lg:text-6xl">{title}</h1>
-              {host && <p className="mt-4 text-lg font-semibold text-teal-50">{host}</p>}
-              <p className="mt-5 max-w-2xl text-base leading-8 text-slate-300">
+              <div className="mb-4 text-sm font-extrabold uppercase tracking-[0.24em] text-teal-200">You're invited to</div>
+              <h1 className="max-w-3xl text-5xl font-extrabold leading-[1.02] text-white sm:text-6xl lg:text-7xl">{title}</h1>
+              {host && <p className="mt-5 text-xl font-semibold text-teal-50">{host}</p>}
+              <p className="mt-6 max-w-2xl text-lg leading-8 text-slate-300">
                 {event.invite_message || 'Join us for a beautiful evening of celebration, food, memories, and good company.'}
               </p>
             </div>
 
-            <div className="grid gap-3 sm:grid-cols-2">
+            <div className="grid gap-4 sm:grid-cols-2">
               <DetailRow icon="📅" label="Date" value={dateLabel} />
               <DetailRow icon="🕐" label="Time" value={timeLabel} />
               <DetailRow icon="📍" label="Location" value={venue || 'Venue details coming soon'} />
@@ -789,13 +802,13 @@ export default function InvitePage() {
           </div>
         </section>
 
-        <section id="details" className="grid gap-5 py-6 md:grid-cols-3">
-          <div className="rounded-3xl border border-white/10 bg-white/[0.07] p-5 shadow-xl shadow-black/10 backdrop-blur md:col-span-2">
-            <div className="mb-5 flex items-center justify-between gap-4">
-              <h2 className="text-2xl font-extrabold">Event details</h2>
+        <section id="details" className="grid gap-6 py-8 md:grid-cols-[minmax(0,1.55fr)_minmax(300px,0.75fr)]">
+          <div className="rounded-3xl border border-white/10 bg-white/[0.07] p-6 shadow-xl shadow-black/10 backdrop-blur sm:p-7">
+            <div className="mb-6 flex items-center justify-between gap-4">
+              <h2 className="text-3xl font-extrabold">Event details</h2>
               {capacityLabel && <span className="rounded-full bg-white/10 px-3 py-1 text-xs font-bold text-slate-200">{capacityLabel}</span>}
             </div>
-            <div className="grid gap-3 sm:grid-cols-2">
+            <div className="grid gap-4 sm:grid-cols-2">
               <DetailRow icon="📅" label="Date" value={dateLabel} />
               <DetailRow icon="🕐" label="Time" value={timeLabel} />
               <DetailRow icon="📍" label="Venue" value={venue || 'Venue details coming soon'} />
@@ -805,9 +818,9 @@ export default function InvitePage() {
             </div>
           </div>
 
-          <div className="rounded-3xl border border-white/10 bg-white/[0.07] p-5 shadow-xl shadow-black/10 backdrop-blur">
-            <h2 className="text-2xl font-extrabold">About this event</h2>
-            <p className="mt-4 text-sm leading-7 text-slate-300">{about}</p>
+          <div className="rounded-3xl border border-white/10 bg-white/[0.07] p-6 shadow-xl shadow-black/10 backdrop-blur sm:p-7">
+            <h2 className="text-3xl font-extrabold">About this event</h2>
+            <p className="mt-5 text-base leading-8 text-slate-300">{about}</p>
             {event.registry_enabled && event.registry_token && (
               <a href={`/registry/${event.registry_token}`} className="mt-5 inline-flex min-h-11 items-center justify-center rounded-2xl border border-white/15 bg-white/10 px-4 py-2 text-sm font-bold text-white transition hover:bg-white/15">
                 View gift list
@@ -816,8 +829,8 @@ export default function InvitePage() {
           </div>
         </section>
 
-        <section id="rsvp" className="scroll-mt-6 py-7">
-          <div className="mx-auto max-w-3xl rounded-[1.5rem] border border-white/10 bg-white p-5 text-slate-950 shadow-2xl shadow-black/25 sm:p-7">
+        <section id="rsvp" className="scroll-mt-6 py-9">
+          <div className="mx-auto w-full max-w-[680px] rounded-[1.65rem] border border-white/15 bg-white p-5 text-slate-950 shadow-2xl shadow-black/30 sm:p-8">
             {rsvpPanel}
           </div>
         </section>

@@ -70,7 +70,7 @@ function eventTitle(event) {
 }
 
 function venueText(event) {
-  return event?.venue || event?.location || event?.address || ''
+  return event?.venue_name || event?.venue || event?.location || event?.venue_address || event?.address || ''
 }
 
 function hostText(event) {
@@ -100,7 +100,7 @@ function SecondaryButton({ children, className = '', ...props }) {
   return (
     <button
       {...props}
-      className={`inline-flex min-h-12 items-center justify-center rounded-2xl border border-white/15 bg-white/8 px-6 py-3 text-sm font-bold text-white transition hover:-translate-y-0.5 hover:bg-white/14 focus:outline-none focus:ring-4 focus:ring-teal-300/25 disabled:pointer-events-none disabled:opacity-55 ${className}`}
+      className={`inline-flex min-h-12 items-center justify-center rounded-2xl border border-white/15 bg-white/[0.08] px-6 py-3 text-sm font-bold text-white transition hover:-translate-y-0.5 hover:bg-white/[0.14] focus:outline-none focus:ring-4 focus:ring-teal-300/25 disabled:pointer-events-none disabled:opacity-55 ${className}`}
     >
       {children}
     </button>
@@ -113,7 +113,7 @@ function EventPoster({ event }) {
     return (
       <div className="relative">
         <div className="absolute -inset-4 rounded-[2rem] bg-teal-300/15 blur-2xl" />
-        <div className="relative overflow-hidden rounded-[1.5rem] border border-white/12 bg-slate-950 shadow-2xl shadow-black/35">
+        <div className="relative overflow-hidden rounded-[1.5rem] border border-white/[0.12] bg-slate-950 shadow-2xl shadow-black/35">
           <img
             src={event.invite_cover_image}
             alt={`${title} event flyer`}
@@ -127,7 +127,7 @@ function EventPoster({ event }) {
   return (
     <div className="relative">
       <div className="absolute -inset-4 rounded-[2rem] bg-teal-300/15 blur-2xl" />
-      <div className="relative flex aspect-[4/5] w-full flex-col justify-between overflow-hidden rounded-[1.5rem] border border-white/12 bg-[linear-gradient(145deg,#0f172a,#113f46_52%,#14b8a6)] p-7 shadow-2xl shadow-black/35">
+      <div className="relative flex aspect-[4/5] w-full flex-col justify-between overflow-hidden rounded-[1.5rem] border border-white/[0.12] bg-[linear-gradient(145deg,#0f172a,#113f46_52%,#14b8a6)] p-7 shadow-2xl shadow-black/35">
         <div className="h-16 w-16 rounded-2xl border border-white/20 bg-white/10" />
         <div>
           <div className="mb-3 text-xs font-extrabold uppercase tracking-[0.28em] text-teal-100">You're invited</div>
@@ -152,17 +152,9 @@ function DetailRow({ icon, label, value }) {
   )
 }
 
-function StatusBox({ children }) {
-  return (
-    <div className="rounded-2xl border border-teal-300/25 bg-teal-300/10 px-4 py-3 text-sm leading-relaxed text-teal-50">
-      {children}
-    </div>
-  )
-}
-
 // ── Question input components ──────────────────────────────────────────────────
 
-function QuestionField({ question, value, onChange, theme }) {
+function QuestionField({ question, value, onChange }) {
   const baseInput = 'w-full min-h-12 rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-950 placeholder-slate-400 focus:outline-none focus:ring-4 focus:ring-teal-300/20'
 
   if (question.question_type === 'boolean') {
@@ -399,7 +391,7 @@ function RSVPForm({ event, theme, onConfirmed }) {
 
 // ── Confirmation view ─────────────────────────────────────────────────────────
 
-function ConfirmView({ confirm, event, theme }) {
+function ConfirmView({ confirm, event }) {
   const ticketUrl = confirm.qr_token ? `/scan/${confirm.qr_token}` : ''
   return (
     <div className="space-y-5">
@@ -679,162 +671,162 @@ export default function InvitePage() {
   )
 
   const theme = event.invite_theme || 'default'
-  const t = THEMES[theme] || THEMES.default
   const atCapacity = event.rsvp_capacity != null && event.rsvp_count >= event.rsvp_capacity
   const deadlinePassed = !!event.deadline_passed
+  const title = eventTitle(event)
+  const dateLabel = fmtDate(event.event_date)
+  const timeLabel = fmtTime(event.event_date)
+  const venue = venueText(event)
+  const host = hostText(event)
+  const deadline = deadlineText(event)
+  const about = event.description || event.invite_message || 'We are excited to celebrate this special occasion with family and friends. Please RSVP so we can prepare properly for your attendance.'
+  const capacityLabel = event.rsvp_capacity != null ? `${event.rsvp_count} / ${event.rsvp_capacity} spots claimed` : ''
+
+  let rsvpPanel
+  if (confirmed) {
+    rsvpPanel = confirmed.rsvp_status === 'declined'
+      ? <DeclinedView confirm={confirmed} />
+      : confirmed.rsvp_status === 'pending'
+        ? <PendingView confirm={confirmed} />
+        : <ConfirmView confirm={confirmed} event={event} />
+  } else if (tokenMode) {
+    rsvpPanel = deadlinePassed ? (
+      <div className="rounded-3xl border border-slate-200 bg-slate-50 p-5 text-center">
+        <div className="text-lg font-extrabold text-slate-800">RSVP has closed for this event.</div>
+        {tokenMeta.already_responded && (
+          <div className="mt-2 text-sm text-slate-500">
+            Your response: <span className="font-bold">{guest?.rsvp_status === 'confirmed' ? 'Attending' : 'Not attending'}</span>
+          </div>
+        )}
+      </div>
+    ) : (
+      <div className="space-y-5">
+        {tokenMeta.already_responded && (
+          <div className="rounded-2xl border border-teal-200 bg-teal-50 px-4 py-3 text-sm leading-relaxed text-teal-900">
+            You're currently marked as <span className="font-bold">{guest?.rsvp_status === 'confirmed' ? 'Attending' : 'Not attending'}</span>. You can update your RSVP before the deadline.
+          </div>
+        )}
+        <TokenRSVPForm event={event} prefill={guest} token={token} theme={theme} onDone={setConfirmed} />
+      </div>
+    )
+  } else if (!event.rsvp_enabled) {
+    rsvpPanel = (
+      <div className="rounded-3xl border border-slate-200 bg-slate-50 p-5 text-center text-sm font-semibold text-slate-600">
+        RSVP is not open yet. Check back soon.
+      </div>
+    )
+  } else if (event.invite_mode === 'closed') {
+    rsvpPanel = (
+      <div className="rounded-3xl border border-slate-200 bg-slate-50 p-5 text-center">
+        <div className="text-lg font-extrabold text-slate-800">This event is by invitation only.</div>
+        <div className="mt-2 text-sm text-slate-500">Please use the personal invite link sent to you.</div>
+      </div>
+    )
+  } else if (deadlinePassed) {
+    rsvpPanel = (
+      <div className="rounded-3xl border border-slate-200 bg-slate-50 p-5 text-center text-sm font-semibold text-slate-600">
+        RSVP has closed for this event.
+      </div>
+    )
+  } else if (atCapacity) {
+    rsvpPanel = (
+      <div className="rounded-3xl border border-red-200 bg-red-50 p-5 text-center text-sm font-bold text-red-700">
+        This event is at capacity.
+      </div>
+    )
+  } else if (prior) {
+    rsvpPanel = (
+      <div className="rounded-3xl border border-teal-200 bg-teal-50 p-5 text-center">
+        <div className="text-2xl font-extrabold text-slate-950">You've already RSVP'd{prior.first_name ? `, ${prior.first_name}` : ''}.</div>
+        <div className="mt-2 text-sm leading-relaxed text-slate-600">
+          {prior.rsvp_status === 'declined'
+            ? 'You let the host know you cannot make it.'
+            : prior.rsvp_status === 'pending'
+              ? 'Your RSVP is awaiting the host approval.'
+              : 'You are on the guest list. Your ticket was sent to you.'}
+        </div>
+        <div className="mt-4 text-sm font-semibold text-slate-500">Need to change it? Contact the host.</div>
+      </div>
+    )
+  } else {
+    rsvpPanel = <RSVPForm event={event} theme={theme} onConfirmed={handleConfirmed} />
+  }
 
   return (
-    <div className={`min-h-screen ${t.bg} flex flex-col`}>
-      {/* Header band */}
-      <div className={`${t.header} py-3 px-4`}>
-        <div className="max-w-lg mx-auto flex items-center justify-between">
-          <span className="text-white/80 text-xs font-semibold tracking-widest uppercase">You're Invited</span>
-          <span className="text-white/60 text-xs">EventQR</span>
+    <div className="invite-page min-h-screen bg-[radial-gradient(circle_at_18%_0%,rgba(20,184,166,0.22),transparent_34rem),linear-gradient(140deg,#07111f_0%,#0f172a_48%,#132f38_100%)] text-white">
+      <header className="px-5 py-5">
+        <div className="mx-auto flex max-w-6xl items-center justify-between">
+          <span className="text-xs font-extrabold uppercase tracking-[0.26em] text-teal-100">You're invited</span>
+          <span className="rounded-full border border-white/10 bg-white/[0.08] px-3 py-1.5 text-xs font-bold text-white/80">EventQR</span>
         </div>
-      </div>
+      </header>
 
-      {/* Card */}
-      <div className="flex-1 flex items-start justify-center px-4 py-8">
-        <div className={`w-full max-w-lg rounded-2xl shadow-xl border ${t.border} ${t.card} overflow-hidden`}>
+      <main className="mx-auto max-w-6xl px-5 pb-14">
+        <section className="grid items-center gap-9 py-5 md:grid-cols-[0.92fr_1.08fr] md:py-12">
+          <EventPoster event={event} />
 
-          {/* Event hero — cover image as its own banner (no text overlaid),
-              with the title/date in a solid band directly below it. */}
-          {event.invite_cover_image && (
-            <div className="h-48 bg-slate-900 flex items-center justify-center">
-              <img
-                src={event.invite_cover_image}
-                alt={event.name}
-                className="w-full h-full object-contain"
-              />
+          <div className="space-y-7">
+            <div>
+              <div className="mb-3 text-sm font-extrabold uppercase tracking-[0.22em] text-teal-200">You're invited to</div>
+              <h1 className="max-w-3xl text-4xl font-extrabold leading-[1.04] text-white sm:text-5xl lg:text-6xl">{title}</h1>
+              {host && <p className="mt-4 text-lg font-semibold text-teal-50">{host}</p>}
+              <p className="mt-5 max-w-2xl text-base leading-8 text-slate-300">
+                {event.invite_message || 'Join us for a beautiful evening of celebration, food, memories, and good company.'}
+              </p>
             </div>
-          )}
-          <div className={`${t.header} px-6 py-6 text-white`}>
-            <div className="text-2xl font-extrabold leading-tight">{event.name}</div>
-            {event.couples_name && (
-              <div className="mt-1 text-white/80 text-sm font-medium">{event.couples_name}</div>
-            )}
-            <div className="mt-4 flex flex-wrap gap-4 text-sm">
-              <div className="flex items-center gap-1.5 text-white/90">
-                <span>📅</span>
-                <span>{fmtDate(event.event_date)}</span>
-              </div>
-              <div className="flex items-center gap-1.5 text-white/90">
-                <span>🕐</span>
-                <span>{fmtTime(event.event_date)}</span>
-              </div>
+
+            <div className="grid gap-3 sm:grid-cols-2">
+              <DetailRow icon="📅" label="Date" value={dateLabel} />
+              <DetailRow icon="🕐" label="Time" value={timeLabel} />
+              <DetailRow icon="📍" label="Location" value={venue || 'Venue details coming soon'} />
+              <DetailRow icon="🎟️" label="Admission" value="RSVP to receive your personal QR ticket." />
+            </div>
+
+            <div className="flex flex-col gap-3 sm:flex-row">
+              <PrimaryButton type="button" onClick={scrollToRsvp}>Confirm My RSVP</PrimaryButton>
+              <SecondaryButton type="button" onClick={() => document.getElementById('details')?.scrollIntoView({ behavior: 'smooth' })}>View Event Details</SecondaryButton>
+            </div>
+          </div>
+        </section>
+
+        <section id="details" className="grid gap-5 py-6 md:grid-cols-3">
+          <div className="rounded-3xl border border-white/10 bg-white/[0.07] p-5 shadow-xl shadow-black/10 backdrop-blur md:col-span-2">
+            <div className="mb-5 flex items-center justify-between gap-4">
+              <h2 className="text-2xl font-extrabold">Event details</h2>
+              {capacityLabel && <span className="rounded-full bg-white/10 px-3 py-1 text-xs font-bold text-slate-200">{capacityLabel}</span>}
+            </div>
+            <div className="grid gap-3 sm:grid-cols-2">
+              <DetailRow icon="📅" label="Date" value={dateLabel} />
+              <DetailRow icon="🕐" label="Time" value={timeLabel} />
+              <DetailRow icon="📍" label="Venue" value={venue || 'Venue details coming soon'} />
+              <DetailRow icon="👤" label="Host" value={host} />
+              <DetailRow icon="⏳" label="RSVP deadline" value={deadline} />
+              <DetailRow icon="✓" label="Admission note" value="Your RSVP generates a personal QR code. Please bring it with you for check-in at the entrance." />
             </div>
           </div>
 
-          {/* Body */}
-          <div className="px-6 py-6 space-y-5">
-            {/* Custom invite message */}
-            {event.invite_message && (
-              <div className={`rounded-xl border px-4 py-3 text-sm leading-relaxed text-slate-700 dark:text-slate-300 ${t.border} ${t.badge}`}>
-                {event.invite_message}
-              </div>
-            )}
-
-            {/* Description */}
-            {event.description && (
-              <div className="text-sm text-slate-600 dark:text-slate-400 leading-relaxed">
-                {event.description}
-              </div>
-            )}
-
-            {/* Capacity badge */}
-            {event.rsvp_capacity != null && (
-              <div className="flex items-center gap-2 text-xs text-slate-500 dark:text-slate-400">
-                <span>👥</span>
-                <span>{event.rsvp_count} / {event.rsvp_capacity} spots claimed</span>
-                {atCapacity && <span className="font-semibold text-red-500">FULL</span>}
-              </div>
-            )}
-
-            <hr className={`border-t ${t.border}`} />
-
-            {/* RSVP section */}
-            {confirmed ? (
-              confirmed.rsvp_status === 'declined'
-                ? <DeclinedView confirm={confirmed} />
-                : confirmed.rsvp_status === 'pending'
-                  ? <PendingView confirm={confirmed} />
-                  : <ConfirmView confirm={confirmed} event={event} theme={theme} />
-            ) : tokenMode ? (
-              /* ── Personalised (closed-mode) invite ── */
-              deadlinePassed ? (
-                <div className="text-center py-4 space-y-1">
-                  <div className="text-sm font-semibold text-slate-600 dark:text-slate-300">RSVP has closed for this event.</div>
-                  {tokenMeta.already_responded && (
-                    <div className="text-xs text-slate-400 dark:text-slate-500">
-                      Your response: <span className="font-semibold">{guest?.rsvp_status === 'confirmed' ? 'Attending' : 'Not attending'}</span>
-                    </div>
-                  )}
-                </div>
-              ) : (
-                <>
-                  <div className={`text-sm font-bold ${t.accent}`}>RSVP</div>
-                  {tokenMeta.already_responded && (
-                    <div className={`rounded-lg border px-3 py-2 text-xs ${t.badge} ${t.border}`}>
-                      You previously responded <span className="font-semibold">{guest?.rsvp_status === 'confirmed' ? '“Attending”' : '“Not attending”'}</span>. You can update it below until the deadline.
-                    </div>
-                  )}
-                  <TokenRSVPForm event={event} prefill={guest} token={token} theme={theme} onDone={setConfirmed} />
-                </>
-              )
-            ) : !event.rsvp_enabled ? (
-              <div className="text-center py-4 text-sm text-slate-500 dark:text-slate-400">
-                RSVP is not open yet. Check back soon.
-              </div>
-            ) : event.invite_mode === 'closed' ? (
-              <div className="text-center py-4 space-y-1">
-                <div className="text-sm font-semibold text-slate-600 dark:text-slate-300">This event is by invitation only.</div>
-                <div className="text-xs text-slate-400 dark:text-slate-500">Please use the personal invite link sent to you.</div>
-              </div>
-            ) : deadlinePassed ? (
-              <div className="text-center py-4 space-y-1">
-                <div className="text-sm font-semibold text-slate-600 dark:text-slate-300">RSVP has closed for this event.</div>
-              </div>
-            ) : atCapacity ? (
-              <div className="text-center py-4">
-                <div className="text-sm font-semibold text-red-600 dark:text-red-400">This event is at capacity.</div>
-              </div>
-            ) : prior ? (
-              <div className="text-center py-4 space-y-2">
-                <div className="text-xl font-bold text-slate-900 dark:text-white">You've already RSVP'd{prior.first_name ? `, ${prior.first_name}` : ''}.</div>
-                <div className="text-sm text-slate-500 dark:text-slate-400">
-                  {prior.rsvp_status === 'declined'
-                    ? 'You let the host know you can’t make it.'
-                    : prior.rsvp_status === 'pending'
-                      ? 'Your RSVP is awaiting the host’s approval.'
-                      : 'You’re on the guest list — your ticket was sent to you.'}
-                </div>
-                <div className="text-xs text-slate-400 dark:text-slate-500">Need to change it? Contact the host.</div>
-              </div>
-            ) : (
-              <>
-                <div className={`text-sm font-bold ${t.accent}`}>RSVP</div>
-                <RSVPForm event={event} theme={theme} onConfirmed={handleConfirmed} />
-              </>
+          <div className="rounded-3xl border border-white/10 bg-white/[0.07] p-5 shadow-xl shadow-black/10 backdrop-blur">
+            <h2 className="text-2xl font-extrabold">About this event</h2>
+            <p className="mt-4 text-sm leading-7 text-slate-300">{about}</p>
+            {event.registry_enabled && event.registry_token && (
+              <a href={`/registry/${event.registry_token}`} className="mt-5 inline-flex min-h-11 items-center justify-center rounded-2xl border border-white/15 bg-white/10 px-4 py-2 text-sm font-bold text-white transition hover:bg-white/15">
+                View gift list
+              </a>
             )}
           </div>
-        </div>
-      </div>
+        </section>
 
-      {/* Gift registry link */}
-      {event.registry_enabled && event.registry_token && (
-        <div className="pb-6 text-center">
-          <a href={`/registry/${event.registry_token}`}
-            className="inline-flex items-center gap-2 bg-white/80 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-full px-5 py-2.5 text-sm font-semibold text-slate-700 dark:text-slate-200 hover:bg-white dark:hover:bg-slate-700 shadow-sm">
-            View gift list
-          </a>
-        </div>
-      )}
+        <section id="rsvp" className="scroll-mt-6 py-7">
+          <div className="mx-auto max-w-3xl rounded-[1.5rem] border border-white/10 bg-white p-5 text-slate-950 shadow-2xl shadow-black/25 sm:p-7">
+            {rsvpPanel}
+          </div>
+        </section>
+      </main>
 
-      {/* Footer — branding shown only on free events */}
       {!event.is_paid && (
-        <div className="py-4 text-center text-xs text-slate-400 dark:text-slate-600">
+        <footer className="pb-6 text-center text-xs font-semibold text-slate-500">
           Powered by EventQR
-        </div>
+        </footer>
       )}
     </div>
   )

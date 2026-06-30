@@ -147,6 +147,14 @@ textarea:focus {
   border-radius: 0.75rem !important;
 }
 
+.invite-page .rounded-2xl {
+  border-radius: 1rem !important;
+}
+
+.invite-page .rounded-3xl {
+  border-radius: 1.5rem !important;
+}
+
 .dark .dark\:bg-slate-950,
 .dark .dark\:bg-slate-900,
 .dark .dark\:bg-slate-800 {

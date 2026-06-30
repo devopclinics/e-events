@@ -1107,6 +1107,8 @@ class InvitePageOut(BaseModel):
     couples_name: str
     event_date: datetime
     description: Optional[str]
+    venue_name: Optional[str] = None
+    venue_address: Optional[str] = None
     invite_theme: str
     invite_message: Optional[str]
     rsvp_token: Optional[str] = None

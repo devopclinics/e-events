@@ -27,6 +27,7 @@ class Settings(BaseSettings):
     firebase_credentials: str = ""
     superadmin_emails: str = ""
     messaging_enabled: bool = True
+    guest_hub_enabled: bool = True
     announcements_enabled: bool = True
     direct_host_messages_enabled: bool = True
     event_chat_enabled: bool = False
@@ -127,6 +128,7 @@ class EventGuestMessagingSettings(Base):
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
     event_id: Mapped[str] = mapped_column(String(36), ForeignKey("events.id"))
+    guest_hub_enabled: Mapped[bool] = mapped_column(Boolean, default=True)
     announcements_enabled: Mapped[bool] = mapped_column(Boolean, default=True)
     direct_host_messages_enabled: Mapped[bool] = mapped_column(Boolean, default=True)
     guest_chat_enabled: Mapped[bool] = mapped_column(Boolean, default=False)
@@ -302,12 +304,18 @@ async def guest_by_token(event_id: str, token: str, db: AsyncSession) -> Guest:
     return guest
 
 
+def require_accepted_guest(guest: Guest):
+    if guest.rsvp_status != "confirmed":
+        raise HTTPException(403, "Guest Hub is available after your RSVP is accepted.")
+
+
 async def get_settings(event_id: str, db: AsyncSession) -> EventGuestMessagingSettings:
     row = await db.scalar(select(EventGuestMessagingSettings).where(EventGuestMessagingSettings.event_id == event_id))
     if row:
         return row
     row = EventGuestMessagingSettings(
         event_id=event_id,
+        guest_hub_enabled=settings.guest_hub_enabled,
         announcements_enabled=settings.announcements_enabled,
         direct_host_messages_enabled=settings.direct_host_messages_enabled,
         guest_chat_enabled=settings.event_chat_enabled,
@@ -383,6 +391,7 @@ class MessageModerationPatch(BaseModel):
 
 
 class SettingsPatch(BaseModel):
+    guest_hub_enabled: bool | None = None
     announcements_enabled: bool | None = None
     direct_host_messages_enabled: bool | None = None
     guest_chat_enabled: bool | None = None
@@ -411,8 +420,11 @@ async def health(db: AsyncSession = Depends(get_db)):
 async def guest_hub(event_id: str, token: str = Query(...), db: AsyncSession = Depends(get_db)):
     _ensure_enabled()
     guest = await guest_by_token(event_id, token, db)
+    require_accepted_guest(guest)
     event = await db.get(Event, event_id)
     cfg = await get_settings(event_id, db)
+    if not cfg.guest_hub_enabled:
+        raise HTTPException(403, "Guest Hub is disabled for this event.")
     table = await db.get(SeatingTable, guest.table_id) if guest.table_id else None
     anns = []
     if cfg.announcements_enabled:
@@ -426,7 +438,7 @@ async def guest_hub(event_id: str, token: str = Query(...), db: AsyncSession = D
             if await _announcement_visible(ann, guest, db):
                 anns.append({"id": ann.id, "title": ann.title, "body": ann.body, "created_at": ann.created_at.isoformat()})
     direct = await _direct_messages(event_id, guest, db)
-    chat_enabled = bool(cfg.guest_chat_enabled and (guest.rsvp_status == "confirmed" or not cfg.attending_only_chat))
+    chat_enabled = bool(cfg.guest_chat_enabled)
     return {
         "guest": {
             "id": guest.id,
@@ -522,8 +534,11 @@ async def _chat_messages(event_id: str, db: AsyncSession, include_hidden: bool =
 async def guest_direct_message(event_id: str, payload: MessageIn, token: str = Query(...), db: AsyncSession = Depends(get_db)):
     _ensure_enabled()
     guest = await guest_by_token(event_id, token, db)
+    require_accepted_guest(guest)
     cfg = await get_settings(event_id, db)
-    if not cfg.direct_host_messages_enabled or guest.rsvp_status != "confirmed":
+    if not cfg.guest_hub_enabled:
+        raise HTTPException(403, "Guest Hub is disabled for this event.")
+    if not cfg.direct_host_messages_enabled:
         raise HTTPException(403, "Message Host is only available to confirmed guests")
     _rate_limit(f"direct:{guest.id}", settings.guest_message_rate_limit)
     thread = await _direct_thread(event_id, guest, db, create=True)
@@ -540,11 +555,12 @@ async def guest_direct_message(event_id: str, payload: MessageIn, token: str = Q
 async def guest_chat_message(event_id: str, payload: MessageIn, token: str = Query(...), db: AsyncSession = Depends(get_db)):
     _ensure_enabled()
     guest = await guest_by_token(event_id, token, db)
+    require_accepted_guest(guest)
     cfg = await get_settings(event_id, db)
+    if not cfg.guest_hub_enabled:
+        raise HTTPException(403, "Guest Hub is disabled for this event.")
     if not cfg.guest_chat_enabled:
         raise HTTPException(403, "Guest Chat is disabled for this event")
-    if cfg.attending_only_chat and guest.rsvp_status != "confirmed":
-        raise HTTPException(403, "Guest Chat is only available to attending guests")
     if not cfg.guest_chat_posting_enabled:
         raise HTTPException(403, "Guest Chat posting is paused")
     _rate_limit(f"chat:{guest.id}", settings.guest_chat_rate_limit)
@@ -571,6 +587,7 @@ async def admin_settings(event_id: str, user: User = Depends(current_user), db: 
     cfg = await get_settings(event_id, db)
     await db.commit()
     return {
+        "guest_hub_enabled": cfg.guest_hub_enabled,
         "announcements_enabled": cfg.announcements_enabled,
         "direct_host_messages_enabled": cfg.direct_host_messages_enabled,
         "guest_chat_enabled": cfg.guest_chat_enabled,

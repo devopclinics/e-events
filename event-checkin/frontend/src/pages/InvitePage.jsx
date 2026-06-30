@@ -614,6 +614,7 @@ function TokenRSVPForm({ event, prefill, token, theme, onDone }) {
 function GuestHub({ event, accessToken }) {
   const [hub, setHub] = useState(null)
   const [error, setError] = useState('')
+  const [hidden, setHidden] = useState(false)
   const [message, setMessage] = useState('')
   const [chatMessage, setChatMessage] = useState('')
   const [sending, setSending] = useState(false)
@@ -625,9 +626,15 @@ function GuestHub({ event, accessToken }) {
     async function load() {
       try {
         const data = await api.guestHub(event.id, accessToken)
-        if (!cancelled) { setHub(data); setError('') }
-      } catch {
-        if (!cancelled) setError('Event updates are temporarily unavailable.')
+        if (!cancelled) { setHub(data); setError(''); setHidden(false) }
+      } catch (err) {
+        if (cancelled) return
+        const msg = err.message || ''
+        if (msg.includes('disabled') || msg.includes('accepted')) {
+          setHidden(true)
+          return
+        }
+        setError('Event updates are temporarily unavailable.')
       }
     }
     load()
@@ -667,7 +674,7 @@ function GuestHub({ event, accessToken }) {
     }
   }
 
-  if (!accessToken) return null
+  if (!accessToken || hidden) return null
 
   return (
     <section className="py-2">
@@ -749,7 +756,9 @@ function GuestHub({ event, accessToken }) {
             </form>
           ) : (
             <div className="mt-4 rounded-xl border border-white/10 bg-slate-950/20 px-3 py-2 text-sm text-slate-400">
-              Message Host unlocks after your RSVP is confirmed.
+              {hub?.guest?.rsvp_status === 'confirmed'
+                ? 'Message Host is not enabled for this event.'
+                : 'Message Host unlocks after your RSVP is confirmed.'}
             </div>
           )}
         </div>

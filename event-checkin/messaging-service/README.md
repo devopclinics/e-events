@@ -33,6 +33,7 @@ Important variables:
 - `FIREBASE_CREDENTIALS`
 - `SUPERADMIN_EMAILS`
 - `MESSAGING_ENABLED=true`
+- `GUEST_HUB_ENABLED=true`
 - `ANNOUNCEMENTS_ENABLED=true`
 - `DIRECT_HOST_MESSAGES_ENABLED=true`
 - `EVENT_CHAT_ENABLED=false`
@@ -72,6 +73,7 @@ Admin routes:
 Implemented:
 
 - Event Updates / announcements
+- Event-level Guest Hub enable/disable
 - Direct guest-to-host messages
 - Guest-to-guest chat with host-controlled posting
 - Basic guest chat moderation

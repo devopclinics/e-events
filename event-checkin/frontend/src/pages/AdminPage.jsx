@@ -161,17 +161,23 @@ function GuestCommunicationPanel({ event }) {
         {err && <div className="mt-4 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">{err}</div>}
         {msg && <div className="mt-4 rounded-lg border border-green-200 bg-green-50 px-3 py-2 text-sm text-green-700">{msg}</div>}
         {settings && (
-          <div className="mt-5 grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
+          <div className="mt-5 grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
             {[
-              ['announcements_enabled', 'Event Updates'],
-              ['direct_host_messages_enabled', 'Message Host'],
-              ['guest_chat_enabled', 'Guest Chat'],
-              ['guest_chat_posting_enabled', 'Allow Guest Posts'],
-              ['attending_only_chat', 'Attending Only'],
-            ].map(([key, label]) => (
-              <label key={key} className="flex items-center gap-2 rounded-lg border border-slate-200 dark:border-slate-700 px-3 py-2 text-sm dark:text-slate-200">
-                <input type="checkbox" checked={!!settings[key]} disabled={loading} onChange={(e) => saveSetting(key, e.target.checked)} className="h-4 w-4 accent-teal-600" />
-                {label}
+              ['guest_hub_enabled', 'Guest Hub', 'Show the post-RSVP hub for accepted attendees.'],
+              ['announcements_enabled', 'Event Updates', 'Show organizer updates in Guest Hub.'],
+              ['direct_host_messages_enabled', 'Message Host', 'Let guests send private questions to the organizer.'],
+              ['guest_chat_enabled', 'Guest Chat', 'Show a shared guest-to-guest chat.'],
+              ['guest_chat_posting_enabled', 'Guest Posts', 'Allow guests to add new chat messages.'],
+            ].map(([key, label, help]) => (
+              <label key={key} className="flex min-h-[92px] flex-col justify-between gap-3 rounded-lg border border-slate-200 p-3 text-sm dark:border-slate-700 dark:text-slate-200">
+                <span>
+                  <span className="block font-semibold">{label}</span>
+                  <span className="mt-1 block text-xs leading-5 text-slate-500 dark:text-slate-400">{help}</span>
+                </span>
+                <span className="flex items-center justify-between gap-2 text-xs font-semibold uppercase tracking-wide text-slate-400">
+                  {settings[key] ? 'Enabled' : 'Disabled'}
+                  <input type="checkbox" checked={!!settings[key]} disabled={loading} onChange={(e) => saveSetting(key, e.target.checked)} className="h-4 w-4 accent-teal-600" />
+                </span>
               </label>
             ))}
           </div>
@@ -209,7 +215,8 @@ function GuestCommunicationPanel({ event }) {
         </div>
 
         <div className="bg-white dark:bg-slate-800 dark:border dark:border-slate-700/60 rounded-xl shadow p-6">
-          <h3 className="font-semibold text-base dark:text-white">Guest Inbox</h3>
+          <h3 className="font-semibold text-base dark:text-white">Guest Questions Inbox</h3>
+          <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">Questions sent through Message Host appear here. Replies are visible to that guest in their Guest Hub.</p>
           <div className="mt-4 space-y-2">
             {inbox.length ? inbox.map((t) => (
               <button key={t.thread_id} onClick={() => openThread(t.thread_id)} className="w-full rounded-lg border border-slate-200 dark:border-slate-700 p-3 text-left hover:bg-slate-50 dark:hover:bg-slate-700">

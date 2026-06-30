@@ -266,6 +266,9 @@ if $DO_DEPLOY; then
   # ── Phase 4c — Swap production containers ───────────────────────────────────
   step "6/6  Restarting services with new images"
   APP_VERSION="$VERSION" docker compose -f "$PROD_COMPOSE" up -d --remove-orphans
+  # Nginx resolves Docker service names at startup. Restart the proxy after
+  # frontend/backend swaps so it does not keep stale container IPs.
+  APP_VERSION="$VERSION" docker compose -f "$PROD_COMPOSE" restart proxy
   ok "Services restarted"
 
   echo ""

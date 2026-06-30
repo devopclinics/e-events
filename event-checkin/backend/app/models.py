@@ -484,6 +484,7 @@ class EventGuestMessagingSettings(Base):
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
     event_id: Mapped[str] = mapped_column(String(36), ForeignKey("events.id"), index=True)
+    guest_hub_enabled: Mapped[bool] = mapped_column(Boolean, default=True)
     announcements_enabled: Mapped[bool] = mapped_column(Boolean, default=True)
     direct_host_messages_enabled: Mapped[bool] = mapped_column(Boolean, default=True)
     guest_chat_enabled: Mapped[bool] = mapped_column(Boolean, default=False)

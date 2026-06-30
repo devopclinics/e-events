@@ -177,7 +177,6 @@ const detailSections = [
     title: 'A command center for every event you manage.',
     copy: 'Festio gives organizers one workspace to manage events, teams, roles, guests, feature toggles, message credits, paid unlocks, and live operations without jumping between tools.',
     points: ['Organization workspace', 'Multi-event management', 'Draft/Active/Ended/Reopen lifecycle', 'Team roles', 'Staff assignment', 'Staff permissions', 'Event pass unlocks', 'Message credit balance', 'Trial request flow'],
-    image: '/media/help-event-setup.png',
     alt: 'Festio event setup workspace showing event controls',
   },
   {
@@ -186,7 +185,6 @@ const detailSections = [
     title: 'Turn your guest list into a live event database.',
     copy: 'Import, clean, segment, approve, tag, seat, message, and track every guest from one place.',
     points: ['Manual guest add', 'CSV/XLSX upload', 'Import template', 'Export guest list', 'Google Sheets/OneDrive sync', 'Duplicate handling', 'RSVP status', 'Guest profiles', 'RSVP answers', 'Check-in history', 'Ticket types', 'Tags', 'Table groups', 'Personal invite links', 'Resend invites'],
-    image: '/media/help-guests.png',
     alt: 'Festio guest database with RSVP status and guest records',
   },
   {
@@ -195,7 +193,6 @@ const detailSections = [
     title: 'RSVPs that match how your event actually works.',
     copy: 'Run open or private RSVPs, set deadlines, control capacity, approve guests, collect custom answers, and automatically issue QR passes only when guests are accepted.',
     points: ['Public RSVP page', 'Personal invite links', 'Open/shared RSVP link', 'Closed/private RSVP mode', 'RSVP deadline', 'Max RSVP capacity', 'Approval-required RSVP mode', 'Custom RSVP questions', 'Cover/flyer image', 'RSVP theme/message', 'Attending/declined flow', 'RSVP update before deadline', 'No-reply reminders', 'Broadcasts to guest segments'],
-    image: '/media/help-invites-rsvp.png',
     alt: 'Festio invitation and RSVP setup screen',
   },
   {
@@ -204,7 +201,6 @@ const detailSections = [
     title: 'Every message, under your control.',
     copy: 'Customize invitations, reminders, QR pass emails, RSVP confirmations, approval messages, broadcasts, admission alerts, and check-in confirmations across email, SMS, WhatsApp, and MMS.',
     points: ['Editable templates', 'Template preview', 'Test send', 'Reset to default', 'Variable helper list', 'Template audit history', 'Plain-text fallback', 'SMS/WhatsApp/MMS support', 'Notification consent preferences'],
-    image: '/media/help-invites-rsvp.png',
     alt: 'Festio messaging and invite tools',
   },
   {
@@ -213,7 +209,6 @@ const detailSections = [
     title: 'Give guests one beautiful place for everything.',
     copy: 'Each confirmed guest can access a personal pass page with their QR pass, event details, menu choices, partner pairing, notification preferences, updates, host messages, and chat when enabled.',
     points: ['Public pass page by QR token', 'QR code display', 'Pass status', 'Event details', 'Menu/order selection', 'Partner/plus-one pairing', 'Guest Hub', 'Event updates', 'Message host', 'Guest chat', 'Attending-only chat', 'Admin moderation'],
-    image: '/media/help-guest-invite.png',
     alt: 'Festio guest pass and event invite page',
   },
   {
@@ -222,7 +217,6 @@ const detailSections = [
     title: 'Seat guests without confusion.',
     copy: 'Create tables, set capacity, assign seats manually or automatically, reserve seats, group tables by section, pair partners, and prevent double-booking or over-capacity mistakes.',
     points: ['Tables', 'Capacity', 'Seating chart', 'Manual assignment', 'Auto assignment', 'Seat reservation', 'Table groups/sections', 'Bulk assignment', 'Partner pairing', 'Double-booking prevention', 'Staff section assignment'],
-    image: '/media/help-orders.png',
     alt: 'Festio seating and orders workspace',
   },
   {
@@ -231,7 +225,6 @@ const detailSections = [
     title: 'Scan, verify, and guide guests instantly.',
     copy: 'Use phone-based scanning, manual search, self check-in, walk-in registration, gate rules, zones, pass permissions, and duplicate protection to manage entry with confidence.',
     points: ['Browser scanner', 'Camera QR scanning', 'Manual check-in/search', 'Admitted, already admitted, denied, invalid', 'Active-event requirement', 'Duplicate-scan protection', 'Admission notifications', 'Walk-in registration', 'Self check-in', 'Staff scanner permissions', 'Section/gate/zone scanning', 'Access denied reasons'],
-    image: '/media/help-check-in.png',
     alt: 'Festio mobile QR pass scanner for event check-in',
   },
   {
@@ -240,7 +233,6 @@ const detailSections = [
     title: 'Access control for real venues.',
     copy: 'Create zones, gates, pass permissions, tag requirements, capacity rules, entry/exit modes, and live occupancy tracking for complex venues and VIP areas.',
     points: ['Zones/areas', 'Zone capacity', 'Entry/exit/both direction modes', 'Ticket type permissions', 'Guest tag requirements', 'Gate scan mode', 'Live occupancy', 'Peak arrival analytics', 'Zone flow analytics', 'Guest journey history'],
-    image: '/media/help-entry-areas.png',
     alt: 'Festio venue access areas and gate rules',
   },
   {
@@ -249,7 +241,6 @@ const detailSections = [
     title: 'Meals and service, connected to the guest list.',
     copy: 'Let guests choose meals, manage menu categories and combinations, track orders by table, generate kitchen views, and mark meals served.',
     points: ['Menu categories', 'Menu items', 'Menu combinations', 'Guest menu choices', 'Public guest menu selection', 'Menu deadline behavior', 'Orders dashboard', 'Per-table order totals', 'Kitchen/orders view', 'Mark meal served'],
-    image: '/media/help-orders-view.png',
     alt: 'Festio orders view with meal totals by table',
   },
   {
@@ -258,7 +249,6 @@ const detailSections = [
     title: 'Handle the details beyond the door.',
     copy: 'Manage gift registries, item claims, cash funds, shipments, guest shipping addresses, vendor fulfillment, packing status, and exports from the same event workspace.',
     points: ['Gift registry', 'Registry message/settings', 'Store link unfurling', 'Cash funds', 'Guest item claims', 'Admin claim tracking', 'Deliveries add-on', 'Shipments', 'Shipment items', 'Vendor share page', 'Vendor XLSX export', 'Admin XLSX export'],
-    image: '/media/help-deliveries.png',
     alt: 'Festio delivery and fulfillment tools for vendors',
   },
   {
@@ -267,7 +257,6 @@ const detailSections = [
     title: 'Know what is happening while it is happening.',
     copy: 'Track RSVPs, invite delivery, contact completeness, check-ins, VIP arrivals, pending guests, table reports, catering summaries, occupancy, and guest flow live.',
     points: ['Total guest count', 'RSVP breakdown', 'Confirmed/declined/pending/no-reply', 'Checked-in count', 'Recent admitted guests', 'Pending guests', 'Invite delivery stats', 'Contact completeness', 'Check-in timeline', 'VIP stats', 'Ticket-type breakdown', 'Table-group breakdown', 'Per-table reports', 'Catering/order summary', 'Live auto-refresh/SSE', 'Venue occupancy analytics'],
-    image: '/media/help-results.png',
     alt: 'Festio live event dashboard and attendance analytics',
   },
 ]
@@ -390,15 +379,160 @@ function HeroVisual() {
   )
 }
 
-function Shot({ src, alt, className = '' }) {
+const mockups = {
+  'command-center': {
+    title: 'Festio Workspace',
+    status: '3 active events',
+    stats: [['Active', '2'], ['Draft', '1'], ['Credits', '840']],
+    listTitle: 'Event controls',
+    rows: [['Product Launch', 'Active', 'Team 6'], ['Aqdu Ceremony', 'Draft', 'RSVP open'], ['Awards Night', 'Active', 'Check-in ready']],
+    panelTitle: 'Team & settings',
+    panel: ['Owner', 'Admin', 'Staff', 'Scanner'],
+  },
+  'guest-database': {
+    title: 'Guest Database',
+    status: 'Synced',
+    stats: [['Guests', '526'], ['Attending', '318'], ['Pending', '24']],
+    listTitle: 'Guest records',
+    rows: [['Am Ami', 'Attending', 'VIP'], ['Mina Bello', 'Pending', 'Press'], ['Tobi Khan', 'Checked in', 'Family']],
+    panelTitle: 'Segments',
+    panel: ['VIP', 'Family', 'Press', 'No reply'],
+  },
+  rsvp: {
+    title: 'RSVP Studio',
+    status: 'Open',
+    stats: [['Capacity', '420'], ['RSVP yes', '318'], ['Declined', '32']],
+    listTitle: 'Invite flow',
+    rows: [['Public page', 'Enabled', 'Live'], ['Approval', 'Required', 'On'], ['Deadline', 'Jul 7', '8 days']],
+    panelTitle: 'Festio Pass',
+    panel: ['Issued after approval', 'QR ready', 'Email + WhatsApp'],
+  },
+  messaging: {
+    title: 'Message Center',
+    status: 'Ready',
+    stats: [['Templates', '12'], ['Sent', '1,248'], ['Credits', '840']],
+    listTitle: 'Template preview',
+    rows: [['QR pass email', 'Plain text', 'Tested'], ['Reminder', 'SMS', 'Ready'], ['Broadcast', 'WhatsApp', 'Draft']],
+    panelTitle: 'Guest inbox',
+    panel: ['3 host messages', '2 announcements', 'Chat moderated'],
+  },
+  'guest-hub': {
+    title: 'Guest Hub',
+    status: 'Attending only',
+    stats: [['Updates', '4'], ['Questions', '3'], ['Chat', 'On']],
+    listTitle: 'Guest view',
+    rows: [['QR pass', 'Ready', 'Valid'], ['Menu choice', 'Jollof', 'Saved'], ['Partner', 'Linked', 'Seat pair']],
+    panelTitle: 'Host updates',
+    panel: ['Doors open 5:30 PM', 'Parking Lot B', 'Dress code: Formal'],
+  },
+  seating: {
+    title: 'Seating Plan',
+    status: 'Auto-assigned',
+    stats: [['Tables', '42'], ['Seated', '318'], ['Open seats', '84']],
+    listTitle: 'Table groups',
+    rows: [['Family A', '12 tables', '98% full'], ['VIP', '5 tables', 'Reserved'], ['Friends', '18 tables', 'Auto-fill']],
+    panelTitle: 'Seat map',
+    panel: ['A1', 'A2', 'A3', 'B1'],
+  },
+  'check-in': {
+    title: 'Live Check-In',
+    status: 'Scanning',
+    stats: [['Admitted', '146'], ['Denied', '5'], ['Walk-ins', '12']],
+    listTitle: 'Scan results',
+    rows: [['Am Ami', 'Admitted', 'VIP Gate'], ['Noah Bennett', 'Already in', 'Main'], ['Zara Okafor', 'Denied', 'Wrong zone']],
+    panelTitle: 'Phone scanner',
+    panel: ['QR pass', 'Manual search', 'Walk-in', 'Self check-in'],
+  },
+  'access-rules': {
+    title: 'Venue Access',
+    status: 'Rules active',
+    stats: [['Zones', '6'], ['Gates', '9'], ['Inside', '146']],
+    listTitle: 'Zone rules',
+    rows: [['Main Hall', 'GA + VIP', '92 inside'], ['VIP Lounge', 'VIP only', '42 inside'], ['Backstage', 'Staff tag', '12 inside']],
+    panelTitle: 'Analytics',
+    panel: ['Live occupancy', 'Peak arrivals', 'Zone flow', 'Guest journey'],
+  },
+  orders: {
+    title: 'Orders Dashboard',
+    status: 'Kitchen live',
+    stats: [['Jollof', '96'], ['Veg plate', '32'], ['Served', '58%']],
+    listTitle: 'Per-table totals',
+    rows: [['Table 1', '2 guests', '1 served'], ['Table 2', '1 guest', 'Pending'], ['Unassigned', '2 guests', '0 served']],
+    panelTitle: 'Menu choices',
+    panel: ['Meals', 'Drinks', 'Gift pickup', 'Combinations'],
+  },
+  'registry-deliveries': {
+    title: 'Gifts & Deliveries',
+    status: 'Vendor shared',
+    stats: [['Claims', '38'], ['Shipments', '4'], ['Packed', '72%']],
+    listTitle: 'Fulfillment',
+    rows: [['Welcome tote', '5 guests', 'Packed'], ['Aso-ebi', '48 guests', 'In progress'], ['Gift list', '12 items', 'Claimed']],
+    panelTitle: 'Vendor tools',
+    panel: ['Share page', 'XLSX export', 'Addresses', 'Packing status'],
+  },
+  analytics: {
+    title: 'Live Results',
+    status: 'Auto-refresh',
+    stats: [['Total', '526'], ['Checked in', '146'], ['VIP', '42']],
+    listTitle: 'Dashboard',
+    rows: [['RSVP breakdown', 'Live', 'Updated'], ['Invite delivery', 'Tracked', '98%'], ['Table report', 'Ready', 'Exportable']],
+    panelTitle: 'Insights',
+    panel: ['Timeline', 'Occupancy', 'Flow', 'Catering'],
+  },
+}
+
+function ProductMockup({ type, alt, className = '' }) {
+  const data = mockups[type] || mockups['command-center']
   return (
-    <div className={`overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-xl shadow-slate-950/5 dark:border-white/10 dark:bg-slate-900 ${className}`}>
-      <div className="flex items-center gap-1.5 border-b border-slate-200 bg-slate-50 px-4 py-3 dark:border-white/10 dark:bg-slate-950/70">
-        <span className="h-2.5 w-2.5 rounded-full bg-rose-400" />
-        <span className="h-2.5 w-2.5 rounded-full bg-amber-400" />
-        <span className="h-2.5 w-2.5 rounded-full bg-emerald-400" />
+    <div
+      role="img"
+      aria-label={alt}
+      className={`overflow-hidden rounded-[1.6rem] border border-slate-200 bg-white p-4 shadow-2xl shadow-slate-950/10 dark:border-white/10 dark:bg-slate-900 ${className}`}
+    >
+      <div className="rounded-2xl bg-slate-950 p-4 text-white">
+        <div className="flex items-center justify-between gap-3 border-b border-white/10 pb-3">
+          <div className="flex items-center gap-2">
+            <LogoMark size="h-8 w-8" text="text-xs" />
+            <div>
+              <div className="text-sm font-black">Festio</div>
+              <div className="text-[10px] font-bold uppercase tracking-[0.18em] text-teal-300">{data.title}</div>
+            </div>
+          </div>
+          <span className="rounded-full bg-teal-300/15 px-3 py-1 text-xs font-black text-teal-200">{data.status}</span>
+        </div>
+
+        <div className="mt-4 grid gap-3 sm:grid-cols-3">
+          {data.stats.map(([label, value]) => (
+            <div key={label} className="rounded-xl bg-white/10 p-3">
+              <div className="text-[10px] font-black uppercase tracking-wider text-slate-400">{label}</div>
+              <div className="mt-1 text-2xl font-black tabular-nums">{value}</div>
+            </div>
+          ))}
+        </div>
+
+        <div className="mt-4 grid gap-3 lg:grid-cols-[1.2fr_0.8fr]">
+          <div className="rounded-xl bg-white p-3 text-slate-950">
+            <div className="mb-2 text-xs font-black uppercase tracking-wider text-slate-500">{data.listTitle}</div>
+            {data.rows.map((row) => (
+              <div key={row.join('-')} className="grid grid-cols-[1.2fr_0.8fr_0.8fr] items-center gap-2 border-t border-slate-100 py-2 text-[11px]">
+                {row.map((cell, index) => (
+                  <span key={cell} className={index === 0 ? 'font-black' : 'text-slate-600'}>{cell}</span>
+                ))}
+              </div>
+            ))}
+          </div>
+          <div className="rounded-xl bg-gradient-to-br from-teal-300 to-emerald-300 p-3 text-slate-950">
+            <div className="text-xs font-black uppercase tracking-wider">{data.panelTitle}</div>
+            <div className="mt-3 grid gap-2">
+              {data.panel.map((item, index) => (
+                <div key={item} className={`rounded-lg px-3 py-2 text-xs font-black ${index === 0 ? 'bg-slate-950 text-white' : 'bg-white/75 text-slate-950'}`}>
+                  {item}
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
       </div>
-      <img src={src} alt={alt} loading="lazy" className="block w-full bg-white dark:opacity-95" />
     </div>
   )
 }
@@ -589,7 +723,7 @@ export default function LandingPage() {
                   )}
                 </Reveal>
                 <Reveal delay={120} className={index % 2 ? 'lg:order-1' : ''}>
-                  <Shot src={section.image} alt={section.alt} />
+                  <ProductMockup type={section.id} alt={section.alt} />
                 </Reveal>
               </div>
             </section>

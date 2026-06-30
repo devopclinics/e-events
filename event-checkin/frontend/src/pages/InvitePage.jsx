@@ -693,6 +693,7 @@ export default function InvitePage() {
   const host = hostText(event)
   const deadline = deadlineText(event)
   const about = event.description || event.invite_message || 'We are excited to celebrate this special occasion with family and friends. Please RSVP so we can prepare properly for your attendance.'
+  const admissionNote = event.admission_note || 'Your RSVP generates a personal QR code. Please bring it with you for check-in at the entrance.'
   const capacityLabel = event.rsvp_capacity != null ? `${event.rsvp_count} / ${event.rsvp_capacity} spots claimed` : ''
 
   let rsvpPanel
@@ -792,7 +793,7 @@ export default function InvitePage() {
               <DetailRow icon="📅" label="Date" value={dateLabel} />
               <DetailRow icon="🕐" label="Time" value={timeLabel} />
               <DetailRow icon="📍" label="Location" value={venue || 'Venue details coming soon'} />
-              <DetailRow icon="🎟️" label="Admission" value="RSVP to receive your personal QR ticket." />
+              <DetailRow icon="🎟️" label="Admission" value={admissionNote} />
             </div>
 
             <div className="flex flex-col gap-3 sm:flex-row">
@@ -814,7 +815,7 @@ export default function InvitePage() {
               <DetailRow icon="📍" label="Venue" value={venue || 'Venue details coming soon'} />
               <DetailRow icon="👤" label="Host" value={host} />
               <DetailRow icon="⏳" label="RSVP deadline" value={deadline} />
-              <DetailRow icon="✓" label="Admission note" value="Your RSVP generates a personal QR code. Please bring it with you for check-in at the entrance." />
+              <DetailRow icon="✓" label="Admission note" value={admissionNote} />
             </div>
           </div>
 

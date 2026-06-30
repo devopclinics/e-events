@@ -4391,7 +4391,7 @@ function utcToLocal(utcStr) {
 
 function EventForm({ initial, onSave, onCancel }) {
   const [form, setForm] = useState(
-    initial || { name: '', couples_name: '', event_date: '', description: '', checkin_base_url: window.location.origin }
+    initial || { name: '', couples_name: '', event_date: '', description: '', admission_note: '', checkin_base_url: window.location.origin }
   )
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
@@ -4440,6 +4440,17 @@ function EventForm({ initial, onSave, onCancel }) {
       <div>
         <label htmlFor="event-description" className="block text-xs font-semibold text-gray-600 mb-1">Description</label>
         <textarea id="event-description" className={field} rows={2} value={form.description || ''} onChange={set('description')} />
+      </div>
+      <div>
+        <label htmlFor="event-admission-note" className="block text-xs font-semibold text-gray-600 mb-1">Admission note</label>
+        <textarea
+          id="event-admission-note"
+          className={field}
+          rows={2}
+          value={form.admission_note || ''}
+          onChange={set('admission_note')}
+          placeholder="e.g. Show your QR ticket at the entrance for check-in."
+        />
       </div>
       {error && <p className="text-red-600 text-sm">{error}</p>}
       <div className="flex gap-3">

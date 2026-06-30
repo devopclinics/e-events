@@ -117,6 +117,7 @@ class Event(Base):
     venue_access_enabled: Mapped[bool] = mapped_column(Boolean, default=False)
     venue_name: Mapped[str | None] = mapped_column(String(255), nullable=True)
     venue_address: Mapped[str | None] = mapped_column(Text, nullable=True)
+    admission_note: Mapped[str | None] = mapped_column(Text, nullable=True)
     # Unguessable public token for the registry page (cf. invite_token). Nullable
     # so existing rows backfill lazily; new events get one via the default.
     registry_token: Mapped[str | None] = mapped_column(

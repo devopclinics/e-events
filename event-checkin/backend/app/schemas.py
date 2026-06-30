@@ -47,6 +47,7 @@ class EventCreate(BaseModel):
     checkin_base_url: str
     venue_name: Optional[str] = None
     venue_address: Optional[str] = None
+    admission_note: Optional[str] = None
 
     @field_validator("event_date", mode="after")
     @classmethod
@@ -64,6 +65,7 @@ class EventUpdate(BaseModel):
     checkin_base_url: Optional[str] = None
     venue_name: Optional[str] = None
     venue_address: Optional[str] = None
+    admission_note: Optional[str] = None
     notify_email: Optional[bool] = None
     notify_sms: Optional[bool] = None
     notify_whatsapp: Optional[bool] = None
@@ -99,6 +101,7 @@ class EventOut(BaseModel):
     venue_access_enabled: bool = False
     venue_name: Optional[str] = None
     venue_address: Optional[str] = None
+    admission_note: Optional[str] = None
     notify_email: bool = True
     notify_sms: bool = True
     notify_whatsapp: bool = True
@@ -1109,6 +1112,7 @@ class InvitePageOut(BaseModel):
     description: Optional[str]
     venue_name: Optional[str] = None
     venue_address: Optional[str] = None
+    admission_note: Optional[str] = None
     invite_theme: str
     invite_message: Optional[str]
     rsvp_token: Optional[str] = None

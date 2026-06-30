@@ -188,6 +188,7 @@ async def _invite_page_out(event: Event, db: AsyncSession) -> InvitePageOut:
         description=event.description,
         venue_name=event.venue_name,
         venue_address=event.venue_address,
+        admission_note=event.admission_note,
         rsvp_token=event.rsvp_token,
         invite_theme=event.invite_theme,
         invite_message=event.invite_message,

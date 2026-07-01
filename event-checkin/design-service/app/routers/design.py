@@ -5,13 +5,19 @@ owns the event, then calls these endpoints with the internal token). Public-them
 is open so guest-facing pages can read it with no auth. Every read has a safe
 default so a missing/broken design never blocks a public page.
 """
-from fastapi import APIRouter, Depends, Header, HTTPException, Query
+import os
+import uuid
+
+from fastapi import APIRouter, Depends, File, Header, HTTPException, Query, UploadFile
+from fastapi.responses import FileResponse, Response
 
 from ..config import settings
 from ..catalog import build_catalog, get_template, default_template
 from ..store import load_design, save_design, publish_design
+from ..assets import save_upload, asset_path, UploadError
+from ..render import render_flyer, PNG_SIZES, PDF_SIZES
 from ..schemas import (
-    EventDesignIn, EventDesignOut, PublicTheme, EmailTheme, PublishResult,
+    EventDesignIn, EventDesignOut, PublicTheme, EmailTheme, PublishResult, RenderRequest,
 )
 
 router = APIRouter(prefix="/api/v1/design")
@@ -138,3 +144,91 @@ def email_theme(event_id: str):
         flyer_image_url=assets.get("flyer_image_url"),
         is_default=is_default,
     )
+
+
+# ── Asset uploads (validated) + safe file serving ────────────────────────────
+@router.post("/events/{event_id}/assets", dependencies=[Depends(require_internal)])
+async def upload_asset(event_id: str, file: UploadFile = File(...), asset_type: str = "image"):
+    data = await file.read()
+    try:
+        meta = save_upload(event_id, file.filename or "upload", data, asset_type)
+    except UploadError as e:
+        raise HTTPException(400, str(e))
+    # Record the asset ref on the event design so the editor can list them.
+    d = load_design(event_id) or {}
+    assets = d.get("asset_config", {})
+    lib = assets.get("library", [])
+    lib.insert(0, meta)
+    assets["library"] = lib[:100]
+    save_design(event_id, {"asset_config": assets})
+    return meta
+
+
+@router.get("/files/{event_id}/{filename}")
+def serve_file(event_id: str, filename: str):
+    """Public, path-traversal-guarded serving of stored assets/outputs."""
+    path = asset_path(event_id, filename)
+    if not path:
+        # also look in the rendered-outputs dir
+        out = os.path.join(settings.storage_path, "outputs", event_id, filename)
+        if event_id.replace("-", "").isalnum() and os.path.isfile(out) and ".." not in filename:
+            path = out
+    if not path:
+        raise HTTPException(404, "not found")
+    return FileResponse(path)
+
+
+# ── Flyer rendering (PNG / PDF) ──────────────────────────────────────────────
+@router.post("/events/{event_id}/render/flyer", dependencies=[Depends(require_internal)])
+async def render_event_flyer(event_id: str, body: RenderRequest):
+    size = body.size
+    fmt = body.format or ("pdf" if size in PDF_SIZES else "png")
+    if size not in PNG_SIZES and size not in PDF_SIZES:
+        raise HTTPException(400, f"unknown size '{size}'")
+    if fmt not in ("png", "pdf"):
+        raise HTTPException(400, "format must be png or pdf")
+
+    design = load_design(event_id) or {}
+    tpl = get_template(body.template_id or design.get("selected_flyer_template_id")
+                       or design.get("selected_template_id") or "") or default_template()
+    colors = {**tpl["defaultColors"], **(design.get("theme_config", {}).get("colors", {})), **(body.colors or {})}
+    wording = {**design.get("wording_config", {}), **(body.wording or {})}
+    ctx = {
+        "colors": colors,
+        "fontPairing": tpl["fontPairing"],
+        "wording": wording,
+        "coverImageUrl": body.cover_image_url or design.get("asset_config", {}).get("cover_image_url"),
+        "qr": {"enabled": body.qr_enabled and bool(body.qr_data), "position": body.qr_position, "data": body.qr_data},
+    }
+    try:
+        content = await render_flyer(ctx, size, fmt, settings.render_timeout_seconds)
+    except Exception as e:  # rendering must never 500 the studio hard
+        raise HTTPException(502, f"render failed: {e}")
+
+    # Persist the output so it can be re-downloaded / listed.
+    out_dir = os.path.join(settings.storage_path, "outputs", event_id)
+    os.makedirs(out_dir, exist_ok=True)
+    name = f"flyer-{size}-{uuid.uuid4().hex[:8]}.{fmt}"
+    with open(os.path.join(out_dir, name), "wb") as f:
+        f.write(content)
+
+    media = "application/pdf" if fmt == "pdf" else "image/png"
+    return Response(
+        content=content, media_type=media,
+        headers={"Content-Disposition": f'inline; filename="{name}"',
+                 "X-Design-Output-Url": f"{settings.public_asset_base_url}/api/v1/design/files/{event_id}/{name}"},
+    )
+
+
+@router.get("/events/{event_id}/outputs", dependencies=[Depends(require_internal)])
+def list_outputs(event_id: str):
+    out_dir = os.path.join(settings.storage_path, "outputs", event_id)
+    if not (event_id.replace("-", "").isalnum() and os.path.isdir(out_dir)):
+        return {"outputs": []}
+    base = settings.public_asset_base_url
+    files = sorted(os.listdir(out_dir), reverse=True)
+    return {"outputs": [
+        {"filename": f, "format": f.rsplit(".", 1)[-1],
+         "url": f"{base}/api/v1/design/files/{event_id}/{f}"}
+        for f in files if "." in f
+    ]}

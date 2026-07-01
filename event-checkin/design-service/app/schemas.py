@@ -53,3 +53,15 @@ class PublishResult(BaseModel):
     is_published: bool
     published_version: int
     published_at: datetime
+
+
+class RenderRequest(BaseModel):
+    size: str = "portrait"          # square | story | portrait | a5 | a4
+    format: str | None = None       # png | pdf (auto: pdf for a5/a4, else png)
+    template_id: str | None = None
+    colors: dict | None = None
+    wording: dict | None = None
+    cover_image_url: str | None = None
+    qr_data: str | None = None      # URL/text to encode (e.g. the RSVP link)
+    qr_position: str = "bottom-right"
+    qr_enabled: bool = True

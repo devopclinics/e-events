@@ -895,7 +895,7 @@ export default function DesignStudioPage() {
             <div className="rounded-2xl border border-slate-200 bg-white p-5 dark:border-white/10 dark:bg-slate-900">
               <label className={label}>Flyer template</label>
               <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-                {filteredTemplates.slice(0, 6).map((template) => (
+                {filteredTemplates.map((template) => (
                   <button
                     key={template.id}
                     type="button"

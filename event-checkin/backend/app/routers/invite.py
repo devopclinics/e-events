@@ -225,7 +225,7 @@ def _send_rsvp_invite(
         background_tasks.add_task(
             send_invite_email,
             {"first_name": guest.first_name, "last_name": guest.last_name,
-             "email": guest.email, "qr_token": guest.qr_token},
+             "email": guest.email, "qr_token": guest.qr_token, "event_id": event.id},
             event.name, event.couples_name, event.checkin_base_url,
             event.event_date,
             event.seating_enabled, event.menu_enabled,

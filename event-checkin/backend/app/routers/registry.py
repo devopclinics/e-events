@@ -241,7 +241,7 @@ async def send_registry_message(
             if html:
                 background_tasks.add_task(
                     send_simple_email,
-                    guest.email, subj or f"Gift registry — {ev.name}", html,
+                    guest.email, subj or f"Gift registry — {ev.name}", html, ev.id,
                 )
                 sent_any = True
 

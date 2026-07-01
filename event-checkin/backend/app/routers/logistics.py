@@ -247,7 +247,7 @@ async def update_line(event_id: str, sid: str, gid: str, data: GuestShipmentUpda
             if body:
                 background_tasks.add_task(
                     email_service.send_simple_email,
-                    g.email, subj or f"Shipping update — {ev.name}", body,
+                    g.email, subj or f"Shipping update — {ev.name}", body, ev.id,
                 )
         if (can_use_paid_channels(ev) and ev.notify_sms and g.phone
                 and g.sms_consent and take_message_credit(ev)):
@@ -354,6 +354,7 @@ async def send_to_vendor(event_id: str, sid: str, db: AsyncSession = Depends(get
         event_name=ev.name, shipment_name=s.name, vendor_url=vendor_url,
         item_count=len(lines), notes=s.notes,
         attachment=xlsx, attachment_name=_safe_filename(s.name),
+        event_id=ev.id,
     )
     s.sent_at = datetime.utcnow()
     await db.commit()

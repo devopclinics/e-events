@@ -718,6 +718,7 @@ def _dispatch_invite(background_tasks: BackgroundTasks, event: Event, guest: Gue
             "last_name":  guest.last_name,
             "email":      guest.email,
             "qr_token":   guest.qr_token,
+            "event_id":   event.id,
         }
         background_tasks.add_task(
             send_invite_email,
@@ -787,13 +788,14 @@ def _dispatch_rsvp_invite(background_tasks: BackgroundTasks, event: Event, guest
         else:
             subj, body = template_email_or_default(overrides, template_key, ctx)
         if body is not None:
-            background_tasks.add_task(send_simple_email, guest.email, subj or f"You're invited — {event.name}", body)
+            background_tasks.add_task(send_simple_email, guest.email, subj or f"You're invited — {event.name}", body, event.id)
         else:
             background_tasks.add_task(
                 send_manual_invite_email,
                 name=name, email=guest.email, invite_url=invite_url,
                 event_name=event.name, event_date=event.event_date,
                 invite_message=event.invite_message,
+                event_id=event.id,
             )
         dispatched = True
 
@@ -844,7 +846,7 @@ def dispatch_approval_accepted(background_tasks: BackgroundTasks, event: Event, 
     if event.notify_email and guest.email:
         subj, body = template_email_or_default(overrides, "approval_accepted", ctx)
         if body:
-            background_tasks.add_task(send_simple_email, guest.email, subj or event.name, body)
+            background_tasks.add_task(send_simple_email, guest.email, subj or event.name, body, event.id)
             sent = True
 
     if (can_use_paid_channels(event) and event.notify_sms and guest.phone
@@ -880,7 +882,7 @@ def dispatch_simple_notice(background_tasks: BackgroundTasks, event: Event, gues
     if event.notify_email and guest.email:
         subj, body = template_email_or_default(overrides, key, ctx)
         if body:
-            background_tasks.add_task(send_simple_email, guest.email, subj or event.name, body)
+            background_tasks.add_task(send_simple_email, guest.email, subj or event.name, body, event.id)
             sent = True
     if (can_use_paid_channels(event) and event.notify_sms and guest.phone
             and guest.sms_consent and take_message_credit(event)):

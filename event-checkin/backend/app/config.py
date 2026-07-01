@@ -4,6 +4,8 @@ from pydantic_settings import BaseSettings
 class Settings(BaseSettings):
     database_url: str = "postgresql+asyncpg://checkin:checkin@localhost/checkin"
     frontend_url: str = "http://localhost:5173"
+    design_service_url: str = "http://design-service:8010"
+    design_internal_token: str = ""
 
     # Firebase — paste the service account JSON as a single-line string
     firebase_credentials: str = ""

@@ -348,6 +348,7 @@ async def perform_admission(guest, event, background_tasks, db) -> ScanResult:
         "seat_number": guest.seat_number,
         "menu_choices": menu_lines,
         "event_name": event.name if event else None,
+        "event_id": event.id if event else None,
         "ticket_url": ticket_url,
         "menu_enabled": bool(event and event.menu_enabled),
     }

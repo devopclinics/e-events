@@ -20,6 +20,64 @@ from services.qr_service import generate_qr_bytes
 logger = logging.getLogger(__name__)
 
 
+async def _design_email_theme(event_id: str | None) -> dict | None:
+    """Fetch the published Design Studio email theme. Failure must not block mail."""
+    if not event_id:
+        return None
+    base = (settings.design_service_url or "").rstrip("/")
+    if not base:
+        return None
+    try:
+        async with httpx.AsyncClient(timeout=3.0) as c:
+            r = await c.get(
+                f"{base}/api/v1/design/events/{event_id}/theme",
+                headers={"X-Internal-Token": getattr(settings, "design_internal_token", "")},
+            )
+        if r.status_code != 200:
+            return None
+        data = r.json()
+        return None if data.get("is_default") else data
+    except Exception:
+        logger.info("Design email theme unavailable for event %s", event_id, exc_info=True)
+        return None
+
+
+def _theme_colors(theme: dict | None) -> dict:
+    return {
+        "background": (theme or {}).get("background_color") or "#f4f7fb",
+        "surface": "#ffffff",
+        "header": (theme or {}).get("background_color") or "#0f172a",
+        "primary": (theme or {}).get("primary_color") or "#ffffff",
+        "accent": (theme or {}).get("accent_color") or "#2dd4bf",
+        "button_text": "#05111f",
+    }
+
+
+def _theme_cover_url(theme: dict | None) -> str:
+    return (theme or {}).get("flyer_image_url") or (theme or {}).get("cover_image_url") or ""
+
+
+def _apply_design_theme_to_html(html_body: str, theme: dict | None) -> str:
+    if not theme or not html_body:
+        return html_body
+    c = _theme_colors(theme)
+    replacements = {
+        "#f4f7fb": c["background"],
+        "#081524": c["header"],
+        "#0d1b2f": c["header"],
+        "#2dd4bf": c["accent"],
+        "#76fff0": c["accent"],
+        "#0f766e": c["accent"],
+        "#ecfeff": f'{c["accent"]}18',
+        "#99f6e4": f'{c["accent"]}55',
+        "#115e59": c["header"],
+    }
+    out = html_body
+    for old, new in replacements.items():
+        out = out.replace(old, new)
+    return out
+
+
 def _resend_payload(msg: MIMEMultipart) -> dict:
     """Convert a built MIME message into a Resend API payload, preserving the
     HTML body and any inline/attached images (incl. the cid:qrcode QR)."""
@@ -207,11 +265,21 @@ def _plain_text_from_html(html_body: str) -> str:
 
 def _festio_email_shell(inner: str, *, title: str | None = None,
                         preheader: str | None = None,
-                        footer_reason: str | None = None) -> str:
+                        footer_reason: str | None = None,
+                        theme: dict | None = None) -> str:
     """Shared email-client-safe shell for transactional non-ticket emails."""
     safe_title = _html.escape(title or "Festio")
     safe_preheader = _html.escape(preheader or safe_title)
     footer = _html.escape(footer_reason or "You are receiving this email because you are connected to this event.")
+    c = _theme_colors(theme)
+    cover = _theme_cover_url(theme)
+    cover_block = (
+        '<tr><td>'
+        f'<img src="{_html.escape(cover, quote=True)}" alt="" width="600" '
+        'style="display:block;width:100%;max-width:600px;height:auto;border:0;outline:none;text-decoration:none;" />'
+        '</td></tr>'
+        if cover else ""
+    )
     return (
         '<!doctype html><html><head><meta http-equiv="Content-Type" content="text/html; charset=utf-8">'
         '<meta name="viewport" content="width=device-width, initial-scale=1.0">'
@@ -219,21 +287,22 @@ def _festio_email_shell(inner: str, *, title: str | None = None,
         'table[width="600"]{width:100% !important;}'
         'h1{font-size:24px !important;line-height:30px !important;}'
         '}</style></head>'
-        '<body style="margin:0;padding:0;background:#f4f7fb;font-family:Arial,Helvetica,sans-serif;">'
-        '<div style="display:none;font-size:1px;color:#f4f7fb;line-height:1px;max-height:0;'
+        f'<body style="margin:0;padding:0;background:{c["background"]};font-family:Arial,Helvetica,sans-serif;">'
+        f'<div style="display:none;font-size:1px;color:{c["background"]};line-height:1px;max-height:0;'
         f'max-width:0;opacity:0;overflow:hidden;">{safe_preheader}</div>'
         '<table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" '
-        'style="width:100%;background:#f4f7fb;margin:0;padding:0;">'
+        f'style="width:100%;background:{c["background"]};margin:0;padding:0;">'
         '<tr><td align="center" style="padding:28px 12px;">'
         '<table role="presentation" width="600" cellspacing="0" cellpadding="0" border="0" '
-        'style="width:100%;max-width:600px;border-collapse:separate;background:#ffffff;'
+        f'style="width:100%;max-width:600px;border-collapse:separate;background:{c["surface"]};'
         'border-radius:16px;border:1px solid #dbe7ef;overflow:hidden;">'
-        '<tr><td style="background:#0f172a;padding:22px 28px;">'
-        '<div style="font-family:Arial,Helvetica,sans-serif;color:#2dd4bf;font-size:13px;'
+        f'<tr><td style="background:{c["header"]};padding:22px 28px;">'
+        f'<div style="font-family:Arial,Helvetica,sans-serif;color:{c["accent"]};font-size:13px;'
         'line-height:18px;font-weight:800;letter-spacing:.9px;text-transform:uppercase;">Festio</div>'
-        f'<h1 style="font-family:Arial,Helvetica,sans-serif;color:#ffffff;font-size:28px;'
+        f'<h1 style="font-family:Arial,Helvetica,sans-serif;color:{c["primary"]};font-size:28px;'
         f'line-height:34px;margin:8px 0 0 0;font-weight:800;">{safe_title}</h1>'
         '</td></tr>'
+        f'{cover_block}'
         '<tr><td style="font-family:Arial,Helvetica,sans-serif;color:#172033;'
         'font-size:15px;line-height:24px;padding:28px;">'
         f'{inner}'
@@ -247,7 +316,7 @@ def _festio_email_shell(inner: str, *, title: str | None = None,
     )
 
 
-async def send_simple_email(to_email: str, subject: str, html_body: str):
+async def send_simple_email(to_email: str, subject: str, html_body: str, event_id: str | None = None):
     """Shared Festio-branded HTML email for simple transactional templates."""
     if not to_email:
         return
@@ -255,10 +324,12 @@ async def send_simple_email(to_email: str, subject: str, html_body: str):
     msg["Subject"] = subject
     msg["From"] = settings.email_from
     msg["To"] = to_email
+    theme = await _design_email_theme(event_id)
     wrapped = _festio_email_shell(
         html_body,
         title=subject,
         preheader=_plain_text_from_html(html_body)[:140],
+        theme=theme,
     )
     msg.attach(MIMEText(_plain_text_from_html(html_body), "plain", "utf-8"))
     msg.attach(MIMEText(wrapped, "html", "utf-8"))
@@ -443,6 +514,7 @@ async def send_invite_email(
 
     msg = MIMEMultipart("related")
     qr_bytes = generate_qr_bytes(guest_data["qr_token"], checkin_base_url)
+    theme = await _design_email_theme(guest_data.get("event_id"))
     ticket_url = f"{checkin_base_url.rstrip('/')}/scan/{guest_data['qr_token']}"
     date_str = _fmt_event_date(event_date)
     time_str = _fmt_event_time(event_date)
@@ -452,7 +524,7 @@ async def send_invite_email(
     venue_html = _html.escape(venue_name or "Venue details coming soon.")
     if venue_address:
         venue_html += f'<br><span style="font-weight:400;color:#64748b;">{_html.escape(venue_address)}</span>'
-    event_image_url = _abs_url(checkin_base_url, event_image)
+    event_image_url = _abs_url(checkin_base_url, _theme_cover_url(theme) or event_image)
     calendar_url = _calendar_link(event_name, event_date, venue_text if venue_name or venue_address else "")
     directions_url = (
         "https://www.google.com/maps/search/?api=1&query=" + quote_plus(venue_text)
@@ -528,6 +600,7 @@ async def send_invite_email(
         f'{inner}'
         '</body></html>'
     )
+    body = _apply_design_theme_to_html(body, theme)
 
     msg["Subject"] = subject
     msg["From"] = settings.email_from
@@ -545,6 +618,7 @@ async def send_invite_email(
 
 
 async def send_admission_email(guest_data: dict):
+    theme = await _design_email_theme(guest_data.get("event_id"))
     msg = MIMEMultipart()
     msg["Subject"] = guest_data.get("subject_override") or "You're Admitted!"
     msg["From"] = settings.email_from
@@ -644,6 +718,7 @@ async def send_admission_email(guest_data: dict):
         title=msg["Subject"],
         preheader=f"Welcome, {guest_data['first_name']}! You have been checked in.",
         footer_reason="You are receiving this email because you were checked in for this event.",
+        theme=theme,
     )
 
     msg.attach(MIMEText(_plain_text_from_html(inner), "plain", "utf-8"))
@@ -659,6 +734,7 @@ async def send_manual_invite_email(
     event_name: str,
     event_date: datetime,
     invite_message: str | None = None,
+    event_id: str | None = None,
 ):
     """Send a personal invite link (no QR) to a recipient who hasn't RSVP'd yet."""
     msg = MIMEMultipart()
@@ -666,6 +742,7 @@ async def send_manual_invite_email(
     msg["From"] = settings.email_from
     msg["To"] = email
 
+    theme = await _design_email_theme(event_id)
     safe_name = _html.escape(name)
     safe_event = _html.escape(event_name)
     date_str = event_date.strftime("%A, %d %B %Y") if event_date else ""
@@ -688,6 +765,7 @@ async def send_manual_invite_email(
         title="You're invited",
         preheader=f"RSVP for {event_name}",
         footer_reason=f"You are receiving this email because you were invited to {event_name}.",
+        theme=theme,
     )
 
     msg.attach(MIMEText(_plain_text_from_html(inner), "plain", "utf-8"))
@@ -706,6 +784,7 @@ async def send_vendor_shipping_email(
     notes: str | None = None,
     attachment: bytes | None = None,
     attachment_name: str = "shipping-list.xlsx",
+    event_id: str | None = None,
 ):
     """Send a vendor the shipping/packing list for a shipment — a link to the
     read-only vendor page, plus an optional spreadsheet attachment."""
@@ -714,6 +793,7 @@ async def send_vendor_shipping_email(
     msg["From"] = settings.email_from
     msg["To"] = vendor_email
 
+    theme = await _design_email_theme(event_id)
     safe_vendor = _html.escape(vendor_name) if vendor_name else "there"
     safe_event = _html.escape(event_name)
     safe_shipment = _html.escape(shipment_name)
@@ -738,6 +818,7 @@ async def send_vendor_shipping_email(
         title="Shipping list ready",
         preheader=f"{shipment_name} shipping list for {event_name}",
         footer_reason=f"You are receiving this email because you are a vendor for {event_name}.",
+        theme=theme,
     )
 
     msg.attach(MIMEText(_plain_text_from_html(inner), "plain", "utf-8"))
@@ -749,13 +830,14 @@ async def send_vendor_shipping_email(
     await _send(msg)
 
 
-async def send_broadcast_email(*, email: str, first_name: str, message: str, event_name: str):
+async def send_broadcast_email(*, email: str, first_name: str, message: str, event_name: str, event_id: str | None = None):
     """Send a free-text broadcast update (no QR/link) to a guest."""
     msg = MIMEMultipart()
     msg["Subject"] = f"Update — {event_name}"
     msg["From"] = settings.email_from
     msg["To"] = email
 
+    theme = await _design_email_theme(event_id)
     safe_name = _html.escape(first_name or "there")
     safe_event = _html.escape(event_name)
     safe_msg = _html.escape(message).replace("\n", "<br>")
@@ -772,6 +854,7 @@ async def send_broadcast_email(*, email: str, first_name: str, message: str, eve
         title=f"Update — {event_name}",
         preheader=message[:140],
         footer_reason=f"You are receiving this email because you are on the guest list for {event_name}.",
+        theme=theme,
     )
 
     msg.attach(MIMEText(_plain_text_from_html(inner), "plain", "utf-8"))

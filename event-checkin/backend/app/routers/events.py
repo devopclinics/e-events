@@ -761,7 +761,7 @@ async def broadcast_message(
             if body is not None:
                 background_tasks.add_task(
                     send_simple_email, guest.email,
-                    subj or f"Update — {event.name}", body,
+                    subj or f"Update — {event.name}", body, event.id,
                 )
             else:
                 background_tasks.add_task(
@@ -770,6 +770,7 @@ async def broadcast_message(
                     first_name=guest.first_name,
                     message=data.message,
                     event_name=event.name,
+                    event_id=event.id,
                 )
             sent_any = True
 
@@ -864,6 +865,7 @@ async def send_manual_invites(
                 event_name=event.name,
                 event_date=event.event_date,
                 invite_message=event.invite_message,
+                event_id=event.id,
             )
             dispatched = True
 

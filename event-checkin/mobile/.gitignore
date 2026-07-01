@@ -1,0 +1,9 @@
+# Build artifacts — never commit
+*.apk
+*.aab
+
+# Release signing key — secret, keep out of git.
+# (debug.keystore is intentionally committed: password is the standard "android"
+#  and a shared debug cert keeps the Google-sign-in SHA-1 stable across machines.)
+festio-release.jks
+*.jks

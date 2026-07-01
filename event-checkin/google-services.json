@@ -1,0 +1,39 @@
+{
+  "project_info": {
+    "project_number": "177647371710",
+    "project_id": "evets-f394d",
+    "storage_bucket": "evets-f394d.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:177647371710:android:2214b7ed3439103cd825ef",
+        "android_client_info": {
+          "package_name": "events.festio.app"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "177647371710-78rqm7qnqc3948vlkgdq6e0en8dsuq3u.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyAmTQfuV5y3qkhcjB0G6jv5jeyPZqHLRjc"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "177647371710-78rqm7qnqc3948vlkgdq6e0en8dsuq3u.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

@@ -114,6 +114,30 @@ function QrScanner({ onScan }) {
     setError('')
     setStarting(true)
 
+    // Native (Capacitor) → use the MLKit barcode scanner: far more reliable than
+    // decoding video frames in JS, and the OS-level camera UI. Web falls through
+    // to html5-qrcode below.
+    const { Capacitor } = await import('@capacitor/core')
+    if (Capacitor.isNativePlatform()) {
+      try {
+        const { BarcodeScanner, BarcodeFormat } = await import('@capacitor-mlkit/barcode-scanning')
+        const perm = await BarcodeScanner.requestPermissions()
+        if (perm.camera !== 'granted' && perm.camera !== 'limited') {
+          setStarting(false)
+          setError('Camera permission denied. Enable it in Settings to scan.')
+          return
+        }
+        const { barcodes } = await BarcodeScanner.scan({ formats: [BarcodeFormat.QrCode] })
+        setStarting(false)
+        if (barcodes && barcodes.length) onScan(barcodes[0].rawValue)
+        return
+      } catch (e) {
+        setStarting(false)
+        setError(`Scanner failed: ${e?.message || e}`)
+        return
+      }
+    }
+
     // 1. Request the permission synchronously inside this user gesture.
     //    Prefer back camera; fall back to any camera if 'environment' is unsupported.
     let probe

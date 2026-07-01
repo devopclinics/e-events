@@ -1,7 +1,8 @@
 import { useState, useEffect } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
-import { signInWithEmailAndPassword, signInWithPopup } from 'firebase/auth'
-import { auth, googleProvider } from '../firebase'
+import { signInWithEmailAndPassword } from 'firebase/auth'
+import { auth } from '../firebase'
+import { googleSignIn } from '../auth/googleSignIn'
 import { useAuth } from '../context/AuthContext'
 import { getPreferredView, setPreferredView } from '../App'
 
@@ -77,7 +78,7 @@ export default function LoginPage() {
   async function signInWithGoogle() {
     setLoading(true); setError('')
     try {
-      const cred = await signInWithPopup(auth, googleProvider)
+      const cred = await googleSignIn()
       const token = await cred.user.getIdToken()
       const res = await fetch('/api/auth/me', { headers: { Authorization: `Bearer ${token}` } })
       const dbUser = await res.json()

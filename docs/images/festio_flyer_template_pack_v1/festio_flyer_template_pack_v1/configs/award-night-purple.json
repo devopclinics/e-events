@@ -1,0 +1,65 @@
+{
+  "id": "award-night-purple",
+  "name": "Award Night Purple",
+  "category": "Award Night",
+  "style": "Luxury / Premium",
+  "isFree": true,
+  "type": "flyer_template_family",
+  "surfaces": [
+    "flyer",
+    "event_page",
+    "guest_hub",
+    "festio_pass",
+    "email"
+  ],
+  "supportedFlyerSizes": [
+    "portrait_1080x1350",
+    "square_1080x1080",
+    "story_1080x1920",
+    "a5_pdf",
+    "a4_pdf"
+  ],
+  "defaultColors": {
+    "background": "#2E1065",
+    "surface": "#0B0618",
+    "primary": "#FDE68A",
+    "accent": "#A78BFA",
+    "text": "#FFFFFF"
+  },
+  "layout": "split_curve",
+  "editableFields": [
+    "inviteLabel",
+    "hostName",
+    "eventTitle",
+    "eventSubtitle",
+    "eventDescription",
+    "date",
+    "time",
+    "venue",
+    "address",
+    "rsvpBy",
+    "phone",
+    "email",
+    "dressCode",
+    "admissionNote",
+    "customMessage"
+  ],
+  "imageZones": [
+    {
+      "id": "main_photo",
+      "label": "Main Photo",
+      "required": false,
+      "crop": "portrait_or_cover"
+    }
+  ],
+  "qrPlacement": {
+    "enabled": true,
+    "positions": [
+      "bottom-left",
+      "bottom-right",
+      "center-bottom"
+    ]
+  },
+  "preview": "previews/award-night-purple.png",
+  "thumbnail": "thumbnails/award-night-purple_thumb.png"
+}

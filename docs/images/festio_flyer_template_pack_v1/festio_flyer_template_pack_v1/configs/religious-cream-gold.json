@@ -1,0 +1,65 @@
+{
+  "id": "religious-cream-gold",
+  "name": "Religious Cream Gold",
+  "category": "Religious Event",
+  "style": "Classic / Formal",
+  "isFree": true,
+  "type": "flyer_template_family",
+  "surfaces": [
+    "flyer",
+    "event_page",
+    "guest_hub",
+    "festio_pass",
+    "email"
+  ],
+  "supportedFlyerSizes": [
+    "portrait_1080x1350",
+    "square_1080x1080",
+    "story_1080x1920",
+    "a5_pdf",
+    "a4_pdf"
+  ],
+  "defaultColors": {
+    "background": "#FFFBEB",
+    "surface": "#FFFFFF",
+    "primary": "#92400E",
+    "accent": "#B45309",
+    "text": "#FFFFFF"
+  },
+  "layout": "minimal",
+  "editableFields": [
+    "inviteLabel",
+    "hostName",
+    "eventTitle",
+    "eventSubtitle",
+    "eventDescription",
+    "date",
+    "time",
+    "venue",
+    "address",
+    "rsvpBy",
+    "phone",
+    "email",
+    "dressCode",
+    "admissionNote",
+    "customMessage"
+  ],
+  "imageZones": [
+    {
+      "id": "main_photo",
+      "label": "Main Photo",
+      "required": false,
+      "crop": "portrait_or_cover"
+    }
+  ],
+  "qrPlacement": {
+    "enabled": true,
+    "positions": [
+      "bottom-left",
+      "bottom-right",
+      "center-bottom"
+    ]
+  },
+  "preview": "previews/religious-cream-gold.png",
+  "thumbnail": "thumbnails/religious-cream-gold_thumb.png"
+}

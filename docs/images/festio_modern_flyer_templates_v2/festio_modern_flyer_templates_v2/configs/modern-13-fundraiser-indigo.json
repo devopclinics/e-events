@@ -1,0 +1,66 @@
+{
+  "id": "modern-13-fundraiser-indigo",
+  "name": "Indigo Fundraiser",
+  "category": "Fundraiser",
+  "style": "Formal",
+  "isFree": true,
+  "type": "flyer_template_family",
+  "surfaces": [
+    "flyer",
+    "event_page",
+    "guest_hub",
+    "festio_pass",
+    "email"
+  ],
+  "supportedFlyerSizes": [
+    "portrait_1080x1350",
+    "square_1080x1080",
+    "story_1080x1920",
+    "a5_pdf",
+    "a4_pdf"
+  ],
+  "defaultColors": {
+    "background": "#1E1B4B",
+    "surface": "#111827",
+    "primary": "#FDE68A",
+    "accent": "#C084FC",
+    "text": "#FFFFFF"
+  },
+  "renderer": "editorial",
+  "editableFields": [
+    "inviteLabel",
+    "hostName",
+    "eventTitle",
+    "eventSubtitle",
+    "eventDescription",
+    "date",
+    "time",
+    "venue",
+    "address",
+    "rsvpBy",
+    "phone",
+    "email",
+    "dressCode",
+    "admissionNote",
+    "parkingNote",
+    "customMessage"
+  ],
+  "imageZones": [
+    {
+      "id": "main_photo",
+      "label": "Main Photo / Cover Image",
+      "required": false,
+      "crop": "portrait_or_cover"
+    }
+  ],
+  "qrPlacement": {
+    "enabled": true,
+    "positions": [
+      "bottom-left",
+      "bottom-right",
+      "center-bottom"
+    ]
+  },
+  "preview": "previews_1080x1350/modern-13-fundraiser-indigo.png",
+  "thumbnail": "thumbnails_360x450/modern-13-fundraiser-indigo_thumb.png"
+}

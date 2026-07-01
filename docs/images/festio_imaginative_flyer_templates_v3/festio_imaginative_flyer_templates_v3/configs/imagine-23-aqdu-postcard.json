@@ -1,0 +1,66 @@
+{
+  "id": "imagine-23-aqdu-postcard",
+  "name": "Aqdu Invitation Postcard",
+  "category": "Nikkah/Aqdu",
+  "style": "Postcard",
+  "isFree": true,
+  "type": "flyer_template_family",
+  "surfaces": [
+    "flyer",
+    "event_page",
+    "guest_hub",
+    "festio_pass",
+    "email"
+  ],
+  "supportedFlyerSizes": [
+    "portrait_1080x1350",
+    "square_1080x1080",
+    "story_1080x1920",
+    "a5_pdf",
+    "a4_pdf"
+  ],
+  "defaultColors": {
+    "background": "#ECFDF5",
+    "surface": "#FFFFFF",
+    "primary": "#047857",
+    "accent": "#D97706",
+    "text": "#FFFFFF"
+  },
+  "renderer": "postcard",
+  "editableFields": [
+    "inviteLabel",
+    "hostName",
+    "eventTitle",
+    "eventSubtitle",
+    "eventDescription",
+    "date",
+    "time",
+    "venue",
+    "address",
+    "rsvpBy",
+    "phone",
+    "email",
+    "dressCode",
+    "admissionNote",
+    "parkingNote",
+    "customMessage"
+  ],
+  "imageZones": [
+    {
+      "id": "main_photo",
+      "label": "Main Photo / Cover Image",
+      "required": false,
+      "crop": "portrait_or_cover"
+    }
+  ],
+  "qrPlacement": {
+    "enabled": true,
+    "positions": [
+      "bottom-left",
+      "bottom-right",
+      "center-bottom"
+    ]
+  },
+  "preview": "previews_1080x1350/imagine-23-aqdu-postcard.png",
+  "thumbnail": "thumbnails_360x450/imagine-23-aqdu-postcard_thumb.png"
+}

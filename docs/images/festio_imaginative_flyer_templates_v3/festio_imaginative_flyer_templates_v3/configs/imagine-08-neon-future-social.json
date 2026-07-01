@@ -1,0 +1,66 @@
+{
+  "id": "imagine-08-neon-future-social",
+  "name": "Neon Future Social",
+  "category": "Concert/Social",
+  "style": "Futurist",
+  "isFree": true,
+  "type": "flyer_template_family",
+  "surfaces": [
+    "flyer",
+    "event_page",
+    "guest_hub",
+    "festio_pass",
+    "email"
+  ],
+  "supportedFlyerSizes": [
+    "portrait_1080x1350",
+    "square_1080x1080",
+    "story_1080x1920",
+    "a5_pdf",
+    "a4_pdf"
+  ],
+  "defaultColors": {
+    "background": "#020617",
+    "surface": "#020617",
+    "primary": "#F0ABFC",
+    "accent": "#22D3EE",
+    "text": "#FFFFFF"
+  },
+  "renderer": "futurist",
+  "editableFields": [
+    "inviteLabel",
+    "hostName",
+    "eventTitle",
+    "eventSubtitle",
+    "eventDescription",
+    "date",
+    "time",
+    "venue",
+    "address",
+    "rsvpBy",
+    "phone",
+    "email",
+    "dressCode",
+    "admissionNote",
+    "parkingNote",
+    "customMessage"
+  ],
+  "imageZones": [
+    {
+      "id": "main_photo",
+      "label": "Main Photo / Cover Image",
+      "required": false,
+      "crop": "portrait_or_cover"
+    }
+  ],
+  "qrPlacement": {
+    "enabled": true,
+    "positions": [
+      "bottom-left",
+      "bottom-right",
+      "center-bottom"
+    ]
+  },
+  "preview": "previews_1080x1350/imagine-08-neon-future-social.png",
+  "thumbnail": "thumbnails_360x450/imagine-08-neon-future-social_thumb.png"
+}

@@ -1,0 +1,65 @@
+{
+  "id": "vip-private-lounge",
+  "name": "Vip Private Lounge",
+  "category": "VIP/Private Party",
+  "style": "Luxury / Premium",
+  "isFree": true,
+  "type": "flyer_template_family",
+  "surfaces": [
+    "flyer",
+    "event_page",
+    "guest_hub",
+    "festio_pass",
+    "email"
+  ],
+  "supportedFlyerSizes": [
+    "portrait_1080x1350",
+    "square_1080x1080",
+    "story_1080x1920",
+    "a5_pdf",
+    "a4_pdf"
+  ],
+  "defaultColors": {
+    "background": "#0F172A",
+    "surface": "#030712",
+    "primary": "#FDE68A",
+    "accent": "#A3E635",
+    "text": "#FFFFFF"
+  },
+  "layout": "split_curve",
+  "editableFields": [
+    "inviteLabel",
+    "hostName",
+    "eventTitle",
+    "eventSubtitle",
+    "eventDescription",
+    "date",
+    "time",
+    "venue",
+    "address",
+    "rsvpBy",
+    "phone",
+    "email",
+    "dressCode",
+    "admissionNote",
+    "customMessage"
+  ],
+  "imageZones": [
+    {
+      "id": "main_photo",
+      "label": "Main Photo",
+      "required": false,
+      "crop": "portrait_or_cover"
+    }
+  ],
+  "qrPlacement": {
+    "enabled": true,
+    "positions": [
+      "bottom-left",
+      "bottom-right",
+      "center-bottom"
+    ]
+  },
+  "preview": "previews/vip-private-lounge.png",
+  "thumbnail": "thumbnails/vip-private-lounge_thumb.png"
+}

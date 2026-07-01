@@ -1,0 +1,1597 @@
+{
+  "pack": "Festio Modern Flyer Templates v2",
+  "version": "2.0.0",
+  "description": "24 more polished, modern flyer template previews and JSON configs for Festio Design Studio.",
+  "canvas": {
+    "portrait": [
+      1080,
+      1350
+    ]
+  },
+  "templates": [
+    {
+      "id": "modern-01-black-gold-birthday",
+      "name": "Noir Gold Birthday",
+      "category": "Birthday",
+      "style": "Luxury / Premium",
+      "isFree": true,
+      "type": "flyer_template_family",
+      "surfaces": [
+        "flyer",
+        "event_page",
+        "guest_hub",
+        "festio_pass",
+        "email"
+      ],
+      "supportedFlyerSizes": [
+        "portrait_1080x1350",
+        "square_1080x1080",
+        "story_1080x1920",
+        "a5_pdf",
+        "a4_pdf"
+      ],
+      "defaultColors": {
+        "background": "#073B3F",
+        "surface": "#050505",
+        "primary": "#F5C542",
+        "accent": "#D4AF37",
+        "text": "#FFFFFF"
+      },
+      "renderer": "luxe_split",
+      "editableFields": [
+        "inviteLabel",
+        "hostName",
+        "eventTitle",
+        "eventSubtitle",
+        "eventDescription",
+        "date",
+        "time",
+        "venue",
+        "address",
+        "rsvpBy",
+        "phone",
+        "email",
+        "dressCode",
+        "admissionNote",
+        "parkingNote",
+        "customMessage"
+      ],
+      "imageZones": [
+        {
+          "id": "main_photo",
+          "label": "Main Photo / Cover Image",
+          "required": false,
+          "crop": "portrait_or_cover"
+        }
+      ],
+      "qrPlacement": {
+        "enabled": true,
+        "positions": [
+          "bottom-left",
+          "bottom-right",
+          "center-bottom"
+        ]
+      },
+      "preview": "previews_1080x1350/modern-01-black-gold-birthday.png",
+      "thumbnail": "thumbnails_360x450/modern-01-black-gold-birthday_thumb.png"
+    },
+    {
+      "id": "modern-02-emerald-aqdu",
+      "name": "Emerald Aqdu",
+      "category": "Nikkah/Aqdu",
+      "style": "Luxury / Premium",
+      "isFree": true,
+      "type": "flyer_template_family",
+      "surfaces": [
+        "flyer",
+        "event_page",
+        "guest_hub",
+        "festio_pass",
+        "email"
+      ],
+      "supportedFlyerSizes": [
+        "portrait_1080x1350",
+        "square_1080x1080",
+        "story_1080x1920",
+        "a5_pdf",
+        "a4_pdf"
+      ],
+      "defaultColors": {
+        "background": "#064E3B",
+        "surface": "#031C17",
+        "primary": "#FDE68A",
+        "accent": "#D4AF37",
+        "text": "#FFFFFF"
+      },
+      "renderer": "arch",
+      "editableFields": [
+        "inviteLabel",
+        "hostName",
+        "eventTitle",
+        "eventSubtitle",
+        "eventDescription",
+        "date",
+        "time",
+        "venue",
+        "address",
+        "rsvpBy",
+        "phone",
+        "email",
+        "dressCode",
+        "admissionNote",
+        "parkingNote",
+        "customMessage"
+      ],
+      "imageZones": [
+        {
+          "id": "main_photo",
+          "label": "Main Photo / Cover Image",
+          "required": false,
+          "crop": "portrait_or_cover"
+        }
+      ],
+      "qrPlacement": {
+        "enabled": true,
+        "positions": [
+          "bottom-left",
+          "bottom-right",
+          "center-bottom"
+        ]
+      },
+      "preview": "previews_1080x1350/modern-02-emerald-aqdu.png",
+      "thumbnail": "thumbnails_360x450/modern-02-emerald-aqdu_thumb.png"
+    },
+    {
+      "id": "modern-03-soft-floral-wedding",
+      "name": "Soft Floral Wedding",
+      "category": "Wedding",
+      "style": "Modern Minimal",
+      "isFree": true,
+      "type": "flyer_template_family",
+      "surfaces": [
+        "flyer",
+        "event_page",
+        "guest_hub",
+        "festio_pass",
+        "email"
+      ],
+      "supportedFlyerSizes": [
+        "portrait_1080x1350",
+        "square_1080x1080",
+        "story_1080x1920",
+        "a5_pdf",
+        "a4_pdf"
+      ],
+      "defaultColors": {
+        "background": "#FFF7ED",
+        "surface": "#FFFFFF",
+        "primary": "#FB7185",
+        "accent": "#B45309",
+        "text": "#FFFFFF"
+      },
+      "renderer": "glass_card",
+      "editableFields": [
+        "inviteLabel",
+        "hostName",
+        "eventTitle",
+        "eventSubtitle",
+        "eventDescription",
+        "date",
+        "time",
+        "venue",
+        "address",
+        "rsvpBy",
+        "phone",
+        "email",
+        "dressCode",
+        "admissionNote",
+        "parkingNote",
+        "customMessage"
+      ],
+      "imageZones": [
+        {
+          "id": "main_photo",
+          "label": "Main Photo / Cover Image",
+          "required": false,
+          "crop": "portrait_or_cover"
+        }
+      ],
+      "qrPlacement": {
+        "enabled": true,
+        "positions": [
+          "bottom-left",
+          "bottom-right",
+          "center-bottom"
+        ]
+      },
+      "preview": "previews_1080x1350/modern-03-soft-floral-wedding.png",
+      "thumbnail": "thumbnails_360x450/modern-03-soft-floral-wedding_thumb.png"
+    },
+    {
+      "id": "modern-04-executive-summit",
+      "name": "Executive Summit",
+      "category": "Corporate",
+      "style": "Modern Minimal",
+      "isFree": true,
+      "type": "flyer_template_family",
+      "surfaces": [
+        "flyer",
+        "event_page",
+        "guest_hub",
+        "festio_pass",
+        "email"
+      ],
+      "supportedFlyerSizes": [
+        "portrait_1080x1350",
+        "square_1080x1080",
+        "story_1080x1920",
+        "a5_pdf",
+        "a4_pdf"
+      ],
+      "defaultColors": {
+        "background": "#F8FAFC",
+        "surface": "#FFFFFF",
+        "primary": "#1D4ED8",
+        "accent": "#2563EB",
+        "text": "#FFFFFF"
+      },
+      "renderer": "mono",
+      "editableFields": [
+        "inviteLabel",
+        "hostName",
+        "eventTitle",
+        "eventSubtitle",
+        "eventDescription",
+        "date",
+        "time",
+        "venue",
+        "address",
+        "rsvpBy",
+        "phone",
+        "email",
+        "dressCode",
+        "admissionNote",
+        "parkingNote",
+        "customMessage"
+      ],
+      "imageZones": [
+        {
+          "id": "main_photo",
+          "label": "Main Photo / Cover Image",
+          "required": false,
+          "crop": "portrait_or_cover"
+        }
+      ],
+      "qrPlacement": {
+        "enabled": true,
+        "positions": [
+          "bottom-left",
+          "bottom-right",
+          "center-bottom"
+        ]
+      },
+      "preview": "previews_1080x1350/modern-04-executive-summit.png",
+      "thumbnail": "thumbnails_360x450/modern-04-executive-summit_thumb.png"
+    },
+    {
+      "id": "modern-05-neon-social",
+      "name": "Neon Social Night",
+      "category": "Concert/Social",
+      "style": "Colorful / Festive",
+      "isFree": true,
+      "type": "flyer_template_family",
+      "surfaces": [
+        "flyer",
+        "event_page",
+        "guest_hub",
+        "festio_pass",
+        "email"
+      ],
+      "supportedFlyerSizes": [
+        "portrait_1080x1350",
+        "square_1080x1080",
+        "story_1080x1920",
+        "a5_pdf",
+        "a4_pdf"
+      ],
+      "defaultColors": {
+        "background": "#020617",
+        "surface": "#020617",
+        "primary": "#22D3EE",
+        "accent": "#F0ABFC",
+        "text": "#FFFFFF"
+      },
+      "renderer": "neon",
+      "editableFields": [
+        "inviteLabel",
+        "hostName",
+        "eventTitle",
+        "eventSubtitle",
+        "eventDescription",
+        "date",
+        "time",
+        "venue",
+        "address",
+        "rsvpBy",
+        "phone",
+        "email",
+        "dressCode",
+        "admissionNote",
+        "parkingNote",
+        "customMessage"
+      ],
+      "imageZones": [
+        {
+          "id": "main_photo",
+          "label": "Main Photo / Cover Image",
+          "required": false,
+          "crop": "portrait_or_cover"
+        }
+      ],
+      "qrPlacement": {
+        "enabled": true,
+        "positions": [
+          "bottom-left",
+          "bottom-right",
+          "center-bottom"
+        ]
+      },
+      "preview": "previews_1080x1350/modern-05-neon-social.png",
+      "thumbnail": "thumbnails_360x450/modern-05-neon-social_thumb.png"
+    },
+    {
+      "id": "modern-06-royal-gala",
+      "name": "Royal Gala",
+      "category": "Gala",
+      "style": "Luxury / Premium",
+      "isFree": true,
+      "type": "flyer_template_family",
+      "surfaces": [
+        "flyer",
+        "event_page",
+        "guest_hub",
+        "festio_pass",
+        "email"
+      ],
+      "supportedFlyerSizes": [
+        "portrait_1080x1350",
+        "square_1080x1080",
+        "story_1080x1920",
+        "a5_pdf",
+        "a4_pdf"
+      ],
+      "defaultColors": {
+        "background": "#020617",
+        "surface": "#050505",
+        "primary": "#FDE68A",
+        "accent": "#F59E0B",
+        "text": "#FFFFFF"
+      },
+      "renderer": "editorial",
+      "editableFields": [
+        "inviteLabel",
+        "hostName",
+        "eventTitle",
+        "eventSubtitle",
+        "eventDescription",
+        "date",
+        "time",
+        "venue",
+        "address",
+        "rsvpBy",
+        "phone",
+        "email",
+        "dressCode",
+        "admissionNote",
+        "parkingNote",
+        "customMessage"
+      ],
+      "imageZones": [
+        {
+          "id": "main_photo",
+          "label": "Main Photo / Cover Image",
+          "required": false,
+          "crop": "portrait_or_cover"
+        }
+      ],
+      "qrPlacement": {
+        "enabled": true,
+        "positions": [
+          "bottom-left",
+          "bottom-right",
+          "center-bottom"
+        ]
+      },
+      "preview": "previews_1080x1350/modern-06-royal-gala.png",
+      "thumbnail": "thumbnails_360x450/modern-06-royal-gala_thumb.png"
+    },
+    {
+      "id": "modern-07-community-day",
+      "name": "Community Day",
+      "category": "Community Event",
+      "style": "Warm / Friendly",
+      "isFree": true,
+      "type": "flyer_template_family",
+      "surfaces": [
+        "flyer",
+        "event_page",
+        "guest_hub",
+        "festio_pass",
+        "email"
+      ],
+      "supportedFlyerSizes": [
+        "portrait_1080x1350",
+        "square_1080x1080",
+        "story_1080x1920",
+        "a5_pdf",
+        "a4_pdf"
+      ],
+      "defaultColors": {
+        "background": "#ECFDF5",
+        "surface": "#FFFFFF",
+        "primary": "#16A34A",
+        "accent": "#059669",
+        "text": "#FFFFFF"
+      },
+      "renderer": "glass_card",
+      "editableFields": [
+        "inviteLabel",
+        "hostName",
+        "eventTitle",
+        "eventSubtitle",
+        "eventDescription",
+        "date",
+        "time",
+        "venue",
+        "address",
+        "rsvpBy",
+        "phone",
+        "email",
+        "dressCode",
+        "admissionNote",
+        "parkingNote",
+        "customMessage"
+      ],
+      "imageZones": [
+        {
+          "id": "main_photo",
+          "label": "Main Photo / Cover Image",
+          "required": false,
+          "crop": "portrait_or_cover"
+        }
+      ],
+      "qrPlacement": {
+        "enabled": true,
+        "positions": [
+          "bottom-left",
+          "bottom-right",
+          "center-bottom"
+        ]
+      },
+      "preview": "previews_1080x1350/modern-07-community-day.png",
+      "thumbnail": "thumbnails_360x450/modern-07-community-day_thumb.png"
+    },
+    {
+      "id": "modern-08-award-purple",
+      "name": "Purple Award Night",
+      "category": "Award Night",
+      "style": "Luxury / Premium",
+      "isFree": true,
+      "type": "flyer_template_family",
+      "surfaces": [
+        "flyer",
+        "event_page",
+        "guest_hub",
+        "festio_pass",
+        "email"
+      ],
+      "supportedFlyerSizes": [
+        "portrait_1080x1350",
+        "square_1080x1080",
+        "story_1080x1920",
+        "a5_pdf",
+        "a4_pdf"
+      ],
+      "defaultColors": {
+        "background": "#2E1065",
+        "surface": "#0B0618",
+        "primary": "#FDE68A",
+        "accent": "#A78BFA",
+        "text": "#FFFFFF"
+      },
+      "renderer": "luxe_split",
+      "editableFields": [
+        "inviteLabel",
+        "hostName",
+        "eventTitle",
+        "eventSubtitle",
+        "eventDescription",
+        "date",
+        "time",
+        "venue",
+        "address",
+        "rsvpBy",
+        "phone",
+        "email",
+        "dressCode",
+        "admissionNote",
+        "parkingNote",
+        "customMessage"
+      ],
+      "imageZones": [
+        {
+          "id": "main_photo",
+          "label": "Main Photo / Cover Image",
+          "required": false,
+          "crop": "portrait_or_cover"
+        }
+      ],
+      "qrPlacement": {
+        "enabled": true,
+        "positions": [
+          "bottom-left",
+          "bottom-right",
+          "center-bottom"
+        ]
+      },
+      "preview": "previews_1080x1350/modern-08-award-purple.png",
+      "thumbnail": "thumbnails_360x450/modern-08-award-purple_thumb.png"
+    },
+    {
+      "id": "modern-09-graduation-blue",
+      "name": "Blue Graduation",
+      "category": "Graduation",
+      "style": "Photo-first / Flyer-first",
+      "isFree": true,
+      "type": "flyer_template_family",
+      "surfaces": [
+        "flyer",
+        "event_page",
+        "guest_hub",
+        "festio_pass",
+        "email"
+      ],
+      "supportedFlyerSizes": [
+        "portrait_1080x1350",
+        "square_1080x1080",
+        "story_1080x1920",
+        "a5_pdf",
+        "a4_pdf"
+      ],
+      "defaultColors": {
+        "background": "#0F172A",
+        "surface": "#111827",
+        "primary": "#93C5FD",
+        "accent": "#FBBF24",
+        "text": "#FFFFFF"
+      },
+      "renderer": "editorial",
+      "editableFields": [
+        "inviteLabel",
+        "hostName",
+        "eventTitle",
+        "eventSubtitle",
+        "eventDescription",
+        "date",
+        "time",
+        "venue",
+        "address",
+        "rsvpBy",
+        "phone",
+        "email",
+        "dressCode",
+        "admissionNote",
+        "parkingNote",
+        "customMessage"
+      ],
+      "imageZones": [
+        {
+          "id": "main_photo",
+          "label": "Main Photo / Cover Image",
+          "required": false,
+          "crop": "portrait_or_cover"
+        }
+      ],
+      "qrPlacement": {
+        "enabled": true,
+        "positions": [
+          "bottom-left",
+          "bottom-right",
+          "center-bottom"
+        ]
+      },
+      "preview": "previews_1080x1350/modern-09-graduation-blue.png",
+      "thumbnail": "thumbnails_360x450/modern-09-graduation-blue_thumb.png"
+    },
+    {
+      "id": "modern-10-memorial-pearl",
+      "name": "Pearl Memorial",
+      "category": "Memorial",
+      "style": "Classic / Formal",
+      "isFree": true,
+      "type": "flyer_template_family",
+      "surfaces": [
+        "flyer",
+        "event_page",
+        "guest_hub",
+        "festio_pass",
+        "email"
+      ],
+      "supportedFlyerSizes": [
+        "portrait_1080x1350",
+        "square_1080x1080",
+        "story_1080x1920",
+        "a5_pdf",
+        "a4_pdf"
+      ],
+      "defaultColors": {
+        "background": "#F8FAFC",
+        "surface": "#FFFFFF",
+        "primary": "#64748B",
+        "accent": "#475569",
+        "text": "#FFFFFF"
+      },
+      "renderer": "mono",
+      "editableFields": [
+        "inviteLabel",
+        "hostName",
+        "eventTitle",
+        "eventSubtitle",
+        "eventDescription",
+        "date",
+        "time",
+        "venue",
+        "address",
+        "rsvpBy",
+        "phone",
+        "email",
+        "dressCode",
+        "admissionNote",
+        "parkingNote",
+        "customMessage"
+      ],
+      "imageZones": [
+        {
+          "id": "main_photo",
+          "label": "Main Photo / Cover Image",
+          "required": false,
+          "crop": "portrait_or_cover"
+        }
+      ],
+      "qrPlacement": {
+        "enabled": true,
+        "positions": [
+          "bottom-left",
+          "bottom-right",
+          "center-bottom"
+        ]
+      },
+      "preview": "previews_1080x1350/modern-10-memorial-pearl.png",
+      "thumbnail": "thumbnails_360x450/modern-10-memorial-pearl_thumb.png"
+    },
+    {
+      "id": "modern-11-baby-pastel",
+      "name": "Pastel Baby Shower",
+      "category": "Baby Shower",
+      "style": "Soft Pastel",
+      "isFree": true,
+      "type": "flyer_template_family",
+      "surfaces": [
+        "flyer",
+        "event_page",
+        "guest_hub",
+        "festio_pass",
+        "email"
+      ],
+      "supportedFlyerSizes": [
+        "portrait_1080x1350",
+        "square_1080x1080",
+        "story_1080x1920",
+        "a5_pdf",
+        "a4_pdf"
+      ],
+      "defaultColors": {
+        "background": "#FDF2F8",
+        "surface": "#FFFFFF",
+        "primary": "#F472B6",
+        "accent": "#38BDF8",
+        "text": "#FFFFFF"
+      },
+      "renderer": "glass_card",
+      "editableFields": [
+        "inviteLabel",
+        "hostName",
+        "eventTitle",
+        "eventSubtitle",
+        "eventDescription",
+        "date",
+        "time",
+        "venue",
+        "address",
+        "rsvpBy",
+        "phone",
+        "email",
+        "dressCode",
+        "admissionNote",
+        "parkingNote",
+        "customMessage"
+      ],
+      "imageZones": [
+        {
+          "id": "main_photo",
+          "label": "Main Photo / Cover Image",
+          "required": false,
+          "crop": "portrait_or_cover"
+        }
+      ],
+      "qrPlacement": {
+        "enabled": true,
+        "positions": [
+          "bottom-left",
+          "bottom-right",
+          "center-bottom"
+        ]
+      },
+      "preview": "previews_1080x1350/modern-11-baby-pastel.png",
+      "thumbnail": "thumbnails_360x450/modern-11-baby-pastel_thumb.png"
+    },
+    {
+      "id": "modern-12-banquet-maroon",
+      "name": "Maroon Banquet",
+      "category": "Banquet",
+      "style": "Classic / Formal",
+      "isFree": true,
+      "type": "flyer_template_family",
+      "surfaces": [
+        "flyer",
+        "event_page",
+        "guest_hub",
+        "festio_pass",
+        "email"
+      ],
+      "supportedFlyerSizes": [
+        "portrait_1080x1350",
+        "square_1080x1080",
+        "story_1080x1920",
+        "a5_pdf",
+        "a4_pdf"
+      ],
+      "defaultColors": {
+        "background": "#450A0A",
+        "surface": "#190707",
+        "primary": "#FDE68A",
+        "accent": "#F59E0B",
+        "text": "#FFFFFF"
+      },
+      "renderer": "arch",
+      "editableFields": [
+        "inviteLabel",
+        "hostName",
+        "eventTitle",
+        "eventSubtitle",
+        "eventDescription",
+        "date",
+        "time",
+        "venue",
+        "address",
+        "rsvpBy",
+        "phone",
+        "email",
+        "dressCode",
+        "admissionNote",
+        "parkingNote",
+        "customMessage"
+      ],
+      "imageZones": [
+        {
+          "id": "main_photo",
+          "label": "Main Photo / Cover Image",
+          "required": false,
+          "crop": "portrait_or_cover"
+        }
+      ],
+      "qrPlacement": {
+        "enabled": true,
+        "positions": [
+          "bottom-left",
+          "bottom-right",
+          "center-bottom"
+        ]
+      },
+      "preview": "previews_1080x1350/modern-12-banquet-maroon.png",
+      "thumbnail": "thumbnails_360x450/modern-12-banquet-maroon_thumb.png"
+    },
+    {
+      "id": "modern-13-fundraiser-indigo",
+      "name": "Indigo Fundraiser",
+      "category": "Fundraiser",
+      "style": "Formal",
+      "isFree": true,
+      "type": "flyer_template_family",
+      "surfaces": [
+        "flyer",
+        "event_page",
+        "guest_hub",
+        "festio_pass",
+        "email"
+      ],
+      "supportedFlyerSizes": [
+        "portrait_1080x1350",
+        "square_1080x1080",
+        "story_1080x1920",
+        "a5_pdf",
+        "a4_pdf"
+      ],
+      "defaultColors": {
+        "background": "#1E1B4B",
+        "surface": "#111827",
+        "primary": "#FDE68A",
+        "accent": "#C084FC",
+        "text": "#FFFFFF"
+      },
+      "renderer": "editorial",
+      "editableFields": [
+        "inviteLabel",
+        "hostName",
+        "eventTitle",
+        "eventSubtitle",
+        "eventDescription",
+        "date",
+        "time",
+        "venue",
+        "address",
+        "rsvpBy",
+        "phone",
+        "email",
+        "dressCode",
+        "admissionNote",
+        "parkingNote",
+        "customMessage"
+      ],
+      "imageZones": [
+        {
+          "id": "main_photo",
+          "label": "Main Photo / Cover Image",
+          "required": false,
+          "crop": "portrait_or_cover"
+        }
+      ],
+      "qrPlacement": {
+        "enabled": true,
+        "positions": [
+          "bottom-left",
+          "bottom-right",
+          "center-bottom"
+        ]
+      },
+      "preview": "previews_1080x1350/modern-13-fundraiser-indigo.png",
+      "thumbnail": "thumbnails_360x450/modern-13-fundraiser-indigo_thumb.png"
+    },
+    {
+      "id": "modern-14-private-lounge",
+      "name": "Private Lounge",
+      "category": "VIP/Private Party",
+      "style": "Luxury / Premium",
+      "isFree": true,
+      "type": "flyer_template_family",
+      "surfaces": [
+        "flyer",
+        "event_page",
+        "guest_hub",
+        "festio_pass",
+        "email"
+      ],
+      "supportedFlyerSizes": [
+        "portrait_1080x1350",
+        "square_1080x1080",
+        "story_1080x1920",
+        "a5_pdf",
+        "a4_pdf"
+      ],
+      "defaultColors": {
+        "background": "#0F172A",
+        "surface": "#030712",
+        "primary": "#FDE68A",
+        "accent": "#A3E635",
+        "text": "#FFFFFF"
+      },
+      "renderer": "luxe_split",
+      "editableFields": [
+        "inviteLabel",
+        "hostName",
+        "eventTitle",
+        "eventSubtitle",
+        "eventDescription",
+        "date",
+        "time",
+        "venue",
+        "address",
+        "rsvpBy",
+        "phone",
+        "email",
+        "dressCode",
+        "admissionNote",
+        "parkingNote",
+        "customMessage"
+      ],
+      "imageZones": [
+        {
+          "id": "main_photo",
+          "label": "Main Photo / Cover Image",
+          "required": false,
+          "crop": "portrait_or_cover"
+        }
+      ],
+      "qrPlacement": {
+        "enabled": true,
+        "positions": [
+          "bottom-left",
+          "bottom-right",
+          "center-bottom"
+        ]
+      },
+      "preview": "previews_1080x1350/modern-14-private-lounge.png",
+      "thumbnail": "thumbnails_360x450/modern-14-private-lounge_thumb.png"
+    },
+    {
+      "id": "modern-15-religious-cream",
+      "name": "Cream Religious Program",
+      "category": "Religious Event",
+      "style": "Classic / Formal",
+      "isFree": true,
+      "type": "flyer_template_family",
+      "surfaces": [
+        "flyer",
+        "event_page",
+        "guest_hub",
+        "festio_pass",
+        "email"
+      ],
+      "supportedFlyerSizes": [
+        "portrait_1080x1350",
+        "square_1080x1080",
+        "story_1080x1920",
+        "a5_pdf",
+        "a4_pdf"
+      ],
+      "defaultColors": {
+        "background": "#FFFBEB",
+        "surface": "#FFFFFF",
+        "primary": "#92400E",
+        "accent": "#B45309",
+        "text": "#FFFFFF"
+      },
+      "renderer": "glass_card",
+      "editableFields": [
+        "inviteLabel",
+        "hostName",
+        "eventTitle",
+        "eventSubtitle",
+        "eventDescription",
+        "date",
+        "time",
+        "venue",
+        "address",
+        "rsvpBy",
+        "phone",
+        "email",
+        "dressCode",
+        "admissionNote",
+        "parkingNote",
+        "customMessage"
+      ],
+      "imageZones": [
+        {
+          "id": "main_photo",
+          "label": "Main Photo / Cover Image",
+          "required": false,
+          "crop": "portrait_or_cover"
+        }
+      ],
+      "qrPlacement": {
+        "enabled": true,
+        "positions": [
+          "bottom-left",
+          "bottom-right",
+          "center-bottom"
+        ]
+      },
+      "preview": "previews_1080x1350/modern-15-religious-cream.png",
+      "thumbnail": "thumbnails_360x450/modern-15-religious-cream_thumb.png"
+    },
+    {
+      "id": "modern-16-seminar-clean",
+      "name": "Clean Seminar",
+      "category": "Seminar",
+      "style": "Modern Minimal",
+      "isFree": true,
+      "type": "flyer_template_family",
+      "surfaces": [
+        "flyer",
+        "event_page",
+        "guest_hub",
+        "festio_pass",
+        "email"
+      ],
+      "supportedFlyerSizes": [
+        "portrait_1080x1350",
+        "square_1080x1080",
+        "story_1080x1920",
+        "a5_pdf",
+        "a4_pdf"
+      ],
+      "defaultColors": {
+        "background": "#F8FAFC",
+        "surface": "#FFFFFF",
+        "primary": "#14B8A6",
+        "accent": "#0EA5E9",
+        "text": "#FFFFFF"
+      },
+      "renderer": "mono",
+      "editableFields": [
+        "inviteLabel",
+        "hostName",
+        "eventTitle",
+        "eventSubtitle",
+        "eventDescription",
+        "date",
+        "time",
+        "venue",
+        "address",
+        "rsvpBy",
+        "phone",
+        "email",
+        "dressCode",
+        "admissionNote",
+        "parkingNote",
+        "customMessage"
+      ],
+      "imageZones": [
+        {
+          "id": "main_photo",
+          "label": "Main Photo / Cover Image",
+          "required": false,
+          "crop": "portrait_or_cover"
+        }
+      ],
+      "qrPlacement": {
+        "enabled": true,
+        "positions": [
+          "bottom-left",
+          "bottom-right",
+          "center-bottom"
+        ]
+      },
+      "preview": "previews_1080x1350/modern-16-seminar-clean.png",
+      "thumbnail": "thumbnails_360x450/modern-16-seminar-clean_thumb.png"
+    },
+    {
+      "id": "modern-17-dinner-amber",
+      "name": "Amber Dinner Party",
+      "category": "Dinner Party",
+      "style": "Warm / Elegant",
+      "isFree": true,
+      "type": "flyer_template_family",
+      "surfaces": [
+        "flyer",
+        "event_page",
+        "guest_hub",
+        "festio_pass",
+        "email"
+      ],
+      "supportedFlyerSizes": [
+        "portrait_1080x1350",
+        "square_1080x1080",
+        "story_1080x1920",
+        "a5_pdf",
+        "a4_pdf"
+      ],
+      "defaultColors": {
+        "background": "#431407",
+        "surface": "#1C0A04",
+        "primary": "#FED7AA",
+        "accent": "#FB923C",
+        "text": "#FFFFFF"
+      },
+      "renderer": "arch",
+      "editableFields": [
+        "inviteLabel",
+        "hostName",
+        "eventTitle",
+        "eventSubtitle",
+        "eventDescription",
+        "date",
+        "time",
+        "venue",
+        "address",
+        "rsvpBy",
+        "phone",
+        "email",
+        "dressCode",
+        "admissionNote",
+        "parkingNote",
+        "customMessage"
+      ],
+      "imageZones": [
+        {
+          "id": "main_photo",
+          "label": "Main Photo / Cover Image",
+          "required": false,
+          "crop": "portrait_or_cover"
+        }
+      ],
+      "qrPlacement": {
+        "enabled": true,
+        "positions": [
+          "bottom-left",
+          "bottom-right",
+          "center-bottom"
+        ]
+      },
+      "preview": "previews_1080x1350/modern-17-dinner-amber.png",
+      "thumbnail": "thumbnails_360x450/modern-17-dinner-amber_thumb.png"
+    },
+    {
+      "id": "modern-18-naming-soft",
+      "name": "Soft Naming Ceremony",
+      "category": "Naming Ceremony",
+      "style": "Soft / Family",
+      "isFree": true,
+      "type": "flyer_template_family",
+      "surfaces": [
+        "flyer",
+        "event_page",
+        "guest_hub",
+        "festio_pass",
+        "email"
+      ],
+      "supportedFlyerSizes": [
+        "portrait_1080x1350",
+        "square_1080x1080",
+        "story_1080x1920",
+        "a5_pdf",
+        "a4_pdf"
+      ],
+      "defaultColors": {
+        "background": "#ECFDF5",
+        "surface": "#FFFFFF",
+        "primary": "#047857",
+        "accent": "#D97706",
+        "text": "#FFFFFF"
+      },
+      "renderer": "glass_card",
+      "editableFields": [
+        "inviteLabel",
+        "hostName",
+        "eventTitle",
+        "eventSubtitle",
+        "eventDescription",
+        "date",
+        "time",
+        "venue",
+        "address",
+        "rsvpBy",
+        "phone",
+        "email",
+        "dressCode",
+        "admissionNote",
+        "parkingNote",
+        "customMessage"
+      ],
+      "imageZones": [
+        {
+          "id": "main_photo",
+          "label": "Main Photo / Cover Image",
+          "required": false,
+          "crop": "portrait_or_cover"
+        }
+      ],
+      "qrPlacement": {
+        "enabled": true,
+        "positions": [
+          "bottom-left",
+          "bottom-right",
+          "center-bottom"
+        ]
+      },
+      "preview": "previews_1080x1350/modern-18-naming-soft.png",
+      "thumbnail": "thumbnails_360x450/modern-18-naming-soft_thumb.png"
+    },
+    {
+      "id": "modern-19-conference-tech",
+      "name": "Tech Conference",
+      "category": "Conference",
+      "style": "Modern Tech",
+      "isFree": true,
+      "type": "flyer_template_family",
+      "surfaces": [
+        "flyer",
+        "event_page",
+        "guest_hub",
+        "festio_pass",
+        "email"
+      ],
+      "supportedFlyerSizes": [
+        "portrait_1080x1350",
+        "square_1080x1080",
+        "story_1080x1920",
+        "a5_pdf",
+        "a4_pdf"
+      ],
+      "defaultColors": {
+        "background": "#020617",
+        "surface": "#020617",
+        "primary": "#67E8F9",
+        "accent": "#2DD4BF",
+        "text": "#FFFFFF"
+      },
+      "renderer": "neon",
+      "editableFields": [
+        "inviteLabel",
+        "hostName",
+        "eventTitle",
+        "eventSubtitle",
+        "eventDescription",
+        "date",
+        "time",
+        "venue",
+        "address",
+        "rsvpBy",
+        "phone",
+        "email",
+        "dressCode",
+        "admissionNote",
+        "parkingNote",
+        "customMessage"
+      ],
+      "imageZones": [
+        {
+          "id": "main_photo",
+          "label": "Main Photo / Cover Image",
+          "required": false,
+          "crop": "portrait_or_cover"
+        }
+      ],
+      "qrPlacement": {
+        "enabled": true,
+        "positions": [
+          "bottom-left",
+          "bottom-right",
+          "center-bottom"
+        ]
+      },
+      "preview": "previews_1080x1350/modern-19-conference-tech.png",
+      "thumbnail": "thumbnails_360x450/modern-19-conference-tech_thumb.png"
+    },
+    {
+      "id": "modern-20-general-teal",
+      "name": "Modern Teal Event",
+      "category": "General Modern Event",
+      "style": "Modern",
+      "isFree": true,
+      "type": "flyer_template_family",
+      "surfaces": [
+        "flyer",
+        "event_page",
+        "guest_hub",
+        "festio_pass",
+        "email"
+      ],
+      "supportedFlyerSizes": [
+        "portrait_1080x1350",
+        "square_1080x1080",
+        "story_1080x1920",
+        "a5_pdf",
+        "a4_pdf"
+      ],
+      "defaultColors": {
+        "background": "#0F766E",
+        "surface": "#0B1220",
+        "primary": "#CCFBF1",
+        "accent": "#2DD4BF",
+        "text": "#FFFFFF"
+      },
+      "renderer": "editorial",
+      "editableFields": [
+        "inviteLabel",
+        "hostName",
+        "eventTitle",
+        "eventSubtitle",
+        "eventDescription",
+        "date",
+        "time",
+        "venue",
+        "address",
+        "rsvpBy",
+        "phone",
+        "email",
+        "dressCode",
+        "admissionNote",
+        "parkingNote",
+        "customMessage"
+      ],
+      "imageZones": [
+        {
+          "id": "main_photo",
+          "label": "Main Photo / Cover Image",
+          "required": false,
+          "crop": "portrait_or_cover"
+        }
+      ],
+      "qrPlacement": {
+        "enabled": true,
+        "positions": [
+          "bottom-left",
+          "bottom-right",
+          "center-bottom"
+        ]
+      },
+      "preview": "previews_1080x1350/modern-20-general-teal.png",
+      "thumbnail": "thumbnails_360x450/modern-20-general-teal_thumb.png"
+    },
+    {
+      "id": "modern-21-afro-geometric",
+      "name": "Afro Geometric Celebration",
+      "category": "Cultural Event",
+      "style": "Colorful / Festive",
+      "isFree": true,
+      "type": "flyer_template_family",
+      "surfaces": [
+        "flyer",
+        "event_page",
+        "guest_hub",
+        "festio_pass",
+        "email"
+      ],
+      "supportedFlyerSizes": [
+        "portrait_1080x1350",
+        "square_1080x1080",
+        "story_1080x1920",
+        "a5_pdf",
+        "a4_pdf"
+      ],
+      "defaultColors": {
+        "background": "#3B0764",
+        "surface": "#1C0A04",
+        "primary": "#FDE68A",
+        "accent": "#FB923C",
+        "text": "#FFFFFF"
+      },
+      "renderer": "luxe_split",
+      "editableFields": [
+        "inviteLabel",
+        "hostName",
+        "eventTitle",
+        "eventSubtitle",
+        "eventDescription",
+        "date",
+        "time",
+        "venue",
+        "address",
+        "rsvpBy",
+        "phone",
+        "email",
+        "dressCode",
+        "admissionNote",
+        "parkingNote",
+        "customMessage"
+      ],
+      "imageZones": [
+        {
+          "id": "main_photo",
+          "label": "Main Photo / Cover Image",
+          "required": false,
+          "crop": "portrait_or_cover"
+        }
+      ],
+      "qrPlacement": {
+        "enabled": true,
+        "positions": [
+          "bottom-left",
+          "bottom-right",
+          "center-bottom"
+        ]
+      },
+      "preview": "previews_1080x1350/modern-21-afro-geometric.png",
+      "thumbnail": "thumbnails_360x450/modern-21-afro-geometric_thumb.png"
+    },
+    {
+      "id": "modern-22-minimal-white-gold",
+      "name": "Minimal White Gold",
+      "category": "Wedding",
+      "style": "Modern Minimal",
+      "isFree": true,
+      "type": "flyer_template_family",
+      "surfaces": [
+        "flyer",
+        "event_page",
+        "guest_hub",
+        "festio_pass",
+        "email"
+      ],
+      "supportedFlyerSizes": [
+        "portrait_1080x1350",
+        "square_1080x1080",
+        "story_1080x1920",
+        "a5_pdf",
+        "a4_pdf"
+      ],
+      "defaultColors": {
+        "background": "#FFFBEB",
+        "surface": "#FFFFFF",
+        "primary": "#A16207",
+        "accent": "#B45309",
+        "text": "#FFFFFF"
+      },
+      "renderer": "mono",
+      "editableFields": [
+        "inviteLabel",
+        "hostName",
+        "eventTitle",
+        "eventSubtitle",
+        "eventDescription",
+        "date",
+        "time",
+        "venue",
+        "address",
+        "rsvpBy",
+        "phone",
+        "email",
+        "dressCode",
+        "admissionNote",
+        "parkingNote",
+        "customMessage"
+      ],
+      "imageZones": [
+        {
+          "id": "main_photo",
+          "label": "Main Photo / Cover Image",
+          "required": false,
+          "crop": "portrait_or_cover"
+        }
+      ],
+      "qrPlacement": {
+        "enabled": true,
+        "positions": [
+          "bottom-left",
+          "bottom-right",
+          "center-bottom"
+        ]
+      },
+      "preview": "previews_1080x1350/modern-22-minimal-white-gold.png",
+      "thumbnail": "thumbnails_360x450/modern-22-minimal-white-gold_thumb.png"
+    },
+    {
+      "id": "modern-23-luxury-birthday-red",
+      "name": "Red Carpet Birthday",
+      "category": "Birthday",
+      "style": "Luxury / Premium",
+      "isFree": true,
+      "type": "flyer_template_family",
+      "surfaces": [
+        "flyer",
+        "event_page",
+        "guest_hub",
+        "festio_pass",
+        "email"
+      ],
+      "supportedFlyerSizes": [
+        "portrait_1080x1350",
+        "square_1080x1080",
+        "story_1080x1920",
+        "a5_pdf",
+        "a4_pdf"
+      ],
+      "defaultColors": {
+        "background": "#450A0A",
+        "surface": "#09090B",
+        "primary": "#FDE68A",
+        "accent": "#EF4444",
+        "text": "#FFFFFF"
+      },
+      "renderer": "arch",
+      "editableFields": [
+        "inviteLabel",
+        "hostName",
+        "eventTitle",
+        "eventSubtitle",
+        "eventDescription",
+        "date",
+        "time",
+        "venue",
+        "address",
+        "rsvpBy",
+        "phone",
+        "email",
+        "dressCode",
+        "admissionNote",
+        "parkingNote",
+        "customMessage"
+      ],
+      "imageZones": [
+        {
+          "id": "main_photo",
+          "label": "Main Photo / Cover Image",
+          "required": false,
+          "crop": "portrait_or_cover"
+        }
+      ],
+      "qrPlacement": {
+        "enabled": true,
+        "positions": [
+          "bottom-left",
+          "bottom-right",
+          "center-bottom"
+        ]
+      },
+      "preview": "previews_1080x1350/modern-23-luxury-birthday-red.png",
+      "thumbnail": "thumbnails_360x450/modern-23-luxury-birthday-red_thumb.png"
+    },
+    {
+      "id": "modern-24-corporate-dark",
+      "name": "Dark Corporate Launch",
+      "category": "Corporate Event",
+      "style": "Modern Tech",
+      "isFree": true,
+      "type": "flyer_template_family",
+      "surfaces": [
+        "flyer",
+        "event_page",
+        "guest_hub",
+        "festio_pass",
+        "email"
+      ],
+      "supportedFlyerSizes": [
+        "portrait_1080x1350",
+        "square_1080x1080",
+        "story_1080x1920",
+        "a5_pdf",
+        "a4_pdf"
+      ],
+      "defaultColors": {
+        "background": "#020617",
+        "surface": "#020617",
+        "primary": "#38BDF8",
+        "accent": "#14B8A6",
+        "text": "#FFFFFF"
+      },
+      "renderer": "editorial",
+      "editableFields": [
+        "inviteLabel",
+        "hostName",
+        "eventTitle",
+        "eventSubtitle",
+        "eventDescription",
+        "date",
+        "time",
+        "venue",
+        "address",
+        "rsvpBy",
+        "phone",
+        "email",
+        "dressCode",
+        "admissionNote",
+        "parkingNote",
+        "customMessage"
+      ],
+      "imageZones": [
+        {
+          "id": "main_photo",
+          "label": "Main Photo / Cover Image",
+          "required": false,
+          "crop": "portrait_or_cover"
+        }
+      ],
+      "qrPlacement": {
+        "enabled": true,
+        "positions": [
+          "bottom-left",
+          "bottom-right",
+          "center-bottom"
+        ]
+      },
+      "preview": "previews_1080x1350/modern-24-corporate-dark.png",
+      "thumbnail": "thumbnails_360x450/modern-24-corporate-dark_thumb.png"
+    }
+  ]
+}

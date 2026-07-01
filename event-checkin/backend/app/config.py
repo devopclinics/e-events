@@ -17,7 +17,7 @@ class Settings(BaseSettings):
     smtp_user: str = ""
     smtp_password: str = ""
     smtp_tls: bool = True
-    email_from: str = "noreply@event.com"
+    email_from: str = "Festio <events@festio.events>"
     # If set, email is sent via the Resend HTTP API instead of SMTP.
     resend_api_key: str = ""
     # If set, email is sent via Bird's Email API before falling back to SMTP.

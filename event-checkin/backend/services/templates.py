@@ -83,7 +83,7 @@ _TICKET_QR_EMAIL_BODY = """
           <td style="background:#0d1b2f;padding:34px 28px 30px 28px;">
             <div style="font-family:Arial,Helvetica,sans-serif;color:#2dd4bf;font-size:12px;font-weight:800;line-height:18px;text-transform:uppercase;letter-spacing:1.5px;">You're invited</div>
             <h1 style="font-family:Arial,Helvetica,sans-serif;color:#ffffff;font-size:34px;line-height:40px;font-weight:800;margin:8px 0 8px 0;">{{event_name}}</h1>
-            <p style="font-family:Arial,Helvetica,sans-serif;color:#d7e2ee;font-size:16px;line-height:24px;margin:0;">Your personal QR ticket is ready. Show it at the entrance for admission.</p>
+            <p style="font-family:Arial,Helvetica,sans-serif;color:#d7e2ee;font-size:16px;line-height:24px;margin:0;">Your personal Festio Pass is ready. Show it at the entrance for admission.</p>
           </td>
         </tr>
         <tr>
@@ -173,7 +173,7 @@ _TICKET_QR_EMAIL_BODY = """
 TEMPLATE_DEFS: dict[str, dict] = {
     # ── Invitations ────────────────────────────────────────────────────────────
     "ticket_qr": _t(
-        "Ticket QR email", ["email"], group="Invitations", email_kind="full",
+        "Festio Pass email", ["email"], group="Invitations", email_kind="full",
         subject="You're invited to {{event_name}}",
         email_body=_TICKET_QR_EMAIL_BODY,
         placeholders=_TICKET_EMAIL_PLACEHOLDERS,
@@ -183,21 +183,21 @@ TEMPLATE_DEFS: dict[str, dict] = {
               "View My Ticket button. Optional blocks like {{event_image_block}}, "
               "{{venue_row}}, {{calendar_link_block}}, {{directions_link_block}}, "
               "{{pairing_cta}} and {{menu_cta}} are generated automatically. "
-              "Keep {{qr_code}} and {{ticket_link}} so guests still get a scannable ticket."),
+              "Keep {{qr_code}} and {{ticket_link}} so guests still get a scannable pass."),
     ),
     "sms_invitation": _t(
         "SMS invitation", ["sms"], group="Invitations",
-        sms_body="Hi {{guest_first_name}}! You're invited to {{event_name}} on {{event_date}}. Your ticket: {{ticket_link}}",
+        sms_body="Hi {{guest_first_name}}! You're invited to {{event_name}} on {{event_date}}. Your Festio Pass: {{ticket_link}}",
         required=["ticket_link"],
     ),
     "whatsapp_invitation": _t(
         "WhatsApp invitation", ["whatsapp"], group="Invitations",
-        whatsapp_body="Hi {{guest_first_name}}! You're invited to {{event_name}} on {{event_date}}. Your ticket: {{ticket_link}}",
+        whatsapp_body="Hi {{guest_first_name}}! You're invited to {{event_name}} on {{event_date}}. Your Festio Pass: {{ticket_link}}",
         required=["ticket_link"],
     ),
     "mms_invitation": _t(
         "MMS invitation (ticket card)", ["mms"], group="Invitations",
-        mms_body="Hi {{guest_first_name}}! You're invited to {{event_name}} on {{event_date}}. Your ticket card is attached — show it at the door.",
+        mms_body="Hi {{guest_first_name}}! You're invited to {{event_name}} on {{event_date}}. Your Festio Pass card is attached — show it at the door.",
         note="Sent with the ticket-card image when MMS is on. Fires at invite time (super-admin MMS toggle).",
     ),
     "rsvp_invitation": _t(
@@ -265,10 +265,10 @@ TEMPLATE_DEFS: dict[str, dict] = {
         email_body=(
             "<p>Hi <strong>{{guest_first_name}}</strong>,</p>"
             "<p>Good news — your RSVP to <strong>{{event_name}}</strong> has been "
-            "approved. Your ticket: <a href=\"{{ticket_link}}\">view ticket</a>.</p>"
+            "approved. Your Festio Pass: <a href=\"{{ticket_link}}\">view pass</a>.</p>"
         ),
-        sms_body="Approved! Your ticket for {{event_name}}: {{ticket_link}}",
-        whatsapp_body="Approved! Your ticket for {{event_name}}: {{ticket_link}}",
+        sms_body="Approved! Your Festio Pass for {{event_name}}: {{ticket_link}}",
+        whatsapp_body="Approved! Your Festio Pass for {{event_name}}: {{ticket_link}}",
     ),
     "approval_rejected": _t(
         "Approval rejected", ["email", "sms"], group="Approval",
@@ -494,7 +494,7 @@ def sample_context(event=None) -> dict:
         "message": "Doors open at 6 PM — see you soon!",
     }
     base.update({
-        "preview_text": "Your personal QR ticket is ready. Show it at the entrance for admission.",
+        "preview_text": "Your personal Festio Pass is ready. Show it at the entrance for admission.",
         "event_image": "https://placehold.co/1200x600/png?text=Event+Image",
         "event_image_block": (
             '<tr><td><img src="https://placehold.co/1200x600/png?text=Event+Image" '

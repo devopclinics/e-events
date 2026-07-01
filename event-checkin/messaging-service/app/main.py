@@ -366,7 +366,7 @@ def _message_out(m: EventMessage, guest_name: str | None = None) -> dict[str, An
         "id": m.id,
         "sender_type": m.sender_type,
         "guest_id": m.guest_id,
-        "sender_name": guest_name if m.sender_type == "guest" else ("Host" if m.sender_type == "organizer" else "EventQR"),
+        "sender_name": guest_name if m.sender_type == "guest" else ("Host" if m.sender_type == "organizer" else "Festio"),
         "message_type": m.message_type,
         "body": m.body,
         "status": m.status,
@@ -399,7 +399,7 @@ class SettingsPatch(BaseModel):
     attending_only_chat: bool | None = None
 
 
-app = FastAPI(title="EventQR Messaging Service", version="0.1.0")
+app = FastAPI(title="Festio Messaging Service", version="0.1.0")
 app.add_middleware(
     CORSMiddleware,
     allow_origins=[settings.frontend_url],

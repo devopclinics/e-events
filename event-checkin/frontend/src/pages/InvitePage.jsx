@@ -315,7 +315,7 @@ function RSVPForm({ event, theme, onConfirmed }) {
     <div className="space-y-5">
       <div>
         <h2 className="text-2xl font-extrabold text-slate-950">Will you be attending?</h2>
-        <p className="mt-2 text-sm leading-relaxed text-slate-500">Let the host know so they can prepare your spot and QR admission ticket.</p>
+        <p className="mt-2 text-sm leading-relaxed text-slate-500">Let the host know so they can prepare your spot and Festio Pass.</p>
       </div>
 
       <div className="grid gap-3 sm:grid-cols-2">
@@ -437,7 +437,7 @@ function ConfirmView({ confirm, event }) {
         <div className="mt-4 text-sm font-semibold text-slate-600">Show this at the entrance for check-in.</div>
       </div>
       <div className="grid gap-3 sm:grid-cols-3">
-        {ticketUrl && <a href={ticketUrl} className="inline-flex min-h-11 items-center justify-center rounded-xl bg-slate-950 px-4 py-2 text-sm font-bold text-white transition hover:bg-slate-800">View My QR Ticket</a>}
+        {ticketUrl && <a href={ticketUrl} className="inline-flex min-h-11 items-center justify-center rounded-xl bg-slate-950 px-4 py-2 text-sm font-bold text-white transition hover:bg-slate-800">View My Festio Pass</a>}
         <button type="button" onClick={() => window.print()} className="inline-flex min-h-11 items-center justify-center rounded-xl border border-slate-200 px-4 py-2 text-sm font-bold text-slate-700 transition hover:bg-slate-50">Save Ticket</button>
         <button
           type="button"
@@ -705,7 +705,7 @@ function GuestHub({ event, accessToken }) {
             )}
             {hub?.guest?.qr_token && (
               <a href={`/scan/${hub.guest.qr_token}`} className="mt-4 inline-flex min-h-10 items-center justify-center rounded-xl bg-teal-400 px-4 py-2 text-sm font-extrabold text-slate-950 hover:bg-teal-300">
-                View QR Ticket
+                View Festio Pass
               </a>
             )}
           </div>

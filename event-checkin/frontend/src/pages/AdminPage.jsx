@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react'
-import { api } from '../api'
+import { api, PUBLIC_BASE_URL, publicBaseUrl } from '../api'
 import { useAuth } from '../context/AuthContext'
 import { useCurrentEvent } from '../hooks/useCurrentEvent'
 
@@ -401,7 +401,7 @@ function SelfCheckinPanel({ event, onChanged, onFlash }) {
   const [loading, setLoading] = useState(false)
   const [copied, setCopied] = useState(false)
   const code = event.event_code
-  const url = code ? api.selfCheckinUrl(code) : ''
+  const url = code ? api.selfCheckinUrl(code, event) : ''
 
   async function toggle() {
     setLoading(true)
@@ -1448,7 +1448,7 @@ function CombinationsSection({ eventId, cat, loading, setLoading, onCatsChange, 
 
 const SHIP_STATUS = ['pending', 'shipped', 'delivered']
 
-function LogisticsPanel({ eventId }) {
+function LogisticsPanel({ eventId, event }) {
   const [shipments, setShipments] = useState([])
   const [form, setForm]           = useState(null)   // create/edit shipment form
   const [activeId, setActiveId]   = useState(null)   // shipment whose lines are shown
@@ -1551,7 +1551,7 @@ function LogisticsPanel({ eventId }) {
   }
 
   function copyVendorLink(s) {
-    const url = `${window.location.origin}/vendor/${s.share_token}`
+    const url = `${publicBaseUrl(event)}/vendor/${s.share_token}`
     navigator.clipboard?.writeText(url)
     flash('Vendor link copied to clipboard.')
   }
@@ -1917,7 +1917,7 @@ function RegistryPanel({ eventId, event }) {
     payment_instructions: it.payment_instructions || '',
   })
 
-  const registryUrl = token ? `${window.location.origin}/registry/${token}` : ''
+  const registryUrl = token ? `${publicBaseUrl(event)}/registry/${token}` : ''
 
   return (
     <div className="bg-white dark:bg-slate-800 dark:border dark:border-slate-700/60 rounded-xl shadow p-6 space-y-4">
@@ -4613,7 +4613,7 @@ function utcToLocal(utcStr) {
 
 function EventForm({ initial, onSave, onCancel }) {
   const [form, setForm] = useState(
-    initial || { name: '', couples_name: '', event_date: '', description: '', admission_note: '', checkin_base_url: window.location.origin }
+    initial || { name: '', couples_name: '', event_date: '', description: '', admission_note: '', checkin_base_url: PUBLIC_BASE_URL }
   )
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')

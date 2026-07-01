@@ -25,7 +25,7 @@ export default function PrivacyPage() {
 
           <h2 className="font-semibold text-slate-900 dark:text-white">How we use it</h2>
           <p>
-            To run the event: deliver invitations and QR tickets, collect RSVPs, assign seating,
+            To run the event: deliver invitations and QR passes, collect RSVPs, assign seating,
             and confirm check-in. We use email, SMS, and WhatsApp to send these event
             notifications to guests.
           </p>

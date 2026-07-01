@@ -31,6 +31,8 @@ router = APIRouter()
 
 # Event-code alphabet: uppercase, no confusable characters (0 O 1 I L).
 _CODE_ALPHABET = "ABCDEFGHJKMNPQRSTUVWXYZ23456789"
+FESTIO_PUBLIC_BASE_URL = "https://festio.events"
+LEGACY_PUBLIC_BASE_URLS = {"https://events.vsgs.io", "http://events.vsgs.io"}
 
 
 def _gen_code(n: int = 8) -> str:
@@ -44,6 +46,13 @@ async def unique_event_code(db: AsyncSession) -> str:
         if not await db.scalar(select(Event.id).where(Event.event_code == code)):
             return code
     return _gen_code(10)  # extremely unlikely fallback
+
+
+def _normalize_public_base_url(value: str | None) -> str:
+    base = (value or "").strip().rstrip("/")
+    if not base or base in LEGACY_PUBLIC_BASE_URLS:
+        return FESTIO_PUBLIC_BASE_URL
+    return base
 
 
 VALID_STATUSES = {"draft", "active", "ended"}
@@ -87,7 +96,9 @@ async def create_event(
     )
     if not org_id:
         raise HTTPException(403, "You don't belong to an organization")
-    event = Event(**data.model_dump(), org_id=org_id)
+    payload = data.model_dump()
+    payload["checkin_base_url"] = _normalize_public_base_url(payload.get("checkin_base_url"))
+    event = Event(**payload, org_id=org_id)
     event.event_code = await unique_event_code(db)
     event.rsvp_token = event.rsvp_token or str(_uuid.uuid4())
     db.add(event)
@@ -174,7 +185,10 @@ async def update_event(
     event = await db.get(Event, event_id)
     if not event:
         raise HTTPException(404, "Event not found")
-    for field, value in data.model_dump(exclude_none=True).items():
+    payload = data.model_dump(exclude_none=True)
+    if "checkin_base_url" in payload:
+        payload["checkin_base_url"] = _normalize_public_base_url(payload.get("checkin_base_url"))
+    for field, value in payload.items():
         setattr(event, field, value)
     await db.commit()
     await db.refresh(event)

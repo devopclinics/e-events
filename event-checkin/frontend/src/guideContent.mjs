@@ -89,7 +89,7 @@ export const CONTENT = {
           'Shared link: copy the event link and share it yourself (WhatsApp group, email, social). Or use Manual invite — search a specific guest and send them a personal link.',
           'Personal links: use Invites & RSVP to send to guests who have not been invited yet, remind no-replies, or resend links.',
           'Pick your channels: Email (always free), SMS (uses message credits), WhatsApp (uses message credits).',
-          'Each guest receives their personal ticket QR automatically by email when they RSVP as Attending.',
+          'Each guest receives their personal Festio Pass automatically by email when they RSVP as Attending.',
           'For guests without email: if you have their phone number, their QR pass is delivered via SMS or WhatsApp instead.',
           'Message credits are pre-purchased from the Event Pass area — top up as needed. Check your balance before a bulk send.',
           'For reminders, use Broadcast Message to nudge guests before the event or during arrival.',

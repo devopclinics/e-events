@@ -320,7 +320,7 @@ def _ticket_plain_text(ctx: dict) -> str:
         f"You are invited to {ctx['event_name']} on {ctx['event_date']}"
         + (f" at {ctx['event_time']}." if ctx["event_time"] else "."),
         "",
-        "Please show your personal QR ticket at the entrance for admission.",
+        "Please show your personal Festio Pass at the entrance for admission.",
         "",
         "Event details:",
         f"Date: {ctx['event_date']}",
@@ -428,7 +428,7 @@ async def send_invite_email(
         "ticket_link": ticket_url,
         "rsvp_link": rsvp_link or "",
         "event_image": event_image_url,
-        "preview_text": "Your personal QR ticket is ready. Show it at the entrance for admission.",
+        "preview_text": "Your personal Festio Pass is ready. Show it at the entrance for admission.",
         "qr_code": (
             '<img src="cid:qrcode" alt="Your admission QR code" width="240" height="240" '
             'style="display:block;width:240px;height:240px;border:0;outline:none;text-decoration:none;" />'

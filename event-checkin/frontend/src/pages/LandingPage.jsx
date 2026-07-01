@@ -457,7 +457,7 @@ const mockups = {
     status: 'Ready',
     stats: [['Templates', '12'], ['Sent', '1,248'], ['Credits', '840']],
     listTitle: 'Message templates',
-    rows: [['Ticket QR email', 'Email', 'Default'], ['RSVP reminder', 'SMS', 'Edited'], ['Event update', 'WhatsApp', 'Broadcast']],
+    rows: [['Festio Pass email', 'Email', 'Default'], ['RSVP reminder', 'SMS', 'Edited'], ['Event update', 'WhatsApp', 'Broadcast']],
     panelTitle: 'Channels',
     panel: ['Email', 'SMS', 'WhatsApp', 'MMS ticket card'],
   },

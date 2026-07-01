@@ -16,7 +16,7 @@ export default function TermsPage() {
 
           <h2 className="font-semibold text-slate-900 dark:text-white">The service</h2>
           <p>
-            Festio lets event organizers manage guest lists, send invitations and QR tickets,
+            Festio lets event organizers manage guest lists, send invitations and QR passes,
             collect RSVPs, assign seating, and check guests in. Some features require a paid Event
             Pass.
           </p>

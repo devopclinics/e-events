@@ -1,6 +1,14 @@
 import { auth } from './firebase'
 
 const BASE = '/api'
+export const PUBLIC_BASE_URL = 'https://festio.events'
+
+export function publicBaseUrl(eventOrUrl) {
+  const raw = typeof eventOrUrl === 'string' ? eventOrUrl : eventOrUrl?.checkin_base_url
+  const base = (raw || '').trim().replace(/\/+$/, '')
+  if (!base || base === 'https://events.vsgs.io' || base === 'http://events.vsgs.io') return PUBLIC_BASE_URL
+  return base
+}
 
 async function getToken() {
   const u = auth.currentUser
@@ -169,7 +177,7 @@ export const api = {
   selfCheckinAdmit: (code, guestId) =>
     fetch(`${BASE}/e/${encodeURIComponent(code)}/checkin/${encodeURIComponent(guestId)}`, { method: 'POST' })
       .then((r) => (r.ok ? r.json() : r.json().then((e) => Promise.reject(new Error(e.detail))))),
-  selfCheckinUrl: (code) => `${window.location.origin}/e/${code}`,
+  selfCheckinUrl: (code, event) => `${publicBaseUrl(event)}/e/${code}`,
   selfCheckinQrUrl: (code) => `${BASE}/e/${encodeURIComponent(code)}/qr.png`,
 
   // Ticket (public)
@@ -381,10 +389,11 @@ export const api = {
   // Invite page public URL helper (no auth needed)
   inviteUrl: (eventOrId) => {
     if (eventOrId && typeof eventOrId === 'object') {
+      const base = publicBaseUrl(eventOrId)
       return eventOrId.rsvp_token
-        ? `${window.location.origin}/rsvp/${eventOrId.rsvp_token}`
-        : `${window.location.origin}/invite/${eventOrId.id}`
+        ? `${base}/rsvp/${eventOrId.rsvp_token}`
+        : `${base}/invite/${eventOrId.id}`
     }
-    return `${window.location.origin}/invite/${eventOrId}`
+    return `${PUBLIC_BASE_URL}/invite/${eventOrId}`
   },
 }

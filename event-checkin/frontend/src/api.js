@@ -106,7 +106,7 @@ export const api = {
       }).then((r) => (r.ok ? r.json() : r.json().then((e) => Promise.reject(new Error(e.detail || 'Upload failed'))))),
     )
   },
-  renderFlyer: async (eventId, body) => {
+  renderFlyer: async (eventId, body, { download = true } = {}) => {
     const token = await getToken()
     const res = await fetch(`${BASE}/events/${eventId}/design/render/flyer`, {
       method: 'POST',
@@ -116,11 +116,13 @@ export const api = {
     if (!res.ok) throw new Error('Render failed — Design Studio may be busy or unavailable.')
     const outputUrl = res.headers.get('X-Design-Output-Url')
     const blob = await res.blob()
-    const fmt = body.format || (['a5', 'a4'].includes(body.size) ? 'pdf' : 'png')
-    const url = URL.createObjectURL(blob)
-    const a = document.createElement('a')
-    a.href = url; a.download = `flyer-${body.size}.${fmt}`
-    document.body.appendChild(a); a.click(); a.remove(); URL.revokeObjectURL(url)
+    if (download) {
+      const fmt = body.format || (['a5', 'a4'].includes(body.size) ? 'pdf' : 'png')
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url; a.download = `flyer-${body.size}.${fmt}`
+      document.body.appendChild(a); a.click(); a.remove(); URL.revokeObjectURL(url)
+    }
     return { outputUrl }
   },
   generateQR:          (eventId)           => req('POST', `/events/${eventId}/guests/generate-qr`),

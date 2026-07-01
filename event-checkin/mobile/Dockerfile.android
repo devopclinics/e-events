@@ -1,0 +1,27 @@
+# Headless Android build image for Festio (Capacitor).
+# Produces a signed .aab for the Play Store — no Android Studio / GUI needed.
+# Build once; reuse for every release. Runs fine on this Linux server.
+FROM eclipse-temurin:17-jdk-jammy
+
+ENV ANDROID_SDK_ROOT=/opt/android-sdk \
+    DEBIAN_FRONTEND=noninteractive
+ENV PATH="$PATH:$ANDROID_SDK_ROOT/cmdline-tools/latest/bin:$ANDROID_SDK_ROOT/platform-tools"
+
+# Node 20 + tooling
+RUN apt-get update && apt-get install -y --no-install-recommends \
+      curl unzip git ca-certificates && \
+    curl -fsSL https://deb.nodesource.com/setup_20.x | bash - && \
+    apt-get install -y --no-install-recommends nodejs && \
+    rm -rf /var/lib/apt/lists/*
+
+# Android command-line tools + SDK packages (API 34 / build-tools 34)
+RUN mkdir -p "$ANDROID_SDK_ROOT/cmdline-tools" && \
+    curl -fsSL -o /tmp/cmdtools.zip \
+      https://dl.google.com/android/repository/commandlinetools-linux-11076708_latest.zip && \
+    unzip -q /tmp/cmdtools.zip -d "$ANDROID_SDK_ROOT/cmdline-tools" && \
+    mv "$ANDROID_SDK_ROOT/cmdline-tools/cmdline-tools" "$ANDROID_SDK_ROOT/cmdline-tools/latest" && \
+    rm /tmp/cmdtools.zip && \
+    yes | sdkmanager --licenses >/dev/null && \
+    sdkmanager "platform-tools" "platforms;android-34" "build-tools;34.0.0" >/dev/null
+
+WORKDIR /work/frontend

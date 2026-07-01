@@ -116,6 +116,42 @@ function themedPageBackground(colors) {
   }
 }
 
+function hexToRgb(hex) {
+  const clean = String(hex || '').replace('#', '').trim()
+  if (!/^[0-9a-f]{6}$/i.test(clean)) return null
+  return {
+    r: parseInt(clean.slice(0, 2), 16),
+    g: parseInt(clean.slice(2, 4), 16),
+    b: parseInt(clean.slice(4, 6), 16),
+  }
+}
+
+function isLightColor(hex) {
+  const rgb = hexToRgb(hex)
+  if (!rgb) return false
+  return ((rgb.r * 299) + (rgb.g * 587) + (rgb.b * 114)) / 1000 > 170
+}
+
+function readableTone(colors = {}) {
+  const background = colors.background || '#07111f'
+  const surface = colors.surface || '#0f172a'
+  const light = isLightColor(background) && isLightColor(surface)
+  return {
+    background,
+    surface,
+    accent: colors.accent || '#14b8a6',
+    primary: colors.primary || (light ? '#0f172a' : '#ffffff'),
+    text: light ? '#0f172a' : '#ffffff',
+    muted: light ? '#475569' : '#cbd5e1',
+    label: light ? '#64748b' : '#94a3b8',
+    panel: light ? 'rgba(255,255,255,.86)' : 'rgba(255,255,255,.08)',
+    panelStrong: light ? 'rgba(255,255,255,.94)' : 'rgba(15,23,42,.42)',
+    chip: light ? 'rgba(15,23,42,.07)' : 'rgba(255,255,255,.10)',
+    border: light ? 'rgba(15,23,42,.12)' : 'rgba(255,255,255,.12)',
+    shadow: light ? 'rgba(15,23,42,.16)' : 'rgba(0,0,0,.28)',
+  }
+}
+
 function PrimaryButton({ children, className = '', ...props }) {
   return (
     <button
@@ -165,22 +201,23 @@ function EventPoster({ event, coverImage, colors = {}, titleOverride }) {
         <div className="h-16 w-16 rounded-2xl border border-white/20 bg-white/10" />
         <div>
           <div className="mb-3 text-xs font-extrabold uppercase tracking-[0.28em]" style={{ color: colors.accent || '#ccfbf1' }}>You're invited</div>
-          <div className="text-4xl font-extrabold leading-tight sm:text-5xl" style={{ color: colors.primary || '#ffffff' }}>{title}</div>
-          {event.event_date && <div className="mt-5 text-sm font-semibold text-teal-50">{fmtDate(event.event_date)}</div>}
+          <div className="text-4xl font-extrabold leading-tight sm:text-5xl" style={{ color: readableTone(colors).text }}>{title}</div>
+          {event.event_date && <div className="mt-5 text-sm font-semibold" style={{ color: readableTone(colors).muted }}>{fmtDate(event.event_date)}</div>}
         </div>
       </div>
     </div>
   )
 }
 
-function DetailRow({ icon, label, value }) {
+function DetailRow({ icon, label, value, tone }) {
   if (!value) return null
+  const t = tone || readableTone()
   return (
-    <div className="flex gap-3 rounded-2xl border border-white/10 bg-white/[0.07] p-4">
-      <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-teal-300/15 text-lg" aria-hidden="true">{icon}</span>
+    <div className="flex gap-3 rounded-2xl border p-4" style={{ background: t.panel, borderColor: t.border, color: t.text }}>
+      <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl text-lg" style={{ background: `${t.accent}22` }} aria-hidden="true">{icon}</span>
       <div>
-        <div className="text-xs font-extrabold uppercase tracking-[0.16em] text-slate-400">{label}</div>
-        <div className="mt-1 text-sm font-semibold leading-relaxed text-white sm:text-[15px]">{value}</div>
+        <div className="text-xs font-extrabold uppercase tracking-[0.16em]" style={{ color: t.label }}>{label}</div>
+        <div className="mt-1 text-sm font-semibold leading-relaxed sm:text-[15px]" style={{ color: t.text }}>{value}</div>
       </div>
     </div>
   )
@@ -696,20 +733,21 @@ function GuestHub({ event, accessToken, designTheme }) {
 
   if (!accessToken || hidden) return null
   const colors = designColors(designTheme)
+  const tone = readableTone(colors)
 
   return (
     <section className="py-2">
       <div
-        className="mx-auto w-full max-w-[900px] rounded-[1.65rem] border border-white/12 bg-white/[0.08] p-5 text-white shadow-2xl shadow-black/20 backdrop-blur sm:p-7"
-        style={colors.background ? { background: `linear-gradient(145deg, ${colors.background}, ${colors.surface || colors.background})` } : undefined}
+        className="mx-auto w-full max-w-[900px] rounded-[1.65rem] border p-5 shadow-2xl backdrop-blur sm:p-7"
+        style={{ background: `linear-gradient(145deg, ${tone.background}, ${tone.surface})`, borderColor: tone.border, color: tone.text, boxShadow: `0 22px 48px ${tone.shadow}` }}
       >
         <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
           <div>
             <h2 className="text-3xl font-extrabold">Guest Hub</h2>
-            <p className="mt-2 text-sm leading-6 text-slate-300">Your event updates, QR pass, and messages in one place.</p>
+            <p className="mt-2 text-sm leading-6" style={{ color: tone.muted }}>Your event updates, QR pass, and messages in one place.</p>
           </div>
           {hub?.guest?.rsvp_status && (
-            <span className="w-fit rounded-full bg-teal-300/15 px-3 py-1 text-xs font-extrabold uppercase tracking-wide text-teal-100">
+            <span className="w-fit rounded-full px-3 py-1 text-xs font-extrabold uppercase tracking-wide" style={{ background: `${tone.accent}22`, color: tone.text }}>
               {hub.guest.rsvp_status === 'confirmed' ? 'Attending' : hub.guest.rsvp_status}
             </span>
           )}
@@ -718,12 +756,12 @@ function GuestHub({ event, accessToken, designTheme }) {
         {error && <div className="mt-5 rounded-2xl border border-amber-300/25 bg-amber-300/10 px-4 py-3 text-sm text-amber-50">{error}</div>}
 
         <div className="mt-6 grid gap-4 md:grid-cols-3">
-          <div className="rounded-2xl border border-white/10 bg-white/[0.07] p-4">
-            <div className="text-xs font-extrabold uppercase tracking-[0.16em] text-slate-400">Your RSVP</div>
+          <div className="rounded-2xl border p-4" style={{ background: tone.panel, borderColor: tone.border }}>
+            <div className="text-xs font-extrabold uppercase tracking-[0.16em]" style={{ color: tone.label }}>Your RSVP</div>
             <div className="mt-3 text-lg font-extrabold">{hub?.guest?.name || 'Guest'}</div>
             {hub?.guest?.table_name && (
-              <p className="mt-2 text-sm text-slate-300">
-                Table: <span className="font-bold text-white">{hub.guest.table_name}</span>
+              <p className="mt-2 text-sm" style={{ color: tone.muted }}>
+                Table: <span className="font-bold" style={{ color: tone.text }}>{hub.guest.table_name}</span>
                 {hub.guest.seat_number ? ` · Seat ${hub.guest.seat_number}` : ''}
               </p>
             )}
@@ -734,35 +772,35 @@ function GuestHub({ event, accessToken, designTheme }) {
             )}
           </div>
 
-          <div className="rounded-2xl border border-white/10 bg-white/[0.07] p-4 md:col-span-2">
+          <div className="rounded-2xl border p-4 md:col-span-2" style={{ background: tone.panel, borderColor: tone.border }}>
             <div className="flex items-center justify-between gap-3">
               <h3 className="text-lg font-extrabold">Event Updates</h3>
-              {!!hub?.announcements?.length && <span className="rounded-full bg-teal-300/15 px-2.5 py-1 text-xs font-bold text-teal-100">{hub.announcements.length}</span>}
+              {!!hub?.announcements?.length && <span className="rounded-full px-2.5 py-1 text-xs font-bold" style={{ background: `${tone.accent}22`, color: tone.text }}>{hub.announcements.length}</span>}
             </div>
             <div className="mt-4 space-y-3">
               {hub?.announcements?.length ? hub.announcements.map((a) => (
-                <div key={a.id} className="rounded-xl border border-white/10 bg-slate-950/20 p-3">
+                <div key={a.id} className="rounded-xl border p-3" style={{ background: tone.chip, borderColor: tone.border }}>
                   <div className="font-bold">{a.title}</div>
-                  <p className="mt-1 text-sm leading-6 text-slate-300">{a.body}</p>
+                  <p className="mt-1 text-sm leading-6" style={{ color: tone.muted }}>{a.body}</p>
                 </div>
               )) : (
-                <p className="text-sm leading-6 text-slate-400">No updates yet. Important event messages will appear here.</p>
+                <p className="text-sm leading-6" style={{ color: tone.label }}>No updates yet. Important event messages will appear here.</p>
               )}
             </div>
           </div>
         </div>
 
-        <div className="mt-4 rounded-2xl border border-white/10 bg-white/[0.07] p-4">
+        <div className="mt-4 rounded-2xl border p-4" style={{ background: tone.panel, borderColor: tone.border }}>
           <h3 className="text-lg font-extrabold">Message Host</h3>
-          <p className="mt-1 text-sm text-slate-300">Have a question for the organizer?</p>
+          <p className="mt-1 text-sm" style={{ color: tone.muted }}>Have a question for the organizer?</p>
           <div className="mt-4 max-h-56 space-y-2 overflow-auto">
             {hub?.direct_messages?.length ? hub.direct_messages.map((m) => (
-              <div key={m.id} className={`rounded-xl px-3 py-2 text-sm ${m.sender_type === 'guest' ? 'ml-auto max-w-[85%] bg-teal-300/15 text-teal-50' : 'mr-auto max-w-[85%] bg-white/10 text-slate-100'}`}>
-                <div className="mb-1 text-[11px] font-bold uppercase tracking-wide text-slate-400">{m.sender_name}</div>
+              <div key={m.id} className={`rounded-xl px-3 py-2 text-sm ${m.sender_type === 'guest' ? 'ml-auto max-w-[85%]' : 'mr-auto max-w-[85%]'}`} style={{ background: m.sender_type === 'guest' ? `${tone.accent}22` : tone.chip, color: tone.text }}>
+                <div className="mb-1 text-[11px] font-bold uppercase tracking-wide" style={{ color: tone.label }}>{m.sender_name}</div>
                 <div className="leading-6">{m.body}</div>
               </div>
             )) : (
-              <p className="text-sm text-slate-400">No messages yet.</p>
+              <p className="text-sm" style={{ color: tone.label }}>No messages yet.</p>
             )}
           </div>
           {hub?.capabilities?.direct_host_messages ? (
@@ -772,14 +810,15 @@ function GuestHub({ event, accessToken, designTheme }) {
                 onChange={(e) => setMessage(e.target.value)}
                 maxLength={1000}
                 placeholder="Ask the host a question..."
-                className="min-h-11 flex-1 rounded-xl border border-white/15 bg-slate-950/25 px-4 py-2 text-sm text-white placeholder-slate-400 focus:outline-none focus:ring-4 focus:ring-teal-300/20"
+                className="min-h-11 flex-1 rounded-xl border px-4 py-2 text-sm placeholder-slate-400 focus:outline-none focus:ring-4 focus:ring-teal-300/20"
+                style={{ background: tone.panelStrong, borderColor: tone.border, color: tone.text }}
               />
               <button disabled={sending || !message.trim()} style={colors.accent ? { background: colors.accent } : undefined} className="min-h-11 rounded-xl bg-teal-400 px-5 py-2 text-sm font-extrabold text-slate-950 hover:bg-teal-300 disabled:opacity-50">
                 {sending ? 'Sending...' : 'Send'}
               </button>
             </form>
           ) : (
-            <div className="mt-4 rounded-xl border border-white/10 bg-slate-950/20 px-3 py-2 text-sm text-slate-400">
+            <div className="mt-4 rounded-xl border px-3 py-2 text-sm" style={{ background: tone.chip, borderColor: tone.border, color: tone.label }}>
               {hub?.guest?.rsvp_status === 'confirmed'
                 ? 'Message Host is not enabled for this event.'
                 : 'Message Host unlocks after your RSVP is confirmed.'}
@@ -787,19 +826,19 @@ function GuestHub({ event, accessToken, designTheme }) {
           )}
         </div>
 
-        <div className="mt-4 rounded-2xl border border-white/10 bg-slate-950/20 p-4">
+        <div className="mt-4 rounded-2xl border p-4" style={{ background: tone.panel, borderColor: tone.border }}>
           <h3 className="text-lg font-extrabold">Guest Chat</h3>
-          <p className="mt-1 text-sm text-slate-400">A shared space for attending guests.</p>
+          <p className="mt-1 text-sm" style={{ color: tone.label }}>A shared space for attending guests.</p>
           {hub?.capabilities?.guest_chat ? (
             <>
               <div className="mt-4 max-h-64 space-y-2 overflow-auto">
                 {hub?.chat_messages?.length ? hub.chat_messages.map((m) => (
-                  <div key={m.id} className={`rounded-xl px-3 py-2 text-sm ${m.guest_id === hub?.guest?.id ? 'ml-auto max-w-[85%] bg-teal-300/15 text-teal-50' : 'mr-auto max-w-[85%] bg-white/10 text-slate-100'}`}>
-                    <div className="mb-1 text-[11px] font-bold uppercase tracking-wide text-slate-400">{m.sender_name}</div>
+                  <div key={m.id} className={`rounded-xl px-3 py-2 text-sm ${m.guest_id === hub?.guest?.id ? 'ml-auto max-w-[85%]' : 'mr-auto max-w-[85%]'}`} style={{ background: m.guest_id === hub?.guest?.id ? `${tone.accent}22` : tone.chip, color: tone.text }}>
+                    <div className="mb-1 text-[11px] font-bold uppercase tracking-wide" style={{ color: tone.label }}>{m.sender_name}</div>
                     <div className="leading-6">{m.body}</div>
                   </div>
                 )) : (
-                  <p className="text-sm text-slate-400">No guest chat messages yet.</p>
+                  <p className="text-sm" style={{ color: tone.label }}>No guest chat messages yet.</p>
                 )}
               </div>
               {hub?.capabilities?.guest_chat_posting ? (
@@ -809,20 +848,21 @@ function GuestHub({ event, accessToken, designTheme }) {
                     onChange={(e) => setChatMessage(e.target.value)}
                     maxLength={1000}
                     placeholder="Send a message to guests..."
-                    className="min-h-11 flex-1 rounded-xl border border-white/15 bg-slate-950/25 px-4 py-2 text-sm text-white placeholder-slate-400 focus:outline-none focus:ring-4 focus:ring-teal-300/20"
+                    className="min-h-11 flex-1 rounded-xl border px-4 py-2 text-sm placeholder-slate-400 focus:outline-none focus:ring-4 focus:ring-teal-300/20"
+                    style={{ background: tone.panelStrong, borderColor: tone.border, color: tone.text }}
                   />
                   <button disabled={sendingChat || !chatMessage.trim()} style={colors.accent ? { background: colors.accent } : undefined} className="min-h-11 rounded-xl bg-white px-5 py-2 text-sm font-extrabold text-slate-950 hover:bg-slate-100 disabled:opacity-50">
                     {sendingChat ? 'Sending...' : 'Send'}
                   </button>
                 </form>
               ) : (
-                <div className="mt-4 rounded-xl border border-white/10 bg-slate-950/20 px-3 py-2 text-sm text-slate-400">
+                <div className="mt-4 rounded-xl border px-3 py-2 text-sm" style={{ background: tone.chip, borderColor: tone.border, color: tone.label }}>
                   Guest Chat posting is paused by the host.
                 </div>
               )}
             </>
           ) : (
-            <div className="mt-4 rounded-xl border border-white/10 bg-slate-950/20 px-3 py-2 text-sm text-slate-400">
+            <div className="mt-4 rounded-xl border px-3 py-2 text-sm" style={{ background: tone.chip, borderColor: tone.border, color: tone.label }}>
               Guest Chat is not enabled for this event.
             </div>
           )}
@@ -924,6 +964,7 @@ export default function InvitePage() {
 
   const theme = event.invite_theme || 'default'
   const dColors = designColors(designTheme)
+  const tone = readableTone(dColors)
   const dWording = designTheme?.wording || {}
   const dCover = designCover(designTheme, event)
   const atCapacity = event.rsvp_capacity != null && event.rsvp_count >= event.rsvp_capacity
@@ -1021,13 +1062,13 @@ export default function InvitePage() {
 
   return (
     <div
-      className="invite-page min-h-screen bg-[radial-gradient(circle_at_18%_0%,rgba(20,184,166,0.24),transparent_36rem),linear-gradient(140deg,#07111f_0%,#0f172a_48%,#132f38_100%)] text-white"
-      style={themedPageBackground(dColors)}
+      className="invite-page min-h-screen bg-[radial-gradient(circle_at_18%_0%,rgba(20,184,166,0.24),transparent_36rem),linear-gradient(140deg,#07111f_0%,#0f172a_48%,#132f38_100%)]"
+      style={{ ...themedPageBackground(dColors), color: tone.text }}
     >
       <header className="px-5 py-6 sm:px-6">
         <div className="mx-auto flex max-w-[1180px] items-center justify-between">
-          <span className="text-sm font-extrabold uppercase tracking-[0.24em]" style={{ color: dColors.accent || undefined }}>You're invited</span>
-          <span className="rounded-full border border-white/10 bg-white/[0.08] px-4 py-2 text-sm font-bold text-white/85">Festio</span>
+          <span className="text-sm font-extrabold uppercase tracking-[0.24em]" style={{ color: tone.accent }}>You're invited</span>
+          <span className="rounded-full border px-4 py-2 text-sm font-bold" style={{ background: tone.chip, borderColor: tone.border, color: tone.text }}>Festio</span>
         </div>
       </header>
 
@@ -1037,18 +1078,18 @@ export default function InvitePage() {
 
           <div className="space-y-8">
             <div>
-              <div className="mb-4 text-sm font-extrabold uppercase tracking-[0.24em]" style={{ color: dColors.accent || undefined }}>You're invited to</div>
-              <h1 className="max-w-3xl text-5xl font-extrabold leading-[1.02] text-white sm:text-6xl lg:text-7xl" style={{ color: dColors.primary || undefined }}>{title}</h1>
-              {host && <p className="mt-5 text-xl font-semibold text-teal-50">{host}</p>}
-              <p className="mt-6 max-w-2xl text-lg leading-8 text-slate-300">
+              <div className="mb-4 text-sm font-extrabold uppercase tracking-[0.24em]" style={{ color: tone.accent }}>You're invited to</div>
+              <h1 className="max-w-3xl text-5xl font-extrabold leading-[1.02] sm:text-6xl lg:text-7xl" style={{ color: tone.primary }}>{title}</h1>
+              {host && <p className="mt-5 text-xl font-semibold" style={{ color: tone.text }}>{host}</p>}
+              <p className="mt-6 max-w-2xl text-lg leading-8" style={{ color: tone.muted }}>
                 {dWording.rsvpNote || event.invite_message || 'Join us for a beautiful evening of celebration, food, memories, and good company.'}
               </p>
             </div>
 
             <div className="grid gap-4 sm:grid-cols-2">
-              <DetailRow icon="📅" label="When" value={heroWhen} />
-              <DetailRow icon="📍" label="Location" value={venue || 'Venue details coming soon'} />
-              <DetailRow icon="🎟️" label="Admission" value="QR pass at entry" />
+              <DetailRow icon="📅" label="When" value={heroWhen} tone={tone} />
+              <DetailRow icon="📍" label="Location" value={venue || 'Venue details coming soon'} tone={tone} />
+              <DetailRow icon="🎟️" label="Admission" value="QR pass at entry" tone={tone} />
             </div>
 
             <div className="flex flex-col gap-3 sm:flex-row">
@@ -1059,7 +1100,13 @@ export default function InvitePage() {
               >
                 {hasGuestHub ? 'Open Guest Hub' : 'Confirm My RSVP'}
               </PrimaryButton>
-              <SecondaryButton type="button" onClick={() => document.getElementById('details')?.scrollIntoView({ behavior: 'smooth' })}>View Event Details</SecondaryButton>
+              <SecondaryButton
+                type="button"
+                style={{ background: tone.chip, borderColor: tone.border, color: tone.text }}
+                onClick={() => document.getElementById('details')?.scrollIntoView({ behavior: 'smooth' })}
+              >
+                View Event Details
+              </SecondaryButton>
             </div>
           </div>
         </section>
@@ -1071,26 +1118,26 @@ export default function InvitePage() {
         )}
 
         <section id="details" className="grid gap-6 py-8 md:grid-cols-[minmax(0,1.55fr)_minmax(300px,0.75fr)]">
-          <div className="rounded-3xl border border-white/10 bg-white/[0.07] p-6 shadow-xl shadow-black/10 backdrop-blur sm:p-7">
+          <div className="rounded-3xl border p-6 shadow-xl backdrop-blur sm:p-7" style={{ background: tone.panelStrong, borderColor: tone.border, boxShadow: `0 22px 48px ${tone.shadow}`, color: tone.text }}>
             <div className="mb-6 flex items-center justify-between gap-4">
               <h2 className="text-3xl font-extrabold">Event details</h2>
-              {capacityLabel && <span className="rounded-full bg-white/10 px-3 py-1 text-xs font-bold text-slate-200">{capacityLabel}</span>}
+              {capacityLabel && <span className="rounded-full px-3 py-1 text-xs font-bold" style={{ background: tone.chip, color: tone.text }}>{capacityLabel}</span>}
             </div>
             <div className="grid gap-4 sm:grid-cols-2">
-              <DetailRow icon="📅" label="Date" value={dateLabel} />
-              <DetailRow icon="🕐" label="Time" value={timeLabel} />
-              <DetailRow icon="📍" label="Venue" value={venue || 'Venue details coming soon'} />
-              <DetailRow icon="👤" label="Host" value={host} />
-              <DetailRow icon="⏳" label="RSVP deadline" value={deadline} />
-              <DetailRow icon="✓" label="Admission note" value={admissionNote} />
+              <DetailRow icon="📅" label="Date" value={dateLabel} tone={tone} />
+              <DetailRow icon="🕐" label="Time" value={timeLabel} tone={tone} />
+              <DetailRow icon="📍" label="Venue" value={venue || 'Venue details coming soon'} tone={tone} />
+              <DetailRow icon="👤" label="Host" value={host} tone={tone} />
+              <DetailRow icon="⏳" label="RSVP deadline" value={deadline} tone={tone} />
+              <DetailRow icon="✓" label="Admission note" value={admissionNote} tone={tone} />
             </div>
           </div>
 
-          <div className="rounded-3xl border border-white/10 bg-white/[0.07] p-6 shadow-xl shadow-black/10 backdrop-blur sm:p-7">
+          <div className="rounded-3xl border p-6 shadow-xl backdrop-blur sm:p-7" style={{ background: tone.panelStrong, borderColor: tone.border, boxShadow: `0 22px 48px ${tone.shadow}`, color: tone.text }}>
             <h2 className="text-3xl font-extrabold">About this event</h2>
-            <p className="mt-5 text-base leading-8 text-slate-300">{about}</p>
+            <p className="mt-5 text-base leading-8" style={{ color: tone.muted }}>{about}</p>
             {event.registry_enabled && event.registry_token && (
-              <a href={`/registry/${event.registry_token}`} className="mt-5 inline-flex min-h-11 items-center justify-center rounded-2xl border border-white/15 bg-white/10 px-4 py-2 text-sm font-bold text-white transition hover:bg-white/15">
+              <a href={`/registry/${event.registry_token}`} className="mt-5 inline-flex min-h-11 items-center justify-center rounded-2xl border px-4 py-2 text-sm font-bold transition" style={{ background: tone.chip, borderColor: tone.border, color: tone.text }}>
                 View gift list
               </a>
             )}
@@ -1107,7 +1154,7 @@ export default function InvitePage() {
       </main>
 
       {!event.is_paid && (
-        <footer className="pb-6 text-center text-xs font-semibold text-slate-500">
+        <footer className="pb-6 text-center text-xs font-semibold" style={{ color: tone.label }}>
           Powered by Festio
         </footer>
       )}

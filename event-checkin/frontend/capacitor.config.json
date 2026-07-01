@@ -1,0 +1,14 @@
+{
+  "appId": "events.festio.app",
+  "appName": "Festio",
+  "webDir": "dist",
+  "server": {
+    "androidScheme": "https"
+  },
+  "plugins": {
+    "SplashScreen": {
+      "launchShowDuration": 1200,
+      "backgroundColor": "#14b8a6"
+    }
+  }
+}

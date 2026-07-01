@@ -206,13 +206,15 @@ async def render_event_flyer(event_id: str, body: RenderRequest):
                        or design.get("selected_template_id") or "") or default_template()
     colors = {**tpl["defaultColors"], **(design.get("theme_config", {}).get("colors", {})), **(body.colors or {})}
     wording = {**design.get("wording_config", {}), **(body.wording or {})}
+    assets = design.get("asset_config", {})
     ctx = {
         "template": tpl,
         "colors": colors,
         "fontPairing": tpl["fontPairing"],
         "wording": wording,
-        "coverImageUrl": body.cover_image_url or design.get("asset_config", {}).get("cover_image_url"),
-        "imagePosition": body.image_position or design.get("asset_config", {}).get("image_position", {}),
+        "coverImageUrl": body.cover_image_url or assets.get("cover_image_url"),
+        "imagePosition": body.image_position or assets.get("image_position", {}),
+        "textScale": body.text_scale or assets.get("flyer_text_scale", 1),
         "qr": {"enabled": body.qr_enabled and bool(body.qr_data), "position": body.qr_position, "data": body.qr_data},
     }
     try:

@@ -112,8 +112,11 @@ async def render_flyer(event_id: str, body: dict = Body(default={}),
         async with httpx.AsyncClient(timeout=_TIMEOUT) as c:
             r = await c.post(f"{DESIGN_URL}/api/v1/design/events/{event_id}/render/flyer", json=body, headers=_headers())
         # Stream the rendered PNG/PDF straight back to the browser for download.
+        headers = {"Content-Disposition": r.headers.get("content-disposition", "inline")}
+        if r.headers.get("x-design-output-url"):
+            headers["X-Design-Output-Url"] = r.headers["x-design-output-url"]
         return Response(content=r.content, status_code=r.status_code,
                         media_type=r.headers.get("content-type", "application/octet-stream"),
-                        headers={"Content-Disposition": r.headers.get("content-disposition", "inline")})
+                        headers=headers)
     except httpx.RequestError:
         raise HTTPException(503, _UNAVAILABLE)

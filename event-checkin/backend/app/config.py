@@ -4,6 +4,9 @@ from pydantic_settings import BaseSettings
 class Settings(BaseSettings):
     database_url: str = "postgresql+asyncpg://checkin:checkin@localhost/checkin"
     frontend_url: str = "http://localhost:5173"
+    # Extra CORS origins (comma-separated) on top of frontend_url + the Capacitor
+    # native WebView origins. Set to add e.g. a staging URL.
+    cors_extra_origins: str = ""
     design_service_url: str = "http://design-service:8010"
     design_internal_token: str = ""
 

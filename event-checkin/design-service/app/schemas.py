@@ -63,6 +63,7 @@ class RenderRequest(BaseModel):
     wording: dict | None = None
     cover_image_url: str | None = None
     image_position: dict | None = None  # {x, y, zoom} for fixed template image zones
+    text_scale: float | None = None     # multiplier for flyer typography
     qr_data: str | None = None      # URL/text to encode (e.g. the RSVP link)
     qr_position: str = "bottom-right"
     qr_enabled: bool = True

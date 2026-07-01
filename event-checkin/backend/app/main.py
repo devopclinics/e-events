@@ -38,9 +38,16 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(title="Event Check-In QR System", version="1.0.0", lifespan=lifespan)
 
+# The Capacitor native WebView serves the app from these origins, so the API
+# must allow them or every request from the mobile app fails CORS.
+_CAPACITOR_ORIGINS = ["https://localhost", "capacitor://localhost", "ionic://localhost"]
+_cors_origins = [settings.frontend_url, *_CAPACITOR_ORIGINS] + [
+    o.strip() for o in settings.cors_extra_origins.split(",") if o.strip()
+]
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[settings.frontend_url],
+    allow_origins=_cors_origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -69,7 +76,15 @@ app.include_router(self_checkin.router, prefix="/api/e", tags=["self-checkin"])
 app.include_router(design_proxy_router.router, prefix="/api/events", tags=["design"])
 
 # Serve uploaded files (cover images, etc.)
-os.makedirs(UPLOADS_DIR, exist_ok=True)
+try:
+    os.makedirs(UPLOADS_DIR, exist_ok=True)
+except OSError:
+    # The default in-container path (/app/uploads) isn't writable when running
+    # outside the container (CI, local pytest) — fall back to a temp dir so the
+    # app still imports. Prod keeps using UPLOADS_DIR unchanged.
+    import tempfile
+    UPLOADS_DIR = os.path.join(tempfile.gettempdir(), "eqr_uploads")
+    os.makedirs(UPLOADS_DIR, exist_ok=True)
 app.mount("/api/uploads", StaticFiles(directory=UPLOADS_DIR), name="uploads")
 
 

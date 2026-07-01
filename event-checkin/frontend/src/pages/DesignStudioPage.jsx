@@ -47,6 +47,14 @@ const FLYER_SIZES = [
   ['a4', 'Printable A4 PDF'],
 ]
 
+const FLYER_TEXT_SCALES = [
+  [0.9, 'Small'],
+  [1, 'Standard'],
+  [1.15, 'Large'],
+  [1.3, 'Extra large'],
+  [1.45, 'Maximum'],
+]
+
 const QR_POSITIONS = [
   ['bottom-right', 'Bottom right'],
   ['bottom-left', 'Bottom left'],
@@ -162,6 +170,37 @@ function ThemeSwatches({ colors }) {
   )
 }
 
+function hexToRgb(hex) {
+  const clean = String(hex || '').replace('#', '').trim()
+  if (!/^[0-9a-f]{6}$/i.test(clean)) return null
+  return {
+    r: parseInt(clean.slice(0, 2), 16),
+    g: parseInt(clean.slice(2, 4), 16),
+    b: parseInt(clean.slice(4, 6), 16),
+  }
+}
+
+function isLightColor(hex) {
+  const rgb = hexToRgb(hex)
+  if (!rgb) return false
+  return ((rgb.r * 299) + (rgb.g * 587) + (rgb.b * 114)) / 1000 > 170
+}
+
+function previewTone(colors) {
+  const background = colors.background || '#07111f'
+  const surface = colors.surface || '#111827'
+  const light = isLightColor(background) && isLightColor(surface)
+  return {
+    background,
+    surface,
+    accent: colors.accent || '#14b8a6',
+    text: light ? '#0f172a' : '#ffffff',
+    muted: light ? '#334155' : '#dbeafe',
+    panel: light ? 'rgba(255,255,255,.88)' : 'rgba(15,23,42,.72)',
+    chip: light ? 'rgba(15,23,42,.08)' : 'rgba(255,255,255,.14)',
+  }
+}
+
 function TemplatePreviewBlock({ template, onSelect, onPreview, selected }) {
   const c = template.defaultColors || {}
   const imageUrl = template.previewUrl || (template.sourceType === 'template-pack' ? template.thumbnailUrl : '')
@@ -216,32 +255,56 @@ function TemplatePreviewBlock({ template, onSelect, onPreview, selected }) {
 }
 
 function flyerLayoutClass(template) {
-  return (template?.flyerDefinition?.layout || template?.layout?.flyer || 'photo-right-curved-divider').replace(/[^a-z0-9]+/gi, '-')
+  const layout = template?.flyerDefinition?.layout || template?.layout?.flyer || 'photo-right-curved-divider'
+  const aliases = {
+    afroluxe: 'framed-center-card',
+    arch: 'framed-center-card',
+    botanical: 'framed-center-card',
+    cinematic: 'photo-right-curved-divider',
+    diagonal: 'color-pop-stickers',
+    editorial: 'full-bleed-photo',
+    full_photo: 'full-bleed-photo',
+    'full-photo': 'full-bleed-photo',
+    futurist: 'color-pop-stickers',
+    glass_card: 'framed-center-card',
+    lux_card: 'framed-center-card',
+    luxe_arches: 'framed-center-card',
+    luxe_split: 'photo-right-curved-divider',
+    magazine: 'full-bleed-photo',
+    minimal: 'text-center',
+    mono: 'text-center',
+    neon: 'color-pop-stickers',
+    postcard: 'color-pop-stickers',
+    'photo-first': 'full-bleed-photo',
+    'photo-first-birthday-celebration': 'full-bleed-photo',
+    'photo-wedding': 'full-bleed-photo',
+    split_curve: 'photo-right-curved-divider',
+  }
+  return (aliases[layout] || layout).replace(/[^a-z0-9]+/gi, '-')
 }
 
 function FlyerPreview({ template, colors, wording, coverImageUrl, imagePosition, qrEnabled, qrPosition }) {
   const templateImageUrl = template?.previewUrl || (template?.sourceType === 'template-pack' ? template?.thumbnailUrl : '')
-  if (templateImageUrl) {
-    return (
-      <div className="mx-auto w-full max-w-[340px]">
-        <div className="overflow-hidden rounded-[1.5rem] border border-white/10 bg-slate-950 shadow-2xl shadow-slate-950/25">
-          <img src={templateImageUrl} alt="" className="aspect-[4/5] w-full object-cover" />
-        </div>
-        <div className="mt-3 text-center">
-          <div className="text-sm font-black text-slate-950 dark:text-white">{template?.name || 'Selected flyer'}</div>
-          <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">Selected flyer preview</p>
-        </div>
-      </div>
-    )
-  }
   const justify = qrPosition === 'bottom-left' ? 'justify-start' : qrPosition === 'center-bottom' ? 'justify-center' : 'justify-end'
   const layout = flyerLayoutClass(template)
   const isLuxury = layout === 'photo-right-curved-divider'
+  const rotate = Number(imagePosition.rotate ?? 0)
+  const zoneScale = Number(imagePosition.zoneScale ?? 100) / 100
+  const boxX = Number(imagePosition.boxX ?? 0)
+  const boxY = Number(imagePosition.boxY ?? 0)
+  const zoneTransform = layout === 'framed-center-card'
+    ? `translateX(-50%) translate(${boxX}%, ${boxY}%) scale(${zoneScale})`
+    : layout === 'color-pop-stickers'
+      ? `translate(${boxX}%, ${boxY}%) rotate(3deg) scale(${zoneScale})`
+      : `translate(${boxX}%, ${boxY}%) scale(${zoneScale})`
+  const zoneTransformOrigin = layout === 'photo-right-curved-divider' ? 'center right' : 'center'
   const photoStyle = coverImageUrl
     ? {
         backgroundImage: `url(${coverImageUrl})`,
         backgroundPosition: `${imagePosition.x}% ${imagePosition.y}%`,
         backgroundSize: `${imagePosition.zoom}% auto`,
+        transform: `rotate(${rotate}deg) scale(${rotate ? 1.12 : 1})`,
+        transformOrigin: 'center',
       }
     : {}
   const titleStyle = isLuxury ? { fontFamily: '"Brush Script MT", "Segoe Script", cursive', color: colors.primary || '#D4AF37' } : { color: colors.primary || '#fff' }
@@ -251,6 +314,9 @@ function FlyerPreview({ template, colors, wording, coverImageUrl, imagePosition,
         className={`relative aspect-[4/5] overflow-hidden rounded-[1.5rem] border border-white/10 shadow-2xl shadow-slate-950/25 flyer-preview-${layout}`}
         style={{ background: `linear-gradient(155deg, ${colors.background || '#0f172a'}, ${colors.surface || '#111827'})`, color: colors.text || '#fff' }}
       >
+        {templateImageUrl && !coverImageUrl && (
+          <img src={templateImageUrl} alt="" className="absolute inset-0 h-full w-full object-cover opacity-35" />
+        )}
         <div className="absolute inset-0 opacity-60" style={{ background: `radial-gradient(circle at 15% 12%, ${colors.accent || '#14b8a6'}55, transparent 22%), radial-gradient(circle at 90% 92%, ${colors.primary || '#fff'}55, transparent 26%)` }} />
         {['left-[10%] top-[6%]', 'left-[55%] top-[8%]', 'right-[8%] bottom-[10%]'].map((pos, i) => (
           <span key={pos} className={`absolute h-2.5 w-2.5 rotate-45 rounded-[2px] ${pos}`} style={{ background: i === 1 ? colors.accent : colors.primary, boxShadow: `0 0 18px ${colors.primary || '#fff'}` }} />
@@ -269,7 +335,7 @@ function FlyerPreview({ template, colors, wording, coverImageUrl, imagePosition,
                   ? 'left-1/2 top-[8%] h-[22%] w-[32%] -translate-x-1/2 rounded-full border-4'
                   : 'right-[8%] top-[8%] h-[30%] w-[36%] rounded-[2rem] border-4'
           }`}
-          style={{ borderColor: colors.primary || '#D4AF37' }}
+          style={{ borderColor: colors.primary || '#D4AF37', transform: zoneTransform, transformOrigin: zoneTransformOrigin }}
         >
           {coverImageUrl ? (
             <div className={`h-full w-full bg-no-repeat ${layout === 'full-bleed-photo' ? 'opacity-55' : ''}`} style={photoStyle} />
@@ -331,18 +397,22 @@ function FlyerPreview({ template, colors, wording, coverImageUrl, imagePosition,
           </div>
         )}
       </div>
-      <p className="mt-3 text-center text-xs text-slate-500 dark:text-slate-400">Live preview. Downloads render full-resolution PNG/PDF.</p>
+      <div className="mt-3 text-center">
+        <div className="text-sm font-black text-slate-950 dark:text-white">{template?.name || 'Selected flyer'}</div>
+        <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">{coverImageUrl ? 'Live preview with attached photo' : 'Live preview; attach a photo to fill the photo zone'}</p>
+      </div>
     </div>
   )
 }
 
 function EventPagePreview({ colors, wording, coverImageUrl, mode = 'desktop' }) {
+  const tone = previewTone(colors)
   return (
     <div className={`overflow-hidden rounded-[1.5rem] border border-slate-200 bg-slate-950 shadow-xl dark:border-white/10 ${mode === 'mobile' ? 'mx-auto max-w-[320px]' : ''}`}>
-      <div className="p-3" style={{ background: `radial-gradient(circle at 20% 0%, ${colors.accent || '#14b8a6'}55, transparent 48%), linear-gradient(140deg, ${colors.background || '#07111f'}, ${colors.surface || '#111827'})` }}>
-        <div className="mb-4 flex items-center justify-between text-white">
+      <div className="p-3" style={{ background: `radial-gradient(circle at 20% 0%, ${tone.accent}55, transparent 48%), linear-gradient(140deg, ${tone.background}, ${tone.surface})`, color: tone.text }}>
+        <div className="mb-4 flex items-center justify-between" style={{ color: tone.text }}>
           <span className="text-[10px] font-black uppercase tracking-[0.22em]">You're invited</span>
-          <span className="rounded-full bg-white/10 px-3 py-1 text-[10px] font-bold">Festio</span>
+          <span className="rounded-full px-3 py-1 text-[10px] font-bold" style={{ background: tone.chip }}>Festio</span>
         </div>
         <div className={`grid gap-5 ${mode === 'mobile' ? '' : 'md:grid-cols-[0.9fr_1.1fr]'}`}>
           <div className="overflow-hidden rounded-2xl bg-white/10">
@@ -351,20 +421,20 @@ function EventPagePreview({ colors, wording, coverImageUrl, mode = 'desktop' }) 
             ) : (
               <div className="grid aspect-[4/5] place-items-center p-6 text-center">
                 <div>
-                  <div className="text-[10px] font-black uppercase tracking-[0.18em]" style={{ color: colors.accent || '#14b8a6' }}>Cover image</div>
-                  <div className="mt-2 text-xl font-black" style={{ color: colors.primary || '#fff' }}>{wording.eventTitle}</div>
+                  <div className="text-[10px] font-black uppercase tracking-[0.18em]" style={{ color: tone.accent }}>Cover image</div>
+                  <div className="mt-2 text-xl font-black" style={{ color: tone.text }}>{wording.eventTitle}</div>
                 </div>
               </div>
             )}
           </div>
-          <div className="flex flex-col justify-center p-2 text-white">
-            <div className="text-[10px] font-black uppercase tracking-[0.22em]" style={{ color: colors.accent || '#14b8a6' }}>You're invited to</div>
-            <div className="mt-2 text-3xl font-black leading-tight" style={{ color: colors.primary || '#fff' }}>{wording.eventTitle}</div>
-            <p className="mt-3 text-sm leading-6 text-slate-200">{wording.customMessage}</p>
-            <div className="mt-4 grid gap-2 text-xs font-bold text-white sm:grid-cols-2">
-              <span className="rounded-xl bg-white/10 p-3">{wording.date}</span>
-              <span className="rounded-xl bg-white/10 p-3">{wording.time}</span>
-              <span className="rounded-xl bg-white/10 p-3 sm:col-span-2">{wording.venue}</span>
+          <div className="flex flex-col justify-center rounded-2xl p-4" style={{ background: tone.panel, color: tone.text }}>
+            <div className="text-[10px] font-black uppercase tracking-[0.22em]" style={{ color: tone.accent }}>You're invited to</div>
+            <div className="mt-2 text-3xl font-black leading-tight" style={{ color: tone.text }}>{wording.eventTitle}</div>
+            <p className="mt-3 text-sm leading-6" style={{ color: tone.muted }}>{wording.customMessage}</p>
+            <div className="mt-4 grid gap-2 text-xs font-bold sm:grid-cols-2" style={{ color: tone.text }}>
+              <span className="rounded-xl p-3" style={{ background: tone.chip }}>{wording.date}</span>
+              <span className="rounded-xl p-3" style={{ background: tone.chip }}>{wording.time}</span>
+              <span className="rounded-xl p-3 sm:col-span-2" style={{ background: tone.chip }}>{wording.venue}</span>
             </div>
             <button type="button" className="mt-4 min-h-11 rounded-xl px-4 py-2 text-sm font-black text-slate-950" style={{ background: colors.accent || '#14b8a6' }}>
               Confirm My RSVP
@@ -378,12 +448,12 @@ function EventPagePreview({ colors, wording, coverImageUrl, mode = 'desktop' }) 
 
 function PassPreview({ colors, wording, coverImageUrl }) {
   return (
-    <div className="mx-auto max-w-[360px] overflow-hidden rounded-[1.6rem] border border-slate-200 bg-white shadow-xl dark:border-white/10 dark:bg-slate-900">
+    <div className="mx-auto max-w-[360px] overflow-hidden rounded-[1.6rem] border border-slate-200 bg-white text-slate-950 shadow-xl dark:border-white/10">
       <div className="h-28 bg-cover bg-center" style={{ backgroundImage: coverImageUrl ? `url(${coverImageUrl})` : `linear-gradient(135deg, ${colors.background || '#0f172a'}, ${colors.accent || '#14b8a6'})` }} />
       <div className="p-5">
         <div className="text-xs font-black uppercase tracking-[0.18em] text-slate-500">Festio Pass</div>
-        <h3 className="mt-1 text-2xl font-black text-slate-950 dark:text-white">{wording.eventTitle}</h3>
-        <p className="mt-1 text-sm font-semibold text-slate-500 dark:text-slate-300">{wording.date} - {wording.time}</p>
+        <h3 className="mt-1 text-2xl font-black text-slate-950">{wording.eventTitle}</h3>
+        <p className="mt-1 text-sm font-semibold text-slate-500">{wording.date} - {wording.time}</p>
         <div className="mt-5 grid place-items-center rounded-2xl bg-white p-4 shadow-inner">
           <div className="grid h-40 w-40 grid-cols-7 gap-1">
             {Array.from({ length: 49 }).map((_, i) => (
@@ -391,7 +461,7 @@ function PassPreview({ colors, wording, coverImageUrl }) {
             ))}
           </div>
         </div>
-        <p className="mt-4 text-sm leading-6 text-slate-600 dark:text-slate-300">{wording.admissionNote}</p>
+        <p className="mt-4 text-sm leading-6 text-slate-600">{wording.admissionNote}</p>
         <button type="button" className="mt-4 min-h-11 w-full rounded-xl px-4 py-2 text-sm font-black text-slate-950" style={{ background: colors.accent || '#14b8a6' }}>
           Open Guest Hub
         </button>
@@ -401,6 +471,7 @@ function PassPreview({ colors, wording, coverImageUrl }) {
 }
 
 function EmailPreview({ colors, wording, coverImageUrl, activeType, setActiveType }) {
+  const tone = previewTone(colors)
   return (
     <div className="grid gap-5 lg:grid-cols-[240px_minmax(0,1fr)]">
       <div className="space-y-2">
@@ -416,13 +487,13 @@ function EmailPreview({ colors, wording, coverImageUrl, activeType, setActiveTyp
         ))}
       </div>
       <div className="mx-auto w-full max-w-[600px] overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-xl dark:border-white/10">
-        <div className="px-6 py-5 text-white" style={{ background: colors.background || '#08111f' }}>
+        <div className="px-6 py-5" style={{ background: tone.background, color: tone.text }}>
           <div className="flex items-center justify-between">
             <strong>Festio</strong>
-            <span className="text-xs font-bold text-white/70">Digital Invitation</span>
+            <span className="text-xs font-bold" style={{ color: tone.muted }}>Digital Invitation</span>
           </div>
-          <h3 className="mt-6 text-3xl font-black" style={{ color: colors.primary || '#fff' }}>{activeType}</h3>
-          <p className="mt-2 text-sm text-white/75">Your personal event experience is ready.</p>
+          <h3 className="mt-6 text-3xl font-black" style={{ color: tone.text }}>{activeType}</h3>
+          <p className="mt-2 text-sm" style={{ color: tone.muted }}>Your personal event experience is ready.</p>
         </div>
         {coverImageUrl && <img src={coverImageUrl} alt="" className="h-40 w-full object-cover" />}
         <div className="p-6 text-slate-800">
@@ -573,12 +644,18 @@ export default function DesignStudioPage() {
   const baseColors = selectedTpl?.defaultColors || {}
   const colors = { ...baseColors, ...(design?.theme_config?.colors || {}) }
   const coverImageUrl = design?.asset_config?.flyer_image_url || design?.asset_config?.cover_image_url || currentEvent?.invite_cover_image || ''
+  const photoCoverImageUrl = design?.asset_config?.cover_image_url || ''
   const flyerCoverImageUrl = design?.asset_config?.flyer_image_url || ''
   const imagePosition = {
     x: Number(design?.asset_config?.image_position?.x ?? 50),
     y: Number(design?.asset_config?.image_position?.y ?? 50),
     zoom: Number(design?.asset_config?.image_position?.zoom ?? 115),
+    rotate: Number(design?.asset_config?.image_position?.rotate ?? 0),
+    zoneScale: Number(design?.asset_config?.image_position?.zoneScale ?? 100),
+    boxX: Number(design?.asset_config?.image_position?.boxX ?? 0),
+    boxY: Number(design?.asset_config?.image_position?.boxY ?? 0),
   }
+  const flyerTextScale = Number(design?.asset_config?.flyer_text_scale ?? 1)
   const defaultWords = {
     inviteLabel: "You're invited to",
     eventTitle: currentEvent?.name || 'Electron Jubilee',
@@ -631,12 +708,12 @@ export default function DesignStudioPage() {
     await patch(
       {
         selected_template_id: t.id,
-        selected_flyer_template_id: design?.selected_flyer_template_id || t.id,
+        selected_flyer_template_id: t.id,
         theme_config: {
           ...(design?.theme_config || {}),
-          colors: { ...(design?.theme_config?.colors || {}) },
-          fontPairing: design?.theme_config?.fontPairing || t.fontPairing,
-          buttonStyle: design?.theme_config?.buttonStyle || t.buttonStyle,
+          colors: { ...(t.defaultColors || {}) },
+          fontPairing: t.fontPairing,
+          buttonStyle: t.buttonStyle,
         },
       },
       `Selected ${t.name}.`,
@@ -651,7 +728,14 @@ export default function DesignStudioPage() {
     const imageUrl = templateFlyerImageUrl(t)
     await patch(
       {
+        selected_template_id: t.id,
         selected_flyer_template_id: t.id,
+        theme_config: {
+          ...(design?.theme_config || {}),
+          colors: { ...(t.defaultColors || {}) },
+          fontPairing: t.fontPairing,
+          buttonStyle: t.buttonStyle,
+        },
         asset_config: { ...(design?.asset_config || {}), flyer_image_url: imageUrl },
       },
       imageUrl ? `Flyer set to ${t.name}. Publish to make it live.` : `Flyer template set to ${t.name}.`,
@@ -665,6 +749,9 @@ export default function DesignStudioPage() {
     const next = { ...imagePosition, [key]: Number(value) }
     setDesign((d) => ({ ...(d || { event_id: eventId }), asset_config: { ...(d?.asset_config || {}), image_position: next } }))
   }
+  const setFlyerTextScale = (value) => {
+    setDesign((d) => ({ ...(d || { event_id: eventId }), asset_config: { ...(d?.asset_config || {}), flyer_text_scale: Number(value) } }))
+  }
 
   async function saveWording() {
     await patch({ wording_config: Object.fromEntries(WORDING_FIELDS.map(([key]) => [key, wording[key]])) }, 'Wording saved.')
@@ -674,7 +761,7 @@ export default function DesignStudioPage() {
     await patch(
       {
         wording_config: Object.fromEntries(WORDING_FIELDS.map(([key]) => [key, wording[key]])),
-        asset_config: { ...(design?.asset_config || {}), image_position: imagePosition },
+        asset_config: { ...(design?.asset_config || {}), image_position: imagePosition, flyer_text_scale: flyerTextScale },
       },
       'Flyer settings saved.',
     )
@@ -696,10 +783,10 @@ export default function DesignStudioPage() {
   }
 
   async function useCoverOnEventPage() {
-    if (!eventId || !coverImageUrl) return
+    if (!eventId || !photoCoverImageUrl) return
     setBusy(true)
     try {
-      const updated = await api.updateInviteSettings(eventId, { invite_cover_image: coverImageUrl })
+      const updated = await api.updateInviteSettings(eventId, { invite_cover_image: photoCoverImageUrl })
       setEvents((prev) => prev.map((ev) => (ev.id === updated.id ? updated : ev)))
       note('Cover image applied to the live RSVP page settings.')
     } catch (e) {
@@ -715,7 +802,7 @@ export default function DesignStudioPage() {
     try {
       await api.saveEventDesign(eventId, {
         wording_config: wording,
-        asset_config: { ...(design?.asset_config || {}), image_position: imagePosition },
+        asset_config: { ...(design?.asset_config || {}), image_position: imagePosition, flyer_text_scale: flyerTextScale },
       })
       const result = await api.renderFlyer(eventId, {
         size: flyer.size,
@@ -723,8 +810,9 @@ export default function DesignStudioPage() {
         template_id: selectedFlyerTpl?.id,
         colors,
         wording,
-        cover_image_url: coverImageUrl || undefined,
+        cover_image_url: photoCoverImageUrl || undefined,
         image_position: imagePosition,
+        text_scale: flyerTextScale,
         qr_enabled: flyer.qr,
         qr_position: flyer.qrPosition,
         qr_data: flyer.qr && flyer.rsvpLink ? `https://festio.events/invite/${eventId}` : null,
@@ -750,13 +838,26 @@ export default function DesignStudioPage() {
     if (!eventId) return note('Pick an event first.', true)
     setBusy(true)
     try {
-      const flyerImageUrl = templateFlyerImageUrl(selectedFlyerTpl) || design?.asset_config?.flyer_image_url || ''
+      const rendered = selectedFlyerTpl ? await api.renderFlyer(eventId, {
+        size: 'portrait',
+        format: 'png',
+        template_id: selectedFlyerTpl.id,
+        colors,
+        wording,
+        cover_image_url: photoCoverImageUrl || undefined,
+        image_position: imagePosition,
+        text_scale: flyerTextScale,
+        qr_enabled: true,
+        qr_position: flyer.qrPosition,
+        qr_data: `https://festio.events/invite/${eventId}`,
+      }, { download: false }) : null
+      const flyerImageUrl = rendered?.outputUrl || design?.asset_config?.flyer_image_url || templateFlyerImageUrl(selectedFlyerTpl) || ''
       const saved = await api.saveEventDesign(eventId, {
-        selected_template_id: design?.selected_template_id,
+        selected_template_id: selectedFlyerTpl?.id || design?.selected_template_id,
         selected_flyer_template_id: selectedFlyerTpl?.id || design?.selected_flyer_template_id,
         theme_config: design?.theme_config || {},
         wording_config: wording,
-        asset_config: { ...(design?.asset_config || {}), flyer_image_url: flyerImageUrl },
+        asset_config: { ...(design?.asset_config || {}), flyer_text_scale: flyerTextScale, flyer_image_url: flyerImageUrl },
       })
       setDesign(saved)
       const published = await api.publishEventDesign(eventId)
@@ -775,6 +876,7 @@ export default function DesignStudioPage() {
   }
 
   const templateForPreview = previewTemplate || selectedTpl
+  const hubTone = previewTone(colors)
 
   return (
     <div className="mx-auto max-w-7xl px-4 py-6 sm:px-6">
@@ -972,49 +1074,6 @@ export default function DesignStudioPage() {
               </div>
             </div>
 
-            <div className="grid gap-5 rounded-2xl border border-slate-200 bg-white p-5 dark:border-white/10 dark:bg-slate-900 md:grid-cols-2">
-              <div>
-                <label className={label}>Upload main photo</label>
-                <input type="file" accept="image/jpeg,image/png,image/webp" onChange={upload} className="block w-full text-sm text-slate-600 dark:text-slate-300" />
-                <p className="mt-2 text-xs leading-5 text-slate-500 dark:text-slate-400">JPG, PNG, or WEBP. The photo is placed inside the selected template mask/frame and can be repositioned below.</p>
-              </div>
-              <div className="flex flex-wrap items-end gap-2">
-                <button type="button" disabled={busy || !coverImageUrl} onClick={useCoverOnEventPage} className="min-h-11 rounded-xl border border-slate-300 px-4 py-2 text-sm font-extrabold text-slate-700 hover:bg-slate-50 disabled:opacity-50 dark:border-white/10 dark:text-slate-200 dark:hover:bg-white/5">
-                  Use photo as RSVP cover
-                </button>
-                <button type="button" disabled={busy || !selectedFlyerTpl} onClick={() => renderFlyer('png', true)} className="min-h-11 rounded-xl bg-teal-500 px-4 py-2 text-sm font-black text-slate-950 hover:bg-teal-300 disabled:opacity-50">
-                  Use rendered flyer as RSVP cover
-                </button>
-                {coverImageUrl && <span className="text-xs font-semibold text-emerald-600 dark:text-emerald-300">Cover ready</span>}
-                {flyerCoverImageUrl && <span className="text-xs font-semibold text-emerald-600 dark:text-emerald-300">Rendered flyer cover ready</span>}
-              </div>
-              <div className="md:col-span-2">
-                <label className={label}>Photo crop and position</label>
-                <div className="grid gap-3 md:grid-cols-3">
-                  {[
-                    ['x', 'Horizontal', 0, 100],
-                    ['y', 'Vertical', 0, 100],
-                    ['zoom', 'Zoom', 100, 180],
-                  ].map(([key, text, min, max]) => (
-                    <label key={key} className="rounded-xl border border-slate-200 p-3 text-xs font-bold text-slate-600 dark:border-white/10 dark:text-slate-300">
-                      <span className="flex items-center justify-between gap-2">
-                        <span>{text}</span>
-                        <span>{imagePosition[key]}</span>
-                      </span>
-                      <input
-                        type="range"
-                        min={min}
-                        max={max}
-                        value={imagePosition[key]}
-                        onChange={(e) => setImagePosition(key, e.target.value)}
-                        className="mt-3 w-full accent-teal-500"
-                      />
-                    </label>
-                  ))}
-                </div>
-              </div>
-            </div>
-
             <div className="rounded-2xl border border-slate-200 bg-white p-5 dark:border-white/10 dark:bg-slate-900">
               <label className={label}>Edit invitation wording</label>
               <div className="grid gap-3 md:grid-cols-2">
@@ -1044,11 +1103,17 @@ export default function DesignStudioPage() {
                   </label>
                 ))}
               </div>
-              <div className="mt-4 grid gap-3 sm:grid-cols-2">
+              <div className="mt-4 grid gap-3 sm:grid-cols-3">
                 <div>
                   <label className={label}>Font style</label>
                   <select className={input} value={design?.theme_config?.fontPairing || selectedTpl?.fontPairing || 'modern-sans'} onChange={(e) => setThemeSetting('fontPairing', e.target.value)}>
                     {FONT_OPTIONS.map(([key, text]) => <option key={key} value={key}>{text}</option>)}
+                  </select>
+                </div>
+                <div>
+                  <label className={label}>Flyer text size</label>
+                  <select className={input} value={flyerTextScale} onChange={(e) => setFlyerTextScale(e.target.value)}>
+                    {FLYER_TEXT_SCALES.map(([key, text]) => <option key={key} value={key}>{text}</option>)}
                   </select>
                 </div>
                 <div>
@@ -1101,12 +1166,66 @@ export default function DesignStudioPage() {
               </div>
             )}
           </section>
-          <aside className="lg:sticky lg:top-24 lg:self-start">
+          <aside className="space-y-5 lg:sticky lg:top-24 lg:self-start">
+            <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm dark:border-white/10 dark:bg-slate-900">
+              <label className={label}>Attached photo</label>
+              <div className="mt-3 overflow-hidden rounded-2xl border border-slate-200 bg-slate-100 dark:border-white/10 dark:bg-slate-800">
+                {photoCoverImageUrl ? (
+                  <img src={photoCoverImageUrl} alt="" className="aspect-[4/3] w-full object-cover" />
+                ) : (
+                  <div className="grid aspect-[4/3] place-items-center p-5 text-center text-xs font-bold text-slate-500 dark:text-slate-400">
+                    Upload a photo to place it inside the selected flyer frame.
+                  </div>
+                )}
+              </div>
+              <input type="file" accept="image/jpeg,image/png,image/webp" onChange={upload} className="mt-4 block w-full text-sm text-slate-600 dark:text-slate-300" />
+              <div className="mt-4 grid gap-2">
+                <button type="button" disabled={busy || !photoCoverImageUrl} onClick={useCoverOnEventPage} className="min-h-11 rounded-xl border border-slate-300 px-4 py-2 text-sm font-extrabold text-slate-700 hover:bg-slate-50 disabled:opacity-50 dark:border-white/10 dark:text-slate-200 dark:hover:bg-white/5">
+                  Use photo as RSVP cover
+                </button>
+                <button type="button" disabled={busy || !selectedFlyerTpl} onClick={() => renderFlyer('png', true)} className="min-h-11 rounded-xl bg-teal-500 px-4 py-2 text-sm font-black text-slate-950 hover:bg-teal-300 disabled:opacity-50">
+                  Use rendered flyer as RSVP cover
+                </button>
+              </div>
+              <div className="mt-4">
+                <label className={label}>Photo crop and position</label>
+                <div className="space-y-3">
+                  {[
+                    ['x', 'Horizontal', 0, 100],
+                    ['y', 'Vertical', 0, 100],
+                    ['zoom', 'Zoom', 100, 180],
+                    ['rotate', 'Rotation', -180, 180],
+                    ['zoneScale', 'Photo area', 70, 150],
+                    ['boxX', 'Frame horizontal', -60, 60],
+                    ['boxY', 'Frame vertical', -60, 60],
+                  ].map(([key, text, min, max]) => (
+                    <label key={key} className="block rounded-xl border border-slate-200 p-3 text-xs font-bold text-slate-600 dark:border-white/10 dark:text-slate-300">
+                      <span className="flex items-center justify-between gap-2">
+                        <span>{text}</span>
+                        <span>{imagePosition[key]}</span>
+                      </span>
+                      <input
+                        type="range"
+                        min={min}
+                        max={max}
+                        value={imagePosition[key]}
+                        onChange={(e) => setImagePosition(key, e.target.value)}
+                        className="mt-3 w-full accent-teal-500"
+                      />
+                    </label>
+                  ))}
+                </div>
+              </div>
+              <div className="mt-3 flex flex-wrap gap-2">
+                {photoCoverImageUrl && <span className="text-xs font-semibold text-emerald-600 dark:text-emerald-300">Photo ready</span>}
+                {flyerCoverImageUrl && <span className="text-xs font-semibold text-emerald-600 dark:text-emerald-300">Rendered flyer ready</span>}
+              </div>
+            </div>
             <FlyerPreview
               template={selectedFlyerTpl}
               colors={colors}
               wording={wording}
-              coverImageUrl={coverImageUrl}
+              coverImageUrl={photoCoverImageUrl}
               imagePosition={imagePosition}
               qrEnabled={flyer.qr}
               qrPosition={flyer.qrPosition}
@@ -1126,13 +1245,13 @@ export default function DesignStudioPage() {
             <EventPagePreview colors={colors} wording={wording} coverImageUrl={coverImageUrl} />
             <div className="rounded-2xl border border-slate-200 bg-white p-5 dark:border-white/10 dark:bg-slate-900">
               <h3 className="text-lg font-black text-slate-950 dark:text-white">Guest Hub preview</h3>
-              <div className="mt-4 rounded-2xl p-4 text-white" style={{ background: `linear-gradient(145deg, ${colors.background || '#0f172a'}, ${colors.surface || '#111827'})` }}>
-                <div className="text-xs font-black uppercase tracking-[0.18em]" style={{ color: colors.accent || '#14b8a6' }}>Guest Hub</div>
-                <div className="mt-2 text-2xl font-black" style={{ color: colors.primary || '#fff' }}>{wording.eventTitle}</div>
+              <div className="mt-4 rounded-2xl p-4" style={{ background: `linear-gradient(145deg, ${hubTone.background}, ${hubTone.surface})`, color: hubTone.text }}>
+                <div className="text-xs font-black uppercase tracking-[0.18em]" style={{ color: hubTone.accent }}>Guest Hub</div>
+                <div className="mt-2 text-2xl font-black" style={{ color: hubTone.text }}>{wording.eventTitle}</div>
                 <div className="mt-4 space-y-2 text-sm">
-                  <div className="rounded-xl bg-white/10 p-3">Event update: Doors open at 5:30 PM.</div>
-                  <div className="rounded-xl bg-white/10 p-3">Message host: Available after RSVP acceptance.</div>
-                  <div className="rounded-xl bg-white/10 p-3">Menu choice: Jollof rice bowl saved.</div>
+                  <div className="rounded-xl p-3" style={{ background: hubTone.chip }}>Event update: Doors open at 5:30 PM.</div>
+                  <div className="rounded-xl p-3" style={{ background: hubTone.chip }}>Message host: Available after RSVP acceptance.</div>
+                  <div className="rounded-xl p-3" style={{ background: hubTone.chip }}>Menu choice: Jollof rice bowl saved.</div>
                 </div>
               </div>
               <div className="mt-5 grid gap-3">

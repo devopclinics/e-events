@@ -245,9 +245,17 @@ fi  # end DO_BUILD
 if $DO_DEPLOY; then
   [[ -f "$PROD_COMPOSE" ]] || die "Production compose file not found: $PROD_COMPOSE"
 
+  PACKS_HOST_PATH="${DESIGN_TEMPLATE_PACKS_HOST_PATH:-${SCRIPT_DIR}/../docs/images}"
+  if [[ -d "$PACKS_HOST_PATH" ]]; then
+    info "Design template packs path: ${PACKS_HOST_PATH}"
+  else
+    warn "Design template packs path not found: ${PACKS_HOST_PATH}"
+    warn "Design Studio will still deploy, but uploaded flyer templates will not appear until this path exists or DESIGN_TEMPLATE_PACKS_HOST_PATH is set."
+  fi
+
   # ── Phase 4a — Pull new images ──────────────────────────────────────────────
   step "4/6  Pulling images from Docker Hub"
-  APP_VERSION="$VERSION" docker compose -f "$PROD_COMPOSE" pull backend frontend messaging-service
+  APP_VERSION="$VERSION" docker compose -f "$PROD_COMPOSE" pull backend frontend messaging-service design-service
   ok "Images pulled"
 
   # ── Phase 4b — Run DB migration in a one-off container ──────────────────────
@@ -285,6 +293,21 @@ if $DO_DEPLOY; then
   echo ""
   info "Running containers:"
   APP_VERSION="$VERSION" docker compose -f "$PROD_COMPOSE" ps
+
+  info "Checking deployed Design Studio template count..."
+  DESIGN_TEMPLATES=$(
+    APP_VERSION="$VERSION" docker compose -f "$PROD_COMPOSE" exec -T design-service \
+      python - <<'PY' 2>/dev/null || true
+import urllib.request, json
+data = json.loads(urllib.request.urlopen("http://localhost:8010/health", timeout=5).read())
+print(data.get("templates", "unknown"))
+PY
+  )
+  if [[ "$DESIGN_TEMPLATES" == "174" ]]; then
+    ok "Design Studio catalog has 174 templates, including uploaded flyer packs"
+  else
+    warn "Design Studio reported template count: ${DESIGN_TEMPLATES:-unknown}. Expected 174 after flyer pack deployment."
+  fi
 fi
 
 echo -e "\n${GREEN}${BOLD}Deployment complete — version ${VERSION} is live.${NC}\n"

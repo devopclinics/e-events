@@ -80,6 +80,7 @@ services:
       DESIGN_INTERNAL_TOKEN: ${DESIGN_INTERNAL_TOKEN:-}
     volumes:
       - design-assets:/app/data/design-assets
+      - ${DESIGN_TEMPLATE_PACKS_HOST_PATH:-../docs/images}:/app/data/design-assets/packs:ro
     healthcheck:
       test: ["CMD-SHELL", "python -c \"import urllib.request; urllib.request.urlopen('http://localhost:8010/health', timeout=3).read()\""]
       interval: 15s

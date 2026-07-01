@@ -106,7 +106,7 @@ function LogoMark({ size = 'h-9 w-9', text = 'text-sm' }) {
 
 const trustChips = [
   'RSVP', 'Guest Management', 'Seating', 'Messaging', 'QR Passes',
-  'Check-In', 'Live Dashboard', 'Orders', 'Gift List', 'Registry', 'Deliveries',
+  'Check-In', 'Live Dashboard', 'Design Studio', 'Orders', 'Gift List', 'Registry', 'Deliveries',
 ]
 
 const problemCards = [
@@ -179,6 +179,17 @@ const addOnHighlights = [
     copy: 'Manage shipments, packing status, vendor share pages, shipping addresses, and fulfillment exports.',
     points: ['Shipment items', 'Vendor page', 'Packing status', 'XLSX exports'],
   },
+]
+
+const designStudioBullets = [
+  '100+ starter template families',
+  '20 event categories',
+  '5 styles per category',
+  'Upload your own flyer or image',
+  'Edit wording and colors',
+  'Preview mobile and desktop',
+  'Download PNG/PDF flyers',
+  'Reuse design across RSVP, Guest Hub, Festio Passes, and emails',
 ]
 
 const journey = [
@@ -424,6 +435,84 @@ function HeroVisual() {
   )
 }
 
+function DesignStudioVisual() {
+  const families = [
+    ['Luxury Birthday', '#050816', '#D4AF37'],
+    ['Modern Nikkah', '#F8FAFC', '#0E7C5A'],
+    ['Photo Gala', '#0B1220', '#14B8A6'],
+  ]
+  return (
+    <div className="relative" aria-label="Festio Design Studio preview showing template families, flyer editor, and guest surfaces">
+      <div className="absolute -inset-6 rounded-[2rem] bg-gradient-to-tr from-teal-300/25 via-amber-200/20 to-rose-300/25 blur-3xl" aria-hidden="true" />
+      <div className="relative overflow-hidden rounded-[1.75rem] border border-white/55 bg-white/90 p-4 shadow-2xl shadow-slate-950/15 backdrop-blur dark:border-white/10 dark:bg-slate-900/90">
+        <div className="grid gap-4 lg:grid-cols-[0.92fr_1.08fr]">
+          <div className="rounded-2xl bg-slate-950 p-4 text-white">
+            <div className="flex items-center justify-between">
+              <div>
+                <div className="text-[10px] font-black uppercase tracking-[0.2em] text-teal-300">Design Studio</div>
+                <div className="mt-1 text-lg font-black">Choose a design</div>
+              </div>
+              <div className="rounded-full bg-white/10 px-2.5 py-1 text-[10px] font-bold">100+ families</div>
+            </div>
+            <div className="mt-4 space-y-3">
+              {families.map(([name, bg, accent], index) => (
+                <div key={name} className={`rounded-xl border p-3 ${index === 0 ? 'border-teal-300 bg-white/10' : 'border-white/10 bg-white/[0.04]'}`}>
+                  <div className="h-20 rounded-lg p-3" style={{ background: `linear-gradient(135deg, ${bg}, ${accent})` }}>
+                    <div className="text-sm font-black" style={{ color: index === 1 ? '#0f172a' : '#fff' }}>{name}</div>
+                    <div className="mt-1 text-[10px] font-bold uppercase tracking-wider" style={{ color: index === 1 ? '#334155' : '#e2e8f0' }}>RSVP + Flyer + Pass + Email</div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          <div className="grid gap-4">
+            <div className="rounded-2xl border border-slate-200 bg-[#fbf7ef] p-4 dark:border-white/10 dark:bg-slate-950">
+              <div className="flex items-center justify-between">
+                <div>
+                  <div className="text-[10px] font-black uppercase tracking-[0.2em] text-teal-700 dark:text-teal-300">Flyer editor</div>
+                  <div className="mt-1 text-lg font-black text-slate-950 dark:text-white">Electron Jubilee</div>
+                </div>
+                <div className="rounded-full bg-teal-100 px-3 py-1 text-[10px] font-black text-teal-800">PNG/PDF</div>
+              </div>
+              <div className="mt-4 grid gap-3 sm:grid-cols-[0.8fr_1.2fr]">
+                <div className="aspect-[4/5] rounded-xl bg-gradient-to-br from-slate-950 via-slate-800 to-amber-400 p-4 text-white">
+                  <div className="text-[9px] font-black uppercase tracking-[0.18em] text-teal-200">You're invited</div>
+                  <div className="mt-2 text-xl font-black leading-tight text-amber-200">Electron Jubilee</div>
+                  <div className="mt-auto pt-12 text-[10px] font-bold">Aug 18 · 6:00 PM</div>
+                </div>
+                <div className="space-y-2">
+                  {['Event title', 'Venue', 'Admission note'].map((field) => (
+                    <div key={field} className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs font-bold text-slate-600 dark:border-white/10 dark:bg-white/5 dark:text-slate-300">{field}</div>
+                  ))}
+                  <div className="grid grid-cols-4 gap-1.5 pt-2">
+                    {['#D4AF37', '#14B8A6', '#050816', '#FFFFFF'].map((color) => (
+                      <span key={color} className="h-8 rounded-lg border border-slate-200" style={{ background: color }} />
+                    ))}
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div className="grid gap-3 sm:grid-cols-3">
+              {[
+                ['RSVP Page', 'Mobile + desktop preview'],
+                ['Festio Pass', 'QR-safe ticket card'],
+                ['Email Theme', 'Branded invitation'],
+              ].map(([title, copy]) => (
+                <div key={title} className="rounded-2xl border border-slate-200 bg-white p-4 dark:border-white/10 dark:bg-slate-950">
+                  <div className="text-sm font-black text-slate-950 dark:text-white">{title}</div>
+                  <div className="mt-2 text-xs leading-5 text-slate-500 dark:text-slate-400">{copy}</div>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  )
+}
+
 const mockups = {
   'command-center': {
     title: 'Event Setup',
@@ -644,6 +733,7 @@ export default function LandingPage() {
           </a>
           <nav className="hidden items-center gap-6 lg:flex" aria-label="Primary">
             <a href="#features" className="text-sm font-bold text-slate-600 hover:text-slate-950 dark:text-slate-300 dark:hover:text-white">Features</a>
+            <a href="#design-studio" className="text-sm font-bold text-slate-600 hover:text-slate-950 dark:text-slate-300 dark:hover:text-white">Design Studio</a>
             <a href="#addons" className="text-sm font-bold text-slate-600 hover:text-slate-950 dark:text-slate-300 dark:hover:text-white">Add-ons</a>
             <a href="#guest-journey" className="text-sm font-bold text-slate-600 hover:text-slate-950 dark:text-slate-300 dark:hover:text-white">Guest Journey</a>
             <a href="#event-types" className="text-sm font-bold text-slate-600 hover:text-slate-950 dark:text-slate-300 dark:hover:text-white">Event Types</a>
@@ -736,6 +826,33 @@ export default function LandingPage() {
                 </Reveal>
               ))}
             </div>
+          </div>
+        </section>
+
+        <section id="design-studio" className="border-y border-slate-900/10 bg-white py-20 dark:border-white/10 dark:bg-slate-900/35">
+          <div className="mx-auto grid max-w-7xl items-center gap-12 px-4 sm:px-6 lg:grid-cols-[0.9fr_1.1fr]">
+            <Reveal>
+              <SectionHeader
+                eyebrow="Design Studio"
+                title="Beautiful pages and flyers, without design stress."
+                copy="Choose from template families, upload your own flyer, customize the wording, match your event colors, and publish a polished RSVP page, Guest Hub, Festio Pass, email style, and downloadable flyer in minutes."
+              />
+              <div className="mt-8 grid gap-3 sm:grid-cols-2">
+                {designStudioBullets.map((point) => (
+                  <div key={point} className="flex gap-3 rounded-2xl border border-slate-200 bg-[#fbf7ef] p-4 dark:border-white/10 dark:bg-slate-950">
+                    <CheckIcon className="mt-0.5 h-4 w-4 shrink-0 text-teal-700 dark:text-teal-300" />
+                    <span className="text-sm font-bold leading-6 text-slate-700 dark:text-slate-200">{point}</span>
+                  </div>
+                ))}
+              </div>
+              <div className="mt-8 flex flex-col gap-3 sm:flex-row">
+                <PrimaryCta to="/register?intent=design">Create Free Event</PrimaryCta>
+                <SecondaryCta>Book a Demo</SecondaryCta>
+              </div>
+            </Reveal>
+            <Reveal delay={120}>
+              <DesignStudioVisual />
+            </Reveal>
           </div>
         </section>
 
@@ -957,6 +1074,7 @@ export default function LandingPage() {
           </div>
           <nav className="flex flex-wrap gap-5 text-sm font-bold text-slate-500 dark:text-slate-400" aria-label="Footer">
             <a href="#features" className="hover:text-teal-700 dark:hover:text-teal-300">Features</a>
+            <a href="#design-studio" className="hover:text-teal-700 dark:hover:text-teal-300">Design Studio</a>
             <a href="#guest-journey" className="hover:text-teal-700 dark:hover:text-teal-300">Guest Journey</a>
             <Link to="/pricing" className="hover:text-teal-700 dark:hover:text-teal-300">Pricing</Link>
             <Link to="/login" className="hover:text-teal-700 dark:hover:text-teal-300">Sign in</Link>

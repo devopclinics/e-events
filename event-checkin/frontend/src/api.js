@@ -92,6 +92,9 @@ export const api = {
   saveEventDesign:     (eventId, data)     => req('PUT', `/events/${eventId}/design`, data),
   publishEventDesign:  (eventId)           => req('POST', `/events/${eventId}/design/publish`),
   designOutputs:       (eventId)           => req('GET', `/events/${eventId}/design/outputs`),
+  publicDesignTheme:    (eventId) =>
+    fetch(`/api/v1/design/events/${encodeURIComponent(eventId)}/public-theme`, { cache: 'no-store' })
+      .then((r) => (r.ok ? r.json() : Promise.reject(new Error('Design theme unavailable')))),
   uploadDesignAsset:   (eventId, file) => {
     const fd = new FormData()
     fd.append('file', file)
@@ -111,12 +114,14 @@ export const api = {
       body: JSON.stringify(body),
     })
     if (!res.ok) throw new Error('Render failed — Design Studio may be busy or unavailable.')
+    const outputUrl = res.headers.get('X-Design-Output-Url')
     const blob = await res.blob()
     const fmt = body.format || (['a5', 'a4'].includes(body.size) ? 'pdf' : 'png')
     const url = URL.createObjectURL(blob)
     const a = document.createElement('a')
     a.href = url; a.download = `flyer-${body.size}.${fmt}`
     document.body.appendChild(a); a.click(); a.remove(); URL.revokeObjectURL(url)
+    return { outputUrl }
   },
   generateQR:          (eventId)           => req('POST', `/events/${eventId}/guests/generate-qr`),
   sendInvites:         (eventId)           => req('POST', `/events/${eventId}/guests/send-invites`),

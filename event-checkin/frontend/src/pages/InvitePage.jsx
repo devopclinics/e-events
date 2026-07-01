@@ -99,6 +99,23 @@ function scrollToRsvp() {
   document.getElementById('rsvp')?.scrollIntoView({ behavior: 'smooth', block: 'start' })
 }
 
+function designColors(theme) {
+  return theme?.colors || {}
+}
+
+function designCover(theme, event) {
+  return theme?.flyer_image_url || theme?.cover_image_url || event?.invite_cover_image || ''
+}
+
+function themedPageBackground(colors) {
+  if (!colors?.background) return undefined
+  const accent = colors.accent || '#14b8a6'
+  const surface = colors.surface || '#0f172a'
+  return {
+    background: `radial-gradient(circle at 18% 0%, ${accent}38, transparent 36rem), linear-gradient(140deg, ${colors.background} 0%, ${surface} 52%, ${colors.background} 100%)`,
+  }
+}
+
 function PrimaryButton({ children, className = '', ...props }) {
   return (
     <button
@@ -121,15 +138,15 @@ function SecondaryButton({ children, className = '', ...props }) {
   )
 }
 
-function EventPoster({ event }) {
-  const title = eventTitle(event)
-  if (event.invite_cover_image) {
+function EventPoster({ event, coverImage, colors = {}, titleOverride }) {
+  const title = titleOverride || eventTitle(event)
+  if (coverImage) {
     return (
       <div className="relative mx-auto w-full max-w-[420px]">
-        <div className="absolute -inset-5 rounded-[2rem] bg-teal-300/20 blur-3xl" />
+        <div className="absolute -inset-5 rounded-[2rem] blur-3xl" style={{ background: `${colors.accent || '#14b8a6'}33` }} />
         <div className="relative overflow-hidden rounded-[1.6rem] border border-white/[0.14] bg-slate-950 shadow-2xl shadow-black/45">
           <img
-            src={event.invite_cover_image}
+            src={coverImage}
             alt={`${title} event flyer`}
             className="aspect-[4/5] w-full object-cover"
           />
@@ -140,12 +157,15 @@ function EventPoster({ event }) {
 
   return (
     <div className="relative mx-auto w-full max-w-[420px]">
-      <div className="absolute -inset-5 rounded-[2rem] bg-teal-300/20 blur-3xl" />
-      <div className="relative flex aspect-[4/5] w-full flex-col justify-between overflow-hidden rounded-[1.6rem] border border-white/[0.14] bg-[linear-gradient(145deg,#0f172a,#113f46_52%,#14b8a6)] p-8 shadow-2xl shadow-black/45">
+      <div className="absolute -inset-5 rounded-[2rem] blur-3xl" style={{ background: `${colors.accent || '#14b8a6'}33` }} />
+      <div
+        className="relative flex aspect-[4/5] w-full flex-col justify-between overflow-hidden rounded-[1.6rem] border border-white/[0.14] p-8 shadow-2xl shadow-black/45"
+        style={{ background: `linear-gradient(145deg, ${colors.background || '#0f172a'}, ${colors.surface || '#113f46'} 52%, ${colors.accent || '#14b8a6'})` }}
+      >
         <div className="h-16 w-16 rounded-2xl border border-white/20 bg-white/10" />
         <div>
-          <div className="mb-3 text-xs font-extrabold uppercase tracking-[0.28em] text-teal-100">You're invited</div>
-          <div className="text-4xl font-extrabold leading-tight text-white sm:text-5xl">{title}</div>
+          <div className="mb-3 text-xs font-extrabold uppercase tracking-[0.28em]" style={{ color: colors.accent || '#ccfbf1' }}>You're invited</div>
+          <div className="text-4xl font-extrabold leading-tight sm:text-5xl" style={{ color: colors.primary || '#ffffff' }}>{title}</div>
           {event.event_date && <div className="mt-5 text-sm font-semibold text-teal-50">{fmtDate(event.event_date)}</div>}
         </div>
       </div>
@@ -611,7 +631,7 @@ function TokenRSVPForm({ event, prefill, token, theme, onDone }) {
   )
 }
 
-function GuestHub({ event, accessToken }) {
+function GuestHub({ event, accessToken, designTheme }) {
   const [hub, setHub] = useState(null)
   const [error, setError] = useState('')
   const [hidden, setHidden] = useState(false)
@@ -675,10 +695,14 @@ function GuestHub({ event, accessToken }) {
   }
 
   if (!accessToken || hidden) return null
+  const colors = designColors(designTheme)
 
   return (
     <section className="py-2">
-      <div className="mx-auto w-full max-w-[900px] rounded-[1.65rem] border border-white/12 bg-white/[0.08] p-5 text-white shadow-2xl shadow-black/20 backdrop-blur sm:p-7">
+      <div
+        className="mx-auto w-full max-w-[900px] rounded-[1.65rem] border border-white/12 bg-white/[0.08] p-5 text-white shadow-2xl shadow-black/20 backdrop-blur sm:p-7"
+        style={colors.background ? { background: `linear-gradient(145deg, ${colors.background}, ${colors.surface || colors.background})` } : undefined}
+      >
         <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
           <div>
             <h2 className="text-3xl font-extrabold">Guest Hub</h2>
@@ -704,7 +728,7 @@ function GuestHub({ event, accessToken }) {
               </p>
             )}
             {hub?.guest?.qr_token && (
-              <a href={`/scan/${hub.guest.qr_token}`} className="mt-4 inline-flex min-h-10 items-center justify-center rounded-xl bg-teal-400 px-4 py-2 text-sm font-extrabold text-slate-950 hover:bg-teal-300">
+              <a href={`/scan/${hub.guest.qr_token}`} style={colors.accent ? { background: colors.accent } : undefined} className="mt-4 inline-flex min-h-10 items-center justify-center rounded-xl bg-teal-400 px-4 py-2 text-sm font-extrabold text-slate-950 hover:bg-teal-300">
                 View Festio Pass
               </a>
             )}
@@ -750,7 +774,7 @@ function GuestHub({ event, accessToken }) {
                 placeholder="Ask the host a question..."
                 className="min-h-11 flex-1 rounded-xl border border-white/15 bg-slate-950/25 px-4 py-2 text-sm text-white placeholder-slate-400 focus:outline-none focus:ring-4 focus:ring-teal-300/20"
               />
-              <button disabled={sending || !message.trim()} className="min-h-11 rounded-xl bg-teal-400 px-5 py-2 text-sm font-extrabold text-slate-950 hover:bg-teal-300 disabled:opacity-50">
+              <button disabled={sending || !message.trim()} style={colors.accent ? { background: colors.accent } : undefined} className="min-h-11 rounded-xl bg-teal-400 px-5 py-2 text-sm font-extrabold text-slate-950 hover:bg-teal-300 disabled:opacity-50">
                 {sending ? 'Sending...' : 'Send'}
               </button>
             </form>
@@ -787,7 +811,7 @@ function GuestHub({ event, accessToken }) {
                     placeholder="Send a message to guests..."
                     className="min-h-11 flex-1 rounded-xl border border-white/15 bg-slate-950/25 px-4 py-2 text-sm text-white placeholder-slate-400 focus:outline-none focus:ring-4 focus:ring-teal-300/20"
                   />
-                  <button disabled={sendingChat || !chatMessage.trim()} className="min-h-11 rounded-xl bg-white px-5 py-2 text-sm font-extrabold text-slate-950 hover:bg-slate-100 disabled:opacity-50">
+                  <button disabled={sendingChat || !chatMessage.trim()} style={colors.accent ? { background: colors.accent } : undefined} className="min-h-11 rounded-xl bg-white px-5 py-2 text-sm font-extrabold text-slate-950 hover:bg-slate-100 disabled:opacity-50">
                     {sendingChat ? 'Sending...' : 'Send'}
                   </button>
                 </form>
@@ -817,6 +841,7 @@ export default function InvitePage() {
   const [event, setEvent] = useState(null)
   const [guest, setGuest] = useState(null)
   const [tokenMeta, setTokenMeta] = useState({ deadline_passed: false, already_responded: false })
+  const [designTheme, setDesignTheme] = useState(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const [confirmed, setConfirmed] = useState(null)
@@ -866,6 +891,22 @@ export default function InvitePage() {
       .finally(() => setLoading(false))
   }, [eventId, token, tokenMode, rsvpToken, rsvpLinkMode])
 
+  useEffect(() => {
+    if (!event?.id) {
+      setDesignTheme(null)
+      return
+    }
+    let cancelled = false
+    api.publicDesignTheme(event.id)
+      .then((themePayload) => {
+        if (!cancelled) setDesignTheme(themePayload?.is_default ? null : themePayload)
+      })
+      .catch(() => {
+        if (!cancelled) setDesignTheme(null)
+      })
+    return () => { cancelled = true }
+  }, [event?.id])
+
   if (loading) return (
     <div className="min-h-screen flex items-center justify-center bg-slate-100 dark:bg-slate-900">
       <div className="text-slate-500 text-sm animate-pulse">Loading…</div>
@@ -882,16 +923,19 @@ export default function InvitePage() {
   )
 
   const theme = event.invite_theme || 'default'
+  const dColors = designColors(designTheme)
+  const dWording = designTheme?.wording || {}
+  const dCover = designCover(designTheme, event)
   const atCapacity = event.rsvp_capacity != null && event.rsvp_count >= event.rsvp_capacity
   const deadlinePassed = !!event.deadline_passed
-  const title = eventTitle(event)
-  const dateLabel = fmtDate(event.event_date)
-  const timeLabel = fmtTime(event.event_date)
-  const venue = venueText(event)
-  const host = hostText(event)
+  const title = dWording.eventTitle || eventTitle(event)
+  const dateLabel = dWording.date || fmtDate(event.event_date)
+  const timeLabel = dWording.time || fmtTime(event.event_date)
+  const venue = [dWording.venue, dWording.address].filter(Boolean).join(' · ') || venueText(event)
+  const host = dWording.hostName || hostText(event)
   const deadline = deadlineText(event)
-  const about = event.description || event.invite_message || 'We are excited to celebrate this special occasion with family and friends. Please RSVP so we can prepare properly for your attendance.'
-  const admissionNote = event.admission_note || 'Your RSVP generates a personal QR code. Please bring it with you for check-in at the entrance.'
+  const about = dWording.customMessage || event.description || event.invite_message || 'We are excited to celebrate this special occasion with family and friends. Please RSVP so we can prepare properly for your attendance.'
+  const admissionNote = dWording.admissionNote || event.admission_note || 'Your RSVP generates a personal QR code. Please bring it with you for check-in at the entrance.'
   const heroWhen = [dateLabel, timeLabel].filter(Boolean).join(' · ')
   const capacityLabel = event.rsvp_capacity != null ? `${event.rsvp_count} / ${event.rsvp_capacity} spots claimed` : ''
   const guestHubToken = confirmed?.rsvp_status === 'confirmed'
@@ -976,25 +1020,28 @@ export default function InvitePage() {
   }
 
   return (
-    <div className="invite-page min-h-screen bg-[radial-gradient(circle_at_18%_0%,rgba(20,184,166,0.24),transparent_36rem),linear-gradient(140deg,#07111f_0%,#0f172a_48%,#132f38_100%)] text-white">
+    <div
+      className="invite-page min-h-screen bg-[radial-gradient(circle_at_18%_0%,rgba(20,184,166,0.24),transparent_36rem),linear-gradient(140deg,#07111f_0%,#0f172a_48%,#132f38_100%)] text-white"
+      style={themedPageBackground(dColors)}
+    >
       <header className="px-5 py-6 sm:px-6">
         <div className="mx-auto flex max-w-[1180px] items-center justify-between">
-          <span className="text-sm font-extrabold uppercase tracking-[0.24em] text-teal-100">You're invited</span>
+          <span className="text-sm font-extrabold uppercase tracking-[0.24em]" style={{ color: dColors.accent || undefined }}>You're invited</span>
           <span className="rounded-full border border-white/10 bg-white/[0.08] px-4 py-2 text-sm font-bold text-white/85">Festio</span>
         </div>
       </header>
 
       <main className="mx-auto max-w-[1180px] px-5 pb-16 sm:px-6">
         <section className="grid items-center gap-10 py-7 md:grid-cols-[minmax(320px,420px)_minmax(0,1fr)] md:gap-12 lg:gap-16 lg:py-14">
-          <EventPoster event={event} />
+          <EventPoster event={event} coverImage={dCover} colors={dColors} titleOverride={title} />
 
           <div className="space-y-8">
             <div>
-              <div className="mb-4 text-sm font-extrabold uppercase tracking-[0.24em] text-teal-200">You're invited to</div>
-              <h1 className="max-w-3xl text-5xl font-extrabold leading-[1.02] text-white sm:text-6xl lg:text-7xl">{title}</h1>
+              <div className="mb-4 text-sm font-extrabold uppercase tracking-[0.24em]" style={{ color: dColors.accent || undefined }}>You're invited to</div>
+              <h1 className="max-w-3xl text-5xl font-extrabold leading-[1.02] text-white sm:text-6xl lg:text-7xl" style={{ color: dColors.primary || undefined }}>{title}</h1>
               {host && <p className="mt-5 text-xl font-semibold text-teal-50">{host}</p>}
               <p className="mt-6 max-w-2xl text-lg leading-8 text-slate-300">
-                {event.invite_message || 'Join us for a beautiful evening of celebration, food, memories, and good company.'}
+                {dWording.rsvpNote || event.invite_message || 'Join us for a beautiful evening of celebration, food, memories, and good company.'}
               </p>
             </div>
 
@@ -1005,7 +1052,11 @@ export default function InvitePage() {
             </div>
 
             <div className="flex flex-col gap-3 sm:flex-row">
-              <PrimaryButton type="button" onClick={() => document.getElementById(hasGuestHub ? 'guest-hub' : 'rsvp')?.scrollIntoView({ behavior: 'smooth' })}>
+              <PrimaryButton
+                type="button"
+                style={dColors.accent ? { background: dColors.accent } : undefined}
+                onClick={() => document.getElementById(hasGuestHub ? 'guest-hub' : 'rsvp')?.scrollIntoView({ behavior: 'smooth' })}
+              >
                 {hasGuestHub ? 'Open Guest Hub' : 'Confirm My RSVP'}
               </PrimaryButton>
               <SecondaryButton type="button" onClick={() => document.getElementById('details')?.scrollIntoView({ behavior: 'smooth' })}>View Event Details</SecondaryButton>
@@ -1015,7 +1066,7 @@ export default function InvitePage() {
 
         {hasGuestHub && (
           <section id="guest-hub" className="scroll-mt-6 py-6">
-            <GuestHub event={event} accessToken={guestHubToken} />
+            <GuestHub event={event} accessToken={guestHubToken} designTheme={designTheme} />
           </section>
         )}
 
@@ -1052,7 +1103,7 @@ export default function InvitePage() {
           </div>
         </section>
 
-        {!hasGuestHub && <GuestHub event={event} accessToken={guestHubToken} />}
+        {!hasGuestHub && <GuestHub event={event} accessToken={guestHubToken} designTheme={designTheme} />}
       </main>
 
       {!event.is_paid && (

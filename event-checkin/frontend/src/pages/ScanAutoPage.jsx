@@ -2,6 +2,17 @@ import { useEffect, useState } from 'react'
 import { useParams } from 'react-router-dom'
 import { api } from '../api'
 
+function passThemeColors(theme) {
+  return theme?.colors || {}
+}
+
+function passBackground(colors) {
+  if (!colors?.background) return undefined
+  return {
+    background: `radial-gradient(circle at 20% 0%, ${colors.accent || '#14b8a6'}33, transparent 28rem), linear-gradient(145deg, ${colors.background}, ${colors.surface || colors.background})`,
+  }
+}
+
 function MenuLockedCard() {
   return (
     <div className="border-2 border-amber-300 bg-amber-50 dark:bg-amber-900/20 rounded-xl p-5 text-center">
@@ -552,6 +563,7 @@ function PartnerPairing({ token, partner, onChange, eventSeatingEnabled }) {
 export default function ScanAutoPage() {
   const { token } = useParams()
   const [data, setData] = useState(null)
+  const [designTheme, setDesignTheme] = useState(null)
   const [loading, setLoading] = useState(true)
 
   const reload = () => api.viewTicket(token).then(setData).catch(() => setData({ status: 'invalid' }))
@@ -560,6 +572,23 @@ export default function ScanAutoPage() {
     reload().finally(() => setLoading(false))
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [token])
+
+  useEffect(() => {
+    const eventId = data?.guest?.event_id
+    if (!eventId) {
+      setDesignTheme(null)
+      return
+    }
+    let cancelled = false
+    api.publicDesignTheme(eventId)
+      .then((themePayload) => {
+        if (!cancelled) setDesignTheme(themePayload?.is_default ? null : themePayload)
+      })
+      .catch(() => {
+        if (!cancelled) setDesignTheme(null)
+      })
+    return () => { cancelled = true }
+  }, [data?.guest?.event_id])
 
   if (loading) {
     return (
@@ -589,23 +618,36 @@ export default function ScanAutoPage() {
   }
 
   const { guest, event, status, table_name, seat_number, menu_categories, guest_choices, partner, menu_locked } = data || {}
+  const colors = passThemeColors(designTheme)
+  const wording = designTheme?.wording || {}
+  const coverImage = designTheme?.flyer_image_url || designTheme?.cover_image_url || ''
   const qrImageUrl = `/api/scan/${token}/qr.png`
   const eventDate = event?.event_date ? new Date(event.event_date) : null
+  const eventName = wording.eventTitle || event?.name || 'Event'
+  const hostName = wording.hostName || event?.couples_name || ''
+  const admissionText = wording.admissionNote || (status === 'admitted'
+    ? 'You have already been checked in.'
+    : 'Show this code to the check-in official at the entrance.')
 
   return (
-    <div className="app-shell min-h-screen flex items-center justify-center p-4 py-10">
+    <div className="app-shell min-h-screen flex items-center justify-center p-4 py-10" style={passBackground(colors)}>
       {/* Ticket card */}
       <div className="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 shadow-2xl w-full max-w-sm overflow-hidden">
 
         {/* Header strip */}
-        <div className="bg-slate-950 px-6 pt-8 pb-10 text-center relative">
+        <div
+          className="bg-slate-950 px-6 pt-8 pb-10 text-center relative overflow-hidden"
+          style={{ background: coverImage ? undefined : `linear-gradient(145deg, ${colors.background || '#020617'}, ${colors.surface || '#0f172a'})` }}
+        >
+          {coverImage && <div className="absolute inset-0 bg-cover bg-center opacity-45" style={{ backgroundImage: `url(${coverImage})` }} />}
+          <div className="absolute inset-0 bg-slate-950/55" />
           <div className="absolute top-4 right-4 left-4 flex justify-center">
             <StatusBadge status={status} />
           </div>
-          <div className="mt-8">
-            <p className="text-teal-200 text-xs uppercase font-semibold mb-1">You're invited to</p>
-            <h1 className="text-white text-2xl font-bold leading-tight">{event?.name || 'Event'}</h1>
-            <p className="text-slate-300 text-sm mt-1 italic">{event?.couples_name}</p>
+          <div className="relative mt-8">
+            <p className="text-teal-200 text-xs uppercase font-semibold mb-1" style={{ color: colors.accent || undefined }}>You're invited to</p>
+            <h1 className="text-white text-2xl font-bold leading-tight" style={{ color: colors.primary || undefined }}>{eventName}</h1>
+            <p className="text-slate-300 text-sm mt-1 italic">{hostName}</p>
             {eventDate && (
               <p className="text-slate-400 text-xs mt-2 font-medium">
                 {eventDate.toLocaleDateString(undefined, { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}
@@ -650,9 +692,7 @@ export default function ScanAutoPage() {
           </div>
 
           <p className="text-center text-slate-400 text-xs">
-            {status === 'admitted'
-              ? 'You have already been checked in.'
-              : 'Show this code to the check-in official at the entrance.'}
+            {admissionText}
           </p>
 
           {/* Admitted banner */}

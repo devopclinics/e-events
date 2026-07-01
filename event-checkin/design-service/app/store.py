@@ -57,6 +57,14 @@ def save_design(event_id: str, data: dict) -> dict:
 def publish_design(event_id: str) -> dict:
     d = load_design(event_id) or {"event_id": event_id}
     version = int(d.get("published_version") or 0) + 1
+    d["published_snapshot"] = {
+        "selected_template_id": d.get("selected_template_id"),
+        "selected_flyer_template_id": d.get("selected_flyer_template_id"),
+        "theme_config": d.get("theme_config", {}),
+        "wording_config": d.get("wording_config", {}),
+        "asset_config": d.get("asset_config", {}),
+        "organization_id": d.get("organization_id"),
+    }
     d["is_published"] = True
     d["published_version"] = version
     d["published_at"] = datetime.now(timezone.utc).isoformat()

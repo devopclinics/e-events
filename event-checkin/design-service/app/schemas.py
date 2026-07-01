@@ -62,6 +62,7 @@ class RenderRequest(BaseModel):
     colors: dict | None = None
     wording: dict | None = None
     cover_image_url: str | None = None
+    image_position: dict | None = None  # {x, y, zoom} for fixed template image zones
     qr_data: str | None = None      # URL/text to encode (e.g. the RSVP link)
     qr_position: str = "bottom-right"
     qr_enabled: bool = True

@@ -101,9 +101,13 @@ def publish(event_id: str):
 
 
 # ── Theme payloads (with fallback to the default family) ───────────────────────
-def _resolve(event_id: str) -> tuple[dict, dict, bool]:
+def _resolve(event_id: str, *, published_only: bool = False) -> tuple[dict, dict, bool]:
     """Returns (template, design, is_default)."""
     design = load_design(event_id) or {}
+    if published_only:
+        if not design.get("is_published"):
+            return default_template(), design, True
+        design = design.get("published_snapshot") or design
     tpl = get_template(design.get("selected_template_id") or "") if design else None
     if not tpl:
         return default_template(), design, True
@@ -112,7 +116,7 @@ def _resolve(event_id: str) -> tuple[dict, dict, bool]:
 
 @router.get("/events/{event_id}/public-theme", response_model=PublicTheme)
 def public_theme(event_id: str):
-    tpl, design, is_default = _resolve(event_id)
+    tpl, design, is_default = _resolve(event_id, published_only=True)
     colors = {**tpl["defaultColors"], **(design.get("theme_config", {}).get("colors", {}))}
     assets = design.get("asset_config", {})
     return PublicTheme(
@@ -131,7 +135,7 @@ def public_theme(event_id: str):
 
 @router.get("/events/{event_id}/theme", response_model=EmailTheme, dependencies=[Depends(require_internal)])
 def email_theme(event_id: str):
-    tpl, design, is_default = _resolve(event_id)
+    tpl, design, is_default = _resolve(event_id, published_only=True)
     colors = {**tpl["defaultColors"], **(design.get("theme_config", {}).get("colors", {}))}
     assets = design.get("asset_config", {})
     return EmailTheme(
@@ -194,10 +198,12 @@ async def render_event_flyer(event_id: str, body: RenderRequest):
     colors = {**tpl["defaultColors"], **(design.get("theme_config", {}).get("colors", {})), **(body.colors or {})}
     wording = {**design.get("wording_config", {}), **(body.wording or {})}
     ctx = {
+        "template": tpl,
         "colors": colors,
         "fontPairing": tpl["fontPairing"],
         "wording": wording,
         "coverImageUrl": body.cover_image_url or design.get("asset_config", {}).get("cover_image_url"),
+        "imagePosition": body.image_position or design.get("asset_config", {}).get("image_position", {}),
         "qr": {"enabled": body.qr_enabled and bool(body.qr_data), "position": body.qr_position, "data": body.qr_data},
     }
     try:

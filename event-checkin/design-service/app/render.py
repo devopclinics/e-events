@@ -23,6 +23,8 @@ _FONTS = {
     "display-rounded":'"Trebuchet MS", "Segoe UI", sans-serif',
 }
 
+_SCRIPT_FONT = '"Brush Script MT", "Segoe Script", "Lucida Handwriting", cursive'
+
 
 def qr_data_uri(data: str) -> str:
     qr = qrcode.QRCode(border=1, box_size=10)
@@ -38,67 +40,158 @@ def _esc(v) -> str:
     return _html.escape(str(v)) if v else ""
 
 
+def _css_url(v) -> str:
+    return _html.escape(str(v), quote=True) if v else ""
+
+
+def _text(w: dict, key: str, fallback: str = "") -> str:
+    value = str(w.get(key) or "").strip()
+    return value or fallback
+
+
 def build_flyer_html(ctx: dict, size_key: str) -> str:
-    """ctx: {colors, fontPairing, wording{...}, coverImageUrl, qr{enabled,position,data}}."""
+    """ctx: {template, colors, fontPairing, wording, coverImageUrl, imagePosition, qr}."""
     c = ctx.get("colors", {})
     bg = c.get("background", "#0B1220"); surface = c.get("surface", "#111827")
     primary = c.get("primary", "#D4AF37"); accent = c.get("accent", "#14B8A6")
     text = c.get("text", "#FFFFFF")
+    tpl = ctx.get("template") or {}
+    flyer_def = tpl.get("flyerDefinition") or {}
+    layout = flyer_def.get("layout") or tpl.get("layout", {}).get("flyer") or "photo-right-curved-divider"
+    layout_class = "".join(ch if ch.isalnum() else "-" for ch in layout).strip("-")
     font = _FONTS.get(ctx.get("fontPairing", "modern-sans"), _FONTS["modern-sans"])
     w = ctx.get("wording", {})
     cover = ctx.get("coverImageUrl")
+    position = ctx.get("imagePosition") or {}
+    pos_x = int(position.get("x", 50))
+    pos_y = int(position.get("y", 50))
+    zoom = int(position.get("zoom", 115))
     qr = ctx.get("qr", {}) or {}
     qr_pos = qr.get("position", "bottom-right")
     qr_img = qr_data_uri(qr["data"]) if qr.get("enabled") and qr.get("data") else None
 
     just = {"bottom-left": "flex-start", "bottom-right": "flex-end", "center-bottom": "center"}.get(qr_pos, "flex-end")
-    cover_block = (
-        f'<div class="cover" style="background-image:url({_esc(cover)})"></div>' if cover else ""
-    )
 
-    def row(label, value):
-        return f'<div class="row"><span class="lbl">{label}</span><span class="val">{_esc(value)}</span></div>' if value else ""
+    def row(icon, label, value):
+        if not value:
+            return ""
+        return f'<div class="detail-row"><span class="detail-icon">{icon}</span><span><b>{label}</b><em>{_esc(value)}</em></span></div>'
+
+    event_title = _text(w, "eventTitle", "Birthday")
+    host = _text(w, "hostName")
+    invite_label = _text(w, "inviteLabel", "You're invited to celebrate")
+    subtitle = _text(w, "eventSubtitle", _text(w, "customMessage", "Join us for an evening of good vibes, great company, and memories in the making."))
+    rsvp_by = _text(w, "rsvpBy", _text(w, "rsvpNote", "Kindly reply soon."))
+    footer = _text(w, "footerMessage", _text(w, "footerNote", "I can't wait to celebrate with you."))
+    phone = _text(w, "phone")
+    email = _text(w, "email")
+    admission_note = _text(w, "admissionNote")
+    contact = " · ".join(x for x in [phone, email] if x)
+    photo_style = f"background-image:url('{_css_url(cover)}');background-position:{pos_x}% {pos_y}%;background-size:{zoom}% auto;" if cover else ""
+    full_bg_style = f"background-image:linear-gradient(90deg, rgba(0,0,0,.76), rgba(0,0,0,.24)), url('{_css_url(cover)}');background-position:{pos_x}% {pos_y}%;background-size:{zoom}% auto;" if cover else ""
 
     return f"""<!doctype html><html><head><meta charset="utf-8"><style>
 * {{ margin:0; padding:0; box-sizing:border-box; }}
 html,body {{ width:100%; height:100%; }}
 body {{ font-family:{font}; color:{text}; background:{bg}; }}
-.flyer {{ width:100%; height:100vh; display:flex; flex-direction:column;
-  background:linear-gradient(160deg,{bg},{surface}); position:relative; overflow:hidden; }}
-.cover {{ height:42%; background-size:cover; background-position:center; }}
-.body {{ flex:1; padding:8% 9%; display:flex; flex-direction:column; }}
-.kicker {{ text-transform:uppercase; letter-spacing:.28em; font-size:1.1em; font-weight:800; color:{accent}; }}
-.title {{ font-size:4.4em; line-height:1.02; font-weight:900; color:{primary}; margin:.35em 0; }}
-.host {{ font-size:1.7em; font-weight:700; color:{text}; opacity:.92; }}
-.meta {{ margin-top:auto; display:flex; flex-direction:column; gap:.55em; }}
-.row {{ display:flex; gap:.8em; font-size:1.35em; }}
-.lbl {{ color:{accent}; font-weight:800; min-width:3.2em; }}
-.val {{ color:{text}; opacity:.95; }}
-.note {{ margin-top:1em; font-size:1.15em; color:{text}; opacity:.8; }}
-.footer {{ display:flex; justify-content:{just}; align-items:flex-end; margin-top:1.4em; gap:1em; }}
-.qr {{ width:150px; height:150px; background:#fff; padding:10px; border-radius:14px; }}
-.qr img {{ width:100%; height:100%; }}
-.rsvp {{ font-size:1.05em; color:{text}; opacity:.75; align-self:center; }}
+.flyer {{ width:100vw; height:100vh; position:relative; overflow:hidden; background:linear-gradient(150deg,{bg},{surface}); isolation:isolate; }}
+.flyer::before {{ content:""; position:absolute; inset:-12%; background:radial-gradient(circle at 16% 9%, {accent}34, transparent 25%), radial-gradient(circle at 94% 92%, {primary}38, transparent 32%); z-index:-3; }}
+.flyer::after {{ content:""; position:absolute; inset:0; background:linear-gradient(90deg, rgba(255,255,255,.06), transparent 34%, rgba(255,255,255,.04)); mix-blend-mode:screen; z-index:-2; }}
+.particle {{ position:absolute; width:14px; height:14px; border-radius:3px; background:{primary}; opacity:.86; transform:rotate(28deg); box-shadow:0 0 24px {primary}99; }}
+.p1 {{ left:10%; top:5%; }} .p2 {{ left:54%; top:7%; width:9px; height:9px; }} .p3 {{ left:8%; bottom:18%; width:8px; height:8px; }} .p4 {{ right:8%; bottom:11%; width:18px; height:18px; }}
+.balloon {{ position:absolute; border-radius:999px 999px 880px 880px; filter:drop-shadow(0 22px 20px rgba(0,0,0,.28)); opacity:.95; }}
+.balloon.one {{ right:9%; top:4%; width:15%; height:13%; background:linear-gradient(145deg,{primary},#5b4209); }}
+.balloon.two {{ right:2%; top:7%; width:13%; height:11%; background:linear-gradient(145deg,#111,#555); }}
+.balloon.three {{ right:8%; bottom:6%; width:17%; height:14%; background:linear-gradient(145deg,{accent},#5b3007); }}
+.photo-zone {{ position:absolute; overflow:hidden; background:linear-gradient(145deg, rgba(255,255,255,.1), rgba(255,255,255,.02)); background-repeat:no-repeat; }}
+.photo-fill {{ position:absolute; inset:0; background-repeat:no-repeat; }}
+.photo-placeholder {{ position:absolute; inset:0; display:grid; place-items:center; color:{text}; font-size:2.5vh; font-weight:900; text-align:center; padding:9%; opacity:.72; background:linear-gradient(145deg, rgba(255,255,255,.12), rgba(255,255,255,.03)); }}
+.content {{ position:absolute; z-index:4; }}
+.kicker {{ text-transform:uppercase; letter-spacing:.26em; font-size:2.1vh; font-weight:900; color:{text}; }}
+.host {{ margin-top:.4vh; font-size:3vh; font-weight:800; color:{text}; }}
+.title {{ margin-top:1.4vh; color:{primary}; font-size:8.3vh; line-height:.88; font-weight:900; letter-spacing:-.03em; }}
+.script-title {{ font-family:{_SCRIPT_FONT}; font-weight:500; letter-spacing:0; text-shadow:0 0 20px {primary}44; }}
+.subtitle {{ margin-top:3vh; max-width:78%; color:{text}; font-size:2.05vh; line-height:1.45; font-weight:600; text-transform:uppercase; letter-spacing:.08em; opacity:.94; }}
+.details {{ margin-top:3.2vh; display:grid; gap:1.5vh; }}
+.detail-row {{ display:grid; grid-template-columns:4.5vh 1fr; gap:1.3vh; align-items:center; color:{text}; font-size:1.85vh; }}
+.detail-icon {{ width:4.1vh; height:4.1vh; display:grid; place-items:center; border-radius:1.1vh; background:{primary}; color:{bg}; font-size:2.4vh; font-weight:900; }}
+.detail-row b {{ display:block; color:{primary}; font-size:1.45vh; text-transform:uppercase; letter-spacing:.22em; }}
+.detail-row em {{ display:block; margin-top:.25vh; font-style:normal; font-weight:900; line-height:1.24; }}
+.rsvp-card {{ margin-top:3vh; width:46%; min-height:10vh; display:grid; align-content:center; border:1px solid {primary}; border-radius:1.4vh; background:linear-gradient(145deg, rgba(255,255,255,.08), rgba(255,255,255,.02)); padding:1.8vh 2.2vh; box-shadow:0 20px 50px rgba(0,0,0,.28); }}
+.rsvp-card strong {{ display:block; color:{primary}; font-size:5.2vh; line-height:.9; letter-spacing:.16em; }}
+.rsvp-card span {{ display:block; margin-top:1.1vh; color:{text}; font-size:1.65vh; line-height:1.28; text-transform:uppercase; letter-spacing:.12em; }}
+.admission {{ margin-top:1.8vh; width:72%; color:{text}; font-size:1.7vh; line-height:1.4; opacity:.84; }}
+.contact {{ margin-top:1.7vh; color:{text}; font-size:1.7vh; font-weight:700; opacity:.9; }}
+.footer-copy {{ position:absolute; left:8%; bottom:4.2%; z-index:5; color:{primary}; font-family:{_SCRIPT_FONT}; font-size:3.1vh; line-height:1.05; max-width:42%; text-align:center; }}
+.qr-wrap {{ position:absolute; z-index:6; bottom:4.4%; display:flex; justify-content:{just}; width:100%; padding:0 7%; pointer-events:none; }}
+.qr {{ width:14vh; height:14vh; background:#fff; padding:1.1vh; border-radius:1.2vh; box-shadow:0 24px 46px rgba(0,0,0,.34); }}
+.qr img {{ width:100%; height:100%; display:block; }}
+.photo-right-curved-divider .photo-zone {{ right:-4%; top:0; width:48%; height:100%; border-radius:48% 0 0 48% / 50% 0 0 50%; border-left:.55vh solid {primary}; box-shadow:-24px 0 40px rgba(0,0,0,.38); }}
+.photo-right-curved-divider .photo-fill {{ {photo_style} }}
+.photo-right-curved-divider .content {{ left:7.5%; top:5%; width:52%; height:87%; }}
+.photo-right-curved-divider .title {{ font-size:9.1vh; }}
+.color-pop-stickers {{ background:linear-gradient(145deg,{bg},{surface}); }}
+.color-pop-stickers .photo-zone {{ right:7%; top:9%; width:36%; height:34%; border-radius:5vh; transform:rotate(3deg); border:.8vh solid #fff; box-shadow:0 24px 60px rgba(0,0,0,.28); }}
+.color-pop-stickers .photo-fill {{ {photo_style} }}
+.color-pop-stickers .content {{ left:7%; right:7%; top:9%; bottom:7%; }}
+.color-pop-stickers .title {{ max-width:58%; font-size:8.8vh; }}
+.color-pop-stickers .subtitle {{ max-width:52%; }}
+.color-pop-stickers .details {{ width:58%; }}
+.color-pop-stickers .rsvp-card {{ width:42%; background:{primary}; color:{bg}; border:0; }} .color-pop-stickers .rsvp-card strong,.color-pop-stickers .rsvp-card span {{ color:{bg}; }}
+.playful-photo-badge {{ background:radial-gradient(circle at 20% 20%, {accent}33, transparent 22%), linear-gradient(135deg,{bg},{surface}); }}
+.playful-photo-badge .photo-zone {{ right:8%; top:8%; width:34%; height:27%; border-radius:999px; border:.9vh solid {primary}; box-shadow:0 28px 70px rgba(0,0,0,.2); }}
+.playful-photo-badge .photo-fill {{ {photo_style} }}
+.playful-photo-badge .content {{ left:8%; right:8%; top:11%; bottom:8%; text-align:left; }}
+.playful-photo-badge .title {{ max-width:58%; color:{primary}; }}
+.playful-photo-badge .subtitle {{ max-width:58%; text-transform:none; letter-spacing:0; }}
+.playful-photo-badge .rsvp-card {{ width:56%; border:0; background:{accent}; }} .playful-photo-badge .rsvp-card strong,.playful-photo-badge .rsvp-card span {{ color:{bg}; }}
+.framed-center-card {{ background:{bg}; }}
+.framed-center-card .photo-zone {{ left:50%; top:8%; width:28%; height:20%; transform:translateX(-50%); border-radius:999px; border:.55vh solid {primary}; box-shadow:0 20px 48px rgba(0,0,0,.18); }}
+.framed-center-card .photo-fill {{ {photo_style} }}
+.framed-center-card .content {{ left:9%; right:9%; top:7%; bottom:7%; display:flex; flex-direction:column; align-items:center; text-align:center; padding:4%; border:.25vh solid {primary}; background:linear-gradient(180deg, rgba(255,255,255,.84), rgba(255,255,255,.65)); color:{text}; }}
+.framed-center-card .kicker,.framed-center-card .host,.framed-center-card .subtitle,.framed-center-card .detail-row,.framed-center-card .admission,.framed-center-card .contact {{ color:{text}; }}
+.framed-center-card .title {{ margin-top:22%; font-size:7.4vh; }}
+.framed-center-card .subtitle {{ max-width:70%; text-transform:none; letter-spacing:0; }}
+.framed-center-card .details {{ width:72%; }}
+.framed-center-card .rsvp-card {{ width:44%; }}
+.framed-center-card .footer-copy {{ left:50%; transform:translateX(-50%); max-width:70%; color:{primary}; }}
+.full-bleed-photo {{ {full_bg_style} background-repeat:no-repeat; }}
+.full-bleed-photo .photo-zone {{ display:none; }}
+.full-bleed-photo .content {{ left:7%; right:7%; bottom:7%; top:auto; min-height:50%; padding:4.5%; border-radius:4vh; background:linear-gradient(145deg, rgba(0,0,0,.68), rgba(0,0,0,.32)); backdrop-filter:blur(4px); }}
+.full-bleed-photo .title {{ font-size:8.4vh; }}
+.full-bleed-photo .subtitle {{ max-width:82%; }}
+.full-bleed-photo .rsvp-card {{ width:40%; }}
+@media (max-aspect-ratio: 3/4) {{
+  .photo-right-curved-divider .photo-zone {{ width:54%; }}
+  .photo-right-curved-divider .content {{ width:58%; }}
+  .title {{ font-size:6.7vh; }}
+  .script-title {{ font-size:7.4vh; }}
+  .rsvp-card {{ width:58%; }}
+}}
 </style></head><body>
-<div class="flyer">
-  {cover_block}
-  <div class="body">
-    <div class="kicker">You're invited</div>
-    <div class="title">{_esc(w.get('eventTitle') or 'Your Event')}</div>
-    <div class="host">{_esc(w.get('hostName'))}</div>
-    <div class="meta">
-      {row('When', ' · '.join(x for x in [w.get('date'), w.get('time')] if x))}
-      {row('Where', w.get('venue'))}
-      {row('', w.get('address'))}
-      {f'<div class="note">{_esc(w.get("dressCode"))}</div>' if w.get('dressCode') else ''}
-      {f'<div class="note">{_esc(w.get("admissionNote"))}</div>' if w.get('admissionNote') else ''}
-      {f'<div class="note">{_esc(w.get("customMessage"))}</div>' if w.get('customMessage') else ''}
-      <div class="footer">
-        {f'<div class="qr"><img src="{qr_img}"/></div>' if qr_img else ''}
-        {f'<div class="rsvp">{_esc(w.get("rsvpNote") or "Scan to RSVP")}</div>' if qr_img else ''}
-      </div>
-    </div>
+<div class="flyer {layout_class}">
+  <span class="particle p1"></span><span class="particle p2"></span><span class="particle p3"></span><span class="particle p4"></span>
+  <span class="balloon one"></span><span class="balloon two"></span><span class="balloon three"></span>
+  <div class="photo-zone">
+    {f'<div class="photo-fill"></div>' if cover else '<div class="photo-placeholder">Upload<br>Main Photo</div>'}
   </div>
+  <main class="content">
+    <div class="kicker">{_esc(invite_label)}</div>
+    {f'<div class="host">{_esc(host)}</div>' if host else ''}
+    <h1 class="title script-title">{_esc(event_title)}</h1>
+    {f'<p class="subtitle">{_esc(subtitle)}</p>' if subtitle else ''}
+    <section class="details">
+      {row('▣', 'Date', w.get('date'))}
+      {row('◷', 'Time', w.get('time'))}
+      {row('⌖', 'Venue', w.get('venue'))}
+      {row('⌁', 'Address', w.get('address'))}
+    </section>
+    <section class="rsvp-card"><strong>RSVP</strong><span>{_esc(rsvp_by)}</span></section>
+    {f'<p class="admission">{_esc(admission_note)}</p>' if admission_note else ''}
+    {f'<p class="contact">{_esc(contact)}</p>' if contact else ''}
+  </main>
+  <div class="footer-copy">{_esc(footer)}</div>
+  {f'<div class="qr-wrap"><div class="qr"><img alt="RSVP QR code" src="{qr_img}"/></div></div>' if qr_img else ''}
 </div></body></html>"""
 
 

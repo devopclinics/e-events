@@ -220,6 +220,20 @@ function flyerLayoutClass(template) {
 }
 
 function FlyerPreview({ template, colors, wording, coverImageUrl, imagePosition, qrEnabled, qrPosition }) {
+  const templateImageUrl = template?.previewUrl || (template?.sourceType === 'template-pack' ? template?.thumbnailUrl : '')
+  if (templateImageUrl) {
+    return (
+      <div className="mx-auto w-full max-w-[340px]">
+        <div className="overflow-hidden rounded-[1.5rem] border border-white/10 bg-slate-950 shadow-2xl shadow-slate-950/25">
+          <img src={templateImageUrl} alt="" className="aspect-[4/5] w-full object-cover" />
+        </div>
+        <div className="mt-3 text-center">
+          <div className="text-sm font-black text-slate-950 dark:text-white">{template?.name || 'Selected flyer'}</div>
+          <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">Selected flyer preview</p>
+        </div>
+      </div>
+    )
+  }
   const justify = qrPosition === 'bottom-left' ? 'justify-start' : qrPosition === 'center-bottom' ? 'justify-center' : 'justify-end'
   const layout = flyerLayoutClass(template)
   const isLuxury = layout === 'photo-right-curved-divider'
@@ -510,6 +524,11 @@ export default function DesignStudioPage() {
     })
   }, [templates, filters])
 
+  const flyerTemplates = useMemo(() => {
+    const imageBacked = filteredTemplates.filter((t) => t.previewUrl || (t.sourceType === 'template-pack' && t.thumbnailUrl))
+    return imageBacked.length ? imageBacked : filteredTemplates
+  }, [filteredTemplates])
+
   const categoryOptions = useMemo(() => {
     const seen = new Set(CATEGORY_OPTIONS.map(([key]) => key))
     const dynamic = []
@@ -542,8 +561,13 @@ export default function DesignStudioPage() {
   )
 
   const selectedFlyerTpl = useMemo(
-    () => templates.find((t) => t.id === design?.selected_flyer_template_id) || selectedTpl,
-    [templates, design, selectedTpl],
+    () => {
+      const explicit = templates.find((t) => t.id === design?.selected_flyer_template_id)
+      if (explicit) return explicit
+      if (selectedTpl?.previewUrl || (selectedTpl?.sourceType === 'template-pack' && selectedTpl?.thumbnailUrl)) return selectedTpl
+      return flyerTemplates[0] || selectedTpl || null
+    },
+    [templates, design, selectedTpl, flyerTemplates],
   )
 
   const baseColors = selectedTpl?.defaultColors || {}
@@ -894,51 +918,38 @@ export default function DesignStudioPage() {
             />
             <div className="rounded-2xl border border-slate-200 bg-white p-5 dark:border-white/10 dark:bg-slate-900">
               <label className={label}>Flyer template</label>
-              <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-                {filteredTemplates.map((template) => (
-                  <button
-                    key={template.id}
-                    type="button"
-                    onClick={() => chooseFlyerTemplate(template)}
-                    className={`rounded-xl border p-3 text-left ${selectedFlyerTpl?.id === template.id ? 'border-teal-400 bg-teal-50 dark:bg-teal-400/10' : 'border-slate-200 hover:bg-slate-50 dark:border-white/10 dark:hover:bg-white/5'}`}
-                  >
-                    {(template.previewUrl || (template.sourceType === 'template-pack' && template.thumbnailUrl)) && (
-                      <img
-                        src={template.previewUrl || template.thumbnailUrl}
-                        alt=""
-                        className="mb-3 aspect-[4/5] w-full rounded-lg object-cover"
-                        loading="lazy"
-                      />
-                    )}
-                    <div className="text-sm font-black text-slate-950 dark:text-white">{template.name}</div>
-                    <div className="mt-1 text-xs text-slate-500 dark:text-slate-400">{template.layout?.flyer}</div>
-                  </button>
-                ))}
+              <div className="mt-2 text-sm font-semibold text-slate-500 dark:text-slate-400">{flyerTemplates.length} flyer designs</div>
+              <div className="mt-4 grid gap-3 grid-cols-2 md:grid-cols-3 xl:grid-cols-4">
+                {flyerTemplates.map((template) => {
+                  const imageUrl = template.previewUrl || template.thumbnailUrl
+                  return (
+                    <button
+                      key={template.id}
+                      type="button"
+                      onClick={() => chooseFlyerTemplate(template)}
+                      className={`group overflow-hidden rounded-xl border text-left transition hover:-translate-y-0.5 hover:shadow-lg ${selectedFlyerTpl?.id === template.id ? 'border-teal-400 ring-4 ring-teal-400/20' : 'border-slate-200 dark:border-white/10'}`}
+                    >
+                      {imageUrl ? (
+                        <div className="relative aspect-[4/5] bg-slate-100 dark:bg-slate-800">
+                          <img
+                            src={imageUrl}
+                            alt=""
+                            className="h-full w-full object-cover"
+                            loading="lazy"
+                          />
+                          <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-slate-950/85 to-transparent p-3">
+                            <div className="max-h-9 overflow-hidden text-xs font-black leading-tight text-white">{template.name}</div>
+                          </div>
+                        </div>
+                      ) : (
+                        <div className="grid aspect-[4/5] place-items-center bg-slate-100 p-3 text-center text-xs font-black text-slate-600 dark:bg-slate-800 dark:text-slate-300">
+                          {template.name}
+                        </div>
+                      )}
+                    </button>
+                  )
+                })}
               </div>
-              {selectedFlyerTpl?.flyerDefinition && (
-                <div className="mt-5 grid gap-4 lg:grid-cols-[1fr_1fr]">
-                  <div className="rounded-2xl bg-slate-50 p-4 dark:bg-white/5">
-                    <div className="text-xs font-black uppercase tracking-[0.16em] text-slate-500 dark:text-slate-400">Template layers</div>
-                    <div className="mt-3 flex flex-wrap gap-2">
-                      {(selectedFlyerTpl.flyerDefinition.layers || []).map((layer) => (
-                        <span key={layer} className="rounded-full bg-white px-2.5 py-1 text-[11px] font-bold text-slate-700 shadow-sm dark:bg-slate-950 dark:text-slate-200">
-                          {layer.replaceAll('_', ' ')}
-                        </span>
-                      ))}
-                    </div>
-                  </div>
-                  <div className="rounded-2xl bg-slate-50 p-4 dark:bg-white/5">
-                    <div className="text-xs font-black uppercase tracking-[0.16em] text-slate-500 dark:text-slate-400">Editable zones</div>
-                    <div className="mt-3 flex flex-wrap gap-2">
-                      {(selectedFlyerTpl.flyerDefinition.editableZones || selectedFlyerTpl.textZones || []).slice(0, 14).map((zone) => (
-                        <span key={zone} className="rounded-full bg-white px-2.5 py-1 text-[11px] font-bold text-slate-700 shadow-sm dark:bg-slate-950 dark:text-slate-200">
-                          {zone.replaceAll('_', ' ')}
-                        </span>
-                      ))}
-                    </div>
-                  </div>
-                </div>
-              )}
             </div>
 
             <div className="grid gap-5 rounded-2xl border border-slate-200 bg-white p-5 dark:border-white/10 dark:bg-slate-900 md:grid-cols-2">

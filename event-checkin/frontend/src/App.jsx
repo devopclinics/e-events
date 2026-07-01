@@ -19,6 +19,7 @@ import PricingPage from './pages/PricingPage'
 import RefundPolicyPage from './pages/RefundPolicyPage'
 import PrivacyPage from './pages/PrivacyPage'
 import TermsPage from './pages/TermsPage'
+import DesignStudioPage from './pages/DesignStudioPage'
 import ConsolePage from './pages/ConsolePage'
 import KitchenPage from './pages/KitchenPage'
 import HelpPage from './pages/HelpPage'
@@ -81,6 +82,7 @@ function Nav({ hasMenu, eventName }) {
 
   const links = [
     ...(user?.role === 'admin' ? [{ to: '/admin', label: 'Event Setup', end: true }] : []),
+    ...(user?.role === 'admin' ? [{ to: '/design-studio', label: 'Design Studio' }] : []),
     { to: '/dashboard', label: 'Results' },
     { to: '/scanner', label: 'Check-in' },
     ...(hasMenu ? [{ to: '/kitchen', label: 'Orders' }] : []),
@@ -265,6 +267,7 @@ function AppRoutes() {
           <AuthedLayout>
             <Routes>
               <Route path="/admin" element={<ProtectedRoute adminOnly><AdminPage /></ProtectedRoute>} />
+              <Route path="/design-studio" element={<ProtectedRoute adminOnly><DesignStudioPage /></ProtectedRoute>} />
               <Route path="/dashboard" element={<ProtectedRoute><DashboardPage /></ProtectedRoute>} />
               <Route path="/scanner" element={<ProtectedRoute><ScannerPage /></ProtectedRoute>} />
               <Route path="/kitchen" element={<ProtectedRoute><KitchenPage /></ProtectedRoute>} />

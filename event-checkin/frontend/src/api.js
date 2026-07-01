@@ -84,6 +84,40 @@ export const api = {
     downloadFile(`/events/${eventId}/guests/export?fmt=${fmt}`, `guest-list.${fmt}`),
   importGuestsFromUrl: (eventId, url)      => req('POST', `/events/${eventId}/guests/import-url`, { url }),
   addGuest:            (eventId, data)     => req('POST', `/events/${eventId}/guests`, data),
+
+  // Design Studio (templates read direct from design-service; the rest via the
+  // core-backend proxy which enforces auth + event ownership).
+  designTemplates:     (query = '')        => req('GET', `/v1/design/templates${query}`),
+  getEventDesign:      (eventId)           => req('GET', `/events/${eventId}/design`),
+  saveEventDesign:     (eventId, data)     => req('PUT', `/events/${eventId}/design`, data),
+  publishEventDesign:  (eventId)           => req('POST', `/events/${eventId}/design/publish`),
+  designOutputs:       (eventId)           => req('GET', `/events/${eventId}/design/outputs`),
+  uploadDesignAsset:   (eventId, file) => {
+    const fd = new FormData()
+    fd.append('file', file)
+    return getToken().then((token) =>
+      fetch(`${BASE}/events/${eventId}/design/assets`, {
+        method: 'POST',
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+        body: fd,
+      }).then((r) => (r.ok ? r.json() : r.json().then((e) => Promise.reject(new Error(e.detail || 'Upload failed'))))),
+    )
+  },
+  renderFlyer: async (eventId, body) => {
+    const token = await getToken()
+    const res = await fetch(`${BASE}/events/${eventId}/design/render/flyer`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', ...(token ? { Authorization: `Bearer ${token}` } : {}) },
+      body: JSON.stringify(body),
+    })
+    if (!res.ok) throw new Error('Render failed — Design Studio may be busy or unavailable.')
+    const blob = await res.blob()
+    const fmt = body.format || (['a5', 'a4'].includes(body.size) ? 'pdf' : 'png')
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url; a.download = `flyer-${body.size}.${fmt}`
+    document.body.appendChild(a); a.click(); a.remove(); URL.revokeObjectURL(url)
+  },
   generateQR:          (eventId)           => req('POST', `/events/${eventId}/guests/generate-qr`),
   sendInvites:         (eventId)           => req('POST', `/events/${eventId}/guests/send-invites`),
   sendInvitesBatch:    (eventId, guestIds, force = false) =>

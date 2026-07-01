@@ -11,6 +11,7 @@ from .routers import auth as auth_router
 from .routers import invite as invite_router
 from .routers import billing as billing_router
 from .routers import admin as admin_router
+from .routers import design_proxy as design_proxy_router
 from . import sync_poller, db_migrate
 
 # Override with UPLOADS_DIR for local/test runs; defaults to the in-container path.
@@ -65,6 +66,7 @@ app.include_router(admin_router.router, prefix="/api/admin", tags=["admin"])
 app.include_router(messaging.router, prefix="/api/messaging", tags=["messaging"])
 app.include_router(templates_router.router, prefix="/api/events", tags=["templates"])
 app.include_router(self_checkin.router, prefix="/api/e", tags=["self-checkin"])
+app.include_router(design_proxy_router.router, prefix="/api/events", tags=["design"])
 
 # Serve uploaded files (cover images, etc.)
 os.makedirs(UPLOADS_DIR, exist_ok=True)

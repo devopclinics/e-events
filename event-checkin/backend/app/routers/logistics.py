@@ -13,7 +13,7 @@ import io
 import json
 from datetime import datetime
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException
 from fastapi.responses import StreamingResponse
 from sqlalchemy import select, func
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -26,7 +26,11 @@ from ..schemas import (
     GuestShipmentOut, GuestShipmentUpdate, ShippingAddressUpdate, VendorPageOut,
 )
 from ..auth import require_paid_event_admin, require_paid_event_member
+from ..entitlements import can_use_paid_channels, take_message_credit
+from ..template_resolve import load_overrides, channel_text as template_channel_text, channel_text_or_default, email_or_default
+from services import messaging
 from services import email_service
+from services.templates import build_context as build_template_context
 
 router = APIRouter()
 vendor_router = APIRouter()
@@ -215,22 +219,52 @@ async def list_lines(event_id: str, sid: str, db: AsyncSession = Depends(get_db)
 
 @router.put("/{event_id}/shipments/{sid}/lines/{gid}", response_model=GuestShipmentOut)
 async def update_line(event_id: str, sid: str, gid: str, data: GuestShipmentUpdate,
+                      background_tasks: BackgroundTasks,
                       db: AsyncSession = Depends(get_db),
                       _: User = Depends(require_paid_event_admin)):
-    await _logi_event(event_id, db)
-    await _get_shipment(event_id, sid, db)
+    ev = await _logi_event(event_id, db)
+    shipment = await _get_shipment(event_id, sid, db)
     line = await db.scalar(
         select(GuestShipment).where(GuestShipment.shipment_id == sid, GuestShipment.guest_id == gid)
     )
     if not line:
         raise HTTPException(404, "Guest is not on this shipment")
+    previous_status = line.ship_status
     fields = data.model_dump(exclude_unset=True)
     for k, v in fields.items():
         setattr(line, k, v)
     if fields.get("ship_status") == "shipped" and not line.shipped_at:
         line.shipped_at = datetime.utcnow()
-    await db.commit()
     g = await db.get(Guest, gid)
+    if fields.get("ship_status") == "shipped" and previous_status != "shipped" and g:
+        overrides = await load_overrides(event_id, db)
+        ctx = build_template_context(ev, g, extras={
+            "message": shipment.name,
+            "tracking_number": line.tracking_number or "",
+        })
+        if ev.notify_email and g.email:
+            subj, body = email_or_default(overrides, "logistics_notification", ctx)
+            if body:
+                background_tasks.add_task(
+                    email_service.send_simple_email,
+                    g.email, subj or f"Shipping update — {ev.name}", body,
+                )
+        if (can_use_paid_channels(ev) and ev.notify_sms and g.phone
+                and g.sms_consent and take_message_credit(ev)):
+            sms = channel_text_or_default(overrides, "logistics_notification", "sms", ctx)
+            if sms:
+                background_tasks.add_task(messaging.send_custom_sms, phone=g.phone, body=sms)
+        if (can_use_paid_channels(ev) and ev.notify_whatsapp and g.phone
+                and g.whatsapp_consent and take_message_credit(ev)):
+            wa = template_channel_text(overrides, "logistics_notification", "whatsapp", ctx)
+            if wa is not None:
+                background_tasks.add_task(messaging.send_custom_whatsapp, phone=g.phone, body=wa)
+            else:
+                background_tasks.add_task(
+                    messaging.send_logistics_whatsapp,
+                    phone=g.phone, first_name=g.first_name, event_name=ev.name,
+                )
+    await db.commit()
     return _line_out(line, g)
 
 

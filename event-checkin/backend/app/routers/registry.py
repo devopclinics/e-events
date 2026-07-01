@@ -16,12 +16,12 @@ from datetime import datetime
 from urllib.parse import urlparse, urlencode, parse_qsl, urlunparse
 
 import httpx
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, BackgroundTasks, Body, Depends, HTTPException
 from sqlalchemy import select, func
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..database import get_db
-from ..models import Event, Organization, RegistryItem, RegistryClaim, AffiliateStore, User
+from ..models import Event, Organization, RegistryItem, RegistryClaim, AffiliateStore, User, Guest
 from ..schemas import (
     RegistryItemCreate, RegistryItemUpdate, RegistryItemOut,
     RegistrySettingsUpdate, RegistrySettingsOut,
@@ -29,6 +29,11 @@ from ..schemas import (
     RegistryUnfurlRequest, RegistryUnfurlOut,
 )
 from ..auth import require_paid_event_admin, require_paid_event_member
+from ..entitlements import can_use_paid_channels, take_message_credit
+from ..template_resolve import load_overrides, channel_text as template_channel_text, channel_text_or_default, email_or_default
+from services import messaging
+from services.email_service import send_simple_email
+from services.templates import build_context as build_template_context
 from .guests import _BROWSER_UA
 
 router = APIRouter()
@@ -197,6 +202,85 @@ async def update_settings(event_id: str, data: RegistrySettingsUpdate,
         ev.registry_message = data.registry_message
     token = await ensure_registry_token(ev, db)
     return RegistrySettingsOut(registry_message=ev.registry_message, registry_token=token)
+
+
+@router.post("/{event_id}/registry/send-message")
+async def send_registry_message(
+    event_id: str,
+    background_tasks: BackgroundTasks,
+    body: dict = Body(default={}),
+    db: AsyncSession = Depends(get_db),
+    _: User = Depends(require_paid_event_admin),
+):
+    """Send the gift-list link to confirmed guests through enabled channels."""
+    ev = await _registry_event(event_id, db)
+    token = await ensure_registry_token(ev, db)
+    requested = body.get("channels") or ["email", "sms", "whatsapp"]
+    channels = [c for c in requested if c in {"email", "sms", "whatsapp"}]
+    if not channels:
+        raise HTTPException(400, "Choose email, SMS and/or WhatsApp")
+
+    base = (ev.checkin_base_url or "").rstrip("/")
+    registry_url = f"{base}/registry/{token}" if base else f"/registry/{token}"
+    guests = list((await db.execute(
+        select(Guest).where(Guest.event_id == event_id, Guest.rsvp_status == "confirmed")
+    )).scalars().all())
+    overrides = await load_overrides(event_id, db)
+
+    queued = 0
+    skipped_no_contact = 0
+    skipped_no_credits = 0
+    for guest in guests:
+        sent_any = False
+        ctx = build_template_context(ev, guest, extras={
+            "rsvp_link": registry_url,
+            "message": ev.registry_message or "",
+        })
+        if "email" in channels and ev.notify_email and guest.email:
+            subj, html = email_or_default(overrides, "registry_message", ctx)
+            if html:
+                background_tasks.add_task(
+                    send_simple_email,
+                    guest.email, subj or f"Gift registry — {ev.name}", html,
+                )
+                sent_any = True
+
+        if ("sms" in channels and can_use_paid_channels(ev) and ev.notify_sms
+                and guest.phone and guest.sms_consent):
+            if take_message_credit(ev):
+                sms = channel_text_or_default(overrides, "registry_message", "sms", ctx)
+                if sms:
+                    background_tasks.add_task(messaging.send_custom_sms, phone=guest.phone, body=sms)
+                    sent_any = True
+            else:
+                skipped_no_credits += 1
+
+        if ("whatsapp" in channels and can_use_paid_channels(ev) and ev.notify_whatsapp
+                and guest.phone and guest.whatsapp_consent):
+            if take_message_credit(ev):
+                wa = template_channel_text(overrides, "registry_message", "whatsapp", ctx)
+                if wa is not None:
+                    background_tasks.add_task(messaging.send_custom_whatsapp, phone=guest.phone, body=wa)
+                else:
+                    background_tasks.add_task(
+                        messaging.send_registry_whatsapp,
+                        phone=guest.phone, event_name=ev.name, registry_url=registry_url,
+                    )
+                sent_any = True
+            else:
+                skipped_no_credits += 1
+
+        if sent_any:
+            queued += 1
+        else:
+            skipped_no_contact += 1
+
+    await db.commit()
+    return {
+        "queued": queued,
+        "skipped_no_contact": skipped_no_contact,
+        "skipped_no_credits": skipped_no_credits,
+    }
 
 
 @router.get("/{event_id}/registry/claims", response_model=list[RegistryClaimOut])

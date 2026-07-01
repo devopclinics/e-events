@@ -1858,6 +1858,17 @@ function RegistryPanel({ eventId, event }) {
     } catch (e) { setMsg(e.message) }
   }
 
+  async function sendGiftList() {
+    if (!registryUrl) return flash('Preparing link...')
+    if (!confirm('Send the gift list link to confirmed guests by email, SMS, and WhatsApp?')) return
+    setLoading(true)
+    try {
+      await api.updateRegistrySettings(eventId, { registry_message: message })
+      const res = await api.sendRegistryMessage(eventId, ['email', 'sms', 'whatsapp'])
+      flash(`Gift list queued for ${res.queued} guest(s).`)
+    } catch (e) { setMsg(e.message) } finally { setLoading(false) }
+  }
+
   async function fetchDetails() {
     if (!form.external_url) { setMsg('Paste a product link first.'); return }
     setLoading(true)
@@ -1929,6 +1940,8 @@ function RegistryPanel({ eventId, event }) {
         <div className="flex gap-2">
           <button onClick={() => { if (!registryUrl) return flash('Preparing link...'); navigator.clipboard?.writeText(registryUrl); flash('Gift list link copied.') }}
             className="text-xs border border-gray-300 dark:border-slate-600 px-3 py-1.5 rounded-lg dark:text-slate-200 hover:bg-gray-50 dark:hover:bg-slate-700">Copy registry link</button>
+          <button onClick={sendGiftList} disabled={loading}
+            className="text-xs border border-indigo-300 dark:border-indigo-700 px-3 py-1.5 rounded-lg text-indigo-700 dark:text-indigo-300 hover:bg-indigo-50 dark:hover:bg-slate-700 disabled:opacity-50">Send to guests</button>
           <button onClick={() => (showClaims ? setShowClaims(false) : loadClaims())}
             className="text-xs border border-gray-300 dark:border-slate-600 px-3 py-1.5 rounded-lg dark:text-slate-200 hover:bg-gray-50 dark:hover:bg-slate-700">{showClaims ? 'Hide claims' : 'Claims & pledges'}</button>
           <button onClick={openNew} className="bg-indigo-600 text-white px-3 py-1.5 rounded-lg text-xs font-semibold hover:bg-indigo-700">+ Add entry</button>
@@ -4198,7 +4211,7 @@ function MessageTemplatesPanel({ eventId }) {
                   <div className="text-[11px] font-semibold uppercase text-gray-400 mb-2">Preview (sample data)</div>
                   {meta.channels.includes('email') && (<>
                     <div className="text-xs text-gray-500 dark:text-slate-400">Subject: <span className="dark:text-slate-200">{preview.subject}</span></div>
-                    <div className="mt-1 bg-white dark:bg-slate-800 rounded p-2 text-sm dark:text-slate-200" dangerouslySetInnerHTML={{ __html: preview.email_body }} />
+                    <div className="mt-1 bg-white dark:bg-slate-800 rounded p-2 text-sm dark:text-slate-200 max-h-[26rem] overflow-auto" dangerouslySetInnerHTML={{ __html: preview.email_preview_html || preview.email_body }} />
                   </>)}
                   {meta.channels.includes('sms') && <div className="mt-2 text-sm dark:text-slate-200">📱 {preview.sms_body}</div>}
                   {meta.channels.includes('whatsapp') && <div className="mt-1 text-sm dark:text-slate-200">💬 {preview.whatsapp_body}</div>}
@@ -6130,7 +6143,7 @@ export default function AdminPage() {
                       className="mt-0.5 w-4 h-4 accent-indigo-600" />
                     <span>
                       <span className="text-sm font-medium text-slate-700 dark:text-slate-200">MMS ticket card</span>
-                      <span className="block text-xs text-gray-400 dark:text-slate-500">Sends the styled ticket-card image by MMS at check-in (needs an MMS-capable provider configured).</span>
+                      <span className="block text-xs text-gray-400 dark:text-slate-500">Sends the styled ticket-card image by MMS at invite time and check-in (needs an MMS-capable provider configured).</span>
                     </span>
                   </label>
                 </div>

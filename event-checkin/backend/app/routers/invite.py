@@ -360,6 +360,13 @@ async def submit_rsvp(
     await db.refresh(guest)
 
     if needs_approval:
+        if event.notify_rsvp_responses:
+            from .guests import dispatch_simple_notice
+            dispatch_simple_notice(
+                background_tasks, event, guest,
+                "approval_pending", await load_overrides(event.id, db),
+            )
+            await db.commit()
         return RSVPConfirm(
             id=guest.id,
             qr_token=guest.qr_token,
@@ -370,6 +377,12 @@ async def submit_rsvp(
         )
 
     # Approved automatically — fire the ticket in the background.
+    if event.notify_rsvp_responses:
+        from .guests import dispatch_simple_notice
+        dispatch_simple_notice(
+            background_tasks, event, guest,
+            "rsvp_confirmation", await load_overrides(event.id, db),
+        )
     _send_rsvp_invite(background_tasks, event, guest, await load_overrides(event.id, db))
     await db.commit()  # persist any message-credit decrements
     return RSVPConfirm(
@@ -471,6 +484,12 @@ async def submit_invite_token_rsvp(
             guest.qr_generated_at = datetime.utcnow()
         await db.commit()
         await db.refresh(guest)
+        if event.notify_rsvp_responses:
+            from .guests import dispatch_simple_notice
+            dispatch_simple_notice(
+                background_tasks, event, guest,
+                "rsvp_confirmation", await load_overrides(event.id, db),
+            )
         # Issue the ticket now that they've confirmed.
         _send_rsvp_invite(background_tasks, event, guest, await load_overrides(event.id, db))
         await db.commit()  # persist any message-credit decrements

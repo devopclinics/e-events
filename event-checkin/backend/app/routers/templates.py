@@ -16,7 +16,7 @@ from ..models import Event, MessageTemplate, MessageTemplateAudit, User
 from ..schemas import MessageTemplateSave, TemplatePreviewRequest, TemplateTestSendRequest
 from ..auth import require_event_admin
 from services import templates as tpl
-from services.email_service import send_simple_email
+from services.email_service import send_simple_email, render_simple_email_preview
 from services import messaging
 
 router = APIRouter()
@@ -192,9 +192,15 @@ def _render_draft(event, key: str, spec: dict, data: MessageTemplateSave, ov: Me
     sms_body = data.sms_body if data.sms_body is not None else eff["sms_body"]
     wa_body = data.whatsapp_body if data.whatsapp_body is not None else eff["whatsapp_body"]
     mms_body = data.mms_body if data.mms_body is not None else eff["mms_body"]
+    rendered_subject = tpl.render(subject, ctx)
+    rendered_email = tpl.render(email_body, ctx)
     return {
-        "subject": tpl.render(subject, ctx),
-        "email_body": tpl.render(email_body, ctx),
+        "subject": rendered_subject,
+        "email_body": rendered_email,
+        "email_preview_html": (
+            rendered_email if spec.get("email_kind") == "full"
+            else render_simple_email_preview(rendered_subject, rendered_email) if rendered_email else ""
+        ),
         "sms_body": tpl.render(sms_body, ctx),
         "whatsapp_body": tpl.render(wa_body, ctx),
         "mms_body": tpl.render(mms_body, ctx),

@@ -68,6 +68,106 @@ async def send_admission_whatsapp(*, phone: str, first_name: str, event_name: st
     )
 
 
+async def send_rsvp_invitation_whatsapp(*, phone: str, name: str, event_name: str, invite_url: str) -> None:
+    if not _channel_ready("whatsapp", phone):
+        return
+    await _send_whatsapp_template(
+        phone=phone,
+        kind="rsvp_invitation",
+        params=[name, event_name, invite_url],
+        var_keys=["guestName", "eventName", "rsvpLink"],
+    )
+
+
+async def send_rsvp_reminder_whatsapp(*, phone: str, first_name: str, event_name: str, invite_url: str) -> None:
+    if not _channel_ready("whatsapp", phone):
+        return
+    await _send_whatsapp_template(
+        phone=phone,
+        kind="rsvp_reminder",
+        params=[first_name, event_name, invite_url],
+        var_keys=["firstName", "eventName", "rsvpLink"],
+    )
+
+
+async def send_rsvp_confirmation_whatsapp(*, phone: str, first_name: str, event_name: str, event_date: datetime) -> None:
+    if not _channel_ready("whatsapp", phone):
+        return
+    date_str = event_date.strftime("%A, %d %B %Y") if event_date else ""
+    await _send_whatsapp_template(
+        phone=phone,
+        kind="rsvp_confirmation",
+        params=[first_name, event_name, date_str],
+        var_keys=["firstName", "eventName", "eventDate"],
+    )
+
+
+async def send_rsvp_decline_whatsapp(*, phone: str, first_name: str, event_name: str) -> None:
+    if not _channel_ready("whatsapp", phone):
+        return
+    await _send_whatsapp_template(
+        phone=phone,
+        kind="rsvp_decline",
+        params=[first_name, event_name],
+        var_keys=["firstName", "eventName"],
+    )
+
+
+async def send_approval_pending_whatsapp(*, phone: str, first_name: str, event_name: str) -> None:
+    if not _channel_ready("whatsapp", phone):
+        return
+    await _send_whatsapp_template(
+        phone=phone,
+        kind="approval_pending",
+        params=[first_name, event_name],
+        var_keys=["firstName", "eventName"],
+    )
+
+
+async def send_approval_accepted_whatsapp(*, phone: str, first_name: str, event_name: str, ticket_url: str) -> None:
+    if not _channel_ready("whatsapp", phone):
+        return
+    await _send_whatsapp_template(
+        phone=phone,
+        kind="approval_accepted",
+        params=[first_name, event_name, ticket_url],
+        var_keys=["firstName", "eventName", "ticketLink"],
+    )
+
+
+async def send_approval_rejected_whatsapp(*, phone: str, first_name: str, event_name: str) -> None:
+    if not _channel_ready("whatsapp", phone):
+        return
+    await _send_whatsapp_template(
+        phone=phone,
+        kind="approval_rejected",
+        params=[first_name, event_name],
+        var_keys=["firstName", "eventName"],
+    )
+
+
+async def send_logistics_whatsapp(*, phone: str, first_name: str, event_name: str) -> None:
+    if not _channel_ready("whatsapp", phone):
+        return
+    await _send_whatsapp_template(
+        phone=phone,
+        kind="logistics",
+        params=[first_name, event_name],
+        var_keys=["firstName", "eventName"],
+    )
+
+
+async def send_registry_whatsapp(*, phone: str, event_name: str, registry_url: str) -> None:
+    if not _channel_ready("whatsapp", phone):
+        return
+    await _send_whatsapp_template(
+        phone=phone,
+        kind="registry",
+        params=[event_name, registry_url],
+        var_keys=["eventName", "registryLink"],
+    )
+
+
 async def send_broadcast_sms(*, phone: str, first_name: str, message: str) -> None:
     """Send a free-text host broadcast over SMS."""
     if not _channel_ready("sms", phone):
@@ -100,8 +200,9 @@ async def send_manual_invite_whatsapp(*, phone: str, name: str, event_name: str,
     """Send a personal invite link via WhatsApp to someone who hasn't RSVP'd yet."""
     if not _channel_ready("whatsapp", phone):
         return
-    body = f"Hi {name}! You're invited to {event_name}. RSVP here: {invite_url}"
-    await _send_sms_as_whatsapp(phone, body)
+    await send_rsvp_invitation_whatsapp(
+        phone=phone, name=name, event_name=event_name, invite_url=invite_url,
+    )
 
 
 async def send_custom_sms(*, phone: str, body: str) -> None:
@@ -280,35 +381,52 @@ async def _send_sms(phone: str, body: str) -> None:
         await asyncio.to_thread(_twilio_send_sync, settings.twilio_from_number, phone, body=body)
 
 
+def _bird_whatsapp_template_for(kind: str) -> str:
+    return {
+        "invite": settings.bird_whatsapp_invite_template,
+        "rsvp_invitation": settings.bird_whatsapp_rsvp_invitation_template,
+        "rsvp_reminder": settings.bird_whatsapp_rsvp_reminder_template,
+        "rsvp_confirmation": settings.bird_whatsapp_rsvp_confirmation_template,
+        "rsvp_decline": settings.bird_whatsapp_rsvp_decline_template,
+        "approval_pending": settings.bird_whatsapp_approval_pending_template,
+        "approval_accepted": settings.bird_whatsapp_approval_accepted_template,
+        "approval_rejected": settings.bird_whatsapp_approval_rejected_template,
+        "admission": settings.bird_whatsapp_admission_template,
+        "logistics": settings.bird_whatsapp_logistics_template,
+        "registry": settings.bird_whatsapp_registry_template,
+    }.get(kind, "")
+
+
 async def _send_whatsapp_template(*, phone: str, kind: str, params: list[str],
                                   var_keys: list[str] | None = None) -> None:
-    """kind: 'invite' | 'admission' — picks template name (Bird) or SID (Twilio).
+    """Pick a provider template for a WhatsApp lifecycle message.
+
     `var_keys` names Bird template variables (e.g. firstName/eventName/…); falls
     back to positional 1,2,3 when not given."""
     provider = _wa_provider()
     if provider == "bird":
-        template = (
-            settings.bird_whatsapp_invite_template if kind == "invite"
-            else settings.bird_whatsapp_admission_template
-        )
+        template = _bird_whatsapp_template_for(kind)
         if not template:
             logger.warning("Bird WhatsApp %s template not set — skipping", kind)
             return
         keys = var_keys or [str(i + 1) for i in range(len(params))]
-        # Bird requires variables as a flat {key: value} object + a locale.
-        variables = {k: v for k, v in zip(keys, params)}
+        # Bird wants the template *name*, a locale, and parameters as an array of
+        # {type,key,value} objects. A flat {key:value} "variables" object 422s
+        # with "provided template information is invalid".
+        parameters = [{"type": "string", "key": k, "value": v} for k, v in zip(keys, params)]
         await _bird_post(settings.bird_whatsapp_channel_id, {
             "receiver": _bird_recipient(phone),
             "template": {
-                "projectId": template,
+                "name": template,
                 "locale": "en",
-                "variables": variables,
+                "parameters": parameters,
             },
         })
     elif provider == "twilio":
         sid = (
             settings.twilio_whatsapp_invite_template_sid if kind == "invite"
-            else settings.twilio_whatsapp_admission_template_sid
+            else settings.twilio_whatsapp_admission_template_sid if kind == "admission"
+            else ""
         )
         to_addr = phone if phone.startswith("whatsapp:") else f"whatsapp:{phone}"
         # Sandbox accepts plain body; production requires content_sid + variables.

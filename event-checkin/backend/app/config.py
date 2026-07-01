@@ -42,8 +42,17 @@ class Settings(BaseSettings):
     bird_workspace_id: str = ""
     bird_sms_channel_id: str = ""
     bird_whatsapp_channel_id: str = ""
-    bird_whatsapp_invite_template: str = ""           # Bird template name or project ID for invite
-    bird_whatsapp_admission_template: str = ""        # Bird template name or project ID for admission
+    bird_whatsapp_invite_template: str = ""           # Bird WhatsApp template NAME for invite (e.g. event_invite_utility)
+    bird_whatsapp_rsvp_invitation_template: str = ""  # Bird WhatsApp template NAME for RSVP invite
+    bird_whatsapp_rsvp_reminder_template: str = ""    # Bird WhatsApp template NAME for RSVP reminder
+    bird_whatsapp_rsvp_confirmation_template: str = ""# Bird WhatsApp template NAME for RSVP confirmation
+    bird_whatsapp_rsvp_decline_template: str = ""     # Bird WhatsApp template NAME for RSVP decline
+    bird_whatsapp_approval_pending_template: str = "" # Bird WhatsApp template NAME for approval pending
+    bird_whatsapp_approval_accepted_template: str = ""# Bird WhatsApp template NAME for approval accepted
+    bird_whatsapp_approval_rejected_template: str = ""# Bird WhatsApp template NAME for approval rejected
+    bird_whatsapp_admission_template: str = ""        # Bird WhatsApp template NAME for admission (e.g. event_admmision_utility)
+    bird_whatsapp_logistics_template: str = ""        # Bird WhatsApp template NAME for logistics notification
+    bird_whatsapp_registry_template: str = ""         # Bird WhatsApp template NAME for registry message
     bird_mms_channel_id: str = ""                     # Bird MMS channel (image-capable)
 
     # ClickSend (MMS-capable provider used in prod). Empty = disabled.

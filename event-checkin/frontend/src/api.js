@@ -334,6 +334,8 @@ export const api = {
   unfurlRegistryLink:   (eventId, url)       => req('POST',   `/events/${eventId}/registry/unfurl`, { url }),
   getRegistrySettings:  (eventId)            => req('GET',    `/events/${eventId}/registry/settings`),
   updateRegistrySettings:(eventId, data)     => req('PUT',    `/events/${eventId}/registry/settings`, data),
+  sendRegistryMessage:  (eventId, channels = ['email', 'sms', 'whatsapp']) =>
+    req('POST', `/events/${eventId}/registry/send-message`, { channels }),
   listRegistryClaims:   (eventId)            => req('GET',    `/events/${eventId}/registry/claims`),
   // Venue Access Intelligence (admin)
   listZones:           (eventId)            => req('GET',    `/events/${eventId}/zones`),

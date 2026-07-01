@@ -687,7 +687,9 @@ async def upload_guests(event_id: str, file: UploadFile = File(...), db: AsyncSe
     return await _process_csv(text, event_id, db)
 
 
-def _dispatch_invite(background_tasks: BackgroundTasks, event: Event, guest: Guest, overrides: dict | None = None) -> bool:
+def _dispatch_invite(background_tasks: BackgroundTasks, event: Event, guest: Guest,
+                     overrides: dict | None = None,
+                     rsvp_template_key: str = "rsvp_invitation") -> bool:
     """Fan out an invite across enabled channels for this event. Channel modules
     no-op silently when contact info is missing or creds aren't configured.
 
@@ -701,7 +703,7 @@ def _dispatch_invite(background_tasks: BackgroundTasks, event: Event, guest: Gue
     Returns True if at least one channel was dispatched, False if the guest had no
     reachable channel (used to set invite_status sent/failed)."""
     if event.invite_mode == "closed":
-        return _dispatch_rsvp_invite(background_tasks, event, guest, overrides)
+        return _dispatch_rsvp_invite(background_tasks, event, guest, overrides, rsvp_template_key)
 
     ticket_url = f"{event.checkin_base_url.rstrip('/')}/scan/{guest.qr_token}"
     paid_channels = can_use_paid_channels(event)
@@ -763,7 +765,9 @@ def _dispatch_invite(background_tasks: BackgroundTasks, event: Event, guest: Gue
     return dispatched
 
 
-def _dispatch_rsvp_invite(background_tasks: BackgroundTasks, event: Event, guest: Guest, overrides: dict | None = None) -> bool:
+def _dispatch_rsvp_invite(background_tasks: BackgroundTasks, event: Event, guest: Guest,
+                          overrides: dict | None = None,
+                          template_key: str = "rsvp_invitation") -> bool:
     """Closed-mode invite: send the guest their personal RSVP link. Generates a
     one-per-guest invite_token on first send (mutation persisted by the caller's
     commit). No ticket/QR yet — that's issued when they confirm. Returns True if
@@ -778,7 +782,10 @@ def _dispatch_rsvp_invite(background_tasks: BackgroundTasks, event: Event, guest
     dispatched = False
 
     if event.notify_email and guest.email:
-        subj, body = template_email_override(overrides, "rsvp_invitation", ctx)
+        if template_key == "rsvp_invitation":
+            subj, body = template_email_override(overrides, template_key, ctx)
+        else:
+            subj, body = template_email_or_default(overrides, template_key, ctx)
         if body is not None:
             background_tasks.add_task(send_simple_email, guest.email, subj or f"You're invited — {event.name}", body)
         else:
@@ -791,7 +798,10 @@ def _dispatch_rsvp_invite(background_tasks: BackgroundTasks, event: Event, guest
         dispatched = True
 
     if paid_channels and event.notify_sms and guest.phone and guest.sms_consent and take_message_credit(event):
-        sms_text = template_channel_text(overrides, "rsvp_invitation", "sms", ctx)
+        if template_key == "rsvp_invitation":
+            sms_text = template_channel_text(overrides, template_key, "sms", ctx)
+        else:
+            sms_text = template_channel_or_default(overrides, template_key, "sms", ctx)
         if sms_text is not None:
             background_tasks.add_task(messaging.send_custom_sms, phone=guest.phone, body=sms_text)
         else:
@@ -803,9 +813,15 @@ def _dispatch_rsvp_invite(background_tasks: BackgroundTasks, event: Event, guest
         dispatched = True
 
     if paid_channels and event.notify_whatsapp and guest.phone and guest.whatsapp_consent and take_message_credit(event):
-        wa_text = template_channel_text(overrides, "rsvp_invitation", "whatsapp", ctx)
+        wa_text = template_channel_text(overrides, template_key, "whatsapp", ctx)
         if wa_text is not None:
             background_tasks.add_task(messaging.send_custom_whatsapp, phone=guest.phone, body=wa_text)
+        elif template_key == "rsvp_reminder":
+            background_tasks.add_task(
+                messaging.send_rsvp_reminder_whatsapp,
+                phone=guest.phone, first_name=guest.first_name,
+                event_name=event.name, invite_url=invite_url,
+            )
         else:
             background_tasks.add_task(
                 messaging.send_manual_invite_whatsapp,
@@ -817,9 +833,46 @@ def _dispatch_rsvp_invite(background_tasks: BackgroundTasks, event: Event, guest
     return dispatched
 
 
+def dispatch_approval_accepted(background_tasks: BackgroundTasks, event: Event, guest: Guest,
+                               overrides: dict | None = None) -> bool:
+    """Send approval-accepted notices with the guest's issued ticket link."""
+    ticket_url = f"{event.checkin_base_url.rstrip('/')}/scan/{guest.qr_token}"
+    overrides = overrides or {}
+    ctx = build_template_context(event, guest, extras={"ticket_link": ticket_url})
+    sent = False
+
+    if event.notify_email and guest.email:
+        subj, body = template_email_or_default(overrides, "approval_accepted", ctx)
+        if body:
+            background_tasks.add_task(send_simple_email, guest.email, subj or event.name, body)
+            sent = True
+
+    if (can_use_paid_channels(event) and event.notify_sms and guest.phone
+            and guest.sms_consent and take_message_credit(event)):
+        sms = template_channel_or_default(overrides, "approval_accepted", "sms", ctx)
+        if sms:
+            background_tasks.add_task(messaging.send_custom_sms, phone=guest.phone, body=sms)
+            sent = True
+
+    if (can_use_paid_channels(event) and event.notify_whatsapp and guest.phone
+            and guest.whatsapp_consent and take_message_credit(event)):
+        wa_text = template_channel_text(overrides, "approval_accepted", "whatsapp", ctx)
+        if wa_text is not None:
+            background_tasks.add_task(messaging.send_custom_whatsapp, phone=guest.phone, body=wa_text)
+        else:
+            background_tasks.add_task(
+                messaging.send_approval_accepted_whatsapp,
+                phone=guest.phone, first_name=guest.first_name,
+                event_name=event.name, ticket_url=ticket_url,
+            )
+        sent = True
+
+    return sent
+
+
 def dispatch_simple_notice(background_tasks: BackgroundTasks, event: Event, guest: Guest,
                            key: str, overrides: dict, extras: dict | None = None) -> bool:
-    """Send a simple notification template (email + SMS) to a guest — used for
+    """Send a simple notification template to a guest — used for
     decline/rejected confirmations. Gated by the event's channel flags; uses the
     event override or the registry default. Returns True if anything was scheduled."""
     ctx = build_template_context(event, guest, extras=extras or {})
@@ -834,6 +887,41 @@ def dispatch_simple_notice(background_tasks: BackgroundTasks, event: Event, gues
         sms = template_channel_or_default(overrides, key, "sms", ctx)
         if sms:
             background_tasks.add_task(messaging.send_custom_sms, phone=guest.phone, body=sms)
+            sent = True
+    wa = template_channel_text(overrides, key, "whatsapp", ctx)
+    if (wa is not None or key in {"rsvp_decline", "approval_pending", "rsvp_confirmation", "approval_rejected"}) and (
+            can_use_paid_channels(event) and event.notify_whatsapp and guest.phone
+            and guest.whatsapp_consent and take_message_credit(event)):
+        if wa is not None:
+            background_tasks.add_task(messaging.send_custom_whatsapp, phone=guest.phone, body=wa)
+            sent = True
+        elif key == "rsvp_decline":
+            background_tasks.add_task(
+                messaging.send_rsvp_decline_whatsapp,
+                phone=guest.phone, first_name=guest.first_name,
+                event_name=event.name,
+            )
+            sent = True
+        elif key == "approval_pending":
+            background_tasks.add_task(
+                messaging.send_approval_pending_whatsapp,
+                phone=guest.phone, first_name=guest.first_name,
+                event_name=event.name,
+            )
+            sent = True
+        elif key == "rsvp_confirmation":
+            background_tasks.add_task(
+                messaging.send_rsvp_confirmation_whatsapp,
+                phone=guest.phone, first_name=guest.first_name,
+                event_name=event.name, event_date=event.event_date,
+            )
+            sent = True
+        elif key == "approval_rejected":
+            background_tasks.add_task(
+                messaging.send_approval_rejected_whatsapp,
+                phone=guest.phone, first_name=guest.first_name,
+                event_name=event.name,
+            )
             sent = True
     return sent
 
@@ -1348,7 +1436,12 @@ async def send_invites_batch(
         # Auto-generate QR timestamp on first send so it can also be a no-op for never-touched guests.
         if not guest.qr_generated_at:
             guest.qr_generated_at = now
-        ok = _dispatch_invite(background_tasks, event, guest, overrides)
+        rsvp_template_key = (
+            "rsvp_reminder"
+            if event.invite_mode == "closed" and force and guest.invite_sent_at and guest.rsvp_status == "invited"
+            else "rsvp_invitation"
+        )
+        ok = _dispatch_invite(background_tasks, event, guest, overrides, rsvp_template_key)
         guest.invite_sent_at = now
         guest.invite_status = "sent" if ok else "failed"
         queued += 1
@@ -1392,7 +1485,10 @@ async def approve_rsvp(event_id: str, guest_id: str, background_tasks: Backgroun
     if not guest.qr_generated_at:
         guest.qr_generated_at = now
     guest.invite_sent_at = now
-    ok = _dispatch_invite(background_tasks, event, guest, await load_overrides(event_id, db))
+    overrides = await load_overrides(event_id, db)
+    ok = dispatch_approval_accepted(background_tasks, event, guest, overrides)
+    if not ok:
+        ok = _dispatch_invite(background_tasks, event, guest, overrides)
     guest.invite_status = "sent" if ok else "failed"
     await db.commit()
     return {"ok": True, "rsvp_status": "confirmed"}

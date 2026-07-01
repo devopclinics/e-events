@@ -1,6 +1,7 @@
 import base64
 import html as _html
 import logging
+import re
 from datetime import datetime, timedelta, timezone
 from email.utils import getaddresses
 from email.mime.application import MIMEApplication
@@ -197,16 +198,79 @@ async def _send(msg: MIMEMultipart):
         logger.exception("Failed to send email to %s", msg["To"])
 
 
+def _plain_text_from_html(html_body: str) -> str:
+    text = re.sub(r"(?i)<br\s*/?>", "\n", html_body or "")
+    text = re.sub(r"(?i)</p\s*>", "\n\n", text)
+    text = re.sub(r"<[^>]+>", "", text)
+    return _html.unescape(text).strip()
+
+
+def _festio_email_shell(inner: str, *, title: str | None = None,
+                        preheader: str | None = None,
+                        footer_reason: str | None = None) -> str:
+    """Shared email-client-safe shell for transactional non-ticket emails."""
+    safe_title = _html.escape(title or "Festio")
+    safe_preheader = _html.escape(preheader or safe_title)
+    footer = _html.escape(footer_reason or "You are receiving this email because you are connected to this event.")
+    return (
+        '<!doctype html><html><head><meta http-equiv="Content-Type" content="text/html; charset=utf-8">'
+        '<meta name="viewport" content="width=device-width, initial-scale=1.0">'
+        '<style>@media only screen and (max-width: 620px) {'
+        'table[width="600"]{width:100% !important;}'
+        'h1{font-size:24px !important;line-height:30px !important;}'
+        '}</style></head>'
+        '<body style="margin:0;padding:0;background:#f4f7fb;font-family:Arial,Helvetica,sans-serif;">'
+        '<div style="display:none;font-size:1px;color:#f4f7fb;line-height:1px;max-height:0;'
+        f'max-width:0;opacity:0;overflow:hidden;">{safe_preheader}</div>'
+        '<table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" '
+        'style="width:100%;background:#f4f7fb;margin:0;padding:0;">'
+        '<tr><td align="center" style="padding:28px 12px;">'
+        '<table role="presentation" width="600" cellspacing="0" cellpadding="0" border="0" '
+        'style="width:100%;max-width:600px;border-collapse:separate;background:#ffffff;'
+        'border-radius:16px;border:1px solid #dbe7ef;overflow:hidden;">'
+        '<tr><td style="background:#0f172a;padding:22px 28px;">'
+        '<div style="font-family:Arial,Helvetica,sans-serif;color:#2dd4bf;font-size:13px;'
+        'line-height:18px;font-weight:800;letter-spacing:.9px;text-transform:uppercase;">Festio</div>'
+        f'<h1 style="font-family:Arial,Helvetica,sans-serif;color:#ffffff;font-size:28px;'
+        f'line-height:34px;margin:8px 0 0 0;font-weight:800;">{safe_title}</h1>'
+        '</td></tr>'
+        '<tr><td style="font-family:Arial,Helvetica,sans-serif;color:#172033;'
+        'font-size:15px;line-height:24px;padding:28px;">'
+        f'{inner}'
+        '</td></tr>'
+        '<tr><td align="center" style="background:#f8fafc;border-top:1px solid #e2e8f0;padding:18px 24px;">'
+        '<p style="font-family:Arial,Helvetica,sans-serif;color:#64748b;font-size:12px;line-height:18px;margin:0 0 6px 0;">'
+        'Powered by <strong style="color:#0f172a;">Festio</strong></p>'
+        f'<p style="font-family:Arial,Helvetica,sans-serif;color:#94a3b8;font-size:11px;line-height:17px;margin:0;">{footer}</p>'
+        '</td></tr>'
+        '</table></td></tr></table></body></html>'
+    )
+
+
 async def send_simple_email(to_email: str, subject: str, html_body: str):
-    """Lightweight HTML email — used for trial-request notifications."""
+    """Shared Festio-branded HTML email for simple transactional templates."""
     if not to_email:
         return
     msg = MIMEMultipart("alternative")
     msg["Subject"] = subject
     msg["From"] = settings.email_from
     msg["To"] = to_email
-    msg.attach(MIMEText(html_body, "html"))
+    wrapped = _festio_email_shell(
+        html_body,
+        title=subject,
+        preheader=_plain_text_from_html(html_body)[:140],
+    )
+    msg.attach(MIMEText(_plain_text_from_html(html_body), "plain", "utf-8"))
+    msg.attach(MIMEText(wrapped, "html", "utf-8"))
     await _send(msg)
+
+
+def render_simple_email_preview(subject: str, html_body: str) -> str:
+    return _festio_email_shell(
+        html_body,
+        title=subject,
+        preheader=_plain_text_from_html(html_body)[:140],
+    )
 
 
 def _invite_pairing_cta(ticket_url: str) -> str:
@@ -349,20 +413,9 @@ def _ticket_plain_text(ctx: dict) -> str:
     return "\n".join(parts)
 
 
-def _custom_email_shell(inner: str) -> str:
+def _custom_email_shell(inner: str, title: str | None = None) -> str:
     """Keep older organizer-customized full-body templates readable."""
-    return (
-        '<table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" '
-        'style="width:100%;background:#f4f7fb;margin:0;padding:0;">'
-        '<tr><td align="center" style="padding:24px 12px;">'
-        '<table role="presentation" width="600" cellspacing="0" cellpadding="0" border="0" '
-        'style="width:100%;max-width:600px;border-collapse:separate;background:#ffffff;'
-        'border-radius:14px;border:1px solid #e2e8f0;">'
-        '<tr><td style="font-family:Arial,Helvetica,sans-serif;color:#172033;'
-        'font-size:15px;line-height:24px;padding:28px;">'
-        f'{inner}'
-        '</td></tr></table></td></tr></table>'
-    )
+    return _festio_email_shell(inner, title=title or "Event update")
 
 
 async def send_invite_email(
@@ -458,7 +511,7 @@ async def send_invite_email(
     subject = tpl.render(subject_tmpl, ctx) or f"You're invited to {event_name}"
     inner = tpl.render(body_tmpl, ctx)
     if override_body:
-        inner = _custom_email_shell(inner)
+        inner = _custom_email_shell(inner, title=subject)
     text_body = _ticket_plain_text(ctx)
     body = (
         '<!doctype html><html><head><meta http-equiv="Content-Type" content="text/html; charset=utf-8">'
@@ -576,9 +629,7 @@ async def send_admission_email(guest_data: dict):
         '<p style="font-size: 18px; margin:0;">You have been successfully admitted.</p>'
     )
 
-    body = f"""
-    <html>
-    <body style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
+    inner = f"""
       <div style="background: #22c55e; color: white; padding: 30px; border-radius: 12px; text-align: center;">
         {intro_html}
         {time_html}
@@ -587,11 +638,16 @@ async def send_admission_email(guest_data: dict):
       {menu_html}
       {menu_cta_html}
       <p style="margin-top: 24px; color: #666;">Enjoy the event!</p>
-    </body>
-    </html>
     """
+    body = _festio_email_shell(
+        inner,
+        title=msg["Subject"],
+        preheader=f"Welcome, {guest_data['first_name']}! You have been checked in.",
+        footer_reason="You are receiving this email because you were checked in for this event.",
+    )
 
-    msg.attach(MIMEText(body, "html"))
+    msg.attach(MIMEText(_plain_text_from_html(inner), "plain", "utf-8"))
+    msg.attach(MIMEText(body, "html", "utf-8"))
     await _send(msg)
 
 
@@ -615,10 +671,7 @@ async def send_manual_invite_email(
     date_str = event_date.strftime("%A, %d %B %Y") if event_date else ""
     safe_msg = f"<p>{_html.escape(invite_message)}</p>" if invite_message else ""
 
-    body = f"""
-    <html>
-    <body style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;padding:20px;">
-      <h1 style="color:#1a1a2e;">You're Invited!</h1>
+    inner = f"""
       <p>Hi <strong>{safe_name}</strong>,</p>
       <p>You have been personally invited to <strong>{safe_event}</strong>{(' on <strong>' + date_str + '</strong>') if date_str else ''}.</p>
       {safe_msg}
@@ -629,11 +682,16 @@ async def send_manual_invite_email(
         </a>
       </div>
       <p style="color:#666;font-size:13px;">Or copy this link: {invite_url}</p>
-    </body>
-    </html>
     """
+    body = _festio_email_shell(
+        inner,
+        title="You're invited",
+        preheader=f"RSVP for {event_name}",
+        footer_reason=f"You are receiving this email because you were invited to {event_name}.",
+    )
 
-    msg.attach(MIMEText(body, "html"))
+    msg.attach(MIMEText(_plain_text_from_html(inner), "plain", "utf-8"))
+    msg.attach(MIMEText(body, "html", "utf-8"))
     await _send(msg)
 
 
@@ -661,10 +719,7 @@ async def send_vendor_shipping_email(
     safe_shipment = _html.escape(shipment_name)
     safe_notes = f'<p style="background:#f8fafc;border-left:3px solid #0f766e;padding:10px 14px;color:#334155;">{_html.escape(notes)}</p>' if notes else ""
 
-    body = f"""
-    <html>
-    <body style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;padding:20px;">
-      <h1 style="color:#1a1a2e;">Shipping list ready</h1>
+    inner = f"""
       <p>Hi <strong>{safe_vendor}</strong>,</p>
       <p>Here is the shipping list for <strong>{safe_shipment}</strong> ({safe_event}) —
          <strong>{item_count}</strong> recipient(s).</p>
@@ -677,11 +732,16 @@ async def send_vendor_shipping_email(
       </div>
       <p style="color:#666;font-size:13px;">Or copy this link: {vendor_url}</p>
       <p style="color:#666;font-size:13px;">The full list (names, addresses, sizes) is on that page, and also attached as a spreadsheet.</p>
-    </body>
-    </html>
     """
+    body = _festio_email_shell(
+        inner,
+        title="Shipping list ready",
+        preheader=f"{shipment_name} shipping list for {event_name}",
+        footer_reason=f"You are receiving this email because you are a vendor for {event_name}.",
+    )
 
-    msg.attach(MIMEText(body, "html"))
+    msg.attach(MIMEText(_plain_text_from_html(inner), "plain", "utf-8"))
+    msg.attach(MIMEText(body, "html", "utf-8"))
     if attachment:
         part = MIMEApplication(attachment, _subtype="vnd.openxmlformats-officedocument.spreadsheetml.sheet")
         part.add_header("Content-Disposition", "attachment", filename=attachment_name)
@@ -700,18 +760,20 @@ async def send_broadcast_email(*, email: str, first_name: str, message: str, eve
     safe_event = _html.escape(event_name)
     safe_msg = _html.escape(message).replace("\n", "<br>")
 
-    body = f"""
-    <html>
-    <body style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;padding:20px;">
-      <h2 style="color:#1a1a2e;">{safe_event}</h2>
+    inner = f"""
       <p>Hi <strong>{safe_name}</strong>,</p>
       <p style="font-size:15px;line-height:1.6;">{safe_msg}</p>
       <p style="color:#888;font-size:12px;margin-top:28px;">
         You're receiving this because you're on the guest list for {safe_event}.
       </p>
-    </body>
-    </html>
     """
+    body = _festio_email_shell(
+        inner,
+        title=f"Update — {event_name}",
+        preheader=message[:140],
+        footer_reason=f"You are receiving this email because you are on the guest list for {event_name}.",
+    )
 
-    msg.attach(MIMEText(body, "html"))
+    msg.attach(MIMEText(_plain_text_from_html(inner), "plain", "utf-8"))
+    msg.attach(MIMEText(body, "html", "utf-8"))
     await _send(msg)

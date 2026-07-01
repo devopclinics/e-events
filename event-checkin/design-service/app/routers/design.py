@@ -12,7 +12,7 @@ from fastapi import APIRouter, Depends, File, Header, HTTPException, Query, Uplo
 from fastapi.responses import FileResponse, Response
 
 from ..config import settings
-from ..catalog import build_catalog, get_template, default_template
+from ..catalog import build_catalog, get_template, default_template, resolve_template_asset
 from ..store import load_design, save_design, publish_design
 from ..assets import save_upload, asset_path, UploadError
 from ..render import render_flyer, PNG_SIZES, PDF_SIZES
@@ -56,6 +56,15 @@ def get_one_template(template_id: str):
     if not tpl:
         raise HTTPException(404, "template not found")
     return tpl
+
+
+@router.get("/template-assets/{pack_slug}/{asset_path:path}")
+def serve_template_asset(pack_slug: str, asset_path: str):
+    """Public, read-only serving for bundled template pack thumbnails/previews."""
+    path = resolve_template_asset(pack_slug, asset_path)
+    if not path:
+        raise HTTPException(404, "not found")
+    return FileResponse(path)
 
 
 # ── Per-event design config ───────────────────────────────────────────────────

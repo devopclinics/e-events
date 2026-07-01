@@ -7,6 +7,11 @@ hub, Festio Pass, email). Adding a category or style scales the catalog with no
 new files.
 """
 from functools import lru_cache
+import json
+import re
+from pathlib import Path, PurePosixPath
+
+from .config import settings
 
 # ── Styles: base palette, fonts, layouts, button shape ────────────────────────
 STYLES: dict[str, dict] = {
@@ -156,6 +161,224 @@ BASE_TEXT_ZONES = [
     "customMessage", "footerMessage", "footerNote",
 ]
 
+PACK_ASSET_ROUTE = "/api/v1/design/template-assets"
+STYLE_KEY_BY_LABEL = {
+    style["label"].lower(): key
+    for key, style in STYLES.items()
+}
+STYLE_KEY_BY_LABEL.update({
+    "luxury / premium": "luxury",
+    "colorful / festive": "festive",
+    "modern minimal": "minimal",
+    "classic / formal": "classic",
+    "photo-first / flyer-first": "photo-first",
+})
+
+
+def _slugify(value: str) -> str:
+    return re.sub(r"[^a-z0-9]+", "-", (value or "").lower()).strip("-") or "template"
+
+
+def _dev_docs_images_path() -> Path:
+    # app/catalog.py -> design-service/app -> event-checkin -> platform-tutor/docs/images
+    return Path(__file__).resolve().parents[2].parent / "docs" / "images"
+
+
+def _pack_search_roots() -> list[Path]:
+    raw = settings.template_packs_path or ""
+    roots = [Path(p.strip()) for p in re.split(r"[:,]", raw) if p.strip()]
+    roots.extend([
+        Path(settings.storage_path) / "packs",
+        _dev_docs_images_path(),
+    ])
+    seen: set[str] = set()
+    unique: list[Path] = []
+    for root in roots:
+        key = str(root)
+        if key not in seen:
+            seen.add(key)
+            unique.append(root)
+    return unique
+
+
+def _pack_manifests() -> list[Path]:
+    manifests: list[Path] = []
+    seen: set[Path] = set()
+    for root in _pack_search_roots():
+        if not root.exists():
+            continue
+        for manifest in root.rglob("template_manifest.json"):
+            resolved = manifest.resolve()
+            if resolved not in seen:
+                seen.add(resolved)
+                manifests.append(manifest)
+    return sorted(manifests)
+
+
+def _category_key(label: str) -> str:
+    normalized = _slugify(label.replace("/", "-"))
+    aliases = {
+        "nikkah-aqdu": "nikkah-aqdu",
+        "corporate-event": "corporate",
+        "vip-private-party": "vip-private",
+        "concert-social": "concert-social",
+    }
+    return aliases.get(normalized, normalized)
+
+
+def _style_key(label: str) -> str:
+    return STYLE_KEY_BY_LABEL.get((label or "").lower(), _slugify(label))
+
+
+def _asset_url(pack_slug: str, rel_path: str | None) -> str | None:
+    if not rel_path:
+        return None
+    clean = str(PurePosixPath(rel_path)).lstrip("/")
+    if clean.startswith("../") or "/../" in clean:
+        return None
+    return f"{PACK_ASSET_ROUTE}/{pack_slug}/{clean}"
+
+
+def _pack_slug(manifest: Path, meta: dict | None = None) -> str:
+    return _slugify((meta or {}).get("pack") or manifest.parent.name)
+
+
+def _supported_sizes(values: list[str] | None) -> list[str]:
+    sizes: list[str] = []
+    for value in values or FLYER_SIZES:
+        key = str(value).split("_", 1)[0].replace("pdf", "").strip("-_")
+        if key in {"square", "story", "portrait", "a5", "a4"} and key not in sizes:
+            sizes.append(key)
+    return sizes or list(FLYER_SIZES)
+
+
+def _pack_layers(renderer: str) -> list[str]:
+    return [
+        "background",
+        f"renderer_{_slugify(renderer).replace('-', '_')}" if renderer else "template_artwork",
+        "main_photo",
+        "text_blocks",
+        "details",
+        "optional_qr",
+    ]
+
+
+def _pack_template(manifest: Path, meta: dict, entry: dict) -> dict:
+    pack_slug = _pack_slug(manifest, meta)
+    tpl_id = f"{pack_slug}-{entry['id']}"
+    category = entry.get("category") or "General Modern Event"
+    style = entry.get("style") or "Modern Minimal"
+    style_key = _style_key(style)
+    colors = {
+        "background": "#0F172A",
+        "surface": "#111827",
+        "primary": "#FFFFFF",
+        "accent": "#14B8A6",
+        "text": "#FFFFFF",
+        **(entry.get("defaultColors") or {}),
+    }
+    renderer = entry.get("renderer") or entry.get("layout") or style_key
+    text_zones = entry.get("editableFields") or list(BASE_TEXT_ZONES)
+    image_zones = entry.get("imageZones") or _image_zones("full-bleed-photo")
+    supported_sizes = _supported_sizes(entry.get("supportedFlyerSizes"))
+    layers = _pack_layers(renderer)
+    flyer_definition = {
+        "type": "flyer",
+        "canvasSize": meta.get("canvas") or {"portrait": [1080, 1350]},
+        "supportedSizes": supported_sizes,
+        "layout": renderer,
+        "tone": _slugify(category),
+        "layers": layers,
+        "imageZones": image_zones,
+        "textZones": text_zones,
+        "fontStyle": {"headline": "modern-sans", "body": "modern-sans"},
+        "colors": colors,
+        "qrPlacement": entry.get("qrPlacement") or {"enabled": True, "positions": ["bottom-left", "bottom-right", "center-bottom"]},
+        "decorations": {"templateArtwork": True},
+        "editableZones": [
+            "background",
+            "main_photo",
+            "image_crop",
+            *text_zones,
+            "optional_qr",
+        ],
+    }
+    return {
+        "id": tpl_id,
+        "sourceId": entry["id"],
+        "sourceType": "template-pack",
+        "sourcePack": meta.get("pack") or manifest.parent.name,
+        "sourcePackVersion": meta.get("version"),
+        "name": entry.get("name") or entry["id"].replace("-", " ").title(),
+        "aliases": [entry["id"]],
+        "category": category,
+        "categoryKey": _category_key(category),
+        "style": style,
+        "styleKey": style_key,
+        "type": "template-family",
+        "isFree": bool(entry.get("isFree", True)),
+        "surfaces": entry.get("surfaces") or list(SURFACES),
+        "supportedFlyerSizes": supported_sizes,
+        "supportedSizes": supported_sizes,
+        "defaultColors": colors,
+        "fontPairing": entry.get("fontPairing") or "modern-sans",
+        "layout": {
+            "eventPage": f"{renderer}-event-page",
+            "flyer": renderer,
+            "guestHub": f"{renderer}-guest-hub",
+            "pass": f"{renderer}-pass",
+            "email": f"{renderer}-email",
+        },
+        "layers": layers,
+        "imageZones": image_zones,
+        "textZones": text_zones,
+        "qrPlacement": flyer_definition["qrPlacement"],
+        "flyerDefinition": flyer_definition,
+        "buttonStyle": entry.get("buttonStyle") or "rounded",
+        "coverImageRules": {"aspect": "portrait", "recommended": "1080x1350"},
+        "thumbnailUrl": _asset_url(pack_slug, entry.get("thumbnail")),
+        "previewUrl": _asset_url(pack_slug, entry.get("preview")),
+    }
+
+
+def _pack_catalog() -> list[dict]:
+    templates: list[dict] = []
+    seen_ids: set[str] = set()
+    for manifest in _pack_manifests():
+        try:
+            meta = json.loads(manifest.read_text())
+        except (OSError, json.JSONDecodeError):
+            continue
+        for entry in meta.get("templates") or []:
+            if not isinstance(entry, dict) or not entry.get("id"):
+                continue
+            tpl = _pack_template(manifest, meta, entry)
+            if tpl["id"] not in seen_ids:
+                seen_ids.add(tpl["id"])
+                templates.append(tpl)
+    return templates
+
+
+def resolve_template_asset(pack_slug: str, rel_path: str) -> str | None:
+    clean = str(PurePosixPath(rel_path)).lstrip("/")
+    if clean.startswith("../") or "/../" in clean:
+        return None
+    for manifest in _pack_manifests():
+        try:
+            meta = json.loads(manifest.read_text())
+        except (OSError, json.JSONDecodeError):
+            meta = {}
+        if _pack_slug(manifest, meta) != pack_slug:
+            continue
+        root = manifest.parent.resolve()
+        candidate = (root / clean).resolve()
+        try:
+            candidate.relative_to(root)
+        except ValueError:
+            return None
+        return str(candidate) if candidate.is_file() else None
+    return None
+
 
 def _text_zones(extra_text: str | None) -> list[str]:
     zones = list(BASE_TEXT_ZONES)
@@ -288,11 +511,12 @@ def _family(cat_key: str, cat: dict, style_key: str, style: dict) -> dict:
 @lru_cache(maxsize=1)
 def build_catalog() -> list[dict]:
     """All template families, generated deterministically (categories × styles)."""
-    return [
+    generated = [
         _family(ck, cv, sk, sv)
         for ck, cv in CATEGORIES.items()
         for sk, sv in STYLES.items()
     ]
+    return generated + _pack_catalog()
 
 
 def get_template(template_id: str) -> dict | None:

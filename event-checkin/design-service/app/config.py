@@ -24,6 +24,10 @@ class Settings:
     ]
     public_asset_base_url: str = os.getenv("DESIGN_PUBLIC_ASSET_BASE_URL", "https://festio.events").rstrip("/")
     storage_path: str = os.getenv("DESIGN_STORAGE_PATH", "/app/data/design-assets")
+    template_packs_path: str = os.getenv(
+        "DESIGN_TEMPLATE_PACKS_PATH",
+        os.path.join(storage_path, "packs"),
+    )
     enable_svg_upload: bool = os.getenv("DESIGN_ENABLE_SVG_UPLOAD", "false").lower() == "true"
     render_timeout_seconds: int = _int("DESIGN_RENDER_TIMEOUT_SECONDS", 30)
     # Shared secret the core backend/proxy sends on write + internal-theme calls.

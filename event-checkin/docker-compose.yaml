@@ -67,11 +67,13 @@ services:
       DESIGN_ALLOWED_FILE_TYPES: ${DESIGN_ALLOWED_FILE_TYPES:-jpg,jpeg,png,webp}
       DESIGN_PUBLIC_ASSET_BASE_URL: ${DESIGN_PUBLIC_ASSET_BASE_URL:-https://festio.events}
       DESIGN_STORAGE_PATH: /app/data/design-assets
+      DESIGN_TEMPLATE_PACKS_PATH: /app/data/design-assets/packs
       DESIGN_ENABLE_SVG_UPLOAD: ${DESIGN_ENABLE_SVG_UPLOAD:-false}
       DESIGN_RENDER_TIMEOUT_SECONDS: ${DESIGN_RENDER_TIMEOUT_SECONDS:-30}
       DESIGN_INTERNAL_TOKEN: ${DESIGN_INTERNAL_TOKEN:-}
     volumes:
       - design-assets:/app/data/design-assets
+      - ../docs/images:/app/data/design-assets/packs:ro
     healthcheck:
       test: ["CMD-SHELL", "python -c \"import urllib.request; urllib.request.urlopen('http://localhost:8010/health', timeout=3).read()\""]
       interval: 15s

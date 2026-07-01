@@ -164,16 +164,25 @@ function ThemeSwatches({ colors }) {
 
 function TemplatePreviewBlock({ template, onSelect, onPreview, selected }) {
   const c = template.defaultColors || {}
+  const imageUrl = template.previewUrl || (template.sourceType === 'template-pack' ? template.thumbnailUrl : '')
   return (
     <article className={`overflow-hidden rounded-2xl border bg-white shadow-sm transition hover:-translate-y-0.5 hover:shadow-lg dark:bg-slate-900 ${selected ? 'border-teal-500 ring-4 ring-teal-400/20' : 'border-slate-200 dark:border-white/10'}`}>
       <button
         type="button"
         onClick={onPreview}
-        className="block h-36 w-full text-left"
+        className="relative block h-44 w-full overflow-hidden text-left"
         style={{ background: `linear-gradient(145deg, ${c.background || '#0f172a'}, ${c.surface || '#111827'})` }}
         aria-label={`Preview ${template.name}`}
       >
-        <div className="flex h-full flex-col justify-between p-4">
+        {imageUrl && (
+          <img
+            src={imageUrl}
+            alt=""
+            className="absolute inset-0 h-full w-full object-cover"
+            loading="lazy"
+          />
+        )}
+        <div className={`relative flex h-full flex-col justify-between p-4 ${imageUrl ? 'bg-gradient-to-b from-slate-950/60 via-transparent to-slate-950/75' : ''}`}>
           <div className="flex items-center justify-between gap-2">
             <span className="rounded-full bg-white/12 px-2 py-1 text-[10px] font-black uppercase tracking-wider text-white">{template.category}</span>
             <span className={`rounded-full px-2 py-1 text-[10px] font-black ${template.isFree ? 'bg-emerald-100 text-emerald-800' : 'bg-amber-100 text-amber-900'}`}>
@@ -181,8 +190,8 @@ function TemplatePreviewBlock({ template, onSelect, onPreview, selected }) {
             </span>
           </div>
           <div>
-            <div className="text-xl font-black leading-tight" style={{ color: c.primary || '#fff' }}>{template.name}</div>
-            <div className="mt-1 text-xs font-bold" style={{ color: c.accent || '#14b8a6' }}>{template.style}</div>
+            <div className="text-xl font-black leading-tight" style={{ color: imageUrl ? '#fff' : (c.primary || '#fff') }}>{template.name}</div>
+            <div className="mt-1 text-xs font-bold" style={{ color: imageUrl ? '#fff' : (c.accent || '#14b8a6') }}>{template.style}</div>
           </div>
         </div>
       </button>
@@ -501,6 +510,32 @@ export default function DesignStudioPage() {
     })
   }, [templates, filters])
 
+  const categoryOptions = useMemo(() => {
+    const seen = new Set(CATEGORY_OPTIONS.map(([key]) => key))
+    const dynamic = []
+    templates.forEach((t) => {
+      const key = t.categoryKey || t.category
+      if (key && t.category && !seen.has(key)) {
+        seen.add(key)
+        dynamic.push([key, t.category])
+      }
+    })
+    return [...CATEGORY_OPTIONS, ...dynamic]
+  }, [templates])
+
+  const styleOptions = useMemo(() => {
+    const seen = new Set(STYLE_OPTIONS.map(([key]) => key))
+    const dynamic = []
+    templates.forEach((t) => {
+      const key = t.styleKey || t.style
+      if (key && t.style && !seen.has(key)) {
+        seen.add(key)
+        dynamic.push([key, t.style])
+      }
+    })
+    return [...STYLE_OPTIONS, ...dynamic]
+  }, [templates])
+
   const selectedTpl = useMemo(
     () => templates.find((t) => t.id === design?.selected_template_id) || null,
     [templates, design],
@@ -773,11 +808,11 @@ export default function DesignStudioPage() {
             <div className="mt-5 grid gap-3 rounded-2xl border border-slate-200 bg-white p-4 dark:border-white/10 dark:bg-slate-900 md:grid-cols-5">
               <select value={filters.category} onChange={(e) => setFilters((f) => ({ ...f, category: e.target.value }))} className={input}>
                 <option value="">All categories</option>
-                {CATEGORY_OPTIONS.map(([key, text]) => <option key={key} value={key}>{text}</option>)}
+                {categoryOptions.map(([key, text]) => <option key={key} value={key}>{text}</option>)}
               </select>
               <select value={filters.style} onChange={(e) => setFilters((f) => ({ ...f, style: e.target.value }))} className={input}>
                 <option value="">All styles</option>
-                {STYLE_OPTIONS.map(([key, text]) => <option key={key} value={key}>{text}</option>)}
+                {styleOptions.map(([key, text]) => <option key={key} value={key}>{text}</option>)}
               </select>
               <select value={filters.free} onChange={(e) => setFilters((f) => ({ ...f, free: e.target.value }))} className={input}>
                 <option value="">Free & premium</option>
@@ -814,9 +849,21 @@ export default function DesignStudioPage() {
               <SectionTitle eyebrow="Preview" title={templateForPreview?.name || 'Select a template'} />
               {templateForPreview ? (
                 <div className="mt-4 space-y-4">
-                  <div className="rounded-2xl p-4" style={{ background: `linear-gradient(145deg, ${templateForPreview.defaultColors.background}, ${templateForPreview.defaultColors.surface})` }}>
-                    <div className="text-2xl font-black" style={{ color: templateForPreview.defaultColors.primary }}>{templateForPreview.name}</div>
-                    <div className="mt-1 text-sm font-bold" style={{ color: templateForPreview.defaultColors.accent }}>{templateForPreview.style}</div>
+                  <div className="relative overflow-hidden rounded-2xl p-4" style={{ background: `linear-gradient(145deg, ${templateForPreview.defaultColors.background}, ${templateForPreview.defaultColors.surface})` }}>
+                    {templateForPreview.previewUrl && (
+                      <img
+                        src={templateForPreview.previewUrl}
+                        alt=""
+                        className="absolute inset-0 h-full w-full object-cover"
+                        loading="lazy"
+                      />
+                    )}
+                    <div className={`relative min-h-[80px] ${templateForPreview.previewUrl ? 'min-h-[240px] bg-gradient-to-b from-slate-950/40 via-transparent to-slate-950/80' : ''}`}>
+                      <div className="absolute bottom-0 left-0 right-0 p-1">
+                        <div className="text-2xl font-black" style={{ color: templateForPreview.previewUrl ? '#fff' : templateForPreview.defaultColors.primary }}>{templateForPreview.name}</div>
+                        <div className="mt-1 text-sm font-bold" style={{ color: templateForPreview.previewUrl ? '#fff' : templateForPreview.defaultColors.accent }}>{templateForPreview.style}</div>
+                      </div>
+                    </div>
                   </div>
                   <ThemeSwatches colors={templateForPreview.defaultColors} />
                   <div className="grid grid-cols-2 gap-2 text-xs">
@@ -855,6 +902,14 @@ export default function DesignStudioPage() {
                     onClick={() => chooseFlyerTemplate(template)}
                     className={`rounded-xl border p-3 text-left ${selectedFlyerTpl?.id === template.id ? 'border-teal-400 bg-teal-50 dark:bg-teal-400/10' : 'border-slate-200 hover:bg-slate-50 dark:border-white/10 dark:hover:bg-white/5'}`}
                   >
+                    {(template.previewUrl || (template.sourceType === 'template-pack' && template.thumbnailUrl)) && (
+                      <img
+                        src={template.previewUrl || template.thumbnailUrl}
+                        alt=""
+                        className="mb-3 aspect-[4/5] w-full rounded-lg object-cover"
+                        loading="lazy"
+                      />
+                    )}
                     <div className="text-sm font-black text-slate-950 dark:text-white">{template.name}</div>
                     <div className="mt-1 text-xs text-slate-500 dark:text-slate-400">{template.layout?.flyer}</div>
                   </button>

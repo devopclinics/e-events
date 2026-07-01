@@ -91,7 +91,7 @@ def put_event_design(event_id: str, body: EventDesignIn, x_org_id: str | None = 
         raise HTTPException(400, "unknown selected_template_id")
     if body.selected_flyer_template_id and not get_template(body.selected_flyer_template_id):
         raise HTTPException(400, "unknown selected_flyer_template_id")
-    data = body.model_dump(exclude_none=True)
+    data = body.model_dump(exclude_unset=True, exclude_none=True)
     if x_org_id:
         data["organization_id"] = x_org_id
     saved = save_design(event_id, data)

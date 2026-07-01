@@ -572,7 +572,7 @@ export default function DesignStudioPage() {
 
   const baseColors = selectedTpl?.defaultColors || {}
   const colors = { ...baseColors, ...(design?.theme_config?.colors || {}) }
-  const coverImageUrl = design?.asset_config?.cover_image_url || currentEvent?.invite_cover_image || ''
+  const coverImageUrl = design?.asset_config?.flyer_image_url || design?.asset_config?.cover_image_url || currentEvent?.invite_cover_image || ''
   const flyerCoverImageUrl = design?.asset_config?.flyer_image_url || ''
   const imagePosition = {
     x: Number(design?.asset_config?.image_position?.x ?? 50),
@@ -643,8 +643,19 @@ export default function DesignStudioPage() {
     )
   }
 
+  function templateFlyerImageUrl(t) {
+    return t?.previewUrl || (t?.sourceType === 'template-pack' ? t?.thumbnailUrl : '')
+  }
+
   async function chooseFlyerTemplate(t) {
-    await patch({ selected_flyer_template_id: t.id }, `Flyer template set to ${t.name}.`)
+    const imageUrl = templateFlyerImageUrl(t)
+    await patch(
+      {
+        selected_flyer_template_id: t.id,
+        asset_config: { ...(design?.asset_config || {}), flyer_image_url: imageUrl },
+      },
+      imageUrl ? `Flyer set to ${t.name}. Publish to make it live.` : `Flyer template set to ${t.name}.`,
+    )
   }
 
   const setColor = (key, value) => patch({ theme_config: { ...(design?.theme_config || {}), colors: { ...colors, [key]: value } } })
@@ -739,14 +750,23 @@ export default function DesignStudioPage() {
     if (!eventId) return note('Pick an event first.', true)
     setBusy(true)
     try {
-      await api.saveEventDesign(eventId, { wording_config: wording })
+      const flyerImageUrl = templateFlyerImageUrl(selectedFlyerTpl) || design?.asset_config?.flyer_image_url || ''
+      const saved = await api.saveEventDesign(eventId, {
+        selected_template_id: design?.selected_template_id,
+        selected_flyer_template_id: selectedFlyerTpl?.id || design?.selected_flyer_template_id,
+        theme_config: design?.theme_config || {},
+        wording_config: wording,
+        asset_config: { ...(design?.asset_config || {}), flyer_image_url: flyerImageUrl },
+      })
+      setDesign(saved)
       const published = await api.publishEventDesign(eventId)
-      if (coverImageUrl) {
-        const updated = await api.updateInviteSettings(eventId, { invite_cover_image: coverImageUrl })
+      const liveCover = flyerImageUrl || saved?.asset_config?.cover_image_url || coverImageUrl
+      if (liveCover) {
+        const updated = await api.updateInviteSettings(eventId, { invite_cover_image: liveCover })
         setEvents((prev) => prev.map((ev) => (ev.id === updated.id ? updated : ev)))
       }
-      setDesign((d) => ({ ...(d || {}), is_published: published.is_published, published_version: published.published_version, published_at: published.published_at }))
-      note('Design published to RSVP pages, Guest Hub, Festio Passes, and the event cover used by emails.')
+      setDesign((d) => ({ ...(d || saved || {}), is_published: published.is_published, published_version: published.published_version, published_at: published.published_at }))
+      note('Design and selected flyer published to RSVP pages, Guest Hub, Festio Passes, and emails.')
     } catch (e) {
       note(e.message || 'Publish failed', true)
     } finally {

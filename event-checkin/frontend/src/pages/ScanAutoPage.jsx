@@ -620,6 +620,7 @@ export default function ScanAutoPage() {
   const { guest, event, status, table_name, seat_number, menu_categories, guest_choices, partner, menu_locked } = data || {}
   const colors = passThemeColors(designTheme)
   const wording = designTheme?.wording || {}
+  const passOpts = { showTable: true, showSeat: true, showHubButton: true, ...(designTheme?.pass_options || {}) }
   const coverImage = designTheme?.flyer_image_url || designTheme?.cover_image_url || ''
   const qrImageUrl = `/api/scan/${token}/qr.png`
   const eventDate = event?.event_date ? new Date(event.event_date) : null
@@ -698,16 +699,29 @@ export default function ScanAutoPage() {
           {/* Admitted banner */}
           {status === 'admitted' && <AdmittedBanner guest={guest} event={event} />}
 
-          {/* Table / Seat badge */}
-          {(table_name || seat_number) && (
+          {/* Table / Seat badge — visibility controlled from Design Studio pass options */}
+          {((passOpts.showTable && table_name) || (passOpts.showSeat && seat_number)) && (
             <div className="flex justify-center">
               <span className="inline-flex items-center gap-2 bg-indigo-50 border border-indigo-200 text-indigo-700 px-4 py-2 rounded-lg text-sm font-medium">
                 <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z" />
                 </svg>
-                {table_name}
-                {seat_number && <span className="text-indigo-400">· Seat {seat_number}</span>}
+                {passOpts.showTable && table_name}
+                {passOpts.showSeat && seat_number && <span className="text-indigo-400">{passOpts.showTable && table_name ? '· ' : ''}Seat {seat_number}</span>}
               </span>
+            </div>
+          )}
+
+          {/* Guest Hub entry — controlled from Design Studio pass options */}
+          {passOpts.showHubButton && guest?.invite_token && (
+            <div className="flex justify-center">
+              <a
+                href={`/r/${guest.invite_token}#guest-hub`}
+                className="inline-flex min-h-11 items-center justify-center rounded-lg px-5 py-2 text-sm font-bold text-slate-950"
+                style={{ background: colors.accent || '#14b8a6' }}
+              >
+                Open Guest Hub
+              </a>
             </div>
           )}
 

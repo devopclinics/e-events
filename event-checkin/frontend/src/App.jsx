@@ -95,7 +95,7 @@ function Nav({ hasMenu, eventName }) {
     <nav className="app-nav sticky top-0 z-50 backdrop-blur">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 flex items-center h-16 gap-3">
         <NavLink
-          to={user ? getPreferredView(user.role) : '/'}
+          to="/"
           className="flex items-center gap-2 text-slate-950 dark:text-white font-bold text-lg mr-2 tracking-tight rounded-md focus:outline-none focus:ring-2 focus:ring-teal-500 focus:ring-offset-2 dark:focus:ring-offset-slate-950"
           aria-label="Go to Festio home"
         >
@@ -229,8 +229,6 @@ function AuthedLayout({ children }) {
 // ── Routes ────────────────────────────────────────────────────────────────────
 
 function AppRoutes() {
-  const { user } = useAuth()
-
   return (
     <Routes>
       <Route path="/login" element={<LoginPage />} />
@@ -255,10 +253,8 @@ function AppRoutes() {
       {/* Unlisted public help — shareable with prospects, no account needed */}
       <Route path="/guide" element={<HelpPage publicMode />} />
 
-      {/* Landing page: show to guests, redirect logged-in users */}
-      <Route path="/"
-        element={user ? <Navigate to={getPreferredView(user.role)} replace /> : <LandingPage />}
-      />
+      {/* Landing page: public marketing page — logged-in users keep their session */}
+      <Route path="/" element={<LandingPage />} />
 
       {/* Authenticated app with Nav */}
       <Route

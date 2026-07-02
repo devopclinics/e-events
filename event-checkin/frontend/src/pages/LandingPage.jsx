@@ -1,6 +1,8 @@
 import { useEffect, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { useTheme } from '../context/ThemeContext'
+import { useAuth } from '../context/AuthContext'
+import { getPreferredView } from '../App'
 
 const DEMO_URL = ''
 const CONTACT_EMAIL = 'info@devopclinics.com'
@@ -128,11 +130,7 @@ const problemCards = [
   'Invite links get forwarded',
   'Tables and seats cause confusion',
   'Staff keep calling the organizer',
-  'Meal choices live in separate forms',
-  'Gift claims and deliveries are tracked manually',
-  'Guest questions are scattered',
   'No live view of attendance or access',
-  'VIPs and restricted areas are hard to control',
 ]
 
 const pillars = [
@@ -206,25 +204,13 @@ const designStudioBullets = [
 ]
 
 const journey = [
-  ['Create the event', 'Set event name, host, date, venue, address, description, and public event settings.'],
-  ['Add or import guests', 'Upload spreadsheets, sync lists, remove duplicates, and assign pass types, tags, tables, and groups.'],
-  ['Collect RSVPs', 'Use public or private RSVP pages, approval workflows, deadlines, custom questions, and capacity limits.'],
-  ['Send Festio Passes', 'Send personalized QR passes by email, SMS, WhatsApp, or MMS after approval or confirmation.'],
-  ['Engage guests', 'Use Guest Hub, announcements, message host, chat, reminders, and notification preferences.'],
-  ['Manage event details', 'Handle seating, menu choices, orders, gifts, deliveries, vendors, and staff roles.'],
-  ['Scan and operate live', 'Staff scan guests, manage gates and zones, approve walk-ins, prevent duplicates, and view live dashboards.'],
-  ['Export and review', 'Export guest lists, attendance, table reports, catering summaries, vendor reports, and event records.'],
+  ['Create the event', 'Set the event details, then add or import your guest list with tags, tables, and pass types.'],
+  ['Collect RSVPs', 'Use public or private RSVP pages with approvals, deadlines, custom questions, and capacity limits.'],
+  ['Send Festio Passes', 'Deliver personalized QR passes by email, SMS, WhatsApp, or MMS the moment guests are confirmed.'],
+  ['Run it live', 'Scan at the door, manage zones and walk-ins, track meals and gifts, and watch the live dashboard.'],
 ]
 
 const detailSections = [
-  {
-    id: 'command-center',
-    eyebrow: 'Organizer command center',
-    title: 'A command center for every event you manage.',
-    copy: 'Festio gives organizers one workspace to manage events, teams, roles, guests, feature toggles, message credits, paid unlocks, and live operations without jumping between tools.',
-    points: ['Organization workspace', 'Multi-event management', 'Draft/Active/Ended/Reopen lifecycle', 'Team roles', 'Staff assignment', 'Staff permissions', 'Event pass unlocks', 'Message credit balance', 'Trial request flow'],
-    alt: 'Festio event setup workspace showing event controls',
-  },
   {
     id: 'guest-database',
     eyebrow: 'Guest database',
@@ -248,14 +234,6 @@ const detailSections = [
     copy: 'Customize invitations, reminders, QR pass emails, RSVP confirmations, approval messages, broadcasts, admission alerts, and check-in confirmations across email, SMS, WhatsApp, and MMS.',
     points: ['Editable templates', 'Template preview', 'Test send', 'Reset to default', 'Variable helper list', 'Template audit history', 'Plain-text fallback', 'SMS/WhatsApp/MMS support', 'Notification consent preferences'],
     alt: 'Festio messaging and invite tools',
-  },
-  {
-    id: 'guest-hub',
-    eyebrow: 'Guest pass and Guest Hub',
-    title: 'Give guests one beautiful place for everything.',
-    copy: 'Each confirmed guest can access a personal pass page with their QR pass, event details, menu choices, partner pairing, notification preferences, updates, host messages, and chat when enabled.',
-    points: ['Public pass page by QR token', 'QR code display', 'Pass status', 'Event details', 'Menu/order selection', 'Partner/plus-one pairing', 'Guest Hub', 'Event updates', 'Message host', 'Guest chat', 'Attending-only chat', 'Admin moderation'],
-    alt: 'Festio guest pass and event invite page',
   },
   {
     id: 'seating',
@@ -282,30 +260,6 @@ const detailSections = [
     alt: 'Festio venue access areas and gate rules',
   },
   {
-    id: 'orders',
-    eyebrow: 'Orders and menu',
-    title: 'Meals and service, connected to the guest list.',
-    copy: 'Let guests choose meals, manage menu categories and combinations, track orders by table, generate kitchen views, and mark meals served.',
-    points: ['Menu categories', 'Menu items', 'Menu combinations', 'Guest menu choices', 'Public guest menu selection', 'Menu deadline behavior', 'Orders dashboard', 'Per-table order totals', 'Kitchen/orders view', 'Mark meal served'],
-    alt: 'Festio orders view with meal totals by table',
-  },
-  {
-    id: 'gift-list',
-    eyebrow: 'Gift list and registry',
-    title: 'Gift lists that stay tied to guests.',
-    copy: 'Publish registry options, track item claims, manage cash funds, add store links, and keep gift activity connected to the guest record.',
-    points: ['Gift registry', 'Registry message/settings', 'Store link unfurling', 'Cash funds', 'Guest item claims', 'Admin claim tracking', 'Claim reports', 'Registry exports'],
-    alt: 'Festio gift list and registry claim tracking workspace',
-  },
-  {
-    id: 'deliveries',
-    eyebrow: 'Deliveries and fulfillment',
-    title: 'Coordinate shipments, vendors, and pickup details.',
-    copy: 'Manage delivery add-ons, shipment items, guest shipping addresses, vendor share pages, packing status, and exportable fulfillment reports.',
-    points: ['Deliveries add-on', 'Shipments', 'Shipment items', 'Guest shipping addresses', 'Vendor share page', 'Packing status', 'Vendor XLSX export', 'Admin XLSX export'],
-    alt: 'Festio delivery and vendor fulfillment workspace',
-  },
-  {
     id: 'analytics',
     eyebrow: 'Live dashboard and analytics',
     title: 'Know what is happening while it is happening.',
@@ -320,12 +274,8 @@ const eventTypes = [
   ['Galas & banquets', 'Coordinate VIP guests, reserved tables, sponsors, catered service, access areas, and live arrival reporting.'],
   ['Conferences & seminars', 'Run check-in, sessions, pass types, staff roles, attendee messaging, and exportable attendance records.'],
   ['Community & religious events', 'Handle large guest lists, RSVPs, self check-in, volunteers, seating sections, and announcements.'],
-  ['Fundraisers & award nights', 'Track donors, nominees, VIPs, table assignments, guest communication, and attendance in one dashboard.'],
-  ['Private parties', 'Create a polished invite, collect RSVPs, send QR passes, message guests, and avoid door confusion.'],
   ['Corporate events', 'Control registrations, access, teams, check-in records, messaging, and event reporting with operational clarity.'],
-  ['Multi-zone venue events', 'Use zones, gates, pass permissions, tag requirements, capacity limits, and occupancy analytics.'],
-  ['Catered events', 'Collect menu choices, manage combinations, view per-table totals, and track served meals.'],
-  ['Vendor-supported events', 'Coordinate deliveries, packing lists, vendor share pages, registry claims, and fulfillment exports.'],
+  ['Private parties', 'Create a polished invite, collect RSVPs, send QR passes, message guests, and avoid door confusion.'],
 ]
 
 const comparisonRows = [
@@ -741,6 +691,8 @@ function ComparisonCell({ value, highlight = false }) {
 
 export default function LandingPage() {
   const { dark, toggle } = useTheme()
+  const { user } = useAuth()
+  const appHome = user ? getPreferredView(user.role) : null
 
   return (
     <div className="landing min-h-screen bg-white text-slate-900 dark:bg-slate-950 dark:text-white">
@@ -762,8 +714,17 @@ export default function LandingPage() {
           <button onClick={toggle} className="rounded-lg p-2 text-slate-300 transition hover:bg-white/10 hover:text-white" aria-label="Toggle theme">
             {dark ? <SunIcon /> : <MoonIcon />}
           </button>
-          <Link to="/login" className="hidden text-sm font-extrabold text-slate-200 hover:text-white sm:inline">Sign In</Link>
-          <PrimaryCta className="min-h-10 px-4 py-2">Create Free Event</PrimaryCta>
+          {user ? (
+            <>
+              <span className="hidden text-sm font-bold text-slate-300 md:inline">{user.name}</span>
+              <PrimaryCta to={appHome} className="min-h-10 px-4 py-2">Open App</PrimaryCta>
+            </>
+          ) : (
+            <>
+              <Link to="/login" className="hidden text-sm font-extrabold text-slate-200 hover:text-white sm:inline">Sign In</Link>
+              <PrimaryCta className="min-h-10 px-4 py-2">Create Free Event</PrimaryCta>
+            </>
+          )}
         </div>
       </header>
 
@@ -942,7 +903,7 @@ export default function LandingPage() {
                 <Reveal className={index % 2 ? 'lg:order-2' : ''}>
                   <SectionHeader eyebrow={section.eyebrow} title={section.title} copy={section.copy} />
                   <PointList points={section.points} />
-                  {index === 2 && (
+                  {section.id === 'rsvp' && (
                     <div className="mt-8 flex flex-col gap-3 sm:flex-row">
                       <PrimaryCta to="/register?intent=rsvp">Create RSVP Page</PrimaryCta>
                       <SecondaryCta>Book a Demo</SecondaryCta>
@@ -1042,14 +1003,6 @@ export default function LandingPage() {
                 </Reveal>
               ))}
             </div>
-            <div className="mt-8 grid gap-4 sm:grid-cols-3">
-              {['Guests processed', 'Events managed', 'Organizer quotes'].map((label) => (
-                <div key={label} className="rounded-2xl border border-white/10 bg-white/[0.04] p-5 text-center">
-                  <div className="text-3xl font-black text-teal-300">Add data</div>
-                  <div className="mt-1 text-xs font-bold uppercase tracking-wider text-slate-400">{label}</div>
-                </div>
-              ))}
-            </div>
           </div>
         </section>
 
@@ -1118,7 +1071,11 @@ export default function LandingPage() {
             <a href="#design-studio" className="hover:text-teal-700 dark:hover:text-teal-300">Design Studio</a>
             <a href="#guest-journey" className="hover:text-teal-700 dark:hover:text-teal-300">Guest Journey</a>
             <Link to="/pricing" className="hover:text-teal-700 dark:hover:text-teal-300">Pricing</Link>
-            <Link to="/login" className="hover:text-teal-700 dark:hover:text-teal-300">Sign in</Link>
+            {user ? (
+              <Link to={appHome} className="hover:text-teal-700 dark:hover:text-teal-300">Open app</Link>
+            ) : (
+              <Link to="/login" className="hover:text-teal-700 dark:hover:text-teal-300">Sign in</Link>
+            )}
             <a {...demoProps} className="hover:text-teal-700 dark:hover:text-teal-300">Book a demo</a>
           </nav>
           <p className="text-xs font-medium text-slate-400 dark:text-slate-500">© {new Date().getFullYear()} Festio. All rights reserved.</p>

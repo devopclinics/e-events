@@ -33,6 +33,7 @@ class PublicTheme(BaseModel):
     cover_image_url: str | None = None
     flyer_image_url: str | None = None
     wording: dict = Field(default_factory=dict)
+    pass_options: dict = Field(default_factory=dict)
 
 
 class EmailTheme(BaseModel):

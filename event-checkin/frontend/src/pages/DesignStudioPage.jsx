@@ -69,6 +69,22 @@ const FONT_OPTIONS = [
   ['bold-sans', 'Bold sans'],
 ]
 
+// On-screen equivalents of the render-service font pairings so the live
+// previews reflect the selected font, not just the downloaded flyer.
+const FONT_STACKS = {
+  'modern-sans': 'Inter, ui-sans-serif, system-ui, sans-serif',
+  'classic-serif': 'Georgia, "Times New Roman", Times, serif',
+  'elegant-serif': '"Palatino Linotype", "Book Antiqua", Palatino, Georgia, serif',
+  'display-rounded': '"Trebuchet MS", "Segoe UI Rounded", Verdana, sans-serif',
+  'bold-sans': '"Arial Black", "Segoe UI", Arial, sans-serif',
+}
+
+const PASS_OPTION_FIELDS = [
+  ['showTable', 'Show table assignment'],
+  ['showSeat', 'Show seat number'],
+  ['showHubButton', 'Show Guest Hub button'],
+]
+
 const WORDING_FIELDS = [
   ['inviteLabel', 'Invite label', "You're invited to"],
   ['eventTitle', 'Event title', 'Electron Jubilee'],
@@ -283,7 +299,7 @@ function flyerLayoutClass(template) {
   return (aliases[layout] || layout).replace(/[^a-z0-9]+/gi, '-')
 }
 
-function FlyerPreview({ template, colors, wording, coverImageUrl, imagePosition, qrEnabled, qrPosition }) {
+function FlyerPreview({ template, colors, wording, coverImageUrl, imagePosition, qrEnabled, qrPosition, fontFamily }) {
   const templateImageUrl = template?.previewUrl || (template?.sourceType === 'template-pack' ? template?.thumbnailUrl : '')
   const justify = qrPosition === 'bottom-left' ? 'justify-start' : qrPosition === 'center-bottom' ? 'justify-center' : 'justify-end'
   const layout = flyerLayoutClass(template)
@@ -312,7 +328,7 @@ function FlyerPreview({ template, colors, wording, coverImageUrl, imagePosition,
     <div className="mx-auto w-full max-w-[340px]">
       <div
         className={`relative aspect-[4/5] overflow-hidden rounded-[1.5rem] border border-white/10 shadow-2xl shadow-slate-950/25 flyer-preview-${layout}`}
-        style={{ background: `linear-gradient(155deg, ${colors.background || '#0f172a'}, ${colors.surface || '#111827'})`, color: colors.text || '#fff' }}
+        style={{ background: `linear-gradient(155deg, ${colors.background || '#0f172a'}, ${colors.surface || '#111827'})`, color: colors.text || '#fff', fontFamily }}
       >
         {templateImageUrl && !coverImageUrl && (
           <img src={templateImageUrl} alt="" className="absolute inset-0 h-full w-full object-cover opacity-35" />
@@ -405,10 +421,10 @@ function FlyerPreview({ template, colors, wording, coverImageUrl, imagePosition,
   )
 }
 
-function EventPagePreview({ colors, wording, coverImageUrl, mode = 'desktop' }) {
+function EventPagePreview({ colors, wording, coverImageUrl, mode = 'desktop', fontFamily }) {
   const tone = previewTone(colors)
   return (
-    <div className={`overflow-hidden rounded-[1.5rem] border border-slate-200 bg-slate-950 shadow-xl dark:border-white/10 ${mode === 'mobile' ? 'mx-auto max-w-[320px]' : ''}`}>
+    <div className={`overflow-hidden rounded-[1.5rem] border border-slate-200 bg-slate-950 shadow-xl dark:border-white/10 ${mode === 'mobile' ? 'mx-auto max-w-[320px]' : ''}`} style={fontFamily ? { fontFamily } : undefined}>
       <div className="p-3" style={{ background: `radial-gradient(circle at 20% 0%, ${tone.accent}55, transparent 48%), linear-gradient(140deg, ${tone.background}, ${tone.surface})`, color: tone.text }}>
         <div className="mb-4 flex items-center justify-between" style={{ color: tone.text }}>
           <span className="text-[10px] font-black uppercase tracking-[0.22em]">You're invited</span>
@@ -446,14 +462,20 @@ function EventPagePreview({ colors, wording, coverImageUrl, mode = 'desktop' }) 
   )
 }
 
-function PassPreview({ colors, wording, coverImageUrl }) {
+function PassPreview({ colors, wording, coverImageUrl, passOptions = {}, fontFamily }) {
+  const opts = { showTable: true, showSeat: true, showHubButton: true, ...passOptions }
   return (
-    <div className="mx-auto max-w-[360px] overflow-hidden rounded-[1.6rem] border border-slate-200 bg-white text-slate-950 shadow-xl dark:border-white/10">
+    <div className="mx-auto max-w-[360px] overflow-hidden rounded-[1.6rem] border border-slate-200 bg-white text-slate-950 shadow-xl dark:border-white/10" style={fontFamily ? { fontFamily } : undefined}>
       <div className="h-28 bg-cover bg-center" style={{ backgroundImage: coverImageUrl ? `url(${coverImageUrl})` : `linear-gradient(135deg, ${colors.background || '#0f172a'}, ${colors.accent || '#14b8a6'})` }} />
       <div className="p-5">
         <div className="text-xs font-black uppercase tracking-[0.18em] text-slate-500">Festio Pass</div>
         <h3 className="mt-1 text-2xl font-black text-slate-950">{wording.eventTitle}</h3>
         <p className="mt-1 text-sm font-semibold text-slate-500">{wording.date} - {wording.time}</p>
+        {(opts.showTable || opts.showSeat) && (
+          <p className="mt-2 inline-flex rounded-full bg-slate-100 px-3 py-1 text-xs font-black text-slate-700">
+            {[opts.showTable && 'Table VIP-2', opts.showSeat && 'Seat 4'].filter(Boolean).join(' · ')}
+          </p>
+        )}
         <div className="mt-5 grid place-items-center rounded-2xl bg-white p-4 shadow-inner">
           <div className="grid h-40 w-40 grid-cols-7 gap-1">
             {Array.from({ length: 49 }).map((_, i) => (
@@ -462,18 +484,20 @@ function PassPreview({ colors, wording, coverImageUrl }) {
           </div>
         </div>
         <p className="mt-4 text-sm leading-6 text-slate-600">{wording.admissionNote}</p>
-        <button type="button" className="mt-4 min-h-11 w-full rounded-xl px-4 py-2 text-sm font-black text-slate-950" style={{ background: colors.accent || '#14b8a6' }}>
-          Open Guest Hub
-        </button>
+        {opts.showHubButton && (
+          <button type="button" className="mt-4 min-h-11 w-full rounded-xl px-4 py-2 text-sm font-black text-slate-950" style={{ background: colors.accent || '#14b8a6' }}>
+            Open Guest Hub
+          </button>
+        )}
       </div>
     </div>
   )
 }
 
-function EmailPreview({ colors, wording, coverImageUrl, activeType, setActiveType }) {
+function EmailPreview({ colors, wording, coverImageUrl, activeType, setActiveType, fontFamily }) {
   const tone = previewTone(colors)
   return (
-    <div className="grid gap-5 lg:grid-cols-[240px_minmax(0,1fr)]">
+    <div className="grid gap-5 lg:grid-cols-[240px_minmax(0,1fr)]" style={fontFamily ? { fontFamily } : undefined}>
       <div className="space-y-2">
         {EMAIL_TYPES.map((type) => (
           <button
@@ -545,7 +569,7 @@ export default function DesignStudioPage() {
   const [tab, setTab] = useState('Templates')
   const [templates, setTemplates] = useState([])
   const [design, setDesign] = useState(null)
-  const [filters, setFilters] = useState({ category: '', style: '', free: '', surface: '' })
+  const [filters, setFilters] = useState({ search: '', category: '', style: '', free: '', surface: '' })
   const [previewTemplate, setPreviewTemplate] = useState(null)
   const [outputs, setOutputs] = useState([])
   const [busy, setBusy] = useState(false)
@@ -586,7 +610,9 @@ export default function DesignStudioPage() {
   const currentEvent = useMemo(() => events.find((e) => e.id === eventId) || null, [events, eventId])
 
   const filteredTemplates = useMemo(() => {
+    const q = filters.search.trim().toLowerCase()
     return templates.filter((t) => {
+      if (q && !`${t.name} ${t.category} ${t.style}`.toLowerCase().includes(q)) return false
       if (filters.category && t.categoryKey !== filters.category && t.category !== filters.category) return false
       if (filters.style && t.styleKey !== filters.style && t.style !== filters.style) return false
       if (filters.free !== '' && t.isFree !== (filters.free === 'true')) return false
@@ -643,6 +669,9 @@ export default function DesignStudioPage() {
 
   const baseColors = selectedTpl?.defaultColors || {}
   const colors = { ...baseColors, ...(design?.theme_config?.colors || {}) }
+  const passOptions = { showTable: true, showSeat: true, showHubButton: true, ...(design?.theme_config?.passOptions || {}) }
+  const fontPairing = design?.theme_config?.fontPairing || selectedTpl?.fontPairing || 'modern-sans'
+  const previewFontFamily = FONT_STACKS[fontPairing] || FONT_STACKS['modern-sans']
   const coverImageUrl = design?.asset_config?.flyer_image_url || design?.asset_config?.cover_image_url || currentEvent?.invite_cover_image || ''
   const photoCoverImageUrl = design?.asset_config?.cover_image_url || ''
   const flyerCoverImageUrl = design?.asset_config?.flyer_image_url || ''
@@ -951,7 +980,15 @@ export default function DesignStudioPage() {
               title="Start with one template family for the full guest experience."
               copy="Each family styles the RSVP page, downloadable flyer, Guest Hub, Festio Pass, and email theme together."
             />
-            <div className="mt-5 grid gap-3 rounded-2xl border border-slate-200 bg-white p-4 dark:border-white/10 dark:bg-slate-900 md:grid-cols-5">
+            <div className="mt-5 grid gap-3 rounded-2xl border border-slate-200 bg-white p-4 dark:border-white/10 dark:bg-slate-900 md:grid-cols-3 xl:grid-cols-6">
+              <input
+                type="search"
+                value={filters.search}
+                onChange={(e) => setFilters((f) => ({ ...f, search: e.target.value }))}
+                placeholder="Search templates…"
+                aria-label="Search templates"
+                className={input}
+              />
               <select value={filters.category} onChange={(e) => setFilters((f) => ({ ...f, category: e.target.value }))} className={input}>
                 <option value="">All categories</option>
                 {categoryOptions.map(([key, text]) => <option key={key} value={key}>{text}</option>)}
@@ -973,7 +1010,7 @@ export default function DesignStudioPage() {
                 <option value="festio_pass">Festio Pass</option>
                 <option value="email">Email</option>
               </select>
-              <button type="button" onClick={() => setFilters({ category: '', style: '', free: '', surface: '' })} className="min-h-11 rounded-xl border border-slate-300 px-3 py-2 text-sm font-extrabold text-slate-700 hover:bg-slate-50 dark:border-white/10 dark:text-slate-200 dark:hover:bg-white/5">
+              <button type="button" onClick={() => setFilters({ search: '', category: '', style: '', free: '', surface: '' })} className="min-h-11 rounded-xl border border-slate-300 px-3 py-2 text-sm font-extrabold text-slate-700 hover:bg-slate-50 dark:border-white/10 dark:text-slate-200 dark:hover:bg-white/5">
                 Reset
               </button>
             </div>
@@ -1229,6 +1266,7 @@ export default function DesignStudioPage() {
               imagePosition={imagePosition}
               qrEnabled={flyer.qr}
               qrPosition={flyer.qrPosition}
+              fontFamily={previewFontFamily}
             />
           </aside>
         </div>
@@ -1242,10 +1280,10 @@ export default function DesignStudioPage() {
             copy="The selected family, colors, cover image, and wording apply to the RSVP page and Guest Hub while existing RSVP behavior remains unchanged."
           />
           <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_360px]">
-            <EventPagePreview colors={colors} wording={wording} coverImageUrl={coverImageUrl} />
+            <EventPagePreview colors={colors} wording={wording} coverImageUrl={coverImageUrl} fontFamily={previewFontFamily} />
             <div className="rounded-2xl border border-slate-200 bg-white p-5 dark:border-white/10 dark:bg-slate-900">
               <h3 className="text-lg font-black text-slate-950 dark:text-white">Guest Hub preview</h3>
-              <div className="mt-4 rounded-2xl p-4" style={{ background: `linear-gradient(145deg, ${hubTone.background}, ${hubTone.surface})`, color: hubTone.text }}>
+              <div className="mt-4 rounded-2xl p-4" style={{ background: `linear-gradient(145deg, ${hubTone.background}, ${hubTone.surface})`, color: hubTone.text, fontFamily: previewFontFamily }}>
                 <div className="text-xs font-black uppercase tracking-[0.18em]" style={{ color: hubTone.accent }}>Guest Hub</div>
                 <div className="mt-2 text-2xl font-black" style={{ color: hubTone.text }}>{wording.eventTitle}</div>
                 <div className="mt-4 space-y-2 text-sm">
@@ -1266,7 +1304,7 @@ export default function DesignStudioPage() {
           </div>
           <div>
             <label className={label}>Mobile preview</label>
-            <EventPagePreview colors={colors} wording={wording} coverImageUrl={coverImageUrl} mode="mobile" />
+            <EventPagePreview colors={colors} wording={wording} coverImageUrl={coverImageUrl} mode="mobile" fontFamily={previewFontFamily} />
           </div>
         </div>
       )}
@@ -1298,16 +1336,25 @@ export default function DesignStudioPage() {
               </button>
             </div>
             <div className="grid gap-3 sm:grid-cols-3">
-              {['Show table assignment', 'Show seat number', 'Show Guest Hub button'].map((text) => (
-                <label key={text} className="flex min-h-12 items-center gap-2 rounded-2xl border border-slate-200 bg-white px-4 text-sm font-bold text-slate-700 dark:border-white/10 dark:bg-slate-900 dark:text-slate-200">
-                  <input type="checkbox" defaultChecked className="h-4 w-4 accent-teal-500" />
+              {PASS_OPTION_FIELDS.map(([key, text]) => (
+                <label key={key} className="flex min-h-12 items-center gap-2 rounded-2xl border border-slate-200 bg-white px-4 text-sm font-bold text-slate-700 dark:border-white/10 dark:bg-slate-900 dark:text-slate-200">
+                  <input
+                    type="checkbox"
+                    checked={passOptions[key]}
+                    disabled={busy}
+                    onChange={(e) => setThemeSetting('passOptions', { ...passOptions, [key]: e.target.checked })}
+                    className="h-4 w-4 accent-teal-500"
+                  />
                   {text}
                 </label>
               ))}
             </div>
+            <p className="text-xs font-semibold text-slate-500 dark:text-slate-400">
+              Saved automatically. Applies to live guest passes after you publish the design.
+            </p>
           </section>
           <aside>
-            <PassPreview colors={colors} wording={wording} coverImageUrl={coverImageUrl} />
+            <PassPreview colors={colors} wording={wording} coverImageUrl={coverImageUrl} passOptions={passOptions} fontFamily={previewFontFamily} />
           </aside>
         </div>
       )}
@@ -1319,7 +1366,7 @@ export default function DesignStudioPage() {
             title="Preview the event design inside transactional emails."
             copy="Messaging can request this theme payload for invitations, RSVP confirmations, Festio Pass emails, reminders, broadcasts, and check-in confirmations. If design-service is unavailable, default Festio email styling is used."
           />
-          <EmailPreview colors={colors} wording={wording} coverImageUrl={coverImageUrl} activeType={emailType} setActiveType={setEmailType} />
+          <EmailPreview colors={colors} wording={wording} coverImageUrl={coverImageUrl} activeType={emailType} setActiveType={setEmailType} fontFamily={previewFontFamily} />
         </div>
       )}
 
@@ -1332,8 +1379,8 @@ export default function DesignStudioPage() {
               copy="Publishing applies this design across public event surfaces through the design-service payload. Core RSVP, QR, messaging, scanner, seating, orders, registry, and delivery workflows are not changed."
             />
             <div className="grid gap-5 md:grid-cols-2">
-              <EventPagePreview colors={colors} wording={wording} coverImageUrl={coverImageUrl} mode="mobile" />
-              <PassPreview colors={colors} wording={wording} coverImageUrl={coverImageUrl} />
+              <EventPagePreview colors={colors} wording={wording} coverImageUrl={coverImageUrl} mode="mobile" fontFamily={previewFontFamily} />
+              <PassPreview colors={colors} wording={wording} coverImageUrl={coverImageUrl} passOptions={passOptions} fontFamily={previewFontFamily} />
             </div>
           </section>
           <aside className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm dark:border-white/10 dark:bg-slate-900 lg:sticky lg:top-24 lg:self-start">

@@ -139,6 +139,7 @@ def public_theme(event_id: str):
         cover_image_url=assets.get("cover_image_url"),
         flyer_image_url=assets.get("flyer_image_url"),
         wording=design.get("wording_config", {}),
+        pass_options=design.get("theme_config", {}).get("passOptions", {}),
     )
 
 

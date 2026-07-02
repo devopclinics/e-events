@@ -24,6 +24,7 @@ KEY_ALIAS="${KEY_ALIAS:-festio}"
 API_ORIGIN="${VITE_API_ORIGIN:-https://festio.events}"
 AAB_REL="frontend/android/app/build/outputs/bundle/release/app-release.aab"
 AAB_DBG="frontend/android/app/build/outputs/bundle/debug/app-debug.aab"
+APK_DBG="frontend/android/app/build/outputs/apk/debug/app-debug.apk"
 
 say() { printf '\033[0;36m==> %s\033[0m\n' "$*"; }
 die() { printf '\033[0;31mERROR: %s\033[0m\n' "$*" >&2; exit 1; }
@@ -46,7 +47,11 @@ if [[ "${DEBUG:-0}" == "1" ]]; then
     -e VITE_API_ORIGIN="$API_ORIGIN" -e APK="${APK:-0}" \
     "$IMAGE" bash /work/mobile/build-android.sh
   if [[ "${APK:-0}" == "1" ]]; then
-    say "DONE → frontend/android/app/build/outputs/apk/debug/app-debug.apk (sideload this)"
+    OUT_APK="$PWD/../$APK_DBG"
+    [[ -f "$OUT_APK" ]] || die "Build finished but APK not found at $OUT_APK"
+    cp "$OUT_APK" "$PWD/festio-debug.apk"
+    say "DONE → $APK_DBG"
+    say "Copied → mobile/festio-debug.apk (serve this file to the phone)"
   else
     say "DONE → $AAB_DBG (relative to event-checkin/)"
   fi

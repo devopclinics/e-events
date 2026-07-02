@@ -14,6 +14,14 @@
       },
       "oauth_client": [
         {
+          "client_id": "177647371710-qkropjoi6mqnqpmjd5iho5c5n899494g.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "events.festio.app",
+            "certificate_hash": "7f451e4fea1173472de7e35136d2147041279cb7"
+          }
+        },
+        {
           "client_id": "177647371710-78rqm7qnqc3948vlkgdq6e0en8dsuq3u.apps.googleusercontent.com",
           "client_type": 3
         }

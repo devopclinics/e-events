@@ -66,10 +66,11 @@ export default function LoginPage() {
       const cred = await signInWithEmailAndPassword(auth, form.email, form.password)
       const token = await cred.user.getIdToken()
       const res = await fetch('/api/auth/me', { headers: { Authorization: `Bearer ${token}` } })
+      if (!res.ok) throw new Error(`Profile sync failed (${res.status})`)
       const dbUser = await res.json()
       afterSignIn(dbUser.role)
     } catch (err) {
-      setError(friendlyError(err.code))
+      setError(friendlyError(err))
     } finally {
       setLoading(false)
     }
@@ -81,10 +82,11 @@ export default function LoginPage() {
       const cred = await googleSignIn()
       const token = await cred.user.getIdToken()
       const res = await fetch('/api/auth/me', { headers: { Authorization: `Bearer ${token}` } })
+      if (!res.ok) throw new Error(`Profile sync failed (${res.status})`)
       const dbUser = await res.json()
       afterSignIn(dbUser.role)
     } catch (err) {
-      if (err.code !== 'auth/popup-closed-by-user') setError(friendlyError(err.code))
+      if (err.code !== 'auth/popup-closed-by-user') setError(friendlyError(err))
     } finally {
       setLoading(false)
     }
@@ -152,17 +154,19 @@ export default function LoginPage() {
   )
 }
 
-function friendlyError(code) {
+function friendlyError(err) {
+  const code = err?.code
+  const detail = code ? ` (${code})` : ''
   switch (code) {
     case 'auth/invalid-credential':
     case 'auth/wrong-password':
     case 'auth/user-not-found':
-      return 'Invalid email or password.'
+      return `Invalid email or password.${detail}`
     case 'auth/too-many-requests':
-      return 'Too many attempts. Try again later.'
+      return `Too many attempts. Try again later.${detail}`
     case 'auth/network-request-failed':
-      return 'Network error. Check your connection.'
+      return `Network error. Check your connection.${detail}`
     default:
-      return 'Sign-in failed. Please try again.'
+      return err?.message ? `Sign-in failed${detail}: ${err.message}` : `Sign-in failed${detail}. Please try again.`
   }
 }

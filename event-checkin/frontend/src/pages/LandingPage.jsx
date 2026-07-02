@@ -77,7 +77,7 @@ function PrimaryCta({ children = 'Create Free Event', to = '/register', classNam
   return (
     <Link
       to={to}
-      className={`inline-flex min-h-12 items-center justify-center gap-2 rounded-xl bg-teal-500 px-6 py-3 text-sm font-extrabold text-slate-950 shadow-lg shadow-teal-950/20 transition hover:-translate-y-0.5 hover:bg-teal-300 focus:outline-none focus:ring-2 focus:ring-teal-400 focus:ring-offset-2 dark:focus:ring-offset-slate-950 ${className}`}
+      className={`inline-flex min-h-12 items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-teal-400 to-emerald-400 px-6 py-3 text-sm font-extrabold text-slate-950 shadow-lg shadow-teal-500/40 transition hover:-translate-y-0.5 hover:shadow-xl hover:shadow-teal-400/50 hover:brightness-110 focus:outline-none focus:ring-2 focus:ring-teal-400 focus:ring-offset-2 dark:focus:ring-offset-slate-950 ${className}`}
     >
       {children}
       <ArrowIcon />
@@ -85,11 +85,14 @@ function PrimaryCta({ children = 'Create Free Event', to = '/register', classNam
   )
 }
 
-function SecondaryCta({ children = 'Book a Demo', className = '' }) {
+function SecondaryCta({ children = 'Book a Demo', className = '', tone = 'light' }) {
+  const toneClasses = tone === 'dark'
+    ? 'border-white/20 bg-white/10 text-white hover:border-teal-300/60 hover:bg-white/15'
+    : 'border-slate-300 bg-white/70 text-slate-900 shadow-sm hover:border-teal-400 hover:bg-white dark:border-white/15 dark:bg-white/5 dark:text-white dark:hover:bg-white/10'
   return (
     <a
       {...demoProps}
-      className={`inline-flex min-h-12 items-center justify-center gap-2 rounded-xl border border-slate-300 bg-white/70 px-6 py-3 text-sm font-extrabold text-slate-900 shadow-sm transition hover:-translate-y-0.5 hover:border-teal-400 hover:bg-white focus:outline-none focus:ring-2 focus:ring-teal-400 focus:ring-offset-2 dark:border-white/15 dark:bg-white/5 dark:text-white dark:hover:bg-white/10 dark:focus:ring-offset-slate-950 ${className}`}
+      className={`inline-flex min-h-12 items-center justify-center gap-2 rounded-xl border px-6 py-3 text-sm font-extrabold transition hover:-translate-y-0.5 focus:outline-none focus:ring-2 focus:ring-teal-400 focus:ring-offset-2 dark:focus:ring-offset-slate-950 ${toneClasses} ${className}`}
     >
       {children}
     </a>
@@ -103,6 +106,16 @@ function LogoMark({ size = 'h-9 w-9', text = 'text-sm' }) {
     </span>
   )
 }
+
+const accentGradients = [
+  'from-teal-500 to-emerald-500',
+  'from-violet-500 to-fuchsia-500',
+  'from-amber-500 to-orange-500',
+  'from-sky-500 to-blue-500',
+  'from-rose-500 to-pink-500',
+  'from-indigo-500 to-violet-500',
+  'from-emerald-500 to-lime-500',
+]
 
 const trustChips = [
   'RSVP', 'Guest Management', 'Seating', 'Messaging', 'QR Passes',
@@ -338,8 +351,8 @@ function HeroVisual() {
   ]
   return (
     <div className="relative" aria-label="Festio organizer dashboard, QR pass, seating, messaging, and orders preview">
-      <div className="absolute -inset-6 rounded-[2rem] bg-gradient-to-tr from-teal-300/30 via-amber-200/20 to-purple-300/25 blur-3xl" aria-hidden="true" />
-      <div className="relative rounded-[1.75rem] border border-white/50 bg-white/85 p-4 shadow-2xl shadow-slate-950/15 backdrop-blur dark:border-white/10 dark:bg-slate-900/85">
+      <div className="absolute -inset-6 rounded-[2rem] bg-gradient-to-tr from-teal-400/40 via-amber-300/20 to-violet-400/35 blur-3xl" aria-hidden="true" />
+      <div className="relative rounded-[1.75rem] border border-white/15 bg-white/[0.07] p-4 shadow-2xl shadow-slate-950/40 backdrop-blur-xl">
         <div className="rounded-2xl bg-slate-950 p-4 text-white">
           <div className="flex items-center justify-between gap-3 border-b border-white/10 pb-3">
             <div>
@@ -467,7 +480,7 @@ function DesignStudioVisual() {
           </div>
 
           <div className="grid gap-4">
-            <div className="rounded-2xl border border-slate-200 bg-[#fbf7ef] p-4 dark:border-white/10 dark:bg-slate-950">
+            <div className="rounded-2xl border border-slate-200 bg-white p-4 dark:border-white/10 dark:bg-slate-950">
               <div className="flex items-center justify-between">
                 <div>
                   <div className="text-[10px] font-black uppercase tracking-[0.2em] text-teal-700 dark:text-teal-300">Flyer editor</div>
@@ -680,12 +693,18 @@ function ProductMockup({ type, alt, className = '' }) {
   )
 }
 
-function SectionHeader({ eyebrow, title, copy, center = false }) {
+function SectionHeader({ eyebrow, title, copy, center = false, tone = 'auto' }) {
+  const onDark = tone === 'dark'
   return (
     <div className={center ? 'mx-auto max-w-3xl text-center' : 'max-w-3xl'}>
-      {eyebrow && <p className="text-sm font-black uppercase tracking-[0.2em] text-teal-700 dark:text-teal-300">{eyebrow}</p>}
-      <h2 className="mt-3 text-3xl font-black tracking-tight text-slate-950 dark:text-white sm:text-4xl lg:text-5xl">{title}</h2>
-      {copy && <p className="mt-4 text-base leading-8 text-slate-600 dark:text-slate-300 sm:text-lg">{copy}</p>}
+      {eyebrow && (
+        <p className={`inline-block bg-gradient-to-r bg-clip-text text-sm font-black uppercase tracking-[0.2em] text-transparent ${onDark ? 'from-teal-300 to-emerald-200' : 'from-teal-600 to-emerald-500 dark:from-teal-300 dark:to-emerald-200'}`}>{eyebrow}</p>
+      )}
+      <h2 className={`mt-3 text-3xl font-black tracking-tight sm:text-4xl lg:text-5xl ${onDark ? 'text-white' : 'text-slate-950 dark:text-white'}`}>{title}</h2>
+      <div className={`mt-4 h-1 w-16 rounded-full bg-gradient-to-r from-teal-400 via-emerald-400 to-amber-300 ${center ? 'mx-auto' : ''}`} aria-hidden="true" />
+      {copy && (
+        <p className={`mt-4 text-base leading-8 sm:text-lg ${onDark ? 'text-slate-300' : 'text-slate-600 dark:text-slate-300'}`}>{copy}</p>
+      )}
     </div>
   )
 }
@@ -702,9 +721,9 @@ function PointList({ points, compact = false }) {
   )
 }
 
-function ValueIcon({ label }) {
+function ValueIcon({ label, gradient = 'from-teal-500 to-emerald-500' }) {
   return (
-    <span className="grid h-11 w-11 shrink-0 place-items-center rounded-xl bg-teal-50 text-sm font-black text-teal-800 dark:bg-teal-400/10 dark:text-teal-200">
+    <span className={`grid h-11 w-11 shrink-0 place-items-center rounded-xl bg-gradient-to-br ${gradient} text-sm font-black text-white shadow-md`}>
       {label}
     </span>
   )
@@ -724,51 +743,61 @@ export default function LandingPage() {
   const { dark, toggle } = useTheme()
 
   return (
-    <div className="min-h-screen bg-[#fbf7ef] text-slate-900 dark:bg-slate-950 dark:text-white">
-      <header className="sticky top-0 z-50 border-b border-slate-900/10 bg-[#fbf7ef]/90 backdrop-blur dark:border-white/10 dark:bg-slate-950/90">
+    <div className="landing min-h-screen bg-white text-slate-900 dark:bg-slate-950 dark:text-white">
+      <header className="sticky top-0 z-50 border-b border-white/10 bg-slate-950/85 text-white backdrop-blur-xl">
         <div className="mx-auto flex h-16 max-w-7xl items-center gap-4 px-4 sm:px-6">
-          <a href="#top" className="mr-auto flex items-center gap-2 rounded-md focus:outline-none focus:ring-2 focus:ring-teal-500 focus:ring-offset-2 dark:focus:ring-offset-slate-950" aria-label="Festio home">
+          <a href="#top" className="mr-auto flex items-center gap-2 rounded-md focus:outline-none focus:ring-2 focus:ring-teal-500 focus:ring-offset-2 focus:ring-offset-slate-950" aria-label="Festio home">
             <LogoMark />
             <span className="text-lg font-black tracking-tight">Festio</span>
           </a>
           <nav className="hidden items-center gap-6 lg:flex" aria-label="Primary">
-            <a href="#features" className="text-sm font-bold text-slate-600 hover:text-slate-950 dark:text-slate-300 dark:hover:text-white">Features</a>
-            <a href="#design-studio" className="text-sm font-bold text-slate-600 hover:text-slate-950 dark:text-slate-300 dark:hover:text-white">Design Studio</a>
-            <a href="#addons" className="text-sm font-bold text-slate-600 hover:text-slate-950 dark:text-slate-300 dark:hover:text-white">Add-ons</a>
-            <a href="#guest-journey" className="text-sm font-bold text-slate-600 hover:text-slate-950 dark:text-slate-300 dark:hover:text-white">Guest Journey</a>
-            <a href="#event-types" className="text-sm font-bold text-slate-600 hover:text-slate-950 dark:text-slate-300 dark:hover:text-white">Event Types</a>
-            <Link to="/pricing" className="text-sm font-bold text-slate-600 hover:text-slate-950 dark:text-slate-300 dark:hover:text-white">Pricing</Link>
-            <a href="#demo" className="text-sm font-bold text-slate-600 hover:text-slate-950 dark:text-slate-300 dark:hover:text-white">Demo</a>
+            <a href="#features" className="text-sm font-bold text-slate-300 transition hover:text-white">Features</a>
+            <a href="#design-studio" className="text-sm font-bold text-slate-300 transition hover:text-white">Design Studio</a>
+            <a href="#addons" className="text-sm font-bold text-slate-300 transition hover:text-white">Add-ons</a>
+            <a href="#guest-journey" className="text-sm font-bold text-slate-300 transition hover:text-white">Guest Journey</a>
+            <a href="#event-types" className="text-sm font-bold text-slate-300 transition hover:text-white">Event Types</a>
+            <Link to="/pricing" className="text-sm font-bold text-slate-300 transition hover:text-white">Pricing</Link>
+            <a href="#demo" className="text-sm font-bold text-slate-300 transition hover:text-white">Demo</a>
           </nav>
-          <button onClick={toggle} className="rounded-lg p-2 text-slate-500 transition hover:bg-white hover:text-slate-950 dark:text-slate-300 dark:hover:bg-white/10 dark:hover:text-white" aria-label="Toggle theme">
+          <button onClick={toggle} className="rounded-lg p-2 text-slate-300 transition hover:bg-white/10 hover:text-white" aria-label="Toggle theme">
             {dark ? <SunIcon /> : <MoonIcon />}
           </button>
-          <Link to="/login" className="hidden text-sm font-extrabold text-slate-700 hover:text-slate-950 dark:text-slate-200 dark:hover:text-white sm:inline">Sign In</Link>
-          <PrimaryCta className="min-h-10 px-4 py-2 shadow-none">Create Free Event</PrimaryCta>
+          <Link to="/login" className="hidden text-sm font-extrabold text-slate-200 hover:text-white sm:inline">Sign In</Link>
+          <PrimaryCta className="min-h-10 px-4 py-2">Create Free Event</PrimaryCta>
         </div>
       </header>
 
       <main>
-        <section id="top" className="relative overflow-hidden">
-          <div className="absolute inset-0 -z-10 bg-[radial-gradient(60rem_30rem_at_80%_5%,rgba(45,212,191,.24),transparent),radial-gradient(38rem_28rem_at_10%_5%,rgba(245,158,11,.16),transparent)]" aria-hidden="true" />
-          <div className="mx-auto grid max-w-7xl items-center gap-12 px-4 py-16 sm:px-6 sm:py-20 lg:grid-cols-[1.02fr_0.98fr] lg:py-24">
+        <section id="top" className="relative overflow-hidden bg-slate-950 text-white">
+          <div className="pointer-events-none absolute inset-0" aria-hidden="true">
+            <div className="absolute -top-40 right-[-10%] h-[36rem] w-[36rem] rounded-full bg-teal-500/25 blur-[130px]" />
+            <div className="absolute left-[-12%] top-1/3 h-[30rem] w-[30rem] rounded-full bg-violet-500/20 blur-[130px]" />
+            <div className="absolute bottom-[-25%] left-1/3 h-[32rem] w-[32rem] rounded-full bg-amber-400/10 blur-[130px]" />
+            <div className="absolute inset-0 bg-[linear-gradient(rgba(255,255,255,.05)_1px,transparent_1px),linear-gradient(90deg,rgba(255,255,255,.05)_1px,transparent_1px)] bg-[size:60px_60px] [mask-image:radial-gradient(ellipse_65%_60%_at_50%_35%,#000_30%,transparent_100%)]" />
+          </div>
+          <div className="relative mx-auto grid max-w-7xl items-center gap-12 px-4 py-16 sm:px-6 sm:py-20 lg:grid-cols-[1.02fr_0.98fr] lg:py-28">
             <Reveal>
-              <p className="inline-flex rounded-full border border-teal-200 bg-white/80 px-4 py-2 text-xs font-black uppercase tracking-[0.2em] text-teal-800 shadow-sm dark:border-teal-400/20 dark:bg-white/5 dark:text-teal-200">
+              <p className="inline-flex items-center gap-2.5 rounded-full border border-teal-300/30 bg-teal-400/10 px-4 py-2 text-xs font-black uppercase tracking-[0.2em] text-teal-200">
+                <span className="relative flex h-2 w-2">
+                  <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-teal-300 opacity-75" />
+                  <span className="relative inline-flex h-2 w-2 rounded-full bg-teal-300" />
+                </span>
                 The guest operating system for modern events
               </p>
-              <h1 className="mt-7 max-w-4xl text-5xl font-black tracking-tight text-slate-950 dark:text-white sm:text-6xl lg:text-7xl">
-                Run every guest moment from invite to exit.
+              <h1 className="mt-7 max-w-4xl text-5xl font-black tracking-tight sm:text-6xl lg:text-7xl">
+                Run every guest moment{' '}
+                <span className="bg-gradient-to-r from-teal-300 via-emerald-300 to-amber-200 bg-clip-text text-transparent">from invite to exit.</span>
               </h1>
-              <p className="mt-6 max-w-2xl text-lg leading-8 text-slate-700 dark:text-slate-300 sm:text-xl">
+              <p className="mt-6 max-w-2xl text-lg leading-8 text-slate-300 sm:text-xl">
                 Festio helps organizers create events, manage guests, collect RSVPs, send QR passes, assign seats, message attendees, control access, manage meals, and track attendance live from one simple dashboard.
               </p>
               <div className="mt-8 flex flex-col gap-3 sm:flex-row">
                 <PrimaryCta className="px-7 py-4 text-base" />
-                <SecondaryCta className="px-7 py-4 text-base" />
+                <SecondaryCta tone="dark" className="px-7 py-4 text-base" />
               </div>
               <div className="mt-8 flex max-w-2xl flex-wrap gap-2" aria-label="Festio product capabilities">
                 {trustChips.map((chip) => (
-                  <span key={chip} className="rounded-full border border-slate-200 bg-white/80 px-3 py-1.5 text-xs font-black text-slate-700 shadow-sm dark:border-white/10 dark:bg-white/5 dark:text-slate-200">
+                  <span key={chip} className="rounded-full border border-white/10 bg-white/5 px-3 py-1.5 text-xs font-black text-slate-200 backdrop-blur transition hover:border-teal-300/40 hover:text-white">
                     {chip}
                   </span>
                 ))}
@@ -780,7 +809,7 @@ export default function LandingPage() {
           </div>
         </section>
 
-        <section id="problem" className="border-y border-slate-900/10 bg-white py-20 dark:border-white/10 dark:bg-slate-900/35">
+        <section id="problem" className="border-y border-slate-200 bg-gradient-to-b from-rose-50/70 via-white to-white py-20 dark:border-white/10 dark:bg-slate-900/35 dark:from-rose-400/[0.06] dark:via-transparent dark:to-transparent">
           <div className="mx-auto max-w-7xl px-4 sm:px-6">
             <Reveal>
               <SectionHeader
@@ -793,7 +822,7 @@ export default function LandingPage() {
             <div className="mt-12 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
               {problemCards.map((problem, index) => (
                 <Reveal key={problem} delay={(index % 3) * 70}>
-                  <div className="h-full rounded-2xl border border-slate-200 bg-[#fbf7ef] p-5 shadow-sm dark:border-white/10 dark:bg-slate-950">
+                  <div className="h-full rounded-2xl border border-slate-200 bg-white p-5 shadow-sm dark:border-white/10 dark:bg-slate-950">
                     <div className="mb-4 grid h-9 w-9 place-items-center rounded-full bg-rose-100 text-sm font-black text-rose-700 dark:bg-rose-400/10 dark:text-rose-300">!</div>
                     <h3 className="text-base font-black text-slate-950 dark:text-white">{problem}</h3>
                     <p className="mt-2 text-sm leading-6 text-slate-600 dark:text-slate-400">Festio connects this workflow back to the same live guest record.</p>
@@ -817,8 +846,8 @@ export default function LandingPage() {
             <div className="mt-12 grid gap-5 md:grid-cols-2 xl:grid-cols-4">
               {pillars.map((pillar, index) => (
                 <Reveal key={pillar.title} delay={(index % 4) * 70}>
-                  <article className={`h-full rounded-2xl border border-slate-200 bg-white p-6 shadow-sm transition hover:-translate-y-1 hover:shadow-xl dark:border-white/10 dark:bg-slate-900 ${index === 0 || index === 6 ? 'xl:col-span-2' : ''}`}>
-                    <ValueIcon label={`0${index + 1}`} />
+                  <article className={`h-full rounded-2xl border border-slate-200 bg-white p-6 shadow-sm transition hover:-translate-y-1 hover:border-teal-300/70 hover:shadow-xl dark:border-white/10 dark:bg-slate-900 dark:hover:border-teal-300/40 ${index === 0 || index === 6 ? 'xl:col-span-2' : ''}`}>
+                    <ValueIcon label={`0${index + 1}`} gradient={accentGradients[index % accentGradients.length]} />
                     <h3 className="mt-5 text-xl font-black text-slate-950 dark:text-white">{pillar.title}</h3>
                     <p className="mt-3 text-sm leading-6 text-slate-600 dark:text-slate-300">{pillar.copy}</p>
                     <PointList points={pillar.items} compact />
@@ -829,7 +858,7 @@ export default function LandingPage() {
           </div>
         </section>
 
-        <section id="design-studio" className="border-y border-slate-900/10 bg-white py-20 dark:border-white/10 dark:bg-slate-900/35">
+        <section id="design-studio" className="border-y border-slate-200 bg-gradient-to-br from-teal-50/80 via-white to-amber-50/70 py-20 dark:border-white/10 dark:bg-slate-900/35 dark:from-teal-400/[0.06] dark:via-transparent dark:to-amber-400/[0.05]">
           <div className="mx-auto grid max-w-7xl items-center gap-12 px-4 sm:px-6 lg:grid-cols-[0.9fr_1.1fr]">
             <Reveal>
               <SectionHeader
@@ -839,7 +868,7 @@ export default function LandingPage() {
               />
               <div className="mt-8 grid gap-3 sm:grid-cols-2">
                 {designStudioBullets.map((point) => (
-                  <div key={point} className="flex gap-3 rounded-2xl border border-slate-200 bg-[#fbf7ef] p-4 dark:border-white/10 dark:bg-slate-950">
+                  <div key={point} className="flex gap-3 rounded-2xl border border-slate-200 bg-white p-4 dark:border-white/10 dark:bg-slate-950">
                     <CheckIcon className="mt-0.5 h-4 w-4 shrink-0 text-teal-700 dark:text-teal-300" />
                     <span className="text-sm font-bold leading-6 text-slate-700 dark:text-slate-200">{point}</span>
                   </div>
@@ -856,7 +885,7 @@ export default function LandingPage() {
           </div>
         </section>
 
-        <section id="addons" className="border-y border-slate-900/10 bg-white py-20 dark:border-white/10 dark:bg-slate-900/35">
+        <section id="addons" className="border-y border-slate-200 bg-gradient-to-b from-violet-50/70 via-white to-white py-20 dark:border-white/10 dark:bg-slate-900/35 dark:from-violet-400/[0.06] dark:via-transparent dark:to-transparent">
           <div className="mx-auto max-w-7xl px-4 sm:px-6">
             <Reveal>
               <SectionHeader
@@ -869,7 +898,7 @@ export default function LandingPage() {
             <div className="mt-12 grid gap-8 lg:grid-cols-3">
               {addOnHighlights.map((item, index) => (
                 <Reveal key={item.id} delay={index * 80}>
-                  <article className="h-full rounded-2xl border border-slate-200 bg-[#fbf7ef] p-5 shadow-sm dark:border-white/10 dark:bg-slate-950">
+                  <article className="h-full rounded-2xl border border-slate-200 bg-white p-5 shadow-sm dark:border-white/10 dark:bg-slate-950">
                     <ProductMockup type={item.id} alt={`Festio ${item.title} preview`} />
                     <h3 className="mt-6 text-2xl font-black text-slate-950 dark:text-white">{item.title}</h3>
                     <p className="mt-3 text-sm leading-6 text-slate-600 dark:text-slate-300">{item.copy}</p>
@@ -886,6 +915,7 @@ export default function LandingPage() {
             <Reveal>
               <SectionHeader
                 center
+                tone="dark"
                 eyebrow="Guest journey"
                 title="From first invite to final arrival, every step is connected."
                 copy="A guest RSVP can become a pass, a table assignment, a meal order, a message thread, an access rule, and a live dashboard update."
@@ -894,8 +924,8 @@ export default function LandingPage() {
             <div className="mt-14 grid gap-5 md:grid-cols-2 lg:grid-cols-4">
               {journey.map(([title, copy], index) => (
                 <Reveal key={title} delay={(index % 4) * 70}>
-                  <article className="relative h-full rounded-2xl border border-white/10 bg-white/[0.06] p-5">
-                    <div className="mb-5 grid h-10 w-10 place-items-center rounded-full bg-teal-300 text-sm font-black text-slate-950">{index + 1}</div>
+                  <article className="relative h-full rounded-2xl border border-white/10 bg-white/[0.06] p-5 transition hover:border-teal-300/40 hover:bg-white/[0.09]">
+                    <div className={`mb-5 grid h-10 w-10 place-items-center rounded-full bg-gradient-to-br text-sm font-black text-white ${accentGradients[index % accentGradients.length]}`}>{index + 1}</div>
                     <h3 className="text-lg font-black">{title}</h3>
                     <p className="mt-3 text-sm leading-6 text-slate-300">{copy}</p>
                   </article>
@@ -907,7 +937,7 @@ export default function LandingPage() {
 
         <div id="demo">
           {detailSections.map((section, index) => (
-            <section key={section.id} id={section.id} className={`scroll-mt-20 py-20 ${index % 2 ? 'bg-white dark:bg-slate-900/35' : ''}`}>
+            <section key={section.id} id={section.id} className={`scroll-mt-20 py-20 ${index % 2 ? `bg-gradient-to-b via-white to-white dark:bg-slate-900/35 dark:via-transparent dark:to-transparent ${['from-teal-50/70 dark:from-teal-400/[0.05]', 'from-violet-50/60 dark:from-violet-400/[0.05]', 'from-amber-50/60 dark:from-amber-400/[0.05]', 'from-sky-50/60 dark:from-sky-400/[0.05]', 'from-rose-50/50 dark:from-rose-400/[0.05]', 'from-emerald-50/60 dark:from-emerald-400/[0.05]'][Math.floor(index / 2) % 6]}` : ''}`}>
               <div className="mx-auto grid max-w-7xl items-center gap-10 px-4 sm:px-6 lg:grid-cols-2">
                 <Reveal className={index % 2 ? 'lg:order-2' : ''}>
                   <SectionHeader eyebrow={section.eyebrow} title={section.title} copy={section.copy} />
@@ -927,7 +957,7 @@ export default function LandingPage() {
           ))}
         </div>
 
-        <section id="event-types" className="border-y border-slate-900/10 bg-white py-20 dark:border-white/10 dark:bg-slate-900/35">
+        <section id="event-types" className="border-y border-slate-200 bg-gradient-to-b from-sky-50/70 via-white to-white py-20 dark:border-white/10 dark:bg-slate-900/35 dark:from-sky-400/[0.06] dark:via-transparent dark:to-transparent">
           <div className="mx-auto max-w-7xl px-4 sm:px-6">
             <Reveal>
               <SectionHeader
@@ -940,7 +970,7 @@ export default function LandingPage() {
             <div className="mt-12 grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
               {eventTypes.map(([title, copy], index) => (
                 <Reveal key={title} delay={(index % 3) * 70}>
-                  <article className="h-full rounded-2xl border border-slate-200 bg-[#fbf7ef] p-6 shadow-sm dark:border-white/10 dark:bg-slate-950">
+                  <article className="h-full rounded-2xl border border-slate-200 bg-white p-6 shadow-sm dark:border-white/10 dark:bg-slate-950">
                     <h3 className="text-lg font-black text-slate-950 dark:text-white">{title}</h3>
                     <p className="mt-3 text-sm leading-6 text-slate-600 dark:text-slate-300">{copy}</p>
                   </article>
@@ -968,7 +998,7 @@ export default function LandingPage() {
                       <th scope="col" className="px-5 py-4 text-sm font-black text-slate-950 dark:text-white">Capability</th>
                       <th scope="col" className="px-5 py-4 text-center text-sm font-black text-slate-600 dark:text-slate-300">Basic RSVP tools</th>
                       <th scope="col" className="px-5 py-4 text-center text-sm font-black text-slate-600 dark:text-slate-300">QR check-in tools</th>
-                      <th scope="col" className="px-5 py-4 text-center text-sm font-black text-teal-700 dark:text-teal-300">Festio</th>
+                      <th scope="col" className="bg-teal-50/70 px-5 py-4 text-center text-sm font-black text-teal-700 dark:bg-teal-400/5 dark:text-teal-300">Festio</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -977,7 +1007,7 @@ export default function LandingPage() {
                         <th scope="row" className="px-5 py-4 text-sm font-bold text-slate-800 dark:text-slate-100">{capability}</th>
                         <td className="px-5 py-4 text-center"><ComparisonCell value={rsvp} /></td>
                         <td className="px-5 py-4 text-center"><ComparisonCell value={checkin} /></td>
-                        <td className="px-5 py-4 text-center"><ComparisonCell value={festio} highlight /></td>
+                        <td className="bg-teal-50/70 px-5 py-4 text-center dark:bg-teal-400/5"><ComparisonCell value={festio} highlight /></td>
                       </tr>
                     ))}
                   </tbody>
@@ -992,6 +1022,7 @@ export default function LandingPage() {
             <Reveal>
               <SectionHeader
                 center
+                tone="dark"
                 eyebrow="Trust"
                 title="Built for real event operations."
                 copy="Festio is designed for the moments when guests are arriving, staff need answers, and the organizer needs one reliable source of truth."
@@ -1025,7 +1056,7 @@ export default function LandingPage() {
         <section className="py-20">
           <div className="mx-auto max-w-5xl px-4 sm:px-6">
             <Reveal>
-              <div className="overflow-hidden rounded-[2rem] border border-slate-200 bg-white p-8 shadow-xl shadow-slate-950/5 dark:border-white/10 dark:bg-slate-900 sm:p-12">
+              <div className="overflow-hidden rounded-[2rem] border border-slate-200 bg-gradient-to-br from-white via-teal-50/60 to-amber-50/50 p-8 shadow-xl shadow-slate-950/10 dark:border-white/10 dark:bg-slate-900 dark:from-slate-900 dark:via-slate-900 dark:to-slate-900 sm:p-12">
                 <div className="grid gap-8 lg:grid-cols-[1.3fr_0.7fr] lg:items-center">
                   <div>
                     <p className="text-sm font-black uppercase tracking-[0.2em] text-teal-700 dark:text-teal-300">Pricing</p>
@@ -1047,23 +1078,33 @@ export default function LandingPage() {
           </div>
         </section>
 
-        <section className="border-t border-slate-900/10 py-24 dark:border-white/10">
-          <div className="mx-auto max-w-4xl px-4 text-center sm:px-6">
-            <Reveal>
-              <h2 className="text-4xl font-black tracking-tight text-slate-950 dark:text-white sm:text-5xl">Ready to run your event with less confusion and more control?</h2>
-              <p className="mt-5 text-lg leading-8 text-slate-600 dark:text-slate-300">
+        <section className="px-4 pb-24 pt-8 sm:px-6">
+          <div className="relative mx-auto max-w-6xl overflow-hidden rounded-[2.5rem] bg-slate-950 px-6 py-16 text-center text-white shadow-2xl shadow-slate-950/25 sm:px-12 sm:py-20">
+            <div className="pointer-events-none absolute inset-0" aria-hidden="true">
+              <div className="absolute -top-24 left-1/4 h-72 w-72 rounded-full bg-teal-500/30 blur-[100px]" />
+              <div className="absolute -bottom-24 right-1/4 h-72 w-72 rounded-full bg-violet-500/25 blur-[100px]" />
+              <div className="absolute -right-16 top-0 h-56 w-56 rounded-full bg-amber-400/15 blur-[90px]" />
+              <div className="absolute inset-0 bg-[linear-gradient(rgba(255,255,255,.04)_1px,transparent_1px),linear-gradient(90deg,rgba(255,255,255,.04)_1px,transparent_1px)] bg-[size:52px_52px] [mask-image:radial-gradient(ellipse_70%_70%_at_50%_50%,#000_25%,transparent_100%)]" />
+            </div>
+            <Reveal className="relative">
+              <h2 className="mx-auto max-w-3xl text-4xl font-black tracking-tight sm:text-5xl">
+                Ready to run your event with{' '}
+                <span className="bg-gradient-to-r from-teal-300 via-emerald-300 to-amber-200 bg-clip-text text-transparent">less confusion and more control?</span>
+              </h2>
+              <p className="mx-auto mt-5 max-w-2xl text-lg leading-8 text-slate-300">
                 Create your event, invite your guests, manage the details, and see everything live with Festio.
               </p>
               <div className="mt-8 flex flex-col justify-center gap-3 sm:flex-row">
                 <PrimaryCta className="px-8 py-4 text-base" />
-                <SecondaryCta className="px-8 py-4 text-base" />
+                <SecondaryCta tone="dark" className="px-8 py-4 text-base" />
               </div>
             </Reveal>
           </div>
         </section>
       </main>
 
-      <footer className="border-t border-slate-900/10 bg-white py-10 dark:border-white/10 dark:bg-slate-950">
+      <div className="h-px bg-gradient-to-r from-teal-400 via-violet-400 to-amber-300" aria-hidden="true" />
+      <footer className="bg-white py-10 dark:bg-slate-950">
         <div className="mx-auto flex max-w-7xl flex-col gap-5 px-4 sm:px-6 lg:flex-row lg:items-center lg:justify-between">
           <div className="flex items-center gap-2">
             <LogoMark size="h-8 w-8" text="text-xs" />

@@ -17,7 +17,10 @@ export async function googleSignIn() {
     return signInWithPopup(auth, googleProvider)
   }
   const { FirebaseAuthentication } = await import('@capacitor-firebase/authentication')
-  const result = await FirebaseAuthentication.signInWithGoogle()
+  const result = await FirebaseAuthentication.signInWithGoogle({
+    skipNativeAuth: true,
+    useCredentialManager: false,
+  })
   const idToken = result?.credential?.idToken
   if (!idToken) {
     const err = new Error('Google sign-in cancelled')

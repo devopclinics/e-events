@@ -1,4 +1,4 @@
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap');
 
 @tailwind base;
 @tailwind components;
@@ -153,6 +153,35 @@ textarea:focus {
 
 .invite-page .rounded-3xl {
   border-radius: 1.5rem !important;
+}
+
+/* The landing page is a marketing surface — exempt it from the app-shell
+   flattening overrides above so its depth, radii, and colored shadows render. */
+.landing .rounded-2xl {
+  border-radius: 1rem !important;
+}
+
+.landing .rounded-3xl {
+  border-radius: 1.5rem !important;
+}
+
+.landing .shadow,
+.landing .shadow-lg,
+.landing .shadow-xl,
+.landing .shadow-2xl,
+.dark .landing .shadow,
+.dark .landing .shadow-lg,
+.dark .landing .shadow-xl,
+.dark .landing .shadow-2xl {
+  box-shadow: var(--tw-ring-offset-shadow, 0 0 #0000), var(--tw-ring-shadow, 0 0 #0000), var(--tw-shadow) !important;
+}
+
+.dark .landing .dark\:bg-slate-950 {
+  background-color: #020617 !important;
+}
+
+.dark .landing .dark\:bg-slate-900 {
+  background-color: #0f172a !important;
 }
 
 .dark .dark\:bg-slate-950,

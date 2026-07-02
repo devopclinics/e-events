@@ -9,6 +9,10 @@
     "SplashScreen": {
       "launchShowDuration": 1200,
       "backgroundColor": "#14b8a6"
+    },
+    "FirebaseAuthentication": {
+      "skipNativeAuth": true,
+      "providers": ["google.com"]
     }
   }
 }

@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from 'react'
 import { api, PUBLIC_BASE_URL, publicBaseUrl } from '../api'
+import { utcToLocalInput } from '../timeutil'
 import { useAuth } from '../context/AuthContext'
 import { useCurrentEvent } from '../hooks/useCurrentEvent'
 
@@ -3450,7 +3451,7 @@ function InvitePanel({ event, onChanged }) {
     rsvp_collect_email:event.rsvp_collect_email ?? true,
     rsvp_capacity:     event.rsvp_capacity      ?? '',
     invite_mode:       event.invite_mode        ?? 'open',
-    rsvp_deadline:     event.rsvp_deadline ? event.rsvp_deadline.slice(0, 16) : '',
+    rsvp_deadline:     utcToLocalInput(event.rsvp_deadline),
     rsvp_require_approval: event.rsvp_require_approval ?? false,
   })
   const [questions, setQuestions] = useState([])
@@ -3473,7 +3474,7 @@ function InvitePanel({ event, onChanged }) {
       const payload = {
         ...form,
         rsvp_capacity: form.rsvp_capacity === '' ? null : Number(form.rsvp_capacity),
-        rsvp_deadline: form.rsvp_deadline ? form.rsvp_deadline : null,
+        rsvp_deadline: form.rsvp_deadline ? new Date(form.rsvp_deadline).toISOString() : null,
       }
       const updated = await api.updateInviteSettings(event.id, payload)
       onChanged(updated)
@@ -4617,12 +4618,11 @@ function TeamPanel({ eventId }) {
 
 // ── EventForm ─────────────────────────────────────────────────────────────────
 
-function utcToLocal(utcStr) {
-  if (!utcStr) return ''
-  const d = new Date(utcStr)
-  const local = new Date(d.getTime() - d.getTimezoneOffset() * 60000)
-  return local.toISOString().slice(0, 16)
-}
+// NB: backend timestamps have no timezone suffix — parsing them with a bare
+// `new Date()` reads them as LOCAL time, which made every edit+save cycle
+// shift event_date by the viewer's UTC offset. utcToLocalInput tags them as
+// UTC first, so the datetime-local round trip is stable.
+const utcToLocal = utcToLocalInput
 
 function EventForm({ initial, onSave, onCancel }) {
   const [form, setForm] = useState(

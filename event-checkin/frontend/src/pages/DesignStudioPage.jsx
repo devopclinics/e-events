@@ -1,6 +1,7 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { api } from '../api'
 import { useCurrentEvent } from '../hooks/useCurrentEvent'
+import { parseUtc } from '../timeutil'
 
 // Admin shell for the decoupled Festio Design Studio. Core event logic stays in
 // the existing backend; this page only saves design settings through the
@@ -135,22 +136,20 @@ const input = 'w-full min-h-11 rounded-xl border border-slate-300 bg-white px-3 
 const label = 'mb-1 block text-xs font-extrabold uppercase tracking-[0.12em] text-slate-500 dark:text-slate-400'
 
 function fmtEventDate(value) {
-  if (!value) return ''
-  const d = new Date(value)
-  if (Number.isNaN(d.getTime())) return ''
+  const d = parseUtc(value)
+  if (!d) return ''
   return d.toLocaleDateString(undefined, { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' })
 }
 
 function fmtEventTime(value) {
-  if (!value) return ''
-  const d = new Date(value)
-  if (Number.isNaN(d.getTime())) return ''
+  const d = parseUtc(value)
+  if (!d) return ''
   return d.toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' })
 }
 
-function normalizeText(value, fallback) {
-  const v = `${value || ''}`.trim()
-  return v || fallback
+function humanizeKey(value) {
+  if (!value) return '—'
+  return String(value).replace(/[-_]+/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase())
 }
 
 function SectionTitle({ eyebrow, title, copy }) {
@@ -299,7 +298,7 @@ function flyerLayoutClass(template) {
   return (aliases[layout] || layout).replace(/[^a-z0-9]+/gi, '-')
 }
 
-function FlyerPreview({ template, colors, wording, coverImageUrl, imagePosition, qrEnabled, qrPosition, fontFamily }) {
+function FlyerPreview({ template, colors, wording, coverImageUrl, imagePosition, qrEnabled, qrPosition, fontFamily, textScale = 1 }) {
   const templateImageUrl = template?.previewUrl || (template?.sourceType === 'template-pack' ? template?.thumbnailUrl : '')
   const justify = qrPosition === 'bottom-left' ? 'justify-start' : qrPosition === 'center-bottom' ? 'justify-center' : 'justify-end'
   const layout = flyerLayoutClass(template)
@@ -370,7 +369,12 @@ function FlyerPreview({ template, colors, wording, coverImageUrl, imagePosition,
                   ? 'inset-[8%] flex flex-col items-center border p-5 text-center'
                   : 'inset-x-[7%] top-[9%]'
           }`}
-          style={layout === 'framed-center-card' ? { borderColor: colors.primary, background: 'rgba(255,255,255,.72)' } : undefined}
+          style={{
+            ...(layout === 'framed-center-card' ? { borderColor: colors.primary, background: 'rgba(255,255,255,.72)' } : {}),
+            ...(Number(textScale) !== 1
+              ? { transform: `scale(${textScale})`, transformOrigin: layout === 'full-bleed-photo' ? 'bottom left' : 'top left' }
+              : {}),
+          }}
         >
           <div className="text-[9px] font-black uppercase tracking-[0.22em]" style={{ color: layout === 'framed-center-card' ? colors.text : colors.text || '#fff' }}>
             {wording.inviteLabel || "You're invited to"}
@@ -576,6 +580,17 @@ export default function DesignStudioPage() {
   const [flash, setFlash] = useState(null)
   const [flyer, setFlyer] = useState({ size: 'portrait', qr: true, rsvpLink: true, qrPosition: 'bottom-right' })
   const [emailType, setEmailType] = useState(EMAIL_TYPES[0])
+  const designRef = useRef(null)
+  const saveTimer = useRef(null)
+
+  useEffect(() => { designRef.current = design }, [design])
+  useEffect(() => () => { if (saveTimer.current) clearTimeout(saveTimer.current) }, [eventId])
+
+  // Hydrate persisted flyer settings (size, QR options) when the event's design loads.
+  useEffect(() => {
+    const saved = design?.asset_config?.flyer_settings
+    setFlyer((f) => ({ size: 'portrait', qr: true, rsvpLink: true, qrPosition: 'bottom-right', ...(saved || {}) }))
+  }, [eventId, design?.event_id])
 
   const note = (text, err = false) => {
     setFlash({ text, err })
@@ -611,6 +626,7 @@ export default function DesignStudioPage() {
 
   const filteredTemplates = useMemo(() => {
     const q = filters.search.trim().toLowerCase()
+    const hasImage = (t) => !!(t.previewUrl || (t.sourceType === 'template-pack' && t.thumbnailUrl))
     return templates.filter((t) => {
       if (q && !`${t.name} ${t.category} ${t.style}`.toLowerCase().includes(q)) return false
       if (filters.category && t.categoryKey !== filters.category && t.category !== filters.category) return false
@@ -618,7 +634,7 @@ export default function DesignStudioPage() {
       if (filters.free !== '' && t.isFree !== (filters.free === 'true')) return false
       if (filters.surface && !(t.surfaces || []).includes(filters.surface)) return false
       return true
-    })
+    }).sort((a, b) => hasImage(b) - hasImage(a))
   }, [templates, filters])
 
   const flyerTemplates = useMemo(() => {
@@ -705,8 +721,13 @@ export default function DesignStudioPage() {
     footerMessage: "I can't wait to celebrate with you.",
     footerNote: 'Powered by Festio',
   }
+  // A saved value wins even when it is an empty string, so organizers can
+  // clear a field (dress code, parking note, …) instead of only replacing it.
   const wording = Object.fromEntries(
-    WORDING_FIELDS.map(([key, , fallback]) => [key, normalizeText(design?.wording_config?.[key], defaultWords[key] || fallback)]),
+    WORDING_FIELDS.map(([key, , fallback]) => {
+      const saved = design?.wording_config?.[key]
+      return [key, saved ?? (defaultWords[key] || fallback)]
+    }),
   )
 
   async function patch(partial, successText = '') {
@@ -733,7 +754,19 @@ export default function DesignStudioPage() {
     }
   }
 
+  // Only warn when the user actually customized colors away from the current
+  // template's palette — plain template hopping stays friction-free.
+  function confirmPaletteSwap(t) {
+    if (t.id === design?.selected_template_id) return true
+    const saved = design?.theme_config?.colors || {}
+    const base = selectedTpl?.defaultColors || {}
+    const customized = Object.entries(saved).some(([key, value]) => value && value !== base[key])
+    if (!customized) return true
+    return window.confirm(`Use the "${t.name}" color palette? This replaces your custom colors.`)
+  }
+
   async function chooseTemplate(t) {
+    if (!confirmPaletteSwap(t)) return
     await patch(
       {
         selected_template_id: t.id,
@@ -754,6 +787,7 @@ export default function DesignStudioPage() {
   }
 
   async function chooseFlyerTemplate(t) {
+    if (!confirmPaletteSwap(t)) return
     const imageUrl = templateFlyerImageUrl(t)
     await patch(
       {
@@ -771,8 +805,42 @@ export default function DesignStudioPage() {
     )
   }
 
-  const setColor = (key, value) => patch({ theme_config: { ...(design?.theme_config || {}), colors: { ...colors, [key]: value } } })
-  const setThemeSetting = (key, value) => patch({ theme_config: { ...(design?.theme_config || {}), [key]: value } })
+  // Color drags fire an input event per tick — update local state instantly and
+  // debounce the PUT so saves can't flood the server or race each other.
+  const queueSave = () => {
+    if (!eventId) return
+    if (saveTimer.current) clearTimeout(saveTimer.current)
+    saveTimer.current = setTimeout(async () => {
+      saveTimer.current = null
+      const d = designRef.current
+      try {
+        await api.saveEventDesign(eventId, {
+          selected_template_id: d?.selected_template_id,
+          selected_flyer_template_id: d?.selected_flyer_template_id,
+          theme_config: d?.theme_config || {},
+          wording_config: d?.wording_config || {},
+          asset_config: d?.asset_config || {},
+        })
+      } catch (e) {
+        note(e.message || 'Save failed', true)
+      }
+    }, 600)
+  }
+
+  const setColor = (key, value) => {
+    setDesign((d) => ({ ...(d || { event_id: eventId }), theme_config: { ...(d?.theme_config || {}), colors: { ...colors, [key]: value } } }))
+    queueSave()
+  }
+  const setThemeSetting = (key, value) => {
+    setDesign((d) => ({ ...(d || { event_id: eventId }), theme_config: { ...(d?.theme_config || {}), [key]: value } }))
+    queueSave()
+  }
+  const setFlyerSetting = (key, value) => {
+    const next = { ...flyer, [key]: value }
+    setFlyer(next)
+    setDesign((d) => ({ ...(d || { event_id: eventId }), asset_config: { ...(d?.asset_config || {}), flyer_settings: next } }))
+    queueSave()
+  }
   const setWord = (key, value) => setDesign((d) => ({ ...(d || { event_id: eventId }), wording_config: { ...(d?.wording_config || {}), [key]: value } }))
   const setImagePosition = (key, value) => {
     const next = { ...imagePosition, [key]: Number(value) }
@@ -876,9 +944,9 @@ export default function DesignStudioPage() {
         cover_image_url: photoCoverImageUrl || undefined,
         image_position: imagePosition,
         text_scale: flyerTextScale,
-        qr_enabled: true,
+        qr_enabled: flyer.qr,
         qr_position: flyer.qrPosition,
-        qr_data: `https://festio.events/invite/${eventId}`,
+        qr_data: flyer.qr && flyer.rsvpLink ? `https://festio.events/invite/${eventId}` : null,
       }, { download: false }) : null
       const flyerImageUrl = rendered?.outputUrl || design?.asset_config?.flyer_image_url || templateFlyerImageUrl(selectedFlyerTpl) || ''
       const saved = await api.saveEventDesign(eventId, {
@@ -908,7 +976,7 @@ export default function DesignStudioPage() {
   const hubTone = previewTone(colors)
 
   return (
-    <div className="mx-auto max-w-7xl px-4 py-6 sm:px-6">
+    <div className="design-studio mx-auto max-w-7xl px-4 py-6 sm:px-6">
       <div className="mb-6 overflow-hidden rounded-[1.75rem] border border-slate-200 bg-white shadow-sm dark:border-white/10 dark:bg-slate-900">
         <div className="grid gap-6 p-5 lg:grid-cols-[1fr_340px] lg:p-7">
           <div>
@@ -1050,10 +1118,10 @@ export default function DesignStudioPage() {
                   </div>
                   <ThemeSwatches colors={templateForPreview.defaultColors} />
                   <div className="grid grid-cols-2 gap-2 text-xs">
-                    <div className="rounded-xl bg-slate-50 p-3 dark:bg-white/5"><strong>Layout</strong><br />{templateForPreview.layout?.eventPage}</div>
-                    <div className="rounded-xl bg-slate-50 p-3 dark:bg-white/5"><strong>Flyer</strong><br />{templateForPreview.layout?.flyer}</div>
-                    <div className="rounded-xl bg-slate-50 p-3 dark:bg-white/5"><strong>Pass</strong><br />{templateForPreview.layout?.pass}</div>
-                    <div className="rounded-xl bg-slate-50 p-3 dark:bg-white/5"><strong>Email</strong><br />{templateForPreview.layout?.email}</div>
+                    <div className="rounded-xl bg-slate-50 p-3 dark:bg-white/5"><strong>Layout</strong><br />{humanizeKey(templateForPreview.layout?.eventPage)}</div>
+                    <div className="rounded-xl bg-slate-50 p-3 dark:bg-white/5"><strong>Flyer</strong><br />{humanizeKey(templateForPreview.layout?.flyer)}</div>
+                    <div className="rounded-xl bg-slate-50 p-3 dark:bg-white/5"><strong>Pass</strong><br />{humanizeKey(templateForPreview.layout?.pass)}</div>
+                    <div className="rounded-xl bg-slate-50 p-3 dark:bg-white/5"><strong>Email</strong><br />{humanizeKey(templateForPreview.layout?.email)}</div>
                   </div>
                   <button type="button" onClick={() => chooseTemplate(templateForPreview)} className="min-h-12 w-full rounded-xl bg-teal-500 px-4 py-3 text-sm font-black text-slate-950 hover:bg-teal-300">
                     Use this family
@@ -1155,21 +1223,21 @@ export default function DesignStudioPage() {
                 </div>
                 <div>
                   <label className={label}>Flyer format</label>
-                  <select className={input} value={flyer.size} onChange={(e) => setFlyer((f) => ({ ...f, size: e.target.value }))}>
+                  <select className={input} value={flyer.size} onChange={(e) => setFlyerSetting('size', e.target.value)}>
                     {FLYER_SIZES.map(([key, text]) => <option key={key} value={key}>{text}</option>)}
                   </select>
                 </div>
               </div>
               <div className="mt-4 grid gap-3 sm:grid-cols-3">
                 <label className="flex min-h-11 items-center gap-2 rounded-xl border border-slate-200 px-3 text-sm font-bold dark:border-white/10">
-                  <input type="checkbox" checked={flyer.qr} onChange={(e) => setFlyer((f) => ({ ...f, qr: e.target.checked }))} className="h-4 w-4 accent-teal-500" />
+                  <input type="checkbox" checked={flyer.qr} onChange={(e) => setFlyerSetting('qr', e.target.checked)} className="h-4 w-4 accent-teal-500" />
                   Include RSVP QR
                 </label>
                 <label className="flex min-h-11 items-center gap-2 rounded-xl border border-slate-200 px-3 text-sm font-bold dark:border-white/10">
-                  <input type="checkbox" checked={flyer.rsvpLink} onChange={(e) => setFlyer((f) => ({ ...f, rsvpLink: e.target.checked }))} className="h-4 w-4 accent-teal-500" />
+                  <input type="checkbox" checked={flyer.rsvpLink} onChange={(e) => setFlyerSetting('rsvpLink', e.target.checked)} className="h-4 w-4 accent-teal-500" />
                   Use RSVP link
                 </label>
-                <select className={input} value={flyer.qrPosition} onChange={(e) => setFlyer((f) => ({ ...f, qrPosition: e.target.value }))}>
+                <select className={input} value={flyer.qrPosition} onChange={(e) => setFlyerSetting('qrPosition', e.target.value)}>
                   {QR_POSITIONS.map(([key, text]) => <option key={key} value={key}>{text}</option>)}
                 </select>
               </div>
@@ -1267,6 +1335,7 @@ export default function DesignStudioPage() {
               qrEnabled={flyer.qr}
               qrPosition={flyer.qrPosition}
               fontFamily={previewFontFamily}
+              textScale={flyerTextScale}
             />
           </aside>
         </div>

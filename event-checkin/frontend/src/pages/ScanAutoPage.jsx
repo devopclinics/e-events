@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { useParams } from 'react-router-dom'
 import { api } from '../api'
+import { parseUtc } from '../timeutil'
 
 function passThemeColors(theme) {
   return theme?.colors || {}
@@ -623,7 +624,7 @@ export default function ScanAutoPage() {
   const passOpts = { showTable: true, showSeat: true, showHubButton: true, ...(designTheme?.pass_options || {}) }
   const coverImage = designTheme?.flyer_image_url || designTheme?.cover_image_url || ''
   const qrImageUrl = `/api/scan/${token}/qr.png`
-  const eventDate = event?.event_date ? new Date(event.event_date) : null
+  const eventDate = parseUtc(event?.event_date)
   const eventName = wording.eventTitle || event?.name || 'Event'
   const hostName = wording.hostName || event?.couples_name || ''
   const admissionText = wording.admissionNote || (status === 'admitted'

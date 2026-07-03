@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import { useParams } from 'react-router-dom'
 import { api } from '../api'
+import { parseUtc } from '../timeutil'
 
 // ── Theme definitions ─────────────────────────────────────────────────────────
 
@@ -55,14 +56,14 @@ const THEMES = {
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
 function fmtDate(iso) {
-  if (!iso) return ''
-  const d = new Date(iso)
+  const d = parseUtc(iso)
+  if (!d) return ''
   return d.toLocaleDateString(undefined, { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })
 }
 
 function fmtTime(iso) {
-  if (!iso) return ''
-  const d = new Date(iso)
+  const d = parseUtc(iso)
+  if (!d) return ''
   return d.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' })
 }
 

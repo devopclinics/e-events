@@ -14,7 +14,7 @@ import aiosmtplib
 import httpx
 
 from app.config import settings
-from app.timeutil import local_hhmm
+from app.timeutil import local_hhmm, to_event_local
 from services.qr_service import generate_qr_bytes
 
 logger = logging.getLogger(__name__)
@@ -377,6 +377,7 @@ def _invite_menu_cta(ticket_url: str) -> str:
 
 
 def _fmt_event_date(dt: datetime | None) -> str:
+    dt = to_event_local(dt)
     if not dt:
         return ""
     try:
@@ -386,6 +387,7 @@ def _fmt_event_date(dt: datetime | None) -> str:
 
 
 def _fmt_event_time(dt: datetime | None) -> str:
+    dt = to_event_local(dt)
     if not dt:
         return ""
     try:
@@ -745,7 +747,8 @@ async def send_manual_invite_email(
     theme = await _design_email_theme(event_id)
     safe_name = _html.escape(name)
     safe_event = _html.escape(event_name)
-    date_str = event_date.strftime("%A, %d %B %Y") if event_date else ""
+    _local_date = to_event_local(event_date)
+    date_str = _local_date.strftime("%A, %d %B %Y") if _local_date else ""
     safe_msg = f"<p>{_html.escape(invite_message)}</p>" if invite_message else ""
 
     inner = f"""

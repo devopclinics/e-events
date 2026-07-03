@@ -16,7 +16,7 @@ from datetime import datetime
 import httpx
 
 from app.config import settings
-from app.timeutil import local_hhmm
+from app.timeutil import local_hhmm, to_event_local
 
 logger = logging.getLogger(__name__)
 
@@ -28,7 +28,8 @@ _BIRD_BASE = "https://api.bird.com"
 async def send_invite_sms(*, phone: str, first_name: str, event_name: str, ticket_url: str, event_date: datetime) -> None:
     if not _channel_ready("sms", phone):
         return
-    date_str = event_date.strftime("%a %d %b") if event_date else ""
+    _local = to_event_local(event_date)
+    date_str = _local.strftime("%a %d %b") if _local else ""
     body = f"Hi {first_name}! You're invited to {event_name}" + (f" on {date_str}" if date_str else "") + f". Your ticket: {ticket_url}"
     await _send_sms(phone, body)
 
@@ -48,7 +49,8 @@ async def send_admission_sms(*, phone: str, first_name: str, event_name: str, ad
 async def send_invite_whatsapp(*, phone: str, first_name: str, event_name: str, ticket_url: str, event_date: datetime) -> None:
     if not _channel_ready("whatsapp", phone):
         return
-    date_str = event_date.strftime("%A, %d %B %Y") if event_date else ""
+    _local = to_event_local(event_date)
+    date_str = _local.strftime("%A, %d %B %Y") if _local else ""
     await _send_whatsapp_template(
         phone=phone,
         kind="invite",
@@ -93,7 +95,8 @@ async def send_rsvp_reminder_whatsapp(*, phone: str, first_name: str, event_name
 async def send_rsvp_confirmation_whatsapp(*, phone: str, first_name: str, event_name: str, event_date: datetime) -> None:
     if not _channel_ready("whatsapp", phone):
         return
-    date_str = event_date.strftime("%A, %d %B %Y") if event_date else ""
+    _local = to_event_local(event_date)
+    date_str = _local.strftime("%A, %d %B %Y") if _local else ""
     await _send_whatsapp_template(
         phone=phone,
         kind="rsvp_confirmation",

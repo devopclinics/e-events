@@ -155,13 +155,17 @@ textarea:focus {
   border-radius: 1.5rem !important;
 }
 
-/* The landing page is a marketing surface — exempt it from the app-shell
-   flattening overrides above so its depth, radii, and colored shadows render. */
-.landing .rounded-2xl {
+/* The landing page and Design Studio are visual surfaces — exempt them from the
+   app-shell flattening overrides above so depth, radii, and colored shadows render.
+   (The studio keeps the dark-mode surface remap below so it stays consistent
+   with the rest of the app shell.) */
+.landing .rounded-2xl,
+.design-studio .rounded-2xl {
   border-radius: 1rem !important;
 }
 
-.landing .rounded-3xl {
+.landing .rounded-3xl,
+.design-studio .rounded-3xl {
   border-radius: 1.5rem !important;
 }
 
@@ -169,10 +173,18 @@ textarea:focus {
 .landing .shadow-lg,
 .landing .shadow-xl,
 .landing .shadow-2xl,
+.design-studio .shadow,
+.design-studio .shadow-lg,
+.design-studio .shadow-xl,
+.design-studio .shadow-2xl,
 .dark .landing .shadow,
 .dark .landing .shadow-lg,
 .dark .landing .shadow-xl,
-.dark .landing .shadow-2xl {
+.dark .landing .shadow-2xl,
+.dark .design-studio .shadow,
+.dark .design-studio .shadow-lg,
+.dark .design-studio .shadow-xl,
+.dark .design-studio .shadow-2xl {
   box-shadow: var(--tw-ring-offset-shadow, 0 0 #0000), var(--tw-ring-shadow, 0 0 #0000), var(--tw-shadow) !important;
 }
 

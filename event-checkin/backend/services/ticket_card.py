@@ -6,6 +6,8 @@ from pathlib import Path
 
 from PIL import Image, ImageDraw, ImageFont
 
+from app.timeutil import to_event_local
+
 _FONTS_DIR = Path(__file__).parent.parent / "fonts"
 
 # ── colours ──────────────────────────────────────────────────────────────────
@@ -155,7 +157,8 @@ def generate_ticket_card(
         y += 30
 
     if event_date:
-        _centered(draw, y, event_date.strftime("%A, %B %-d, %Y"), f_small, _GRAY_400, W)
+        _local_date = to_event_local(event_date) or event_date
+        _centered(draw, y, _local_date.strftime("%A, %B %-d, %Y"), f_small, _GRAY_400, W)
         y += 30
 
     if venue_lines:

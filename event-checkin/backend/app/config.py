@@ -60,6 +60,8 @@ class Settings(BaseSettings):
     bird_whatsapp_registry_template: str = ""         # Bird WhatsApp template NAME for registry message
     bird_mms_channel_id: str = ""                     # Bird MMS channel (image-capable)
 
+    meta_whatsapp_webhook_verify_token: str = "festio-whatsapp-webhook"
+
     # ClickSend (MMS-capable provider used in prod). Empty = disabled.
     clicksend_username: str = ""
     clicksend_api_key: str = ""

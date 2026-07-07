@@ -37,6 +37,8 @@ export default function PrivacyPage() {
             the specific event they were invited to. Message frequency varies by event. Message and
             data rates may apply. Reply <strong>STOP</strong> to opt out at any time, or
             <strong> HELP</strong> for help; guests can also turn SMS off on their ticket page.
+            See our{' '}
+            <Link to="/sms-policy" className="text-teal-600 hover:underline">SMS Opt-In and Messaging Terms</Link>.
           </p>
           <p>
             <strong>
@@ -65,7 +67,10 @@ export default function PrivacyPage() {
           <h2 className="font-semibold text-slate-900 dark:text-white">Contact</h2>
           <p>
             Questions about this policy:{' '}
-            <a href="mailto:info@devopclinics.com" className="text-teal-600 hover:underline">info@devopclinics.com</a>.
+            <a href="mailto:events@festio.events" className="text-teal-600 hover:underline">events@festio.events</a>.
+          </p>
+          <p>
+            Festio is operated by <strong>FOHMA Solutions LLC</strong>.
           </p>
         </div>
 
@@ -73,6 +78,8 @@ export default function PrivacyPage() {
           <Link to="/" className="text-teal-600 hover:underline">← Back to Festio</Link>
           {' · '}
           <Link to="/terms" className="text-teal-600 hover:underline">Terms of Service</Link>
+          {' · '}
+          <Link to="/sms-policy" className="text-teal-600 hover:underline">SMS Terms</Link>
         </p>
       </div>
     </div>

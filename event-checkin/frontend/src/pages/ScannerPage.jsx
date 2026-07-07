@@ -1,7 +1,80 @@
 import { useState, useEffect, useRef } from 'react'
 import { Html5Qrcode } from 'html5-qrcode'
+import { Capacitor } from '@capacitor/core'
 import { api } from '../api'
 import { useCurrentEvent } from '../hooks/useCurrentEvent'
+import {
+  drainExperienceQueue,
+  drainOfflineAdmissions,
+  enqueueOfflineAccessScan,
+  enqueueExperienceStep,
+  enqueueOfflineAdmission,
+  experienceQueueCount,
+  loadOfflineManifest,
+  offlineAdmissionCount,
+  saveOfflineManifest,
+} from '../offlineExperienceQueue'
+
+function sessionSummary(session = {}) {
+  const parts = []
+  if (session.topic) parts.push(session.topic)
+  if (session.date) parts.push(session.date)
+  if (session.start_time || session.end_time) parts.push([session.start_time, session.end_time].filter(Boolean).join('-'))
+  if (session.room) parts.push(session.room)
+  if (session.speaker) parts.push(`Speaker: ${session.speaker}`)
+  return parts.join(' · ')
+}
+
+function normalizeSessionConfig(config = {}) {
+  const raw = config.session || config.session_details || config.schedule || config.session_config || config
+  const first = Array.isArray(config.sessions) ? config.sessions[0] : null
+  const source = (raw && typeof raw === 'object' ? raw : null) || (first && typeof first === 'object' ? first : null) || {}
+  return {
+    topic: source.topic || source.title || source.name || '',
+    date: source.date || source.session_date || '',
+    start_time: source.start_time || source.startTime || source.start || '',
+    end_time: source.end_time || source.endTime || source.end || '',
+    room: source.room || source.location || source.venue || '',
+    speaker: source.speaker || source.host || source.presenter || '',
+    capacity: source.capacity ?? '',
+    checkin_window_minutes: source.checkin_window_minutes ?? source.checkInWindowMinutes ?? source.checkin_window ?? '',
+  }
+}
+
+function hasSessionDetails(session = {}) {
+  return ['topic', 'date', 'start_time', 'end_time', 'room', 'speaker'].some((key) => String(session?.[key] || '').trim())
+}
+
+function sessionWindowState(session = {}) {
+  const rawWindow = session.checkin_window_minutes
+  if (rawWindow === undefined || rawWindow === null || rawWindow === '') return { open: true, reason: '' }
+  const windowMinutes = Number(rawWindow)
+  if (!Number.isFinite(windowMinutes) || windowMinutes < 0) return { open: false, reason: 'Session check-in window is not valid.' }
+  if (!session.date || !session.start_time) return { open: true, reason: '' }
+  const start = new Date(`${session.date}T${session.start_time}`)
+  if (Number.isNaN(start.getTime())) return { open: true, reason: '' }
+  const opens = new Date(start.getTime() - windowMinutes * 60 * 1000)
+  const now = new Date()
+  if (now < opens) {
+    return {
+      open: false,
+      reason: `Check-in opens ${windowMinutes} minutes before start (${opens.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}).`,
+    }
+  }
+  if (session.end_time) {
+    const end = new Date(`${session.date}T${session.end_time}`)
+    if (!Number.isNaN(end.getTime()) && now > end) return { open: false, reason: 'Session check-in is closed.' }
+  }
+  return { open: true, reason: '' }
+}
+
+function experienceStepActionLabel(step, sessionNeedsSetup = false, sessionWindowClosed = false) {
+  if (sessionNeedsSetup) return 'Setup needed'
+  if (sessionWindowClosed) return 'Not open'
+  if (step?.type === 'session_attendance') return 'Check in'
+  if (step?.type === 'room_assignment') return 'Assign Room'
+  return 'Complete'
+}
 
 function ZoneResultCard({ result, onReset }) {
   const denied = result.denied || result.status === 'invalid'
@@ -29,9 +102,10 @@ function ZoneResultCard({ result, onReset }) {
   )
 }
 
-function ResultCard({ result, onReset }) {
+function ResultCard({ result, onReset, onStepComplete, stepActionLoading }) {
   const cfg = {
     admitted:        { bg: 'bg-green-500',  icon: '✓', heading: 'ADMITTED' },
+    offline_queued:  { bg: 'bg-teal-600',   icon: '✓', heading: 'ADMITTED OFFLINE' },
     // Already-admitted is the most common door mistake (a double-scan), so make
     // it loud: bold orange + a thick ring + a big icon so staff can't miss it.
     already_admitted:{ bg: 'bg-orange-500', ring: 'ring-4 ring-orange-300', icon: '‼', heading: 'ALREADY CHECKED IN', big: true },
@@ -63,6 +137,11 @@ function ResultCard({ result, onReset }) {
           <div className="text-2xl font-bold">{new Date(result.guest.admitted_at).toLocaleTimeString()}</div>
         </div>
       )}
+      {result.step_error && (
+        <div className="mx-auto mt-4 max-w-sm rounded-xl border border-white/25 bg-black/20 px-4 py-3 text-sm font-semibold text-white">
+          {result.step_error}
+        </div>
+      )}
       {(result.table_name || result.seat_number) && (
         <div className="mt-3 flex justify-center gap-4 text-sm text-white/90">
           {result.table_name && (
@@ -75,6 +154,48 @@ function ResultCard({ result, onReset }) {
               Seat: <strong>{result.seat_number}</strong>
             </span>
           )}
+        </div>
+      )}
+      {result.experience_next_steps?.length > 0 && (
+        <div className="mt-5 rounded-xl bg-black/20 p-4 text-left">
+          <div className="text-xs font-bold uppercase tracking-wide text-white/70">Next steps</div>
+          <div className="mt-2 space-y-2">
+            {result.experience_next_steps.map(({ step, progress }) => {
+              const messages = step.config?.messages || {}
+              const prompt = messages.staff || step.config?.staff_prompt || step.description
+              const session = normalizeSessionConfig(step.config || {})
+              const sessionInfo = step.type === 'session_attendance' ? sessionSummary(session) : ''
+              const sessionNeedsSetup = step.type === 'session_attendance' && !hasSessionDetails(session)
+              const windowState = step.type === 'session_attendance' ? sessionWindowState(session) : { open: true, reason: '' }
+              const sessionWindowClosed = step.type === 'session_attendance' && !windowState.open
+              return (
+              <div key={step.id} className="rounded-lg bg-white/15 px-3 py-2">
+                <div className="flex flex-wrap items-start justify-between gap-2">
+                  <div className="min-w-0">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <span className="text-sm font-bold">{step.title}</span>
+                      {step.required && <span className="rounded-full bg-amber-300 px-2 py-0.5 text-[10px] font-bold text-amber-950">Required</span>}
+                      <span className="rounded-full bg-white/20 px-2 py-0.5 text-[10px] font-bold capitalize text-white/90">
+                        {(progress?.status || 'available').replaceAll('_', ' ')}
+                      </span>
+                    </div>
+                    {prompt && <div className="mt-1 text-xs text-white/80">{prompt}</div>}
+                    {sessionInfo && <div className="mt-1 text-xs font-bold text-teal-100">{sessionInfo}</div>}
+                    {sessionNeedsSetup && <div className="mt-1 text-xs font-bold text-amber-100">Session setup needed in Admin before check-in.</div>}
+                    {!sessionNeedsSetup && sessionWindowClosed && <div className="mt-1 text-xs font-bold text-amber-100">{windowState.reason}</div>}
+                  </div>
+                  {!['check_in', 'seating_assignment', 'meal_selection', 'consent'].includes(step.type) && (
+                    <button type="button" onClick={() => onStepComplete?.(step)}
+                      disabled={stepActionLoading || sessionNeedsSetup || sessionWindowClosed}
+                      className="rounded-lg bg-white/20 px-3 py-1.5 text-xs font-bold text-white hover:bg-white/30 disabled:opacity-50">
+                      {experienceStepActionLabel(step, sessionNeedsSetup, sessionWindowClosed)}
+                    </button>
+                  )}
+                </div>
+              </div>
+              )
+            })}
+          </div>
         </div>
       )}
       <button
@@ -117,7 +238,6 @@ function QrScanner({ onScan }) {
     // Native (Capacitor) → use the MLKit barcode scanner: far more reliable than
     // decoding video frames in JS, and the OS-level camera UI. Web falls through
     // to html5-qrcode below.
-    const { Capacitor } = await import('@capacitor/core')
     if (Capacitor.isNativePlatform()) {
       try {
         const { BarcodeScanner, BarcodeFormat } = await import('@capacitor-mlkit/barcode-scanning')
@@ -140,6 +260,11 @@ function QrScanner({ onScan }) {
 
     // 1. Request the permission synchronously inside this user gesture.
     //    Prefer back camera; fall back to any camera if 'environment' is unsupported.
+    if (!window.isSecureContext || !navigator.mediaDevices?.getUserMedia) {
+      setStarting(false)
+      setError(cameraSecureContextHelp())
+      return
+    }
     let probe
     try {
       probe = await navigator.mediaDevices.getUserMedia({
@@ -147,9 +272,13 @@ function QrScanner({ onScan }) {
         audio: false,
       })
     } catch (e) {
-      setStarting(false)
-      setError(iosCameraHelp(e))
-      return
+      try {
+        probe = await navigator.mediaDevices.getUserMedia({ video: true, audio: false })
+      } catch (fallbackError) {
+        setStarting(false)
+        setError(iosCameraHelp(fallbackError))
+        return
+      }
     }
     // Release the probe stream — html5-qrcode opens its own.
     probe.getTracks().forEach((t) => t.stop())
@@ -256,6 +385,17 @@ function QrScanner({ onScan }) {
   )
 }
 
+function cameraSecureContextHelp() {
+  const host = window.location.host
+  const protocol = window.location.protocol
+  return [
+    'Camera is unavailable in this browser context.',
+    `Current address: ${protocol}//${host}`,
+    'Mobile browsers require HTTPS for camera access, except on localhost.',
+    'Use the HTTPS production domain, an HTTPS tunnel, or open the scanner from the native app.',
+  ].join('\n')
+}
+
 function iosCameraHelp(err) {
   const name = err?.name || ''
   const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent)
@@ -337,7 +477,7 @@ function ManualCheckin({ eventId, onResult, walkInEnabled, sectionMode, sectionI
   if (confirm) {
     return (
       <div className="text-center space-y-4 py-2">
-        <p className="text-sm text-gray-500 dark:text-slate-400">Check in</p>
+        <p className="text-sm text-gray-500 dark:text-slate-400">{confirm.admitted ? 'Already checked in' : 'Check in'}</p>
         <p className="text-2xl font-bold dark:text-white flex items-center justify-center gap-2">
           {confirm.full_name}
           {confirm.is_vip && <span className="text-[10px] bg-amber-100 text-amber-700 px-1.5 py-0.5 rounded-full align-middle">VIP</span>}
@@ -356,7 +496,7 @@ function ManualCheckin({ eventId, onResult, walkInEnabled, sectionMode, sectionI
           </button>
           <button onClick={() => doCheckin(confirm)} disabled={busy}
             className="px-8 py-3 rounded-xl bg-green-600 hover:bg-green-700 text-white font-bold disabled:opacity-50">
-            {busy ? 'Checking in…' : 'Confirm'}
+            {busy ? 'Loading…' : confirm.admitted ? 'Open journey' : 'Confirm'}
           </button>
         </div>
       </div>
@@ -413,10 +553,10 @@ function ManualCheckin({ eventId, onResult, walkInEnabled, sectionMode, sectionI
       )}
       <div className="space-y-2">
         {results.map((g) => (
-          <button key={g.id} disabled={g.admitted} onClick={() => setConfirm(g)}
+          <button key={g.id} onClick={() => setConfirm(g)}
             className={`w-full text-left rounded-lg border px-3 py-2.5 flex items-center justify-between gap-2 ${
               g.admitted
-                ? 'border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-900/20 cursor-default'
+                ? 'border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-900/20 hover:bg-amber-100 dark:hover:bg-amber-900/30'
                 : 'border-gray-200 dark:border-slate-700 hover:bg-teal-50 dark:hover:bg-teal-900/20'
             }`}>
             <div className="min-w-0">
@@ -431,7 +571,7 @@ function ManualCheckin({ eventId, onResult, walkInEnabled, sectionMode, sectionI
             </div>
             {g.admitted
               ? <span className="text-xs text-amber-600 dark:text-amber-400 font-semibold shrink-0">
-                  Admitted{g.admitted_at ? ` ${new Date(g.admitted_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}` : ''}
+                  Review{g.admitted_at ? ` · ${new Date(g.admitted_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}` : ''}
                 </span>
               : <span className="text-teal-600 dark:text-teal-400 text-sm font-semibold shrink-0">Check in →</span>}
           </button>
@@ -480,6 +620,10 @@ export default function ScannerPage() {
   const [eventId, setEventId] = useCurrentEvent()
   const [result, setResult] = useState(null)
   const [loading, setLoading] = useState(false)
+  const [stepActionLoading, setStepActionLoading] = useState(false)
+  const [queuedActions, setQueuedActions] = useState(() => experienceQueueCount())
+  const [queuedAdmissions, setQueuedAdmissions] = useState(() => offlineAdmissionCount())
+  const [offlineManifest, setOfflineManifest] = useState(null)
   const [scanKey, setScanKey] = useState(0)
   // Venue-access mode (additive — legacy scanning is unchanged when off).
   const [zones, setZones] = useState([])
@@ -505,22 +649,90 @@ export default function ScannerPage() {
   const selectedGate = gates.find((g) => g.id === gateId)
   const scanningReady = !!selectedEvent && selectedEvent.status === 'active'
 
-  useEffect(() => {
-    api.listEvents().then((evs) => {
+  async function refreshEvents() {
+    try {
+      const evs = await api.listEvents()
       setEvents(evs)
       if (!evs.some((e) => e.id === eventId)) setEventId(evs.length === 1 ? evs[0].id : '')
-    })
+    } catch {
+      // Keep the last known event list during transient network loss.
+    }
+  }
+
+  useEffect(() => {
+    refreshEvents()
+    const id = setInterval(refreshEvents, 30000)
+    window.addEventListener('focus', refreshEvents)
+    return () => {
+      clearInterval(id)
+      window.removeEventListener('focus', refreshEvents)
+    }
   }, []) // eslint-disable-line react-hooks/exhaustive-deps
+
+  useEffect(() => {
+    async function drain() {
+      if (!navigator.onLine) return
+      const [res, admissions] = await Promise.all([
+        drainExperienceQueue(api),
+        drainOfflineAdmissions(api),
+      ])
+      setQueuedActions(res.remaining)
+      setQueuedAdmissions(admissions.remaining)
+      if (res.sent && result?.guest?.event_id && result?.guest?.id) {
+        const nextSteps = await api.getExperienceNextSteps(result.guest.event_id, result.guest.id).catch(() => null)
+        if (nextSteps) setResult((prev) => prev ? { ...prev, experience_next_steps: nextSteps } : prev)
+      }
+      if (admissions.sent && eventId) refreshOfflineManifest(eventId)
+    }
+    function updateCount() {
+      setQueuedActions(experienceQueueCount())
+      setQueuedAdmissions(offlineAdmissionCount())
+    }
+    window.addEventListener('online', drain)
+    window.addEventListener('experience-queue-change', updateCount)
+    window.addEventListener('offline-admission-change', updateCount)
+    drain()
+    return () => {
+      window.removeEventListener('online', drain)
+      window.removeEventListener('experience-queue-change', updateCount)
+      window.removeEventListener('offline-admission-change', updateCount)
+    }
+  }, [result?.guest?.event_id, result?.guest?.id, eventId])
+
+  async function refreshOfflineManifest(id = eventId) {
+    if (!id || !navigator.onLine) return
+    try {
+      const manifest = await api.offlineManifest(id)
+      saveOfflineManifest(id, manifest)
+      setOfflineManifest(manifest)
+    } catch {
+      setOfflineManifest(loadOfflineManifest(id))
+    }
+  }
+
+  useEffect(() => {
+    if (!eventId) {
+      setOfflineManifest(null)
+      return
+    }
+    setOfflineManifest(loadOfflineManifest(eventId))
+    if (scanningReady) refreshOfflineManifest(eventId)
+  }, [eventId, scanningReady])
 
   // Load zones + gates only for venue-access events.
   useEffect(() => {
     setZoneId(''); setZones([]); setGateId(''); setGates([]); setMode('qr')
     if (eventId && selectedEvent?.venue_access_enabled) {
-      api.listZones(eventId).then(setZones).catch(() => {})
+      const cached = loadOfflineManifest(eventId)
+      api.listZones(eventId).then(setZones).catch(() => setZones(cached?.zones || []))
       api.listGates(eventId).then((g) => {
         setGates(g)
         setScanBy(g.length ? 'gate' : 'zone')
-      }).catch(() => setScanBy('zone'))
+      }).catch(() => {
+        const fallbackGates = cached?.gates || []
+        setGates(fallbackGates)
+        setScanBy(fallbackGates.length ? 'gate' : 'zone')
+      })
     }
   }, [eventId]) // eslint-disable-line
 
@@ -554,6 +766,10 @@ export default function ScannerPage() {
     try {
       if (accessMode && scanBy === 'gate') {
         if (!gateId) { setResult({ zoneMode: true, status: 'invalid', message: 'Pick a gate first.' }); return }
+        if (!navigator.onLine) {
+          offlineAccessScan(token, { mode: 'gate', gateId })
+          return
+        }
         const res = await api.scanGate(eventId, gateId, token)
         setResult({
           zoneMode: true,
@@ -571,22 +787,246 @@ export default function ScannerPage() {
         if (!zoneId) { setResult({ zoneMode: true, status: 'invalid', message: 'Pick a zone first.' }); return }
         const body = { zone_id: zoneId }
         if (selectedZone?.direction_mode === 'both') body.direction = direction
+        if (!navigator.onLine) {
+          offlineAccessScan(token, { mode: 'zone', zoneId, direction: body.direction })
+          return
+        }
         const res = await api.scanZone(token, body)
         setResult({ zoneMode: true, ...res })
       } else {
+        if (!navigator.onLine) {
+          offlineAdmit(token)
+          return
+        }
         const res = await api.scan(token)
         setResult(res)
+        refreshOfflineManifest(eventId)
       }
     } catch (err) {
-      setResult({ zoneMode: accessMode, status: 'invalid', message: err.message })
+      if (/failed to fetch|network|load failed/i.test(err.message || '')) {
+        if (accessMode && scanBy === 'gate') offlineAccessScan(token, { mode: 'gate', gateId })
+        else if (accessMode) offlineAccessScan(token, { mode: 'zone', zoneId, direction: selectedZone?.direction_mode === 'both' ? direction : undefined })
+        else offlineAdmit(token)
+      } else {
+        setResult({ zoneMode: accessMode, status: 'invalid', message: err.message })
+      }
     } finally {
       setLoading(false)
     }
   }
 
+  function offlineAdmit(token) {
+    const manifest = offlineManifest || loadOfflineManifest(eventId)
+    if (!manifest?.guests?.length) {
+      setResult({
+        status: 'invalid',
+        message: 'No offline guest list is cached for this event. Go online once on this scanner to prepare offline check-in.',
+      })
+      return
+    }
+    const guest = manifest.guests.find((g) => g.qr_token === token)
+    if (!guest) {
+      setResult({ status: 'invalid', message: 'Offline guest list does not contain this QR code.' })
+      return
+    }
+    if (guest.admitted) {
+      setResult({
+        status: 'already_admitted',
+        message: `${guest.first_name} ${guest.last_name} was already admitted in the cached guest list.`,
+        guest,
+        table_name: guest.table_name,
+        seat_number: guest.seat_number,
+      })
+      return
+    }
+    const admittedAt = new Date().toISOString()
+    const nextManifest = {
+      ...manifest,
+      guests: manifest.guests.map((g) => g.qr_token === token ? { ...g, admitted: true, admitted_at: admittedAt } : g),
+    }
+    saveOfflineManifest(eventId, nextManifest)
+    setOfflineManifest(nextManifest)
+    enqueueOfflineAdmission({
+      eventId,
+      token,
+      guestId: guest.id,
+      guestName: `${guest.first_name} ${guest.last_name}`,
+    })
+    setQueuedAdmissions(offlineAdmissionCount())
+    setResult({
+      status: 'offline_queued',
+      message: `${guest.first_name} ${guest.last_name} is checked in on this device. This admission will sync when online.`,
+      guest: { ...guest, admitted: true, admitted_at: admittedAt },
+      table_name: guest.table_name,
+      seat_number: guest.seat_number,
+    })
+  }
+
+  function offlineZoneOccupancy(manifest, zoneId) {
+    const zone = (manifest?.zones || []).find((z) => z.id === zoneId)
+    return Math.max(Number(zone?.occupancy || 0), 0)
+  }
+
+  function updateManifestForAccessScan(manifest, zoneId, direction, guestId) {
+    const next = {
+      ...manifest,
+      zones: (manifest.zones || []).map((zone) => {
+        if (zone.id !== zoneId) return zone
+        const delta = direction === 'out' ? -1 : 1
+        return { ...zone, occupancy: Math.max(Number(zone.occupancy || 0) + delta, 0) }
+      }),
+      guests: (manifest.guests || []).map((guest) => {
+        if (guest.id !== guestId || direction !== 'in') return guest
+        return { ...guest, admitted: true, admitted_at: guest.admitted_at || new Date().toISOString() }
+      }),
+    }
+    saveOfflineManifest(eventId, next)
+    setOfflineManifest(next)
+  }
+
+  function guestTagNames(manifest, guestId, matchedTagIds) {
+    const tags = new Map((manifest.guest_tags || []).map((tag) => [tag.id, tag.name]))
+    return matchedTagIds.map((tagId) => tags.get(tagId)).filter(Boolean)
+  }
+
+  function offlineAccessDecision(manifest, guest, zone, mode) {
+    if (mode === 'gate') {
+      const ruleTagIds = new Set((manifest.zone_tag_rules || []).filter((rule) => rule.zone_id === zone.id).map((rule) => rule.tag_id))
+      if (ruleTagIds.size) {
+        const guestTagIds = new Set((manifest.guest_tag_links || []).filter((link) => link.guest_id === guest.id).map((link) => link.tag_id))
+        const matched = [...ruleTagIds].filter((tagId) => guestTagIds.has(tagId))
+        if (!matched.length) return { allowed: false, reason: "Guest's tags don't permit this zone", matchedTags: [] }
+        return { allowed: true, matchedTags: guestTagNames(manifest, guest.id, matched) }
+      }
+      return { allowed: true, matchedTags: [] }
+    }
+    if (guest.ticket_type_id) {
+      const ticket = (manifest.ticket_types || []).find((tt) => tt.id === guest.ticket_type_id)
+      const allowedZones = ticket?.allowed_zone_ids
+      if (Array.isArray(allowedZones) && allowedZones.length && !allowedZones.includes(zone.id)) {
+        return { allowed: false, reason: `${ticket?.name || 'This'} ticket is not valid for this zone`, matchedTags: [] }
+      }
+    }
+    return { allowed: true, matchedTags: [] }
+  }
+
+  function offlineAccessScan(token, options) {
+    const manifest = offlineManifest || loadOfflineManifest(eventId)
+    if (!manifest?.guests?.length) {
+      setResult({
+        zoneMode: true,
+        status: 'invalid',
+        message: 'No offline guest list is cached for this event. Go online once on this scanner to prepare offline access scanning.',
+      })
+      return
+    }
+    const guest = manifest.guests.find((g) => g.qr_token === token)
+    if (!guest) {
+      setResult({ zoneMode: true, status: 'invalid', message: 'Offline guest list does not contain this QR code.' })
+      return
+    }
+    const gate = options.mode === 'gate' ? (manifest.gates || []).find((g) => g.id === options.gateId && g.is_active !== false) : null
+    const zoneIdForScan = gate?.zone_id || options.zoneId
+    const zone = (manifest.zones || []).find((z) => z.id === zoneIdForScan && z.is_active !== false)
+    if (!zone) {
+      setResult({ zoneMode: true, status: 'invalid', message: 'Offline manifest does not contain this active zone or gate.' })
+      return
+    }
+    let scanDirection = gate?.direction || options.direction || (zone.direction_mode === 'exit' ? 'out' : 'in')
+    if (zone.direction_mode === 'entry') scanDirection = 'in'
+    if (zone.direction_mode === 'exit') scanDirection = 'out'
+
+    const decision = offlineAccessDecision(manifest, guest, zone, options.mode)
+    let denied = !decision.allowed
+    let denyReason = decision.reason
+    const currentOccupancy = offlineZoneOccupancy(manifest, zone.id)
+    if (!denied && scanDirection === 'in' && zone.capacity && currentOccupancy >= zone.capacity) {
+      denied = true
+      denyReason = 'Zone is at capacity in this device cache'
+    }
+
+    const guestName = `${guest.first_name} ${guest.last_name || ''}`.trim()
+    if (denied) {
+      setResult({
+        zoneMode: true,
+        status: 'denied',
+        denied: true,
+        guest_name: guestName,
+        ticket_type: decision.matchedTags?.join(', ') || undefined,
+        zone_name: zone.name,
+        direction: scanDirection,
+        occupancy: currentOccupancy,
+        deny_reason: denyReason,
+        message: `Denied offline — ${denyReason}`,
+      })
+      return
+    }
+
+    updateManifestForAccessScan(manifest, zone.id, scanDirection, guest.id)
+    enqueueOfflineAccessScan({
+      eventId,
+      token,
+      guestId: guest.id,
+      guestName,
+      mode: options.mode,
+      gateId: gate?.id,
+      zoneId: zone.id,
+      direction: scanDirection,
+    })
+    setQueuedAdmissions(offlineAdmissionCount())
+    const nextOccupancy = scanDirection === 'out' ? Math.max(currentOccupancy - 1, 0) : currentOccupancy + 1
+    setResult({
+      zoneMode: true,
+      status: 'offline_queued',
+      denied: false,
+      guest_name: guestName,
+      ticket_type: decision.matchedTags?.join(', ') || undefined,
+      zone_name: zone.name,
+      direction: scanDirection,
+      occupancy: nextOccupancy,
+      message: `${guestName} — ${scanDirection.toUpperCase()} ${zone.name}. Queued offline and will sync when online.`,
+    })
+  }
+
   function reset() {
     setResult(null)
     setScanKey((k) => k + 1)
+  }
+
+  async function completeNextStep(step) {
+    if (!result?.guest?.event_id || !result?.guest?.id || !step?.id) return
+    const payload = {
+      status: 'completed',
+      metadata: {
+        source: 'scanner',
+        ...(step.type === 'session_attendance' ? { action: 'session_check_in' } : {}),
+      },
+    }
+    setStepActionLoading(true)
+    try {
+      await api.updateGuestExperienceStep(result.guest.event_id, result.guest.id, step.id, payload)
+      const nextSteps = await api.getExperienceNextSteps(result.guest.event_id, result.guest.id).catch(() => [])
+      setResult((prev) => prev ? { ...prev, experience_next_steps: nextSteps } : prev)
+    } catch (err) {
+      if (!navigator.onLine || /failed to fetch|network|load failed/i.test(err.message || '')) {
+        enqueueExperienceStep({
+          eventId: result.guest.event_id,
+          guestId: result.guest.id,
+          stepId: step.id,
+          payload,
+        })
+        setQueuedActions(experienceQueueCount())
+        setResult((prev) => prev ? {
+          ...prev,
+          message: `${prev.message} Step queued and will sync when online.`,
+          experience_next_steps: (prev.experience_next_steps || []).filter((item) => item.step.id !== step.id),
+        } : prev)
+      } else {
+        setResult((prev) => prev ? { ...prev, step_error: err.message } : prev)
+      }
+    } finally {
+      setStepActionLoading(false)
+    }
   }
 
   return (
@@ -596,6 +1036,16 @@ export default function ScannerPage() {
         <p className="text-sm text-gray-500 dark:text-slate-400">
           {scanningReady ? "Start the camera and point it at a guest's QR code." : 'Choose an active event before scanning guests.'}
         </p>
+        {queuedActions > 0 && (
+          <p className="text-xs font-semibold text-amber-600 dark:text-amber-300">
+            {queuedActions} Experience action{queuedActions === 1 ? '' : 's'} pending sync
+          </p>
+        )}
+        {queuedAdmissions > 0 && (
+          <p className="text-xs font-semibold text-amber-600 dark:text-amber-300">
+            {queuedAdmissions} offline scan{queuedAdmissions === 1 ? '' : 's'} pending sync
+          </p>
+        )}
       </div>
 
       {events.length > 1 && (
@@ -709,7 +1159,9 @@ export default function ScannerPage() {
         )}
 
         {!loading && result && result.zoneMode && <ZoneResultCard result={result} onReset={reset} />}
-        {!loading && result && !result.zoneMode && <ResultCard result={result} onReset={reset} />}
+        {!loading && result && !result.zoneMode && (
+          <ResultCard result={result} onReset={reset} onStepComplete={completeNextStep} stepActionLoading={stepActionLoading} />
+        )}
 
         {!loading && !result && !scanningReady && (
           <div className="rounded-xl border border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-900/30 px-4 py-5 text-center">

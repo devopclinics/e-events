@@ -25,6 +25,10 @@ PLACEHOLDERS = [
     "rsvp_link", "ticket_link", "qr_code",
     "venue_name", "venue_address", "event_location",
     "table_name", "table_group", "ticket_type",
+    "experience_steps", "experience_steps_text",
+    "experience_step_title", "experience_step_message",
+    "session_topic", "session_date", "session_time", "session_room", "session_speaker",
+    "room_name", "seat_number", "download_link",
 ]
 
 _TOKEN_RE = re.compile(r"\{\{\s*([a-zA-Z0-9_]+)\s*\}\}")
@@ -60,7 +64,7 @@ _TICKET_EMAIL_PLACEHOLDERS = PLACEHOLDERS + [
     "preview_text", "event_image", "event_image_block", "event_time_row",
     "venue_row", "host_row", "admission_instruction", "calendar_link",
     "calendar_link_block", "directions_link", "directions_link_block",
-    "pairing_cta", "menu_cta", "support_email",
+    "pairing_cta", "menu_cta", "hub_cta", "support_email",
 ]
 
 _TICKET_QR_EMAIL_BODY = """
@@ -152,7 +156,7 @@ _TICKET_QR_EMAIL_BODY = """
             </table>
           </td>
         </tr>
-        {{pairing_cta}}{{menu_cta}}
+        {{pairing_cta}}{{menu_cta}}{{hub_cta}}
         <tr>
           <td style="padding:20px 28px 28px 28px;">
             <p style="font-family:Arial,Helvetica,sans-serif;color:#42526a;font-size:15px;line-height:24px;margin:0;">With love,<br><strong style="color:#172033;">{{organizer_name}}</strong></p>
@@ -160,7 +164,8 @@ _TICKET_QR_EMAIL_BODY = """
         </tr>
         <tr>
           <td align="center" style="background:#f8fafc;border-top:1px solid #e2e8f0;padding:20px 24px;">
-            <p style="font-family:Arial,Helvetica,sans-serif;color:#64748b;font-size:12px;line-height:18px;margin:0 0 6px 0;">Powered by <strong style="color:#0f172a;">Festio</strong></p>
+            <p style="font-family:Arial,Helvetica,sans-serif;color:#64748b;font-size:12px;line-height:18px;margin:0 0 6px 0;">Powered by <strong style="color:#0f172a;">Festio</strong> · <a href="https://festio.events" style="color:#0f766e;text-decoration:underline;">festio.events</a> · <a href="mailto:events@festio.events" style="color:#0f766e;text-decoration:underline;">events@festio.events</a></p>
+            <p style="font-family:Arial,Helvetica,sans-serif;color:#64748b;font-size:11px;line-height:17px;margin:0 0 5px 0;">Invites, RSVP, QR check-in, seating, guest messaging, Experience workflows and event insights.</p>
             <p style="font-family:Arial,Helvetica,sans-serif;color:#94a3b8;font-size:11px;line-height:17px;margin:0;">You are receiving this email because you were invited to {{event_name}}.</p>
           </td>
         </tr>
@@ -182,7 +187,8 @@ TEMPLATE_DEFS: dict[str, dict] = {
               "{{qr_code}} inserts the QR image and {{ticket_link}} powers the "
               "View My Ticket button. Optional blocks like {{event_image_block}}, "
               "{{venue_row}}, {{calendar_link_block}}, {{directions_link_block}}, "
-              "{{pairing_cta}} and {{menu_cta}} are generated automatically. "
+              "{{pairing_cta}}, {{menu_cta}} and {{hub_cta}} (Guest Hub link) "
+              "are generated automatically. "
               "Keep {{qr_code}} and {{ticket_link}} so guests still get a scannable pass."),
     ),
     "sms_invitation": _t(
@@ -293,6 +299,104 @@ TEMPLATE_DEFS: dict[str, dict] = {
         mms_body="Welcome {{guest_first_name}}! You're checked in to {{event_name}}. Table: {{table_name}}. Your ticket card is attached.",
         note=("The seating/menu blocks are added automatically; edit the subject and intro copy here. "
               "The MMS body is the caption sent with the ticket-card image."),
+    ),
+    "experience_next_steps": _t(
+        "Experience next steps", ["email", "sms", "whatsapp"], group="Experience",
+        subject="Your next steps — {{event_name}}",
+        email_body=(
+            "<p>Hi <strong>{{guest_first_name}}</strong>,</p>"
+            "<p>Here are your current next steps for <strong>{{event_name}}</strong>:</p>"
+            "{{experience_steps}}"
+            '<p>You can also reopen your Festio Pass here: <a href="{{ticket_link}}">view pass</a>.</p>'
+        ),
+        sms_body="Hi {{guest_first_name}}, your next steps for {{event_name}}: {{experience_steps_text}} {{ticket_link}}",
+        whatsapp_body="Hi {{guest_first_name}}, your next steps for {{event_name}}: {{experience_steps_text}} {{ticket_link}}",
+        placeholders=PLACEHOLDERS + ["ticket_link", "experience_steps", "experience_steps_text"],
+        required=["experience_steps_text"],
+        note=("Used when resending a guest's Experience/runbook instructions from the portal. "
+              "{{experience_steps}} renders a formatted email list; {{experience_steps_text}} is the short text version."),
+    ),
+    "experience_invitation": _t(
+        "Experience pass / invite", ["email", "sms", "whatsapp", "mms"], group="Experience", email_kind="full",
+        subject="Your {{event_name}} Experience Pass",
+        email_body=(
+            "<p>Hi <strong>{{guest_first_name}}</strong>,</p>"
+            "<p>Your personal Experience Pass for <strong>{{event_name}}</strong> is ready.</p>"
+            "<p>Use this pass for check-in, consent, activity steps, room or seating assignments, and session attendance.</p>"
+            '<p><a href="{{ticket_link}}">Open your Experience Pass</a></p>'
+            "<p>{{qr_code}}</p>"
+        ),
+        sms_body="Hi {{guest_first_name}}, your {{event_name}} Experience Pass is ready: {{ticket_link}}",
+        whatsapp_body="Hi {{guest_first_name}}, your {{event_name}} Experience Pass is ready: {{ticket_link}}",
+        mms_body="Your {{event_name}} Experience Pass is attached. Show it for check-in and event activity tracking.",
+        placeholders=_TICKET_EMAIL_PLACEHOLDERS,
+        required=["ticket_link", "qr_code"],
+        note=("Used instead of the general Festio Pass invite when Experience is enabled. "
+              "Keep {{ticket_link}} and {{qr_code}} so guests receive a usable pass."),
+    ),
+    "experience_admission_confirmation": _t(
+        "Experience check-in confirmation", ["email", "sms", "whatsapp", "mms"], group="Experience",
+        email_kind="block",
+        subject="You're checked in — {{event_name}}",
+        email_body=(
+            "<p>Welcome, <strong>{{guest_first_name}}</strong>. You are checked in for <strong>{{event_name}}</strong>.</p>"
+            "<p>Your Experience steps are now active. Staff may guide you through consent, gifts, room assignments, sessions, or other event activities.</p>"
+        ),
+        sms_body="Welcome {{guest_first_name}}, you are checked in for {{event_name}}. Open your pass for next steps: {{ticket_link}}",
+        whatsapp_body="Welcome {{guest_first_name}}, you are checked in for {{event_name}}. Open your pass for next steps: {{ticket_link}}",
+        mms_body="Welcome {{guest_first_name}}, you are checked in for {{event_name}}. Keep your pass handy for Experience steps.",
+        placeholders=PLACEHOLDERS + ["ticket_link", "qr_code"],
+        note="Used instead of the general check-in confirmation when Experience is enabled.",
+    ),
+    "experience_consent_copy": _t(
+        "Experience consent copy", ["email"], group="Experience",
+        subject="Signed consent copy — {{event_name}}",
+        email_body=(
+            "<p>Hi <strong>{{guest_first_name}}</strong>,</p>"
+            "<p>Your signed consent copy for <strong>{{event_name}}</strong> is ready.</p>"
+            '<p><a href="{{download_link}}">Download signed consent copy</a></p>'
+        ),
+        placeholders=PLACEHOLDERS + ["download_link"],
+        required=["download_link"],
+        note="Used when a guest or organizer sends the signed consent copy.",
+    ),
+    "experience_souvenir_completion": _t(
+        "Experience souvenir completion", ["email"], group="Experience",
+        subject="{{experience_step_title}} complete — {{event_name}}",
+        email_body=(
+            "<p>Hi <strong>{{guest_first_name}}</strong>,</p>"
+            "<p>{{experience_step_message}}</p>"
+            "<p>Thank you for attending <strong>{{event_name}}</strong>.</p>"
+        ),
+        placeholders=PLACEHOLDERS + ["experience_step_title", "experience_step_message"],
+        required=["experience_step_title", "experience_step_message"],
+        note="Used when a souvenir, gift, badge, or welcome-pack Experience step is completed.",
+    ),
+    "experience_room_assignment": _t(
+        "Experience room assignment", ["email"], group="Experience",
+        subject="Your room assignment — {{event_name}}",
+        email_body=(
+            "<p>Hi <strong>{{guest_first_name}}</strong>,</p>"
+            "<p>{{experience_step_message}}</p>"
+            "<p><strong>Room:</strong> {{room_name}}<br>"
+            "<strong>Table:</strong> {{table_name}}<br>"
+            "<strong>Seat:</strong> {{seat_number}}</p>"
+        ),
+        placeholders=PLACEHOLDERS + ["experience_step_message", "room_name", "seat_number"],
+        required=["experience_step_message"],
+        note="Used when a room/table/seat assignment Experience step is completed.",
+    ),
+    "experience_session_attendance": _t(
+        "Experience session attendance", ["email"], group="Experience",
+        subject="Session check-in recorded — {{event_name}}",
+        email_body=(
+            "<p>Hi <strong>{{guest_first_name}}</strong>,</p>"
+            "<p>Your attendance has been recorded for <strong>{{session_topic}}</strong>.</p>"
+            "<p>{{session_date}} {{session_time}}<br>{{session_room}}</p>"
+        ),
+        placeholders=PLACEHOLDERS + ["session_topic", "session_date", "session_time", "session_room", "session_speaker"],
+        required=["session_topic"],
+        note="Optional email template for session attendance completion if session email sending is enabled later.",
     ),
     "broadcast": _t(
         "Event update / broadcast", ["email", "sms", "whatsapp"], group="Day-of",
@@ -496,6 +600,11 @@ def sample_context(event=None) -> dict:
         "event_location": getattr(event, "venue_address", None) or "123 Main St",
         "table_name": "VIP-1", "table_group": "VIP Tables", "ticket_type": "VIP",
         "message": "Doors open at 6 PM — see you soon!",
+        "experience_steps": (
+            "<ol><li><strong>Main entrance check-in</strong><br>Show your pass at the entrance.</li>"
+            "<li><strong>Seat confirmed</strong><br>Confirm your table before entering dinner.</li></ol>"
+        ),
+        "experience_steps_text": "Main entrance check-in; Seat confirmed.",
     }
     base.update({
         "preview_text": "Your personal Festio Pass is ready. Show it at the entrance for admission.",

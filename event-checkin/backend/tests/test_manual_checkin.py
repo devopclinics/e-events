@@ -116,3 +116,32 @@ async def test_unassigned_staff_cannot_search(ctx):
     ctx.login(staff_obj)
     r = await ctx.client.get(f"/api/events/{ctx.ids['event_a']}/guests/search?q=smith")
     assert r.status_code == 403
+
+
+@pytest.mark.asyncio
+async def test_ticket_pairing_hidden_and_blocked_when_toggle_off(ctx):
+    ev = ctx.ids["event_a"]
+    async with _Session() as s:
+        event = await s.get(Event, ev)
+        event.is_paid = True
+        event.status = "active"
+        event.seating_enabled = True
+        event.partner_pairing_enabled = False
+        await s.execute(delete(Guest).where(Guest.event_id == ev))
+        s.add_all([
+            Guest(event_id=ev, first_name="Ada", last_name="One", email="ada@example.com", qr_token="ada-token"),
+            Guest(event_id=ev, first_name="Ben", last_name="Two", email="ben@example.com", qr_token="ben-token"),
+        ])
+        await s.commit()
+
+    ticket = await ctx.client.get("/api/scan/ada-token/ticket")
+    assert ticket.status_code == 200
+    assert ticket.json()["event"]["seating_enabled"] is True
+    assert ticket.json()["event"]["partner_pairing_enabled"] is False
+
+    pair = await ctx.client.post("/api/scan/ada-token/pair", json={
+        "partner_first_name": "Ben",
+        "partner_last_name": "Two",
+        "partner_email": "ben@example.com",
+    })
+    assert pair.status_code == 403

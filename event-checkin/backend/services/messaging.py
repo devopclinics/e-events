@@ -21,6 +21,17 @@ from app.timeutil import local_hhmm, to_event_local
 logger = logging.getLogger(__name__)
 
 _BIRD_BASE = "https://api.bird.com"
+_SMS_FOOTER = "Reply STOP to opt out."
+
+
+def _brand_sms(body: str) -> str:
+    """Keep carrier-reviewed SMS bodies branded and opt-out compliant."""
+    text = body.strip()
+    if not text.startswith("Festio:"):
+        text = f"Festio: {text}"
+    if "STOP" not in text.upper():
+        text = f"{text} {_SMS_FOOTER}"
+    return text
 
 
 # ── public API ────────────────────────────────────────────────────────────────
@@ -29,21 +40,21 @@ async def send_invite_sms(*, phone: str, first_name: str, event_name: str, ticke
     if not _channel_ready("sms", phone):
         return
     _local = to_event_local(event_date)
-    date_str = _local.strftime("%a %d %b") if _local else ""
+    date_str = _local.strftime("%b %d, %Y") if _local else ""
     body = f"Hi {first_name}! You're invited to {event_name}" + (f" on {date_str}" if date_str else "") + f". Your ticket: {ticket_url}"
-    await _send_sms(phone, body)
+    await _send_sms(phone, _brand_sms(body))
 
 
 async def send_admission_sms(*, phone: str, first_name: str, event_name: str, admitted_at, table_name: str | None, seat_number: str | None) -> None:
     if not _channel_ready("sms", phone):
         return
-    parts = [f"Welcome {first_name}!", "You're checked in."]
+    parts = [f"Welcome {first_name}!", f"You're checked in to {event_name}."]
     if admitted_at:
         parts.append(f"Time: {local_hhmm(admitted_at)}.")
     if table_name:
         seat_bit = f" seat {seat_number}" if seat_number else ""
         parts.append(f"Table: {table_name}{seat_bit}.")
-    await _send_sms(phone, " ".join(parts))
+    await _send_sms(phone, _brand_sms(" ".join(parts)))
 
 
 async def send_invite_whatsapp(*, phone: str, first_name: str, event_name: str, ticket_url: str, event_date: datetime) -> None:
@@ -176,7 +187,7 @@ async def send_broadcast_sms(*, phone: str, first_name: str, message: str) -> No
     if not _channel_ready("sms", phone):
         return
     body = f"Hi {first_name}! {message}"
-    await _send_sms(phone, body)
+    await _send_sms(phone, _brand_sms(body))
 
 
 async def send_broadcast_whatsapp(*, phone: str, first_name: str, message: str) -> None:
@@ -196,7 +207,7 @@ async def send_manual_invite_sms(*, phone: str, name: str, event_name: str, invi
     if not _channel_ready("sms", phone):
         return
     body = f"Hi {name}! You're invited to {event_name}. RSVP here: {invite_url}"
-    await _send_sms(phone, body)
+    await _send_sms(phone, _brand_sms(body))
 
 
 async def send_manual_invite_whatsapp(*, phone: str, name: str, event_name: str, invite_url: str) -> None:
@@ -212,7 +223,7 @@ async def send_custom_sms(*, phone: str, body: str) -> None:
     """Send a fully-rendered SMS body (used by the customizable-template engine)."""
     if not _channel_ready("sms", phone):
         return
-    await _send_sms(phone, body)
+    await _send_sms(phone, _brand_sms(body))
 
 
 # ── MMS (image ticket card) ─────────────────────────────────────────────────────

@@ -40,6 +40,13 @@ const HTML_ASSETS = [
     filename: 'eventqr-pitch-v3-target-audience.html',
     type: 'HTML',
   },
+  {
+    title: "Women's Convention Experience Proposal",
+    description: "Organizer-facing proposal deck for using Festio Experience at Masjid Mumineen Women's Convention 2026.",
+    href: '/media/womens-convention-experience-proposal.html',
+    filename: 'womens-convention-experience-proposal.html',
+    type: 'HTML',
+  },
 ]
 
 const SCREENSHOTS = [

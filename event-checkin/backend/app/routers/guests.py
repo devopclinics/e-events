@@ -1,4 +1,5 @@
 import csv
+import html
 import io
 import re
 import uuid
@@ -7,20 +8,45 @@ from datetime import datetime
 from urllib.parse import urlparse
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, BackgroundTasks, Response, Body
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, func
+from sqlalchemy import delete, select, func
 from sqlalchemy.exc import IntegrityError
 from ..database import get_db
 from sqlalchemy import or_
-from ..models import Event, Guest, TicketType, GuestTag, GuestTagLink, User, TableGroup, SeatingTable, EventUser, EventUserSection, RSVPQuestion, RSVPAnswer
+from ..models import (
+    ConsentSignature,
+    EmailDeliveryEvent,
+    Event,
+    EventMessage,
+    EventMessageDeliveryLog,
+    EventMessageRead,
+    EventMessageThread,
+    ExperienceEvent,
+    Guest,
+    GuestExperienceProgress,
+    GuestMenuChoice,
+    GuestShipment,
+    GuestTag,
+    GuestTagLink,
+    RSVPAnswer,
+    RSVPQuestion,
+    ScanEvent,
+    SeatingTable,
+    TableGroup,
+    TicketType,
+    User,
+    EventUser,
+    EventUserSection,
+)
 from ..schemas import GuestOut, GuestCreate, GuestUpdate, BulkAssignGroupRequest, ScanResult, WalkInRegister
 from ..auth import require_event_admin, require_official
 from ..entitlements import assert_within_guest_cap, guest_limit, can_use_paid_channels, take_message_credit
 from services.qr_service import generate_qr_bytes
 from services.email_service import send_invite_email, send_manual_invite_email, send_simple_email
 from ..template_resolve import load_overrides, channel_text as template_channel_text, email_override as template_email_override, channel_text_or_default as template_channel_or_default, email_or_default as template_email_or_default
-from services.templates import build_context as build_template_context
-from .scanner import checkin_guard, perform_admission
+from services.templates import TEMPLATE_DEFS, build_context as build_template_context
+from .scanner import checkin_guard, perform_admission, queue_admission_email, queue_consent_copy_email
 from services import messaging
+from ..services.experience import next_guest_steps, sync_guest_progress
 
 router = APIRouter()
 
@@ -712,26 +738,34 @@ def _dispatch_invite(background_tasks: BackgroundTasks, event: Event, guest: Gue
     dispatched = False
 
     if event.notify_email and guest.email:
-        ov = overrides.get("ticket_qr")
+        invite_key = "experience_invitation" if event.experience_enabled else "ticket_qr"
+        ov = overrides.get(invite_key)
+        spec = TEMPLATE_DEFS.get(invite_key, {})
         guest_data = {
+            "guest_id": guest.id,
             "first_name": guest.first_name,
             "last_name":  guest.last_name,
             "email":      guest.email,
             "qr_token":   guest.qr_token,
             "event_id":   event.id,
+            "message_kind": "experience_invitation" if event.experience_enabled else "invitation",
         }
         background_tasks.add_task(
             send_invite_email,
             guest_data, event.name, event.couples_name, event.checkin_base_url, event.event_date,
-            event.seating_enabled, event.menu_enabled,
-            ov.subject if ov else None, ov.email_body if ov else None,
+            event.seating_enabled, event.menu_enabled, event.partner_pairing_enabled,
+            ov.subject if ov else spec.get("subject"), ov.email_body if ov else spec.get("email_body"),
             event.venue_name, event.venue_address, event.admission_note,
             event.invite_cover_image,
         )
         dispatched = True
 
     if paid_channels and event.notify_sms and guest.phone and guest.sms_consent and take_message_credit(event):
-        sms_text = template_channel_text(overrides, "sms_invitation", "sms", ctx)
+        sms_text = (
+            template_channel_or_default(overrides, "experience_invitation", "sms", ctx)
+            if event.experience_enabled
+            else template_channel_text(overrides, "sms_invitation", "sms", ctx)
+        )
         if sms_text is not None:
             background_tasks.add_task(messaging.send_custom_sms, phone=guest.phone, body=sms_text)
         else:
@@ -743,7 +777,11 @@ def _dispatch_invite(background_tasks: BackgroundTasks, event: Event, guest: Gue
         dispatched = True
 
     if paid_channels and event.notify_whatsapp and guest.phone and guest.whatsapp_consent and take_message_credit(event):
-        wa_text = template_channel_text(overrides, "whatsapp_invitation", "whatsapp", ctx)
+        wa_text = (
+            template_channel_or_default(overrides, "experience_invitation", "whatsapp", ctx)
+            if event.experience_enabled
+            else template_channel_text(overrides, "whatsapp_invitation", "whatsapp", ctx)
+        )
         if wa_text is not None:
             background_tasks.add_task(messaging.send_custom_whatsapp, phone=guest.phone, body=wa_text)
         else:
@@ -757,7 +795,8 @@ def _dispatch_invite(background_tasks: BackgroundTasks, event: Event, guest: Gue
     # MMS (ticket card) at invite time — super-admin-enabled per event.
     if (paid_channels and event.notify_mms and guest.phone and guest.sms_consent
             and messaging.mms_ready() and event.checkin_base_url and take_message_credit(event)):
-        mms_text = (template_channel_or_default(overrides, "mms_invitation", "mms", ctx)
+        mms_key = "experience_invitation" if event.experience_enabled else "mms_invitation"
+        mms_text = (template_channel_or_default(overrides, mms_key, "mms", ctx)
                     or f"Hi {guest.first_name}! You're invited to {event.name}.")
         card_url = f"{event.checkin_base_url.rstrip('/')}/api/scan/{guest.qr_token}/card.jpg"
         background_tasks.add_task(messaging.send_mms, phone=guest.phone, body=mms_text, media_url=card_url)
@@ -788,7 +827,16 @@ def _dispatch_rsvp_invite(background_tasks: BackgroundTasks, event: Event, guest
         else:
             subj, body = template_email_or_default(overrides, template_key, ctx)
         if body is not None:
-            background_tasks.add_task(send_simple_email, guest.email, subj or f"You're invited — {event.name}", body, event.id)
+            background_tasks.add_task(
+                send_simple_email,
+                guest.email,
+                subj or f"You're invited — {event.name}",
+                body,
+                event.id,
+                None,
+                guest.id,
+                template_key,
+            )
         else:
             background_tasks.add_task(
                 send_manual_invite_email,
@@ -796,6 +844,7 @@ def _dispatch_rsvp_invite(background_tasks: BackgroundTasks, event: Event, guest
                 event_name=event.name, event_date=event.event_date,
                 invite_message=event.invite_message,
                 event_id=event.id,
+                guest_id=guest.id,
             )
         dispatched = True
 
@@ -846,7 +895,7 @@ def dispatch_approval_accepted(background_tasks: BackgroundTasks, event: Event, 
     if event.notify_email and guest.email:
         subj, body = template_email_or_default(overrides, "approval_accepted", ctx)
         if body:
-            background_tasks.add_task(send_simple_email, guest.email, subj or event.name, body, event.id)
+            background_tasks.add_task(send_simple_email, guest.email, subj or event.name, body, event.id, None, guest.id, key)
             sent = True
 
     if (can_use_paid_channels(event) and event.notify_sms and guest.phone
@@ -882,7 +931,7 @@ def dispatch_simple_notice(background_tasks: BackgroundTasks, event: Event, gues
     if event.notify_email and guest.email:
         subj, body = template_email_or_default(overrides, key, ctx)
         if body:
-            background_tasks.add_task(send_simple_email, guest.email, subj or event.name, body, event.id)
+            background_tasks.add_task(send_simple_email, guest.email, subj or event.name, body, event.id, None, guest.id, key)
             sent = True
     if (can_use_paid_channels(event) and event.notify_sms and guest.phone
             and guest.sms_consent and take_message_credit(event)):
@@ -926,6 +975,85 @@ def dispatch_simple_notice(background_tasks: BackgroundTasks, event: Event, gues
             )
             sent = True
     return sent
+
+
+async def _dispatch_experience_next_steps(
+    background_tasks: BackgroundTasks,
+    event: Event,
+    guest: Guest,
+    db: AsyncSession,
+    overrides: dict | None = None,
+) -> bool:
+    """Send a guest their currently actionable Experience steps."""
+    if not event.notify_email or not guest.email:
+        return False
+
+    def session_text(session: dict | None) -> str:
+        if not isinstance(session, dict):
+            return ""
+        parts = [str(session[key]) for key in ("topic", "date") if session.get(key)]
+        times = " - ".join(str(session.get(key)) for key in ("start_time", "end_time") if session.get(key))
+        if times:
+            parts.append(times)
+        if session.get("room"):
+            parts.append(str(session["room"]))
+        if session.get("speaker"):
+            parts.append(f"Speaker: {session['speaker']}")
+        return " · ".join(parts)
+
+    rows = await next_guest_steps(event.id, guest.id, db)
+    step_items = []
+    ticket_url = f"{event.checkin_base_url.rstrip('/')}/scan/{guest.qr_token}" if event.checkin_base_url else ""
+    for step, _progress in rows:
+        config = step.config or {}
+        messages = config.get("messages") if isinstance(config.get("messages"), dict) else {}
+        description = (messages.get("guest") or config.get("guest_message") or step.description or "").strip()
+        session = session_text(config.get("session"))
+        if session:
+            description = f"{description}\n{session}" if description else session
+        action = (
+            f'<br><a href="{html.escape(ticket_url + "#consent", quote=True)}">Open consent form</a>'
+            if step.type == "consent" and ticket_url else ""
+        )
+        step_items.append({
+            "title": step.title,
+            "description": description,
+            "required": bool(step.required),
+            "action": action,
+        })
+    if step_items:
+        list_items = "".join(
+            "<li><strong>{title}</strong>{required}{description}{action}</li>".format(
+                title=html.escape(item["title"]),
+                required=" <span>(required)</span>" if item["required"] else "",
+                description=f"<br>{html.escape(item['description'])}" if item["description"] else "",
+                action=item.get("action") or "",
+            )
+            for item in step_items
+        )
+        steps_html = f"<ol>{list_items}</ol>"
+        steps_text = "; ".join(
+            f"{item['title']}{' (required)' if item['required'] else ''}" for item in step_items
+        )
+    else:
+        steps_html = "<p>You have no pending Experience steps right now.</p>"
+        steps_text = "No pending steps right now."
+
+    ctx = build_template_context(
+        event,
+        guest,
+        extras={
+            "ticket_link": ticket_url,
+            "qr_code": ticket_url,
+            "experience_steps": steps_html,
+            "experience_steps_text": steps_text,
+        },
+    )
+    subj, body = template_email_or_default(overrides or {}, "experience_next_steps", ctx)
+    if not body:
+        return False
+    background_tasks.add_task(send_simple_email, guest.email, subj or f"Your next steps — {event.name}", body, event.id, None, guest.id, "experience_next_steps")
+    return True
 
 
 async def import_from_source_url(url: str, event_id: str, db: AsyncSession) -> dict:
@@ -1004,6 +1132,23 @@ async def list_guests(event_id: str, db: AsyncSession = Depends(get_db), _: User
     )).all())
     for g in guests:
         g.table_group_name = names.get(g.assigned_table_group_id)
+    guest_ids = [g.id for g in guests]
+    if guest_ids:
+        rows = (await db.execute(
+            select(EmailDeliveryEvent)
+            .where(EmailDeliveryEvent.event_id == event_id, EmailDeliveryEvent.guest_id.in_(guest_ids))
+            .order_by(EmailDeliveryEvent.occurred_at.desc(), EmailDeliveryEvent.created_at.desc())
+        )).scalars().all()
+        latest_by_guest = {}
+        for row in rows:
+            latest_by_guest.setdefault(row.guest_id, row)
+        for g in guests:
+            row = latest_by_guest.get(g.id)
+            if row:
+                g.email_delivery_status = row.status
+                g.email_delivery_event_type = row.event_type
+                g.email_delivery_kind = row.message_kind
+                g.email_delivery_at = row.occurred_at
     return guests
 
 
@@ -1141,6 +1286,8 @@ async def update_guest(
     except IntegrityError:
         await db.rollback()
         raise HTTPException(409, f"Seat {guest.seat_number} on that table was just taken — refresh and pick another seat.")
+    await sync_guest_progress(event_id, guest.id, db, source="admin")
+    await db.commit()
     await db.refresh(guest)
     return guest
 
@@ -1354,6 +1501,23 @@ async def delete_guest(event_id: str, guest_id: str, db: AsyncSession = Depends(
     guest = await db.get(Guest, guest_id)
     if not guest or guest.event_id != event_id:
         raise HTTPException(404, "Guest not found")
+    await db.execute(
+        Guest.__table__.update()
+        .where(Guest.event_id == event_id, Guest.partner_guest_id == guest_id)
+        .values(partner_guest_id=None)
+    )
+    await db.execute(delete(GuestExperienceProgress).where(GuestExperienceProgress.guest_id == guest_id))
+    await db.execute(delete(ExperienceEvent).where(ExperienceEvent.guest_id == guest_id))
+    await db.execute(delete(ConsentSignature).where(ConsentSignature.guest_id == guest_id))
+    await db.execute(delete(ScanEvent).where(ScanEvent.guest_id == guest_id))
+    await db.execute(delete(GuestTagLink).where(GuestTagLink.guest_id == guest_id))
+    await db.execute(delete(GuestShipment).where(GuestShipment.guest_id == guest_id))
+    await db.execute(delete(GuestMenuChoice).where(GuestMenuChoice.guest_id == guest_id))
+    await db.execute(delete(RSVPAnswer).where(RSVPAnswer.guest_id == guest_id))
+    await db.execute(delete(EventMessageRead).where(EventMessageRead.guest_id == guest_id))
+    await db.execute(delete(EventMessageDeliveryLog).where(EventMessageDeliveryLog.guest_id == guest_id))
+    await db.execute(delete(EventMessage).where(EventMessage.guest_id == guest_id))
+    await db.execute(delete(EventMessageThread).where(EventMessageThread.guest_id == guest_id))
     await db.delete(guest)
     await db.commit()
 
@@ -1469,6 +1633,54 @@ async def resend_invite(event_id: str, guest_id: str, background_tasks: Backgrou
     guest.invite_status = "sent" if ok else "failed"
     await db.commit()
     return {"ok": True}
+
+
+@router.post("/{event_id}/guests/{guest_id}/resend-email")
+async def resend_guest_email(
+    event_id: str,
+    guest_id: str,
+    background_tasks: BackgroundTasks,
+    body: dict = Body(...),
+    db: AsyncSession = Depends(get_db),
+    _: User = Depends(require_event_admin),
+):
+    """Resend a specific guest-facing email from the portal."""
+    kind = (body.get("kind") or "").strip()
+    allowed = {"invitation", "admission", "experience_next_steps", "consent_copy"}
+    if kind not in allowed:
+        raise HTTPException(400, f"kind must be one of: {', '.join(sorted(allowed))}")
+
+    event = await db.get(Event, event_id)
+    if not event:
+        raise HTTPException(404, "Event not found")
+    guest = await db.get(Guest, guest_id)
+    if not guest or guest.event_id != event_id:
+        raise HTTPException(404, "Guest not found")
+    if not guest.email:
+        raise HTTPException(400, "Guest does not have an email address")
+
+    overrides = await load_overrides(event_id, db)
+    if kind == "invitation":
+        if event.invite_mode != "closed" and not guest.qr_generated_at:
+            raise HTTPException(400, "Generate QR codes first before sending invites")
+        ok = _dispatch_invite(background_tasks, event, guest, overrides)
+        guest.invite_sent_at = datetime.utcnow()
+        guest.invite_status = "sent" if ok else "failed"
+        await db.commit()
+        return {"ok": ok, "kind": kind}
+
+    if kind == "admission":
+        if not guest.admitted:
+            raise HTTPException(400, "Guest has not been admitted yet")
+        ok = await queue_admission_email(background_tasks, event, guest, db)
+        return {"ok": ok, "kind": kind}
+
+    if kind == "consent_copy":
+        ok = await queue_consent_copy_email(background_tasks, event, guest, db)
+        return {"ok": ok, "kind": kind}
+
+    ok = await _dispatch_experience_next_steps(background_tasks, event, guest, db, overrides)
+    return {"ok": ok, "kind": kind}
 
 
 @router.post("/{event_id}/guests/{guest_id}/approve")

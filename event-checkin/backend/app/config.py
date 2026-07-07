@@ -25,6 +25,8 @@ class Settings(BaseSettings):
     email_from: str = "Festio <events@festio.events>"
     # If set, email is sent via the Resend HTTP API instead of SMTP.
     resend_api_key: str = ""
+    # Resend webhook signing secret (whsec_...). Empty means acknowledge only.
+    resend_webhook_secret: str = ""
     # If set, email is sent via Bird's Email API before falling back to SMTP.
     # Example: https://email.us-west-2.api.bird.com/api
     bird_email_api_base: str = ""

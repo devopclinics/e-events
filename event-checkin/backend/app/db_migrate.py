@@ -48,8 +48,8 @@ SCHEMA_PATCHES: list[str] = [
     # (events.org_id, users.is_platform_superadmin). Safe to re-run every deploy.
     #
     # 1) Default organization for all pre-existing data.
-    "INSERT INTO organizations (id, name, slug, region, currency, plan, created_at) "
-    "SELECT '00000000-0000-0000-0000-000000000001', 'vsgs', 'vsgs', 'US', 'USD', 'free', now() "
+    "INSERT INTO organizations (id, name, slug, region, currency, plan, created_at, is_active) "
+    "SELECT '00000000-0000-0000-0000-000000000001', 'vsgs', 'vsgs', 'US', 'USD', 'free', now(), TRUE "
     "WHERE NOT EXISTS (SELECT 1 FROM organizations WHERE id = '00000000-0000-0000-0000-000000000001')",
     # 2) Attach orphan events to the default org.
     "UPDATE events SET org_id = '00000000-0000-0000-0000-000000000001' WHERE org_id IS NULL",

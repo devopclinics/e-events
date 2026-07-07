@@ -3,7 +3,7 @@ import pytest
 from sqlalchemy import select
 
 from conftest import _Session
-from app.models import Event, Guest, Zone, ScanEvent
+from app.models import Event, EventUser, Guest, Membership, User, Zone, ScanEvent
 
 
 async def _setup_access_event(ctx):
@@ -80,6 +80,34 @@ async def test_open_zone_admits_everyone(ctx):
     # No zone tag rules → anyone allowed
     r = await ctx.client.post(f"/api/events/{eid}/gates/{gate['id']}/scan", json={"qr_token": "QR-TESTTOKEN"})
     assert r.json()["allowed"] is True
+
+
+@pytest.mark.asyncio
+async def test_gate_scan_staff_must_be_assigned_to_event(ctx):
+    eid = ctx.ids["event_a"]
+    zone_id, _ = await _setup_access_event(ctx)
+    ctx.login(ctx.ids["user_a"])
+    gate = (await ctx.client.post(f"/api/events/{eid}/gates",
+            json={"name": "Main Door", "zone_id": zone_id, "direction": "in"})).json()
+
+    async with _Session() as s:
+        staff = User(name="Unassigned", email="unassigned@a.com", role="official")
+        s.add(staff)
+        await s.flush()
+        s.add(Membership(org_id=ctx.ids["org_a"], user_id=staff.id, role="staff"))
+        await s.commit()
+
+    ctx.login(staff)
+    denied = await ctx.client.post(f"/api/events/{eid}/gates/{gate['id']}/scan", json={"qr_token": "QR-TESTTOKEN"})
+    assert denied.status_code == 403
+
+    async with _Session() as s:
+        s.add(EventUser(event_id=eid, user_id=staff.id))
+        await s.commit()
+
+    allowed = await ctx.client.post(f"/api/events/{eid}/gates/{gate['id']}/scan", json={"qr_token": "QR-TESTTOKEN"})
+    assert allowed.status_code == 200
+    assert allowed.json()["allowed"] is True
 
 
 @pytest.mark.asyncio

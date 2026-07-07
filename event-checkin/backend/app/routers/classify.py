@@ -5,19 +5,18 @@ auto-detects the zone and evaluates the guest's tags. Completely separate from
 the legacy check-in (scan_qr) and the manual zone scan (scan_qr_zone): this
 module adds new tables + endpoints and does not modify either existing flow.
 """
-from datetime import datetime
-
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException
 from sqlalchemy import select, delete, func
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..database import get_db
-from ..models import (Event, Guest, Zone, ScanEvent, GuestTag, GuestTagLink,
+from ..models import (Event, EventUser, Guest, Zone, ScanEvent, GuestTag, GuestTagLink,
                       ZoneTagRule, Gate, RSVPAnswer, User)
 from ..schemas import (GuestTagIn, GuestTagOut, TagIdList, GateIn, GateOut,
                        GateScanRequest, GateScanResult)
-from ..auth import require_paid_event_admin, require_paid_event_member, get_current_user
+from ..auth import _org_role, require_paid_event_admin, require_paid_event_member, get_current_user
 from .access import zone_occupancy   # read-only reuse; access.py doesn't import this
+from .scanner import perform_admission
 
 router = APIRouter()
 
@@ -34,6 +33,25 @@ async def _event(event_id: str, db: AsyncSession) -> Event:
 async def _tag_count(tag_id: str, db: AsyncSession) -> int:
     return int(await db.scalar(
         select(func.count(GuestTagLink.id)).where(GuestTagLink.tag_id == tag_id)) or 0)
+
+
+async def _ensure_assigned_scanner(event: Event, user: User, db: AsyncSession) -> None:
+    """Match the stricter QR/manual scanner authorization.
+
+    Org owners/admins can scan any event in their org. Staff must be assigned to
+    the specific event.
+    """
+    if user.is_platform_superadmin:
+        return
+    role = await _org_role(user, event.org_id, db)
+    if role is None:
+        raise HTTPException(403, "You are not assigned to this event.")
+    if role == "staff":
+        assigned = await db.scalar(
+            select(EventUser.id).where(EventUser.event_id == event.id, EventUser.user_id == user.id).limit(1)
+        )
+        if not assigned:
+            raise HTTPException(403, "You are not assigned to this event.")
 
 
 # ── Tags CRUD ────────────────────────────────────────────────────────────────
@@ -246,9 +264,11 @@ async def _guest_allowed(guest_id: str, zone_id: str, db: AsyncSession) -> tuple
 
 @router.post("/{event_id}/gates/{gid}/scan", response_model=GateScanResult)
 async def gate_scan(event_id: str, gid: str, body: GateScanRequest,
+                    background_tasks: BackgroundTasks,
                     db: AsyncSession = Depends(get_db),
                     user: User = Depends(require_paid_event_member)):
     event = await _event(event_id, db)
+    await _ensure_assigned_scanner(event, user, db)
     if event.status != "active":
         raise HTTPException(409, f"'{event.name}' is not active. Scanning is disabled.")
     gate = await db.get(Gate, gid)
@@ -268,11 +288,32 @@ async def gate_scan(event_id: str, gid: str, body: GateScanRequest,
 
     db.add(ScanEvent(event_id=event_id, guest_id=guest.id, zone_id=gate.zone_id,
                      direction=direction, scanned_by=user.id, denied=denied, deny_reason=deny_reason))
-    # First allowed entry doubles as check-in (mirrors scan_qr_zone, not shared).
+    admission_denied_reason = None
+    # First allowed entry doubles as check-in through the same admission engine
+    # used by the standard QR scanner.
     if not denied and direction == "in" and not guest.admitted:
-        guest.admitted = True
-        guest.admitted_at = datetime.utcnow()
-    await db.commit()
+        admission = await perform_admission(guest, event, background_tasks, db)
+        if admission.status not in ("admitted", "already_admitted"):
+            denied = True
+            deny_reason = admission.message
+            admission_denied_reason = admission.message
+    if admission_denied_reason:
+        scan = await db.scalar(
+            select(ScanEvent)
+            .where(
+                ScanEvent.event_id == event_id,
+                ScanEvent.guest_id == guest.id,
+                ScanEvent.zone_id == gate.zone_id,
+            )
+            .order_by(ScanEvent.scanned_at.desc())
+            .limit(1)
+        )
+        if scan:
+            scan.denied = True
+            scan.deny_reason = admission_denied_reason
+        await db.commit()
+    else:
+        await db.commit()
 
     occ = await zone_occupancy(gate.zone_id, db) if zone else None
     name = f"{guest.first_name} {guest.last_name}".strip()

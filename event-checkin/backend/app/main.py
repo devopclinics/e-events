@@ -6,12 +6,13 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from .database import engine
 from .config import settings
-from .routers import events, guests, scanner, dashboard, seating, menu, logistics, registry, access, trials, classify, messaging, meta_whatsapp, templates as templates_router, self_checkin
+from .routers import events, guests, scanner, dashboard, seating, menu, logistics, registry, access, trials, classify, messaging, meta_whatsapp, resend_webhooks, templates as templates_router, self_checkin, experience
 from .routers import auth as auth_router
 from .routers import invite as invite_router
 from .routers import billing as billing_router
 from .routers import admin as admin_router
 from .routers import design_proxy as design_proxy_router
+from .routers import og as og_router
 from . import sync_poller, db_migrate
 
 # Override with UPLOADS_DIR for local/test runs; defaults to the in-container path.
@@ -55,6 +56,7 @@ app.add_middleware(
 
 app.include_router(auth_router.router, prefix="/api/auth",   tags=["auth"])
 app.include_router(events.router,      prefix="/api/events", tags=["events"])
+app.include_router(experience.router,  prefix="/api/events", tags=["experience"])
 app.include_router(guests.router,      prefix="/api/events", tags=["guests"])
 app.include_router(seating.router,     prefix="/api/events", tags=["seating"])
 app.include_router(menu.router,        prefix="/api/events", tags=["menu"])
@@ -72,9 +74,11 @@ app.include_router(trials.router, prefix="/api", tags=["trials"])
 app.include_router(admin_router.router, prefix="/api/admin", tags=["admin"])
 app.include_router(messaging.router, prefix="/api/messaging", tags=["messaging"])
 app.include_router(meta_whatsapp.router, prefix="/api/webhooks", tags=["webhooks"])
+app.include_router(resend_webhooks.router, prefix="/api/webhooks", tags=["webhooks"])
 app.include_router(templates_router.router, prefix="/api/events", tags=["templates"])
 app.include_router(self_checkin.router, prefix="/api/e", tags=["self-checkin"])
 app.include_router(design_proxy_router.router, prefix="/api/events", tags=["design"])
+app.include_router(og_router.router, prefix="/api/og", tags=["og"])
 
 # Serve uploaded files (cover images, etc.)
 try:

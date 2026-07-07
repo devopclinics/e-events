@@ -1,6 +1,6 @@
-from pydantic import BaseModel, ConfigDict, EmailStr, field_validator
+from pydantic import BaseModel, ConfigDict, EmailStr, Field, field_validator
 from datetime import datetime, timezone
-from typing import Optional, Literal
+from typing import Any, Optional, Literal
 
 
 # ── Auth ─────────────────────────────────────────────────────────────────────
@@ -99,6 +99,8 @@ class EventOut(BaseModel):
     logistics_enabled: bool = False
     registry_enabled: bool = False
     venue_access_enabled: bool = False
+    experience_enabled: bool = False
+    partner_pairing_enabled: bool = False
     venue_name: Optional[str] = None
     venue_address: Optional[str] = None
     admission_note: Optional[str] = None
@@ -133,6 +135,9 @@ class EventOut(BaseModel):
     invite_mode: str = "open"
     rsvp_deadline: Optional[datetime] = None
     rsvp_require_approval: bool = False
+    rsvp_multi_invitee_enabled: bool = False
+    rsvp_multi_invitee_limit: int = 10
+    rsvp_multi_invitee_limit_rules: Optional[dict[str, int]] = None
     # Entitlements (Phase 2)
     plan_tier: str = "free"
     is_paid: bool = False
@@ -148,6 +153,8 @@ class EventMemberOut(BaseModel):
     can_reassign_seats: bool
     can_manage_menu: bool = False
     can_view_dashboard: bool = False
+    event_role: str = "staff"
+    access_level: str = "edit"
     # Allowed sections (table group ids) for section-based scanning.
     # Empty = unrestricted ("All sections").
     section_group_ids: list[str] = []
@@ -297,6 +304,354 @@ class AccountOrgOut(BaseModel):
 
 class ActiveToggle(BaseModel):
     active: bool
+
+
+# ── Experience workflow engine ───────────────────────────────────────────────
+
+ExperienceStepType = Literal[
+    "rsvp",
+    "approval",
+    "check_in",
+    "consent",
+    "souvenir",
+    "badge",
+    "room_assignment",
+    "seating_assignment",
+    "meal_selection",
+    "session_attendance",
+    "certificate",
+    "checkout",
+    "custom",
+]
+
+
+class ExperienceStepCreate(BaseModel):
+    key: str
+    type: ExperienceStepType
+    title: str
+    description: Optional[str] = None
+    sort_order: int = 0
+    required: bool = True
+    enabled: bool = True
+    conditions: Optional[dict] = None
+    config: Optional[dict] = None
+
+    @field_validator("key", "title", mode="after")
+    @classmethod
+    def clean_required_text(cls, v):
+        cleaned = " ".join((v or "").split())
+        if not cleaned:
+            raise ValueError("value is required")
+        return cleaned
+
+    @field_validator("conditions", "config", mode="after")
+    @classmethod
+    def validate_json_shape(cls, v):
+        _validate_experience_json(v)
+        return v
+
+
+class ExperienceStepUpdate(BaseModel):
+    key: Optional[str] = None
+    type: Optional[ExperienceStepType] = None
+    title: Optional[str] = None
+    description: Optional[str] = None
+    sort_order: Optional[int] = None
+    required: Optional[bool] = None
+    enabled: Optional[bool] = None
+    conditions: Optional[dict] = None
+    config: Optional[dict] = None
+
+    @field_validator("key", "title", mode="after")
+    @classmethod
+    def clean_optional_text(cls, v):
+        if v is None:
+            return v
+        cleaned = " ".join(v.split())
+        if not cleaned:
+            raise ValueError("value cannot be blank")
+        return cleaned
+
+    @field_validator("conditions", "config", mode="after")
+    @classmethod
+    def validate_json_shape(cls, v):
+        _validate_experience_json(v)
+        return v
+
+
+class ExperienceStepReorder(BaseModel):
+    step_ids: list[str] = Field(default_factory=list)
+
+
+class ExperienceWorkflowClone(BaseModel):
+    name: Optional[str] = None
+
+
+class ExperienceWorkflowCreate(BaseModel):
+    name: str = "Default Experience"
+    steps: list[ExperienceStepCreate] = Field(default_factory=list)
+
+    @field_validator("name", mode="after")
+    @classmethod
+    def clean_name(cls, v):
+        cleaned = " ".join((v or "").split())
+        if not cleaned:
+            raise ValueError("Workflow name is required")
+        return cleaned
+
+
+class ExperienceProgressUpdate(BaseModel):
+    status: Literal["available", "blocked", "completed", "skipped", "failed", "overridden"]
+    override_reason: Optional[str] = None
+    metadata: Optional[dict] = None
+
+
+class ExperienceStepOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: str
+    workflow_id: str
+    key: str
+    type: str
+    title: str
+    description: Optional[str] = None
+    sort_order: int
+    required: bool
+    enabled: bool
+    conditions: Optional[dict] = None
+    config: Optional[dict] = None
+    created_at: datetime
+    updated_at: datetime
+
+
+class ExperienceWorkflowOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: str
+    event_id: str
+    name: str
+    status: str
+    version: int
+    is_default: bool
+    created_by: Optional[str] = None
+    created_at: datetime
+    updated_at: datetime
+    steps: list[ExperienceStepOut] = []
+
+
+class GuestExperienceProgressOut(BaseModel):
+    id: str
+    event_id: str
+    workflow_id: str
+    step_id: str
+    guest_id: str
+    status: str
+    completed_at: Optional[datetime] = None
+    completed_by_user_id: Optional[str] = None
+    completed_by_source: Optional[str] = None
+    override_reason: Optional[str] = None
+    metadata: Optional[dict] = None
+    created_at: datetime
+    updated_at: datetime
+
+
+class GuestExperienceOut(BaseModel):
+    guest_id: str
+    workflow: ExperienceWorkflowOut
+    progress: list[GuestExperienceProgressOut]
+
+
+class ExperienceStepDashboardOut(BaseModel):
+    step_id: str
+    key: str
+    type: str
+    title: str
+    sort_order: int
+    required: bool
+    enabled: bool
+    not_started: int = 0
+    available: int = 0
+    blocked: int = 0
+    completed: int = 0
+    skipped: int = 0
+    failed: int = 0
+    overridden: int = 0
+    total: int = 0
+    completion_rate: float = 0
+
+
+class ExperienceDashboardOut(BaseModel):
+    event_id: str
+    workflow: Optional[ExperienceWorkflowOut] = None
+    guest_total: int = 0
+    step_count: int = 0
+    completed_total: int = 0
+    progress_total: int = 0
+    completion_rate: float = 0
+    steps: list[ExperienceStepDashboardOut] = Field(default_factory=list)
+
+
+class ExperienceEventOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: str
+    event_id: str
+    workflow_id: str
+    step_id: Optional[str] = None
+    guest_id: Optional[str] = None
+    actor_user_id: Optional[str] = None
+    event_type: str
+    source: str
+    payload: Optional[dict] = None
+    occurred_at: datetime
+
+
+class ExperienceNextStepOut(BaseModel):
+    step: ExperienceStepOut
+    progress: Optional[GuestExperienceProgressOut] = None
+
+
+class ConsentFormUpsert(BaseModel):
+    title: str = "Event consent"
+    body: str
+    require_signature: bool = True
+
+    @field_validator("title", "body", mode="after")
+    @classmethod
+    def clean_consent_text(cls, v):
+        cleaned = (v or "").strip()
+        if not cleaned:
+            raise ValueError("value is required")
+        return cleaned
+
+
+class ConsentFormOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: str
+    event_id: str
+    title: str
+    body: str
+    version: int
+    is_active: bool
+    require_signature: bool
+    created_by: Optional[str] = None
+    created_at: datetime
+    updated_at: datetime
+
+
+class ConsentSignatureCreate(BaseModel):
+    signer_name: str
+    signature_text: str
+
+    @field_validator("signer_name", "signature_text", mode="after")
+    @classmethod
+    def clean_signature_text(cls, v):
+        cleaned = " ".join((v or "").split())
+        if not cleaned:
+            raise ValueError("value is required")
+        return cleaned
+
+
+class ConsentSignatureOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: str
+    event_id: str
+    form_id: str
+    guest_id: str
+    signer_name: str
+    signature_text: str
+    signed_at: datetime
+    sent_copy_at: Optional[datetime] = None
+    created_at: datetime
+
+
+# ── Guest-facing Experience (Guest Hub journey view) ─────────────────────────
+# These are the guest-safe projections used by the token-authenticated
+# /experience/me surface. Unlike the staff schemas above they deliberately omit
+# internal step config/conditions and only expose what a guest may see or act on.
+
+class GuestJourneyGuestOut(BaseModel):
+    id: str
+    name: str
+    rsvp_status: Optional[str] = None
+
+
+class GuestJourneyWorkflowOut(BaseModel):
+    id: str
+    name: str
+    version: int
+
+
+class GuestJourneyStepOut(BaseModel):
+    id: str
+    key: str
+    type: str
+    title: str
+    description: Optional[str] = None
+    required: bool
+    status: str  # available | blocked | completed | skipped | not_started | ...
+    completed_at: Optional[datetime] = None
+    self_service: bool = False  # a guest can complete this step from the Hub
+    actionable: bool = False     # self_service AND still pending
+    guest_message: Optional[str] = None
+    completion_message: Optional[str] = None
+    session: Optional[dict[str, Any]] = None
+    metadata: dict[str, Any] = Field(default_factory=dict)
+
+
+class GuestConsentStateOut(BaseModel):
+    required: bool = False
+    signed: bool = False
+    signed_at: Optional[datetime] = None
+    form: Optional[ConsentFormOut] = None
+
+
+class GuestJourneyOut(BaseModel):
+    experience_enabled: bool = False
+    guest: Optional[GuestJourneyGuestOut] = None
+    workflow: Optional[GuestJourneyWorkflowOut] = None
+    steps: list[GuestJourneyStepOut] = Field(default_factory=list)
+    next_steps: list[GuestJourneyStepOut] = Field(default_factory=list)
+    consent: Optional[GuestConsentStateOut] = None
+    completed_count: int = 0
+    total_count: int = 0
+
+
+class PublicConsentOut(BaseModel):
+    status: Literal["none", "available", "signed", "invalid", "not_admitted"]
+    form: Optional[ConsentFormOut] = None
+    signature: Optional[ConsentSignatureOut] = None
+
+
+class SendConsentCopyOut(BaseModel):
+    ok: bool
+    sent_to: str
+
+
+def _validate_experience_json(value, depth: int = 0):
+    if value is None:
+        return
+    if depth > 5:
+        raise ValueError("JSON is too deeply nested")
+    if isinstance(value, dict):
+        if len(value) > 50:
+            raise ValueError("JSON object has too many keys")
+        for key, child in value.items():
+            if not isinstance(key, str) or not key:
+                raise ValueError("JSON object keys must be non-empty strings")
+            _validate_experience_json(child, depth + 1)
+        return
+    if isinstance(value, list):
+        if len(value) > 100:
+            raise ValueError("JSON list is too long")
+        for child in value:
+            _validate_experience_json(child, depth + 1)
+        return
+    if isinstance(value, (str, int, float, bool)):
+        return
+    raise ValueError("JSON contains an unsupported value")
 
 
 class MemberRole(BaseModel):
@@ -881,6 +1236,10 @@ class GuestOut(BaseModel):
     qr_generated_at: Optional[datetime]
     invite_sent_at: Optional[datetime]
     invite_status: Optional[str] = None
+    email_delivery_status: Optional[str] = None
+    email_delivery_event_type: Optional[str] = None
+    email_delivery_kind: Optional[str] = None
+    email_delivery_at: Optional[datetime] = None
     invite_token: Optional[str] = None
     rsvp_status: str = "invited"
     rsvp_responded_at: Optional[datetime] = None
@@ -897,6 +1256,12 @@ class GuestOut(BaseModel):
     ticket_type_id: Optional[str] = None
     sms_consent: bool = True
     whatsapp_consent: bool = True
+    rsvp_submitter_name: Optional[str] = None
+    rsvp_submitter_email: Optional[str] = None
+    rsvp_submitter_phone: Optional[str] = None
+    rsvp_relationship: Optional[str] = None
+    rsvp_guest_type: Optional[str] = None
+    rsvp_notes: Optional[str] = None
 
 
 # ── Scanner ──────────────────────────────────────────────────────────────────
@@ -907,6 +1272,7 @@ class ScanResult(BaseModel):
     guest: Optional[GuestOut] = None
     table_name: Optional[str] = None
     seat_number: Optional[str] = None
+    experience_next_steps: list[ExperienceNextStepOut] = Field(default_factory=list)
 
 
 class EventBrief(BaseModel):
@@ -915,6 +1281,8 @@ class EventBrief(BaseModel):
     event_date: datetime
     status: str
     seating_enabled: bool = False
+    partner_pairing_enabled: bool = False
+    experience_enabled: bool = False
     menu_enabled: bool = False
     notify_sms: bool = True
     notify_whatsapp: bool = True
@@ -981,6 +1349,20 @@ class DashboardInviteDelivery(BaseModel):
     unsent: int = 0
 
 
+class DashboardEmailDelivery(BaseModel):
+    sent: int = 0
+    delivered: int = 0
+    opened: int = 0
+    clicked: int = 0
+    delayed: int = 0
+    bounced: int = 0
+    failed: int = 0
+    complained: int = 0
+    suppressed: int = 0
+    unknown: int = 0
+    tracked: int = 0
+
+
 class DashboardContactStats(BaseModel):
     email_available: int = 0
     phone_available: int = 0
@@ -1013,6 +1395,7 @@ class DashboardStats(BaseModel):
     vip_total: int = 0
     vip_admitted: int = 0
     invite_delivery: DashboardInviteDelivery = DashboardInviteDelivery()
+    email_delivery: DashboardEmailDelivery = DashboardEmailDelivery()
     contact_stats: DashboardContactStats = DashboardContactStats()
     arrival_timeline: list[DashboardTimelinePoint] = []
     pending_guests: list[GuestOut] = []
@@ -1100,6 +1483,9 @@ class InviteSettingsUpdate(BaseModel):
     invite_mode: Optional[Literal["open", "closed"]] = None
     rsvp_deadline: Optional[datetime] = None
     rsvp_require_approval: Optional[bool] = None
+    rsvp_multi_invitee_enabled: Optional[bool] = None
+    rsvp_multi_invitee_limit: Optional[int] = None
+    rsvp_multi_invitee_limit_rules: Optional[dict[str, int]] = None
 
 
 class InvitePageOut(BaseModel):
@@ -1117,12 +1503,16 @@ class InvitePageOut(BaseModel):
     invite_message: Optional[str]
     rsvp_token: Optional[str] = None
     rsvp_enabled: bool
+    experience_enabled: bool = False
     rsvp_collect_phone: bool
     rsvp_collect_email: bool
     rsvp_capacity: Optional[int]
     invite_cover_image: Optional[str] = None
     invite_mode: str = "open"
     rsvp_deadline: Optional[datetime] = None
+    rsvp_multi_invitee_enabled: bool = False
+    rsvp_multi_invitee_limit: int = 10
+    rsvp_multi_invitee_limit_rules: Optional[dict[str, int]] = None
     # rsvp_count populated by the endpoint
     rsvp_count: int = 0
     # deadline_passed computed by the endpoint
@@ -1134,6 +1524,17 @@ class InvitePageOut(BaseModel):
     registry_token: Optional[str] = None
 
 
+class RSVPInviteeSubmit(BaseModel):
+    full_name: str = ""
+    first_name: str = ""
+    last_name: str = ""
+    email: Optional[EmailStr] = None
+    phone: Optional[str] = None
+    relationship: Optional[str] = None
+    guest_type: Optional[str] = None
+    notes: Optional[str] = None
+
+
 class RSVPSubmit(BaseModel):
     first_name: str
     last_name: str
@@ -1141,6 +1542,7 @@ class RSVPSubmit(BaseModel):
     phone: Optional[str] = None
     # key = question_id, value = answer string
     answers: dict[str, str] = {}
+    invitees: list[RSVPInviteeSubmit] = []
     # Logistics add-on (optional): shipping address + per-shipment size choices.
     shipping_address: Optional[ShippingAddressUpdate] = None
     sizes: dict[str, str] = {}  # shipment_id -> size
@@ -1149,6 +1551,10 @@ class RSVPSubmit(BaseModel):
 class RSVPConfirm(BaseModel):
     id: str
     qr_token: str
+    # Personal token that powers the guest's cross-device Guest Hub link
+    # (/r/{invite_token}). Generated for self-registrations so the Hub is
+    # reachable from any browser, not just the one that RSVP'd.
+    invite_token: str | None = None
     first_name: str
     last_name: str
     rsvp_status: str = "confirmed"

@@ -5,7 +5,7 @@ import { useAuth } from '../context/AuthContext'
 import { getPreferredView } from '../App'
 
 const DEMO_URL = ''
-const CONTACT_EMAIL = 'info@devopclinics.com'
+const CONTACT_EMAIL = 'events@festio.events'
 const demoHref = DEMO_URL || `mailto:${CONTACT_EMAIL}?subject=Book%20a%20demo%20%E2%80%94%20Festio`
 const demoProps = DEMO_URL ? { href: DEMO_URL, target: '_blank', rel: 'noopener noreferrer' } : { href: demoHref }
 
@@ -1071,6 +1071,8 @@ export default function LandingPage() {
             <a href="#design-studio" className="hover:text-teal-700 dark:hover:text-teal-300">Design Studio</a>
             <a href="#guest-journey" className="hover:text-teal-700 dark:hover:text-teal-300">Guest Journey</a>
             <Link to="/pricing" className="hover:text-teal-700 dark:hover:text-teal-300">Pricing</Link>
+            <Link to="/sms-policy" className="hover:text-teal-700 dark:hover:text-teal-300">SMS Terms</Link>
+            <Link to="/privacy" className="hover:text-teal-700 dark:hover:text-teal-300">Privacy</Link>
             {user ? (
               <Link to={appHome} className="hover:text-teal-700 dark:hover:text-teal-300">Open app</Link>
             ) : (
@@ -1078,7 +1080,11 @@ export default function LandingPage() {
             )}
             <a {...demoProps} className="hover:text-teal-700 dark:hover:text-teal-300">Book a demo</a>
           </nav>
-          <p className="text-xs font-medium text-slate-400 dark:text-slate-500">© {new Date().getFullYear()} Festio. All rights reserved.</p>
+          <div className="text-xs font-medium leading-5 text-slate-400 dark:text-slate-500 lg:text-right">
+            <p>© {new Date().getFullYear()} Festio. All rights reserved.</p>
+            <p>Festio is operated by FOHMA Solutions LLC.</p>
+            <p><a href="mailto:events@festio.events" className="hover:text-teal-700 dark:hover:text-teal-300">events@festio.events</a></p>
+          </div>
         </div>
       </footer>
     </div>

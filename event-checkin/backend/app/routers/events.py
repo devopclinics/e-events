@@ -134,13 +134,30 @@ async def list_events(
     if current_user.is_platform_superadmin:
         result = await db.execute(select(Event).order_by(Event.created_at.desc()))
     else:
-        result = await db.execute(
+        managed = (await db.execute(
             select(Event)
             .join(Membership, Membership.org_id == Event.org_id)
             .join(Organization, Organization.id == Event.org_id)
-            .where(Membership.user_id == current_user.id, Organization.is_active.is_(True))
+            .where(
+                Membership.user_id == current_user.id,
+                Membership.role.in_(["owner", "admin"]),
+                Organization.is_active.is_(True),
+            )
             .order_by(Event.created_at.desc())
-        )
+        )).scalars().all()
+        assigned = (await db.execute(
+            select(Event)
+            .join(EventUser, EventUser.event_id == Event.id)
+            .join(Organization, Organization.id == Event.org_id)
+            .where(EventUser.user_id == current_user.id, Organization.is_active.is_(True))
+            .order_by(Event.created_at.desc())
+        )).scalars().all()
+        seen, rows = set(), []
+        for event in [*managed, *assigned]:
+            if event.id not in seen:
+                seen.add(event.id)
+                rows.append(event)
+        return rows
     return result.scalars().all()
 
 
@@ -158,7 +175,10 @@ async def my_menu_events(db: AsyncSession = Depends(get_db), user: User = Depend
             .where(Membership.user_id == user.id, Membership.role.in_(["owner", "admin"])))).scalars().all()
         staff = (await db.execute(
             base.join(EventUser, EventUser.event_id == Event.id)
-            .where(EventUser.user_id == user.id, EventUser.can_manage_menu.is_(True)))).scalars().all()
+            .where(
+                EventUser.user_id == user.id,
+                (EventUser.can_manage_menu.is_(True)) | (EventUser.event_role == "manager"),
+            ))).scalars().all()
         seen, rows = set(), []
         for e in [*mgr, *staff]:
             if e.id not in seen:
@@ -258,7 +278,17 @@ async def list_members(
     ):
         sections_by_eu.setdefault(eu_id, []).append(tg_id)
     return [
-        EventMemberOut(id=eu.id, user=UserOut.model_validate(u), assigned_at=eu.assigned_at, can_reassign_seats=eu.can_reassign_seats, can_manage_menu=eu.can_manage_menu, can_view_dashboard=eu.can_view_dashboard, section_group_ids=sections_by_eu.get(eu.id, []))
+        EventMemberOut(
+            id=eu.id,
+            user=UserOut.model_validate(u),
+            assigned_at=eu.assigned_at,
+            can_reassign_seats=eu.can_reassign_seats,
+            can_manage_menu=eu.can_manage_menu,
+            can_view_dashboard=eu.can_view_dashboard,
+            event_role=eu.event_role,
+            access_level=eu.access_level,
+            section_group_ids=sections_by_eu.get(eu.id, []),
+        )
         for eu, u in rows
     ]
 
@@ -296,7 +326,16 @@ async def assign_member(
     db.add(eu)
     await db.commit()
     await db.refresh(eu)
-    return EventMemberOut(id=eu.id, user=UserOut.model_validate(user), assigned_at=eu.assigned_at, can_reassign_seats=eu.can_reassign_seats, can_manage_menu=eu.can_manage_menu, can_view_dashboard=eu.can_view_dashboard)
+    return EventMemberOut(
+        id=eu.id,
+        user=UserOut.model_validate(user),
+        assigned_at=eu.assigned_at,
+        can_reassign_seats=eu.can_reassign_seats,
+        can_manage_menu=eu.can_manage_menu,
+        can_view_dashboard=eu.can_view_dashboard,
+        event_role=eu.event_role,
+        access_level=eu.access_level,
+    )
 
 
 # ── Organization team (members of the event's org) ──────────────────────────────
@@ -487,9 +526,10 @@ async def toggle_features(
     event = await db.get(Event, event_id)
     if not event:
         raise HTTPException(404, "Event not found")
-    # Seating, menu, logistics, registry & venue access are paid-plan features.
+    # Seating, menu, logistics, registry, venue access & pairing are paid-plan features.
     if (body.get("seating_enabled") or body.get("menu_enabled") or body.get("logistics_enabled")
-            or body.get("registry_enabled") or body.get("venue_access_enabled")) and not event.is_paid:
+            or body.get("registry_enabled") or body.get("venue_access_enabled")
+            or body.get("partner_pairing_enabled")) and not event.is_paid:
         raise HTTPException(402, "This feature requires an Event Pass — upgrade this event first.")
     if "seating_enabled" in body:
         event.seating_enabled = bool(body["seating_enabled"])
@@ -511,6 +551,10 @@ async def toggle_features(
                 "drive the scanner differently and can't run on the same event.",
             )
         event.venue_access_enabled = enable
+    if "experience_enabled" in body:
+        event.experience_enabled = bool(body["experience_enabled"])
+    if "partner_pairing_enabled" in body:
+        event.partner_pairing_enabled = bool(body["partner_pairing_enabled"])
     if "registry_enabled" in body:
         event.registry_enabled = bool(body["registry_enabled"])
         # Mint the public registry token on first enable.
@@ -607,8 +651,40 @@ async def update_invite_settings(
         raise HTTPException(404, "Event not found")
     if not event.rsvp_token:
         event.rsvp_token = str(_uuid.uuid4())
+    synced_limit_rules = None
     for field, value in data.model_dump(exclude_none=True).items():
+        if field == "rsvp_multi_invitee_limit":
+            value = max(1, min(int(value), 100))
+        if field == "rsvp_multi_invitee_limit_rules":
+            rules = {}
+            for key, limit in (value or {}).items():
+                label = str(key or "").strip()
+                if not label:
+                    continue
+                rules[label] = max(1, min(int(limit or 1), 100))
+            value = rules or None
+            synced_limit_rules = value
         setattr(event, field, value)
+    if synced_limit_rules:
+        category = await db.scalar(
+            select(RSVPQuestion)
+            .where(RSVPQuestion.event_id == event.id, RSVPQuestion.question == "Invitation category")
+            .limit(1)
+        )
+        if not category:
+            category = RSVPQuestion(
+                event_id=event.id,
+                question="Invitation category",
+                question_type="select",
+                is_required=True,
+                sort_order=15,
+            )
+            db.add(category)
+        import json as _json
+        category.question_type = "select"
+        category.options = _json.dumps(list(synced_limit_rules.keys()))
+        category.is_required = True
+        category.sort_order = min(category.sort_order or 15, 15)
     await db.commit()
     await db.refresh(event)
     return event
@@ -761,7 +837,7 @@ async def broadcast_message(
             if body is not None:
                 background_tasks.add_task(
                     send_simple_email, guest.email,
-                    subj or f"Update — {event.name}", body, event.id,
+                    subj or f"Update — {event.name}", body, event.id, None, guest.id, "broadcast",
                 )
             else:
                 background_tasks.add_task(

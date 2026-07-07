@@ -3,7 +3,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 
 from ..database import get_db
-from ..models import User, Membership
+from ..models import User, Membership, EventUser
 from ..schemas import UserOut
 from ..auth import get_current_user, require_superadmin
 
@@ -19,10 +19,17 @@ async def me(user: User = Depends(get_current_user), db: AsyncSession = Depends(
             Membership.user_id == user.id, Membership.role.in_(["owner", "admin"])
         ).limit(1)
     ))
+    is_event_manager = bool(await db.scalar(
+        select(EventUser.id).where(
+            EventUser.user_id == user.id,
+            EventUser.event_role == "manager",
+        ).limit(1)
+    ))
     effective_admin = is_org_admin or user.is_platform_superadmin
+    role = "admin" if effective_admin else "event_manager" if is_event_manager else "official"
     return UserOut(
         id=user.id, name=user.name, email=user.email,
-        role="admin" if effective_admin else "official",
+        role=role,
         created_at=user.created_at,
         is_platform_superadmin=user.is_platform_superadmin,
         is_org_admin=is_org_admin,

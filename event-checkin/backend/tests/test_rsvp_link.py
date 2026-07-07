@@ -2,7 +2,7 @@ from sqlalchemy import delete
 
 import pytest
 
-from app.models import Event, Guest
+from app.models import Event, Guest, RSVPQuestion, TableGroup, TicketType
 from conftest import _Session
 
 
@@ -36,3 +36,133 @@ async def test_public_rsvp_link_uses_event_token(ctx):
 
     missing = await ctx.client.get("/api/invite/link/not-real")
     assert missing.status_code == 404
+
+
+@pytest.mark.asyncio
+async def test_public_rsvp_link_can_create_multiple_pending_invitees(ctx):
+    ev = ctx.ids["event_a"]
+    async with _Session() as s:
+        event = await s.get(Event, ev)
+        event.rsvp_enabled = True
+        event.invite_mode = "open"
+        event.rsvp_token = "multi-token-123"
+        event.rsvp_require_approval = True
+        event.rsvp_multi_invitee_enabled = True
+        event.rsvp_multi_invitee_limit = 3
+        event.is_paid = True
+        event.guest_cap = 10
+        await s.execute(delete(Guest).where(Guest.event_id == ev))
+        vip_group = TableGroup(event_id=ev, name="VIP & Dignitaries", tag="VIP")
+        family_group = TableGroup(event_id=ev, name="Parents & Invited Guests", tag="FAMILY")
+        vip_ticket = TicketType(event_id=ev, name="VIP/Dignitary")
+        family_ticket = TicketType(event_id=ev, name="Invited Guest")
+        s.add_all([vip_group, family_group, vip_ticket, family_ticket])
+        await s.commit()
+
+    response = await ctx.client.post(
+        "/api/invite/link/multi-token-123/rsvp",
+        json={
+            "first_name": "Parent",
+            "last_name": "Submitter",
+            "email": "submitter@example.com",
+            "phone": "+14155550100",
+            "answers": {},
+            "invitees": [
+                {
+                    "full_name": "Aisha Bello",
+                    "phone": "+14155550101",
+                    "email": "aisha@example.com",
+                    "relationship": "Aunt",
+                    "guest_type": "Invited Guest",
+                },
+                {
+                    "full_name": "Dr Imran Eleha",
+                    "phone": "+14155550102",
+                    "guest_type": "VIP/Dignitary",
+                    "notes": "Guest of honour",
+                },
+            ],
+        },
+    )
+
+    assert response.status_code == 201, response.text
+    assert response.json()["rsvp_status"] == "pending"
+    assert "2 invitees" in response.json()["message"]
+
+    async with _Session() as s:
+        guests = (await s.execute(
+            __import__("sqlalchemy").select(Guest).where(Guest.event_id == ev).order_by(Guest.first_name)
+        )).scalars().all()
+        assert len(guests) == 2
+        by_name = {f"{g.first_name} {g.last_name}".strip(): g for g in guests}
+        assert by_name["Aisha Bello"].rsvp_submitter_email == "submitter@example.com"
+        assert by_name["Aisha Bello"].rsvp_relationship == "Aunt"
+        assert by_name["Aisha Bello"].rsvp_status == "pending"
+        assert by_name["Aisha Bello"].qr_generated_at is None
+        assert by_name["Dr Imran Eleha"].is_vip is True
+        assert by_name["Dr Imran Eleha"].rsvp_guest_type == "VIP/Dignitary"
+
+
+@pytest.mark.asyncio
+async def test_multi_invitee_rsvp_enforces_category_limit_rules(ctx):
+    ev = ctx.ids["event_a"]
+    async with _Session() as s:
+        event = await s.get(Event, ev)
+        event.rsvp_enabled = True
+        event.invite_mode = "open"
+        event.rsvp_token = "category-limit-token"
+        event.rsvp_require_approval = True
+        event.rsvp_multi_invitee_enabled = True
+        event.rsvp_multi_invitee_limit = 10
+        event.rsvp_multi_invitee_limit_rules = {
+            "Transition ceremony parent/guardian": 2,
+            "Haflatul-Qur'an parent/guardian": 10,
+        }
+        event.is_paid = True
+        event.guest_cap = 20
+        await s.execute(delete(Guest).where(Guest.event_id == ev))
+        q = RSVPQuestion(
+            event_id=ev,
+            question="Invitation category",
+            question_type="select",
+            options="[\"Transition ceremony parent/guardian\",\"Haflatul-Qur'an parent/guardian\"]",
+            is_required=True,
+            sort_order=1,
+        )
+        s.add(q)
+        await s.commit()
+        question_id = q.id
+
+    too_many = await ctx.client.post(
+        "/api/invite/link/category-limit-token/rsvp",
+        json={
+            "first_name": "Parent",
+            "last_name": "Submitter",
+            "email": "category-parent@example.com",
+            "answers": {question_id: "Transition ceremony parent/guardian"},
+            "invitees": [
+                {"full_name": "Guest One"},
+                {"full_name": "Guest Two"},
+                {"full_name": "Guest Three"},
+            ],
+        },
+    )
+    assert too_many.status_code == 422
+    assert "up to 2 invitees" in too_many.text
+
+    allowed = await ctx.client.post(
+        "/api/invite/link/category-limit-token/rsvp",
+        json={
+            "first_name": "Parent",
+            "last_name": "Submitter",
+            "email": "category-parent@example.com",
+            "answers": {question_id: "Haflatul-Qur'an parent/guardian"},
+            "invitees": [
+                {"full_name": "Guest One"},
+                {"full_name": "Guest Two"},
+                {"full_name": "Guest Three"},
+            ],
+        },
+    )
+    assert allowed.status_code == 201, allowed.text
+    assert "3 invitees" in allowed.json()["message"]

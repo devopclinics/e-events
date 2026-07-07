@@ -9,7 +9,9 @@ export function AuthProvider({ children }) {
   const [user, setUser] = useState(undefined)
 
   useEffect(() => {
-    return onAuthStateChanged(auth, async (firebaseUser) => {
+    const timeout = window.setTimeout(() => setUser((current) => current === undefined ? null : current), 5000)
+    const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
+      window.clearTimeout(timeout)
       if (!firebaseUser) {
         setUser(null)
         return
@@ -28,6 +30,10 @@ export function AuthProvider({ children }) {
         setUser(null)
       }
     })
+    return () => {
+      window.clearTimeout(timeout)
+      unsubscribe()
+    }
   }, [])
 
   async function logout() {
@@ -35,11 +41,8 @@ export function AuthProvider({ children }) {
     setUser(null)
   }
 
-  // Block render until Firebase resolves the auth state (prevents flash)
-  if (user === undefined) return null
-
   return (
-    <AuthContext.Provider value={{ user, logout }}>
+    <AuthContext.Provider value={{ user: user || null, loading: user === undefined, logout }}>
       {children}
     </AuthContext.Provider>
   )

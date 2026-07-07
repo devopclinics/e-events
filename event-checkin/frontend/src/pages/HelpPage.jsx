@@ -212,7 +212,7 @@ export default function HelpPage({ publicMode = false }) {
           {role !== 'guest' && (
             <p className="text-xs text-slate-400 dark:text-slate-500 pt-2">
               Need more? <Link to="/pricing" className="text-teal-600 hover:underline">See pricing</Link> ·
-              {' '}<a href="mailto:info@devopclinics.com" className="text-teal-600 hover:underline">Contact support</a>
+              {' '}<a href="mailto:info@festio.events" className="text-teal-600 hover:underline">Contact support</a>
             </p>
           )}
         </div>

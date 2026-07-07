@@ -9,6 +9,7 @@ from ..schemas import (
     TableGroupCreate, TableGroupOut, TableGroupTablesUpdate,
 )
 from ..auth import require_paid_event_admin, require_paid_event_member, is_org_manager
+from ..services.experience import sync_guest_progress
 
 router = APIRouter()
 
@@ -554,6 +555,8 @@ async def assign_seat(
             f"Seat {body.seat_number} on that table was just taken — "
             "refresh and pick another seat.",
         )
+    await sync_guest_progress(event_id, guest.id, db, source="admin")
+    await db.commit()
     return {"ok": True, "table_id": guest.table_id, "seat_number": guest.seat_number}
 
 
@@ -575,6 +578,7 @@ async def mark_meal_served(
     if not guest or guest.event_id != event_id:
         raise HTTPException(404, "Guest not found")
     guest.meal_served = True
+    await sync_guest_progress(event_id, guest.id, db, source="staff", actor_user_id=current_user.id)
     await db.commit()
     return {"ok": True}
 
@@ -598,6 +602,21 @@ async def update_member_permissions(
         eu.can_manage_menu = bool(body["can_manage_menu"])
     if "can_view_dashboard" in body:
         eu.can_view_dashboard = bool(body["can_view_dashboard"])
+    if "event_role" in body:
+        role = str(body["event_role"] or "staff")
+        if role not in ("staff", "manager"):
+            raise HTTPException(400, "event_role must be staff or manager")
+        eu.event_role = role
+        if role == "manager":
+            eu.can_manage_menu = True
+            eu.can_view_dashboard = True
+        else:
+            eu.access_level = "edit"
+    if "access_level" in body:
+        level = str(body["access_level"] or "edit")
+        if level not in ("edit", "view"):
+            raise HTTPException(400, "access_level must be edit or view")
+        eu.access_level = level
     await db.commit()
     return {"ok": True}
 

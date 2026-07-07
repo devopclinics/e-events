@@ -59,9 +59,10 @@ async def test_invite_email_overrides_keep_qr(monkeypatch):
     await email_service.send_invite_email(
         {"first_name": "Ada", "last_name": "Lovelace", "email": "ada@x.com", "qr_token": "tok-9"},
         "Spring Gala", "The Hosts", "https://events.example", datetime(2026, 9, 1),
-        False, False,
-        "Custom subject for {{event_name}}!",
-        "<p>Welcome, special guest {{guest_first_name}}.</p>{{qr_code}}"
+        seating_enabled=False,
+        menu_enabled=False,
+        override_subject="Custom subject for {{event_name}}!",
+        override_body="<p>Welcome, special guest {{guest_first_name}}.</p>{{qr_code}}"
         '<a href="{{ticket_link}}">ticket</a>',
     )
     msg = sent["msg"]
@@ -73,17 +74,30 @@ async def test_invite_email_overrides_keep_qr(monkeypatch):
 
 
 @pytest.mark.asyncio
-async def test_invite_email_pairing_cta_only_when_seating(monkeypatch):
-    """The {{pairing_cta}} block appears only when seating is enabled (default template)."""
+async def test_invite_email_pairing_cta_requires_pairing_toggle(monkeypatch):
+    """The {{pairing_cta}} block appears only when seating and partner pairing are enabled."""
     sent = _capture(monkeypatch)
     await email_service.send_invite_email(
         {"first_name": "Ada", "last_name": "Lovelace", "email": "ada@x.com", "qr_token": "t"},
         "Spring Gala", "The Hosts", "https://events.example", datetime(2026, 9, 1),
-        True, False,   # seating on, menu off
+        seating_enabled=True,
+        menu_enabled=False,
+        partner_pairing_enabled=False,
+    )
+    html = _part_text(sent["msg"], "text/html")
+    assert "Pair with my partner" not in html
+    assert "Choose menu" not in html
+
+    sent = _capture(monkeypatch)
+    await email_service.send_invite_email(
+        {"first_name": "Ada", "last_name": "Lovelace", "email": "ada@x.com", "qr_token": "t"},
+        "Spring Gala", "The Hosts", "https://events.example", datetime(2026, 9, 1),
+        seating_enabled=True,
+        menu_enabled=False,
+        partner_pairing_enabled=True,
     )
     html = _part_text(sent["msg"], "text/html")
     assert "Pair with my partner" in html
-    assert "Choose menu" not in html
 
 
 @pytest.mark.asyncio

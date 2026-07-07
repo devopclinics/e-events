@@ -19,6 +19,7 @@ import PricingPage from './pages/PricingPage'
 import RefundPolicyPage from './pages/RefundPolicyPage'
 import PrivacyPage from './pages/PrivacyPage'
 import TermsPage from './pages/TermsPage'
+import SmsPolicyPage from './pages/SmsPolicyPage'
 import DesignStudioPage from './pages/DesignStudioPage'
 import ConsolePage from './pages/ConsolePage'
 import KitchenPage from './pages/KitchenPage'
@@ -31,9 +32,10 @@ import SelfCheckinPage from './pages/SelfCheckinPage'
 export function getPreferredView(role) {
   const stored = localStorage.getItem('preferredView')
   if (stored === 'admin' && role === 'admin') return '/admin'
+  if (stored === 'admin' && role === 'event_manager') return '/admin'
   if (stored === 'dashboard') return '/dashboard'
   if (stored === 'scanner') return '/scanner'
-  return role === 'admin' ? '/admin' : '/scanner'
+  return role === 'admin' || role === 'event_manager' ? '/admin' : '/scanner'
 }
 
 export function setPreferredView(view) {
@@ -81,14 +83,14 @@ function Nav({ hasMenu, eventName }) {
   }
 
   const links = [
-    ...(user?.role === 'admin' ? [{ to: '/admin', label: 'Event Setup', end: true }] : []),
+    ...(['admin', 'event_manager'].includes(user?.role) ? [{ to: '/admin', label: 'Event Setup', end: true }] : []),
     ...(user?.role === 'admin' ? [{ to: '/design-studio', label: 'Design Studio' }] : []),
     { to: '/dashboard', label: 'Results' },
     { to: '/scanner', label: 'Check-in' },
     ...(hasMenu ? [{ to: '/kitchen', label: 'Orders' }] : []),
     ...(user?.is_platform_superadmin ? [{ to: '/console', label: 'Console' }] : []),
     ...(user?.is_platform_superadmin ? [{ to: '/media-library', label: 'Media' }] : []),
-    { to: '/help', label: 'Help' },
+    ...(user?.role !== 'event_manager' ? [{ to: '/help', label: 'Help' }] : []),
   ]
 
   return (
@@ -181,7 +183,7 @@ function Nav({ hasMenu, eventName }) {
 function MobileTabBar({ user, hasMenu }) {
   if (!user) return null
   const items = [
-    ...(user.role === 'admin' ? [{ to: '/admin', label: 'Setup', icon: '🗂️' }] : []),
+    ...(['admin', 'event_manager'].includes(user.role) ? [{ to: '/admin', label: 'Setup', icon: '🗂️' }] : []),
     { to: '/dashboard', label: 'Results', icon: '📊' },
     { to: '/scanner', label: 'Check-in', icon: '🎟️' },
     ...(hasMenu ? [{ to: '/kitchen', label: 'Orders', icon: '☑' }] : []),
@@ -250,6 +252,7 @@ function AppRoutes() {
       <Route path="/refund-policy" element={<RefundPolicyPage />} />
       <Route path="/privacy" element={<PrivacyPage />} />
       <Route path="/terms" element={<TermsPage />} />
+      <Route path="/sms-policy" element={<SmsPolicyPage />} />
       {/* Unlisted public help — shareable with prospects, no account needed */}
       <Route path="/guide" element={<HelpPage publicMode />} />
 
@@ -262,7 +265,7 @@ function AppRoutes() {
         element={
           <AuthedLayout>
             <Routes>
-              <Route path="/admin" element={<ProtectedRoute adminOnly><AdminPage /></ProtectedRoute>} />
+              <Route path="/admin" element={<ProtectedRoute setupOnly><AdminPage /></ProtectedRoute>} />
               <Route path="/design-studio" element={<ProtectedRoute adminOnly><DesignStudioPage /></ProtectedRoute>} />
               <Route path="/dashboard" element={<ProtectedRoute><DashboardPage /></ProtectedRoute>} />
               <Route path="/scanner" element={<ProtectedRoute><ScannerPage /></ProtectedRoute>} />

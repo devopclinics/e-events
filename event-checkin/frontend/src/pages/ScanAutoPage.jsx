@@ -26,6 +26,146 @@ function MenuLockedCard() {
   )
 }
 
+function ConsentCard({ token, guest }) {
+  const [data, setData] = useState(null)
+  const [signerName, setSignerName] = useState('')
+  const [signatureText, setSignatureText] = useState('')
+  const [saving, setSaving] = useState(false)
+  const [msg, setMsg] = useState('')
+  const [err, setErr] = useState('')
+
+  useEffect(() => {
+    let cancelled = false
+    api.viewConsent(token)
+      .then((res) => {
+        if (cancelled) return
+        setData(res)
+        const fullName = `${guest?.first_name || ''} ${guest?.last_name || ''}`.trim()
+        setSignerName(res.signature?.signer_name || fullName)
+        setSignatureText(res.signature?.signature_text || fullName)
+      })
+      .catch(() => !cancelled && setData({ status: 'none' }))
+    return () => { cancelled = true }
+  }, [token, guest?.first_name, guest?.last_name])
+
+  useEffect(() => {
+    if (!data || data.status === 'none' || data.status === 'invalid' || data.status === 'not_admitted') return
+    if (window.location.hash !== '#consent') return
+    const timer = setTimeout(() => {
+      document.getElementById('consent')?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+    }, 80)
+    return () => clearTimeout(timer)
+  }, [data?.status])
+
+  if (!data) {
+    if (window.location.hash !== '#consent') return null
+    return (
+      <div id="consent" className="scroll-mt-6 rounded-xl border border-teal-200 bg-teal-50 p-4 text-sm text-slate-700 dark:border-teal-900 dark:bg-teal-900/20 dark:text-slate-200">
+        Loading consent form...
+      </div>
+    )
+  }
+  if (data.status === 'none' || data.status === 'invalid') {
+    if (window.location.hash !== '#consent') return null
+    return (
+      <div id="consent" className="scroll-mt-6 rounded-xl border border-amber-200 bg-amber-50 p-4 dark:border-amber-900 dark:bg-amber-900/20">
+        <p className="text-sm font-bold text-amber-900 dark:text-amber-100">Consent form not available</p>
+        <p className="mt-1 text-xs text-amber-800 dark:text-amber-200">
+          This event does not have an active consent form for this pass yet.
+        </p>
+      </div>
+    )
+  }
+  if (data.status === 'not_admitted') {
+    if (window.location.hash !== '#consent') return null
+    return (
+      <div id="consent" className="scroll-mt-6 rounded-xl border border-amber-200 bg-amber-50 p-4 dark:border-amber-900 dark:bg-amber-900/20">
+        <p className="text-sm font-bold text-amber-900 dark:text-amber-100">Consent opens after check-in</p>
+        <p className="mt-1 text-xs text-amber-800 dark:text-amber-200">
+          Please check in with event staff first. Festio will send the consent form as a next step after admission.
+        </p>
+      </div>
+    )
+  }
+  const signed = data.status === 'signed' && data.signature
+
+  async function submit(e) {
+    e.preventDefault()
+    setSaving(true); setErr(''); setMsg('')
+    try {
+      const res = await api.signConsent(token, { signer_name: signerName, signature_text: signatureText })
+      setData(res)
+      setMsg('Consent signed.')
+    } catch (error) {
+      setErr(error.message)
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  async function sendCopy() {
+    setSaving(true); setErr(''); setMsg('')
+    try {
+      const res = await api.sendConsentCopy(token)
+      setMsg(`Copy sent to ${res.sent_to}.`)
+    } catch (error) {
+      setErr(error.message)
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  return (
+    <div id="consent" className="scroll-mt-6 rounded-xl border border-teal-200 bg-teal-50 p-4 dark:border-teal-900 dark:bg-teal-900/20">
+      <div className="flex items-start justify-between gap-3">
+        <div>
+          <p className="text-sm font-bold text-slate-900 dark:text-white">{data.form?.title || 'Event consent'}</p>
+          <p className="mt-1 text-xs text-slate-600 dark:text-slate-300">Form version {data.form?.version}</p>
+        </div>
+        {signed && <span className="rounded-full bg-green-100 px-2 py-0.5 text-xs font-bold text-green-700 dark:bg-green-900/40 dark:text-green-200">Signed</span>}
+      </div>
+      <div className="mt-3 max-h-48 overflow-auto whitespace-pre-wrap rounded-lg border border-teal-100 bg-white p-3 text-sm text-slate-700 dark:border-teal-900 dark:bg-slate-900 dark:text-slate-200">
+        {data.form?.body}
+      </div>
+      {err && <div className="mt-3 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-700">{err}</div>}
+      {msg && <div className="mt-3 rounded-lg border border-green-200 bg-green-50 px-3 py-2 text-xs text-green-700">{msg}</div>}
+      {signed ? (
+        <div className="mt-3 flex flex-wrap gap-2">
+          <a href={api.consentDownloadUrl(token)}
+            className="inline-flex min-h-10 items-center justify-center rounded-lg bg-slate-950 px-4 py-2 text-sm font-bold text-white hover:bg-slate-800">
+            Download HTML
+          </a>
+          <a href={api.consentPdfDownloadUrl(token)}
+            className="inline-flex min-h-10 items-center justify-center rounded-lg bg-slate-950 px-4 py-2 text-sm font-bold text-white hover:bg-slate-800">
+            Download PDF
+          </a>
+          <button type="button" onClick={sendCopy} disabled={saving}
+            className="inline-flex min-h-10 items-center justify-center rounded-lg border border-slate-300 px-4 py-2 text-sm font-bold text-slate-700 hover:bg-white disabled:opacity-50 dark:border-slate-600 dark:text-slate-100 dark:hover:bg-slate-800">
+            Send copy
+          </button>
+        </div>
+      ) : (
+        <form onSubmit={submit} className="mt-3 space-y-3">
+          <label className="block">
+            <span className="mb-1 block text-xs font-bold text-slate-600 dark:text-slate-300">Signer name</span>
+            <input value={signerName} onChange={(e) => setSignerName(e.target.value)}
+              className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 dark:border-slate-700 dark:bg-slate-900 dark:text-white" />
+          </label>
+          <label className="block">
+            <span className="mb-1 block text-xs font-bold text-slate-600 dark:text-slate-300">Type your signature</span>
+            <input value={signatureText} onChange={(e) => setSignatureText(e.target.value)}
+              className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-semibold text-slate-900 dark:border-slate-700 dark:bg-slate-900 dark:text-white" />
+          </label>
+          <button disabled={saving || !signerName.trim() || !signatureText.trim()}
+            className="w-full rounded-lg bg-teal-600 px-4 py-2 text-sm font-bold text-white hover:bg-teal-700 disabled:opacity-50">
+            Sign consent
+          </button>
+        </form>
+      )}
+    </div>
+  )
+}
+
 function multiBoundsLabel(min, max) {
   if (min > 0 && max != null) return `Pick ${min} to ${max}`
   if ((min === 0 || min == null) && max != null) return `Pick up to ${max}`
@@ -433,7 +573,7 @@ function NotificationPreferences({ token, guest, eventNotifySms, eventNotifyWa, 
       <div>
         <p className="text-sm font-semibold text-slate-800 dark:text-slate-100">🔔 Notification preferences</p>
         <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
-          We'll send event reminders, check-in confirmations and seat assignments to <strong>{phone}</strong>.
+          We'll send your event ticket link, check-in confirmation, and seat updates to <strong>{phone}</strong>.
           Standard message and data rates may apply. Reply <strong>STOP</strong> to opt out at any time.
         </p>
       </div>
@@ -622,11 +762,17 @@ export default function ScanAutoPage() {
   const colors = passThemeColors(designTheme)
   const wording = designTheme?.wording || {}
   const passOpts = { showTable: true, showSeat: true, showHubButton: true, ...(designTheme?.pass_options || {}) }
+  const guestHubToken = guest?.invite_token || guest?.qr_token || token
+  const showGuestHubButton = Boolean(guestHubToken && (passOpts.showHubButton || event?.experience_enabled))
   const coverImage = designTheme?.flyer_image_url || designTheme?.cover_image_url || ''
   const qrImageUrl = `/api/scan/${token}/qr.png`
   const eventDate = parseUtc(event?.event_date)
   const eventName = wording.eventTitle || event?.name || 'Event'
   const hostName = wording.hostName || event?.couples_name || ''
+  const isConsentView = window.location.hash === '#consent'
+  const headerEyebrow = isConsentView ? 'Review and sign' : "You're invited to"
+  const headerTitle = isConsentView ? 'Event consent' : eventName
+  const headerSubtitle = isConsentView ? eventName : hostName
   const admissionText = wording.admissionNote || (status === 'admitted'
     ? 'You have already been checked in.'
     : 'Show this code to the check-in official at the entrance.')
@@ -647,9 +793,9 @@ export default function ScanAutoPage() {
             <StatusBadge status={status} />
           </div>
           <div className="relative mt-8">
-            <p className="text-teal-200 text-xs uppercase font-semibold mb-1" style={{ color: colors.accent || undefined }}>You're invited to</p>
-            <h1 className="text-white text-2xl font-bold leading-tight" style={{ color: colors.primary || undefined }}>{eventName}</h1>
-            <p className="text-slate-300 text-sm mt-1 italic">{hostName}</p>
+            <p className="text-teal-200 text-xs uppercase font-semibold mb-1" style={{ color: colors.accent || undefined }}>{headerEyebrow}</p>
+            <h1 className="text-white text-2xl font-bold leading-tight" style={{ color: colors.primary || undefined }}>{headerTitle}</h1>
+            <p className="text-slate-300 text-sm mt-1 italic">{headerSubtitle}</p>
             {eventDate && (
               <p className="text-slate-400 text-xs mt-2 font-medium">
                 {eventDate.toLocaleDateString(undefined, { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}
@@ -713,21 +859,21 @@ export default function ScanAutoPage() {
             </div>
           )}
 
-          {/* Guest Hub entry — controlled from Design Studio pass options */}
-          {passOpts.showHubButton && guest?.invite_token && (
+          {/* Guest Hub entry — controlled from Design Studio pass options, always exposed for Experience events */}
+          {showGuestHubButton && (
             <div className="flex justify-center">
               <a
-                href={`/r/${guest.invite_token}#guest-hub`}
+                href={`/r/${guestHubToken}#guest-hub`}
                 className="inline-flex min-h-11 items-center justify-center rounded-lg px-5 py-2 text-sm font-bold text-slate-950"
                 style={{ background: colors.accent || '#14b8a6' }}
               >
-                Open Guest Hub
+                {event?.experience_enabled ? 'Track my activity' : 'Open Guest Hub'}
               </a>
             </div>
           )}
 
-          {/* Partner pairing — only when seating is enabled and guest not yet seated */}
-          {event?.seating_enabled && status !== 'admitted' && (
+          {/* Partner pairing — only when explicitly enabled and guest not yet seated */}
+          {event?.seating_enabled && event?.partner_pairing_enabled && status !== 'admitted' && (
             <PartnerPairing
               token={token}
               partner={partner}
@@ -735,6 +881,8 @@ export default function ScanAutoPage() {
               onChange={reload}
             />
           )}
+
+          <ConsentCard token={token} guest={guest} />
 
           {/* Notification preferences — TCR opt-in compliance + guest control */}
           <NotificationPreferences
@@ -759,7 +907,18 @@ export default function ScanAutoPage() {
         </div>
       </div>
 
-      <p className="fixed bottom-4 text-slate-400 text-xs text-center w-full">Powered by Festio</p>
+      <footer className="fixed inset-x-0 bottom-4 px-4 text-center text-[11px] leading-5 text-slate-400">
+        <p>
+          Powered by <span className="font-semibold text-slate-300">Festio</span>
+          {' · '}
+          <a href="https://festio.events" className="text-teal-300 hover:text-teal-200 underline underline-offset-2">festio.events</a>
+          {' · '}
+          <a href="mailto:events@festio.events" className="text-teal-300 hover:text-teal-200 underline underline-offset-2">events@festio.events</a>
+        </p>
+        <p className="hidden sm:block text-slate-500">
+          Invites, RSVP, QR check-in, seating, guest messaging, Experience workflows and event insights.
+        </p>
+      </footer>
     </div>
   )
 }

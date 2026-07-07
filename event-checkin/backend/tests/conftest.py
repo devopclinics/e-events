@@ -3,6 +3,7 @@
 Uses an in-memory SQLite DB and overrides get_db + get_current_user, so no
 Postgres, Firebase, or app lifespan (migrations/poller) is involved.
 """
+import asyncio
 from datetime import datetime
 
 import pytest_asyncio
@@ -24,6 +25,16 @@ _Session = async_sessionmaker(_engine, expire_on_commit=False)
 
 # The "logged-in" user for the current request (set via ctx.login()).
 _current = {"user": None}
+
+
+def pytest_sessionfinish(session, exitstatus):
+    """Dispose the shared in-memory engine so aiosqlite's (non-daemon) connection
+    worker thread stops. Without this the interpreter blocks at shutdown, which
+    made the whole suite appear to hang when run in a single process."""
+    try:
+        asyncio.run(_engine.dispose())
+    except Exception:
+        pass
 
 
 async def _override_get_db():

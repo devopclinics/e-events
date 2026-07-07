@@ -374,6 +374,7 @@ function FeatureToggles({ event, onChanged }) {
       <span className="text-xs font-semibold text-gray-500 dark:text-slate-400 self-center">Event extras:</span>
       {[
         { key: 'seating_enabled', label: 'Seating' },
+        { key: 'partner_pairing_enabled', label: 'Partner pairing' },
         { key: 'menu_enabled',    label: 'Orders' },
         { key: 'logistics_enabled', label: 'Deliveries' },
         { key: 'registry_enabled', label: 'Gift list' },
@@ -3453,6 +3454,9 @@ function InvitePanel({ event, onChanged }) {
     invite_mode:       event.invite_mode        ?? 'open',
     rsvp_deadline:     utcToLocalInput(event.rsvp_deadline),
     rsvp_require_approval: event.rsvp_require_approval ?? false,
+    rsvp_multi_invitee_enabled: event.rsvp_multi_invitee_enabled ?? false,
+    rsvp_multi_invitee_limit: event.rsvp_multi_invitee_limit ?? 10,
+    rsvp_multi_invitee_limit_rules_text: JSON.stringify(event.rsvp_multi_invitee_limit_rules || {}, null, 2),
   })
   const [questions, setQuestions] = useState([])
   const [newQ, setNewQ] = useState({ question: '', question_type: 'text', options: '', is_required: false })
@@ -3471,10 +3475,20 @@ function InvitePanel({ event, onChanged }) {
   async function save() {
     setLoading(true); setMsg(''); setErr('')
     try {
+      let limitRules = null
+      if (form.rsvp_multi_invitee_limit_rules_text?.trim()) {
+        limitRules = JSON.parse(form.rsvp_multi_invitee_limit_rules_text)
+        if (!limitRules || Array.isArray(limitRules) || typeof limitRules !== 'object') {
+          throw new Error('Category invitee limits must be a JSON object.')
+        }
+      }
+      const { rsvp_multi_invitee_limit_rules_text, ...saveForm } = form
       const payload = {
-        ...form,
+        ...saveForm,
         rsvp_capacity: form.rsvp_capacity === '' ? null : Number(form.rsvp_capacity),
         rsvp_deadline: form.rsvp_deadline ? new Date(form.rsvp_deadline).toISOString() : null,
+        rsvp_multi_invitee_limit: Math.max(1, Math.min(Number(form.rsvp_multi_invitee_limit) || 10, 100)),
+        rsvp_multi_invitee_limit_rules: limitRules,
       }
       const updated = await api.updateInviteSettings(event.id, payload)
       onChanged(updated)
@@ -3697,12 +3711,44 @@ function InvitePanel({ event, onChanged }) {
           )}
 
           {form.invite_mode === 'open' && (
-            <div className="flex items-start gap-2">
-              <input id="require_approval" type="checkbox" checked={form.rsvp_require_approval} onChange={set('rsvp_require_approval')} className="w-4 h-4 mt-0.5 accent-teal-600" />
-              <label htmlFor="require_approval" className="text-sm text-slate-700 dark:text-slate-300 cursor-pointer">
-                <span className="font-medium">Review RSVPs before sending tickets</span>
-                <span className="block text-xs text-slate-500 dark:text-slate-400">New RSVPs show as "Pending". Approve them in Guests to send tickets.</span>
-              </label>
+            <div className="space-y-4">
+              <div className="flex items-start gap-2">
+                <input id="require_approval" type="checkbox" checked={form.rsvp_require_approval} onChange={set('rsvp_require_approval')} className="w-4 h-4 mt-0.5 accent-teal-600" />
+                <label htmlFor="require_approval" className="text-sm text-slate-700 dark:text-slate-300 cursor-pointer">
+                  <span className="font-medium">Review RSVPs before sending tickets</span>
+                  <span className="block text-xs text-slate-500 dark:text-slate-400">New RSVPs show as "Pending". Approve them in Guests to send tickets.</span>
+                </label>
+              </div>
+              <div className="rounded-lg border border-slate-200 dark:border-slate-700 p-3">
+                <div className="flex items-start gap-2">
+                  <input id="multi_invitee" type="checkbox" checked={form.rsvp_multi_invitee_enabled} onChange={set('rsvp_multi_invitee_enabled')} className="w-4 h-4 mt-0.5 accent-teal-600" />
+                  <label htmlFor="multi_invitee" className="text-sm text-slate-700 dark:text-slate-300 cursor-pointer">
+                    <span className="font-medium">Let one submitter register multiple invitees</span>
+                    <span className="block text-xs text-slate-500 dark:text-slate-400">Useful for schools and conventions. Each invitee becomes a separate guest with a separate QR pass after approval.</span>
+                  </label>
+                </div>
+                {form.rsvp_multi_invitee_enabled && (
+                  <div className="mt-3 grid gap-3 lg:grid-cols-[220px,1fr]">
+                    <div>
+                      <label className="block text-xs font-semibold text-slate-500 dark:text-slate-400 mb-1">Default max invitees</label>
+                      <input type="number" min="1" max="100" value={form.rsvp_multi_invitee_limit} onChange={set('rsvp_multi_invitee_limit')} className={inputCls} />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-semibold text-slate-500 dark:text-slate-400 mb-1">Category invitee limits JSON</label>
+                      <textarea
+                        rows={5}
+                        value={form.rsvp_multi_invitee_limit_rules_text}
+                        onChange={set('rsvp_multi_invitee_limit_rules_text')}
+                        className={`${inputCls} font-mono`}
+                        placeholder={`{"Transition parent/guardian": 2, "Haflatul-Qur'an parent/guardian": 10}`}
+                      />
+                      <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
+                        Optional. The public RSVP page shows these categories and the backend enforces the selected limit.
+                      </p>
+                    </div>
+                  </div>
+                )}
+              </div>
             </div>
           )}
         </div>
@@ -4019,7 +4065,13 @@ function BillingPanel({ event }) {
 // View and customize the outbound messages (email/SMS/WhatsApp) per event.
 // Event override → platform default; unedited templates send the built-in copy.
 
-function MessageTemplatesPanel({ eventId }) {
+function MessageTemplatesPanel({
+  eventId,
+  title = 'Message Templates',
+  description = 'Customize the emails, SMS and WhatsApp messages this event sends. Unedited templates use the platform default.',
+  includeGroups = null,
+  excludeGroups = ['Experience'],
+}) {
   const [items, setItems]     = useState([])
   const [sel, setSel]         = useState(null)   // selected template key
   const [draft, setDraft]     = useState(null)   // {subject, email_body, sms_body, whatsapp_body}
@@ -4031,6 +4083,7 @@ function MessageTemplatesPanel({ eventId }) {
   const [err, setErr]         = useState('')
   const [testTo, setTestTo]   = useState('')
   const [testChannel, setTestChannel] = useState('email')
+  const [activeGroup, setActiveGroup] = useState('')
 
   const fieldCls = 'border border-gray-300 dark:border-slate-700 rounded-lg px-3 py-2 text-sm bg-white dark:bg-slate-700 text-gray-900 dark:text-white w-full'
 
@@ -4096,40 +4149,85 @@ function MessageTemplatesPanel({ eventId }) {
     finally { setLoading(false) }
   }
 
-  // Group templates for the list.
-  const grouped = items.reduce((acc, it) => { (acc[it.group] = acc[it.group] || []).push(it); return acc }, {})
+  const visibleItems = items.filter((it) => {
+    if (includeGroups && !includeGroups.includes(it.group)) return false
+    if (!includeGroups && excludeGroups.includes(it.group)) return false
+    return true
+  })
+  // Group templates into tabs so long message catalogs stay scannable.
+  const grouped = visibleItems.reduce((acc, it) => { (acc[it.group] = acc[it.group] || []).push(it); return acc }, {})
+  const groupNames = Object.keys(grouped)
+  const selectedGroup = groupNames.includes(activeGroup) ? activeGroup : (groupNames[0] || '')
+  const activeList = grouped[selectedGroup] || []
+
+  useEffect(() => {
+    if (!groupNames.length) {
+      if (activeGroup) setActiveGroup('')
+      return
+    }
+    if (!groupNames.includes(activeGroup)) setActiveGroup(groupNames[0])
+  }, [items, includeGroups, excludeGroups, activeGroup])
+
+  function switchGroup(group) {
+    setActiveGroup(group)
+    const selected = visibleItems.find((it) => it.key === sel)
+    if (!selected || selected.group !== group) {
+      setSel(null); setMeta(null); setDraft(null); setPreview(null); setMsg(''); setErr('')
+    }
+  }
 
   return (
     <div className="bg-white dark:bg-slate-800 dark:border dark:border-slate-700/60 rounded-xl shadow p-6">
-      <h2 className="font-semibold text-base dark:text-white">✏️ Message Templates</h2>
+      <h2 className="font-semibold text-base dark:text-white">{title}</h2>
       <p className="text-xs text-gray-400 dark:text-slate-500 mt-1">
-        Customize the emails, SMS and WhatsApp messages this event sends. Unedited templates use the platform default.
+        {description}
       </p>
       {err && <p className="text-sm text-red-500 mt-2">{err}</p>}
       {msg && <p className="text-sm text-green-600 mt-2">{msg}</p>}
 
+      {groupNames.length > 0 && (
+        <div className="mt-4 flex flex-wrap gap-2 border-b border-gray-200 dark:border-slate-700 pb-3">
+          {groupNames.map((group) => (
+            <button key={group} type="button" onClick={() => switchGroup(group)}
+              className={`rounded-lg px-3 py-1.5 text-xs font-semibold transition ${
+                selectedGroup === group
+                  ? 'bg-indigo-600 text-white dark:bg-teal-500 dark:text-slate-950'
+                  : 'border border-gray-200 text-gray-600 hover:bg-gray-50 dark:border-slate-700 dark:text-slate-300 dark:hover:bg-slate-700'
+              }`}>
+              {group}
+              <span className={`ml-2 rounded-full px-1.5 py-0.5 text-[10px] ${
+                selectedGroup === group ? 'bg-white/20' : 'bg-gray-100 dark:bg-slate-800'
+              }`}>{grouped[group].length}</span>
+            </button>
+          ))}
+        </div>
+      )}
+
       <div className="mt-4 grid grid-cols-1 lg:grid-cols-3 gap-5">
         {/* List */}
-        <div className="lg:col-span-1 space-y-4">
-          {Object.entries(grouped).map(([group, list]) => (
-            <div key={group}>
-              <div className="text-[11px] font-semibold uppercase text-gray-400 dark:text-slate-500 mb-1">{group}</div>
-              <div className="space-y-1">
-                {list.map((it) => (
-                  <button key={it.key} onClick={() => openTemplate(it)}
-                    className={`w-full text-left px-3 py-2 rounded-lg text-sm flex items-center justify-between gap-2 ${
-                      sel === it.key ? 'bg-indigo-50 dark:bg-indigo-900/30 text-indigo-700 dark:text-indigo-200'
-                                     : 'hover:bg-gray-50 dark:hover:bg-slate-700 dark:text-slate-200'
-                    }`}>
-                    <span className="truncate">{it.label}</span>
-                    {it.source === 'event-customized'
-                      ? <span className="text-[10px] bg-amber-100 dark:bg-amber-900/40 text-amber-700 dark:text-amber-300 px-1.5 py-0.5 rounded shrink-0">Custom</span>
-                      : <span className="text-[10px] text-gray-400 shrink-0">Default</span>}
-                  </button>
-                ))}
+        <div className="lg:col-span-1">
+          {groupNames.length === 0 && (
+            <p className="text-sm text-gray-400 dark:text-slate-500">No templates in this section yet.</p>
+          )}
+          {selectedGroup && (
+            <div>
+              <div className="mb-2 text-[11px] font-semibold uppercase text-gray-400 dark:text-slate-500">{selectedGroup}</div>
+              <div className="space-y-1 max-h-[32rem] overflow-auto pr-1">
+                {activeList.map((it) => (
+                <button key={it.key} onClick={() => openTemplate(it)}
+                  className={`w-full text-left px-3 py-2 rounded-lg text-sm flex items-center justify-between gap-2 ${
+                    sel === it.key ? 'bg-indigo-50 dark:bg-indigo-900/30 text-indigo-700 dark:text-indigo-200'
+                                   : 'hover:bg-gray-50 dark:hover:bg-slate-700 dark:text-slate-200'
+                  }`}>
+                  <span className="truncate">{it.label}</span>
+                  {it.source === 'event-customized'
+                    ? <span className="text-[10px] bg-amber-100 dark:bg-amber-900/40 text-amber-700 dark:text-amber-300 px-1.5 py-0.5 rounded shrink-0">Custom</span>
+                    : <span className="text-[10px] text-gray-400 shrink-0">Default</span>}
+                </button>
+              ))}
               </div>
             </div>
-          ))}
+          )}
         </div>
 
         {/* Editor */}
@@ -4332,6 +4430,1772 @@ function BroadcastPanel({ event }) {
   )
 }
 
+// ── Experience workflow panel ────────────────────────────────────────────────
+
+const EXPERIENCE_STEP_TYPES = [
+  ['custom', 'Custom'],
+  ['check_in', 'Check-in'],
+  ['consent', 'Consent'],
+  ['seating_assignment', 'Seating assignment'],
+  ['meal_selection', 'Meal selection'],
+  ['souvenir', 'Souvenir'],
+  ['badge', 'Badge'],
+  ['room_assignment', 'Room assignment'],
+  ['session_attendance', 'Session attendance'],
+  ['certificate', 'Certificate'],
+  ['checkout', 'Checkout'],
+  ['rsvp', 'RSVP'],
+  ['approval', 'Approval'],
+]
+
+function experienceGuestActionLabel(step, status) {
+  if (status !== 'completed') {
+    return {
+      available: 'Available',
+      blocked: 'Block',
+      skipped: 'Skip',
+      failed: 'Fail',
+      overridden: 'Override',
+    }[status] || status
+  }
+  if (step?.type === 'session_attendance') return 'Check in'
+  if (step?.type === 'room_assignment') return 'Assign Room'
+  return 'Complete'
+}
+
+const blankExperienceStep = () => ({
+  key: '',
+  type: 'custom',
+  title: '',
+  description: '',
+  sort_order: 0,
+  required: true,
+  enabled: true,
+  depends_on: '',
+  guest_message: '',
+  staff_prompt: '',
+  completion_message: '',
+  session_topic: '',
+  session_date: '',
+  session_start_time: '',
+  session_end_time: '',
+  session_room: '',
+  session_speaker: '',
+  session_capacity: '',
+  session_checkin_window_minutes: '',
+  room_assignment_mode: 'global',
+  room_assignment_scope: '',
+  room_assignment_room: '',
+  room_assignment_table_group: '',
+  conditions: '',
+  config: '',
+})
+
+function normalizeSessionConfig(config = {}) {
+  const raw = config.session || config.session_details || config.schedule || config.session_config
+  const first = Array.isArray(config.sessions) ? config.sessions[0] : null
+  const source = (raw && typeof raw === 'object' ? raw : null) || (first && typeof first === 'object' ? first : null) || {}
+  const normalized = {
+    topic: source.topic || source.title || source.name || '',
+    date: source.date || source.session_date || '',
+    start_time: source.start_time || source.startTime || source.start || '',
+    end_time: source.end_time || source.endTime || source.end || '',
+    room: source.room || source.location || source.venue || '',
+    speaker: source.speaker || source.host || source.presenter || '',
+    capacity: source.capacity ?? '',
+    checkin_window_minutes: source.checkin_window_minutes ?? source.checkInWindowMinutes ?? source.checkin_window ?? '',
+  }
+  Object.keys(normalized).forEach((key) => {
+    if (normalized[key] === '' || normalized[key] === null || Number.isNaN(normalized[key])) delete normalized[key]
+  })
+  return normalized
+}
+
+function normalizeRoomAssignmentConfig(config = {}) {
+  const source = (config.room_assignment && typeof config.room_assignment === 'object')
+    ? config.room_assignment
+    : (config.assignment && typeof config.assignment === 'object')
+      ? config.assignment
+      : config
+  const mode = source.mode || source.assignment_mode || (source.scoped || source.scope || source.assignment_scope ? 'scoped' : 'global')
+  return {
+    mode: String(mode || 'global').toLowerCase(),
+    scope: source.assignment_scope || source.scope || '',
+    room: source.room || source.hall || source.location || '',
+    table_group: source.table_group || source.table_group_name || source.group || '',
+  }
+}
+
+const EXPERIENCE_STEP_PRESETS = [
+  {
+    key: 'rsvp_approved',
+    type: 'custom',
+    title: 'RSVP approved',
+    description: 'Guest has confirmed attendance and passed host approval.',
+    required: true,
+    config: { owner: 'host', source: 'guest_rsvp', visible_to_staff: true },
+  },
+  {
+    key: 'main_check_in',
+    type: 'check_in',
+    title: 'Main entrance check-in',
+    description: 'Admit the guest using their QR code or manual lookup.',
+    required: true,
+    config: { station: 'main_entrance', allow_manual_lookup: true, requires_event_pass: true },
+  },
+  {
+    key: 'consent',
+    type: 'consent',
+    title: 'Consent',
+    description: 'Guest signs the event consent form from their Festio Pass.',
+    required: true,
+    config: {
+      owner: 'guest',
+      guest_action: 'sign_consent',
+      visible_to_staff: true,
+      messages: {
+        guest: 'Please review and sign the consent form from your Festio Pass before collecting gifts or souvenirs.',
+        staff: 'Ask the guest to open their Festio Pass and sign the consent form.',
+        complete: 'Consent signed.',
+      },
+    },
+  },
+  {
+    key: 'seat_confirmed',
+    type: 'seating_assignment',
+    title: 'Seat confirmed',
+    description: 'Confirm the guest table and seat before sending them into the dining area.',
+    required: true,
+    config: { show_table_name: true, show_seat_number: true },
+  },
+  {
+    key: 'meal_confirmed',
+    type: 'meal_selection',
+    title: 'Meal confirmed',
+    description: 'Confirm catering has the guest meal choice or dietary note.',
+    required: false,
+    config: { allow_staff_note: true, fallback_choice: 'Confirm at table' },
+  },
+  {
+    key: 'welcome_pack',
+    type: 'souvenir',
+    title: 'Souvenir collected',
+    description: 'Staff mark complete after consent is signed and the guest receives their souvenir, welcome pack, badge, or gift bag.',
+    required: false,
+    config: {
+      station: 'gift_table',
+      item: 'souvenir',
+      prevent_duplicate_collection: true,
+      depends_on: ['consent'],
+      messages: {
+        guest: 'Collect your souvenir after signing consent.',
+        staff: 'Give the souvenir, welcome pack, badge, or gift bag, then mark this complete.',
+        complete: 'Souvenir collected.',
+      },
+    },
+  },
+  {
+    key: 'vip_host_greeting',
+    type: 'custom',
+    title: 'Host greeting complete',
+    description: 'Mark complete after the host or protocol team has greeted the guest.',
+    required: false,
+    conditions: { guest_tags_include: ['vip'] },
+    config: { owner: 'protocol_team', staff_prompt: 'Notify host before marking this complete.' },
+  },
+  {
+    key: 'badge_pickup',
+    type: 'badge',
+    title: 'Badge pickup',
+    description: 'Confirm badge, wristband, or credential pickup.',
+    required: false,
+    config: { station: 'registration' },
+  },
+  {
+    key: 'session_attendance',
+    type: 'session_attendance',
+    title: 'Session attendance',
+    description: 'Track guest attendance for a program segment or breakout.',
+    required: false,
+    config: {
+      station: 'session_entry',
+      session: {
+        topic: 'Program session',
+        date: '',
+        start_time: '',
+        end_time: '',
+        room: '',
+        speaker: '',
+        capacity: null,
+      },
+      messages: {
+        guest: 'Please proceed to the scheduled session and show your Festio Pass at the entrance.',
+        staff: 'Confirm the guest is entering the correct session, then mark attendance complete.',
+        complete: 'Session attendance recorded.',
+      },
+    },
+  },
+  {
+    key: 'departure_noted',
+    type: 'checkout',
+    title: 'Departure noted',
+    description: 'Mark complete when valet, transport, or guest departure is handled.',
+    required: false,
+    config: { station: 'exit', allow_note: true },
+  },
+]
+
+const EXPERIENCE_WORKFLOW_TEMPLATES = [
+  {
+    id: 'vip_dinner',
+    name: 'VIP Dinner Guest Journey',
+    label: 'VIP dinner',
+    description: 'RSVP approval, arrival, consent, seating, meal, souvenir, VIP greeting, and departure.',
+    stepKeys: ['rsvp_approved', 'main_check_in', 'consent', 'seat_confirmed', 'meal_confirmed', 'welcome_pack', 'vip_host_greeting', 'departure_noted'],
+  },
+  {
+    id: 'conference_registration',
+    name: 'Conference Registration Journey',
+    label: 'Conference',
+    description: 'Registration desk flow with badge pickup, check-in, session attendance, and checkout.',
+    stepKeys: ['rsvp_approved', 'badge_pickup', 'main_check_in', 'session_attendance', 'departure_noted'],
+  },
+  {
+    id: 'wedding_reception',
+    name: 'Wedding Reception Journey',
+    label: 'Wedding reception',
+    description: 'Guest admission, consent, table confirmation, meal handling, and gift pickup.',
+    stepKeys: ['main_check_in', 'consent', 'seat_confirmed', 'meal_confirmed', 'welcome_pack'],
+  },
+  {
+    id: 'simple_checkin',
+    name: 'Simple Check-in Journey',
+    label: 'Simple check-in',
+    description: 'A minimal operational workflow for events that only need arrival tracking.',
+    stepKeys: ['main_check_in'],
+  },
+]
+
+const EXPERIENCE_PRESET_BY_KEY = Object.fromEntries(EXPERIENCE_STEP_PRESETS.map((preset) => [preset.key, preset]))
+
+function listValue(raw) {
+  if (!raw) return []
+  if (Array.isArray(raw)) return raw.map((v) => String(v).trim()).filter(Boolean)
+  return String(raw).split(',').map((v) => v.trim()).filter(Boolean)
+}
+
+function listText(raw) {
+  return listValue(raw).join(', ')
+}
+
+function toggleListText(raw, value) {
+  const values = new Set(listValue(raw))
+  values.has(value) ? values.delete(value) : values.add(value)
+  return [...values].join(', ')
+}
+
+function sessionSummary(session = {}) {
+  const parts = []
+  if (session.topic) parts.push(session.topic)
+  if (session.date) parts.push(session.date)
+  if (session.start_time || session.end_time) parts.push([session.start_time, session.end_time].filter(Boolean).join('-'))
+  if (session.room) parts.push(session.room)
+  if (session.speaker) parts.push(`Speaker: ${session.speaker}`)
+  if (session.capacity) parts.push(`Cap: ${session.capacity}`)
+  if (session.checkin_window_minutes !== undefined && session.checkin_window_minutes !== '') parts.push(`Opens ${session.checkin_window_minutes}m before`)
+  return parts.join(' · ')
+}
+
+function hasSessionDetails(session = {}) {
+  return !!(session.topic || session.title || session.name || session.date || session.start_time || session.start || session.room || session.location)
+}
+
+function slugifyKey(value, fallback = 'session') {
+  const key = String(value || '')
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '_')
+    .replace(/^_+|_+$/g, '')
+  return key || fallback
+}
+
+function experienceStepPayload(preset, sortOrder = 10) {
+  return {
+    key: preset.key,
+    type: preset.type,
+    title: preset.title,
+    description: preset.description,
+    sort_order: sortOrder,
+    required: preset.required,
+    enabled: true,
+    conditions: preset.conditions || null,
+    config: preset.config || null,
+  }
+}
+
+function ExperiencePanel({ event, onChanged, onFlash }) {
+  const [workflows, setWorkflows] = useState([])
+  const [dashboard, setDashboard] = useState(null)
+  const [analytics, setAnalytics] = useState(null)
+  const [guests, setGuests] = useState([])
+  const [guestJourney, setGuestJourney] = useState(null)
+  const [selectedGuestId, setSelectedGuestId] = useState('')
+  const [guestJourneyOpen, setGuestJourneyOpen] = useState(true)
+  const [workflowDetailsOpen, setWorkflowDetailsOpen] = useState(true)
+  const [versionsOpen, setVersionsOpen] = useState(true)
+  const [selectedId, setSelectedId] = useState('')
+  const [stepForm, setStepForm] = useState(null)
+  const [newName, setNewName] = useState('')
+  const [loading, setLoading] = useState(false)
+  const [err, setErr] = useState('')
+  const [consentForm, setConsentForm] = useState({ title: 'Event consent', body: '', require_signature: true })
+  const [consentSignatures, setConsentSignatures] = useState([])
+  const [auditRows, setAuditRows] = useState([])
+  const [consentOpen, setConsentOpen] = useState(false)
+  const [workflowFilter, setWorkflowFilter] = useState('all')
+  const [auditFilter, setAuditFilter] = useState('')
+  const [sessionImportText, setSessionImportText] = useState('')
+  const [draggedStepId, setDraggedStepId] = useState('')
+  const [dragOverStepId, setDragOverStepId] = useState('')
+  const [activeExperienceTab, setActiveExperienceTab] = useState('workflow')
+
+  const fieldCls = 'border border-gray-300 dark:border-slate-700 rounded-lg px-3 py-2 text-sm bg-white dark:bg-slate-700 text-gray-900 dark:text-white'
+  const selected = workflows.find((w) => w.id === selectedId) || workflows[0]
+  const isDraft = selected?.status === 'draft'
+  const isArchived = selected?.status === 'archived'
+  const publishedWorkflow = workflows.find((w) => w.status === 'published')
+  const publishBlockedBy = isDraft && publishedWorkflow && publishedWorkflow.id !== selected?.id ? publishedWorkflow : null
+  const activeWorkflow = dashboard?.workflow || selected
+  const selectedGuest = guests.find((g) => g.id === selectedGuestId)
+  const selectedGuestConsentSigned = !!consentSignatures.find((sig) => sig.guest_id === selectedGuestId)
+  const filteredWorkflows = workflows.filter((w) => workflowFilter === 'all' || w.status === workflowFilter)
+  const filteredAuditRows = auditRows.filter((row) => {
+    const q = auditFilter.trim().toLowerCase()
+    return !q || row.event_type.toLowerCase().includes(q) || row.source.toLowerCase().includes(q)
+  })
+
+  const storageKey = event?.id ? `festio:experience:${event.id}` : ''
+
+  function rememberSelection(nextId = selectedId, nextFilter = workflowFilter) {
+    if (!storageKey) return
+    try {
+      sessionStorage.setItem(storageKey, JSON.stringify({ selectedId: nextId || '', workflowFilter: nextFilter || 'all' }))
+    } catch {
+      // Session persistence is a convenience; ignore private-mode failures.
+    }
+  }
+
+  function readRememberedSelection() {
+    if (!storageKey) return {}
+    try { return JSON.parse(sessionStorage.getItem(storageKey) || '{}') || {} }
+    catch { return {} }
+  }
+
+  async function load(preferredId = selectedId) {
+    if (!event?.id) return
+    setErr('')
+    try {
+      const [data, dash, analyticsData, guestRows, form, signatures, audit] = await Promise.all([
+        api.listExperienceWorkflows(event.id),
+        api.getExperienceDashboard(event.id).catch(() => null),
+        api.getExperienceAnalytics(event.id).catch(() => null),
+        api.listGuests(event.id).catch(() => []),
+        api.getConsentForm(event.id).catch(() => null),
+        api.listConsentSignatures(event.id).catch(() => []),
+        api.listExperienceAudit(event.id, 50).catch(() => []),
+      ])
+      setWorkflows(data)
+      setDashboard(dash)
+      setAnalytics(analyticsData)
+      setGuests(guestRows)
+      setConsentForm(form || { title: 'Event consent', body: '', require_signature: true })
+      setConsentSignatures(signatures)
+      setAuditRows(audit)
+      if (data.length) {
+        const remembered = readRememberedSelection()
+        if (remembered.workflowFilter && remembered.workflowFilter !== workflowFilter) setWorkflowFilter(remembered.workflowFilter)
+        const preferred = data.find((w) => w.id === preferredId)
+        const rememberedWorkflow = data.find((w) => w.id === remembered.selectedId)
+        const current = data.find((w) => w.id === selectedId)
+        const published = data.find((w) => w.status === 'published')
+        const next = preferred || rememberedWorkflow || current || published || data[0]
+        setSelectedId(next.id)
+        rememberSelection(next.id, remembered.workflowFilter || workflowFilter)
+      } else {
+        setSelectedId('')
+      }
+      if (guestRows.length) {
+        const nextGuestId = selectedGuestId && guestRows.some((g) => g.id === selectedGuestId)
+          ? selectedGuestId
+          : guestRows[0].id
+        setSelectedGuestId(nextGuestId)
+        await loadGuestJourney(nextGuestId)
+      } else {
+        setSelectedGuestId('')
+        setGuestJourney(null)
+      }
+    } catch (e) {
+      setErr(e.message)
+      setDashboard(null)
+    }
+  }
+
+  async function loadGuestJourney(guestId = selectedGuestId) {
+    if (!event?.id || !guestId) {
+      setGuestJourney(null)
+      return
+    }
+    try {
+      setGuestJourney(await api.getGuestExperience(event.id, guestId))
+    } catch (e) {
+      setGuestJourney(null)
+      setErr(e.message)
+    }
+  }
+
+  useEffect(() => {
+    const remembered = readRememberedSelection()
+    if (remembered.workflowFilter) setWorkflowFilter(remembered.workflowFilter)
+    load(remembered.selectedId || '')
+    setStepForm(null)
+    setNewName('')
+  }, [event?.id]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  function parseJsonMaybe(raw, label) {
+    const text = (raw || '').trim()
+    if (!text) return null
+    try { return JSON.parse(text) }
+    catch { throw new Error(`${label} must be valid JSON`) }
+  }
+
+  function stepToForm(step) {
+    const config = step.config || {}
+    const messages = config.messages || {}
+    const session = normalizeSessionConfig(config)
+    const assignment = normalizeRoomAssignmentConfig(config)
+    return {
+      id: step.id,
+      key: step.key,
+      type: step.type,
+      title: step.title,
+      description: step.description || '',
+      sort_order: step.sort_order || 0,
+      required: !!step.required,
+      enabled: !!step.enabled,
+      depends_on: listText(config.depends_on || config.depends_on_keys || config.prerequisites),
+      guest_message: messages.guest || config.guest_message || '',
+      staff_prompt: messages.staff || config.staff_prompt || '',
+      completion_message: messages.complete || config.completion_message || '',
+      session_topic: session.topic || '',
+      session_date: session.date || '',
+      session_start_time: session.start_time || '',
+      session_end_time: session.end_time || '',
+      session_room: session.room || '',
+      session_speaker: session.speaker || '',
+      session_capacity: session.capacity ?? '',
+      session_checkin_window_minutes: session.checkin_window_minutes ?? '',
+      room_assignment_mode: assignment.mode === 'scoped' ? 'scoped' : 'global',
+      room_assignment_scope: assignment.scope || '',
+      room_assignment_room: assignment.room || '',
+      room_assignment_table_group: assignment.table_group || '',
+      conditions: step.conditions ? JSON.stringify(step.conditions, null, 2) : '',
+      config: step.config ? JSON.stringify(step.config, null, 2) : '',
+    }
+  }
+
+  function formPayload() {
+    if (!stepForm.key.trim() || !stepForm.title.trim()) throw new Error('Step key and title are required')
+    const config = parseJsonMaybe(stepForm.config, 'Config') || {}
+    const deps = listValue(stepForm.depends_on)
+    if (deps.length) config.depends_on = deps
+    else delete config.depends_on
+    const messages = { ...(config.messages || {}) }
+    const guestMessage = stepForm.guest_message.trim()
+    const staffPrompt = stepForm.staff_prompt.trim()
+    const completionMessage = stepForm.completion_message.trim()
+    if (guestMessage) messages.guest = guestMessage
+    else delete messages.guest
+    if (staffPrompt) messages.staff = staffPrompt
+    else delete messages.staff
+    if (completionMessage) messages.complete = completionMessage
+    else delete messages.complete
+    if (Object.keys(messages).length) config.messages = messages
+    else delete config.messages
+    if (stepForm.type === 'session_attendance') {
+      const jsonSession = normalizeSessionConfig(config)
+      const session = {
+        ...jsonSession,
+        topic: stepForm.session_topic.trim() || jsonSession.topic || '',
+        date: stepForm.session_date.trim() || jsonSession.date || '',
+        start_time: stepForm.session_start_time.trim() || jsonSession.start_time || '',
+        end_time: stepForm.session_end_time.trim() || jsonSession.end_time || '',
+        room: stepForm.session_room.trim() || jsonSession.room || '',
+        speaker: stepForm.session_speaker.trim() || jsonSession.speaker || '',
+        capacity: stepForm.session_capacity === '' ? (jsonSession.capacity ?? null) : Number(stepForm.session_capacity),
+        checkin_window_minutes: stepForm.session_checkin_window_minutes === '' ? (jsonSession.checkin_window_minutes ?? null) : Number(stepForm.session_checkin_window_minutes),
+      }
+      Object.keys(session).forEach((key) => {
+        if (session[key] === '' || session[key] === null || Number.isNaN(session[key])) delete session[key]
+      })
+      if (Object.keys(session).length) config.session = session
+      else delete config.session
+      delete config.session_details
+      delete config.session_config
+      delete config.schedule
+      delete config.sessions
+    } else {
+      delete config.session
+    }
+    if (stepForm.type === 'room_assignment') {
+      const jsonAssignment = normalizeRoomAssignmentConfig(config)
+      const assignment = {
+        ...(config.room_assignment && typeof config.room_assignment === 'object' ? config.room_assignment : {}),
+        assignment_mode: stepForm.room_assignment_mode || jsonAssignment.mode || 'global',
+        scope: stepForm.room_assignment_scope.trim() || jsonAssignment.scope || stepForm.key.trim(),
+        room: stepForm.room_assignment_room.trim() || jsonAssignment.room || '',
+        table_group: stepForm.room_assignment_table_group.trim() || jsonAssignment.table_group || '',
+      }
+      if (assignment.assignment_mode !== 'scoped') {
+        delete assignment.scope
+        delete assignment.assignment_scope
+        delete assignment.scoped
+      } else {
+        assignment.scoped = true
+      }
+      Object.keys(assignment).forEach((key) => {
+        if (assignment[key] === '' || assignment[key] === null || Number.isNaN(assignment[key])) delete assignment[key]
+      })
+      config.room_assignment = assignment
+      delete config.assignment
+    } else {
+      delete config.room_assignment
+    }
+    return {
+      key: stepForm.key.trim(),
+      type: stepForm.type,
+      title: stepForm.title.trim(),
+      description: stepForm.description.trim() || null,
+      sort_order: Number(stepForm.sort_order || 0),
+      required: !!stepForm.required,
+      enabled: !!stepForm.enabled,
+      conditions: parseJsonMaybe(stepForm.conditions, 'Conditions'),
+      config: Object.keys(config).length ? config : null,
+    }
+  }
+
+  async function run(action, success) {
+    setLoading(true); setErr('')
+    try {
+      const result = await action()
+      if (success) onFlash?.(success)
+      return result
+    } catch (e) {
+      setErr(e.message)
+      return null
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  async function toggleExperience(active) {
+    const updated = await run(() => api.toggleFeatures(event.id, { experience_enabled: active }), active ? 'Experience enabled.' : 'Experience disabled.')
+    if (updated) onChanged(updated)
+  }
+
+  async function createDefault() {
+    const workflow = await run(() => api.createDefaultExperienceWorkflow(event.id), 'Default workflow created.')
+    if (workflow) {
+      onChanged({ ...event, experience_enabled: true })
+      await load(workflow.id)
+    }
+  }
+
+  async function createWorkflow(e) {
+    e.preventDefault()
+    const workflow = await run(
+      () => api.createExperienceWorkflow(event.id, { name: newName.trim() || 'New Experience', steps: [] }),
+      'Workflow created.',
+    )
+    if (workflow) {
+      setNewName('')
+      await load(workflow.id)
+    }
+  }
+
+  async function createWorkflowFromTemplate(template) {
+    const steps = template.stepKeys.map((key, index) => experienceStepPayload(EXPERIENCE_PRESET_BY_KEY[key], (index + 1) * 10))
+    const workflow = await run(
+      () => api.createExperienceWorkflow(event.id, { name: template.name, steps }),
+      `${template.name} created.`,
+    )
+    if (workflow) {
+      onChanged({ ...event, experience_enabled: true })
+      await load(workflow.id)
+    }
+  }
+
+  async function addPresetStep(preset) {
+    if (!selected || !isDraft) return
+    const existing = new Set((selected.steps || []).map((step) => step.key))
+    let payload = experienceStepPayload(preset, ((selected.steps?.length || 0) + 1) * 10)
+    if (existing.has(payload.key)) {
+      const suffix = selected.steps.length + 1
+      payload = { ...payload, key: `${payload.key}_${suffix}`, title: `${payload.title} ${suffix}` }
+    }
+    const saved = await run(() => api.createExperienceStep(event.id, selected.id, payload), `${payload.title} added.`)
+    if (saved) await load(selected.id)
+  }
+
+  async function importSessionSteps() {
+    if (!selected || !isDraft) return
+    let parsed
+    try {
+      parsed = JSON.parse(sessionImportText || '')
+    } catch {
+      setErr('Session import must be valid JSON')
+      return
+    }
+    const rows = Array.isArray(parsed) ? parsed : Array.isArray(parsed?.sessions) ? parsed.sessions : []
+    if (!rows.length) {
+      setErr('Paste a JSON array of sessions, or an object with a sessions array.')
+      return
+    }
+    const existing = new Set((selected.steps || []).map((step) => step.key))
+    const baseOrder = Math.max(0, ...(selected.steps || []).map((step) => Number(step.sort_order) || 0))
+    const payloads = rows.map((row, index) => {
+      const session = normalizeSessionConfig({ session: row })
+      const title = session.topic || row.title || row.name || `Session ${index + 1}`
+      let key = slugifyKey(row.key || title, `session_${index + 1}`)
+      let suffix = 2
+      while (existing.has(key)) {
+        key = `${slugifyKey(row.key || title, `session_${index + 1}`)}_${suffix}`
+        suffix += 1
+      }
+      existing.add(key)
+      return {
+        key,
+        type: 'session_attendance',
+        title,
+        description: row.description || 'Track guest attendance for a program segment or breakout.',
+        sort_order: baseOrder + ((index + 1) * 10),
+        required: row.required ?? true,
+        enabled: row.enabled ?? true,
+        conditions: row.conditions || null,
+        config: {
+          ...(row.config && typeof row.config === 'object' ? row.config : {}),
+          session,
+          messages: row.messages || {
+            guest: 'Please proceed to the scheduled session and show your Festio Pass at the entrance.',
+            staff: 'Confirm the guest is entering the correct session, then mark attendance complete.',
+            complete: 'Session attendance recorded.',
+          },
+        },
+      }
+    })
+    setLoading(true); setErr('')
+    try {
+      for (const payload of payloads) {
+        await api.createExperienceStep(event.id, selected.id, payload)
+      }
+      setSessionImportText('')
+      onFlash?.(`${payloads.length} session step${payloads.length === 1 ? '' : 's'} imported.`)
+      await load(selected.id)
+    } catch (e) {
+      setErr(e.message)
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  async function saveStep(e) {
+    e.preventDefault()
+    const payload = (() => {
+      try { return formPayload() }
+      catch (error) { setErr(error.message); return null }
+    })()
+    if (!payload || !selected) return
+    const saved = stepForm.id
+      ? await run(() => api.updateExperienceStep(event.id, selected.id, stepForm.id, payload), 'Step updated.')
+      : await run(() => api.createExperienceStep(event.id, selected.id, payload), 'Step added.')
+    if (saved) {
+      setStepForm(null)
+      await load(selected.id)
+    }
+  }
+
+  async function deleteStep(stepId) {
+    if (!selected || !confirm('Delete this workflow step?')) return
+    setLoading(true); setErr('')
+    try {
+      await api.deleteExperienceStep(event.id, selected.id, stepId)
+      onFlash?.('Step deleted.')
+      await load(selected.id)
+    } catch (e) {
+      setErr(e.message)
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  async function deleteWorkflow() {
+    if (!selected || selected.status !== 'draft') return
+    if (!confirm(`Delete draft workflow "${selected.name}"? This cannot be undone.`)) return
+    setLoading(true); setErr('')
+    try {
+      await api.deleteExperienceWorkflow(event.id, selected.id)
+      onFlash?.('Draft workflow deleted.')
+      const remaining = workflows.filter((w) => w.id !== selected.id)
+      await load(remaining[0]?.id || '')
+    } catch (e) {
+      setErr(e.message)
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  async function moveStep(index, direction) {
+    if (!selected) return
+    const ids = selected.steps.map((s) => s.id)
+    const target = index + direction
+    if (target < 0 || target >= ids.length) return
+    ;[ids[index], ids[target]] = [ids[target], ids[index]]
+    const updated = await run(() => api.reorderExperienceSteps(event.id, selected.id, ids), 'Step order saved.')
+    if (updated) await load(selected.id)
+  }
+
+  async function dropStep(targetStepId) {
+    if (!selected || !isDraft || !draggedStepId || draggedStepId === targetStepId) {
+      setDraggedStepId('')
+      setDragOverStepId('')
+      return
+    }
+    const ids = selected.steps.map((s) => s.id)
+    const from = ids.indexOf(draggedStepId)
+    const to = ids.indexOf(targetStepId)
+    if (from < 0 || to < 0) {
+      setDraggedStepId('')
+      setDragOverStepId('')
+      return
+    }
+    ids.splice(to, 0, ids.splice(from, 1)[0])
+    setDraggedStepId('')
+    setDragOverStepId('')
+    const updated = await run(() => api.reorderExperienceSteps(event.id, selected.id, ids), 'Step order saved.')
+    if (updated) await load(selected.id)
+  }
+
+  async function saveConsent(e) {
+    e.preventDefault()
+    if (!consentForm.body.trim()) {
+      setErr('Consent body is required')
+      return
+    }
+    const saved = await run(
+      () => api.saveConsentForm(event.id, {
+        title: consentForm.title || 'Event consent',
+        body: consentForm.body,
+        require_signature: !!consentForm.require_signature,
+      }),
+      'Consent form saved.',
+    )
+    if (saved) await load(selected?.id)
+  }
+
+  async function exportProgress() {
+    await run(() => api.downloadExperienceExport(event.id), 'Experience export downloaded.')
+  }
+
+  async function publish() {
+    if (!selected || !confirm('Publish this workflow? Published workflows cannot be edited directly.')) return
+    const workflow = await run(() => api.publishExperienceWorkflow(event.id, selected.id), 'Workflow published.')
+    if (workflow) {
+      onChanged({ ...event, experience_enabled: true })
+      await load(workflow.id)
+    }
+  }
+
+  async function unpublish() {
+    if (!selected || !confirm(`Unpublish ${selected.name}? It will return to draft and stop being the live runbook.`)) return
+    const workflow = await run(() => api.unpublishExperienceWorkflow(event.id, selected.id), 'Workflow unpublished.')
+    if (workflow) {
+      onChanged({ ...event, experience_enabled: false })
+      await load(workflow.id)
+    }
+  }
+
+  async function archiveWorkflow() {
+    if (!selected || !confirm(`Archive ${selected.name}? It will be kept for history and removed from live use.`)) return
+    const workflow = await run(() => api.archiveExperienceWorkflow(event.id, selected.id), 'Workflow archived.')
+    if (workflow) {
+      if (selected.status === 'published') onChanged({ ...event, experience_enabled: false })
+      await load(workflow.id)
+    }
+  }
+
+  async function unarchiveWorkflow() {
+    if (!selected) return
+    const workflow = await run(() => api.unarchiveExperienceWorkflow(event.id, selected.id), 'Workflow restored as draft.')
+    if (workflow) await load(workflow.id)
+  }
+
+  async function clone() {
+    if (!selected) return
+    const name = prompt('Name for the draft copy', `${selected.name} copy`)
+    if (name === null) return
+    const workflow = await run(() => api.cloneExperienceWorkflow(event.id, selected.id, name.trim() || null), 'Workflow cloned.')
+    if (workflow) await load(workflow.id)
+  }
+
+  async function updateGuestStep(step, status) {
+    if (!selectedGuestId) return
+    const reason = status === 'overridden' ? prompt('Override reason') : ''
+    if (status === 'overridden' && reason === null) return
+    const isSessionCheckIn = status === 'completed' && step?.type === 'session_attendance'
+    const updated = await run(
+      () => api.updateGuestExperienceStep(event.id, selectedGuestId, step.id, {
+        status,
+        override_reason: reason || null,
+        metadata: {
+          source: 'portal',
+          ...(isSessionCheckIn ? { action: 'session_check_in' } : {}),
+        },
+      }),
+      isSessionCheckIn ? 'Session check-in recorded.' : 'Guest journey updated.',
+    )
+    if (updated) {
+      await Promise.all([loadGuestJourney(selectedGuestId), load(selected?.id)])
+    }
+  }
+
+  async function resendGuestEmail(kind) {
+    if (!selectedGuestId) return
+    const labels = {
+      invitation: 'Invitation resent.',
+      admission: 'Admission email resent.',
+      experience_next_steps: 'Experience steps email sent.',
+      consent_copy: 'Consent copy resent.',
+    }
+    const sent = await run(() => api.resendGuestEmail(event.id, selectedGuestId, kind), labels[kind])
+    if (sent) await load(selected?.id)
+  }
+
+  const progressByStep = new Map((guestJourney?.progress || []).map((p) => [p.step_id, p]))
+  const journeySteps = (guestJourney?.workflow?.steps || activeWorkflow?.steps || []).slice().sort((a, b) => (a.sort_order || 0) - (b.sort_order || 0))
+  const experienceTabs = [
+    ['setup', 'Setup'],
+    ['workflow', 'Workflow'],
+    ['guests', 'Guests'],
+    ['consent', 'Consent'],
+    ['messages', 'Messages'],
+    ['analytics', 'Analytics'],
+  ]
+
+  return (
+    <div className="space-y-6">
+      <div className="bg-white dark:bg-slate-800 dark:border dark:border-slate-700/60 rounded-xl shadow p-6">
+        <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+          <div>
+            <h2 className="font-semibold text-base dark:text-white">Experience workflow</h2>
+            <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">Configure attendee journey steps without changing the live scanner flow yet.</p>
+          </div>
+          <label className="flex items-center gap-2 text-sm font-semibold text-slate-700 dark:text-slate-200">
+            <input type="checkbox" checked={!!event.experience_enabled} disabled={loading}
+              onChange={(e) => toggleExperience(e.target.checked)}
+              className="h-4 w-4 accent-teal-600" />
+            Enabled
+          </label>
+        </div>
+        {err && <div className="mt-4 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">{err}</div>}
+
+        <div className="mt-5 overflow-x-auto border-b border-slate-200 dark:border-slate-700">
+          <div className="flex min-w-max gap-1">
+            {experienceTabs.map(([key, label]) => (
+              <button key={key} type="button" onClick={() => setActiveExperienceTab(key)}
+                className={`rounded-t-lg px-4 py-2 text-sm font-semibold transition-colors ${
+                  activeExperienceTab === key
+                    ? 'bg-teal-50 text-teal-800 dark:bg-teal-900/30 dark:text-teal-100'
+                    : 'text-slate-500 hover:bg-slate-50 hover:text-slate-800 dark:text-slate-400 dark:hover:bg-slate-700 dark:hover:text-slate-100'
+                }`}>
+                {label}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {activeExperienceTab === 'setup' && (
+          <>
+            <div className="mt-5 flex flex-wrap gap-3">
+              <button onClick={createDefault} disabled={loading}
+                className="rounded-lg bg-teal-600 px-4 py-2 text-sm font-semibold text-white hover:bg-teal-700 disabled:opacity-50">
+                Create default workflow
+              </button>
+              <button type="button" onClick={exportProgress} disabled={loading || !dashboard?.workflow}
+                className="rounded-lg border border-slate-300 px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-50 dark:border-slate-600 dark:text-slate-200 dark:hover:bg-slate-700">
+                Export progress
+              </button>
+              <form onSubmit={createWorkflow} className="flex min-w-[260px] flex-1 gap-2">
+                <input className={`${fieldCls} min-w-0 flex-1`} value={newName}
+                  onChange={(e) => setNewName(e.target.value)} placeholder="New workflow name" />
+                <button disabled={loading} className="rounded-lg border border-slate-300 px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-50 dark:border-slate-600 dark:text-slate-200 dark:hover:bg-slate-700">
+                  Create
+                </button>
+              </form>
+            </div>
+
+            <div className="mt-5 border-t border-slate-200 pt-5 dark:border-slate-700">
+              <div className="mb-3 flex flex-col gap-1 sm:flex-row sm:items-end sm:justify-between">
+                <div>
+                  <h3 className="text-sm font-semibold text-slate-900 dark:text-white">Workflow templates</h3>
+                  <p className="text-xs text-slate-500 dark:text-slate-400">Create a complete draft workflow from a proven event pattern.</p>
+                </div>
+                {publishedWorkflow && (
+                  <div className="text-xs text-slate-500 dark:text-slate-400">
+                    Live: <span className="font-semibold text-slate-700 dark:text-slate-200">{publishedWorkflow.name}</span>
+                  </div>
+                )}
+              </div>
+              <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+                {EXPERIENCE_WORKFLOW_TEMPLATES.map((template) => (
+                  <button key={template.id} type="button" onClick={() => createWorkflowFromTemplate(template)} disabled={loading}
+                    className="rounded-lg border border-slate-200 p-3 text-left transition-colors hover:border-teal-300 hover:bg-teal-50 disabled:opacity-50 dark:border-slate-700 dark:hover:border-teal-800 dark:hover:bg-teal-900/20">
+                    <div className="text-sm font-semibold text-slate-900 dark:text-white">{template.label}</div>
+                    <div className="mt-1 text-xs leading-5 text-slate-500 dark:text-slate-400">{template.description}</div>
+                    <div className="mt-3 text-xs font-semibold text-teal-700 dark:text-teal-300">{template.stepKeys.length} steps</div>
+                  </button>
+                ))}
+              </div>
+            </div>
+          </>
+        )}
+      </div>
+
+      {activeExperienceTab === 'analytics' && <div className="grid gap-4 sm:grid-cols-4">
+        {[
+          ['Guests', dashboard?.guest_total ?? 0],
+          ['Steps', dashboard?.step_count ?? 0],
+          ['Progress rows', dashboard?.progress_total ?? 0],
+          ['Complete', `${dashboard?.completion_rate ?? 0}%`],
+        ].map(([label, value]) => (
+          <div key={label} className="rounded-xl bg-white p-4 text-center shadow dark:border dark:border-slate-700/60 dark:bg-slate-800">
+            <div className="text-2xl font-bold text-teal-600 dark:text-teal-300">{value}</div>
+            <div className="mt-1 text-xs text-slate-500 dark:text-slate-400">{label}</div>
+          </div>
+        ))}
+      </div>}
+
+      {activeExperienceTab === 'messages' && <MessageTemplatesPanel
+        eventId={event.id}
+        includeGroups={['Experience']}
+        excludeGroups={[]}
+        title="Experience messages"
+        description="Customize messages generated by Experience workflows. These templates are separate from general invitations and day-of notices, but use the same placeholder and preview engine."
+      />}
+
+      {activeExperienceTab === 'analytics' && analytics?.workflow && (
+        <div className="grid gap-4 lg:grid-cols-3">
+          <div className="rounded-xl bg-white p-4 shadow dark:border dark:border-slate-700/60 dark:bg-slate-800">
+            <h3 className="text-sm font-semibold text-slate-900 dark:text-white">Consent completion</h3>
+            <div className="mt-3 text-2xl font-bold text-teal-600 dark:text-teal-300">{analytics.consent?.rate ?? 0}%</div>
+            <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
+              {analytics.consent?.signed ?? 0} of {analytics.consent?.total ?? 0} guests signed
+            </p>
+          </div>
+          <div className="rounded-xl bg-white p-4 shadow dark:border dark:border-slate-700/60 dark:bg-slate-800">
+            <h3 className="text-sm font-semibold text-slate-900 dark:text-white">Top bottleneck</h3>
+            {analytics.bottlenecks?.length ? (
+              <>
+                <div className="mt-3 text-sm font-bold text-slate-800 dark:text-slate-100">{analytics.bottlenecks[0].title}</div>
+                <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
+                  {analytics.bottlenecks[0].open} open · {analytics.bottlenecks[0].completion_rate}% complete
+                </p>
+              </>
+            ) : <p className="mt-3 text-sm text-slate-400">No bottlenecks yet.</p>}
+          </div>
+          <div className="rounded-xl bg-white p-4 shadow dark:border dark:border-slate-700/60 dark:bg-slate-800">
+            <h3 className="text-sm font-semibold text-slate-900 dark:text-white">Overrides</h3>
+            <div className="mt-3 text-2xl font-bold text-amber-600 dark:text-amber-300">{analytics.overrides?.length ?? 0}</div>
+            <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">Recent overridden steps in this workflow</p>
+          </div>
+        </div>
+      )}
+
+      {activeExperienceTab === 'consent' && <div className="bg-white dark:bg-slate-800 dark:border dark:border-slate-700/60 rounded-xl shadow p-6">
+        <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+          <div>
+            <h3 className="font-semibold text-base text-slate-900 dark:text-white">Consent form</h3>
+            <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
+              Add a waiver, media release, or event terms for guests to sign from their pass.
+            </p>
+          </div>
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="rounded-full bg-teal-50 px-2 py-1 text-xs font-semibold text-teal-700 dark:bg-teal-900/30 dark:text-teal-200">
+              {consentSignatures.length} signed
+            </span>
+            <button type="button" onClick={() => setConsentOpen((v) => !v)}
+              className="rounded-lg border border-slate-300 px-3 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50 dark:border-slate-600 dark:text-slate-200 dark:hover:bg-slate-700">
+              {consentOpen ? 'Collapse' : 'Expand'}
+            </button>
+          </div>
+        </div>
+        {!consentOpen && consentForm?.body && (
+          <div className="mt-4 rounded-lg border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-600 dark:border-slate-700 dark:bg-slate-900/40 dark:text-slate-300">
+            Active: <span className="font-semibold">{consentForm.title}</span>
+          </div>
+        )}
+        {consentOpen && (
+          <div className="mt-4 grid gap-4 xl:grid-cols-[minmax(0,1fr)_24rem]">
+            <form onSubmit={saveConsent} className="space-y-3">
+              <label className="block">
+                <span className="mb-1 block text-xs font-semibold text-slate-500 dark:text-slate-400">Title</span>
+                <input className={`${fieldCls} w-full`} value={consentForm?.title || ''}
+                  onChange={(e) => setConsentForm((f) => ({ ...f, title: e.target.value }))} placeholder="Event waiver and media consent" />
+              </label>
+              <label className="block">
+                <span className="mb-1 block text-xs font-semibold text-slate-500 dark:text-slate-400">Form body</span>
+                <textarea rows={8} className={`${fieldCls} w-full`}
+                  value={consentForm?.body || ''}
+                  onChange={(e) => setConsentForm((f) => ({ ...f, body: e.target.value }))}
+                  placeholder="Paste the consent, release, waiver, or terms guests need to accept." />
+              </label>
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <label className="flex items-center gap-2 text-sm text-slate-700 dark:text-slate-200">
+                  <input type="checkbox" checked={!!consentForm?.require_signature}
+                    onChange={(e) => setConsentForm((f) => ({ ...f, require_signature: e.target.checked }))} className="h-4 w-4 accent-teal-600" />
+                  Require typed signature
+                </label>
+                <button disabled={loading} className="rounded-lg bg-teal-600 px-4 py-2 text-sm font-semibold text-white hover:bg-teal-700 disabled:opacity-50">
+                  Save consent form
+                </button>
+              </div>
+            </form>
+            <div className="space-y-4">
+              <div className="rounded-xl border border-teal-200 bg-teal-50 p-4 dark:border-teal-900 dark:bg-teal-900/20">
+                <div className="flex items-start justify-between gap-3">
+                  <div>
+                    <h4 className="text-sm font-semibold text-slate-900 dark:text-white">Guest preview</h4>
+                    <p className="mt-1 text-xs text-slate-600 dark:text-slate-300">This is how the consent card appears on a guest pass.</p>
+                  </div>
+                  <span className="rounded-full bg-white px-2 py-0.5 text-xs font-bold text-teal-700 dark:bg-slate-900 dark:text-teal-200">
+                    v{consentForm?.version || 'new'}
+                  </span>
+                </div>
+                <div className="mt-4 rounded-xl border border-teal-100 bg-white p-4 dark:border-teal-900 dark:bg-slate-900">
+                  <div className="flex items-start justify-between gap-3">
+                    <div>
+                      <p className="text-sm font-bold text-slate-900 dark:text-white">{consentForm?.title || 'Event consent'}</p>
+                      <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">Form version {consentForm?.version || 'new'}</p>
+                    </div>
+                    <span className="rounded-full bg-slate-100 px-2 py-0.5 text-xs font-bold text-slate-500 dark:bg-slate-800 dark:text-slate-300">Unsigned</span>
+                  </div>
+                  <div className="mt-3 max-h-56 overflow-auto whitespace-pre-wrap rounded-lg border border-slate-200 bg-slate-50 p-3 text-sm leading-6 text-slate-700 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-200">
+                    {consentForm?.body?.trim() || 'Paste the consent, release, waiver, or terms guests need to accept.'}
+                  </div>
+                  <div className="mt-3 space-y-3">
+                    <label className="block">
+                      <span className="mb-1 block text-xs font-bold text-slate-600 dark:text-slate-300">Signer name</span>
+                      <input disabled value="Guest Name"
+                        className="w-full rounded-lg border border-slate-300 bg-slate-100 px-3 py-2 text-sm text-slate-500 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-400" />
+                    </label>
+                    <label className="block">
+                      <span className="mb-1 block text-xs font-bold text-slate-600 dark:text-slate-300">Type your signature</span>
+                      <input disabled value="Guest Name"
+                        className="w-full rounded-lg border border-slate-300 bg-slate-100 px-3 py-2 text-sm font-semibold text-slate-500 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-400" />
+                    </label>
+                    <button type="button" disabled
+                      className="w-full rounded-lg bg-teal-600 px-4 py-2 text-sm font-bold text-white opacity-70">
+                      Sign consent
+                    </button>
+                  </div>
+                </div>
+              </div>
+              <div className="rounded-xl border border-slate-200 p-4 dark:border-slate-700">
+                <h4 className="text-sm font-semibold text-slate-900 dark:text-white">Recent signatures</h4>
+                <div className="mt-3 space-y-2">
+                  {consentSignatures.length === 0 ? (
+                    <p className="text-sm text-slate-400">No signatures yet.</p>
+                  ) : consentSignatures.slice(0, 6).map((sig) => {
+                    const guest = guests.find((g) => g.id === sig.guest_id)
+                    return (
+                      <div key={sig.id} className="rounded-lg bg-slate-50 px-3 py-2 text-xs text-slate-600 dark:bg-slate-900/50 dark:text-slate-300">
+                        <div className="font-semibold">{sig.signer_name}</div>
+                        <div className="mt-0.5 text-slate-400">
+                          {guest ? `${guest.first_name} ${guest.last_name}` : sig.guest_id} · {new Date(sig.signed_at).toLocaleString()}
+                        </div>
+                      </div>
+                    )
+                  })}
+                </div>
+              </div>
+              <div className="rounded-xl border border-slate-200 p-4 dark:border-slate-700">
+                <h4 className="text-sm font-semibold text-slate-900 dark:text-white">Recent activity</h4>
+                <div className="mt-3 space-y-2">
+                  <input className={`${fieldCls} mb-3 w-full`} value={auditFilter}
+                    onChange={(e) => setAuditFilter(e.target.value)} placeholder="Filter activity" />
+                  {filteredAuditRows.length === 0 ? (
+                    <p className="text-sm text-slate-400">No Experience audit events yet.</p>
+                  ) : filteredAuditRows.slice(0, 12).map((row) => (
+                    <div key={row.id} className="rounded-lg bg-slate-50 px-3 py-2 text-xs text-slate-600 dark:bg-slate-900/50 dark:text-slate-300">
+                      <div className="font-semibold">{row.event_type.replaceAll('_', ' ')}</div>
+                      <div className="mt-0.5 text-slate-400">{row.source} · {new Date(row.occurred_at).toLocaleString()}</div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+      </div>}
+
+      {activeExperienceTab === 'guests' && <div className="bg-white dark:bg-slate-800 dark:border dark:border-slate-700/60 rounded-xl shadow p-6">
+        <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+          <div>
+            <h3 className="font-semibold text-base text-slate-900 dark:text-white">Guest journey</h3>
+            <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">Review and update one guest's workflow status.</p>
+          </div>
+          <div className="flex flex-wrap items-center gap-2">
+            {guestJourneyOpen && (
+              <select className={`${fieldCls} min-w-[260px]`} value={selectedGuestId}
+                onChange={(e) => { setSelectedGuestId(e.target.value); loadGuestJourney(e.target.value) }}>
+                {guests.length === 0 && <option value="">No guests</option>}
+                {guests.map((guest) => (
+                  <option key={guest.id} value={guest.id}>
+                    {guest.first_name} {guest.last_name}{guest.is_vip ? ' · VIP' : ''}
+                  </option>
+                ))}
+              </select>
+            )}
+            <button type="button" onClick={() => setGuestJourneyOpen((v) => !v)}
+              className="rounded-lg border border-slate-300 px-3 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50 dark:border-slate-600 dark:text-slate-200 dark:hover:bg-slate-700">
+              {guestJourneyOpen ? 'Collapse' : 'Expand'}
+            </button>
+          </div>
+        </div>
+
+        {guestJourneyOpen && selectedGuest && (
+          <div className="mt-4 flex flex-col gap-3 rounded-lg border border-slate-200 bg-slate-50 px-3 py-3 text-sm text-slate-700 dark:border-slate-700 dark:bg-slate-900/40 dark:text-slate-200 lg:flex-row lg:items-center lg:justify-between">
+            <div>
+              <span className="font-semibold">{selectedGuest.first_name} {selectedGuest.last_name}</span>
+              <span className="ml-2 text-xs text-slate-500 dark:text-slate-400">
+                RSVP: {selectedGuest.rsvp_status || 'n/a'} · Check-in: {selectedGuest.admitted ? 'Admitted' : 'Not admitted'}
+              </span>
+            </div>
+            <div className="flex flex-wrap gap-2">
+              <button type="button" onClick={() => resendGuestEmail('invitation')} disabled={loading || !selectedGuest.email}
+                className="rounded-lg border border-slate-300 px-2.5 py-1.5 text-xs font-semibold text-slate-700 hover:bg-white disabled:opacity-40 dark:border-slate-600 dark:text-slate-200 dark:hover:bg-slate-800">
+                Resend invite
+              </button>
+              <button type="button" onClick={() => resendGuestEmail('admission')} disabled={loading || !selectedGuest.email || !selectedGuest.admitted}
+                className="rounded-lg border border-slate-300 px-2.5 py-1.5 text-xs font-semibold text-slate-700 hover:bg-white disabled:opacity-40 dark:border-slate-600 dark:text-slate-200 dark:hover:bg-slate-800">
+                Resend admission
+              </button>
+              <button type="button" onClick={() => resendGuestEmail('experience_next_steps')} disabled={loading || !selectedGuest.email}
+                className="rounded-lg bg-teal-600 px-2.5 py-1.5 text-xs font-semibold text-white hover:bg-teal-700 disabled:opacity-40">
+                Send Experience steps
+              </button>
+              <button type="button" onClick={() => resendGuestEmail('consent_copy')} disabled={loading || !selectedGuest.email || !selectedGuestConsentSigned}
+                className="rounded-lg border border-slate-300 px-2.5 py-1.5 text-xs font-semibold text-slate-700 hover:bg-white disabled:opacity-40 dark:border-slate-600 dark:text-slate-200 dark:hover:bg-slate-800">
+                Resend consent copy
+              </button>
+            </div>
+          </div>
+        )}
+
+        {guestJourneyOpen && <div className="mt-4 space-y-3">
+          {journeySteps.length === 0 ? (
+            <p className="rounded-lg border border-dashed border-slate-300 p-6 text-center text-sm text-slate-400 dark:border-slate-700">
+              Publish a workflow and add guests to view journeys.
+            </p>
+          ) : journeySteps.map((step) => {
+            const progress = progressByStep.get(step.id)
+            const status = progress?.status || 'available'
+            return (
+              <div key={step.id} className="rounded-xl border border-slate-200 p-4 dark:border-slate-700">
+                <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+                  <div className="min-w-0">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <h4 className="font-semibold text-slate-900 dark:text-white">{step.title}</h4>
+                      <span className="rounded-full bg-slate-100 px-2 py-0.5 text-xs font-semibold capitalize text-slate-600 dark:bg-slate-700 dark:text-slate-200">{status.replaceAll('_', ' ')}</span>
+                      <span className="rounded-full bg-indigo-50 px-2 py-0.5 text-xs font-semibold text-indigo-700 dark:bg-indigo-900/30 dark:text-indigo-300">{step.type.replaceAll('_', ' ')}</span>
+                    </div>
+                    {step.description && <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">{step.description}</p>}
+                    {progress?.completed_at && <p className="mt-1 text-xs text-slate-400">Completed {new Date(progress.completed_at).toLocaleString()}</p>}
+                  </div>
+                  <div className="flex flex-wrap gap-2">
+                    {['completed', 'available', 'blocked', 'skipped', 'failed', 'overridden'].map((value) => (
+                      <button key={value} onClick={() => updateGuestStep(step, value)} disabled={loading || !selectedGuestId || status === value}
+                        className="rounded-lg border border-slate-300 px-2.5 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-40 dark:border-slate-600 dark:text-slate-200 dark:hover:bg-slate-700">
+                        {experienceGuestActionLabel(step, value)}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            )
+          })}
+        </div>}
+      </div>}
+
+      {activeExperienceTab === 'workflow' && <div className={`grid gap-6 ${versionsOpen ? 'xl:grid-cols-[18rem_1fr]' : 'xl:grid-cols-1'}`}>
+        <div className="bg-white dark:bg-slate-800 dark:border dark:border-slate-700/60 rounded-xl shadow p-4">
+          <div className="mb-3 flex items-center justify-between gap-3">
+            <div className="text-xs font-semibold uppercase tracking-wide text-slate-400">Versions</div>
+            <div className="flex items-center gap-2">
+              {versionsOpen && (
+                <select className={`${fieldCls} py-1 text-xs`} value={workflowFilter} onChange={(e) => {
+                  setWorkflowFilter(e.target.value)
+                  rememberSelection(selected?.id, e.target.value)
+                }}>
+                  <option value="all">All</option>
+                  <option value="published">Live</option>
+                  <option value="draft">Draft</option>
+                  <option value="archived">Archived</option>
+                </select>
+              )}
+              <button type="button" onClick={() => setVersionsOpen((v) => !v)}
+                className="rounded-lg border border-slate-300 px-2.5 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-50 dark:border-slate-600 dark:text-slate-200 dark:hover:bg-slate-700">
+                {versionsOpen ? 'Collapse' : 'Expand'}
+              </button>
+            </div>
+          </div>
+          {!versionsOpen ? (
+            <p className="text-sm text-slate-500 dark:text-slate-400">
+              {workflows.length} workflow version{workflows.length === 1 ? '' : 's'} hidden.
+            </p>
+          ) : filteredWorkflows.length === 0 ? (
+            <p className="text-sm text-slate-400">No workflows yet.</p>
+          ) : (
+            <div className="space-y-2">
+              {filteredWorkflows.map((w) => (
+                <button key={w.id} onClick={() => { setSelectedId(w.id); rememberSelection(w.id, workflowFilter); setStepForm(null) }}
+                  className={`w-full rounded-lg border px-3 py-2 text-left text-sm transition-colors ${
+                    selected?.id === w.id
+                      ? 'border-teal-300 bg-teal-50 text-teal-900 dark:border-teal-800 dark:bg-teal-900/20 dark:text-teal-100'
+                      : 'border-slate-200 text-slate-700 hover:bg-slate-50 dark:border-slate-700 dark:text-slate-200 dark:hover:bg-slate-700'
+                  }`}>
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="font-semibold">{w.name}</span>
+                    <span className="text-xs">v{w.version}</span>
+                  </div>
+                  <div className="mt-1 text-xs capitalize text-slate-400">{w.status}</div>
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+
+        <div className="bg-white dark:bg-slate-800 dark:border dark:border-slate-700/60 rounded-xl shadow p-6">
+          {!selected ? (
+            <div className="rounded-lg border border-dashed border-slate-300 p-8 text-center dark:border-slate-700">
+              <h3 className="text-sm font-semibold text-slate-900 dark:text-white">No workflow selected</h3>
+              <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">Use a template above or create a blank workflow to start.</p>
+            </div>
+          ) : (
+            <div className="space-y-5">
+              <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+                <div>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <h3 className="font-semibold text-lg text-slate-900 dark:text-white">{selected.name}</h3>
+                    <span className={`rounded-full px-2 py-0.5 text-xs font-semibold capitalize ${
+                      isArchived
+                        ? 'bg-slate-100 text-slate-500 dark:bg-slate-700 dark:text-slate-300'
+                        : isDraft
+                        ? 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300'
+                        : 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-300'
+                    }`}>{selected.status}</span>
+                    <span className="rounded-full bg-slate-100 px-2 py-0.5 text-xs font-semibold text-slate-500 dark:bg-slate-700 dark:text-slate-300">v{selected.version}</span>
+                  </div>
+                  <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">{selected.steps.length} step{selected.steps.length === 1 ? '' : 's'}</p>
+                  {!isDraft && (
+                    <p className="mt-2 rounded-lg border border-green-200 bg-green-50 px-3 py-2 text-xs text-green-800 dark:border-green-900 dark:bg-green-900/20 dark:text-green-200">
+                      {isArchived
+                        ? 'Archived workflows are read-only until you unarchive them.'
+                        : 'Published workflows are the live runbook. Unpublish to return it to draft, or clone it to edit the next version.'}
+                    </p>
+                  )}
+                  {isDraft && (
+                    <p className="mt-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800 dark:border-amber-900 dark:bg-amber-900/20 dark:text-amber-200">
+                      {publishBlockedBy
+                        ? `Draft changes are not live. Unpublish ${publishBlockedBy.name} before publishing this version.`
+                        : 'Draft changes are not live until you publish this version.'}
+                    </p>
+                  )}
+	                </div>
+	                <div className="flex flex-wrap gap-2">
+	                  {isDraft && (
+	                    <>
+	                      <button onClick={() => setStepForm(blankExperienceStep())} disabled={loading}
+	                        className="rounded-lg bg-indigo-600 px-3 py-2 text-sm font-semibold text-white hover:bg-indigo-700 disabled:opacity-50">
+	                        Add step
+	                      </button>
+	                      <button onClick={publish} disabled={loading || !!publishBlockedBy || selected.steps.filter((s) => s.enabled).length === 0}
+	                        title={publishBlockedBy ? `Unpublish ${publishBlockedBy.name} first` : ''}
+	                        className="rounded-lg bg-green-600 px-3 py-2 text-sm font-semibold text-white hover:bg-green-700 disabled:opacity-50">
+	                        Publish
+	                      </button>
+	                      <button onClick={deleteWorkflow} disabled={loading}
+	                        className="rounded-lg border border-red-300 px-3 py-2 text-sm font-semibold text-red-700 hover:bg-red-50 disabled:opacity-50 dark:border-red-900 dark:text-red-300 dark:hover:bg-red-900/20">
+	                        Delete draft
+	                      </button>
+	                    </>
+	                  )}
+                  {selected.status === 'published' && (
+                    <button onClick={unpublish} disabled={loading}
+                      className="rounded-lg border border-amber-300 px-3 py-2 text-sm font-semibold text-amber-700 hover:bg-amber-50 disabled:opacity-50 dark:border-amber-800 dark:text-amber-300 dark:hover:bg-amber-900/20">
+                      Unpublish
+                    </button>
+                  )}
+                  {selected.status !== 'archived' && (
+                    <button onClick={archiveWorkflow} disabled={loading}
+                      className="rounded-lg border border-slate-300 px-3 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-50 dark:border-slate-600 dark:text-slate-200 dark:hover:bg-slate-700">
+                      Archive
+                    </button>
+                  )}
+                  {selected.status === 'archived' && (
+                    <button onClick={unarchiveWorkflow} disabled={loading}
+                      className="rounded-lg border border-teal-300 px-3 py-2 text-sm font-semibold text-teal-700 hover:bg-teal-50 disabled:opacity-50 dark:border-teal-800 dark:text-teal-300 dark:hover:bg-teal-900/20">
+                      Unarchive
+                    </button>
+                  )}
+                  <button onClick={clone} disabled={loading}
+                    className="rounded-lg border border-slate-300 px-3 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-50 dark:border-slate-600 dark:text-slate-200 dark:hover:bg-slate-700">
+                    Clone
+                  </button>
+                  <button type="button" onClick={() => setWorkflowDetailsOpen((v) => !v)}
+                    className="rounded-lg border border-slate-300 px-3 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50 dark:border-slate-600 dark:text-slate-200 dark:hover:bg-slate-700">
+                    {workflowDetailsOpen ? 'Collapse' : 'Expand'}
+                  </button>
+                </div>
+              </div>
+
+              {!workflowDetailsOpen && (
+                <div className="rounded-lg border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-600 dark:border-slate-700 dark:bg-slate-900/40 dark:text-slate-300">
+                  {selected.steps.length} step{selected.steps.length === 1 ? '' : 's'} hidden. Expand to edit steps, add presets, or review progress by step.
+                </div>
+              )}
+
+              {workflowDetailsOpen && stepForm && (
+                <form onSubmit={saveStep} className="rounded-xl border border-slate-200 bg-slate-50 p-4 dark:border-slate-700 dark:bg-slate-900/40">
+                  {(() => {
+                    const dependencyChoices = (selected?.steps || []).filter((step) => step.id !== stepForm.id && step.key !== stepForm.key)
+                    return (
+                      <>
+                  <div className="grid gap-3 md:grid-cols-2">
+                    <label className="block">
+                      <span className="mb-1 block text-xs font-semibold text-slate-500 dark:text-slate-400">Key</span>
+                      <input className={`${fieldCls} w-full`} value={stepForm.key}
+                        onChange={(e) => setStepForm((f) => ({ ...f, key: e.target.value }))} placeholder="main_checkin" />
+                    </label>
+                    <label className="block">
+                      <span className="mb-1 block text-xs font-semibold text-slate-500 dark:text-slate-400">Type</span>
+                      <select className={`${fieldCls} w-full`} value={stepForm.type}
+                        onChange={(e) => setStepForm((f) => ({ ...f, type: e.target.value }))}>
+                        {EXPERIENCE_STEP_TYPES.map(([value, label]) => <option key={value} value={value}>{label}</option>)}
+                      </select>
+                    </label>
+                    <label className="block">
+                      <span className="mb-1 block text-xs font-semibold text-slate-500 dark:text-slate-400">Title</span>
+                      <input className={`${fieldCls} w-full`} value={stepForm.title}
+                        onChange={(e) => setStepForm((f) => ({ ...f, title: e.target.value }))} placeholder="Main check-in" />
+                    </label>
+                    <label className="block">
+                      <span className="mb-1 block text-xs font-semibold text-slate-500 dark:text-slate-400">Sort order</span>
+                      <input type="number" className={`${fieldCls} w-full`} value={stepForm.sort_order}
+                        onChange={(e) => setStepForm((f) => ({ ...f, sort_order: e.target.value }))} />
+                    </label>
+                    <label className="block md:col-span-2">
+                      <span className="mb-1 block text-xs font-semibold text-slate-500 dark:text-slate-400">Description</span>
+                      <input className={`${fieldCls} w-full`} value={stepForm.description}
+                        onChange={(e) => setStepForm((f) => ({ ...f, description: e.target.value }))} />
+                    </label>
+                    <div className="md:col-span-2 rounded-xl border border-slate-200 bg-white p-4 dark:border-slate-700 dark:bg-slate-900">
+                      <div className="flex flex-col gap-1 sm:flex-row sm:items-start sm:justify-between">
+                        <div>
+                          <h4 className="text-sm font-semibold text-slate-900 dark:text-white">Step dependencies</h4>
+                          <p className="text-xs text-slate-500 dark:text-slate-400">Require another step to complete before this one appears to staff.</p>
+                        </div>
+                        {stepForm.depends_on && <span className="rounded-full bg-teal-50 px-2 py-0.5 text-xs font-semibold text-teal-700 dark:bg-teal-900/30 dark:text-teal-200">Depends on {stepForm.depends_on}</span>}
+                      </div>
+                      {dependencyChoices.length === 0 ? (
+                        <p className="mt-3 text-xs text-slate-400">Add another step first to create dependencies.</p>
+                      ) : (
+                        <div className="mt-3 flex flex-wrap gap-2">
+                          {dependencyChoices.map((step) => {
+                            const checked = listValue(stepForm.depends_on).includes(step.key)
+                            return (
+                              <label key={step.id} className={`inline-flex cursor-pointer items-center gap-2 rounded-lg border px-3 py-2 text-xs font-semibold ${
+                                checked
+                                  ? 'border-teal-300 bg-teal-50 text-teal-800 dark:border-teal-800 dark:bg-teal-900/30 dark:text-teal-100'
+                                  : 'border-slate-300 bg-white text-slate-600 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200'
+                              }`}>
+                                <input type="checkbox" checked={checked}
+                                  onChange={() => setStepForm((f) => ({ ...f, depends_on: toggleListText(f.depends_on, step.key) }))}
+                                  className="h-4 w-4 accent-teal-600" />
+                                {step.title}
+                              </label>
+                            )
+                          })}
+                        </div>
+                      )}
+                    </div>
+                    <div className="md:col-span-2 rounded-xl border border-slate-200 bg-white p-4 dark:border-slate-700 dark:bg-slate-900">
+                      <h4 className="text-sm font-semibold text-slate-900 dark:text-white">Experience step messages</h4>
+                      <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">These messages belong to this step and can be used in guest emails, scanner prompts, and completion states.</p>
+                      <div className="mt-3 grid gap-3 md:grid-cols-3">
+                        <label className="block">
+                          <span className="mb-1 block text-xs font-semibold text-slate-500 dark:text-slate-400">Guest message</span>
+                          <textarea rows={4} className={`${fieldCls} w-full`} value={stepForm.guest_message}
+                            onChange={(e) => setStepForm((f) => ({ ...f, guest_message: e.target.value }))}
+                            placeholder="What the guest should see for this step." />
+                        </label>
+                        <label className="block">
+                          <span className="mb-1 block text-xs font-semibold text-slate-500 dark:text-slate-400">Staff scanner prompt</span>
+                          <textarea rows={4} className={`${fieldCls} w-full`} value={stepForm.staff_prompt}
+                            onChange={(e) => setStepForm((f) => ({ ...f, staff_prompt: e.target.value }))}
+                            placeholder="What the official should do when this step appears." />
+                        </label>
+                        <label className="block">
+                          <span className="mb-1 block text-xs font-semibold text-slate-500 dark:text-slate-400">Completion message</span>
+                          <textarea rows={4} className={`${fieldCls} w-full`} value={stepForm.completion_message}
+                            onChange={(e) => setStepForm((f) => ({ ...f, completion_message: e.target.value }))}
+                            placeholder="What to show or record after completion." />
+                        </label>
+                      </div>
+                    </div>
+                    {stepForm.type === 'session_attendance' && (
+                      <div className="md:col-span-2 rounded-xl border border-slate-200 bg-white p-4 dark:border-slate-700 dark:bg-slate-900">
+                        <h4 className="text-sm font-semibold text-slate-900 dark:text-white">Session details</h4>
+                        <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">Use these fields to make this attendance step a real scheduled session.</p>
+                        <div className="mt-3 grid gap-3 md:grid-cols-3">
+                          <label className="block md:col-span-2">
+                            <span className="mb-1 block text-xs font-semibold text-slate-500 dark:text-slate-400">Topic</span>
+                            <input className={`${fieldCls} w-full`} value={stepForm.session_topic}
+                              onChange={(e) => setStepForm((f) => ({ ...f, session_topic: e.target.value }))}
+                              placeholder="Building Event Operations with AI" />
+                          </label>
+                          <label className="block">
+                            <span className="mb-1 block text-xs font-semibold text-slate-500 dark:text-slate-400">Date</span>
+                            <input type="date" className={`${fieldCls} w-full`} value={stepForm.session_date}
+                              onChange={(e) => setStepForm((f) => ({ ...f, session_date: e.target.value }))} />
+                          </label>
+                          <label className="block">
+                            <span className="mb-1 block text-xs font-semibold text-slate-500 dark:text-slate-400">Start time</span>
+                            <input type="time" className={`${fieldCls} w-full`} value={stepForm.session_start_time}
+                              onChange={(e) => setStepForm((f) => ({ ...f, session_start_time: e.target.value }))} />
+                          </label>
+                          <label className="block">
+                            <span className="mb-1 block text-xs font-semibold text-slate-500 dark:text-slate-400">End time</span>
+                            <input type="time" className={`${fieldCls} w-full`} value={stepForm.session_end_time}
+                              onChange={(e) => setStepForm((f) => ({ ...f, session_end_time: e.target.value }))} />
+                          </label>
+                          <label className="block">
+                            <span className="mb-1 block text-xs font-semibold text-slate-500 dark:text-slate-400">Capacity</span>
+                            <input type="number" min="0" className={`${fieldCls} w-full`} value={stepForm.session_capacity}
+                              onChange={(e) => setStepForm((f) => ({ ...f, session_capacity: e.target.value }))}
+                              placeholder="80" />
+                          </label>
+                          <label className="block">
+                            <span className="mb-1 block text-xs font-semibold text-slate-500 dark:text-slate-400">Check-in opens</span>
+                            <input type="number" min="0" className={`${fieldCls} w-full`} value={stepForm.session_checkin_window_minutes}
+                              onChange={(e) => setStepForm((f) => ({ ...f, session_checkin_window_minutes: e.target.value }))}
+                              placeholder="60" />
+                            <span className="mt-1 block text-[11px] text-slate-400">Minutes before start time. Leave blank for no time gate.</span>
+                          </label>
+                          <label className="block">
+                            <span className="mb-1 block text-xs font-semibold text-slate-500 dark:text-slate-400">Room / location</span>
+                            <input className={`${fieldCls} w-full`} value={stepForm.session_room}
+                              onChange={(e) => setStepForm((f) => ({ ...f, session_room: e.target.value }))}
+                              placeholder="Hall B" />
+                          </label>
+                          <label className="block md:col-span-2">
+                            <span className="mb-1 block text-xs font-semibold text-slate-500 dark:text-slate-400">Speaker / host</span>
+                            <input className={`${fieldCls} w-full`} value={stepForm.session_speaker}
+                              onChange={(e) => setStepForm((f) => ({ ...f, session_speaker: e.target.value }))}
+                              placeholder="Host Team" />
+                          </label>
+                        </div>
+                      </div>
+                    )}
+                    {stepForm.type === 'room_assignment' && (
+                      <div className="md:col-span-2 rounded-xl border border-slate-200 bg-white p-4 dark:border-slate-700 dark:bg-slate-900">
+                        <h4 className="text-sm font-semibold text-slate-900 dark:text-white">Room assignment details</h4>
+                        <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
+                          Use scoped assignments when the same guest needs different seats for different sessions, halls, or days.
+                        </p>
+                        <div className="mt-3 grid gap-3 md:grid-cols-2">
+                          <label className="block">
+                            <span className="mb-1 block text-xs font-semibold text-slate-500 dark:text-slate-400">Assignment mode</span>
+                            <select className={`${fieldCls} w-full`} value={stepForm.room_assignment_mode}
+                              onChange={(e) => setStepForm((f) => ({ ...f, room_assignment_mode: e.target.value }))}>
+                              <option value="global">Main guest seat</option>
+                              <option value="scoped">Separate seat for this step</option>
+                            </select>
+                          </label>
+                          <label className="block">
+                            <span className="mb-1 block text-xs font-semibold text-slate-500 dark:text-slate-400">Assignment scope</span>
+                            <input className={`${fieldCls} w-full`} value={stepForm.room_assignment_scope}
+                              onChange={(e) => setStepForm((f) => ({ ...f, room_assignment_scope: e.target.value }))}
+                              placeholder="saturday_luncheon" />
+                            <span className="mt-1 block text-[11px] text-slate-400">Required for scoped seating. Use one scope per hall/session seating plan.</span>
+                          </label>
+                          <label className="block">
+                            <span className="mb-1 block text-xs font-semibold text-slate-500 dark:text-slate-400">Room / hall</span>
+                            <input className={`${fieldCls} w-full`} value={stepForm.room_assignment_room}
+                              onChange={(e) => setStepForm((f) => ({ ...f, room_assignment_room: e.target.value }))}
+                              placeholder="Luncheon Hall" />
+                          </label>
+                          <label className="block">
+                            <span className="mb-1 block text-xs font-semibold text-slate-500 dark:text-slate-400">Table group</span>
+                            <input className={`${fieldCls} w-full`} value={stepForm.room_assignment_table_group}
+                              onChange={(e) => setStepForm((f) => ({ ...f, room_assignment_table_group: e.target.value }))}
+                              placeholder="Signature Luncheon" />
+                            <span className="mt-1 block text-[11px] text-slate-400">Optional. Must match an existing seating table group name or tag.</span>
+                          </label>
+                        </div>
+                      </div>
+                    )}
+                    <label className="block">
+                      <span className="mb-1 block text-xs font-semibold text-slate-500 dark:text-slate-400">Conditions JSON</span>
+                      <textarea rows={4} className={`${fieldCls} w-full font-mono text-xs`} value={stepForm.conditions}
+                        onChange={(e) => setStepForm((f) => ({ ...f, conditions: e.target.value }))} placeholder='{"ticket_type":"vip"}' />
+                    </label>
+                    <label className="block">
+                      <span className="mb-1 block text-xs font-semibold text-slate-500 dark:text-slate-400">Config JSON</span>
+                      <textarea rows={4} className={`${fieldCls} w-full font-mono text-xs`} value={stepForm.config}
+                        onChange={(e) => setStepForm((f) => ({ ...f, config: e.target.value }))} placeholder='{"station":"north"}' />
+                    </label>
+                  </div>
+                      </>
+                    )
+                  })()}
+                  <div className="mt-3 flex flex-wrap items-center justify-between gap-3">
+                    <div className="flex flex-wrap gap-4">
+                      <label className="flex items-center gap-2 text-sm text-slate-700 dark:text-slate-200">
+                        <input type="checkbox" checked={!!stepForm.required}
+                          onChange={(e) => setStepForm((f) => ({ ...f, required: e.target.checked }))} className="h-4 w-4 accent-indigo-600" />
+                        Required
+                      </label>
+                      <label className="flex items-center gap-2 text-sm text-slate-700 dark:text-slate-200">
+                        <input type="checkbox" checked={!!stepForm.enabled}
+                          onChange={(e) => setStepForm((f) => ({ ...f, enabled: e.target.checked }))} className="h-4 w-4 accent-indigo-600" />
+                        Enabled
+                      </label>
+                    </div>
+                    <div className="flex gap-2">
+                      <button type="button" onClick={() => setStepForm(null)}
+                        className="rounded-lg border border-slate-300 px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50 dark:border-slate-600 dark:text-slate-200 dark:hover:bg-slate-700">
+                        Cancel
+                      </button>
+                      <button disabled={loading} className="rounded-lg bg-indigo-600 px-4 py-2 text-sm font-semibold text-white hover:bg-indigo-700 disabled:opacity-50">
+                        {stepForm.id ? 'Save step' : 'Add step'}
+                      </button>
+                    </div>
+                  </div>
+                </form>
+              )}
+
+              {workflowDetailsOpen && isDraft && (
+                <div className="rounded-xl border border-slate-200 bg-slate-50 p-4 dark:border-slate-700 dark:bg-slate-900/40">
+                  <div className="mb-3 flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
+                    <div>
+                      <h4 className="text-sm font-semibold text-slate-900 dark:text-white">Step presets</h4>
+                      <p className="text-xs text-slate-500 dark:text-slate-400">Add common operational steps without filling every field manually.</p>
+                    </div>
+                  </div>
+                  <div className="flex flex-wrap gap-2">
+                    {EXPERIENCE_STEP_PRESETS.map((preset) => (
+                      <button key={preset.key} type="button" onClick={() => addPresetStep(preset)} disabled={loading}
+                        className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs font-semibold text-slate-700 hover:border-indigo-300 hover:bg-indigo-50 disabled:opacity-50 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-200 dark:hover:border-indigo-800 dark:hover:bg-indigo-900/20">
+                        {preset.title}
+                      </button>
+                    ))}
+                  </div>
+                  <div className="mt-4 rounded-xl border border-slate-200 bg-white p-4 dark:border-slate-700 dark:bg-slate-900">
+                    <div className="flex flex-col gap-1 sm:flex-row sm:items-start sm:justify-between">
+                      <div>
+                        <h4 className="text-sm font-semibold text-slate-900 dark:text-white">Import program sessions</h4>
+                        <p className="text-xs text-slate-500 dark:text-slate-400">
+                          Paste a JSON array to create one session attendance step per program item.
+                        </p>
+                      </div>
+                      <button type="button" onClick={importSessionSteps} disabled={loading || !sessionImportText.trim()}
+                        className="rounded-lg bg-cyan-600 px-3 py-2 text-xs font-semibold text-white hover:bg-cyan-700 disabled:opacity-50">
+                        Import sessions
+                      </button>
+                    </div>
+                    <textarea rows={7} className={`${fieldCls} mt-3 w-full font-mono text-xs`} value={sessionImportText}
+                      onChange={(e) => setSessionImportText(e.target.value)}
+                      placeholder={`[
+  {"topic":"Opening Keynote","date":"2026-07-28","start_time":"09:00","end_time":"10:00","room":"Main Hall","speaker":"Event Host","capacity":150,"checkin_window_minutes":60},
+  {"topic":"Leadership Panel","date":"2026-07-28","start_time":"11:00","end_time":"11:45","room":"Lounge","speaker":"Community Team","capacity":60,"checkin_window_minutes":30}
+]`} />
+                  </div>
+                </div>
+              )}
+
+              {workflowDetailsOpen && <div className="space-y-3">
+                {selected.steps.length === 0 ? (
+                  <div className="rounded-lg border border-dashed border-slate-300 p-6 text-center dark:border-slate-700">
+                    <p className="text-sm font-semibold text-slate-700 dark:text-slate-200">No steps in this workflow.</p>
+                    <p className="mt-1 text-sm text-slate-400">Add a preset step or create a custom step to define the journey.</p>
+                  </div>
+                ) : selected.steps.map((step, index) => {
+                  const config = step.config || {}
+                  const messages = config.messages || {}
+                  const session = normalizeSessionConfig(config)
+                  const assignment = normalizeRoomAssignmentConfig(config)
+                  const sessionInfo = sessionSummary(session)
+                  const sessionReady = step.type === 'session_attendance' && hasSessionDetails(session)
+                  const depends = listValue(config.depends_on || config.depends_on_keys || config.prerequisites)
+                  const dependencyLabels = depends.map((key) => selected.steps.find((s) => s.key === key || s.id === key)?.title || key)
+                  return (
+                  <div key={step.id}
+                    draggable={isDraft}
+                    onDragStart={(e) => {
+                      if (!isDraft) return
+                      setDraggedStepId(step.id)
+                      e.dataTransfer.effectAllowed = 'move'
+                      e.dataTransfer.setData('text/plain', step.id)
+                    }}
+                    onDragOver={(e) => {
+                      if (!isDraft || !draggedStepId || draggedStepId === step.id) return
+                      e.preventDefault()
+                      e.dataTransfer.dropEffect = 'move'
+                      setDragOverStepId(step.id)
+                    }}
+                    onDragLeave={() => setDragOverStepId((id) => id === step.id ? '' : id)}
+                    onDrop={(e) => {
+                      e.preventDefault()
+                      dropStep(step.id)
+                    }}
+                    onDragEnd={() => { setDraggedStepId(''); setDragOverStepId('') }}
+                    className={`rounded-xl border p-4 transition ${
+                      dragOverStepId === step.id
+                        ? 'border-teal-400 bg-teal-50/70 dark:border-teal-600 dark:bg-teal-900/20'
+                        : 'border-slate-200 dark:border-slate-700'
+                    } ${isDraft ? 'cursor-grab active:cursor-grabbing' : ''}`}>
+                    <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+                      <div className="min-w-0">
+                        <div className="flex flex-wrap items-center gap-2">
+                          {isDraft && <span title="Drag to reorder" className="text-sm font-bold text-slate-400">⋮⋮</span>}
+                          <span className="rounded-full bg-slate-100 px-2 py-0.5 text-xs font-bold text-slate-500 dark:bg-slate-700 dark:text-slate-300">{index + 1}</span>
+                          <h4 className="font-semibold text-slate-900 dark:text-white">{step.title}</h4>
+                          <span className="rounded-full bg-indigo-50 px-2 py-0.5 text-xs font-semibold text-indigo-700 dark:bg-indigo-900/30 dark:text-indigo-300">{step.type.replaceAll('_', ' ')}</span>
+                          {!step.enabled && <span className="rounded-full bg-slate-100 px-2 py-0.5 text-xs font-semibold text-slate-400 dark:bg-slate-700">Disabled</span>}
+                          {step.required && <span className="rounded-full bg-amber-50 px-2 py-0.5 text-xs font-semibold text-amber-700 dark:bg-amber-900/30 dark:text-amber-300">Required</span>}
+                        </div>
+                        <div className="mt-1 text-xs font-mono text-slate-400">{step.key}</div>
+                        {step.description && <p className="mt-2 text-sm text-slate-600 dark:text-slate-300">{step.description}</p>}
+                        {step.type === 'session_attendance' && (
+                          <div className={`mt-3 rounded-lg border px-3 py-2 text-xs font-semibold ${
+                            sessionReady
+                              ? 'border-cyan-200 bg-cyan-50 text-cyan-800 dark:border-cyan-900 dark:bg-cyan-900/20 dark:text-cyan-100'
+                              : 'border-amber-200 bg-amber-50 text-amber-800 dark:border-amber-900 dark:bg-amber-900/20 dark:text-amber-100'
+                          }`}>
+                            {sessionReady ? `Active session: ${sessionInfo}` : 'Setup needed: add topic, date/time, or room, then publish this workflow.'}
+                          </div>
+                        )}
+                        {step.type === 'room_assignment' && (
+                          <div className="mt-3 rounded-lg border border-cyan-200 bg-cyan-50 px-3 py-2 text-xs font-semibold text-cyan-800 dark:border-cyan-900 dark:bg-cyan-900/20 dark:text-cyan-100">
+                            {assignment.mode === 'scoped'
+                              ? `Scoped seating: ${assignment.scope || step.key}${assignment.room ? ` · ${assignment.room}` : ''}${assignment.table_group ? ` · ${assignment.table_group}` : ''}`
+                              : `Main guest seat${assignment.table_group ? ` · ${assignment.table_group}` : ''}`}
+                          </div>
+                        )}
+                        {(dependencyLabels.length > 0 || messages.guest || messages.staff || messages.complete) && (
+                          <div className="mt-3 flex flex-wrap gap-2">
+                            {dependencyLabels.length > 0 && (
+                              <span className="rounded-full bg-teal-50 px-2 py-1 text-xs font-semibold text-teal-700 dark:bg-teal-900/30 dark:text-teal-200">
+                                After: {dependencyLabels.join(', ')}
+                              </span>
+                            )}
+                            {messages.guest && (
+                              <span className="rounded-full bg-cyan-50 px-2 py-1 text-xs font-semibold text-cyan-700 dark:bg-cyan-900/30 dark:text-cyan-200">
+                                Guest message
+                              </span>
+                            )}
+                            {messages.staff && (
+                              <span className="rounded-full bg-indigo-50 px-2 py-1 text-xs font-semibold text-indigo-700 dark:bg-indigo-900/30 dark:text-indigo-200">
+                                Staff prompt
+                              </span>
+                            )}
+                            {messages.complete && (
+                              <span className="rounded-full bg-green-50 px-2 py-1 text-xs font-semibold text-green-700 dark:bg-green-900/30 dark:text-green-200">
+                                Completion text
+                              </span>
+                            )}
+                          </div>
+                        )}
+                      </div>
+                      {isDraft && (
+                        <div className="flex shrink-0 flex-wrap gap-2">
+                          <button onClick={() => moveStep(index, -1)} disabled={loading || index === 0}
+                            className="rounded-lg border border-slate-300 px-2.5 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-40 dark:border-slate-600 dark:text-slate-200 dark:hover:bg-slate-700">
+                            Up
+                          </button>
+                          <button onClick={() => moveStep(index, 1)} disabled={loading || index === selected.steps.length - 1}
+                            className="rounded-lg border border-slate-300 px-2.5 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-40 dark:border-slate-600 dark:text-slate-200 dark:hover:bg-slate-700">
+                            Down
+                          </button>
+                          <button onClick={() => setStepForm(stepToForm(step))}
+                            className="rounded-lg border border-slate-300 px-2.5 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-50 dark:border-slate-600 dark:text-slate-200 dark:hover:bg-slate-700">
+                            Edit
+                          </button>
+                          <button onClick={() => deleteStep(step.id)} disabled={loading}
+                            className="rounded-lg border border-red-300 px-2.5 py-1.5 text-xs font-semibold text-red-600 hover:bg-red-50 disabled:opacity-40 dark:border-red-800 dark:hover:bg-red-900/20">
+                            Delete
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                  )
+                })}
+              </div>}
+
+              {workflowDetailsOpen && dashboard?.steps?.length > 0 && (
+                <div className="border-t border-slate-200 pt-5 dark:border-slate-700">
+                  <h4 className="font-semibold text-slate-900 dark:text-white">Progress by step</h4>
+                  <div className="mt-3 space-y-3">
+                    {dashboard.steps.map((step) => (
+                      <div key={step.step_id} className="rounded-lg border border-slate-200 p-3 dark:border-slate-700">
+                        <div className="flex flex-wrap items-center justify-between gap-2">
+                          <div>
+                            <div className="text-sm font-semibold text-slate-800 dark:text-slate-100">{step.title}</div>
+                            <div className="mt-0.5 text-xs text-slate-400">{step.type.replaceAll('_', ' ')}</div>
+                          </div>
+                          <div className="text-sm font-bold text-teal-600 dark:text-teal-300">{step.completion_rate}%</div>
+                        </div>
+                        <div className="mt-3 h-2 overflow-hidden rounded-full bg-slate-100 dark:bg-slate-700">
+                          <div className="h-full rounded-full bg-teal-500" style={{ width: `${Math.min(step.completion_rate, 100)}%` }} />
+                        </div>
+                        <div className="mt-3 grid grid-cols-2 gap-2 text-xs sm:grid-cols-4 lg:grid-cols-7">
+                          {[
+                            ['Done', step.completed],
+                            ['Available', step.available],
+                            ['Blocked', step.blocked],
+                            ['Skipped', step.skipped],
+                            ['Overridden', step.overridden],
+                            ['Failed', step.failed],
+                            ['Total', step.total],
+                          ].map(([label, value]) => (
+                            <div key={label} className="rounded bg-slate-50 px-2 py-1 text-slate-600 dark:bg-slate-900/50 dark:text-slate-300">
+                              <span className="font-semibold">{value}</span> {label}
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+      </div>}
+    </div>
+  )
+}
+
 // ── Team panel ────────────────────────────────────────────────────────────────
 
 function TeamPanel({ eventId }) {
@@ -4434,6 +6298,17 @@ function TeamPanel({ eventId }) {
     finally { setLoading(false) }
   }
 
+  async function updateEventAccess(userId, patch) {
+    setLoading(true)
+    try {
+      await api.updateMemberPermissions(eventId, userId, patch)
+      setMembers((prev) => prev.map((m) => m.user.id === userId ? { ...m, ...patch } : m))
+      setMsg('Event access updated.')
+      setTimeout(() => setMsg(''), 2500)
+    } catch (e) { setMsg(e.message) }
+    finally { setLoading(false) }
+  }
+
   const roleTag = (role) => (
     <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${role === 'admin' ? 'bg-indigo-100 text-indigo-700 dark:bg-indigo-900/50 dark:text-indigo-300' : 'bg-amber-100 text-amber-700 dark:bg-amber-900/50 dark:text-amber-300'}`}>
       {role}
@@ -4461,6 +6336,28 @@ function TeamPanel({ eventId }) {
               </div>
               <div className="flex items-center gap-2 flex-wrap">
                 {roleTag(m.user.role)}
+                <select
+                  value={m.event_role || 'staff'}
+                  onChange={(e) => updateEventAccess(m.user.id, { event_role: e.target.value })}
+                  disabled={loading}
+                  title="Event-scoped access role"
+                  className="text-xs border border-gray-300 dark:border-slate-600 rounded-full px-2 py-1 bg-white dark:bg-slate-700 dark:text-white disabled:opacity-50"
+                >
+                  <option value="staff">Staff</option>
+                  <option value="manager">Event owner/admin</option>
+                </select>
+                {(m.event_role || 'staff') === 'manager' && (
+                  <select
+                    value={m.access_level || 'edit'}
+                    onChange={(e) => updateEventAccess(m.user.id, { access_level: e.target.value })}
+                    disabled={loading}
+                    title="Edit or view-only access for this event"
+                    className="text-xs border border-gray-300 dark:border-slate-600 rounded-full px-2 py-1 bg-white dark:bg-slate-700 dark:text-white disabled:opacity-50"
+                  >
+                    <option value="edit">Edit access</option>
+                    <option value="view">View only</option>
+                  </select>
+                )}
                 {m.user.role === 'official' && (
                   <>
                     <button
@@ -4582,7 +6479,7 @@ function TeamPanel({ eventId }) {
             </li>
           ))}
         </ul>
-        <p className="text-xs text-slate-400 dark:text-slate-500">Owners &amp; Admins can manage events. Staff can only scan events they're assigned to.</p>
+        <p className="text-xs text-slate-400 dark:text-slate-500">Org Owners &amp; Admins can manage all org events. Staff can be promoted per event to Event owner/admin, with edit or view-only access.</p>
       </div>
 
       {/* Invite a new teammate to the organization by email */}
@@ -4849,6 +6746,28 @@ function Badge({ on, labels }) {
       {on ? labels[0] : labels[1]}
     </span>
   )
+}
+
+function EmailDeliveryBadge({ guest }) {
+  const status = guest?.email_delivery_status
+  if (!status) {
+    return <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-500 dark:bg-slate-700 dark:text-slate-400">No event</span>
+  }
+  const map = {
+    delivered: { label: 'Delivered', cls: 'bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-300' },
+    opened: { label: 'Opened', cls: 'bg-teal-100 text-teal-700 dark:bg-teal-900/40 dark:text-teal-300' },
+    clicked: { label: 'Clicked', cls: 'bg-indigo-100 text-indigo-700 dark:bg-indigo-900/40 dark:text-indigo-300' },
+    sent: { label: 'Sent', cls: 'bg-sky-100 text-sky-700 dark:bg-sky-900/40 dark:text-sky-300' },
+    delivery_delayed: { label: 'Delayed', cls: 'bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300' },
+    bounced: { label: 'Bounced', cls: 'bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300' },
+    failed: { label: 'Failed', cls: 'bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300' },
+    complained: { label: 'Complaint', cls: 'bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300' },
+    suppressed: { label: 'Suppressed', cls: 'bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300' },
+  }
+  const c = map[status] || { label: status.replace(/_/g, ' '), cls: 'bg-slate-100 text-slate-600 dark:bg-slate-700 dark:text-slate-300' }
+  const when = guest.email_delivery_at ? new Date(guest.email_delivery_at).toLocaleString() : ''
+  const title = [guest.email_delivery_event_type, guest.email_delivery_kind, when].filter(Boolean).join(' · ')
+  return <span title={title} className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium capitalize ${c.cls}`}>{c.label}</span>
 }
 
 function OnboardingChecklist({ event, stats, onTab }) {
@@ -5198,9 +7117,9 @@ function MessageDeliveryCard({ guests, onJump }) {
 
   return (
     <div className="bg-white dark:bg-slate-800 dark:border dark:border-slate-700/60 rounded-xl shadow p-6 space-y-4">
-      <h2 className="font-semibold text-base dark:text-white">Message delivery</h2>
+      <h2 className="font-semibold text-base dark:text-white">Message sending</h2>
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-        <Tile label="Delivered" count={delivered.length} cls="bg-green-50 dark:bg-green-900/20 text-green-700 dark:text-green-300" onClick={() => onJump({ invited: 'sent' })} />
+        <Tile label="Sent by Festio" count={delivered.length} cls="bg-green-50 dark:bg-green-900/20 text-green-700 dark:text-green-300" onClick={() => onJump({ invited: 'sent' })} />
         <Tile label="Failed" count={failed.length} cls="bg-red-50 dark:bg-red-900/20 text-red-700 dark:text-red-300" onClick={() => onJump({ invited: 'failed' })} />
         <Tile label="Not sent yet" count={notSent.length} cls="bg-amber-50 dark:bg-amber-900/20 text-amber-700 dark:text-amber-300" onClick={() => onJump({ invited: 'unsent' })} />
         <Tile label="No phone" count={noPhone.length} cls="bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300" />
@@ -5916,8 +7835,22 @@ export default function AdminPage() {
   async function handleResendInvite(guestId) {
     setLoading(true)
     try {
-      await api.resendInvite(selectedId, guestId)
+      await api.resendGuestEmail(selectedId, guestId, 'invitation')
       flash('Invite resent.')
+    } catch (err) { flash(err.message, true) }
+    finally { setLoading(false) }
+  }
+
+  async function handleResendGuestEmail(guestId, kind) {
+    const labels = {
+      admission: 'Admission email resent.',
+      experience_next_steps: 'Experience steps email sent.',
+      consent_copy: 'Consent copy resent.',
+    }
+    setLoading(true)
+    try {
+      await api.resendGuestEmail(selectedId, guestId, kind)
+      flash(labels[kind] || 'Email queued.')
     } catch (err) { flash(err.message, true) }
     finally { setLoading(false) }
   }
@@ -6060,6 +7993,7 @@ export default function AdminPage() {
               ]}] : []),
               { label: 'Team & settings', items: [
                 { id: 'team', label: 'Team', icon: '🧑‍🤝‍🧑' },
+                { id: 'experience', label: 'Experience', icon: '🧭' },
                 { id: 'messages', label: 'Messages', icon: '✏️' },
                 { id: 'features', label: 'Features & messaging', icon: '⚙️' },
               ]},
@@ -6345,6 +8279,8 @@ export default function AdminPage() {
 
           {activeTab === 'team' && <TeamPanel eventId={selectedId} />}
 
+          {activeTab === 'experience' && <ExperiencePanel event={event} onChanged={updateEvent} onFlash={flash} />}
+
           {activeTab === 'communication' && <GuestCommunicationPanel event={event} />}
 
           {activeTab === 'invite' && <>
@@ -6594,6 +8530,7 @@ export default function AdminPage() {
                         {event?.seating_enabled && <th className="px-4 py-3 text-left">Table Group</th>}
                         <th className="px-4 py-3 text-center">QR</th>
                         <th className="px-4 py-3 text-center">Invited</th>
+                        <th className="px-4 py-3 text-center">Email</th>
                         <th className="px-4 py-3 text-center">RSVP</th>
                         <th className="px-4 py-3 text-center">Admitted</th>
                         <th className="px-4 py-3 text-center">Actions</th>
@@ -6628,6 +8565,7 @@ export default function AdminPage() {
                               ? <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-700">Failed</span>
                               : <Badge on={!!g.invite_sent_at} labels={['Sent', 'Unsent']} />}
                           </td>
+                          <td className="px-4 py-3 text-center"><EmailDeliveryBadge guest={g} /></td>
                           <td className="px-4 py-3 text-center"><RsvpStatusBadge status={g.rsvp_status} /></td>
                           <td className="px-4 py-3 text-center">
                             {g.admitted
@@ -6654,9 +8592,17 @@ export default function AdminPage() {
                                 <a href={api.guestQrUrl(selectedId, g.id)} target="_blank" rel="noopener noreferrer"
                                   className="text-xs text-indigo-600 hover:underline">QR</a>
                               )}
-                              {g.qr_generated_at && !g.admitted && (
+                              {(g.qr_generated_at || event?.invite_mode === 'closed') && (
                                 <button onClick={() => handleResendInvite(g.id)} disabled={loading}
-                                  className="text-xs text-amber-600 hover:underline disabled:opacity-40">Resend</button>
+                                  className="text-xs text-amber-600 hover:underline disabled:opacity-40">Invite</button>
+                              )}
+                              {g.admitted && (
+                                <button onClick={() => handleResendGuestEmail(g.id, 'admission')} disabled={loading}
+                                  className="text-xs text-green-600 hover:underline disabled:opacity-40">Admission</button>
+                              )}
+                              {event?.experience_enabled && (
+                                <button onClick={() => handleResendGuestEmail(g.id, 'experience_next_steps')} disabled={loading}
+                                  className="text-xs text-teal-600 hover:underline disabled:opacity-40">Experience</button>
                               )}
                               <button onClick={() => setViewingGuest(g)}
                                 className="text-xs text-slate-500 dark:text-slate-300 hover:underline">View</button>
@@ -6702,6 +8648,7 @@ export default function AdminPage() {
                       <div className="flex flex-wrap gap-1.5">
                         <Badge on={!!g.qr_generated_at} labels={['QR Ready', 'No QR']} />
                         <Badge on={!!g.invite_sent_at} labels={['Invited', 'Unsent']} />
+                        <EmailDeliveryBadge guest={g} />
                         <RsvpStatusBadge status={g.rsvp_status} />
                       </div>
                       <div className="flex gap-4 pt-1">
@@ -6721,9 +8668,17 @@ export default function AdminPage() {
                           <a href={api.guestQrUrl(selectedId, g.id)} target="_blank" rel="noopener noreferrer"
                             className="text-xs text-indigo-600 hover:underline">View QR</a>
                         )}
-                        {g.qr_generated_at && !g.admitted && (
+                        {(g.qr_generated_at || event?.invite_mode === 'closed') && (
                           <button onClick={() => handleResendInvite(g.id)} disabled={loading}
                             className="text-xs text-amber-600 hover:underline disabled:opacity-40">Resend invite</button>
+                        )}
+                        {g.admitted && (
+                          <button onClick={() => handleResendGuestEmail(g.id, 'admission')} disabled={loading}
+                            className="text-xs text-green-600 hover:underline disabled:opacity-40">Admission email</button>
+                        )}
+                        {event?.experience_enabled && (
+                          <button onClick={() => handleResendGuestEmail(g.id, 'experience_next_steps')} disabled={loading}
+                            className="text-xs text-teal-600 hover:underline disabled:opacity-40">Experience steps</button>
                         )}
                         <button onClick={() => setViewingGuest(g)}
                           className="text-xs text-slate-500 dark:text-slate-300 hover:underline">View</button>

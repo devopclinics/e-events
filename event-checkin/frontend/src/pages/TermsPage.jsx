@@ -59,7 +59,10 @@ export default function TermsPage() {
           <h2 className="font-semibold text-slate-900 dark:text-white">Changes &amp; contact</h2>
           <p>
             We may update these terms; continued use means you accept the changes. Questions:{' '}
-            <a href="mailto:info@devopclinics.com" className="text-teal-600 hover:underline">info@devopclinics.com</a>.
+            <a href="mailto:events@festio.events" className="text-teal-600 hover:underline">events@festio.events</a>.
+          </p>
+          <p>
+            Festio is operated by <strong>FOHMA Solutions LLC</strong>.
           </p>
         </div>
 

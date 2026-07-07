@@ -20,6 +20,26 @@ from services.qr_service import generate_qr_bytes
 logger = logging.getLogger(__name__)
 
 
+def _tag_value(value: str | None) -> str:
+    cleaned = re.sub(r"[^A-Za-z0-9_-]", "-", str(value or "").strip())
+    return cleaned[:256]
+
+
+def _set_delivery_context(
+    msg: MIMEMultipart,
+    *,
+    event_id: str | None = None,
+    guest_id: str | None = None,
+    message_kind: str | None = None,
+) -> None:
+    if event_id:
+        msg["X-Festio-Event-Id"] = event_id
+    if guest_id:
+        msg["X-Festio-Guest-Id"] = guest_id
+    if message_kind:
+        msg["X-Festio-Message-Kind"] = message_kind
+
+
 async def _design_email_theme(event_id: str | None) -> dict | None:
     """Fetch the published Design Studio email theme. Failure must not block mail."""
     if not event_id:
@@ -86,6 +106,27 @@ def _resend_payload(msg: MIMEMultipart) -> dict:
         "to": [a.strip() for a in (msg["To"] or "").split(",") if a.strip()],
         "subject": msg["Subject"] or "",
     }
+    headers = {
+        key: value
+        for key, value in {
+            "X-Festio-Event-Id": msg["X-Festio-Event-Id"],
+            "X-Festio-Guest-Id": msg["X-Festio-Guest-Id"],
+            "X-Festio-Message-Kind": msg["X-Festio-Message-Kind"],
+        }.items()
+        if value
+    }
+    if headers:
+        payload["headers"] = headers
+        tag_names = {
+            "X-Festio-Event-Id": "event_id",
+            "X-Festio-Guest-Id": "guest_id",
+            "X-Festio-Message-Kind": "message_kind",
+        }
+        payload["tags"] = [
+            {"name": tag_names[key], "value": _tag_value(value)}
+            for key, value in headers.items()
+            if _tag_value(value)
+        ]
     attachments = []
     for part in msg.walk():
         if part.get_content_type() == "text/html" and "html" not in payload:
@@ -309,14 +350,26 @@ def _festio_email_shell(inner: str, *, title: str | None = None,
         '</td></tr>'
         '<tr><td align="center" style="background:#f8fafc;border-top:1px solid #e2e8f0;padding:18px 24px;">'
         '<p style="font-family:Arial,Helvetica,sans-serif;color:#64748b;font-size:12px;line-height:18px;margin:0 0 6px 0;">'
-        'Powered by <strong style="color:#0f172a;">Festio</strong></p>'
+        'Powered by <strong style="color:#0f172a;">Festio</strong> · '
+        '<a href="https://festio.events" style="color:#0f766e;text-decoration:underline;">festio.events</a> · '
+        '<a href="mailto:events@festio.events" style="color:#0f766e;text-decoration:underline;">events@festio.events</a></p>'
+        '<p style="font-family:Arial,Helvetica,sans-serif;color:#64748b;font-size:11px;line-height:17px;margin:0 0 5px 0;">'
+        'Invites, RSVP, QR check-in, seating, guest messaging, Experience workflows and event insights.</p>'
         f'<p style="font-family:Arial,Helvetica,sans-serif;color:#94a3b8;font-size:11px;line-height:17px;margin:0;">{footer}</p>'
         '</td></tr>'
         '</table></td></tr></table></body></html>'
     )
 
 
-async def send_simple_email(to_email: str, subject: str, html_body: str, event_id: str | None = None):
+async def send_simple_email(
+    to_email: str,
+    subject: str,
+    html_body: str,
+    event_id: str | None = None,
+    attachments: list[tuple[str, bytes, str]] | None = None,
+    guest_id: str | None = None,
+    message_kind: str | None = "simple",
+):
     """Shared Festio-branded HTML email for simple transactional templates."""
     if not to_email:
         return
@@ -324,6 +377,7 @@ async def send_simple_email(to_email: str, subject: str, html_body: str, event_i
     msg["Subject"] = subject
     msg["From"] = settings.email_from
     msg["To"] = to_email
+    _set_delivery_context(msg, event_id=event_id, guest_id=guest_id, message_kind=message_kind)
     theme = await _design_email_theme(event_id)
     wrapped = _festio_email_shell(
         html_body,
@@ -333,6 +387,11 @@ async def send_simple_email(to_email: str, subject: str, html_body: str, event_i
     )
     msg.attach(MIMEText(_plain_text_from_html(html_body), "plain", "utf-8"))
     msg.attach(MIMEText(wrapped, "html", "utf-8"))
+    for filename, content, content_type in attachments or []:
+        maintype, _, subtype = (content_type or "application/octet-stream").partition("/")
+        part = MIMEApplication(content, _subtype=subtype or "octet-stream")
+        part.add_header("Content-Disposition", "attachment", filename=filename)
+        msg.attach(part)
     await _send(msg)
 
 
@@ -356,6 +415,23 @@ def _invite_pairing_cta(ticket_url: str) -> str:
         f'<a href="{ticket_url}" style="display:inline-block;margin-top:10px;'
         'background:#ec4899;color:white;text-decoration:none;padding:8px 16px;'
         'border-radius:8px;font-size:13px;font-weight:700;">Pair with my partner →</a>'
+        '</td></tr></table>'
+    )
+
+
+def _invite_hub_cta(hub_url: str) -> str:
+    return (
+        '<table style="width:100%;margin:24px 0;border:1px solid #cffafe;'
+        'border-radius:12px;border-collapse:separate;overflow:hidden;">'
+        '<tr><td style="padding:14px 16px;">'
+        '<div style="font-weight:700;color:#155e75;font-size:14px;">'
+        '💬 Your Guest Hub</div>'
+        '<div style="color:#6b7280;font-size:13px;margin-top:2px;">'
+        'Message the host, read announcements, and see your table — from any '
+        'device. Bookmark this link to come back anytime.</div>'
+        f'<a href="{hub_url}" style="display:inline-block;margin-top:10px;'
+        'background:#0891b2;color:white;text-decoration:none;padding:8px 16px;'
+        'border-radius:8px;font-size:13px;font-weight:700;">Open my Guest Hub →</a>'
         '</td></tr></table>'
     )
 
@@ -499,6 +575,7 @@ async def send_invite_email(
     event_date: datetime,
     seating_enabled: bool = False,
     menu_enabled: bool = False,
+    partner_pairing_enabled: bool = False,
     override_subject: str | None = None,
     override_body: str | None = None,
     venue_name: str | None = None,
@@ -507,6 +584,7 @@ async def send_invite_email(
     event_image: str | None = None,
     rsvp_link: str | None = None,
     support_email: str | None = None,
+    hub_url: str | None = None,
 ):
     """Render the ticket-QR invite from the message template (event override or
     the code default in TEMPLATE_DEFS) — all wording lives in the template. The
@@ -577,8 +655,9 @@ async def send_invite_email(
         "calendar_link_block": _secondary_link("Add to Calendar", calendar_url),
         "directions_link": directions_url,
         "directions_link_block": _secondary_link("Get Directions", directions_url),
-        "pairing_cta": _invite_pairing_cta(ticket_url) if seating_enabled else "",
+        "pairing_cta": _invite_pairing_cta(ticket_url) if seating_enabled and partner_pairing_enabled else "",
         "menu_cta": _invite_menu_cta(ticket_url) if menu_enabled else "",
+        "hub_cta": _invite_hub_cta(hub_url) if hub_url else "",
         "support_email": _html.escape(support_email or settings.email_from or ""),
     }
 
@@ -607,6 +686,12 @@ async def send_invite_email(
     msg["Subject"] = subject
     msg["From"] = settings.email_from
     msg["To"] = guest_data["email"]
+    _set_delivery_context(
+        msg,
+        event_id=guest_data.get("event_id"),
+        guest_id=guest_data.get("guest_id"),
+        message_kind=guest_data.get("message_kind") or "invitation",
+    )
     alt = MIMEMultipart("alternative")
     alt.attach(MIMEText(text_body, "plain", "utf-8"))
     alt.attach(MIMEText(body, "html", "utf-8"))
@@ -625,12 +710,20 @@ async def send_admission_email(guest_data: dict):
     msg["Subject"] = guest_data.get("subject_override") or "You're Admitted!"
     msg["From"] = settings.email_from
     msg["To"] = guest_data["email"]
+    _set_delivery_context(
+        msg,
+        event_id=guest_data.get("event_id"),
+        guest_id=guest_data.get("guest_id"),
+        message_kind=guest_data.get("message_kind") or "admission",
+    )
 
     admitted_time = local_hhmm(guest_data.get("admitted_at"))
     first = _html.escape(guest_data["first_name"])
     table_name = guest_data.get("table_name")
     seat_number = guest_data.get("seat_number")
     menu_choices = guest_data.get("menu_choices") or []  # list[(category, item)]
+    experience_steps = guest_data.get("experience_next_steps") or []
+    hub_url = guest_data.get("hub_url")
 
     # ── Seating block ────────────────────────────────────────────────────────
     seating_html = ""
@@ -693,6 +786,82 @@ async def send_admission_email(guest_data: dict):
             "</div>"
         )
 
+    experience_html = ""
+    if experience_steps:
+        def session_line(session: dict | None) -> str:
+            if not isinstance(session, dict):
+                return ""
+            parts = []
+            for key in ("topic", "date"):
+                if session.get(key):
+                    parts.append(str(session[key]))
+            times = " - ".join(str(session.get(k)) for k in ("start_time", "end_time") if session.get(k))
+            if times:
+                parts.append(times)
+            if session.get("room"):
+                parts.append(str(session["room"]))
+            if session.get("speaker"):
+                parts.append(f"Speaker: {session['speaker']}")
+            return " · ".join(parts)
+
+        def step_row(step: dict) -> str:
+            step_type = str(step.get("type") or "")
+            action_url = step.get("action_url")
+            session = session_line(step.get("session"))
+            helper = (
+                "Guest action: sign from your Festio Pass."
+                if step_type == "consent"
+                else "Staff action: an official will scan and mark this complete."
+                if step_type == "souvenir"
+                else ""
+            )
+            description = str(step.get("guest_message") or step.get("description") or helper)
+            action = (
+                f'<br><a href="{_html.escape(str(action_url))}" style="display:inline-block;margin-top:8px;'
+                'background:#0f766e;color:white;text-decoration:none;padding:8px 12px;'
+                'border-radius:8px;font-size:12px;font-weight:800;">Open consent form</a>'
+                if step_type == "consent" and action_url else ""
+            )
+            return (
+                '<li style="margin:8px 0;color:#334155;font-size:14px;line-height:20px;">'
+                f'<strong>{_html.escape(str(step.get("title") or "Next step"))}</strong>'
+                + (
+                    ' <span style="display:inline-block;background:#fef3c7;color:#92400e;'
+                    'border-radius:999px;padding:2px 8px;font-size:11px;font-weight:800;'
+                    'text-transform:uppercase;">Required</span>'
+                    if step.get("required") else ""
+                )
+                + (
+                    f'<br><span style="color:#64748b;font-size:13px;">{_html.escape(description)}</span>'
+                    if description else ""
+                )
+                + (
+                    f'<br><span style="display:inline-block;margin-top:4px;color:#0f766e;font-size:12px;font-weight:700;">{_html.escape(session)}</span>'
+                    if session else ""
+                )
+                + action
+                + '</li>'
+            )
+
+        rows = "".join(step_row(step) for step in experience_steps)
+        hub_cta = (
+            f'<p style="margin:14px 0 0 0;"><a href="{_html.escape(str(hub_url))}" '
+            'style="display:inline-block;background:#0f172a;color:white;text-decoration:none;'
+            'padding:10px 14px;border-radius:9px;font-size:13px;font-weight:800;">'
+            'Open Guest Hub to track my activity</a></p>'
+            if hub_url else ""
+        )
+        experience_html = (
+            '<div style="margin-top:24px;border:1px solid #ccfbf1;background:#f0fdfa;'
+            'border-radius:12px;padding:16px;">'
+            '<div style="font-weight:800;color:#115e59;font-size:15px;">Next steps at the event</div>'
+            '<p style="margin:4px 0 10px 0;color:#475569;font-size:13px;line-height:19px;">'
+            'Complete guest actions from your Festio Pass. Staff will scan and complete station actions as you move through the event.</p>'
+            f'<ol style="margin:0;padding-left:20px;">{rows}</ol>'
+            f'{hub_cta}'
+            '</div>'
+        )
+
     time_html = (
         f'<p style="margin-top:8px;font-size:14px;opacity:0.9;">'
         f'Check-in time: <strong>{admitted_time}</strong></p>'
@@ -713,6 +882,7 @@ async def send_admission_email(guest_data: dict):
       </div>
       {menu_html}
       {menu_cta_html}
+      {experience_html}
       <p style="margin-top: 24px; color: #666;">Enjoy the event!</p>
     """
     body = _festio_email_shell(
@@ -737,12 +907,14 @@ async def send_manual_invite_email(
     event_date: datetime,
     invite_message: str | None = None,
     event_id: str | None = None,
+    guest_id: str | None = None,
 ):
     """Send a personal invite link (no QR) to a recipient who hasn't RSVP'd yet."""
     msg = MIMEMultipart()
     msg["Subject"] = f"You're invited — {event_name}"
     msg["From"] = settings.email_from
     msg["To"] = email
+    _set_delivery_context(msg, event_id=event_id, guest_id=guest_id, message_kind="rsvp_invitation")
 
     theme = await _design_email_theme(event_id)
     safe_name = _html.escape(name)

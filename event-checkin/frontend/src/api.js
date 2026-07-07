@@ -133,6 +133,7 @@ export const api = {
   guestRsvpAnswers:    (eventId, guestId)  => req('GET',  `/events/${eventId}/guests/${guestId}/rsvp-answers`),
   deleteGuest:         (eventId, guestId)  => req('DELETE', `/events/${eventId}/guests/${guestId}`),
   resendInvite:        (eventId, guestId)  => req('POST',   `/events/${eventId}/guests/${guestId}/resend-invite`),
+  resendGuestEmail:    (eventId, guestId, kind) => req('POST', `/events/${eventId}/guests/${guestId}/resend-email`, { kind }),
   ensureInviteToken:   (eventId, guestId)  => req('POST',   `/events/${eventId}/guests/${guestId}/invite-token`),
   approveRsvp:         (eventId, guestId)  => req('POST',   `/events/${eventId}/guests/${guestId}/approve`),
   rejectRsvp:          (eventId, guestId)  => req('POST',   `/events/${eventId}/guests/${guestId}/reject`),
@@ -153,6 +154,56 @@ export const api = {
   toggleFeatures: (eventId, body) => req('PATCH', `/events/${eventId}/features`, body),
   sendTestMessage: (eventId, channel, phone) =>
     req('POST', `/events/${eventId}/messaging/test`, { channel, phone }),
+
+  // Experience workflows (admin)
+  listExperienceWorkflows: (eventId) =>
+    req('GET', `/events/${eventId}/experience/workflows`),
+  getExperienceDashboard: (eventId) =>
+    req('GET', `/events/${eventId}/experience/dashboard`),
+  getExperienceAnalytics: (eventId) =>
+    req('GET', `/events/${eventId}/experience/analytics`),
+  createDefaultExperienceWorkflow: (eventId) =>
+    req('POST', `/events/${eventId}/experience/default-workflow`),
+  createExperienceWorkflow: (eventId, data) =>
+    req('POST', `/events/${eventId}/experience/workflows`, data),
+  getExperienceWorkflow: (eventId, workflowId) =>
+    req('GET', `/events/${eventId}/experience/workflows/${workflowId}`),
+  deleteExperienceWorkflow: (eventId, workflowId) =>
+    req('DELETE', `/events/${eventId}/experience/workflows/${workflowId}`),
+  createExperienceStep: (eventId, workflowId, data) =>
+    req('POST', `/events/${eventId}/experience/workflows/${workflowId}/steps`, data),
+  updateExperienceStep: (eventId, workflowId, stepId, data) =>
+    req('PUT', `/events/${eventId}/experience/workflows/${workflowId}/steps/${stepId}`, data),
+  deleteExperienceStep: (eventId, workflowId, stepId) =>
+    req('DELETE', `/events/${eventId}/experience/workflows/${workflowId}/steps/${stepId}`),
+  reorderExperienceSteps: (eventId, workflowId, stepIds) =>
+    req('POST', `/events/${eventId}/experience/workflows/${workflowId}/steps/reorder`, { step_ids: stepIds }),
+  publishExperienceWorkflow: (eventId, workflowId) =>
+    req('POST', `/events/${eventId}/experience/workflows/${workflowId}/publish`),
+  unpublishExperienceWorkflow: (eventId, workflowId) =>
+    req('POST', `/events/${eventId}/experience/workflows/${workflowId}/unpublish`),
+  archiveExperienceWorkflow: (eventId, workflowId) =>
+    req('POST', `/events/${eventId}/experience/workflows/${workflowId}/archive`),
+  unarchiveExperienceWorkflow: (eventId, workflowId) =>
+    req('POST', `/events/${eventId}/experience/workflows/${workflowId}/unarchive`),
+  cloneExperienceWorkflow: (eventId, workflowId, name) =>
+    req('POST', `/events/${eventId}/experience/workflows/${workflowId}/clone`, { name }),
+  getGuestExperience: (eventId, guestId) =>
+    req('GET', `/events/${eventId}/experience/guests/${guestId}`),
+  updateGuestExperienceStep: (eventId, guestId, stepId, data) =>
+    req('PUT', `/events/${eventId}/experience/guests/${guestId}/steps/${stepId}`, data),
+  listExperienceAudit: (eventId, limit = 100) =>
+    req('GET', `/events/${eventId}/experience/audit?limit=${limit}`),
+  getExperienceNextSteps: (eventId, guestId) =>
+    req('GET', `/events/${eventId}/experience/guests/${guestId}/next-steps`),
+  downloadExperienceExport: (eventId) =>
+    downloadFile(`/events/${eventId}/experience/export.csv`, `experience-progress.csv`),
+  getConsentForm: (eventId) =>
+    req('GET', `/events/${eventId}/experience/consent-form`),
+  saveConsentForm: (eventId, data) =>
+    req('PUT', `/events/${eventId}/experience/consent-form`, data),
+  listConsentSignatures: (eventId) =>
+    req('GET', `/events/${eventId}/experience/consent-signatures`),
 
   // Seating
   listTables:              (eventId)                   => req('GET',    `/events/${eventId}/tables`),
@@ -193,6 +244,7 @@ export const api = {
 
   // Scanner
   scan: (token) => req('POST', `/scan/${token}`),
+  offlineManifest: (eventId) => req('GET', `/scan/offline-manifest/${eventId}`),
   // Manual check-in (no QR)
   searchGuests:  (eventId, q) => req('GET', `/events/${eventId}/guests/search?q=${encodeURIComponent(q)}`),
   manualCheckin: (eventId, guestId, tableGroupId) => req('POST', `/events/${eventId}/guests/${guestId}/checkin${tableGroupId ? `?table_group_id=${encodeURIComponent(tableGroupId)}` : ''}`),
@@ -223,6 +275,18 @@ export const api = {
 
   // Ticket (public)
   viewTicket: (token) => fetch(`/api/scan/${token}/ticket`).then((r) => r.json()),
+  viewConsent: (token) => fetch(`/api/scan/${token}/consent`).then((r) => r.json()),
+  signConsent: (token, payload) =>
+    fetch(`/api/scan/${token}/consent`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    }).then((r) => (r.ok ? r.json() : r.json().then((e) => Promise.reject(new Error(e.detail))))),
+  sendConsentCopy: (token) =>
+    fetch(`/api/scan/${token}/consent/send-copy`, { method: 'POST' })
+      .then((r) => (r.ok ? r.json() : r.json().then((e) => Promise.reject(new Error(e.detail))))),
+  consentDownloadUrl: (token) => `/api/scan/${encodeURIComponent(token)}/consent/download`,
+  consentPdfDownloadUrl: (token) => `/api/scan/${encodeURIComponent(token)}/consent/download.pdf`,
 
   // Menu submit (public — guest, no auth)
   submitMenuChoice: (token, payload) =>
@@ -290,6 +354,18 @@ export const api = {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ body }),
     }).then((r) => (r.ok ? r.json() : r.json().then((e) => Promise.reject(new Error(e.detail || 'Chat message could not be sent.'))))),
+
+  // Guest-facing Experience journey (token auth, backend). Returns
+  // { experience_enabled, steps, next_steps, consent, ... }.
+  guestExperience: (eventId, token) =>
+    fetch(`${BASE}/events/${encodeURIComponent(eventId)}/experience/me?token=${encodeURIComponent(token)}`)
+      .then((r) => (r.ok ? r.json() : r.json().then((e) => Promise.reject(new Error(e.detail || 'Your journey is temporarily unavailable.'))))),
+  signGuestConsent: (eventId, token, { signer_name, signature_text }) =>
+    fetch(`${BASE}/events/${encodeURIComponent(eventId)}/experience/me/consent/sign?token=${encodeURIComponent(token)}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ signer_name, signature_text }),
+    }).then((r) => (r.ok ? r.json() : r.json().then((e) => Promise.reject(new Error(e.detail || 'Consent could not be recorded.'))))),
   messagingSettings: (eventId) => req('GET', `/messaging/admin/events/${eventId}/messaging/settings`),
   updateMessagingSettings: (eventId, data) => req('PATCH', `/messaging/admin/events/${eventId}/messaging/settings`, data),
   listAnnouncements: (eventId) => req('GET', `/messaging/admin/events/${eventId}/announcements`),

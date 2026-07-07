@@ -9,8 +9,9 @@ export default function RefundPolicyPage() {
 
         <div className="space-y-4 text-sm text-slate-700 dark:text-slate-300 mt-4">
           <p>
-            Festio sells one-time <strong>Event Passes</strong> and <strong>message-credit
-            top-ups</strong> per event. The following applies to those purchases.
+            Festio, operated by <strong>FOHMA Solutions LLC</strong>, sells one-time
+            <strong> Event Passes</strong> and <strong>message-credit top-ups</strong> per event.
+            The following applies to those purchases.
           </p>
           <h2 className="font-semibold text-slate-900 dark:text-white">Event Passes</h2>
           <p>
@@ -27,7 +28,7 @@ export default function RefundPolicyPage() {
           </p>
           <h2 className="font-semibold text-slate-900 dark:text-white">How to request a refund</h2>
           <p>
-            Email <a href="mailto:info@devopclinics.com" className="text-teal-600 hover:underline">info@devopclinics.com</a> from
+            Email <a href="mailto:events@festio.events" className="text-teal-600 hover:underline">events@festio.events</a> from
             the account email used for the purchase, including the event name and approximate
             purchase date. Approved refunds are returned to the original payment method within
             5–10 business days.

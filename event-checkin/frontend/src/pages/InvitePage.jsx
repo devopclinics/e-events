@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { useParams } from 'react-router-dom'
 import { api } from '../api'
 import { parseUtc } from '../timeutil'
@@ -65,6 +65,34 @@ function fmtTime(iso) {
   const d = parseUtc(iso)
   if (!d) return ''
   return d.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' })
+}
+
+function fmtLocalDateTime(value) {
+  const d = parseUtc(value)
+  if (!d) return ''
+  return d.toLocaleString(undefined, { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })
+}
+
+function sessionSummary(session = {}) {
+  const parts = []
+  if (session.topic) parts.push(session.topic)
+  if (session.date) parts.push(session.date)
+  if (session.start_time || session.end_time) parts.push([session.start_time, session.end_time].filter(Boolean).join('-'))
+  if (session.room) parts.push(session.room)
+  if (session.speaker) parts.push(`Speaker: ${session.speaker}`)
+  return parts.filter(Boolean).join(' · ')
+}
+
+function sessionWindowText(session = {}) {
+  if (session.checkin_window_minutes === undefined || session.checkin_window_minutes === null || session.checkin_window_minutes === '') return ''
+  return `Check-in opens ${session.checkin_window_minutes} min before this session.`
+}
+
+function roomAssignmentText(metadata = {}) {
+  const assignment = metadata.room_assignment || {}
+  const table = assignment.table_name || assignment.table_group_name || ''
+  const seat = assignment.seat_number ? `Seat ${assignment.seat_number}` : ''
+  return [table, seat].filter(Boolean).join(' · ')
 }
 
 function isGenericEventName(value) {
@@ -329,12 +357,47 @@ function RSVPForm({ event, theme, onConfirmed }) {
   const [form, setForm] = useState({ first_name: '', last_name: '', email: '', phone: '' })
   const [choice, setChoice] = useState('')
   const [answers, setAnswers] = useState({})
+  const [invitees, setInvitees] = useState([
+    { full_name: '', relationship: '', phone: '', email: '', guest_type: 'Invited Guest', notes: '' },
+  ])
   const [shipAddr, setShipAddr] = useState({})
   const [sizes, setSizes] = useState({})
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
 
   const set = (k) => (e) => setForm((p) => ({ ...p, [k]: e.target.value }))
+  const multiInvitee = !!event.rsvp_multi_invitee_enabled
+  const defaultInviteeLimit = Math.max(1, Math.min(Number(event.rsvp_multi_invitee_limit || 10), 100))
+  const inviteeLimitRules = event.rsvp_multi_invitee_limit_rules || {}
+  const inviteeLimitRuleEntries = Object.entries(inviteeLimitRules)
+    .map(([label, limit]) => [label, Math.max(1, Math.min(Number(limit) || 1, 100))])
+    .filter(([label]) => String(label || '').trim())
+  const categoryQuestion = multiInvitee && inviteeLimitRuleEntries.length
+    ? (event.questions || []).find((q) => /category|allowance|submitter role/i.test(q.question || '') && q.question_type === 'select')
+    : null
+  const selectedCategory = categoryQuestion ? (answers[categoryQuestion.id] || '') : ''
+  const matchedCategoryRule = inviteeLimitRuleEntries.find(([label]) => label.toLowerCase() === selectedCategory.toLowerCase())
+  const inviteeLimit = matchedCategoryRule ? matchedCategoryRule[1] : defaultInviteeLimit
+  const inviteeTypes = ['Parent/Guardian', 'Invited Guest', 'Teacher', 'School/Staff', 'VIP/Dignitary', 'Other']
+
+  useEffect(() => {
+    setInvitees((rows) => rows.length > inviteeLimit ? rows.slice(0, inviteeLimit) : rows)
+  }, [inviteeLimit])
+
+  function setInvitee(index, key, value) {
+    setInvitees((rows) => rows.map((row, i) => (i === index ? { ...row, [key]: value } : row)))
+  }
+
+  function addInvitee() {
+    setInvitees((rows) => rows.length >= inviteeLimit ? rows : [
+      ...rows,
+      { full_name: '', relationship: '', phone: '', email: '', guest_type: 'Invited Guest', notes: '' },
+    ])
+  }
+
+  function removeInvitee(index) {
+    setInvitees((rows) => rows.length <= 1 ? rows : rows.filter((_, i) => i !== index))
+  }
 
   async function handleSubmit(e) {
     e.preventDefault()
@@ -353,6 +416,18 @@ function RSVPForm({ event, theme, onConfirmed }) {
           email: form.email.trim(),
           phone: form.phone.trim() || undefined,
           answers,
+          invitees: multiInvitee
+            ? invitees
+                .map((row) => ({
+                  full_name: row.full_name.trim(),
+                  relationship: row.relationship.trim(),
+                  phone: row.phone.trim() || undefined,
+                  email: row.email.trim() || undefined,
+                  guest_type: row.guest_type,
+                  notes: row.notes.trim() || undefined,
+                }))
+                .filter((row) => row.full_name || row.phone || row.email)
+            : undefined,
           shipping_address: event.shipping ? shipAddr : undefined,
           sizes: event.shipping ? sizes : undefined,
         }),
@@ -372,8 +447,12 @@ function RSVPForm({ event, theme, onConfirmed }) {
   return (
     <div className="space-y-5">
       <div>
-        <h2 className="text-2xl font-extrabold text-slate-950">Will you be attending?</h2>
-        <p className="mt-2 text-sm leading-relaxed text-slate-500">Let the host know so they can prepare your spot and Festio Pass.</p>
+        <h2 className="text-2xl font-extrabold text-slate-950">{multiInvitee ? 'Submit invited guests' : 'Will you be attending?'}</h2>
+        <p className="mt-2 text-sm leading-relaxed text-slate-500">
+          {multiInvitee
+            ? 'Add the people you are submitting for review. Each approved invitee will receive their own QR pass.'
+            : 'Let the host know so they can prepare your spot and Festio Pass.'}
+        </p>
       </div>
 
       <div className="grid gap-3 sm:grid-cols-2">
@@ -405,33 +484,107 @@ function RSVPForm({ event, theme, onConfirmed }) {
         <form onSubmit={handleSubmit} className="space-y-5">
           <div className="grid gap-4 sm:grid-cols-2">
             <div>
-              <label className="mb-2 block text-sm font-bold text-slate-700">First name <span className="text-red-500">*</span></label>
+              <label className="mb-2 block text-sm font-bold text-slate-700">{multiInvitee ? 'Submitter first name' : 'First name'} <span className="text-red-500">*</span></label>
               <input required value={form.first_name} onChange={set('first_name')} className={inputCls} placeholder="Jane" />
             </div>
             <div>
-              <label className="mb-2 block text-sm font-bold text-slate-700">Last name <span className="text-red-500">*</span></label>
+              <label className="mb-2 block text-sm font-bold text-slate-700">{multiInvitee ? 'Submitter last name' : 'Last name'} <span className="text-red-500">*</span></label>
               <input required value={form.last_name} onChange={set('last_name')} className={inputCls} placeholder="Smith" />
             </div>
           </div>
 
           {event.rsvp_collect_email !== false && (
             <div>
-              <label className="mb-2 block text-sm font-bold text-slate-700">Email <span className="text-red-500">*</span></label>
+              <label className="mb-2 block text-sm font-bold text-slate-700">{multiInvitee ? 'Submitter email' : 'Email'} <span className="text-red-500">*</span></label>
               <input required type="email" value={form.email} onChange={set('email')} className={inputCls} placeholder="jane@example.com" />
             </div>
           )}
 
           {event.rsvp_collect_phone && (
             <div>
-              <label className="mb-2 block text-sm font-bold text-slate-700">Phone <span className="text-slate-400">(optional)</span></label>
+              <label className="mb-2 block text-sm font-bold text-slate-700">{multiInvitee ? 'Submitter phone' : 'Phone'} <span className="text-slate-400">(optional)</span></label>
               <input type="tel" value={form.phone} onChange={set('phone')} className={inputCls} placeholder="+1 (832) 000-0000" />
+            </div>
+          )}
+
+          {multiInvitee && (
+            <div className="space-y-4 rounded-3xl border border-slate-200 bg-slate-50 p-4">
+              {categoryQuestion && (
+                <div className="rounded-2xl border border-teal-100 bg-white p-4">
+                  <label className="mb-2 block text-sm font-bold text-slate-700">
+                    Invitation category <span className="text-red-500">*</span>
+                  </label>
+                  <select
+                    required
+                    value={selectedCategory}
+                    onChange={(e) => setAnswers((p) => ({ ...p, [categoryQuestion.id]: e.target.value }))}
+                    className={inputCls}
+                  >
+                    <option value="">Select category</option>
+                    {inviteeLimitRuleEntries.map(([label, limit]) => (
+                      <option key={label} value={label}>{label} - up to {limit} invitee{limit === 1 ? '' : 's'}</option>
+                    ))}
+                  </select>
+                  <p className="mt-2 text-xs text-slate-500">
+                    The number of invitees is gated by this category and will also be checked before submission.
+                  </p>
+                </div>
+              )}
+              <div className="flex items-center justify-between gap-3">
+                <div>
+                  <div className={`text-xs font-extrabold uppercase tracking-[0.18em] ${t.accent}`}>Invitees</div>
+                  <p className="mt-1 text-xs text-slate-500">Up to {inviteeLimit} people{selectedCategory ? ` for ${selectedCategory}` : ''}. Each approved person gets a separate QR pass.</p>
+                </div>
+                <button type="button" onClick={addInvitee} disabled={invitees.length >= inviteeLimit}
+                  className="rounded-xl border border-slate-300 bg-white px-3 py-2 text-xs font-bold text-slate-700 disabled:cursor-not-allowed disabled:opacity-50">
+                  Add invitee
+                </button>
+              </div>
+              {invitees.map((row, index) => (
+                <div key={index} className="rounded-2xl border border-slate-200 bg-white p-4">
+                  <div className="mb-3 flex items-center justify-between">
+                    <div className="text-sm font-extrabold text-slate-800">Invitee {index + 1}</div>
+                    {invitees.length > 1 && (
+                      <button type="button" onClick={() => removeInvitee(index)} className="text-xs font-bold text-red-500">Remove</button>
+                    )}
+                  </div>
+                  <div className="grid gap-3 sm:grid-cols-2">
+                    <div>
+                      <label className="mb-1 block text-xs font-bold text-slate-600">Full name <span className="text-red-500">*</span></label>
+                      <input required value={row.full_name} onChange={(e) => setInvitee(index, 'full_name', e.target.value)} className={inputCls} placeholder="Invitee full name" />
+                    </div>
+                    <div>
+                      <label className="mb-1 block text-xs font-bold text-slate-600">Guest type</label>
+                      <select value={row.guest_type} onChange={(e) => setInvitee(index, 'guest_type', e.target.value)} className={inputCls}>
+                        {inviteeTypes.map((type) => <option key={type} value={type}>{type}</option>)}
+                      </select>
+                    </div>
+                    <div>
+                      <label className="mb-1 block text-xs font-bold text-slate-600">Relationship / role</label>
+                      <input value={row.relationship} onChange={(e) => setInvitee(index, 'relationship', e.target.value)} className={inputCls} placeholder="Aunt, teacher, chairman, etc." />
+                    </div>
+                    <div>
+                      <label className="mb-1 block text-xs font-bold text-slate-600">Phone</label>
+                      <input type="tel" value={row.phone} onChange={(e) => setInvitee(index, 'phone', e.target.value)} className={inputCls} placeholder="+234..." />
+                    </div>
+                    <div className="sm:col-span-2">
+                      <label className="mb-1 block text-xs font-bold text-slate-600">Email <span className="text-slate-400">(optional)</span></label>
+                      <input type="email" value={row.email} onChange={(e) => setInvitee(index, 'email', e.target.value)} className={inputCls} placeholder="invitee@example.com" />
+                    </div>
+                    <div className="sm:col-span-2">
+                      <label className="mb-1 block text-xs font-bold text-slate-600">Notes</label>
+                      <input value={row.notes} onChange={(e) => setInvitee(index, 'notes', e.target.value)} className={inputCls} placeholder="Any seating, protocol, or meal note for this person" />
+                    </div>
+                  </div>
+                </div>
+              ))}
             </div>
           )}
 
           {event.questions?.length > 0 && (
             <div className="space-y-4 pt-1">
               <div className={`text-xs font-extrabold uppercase tracking-[0.18em] ${t.accent}`}>A few quick questions</div>
-              {event.questions.map((q) => (
+              {event.questions.filter((q) => q.id !== categoryQuestion?.id).map((q) => (
                 <QuestionField
                   key={q.id}
                   question={q}
@@ -453,7 +606,7 @@ function RSVPForm({ event, theme, onConfirmed }) {
           )}
 
           <PrimaryButton type="submit" disabled={loading} className="w-full">
-            {loading ? 'Confirming...' : 'Confirm My RSVP'}
+            {loading ? 'Submitting...' : multiInvitee ? 'Submit invitees for review' : 'Confirm My RSVP'}
           </PrimaryButton>
         </form>
       )}
@@ -465,6 +618,15 @@ function RSVPForm({ event, theme, onConfirmed }) {
 
 function ConfirmView({ confirm, event }) {
   const ticketUrl = confirm.qr_token ? `/scan/${confirm.qr_token}` : ''
+  // Personal, cross-device Guest Hub link. Unlike the shared RSVP link, this is
+  // tied to the guest server-side, so it opens their Hub on any browser/device.
+  const hubPath = confirm.invite_token ? `/r/${confirm.invite_token}#guest-hub` : ''
+  const hubUrl = hubPath && typeof window !== 'undefined' ? `${window.location.origin}${hubPath}` : ''
+  const [copied, setCopied] = useState(false)
+  const copyHub = async () => {
+    if (!hubUrl) return
+    try { await navigator.clipboard.writeText(hubUrl); setCopied(true); setTimeout(() => setCopied(false), 2000) } catch { /* ignore */ }
+  }
   return (
     <div className="space-y-5">
       <div>
@@ -494,6 +656,20 @@ function ConfirmView({ confirm, event }) {
         )}
         <div className="mt-4 text-sm font-semibold text-slate-600">Show this at the entrance for check-in.</div>
       </div>
+      {hubUrl && (
+        <div className="rounded-3xl border border-cyan-200 bg-cyan-50 p-5">
+          <div className="text-xs font-extrabold uppercase tracking-[0.18em] text-cyan-700">Your Guest Hub</div>
+          <div className="mt-2 text-sm font-semibold text-slate-600">
+            Message the host, read announcements, and see your table — from any device. Save this personal link to come back anytime:
+          </div>
+          <div className="mt-3 flex flex-col gap-2 sm:flex-row">
+            <a href={hubPath} className="inline-flex min-h-11 flex-1 items-center justify-center rounded-xl bg-cyan-600 px-4 py-2 text-sm font-bold text-white transition hover:bg-cyan-500">Open my Guest Hub</a>
+            <button type="button" onClick={copyHub} className="inline-flex min-h-11 items-center justify-center rounded-xl border border-cyan-300 bg-white px-4 py-2 text-sm font-bold text-cyan-700 transition hover:bg-cyan-100">
+              {copied ? 'Link copied ✓' : 'Copy link'}
+            </button>
+          </div>
+        </div>
+      )}
       <div className="grid gap-3 sm:grid-cols-3">
         {ticketUrl && <a href={ticketUrl} className="inline-flex min-h-11 items-center justify-center rounded-xl bg-slate-950 px-4 py-2 text-sm font-bold text-white transition hover:bg-slate-800">View My Festio Pass</a>}
         <button type="button" onClick={() => window.print()} className="inline-flex min-h-11 items-center justify-center rounded-xl border border-slate-200 px-4 py-2 text-sm font-bold text-slate-700 transition hover:bg-slate-50">Save Ticket</button>
@@ -677,6 +853,38 @@ function GuestHub({ event, accessToken, designTheme }) {
   const [chatMessage, setChatMessage] = useState('')
   const [sending, setSending] = useState(false)
   const [sendingChat, setSendingChat] = useState(false)
+  // Experience journey (only populated when the event has Experience enabled).
+  const [journey, setJourney] = useState(null)
+  const [signName, setSignName] = useState('')
+  const [signing, setSigning] = useState(false)
+  const [signError, setSignError] = useState('')
+
+  const loadJourney = useCallback(async () => {
+    if (!event?.id || !accessToken) return
+    try {
+      const data = await api.guestExperience(event.id, accessToken)
+      setJourney(data)
+    } catch { /* journey is best-effort; keep the rest of the Hub working */ }
+  }, [event?.id, accessToken])
+
+  useEffect(() => { loadJourney() }, [loadJourney])
+
+  async function submitConsent(e) {
+    e.preventDefault()
+    const name = signName.trim()
+    if (!name) return
+    setSigning(true)
+    setSignError('')
+    try {
+      await api.signGuestConsent(event.id, accessToken, { signer_name: name, signature_text: name })
+      setSignName('')
+      await loadJourney()
+    } catch (err) {
+      setSignError(err.message)
+    } finally {
+      setSigning(false)
+    }
+  }
 
   useEffect(() => {
     if (!event?.id || !accessToken) return
@@ -735,6 +943,7 @@ function GuestHub({ event, accessToken, designTheme }) {
   if (!accessToken || hidden) return null
   const colors = designColors(designTheme)
   const tone = readableTone(colors)
+  const hasRsvp = event?.rsvp_enabled !== false
 
   return (
     <section className="py-2">
@@ -747,7 +956,7 @@ function GuestHub({ event, accessToken, designTheme }) {
             <h2 className="text-3xl font-extrabold">Guest Hub</h2>
             <p className="mt-2 text-sm leading-6" style={{ color: tone.muted }}>Your event updates, QR pass, and messages in one place.</p>
           </div>
-          {hub?.guest?.rsvp_status && (
+          {hasRsvp && hub?.guest?.rsvp_status && (
             <span className="w-fit rounded-full px-3 py-1 text-xs font-extrabold uppercase tracking-wide" style={{ background: `${tone.accent}22`, color: tone.text }}>
               {hub.guest.rsvp_status === 'confirmed' ? 'Attending' : hub.guest.rsvp_status}
             </span>
@@ -756,9 +965,116 @@ function GuestHub({ event, accessToken, designTheme }) {
 
         {error && <div className="mt-5 rounded-2xl border border-amber-300/25 bg-amber-300/10 px-4 py-3 text-sm text-amber-50">{error}</div>}
 
+        {journey?.experience_enabled && journey.steps?.length > 0 && (() => {
+          const visible = journey.steps.filter((s) => s.status !== 'skipped')
+          const remaining = journey.next_steps?.length || 0
+          const done = journey.completed_count || 0
+          const total = journey.total_count || visible.length
+          const progress = total ? Math.round((done / total) * 100) : 0
+          const consent = journey.consent
+          const needsConsent = consent?.required && !consent.signed
+          const statusMeta = (s) => {
+            if (s.status === 'completed' || s.status === 'overridden') return { icon: '✓', chip: 'Done', done: true, tone: tone.accent }
+            if (s.status === 'blocked') return { icon: '•', chip: 'Locked', done: false, tone: tone.label }
+            return { icon: '○', chip: s.actionable ? 'Action needed' : 'Upcoming', done: false, tone: s.actionable ? tone.accent : tone.label }
+          }
+          const detailText = (s, m) => {
+            if (m.done) return s.completion_message || s.guest_message || s.description || ''
+            return s.guest_message || s.description || ''
+          }
+          return (
+            <div className="mt-6 rounded-2xl border p-4" style={{ background: tone.panel, borderColor: tone.border }}>
+              <div className="flex items-center justify-between gap-3">
+                <div>
+                  <h3 className="text-lg font-extrabold">Your activity</h3>
+                  <p className="mt-1 text-sm" style={{ color: tone.muted }}>Track your Experience progress from check-in through each event step.</p>
+                </div>
+                <span className="shrink-0 rounded-full px-2.5 py-1 text-xs font-bold" style={{ background: `${tone.accent}22`, color: tone.text }}>{done}/{total} done</span>
+              </div>
+              <div className="mt-4 h-2 overflow-hidden rounded-full" style={{ background: `${tone.accent}22` }}>
+                <div className="h-full rounded-full" style={{ width: `${Math.min(progress, 100)}%`, background: tone.accent }} />
+              </div>
+              {remaining > 0 && (
+                <div className="mt-4 rounded-xl border p-3" style={{ background: tone.panelStrong, borderColor: tone.border }}>
+                  <div className="text-xs font-extrabold uppercase tracking-[0.16em]" style={{ color: tone.label }}>Current next steps</div>
+                  <div className="mt-2 space-y-2">
+                    {journey.next_steps.slice(0, 4).map((s) => {
+                      const sessionInfo = s.session ? sessionSummary(s.session) : ''
+                      return (
+                        <div key={s.id} className="rounded-lg px-3 py-2 text-sm" style={{ background: tone.chip }}>
+                          <div className="flex items-center justify-between gap-2">
+                            <span className="font-bold">{s.title}</span>
+                            {s.self_service ? <span className="text-[11px] font-bold uppercase tracking-wide" style={{ color: tone.accent }}>Guest action</span> : <span className="text-[11px] font-bold uppercase tracking-wide" style={{ color: tone.label }}>Staff assisted</span>}
+                          </div>
+                          {(s.guest_message || s.description) && <p className="mt-1 leading-5" style={{ color: tone.muted }}>{s.guest_message || s.description}</p>}
+                          {sessionInfo && <p className="mt-1 text-xs font-bold" style={{ color: tone.text }}>{sessionInfo}</p>}
+                        </div>
+                      )
+                    })}
+                  </div>
+                </div>
+              )}
+              <ol className="mt-4 space-y-2">
+                {visible.map((s) => {
+                  const m = statusMeta(s)
+                  const sessionInfo = s.session ? sessionSummary(s.session) : ''
+                  const roomInfo = roomAssignmentText(s.metadata || {})
+                  const checkedInAt = s.metadata?.session_checked_in_at ? fmtLocalDateTime(s.metadata.session_checked_in_at) : ''
+                  const copy = detailText(s, m)
+                  return (
+                    <li key={s.id} className="flex items-start gap-3 rounded-xl border p-3" style={{ background: tone.chip, borderColor: s.actionable ? tone.accent : tone.border }}>
+                      <span className="mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-sm font-bold" style={{ background: m.done ? tone.accent : `${tone.accent}22`, color: m.done ? tone.background : tone.text }}>{m.icon}</span>
+                      <div className="min-w-0 flex-1">
+                        <div className="flex items-center justify-between gap-2">
+                          <span className="font-bold">{s.title}{s.required ? '' : <span className="ml-1 text-xs font-normal" style={{ color: tone.label }}>(optional)</span>}</span>
+                          <span className="shrink-0 text-[11px] font-bold uppercase tracking-wide" style={{ color: m.tone }}>{m.chip}</span>
+                        </div>
+                        {copy && <p className="mt-1 text-sm leading-6" style={{ color: tone.muted }}>{copy}</p>}
+                        {sessionInfo && <p className="mt-2 rounded-lg px-3 py-2 text-xs font-bold" style={{ background: tone.panel, color: tone.text }}>{sessionInfo}</p>}
+                        {s.session && sessionWindowText(s.session) && <p className="mt-1 text-xs" style={{ color: tone.label }}>{sessionWindowText(s.session)}</p>}
+                        {roomInfo && <p className="mt-2 text-sm font-bold" style={{ color: tone.text }}>Assignment: {roomInfo}</p>}
+                        {checkedInAt && <p className="mt-1 text-xs" style={{ color: tone.label }}>Session check-in recorded {checkedInAt}</p>}
+                        {s.completed_at && !checkedInAt && <p className="mt-1 text-xs" style={{ color: tone.label }}>Completed {fmtLocalDateTime(s.completed_at)}</p>}
+                      </div>
+                    </li>
+                  )
+                })}
+              </ol>
+
+              {consent?.form && (
+                <div className="mt-4 rounded-xl border p-4" style={{ background: tone.panelStrong, borderColor: needsConsent ? tone.accent : tone.border }}>
+                  <div className="flex items-center justify-between gap-2">
+                    <h4 className="font-extrabold">{consent.form.title}</h4>
+                    {consent.signed && <span className="shrink-0 text-[11px] font-bold uppercase tracking-wide" style={{ color: tone.accent }}>Signed</span>}
+                  </div>
+                  <div className="mt-2 max-h-40 overflow-auto whitespace-pre-wrap text-sm leading-6" style={{ color: tone.muted }}>{consent.form.body}</div>
+                  {consent.signed ? (
+                    <p className="mt-3 text-sm" style={{ color: tone.label }}>Thank you — your consent has been recorded{consent.signed_at ? ` on ${new Date(consent.signed_at).toLocaleDateString()}` : ''}.</p>
+                  ) : (
+                    <form onSubmit={submitConsent} className="mt-3 flex flex-col gap-2 sm:flex-row">
+                      <input
+                        value={signName}
+                        onChange={(e) => setSignName(e.target.value)}
+                        maxLength={255}
+                        placeholder="Type your full name to sign"
+                        className="min-h-11 flex-1 rounded-xl border px-4 py-2 text-sm placeholder-slate-400 focus:outline-none focus:ring-4 focus:ring-teal-300/20"
+                        style={{ background: tone.panel, borderColor: tone.border, color: tone.text }}
+                      />
+                      <button disabled={signing || !signName.trim()} style={colors.accent ? { background: colors.accent } : undefined} className="min-h-11 rounded-xl bg-teal-400 px-5 py-2 text-sm font-extrabold text-slate-950 hover:bg-teal-300 disabled:opacity-50">
+                        {signing ? 'Signing...' : 'Sign & agree'}
+                      </button>
+                    </form>
+                  )}
+                  {signError && <p className="mt-2 text-sm text-amber-400">{signError}</p>}
+                </div>
+              )}
+            </div>
+          )
+        })()}
+
         <div className="mt-6 grid gap-4 md:grid-cols-3">
           <div className="rounded-2xl border p-4" style={{ background: tone.panel, borderColor: tone.border }}>
-            <div className="text-xs font-extrabold uppercase tracking-[0.16em]" style={{ color: tone.label }}>Your RSVP</div>
+            <div className="text-xs font-extrabold uppercase tracking-[0.16em]" style={{ color: tone.label }}>{hasRsvp ? 'Your RSVP' : 'Your pass'}</div>
             <div className="mt-3 text-lg font-extrabold">{hub?.guest?.name || 'Guest'}</div>
             {hub?.guest?.table_name && (
               <p className="mt-2 text-sm" style={{ color: tone.muted }}>
@@ -820,9 +1136,9 @@ function GuestHub({ event, accessToken, designTheme }) {
             </form>
           ) : (
             <div className="mt-4 rounded-xl border px-3 py-2 text-sm" style={{ background: tone.chip, borderColor: tone.border, color: tone.label }}>
-              {hub?.guest?.rsvp_status === 'confirmed'
-                ? 'Message Host is not enabled for this event.'
-                : 'Message Host unlocks after your RSVP is confirmed.'}
+              {hasRsvp && hub?.guest?.rsvp_status !== 'confirmed'
+                ? 'Message Host unlocks after your RSVP is confirmed.'
+                : 'Message Host is not enabled for this event.'}
             </div>
           )}
         </div>
@@ -976,13 +1292,23 @@ export default function InvitePage() {
   const venue = [dWording.venue, dWording.address].filter(Boolean).join(' · ') || venueText(event)
   const host = dWording.hostName || hostText(event)
   const deadline = deadlineText(event)
-  const about = dWording.customMessage || event.description || event.invite_message || 'We are excited to celebrate this special occasion with family and friends. Please RSVP so we can prepare properly for your attendance.'
-  const admissionNote = dWording.admissionNote || event.admission_note || 'Your RSVP generates a personal QR code. Please bring it with you for check-in at the entrance.'
+  const about = dWording.customMessage || event.description || event.invite_message || (
+    event.rsvp_enabled
+      ? 'We are excited to celebrate this special occasion with family and friends. Please RSVP so we can prepare properly for your attendance.'
+      : 'Your guest pass gives you access to event updates, check-in, and Experience activity tracking.'
+  )
+  const admissionNote = dWording.admissionNote || event.admission_note || (
+    event.rsvp_enabled
+      ? 'Your RSVP generates a personal QR code. Please bring it with you for check-in at the entrance.'
+      : 'Bring your personal QR code for check-in and event activity tracking.'
+  )
   const heroWhen = [dateLabel, timeLabel].filter(Boolean).join(' · ')
   const capacityLabel = event.rsvp_capacity != null ? `${event.rsvp_count} / ${event.rsvp_capacity} spots claimed` : ''
   const guestHubToken = confirmed?.rsvp_status === 'confirmed'
     ? confirmed.qr_token
-    : tokenMode && tokenMeta.already_responded && guest?.rsvp_status === 'confirmed'
+    : tokenMode && event?.experience_enabled
+      ? token
+      : tokenMode && tokenMeta.already_responded && guest?.rsvp_status === 'confirmed'
       ? token
       : prior?.rsvp_status === 'confirmed' && prior?.qr_token
         ? prior.qr_token
@@ -996,6 +1322,8 @@ export default function InvitePage() {
       : confirmed.rsvp_status === 'pending'
         ? <PendingView confirm={confirmed} />
         : <ConfirmView confirm={confirmed} event={event} />
+  } else if (tokenMode && !event.rsvp_enabled) {
+    rsvpPanel = null
   } else if (tokenMode) {
     rsvpPanel = deadlinePassed ? (
       <div className="rounded-3xl border border-slate-200 bg-slate-50 p-5 text-center">
@@ -1129,7 +1457,7 @@ export default function InvitePage() {
               <DetailRow icon="🕐" label="Time" value={timeLabel} tone={tone} />
               <DetailRow icon="📍" label="Venue" value={venue || 'Venue details coming soon'} tone={tone} />
               <DetailRow icon="👤" label="Host" value={host} tone={tone} />
-              <DetailRow icon="⏳" label="RSVP deadline" value={deadline} tone={tone} />
+              {event.rsvp_enabled && <DetailRow icon="⏳" label="RSVP deadline" value={deadline} tone={tone} />}
               <DetailRow icon="✓" label="Admission note" value={admissionNote} tone={tone} />
             </div>
           </div>
@@ -1145,11 +1473,13 @@ export default function InvitePage() {
           </div>
         </section>
 
-        <section id="rsvp" className="scroll-mt-6 py-9">
-          <div className="mx-auto w-full max-w-[680px] rounded-[1.65rem] border border-white/15 bg-white p-5 text-slate-950 shadow-2xl shadow-black/30 sm:p-8">
-            {rsvpPanel}
-          </div>
-        </section>
+        {rsvpPanel && (
+          <section id="rsvp" className="scroll-mt-6 py-9">
+            <div className="mx-auto w-full max-w-[680px] rounded-[1.65rem] border border-white/15 bg-white p-5 text-slate-950 shadow-2xl shadow-black/30 sm:p-8">
+              {rsvpPanel}
+            </div>
+          </section>
+        )}
 
         {!hasGuestHub && <GuestHub event={event} accessToken={guestHubToken} designTheme={designTheme} />}
       </main>

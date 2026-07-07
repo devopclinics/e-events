@@ -5,8 +5,8 @@ from fastapi.responses import StreamingResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func
 from ..database import get_db
-from ..models import Guest, Event, User, Zone, MenuCategory, SeatingTable, TicketType, TableGroup
-from ..schemas import DashboardStats, GuestOut, ZoneOccupancy, TableReport, DashboardBreakdown, DashboardTimelinePoint, DashboardInviteDelivery, DashboardContactStats
+from ..models import EmailDeliveryEvent, Guest, Event, User, Zone, MenuCategory, SeatingTable, TicketType, TableGroup
+from ..schemas import DashboardStats, GuestOut, ZoneOccupancy, TableReport, DashboardBreakdown, DashboardTimelinePoint, DashboardInviteDelivery, DashboardContactStats, DashboardEmailDelivery
 from ..auth import require_dashboard_access, verify_token_user, user_has_dashboard_access
 from .access import zone_occupancy
 from . import sse_subscribers
@@ -49,6 +49,38 @@ async def get_dashboard(event_id: str, db: AsyncSession = Depends(get_db), _: Us
         sent=await _count(db, Guest.event_id == event_id, Guest.invite_status == "sent"),
         failed=await _count(db, Guest.event_id == event_id, Guest.invite_status == "failed"),
         unsent=await _count(db, Guest.event_id == event_id, Guest.invite_status.is_(None), Guest.invite_sent_at.is_(None)),
+    )
+    email_delivery_rows = (await db.execute(
+        select(EmailDeliveryEvent)
+        .where(EmailDeliveryEvent.event_id == event_id)
+        .order_by(EmailDeliveryEvent.occurred_at.desc(), EmailDeliveryEvent.created_at.desc())
+    )).scalars().all()
+    latest_by_email = {}
+    for row in email_delivery_rows:
+        key = row.provider_email_id or row.provider_event_id or row.id
+        latest_by_email.setdefault(key, row)
+    email_delivery_counts = {
+        "sent": 0,
+        "delivered": 0,
+        "opened": 0,
+        "clicked": 0,
+        "delayed": 0,
+        "bounced": 0,
+        "failed": 0,
+        "complained": 0,
+        "suppressed": 0,
+        "unknown": 0,
+    }
+    for row in latest_by_email.values():
+        status = row.status or "unknown"
+        if status == "delivery_delayed":
+            status = "delayed"
+        if status not in email_delivery_counts:
+            status = "unknown"
+        email_delivery_counts[status] += 1
+    email_delivery = DashboardEmailDelivery(
+        **email_delivery_counts,
+        tracked=len(latest_by_email),
     )
     email_available = await _count(db, Guest.event_id == event_id, Guest.email.isnot(None), Guest.email != "")
     phone_available = await _count(db, Guest.event_id == event_id, Guest.phone.isnot(None), Guest.phone != "")
@@ -184,6 +216,7 @@ async def get_dashboard(event_id: str, db: AsyncSession = Depends(get_db), _: Us
         rsvp_pending=rsvp_pending, rsvp_invited=rsvp_invited,
         vip_total=vip_total, vip_admitted=vip_admitted,
         invite_delivery=invite_delivery,
+        email_delivery=email_delivery,
         contact_stats=contact_stats,
         arrival_timeline=arrival_timeline,
         pending_guests=[GuestOut.model_validate(g) for g in pending_guests],

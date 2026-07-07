@@ -17,7 +17,7 @@ from sqlalchemy import func, select, or_
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..database import get_db
-from ..models import Event, Guest, RSVPAnswer, RSVPQuestion, Shipment, GuestShipment
+from ..models import Event, Guest, RSVPAnswer, RSVPQuestion, Shipment, GuestShipment, TableGroup, TicketType
 from ..schemas import (
     InviteGuestPrefill, InvitePageOut, InviteTokenPageOut,
     InviteShippingOut, InviteShipmentNeed, ShippingAddressUpdate,
@@ -194,11 +194,15 @@ async def _invite_page_out(event: Event, db: AsyncSession) -> InvitePageOut:
         invite_message=event.invite_message,
         invite_cover_image=event.invite_cover_image,
         rsvp_enabled=event.rsvp_enabled,
+        experience_enabled=event.experience_enabled,
         rsvp_collect_phone=event.rsvp_collect_phone,
         rsvp_collect_email=event.rsvp_collect_email,
         rsvp_capacity=event.rsvp_capacity,
         invite_mode=event.invite_mode,
         rsvp_deadline=event.rsvp_deadline,
+        rsvp_multi_invitee_enabled=event.rsvp_multi_invitee_enabled,
+        rsvp_multi_invitee_limit=event.rsvp_multi_invitee_limit,
+        rsvp_multi_invitee_limit_rules=event.rsvp_multi_invitee_limit_rules,
         rsvp_count=count,
         deadline_passed=_deadline_passed(event),
         questions=list(questions),
@@ -218,6 +222,10 @@ def _send_rsvp_invite(
     SMS/WhatsApp require a paid event and consume one message credit each;
     email is always allowed. Caller must commit to persist credit decrements."""
     ticket_url = f"{event.checkin_base_url.rstrip('/')}/scan/{guest.qr_token}"
+    hub_url = (
+        f"{event.checkin_base_url.rstrip('/')}/r/{guest.invite_token}#guest-hub"
+        if guest.invite_token else None
+    )
     paid_channels = can_use_paid_channels(event)
     ov = (overrides or {}).get("ticket_qr")
 
@@ -225,13 +233,15 @@ def _send_rsvp_invite(
         background_tasks.add_task(
             send_invite_email,
             {"first_name": guest.first_name, "last_name": guest.last_name,
-             "email": guest.email, "qr_token": guest.qr_token, "event_id": event.id},
+             "email": guest.email, "qr_token": guest.qr_token, "event_id": event.id,
+             "guest_id": guest.id, "message_kind": "invitation"},
             event.name, event.couples_name, event.checkin_base_url,
             event.event_date,
-            event.seating_enabled, event.menu_enabled,
+            event.seating_enabled, event.menu_enabled, event.partner_pairing_enabled,
             ov.subject if ov else None, ov.email_body if ov else None,
             event.venue_name, event.venue_address, event.admission_note,
             event.invite_cover_image,
+            hub_url=hub_url,
         )
 
     if paid_channels and event.notify_sms and guest.phone and guest.sms_consent and take_message_credit(event):
@@ -249,6 +259,228 @@ def _send_rsvp_invite(
             event_name=event.name, ticket_url=ticket_url,
             event_date=event.event_date,
         )
+
+
+def _split_invitee_name(full_name: str, first_name: str = "", last_name: str = "") -> tuple[str, str]:
+    first = (first_name or "").strip()
+    last = (last_name or "").strip()
+    if first or last:
+        return first or full_name.strip(), last
+    parts = [p for p in (full_name or "").strip().split() if p]
+    if not parts:
+        return "", ""
+    if len(parts) == 1:
+        return parts[0], ""
+    return parts[0], " ".join(parts[1:])
+
+
+def _type_key(value: str | None) -> str:
+    return (value or "").strip().lower()
+
+
+async def _default_group_for_invitee(event_id: str, guest_type: str | None, db: AsyncSession) -> str | None:
+    key = _type_key(guest_type)
+    wanted = "FAMILY"
+    if any(term in key for term in ("vip", "dignitary", "honour", "honor", "chairman", "guest of honour", "guest of honor")):
+        wanted = "VIP"
+    elif any(term in key for term in ("teacher", "staff", "school", "official", "volunteer")):
+        wanted = "STAFF"
+    group = await db.scalar(
+        select(TableGroup)
+        .where(TableGroup.event_id == event_id, func.lower(TableGroup.tag) == wanted.lower())
+        .limit(1)
+    )
+    return group.id if group else None
+
+
+async def _ticket_type_for_invitee(event_id: str, guest_type: str | None, db: AsyncSession) -> str | None:
+    key = _type_key(guest_type)
+    desired = "Invited Guest"
+    if any(term in key for term in ("vip", "dignitary", "honour", "honor", "chairman", "guest of honour", "guest of honor")):
+        desired = "VIP/Dignitary"
+    elif any(term in key for term in ("teacher", "staff", "school", "official", "volunteer")):
+        desired = "School/Staff"
+    elif "parent" in key or "guardian" in key:
+        desired = "Parent/Guardian"
+    ticket = await db.scalar(
+        select(TicketType)
+        .where(TicketType.event_id == event_id, func.lower(TicketType.name) == desired.lower())
+        .limit(1)
+    )
+    return ticket.id if ticket else None
+
+
+async def _multi_invitee_limit_for_submission(
+    event: Event,
+    answers: dict[str, str],
+    db: AsyncSession,
+) -> tuple[int, str | None]:
+    default_limit = max(1, min(event.rsvp_multi_invitee_limit or 10, 100))
+    rules = event.rsvp_multi_invitee_limit_rules or {}
+    if not rules:
+        return default_limit, None
+
+    question_ids = list(answers.keys())
+    if not question_ids:
+        return default_limit, None
+    answered_questions = (await db.execute(
+        select(RSVPQuestion.id, RSVPQuestion.question).where(
+            RSVPQuestion.event_id == event.id,
+            RSVPQuestion.id.in_(question_ids),
+        )
+    )).all()
+
+    candidates: list[str] = []
+    for qid, question in answered_questions:
+        label = (question or "").strip()
+        answer = (answers.get(qid) or "").strip()
+        if answer:
+            candidates.extend([answer, f"{label}: {answer}"])
+
+    normalized_rules = {
+        _type_key(label): max(1, min(int(limit or 1), 100))
+        for label, limit in rules.items()
+        if str(label or "").strip()
+    }
+    for candidate in candidates:
+        limit = normalized_rules.get(_type_key(candidate))
+        if limit is not None:
+            return limit, candidate
+
+    return default_limit, None
+
+
+async def _submit_multi_invitee_rsvp(
+    event: Event,
+    data: RSVPSubmit,
+    background_tasks: BackgroundTasks,
+    db: AsyncSession,
+) -> RSVPConfirm:
+    limit, matched_limit_rule = await _multi_invitee_limit_for_submission(event, data.answers, db)
+    raw_invitees = [i for i in (data.invitees or []) if (i.full_name or i.first_name or i.last_name or i.email or i.phone)]
+    if not raw_invitees:
+        raise HTTPException(422, "Add at least one invitee.")
+    if len(raw_invitees) > limit:
+        suffix = f" for {matched_limit_rule}" if matched_limit_rule else " per submission"
+        raise HTTPException(422, f"This RSVP accepts up to {limit} invitee{'s' if limit != 1 else ''}{suffix}.")
+
+    await _require_questions_answered(event.id, data.answers, db)
+
+    count = await _rsvp_count(event.id, db)
+    if event.rsvp_capacity is not None and count + len(raw_invitees) > event.rsvp_capacity:
+        raise HTTPException(409, "Sorry — this event does not have enough remaining spots for all invitees.")
+    assert_within_guest_cap(event, count, adding=len(raw_invitees))
+
+    submitter_email = data.email.lower().strip() if data.email else None
+    submitter_phone = None
+    if data.phone and data.phone.strip():
+        submitter_phone = _normalize_phone(data.phone.strip())
+        if submitter_phone is None:
+            raise HTTPException(422, "Submitter phone format not recognised.")
+
+    normalized_invitees = []
+    dup_filters = []
+    seen_contacts: set[str] = set()
+    for invitee in raw_invitees:
+        first, last = _split_invitee_name(invitee.full_name, invitee.first_name, invitee.last_name)
+        if not first.strip():
+            raise HTTPException(422, "Every invitee needs a name.")
+        email = invitee.email.lower().strip() if invitee.email else None
+        phone = None
+        if invitee.phone and invitee.phone.strip():
+            phone = _normalize_phone(invitee.phone.strip())
+            if phone is None:
+                raise HTTPException(422, f"Phone format not recognised for {first} {last}".strip())
+        contact_key = email or phone
+        if contact_key:
+            if contact_key in seen_contacts:
+                raise HTTPException(409, f"Duplicate invitee contact: {contact_key}")
+            seen_contacts.add(contact_key)
+        if email:
+            dup_filters.append(Guest.email == email)
+        if phone:
+            dup_filters.append(Guest.phone == phone)
+        normalized_invitees.append((invitee, first.strip(), last.strip(), email, phone))
+
+    if dup_filters:
+        existing = (await db.execute(
+            select(Guest.email, Guest.phone)
+            .where(Guest.event_id == event.id, or_(*dup_filters))
+            .limit(1)
+        )).first()
+        if existing:
+            raise HTTPException(409, "One or more invitees already exists on this event.")
+
+    needs_approval = event.rsvp_require_approval
+    now = datetime.utcnow()
+    submitter_name = f"{data.first_name.strip()} {data.last_name.strip()}".strip()
+    created: list[Guest] = []
+
+    for invitee, first, last, email, phone in normalized_invitees:
+        guest_type = (invitee.guest_type or "").strip() or "Invited Guest"
+        group_id = await _default_group_for_invitee(event.id, guest_type, db)
+        ticket_type_id = await _ticket_type_for_invitee(event.id, guest_type, db)
+        is_vip = any(term in _type_key(guest_type) for term in ("vip", "dignitary", "honour", "honor", "chairman"))
+        guest = Guest(
+            event_id=event.id,
+            first_name=first,
+            last_name=last,
+            email=email,
+            phone=phone,
+            invite_token=str(uuid.uuid4()),
+            qr_generated_at=None if needs_approval else now,
+            invite_sent_at=None if needs_approval else now,
+            rsvp_status="pending" if needs_approval else "confirmed",
+            rsvp_responded_at=now,
+            assigned_table_group_id=group_id,
+            ticket_type_id=ticket_type_id,
+            is_vip=is_vip,
+            rsvp_submitter_name=submitter_name or None,
+            rsvp_submitter_email=submitter_email,
+            rsvp_submitter_phone=submitter_phone,
+            rsvp_relationship=(invitee.relationship or "").strip() or None,
+            rsvp_guest_type=guest_type,
+            rsvp_notes=(invitee.notes or "").strip() or None,
+        )
+        db.add(guest)
+        await db.flush()
+        await _save_answers(guest.id, event.id, data.answers, db)
+        created.append(guest)
+
+    await db.commit()
+    overrides = await load_overrides(event.id, db)
+    if needs_approval:
+        if event.notify_rsvp_responses:
+            from .guests import dispatch_simple_notice
+            for guest in created:
+                dispatch_simple_notice(background_tasks, event, guest, "approval_pending", overrides)
+            await db.commit()
+        return RSVPConfirm(
+            id=created[0].id,
+            qr_token=created[0].qr_token,
+            invite_token=created[0].invite_token,
+            first_name=data.first_name.strip() or created[0].first_name,
+            last_name=data.last_name.strip() or created[0].last_name,
+            rsvp_status="pending",
+            message=f"RSVP received for {len(created)} invitee{'s' if len(created) != 1 else ''}. The host will review and issue QR passes after approval.",
+        )
+
+    for guest in created:
+        await db.refresh(guest)
+        if event.notify_rsvp_responses:
+            from .guests import dispatch_simple_notice
+            dispatch_simple_notice(background_tasks, event, guest, "rsvp_confirmation", overrides)
+        _send_rsvp_invite(background_tasks, event, guest, overrides)
+    await db.commit()
+    return RSVPConfirm(
+        id=created[0].id,
+        qr_token=created[0].qr_token,
+        invite_token=created[0].invite_token,
+        first_name=data.first_name.strip() or created[0].first_name,
+        last_name=data.last_name.strip() or created[0].last_name,
+        rsvp_status="confirmed",
+        message=f"RSVP confirmed for {len(created)} invitee{'s' if len(created) != 1 else ''}. QR passes have been issued.",
+    )
 
 
 # ── Routes ────────────────────────────────────────────────────────────────────
@@ -291,6 +523,9 @@ async def submit_rsvp(
 
     if _deadline_passed(event):
         raise HTTPException(410, "RSVP has closed for this event")
+
+    if event.rsvp_multi_invitee_enabled:
+        return await _submit_multi_invitee_rsvp(event, data, background_tasks, db)
 
     # Capacity guard (host-set RSVP cap and plan entitlement cap)
     count = await _rsvp_count(event_id, db)
@@ -343,6 +578,10 @@ async def submit_rsvp(
         last_name=data.last_name.strip(),
         email=email,
         phone=phone,
+        # Give self-registrations a personal token up front so their Guest Hub
+        # link (/r/{invite_token}) works on any device — not just the browser
+        # that RSVP'd. Bulk-invited guests already get one when invited.
+        invite_token=str(uuid.uuid4()),
         qr_generated_at=None if needs_approval else now,
         # invite_sent_at marks that we've delivered their ticket — set it here for
         # instant confirmations so self-registrations count as "invited" in stats.
@@ -370,6 +609,7 @@ async def submit_rsvp(
         return RSVPConfirm(
             id=guest.id,
             qr_token=guest.qr_token,
+            invite_token=guest.invite_token,
             first_name=guest.first_name,
             last_name=guest.last_name,
             rsvp_status="pending",
@@ -388,6 +628,7 @@ async def submit_rsvp(
     return RSVPConfirm(
         id=guest.id,
         qr_token=guest.qr_token,
+        invite_token=guest.invite_token,
         first_name=guest.first_name,
         last_name=guest.last_name,
         rsvp_status="confirmed",
@@ -411,7 +652,9 @@ async def submit_rsvp_by_link(
 
 async def _get_guest_by_token(invite_token: str, db: AsyncSession) -> tuple[Guest, Event]:
     guest = (await db.execute(
-        select(Guest).where(Guest.invite_token == invite_token).limit(1)
+        select(Guest)
+        .where((Guest.invite_token == invite_token) | (Guest.qr_token == invite_token))
+        .limit(1)
     )).scalar_one_or_none()
     if not guest:
         raise HTTPException(404, "Invite not found")

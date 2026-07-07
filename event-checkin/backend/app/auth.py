@@ -1,7 +1,7 @@
 import json
 import firebase_admin
 from firebase_admin import credentials, auth as firebase_auth
-from fastapi import Depends, HTTPException
+from fastapi import Depends, HTTPException, Request
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
@@ -9,7 +9,7 @@ from sqlalchemy import select
 import uuid
 
 from .database import get_db
-from .models import User, Organization, Membership, Event
+from .models import User, Organization, Membership, Event, EventUser
 from .config import settings
 
 
@@ -203,10 +203,15 @@ async def require_event_member(
 
 async def require_event_admin(
     event_id: str,
+    request: Request,
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ) -> User:
-    """Caller must be owner/admin of the event's org (or superadmin)."""
+    """Caller must be org owner/admin, or an assigned event manager.
+
+    Event managers are scoped to this one event. access_level=view can use
+    read-only GET/HEAD/OPTIONS routes; access_level=edit can mutate setup.
+    """
     event = await db.get(Event, event_id)
     if not event:
         raise HTTPException(404, "Event not found")
@@ -216,7 +221,13 @@ async def require_event_admin(
     if role is None:
         raise HTTPException(404, "Event not found")
     if role not in ("owner", "admin"):
-        raise HTTPException(403, "Admin access required")
+        eu = await db.scalar(select(EventUser).where(
+            EventUser.event_id == event_id, EventUser.user_id == user.id
+        ))
+        if not eu or eu.event_role != "manager":
+            raise HTTPException(403, "Admin access required")
+        if (eu.access_level or "edit") != "edit" and request.method not in ("GET", "HEAD", "OPTIONS"):
+            raise HTTPException(403, "This event access is view-only.")
     return user
 
 
@@ -237,10 +248,9 @@ async def require_dashboard_access(
         raise HTTPException(404, "Event not found")
     if role in ("owner", "admin"):
         return user
-    from .models import EventUser
     eu = await db.scalar(select(EventUser).where(
         EventUser.event_id == event_id, EventUser.user_id == user.id))
-    if eu and eu.can_view_dashboard:
+    if eu and (eu.can_view_dashboard or eu.event_role == "manager"):
         return user
     raise HTTPException(403, "You don't have dashboard access for this event.")
 
@@ -275,10 +285,9 @@ async def user_has_dashboard_access(user: User, event: Event, db: AsyncSession) 
     role = await _org_role(user, event.org_id, db)
     if role in ("owner", "admin"):
         return True
-    from .models import EventUser
     eu = await db.scalar(select(EventUser).where(
         EventUser.event_id == event.id, EventUser.user_id == user.id))
-    return bool(eu and eu.can_view_dashboard)
+    return bool(eu and (eu.can_view_dashboard or eu.event_role == "manager"))
 
 
 _PAID_REQUIRED = "This feature requires an Event Pass — upgrade this event to unlock it."
@@ -286,10 +295,14 @@ _PAID_REQUIRED = "This feature requires an Event Pass — upgrade this event to 
 
 async def require_paid_event_admin(
     event_id: str,
+    request: Request,
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ) -> User:
-    """Org owner/admin AND the event is on a paid plan (or superadmin)."""
+    """Org owner/admin or event manager, and the event is paid.
+
+    View-only event managers can read paid setup data but not mutate it.
+    """
     event = await db.get(Event, event_id)
     if not event:
         raise HTTPException(404, "Event not found")
@@ -299,7 +312,13 @@ async def require_paid_event_admin(
     if role is None:
         raise HTTPException(404, "Event not found")
     if role not in ("owner", "admin"):
-        raise HTTPException(403, "Admin access required")
+        eu = await db.scalar(select(EventUser).where(
+            EventUser.event_id == event_id, EventUser.user_id == user.id
+        ))
+        if not eu or eu.event_role != "manager":
+            raise HTTPException(403, "Admin access required")
+        if (eu.access_level or "edit") != "edit" and request.method not in ("GET", "HEAD", "OPTIONS"):
+            raise HTTPException(403, "This event access is view-only.")
     if not event.is_paid:
         raise HTTPException(402, _PAID_REQUIRED)
     return user

@@ -69,6 +69,12 @@ class EventUser(Base):
     can_manage_menu: Mapped[bool] = mapped_column(Boolean, default=False)
     # Lets a non-admin staffer open the live event dashboard (admins always can).
     can_view_dashboard: Mapped[bool] = mapped_column(Boolean, default=False)
+    # Event-scoped role: "staff" (default scanner/day-of) or "manager"
+    # (event owner/admin for this assigned event only).
+    event_role: Mapped[str] = mapped_column(String(30), default="staff")
+    # For event_role=manager: "edit" can change event setup; "view" can only
+    # open setup/results/check-in/orders without mutating event configuration.
+    access_level: Mapped[str] = mapped_column(String(20), default="edit")
 
     event: Mapped["Event"] = relationship("Event", back_populates="members")
     user: Mapped["User"] = relationship("User")
@@ -115,6 +121,12 @@ class Event(Base):
     # Venue Access Intelligence add-on (zones, multi-zone scanning, analytics).
     # Off by default — does not touch the legacy single-scan check-in flow.
     venue_access_enabled: Mapped[bool] = mapped_column(Boolean, default=False)
+    # Experience workflow engine. Off by default so legacy RSVP, QR check-in,
+    # seating, menu, and messaging flows remain unchanged until explicitly enabled.
+    experience_enabled: Mapped[bool] = mapped_column(Boolean, default=False)
+    # Optional invite CTA that lets guests pair with a spouse/partner for seating.
+    # Requires seating to be useful, but is controlled separately from seating.
+    partner_pairing_enabled: Mapped[bool] = mapped_column(Boolean, default=False)
     venue_name: Mapped[str | None] = mapped_column(String(255), nullable=True)
     venue_address: Mapped[str | None] = mapped_column(Text, nullable=True)
     admission_note: Mapped[str | None] = mapped_column(Text, nullable=True)
@@ -201,6 +213,14 @@ class Event(Base):
     # Open mode only: when True, self-service RSVPs land as "pending" and a
     # planner must approve before a ticket is issued. No effect in closed mode.
     rsvp_require_approval: Mapped[bool] = mapped_column(Boolean, default=False)
+    # Optional open-RSVP mode for schools/conventions where one submitter
+    # registers multiple invitees. Off by default so normal RSVP still creates
+    # exactly one guest row per form submission.
+    rsvp_multi_invitee_enabled: Mapped[bool] = mapped_column(Boolean, default=False)
+    rsvp_multi_invitee_limit: Mapped[int] = mapped_column(Integer, default=10)
+    # Optional per-category invitee caps for multi-invitee RSVP. JSON object,
+    # keyed by the submitter category/role answer, e.g. {"Parent": 2, "VIP": 10}.
+    rsvp_multi_invitee_limit_rules: Mapped[dict | None] = mapped_column(JSON, nullable=True)
 
     # ── Per-event entitlements (Phase 2) — what an Event Pass unlocks ─────────
     # plan_tier: "free" | "tier50" | "tier150" | "tier300" | "unlimited" | "comp"
@@ -218,6 +238,129 @@ class Event(Base):
     tables: Mapped[list["SeatingTable"]] = relationship("SeatingTable", back_populates="event", cascade="all, delete-orphan")
     menu_categories: Mapped[list["MenuCategory"]] = relationship("MenuCategory", back_populates="event", cascade="all, delete-orphan")
     rsvp_questions: Mapped[list["RSVPQuestion"]] = relationship("RSVPQuestion", back_populates="event", cascade="all, delete-orphan")
+
+
+# ── Experience workflow engine ───────────────────────────────────────────────
+
+class ExperienceWorkflow(Base):
+    __tablename__ = "experience_workflows"
+    __table_args__ = (
+        UniqueConstraint("event_id", "version", name="uq_experience_workflow_event_version"),
+    )
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+    event_id: Mapped[str] = mapped_column(String(36), ForeignKey("events.id"), index=True)
+    name: Mapped[str] = mapped_column(String(255), default="Default Experience")
+    status: Mapped[str] = mapped_column(String(20), default="draft")  # draft | published | archived
+    version: Mapped[int] = mapped_column(Integer, default=1)
+    is_default: Mapped[bool] = mapped_column(Boolean, default=True, index=True)
+    created_by: Mapped[str | None] = mapped_column(String(36), ForeignKey("users.id"), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    event: Mapped["Event"] = relationship("Event")
+    steps: Mapped[list["ExperienceStep"]] = relationship(
+        "ExperienceStep", back_populates="workflow", cascade="all, delete-orphan"
+    )
+
+
+class ExperienceStep(Base):
+    __tablename__ = "experience_steps"
+    __table_args__ = (
+        UniqueConstraint("workflow_id", "key", name="uq_experience_step_workflow_key"),
+    )
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+    workflow_id: Mapped[str] = mapped_column(String(36), ForeignKey("experience_workflows.id"), index=True)
+    key: Mapped[str] = mapped_column(String(120))
+    type: Mapped[str] = mapped_column(String(40), index=True)
+    title: Mapped[str] = mapped_column(String(255))
+    description: Mapped[str | None] = mapped_column(Text, nullable=True)
+    sort_order: Mapped[int] = mapped_column(Integer, default=0)
+    required: Mapped[bool] = mapped_column(Boolean, default=True)
+    enabled: Mapped[bool] = mapped_column(Boolean, default=True)
+    conditions: Mapped[dict | None] = mapped_column(JSON, nullable=True)
+    config: Mapped[dict | None] = mapped_column(JSON, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    workflow: Mapped["ExperienceWorkflow"] = relationship("ExperienceWorkflow", back_populates="steps")
+
+
+class GuestExperienceProgress(Base):
+    __tablename__ = "guest_experience_progress"
+    __table_args__ = (
+        UniqueConstraint("guest_id", "step_id", name="uq_guest_experience_progress_guest_step"),
+        Index("ix_guest_experience_progress_event_guest", "event_id", "guest_id"),
+        Index("ix_guest_experience_progress_event_step_status", "event_id", "step_id", "status"),
+    )
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+    event_id: Mapped[str] = mapped_column(String(36), ForeignKey("events.id"), index=True)
+    workflow_id: Mapped[str] = mapped_column(String(36), ForeignKey("experience_workflows.id"), index=True)
+    step_id: Mapped[str] = mapped_column(String(36), ForeignKey("experience_steps.id"), index=True)
+    guest_id: Mapped[str] = mapped_column(String(36), ForeignKey("guests.id"), index=True)
+    status: Mapped[str] = mapped_column(String(30), default="not_started", index=True)
+    completed_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    completed_by_user_id: Mapped[str | None] = mapped_column(String(36), ForeignKey("users.id"), nullable=True)
+    completed_by_source: Mapped[str | None] = mapped_column(String(30), nullable=True)
+    override_reason: Mapped[str | None] = mapped_column(Text, nullable=True)
+    progress_metadata: Mapped[dict | None] = mapped_column("metadata", JSON, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+
+class ExperienceEvent(Base):
+    __tablename__ = "experience_events"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+    event_id: Mapped[str] = mapped_column(String(36), ForeignKey("events.id"), index=True)
+    workflow_id: Mapped[str] = mapped_column(String(36), ForeignKey("experience_workflows.id"), index=True)
+    step_id: Mapped[str | None] = mapped_column(String(36), ForeignKey("experience_steps.id"), nullable=True, index=True)
+    guest_id: Mapped[str | None] = mapped_column(String(36), ForeignKey("guests.id"), nullable=True, index=True)
+    actor_user_id: Mapped[str | None] = mapped_column(String(36), ForeignKey("users.id"), nullable=True)
+    event_type: Mapped[str] = mapped_column(String(50), index=True)
+    source: Mapped[str] = mapped_column(String(30), default="system")
+    payload: Mapped[dict | None] = mapped_column(JSON, nullable=True)
+    occurred_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, index=True)
+
+
+class ConsentForm(Base):
+    __tablename__ = "consent_forms"
+    __table_args__ = (
+        Index("ix_consent_forms_event_active", "event_id", "is_active"),
+    )
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+    event_id: Mapped[str] = mapped_column(String(36), ForeignKey("events.id"), index=True)
+    title: Mapped[str] = mapped_column(String(255), default="Event consent")
+    body: Mapped[str] = mapped_column(Text)
+    version: Mapped[int] = mapped_column(Integer, default=1)
+    is_active: Mapped[bool] = mapped_column(Boolean, default=True, index=True)
+    require_signature: Mapped[bool] = mapped_column(Boolean, default=True)
+    created_by: Mapped[str | None] = mapped_column(String(36), ForeignKey("users.id"), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+
+class ConsentSignature(Base):
+    __tablename__ = "consent_signatures"
+    __table_args__ = (
+        UniqueConstraint("form_id", "guest_id", name="uq_consent_signature_form_guest"),
+        Index("ix_consent_signatures_event_guest", "event_id", "guest_id"),
+    )
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+    event_id: Mapped[str] = mapped_column(String(36), ForeignKey("events.id"), index=True)
+    form_id: Mapped[str] = mapped_column(String(36), ForeignKey("consent_forms.id"), index=True)
+    guest_id: Mapped[str] = mapped_column(String(36), ForeignKey("guests.id"), index=True)
+    signer_name: Mapped[str] = mapped_column(String(255))
+    signature_text: Mapped[str] = mapped_column(String(255))
+    signed_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, index=True)
+    ip_address: Mapped[str | None] = mapped_column(String(80), nullable=True)
+    user_agent: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    sent_copy_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
 
 
 class PricingPlan(Base):
@@ -435,6 +578,13 @@ class Guest(Base):
     # (the visible toggle satisfies TCR's "opt-in workflow" documentation).
     sms_consent: Mapped[bool] = mapped_column(Boolean, default=True)
     whatsapp_consent: Mapped[bool] = mapped_column(Boolean, default=True)
+    # Optional context from multi-invitee RSVP submissions.
+    rsvp_submitter_name: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    rsvp_submitter_email: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    rsvp_submitter_phone: Mapped[str | None] = mapped_column(String(50), nullable=True)
+    rsvp_relationship: Mapped[str | None] = mapped_column(String(120), nullable=True)
+    rsvp_guest_type: Mapped[str | None] = mapped_column(String(120), nullable=True)
+    rsvp_notes: Mapped[str | None] = mapped_column(Text, nullable=True)
 
     # Shipping address for the logistics add-on. One address per guest, reused
     # across shipments. Phone (above) doubles as the shipping contact number.
@@ -575,6 +725,30 @@ class EventMessageDeliveryLog(Base):
     error_message: Mapped[str | None] = mapped_column(Text, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+
+class EmailDeliveryEvent(Base):
+    __tablename__ = "email_delivery_events"
+    __table_args__ = (
+        UniqueConstraint("provider_event_id", name="uq_email_delivery_provider_event"),
+    )
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+    provider: Mapped[str] = mapped_column(String(60), default="resend", index=True)
+    provider_event_id: Mapped[str | None] = mapped_column(String(255), nullable=True, index=True)
+    provider_email_id: Mapped[str | None] = mapped_column(String(255), nullable=True, index=True)
+    event_id: Mapped[str | None] = mapped_column(String(36), ForeignKey("events.id"), nullable=True, index=True)
+    guest_id: Mapped[str | None] = mapped_column(String(36), ForeignKey("guests.id"), nullable=True, index=True)
+    recipient: Mapped[str | None] = mapped_column(String(255), nullable=True, index=True)
+    subject: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    message_kind: Mapped[str | None] = mapped_column(String(80), nullable=True, index=True)
+    event_type: Mapped[str] = mapped_column(String(80), index=True)
+    status: Mapped[str] = mapped_column(String(40), index=True)
+    error_message: Mapped[str | None] = mapped_column(Text, nullable=True)
+    tags: Mapped[dict | None] = mapped_column(JSON, nullable=True)
+    payload: Mapped[dict | None] = mapped_column(JSON, nullable=True)
+    occurred_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, index=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
 
 
 class RSVPAnswer(Base):

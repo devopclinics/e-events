@@ -1,0 +1,22 @@
+services:
+  proxy:
+    ports: !override
+      - "4001:80"
+
+  frontend:
+    image: dclinics/events:frontend-test
+
+  backend:
+    image: dclinics/events:backend-test
+
+  messaging-service:
+    image: dclinics/events:messaging-test
+
+  design-service:
+    image: dclinics/events:design-test
+
+volumes:
+  pgdata:
+    name: event-checkin_test_pgdata
+  design-assets:
+    name: event-checkin_test_design-assets

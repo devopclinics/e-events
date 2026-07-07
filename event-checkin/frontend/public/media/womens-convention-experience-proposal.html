@@ -1,0 +1,425 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Festio Experience Proposal - Women's Convention 2026</title>
+<style>
+  *, *::before, *::after { box-sizing: border-box; }
+  :root {
+    --ink: #0f172a;
+    --muted: #64748b;
+    --line: #e2e8f0;
+    --soft: #f8fafc;
+    --teal: #0f766e;
+    --teal2: #14b8a6;
+    --rose: #be123c;
+    --green: #15803d;
+    --amber: #b45309;
+    --navy: #0b1220;
+  }
+  body {
+    margin: 0;
+    background: #111827;
+    color: var(--ink);
+    font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  }
+  .slide {
+    width: 842px;
+    min-height: 596px;
+    margin: 32px auto;
+    background: #fff;
+    border-radius: 8px;
+    overflow: hidden;
+    box-shadow: 0 18px 60px rgba(0,0,0,.42);
+    page-break-after: always;
+    display: flex;
+    flex-direction: column;
+  }
+  .bar { height: 6px; background: linear-gradient(90deg, var(--teal), var(--rose)); }
+  .body { flex: 1; padding: 44px 52px 34px; }
+  .cover {
+    flex: 1;
+    color: #fff;
+    padding: 56px 64px;
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    background:
+      radial-gradient(circle at 82% 18%, rgba(190,18,60,.32), transparent 30%),
+      linear-gradient(135deg, #082f2d 0%, #0b1220 56%, #180a1f 100%);
+  }
+  .brand {
+    display: inline-flex;
+    align-items: center;
+    gap: 10px;
+    width: fit-content;
+    padding: 9px 16px;
+    border-radius: 999px;
+    border: 1px solid rgba(255,255,255,.2);
+    background: rgba(255,255,255,.1);
+    font-weight: 900;
+    letter-spacing: .02em;
+  }
+  .brand-mark {
+    width: 26px;
+    height: 26px;
+    border-radius: 8px;
+    display: grid;
+    place-items: center;
+    background: var(--teal2);
+    color: #021817;
+    font-size: 14px;
+  }
+  .label {
+    margin-bottom: 8px;
+    color: var(--teal);
+    font-size: 10px;
+    font-weight: 800;
+    letter-spacing: .16em;
+    text-transform: uppercase;
+  }
+  .cover .label { color: #5eead4; }
+  h1, h2, h3, p { margin: 0; }
+  h1 { font-size: 48px; line-height: 1.04; letter-spacing: -.03em; font-weight: 950; }
+  h2 { font-size: 31px; line-height: 1.12; letter-spacing: -.02em; font-weight: 900; }
+  h3 { font-size: 15px; line-height: 1.25; font-weight: 850; }
+  p { color: #334155; font-size: 13px; line-height: 1.62; }
+  .cover p { color: rgba(255,255,255,.76); font-size: 15px; max-width: 600px; }
+  .sub { margin-top: 14px; color: var(--muted); font-size: 15px; line-height: 1.55; }
+  .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+  .grid-3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; }
+  .grid-4 { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; }
+  .card {
+    border: 1px solid var(--line);
+    border-radius: 12px;
+    background: var(--soft);
+    padding: 16px 18px;
+  }
+  .card h3 { color: var(--ink); }
+  .card p { margin-top: 7px; color: #475569; font-size: 11.5px; line-height: 1.55; }
+  .metric {
+    border-radius: 14px;
+    border: 1px solid #99f6e4;
+    background: #f0fdfa;
+    padding: 16px;
+  }
+  .metric .value { color: var(--teal); font-size: 28px; font-weight: 950; line-height: 1; }
+  .metric .text { margin-top: 7px; color: #115e59; font-size: 11.5px; font-weight: 700; line-height: 1.45; }
+  .flow {
+    margin-top: 20px;
+    display: grid;
+    grid-template-columns: repeat(5, 1fr);
+    gap: 10px;
+  }
+  .step {
+    min-height: 98px;
+    border-radius: 12px;
+    border: 1px solid #ccfbf1;
+    background: #f0fdfa;
+    padding: 13px;
+  }
+  .step .num {
+    width: 24px;
+    height: 24px;
+    display: grid;
+    place-items: center;
+    border-radius: 999px;
+    background: var(--teal);
+    color: #fff;
+    font-size: 11px;
+    font-weight: 900;
+    margin-bottom: 9px;
+  }
+  .step h3 { font-size: 12px; color: #134e4a; }
+  .step p { margin-top: 5px; font-size: 10.5px; line-height: 1.45; color: #0f766e; }
+  .timeline {
+    margin-top: 20px;
+    border-left: 3px solid #ccfbf1;
+    padding-left: 18px;
+    display: grid;
+    gap: 12px;
+  }
+  .time-card {
+    display: grid;
+    grid-template-columns: 112px 1fr;
+    gap: 16px;
+    align-items: start;
+    padding: 12px 14px;
+    border: 1px solid var(--line);
+    border-radius: 12px;
+    background: #fff;
+  }
+  .time-card .day { color: var(--rose); font-size: 12px; font-weight: 900; text-transform: uppercase; letter-spacing: .08em; }
+  .time-card h3 { font-size: 13px; }
+  .time-card p { font-size: 11px; margin-top: 4px; color: var(--muted); }
+  .pill {
+    display: inline-flex;
+    align-items: center;
+    width: fit-content;
+    margin: 0 6px 6px 0;
+    border-radius: 999px;
+    padding: 5px 9px;
+    background: #ecfeff;
+    color: #155e75;
+    font-size: 10.5px;
+    font-weight: 800;
+  }
+  .table {
+    width: 100%;
+    margin-top: 18px;
+    border-collapse: collapse;
+    font-size: 12px;
+    overflow: hidden;
+    border-radius: 10px;
+  }
+  .table th {
+    text-align: left;
+    background: var(--navy);
+    color: #fff;
+    font-size: 10px;
+    letter-spacing: .08em;
+    text-transform: uppercase;
+    padding: 10px 12px;
+  }
+  .table td {
+    border-bottom: 1px solid var(--line);
+    padding: 11px 12px;
+    color: #334155;
+    vertical-align: top;
+  }
+  .table tr:last-child td { border-bottom: 0; }
+  .status { color: var(--green); font-weight: 900; }
+  .quote {
+    margin-top: 18px;
+    border-left: 4px solid var(--rose);
+    background: #fff1f2;
+    padding: 15px 18px;
+    border-radius: 0 12px 12px 0;
+    color: #881337;
+    font-size: 14px;
+    line-height: 1.55;
+    font-weight: 750;
+  }
+  .price-box {
+    margin-top: 20px;
+    display: grid;
+    grid-template-columns: 220px 1fr;
+    gap: 18px;
+    align-items: stretch;
+    border: 1px solid #fde68a;
+    background: #fffbeb;
+    border-radius: 14px;
+    padding: 16px;
+  }
+  .price {
+    display: grid;
+    place-items: center;
+    border-radius: 12px;
+    background: #fff;
+    border: 1px solid #fcd34d;
+    text-align: center;
+  }
+  .price .amount { color: var(--amber); font-size: 44px; font-weight: 950; line-height: 1; }
+  .price .note { margin-top: 6px; color: #92400e; font-size: 11px; font-weight: 850; text-transform: uppercase; letter-spacing: .08em; }
+  .price-copy h3 { color: #78350f; font-size: 17px; }
+  .price-copy p { margin-top: 7px; color: #78350f; font-size: 12px; line-height: 1.55; }
+  .foot {
+    height: 34px;
+    padding: 0 52px;
+    border-top: 1px solid var(--line);
+    background: var(--soft);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    color: var(--muted);
+    font-size: 10.5px;
+  }
+  .foot strong { color: var(--ink); }
+  .accent { color: var(--rose); }
+  .teal { color: var(--teal); }
+  @media print {
+    body { background: #fff; }
+    .slide { margin: 0; width: 100%; min-height: 100vh; box-shadow: none; border-radius: 0; }
+  }
+</style>
+</head>
+<body>
+  <section class="slide">
+    <div class="cover">
+      <div class="brand"><span class="brand-mark">F</span> Festio Experience</div>
+      <div>
+        <div class="label">Prepared for Masjid Mumineen</div>
+        <h1>Women&apos;s Convention 2026</h1>
+        <p class="sub">A complete guest operations layer for a sold-out, multi-room convention: QR check-in, consent, gifts, room seating, session attendance, and guest activity tracking.</p>
+      </div>
+      <div>
+        <p>July 17-19, 2026 · Red Oak Ballroom, Houston/City Center</p>
+        <p style="margin-top:6px;font-size:12px;">festio.events · events@festio.events</p>
+      </div>
+    </div>
+  </section>
+
+  <section class="slide">
+    <div class="bar"></div>
+    <div class="body">
+      <div class="label">Why Festio for this convention</div>
+      <h2>A sold-out event needs more than a guest list.</h2>
+      <p class="sub">The convention has registration pressure, multiple event rooms, session movement, gifts, seating, and staff coordination. Festio turns those moving parts into one guided guest journey.</p>
+      <div class="grid-3" style="margin-top:24px;">
+        <div class="metric"><div class="value">3 days</div><div class="text">Friday arrival through Sunday closing</div></div>
+        <div class="metric"><div class="value">4 rooms</div><div class="text">Main ballroom, luncheon, connect lounge, wellness room</div></div>
+        <div class="metric"><div class="value">1 pass</div><div class="text">Guest QR used for check-in, sessions, and activity tracking</div></div>
+      </div>
+      <div class="grid-2" style="margin-top:20px;">
+        <div class="card">
+          <h3>The organizer problem</h3>
+          <p>Manual lists and paper checks make it hard to know who arrived, who signed consent, who collected gifts, which room they belong in, and which sessions they attended.</p>
+        </div>
+        <div class="card">
+          <h3>The Festio answer</h3>
+          <p>Every guest receives a personal pass. Staff scan it and see the next required steps, while organizers monitor completion across check-in, consent, seating, gifts, and sessions.</p>
+        </div>
+      </div>
+      <div class="quote">Positioning: Festio is not replacing the convention program. It is the operations system that keeps the program moving.</div>
+    </div>
+    <div class="foot"><strong>Festio Experience Proposal</strong><span>Women&apos;s Convention 2026</span></div>
+  </section>
+
+  <section class="slide">
+    <div class="bar"></div>
+    <div class="body">
+      <div class="label">Guest journey</div>
+      <h2>From arrival to closing, every step is trackable.</h2>
+      <div class="flow">
+        <div class="step"><div class="num">1</div><h3>QR check-in</h3><p>Admit confirmed guests quickly at registration.</p></div>
+        <div class="step"><div class="num">2</div><h3>Consent</h3><p>Guests sign media/event consent after check-in.</p></div>
+        <div class="step"><div class="num">3</div><h3>Badge and gifts</h3><p>Track badge pickup, welcome pack, and early-bird gifts.</p></div>
+        <div class="step"><div class="num">4</div><h3>Room seating</h3><p>Assign table and seat per hall, session, or day.</p></div>
+        <div class="step"><div class="num">5</div><h3>Sessions</h3><p>Check guests into program sessions during the correct time window.</p></div>
+      </div>
+      <table class="table">
+        <thead><tr><th>Stage</th><th>What staff sees</th><th>What organizer gets</th></tr></thead>
+        <tbody>
+          <tr><td><strong>Main check-in</strong></td><td>Valid guest, admitted status, next steps</td><td>Real-time attendance count</td></tr>
+          <tr><td><strong>Consent and badge</strong></td><td>Signed/unsigned consent, badge pickup status</td><td>Proof and activity audit trail</td></tr>
+          <tr><td><strong>Room assignment</strong></td><td>Room, table, seat, and seating scope</td><td>Capacity control per room or program segment</td></tr>
+          <tr><td><strong>Session attendance</strong></td><td>Session gate, room, time, capacity</td><td>Attendance by session and day</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <div class="foot"><strong>Festio Experience Proposal</strong><span>Guest flow built for staff speed</span></div>
+  </section>
+
+  <section class="slide">
+    <div class="bar"></div>
+    <div class="body">
+      <div class="label">Program setup</div>
+      <h2>Convention-ready Experience plan.</h2>
+      <div class="timeline">
+        <div class="time-card">
+          <div class="day">Friday</div>
+          <div><h3>Arrival, registration, opening session</h3><p>QR check-in, consent, badge pickup, Red Oak Ballroom seating, opening session attendance.</p></div>
+        </div>
+        <div class="time-card">
+          <div class="day">Saturday</div>
+          <div><h3>Keynote, Qur&apos;an Gems, luncheon, connect, wellness</h3><p>Session check-ins by room and time, separate table/seat assignments for luncheon and breakout rooms.</p></div>
+        </div>
+        <div class="time-card">
+          <div class="day">Sunday</div>
+          <div><h3>Legacy workshop, closing reflections, feedback</h3><p>Final session attendance, completion tracking, and post-event feedback prompt.</p></div>
+        </div>
+      </div>
+      <div style="margin-top:22px;">
+        <span class="pill">Red Oak Ballroom seating</span>
+        <span class="pill">Signature Luncheon tables</span>
+        <span class="pill">Sisterhood Connect seating</span>
+        <span class="pill">Wellness Room seating</span>
+        <span class="pill">Session time gates</span>
+        <span class="pill">Consent copy email</span>
+        <span class="pill">Welcome pack tracking</span>
+        <span class="pill">Early-bird gift tracking</span>
+      </div>
+    </div>
+    <div class="foot"><strong>Festio Experience Proposal</strong><span>Designed for multi-room event operations</span></div>
+  </section>
+
+  <section class="slide">
+    <div class="bar"></div>
+    <div class="body">
+      <div class="label">What is already prepared</div>
+      <h2>The convention setup can be activated without starting from scratch.</h2>
+      <div class="grid-2" style="margin-top:22px;">
+        <div class="card">
+          <h3>Configured event shell</h3>
+          <p>Women&apos;s Convention 2026 event structure, venue details, closed registration posture, and Experience workflow are ready to receive the final confirmed guest list.</p>
+        </div>
+        <div class="card">
+          <h3>Full workflow model</h3>
+          <p>Check-in, consent, badge, welcome pack, early-bird gifts, room seating, session attendance, closing and feedback steps are already modeled.</p>
+        </div>
+        <div class="card">
+          <h3>Room and table plan</h3>
+          <p>Four seating scopes support different table/seat assignments across the ballroom, luncheon, connect lounge, and wellness room.</p>
+        </div>
+        <div class="card">
+          <h3>Experience messaging</h3>
+          <p>Separate templates support Experience invite/pass, admission, next steps, consent copy, gifts, room assignment, and session attendance.</p>
+        </div>
+      </div>
+      <table class="table">
+        <thead><tr><th>Launch requirement</th><th>Status</th><th>Next action</th></tr></thead>
+        <tbody>
+          <tr><td>Confirmed guest list</td><td><span class="status">Ready to import</span></td><td>Organizer shares final CSV/XLSX list.</td></tr>
+          <tr><td>Staff roles</td><td><span class="status">Ready to assign</span></td><td>Add registration, room, and session officials.</td></tr>
+          <tr><td>Final program times</td><td><span class="status">Configured baseline</span></td><td>Confirm final times, rooms, and capacities.</td></tr>
+          <tr><td>Dry run</td><td><span class="status">Recommended</span></td><td>Run 10 sample guests through the scanner before event day.</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <div class="foot"><strong>Festio Experience Proposal</strong><span>Implementation-ready</span></div>
+  </section>
+
+  <section class="slide">
+    <div class="bar"></div>
+    <div class="body">
+      <div class="label">Proposal</div>
+      <h2>Use Festio as the convention operations layer.</h2>
+      <p class="sub">The recommended rollout is intentionally practical: import guests, confirm rooms and sessions, assign staff, test the scanner, then use Festio live during the convention.</p>
+      <p class="sub" style="margin-top:10px;">This proposal reflects our recommended Experience setup based on the convention details available now. The workflow, messages, rooms, session gates, consent language, and staff actions can be customized around Masjid Mumineen&apos;s final operating needs.</p>
+      <div class="grid-4" style="margin-top:24px;">
+        <div class="card"><h3>1. Confirm</h3><p>Finalize guest list, program rooms, session times, table counts, and consent language.</p></div>
+        <div class="card"><h3>2. Configure</h3><p>Load guests, publish the Experience workflow, and assign staff to registration/session stations.</p></div>
+        <div class="card"><h3>3. Test</h3><p>Run a short staff dry run with sample passes, manual lookup, room assignment, and session check-in.</p></div>
+        <div class="card"><h3>4. Operate</h3><p>Use QR scanner and Guest Hub throughout the convention, with real-time progress reporting.</p></div>
+      </div>
+      <div class="price-box">
+        <div class="price">
+          <div>
+            <div class="amount">$500</div>
+            <div class="note">Mumineen pilot</div>
+          </div>
+        </div>
+        <div class="price-copy">
+          <h3>Special discounted Experience setup for the sold-out 600-participant convention.</h3>
+          <p>This community pilot covers the Festio Experience workflow setup, guest import support, QR check-in, consent flow, room/table assignment, souvenir tracking, session attendance, message templates, and pre-event dry run guidance.</p>
+          <p>The discounted pilot is offered specifically for Masjid Mumineen so the team can evaluate Festio live during the 2026 convention before using it as a standard operations layer for future events.</p>
+          <p>Final setup can be adjusted with the organizer, including which steps appear, who completes them, when session check-in opens, and what each guest message says.</p>
+        </div>
+      </div>
+      <div class="quote">Suggested ask: approve a pilot for Women&apos;s Convention 2026 using Festio for check-in, consent, room/table assignment, gifts, and session attendance.</div>
+      <div style="margin-top:26px;display:flex;justify-content:space-between;gap:24px;align-items:end;">
+        <div>
+          <h3>Festio</h3>
+          <p style="margin-top:6px;">Event passes, QR check-in, seating, messaging, Experience workflows, and guest activity tracking.</p>
+        </div>
+        <div style="text-align:right;">
+          <p><strong style="color:var(--ink);">festio.events</strong></p>
+          <p>events@festio.events</p>
+        </div>
+      </div>
+    </div>
+    <div class="foot"><strong>Festio Experience Proposal</strong><span>Prepared for Masjid Mumineen</span></div>
+  </section>
+</body>
+</html>

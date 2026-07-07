@@ -88,6 +88,8 @@ class Event(Base):
     org_id: Mapped[str] = mapped_column(String(36), ForeignKey("organizations.id"))
     name: Mapped[str] = mapped_column(String(255))
     event_date: Mapped[datetime] = mapped_column(DateTime)
+    rsvp_enabled: Mapped[bool] = mapped_column(Boolean, default=False)
+    experience_enabled: Mapped[bool] = mapped_column(Boolean, default=False)
     venue_name: Mapped[str | None] = mapped_column(String(255))
     admission_note: Mapped[str | None] = mapped_column(Text)
 
@@ -304,8 +306,9 @@ async def guest_by_token(event_id: str, token: str, db: AsyncSession) -> Guest:
     return guest
 
 
-def require_accepted_guest(guest: Guest):
-    if guest.rsvp_status != "confirmed":
+def require_hub_guest(guest: Guest, event: Event | None):
+    event_allows_non_rsvp = bool(event and (event.experience_enabled or not event.rsvp_enabled))
+    if guest.rsvp_status != "confirmed" and not event_allows_non_rsvp:
         raise HTTPException(403, "Guest Hub is available after your RSVP is accepted.")
 
 
@@ -420,8 +423,8 @@ async def health(db: AsyncSession = Depends(get_db)):
 async def guest_hub(event_id: str, token: str = Query(...), db: AsyncSession = Depends(get_db)):
     _ensure_enabled()
     guest = await guest_by_token(event_id, token, db)
-    require_accepted_guest(guest)
     event = await db.get(Event, event_id)
+    require_hub_guest(guest, event)
     cfg = await get_settings(event_id, db)
     if not cfg.guest_hub_enabled:
         raise HTTPException(403, "Guest Hub is disabled for this event.")
@@ -534,8 +537,9 @@ async def _chat_messages(event_id: str, db: AsyncSession, include_hidden: bool =
 async def guest_direct_message(event_id: str, payload: MessageIn, token: str = Query(...), db: AsyncSession = Depends(get_db)):
     _ensure_enabled()
     guest = await guest_by_token(event_id, token, db)
-    require_accepted_guest(guest)
     cfg = await get_settings(event_id, db)
+    event = await db.get(Event, event_id)
+    require_hub_guest(guest, event)
     if not cfg.guest_hub_enabled:
         raise HTTPException(403, "Guest Hub is disabled for this event.")
     if not cfg.direct_host_messages_enabled:
@@ -555,8 +559,9 @@ async def guest_direct_message(event_id: str, payload: MessageIn, token: str = Q
 async def guest_chat_message(event_id: str, payload: MessageIn, token: str = Query(...), db: AsyncSession = Depends(get_db)):
     _ensure_enabled()
     guest = await guest_by_token(event_id, token, db)
-    require_accepted_guest(guest)
     cfg = await get_settings(event_id, db)
+    event = await db.get(Event, event_id)
+    require_hub_guest(guest, event)
     if not cfg.guest_hub_enabled:
         raise HTTPException(403, "Guest Hub is disabled for this event.")
     if not cfg.guest_chat_enabled:

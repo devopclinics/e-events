@@ -92,6 +92,55 @@ function ProgressRow({ name, total, admitted, pending, capacity }) {
   )
 }
 
+function EmailDeliverySummary({ data }) {
+  const d = data || {}
+  const tracked = d.tracked || 0
+  if (!tracked) {
+    return (
+      <Card title="Email provider delivery">
+        <div className="py-8 text-center text-sm text-slate-400">
+          No Resend delivery events recorded for this event yet.
+        </div>
+      </Card>
+    )
+  }
+  const hardProblems = (d.bounced || 0) + (d.failed || 0) + (d.complained || 0) + (d.suppressed || 0)
+  const engagement = (d.opened || 0) + (d.clicked || 0)
+  return (
+    <Card title="Email provider delivery" right={<span className="text-xs text-slate-400">{tracked} tracked emails</span>}>
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-4">
+        <div className="rounded-xl border border-slate-200 dark:border-slate-700 p-3">
+          <div className="text-2xl font-extrabold text-green-600">{d.delivered || 0}</div>
+          <div className="text-xs text-slate-400">Delivered</div>
+        </div>
+        <div className="rounded-xl border border-slate-200 dark:border-slate-700 p-3">
+          <div className="text-2xl font-extrabold text-teal-600">{engagement}</div>
+          <div className="text-xs text-slate-400">Opened / clicked</div>
+        </div>
+        <div className="rounded-xl border border-slate-200 dark:border-slate-700 p-3">
+          <div className="text-2xl font-extrabold text-amber-600">{d.delayed || 0}</div>
+          <div className="text-xs text-slate-400">Delayed</div>
+        </div>
+        <div className="rounded-xl border border-slate-200 dark:border-slate-700 p-3">
+          <div className="text-2xl font-extrabold text-red-600">{hardProblems}</div>
+          <div className="text-xs text-slate-400">Bounced / failed</div>
+        </div>
+      </div>
+      <Bar segments={[
+        { label: 'Delivered', value: d.delivered || 0, color: 'bg-green-500' },
+        { label: 'Opened', value: d.opened || 0, color: 'bg-teal-500' },
+        { label: 'Clicked', value: d.clicked || 0, color: 'bg-indigo-500' },
+        { label: 'Delayed', value: d.delayed || 0, color: 'bg-amber-400' },
+        { label: 'Bounced/failed', value: hardProblems, color: 'bg-red-500' },
+        { label: 'Sent only', value: d.sent || 0, color: 'bg-sky-400' },
+      ]} />
+      <p className="mt-3 text-xs text-slate-400">
+        This comes from Resend webhooks. It tracks actual provider outcomes after Festio sends an email.
+      </p>
+    </Card>
+  )
+}
+
 function Timeline({ points }) {
   const max = Math.max(...points.map((p) => p.count), 1)
   return (
@@ -288,6 +337,8 @@ export default function DashboardPage() {
               </Card>
             )}
           </div>
+
+          <EmailDeliverySummary data={stats.email_delivery} />
 
           <div className="grid lg:grid-cols-2 gap-4">
             <Card title="Contact coverage">

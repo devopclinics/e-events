@@ -2,7 +2,8 @@
 permissions, reset+audit, sanitization and test-send."""
 import pytest
 
-from app.models import Event, User, Membership, MessageTemplate, MessageTemplateAudit
+from app.models import Event, Guest, User, Membership, MessageTemplate, MessageTemplateAudit
+from app.routers import guests as guests_router
 from app.routers import templates as tpl_router
 from services import templates as tpl
 from conftest import _Session
@@ -40,6 +41,7 @@ async def test_list_shows_defaults_then_override(ctx):
 
     listing = (await ctx.client.get(f"/api/events/{ev}/templates")).json()
     assert len(listing) == len(tpl.TEMPLATE_DEFS)
+    assert any(t["key"] == "experience_next_steps" for t in listing)
     bc = next(t for t in listing if t["key"] == "broadcast")
     assert bc["source"] == "default"
 
@@ -144,3 +146,28 @@ async def test_test_send_dispatches(ctx, monkeypatch):
     assert r.status_code == 200
     assert calls["email"][0] == "me@x.com"
     assert "Ada" in calls["email"][2]
+
+
+@pytest.mark.asyncio
+async def test_resend_experience_next_steps_uses_template(ctx, monkeypatch):
+    ctx.login(ctx.ids["user_a"])
+    ev = ctx.ids["event_a"]
+    async with _Session() as s:
+        guest = (await s.execute(Guest.__table__.select().where(Guest.event_id == ev))).first()
+        guest_id = guest.id
+
+    calls = {}
+
+    async def fake_email(to, subject, html, event_id=None, attachments=None):
+        calls["email"] = (to, subject, html, event_id)
+
+    monkeypatch.setattr(guests_router, "send_simple_email", fake_email)
+    r = await ctx.client.post(
+        f"/api/events/{ev}/guests/{guest_id}/resend-email",
+        json={"kind": "experience_next_steps"},
+    )
+    assert r.status_code == 200
+    assert r.json()["ok"] is True
+    assert calls["email"][0] == "g@a.com"
+    assert "Your next steps" in calls["email"][1]
+    assert "no pending" in calls["email"][2]

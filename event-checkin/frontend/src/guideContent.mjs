@@ -177,6 +177,24 @@ export const CONTENT = {
         tip: 'While Section scanning is on, each staffer\'s assigned section replaces the single "auto-assign walk-ins to table group" setting.',
       },
       {
+        id: 'org-experience', icon: '🧭', title: 'Experience workflows: consent, souvenirs, rooms & sessions',
+        badge: 'Paid',
+        intro: 'Use Experience when an event has an operational journey after admission: consent, badge pickup, souvenir handoff, room/table assignment, session attendance, certificates, or checkout.',
+        steps: [
+          'Team &amp; settings → Features → turn on Experience. This adds the Experience workspace for the selected event.',
+          'Create or clone a workflow in Team &amp; settings → Experience. Keep it Draft while editing; only one workflow should be Published at a time.',
+          'Add steps in the order staff should follow: Main check-in, Consent, Badge pickup, Souvenir, Room assignment, Session attendance, and any custom steps.',
+          'Use Step dependencies to gate the journey. Example: Consent depends on Main check-in; Souvenir depends on Consent; Room assignment depends on Souvenir; Session attendance depends on its room assignment.',
+          'For consent, load the active consent form in the Experience consent area. Guests sign from their Festio Pass after check-in, and each signature is tied to the form version they signed.',
+          'For multi-room or multi-day seating, create tables and table groups in Seating first. Then set a Room assignment step to "Separate seat for this step", give it a unique assignment scope, room/hall name, and matching table group.',
+          'Scoped room assignments do not replace the guest\'s main seat. They let the same guest have a Red Oak Ballroom seat, a luncheon seat, and a breakout room seat in one event.',
+          'For sessions, add Session attendance steps with topic, date, start time, end time, room, speaker, capacity, and check-in window. Staff cannot check guests into the session until the configured window opens.',
+          'Publish the workflow when ready, then run a test guest through check-in, consent, souvenir, room assignment, and one session gate before sending to all attendees.',
+        ],
+        tip: 'Main seating and Experience room assignment are connected but serve different purposes: main seating is the guest\'s default event seat; scoped Experience seating is for a specific room, session, meal, or day.',
+        warn: 'Use HTTPS for real phone camera scanning. Browser camera access is unreliable or blocked on normal HTTP from phones.',
+      },
+      {
         id: 'org-logistics', icon: '📦', title: 'Deliveries: ship merch, aso-ebi & gifts',
         badge: 'Paid',
         img: '/media/help-deliveries.png',
@@ -348,6 +366,20 @@ export const CONTENT = {
         ],
       },
       {
+        id: 'staff-experience', icon: '🧭', title: 'Experience next steps',
+        steps: [
+          'If the organiser enabled Experience, the scan result shows the guest\'s next operational steps after admission.',
+          'Only steps that are available should be acted on. Blocked steps are waiting for an earlier required step such as consent, souvenir pickup, or room assignment.',
+          'Consent: ask the guest to open their Festio Pass or Guest Hub and sign the consent form. The consent step completes when the signed form is recorded.',
+          'Souvenir, badge, or welcome pack: hand the item to the guest, then tap Complete on the scanner if the step is available.',
+          'Room assignment: tap Assign Room. Festio assigns the next available table and seat inside the room/table group configured by the organiser.',
+          'Session attendance: tap Check in only when the guest is entering the correct session. If the session is not open yet, the scanner shows "Not open" and the button is disabled.',
+          'A session can have a time gate, such as opening 30 or 60 minutes before start. Do not manually complete it early unless the organiser changes the schedule.',
+          'After completing a step, the scanner refreshes the next steps so you can continue the guest journey without leaving Check-in.',
+        ],
+        tip: 'For large events, assign one staff member per station: entrance check-in, consent help desk, souvenir table, room assignment desk, and session doors.',
+      },
+      {
         id: 'staff-zones', icon: '🚪', title: 'Zone scanning & gates',
         img: '/media/help-check-in.png',
         steps: [
@@ -430,6 +462,19 @@ export const CONTENT = {
         ],
       },
       {
+        id: 'guest-experience', icon: '🧭', title: 'Guest Hub & event activity',
+        steps: [
+          'For Experience events, your ticket page includes a Guest Hub or Track my activity button.',
+          'Open the Guest Hub to see your event pass, updates from the organiser, and your activity progress.',
+          'After check-in, the Guest Hub can show next steps such as signing consent, collecting a badge or souvenir, receiving a room/table assignment, and attending sessions.',
+          'If consent is required, open the consent section, review the form, type your name and signature, then submit it. You can download or request a copy after signing.',
+          'Room and table assignments may appear at different times. A convention can assign one seat for the main hall, another for lunch, and another for a breakout room.',
+          'Session attendance is checked by staff at the session door. Some sessions only open for check-in shortly before the session starts.',
+          'If a step looks incomplete but staff already helped you, ask the event desk to refresh or update your activity record.',
+        ],
+        tip: 'Keep your ticket link handy. It is your fastest path back to your QR code, consent form, Guest Hub, and activity progress.',
+      },
+      {
         id: 'guest-address', icon: '📦', title: 'Providing your address (aso-ebi / gifts)',
         steps: [
           'Some events collect shipping addresses for aso-ebi fabric, welcome bags, or post-event gift delivery.',
@@ -460,6 +505,9 @@ export const CONTENT = {
           'I want to bring an extra guest — contact the host. They control plus-one allowances.',
           'I need to cancel — return to your invite link and change your RSVP to "Can\'t make it". Contact the host if you\'re past the deadline.',
           'I have a dietary requirement — if there\'s no option on the RSVP form, add a note in the "special requests" field or contact the host directly.',
+          'Where do I sign consent? — open your ticket link after check-in and tap Guest Hub or the consent section. If you cannot find it, ask the event desk to resend your link.',
+          'Why can\'t staff check me into a session yet? — the organiser may have set a session check-in window. Staff can check you in when that window opens.',
+          'Why do I have more than one table or seat? — some conventions assign seats separately for different rooms, meals, or sessions. Follow the room/table shown for the activity you are attending.',
         ],
       },
     ],

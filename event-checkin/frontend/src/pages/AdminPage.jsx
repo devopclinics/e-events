@@ -3443,6 +3443,17 @@ const RSVP_QUESTION_PRESETS = [
   { label: 'Company name', question: 'What company or organization are you representing?', question_type: 'text', options: '', is_required: false },
 ]
 
+function rsvpQuestionOptionsText(options) {
+  if (!options) return ''
+  if (Array.isArray(options)) return options.join(', ')
+  try {
+    const parsed = JSON.parse(options)
+    return Array.isArray(parsed) ? parsed.join(', ') : String(options)
+  } catch {
+    return String(options)
+  }
+}
+
 function InvitePanel({ event, onChanged }) {
   const [form, setForm] = useState({
     rsvp_enabled:      event.rsvp_enabled      ?? false,
@@ -3450,6 +3461,7 @@ function InvitePanel({ event, onChanged }) {
     invite_message:    event.invite_message     ?? '',
     rsvp_collect_phone:event.rsvp_collect_phone ?? true,
     rsvp_collect_email:event.rsvp_collect_email ?? true,
+    rsvp_allow_duplicate_emails: event.rsvp_allow_duplicate_emails ?? false,
     rsvp_capacity:     event.rsvp_capacity      ?? '',
     invite_mode:       event.invite_mode        ?? 'open',
     rsvp_deadline:     utcToLocalInput(event.rsvp_deadline),
@@ -3460,6 +3472,7 @@ function InvitePanel({ event, onChanged }) {
   })
   const [questions, setQuestions] = useState([])
   const [newQ, setNewQ] = useState({ question: '', question_type: 'text', options: '', is_required: false })
+  const [editingQuestionId, setEditingQuestionId] = useState(null)
   const [loading, setLoading] = useState(false)
   const [msg, setMsg] = useState('')
   const [err, setErr] = useState('')
@@ -3504,18 +3517,22 @@ function InvitePanel({ event, onChanged }) {
       return
     }
     try {
+      const editingQuestion = editingQuestionId ? questions.find((q) => q.id === editingQuestionId) : null
       const payload = {
         question: newQ.question.trim(),
         question_type: newQ.question_type,
         is_required: newQ.is_required,
-        sort_order: questions.length,
+        sort_order: editingQuestion ? editingQuestion.sort_order : questions.length,
         options: newQ.question_type === 'select' && newQ.options.trim()
           ? JSON.stringify(newQ.options.split(',').map((s) => s.trim()).filter(Boolean))
           : null,
       }
-      const q = await api.createRSVPQuestion(event.id, payload)
-      setQuestions((p) => [...p, q])
+      const q = editingQuestionId
+        ? await api.updateRSVPQuestion(event.id, editingQuestionId, payload)
+        : await api.createRSVPQuestion(event.id, payload)
+      setQuestions((p) => editingQuestionId ? p.map((item) => item.id === q.id ? q : item) : [...p, q])
       setNewQ({ question: '', question_type: 'text', options: '', is_required: false })
+      setEditingQuestionId(null)
     } catch (e) { setErr(e.message) }
   }
 
@@ -3533,6 +3550,26 @@ function InvitePanel({ event, onChanged }) {
   async function deleteQuestion(qId) {
     await api.deleteRSVPQuestion(event.id, qId)
     setQuestions((p) => p.filter((q) => q.id !== qId))
+    if (editingQuestionId === qId) {
+      setEditingQuestionId(null)
+      setNewQ({ question: '', question_type: 'text', options: '', is_required: false })
+    }
+  }
+
+  function editQuestion(q) {
+    setErr('')
+    setEditingQuestionId(q.id)
+    setNewQ({
+      question: q.question || '',
+      question_type: q.question_type || 'text',
+      options: q.question_type === 'select' ? rsvpQuestionOptionsText(q.options) : '',
+      is_required: Boolean(q.is_required),
+    })
+  }
+
+  function cancelQuestionEdit() {
+    setEditingQuestionId(null)
+    setNewQ({ question: '', question_type: 'text', options: '', is_required: false })
   }
 
   async function uploadCover(file) {
@@ -3687,6 +3724,13 @@ function InvitePanel({ event, onChanged }) {
               <input id="collect_email" type="checkbox" checked={form.rsvp_collect_email} onChange={set('rsvp_collect_email')} className="w-4 h-4 accent-teal-600" />
               <label htmlFor="collect_email" className="text-sm font-medium text-slate-700 dark:text-slate-300 cursor-pointer">Ask for email address</label>
             </div>
+            <div className="flex items-start gap-2 sm:col-span-2">
+              <input id="allow_duplicate_emails" type="checkbox" checked={form.rsvp_allow_duplicate_emails} onChange={set('rsvp_allow_duplicate_emails')} className="w-4 h-4 mt-0.5 accent-teal-600" />
+              <label htmlFor="allow_duplicate_emails" className="text-sm text-slate-700 dark:text-slate-300 cursor-pointer">
+                <span className="font-medium">Allow the same email on multiple RSVP guests</span>
+                <span className="block text-xs text-slate-500 dark:text-slate-400">Use this when one parent or coordinator submits several invitees. Phone duplicates are still blocked.</span>
+              </label>
+            </div>
             <div>
               <label className="block text-xs font-semibold text-slate-500 dark:text-slate-400 mb-1">Guest limit (blank = no limit)</label>
               <input type="number" min="0" value={form.rsvp_capacity} onChange={set('rsvp_capacity')} className={inputCls} placeholder="e.g. 100" />
@@ -3731,7 +3775,7 @@ function InvitePanel({ event, onChanged }) {
                   <div className="mt-3 grid gap-3 lg:grid-cols-[220px,1fr]">
                     <div>
                       <label className="block text-xs font-semibold text-slate-500 dark:text-slate-400 mb-1">Default max invitees</label>
-                      <input type="number" min="1" max="100" value={form.rsvp_multi_invitee_limit} onChange={set('rsvp_multi_invitee_limit')} className={inputCls} />
+                      <input type="number" min="0" max="100" value={form.rsvp_multi_invitee_limit} onChange={set('rsvp_multi_invitee_limit')} className={inputCls} />
                     </div>
                     <div>
                       <label className="block text-xs font-semibold text-slate-500 dark:text-slate-400 mb-1">Category invitee limits JSON</label>
@@ -3740,10 +3784,10 @@ function InvitePanel({ event, onChanged }) {
                         value={form.rsvp_multi_invitee_limit_rules_text}
                         onChange={set('rsvp_multi_invitee_limit_rules_text')}
                         className={`${inputCls} font-mono`}
-                        placeholder={`{"Transition parent/guardian": 2, "Haflatul-Qur'an parent/guardian": 10}`}
+                        placeholder={`{"Individual invited guest": 0, "Transition parent/guardian": 2, "Haflatul-Qur'an parent/guardian": 10}`}
                       />
                       <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
-                        Optional. The public RSVP page shows these categories and the backend enforces the selected limit.
+                        Optional. Use 0 for submitter-only categories. The public RSVP page shows these categories and the backend enforces the selected additional guest limit.
                       </p>
                     </div>
                   </div>
@@ -3777,10 +3821,18 @@ function InvitePanel({ event, onChanged }) {
               <span className="font-medium text-slate-800 dark:text-slate-200">{q.question}</span>
               <span className="ml-2 text-xs text-slate-400">({q.question_type}{q.is_required ? ', required' : ''})</span>
             </div>
-            <button onClick={() => deleteQuestion(q.id)} className="text-red-400 hover:text-red-600 text-xs shrink-0">Remove</button>
+            <div className="flex items-center gap-2 shrink-0">
+              <button onClick={() => editQuestion(q)} className="text-teal-500 hover:text-teal-300 text-xs">Edit</button>
+              <button onClick={() => deleteQuestion(q.id)} className="text-red-400 hover:text-red-600 text-xs">Remove</button>
+            </div>
           </div>
         ))}
         {/* Add question form */}
+        {editingQuestionId && (
+          <div className="rounded-lg border border-teal-500/40 bg-teal-50 dark:bg-teal-900/20 px-3 py-2 text-xs text-teal-700 dark:text-teal-200">
+            Editing question. Save to update it, or cancel to add a new question.
+          </div>
+        )}
         <div className="grid sm:grid-cols-[1fr_auto] gap-2">
           <select
             value=""
@@ -3826,8 +3878,14 @@ function InvitePanel({ event, onChanged }) {
           </label>
           <button onClick={addQuestion}
             className="bg-slate-100 dark:bg-slate-700 border border-slate-300 dark:border-slate-600 text-slate-700 dark:text-slate-200 px-3 py-1.5 rounded-lg text-xs font-semibold hover:bg-slate-200 dark:hover:bg-slate-600">
-            Add question
+            {editingQuestionId ? 'Save question' : 'Add question'}
           </button>
+          {editingQuestionId && (
+            <button onClick={cancelQuestionEdit}
+              className="text-xs font-semibold text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200">
+              Cancel
+            </button>
+          )}
         </div>
       </div>
     </div>
@@ -7437,6 +7495,12 @@ function ViewGuestModal({ guest, eventId, onClose }) {
     ['Table group', guest.table_group_name],
     ['Seat', guest.seat_number],
     ['VIP', guest.is_vip ? 'Yes' : null],
+    ['Guest of', guest.rsvp_submitter_guest_id && guest.rsvp_submitter_guest_id === guest.id ? 'Self / main invited guest' : guest.rsvp_submitter_name],
+    ['Submitter email', guest.rsvp_submitter_email],
+    ['Submitter phone', guest.rsvp_submitter_phone],
+    ['Relationship', guest.rsvp_relationship],
+    ['Guest type', guest.rsvp_guest_type],
+    ['RSVP notes', guest.rsvp_notes],
   ].filter(([, v]) => v)
 
   return (
@@ -7626,8 +7690,8 @@ export default function AdminPage() {
 
   // Server-side export so the file includes each guest's RSVP-question answers
   // (the in-memory guest list doesn't carry them), with proper escaping.
-  async function handleExportGuests() {
-    try { await api.downloadGuestList(selectedId, 'csv') }
+  async function handleExportGuests(fmt = 'csv') {
+    try { await api.downloadGuestList(selectedId, fmt) }
     catch (err) { flash(err.message, true) }
   }
 
@@ -8471,9 +8535,13 @@ export default function AdminPage() {
                     className="text-xs px-2.5 py-1.5 rounded-lg bg-indigo-600 text-white font-semibold hover:bg-indigo-700">
                     + Add guest
                   </button>
-                  <button onClick={handleExportGuests}
+                  <button onClick={() => handleExportGuests('csv')}
                     className="text-xs px-2.5 py-1.5 rounded-lg border border-gray-300 dark:border-slate-700 dark:text-slate-200 hover:bg-gray-50 dark:hover:bg-slate-700">
-                    ⬇ Export CSV
+                    ⬇ Full CSV
+                  </button>
+                  <button onClick={() => handleExportGuests('xlsx')}
+                    className="text-xs px-2.5 py-1.5 rounded-lg border border-gray-300 dark:border-slate-700 dark:text-slate-200 hover:bg-gray-50 dark:hover:bg-slate-700">
+                    ⬇ Full XLSX
                   </button>
                   {totalPages > 1 && (
                     <div className="flex items-center gap-2">
@@ -8550,6 +8618,19 @@ export default function AdminPage() {
                           </td>
                           <td className="px-4 py-3 font-medium dark:text-slate-100">
                             <span className="inline-flex items-center gap-2">{g.first_name} {g.last_name}{g.is_vip && <VipBadge />}</span>
+                            {(g.rsvp_submitter_guest_id || g.rsvp_submitter_name || g.rsvp_guest_type) && (
+                              <div className="mt-1 space-y-0.5 text-[11px] leading-tight text-slate-500 dark:text-slate-400">
+                                {g.rsvp_guest_type && <div>Type: {g.rsvp_guest_type}</div>}
+                                {g.rsvp_submitter_guest_id === g.id ? (
+                                  <div>Main invited guest</div>
+                                ) : g.rsvp_submitter_name && (
+                                  <div>
+                                    Guest of {g.rsvp_submitter_name}
+                                    {g.rsvp_relationship ? ` · ${g.rsvp_relationship}` : ''}
+                                  </div>
+                                )}
+                              </div>
+                            )}
                           </td>
                           <td className="px-4 py-3 text-gray-500 dark:text-slate-400 text-xs">{g.email}</td>
                           {event?.seating_enabled && (

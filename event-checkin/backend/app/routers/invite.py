@@ -197,6 +197,7 @@ async def _invite_page_out(event: Event, db: AsyncSession) -> InvitePageOut:
         experience_enabled=event.experience_enabled,
         rsvp_collect_phone=event.rsvp_collect_phone,
         rsvp_collect_email=event.rsvp_collect_email,
+        rsvp_allow_duplicate_emails=event.rsvp_allow_duplicate_emails,
         rsvp_capacity=event.rsvp_capacity,
         invite_mode=event.invite_mode,
         rsvp_deadline=event.rsvp_deadline,
@@ -315,7 +316,8 @@ async def _multi_invitee_limit_for_submission(
     answers: dict[str, str],
     db: AsyncSession,
 ) -> tuple[int, str | None]:
-    default_limit = max(1, min(event.rsvp_multi_invitee_limit or 10, 100))
+    default_raw_limit = event.rsvp_multi_invitee_limit if event.rsvp_multi_invitee_limit is not None else 10
+    default_limit = max(0, min(int(default_raw_limit), 100))
     rules = event.rsvp_multi_invitee_limit_rules or {}
     if not rules:
         return default_limit, None
@@ -338,7 +340,7 @@ async def _multi_invitee_limit_for_submission(
             candidates.extend([answer, f"{label}: {answer}"])
 
     normalized_rules = {
-        _type_key(label): max(1, min(int(limit or 1), 100))
+        _type_key(label): max(0, min(int(limit or 0), 100))
         for label, limit in rules.items()
         if str(label or "").strip()
     }
@@ -358,18 +360,19 @@ async def _submit_multi_invitee_rsvp(
 ) -> RSVPConfirm:
     limit, matched_limit_rule = await _multi_invitee_limit_for_submission(event, data.answers, db)
     raw_invitees = [i for i in (data.invitees or []) if (i.full_name or i.first_name or i.last_name or i.email or i.phone)]
-    if not raw_invitees:
-        raise HTTPException(422, "Add at least one invitee.")
     if len(raw_invitees) > limit:
         suffix = f" for {matched_limit_rule}" if matched_limit_rule else " per submission"
-        raise HTTPException(422, f"This RSVP accepts up to {limit} invitee{'s' if limit != 1 else ''}{suffix}.")
+        if limit <= 0:
+            raise HTTPException(422, f"This RSVP accepts the submitter only{suffix}.")
+        raise HTTPException(422, f"This RSVP accepts the submitter plus up to {limit} invited guest{'s' if limit != 1 else ''}{suffix}.")
 
     await _require_questions_answered(event.id, data.answers, db)
 
     count = await _rsvp_count(event.id, db)
-    if event.rsvp_capacity is not None and count + len(raw_invitees) > event.rsvp_capacity:
+    total_new_guests = 1 + len(raw_invitees)
+    if event.rsvp_capacity is not None and count + total_new_guests > event.rsvp_capacity:
         raise HTTPException(409, "Sorry — this event does not have enough remaining spots for all invitees.")
-    assert_within_guest_cap(event, count, adding=len(raw_invitees))
+    assert_within_guest_cap(event, count, adding=total_new_guests)
 
     submitter_email = data.email.lower().strip() if data.email else None
     submitter_phone = None
@@ -381,6 +384,12 @@ async def _submit_multi_invitee_rsvp(
     normalized_invitees = []
     dup_filters = []
     seen_contacts: set[str] = set()
+    if submitter_email and not event.rsvp_allow_duplicate_emails:
+        seen_contacts.add(submitter_email)
+        dup_filters.append(Guest.email == submitter_email)
+    if submitter_phone:
+        seen_contacts.add(submitter_phone)
+        dup_filters.append(Guest.phone == submitter_phone)
     for invitee in raw_invitees:
         first, last = _split_invitee_name(invitee.full_name, invitee.first_name, invitee.last_name)
         if not first.strip():
@@ -391,12 +400,16 @@ async def _submit_multi_invitee_rsvp(
             phone = _normalize_phone(invitee.phone.strip())
             if phone is None:
                 raise HTTPException(422, f"Phone format not recognised for {first} {last}".strip())
-        contact_key = email or phone
-        if contact_key:
+        contact_keys = []
+        if email and not event.rsvp_allow_duplicate_emails:
+            contact_keys.append(email)
+        if phone:
+            contact_keys.append(phone)
+        for contact_key in contact_keys:
             if contact_key in seen_contacts:
                 raise HTTPException(409, f"Duplicate invitee contact: {contact_key}")
             seen_contacts.add(contact_key)
-        if email:
+        if email and not event.rsvp_allow_duplicate_emails:
             dup_filters.append(Guest.email == email)
         if phone:
             dup_filters.append(Guest.phone == phone)
@@ -414,7 +427,34 @@ async def _submit_multi_invitee_rsvp(
     needs_approval = event.rsvp_require_approval
     now = datetime.utcnow()
     submitter_name = f"{data.first_name.strip()} {data.last_name.strip()}".strip()
+    submitter_guest_type = (matched_limit_rule or "Main invited guest").strip()
+    submitter_group_id = await _default_group_for_invitee(event.id, submitter_guest_type, db)
+    submitter_ticket_type_id = await _ticket_type_for_invitee(event.id, submitter_guest_type, db)
+    submitter_is_vip = any(term in _type_key(submitter_guest_type) for term in ("vip", "dignitary", "honour", "honor", "chairman"))
     created: list[Guest] = []
+
+    submitter_guest = Guest(
+        event_id=event.id,
+        first_name=data.first_name.strip(),
+        last_name=data.last_name.strip(),
+        email=submitter_email,
+        phone=submitter_phone,
+        invite_token=str(uuid.uuid4()),
+        qr_generated_at=None if needs_approval else now,
+        invite_sent_at=None if needs_approval else now,
+        rsvp_status="pending" if needs_approval else "confirmed",
+        rsvp_responded_at=now,
+        assigned_table_group_id=submitter_group_id,
+        ticket_type_id=submitter_ticket_type_id,
+        is_vip=submitter_is_vip,
+        rsvp_guest_type=submitter_guest_type,
+        rsvp_relationship="Self",
+    )
+    db.add(submitter_guest)
+    await db.flush()
+    submitter_guest.rsvp_submitter_guest_id = submitter_guest.id
+    await _save_answers(submitter_guest.id, event.id, data.answers, db)
+    created.append(submitter_guest)
 
     for invitee, first, last, email, phone in normalized_invitees:
         guest_type = (invitee.guest_type or "").strip() or "Invited Guest"
@@ -435,6 +475,7 @@ async def _submit_multi_invitee_rsvp(
             assigned_table_group_id=group_id,
             ticket_type_id=ticket_type_id,
             is_vip=is_vip,
+            rsvp_submitter_guest_id=submitter_guest.id,
             rsvp_submitter_name=submitter_name or None,
             rsvp_submitter_email=submitter_email,
             rsvp_submitter_phone=submitter_phone,
@@ -449,6 +490,11 @@ async def _submit_multi_invitee_rsvp(
 
     await db.commit()
     overrides = await load_overrides(event.id, db)
+    guest_count_text = (
+        f"{submitter_guest.first_name} plus {len(raw_invitees)} invited guest{'s' if len(raw_invitees) != 1 else ''}"
+        if raw_invitees
+        else submitter_guest.first_name
+    )
     if needs_approval:
         if event.notify_rsvp_responses:
             from .guests import dispatch_simple_notice
@@ -459,10 +505,10 @@ async def _submit_multi_invitee_rsvp(
             id=created[0].id,
             qr_token=created[0].qr_token,
             invite_token=created[0].invite_token,
-            first_name=data.first_name.strip() or created[0].first_name,
-            last_name=data.last_name.strip() or created[0].last_name,
+            first_name=submitter_guest.first_name,
+            last_name=submitter_guest.last_name,
             rsvp_status="pending",
-            message=f"RSVP received for {len(created)} invitee{'s' if len(created) != 1 else ''}. The host will review and issue QR passes after approval.",
+            message=f"RSVP received for {guest_count_text}. The host will review and issue QR passes after approval.",
         )
 
     for guest in created:
@@ -476,10 +522,10 @@ async def _submit_multi_invitee_rsvp(
         id=created[0].id,
         qr_token=created[0].qr_token,
         invite_token=created[0].invite_token,
-        first_name=data.first_name.strip() or created[0].first_name,
-        last_name=data.last_name.strip() or created[0].last_name,
+        first_name=submitter_guest.first_name,
+        last_name=submitter_guest.last_name,
         rsvp_status="confirmed",
-        message=f"RSVP confirmed for {len(created)} invitee{'s' if len(created) != 1 else ''}. QR passes have been issued.",
+        message=f"RSVP confirmed for {guest_count_text}. QR passes have been issued.",
     )
 
 
@@ -554,7 +600,7 @@ async def submit_rsvp(
     # is anonymous — the page-side "already RSVP'd" guard covers the common
     # re-submit there.
     dup_filters = []
-    if email:
+    if email and not event.rsvp_allow_duplicate_emails:
         dup_filters.append(Guest.email == email)
     if phone:
         dup_filters.append(Guest.phone == phone)

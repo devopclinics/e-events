@@ -130,6 +130,7 @@ class EventOut(BaseModel):
     invite_message: Optional[str] = None
     rsvp_collect_phone: bool = True
     rsvp_collect_email: bool = True
+    rsvp_allow_duplicate_emails: bool = False
     rsvp_capacity: Optional[int] = None
     invite_cover_image: Optional[str] = None
     invite_mode: str = "open"
@@ -1256,6 +1257,7 @@ class GuestOut(BaseModel):
     ticket_type_id: Optional[str] = None
     sms_consent: bool = True
     whatsapp_consent: bool = True
+    rsvp_submitter_guest_id: Optional[str] = None
     rsvp_submitter_name: Optional[str] = None
     rsvp_submitter_email: Optional[str] = None
     rsvp_submitter_phone: Optional[str] = None
@@ -1478,6 +1480,7 @@ class InviteSettingsUpdate(BaseModel):
     invite_message: Optional[str] = None
     rsvp_collect_phone: Optional[bool] = None
     rsvp_collect_email: Optional[bool] = None
+    rsvp_allow_duplicate_emails: Optional[bool] = None
     rsvp_capacity: Optional[int] = None
     invite_cover_image: Optional[str] = None
     invite_mode: Optional[Literal["open", "closed"]] = None
@@ -1506,6 +1509,7 @@ class InvitePageOut(BaseModel):
     experience_enabled: bool = False
     rsvp_collect_phone: bool
     rsvp_collect_email: bool
+    rsvp_allow_duplicate_emails: bool = False
     rsvp_capacity: Optional[int]
     invite_cover_image: Optional[str] = None
     invite_mode: str = "open"

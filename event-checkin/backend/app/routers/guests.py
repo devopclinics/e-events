@@ -648,7 +648,9 @@ async def export_guests(
         answers[(gid, qid)] = ans
 
     base_cols = ["First name", "Last name", "Email", "Phone", "RSVP status",
-                 "Checked in", "Table", "Seat", "Group", "Ticket type", "VIP"]
+                 "Checked in", "Table", "Seat", "Group", "Ticket type", "VIP",
+                 "Guest of", "Main guest ID", "Submitter email", "Submitter phone",
+                 "Relationship", "Guest type", "RSVP notes"]
     cols = base_cols + [q.question for q in questions]
 
     def row_for(g: Guest) -> list[str]:
@@ -660,6 +662,13 @@ async def export_guests(
             gnames.get(g.assigned_table_group_id, "") if g.assigned_table_group_id else "",
             ttnames.get(g.ticket_type_id, "") if g.ticket_type_id else "",
             "Yes" if g.is_vip else "No",
+            "Self / main invited guest" if g.rsvp_submitter_guest_id == g.id else (g.rsvp_submitter_name or ""),
+            g.rsvp_submitter_guest_id or "",
+            g.rsvp_submitter_email or "",
+            g.rsvp_submitter_phone or "",
+            g.rsvp_relationship or "",
+            g.rsvp_guest_type or "",
+            g.rsvp_notes or "",
         ]
         row += [answers.get((g.id, q.id), "") for q in questions]
         return row
@@ -895,7 +904,16 @@ def dispatch_approval_accepted(background_tasks: BackgroundTasks, event: Event, 
     if event.notify_email and guest.email:
         subj, body = template_email_or_default(overrides, "approval_accepted", ctx)
         if body:
-            background_tasks.add_task(send_simple_email, guest.email, subj or event.name, body, event.id, None, guest.id, key)
+            background_tasks.add_task(
+                send_simple_email,
+                guest.email,
+                subj or event.name,
+                body,
+                event.id,
+                None,
+                guest.id,
+                "approval_accepted",
+            )
             sent = True
 
     if (can_use_paid_channels(event) and event.notify_sms and guest.phone

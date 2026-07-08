@@ -367,10 +367,11 @@ function RSVPForm({ event, theme, onConfirmed }) {
 
   const set = (k) => (e) => setForm((p) => ({ ...p, [k]: e.target.value }))
   const multiInvitee = !!event.rsvp_multi_invitee_enabled
-  const defaultInviteeLimit = Math.max(1, Math.min(Number(event.rsvp_multi_invitee_limit || 10), 100))
+  const rawDefaultInviteeLimit = event.rsvp_multi_invitee_limit ?? 10
+  const defaultInviteeLimit = Math.max(0, Math.min(Number(rawDefaultInviteeLimit) || 0, 100))
   const inviteeLimitRules = event.rsvp_multi_invitee_limit_rules || {}
   const inviteeLimitRuleEntries = Object.entries(inviteeLimitRules)
-    .map(([label, limit]) => [label, Math.max(1, Math.min(Number(limit) || 1, 100))])
+    .map(([label, limit]) => [label, Math.max(0, Math.min(Number(limit) || 0, 100))])
     .filter(([label]) => String(label || '').trim())
   const categoryQuestion = multiInvitee && inviteeLimitRuleEntries.length
     ? (event.questions || []).find((q) => /category|allowance|submitter role/i.test(q.question || '') && q.question_type === 'select')
@@ -378,6 +379,9 @@ function RSVPForm({ event, theme, onConfirmed }) {
   const selectedCategory = categoryQuestion ? (answers[categoryQuestion.id] || '') : ''
   const matchedCategoryRule = inviteeLimitRuleEntries.find(([label]) => label.toLowerCase() === selectedCategory.toLowerCase())
   const inviteeLimit = matchedCategoryRule ? matchedCategoryRule[1] : defaultInviteeLimit
+  const needsInviteeCategory = Boolean(categoryQuestion && !selectedCategory)
+  const acceptsAdditionalInvitees = !needsInviteeCategory && inviteeLimit > 0
+  const submitterOnlyCategory = !needsInviteeCategory && inviteeLimit <= 0
   const inviteeTypes = ['Parent/Guardian', 'Invited Guest', 'Teacher', 'School/Staff', 'VIP/Dignitary', 'Other']
 
   useEffect(() => {
@@ -416,7 +420,7 @@ function RSVPForm({ event, theme, onConfirmed }) {
           email: form.email.trim(),
           phone: form.phone.trim() || undefined,
           answers,
-          invitees: multiInvitee
+          invitees: multiInvitee && acceptsAdditionalInvitees
             ? invitees
                 .map((row) => ({
                   full_name: row.full_name.trim(),
@@ -427,7 +431,7 @@ function RSVPForm({ event, theme, onConfirmed }) {
                   notes: row.notes.trim() || undefined,
                 }))
                 .filter((row) => row.full_name || row.phone || row.email)
-            : undefined,
+            : [],
           shipping_address: event.shipping ? shipAddr : undefined,
           sizes: event.shipping ? sizes : undefined,
         }),
@@ -450,7 +454,7 @@ function RSVPForm({ event, theme, onConfirmed }) {
         <h2 className="text-2xl font-extrabold text-slate-950">{multiInvitee ? 'Submit invited guests' : 'Will you be attending?'}</h2>
         <p className="mt-2 text-sm leading-relaxed text-slate-500">
           {multiInvitee
-            ? 'Add the people you are submitting for review. Each approved invitee will receive their own QR pass.'
+            ? 'Submit your RSVP details for review. Approved guests receive their own QR pass.'
             : 'Let the host know so they can prepare your spot and Festio Pass.'}
         </p>
       </div>
@@ -509,6 +513,10 @@ function RSVPForm({ event, theme, onConfirmed }) {
 
           {multiInvitee && (
             <div className="space-y-4 rounded-3xl border border-slate-200 bg-slate-50 p-4">
+              <div className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-xs leading-relaxed text-amber-800">
+                The submitter is the main invited guest and will receive their own QR pass after approval.
+                Add only their additional invited guests below.
+              </div>
               {categoryQuestion && (
                 <div className="rounded-2xl border border-teal-100 bg-white p-4">
                   <label className="mb-2 block text-sm font-bold text-slate-700">
@@ -522,25 +530,40 @@ function RSVPForm({ event, theme, onConfirmed }) {
                   >
                     <option value="">Select category</option>
                     {inviteeLimitRuleEntries.map(([label, limit]) => (
-                      <option key={label} value={label}>{label} - up to {limit} invitee{limit === 1 ? '' : 's'}</option>
+                      <option key={label} value={label}>
+                        {limit <= 0
+                          ? `${label} - submitter only`
+                          : `${label} - up to ${limit} additional guest${limit === 1 ? '' : 's'}`}
+                      </option>
                     ))}
                   </select>
                   <p className="mt-2 text-xs text-slate-500">
-                    The number of invitees is gated by this category and will also be checked before submission.
+                    The number of additional guests is gated by this category and will also be checked before submission.
                   </p>
                 </div>
               )}
-              <div className="flex items-center justify-between gap-3">
-                <div>
-                  <div className={`text-xs font-extrabold uppercase tracking-[0.18em] ${t.accent}`}>Invitees</div>
-                  <p className="mt-1 text-xs text-slate-500">Up to {inviteeLimit} people{selectedCategory ? ` for ${selectedCategory}` : ''}. Each approved person gets a separate QR pass.</p>
+              {submitterOnlyCategory && (
+                <div className="rounded-2xl border border-teal-100 bg-white px-4 py-3 text-sm leading-relaxed text-slate-600">
+                  This category is for the submitter only. No additional guest details are needed.
                 </div>
-                <button type="button" onClick={addInvitee} disabled={invitees.length >= inviteeLimit}
+              )}
+              {acceptsAdditionalInvitees && (
+                <>
+                  <div className="flex items-center justify-between gap-3">
+                <div>
+                  <div className={`text-xs font-extrabold uppercase tracking-[0.18em] ${t.accent}`}>Additional invited guests</div>
+                  <p className="mt-1 text-xs text-slate-500">
+                    {needsInviteeCategory
+                      ? 'Select an invitation category to see how many additional guests are allowed.'
+                      : `Submitter plus up to ${inviteeLimit} additional guest${inviteeLimit === 1 ? '' : 's'}${selectedCategory ? ` for ${selectedCategory}` : ''}. Each approved person gets a separate QR pass.`}
+                  </p>
+                </div>
+                <button type="button" onClick={addInvitee} disabled={needsInviteeCategory || invitees.length >= inviteeLimit}
                   className="rounded-xl border border-slate-300 bg-white px-3 py-2 text-xs font-bold text-slate-700 disabled:cursor-not-allowed disabled:opacity-50">
-                  Add invitee
+                  Add additional guest
                 </button>
-              </div>
-              {invitees.map((row, index) => (
+                  </div>
+                  {invitees.map((row, index) => (
                 <div key={index} className="rounded-2xl border border-slate-200 bg-white p-4">
                   <div className="mb-3 flex items-center justify-between">
                     <div className="text-sm font-extrabold text-slate-800">Invitee {index + 1}</div>
@@ -577,7 +600,9 @@ function RSVPForm({ event, theme, onConfirmed }) {
                     </div>
                   </div>
                 </div>
-              ))}
+                  ))}
+                </>
+              )}
             </div>
           )}
 
@@ -606,7 +631,7 @@ function RSVPForm({ event, theme, onConfirmed }) {
           )}
 
           <PrimaryButton type="submit" disabled={loading} className="w-full">
-            {loading ? 'Submitting...' : multiInvitee ? 'Submit invitees for review' : 'Confirm My RSVP'}
+            {loading ? 'Submitting...' : multiInvitee ? 'Submit RSVP for review' : 'Confirm My RSVP'}
           </PrimaryButton>
         </form>
       )}

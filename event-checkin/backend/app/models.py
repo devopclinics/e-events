@@ -199,6 +199,9 @@ class Event(Base):
     invite_message: Mapped[str | None] = mapped_column(Text, nullable=True)
     rsvp_collect_phone: Mapped[bool] = mapped_column(Boolean, default=True)
     rsvp_collect_email: Mapped[bool] = mapped_column(Boolean, default=True)
+    # Some family/school workflows use one parent email for multiple invitees.
+    # Off by default so ordinary RSVP still blocks duplicate email submissions.
+    rsvp_allow_duplicate_emails: Mapped[bool] = mapped_column(Boolean, default=False)
     # None = unlimited; integer = max accepted RSVPs
     rsvp_capacity: Mapped[int | None] = mapped_column(Integer, nullable=True)
     # Cover image URL — served from /api/uploads/
@@ -579,6 +582,7 @@ class Guest(Base):
     sms_consent: Mapped[bool] = mapped_column(Boolean, default=True)
     whatsapp_consent: Mapped[bool] = mapped_column(Boolean, default=True)
     # Optional context from multi-invitee RSVP submissions.
+    rsvp_submitter_guest_id: Mapped[str | None] = mapped_column(String(36), ForeignKey("guests.id"), nullable=True)
     rsvp_submitter_name: Mapped[str | None] = mapped_column(String(255), nullable=True)
     rsvp_submitter_email: Mapped[str | None] = mapped_column(String(255), nullable=True)
     rsvp_submitter_phone: Mapped[str | None] = mapped_column(String(50), nullable=True)

@@ -654,14 +654,14 @@ async def update_invite_settings(
     synced_limit_rules = None
     for field, value in data.model_dump(exclude_none=True).items():
         if field == "rsvp_multi_invitee_limit":
-            value = max(1, min(int(value), 100))
+            value = max(0, min(int(value), 100))
         if field == "rsvp_multi_invitee_limit_rules":
             rules = {}
             for key, limit in (value or {}).items():
                 label = str(key or "").strip()
                 if not label:
                     continue
-                rules[label] = max(1, min(int(limit or 1), 100))
+                rules[label] = max(0, min(int(limit or 0), 100))
             value = rules or None
             synced_limit_rules = value
         setattr(event, field, value)

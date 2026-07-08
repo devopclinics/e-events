@@ -898,21 +898,43 @@ def dispatch_approval_accepted(background_tasks: BackgroundTasks, event: Event, 
     """Send approval-accepted notices with the guest's issued ticket link."""
     ticket_url = f"{event.checkin_base_url.rstrip('/')}/scan/{guest.qr_token}"
     overrides = overrides or {}
-    ctx = build_template_context(event, guest, extras={"ticket_link": ticket_url})
+    ctx = build_template_context(event, guest, extras={"ticket_link": ticket_url, "qr_code": ticket_url})
     sent = False
 
     if event.notify_email and guest.email:
-        subj, body = template_email_or_default(overrides, "approval_accepted", ctx)
-        if body:
+        ov = overrides.get("approval_accepted")
+        spec = TEMPLATE_DEFS.get("approval_accepted", {})
+        subject_tmpl = (ov.subject if ov and ov.subject else None) or spec.get("subject")
+        body_tmpl = (ov.email_body if ov and ov.email_body else None) or spec.get("email_body")
+        if body_tmpl:
+            if "{{qr_code" not in body_tmpl:
+                body_tmpl = f"{body_tmpl}<p>{{{{qr_code}}}}</p>"
+            if "{{ticket_link" not in body_tmpl:
+                body_tmpl = f'{body_tmpl}<p><a href="{{{{ticket_link}}}}">View your pass</a></p>'
             background_tasks.add_task(
-                send_simple_email,
-                guest.email,
-                subj or event.name,
-                body,
-                event.id,
-                None,
-                guest.id,
-                "approval_accepted",
+                send_invite_email,
+                {
+                    "guest_id": guest.id,
+                    "first_name": guest.first_name,
+                    "last_name": guest.last_name,
+                    "email": guest.email,
+                    "qr_token": guest.qr_token,
+                    "event_id": event.id,
+                    "message_kind": "approval_accepted",
+                },
+                event.name,
+                event.couples_name,
+                event.checkin_base_url,
+                event.event_date,
+                event.seating_enabled,
+                event.menu_enabled,
+                event.partner_pairing_enabled,
+                subject_tmpl,
+                body_tmpl,
+                event.venue_name,
+                event.venue_address,
+                event.admission_note,
+                event.invite_cover_image,
             )
             sent = True
 
@@ -1277,6 +1299,16 @@ async def update_guest(
         final_seat = data.seat_number.strip() or None
     else:
         final_seat = guest.seat_number
+
+    # Seat must be a real seat on the table (1..capacity). Bounding to capacity
+    # is what makes concurrent manual assignment overflow-proof: only `capacity`
+    # distinct seats can exist, and the unique index rejects any duplicate — so
+    # two admins can't both land a guest on the same full table via different
+    # out-of-range seat numbers.
+    if final_table and final_seat:
+        seat_table = await db.get(SeatingTable, final_table)
+        if seat_table and (not str(final_seat).isdigit() or not (1 <= int(final_seat) <= seat_table.capacity)):
+            raise HTTPException(400, f"Seat number must be between 1 and {seat_table.capacity} for {seat_table.name}.")
 
     # Reject a seat already held by another guest on the same table.
     if final_table and final_seat:

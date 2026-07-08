@@ -520,6 +520,14 @@ async def assign_seat(
             if others >= table.capacity:
                 raise HTTPException(409, f"{table.name} is full (capacity {table.capacity}).")
 
+    # Seat must be within the table's capacity (1..capacity), same as the
+    # guest-edit modal. Bounding to capacity makes concurrent manual assignment
+    # overflow-proof — only `capacity` distinct seats exist and the unique index
+    # rejects duplicates.
+    if body.table_id and body.seat_number:
+        if not str(body.seat_number).isdigit() or not (1 <= int(body.seat_number) <= table.capacity):
+            raise HTTPException(400, f"Seat number must be between 1 and {table.capacity} for {table.name}.")
+
     # Reject a seat already held by another guest on the same table — keeps this
     # path consistent with the guest-edit modal (guests.py::update_guest) so the
     # seating chart can't silently double-book a seat. Checked on the *intended*

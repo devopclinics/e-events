@@ -359,6 +359,8 @@ async def _submit_multi_invitee_rsvp(
     db: AsyncSession,
 ) -> RSVPConfirm:
     limit, matched_limit_rule = await _multi_invitee_limit_for_submission(event, data.answers, db)
+    if matched_limit_rule and "guest" in _type_key(matched_limit_rule) and any(term in _type_key(matched_limit_rule) for term in ("individual", "single")):
+        limit = 0
     raw_invitees = [i for i in (data.invitees or []) if (i.full_name or i.first_name or i.last_name or i.email or i.phone)]
     if len(raw_invitees) > limit:
         suffix = f" for {matched_limit_rule}" if matched_limit_rule else " per submission"

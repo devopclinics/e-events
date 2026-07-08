@@ -19,7 +19,7 @@ async def _event(event_id, *, notify_responses):
 
 def _capture_email(monkeypatch):
     calls = []
-    async def fake(to, subject, html, event_id=None):
+    async def fake(to, subject, html, *args, **kwargs):
         calls.append((to, subject))
     monkeypatch.setattr(guests_mod, "send_simple_email", fake)
     return calls

@@ -687,6 +687,79 @@ class SeatingTableOut(BaseModel):
     category: Optional[str] = None
     sort_order: int = 0
     assigned_count: int = 0
+    # Floor-plan layout
+    pos_x: Optional[int] = None
+    pos_y: Optional[int] = None
+    shape: str = "round"
+    rotation: int = 0
+
+
+# ── Floor plan (venue layout designer) ───────────────────────────────────────
+
+class FloorElementIn(BaseModel):
+    id: Optional[str] = None  # present when updating an existing element
+    type: str
+    label: Optional[str] = None
+    pos_x: int = 0
+    pos_y: int = 0
+    width: int = 120
+    height: int = 60
+    rotation: int = 0
+    color: Optional[str] = None
+
+
+class FloorElementOut(FloorElementIn):
+    model_config = ConfigDict(from_attributes=True)
+    id: str
+    event_id: str
+
+
+class FloorTablePos(BaseModel):
+    """A single table's placement in a bulk layout save."""
+    id: str
+    pos_x: Optional[int] = None
+    pos_y: Optional[int] = None
+    shape: Optional[str] = None
+    rotation: Optional[int] = None
+
+
+class FloorTableOut(BaseModel):
+    """A table as drawn on the plan (name + seats + placement + live occupancy)."""
+    id: str
+    name: str
+    capacity: int
+    category: Optional[str] = None
+    table_group_id: Optional[str] = None
+    table_group_name: Optional[str] = None
+    seated: int = 0
+    pos_x: Optional[int] = None
+    pos_y: Optional[int] = None
+    shape: str = "round"
+    rotation: int = 0
+
+
+class FloorPlanOut(BaseModel):
+    event_id: str
+    event_name: str
+    width: int = 1200
+    height: int = 800
+    bg_image_url: Optional[str] = None
+    bg_opacity: int = 40
+    editable: bool = False          # did the caller arrive with edit rights?
+    share_token: Optional[str] = None   # only exposed to admins
+    edit_token: Optional[str] = None    # only exposed to admins
+    tables: list[FloorTableOut] = Field(default_factory=list)
+    elements: list[FloorElementOut] = Field(default_factory=list)
+
+
+class FloorPlanSave(BaseModel):
+    """Bulk save from the editor: canvas + all table placements + all elements."""
+    width: Optional[int] = None
+    height: Optional[int] = None
+    bg_image_url: Optional[str] = None
+    bg_opacity: Optional[int] = None
+    tables: list[FloorTablePos] = Field(default_factory=list)
+    elements: list[FloorElementIn] = Field(default_factory=list)
 
 
 class SeatAssignRequest(BaseModel):
@@ -1288,6 +1361,10 @@ class EventBrief(BaseModel):
     menu_enabled: bool = False
     notify_sms: bool = True
     notify_whatsapp: bool = True
+    # Gift registry — surfaced on the ticket so guests can reach it from their pass.
+    registry_enabled: bool = False
+    registry_token: Optional[str] = None
+    registry_message: Optional[str] = None
 
 
 class PartnerInfo(BaseModel):

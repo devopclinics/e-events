@@ -437,6 +437,9 @@ async def view_ticket(qr_token: str, db: AsyncSession = Depends(get_db)):
         menu_enabled=event.menu_enabled,
         notify_sms=event.notify_sms,
         notify_whatsapp=event.notify_whatsapp,
+        registry_enabled=event.registry_enabled,
+        registry_token=event.registry_token,
+        registry_message=event.registry_message,
     ) if event else None
 
     table_name = None

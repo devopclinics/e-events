@@ -272,10 +272,13 @@ TEMPLATE_DEFS: dict[str, dict] = {
         email_body=(
             "<p>Hi <strong>{{guest_first_name}}</strong>,</p>"
             "<p>Good news — your RSVP to <strong>{{event_name}}</strong> has been "
-            "approved. Your Festio Pass: <a href=\"{{ticket_link}}\">view pass</a>.</p>"
+            "approved. Your Festio Pass is ready.</p>"
+            "<p>{{qr_code}}</p>"
+            "<p><a href=\"{{ticket_link}}\">View your pass</a></p>"
         ),
         sms_body="Approved! Your Festio Pass for {{event_name}}: {{ticket_link}}",
         whatsapp_body="Approved! Your Festio Pass for {{event_name}}: {{ticket_link}}",
+        required=["ticket_link", "qr_code"],
     ),
     "approval_rejected": _t(
         "Approval rejected", ["email", "sms", "whatsapp"], group="Approval",

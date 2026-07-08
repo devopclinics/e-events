@@ -13,6 +13,7 @@ from .routers import billing as billing_router
 from .routers import admin as admin_router
 from .routers import design_proxy as design_proxy_router
 from .routers import og as og_router
+from .routers import floor as floor_router
 from . import sync_poller, db_migrate
 
 # Override with UPLOADS_DIR for local/test runs; defaults to the in-container path.
@@ -79,6 +80,7 @@ app.include_router(templates_router.router, prefix="/api/events", tags=["templat
 app.include_router(self_checkin.router, prefix="/api/e", tags=["self-checkin"])
 app.include_router(design_proxy_router.router, prefix="/api/events", tags=["design"])
 app.include_router(og_router.router, prefix="/api/og", tags=["og"])
+app.include_router(floor_router.router, prefix="/api", tags=["floor-plan"])
 
 # Serve uploaded files (cover images, etc.)
 try:

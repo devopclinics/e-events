@@ -411,9 +411,51 @@ class SeatingTable(Base):
     category: Mapped[str | None] = mapped_column(String(50), nullable=True)
     # Display + FCFS-fill order (lower first), then name.
     sort_order: Mapped[int] = mapped_column(Integer, default=0)
+    # Floor-plan layout: canvas position (px), shape, and rotation. NULL pos means
+    # "not placed yet" — the editor auto-arranges those into a grid on first open.
+    pos_x: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    pos_y: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    shape: Mapped[str] = mapped_column(String(12), default="round")  # round | rect
+    rotation: Mapped[int] = mapped_column(Integer, default=0)        # degrees
 
     event: Mapped["Event"] = relationship("Event", back_populates="tables")
     guests: Mapped[list["Guest"]] = relationship("Guest", back_populates="table")
+
+
+class FloorPlan(Base):
+    """One venue floor layout per event: canvas size, optional traced background
+    image, and the tokens that let a client view (and optionally edit) it via a
+    share link — same pattern as the RSVP/registry tokens."""
+    __tablename__ = "floor_plans"
+    __table_args__ = (UniqueConstraint("event_id", name="uq_floor_plan_event"),)
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+    event_id: Mapped[str] = mapped_column(String(36), ForeignKey("events.id"), index=True)
+    width: Mapped[int] = mapped_column(Integer, default=1200)
+    height: Mapped[int] = mapped_column(Integer, default=800)
+    bg_image_url: Mapped[str | None] = mapped_column(Text, nullable=True)
+    bg_opacity: Mapped[int] = mapped_column(Integer, default=40)  # 0..100
+    # Client share links. view = read-only, edit = drag/save without a login.
+    share_token: Mapped[str | None] = mapped_column(String(64), unique=True, index=True, nullable=True)
+    edit_token: Mapped[str | None] = mapped_column(String(64), unique=True, index=True, nullable=True)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+
+class FloorElement(Base):
+    """Non-table decor on the floor plan: stage, entrance/exit, dance floor, bar,
+    a plain label, or a wall box. Positioned on the same canvas as the tables."""
+    __tablename__ = "floor_elements"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+    event_id: Mapped[str] = mapped_column(String(36), ForeignKey("events.id"), index=True)
+    type: Mapped[str] = mapped_column(String(20))  # stage|entrance|exit|dancefloor|bar|label|wall
+    label: Mapped[str | None] = mapped_column(String(80), nullable=True)
+    pos_x: Mapped[int] = mapped_column(Integer, default=0)
+    pos_y: Mapped[int] = mapped_column(Integer, default=0)
+    width: Mapped[int] = mapped_column(Integer, default=120)
+    height: Mapped[int] = mapped_column(Integer, default=60)
+    rotation: Mapped[int] = mapped_column(Integer, default=0)
+    color: Mapped[str | None] = mapped_column(String(20), nullable=True)
 
 
 class TableGroup(Base):

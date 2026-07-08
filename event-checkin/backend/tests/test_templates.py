@@ -136,7 +136,7 @@ async def test_test_send_dispatches(ctx, monkeypatch):
     ev = ctx.ids["event_a"]
     calls = {}
 
-    async def fake_email(to, subject, html):
+    async def fake_email(to, subject, html, *args, **kwargs):
         calls["email"] = (to, subject, html)
 
     monkeypatch.setattr(tpl_router, "send_simple_email", fake_email)
@@ -158,7 +158,7 @@ async def test_resend_experience_next_steps_uses_template(ctx, monkeypatch):
 
     calls = {}
 
-    async def fake_email(to, subject, html, event_id=None, attachments=None):
+    async def fake_email(to, subject, html, event_id=None, *args, **kwargs):
         calls["email"] = (to, subject, html, event_id)
 
     monkeypatch.setattr(guests_router, "send_simple_email", fake_email)

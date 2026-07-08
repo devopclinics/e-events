@@ -1621,6 +1621,7 @@ class RSVPSubmit(BaseModel):
     last_name: str
     email: Optional[EmailStr] = None
     phone: Optional[str] = None
+    sms_consent: bool = False
     # key = question_id, value = answer string
     answers: dict[str, str] = {}
     invitees: list[RSVPInviteeSubmit] = []
@@ -1652,6 +1653,7 @@ class InviteGuestPrefill(BaseModel):
     last_name: str
     email: Optional[str] = None
     phone: Optional[str] = None
+    sms_consent: bool = False
     rsvp_status: str = "invited"
     email_locked: bool = False
     phone_locked: bool = False
@@ -1672,6 +1674,7 @@ class RSVPTokenSubmit(BaseModel):
     first_name: Optional[str] = None
     last_name: Optional[str] = None
     phone: Optional[str] = None
+    sms_consent: bool = False
     answers: dict[str, str] = {}
     shipping_address: Optional[ShippingAddressUpdate] = None
     sizes: dict[str, str] = {}  # shipment_id -> size

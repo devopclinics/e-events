@@ -441,6 +441,7 @@ async def _submit_multi_invitee_rsvp(
         last_name=data.last_name.strip(),
         email=submitter_email,
         phone=submitter_phone,
+        sms_consent=bool(data.sms_consent and submitter_phone),
         invite_token=str(uuid.uuid4()),
         qr_generated_at=None if needs_approval else now,
         invite_sent_at=None if needs_approval else now,
@@ -469,6 +470,7 @@ async def _submit_multi_invitee_rsvp(
             last_name=last,
             email=email,
             phone=phone,
+            sms_consent=False,
             invite_token=str(uuid.uuid4()),
             qr_generated_at=None if needs_approval else now,
             invite_sent_at=None if needs_approval else now,
@@ -626,6 +628,7 @@ async def submit_rsvp(
         last_name=data.last_name.strip(),
         email=email,
         phone=phone,
+        sms_consent=bool(data.sms_consent and phone),
         # Give self-registrations a personal token up front so their Guest Hub
         # link (/r/{invite_token}) works on any device — not just the browser
         # that RSVP'd. Bulk-invited guests already get one when invited.
@@ -723,6 +726,7 @@ async def get_invite_token_page(invite_token: str, db: AsyncSession = Depends(ge
             last_name=guest.last_name,
             email=guest.email,
             phone=guest.phone,
+            sms_consent=bool(guest.sms_consent),
             rsvp_status=guest.rsvp_status,
             email_locked=bool(guest.email),
             phone_locked=False,
@@ -763,6 +767,7 @@ async def submit_invite_token_rsvp(
                 "Phone format not recognised. Use E.164 (e.g. +18327941707) or US 10-digit.",
             )
         guest.phone = phone
+    guest.sms_consent = bool(data.sms_consent and guest.phone)
 
     guest.rsvp_status = data.status
     guest.rsvp_responded_at = datetime.utcnow()

@@ -21,15 +21,21 @@ from app.timeutil import local_hhmm, to_event_local
 logger = logging.getLogger(__name__)
 
 _BIRD_BASE = "https://api.bird.com"
-_SMS_FOOTER = "Reply STOP to opt out."
+_SMS_FOOTER = "Reply HELP for help, STOP to opt out. Message and data rates may apply."
 
 
 def _brand_sms(body: str) -> str:
-    """Keep carrier-reviewed SMS bodies branded and opt-out compliant."""
+    """Keep carrier-reviewed SMS bodies branded and compliance-copy aligned."""
     text = body.strip()
     if not text.startswith("Festio:"):
         text = f"Festio: {text}"
-    if "STOP" not in text.upper():
+    upper = text.upper()
+    has_required_footer = (
+        "HELP" in upper
+        and "STOP" in upper
+        and ("MSG & DATA RATES MAY APPLY" in upper or "MESSAGE AND DATA RATES MAY APPLY" in upper)
+    )
+    if not has_required_footer:
         text = f"{text} {_SMS_FOOTER}"
     return text
 

@@ -66,6 +66,7 @@ async def test_public_rsvp_link_can_create_multiple_pending_invitees(ctx):
             "last_name": "Submitter",
             "email": "submitter@example.com",
             "phone": "+14155550100",
+            "sms_consent": True,
             "answers": {},
             "invitees": [
                 {
@@ -98,13 +99,16 @@ async def test_public_rsvp_link_can_create_multiple_pending_invitees(ctx):
         assert by_name["Parent Submitter"].rsvp_submitter_guest_id == by_name["Parent Submitter"].id
         assert by_name["Parent Submitter"].rsvp_relationship == "Self"
         assert by_name["Parent Submitter"].rsvp_status == "pending"
+        assert by_name["Parent Submitter"].sms_consent is True
         assert by_name["Aisha Bello"].rsvp_submitter_email == "submitter@example.com"
         assert by_name["Aisha Bello"].rsvp_submitter_guest_id == by_name["Parent Submitter"].id
         assert by_name["Aisha Bello"].rsvp_relationship == "Aunt"
         assert by_name["Aisha Bello"].rsvp_status == "pending"
+        assert by_name["Aisha Bello"].sms_consent is False
         assert by_name["Aisha Bello"].qr_generated_at is None
         assert by_name["Dr Imran Eleha"].is_vip is True
         assert by_name["Dr Imran Eleha"].rsvp_guest_type == "VIP/Dignitary"
+        assert by_name["Dr Imran Eleha"].sms_consent is False
 
 
 @pytest.mark.asyncio

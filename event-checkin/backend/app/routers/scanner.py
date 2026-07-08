@@ -988,7 +988,7 @@ async def perform_admission(guest, event, background_tasks, db) -> ScanResult:
         background_tasks.add_task(send_admission_email, guest_data)
         await _queue_experience_next_steps_email(background_tasks, event, guest, db, overrides)
 
-    broadcast(guest.event_id, {
+    await broadcast(guest.event_id, {
         "type": "admitted",
         "guest_id": guest.id,
         "name": f"{guest.first_name} {guest.last_name}",
@@ -1089,7 +1089,7 @@ async def scan_qr_zone(
         tbl = await db.get(SeatingTable, guest.table_id)
         table_name = tbl.name if tbl else None
 
-    broadcast(event.id, {
+    await broadcast(event.id, {
         "type": "scan", "guest_id": guest.id,
         "name": f"{guest.first_name} {guest.last_name}",
         "zone_id": zone.id, "zone_name": zone.name,

@@ -13,11 +13,18 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..database import get_db
 from ..models import Event, Guest
+from ..ratelimit import rate_limit
 from ..schemas import SelfCheckinSearch, SelfCheckinResult, SelfCheckinGuest
 from .scanner import perform_admission
 from services.qr_service import generate_qr_for_url
 
 router = APIRouter()
+
+# Generous ceilings sized for a real crowd self-checking-in at one venue (all
+# sharing that venue's public IP), keyed per event_code so one busy event can't
+# starve another and a whole venue isn't throttled as a single client.
+_search_limit = rate_limit(limit=60, window=60, scope="selfcheckin_search")
+_admit_limit = rate_limit(limit=120, window=60, scope="selfcheckin_admit")
 
 
 async def _event_by_code(code: str, db: AsyncSession) -> Event | None:
@@ -43,7 +50,7 @@ async def self_checkin_info(event_code: str, db: AsyncSession = Depends(get_db))
     return SelfCheckinResult(status="ok", name=ev.name)
 
 
-@router.post("/{event_code}/search", response_model=SelfCheckinResult)
+@router.post("/{event_code}/search", response_model=SelfCheckinResult, dependencies=[Depends(_search_limit)])
 async def self_checkin_search(event_code: str, body: SelfCheckinSearch, db: AsyncSession = Depends(get_db)):
     ev = await _event_by_code(event_code, db)
     if not ev or not ev.self_checkin_enabled:
@@ -71,7 +78,7 @@ async def self_checkin_search(event_code: str, body: SelfCheckinSearch, db: Asyn
     return SelfCheckinResult(status="ok", guests=guests)
 
 
-@router.post("/{event_code}/checkin/{guest_id}", response_model=SelfCheckinResult)
+@router.post("/{event_code}/checkin/{guest_id}", response_model=SelfCheckinResult, dependencies=[Depends(_admit_limit)])
 async def self_checkin_admit(
     event_code: str,
     guest_id: str,

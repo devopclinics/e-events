@@ -1,3 +1,4 @@
+import asyncio
 import json
 import firebase_admin
 from firebase_admin import credentials, auth as firebase_auth
@@ -68,7 +69,10 @@ async def get_current_user(
 
     _ensure_firebase()
     try:
-        decoded = firebase_auth.verify_id_token(creds.credentials)
+        # verify_id_token is a synchronous, CPU-bound crypto call. Off-loading it
+        # to a thread keeps the single event loop free to serve other requests
+        # (critical once multiple requests hit auth concurrently).
+        decoded = await asyncio.to_thread(firebase_auth.verify_id_token, creds.credentials)
     except Exception:
         raise HTTPException(401, "Invalid or expired token")
 
@@ -262,7 +266,7 @@ async def verify_token_user(token: str, db: AsyncSession) -> User:
     (does not provision new accounts)."""
     _ensure_firebase()
     try:
-        decoded = firebase_auth.verify_id_token(token)
+        decoded = await asyncio.to_thread(firebase_auth.verify_id_token, token)
     except Exception:
         raise HTTPException(401, "Invalid or expired token")
     firebase_uid = decoded["uid"]

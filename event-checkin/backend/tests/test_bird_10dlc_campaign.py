@@ -1,9 +1,6 @@
 import importlib.util
 from pathlib import Path
 
-import pytest
-
-
 def _load_script():
     path = Path(__file__).resolve().parents[1] / "scripts" / "bird_10dlc_campaign.py"
     spec = importlib.util.spec_from_file_location("bird_10dlc_campaign", path)
@@ -12,11 +9,6 @@ def _load_script():
     return module
 
 
-@pytest.mark.xfail(
-    reason="WIP: 10DLC campaign messageFlow copy was revised and no longer includes the "
-           "https://festio.events/terms URL this test asserts — confirm intended compliance copy.",
-    strict=False,
-)
 def test_campaign_payload_matches_festio_transactional_sms_scope():
     script = _load_script()
 
@@ -35,8 +27,14 @@ def test_campaign_payload_matches_festio_transactional_sms_scope():
     assert payload["subscriberHelp"] is True
     assert payload["termsAndConditions"] is True
     assert "not promotional or marketing" in payload["description"]
+    assert "Mobile opt-in path" in payload["messageFlow"]
+    assert "https://festio.events/rsvp/{event-token}" in payload["messageFlow"]
+    assert "https://festio.events/scan/{guest-token}" in payload["messageFlow"]
+    assert "Reply HELP for help" in payload["messageFlow"]
+    assert "Reply STOP to opt out" in payload["messageFlow"]
+    assert "Message frequency varies by event" in payload["messageFlow"]
+    assert "Message and data rates may apply" in payload["messageFlow"]
     assert "https://festio.events/privacy" in payload["messageFlow"]
-    assert "https://festio.events/terms" in payload["messageFlow"]
 
 
 def test_campaign_samples_are_branded_and_include_stop():

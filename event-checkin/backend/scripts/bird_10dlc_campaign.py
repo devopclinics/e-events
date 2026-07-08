@@ -90,31 +90,32 @@ def campaign_payload(
         "samples": [
             (
                 "Festio: Hi Amara! You're invited to Johnson Wedding on Aug 12, 2026. "
-                "Your ticket: https://festio.events/scan/abc123 Reply HELP for help, STOP to opt out. Msg&data rates may apply."
+                "Your ticket: https://festio.events/scan/abc123 Reply HELP for help, STOP to opt out. Message and data rates may apply."
             ),
             (
                 "Festio: Welcome Amara! You're checked in to Johnson Wedding. "
-                "Table: VIP-2 seat 4. Reply HELP for help, STOP to opt out. Msg&data rates may apply."
+                "Table: VIP-2 seat 4. Reply HELP for help, STOP to opt out. Message and data rates may apply."
             ),
-            "Festio: Your seat for Johnson Wedding changed to Table 2, Seat 6. Reply HELP for help, STOP to opt out. Msg&data rates may apply.",
+            "Festio: Your seat for Johnson Wedding changed to Table 2, Seat 6. Reply HELP for help, STOP to opt out. Message and data rates may apply.",
         ],
         "messageFlow": (
-            "Guests opt in on a Festio event RSVP, ticket, guest hub, or event registration page "
-            "at https://festio.events. The page identifies Festio by FOHMA Solutions LLC, shows "
-            "the guest's phone number, and includes an SMS/text notification checkbox. The public "
-            "opt-in terms and example consent language are published at "
-            "https://festio.events/sms-policy. The consent statement says guests agree to receive "
-            "SMS/text messages from Festio for that event, including invitation or ticket links, "
-            "QR passes, RSVP updates, check-in confirmations, seating updates, session reminders, "
-            "and other event-service notifications. It discloses that message frequency varies by "
-            "event, message and data rates may apply, reply STOP to opt out at any time, reply HELP "
-            "for help, consent is not required to buy goods or services, and links to the Privacy "
-            "Policy at https://festio.events/privacy. Guests can also opt out by replying STOP or "
-            "by contacting events@festio.events."
+            "Mobile opt-in path: the guest opens their Festio RSVP link on a phone, for example "
+            "https://festio.events/rsvp/{event-token}, enters or confirms their mobile number, "
+            "checks the SMS/text notifications consent checkbox, and taps the RSVP/submit button. "
+            "A ticket/pass path such as https://festio.events/scan/{guest-token} also lets a guest "
+            "view or update event messaging preferences. The page identifies Festio by FOHMA "
+            "Solutions LLC and the public evidence page at https://festio.events/sms-policy shows "
+            "the exact opt-in statement: I agree to receive SMS/text messages from Festio for this "
+            "event, including invitation or ticket links, QR passes, RSVP updates, check-in "
+            "confirmations, seating updates, session reminders, and other event-service "
+            "notifications. Message frequency varies by event. Message and data rates may apply. "
+            "Reply HELP for help. Reply STOP to opt out at any time. Consent is not required to "
+            "buy goods or services. Privacy Policy: https://festio.events/privacy. Guests can also "
+            "opt out by replying STOP or contacting events@festio.events."
         ),
         "helpMessage": (
             "Festio: For help, email events@festio.events. Reply START to opt in, "
-            "STOP to opt out. Msg & data rates may apply."
+            "STOP to opt out. Message and data rates may apply."
         ),
         "helpKeywords": "HELP",
         "optoutKeywords": "STOP",
@@ -122,7 +123,7 @@ def campaign_payload(
         "optinMessage": (
             "Festio: You've opted in to event SMS updates for tickets and check-in. "
             "Frequency varies by event. Reply HELP for help, STOP to opt out. "
-            "Msg & data rates may apply."
+            "Message and data rates may apply."
         ),
         "optoutMessage": (
             "Festio: You have opted out of event SMS updates. You will not receive more texts. "

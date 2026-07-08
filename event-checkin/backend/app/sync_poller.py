@@ -83,3 +83,13 @@ async def run() -> None:
         except Exception:
             logger.exception("sync_poller tick crashed")
         await asyncio.sleep(TICK_SECONDS)
+
+
+# Standalone entrypoint so the poller can run as its own process/container
+# (`python -m app.sync_poller`). Under horizontal scaling exactly ONE such
+# process should run — the web pods set RUN_IN_APP_POLLER=false and a single
+# dedicated Deployment (replicas: 1) runs this. In-app single-host deploys keep
+# the default (poller started from main.py's lifespan).
+if __name__ == "__main__":
+    logging.basicConfig(level=logging.INFO)
+    asyncio.run(run())

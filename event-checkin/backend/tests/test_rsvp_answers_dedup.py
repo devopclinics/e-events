@@ -41,6 +41,32 @@ async def test_rsvp_blocks_duplicate_by_phone_no_email(ctx):
     again = await ctx.client.post(f"/api/invite/{ev}/rsvp", json=body)
     assert again.status_code == 409, again.text
 
+    async with _Session() as s:
+        guest = (await s.execute(
+            __import__("sqlalchemy").select(Guest).where(Guest.event_id == ev, Guest.phone == "+14155550123")
+        )).scalar_one()
+        assert guest.sms_consent is False
+
+
+@pytest.mark.asyncio
+async def test_rsvp_saves_explicit_sms_consent(ctx):
+    ev = ctx.ids["event_a"]
+    await _open_event(ev)
+    body = {
+        "first_name": "S",
+        "last_name": "M",
+        "phone": "+14155550124",
+        "sms_consent": True,
+    }
+    response = await ctx.client.post(f"/api/invite/{ev}/rsvp", json=body)
+    assert response.status_code == 201, response.text
+
+    async with _Session() as s:
+        guest = (await s.execute(
+            __import__("sqlalchemy").select(Guest).where(Guest.event_id == ev, Guest.phone == "+14155550124")
+        )).scalar_one()
+        assert guest.sms_consent is True
+
 
 @pytest.mark.asyncio
 async def test_rsvp_answers_visible_to_organizer(ctx):

@@ -15,6 +15,7 @@ from .routers import design_proxy as design_proxy_router
 from .routers import og as og_router
 from .routers import floor as floor_router
 from . import sync_poller, db_migrate
+from . import routers
 
 # Override with UPLOADS_DIR for local/test runs; defaults to the in-container path.
 UPLOADS_DIR = os.environ.get("UPLOADS_DIR", "/app/uploads")
@@ -27,15 +28,26 @@ async def lifespan(app: FastAPI):
     # preferred — it fails fast before swapping production.
     await db_migrate.apply(engine)
 
-    poller_task = asyncio.create_task(sync_poller.run())
+    # Run the guest-list sync poller inside the web process for single-host
+    # deploys (default). When scaling out, set RUN_IN_APP_POLLER=false on the
+    # web pods and run exactly one dedicated poller (`python -m app.sync_poller`)
+    # so events aren't re-imported by every replica.
+    run_poller = os.environ.get("RUN_IN_APP_POLLER", "true").lower() not in ("false", "0", "no")
+    poller_task = asyncio.create_task(sync_poller.run()) if run_poller else None
+
+    # Start the Redis SSE fan-in subscriber (no-op unless REDIS_URL is set) so
+    # dashboard events published by any replica reach the connections on this one.
+    await routers.start_sse_subscriber()
     try:
         yield
     finally:
-        poller_task.cancel()
-        try:
-            await poller_task
-        except asyncio.CancelledError:
-            pass
+        await routers.stop_sse_subscriber()
+        if poller_task is not None:
+            poller_task.cancel()
+            try:
+                await poller_task
+            except asyncio.CancelledError:
+                pass
 
 
 app = FastAPI(title="Event Check-In QR System", version="1.0.0", lifespan=lifespan)

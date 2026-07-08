@@ -32,7 +32,8 @@ async def test_invite_sms_is_branded_and_has_opt_out(monkeypatch):
     assert sent == [(
         "+15551234567",
         "Festio: Hi Amara! You're invited to Johnson Wedding on Aug 12, 2026. "
-        "Your ticket: https://festio.events/scan/abc123 Reply STOP to opt out.",
+        "Your ticket: https://festio.events/scan/abc123 Reply HELP for help, STOP to opt out. "
+        "Message and data rates may apply.",
     )]
 
 
@@ -52,7 +53,7 @@ async def test_admission_sms_names_event_and_has_opt_out(monkeypatch):
     assert sent == [(
         "+15551234567",
         "Festio: Welcome Amara! You're checked in to Johnson Wedding. "
-        "Table: VIP-2 seat 4. Reply STOP to opt out.",
+        "Table: VIP-2 seat 4. Reply HELP for help, STOP to opt out. Message and data rates may apply.",
     )]
 
 
@@ -67,5 +68,6 @@ async def test_custom_sms_adds_missing_brand_and_opt_out(monkeypatch):
 
     assert sent == [(
         "+15551234567",
-        "Festio: Your seat changed to Table 2, Seat 6. Reply STOP to opt out.",
+        "Festio: Your seat changed to Table 2, Seat 6. Reply HELP for help, STOP to opt out. "
+        "Message and data rates may apply.",
     )]

@@ -16,6 +16,7 @@ from .routers import og as og_router
 from .routers import floor as floor_router
 from . import sync_poller, db_migrate
 from . import routers
+from . import storage
 
 # Override with UPLOADS_DIR for local/test runs; defaults to the in-container path.
 UPLOADS_DIR = os.environ.get("UPLOADS_DIR", "/app/uploads")
@@ -94,17 +95,30 @@ app.include_router(design_proxy_router.router, prefix="/api/events", tags=["desi
 app.include_router(og_router.router, prefix="/api/og", tags=["og"])
 app.include_router(floor_router.router, prefix="/api", tags=["floor-plan"])
 
-# Serve uploaded files (cover images, etc.)
-try:
-    os.makedirs(UPLOADS_DIR, exist_ok=True)
-except OSError:
-    # The default in-container path (/app/uploads) isn't writable when running
-    # outside the container (CI, local pytest) — fall back to a temp dir so the
-    # app still imports. Prod keeps using UPLOADS_DIR unchanged.
-    import tempfile
-    UPLOADS_DIR = os.path.join(tempfile.gettempdir(), "eqr_uploads")
-    os.makedirs(UPLOADS_DIR, exist_ok=True)
-app.mount("/api/uploads", StaticFiles(directory=UPLOADS_DIR), name="uploads")
+# Serve uploaded files (cover images, etc.). When S3 is configured, stream from
+# the bucket so any replica can serve any file; otherwise serve from local disk.
+if storage.s3_enabled():
+    from fastapi import HTTPException
+    from fastapi.responses import StreamingResponse
+
+    @app.get("/api/uploads/{subpath:path}")
+    async def serve_upload(subpath: str):
+        result = storage.open_stream(subpath)
+        if result is None:
+            raise HTTPException(404, "Not found")
+        chunks, content_type = result
+        return StreamingResponse(chunks, media_type=content_type)
+else:
+    try:
+        os.makedirs(UPLOADS_DIR, exist_ok=True)
+    except OSError:
+        # The default in-container path (/app/uploads) isn't writable when running
+        # outside the container (CI, local pytest) — fall back to a temp dir so the
+        # app still imports. Prod keeps using UPLOADS_DIR unchanged.
+        import tempfile
+        UPLOADS_DIR = os.path.join(tempfile.gettempdir(), "eqr_uploads")
+        os.makedirs(UPLOADS_DIR, exist_ok=True)
+    app.mount("/api/uploads", StaticFiles(directory=UPLOADS_DIR), name="uploads")
 
 
 @app.get("/api/health")

@@ -23,6 +23,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from ..auth import require_paid_event_admin, require_paid_event_member
 from ..config import settings
 from ..database import get_db
+from .. import storage
 from ..models import (
     Event, FloorElement, FloorPlan, Guest, SeatingTable, TableGroup, TableGroupTable, User,
 )
@@ -233,12 +234,8 @@ async def upload_floor_bg(event_id: str, file: UploadFile = File(...), db: Async
     if len(data) > 10 * 1024 * 1024:
         raise HTTPException(413, "Image too large — maximum 10 MB.")
     ext = {"image/jpeg": "jpg", "image/png": "png", "image/webp": "webp", "image/gif": "gif"}.get(file.content_type, "jpg")
-    dir_path = os.path.join(UPLOADS_DIR, "floor")
-    os.makedirs(dir_path, exist_ok=True)
     filename = f"{event_id}-floor-{uuid.uuid4().hex[:8]}.{ext}"
-    with open(os.path.join(dir_path, filename), "wb") as f:
-        f.write(data)
-    url = f"/api/uploads/floor/{filename}"
+    url = storage.save(f"floor/{filename}", data, file.content_type)
     plan = await _get_or_make_plan(event_id, db)
     plan.bg_image_url = url
     await db.commit()

@@ -22,6 +22,7 @@ from services import messaging
 from services.email_service import send_manual_invite_email, send_broadcast_email, send_simple_email
 from ..template_resolve import load_overrides, channel_text, email_override
 from services.templates import build_context as build_template_context
+from .. import storage
 
 UPLOADS_DIR = "/app/uploads"
 ALLOWED_IMAGE_TYPES = {"image/jpeg", "image/png", "image/webp", "image/gif"}
@@ -1002,14 +1003,8 @@ async def upload_cover_image(
     # Derive extension from content type
     ext = {"image/jpeg": "jpg", "image/png": "png", "image/webp": "webp", "image/gif": "gif"}.get(file.content_type, "jpg")
     filename = f"{event_id}-cover-{_uuid.uuid4().hex[:8]}.{ext}"
-    dir_path = os.path.join(UPLOADS_DIR, "events")
-    os.makedirs(dir_path, exist_ok=True)
-    file_path = os.path.join(dir_path, filename)
 
-    with open(file_path, "wb") as f:
-        f.write(data)
-
-    url = f"/api/uploads/events/{filename}"
+    url = storage.save(f"events/{filename}", data, file.content_type)
     event.invite_cover_image = url
     await db.commit()
     await db.refresh(event)
@@ -1027,12 +1022,8 @@ async def delete_cover_image(
     if not event:
         raise HTTPException(404, "Event not found")
     if event.invite_cover_image:
-        # Best-effort delete the file
-        path = os.path.join(UPLOADS_DIR, event.invite_cover_image.lstrip("/api/uploads/"))
-        try:
-            os.remove(path)
-        except OSError:
-            pass
+        # Best-effort delete the file (local disk or S3, depending on backend).
+        storage.delete(storage.subpath_from_url(event.invite_cover_image))
         event.invite_cover_image = None
         await db.commit()
         await db.refresh(event)

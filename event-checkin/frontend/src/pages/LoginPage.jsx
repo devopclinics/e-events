@@ -8,6 +8,7 @@ import { getPreferredView, setPreferredView } from '../App'
 
 function ViewPicker({ role, onPick }) {
   const views = [
+    ...(role === 'admin' ? [{ key: 'setup', icon: 'NEW', label: 'Create event', desc: 'Create a draft event and get a plan recommendation' }] : []),
     ...(role === 'admin' ? [{ key: 'admin',     icon: 'SET', label: 'Event Setup',  desc: 'Create events, import guests, and send invitations' }] : []),
     { key: 'dashboard', icon: 'RES', label: 'Results',    desc: 'RSVP progress, check-ins, and attendance' },
     { key: 'scanner',   icon: 'QR', label: 'Check-in',   desc: 'Scan guest QR codes at the entrance' },
@@ -94,7 +95,7 @@ export default function LoginPage() {
 
   function handlePick(view) {
     setPreferredView(view)
-    navigate(view === 'admin' ? '/admin' : `/${view}`, { replace: true })
+    navigate(view === 'setup' ? '/setup' : view === 'admin' ? '/admin' : `/${view}`, { replace: true })
   }
 
   if (pickerRole) return <ViewPicker role={pickerRole} onPick={handlePick} />

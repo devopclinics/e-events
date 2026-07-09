@@ -54,12 +54,17 @@ from ..services.experience import (
     unarchive_workflow,
     unpublish_workflow,
 )
+from ..entitlements import assert_feature_allowed
 from ..timeutil import EVENT_TZ
 from services.email_service import send_simple_email
 from services.templates import build_context as build_template_context
 from ..template_resolve import email_or_default as template_email_or_default, load_overrides
 
 router = APIRouter()
+
+
+def _assert_experience_plan(event: Event) -> None:
+    assert_feature_allowed(event, "experience_enabled")
 
 
 def _progress_out(row: GuestExperienceProgress) -> GuestExperienceProgressOut:
@@ -956,6 +961,7 @@ async def save_consent_form(
     event = await db.get(Event, event_id)
     if not event:
         raise HTTPException(404, "Event not found")
+    _assert_experience_plan(event)
     form = await db.scalar(
         select(ConsentForm)
         .where(ConsentForm.event_id == event_id, ConsentForm.is_active.is_(True))
@@ -1007,6 +1013,7 @@ async def default_workflow(
     event = await db.get(Event, event_id)
     if not event:
         raise HTTPException(404, "Event not found")
+    _assert_experience_plan(event)
     return await create_default_workflow(event, db, actor_user_id=current_user.id)
 
 
@@ -1020,6 +1027,7 @@ async def create_custom_workflow(
     event = await db.get(Event, event_id)
     if not event:
         raise HTTPException(404, "Event not found")
+    _assert_experience_plan(event)
     _assert_unique_step_keys(data.steps)
     return await create_workflow(
         event,
@@ -1047,6 +1055,10 @@ async def delete_workflow(
     db: AsyncSession = Depends(get_db),
     _: User = Depends(require_event_admin),
 ):
+    event = await db.get(Event, event_id)
+    if not event:
+        raise HTTPException(404, "Event not found")
+    _assert_experience_plan(event)
     workflow = await _load_scoped_workflow(event_id, workflow_id, db)
     if workflow.status != "draft":
         raise HTTPException(409, "Only draft workflows can be deleted. Archive published or historical workflows instead.")
@@ -1082,6 +1094,10 @@ async def create_step(
     db: AsyncSession = Depends(get_db),
     _: User = Depends(require_event_admin),
 ):
+    event = await db.get(Event, event_id)
+    if not event:
+        raise HTTPException(404, "Event not found")
+    _assert_experience_plan(event)
     workflow = await _load_scoped_workflow(event_id, workflow_id, db)
     _ensure_draft(workflow)
     if await _step_key_exists(workflow.id, data.key, db):
@@ -1102,6 +1118,10 @@ async def update_step(
     db: AsyncSession = Depends(get_db),
     _: User = Depends(require_event_admin),
 ):
+    event = await db.get(Event, event_id)
+    if not event:
+        raise HTTPException(404, "Event not found")
+    _assert_experience_plan(event)
     workflow = await _load_scoped_workflow(event_id, workflow_id, db)
     _ensure_draft(workflow)
     step = await db.get(ExperienceStep, step_id)
@@ -1125,6 +1145,10 @@ async def delete_step(
     db: AsyncSession = Depends(get_db),
     _: User = Depends(require_event_admin),
 ):
+    event = await db.get(Event, event_id)
+    if not event:
+        raise HTTPException(404, "Event not found")
+    _assert_experience_plan(event)
     workflow = await _load_scoped_workflow(event_id, workflow_id, db)
     _ensure_draft(workflow)
     step = await db.get(ExperienceStep, step_id)
@@ -1194,6 +1218,7 @@ async def publish(
     event = await db.get(Event, event_id)
     if not event:
         raise HTTPException(404, "Event not found")
+    _assert_experience_plan(event)
     workflow = await _load_scoped_workflow(event_id, workflow_id, db)
     if workflow.status != "draft":
         raise HTTPException(409, "Only draft workflows can be published")

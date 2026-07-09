@@ -16,6 +16,7 @@ import logging
 from fastapi import APIRouter, Request, Response
 
 from app.config import settings
+from services.credit_ledger import reconcile_provider_status
 
 logger = logging.getLogger(__name__)
 
@@ -59,6 +60,68 @@ async def twilio_status_callback(request: Request) -> Response:
         status,
         f" error={error_code}" if error_code else "",
     )
+    try:
+        await reconcile_provider_status(
+            provider="twilio",
+            provider_message_id=params.get("MessageSid"),
+            status=status,
+            error_code=error_code,
+        )
+    except Exception:
+        logger.exception("Twilio status callback reconciliation failed")
 
     # 204: acknowledge without a body so Twilio marks the callback delivered.
+    return Response(status_code=204)
+
+
+async def _payload(request: Request) -> dict:
+    content_type = request.headers.get("content-type", "")
+    if "application/json" in content_type:
+        data = await request.json()
+        return data if isinstance(data, dict) else {}
+    form = await request.form()
+    return {k: v for k, v in form.items()}
+
+
+@router.post("/bird/status")
+async def bird_status_callback(request: Request) -> Response:
+    data = await _payload(request)
+    message = data.get("message") if isinstance(data.get("message"), dict) else {}
+    status = data.get("status") or message.get("status") or data.get("messageStatus")
+    message_id = (
+        data.get("id")
+        or data.get("messageId")
+        or data.get("message_id")
+        or message.get("id")
+        or message.get("messageId")
+        or message.get("message_id")
+    )
+    error = data.get("errorCode") or data.get("error_code") or data.get("error")
+    try:
+        await reconcile_provider_status(
+            provider="bird",
+            provider_message_id=message_id,
+            status=status,
+            error_code=str(error) if error else None,
+        )
+    except Exception:
+        logger.exception("Bird status callback reconciliation failed")
+    return Response(status_code=204)
+
+
+@router.post("/clicksend/status")
+async def clicksend_status_callback(request: Request) -> Response:
+    data = await _payload(request)
+    status = data.get("status") or data.get("message_status") or data.get("status_text")
+    message_id = data.get("message_id") or data.get("messageid") or data.get("id")
+    error = data.get("error_code") or data.get("error") or data.get("status_code")
+    try:
+        await reconcile_provider_status(
+            provider="clicksend",
+            provider_message_id=message_id,
+            status=status,
+            error_code=str(error) if error else None,
+        )
+    except Exception:
+        logger.exception("ClickSend status callback reconciliation failed")
     return Response(status_code=204)

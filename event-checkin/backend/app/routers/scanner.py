@@ -11,10 +11,11 @@ from ..models import ConsentForm, ConsentSignature, Guest, Event, EventUser, Use
 from ..schemas import ConsentSignatureCreate, ExperienceNextStepOut, ExperienceStepOut, GuestExperienceProgressOut, PublicConsentOut, SendConsentCopyOut, ScanResult, GuestOut, TicketView, EventBrief, MenuCategoryOut, MenuItemOut, MenuCombinationOut, MenuCombinationItemOut, GuestMenuSubmit, PartnerInfo, PairRequest, ScanZoneRequest, ScanZoneResult
 from ..auth import require_official, _org_role
 from .access import zone_occupancy, ticket_allows
-from ..entitlements import can_use_paid_channels, take_message_credit
+from ..entitlements import can_use_paid_channels, last_credit_ledger_id, take_message_credit
 from services.email_service import send_admission_email, send_simple_email
 from services import messaging
-from services.qr_service import generate_qr_bytes
+from services.credit_ledger import send_with_credit_ledger
+from services.qr_service import generate_qr_bytes, generate_qr_for_url
 from . import broadcast
 from .seating import assign_next_seat
 from ..timeutil import local_hhmm
@@ -643,6 +644,15 @@ async def ticket_qr_image(qr_token: str, db: AsyncSession = Depends(get_db)):
     return Response(content=generate_qr_bytes(qr_token, base_url), media_type="image/png")
 
 
+@router.get("/{qr_token}/checkout-qr.png")
+async def ticket_checkout_qr_image(qr_token: str, db: AsyncSession = Depends(get_db)):
+    """Public — distinct QR payload for normal-event checkout/exit scans."""
+    guest = (await db.execute(select(Guest).where(Guest.qr_token == qr_token))).scalar_one_or_none()
+    if not guest:
+        return Response(status_code=404)
+    return Response(content=generate_qr_for_url(f"festio-checkout:{qr_token}"), media_type="image/png")
+
+
 @router.get("/{qr_token}/card.jpg")
 async def ticket_card_image(
     qr_token: str,
@@ -784,10 +794,63 @@ async def scan_qr(
     if not guest:
         return ScanResult(status="invalid", message="Invalid QR code. This ticket was not found.")
     event = await db.get(Event, guest.event_id)
+    if not event:
+        return ScanResult(status="invalid", message="Event not found for this ticket.")
     blocked = await checkin_guard(event, current_user, db)
     if blocked:
         return blocked
     return await perform_admission(guest, event, background_tasks, db)
+
+
+@router.post("/{qr_token}/checkout", response_model=ScanResult)
+async def scan_qr_checkout(
+    qr_token: str,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_official),
+):
+    guest = (await db.execute(select(Guest).where(Guest.qr_token == qr_token))).scalar_one_or_none()
+    if not guest:
+        return ScanResult(status="invalid", message="Invalid QR code. This ticket was not found.")
+    event = await db.get(Event, guest.event_id)
+    if not event:
+        return ScanResult(status="invalid", message="Event not found for this ticket.")
+    blocked = await checkin_guard(event, current_user, db)
+    if blocked:
+        return blocked
+    if not guest.admitted:
+        return ScanResult(
+            status="not_checked_in",
+            message=f"{guest.first_name} {guest.last_name} has not checked in yet.",
+            guest=GuestOut.model_validate(guest),
+        )
+
+    last_normal_scan = await db.scalar(
+        select(ScanEvent)
+        .where(ScanEvent.event_id == event.id, ScanEvent.guest_id == guest.id, ScanEvent.zone_id.is_(None), ScanEvent.denied.is_(False))
+        .order_by(ScanEvent.scanned_at.desc())
+        .limit(1)
+    )
+    if last_normal_scan and last_normal_scan.direction == "out":
+        return ScanResult(
+            status="already_checked_out",
+            message=f"{guest.first_name} {guest.last_name} was already checked out at {local_hhmm(last_normal_scan.scanned_at) or 'unknown'}.",
+            guest=GuestOut.model_validate(guest),
+        )
+
+    db.add(ScanEvent(event_id=event.id, guest_id=guest.id, zone_id=None, direction="out", scanned_by=current_user.id))
+    await db.commit()
+    await broadcast(event.id, {
+        "type": "checked_out",
+        "guest_id": guest.id,
+        "name": f"{guest.first_name} {guest.last_name}",
+        "email": guest.email,
+        "checked_out_at": datetime.utcnow().isoformat(),
+    })
+    return ScanResult(
+        status="checked_out",
+        message=f"{guest.first_name} {guest.last_name} has been checked out.",
+        guest=GuestOut.model_validate(guest),
+    )
 
 
 async def checkin_guard(event, current_user, db) -> ScanResult | None:
@@ -945,24 +1008,28 @@ async def perform_admission(guest, event, background_tasks, db) -> ScanResult:
     tmpl_ctx = build_template_context(
         event, guest, extras={"table_name": table_name or "", "ticket_link": ticket_url or "", "qr_code": ticket_url or ""}
     )
-    if paid and event.notify_sms and guest.phone and guest.sms_consent and take_message_credit(event):
+    if paid and event.notify_sms and guest.phone and guest.sms_consent and take_message_credit(event, "sms"):
         sms_text = _template_channel_for_event(overrides, event, "admission_confirmation", "experience_admission_confirmation", "sms", tmpl_ctx)
         if sms_text is not None:
-            background_tasks.add_task(messaging.send_custom_sms, phone=guest.phone, body=sms_text)
+            background_tasks.add_task(send_with_credit_ledger, last_credit_ledger_id(event), messaging.send_custom_sms, phone=guest.phone, body=sms_text)
         else:
             background_tasks.add_task(
+                send_with_credit_ledger,
+                last_credit_ledger_id(event),
                 messaging.send_admission_sms,
                 phone=guest.phone, first_name=guest.first_name,
                 event_name=event.name if event else "the event",
                 admitted_at=guest.admitted_at,
                 table_name=table_name, seat_number=guest.seat_number,
             )
-    if paid and event.notify_whatsapp and guest.phone and guest.whatsapp_consent and take_message_credit(event):
+    if paid and event.notify_whatsapp and guest.phone and guest.whatsapp_consent and take_message_credit(event, "whatsapp"):
         wa_text = _template_channel_for_event(overrides, event, "admission_confirmation", "experience_admission_confirmation", "whatsapp", tmpl_ctx)
         if wa_text is not None:
-            background_tasks.add_task(messaging.send_custom_whatsapp, phone=guest.phone, body=wa_text)
+            background_tasks.add_task(send_with_credit_ledger, last_credit_ledger_id(event), messaging.send_custom_whatsapp, phone=guest.phone, body=wa_text)
         else:
             background_tasks.add_task(
+                send_with_credit_ledger,
+                last_credit_ledger_id(event),
                 messaging.send_admission_whatsapp,
                 phone=guest.phone, first_name=guest.first_name,
                 event_name=event.name if event else "the event",
@@ -971,12 +1038,12 @@ async def perform_admission(guest, event, background_tasks, db) -> ScanResult:
     # MMS (image ticket card) — super-admin-enabled per event. Sends the styled
     # admitted card fetched directly from /api/scan/{token}/card.jpg.
     if (paid and event.notify_mms and guest.phone and guest.sms_consent
-            and messaging.mms_ready() and event.checkin_base_url and take_message_credit(event)):
+            and messaging.mms_ready() and event.checkin_base_url and take_message_credit(event, "mms")):
         mms_text = (_template_channel_for_event(overrides, event, "admission_confirmation", "experience_admission_confirmation", "mms", tmpl_ctx)
                     or _template_channel_for_event(overrides, event, "admission_confirmation", "experience_admission_confirmation", "sms", tmpl_ctx)
                     or f"Welcome {guest.first_name}! You're checked in to {event.name}.")
         card_url = f"{event.checkin_base_url.rstrip('/')}/api/scan/{guest.qr_token}/card.jpg?admitted=true"
-        background_tasks.add_task(messaging.send_mms, phone=guest.phone, body=mms_text, media_url=card_url)
+        background_tasks.add_task(send_with_credit_ledger, last_credit_ledger_id(event), messaging.send_mms, phone=guest.phone, body=mms_text, media_url=card_url)
     await db.commit()  # persist message-credit decrements
     await sync_guest_progress(event.id, guest.id, db, source="staff", actor_user_id=None)
     await db.commit()

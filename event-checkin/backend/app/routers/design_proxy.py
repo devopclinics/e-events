@@ -21,6 +21,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from ..database import get_db
 from ..models import Event, User
 from ..auth import require_event_admin
+from ..entitlements import assert_feature_allowed
 
 router = APIRouter()
 
@@ -70,6 +71,10 @@ async def put_design(event_id: str, body: dict = Body(...), db: AsyncSession = D
 
 @router.post("/{event_id}/design/publish")
 async def publish_design(event_id: str, db: AsyncSession = Depends(get_db), _: User = Depends(require_event_admin)):
+    event = await db.get(Event, event_id)
+    if not event:
+        raise HTTPException(404, "Event not found")
+    assert_feature_allowed(event, "design_publish")
     try:
         async with httpx.AsyncClient(timeout=_TIMEOUT) as c:
             r = await c.post(f"{DESIGN_URL}/api/v1/design/events/{event_id}/publish", headers=_headers())

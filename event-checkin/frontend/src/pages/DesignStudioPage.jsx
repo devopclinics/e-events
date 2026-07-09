@@ -132,6 +132,17 @@ const SURFACE_LABELS = {
   email: 'Email',
 }
 
+function UpgradeNotice({ message }) {
+  return (
+    <div className="rounded-xl border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900 dark:border-amber-800 dark:bg-amber-950/30 dark:text-amber-200">
+      <div>{message}</div>
+      <a href="/admin?tab=billing" className="mt-2 inline-flex rounded-lg bg-teal-600 px-3 py-1.5 text-xs font-black text-white hover:bg-teal-700">
+        Open Event Pass
+      </a>
+    </div>
+  )
+}
+
 const input = 'w-full min-h-11 rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-4 focus:ring-teal-300/20 dark:border-slate-700 dark:bg-slate-800 dark:text-white'
 const label = 'mb-1 block text-xs font-extrabold uppercase tracking-[0.12em] text-slate-500 dark:text-slate-400'
 
@@ -578,6 +589,7 @@ export default function DesignStudioPage() {
   const [outputs, setOutputs] = useState([])
   const [busy, setBusy] = useState(false)
   const [flash, setFlash] = useState(null)
+  const [upgradeMessage, setUpgradeMessage] = useState('')
   const [flyer, setFlyer] = useState({ size: 'portrait', qr: true, rsvpLink: true, qrPosition: 'bottom-right' })
   const [emailType, setEmailType] = useState(EMAIL_TYPES[0])
   const designRef = useRef(null)
@@ -594,6 +606,7 @@ export default function DesignStudioPage() {
 
   const note = (text, err = false) => {
     setFlash({ text, err })
+    if (!err) setUpgradeMessage('')
     window.setTimeout(() => setFlash(null), 4500)
   }
 
@@ -966,7 +979,12 @@ export default function DesignStudioPage() {
       setDesign((d) => ({ ...(d || saved || {}), is_published: published.is_published, published_version: published.published_version, published_at: published.published_at }))
       note('Design and selected flyer published to RSVP pages, Guest Hub, Festio Passes, and emails.')
     } catch (e) {
-      note(e.message || 'Publish failed', true)
+      if (e.status === 402) {
+        setUpgradeMessage(e.message || 'Design Studio publishing requires an Event Pass.')
+        note('Design preview is saved. Publishing requires an Event Pass.', true)
+      } else {
+        note(e.message || 'Publish failed', true)
+      }
     } finally {
       setBusy(false)
     }
@@ -1014,6 +1032,8 @@ export default function DesignStudioPage() {
           </div>
         </div>
       </div>
+
+      {upgradeMessage && <div className="mb-4"><UpgradeNotice message={upgradeMessage} /></div>}
 
       {flash && (
         <div className={`mb-4 rounded-2xl px-4 py-3 text-sm font-semibold ${flash.err ? 'border border-red-200 bg-red-50 text-red-700 dark:border-red-400/20 dark:bg-red-950/40 dark:text-red-200' : 'border border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-400/20 dark:bg-emerald-950/40 dark:text-emerald-200'}`}>

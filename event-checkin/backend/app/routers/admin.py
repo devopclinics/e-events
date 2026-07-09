@@ -11,6 +11,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..database import get_db
 from ..models import (Organization, Event, User, Membership, PricingPlan, AffiliateStore, TrialRequest,
+                      MessageCreditLedger,
                       Guest, ScanEvent, GuestTagLink, GuestShipment, GuestMenuChoice, RSVPAnswer,
                       SeatingTable, TableGroup, TableGroupTable)
 from ..schemas import (GrantRequest, OperatorInvite, PlanUpsert, UserOut,
@@ -18,6 +19,7 @@ from ..schemas import (GrantRequest, OperatorInvite, PlanUpsert, UserOut,
                        AccountOrgOut, AccountMemberOut, ActiveToggle, MemberRole, EventResetRequest)
 from ..auth import require_superadmin, set_firebase_disabled, delete_firebase_user
 from ..billing import get_plan, apply_purchase
+from ..entitlements import assert_feature_allowed, grant_message_credits
 from services.email_service import send_simple_email
 
 DEFAULT_ORG_ID = "00000000-0000-0000-0000-000000000001"  # legacy default org — protected
@@ -173,6 +175,8 @@ async def set_manual_checkin(
     ev = await db.get(Event, event_id)
     if not ev:
         raise HTTPException(404, "Event not found")
+    if body.active:
+        assert_feature_allowed(ev, "manual_checkin_enabled")
     ev.manual_checkin_enabled = bool(body.active)
     await db.commit()
     return {"ok": True, "manual_checkin_enabled": ev.manual_checkin_enabled}
@@ -189,6 +193,8 @@ async def set_mms(
     ev = await db.get(Event, event_id)
     if not ev:
         raise HTTPException(404, "Event not found")
+    if body.active:
+        assert_feature_allowed(ev, "notify_mms")
     ev.notify_mms = bool(body.active)
     await db.commit()
     return {"ok": True, "notify_mms": ev.notify_mms}
@@ -206,7 +212,7 @@ async def grant(event_id: str, body: GrantRequest, _: User = Depends(require_sup
             raise HTTPException(400, "Unknown tier")
         apply_purchase(event, plan)
     if body.add_credits:
-        event.message_credits = (event.message_credits or 0) + int(body.add_credits)
+        grant_message_credits(event, int(body.add_credits), reason="operator_grant")
     await db.commit()
     await db.refresh(event)
     return {
@@ -476,6 +482,81 @@ async def delete_affiliate_store(store_id: str, _: User = Depends(require_supera
     await db.commit()
 
 
+# ── Message-credit reporting ─────────────────────────────────────────────────
+
+@router.get("/credit-ledger/report")
+async def credit_ledger_report(
+    limit: int = 100,
+    _: User = Depends(require_superadmin),
+    db: AsyncSession = Depends(get_db),
+):
+    limit = max(1, min(int(limit or 100), 500))
+    summary_rows = (await db.execute(
+        select(
+            MessageCreditLedger.provider,
+            MessageCreditLedger.channel,
+            MessageCreditLedger.action,
+            MessageCreditLedger.status,
+            func.count(MessageCreditLedger.id),
+            func.coalesce(func.sum(MessageCreditLedger.credits), 0),
+            func.coalesce(func.sum(MessageCreditLedger.delta), 0),
+            func.coalesce(func.sum(MessageCreditLedger.provider_cost_cents), 0),
+        )
+        .group_by(
+            MessageCreditLedger.provider,
+            MessageCreditLedger.channel,
+            MessageCreditLedger.action,
+            MessageCreditLedger.status,
+        )
+        .order_by(MessageCreditLedger.provider, MessageCreditLedger.channel, MessageCreditLedger.action)
+    )).all()
+    recent_rows = (await db.execute(
+        select(MessageCreditLedger, Event.name, Organization.name)
+        .join(Event, Event.id == MessageCreditLedger.event_id)
+        .join(Organization, Organization.id == MessageCreditLedger.org_id)
+        .order_by(desc(MessageCreditLedger.created_at))
+        .limit(limit)
+    )).all()
+    return {
+        "summary": [
+            {
+                "provider": provider,
+                "channel": channel,
+                "action": action,
+                "status": status,
+                "rows": int(rows or 0),
+                "credits": int(credits or 0),
+                "delta": int(delta or 0),
+                "provider_cost_cents": int(cost or 0),
+            }
+            for provider, channel, action, status, rows, credits, delta, cost in summary_rows
+        ],
+        "recent": [
+            {
+                "id": row.id,
+                "org_id": row.org_id,
+                "org_name": org_name,
+                "event_id": row.event_id,
+                "event_name": event_name,
+                "guest_id": row.guest_id,
+                "action": row.action,
+                "status": row.status,
+                "channel": row.channel,
+                "reason": row.reason,
+                "provider": row.provider,
+                "provider_message_id": row.provider_message_id,
+                "credits": row.credits,
+                "delta": row.delta,
+                "balance_after": row.balance_after,
+                "provider_cost_cents": row.provider_cost_cents,
+                "provider_currency": row.provider_currency,
+                "created_at": row.created_at,
+            }
+            for row, event_name, org_name in recent_rows
+        ],
+    }
+
+
 # ── Trial-credit requests ────────────────────────────────────────────────────
 
 async def _trial_out(req: TrialRequest, db: AsyncSession) -> TrialRequestOut:
@@ -527,7 +608,7 @@ async def resolve_trial_request(req_id: str, body: TrialResolve,
             if plan:
                 apply_purchase(event, plan)
             if body.add_credits:
-                event.message_credits = (event.message_credits or 0) + int(body.add_credits)
+                grant_message_credits(event, int(body.add_credits), reason="trial_request_grant")
             granted_desc = f"applied to “{event.name}”"
         elif body.tier or body.add_credits:
             # No event yet — stash on the org; consumed by their next event.

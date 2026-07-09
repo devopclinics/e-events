@@ -8,12 +8,16 @@ from email.mime.application import MIMEApplication
 from email.mime.image import MIMEImage
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
+from email.mime.base import MIMEBase
+from email import encoders
 from urllib.parse import quote_plus, urlencode, urljoin
 
 import aiosmtplib
 import httpx
 
 from app.config import settings
+from app.database import AsyncSessionLocal
+from app.models import EmailDeliveryEvent
 from app.timeutil import local_hhmm, to_event_local
 from services.qr_service import generate_qr_bytes
 
@@ -161,6 +165,60 @@ async def _send_via_resend(msg: MIMEMultipart):
     async with httpx.AsyncClient(timeout=20) as c:
         r = await c.post("https://api.resend.com/emails", json=_resend_payload(msg), headers=headers)
     r.raise_for_status()
+    try:
+        data = r.json()
+    except Exception:
+        data = {}
+    logger.info(
+        "Resend accepted email: id=%s to=%s subject=%s kind=%s",
+        data.get("id"),
+        msg["To"],
+        msg["Subject"],
+        msg["X-Festio-Message-Kind"],
+    )
+    return data
+
+
+def _delivery_context(msg: MIMEMultipart) -> dict:
+    return {
+        "event_id": msg["X-Festio-Event-Id"] or None,
+        "guest_id": msg["X-Festio-Guest-Id"] or None,
+        "message_kind": msg["X-Festio-Message-Kind"] or None,
+        "recipient": msg["To"] or None,
+        "subject": msg["Subject"] or None,
+    }
+
+
+async def _record_email_delivery(
+    msg: MIMEMultipart,
+    *,
+    provider: str,
+    status: str,
+    event_type: str,
+    provider_email_id: str | None = None,
+    error_message: str | None = None,
+    payload: dict | None = None,
+) -> None:
+    try:
+        ctx = _delivery_context(msg)
+        async with AsyncSessionLocal() as db:
+            db.add(EmailDeliveryEvent(
+                provider=provider,
+                provider_email_id=provider_email_id,
+                event_id=ctx["event_id"],
+                guest_id=ctx["guest_id"],
+                recipient=ctx["recipient"],
+                subject=ctx["subject"],
+                message_kind=ctx["message_kind"],
+                event_type=event_type,
+                status=status,
+                error_message=error_message[:2000] if error_message else None,
+                payload=payload,
+                occurred_at=datetime.utcnow(),
+            ))
+            await db.commit()
+    except Exception:
+        logger.exception("Failed to record email delivery status for %s", msg["To"])
 
 
 def _first_html_text(msg: MIMEMultipart) -> tuple[str | None, str | None]:
@@ -261,6 +319,10 @@ async def _send_via_bird(msg: MIMEMultipart):
     async with httpx.AsyncClient(timeout=30) as c:
         r = await c.post(url, json=_bird_payload(msg), headers=headers)
     r.raise_for_status()
+    try:
+        return r.json()
+    except Exception:
+        return {}
 
 
 async def _send(msg: MIMEMultipart):
@@ -270,18 +332,59 @@ async def _send(msg: MIMEMultipart):
     # Prefer the Resend HTTP API when configured; otherwise fall back to SMTP.
     if settings.resend_api_key:
         try:
-            await _send_via_resend(msg)
-        except Exception:
+            data = await _send_via_resend(msg)
+            await _record_email_delivery(
+                msg,
+                provider="resend",
+                provider_email_id=(data or {}).get("id"),
+                event_type="email.accepted",
+                status="sent",
+                payload={"source": "send_attempt"},
+            )
+        except Exception as exc:
             logger.exception("Resend send failed for %s", msg["To"])
+            await _record_email_delivery(
+                msg,
+                provider="resend",
+                event_type="email.failed",
+                status="failed",
+                error_message=str(exc),
+                payload={"source": "send_attempt"},
+            )
         return
     if settings.bird_email_api_base and settings.bird_workspace_id and settings.bird_access_key:
         try:
-            await _send_via_bird(msg)
-        except Exception:
+            data = await _send_via_bird(msg)
+            provider_email_id = (data or {}).get("id") or (data or {}).get("messageId") or None
+            await _record_email_delivery(
+                msg,
+                provider="bird",
+                provider_email_id=str(provider_email_id) if provider_email_id else None,
+                event_type="email.accepted",
+                status="sent",
+                payload={"source": "send_attempt"},
+            )
+        except Exception as exc:
             logger.exception("Bird email send failed for %s", msg["To"])
+            await _record_email_delivery(
+                msg,
+                provider="bird",
+                event_type="email.failed",
+                status="failed",
+                error_message=str(exc),
+                payload={"source": "send_attempt"},
+            )
         return
     if not settings.smtp_host:
         logger.warning("Email not configured — skipping email to %s", msg["To"])
+        await _record_email_delivery(
+            msg,
+            provider="none",
+            event_type="email.skipped",
+            status="failed",
+            error_message="Email provider is not configured",
+            payload={"source": "send_attempt"},
+        )
         return
     try:
         async with aiosmtplib.SMTP(
@@ -293,8 +396,23 @@ async def _send(msg: MIMEMultipart):
             if settings.smtp_user:
                 await smtp.login(settings.smtp_user, settings.smtp_password)
             await smtp.send_message(msg)
-    except Exception:
+        await _record_email_delivery(
+            msg,
+            provider="smtp",
+            event_type="email.accepted",
+            status="sent",
+            payload={"source": "send_attempt"},
+        )
+    except Exception as exc:
         logger.exception("Failed to send email to %s", msg["To"])
+        await _record_email_delivery(
+            msg,
+            provider="smtp",
+            event_type="email.failed",
+            status="failed",
+            error_message=str(exc),
+            payload={"source": "send_attempt"},
+        )
 
 
 def _plain_text_from_html(html_body: str) -> str:
@@ -373,7 +491,7 @@ async def send_simple_email(
     """Shared Festio-branded HTML email for simple transactional templates."""
     if not to_email:
         return
-    msg = MIMEMultipart("alternative")
+    msg = MIMEMultipart("mixed" if attachments else "alternative")
     msg["Subject"] = subject
     msg["From"] = settings.email_from
     msg["To"] = to_email
@@ -385,11 +503,21 @@ async def send_simple_email(
         preheader=_plain_text_from_html(html_body)[:140],
         theme=theme,
     )
-    msg.attach(MIMEText(_plain_text_from_html(html_body), "plain", "utf-8"))
-    msg.attach(MIMEText(wrapped, "html", "utf-8"))
+    body_part = MIMEMultipart("alternative") if attachments else msg
+    body_part.attach(MIMEText(_plain_text_from_html(html_body), "plain", "utf-8"))
+    body_part.attach(MIMEText(wrapped, "html", "utf-8"))
+    if attachments:
+        msg.attach(body_part)
     for filename, content, content_type in attachments or []:
         maintype, _, subtype = (content_type or "application/octet-stream").partition("/")
-        part = MIMEApplication(content, _subtype=subtype or "octet-stream")
+        if maintype == "text":
+            part = MIMEText(content.decode("utf-8", "replace"), subtype or "plain", "utf-8")
+        elif maintype == "application":
+            part = MIMEApplication(content, _subtype=subtype or "octet-stream")
+        else:
+            part = MIMEBase(maintype or "application", subtype or "octet-stream")
+            part.set_payload(content)
+            encoders.encode_base64(part)
         part.add_header("Content-Disposition", "attachment", filename=filename)
         msg.attach(part)
     await _send(msg)

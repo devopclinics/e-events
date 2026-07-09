@@ -31,6 +31,23 @@ def require_internal(x_internal_token: str | None = Header(default=None)) -> Non
 
 
 # ── Template gallery ──────────────────────────────────────────────────────────
+@router.post("/render-pdf", dependencies=[Depends(require_internal)])
+async def render_pdf(body: dict):
+    """Render self-contained HTML to a PDF. Used by the core backend for the
+    floor-plan export. Body: {html, width?, height?, landscape?}."""
+    from ..render import render_html_pdf
+    html = body.get("html") or ""
+    if not html:
+        raise HTTPException(400, "html is required")
+    pdf = await render_html_pdf(
+        html,
+        width=body.get("width", "1200px"),
+        height=body.get("height", "800px"),
+        landscape=bool(body.get("landscape", True)),
+    )
+    return Response(content=pdf, media_type="application/pdf")
+
+
 @router.get("/templates")
 def list_templates(
     category: str | None = Query(default=None),

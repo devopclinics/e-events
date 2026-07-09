@@ -26,6 +26,18 @@ from app.models import (
 )
 
 
+@pytest.fixture(autouse=True)
+async def pro_event_for_experience_tests(ctx):
+    """Experience is a Pro feature in the current packaging."""
+    async with _Session() as s:
+        ev = await s.get(Event, ctx.ids["event_a"])
+        ev.is_paid = True
+        ev.paid_channels = True
+        ev.plan_tier = "tier300"
+        ev.guest_cap = 300
+        await s.commit()
+
+
 @pytest.mark.asyncio
 async def test_default_workflow_created_from_existing_event_features(ctx):
     async with _Session() as s:
@@ -80,14 +92,21 @@ async def test_default_workflow_created_from_existing_event_features(ctx):
 
 
 @pytest.mark.asyncio
-async def test_experience_toggle_does_not_require_paid_event(ctx):
+async def test_experience_toggle_requires_pro_event(ctx):
+    async with _Session() as s:
+        ev = await s.get(Event, ctx.ids["event_a"])
+        ev.is_paid = False
+        ev.paid_channels = False
+        ev.plan_tier = "free"
+        ev.guest_cap = None
+        await s.commit()
+
     ctx.login(ctx.ids["user_a"])
     r = await ctx.client.patch(
         f"/api/events/{ctx.ids['event_a']}/features",
         json={"experience_enabled": True},
     )
-    assert r.status_code == 200
-    assert r.json()["experience_enabled"] is True
+    assert r.status_code == 402
 
 
 @pytest.mark.asyncio

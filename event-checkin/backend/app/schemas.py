@@ -272,6 +272,23 @@ class TrialRequestOut(BaseModel):
     requester_email: Optional[str] = None
 
 
+class DemoRequestCreate(BaseModel):
+    contact_name: str = Field(min_length=2, max_length=120)
+    email: EmailStr
+    phone: Optional[str] = Field(default=None, max_length=40)
+    organization: Optional[str] = Field(default=None, max_length=140)
+    event_name: Optional[str] = Field(default=None, max_length=140)
+    guest_count: Optional[int] = Field(default=None, ge=1, le=100000)
+    preferred_time: datetime
+    timezone: Optional[str] = Field(default=None, max_length=80)
+    message: Optional[str] = Field(default=None, max_length=1200)
+
+
+class DemoRequestOut(BaseModel):
+    ok: bool = True
+    message: str
+
+
 class TrialResolve(BaseModel):
     action: Literal["approve", "decline"]
     event_id: Optional[str] = None      # which event to comp (approve only)

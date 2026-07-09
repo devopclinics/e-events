@@ -99,15 +99,25 @@ SCHEMA_PATCHES: list[str] = [
         f"SELECT '{k}', '{kind}', '{label}', {cap}, {cr}, {usd}, {ngn}, TRUE, {so} "
         f"WHERE NOT EXISTS (SELECT 1 FROM pricing_plans WHERE key = '{k}')"
         for (k, kind, label, cap, cr, usd, ngn, so) in [
-            ("tier50",      "tier", "Up to 50 guests",     "50",   100,  2900,  2500000,  1),
-            ("tier150",     "tier", "Up to 150 guests",    "150",  300,  5900,  5500000,  2),
-            ("tier300",     "tier", "Up to 300 guests",    "300",  600,  9900,  9500000,  3),
-            ("unlimited",   "tier", "300+ (unlimited)",    "NULL", 1500, 14900, 15000000, 4),
-            ("credits_100", "pack", "100 message credits", "NULL", 100,  500,   500000,   1),
-            ("credits_500", "pack", "500 message credits", "NULL", 500,  2000,  2000000,  2),
-            ("credits_2000","pack", "2,000 message credits","NULL",2000, 6000,  6000000,  3),
+            ("tier50",      "tier", "Starter · up to 50 guests",     "50",   100,  2900,  2900000,  1),
+            ("tier150",     "tier", "Standard · up to 150 guests",   "150",  300,  5900,  6500000,  2),
+            ("tier300",     "tier", "Pro · up to 300 guests",        "300",  700,  9900,  11000000, 3),
+            ("scale",       "tier", "Scale · up to 1,000 guests",    "1000", 2000, 14900, 18000000, 4),
+            ("credits_100", "pack", "100 message credits", "NULL", 100,  600,   500000,   1),
+            ("credits_500", "pack", "500 message credits", "NULL", 500,  2500,  2000000,  2),
+            ("credits_2000","pack", "2,000 message credits","NULL",2000, 8000,  7000000,  3),
         ]
     ],
+    # Keep live pricing aligned with the current public packaging. This is
+    # intentionally idempotent and updates rows seeded by earlier releases.
+    "UPDATE pricing_plans SET label='Starter · up to 50 guests', guest_cap=50, credits=100, usd=2900, ngn=2900000, active=TRUE, sort_order=1 WHERE key='tier50'",
+    "UPDATE pricing_plans SET label='Standard · up to 150 guests', guest_cap=150, credits=300, usd=5900, ngn=6500000, active=TRUE, sort_order=2 WHERE key='tier150'",
+    "UPDATE pricing_plans SET label='Pro · up to 300 guests', guest_cap=300, credits=700, usd=9900, ngn=11000000, active=TRUE, sort_order=3 WHERE key='tier300'",
+    "UPDATE pricing_plans SET label='Scale · up to 1,000 guests', guest_cap=1000, credits=2000, usd=14900, ngn=18000000, active=TRUE, sort_order=4 WHERE key='scale'",
+    "UPDATE pricing_plans SET label='Legacy Scale · up to 1,000 guests', guest_cap=1000, credits=2000, usd=14900, ngn=18000000, active=FALSE WHERE key='unlimited'",
+    "UPDATE pricing_plans SET usd=600, ngn=500000 WHERE key='credits_100'",
+    "UPDATE pricing_plans SET usd=2500, ngn=2000000 WHERE key='credits_500'",
+    "UPDATE pricing_plans SET usd=8000, ngn=7000000 WHERE key='credits_2000'",
     # RSVP links: backfill an unguessable share token on older events and add a
     # uniqueness constraint where the auto-patcher only added the bare column.
     "UPDATE events SET rsvp_token = gen_random_uuid()::text WHERE rsvp_token IS NULL",

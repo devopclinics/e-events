@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { Link, useNavigate } from 'react-router-dom'
+import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import { createUserWithEmailAndPassword, updateProfile } from 'firebase/auth'
 import { auth } from '../firebase'
 import { googleSignIn } from '../auth/googleSignIn'
@@ -8,7 +8,8 @@ import { setPreferredView } from '../App'
 
 function ViewPicker({ role, onPick }) {
   const views = [
-    ...(role === 'admin' ? [{ key: 'admin',     icon: 'SET', label: 'Event Setup',  desc: 'Create events, import guests, and send invitations' }] : []),
+    { key: 'setup', icon: 'SET', label: 'Create an event', desc: 'Start with a draft event and preview before paying' },
+    ...(role === 'admin' ? [{ key: 'admin',     icon: 'OPS', label: 'Event Setup',  desc: 'Manage existing events, guests, and invitations' }] : []),
     { key: 'dashboard', icon: 'RES', label: 'Results',    desc: 'RSVP progress, check-ins, and attendance' },
     { key: 'scanner',   icon: 'QR', label: 'Check-in',   desc: 'Scan guest QR codes at the entrance' },
   ]
@@ -40,14 +41,17 @@ function ViewPicker({ role, onPick }) {
 export default function RegisterPage() {
   const { user } = useAuth()
   const navigate = useNavigate()
+  const [params] = useSearchParams()
+  const plan = params.get('plan') || ''
+  const setupQuery = plan ? `?plan=${encodeURIComponent(plan)}` : ''
   const [form, setForm] = useState({ name: '', email: '', password: '' })
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
   const [pickerRole, setPickerRole] = useState(null)
 
   useEffect(() => {
-    if (user && !pickerRole) navigate('/scanner', { replace: true })
-  }, [user, pickerRole, navigate])
+    if (user && !pickerRole) navigate(`/setup${setupQuery}`, { replace: true })
+  }, [user, pickerRole, navigate, setupQuery])
 
   const set = (k) => (e) => setForm((f) => ({ ...f, [k]: e.target.value }))
 
@@ -85,7 +89,7 @@ export default function RegisterPage() {
 
   function handlePick(view) {
     setPreferredView(view)
-    navigate(view === 'admin' ? '/admin' : `/${view}`, { replace: true })
+    navigate(view === 'setup' ? `/setup${setupQuery}` : view === 'admin' ? '/admin' : `/${view}`, { replace: true })
   }
 
   if (pickerRole) return <ViewPicker role={pickerRole} onPick={handlePick} />

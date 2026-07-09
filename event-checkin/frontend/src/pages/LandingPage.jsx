@@ -3,11 +3,10 @@ import { Link } from 'react-router-dom'
 import { useTheme } from '../context/ThemeContext'
 import { useAuth } from '../context/AuthContext'
 import { getPreferredView } from '../App'
+import { api } from '../api'
 
-const DEMO_URL = ''
 const CONTACT_EMAIL = 'events@festio.events'
-const demoHref = DEMO_URL || `mailto:${CONTACT_EMAIL}?subject=Book%20a%20demo%20%E2%80%94%20Festio`
-const demoProps = DEMO_URL ? { href: DEMO_URL, target: '_blank', rel: 'noopener noreferrer' } : { href: demoHref }
+const demoProps = { href: '#demo' }
 
 function SunIcon() {
   return (
@@ -689,6 +688,140 @@ function ComparisonCell({ value, highlight = false }) {
   return <span className="text-xs font-bold text-slate-500 dark:text-slate-400">{value}</span>
 }
 
+function defaultDemoTime() {
+  const d = new Date()
+  d.setDate(d.getDate() + 1)
+  d.setHours(10, 0, 0, 0)
+  const pad = (value) => String(value).padStart(2, '0')
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`
+}
+
+function DemoRequestForm() {
+  const [form, setForm] = useState({
+    contact_name: '',
+    email: '',
+    phone: '',
+    organization: '',
+    event_name: '',
+    guest_count: '',
+    preferred_time: defaultDemoTime(),
+    message: '',
+  })
+  const [status, setStatus] = useState('idle')
+  const [error, setError] = useState('')
+
+  function setField(key, value) {
+    setForm((prev) => ({ ...prev, [key]: value }))
+  }
+
+  async function submit(e) {
+    e.preventDefault()
+    setStatus('loading')
+    setError('')
+    try {
+      await api.submitDemoRequest({
+        ...form,
+        guest_count: form.guest_count ? Number(form.guest_count) : null,
+        preferred_time: new Date(form.preferred_time).toISOString(),
+        timezone: Intl.DateTimeFormat().resolvedOptions().timeZone || null,
+        phone: form.phone || null,
+        organization: form.organization || null,
+        event_name: form.event_name || null,
+        message: form.message || null,
+      })
+      setStatus('success')
+    } catch (err) {
+      setError(err.message || 'Could not send demo request.')
+      setStatus('idle')
+    }
+  }
+
+  const inputClass = 'w-full rounded-xl border border-slate-300 bg-white px-4 py-3 text-sm font-semibold text-slate-950 outline-none transition focus:border-teal-500 focus:ring-2 focus:ring-teal-200 dark:border-white/10 dark:bg-slate-900 dark:text-white dark:focus:ring-teal-400/20'
+
+  return (
+    <section id="demo" className="scroll-mt-20 border-y border-slate-200 bg-gradient-to-br from-slate-950 via-slate-900 to-teal-950 py-20 text-white dark:border-white/10">
+      <div className="mx-auto grid max-w-7xl gap-10 px-4 sm:px-6 lg:grid-cols-[0.9fr_1.1fr] lg:items-start">
+        <Reveal>
+          <p className="text-xs font-black uppercase tracking-[0.24em] text-teal-200">Book a demo</p>
+          <h2 className="mt-4 text-4xl font-black tracking-tight sm:text-5xl">See Festio on your event workflow.</h2>
+          <p className="mt-5 max-w-xl text-base leading-8 text-slate-300">
+            Tell us what you are planning and pick a preferred time. We will send a calendar hold from Festio and follow up with the meeting link.
+          </p>
+          <div className="mt-8 grid gap-3 text-sm font-bold text-slate-200 sm:grid-cols-2">
+            {['RSVP setup', 'QR check-in', 'Design Studio', 'Experience workflows'].map((item) => (
+              <div key={item} className="flex items-center gap-3 rounded-xl border border-white/10 bg-white/5 px-4 py-3">
+                <CheckIcon className="h-4 w-4 text-teal-300" />
+                {item}
+              </div>
+            ))}
+          </div>
+        </Reveal>
+        <Reveal delay={120}>
+          <form onSubmit={submit} className="rounded-2xl border border-white/10 bg-white p-5 text-slate-950 shadow-2xl shadow-black/30 dark:bg-slate-950 dark:text-white">
+            {status === 'success' ? (
+              <div className="py-8 text-center">
+                <div className="mx-auto grid h-12 w-12 place-items-center rounded-full bg-teal-100 text-teal-700 dark:bg-teal-400/10 dark:text-teal-300">
+                  <CheckIcon className="h-6 w-6" />
+                </div>
+                <h3 className="mt-4 text-2xl font-black">Demo request received</h3>
+                <p className="mx-auto mt-3 max-w-md text-sm leading-6 text-slate-600 dark:text-slate-300">
+                  Check your inbox for the Festio confirmation and calendar hold. We will confirm the meeting link shortly.
+                </p>
+                <a href={`mailto:${CONTACT_EMAIL}`} className="mt-6 inline-flex rounded-xl border border-slate-300 px-5 py-3 text-sm font-extrabold text-slate-700 hover:border-teal-400 dark:border-white/10 dark:text-slate-200">Email Festio</a>
+              </div>
+            ) : (
+              <div className="grid gap-4">
+                <div className="grid gap-4 sm:grid-cols-2">
+                  <label className="text-xs font-black uppercase tracking-wide text-slate-500 dark:text-slate-400">
+                    Name
+                    <input required value={form.contact_name} onChange={(e) => setField('contact_name', e.target.value)} className={`${inputClass} mt-2`} placeholder="Your name" />
+                  </label>
+                  <label className="text-xs font-black uppercase tracking-wide text-slate-500 dark:text-slate-400">
+                    Email
+                    <input required type="email" value={form.email} onChange={(e) => setField('email', e.target.value)} className={`${inputClass} mt-2`} placeholder="you@example.com" />
+                  </label>
+                </div>
+                <div className="grid gap-4 sm:grid-cols-2">
+                  <label className="text-xs font-black uppercase tracking-wide text-slate-500 dark:text-slate-400">
+                    Phone
+                    <input value={form.phone} onChange={(e) => setField('phone', e.target.value)} className={`${inputClass} mt-2`} placeholder="+1 555 000 0000" />
+                  </label>
+                  <label className="text-xs font-black uppercase tracking-wide text-slate-500 dark:text-slate-400">
+                    Organization
+                    <input value={form.organization} onChange={(e) => setField('organization', e.target.value)} className={`${inputClass} mt-2`} placeholder="Company, venue, or host" />
+                  </label>
+                </div>
+                <div className="grid gap-4 sm:grid-cols-2">
+                  <label className="text-xs font-black uppercase tracking-wide text-slate-500 dark:text-slate-400">
+                    Event
+                    <input value={form.event_name} onChange={(e) => setField('event_name', e.target.value)} className={`${inputClass} mt-2`} placeholder="Event name or type" />
+                  </label>
+                  <label className="text-xs font-black uppercase tracking-wide text-slate-500 dark:text-slate-400">
+                    Guests
+                    <input min="1" type="number" value={form.guest_count} onChange={(e) => setField('guest_count', e.target.value)} className={`${inputClass} mt-2`} placeholder="150" />
+                  </label>
+                </div>
+                <label className="text-xs font-black uppercase tracking-wide text-slate-500 dark:text-slate-400">
+                  Preferred time
+                  <input required type="datetime-local" value={form.preferred_time} onChange={(e) => setField('preferred_time', e.target.value)} className={`${inputClass} mt-2`} />
+                </label>
+                <label className="text-xs font-black uppercase tracking-wide text-slate-500 dark:text-slate-400">
+                  What should we cover?
+                  <textarea value={form.message} onChange={(e) => setField('message', e.target.value)} className={`${inputClass} mt-2 min-h-28 resize-y`} placeholder="RSVP, QR passes, check-in, seating, Experience workflows..." />
+                </label>
+                {error && <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-bold text-red-700 dark:border-red-900 dark:bg-red-950/40 dark:text-red-200">{error}</div>}
+                <button disabled={status === 'loading'} className="inline-flex min-h-12 items-center justify-center rounded-xl bg-teal-500 px-6 py-3 text-sm font-black text-slate-950 transition hover:bg-teal-400 disabled:opacity-60">
+                  {status === 'loading' ? 'Sending...' : 'Send demo request'}
+                </button>
+              </div>
+            )}
+          </form>
+        </Reveal>
+      </div>
+    </section>
+  )
+}
+
 export default function LandingPage() {
   const { dark, toggle } = useTheme()
   const { user } = useAuth()
@@ -896,7 +1029,9 @@ export default function LandingPage() {
           </div>
         </section>
 
-        <div id="demo">
+        <DemoRequestForm />
+
+        <div>
           {detailSections.map((section, index) => (
             <section key={section.id} id={section.id} className={`scroll-mt-20 py-20 ${index % 2 ? `bg-gradient-to-b via-white to-white dark:bg-slate-900/35 dark:via-transparent dark:to-transparent ${['from-teal-50/70 dark:from-teal-400/[0.05]', 'from-violet-50/60 dark:from-violet-400/[0.05]', 'from-amber-50/60 dark:from-amber-400/[0.05]', 'from-sky-50/60 dark:from-sky-400/[0.05]', 'from-rose-50/50 dark:from-rose-400/[0.05]', 'from-emerald-50/60 dark:from-emerald-400/[0.05]'][Math.floor(index / 2) % 6]}` : ''}`}>
               <div className="mx-auto grid max-w-7xl items-center gap-10 px-4 sm:px-6 lg:grid-cols-2">

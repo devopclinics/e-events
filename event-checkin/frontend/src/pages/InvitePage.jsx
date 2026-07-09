@@ -352,14 +352,35 @@ function ShippingSection({ shipping, addr, setAddr, sizes, setSizes, inputCls, a
   )
 }
 
+function SmsConsentCheckbox({ checked, onChange, disabled = false }) {
+  return (
+    <label className="flex gap-3 rounded-2xl border border-teal-100 bg-teal-50 px-4 py-3 text-xs leading-relaxed text-slate-700">
+      <input
+        type="checkbox"
+        checked={checked}
+        disabled={disabled}
+        onChange={(e) => onChange(e.target.checked)}
+        className="mt-1 h-5 w-5 shrink-0 accent-teal-600"
+      />
+      <span>
+        I agree to receive SMS/text messages from Festio for this event, including my invitation or ticket link,
+        QR pass, RSVP updates, check-in confirmation, seating updates, session reminders, and other event-service
+        notifications. Message frequency varies by event. Message and data rates may apply. Reply HELP for help.
+        Reply STOP to opt out at any time. Consent is not required to buy goods or services. View our{' '}
+        <a href="/privacy" target="_blank" rel="noreferrer" className="font-bold text-teal-700 underline">Privacy Policy</a>.
+      </span>
+    </label>
+  )
+}
+
 function RSVPForm({ event, theme, onConfirmed }) {
   const t = THEMES[theme] || THEMES.default
   const [form, setForm] = useState({ first_name: '', last_name: '', email: '', phone: '' })
+  const [smsConsent, setSmsConsent] = useState(false)
   const [choice, setChoice] = useState('')
   const [answers, setAnswers] = useState({})
-  const [invitees, setInvitees] = useState([
-    { full_name: '', relationship: '', phone: '', email: '', guest_type: 'Invited Guest', notes: '' },
-  ])
+  const emptyInvitee = () => ({ first_name: '', last_name: '', relationship: '', phone: '', email: '', guest_type: 'Invited Guest', notes: '' })
+  const [invitees, setInvitees] = useState([])
   const [shipAddr, setShipAddr] = useState({})
   const [sizes, setSizes] = useState({})
   const [loading, setLoading] = useState(false)
@@ -379,28 +400,40 @@ function RSVPForm({ event, theme, onConfirmed }) {
   const selectedCategory = categoryQuestion ? (answers[categoryQuestion.id] || '') : ''
   const matchedCategoryRule = inviteeLimitRuleEntries.find(([label]) => label.toLowerCase() === selectedCategory.toLowerCase())
   const inviteeLimit = matchedCategoryRule ? matchedCategoryRule[1] : defaultInviteeLimit
+  const selectedCategoryKey = selectedCategory.trim().toLowerCase()
+  const isSingleInvitedGuestCategory = /\bindividual\b|\bsingle\b/.test(selectedCategoryKey) && /invited guest|guest/.test(selectedCategoryKey)
+  const additionalInviteeLimit = isSingleInvitedGuestCategory ? 0 : inviteeLimit
   const needsInviteeCategory = Boolean(categoryQuestion && !selectedCategory)
-  const acceptsAdditionalInvitees = !needsInviteeCategory && inviteeLimit > 0
-  const submitterOnlyCategory = !needsInviteeCategory && inviteeLimit <= 0
+  const acceptsAdditionalInvitees = !needsInviteeCategory && additionalInviteeLimit > 0
+  const submitterOnlyCategory = !needsInviteeCategory && additionalInviteeLimit <= 0
+  const emailRequired = event.rsvp_collect_email !== false
   const inviteeTypes = ['Parent/Guardian', 'Invited Guest', 'Teacher', 'School/Staff', 'VIP/Dignitary', 'Other']
 
   useEffect(() => {
-    setInvitees((rows) => rows.length > inviteeLimit ? rows.slice(0, inviteeLimit) : rows)
-  }, [inviteeLimit])
+    if (additionalInviteeLimit <= 0) {
+      setInvitees([])
+      return
+    }
+    setInvitees((rows) => {
+      if (rows.length > additionalInviteeLimit) return rows.slice(0, additionalInviteeLimit)
+      if (rows.length === 0) return [emptyInvitee()]
+      return rows
+    })
+  }, [additionalInviteeLimit])
 
   function setInvitee(index, key, value) {
     setInvitees((rows) => rows.map((row, i) => (i === index ? { ...row, [key]: value } : row)))
   }
 
   function addInvitee() {
-    setInvitees((rows) => rows.length >= inviteeLimit ? rows : [
+    setInvitees((rows) => rows.length >= additionalInviteeLimit ? rows : [
       ...rows,
-      { full_name: '', relationship: '', phone: '', email: '', guest_type: 'Invited Guest', notes: '' },
+      emptyInvitee(),
     ])
   }
 
   function removeInvitee(index) {
-    setInvitees((rows) => rows.length <= 1 ? rows : rows.filter((_, i) => i !== index))
+    setInvitees((rows) => rows.length <= 1 ? [emptyInvitee()] : rows.filter((_, i) => i !== index))
   }
 
   async function handleSubmit(e) {
@@ -419,18 +452,20 @@ function RSVPForm({ event, theme, onConfirmed }) {
           last_name: form.last_name.trim(),
           email: form.email.trim(),
           phone: form.phone.trim() || undefined,
+          sms_consent: Boolean(form.phone.trim() && smsConsent),
           answers,
           invitees: multiInvitee && acceptsAdditionalInvitees
             ? invitees
                 .map((row) => ({
-                  full_name: row.full_name.trim(),
+                  first_name: row.first_name.trim(),
+                  last_name: row.last_name.trim(),
                   relationship: row.relationship.trim(),
                   phone: row.phone.trim() || undefined,
                   email: row.email.trim() || undefined,
                   guest_type: row.guest_type,
                   notes: row.notes.trim() || undefined,
                 }))
-                .filter((row) => row.full_name || row.phone || row.email)
+                .filter((row) => row.first_name || row.last_name || row.phone || row.email)
             : [],
           shipping_address: event.shipping ? shipAddr : undefined,
           sizes: event.shipping ? sizes : undefined,
@@ -497,7 +532,7 @@ function RSVPForm({ event, theme, onConfirmed }) {
             </div>
           </div>
 
-          {event.rsvp_collect_email !== false && (
+          {emailRequired && (
             <div>
               <label className="mb-2 block text-sm font-bold text-slate-700">{multiInvitee ? 'Submitter email' : 'Email'} <span className="text-red-500">*</span></label>
               <input required type="email" value={form.email} onChange={set('email')} className={inputCls} placeholder="jane@example.com" />
@@ -509,6 +544,10 @@ function RSVPForm({ event, theme, onConfirmed }) {
               <label className="mb-2 block text-sm font-bold text-slate-700">{multiInvitee ? 'Submitter phone' : 'Phone'} <span className="text-slate-400">(optional)</span></label>
               <input type="tel" value={form.phone} onChange={set('phone')} className={inputCls} placeholder="+1 (832) 000-0000" />
             </div>
+          )}
+
+          {event.rsvp_collect_phone && form.phone.trim() && (
+            <SmsConsentCheckbox checked={smsConsent} onChange={setSmsConsent} disabled={loading} />
           )}
 
           {multiInvitee && (
@@ -529,13 +568,17 @@ function RSVPForm({ event, theme, onConfirmed }) {
                     className={inputCls}
                   >
                     <option value="">Select category</option>
-                    {inviteeLimitRuleEntries.map(([label, limit]) => (
+                    {inviteeLimitRuleEntries.map(([label, limit]) => {
+                      const labelKey = label.trim().toLowerCase()
+                      const singleGuest = /\bindividual\b|\bsingle\b/.test(labelKey) && /invited guest|guest/.test(labelKey)
+                      const effectiveLimit = singleGuest ? 0 : limit
+                      return (
                       <option key={label} value={label}>
-                        {limit <= 0
+                        {effectiveLimit <= 0
                           ? `${label} - submitter only`
-                          : `${label} - up to ${limit} additional guest${limit === 1 ? '' : 's'}`}
+                          : `${label} - up to ${effectiveLimit} additional guest${effectiveLimit === 1 ? '' : 's'}`}
                       </option>
-                    ))}
+                    )})}
                   </select>
                   <p className="mt-2 text-xs text-slate-500">
                     The number of additional guests is gated by this category and will also be checked before submission.
@@ -555,10 +598,10 @@ function RSVPForm({ event, theme, onConfirmed }) {
                   <p className="mt-1 text-xs text-slate-500">
                     {needsInviteeCategory
                       ? 'Select an invitation category to see how many additional guests are allowed.'
-                      : `Submitter plus up to ${inviteeLimit} additional guest${inviteeLimit === 1 ? '' : 's'}${selectedCategory ? ` for ${selectedCategory}` : ''}. Each approved person gets a separate QR pass.`}
+                      : `Submitter plus up to ${additionalInviteeLimit} additional guest${additionalInviteeLimit === 1 ? '' : 's'}${selectedCategory ? ` for ${selectedCategory}` : ''}. Each approved person gets a separate QR pass.`}
                   </p>
                 </div>
-                <button type="button" onClick={addInvitee} disabled={needsInviteeCategory || invitees.length >= inviteeLimit}
+                <button type="button" onClick={addInvitee} disabled={needsInviteeCategory || invitees.length >= additionalInviteeLimit}
                   className="rounded-xl border border-slate-300 bg-white px-3 py-2 text-xs font-bold text-slate-700 disabled:cursor-not-allowed disabled:opacity-50">
                   Add additional guest
                 </button>
@@ -573,8 +616,12 @@ function RSVPForm({ event, theme, onConfirmed }) {
                   </div>
                   <div className="grid gap-3 sm:grid-cols-2">
                     <div>
-                      <label className="mb-1 block text-xs font-bold text-slate-600">Full name <span className="text-red-500">*</span></label>
-                      <input required value={row.full_name} onChange={(e) => setInvitee(index, 'full_name', e.target.value)} className={inputCls} placeholder="Invitee full name" />
+                      <label className="mb-1 block text-xs font-bold text-slate-600">First name <span className="text-red-500">*</span></label>
+                      <input required value={row.first_name} onChange={(e) => setInvitee(index, 'first_name', e.target.value)} className={inputCls} placeholder="Invitee first name" />
+                    </div>
+                    <div>
+                      <label className="mb-1 block text-xs font-bold text-slate-600">Last name <span className="text-red-500">*</span></label>
+                      <input required value={row.last_name} onChange={(e) => setInvitee(index, 'last_name', e.target.value)} className={inputCls} placeholder="Invitee last name" />
                     </div>
                     <div>
                       <label className="mb-1 block text-xs font-bold text-slate-600">Guest type</label>
@@ -591,8 +638,10 @@ function RSVPForm({ event, theme, onConfirmed }) {
                       <input type="tel" value={row.phone} onChange={(e) => setInvitee(index, 'phone', e.target.value)} className={inputCls} placeholder="+234..." />
                     </div>
                     <div className="sm:col-span-2">
-                      <label className="mb-1 block text-xs font-bold text-slate-600">Email <span className="text-slate-400">(optional)</span></label>
-                      <input type="email" value={row.email} onChange={(e) => setInvitee(index, 'email', e.target.value)} className={inputCls} placeholder="invitee@example.com" />
+                      <label className="mb-1 block text-xs font-bold text-slate-600">
+                        Email {emailRequired ? <span className="text-red-500">*</span> : <span className="text-slate-400">(optional)</span>}
+                      </label>
+                      <input required={emailRequired} type="email" value={row.email} onChange={(e) => setInvitee(index, 'email', e.target.value)} className={inputCls} placeholder="invitee@example.com" />
                     </div>
                     <div className="sm:col-span-2">
                       <label className="mb-1 block text-xs font-bold text-slate-600">Notes</label>
@@ -745,6 +794,7 @@ function TokenRSVPForm({ event, prefill, token, theme, onDone }) {
     last_name: prefill.last_name || '',
     phone: prefill.phone || '',
   })
+  const [smsConsent, setSmsConsent] = useState(Boolean(prefill.sms_consent && prefill.phone))
   const [answers, setAnswers] = useState({})
   const [shipAddr, setShipAddr] = useState({})
   const [sizes, setSizes] = useState({})
@@ -777,6 +827,7 @@ function TokenRSVPForm({ event, prefill, token, theme, onDone }) {
           first_name: form.first_name.trim(),
           last_name: form.last_name.trim(),
           phone: form.phone.trim() || undefined,
+          sms_consent: Boolean(form.phone.trim() && smsConsent),
           answers,
           shipping_address: event.shipping ? shipAddr : undefined,
           sizes: event.shipping ? sizes : undefined,
@@ -822,6 +873,10 @@ function TokenRSVPForm({ event, prefill, token, theme, onDone }) {
           <label className="mb-2 block text-sm font-bold text-slate-700">Phone <span className="text-slate-400">(optional)</span></label>
           <input type="tel" value={form.phone} onChange={set('phone')} className={inputCls} placeholder="+1 (832) 000-0000" />
         </div>
+      )}
+
+      {event.rsvp_collect_phone && form.phone.trim() && (
+        <SmsConsentCheckbox checked={smsConsent} onChange={setSmsConsent} disabled={!!loading} />
       )}
 
       {event.questions?.length > 0 && (
@@ -1110,6 +1165,11 @@ function GuestHub({ event, accessToken, designTheme }) {
             {hub?.guest?.qr_token && (
               <a href={`/scan/${hub.guest.qr_token}`} style={colors.accent ? { background: colors.accent } : undefined} className="mt-4 inline-flex min-h-10 items-center justify-center rounded-xl bg-teal-400 px-4 py-2 text-sm font-extrabold text-slate-950 hover:bg-teal-300">
                 View Festio Pass
+              </a>
+            )}
+            {event?.registry_enabled && event?.registry_token && (
+              <a href={`/registry/${event.registry_token}`} className="mt-3 flex min-h-10 items-center justify-center gap-2 rounded-xl border px-4 py-2 text-sm font-extrabold transition hover:opacity-90" style={{ background: tone.chip, borderColor: tone.border, color: tone.text }}>
+                🎁 View gift list
               </a>
             )}
           </div>

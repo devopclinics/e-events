@@ -15,7 +15,9 @@ import LandingPage from './pages/LandingPage'
 import InvitePage from './pages/InvitePage'
 import VendorPage from './pages/VendorPage'
 import RegistryPage from './pages/RegistryPage'
+import FloorPlanPage from './pages/FloorPlanPage'
 import PricingPage from './pages/PricingPage'
+import SetupWizardPage from './pages/SetupWizardPage'
 import RefundPolicyPage from './pages/RefundPolicyPage'
 import PrivacyPage from './pages/PrivacyPage'
 import TermsPage from './pages/TermsPage'
@@ -31,6 +33,7 @@ import SelfCheckinPage from './pages/SelfCheckinPage'
 
 export function getPreferredView(role) {
   const stored = localStorage.getItem('preferredView')
+  if (stored === 'setup' && (role === 'admin' || role === 'event_manager')) return '/setup'
   if (stored === 'admin' && role === 'admin') return '/admin'
   if (stored === 'admin' && role === 'event_manager') return '/admin'
   if (stored === 'dashboard') return '/dashboard'
@@ -67,7 +70,7 @@ function ThemeToggle({ className = '' }) {
 
 // ── Mobile-friendly Nav ───────────────────────────────────────────────────────
 
-function Nav({ hasMenu, eventName }) {
+function Nav({ hasMenu, eventName, canUseDesignStudio }) {
   const { user, logout } = useAuth()
   const navigate = useNavigate()
   const [open, setOpen] = useState(false)
@@ -84,7 +87,7 @@ function Nav({ hasMenu, eventName }) {
 
   const links = [
     ...(['admin', 'event_manager'].includes(user?.role) ? [{ to: '/admin', label: 'Event Setup', end: true }] : []),
-    ...(user?.role === 'admin' ? [{ to: '/design-studio', label: 'Design Studio' }] : []),
+    ...(user?.role === 'admin' && canUseDesignStudio ? [{ to: '/design-studio', label: 'Design Studio' }] : []),
     { to: '/dashboard', label: 'Results' },
     { to: '/scanner', label: 'Check-in' },
     ...(hasMenu ? [{ to: '/kitchen', label: 'Orders' }] : []),
@@ -207,6 +210,7 @@ function AuthedLayout({ children }) {
   const [hasMenu, setHasMenu] = useState(false)
   const [currentEventId] = useCurrentEvent()
   const [eventName, setEventName] = useState('')
+  const [canUseDesignStudio, setCanUseDesignStudio] = useState(false)
 
   useEffect(() => {
     if (!user) { setHasMenu(false); return }
@@ -215,13 +219,24 @@ function AuthedLayout({ children }) {
 
   // Resolve the current event's name for the top-bar breadcrumb (live).
   useEffect(() => {
-    if (!user || !currentEventId) { setEventName(''); return }
-    api.listEvents().then((evs) => setEventName(evs.find((e) => e.id === currentEventId)?.name || '')).catch(() => {})
+    if (!user || !currentEventId) {
+      setEventName('')
+      setCanUseDesignStudio(false)
+      return
+    }
+    api.listEvents().then((evs) => {
+      const current = evs.find((e) => e.id === currentEventId)
+      setEventName(current?.name || '')
+      setCanUseDesignStudio(!!current?.is_paid)
+    }).catch(() => {
+      setEventName('')
+      setCanUseDesignStudio(false)
+    })
   }, [user, currentEventId])
 
   return (
     <>
-      <Nav hasMenu={hasMenu} eventName={eventName} />
+      <Nav hasMenu={hasMenu} eventName={eventName} canUseDesignStudio={canUseDesignStudio} />
       <main className="flex-1 max-w-7xl mx-auto w-full px-4 sm:px-6 py-8 pb-24 sm:pb-8">{children}</main>
       <MobileTabBar user={user} hasMenu={hasMenu} />
     </>
@@ -247,6 +262,8 @@ function AppRoutes() {
       <Route path="/vendor/:token" element={<VendorPage />} />
       {/* Public gift registry — no auth required (unguessable token) */}
       <Route path="/registry/:token" element={<RegistryPage />} />
+      {/* Client floor-plan share link — view or edit token, no auth required */}
+      <Route path="/floor/:token" element={<FloorPlanPage />} />
       {/* Public marketing pages — no auth required */}
       <Route path="/pricing" element={<PricingPage />} />
       <Route path="/refund-policy" element={<RefundPolicyPage />} />
@@ -266,7 +283,9 @@ function AppRoutes() {
           <AuthedLayout>
             <Routes>
               <Route path="/admin" element={<ProtectedRoute setupOnly><AdminPage /></ProtectedRoute>} />
+              <Route path="/setup" element={<ProtectedRoute setupOnly><SetupWizardPage /></ProtectedRoute>} />
               <Route path="/design-studio" element={<ProtectedRoute adminOnly><DesignStudioPage /></ProtectedRoute>} />
+              <Route path="/floor-plan/:eventId" element={<ProtectedRoute adminOnly><FloorPlanPage /></ProtectedRoute>} />
               <Route path="/dashboard" element={<ProtectedRoute><DashboardPage /></ProtectedRoute>} />
               <Route path="/scanner" element={<ProtectedRoute><ScannerPage /></ProtectedRoute>} />
               <Route path="/kitchen" element={<ProtectedRoute><KitchenPage /></ProtectedRoute>} />

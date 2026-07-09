@@ -42,16 +42,16 @@ def _brand_sms(body: str) -> str:
 
 # ── public API ────────────────────────────────────────────────────────────────
 
-async def send_invite_sms(*, phone: str, first_name: str, event_name: str, ticket_url: str, event_date: datetime) -> None:
+async def send_invite_sms(*, phone: str, first_name: str, event_name: str, ticket_url: str, event_date: datetime) -> dict | None:
     if not _channel_ready("sms", phone):
         return
     _local = to_event_local(event_date)
     date_str = _local.strftime("%b %d, %Y") if _local else ""
     body = f"Hi {first_name}! You're invited to {event_name}" + (f" on {date_str}" if date_str else "") + f". Your ticket: {ticket_url}"
-    await _send_sms(phone, _brand_sms(body))
+    return await _send_sms(phone, _brand_sms(body))
 
 
-async def send_admission_sms(*, phone: str, first_name: str, event_name: str, admitted_at, table_name: str | None, seat_number: str | None) -> None:
+async def send_admission_sms(*, phone: str, first_name: str, event_name: str, admitted_at, table_name: str | None, seat_number: str | None) -> dict | None:
     if not _channel_ready("sms", phone):
         return
     parts = [f"Welcome {first_name}!", f"You're checked in to {event_name}."]
@@ -60,15 +60,15 @@ async def send_admission_sms(*, phone: str, first_name: str, event_name: str, ad
     if table_name:
         seat_bit = f" seat {seat_number}" if seat_number else ""
         parts.append(f"Table: {table_name}{seat_bit}.")
-    await _send_sms(phone, _brand_sms(" ".join(parts)))
+    return await _send_sms(phone, _brand_sms(" ".join(parts)))
 
 
-async def send_invite_whatsapp(*, phone: str, first_name: str, event_name: str, ticket_url: str, event_date: datetime) -> None:
+async def send_invite_whatsapp(*, phone: str, first_name: str, event_name: str, ticket_url: str, event_date: datetime) -> dict | None:
     if not _channel_ready("whatsapp", phone):
         return
     _local = to_event_local(event_date)
     date_str = _local.strftime("%A, %d %B %Y") if _local else ""
-    await _send_whatsapp_template(
+    return await _send_whatsapp_template(
         phone=phone,
         kind="invite",
         params=[first_name, event_name, date_str, ticket_url],
@@ -76,10 +76,10 @@ async def send_invite_whatsapp(*, phone: str, first_name: str, event_name: str, 
     )
 
 
-async def send_admission_whatsapp(*, phone: str, first_name: str, event_name: str, table_name: str | None, seat_number: str | None) -> None:
+async def send_admission_whatsapp(*, phone: str, first_name: str, event_name: str, table_name: str | None, seat_number: str | None) -> dict | None:
     if not _channel_ready("whatsapp", phone):
         return
-    await _send_whatsapp_template(
+    return await _send_whatsapp_template(
         phone=phone,
         kind="admission",
         params=[first_name, event_name, table_name or "—", seat_number or "—"],
@@ -87,10 +87,10 @@ async def send_admission_whatsapp(*, phone: str, first_name: str, event_name: st
     )
 
 
-async def send_rsvp_invitation_whatsapp(*, phone: str, name: str, event_name: str, invite_url: str) -> None:
+async def send_rsvp_invitation_whatsapp(*, phone: str, name: str, event_name: str, invite_url: str) -> dict | None:
     if not _channel_ready("whatsapp", phone):
         return
-    await _send_whatsapp_template(
+    return await _send_whatsapp_template(
         phone=phone,
         kind="rsvp_invitation",
         params=[name, event_name, invite_url],
@@ -98,10 +98,10 @@ async def send_rsvp_invitation_whatsapp(*, phone: str, name: str, event_name: st
     )
 
 
-async def send_rsvp_reminder_whatsapp(*, phone: str, first_name: str, event_name: str, invite_url: str) -> None:
+async def send_rsvp_reminder_whatsapp(*, phone: str, first_name: str, event_name: str, invite_url: str) -> dict | None:
     if not _channel_ready("whatsapp", phone):
         return
-    await _send_whatsapp_template(
+    return await _send_whatsapp_template(
         phone=phone,
         kind="rsvp_reminder",
         params=[first_name, event_name, invite_url],
@@ -109,12 +109,12 @@ async def send_rsvp_reminder_whatsapp(*, phone: str, first_name: str, event_name
     )
 
 
-async def send_rsvp_confirmation_whatsapp(*, phone: str, first_name: str, event_name: str, event_date: datetime) -> None:
+async def send_rsvp_confirmation_whatsapp(*, phone: str, first_name: str, event_name: str, event_date: datetime) -> dict | None:
     if not _channel_ready("whatsapp", phone):
         return
     _local = to_event_local(event_date)
     date_str = _local.strftime("%A, %d %B %Y") if _local else ""
-    await _send_whatsapp_template(
+    return await _send_whatsapp_template(
         phone=phone,
         kind="rsvp_confirmation",
         params=[first_name, event_name, date_str],
@@ -122,10 +122,10 @@ async def send_rsvp_confirmation_whatsapp(*, phone: str, first_name: str, event_
     )
 
 
-async def send_rsvp_decline_whatsapp(*, phone: str, first_name: str, event_name: str) -> None:
+async def send_rsvp_decline_whatsapp(*, phone: str, first_name: str, event_name: str) -> dict | None:
     if not _channel_ready("whatsapp", phone):
         return
-    await _send_whatsapp_template(
+    return await _send_whatsapp_template(
         phone=phone,
         kind="rsvp_decline",
         params=[first_name, event_name],
@@ -133,10 +133,10 @@ async def send_rsvp_decline_whatsapp(*, phone: str, first_name: str, event_name:
     )
 
 
-async def send_approval_pending_whatsapp(*, phone: str, first_name: str, event_name: str) -> None:
+async def send_approval_pending_whatsapp(*, phone: str, first_name: str, event_name: str) -> dict | None:
     if not _channel_ready("whatsapp", phone):
         return
-    await _send_whatsapp_template(
+    return await _send_whatsapp_template(
         phone=phone,
         kind="approval_pending",
         params=[first_name, event_name],
@@ -144,10 +144,10 @@ async def send_approval_pending_whatsapp(*, phone: str, first_name: str, event_n
     )
 
 
-async def send_approval_accepted_whatsapp(*, phone: str, first_name: str, event_name: str, ticket_url: str) -> None:
+async def send_approval_accepted_whatsapp(*, phone: str, first_name: str, event_name: str, ticket_url: str) -> dict | None:
     if not _channel_ready("whatsapp", phone):
         return
-    await _send_whatsapp_template(
+    return await _send_whatsapp_template(
         phone=phone,
         kind="approval_accepted",
         params=[first_name, event_name, ticket_url],
@@ -155,10 +155,10 @@ async def send_approval_accepted_whatsapp(*, phone: str, first_name: str, event_
     )
 
 
-async def send_approval_rejected_whatsapp(*, phone: str, first_name: str, event_name: str) -> None:
+async def send_approval_rejected_whatsapp(*, phone: str, first_name: str, event_name: str) -> dict | None:
     if not _channel_ready("whatsapp", phone):
         return
-    await _send_whatsapp_template(
+    return await _send_whatsapp_template(
         phone=phone,
         kind="approval_rejected",
         params=[first_name, event_name],
@@ -166,10 +166,10 @@ async def send_approval_rejected_whatsapp(*, phone: str, first_name: str, event_
     )
 
 
-async def send_logistics_whatsapp(*, phone: str, first_name: str, event_name: str) -> None:
+async def send_logistics_whatsapp(*, phone: str, first_name: str, event_name: str) -> dict | None:
     if not _channel_ready("whatsapp", phone):
         return
-    await _send_whatsapp_template(
+    return await _send_whatsapp_template(
         phone=phone,
         kind="logistics",
         params=[first_name, event_name],
@@ -177,10 +177,10 @@ async def send_logistics_whatsapp(*, phone: str, first_name: str, event_name: st
     )
 
 
-async def send_registry_whatsapp(*, phone: str, event_name: str, registry_url: str) -> None:
+async def send_registry_whatsapp(*, phone: str, event_name: str, registry_url: str) -> dict | None:
     if not _channel_ready("whatsapp", phone):
         return
-    await _send_whatsapp_template(
+    return await _send_whatsapp_template(
         phone=phone,
         kind="registry",
         params=[event_name, registry_url],
@@ -188,15 +188,15 @@ async def send_registry_whatsapp(*, phone: str, event_name: str, registry_url: s
     )
 
 
-async def send_broadcast_sms(*, phone: str, first_name: str, message: str) -> None:
+async def send_broadcast_sms(*, phone: str, first_name: str, message: str) -> dict | None:
     """Send a free-text host broadcast over SMS."""
     if not _channel_ready("sms", phone):
         return
     body = f"Hi {first_name}! {message}"
-    await _send_sms(phone, _brand_sms(body))
+    return await _send_sms(phone, _brand_sms(body))
 
 
-async def send_broadcast_whatsapp(*, phone: str, first_name: str, message: str) -> None:
+async def send_broadcast_whatsapp(*, phone: str, first_name: str, message: str) -> dict | None:
     """Send a free-text host broadcast over WhatsApp.
 
     Falls back to plain SMS-style text since broadcast messages don't use a
@@ -205,31 +205,31 @@ async def send_broadcast_whatsapp(*, phone: str, first_name: str, message: str) 
     if not _channel_ready("whatsapp", phone):
         return
     body = f"Hi {first_name}! {message}"
-    await _send_sms_as_whatsapp(phone, body)
+    return await _send_sms_as_whatsapp(phone, body)
 
 
-async def send_manual_invite_sms(*, phone: str, name: str, event_name: str, invite_url: str) -> None:
+async def send_manual_invite_sms(*, phone: str, name: str, event_name: str, invite_url: str) -> dict | None:
     """Send a personal invite link via SMS to someone who hasn't RSVP'd yet."""
     if not _channel_ready("sms", phone):
         return
     body = f"Hi {name}! You're invited to {event_name}. RSVP here: {invite_url}"
-    await _send_sms(phone, _brand_sms(body))
+    return await _send_sms(phone, _brand_sms(body))
 
 
-async def send_manual_invite_whatsapp(*, phone: str, name: str, event_name: str, invite_url: str) -> None:
+async def send_manual_invite_whatsapp(*, phone: str, name: str, event_name: str, invite_url: str) -> dict | None:
     """Send a personal invite link via WhatsApp to someone who hasn't RSVP'd yet."""
     if not _channel_ready("whatsapp", phone):
         return
-    await send_rsvp_invitation_whatsapp(
+    return await send_rsvp_invitation_whatsapp(
         phone=phone, name=name, event_name=event_name, invite_url=invite_url,
     )
 
 
-async def send_custom_sms(*, phone: str, body: str) -> None:
+async def send_custom_sms(*, phone: str, body: str) -> dict | None:
     """Send a fully-rendered SMS body (used by the customizable-template engine)."""
     if not _channel_ready("sms", phone):
         return
-    await _send_sms(phone, _brand_sms(body))
+    return await _send_sms(phone, _brand_sms(body))
 
 
 # ── MMS (image ticket card) ─────────────────────────────────────────────────────
@@ -246,7 +246,7 @@ def mms_ready() -> bool:
     return False
 
 
-async def send_mms(*, phone: str, body: str, media_url: str) -> None:
+async def send_mms(*, phone: str, body: str, media_url: str) -> dict | None:
     """Send an MMS (text body + image at media_url) via the configured provider.
     ClickSend is preferred when configured (prod), else the active provider's MMS
     path. Never raises — logs and returns on failure."""
@@ -254,18 +254,17 @@ async def send_mms(*, phone: str, body: str, media_url: str) -> None:
         return
     # ClickSend takes precedence when credentials exist (prod's MMS provider).
     if settings.clicksend_username and settings.clicksend_api_key:
-        await _clicksend_mms(phone, body, media_url)
-        return
+        return await _clicksend_mms(phone, body, media_url)
     provider = (settings.messaging_provider or "").lower()
     if provider == "twilio":
-        await _twilio_mms(phone, body, media_url)
+        return await _twilio_mms(phone, body, media_url)
     elif provider == "bird":
-        await _bird_mms(phone, body, media_url)
+        return await _bird_mms(phone, body, media_url)
     else:
         logger.info("MMS requested but no MMS-capable provider configured — skipping")
 
 
-async def _clicksend_mms(phone: str, body: str, media_url: str) -> None:
+async def _clicksend_mms(phone: str, body: str, media_url: str) -> dict | None:
     import base64
     auth = base64.b64encode(f"{settings.clicksend_username}:{settings.clicksend_api_key}".encode()).decode()
     payload = {
@@ -285,39 +284,51 @@ async def _clicksend_mms(phone: str, body: str, media_url: str) -> None:
                              json=payload)
             if r.status_code >= 400:
                 logger.warning("ClickSend MMS → HTTP %s: %s", r.status_code, r.text[:300])
+                return {"provider": "clicksend", "status": "failed"}
+            data = r.json() if r.content else {}
+            messages = data.get("data", {}).get("messages", []) if isinstance(data, dict) else []
+            first = messages[0] if messages else {}
+            return {
+                "provider": "clicksend",
+                "provider_message_id": first.get("message_id") or first.get("messageid") or first.get("id"),
+                "status": first.get("status") or data.get("response_code") or "queued",
+            }
     except Exception:
         logger.exception("ClickSend MMS request failed")
+        return {"provider": "clicksend", "status": "failed"}
 
 
-def _twilio_mms_sync(to_addr: str, body: str, media_url: str) -> None:
+def _twilio_mms_sync(to_addr: str, body: str, media_url: str) -> dict | None:
     try:
         from twilio.rest import Client
         client = Client(settings.twilio_account_sid, settings.twilio_auth_token)
-        client.messages.create(from_=settings.twilio_from_number, to=to_addr, body=body or "", media_url=[media_url])
+        msg = client.messages.create(from_=settings.twilio_from_number, to=to_addr, body=body or "", media_url=[media_url])
+        return {"provider": "twilio", "provider_message_id": getattr(msg, "sid", None), "status": getattr(msg, "status", None) or "queued"}
     except Exception:
         logger.exception("Twilio MMS send failed (to=%s)", to_addr)
+        return {"provider": "twilio", "status": "failed"}
 
 
-async def _twilio_mms(phone: str, body: str, media_url: str) -> None:
-    await asyncio.to_thread(_twilio_mms_sync, phone, body, media_url)
+async def _twilio_mms(phone: str, body: str, media_url: str) -> dict | None:
+    return await asyncio.to_thread(_twilio_mms_sync, phone, body, media_url)
 
 
-async def _bird_mms(phone: str, body: str, media_url: str) -> None:
+async def _bird_mms(phone: str, body: str, media_url: str) -> dict | None:
     # Bird image message. Channel/account must be MMS-capable — verify in prod.
-    await _bird_post(settings.bird_mms_channel_id, {
+    return await _bird_post(settings.bird_mms_channel_id, {
         "receiver": _bird_recipient(phone),
         "body": {"type": "image", "image": {"images": [{"mediaUrl": media_url}], "text": body or ""}},
     })
 
 
-async def send_custom_whatsapp(*, phone: str, body: str) -> None:
+async def send_custom_whatsapp(*, phone: str, body: str) -> dict | None:
     """Send a fully-rendered WhatsApp body as plain text (template engine).
 
     Like broadcasts this uses the free-text path, so it only delivers inside an
     open WhatsApp session / sandbox (no registered template)."""
     if not _channel_ready("whatsapp", phone):
         return
-    await _send_sms_as_whatsapp(phone, body)
+    return await _send_sms_as_whatsapp(phone, body)
 
 
 # ── internal: routing ─────────────────────────────────────────────────────────
@@ -358,7 +369,7 @@ def _channel_ready(channel: str, phone: str | None) -> bool:
 
 # ── internal: Bird ────────────────────────────────────────────────────────────
 
-async def _bird_post(channel_id: str, payload: dict) -> None:
+async def _bird_post(channel_id: str, payload: dict) -> dict | None:
     url = f"{_BIRD_BASE}/workspaces/{settings.bird_workspace_id}/channels/{channel_id}/messages"
     headers = {
         "Authorization": f"AccessKey {settings.bird_access_key}",
@@ -369,8 +380,16 @@ async def _bird_post(channel_id: str, payload: dict) -> None:
             r = await c.post(url, headers=headers, json=payload)
             if r.status_code >= 400:
                 logger.warning("Bird %s → HTTP %s: %s", channel_id, r.status_code, r.text[:300])
+                return {"provider": "bird", "status": "failed"}
+            data = r.json() if r.content else {}
+            return {
+                "provider": "bird",
+                "provider_message_id": data.get("id") or data.get("messageId") or data.get("message_id"),
+                "status": data.get("status") or "queued",
+            }
     except Exception:
         logger.exception("Bird request failed")
+        return {"provider": "bird", "status": "failed"}
 
 
 def _bird_recipient(phone: str) -> dict:
@@ -379,26 +398,29 @@ def _bird_recipient(phone: str) -> dict:
 
 # ── internal: Twilio (sync SDK, wrapped) ──────────────────────────────────────
 
-def _twilio_send_sync(from_addr: str, to_addr: str, **kwargs) -> None:
+def _twilio_send_sync(from_addr: str, to_addr: str, **kwargs) -> dict | None:
     try:
         from twilio.rest import Client
         client = Client(settings.twilio_account_sid, settings.twilio_auth_token)
-        client.messages.create(from_=from_addr, to=to_addr, **kwargs)
+        msg = client.messages.create(from_=from_addr, to=to_addr, **kwargs)
+        return {"provider": "twilio", "provider_message_id": getattr(msg, "sid", None), "status": getattr(msg, "status", None) or "queued"}
     except Exception:
         logger.exception("Twilio send failed (to=%s)", to_addr)
+        return {"provider": "twilio", "status": "failed"}
 
 
 # ── internal: dispatchers ─────────────────────────────────────────────────────
 
-async def _send_sms(phone: str, body: str) -> None:
+async def _send_sms(phone: str, body: str) -> dict | None:
     provider = (settings.messaging_provider or "").lower()
     if provider == "bird":
-        await _bird_post(settings.bird_sms_channel_id, {
+        return await _bird_post(settings.bird_sms_channel_id, {
             "receiver": _bird_recipient(phone),
             "body": {"type": "text", "text": {"text": body}},
         })
     elif provider == "twilio":
-        await asyncio.to_thread(_twilio_send_sync, settings.twilio_from_number, phone, body=body)
+        return await asyncio.to_thread(_twilio_send_sync, settings.twilio_from_number, phone, body=body)
+    return None
 
 
 def _bird_whatsapp_template_for(kind: str) -> str:
@@ -418,7 +440,7 @@ def _bird_whatsapp_template_for(kind: str) -> str:
 
 
 async def _send_whatsapp_template(*, phone: str, kind: str, params: list[str],
-                                  var_keys: list[str] | None = None) -> None:
+                                  var_keys: list[str] | None = None) -> dict | None:
     """Pick a provider template for a WhatsApp lifecycle message.
 
     `var_keys` names Bird template variables (e.g. firstName/eventName/…); falls
@@ -434,7 +456,7 @@ async def _send_whatsapp_template(*, phone: str, kind: str, params: list[str],
         # {type,key,value} objects. A flat {key:value} "variables" object 422s
         # with "provided template information is invalid".
         parameters = [{"type": "string", "key": k, "value": v} for k, v in zip(keys, params)]
-        await _bird_post(settings.bird_whatsapp_channel_id, {
+        return await _bird_post(settings.bird_whatsapp_channel_id, {
             "receiver": _bird_recipient(phone),
             "template": {
                 "name": template,
@@ -452,7 +474,7 @@ async def _send_whatsapp_template(*, phone: str, kind: str, params: list[str],
         # Sandbox accepts plain body; production requires content_sid + variables.
         if sid:
             import json
-            await asyncio.to_thread(
+            return await asyncio.to_thread(
                 _twilio_send_sync,
                 settings.twilio_whatsapp_from, to_addr,
                 content_sid=sid,
@@ -460,18 +482,18 @@ async def _send_whatsapp_template(*, phone: str, kind: str, params: list[str],
             )
         else:
             body = " | ".join(params)  # sandbox fallback for testing
-            await asyncio.to_thread(_twilio_send_sync, settings.twilio_whatsapp_from, to_addr, body=body)
+            return await asyncio.to_thread(_twilio_send_sync, settings.twilio_whatsapp_from, to_addr, body=body)
 
 
-async def _send_sms_as_whatsapp(phone: str, body: str) -> None:
+async def _send_sms_as_whatsapp(phone: str, body: str) -> dict | None:
     """Send a plain-text message via the WhatsApp channel (used for broadcasts
     where no template is registered)."""
     provider = _wa_provider()
     if provider == "bird":
-        await _bird_post(settings.bird_whatsapp_channel_id, {
+        return await _bird_post(settings.bird_whatsapp_channel_id, {
             "receiver": _bird_recipient(phone),
             "body": {"type": "text", "text": {"text": body}},
         })
     elif provider == "twilio":
         to_addr = phone if phone.startswith("whatsapp:") else f"whatsapp:{phone}"
-        await asyncio.to_thread(_twilio_send_sync, settings.twilio_whatsapp_from, to_addr, body=body)
+        return await asyncio.to_thread(_twilio_send_sync, settings.twilio_whatsapp_from, to_addr, body=body)

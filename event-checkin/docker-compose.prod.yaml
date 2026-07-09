@@ -34,10 +34,16 @@ services:
     image: dclinics/events:backend-${APP_VERSION:-latest}
     pull_policy: always
     env_file: ./backend/.env
+    environment:
+      # SSE fan-out + rate-limit counters. Shared across replicas when scaled
+      # out; harmless on single-host. Unset REDIS_URL to fall back to in-process.
+      REDIS_URL: ${REDIS_URL:-redis://redis:6379/0}
     volumes:
       - uploads:/app/uploads
     depends_on:
       db:
+        condition: service_healthy
+      redis:
         condition: service_healthy
     healthcheck:
       test: ["CMD-SHELL", "python -c \"import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://localhost:8000/api/health', timeout=3).status==200 else 1)\""]
@@ -91,6 +97,19 @@ services:
       test: ["CMD-SHELL", "python -c \"import urllib.request; urllib.request.urlopen('http://localhost:8010/health', timeout=3).read()\""]
       interval: 15s
       timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+  # ── Redis (SSE fan-out + rate-limit counters) ─────────────────────────────
+  # Ephemeral by design — pub/sub messages and rate-limit windows are transient,
+  # so no volume/persistence is configured.
+  redis:
+    image: redis:7-alpine
+    command: ["redis-server", "--save", "", "--appendonly", "no"]
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
       retries: 5
     restart: unless-stopped
 

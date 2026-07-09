@@ -573,8 +573,10 @@ function NotificationPreferences({ token, guest, eventNotifySms, eventNotifyWa, 
       <div>
         <p className="text-sm font-semibold text-slate-800 dark:text-slate-100">🔔 Notification preferences</p>
         <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
-          We'll send your event ticket link, check-in confirmation, and seat updates to <strong>{phone}</strong>.
-          Standard message and data rates may apply. Reply <strong>STOP</strong> to opt out at any time.
+          We'll send your event ticket link, check-in confirmation, seating updates, session reminders, and
+          event-service notifications to <strong>{phone}</strong>. Message frequency varies by event. Message and data
+          rates may apply. Reply <strong>HELP</strong> for help or <strong>STOP</strong> to opt out at any time. View our{' '}
+          <a href="/privacy" target="_blank" rel="noreferrer" className="font-semibold text-teal-700 underline dark:text-teal-300">Privacy Policy</a>.
         </p>
       </div>
       <div className="space-y-2">
@@ -766,6 +768,7 @@ export default function ScanAutoPage() {
   const showGuestHubButton = Boolean(guestHubToken && (passOpts.showHubButton || event?.experience_enabled))
   const coverImage = designTheme?.flyer_image_url || designTheme?.cover_image_url || ''
   const qrImageUrl = `/api/scan/${token}/qr.png`
+  const checkoutQrImageUrl = `/api/scan/${token}/checkout-qr.png`
   const eventDate = parseUtc(event?.event_date)
   const eventName = wording.eventTitle || event?.name || 'Event'
   const hostName = wording.hostName || event?.couples_name || ''
@@ -846,6 +849,21 @@ export default function ScanAutoPage() {
           {/* Admitted banner */}
           {status === 'admitted' && <AdmittedBanner guest={guest} event={event} />}
 
+          {status === 'admitted' && (
+            <div className="rounded-lg border border-slate-200 bg-slate-50 p-4 text-center dark:border-slate-700 dark:bg-slate-800">
+              <p className="text-xs font-bold uppercase tracking-widest text-slate-500 dark:text-slate-400">Checkout QR</p>
+              <div className="mt-3 flex justify-center">
+                <img
+                  src={checkoutQrImageUrl}
+                  alt="Checkout QR code"
+                  className="h-32 w-32 rounded bg-white p-2"
+                  onError={(e) => { e.target.style.display = 'none' }}
+                />
+              </div>
+              <p className="mt-2 text-xs text-slate-500 dark:text-slate-400">Show this code if staff need to record your exit.</p>
+            </div>
+          )}
+
           {/* Table / Seat badge — visibility controlled from Design Studio pass options */}
           {((passOpts.showTable && table_name) || (passOpts.showSeat && seat_number)) && (
             <div className="flex justify-center">
@@ -868,6 +886,19 @@ export default function ScanAutoPage() {
                 style={{ background: colors.accent || '#14b8a6' }}
               >
                 {event?.experience_enabled ? 'Track my activity' : 'Open Guest Hub'}
+              </a>
+            </div>
+          )}
+
+          {/* Gift registry — surfaced on the pass so guests can reach it directly */}
+          {event?.registry_enabled && event?.registry_token && (
+            <div className="flex flex-col items-center gap-2">
+              {event.registry_message && <p className="max-w-sm text-center text-sm text-slate-400">{event.registry_message}</p>}
+              <a
+                href={`/registry/${event.registry_token}`}
+                className="inline-flex min-h-11 items-center justify-center gap-2 rounded-lg border border-slate-600 px-5 py-2 text-sm font-bold text-slate-100 transition hover:bg-slate-800"
+              >
+                🎁 View gift list
               </a>
             </div>
           )}

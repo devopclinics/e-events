@@ -109,6 +109,9 @@ function ResultCard({ result, onReset, onStepComplete, stepActionLoading }) {
     // Already-admitted is the most common door mistake (a double-scan), so make
     // it loud: bold orange + a thick ring + a big icon so staff can't miss it.
     already_admitted:{ bg: 'bg-orange-500', ring: 'ring-4 ring-orange-300', icon: '‼', heading: 'ALREADY CHECKED IN', big: true },
+    checked_out:     { bg: 'bg-slate-600', icon: 'OUT', heading: 'CHECKED OUT' },
+    already_checked_out:{ bg: 'bg-orange-500', ring: 'ring-4 ring-orange-300', icon: 'OUT', heading: 'ALREADY CHECKED OUT', big: true },
+    not_checked_in:  { bg: 'bg-orange-500', icon: '!', heading: 'NOT CHECKED IN' },
     invalid:         { bg: 'bg-red-500',    icon: '✕', heading: 'NOT FOUND' },
     not_active:      { bg: 'bg-slate-600',  icon: '⏸', heading: 'EVENT NOT ACTIVE' },
     not_assigned:    { bg: 'bg-orange-500', icon: '🚫', heading: 'NOT ASSIGNED' },
@@ -202,7 +205,7 @@ function ResultCard({ result, onReset, onStepComplete, stepActionLoading }) {
         onClick={onReset}
         className="mt-8 bg-white/20 hover:bg-white/30 text-white font-semibold px-8 py-3 rounded-xl transition-colors"
       >
-        Check in next guest
+        {result.status === 'checked_out' || result.status === 'already_checked_out' ? 'Check out next guest' : 'Check in next guest'}
       </button>
     </div>
   )
@@ -427,7 +430,24 @@ function extractToken(raw) {
   }
 }
 
-function ManualCheckin({ eventId, onResult, walkInEnabled, sectionMode, sectionId, sectionPickable }) {
+function extractScanPayload(raw) {
+  const value = String(raw || '').trim()
+  const checkout = value.match(/^festio-checkout:(.+)$/i)
+  if (checkout) return { token: extractToken(checkout[1]), action: 'checkout' }
+  try {
+    const url = new URL(value)
+    const parts = url.pathname.split('/').filter(Boolean)
+    const checkoutIndex = parts.findIndex((part) => part.toLowerCase() === 'checkout')
+    if (checkoutIndex >= 0 && parts[checkoutIndex + 1]) {
+      return { token: parts[checkoutIndex + 1], action: 'checkout' }
+    }
+  } catch {
+    // Plain ticket tokens fall through to the existing parser.
+  }
+  return { token: extractToken(value), action: null }
+}
+
+function ManualCheckin({ eventId, onResult, manualEnabled, walkInEnabled, sectionMode, sectionId, sectionPickable }) {
   const [q, setQ] = useState('')
   const [results, setResults] = useState([])
   const [searching, setSearching] = useState(false)
@@ -448,10 +468,20 @@ function ManualCheckin({ eventId, onResult, walkInEnabled, sectionMode, sectionI
     } catch (e) { setErr(e.message); setBusy(false) }
   }
 
+  function openWalkInForm() {
+    const term = q.trim()
+    if (term && !wf.first_name.trim() && !wf.last_name.trim()) {
+      const [first, ...rest] = term.split(/\s+/)
+      setWf((f) => ({ ...f, first_name: first || '', last_name: rest.join(' ') }))
+    }
+    setWalkIn(true)
+    setErr('')
+  }
+
   // Debounced search across name + phone.
   useEffect(() => {
     const term = q.trim()
-    if (term.length < 2) { setResults([]); setSearching(false); return }
+    if (!manualEnabled || term.length < 2) { setResults([]); setSearching(false); return }
     let active = true
     setSearching(true)
     const t = setTimeout(async () => {
@@ -462,7 +492,7 @@ function ManualCheckin({ eventId, onResult, walkInEnabled, sectionMode, sectionI
       finally { if (active) setSearching(false) }
     }, 250)
     return () => { active = false; clearTimeout(t) }
-  }, [q, eventId])
+  }, [q, eventId, manualEnabled])
 
   async function doCheckin(guest) {
     setBusy(true); setErr('')
@@ -539,17 +569,20 @@ function ManualCheckin({ eventId, onResult, walkInEnabled, sectionMode, sectionI
         </div>
       )}
       <input value={q} onChange={(e) => setQ(e.target.value)} autoFocus
-        placeholder="Search name or phone…" className={inputCls} />
+        placeholder={manualEnabled ? 'Search name or phone…' : 'Walk-in guest name…'} className={inputCls} />
       {walkInEnabled && (
-        <button onClick={() => { setWalkIn(true); setErr('') }}
+        <button onClick={openWalkInForm}
           className="w-full bg-amber-50 dark:bg-amber-900/20 text-amber-700 dark:text-amber-300 border border-amber-300 dark:border-amber-800 rounded-lg py-2 text-sm font-semibold hover:bg-amber-100 dark:hover:bg-amber-900/40">
           + Register as Walk-in Guest
         </button>
       )}
       {searching && <p className="text-xs text-gray-400 dark:text-slate-500">Searching…</p>}
       {err && <p className="text-sm text-red-500">{err}</p>}
-      {q.trim().length >= 2 && !searching && results.length === 0 && (
-        <p className="text-sm text-gray-400 dark:text-slate-500 text-center py-6">No matching guests.</p>
+      {manualEnabled && q.trim().length >= 2 && !searching && results.length === 0 && (
+        <p className="text-sm text-gray-400 dark:text-slate-500 text-center py-6">No guest found for "{q.trim()}".</p>
+      )}
+      {!manualEnabled && q.trim().length >= 2 && (
+        <p className="text-sm text-gray-400 dark:text-slate-500 text-center py-6">Manual lookup is off. Register this person as a walk-in guest.</p>
       )}
       <div className="space-y-2">
         {results.map((g) => (
@@ -610,6 +643,9 @@ function EventQrPanel({ event }) {
         className="mx-auto my-4 h-64 w-64 rounded-lg bg-white p-3" />
       <p className="text-base font-bold text-slate-950 dark:text-white">Hold this up for guests to scan</p>
       <p className="mt-2 break-all text-xs text-slate-500 dark:text-slate-400">{url}</p>
+      <p className="mt-3 text-xs text-slate-500 dark:text-slate-400">
+        Checkout QR codes are guest-specific and appear on an admitted guest's pass. For Entry areas, exits are recorded by selecting an Exit gate or an Exit direction.
+      </p>
       {copied && <p className="mt-2 text-xs font-semibold text-teal-600 dark:text-teal-400">Link copied</p>}
     </button>
   )
@@ -643,8 +679,11 @@ export default function ScannerPage() {
   const selectedEvent = events.find((e) => e.id === eventId)
   const accessMode = !!selectedEvent?.venue_access_enabled
   const manualEnabled = !!selectedEvent?.manual_checkin_enabled
+  const walkInEnabled = !!selectedEvent?.walk_in_enabled
+  const manualWalkInEnabled = manualEnabled || walkInEnabled
   const selfCheckinEnabled = !!selectedEvent?.self_checkin_enabled
   const sectionMode = !!selectedEvent?.section_mode_enabled
+  const normalCheckoutEnabled = !!selectedEvent && !accessMode
   const selectedZone = zones.find((z) => z.id === zoneId)
   const selectedGate = gates.find((g) => g.id === gateId)
   const scanningReady = !!selectedEvent && selectedEvent.status === 'active'
@@ -761,7 +800,8 @@ export default function ScannerPage() {
   }
 
   async function handleScan(raw) {
-    const token = extractToken(raw)
+    const { token, action } = extractScanPayload(raw)
+    const scanAction = action || (mode === 'checkout' ? 'checkout' : 'checkin')
     setLoading(true)
     try {
       if (accessMode && scanBy === 'gate') {
@@ -794,6 +834,16 @@ export default function ScannerPage() {
         const res = await api.scanZone(token, body)
         setResult({ zoneMode: true, ...res })
       } else {
+        if (scanAction === 'checkout') {
+          if (!navigator.onLine) {
+            setResult({ status: 'invalid', message: 'Check-out needs a network connection so the exit scan can be recorded.' })
+            return
+          }
+          const res = await api.scanCheckout(token)
+          setResult(res)
+          refreshOfflineManifest(eventId)
+          return
+        }
         if (!navigator.onLine) {
           offlineAdmit(token)
           return
@@ -806,6 +856,7 @@ export default function ScannerPage() {
       if (/failed to fetch|network|load failed/i.test(err.message || '')) {
         if (accessMode && scanBy === 'gate') offlineAccessScan(token, { mode: 'gate', gateId })
         else if (accessMode) offlineAccessScan(token, { mode: 'zone', zoneId, direction: selectedZone?.direction_mode === 'both' ? direction : undefined })
+        else if (scanAction === 'checkout') setResult({ status: 'invalid', message: 'Check-out needs a network connection so the exit scan can be recorded.' })
         else offlineAdmit(token)
       } else {
         setResult({ zoneMode: accessMode, status: 'invalid', message: err.message })
@@ -1077,7 +1128,7 @@ export default function ScannerPage() {
 
           {scanBy === 'gate' && gates.length > 0 ? (
             <div>
-              <label className="block text-xs font-semibold text-gray-600 dark:text-slate-300 mb-1">Where are you checking guests in?</label>
+              <label className="block text-xs font-semibold text-gray-600 dark:text-slate-300 mb-1">Where are you scanning?</label>
               <select className="w-full border border-gray-300 dark:border-slate-700 rounded-lg px-3 py-2 text-sm bg-white dark:bg-slate-700 text-gray-900 dark:text-white"
                 value={gateId} onChange={(e) => setGateId(e.target.value)}>
                 <option value="">— select gate —</option>
@@ -1088,16 +1139,26 @@ export default function ScannerPage() {
                   Festio checks each guest's ticket rules automatically.
                 </p>
               )}
+              {!selectedGate && (
+                <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
+                  To record exits, choose a gate marked Exit. Create exit gates in Event Setup, under Entry areas and Gates.
+                </p>
+              )}
             </div>
           ) : (
             <>
               <div>
-                <label className="block text-xs font-semibold text-gray-600 dark:text-slate-300 mb-1">Entry area</label>
+                <label className="block text-xs font-semibold text-gray-600 dark:text-slate-300 mb-1">Entry / exit area</label>
                 <select className="w-full border border-gray-300 dark:border-slate-700 rounded-lg px-3 py-2 text-sm bg-white dark:bg-slate-700 text-gray-900 dark:text-white"
                   value={zoneId} onChange={(e) => setZoneId(e.target.value)}>
                   <option value="">— select zone —</option>
                   {zones.map((z) => <option key={z.id} value={z.id}>{z.name} · inside {z.occupancy}{z.capacity != null ? `/${z.capacity}` : ''}</option>)}
                 </select>
+                {!selectedZone && (
+                  <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
+                    Exit scans require a zone set to Entry & Exit or Exit only.
+                  </p>
+                )}
               </div>
               {selectedZone?.direction_mode === 'both' && (
                 <div className="flex gap-2">
@@ -1176,11 +1237,12 @@ export default function ScannerPage() {
 
         {!loading && !result && scanningReady && (
           <div>
-            {(manualEnabled || selfCheckinEnabled) && (
+            {(normalCheckoutEnabled || manualWalkInEnabled || selfCheckinEnabled) && (
               <div className="flex gap-2 mb-4">
                 {[
                   ['qr', 'QR Scan'],
-                  ...(manualEnabled ? [['manual', 'Manual']] : []),
+                  ...(normalCheckoutEnabled ? [['checkout', 'Check-out']] : []),
+                  ...(manualWalkInEnabled ? [['manual', 'Manual / Walk-in']] : []),
                   ...(selfCheckinEnabled ? [['eventqr', 'Event QR']] : []),
                 ].map(([m, label]) => (
                   <button key={m} onClick={() => setMode(m)}
@@ -1194,14 +1256,16 @@ export default function ScannerPage() {
             )}
             {selfCheckinEnabled && mode === 'eventqr' ? (
               <EventQrPanel event={selectedEvent} />
-            ) : manualEnabled && mode === 'manual' ? (
-              <ManualCheckin eventId={eventId} walkInEnabled={!!selectedEvent?.walk_in_enabled}
+            ) : manualWalkInEnabled && mode === 'manual' ? (
+              <ManualCheckin eventId={eventId} manualEnabled={manualEnabled} walkInEnabled={walkInEnabled || manualEnabled}
                 sectionMode={sectionMode} sectionId={sectionId} sectionPickable={tableGroups.length > 1}
                 onResult={(res) => setResult(res)} />
             ) : (
               <>
                 <p className="text-center text-sm text-gray-500 dark:text-slate-400 mb-4">
-                  Keep the QR code inside the square until you see a result.
+                  {mode === 'checkout'
+                    ? 'Scan the guest ticket or checkout QR to record their exit.'
+                    : 'Keep the QR code inside the square until you see a result.'}
                 </p>
                 <QrScanner key={scanKey} onScan={handleScan} />
               </>

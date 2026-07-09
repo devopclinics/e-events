@@ -35,7 +35,14 @@ async function req(method, path, body) {
     const detail = Array.isArray(err.detail)
       ? err.detail.map((d) => d.msg || JSON.stringify(d)).join('; ')
       : err.detail
-    throw new Error(detail || res.statusText)
+    const message = typeof detail === 'string'
+      ? detail
+      : detail?.message || detail?.error || res.statusText
+    const e = new Error(message || res.statusText)
+    e.status = res.status
+    e.detail = detail
+    e.requiredPlan = res.headers.get('x-required-plan') || detail?.required_plan || ''
+    throw e
   }
   return res.status === 204 ? null : res.json()
 }
@@ -61,6 +68,8 @@ async function downloadFile(path, filename, { withAuth = true } = {}) {
 }
 
 export const api = {
+  submitDemoRequest: (body) => req('POST', '/demo-requests', body),
+
   // Events
   listEvents:   ()           => req('GET',    '/events'),
   createEvent:  (data)       => req('POST',   '/events', data),
@@ -210,6 +219,27 @@ export const api = {
   createTable:             (eventId, data)             => req('POST',   `/events/${eventId}/tables`, data),
   updateTable:             (eventId, tableId, data)    => req('PUT',    `/events/${eventId}/tables/${tableId}`, data),
   deleteTable:             (eventId, tableId)          => req('DELETE', `/events/${eventId}/tables/${tableId}`),
+
+  // Floor-plan designer (admin, logged-in)
+  getFloorPlan:    (eventId)       => req('GET',  `/events/${eventId}/floor-plan`),
+  saveFloorPlan:   (eventId, data) => req('PUT',  `/events/${eventId}/floor-plan`, data),
+  shareFloorPlan:  (eventId)       => req('POST', `/events/${eventId}/floor-plan/share`),
+  floorPlanPdf:    (eventId, name = 'floor-plan') => downloadFile(`/events/${eventId}/floor-plan.pdf`, `${name}.pdf`),
+  uploadFloorBg:   async (eventId, file) => {
+    const token = await getToken()
+    const fd = new FormData(); fd.append('file', file)
+    const r = await fetch(`${BASE}/events/${encodeURIComponent(eventId)}/floor-plan/bg`, {
+      method: 'POST', headers: token ? { Authorization: `Bearer ${token}` } : {}, body: fd,
+    })
+    if (!r.ok) throw new Error((await r.json().catch(() => ({}))).detail || 'Upload failed')
+    return r.json()
+  },
+  // Floor-plan client share links (no login) — view or edit token
+  getSharedFloor:  (token)       => fetch(`${BASE}/floor/${encodeURIComponent(token)}`)
+    .then((r) => (r.ok ? r.json() : r.json().then((e) => Promise.reject(new Error(e.detail || 'This floor-plan link is not valid.'))))),
+  saveSharedFloor: (token, data) => fetch(`${BASE}/floor/${encodeURIComponent(token)}`, {
+    method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(data),
+  }).then((r) => (r.ok ? r.json() : r.json().then((e) => Promise.reject(new Error(e.detail || 'Could not save.'))))),
   getSeatingChart:         (eventId)                   => req('GET',    `/events/${eventId}/seating`),
   autoAssign:              (eventId, clear = false)    => req('POST',   `/events/${eventId}/seating/auto-assign?clear=${clear}`),
   assignSeat:              (eventId, guestId, body)    => req('PATCH',  `/events/${eventId}/guests/${guestId}/seat`, body),
@@ -244,6 +274,7 @@ export const api = {
 
   // Scanner
   scan: (token) => req('POST', `/scan/${token}`),
+  scanCheckout: (token) => req('POST', `/scan/${token}/checkout`),
   offlineManifest: (eventId) => req('GET', `/scan/offline-manifest/${eventId}`),
   // Manual check-in (no QR)
   searchGuests:  (eventId, q) => req('GET', `/events/${eventId}/guests/search?q=${encodeURIComponent(q)}`),
@@ -453,6 +484,7 @@ export const api = {
 
   // Billing (Event Pass)
   getBillingTiers: (eventId)      => req('GET',  `/billing/tiers/${eventId}`),
+  getCreditLedger: (eventId)      => req('GET',  `/billing/credits/${eventId}`),
   checkout:        (eventId, tier) => req('POST', '/billing/checkout', { event_id: eventId, tier }),
   setBillingCurrency: (eventId, currency) => req('POST', '/billing/currency', { event_id: eventId, currency }),
   // Public marketing pricing (no auth)

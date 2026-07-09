@@ -6,7 +6,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from .database import engine
 from .config import settings
-from .routers import events, guests, scanner, dashboard, seating, menu, logistics, registry, access, trials, classify, messaging, meta_whatsapp, resend_webhooks, templates as templates_router, self_checkin, experience
+from .routers import events, guests, scanner, dashboard, seating, menu, logistics, registry, access, trials, demo, classify, messaging, meta_whatsapp, resend_webhooks, templates as templates_router, self_checkin, experience
 from .routers import auth as auth_router
 from .routers import invite as invite_router
 from .routers import billing as billing_router
@@ -94,6 +94,7 @@ app.include_router(dashboard.router,   prefix="/api/events", tags=["dashboard"])
 app.include_router(invite_router.router, prefix="/api/invite", tags=["invite"])
 app.include_router(billing_router.router, prefix="/api/billing", tags=["billing"])
 app.include_router(trials.router, prefix="/api", tags=["trials"])
+app.include_router(demo.router, prefix="/api", tags=["demo"])
 app.include_router(admin_router.router, prefix="/api/admin", tags=["admin"])
 app.include_router(messaging.router, prefix="/api/messaging", tags=["messaging"])
 app.include_router(meta_whatsapp.router, prefix="/api/webhooks", tags=["webhooks"])

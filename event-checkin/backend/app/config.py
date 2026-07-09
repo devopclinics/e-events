@@ -23,6 +23,7 @@ class Settings(BaseSettings):
     smtp_password: str = ""
     smtp_tls: bool = True
     email_from: str = "Festio <events@festio.events>"
+    demo_recipient_emails: str = "events@festio.events"
     # If set, email is sent via the Resend HTTP API instead of SMTP.
     resend_api_key: str = ""
     # Resend webhook signing secret (whsec_...). Empty means acknowledge only.

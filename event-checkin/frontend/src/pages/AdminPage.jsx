@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { api, PUBLIC_BASE_URL, publicBaseUrl } from '../api'
 import { utcToLocalInput } from '../timeutil'
 import { useAuth } from '../context/AuthContext'
@@ -285,7 +286,7 @@ function GuestCommunicationPanel({ event }) {
 
 // ── Feature Toggles ───────────────────────────────────────────────────────────
 
-function ChannelToggles({ event, onChanged }) {
+function ChannelToggles({ event, onChanged, onGate }) {
   const [loading, setLoading]   = useState(false)
   const [testing, setTesting]   = useState(null)        // channel currently being tested
   const [testMsg, setTestMsg]   = useState('')          // success / error banner
@@ -294,7 +295,10 @@ function ChannelToggles({ event, onChanged }) {
     try {
       const updated = await api.toggleFeatures(event.id, { [key]: !event[key] })
       onChanged(updated)
-    } catch (e) { console.error(e) }
+    } catch (e) {
+      if (e.status === 402) onGate?.({ title: 'Activate messaging channels', message: e.message, requiredPlan: FEATURE_PLAN[key] || requiredPlanFromError(e), error: e })
+      else console.error(e)
+    }
     finally { setLoading(false) }
   }
   async function sendTest(channel) {
@@ -353,19 +357,31 @@ function ChannelToggles({ event, onChanged }) {
   )
 }
 
-function FeatureToggles({ event, onChanged }) {
+function FeatureToggles({ event, onChanged, onGate }) {
   const [loading, setLoading] = useState(false)
 
   const [err, setErr] = useState('')
-  const locked = !event.is_paid   // seating/orders are paid-plan features
+  const locked = !event.is_paid
 
   async function toggle(key) {
-    if (locked) { setErr('Seating and orders require an Event Pass — upgrade this event first.'); return }
+    if (locked) {
+      const requiredPlan = FEATURE_PLAN[key] || 'tier50'
+      onGate?.({
+        title: `Activate ${key.replace(/_enabled$/, '').replace(/_/g, ' ')}`,
+        message: `This module requires ${PLAN_LABELS[requiredPlan] || 'an Event Pass'}. You can preview the setup now and pay only when activating it.`,
+        requiredPlan,
+      })
+      setErr('Choose an Event Pass to activate this module.')
+      return
+    }
     setLoading(true); setErr('')
     try {
       const updated = await api.toggleFeatures(event.id, { [key]: !event[key] })
       onChanged(updated)
-    } catch (e) { setErr(e.message) }
+    } catch (e) {
+      if (e.status === 402) onGate?.({ title: 'Upgrade required', message: e.message, requiredPlan: FEATURE_PLAN[key] || requiredPlanFromError(e), error: e })
+      setErr(e.message)
+    }
     finally { setLoading(false) }
   }
 
@@ -399,7 +415,7 @@ function FeatureToggles({ event, onChanged }) {
   )
 }
 
-function SelfCheckinPanel({ event, onChanged, onFlash }) {
+function SelfCheckinPanel({ event, onChanged, onFlash, onGate }) {
   const [loading, setLoading] = useState(false)
   const [copied, setCopied] = useState(false)
   const code = event.event_code
@@ -412,7 +428,8 @@ function SelfCheckinPanel({ event, onChanged, onFlash }) {
       onChanged(updated)
       onFlash?.(`Self check-in ${updated.self_checkin_enabled ? 'enabled' : 'disabled'}.`)
     } catch (e) {
-      onFlash?.(e.message, true)
+      if (e.status === 402) onGate?.({ title: 'Activate self check-in', message: e.message, requiredPlan: FEATURE_PLAN.self_checkin_enabled, error: e })
+      else onFlash?.(e.message, true)
     } finally {
       setLoading(false)
     }
@@ -655,6 +672,10 @@ function SeatingPanel({ eventId }) {
       <div className="flex items-center justify-between flex-wrap gap-2">
         <h2 className="font-semibold text-base dark:text-white">Seating</h2>
         <div className="flex gap-2 flex-wrap">
+          <a href={`/floor-plan/${eventId}`}
+            className="bg-teal-600 text-white px-3 py-1.5 rounded-lg text-xs font-semibold hover:bg-teal-700">
+            🪑 Floor layout
+          </a>
           <button onClick={() => autoAssign(false)} disabled={loading || tables.length === 0}
             className="bg-blue-600 text-white px-3 py-1.5 rounded-lg text-xs font-semibold hover:bg-blue-700 disabled:opacity-50">
             Auto-Assign
@@ -1018,7 +1039,7 @@ function TableGroupsPanel({ eventId }) {
 }
 
 // ── Walk-in toggle (ported from prod) ───────────────────────────────────────────
-// Lets staff register walk-in guests at the door (Scanner → Manual). New walk-ins
+// Lets staff register walk-in guests at the door (Scanner -> Manual / Walk-in). New walk-ins
 // are auto-assigned to a chosen table group.
 
 function WalkInToggle({ event, onChanged, onFlash }) {
@@ -1057,7 +1078,7 @@ function WalkInToggle({ event, onChanged, onFlash }) {
       <div className="flex items-center justify-between gap-3 flex-wrap">
         <div>
           <h2 className="font-semibold text-base dark:text-white">Walk-in guests</h2>
-          <p className="text-xs text-gray-400 dark:text-slate-500 mt-1">Let staff register guests who arrive without an invite (Scanner → Manual tab).</p>
+          <p className="text-xs text-gray-400 dark:text-slate-500 mt-1">Let staff register guests who arrive without an invite (Scanner: Manual / Walk-in tab).</p>
         </div>
         <button onClick={toggle} disabled={loading}
           className={`px-4 py-2 rounded-lg text-sm font-semibold border transition-colors disabled:opacity-50 ${
@@ -4020,7 +4041,224 @@ function fmtMoney(amount, currency) {
     : `$${major.toLocaleString(undefined, { minimumFractionDigits: 0 })}`
 }
 
-function BillingPanel({ event }) {
+const PLAN_ORDER = ['tier50', 'tier150', 'tier300', 'scale']
+const PLAN_RANK = { free: 0, tier50: 1, tier150: 2, tier300: 3, scale: 4, unlimited: 4 }
+const PLAN_LABELS = {
+  tier50: 'Starter Event Pass',
+  tier150: 'Standard Event Pass',
+  tier300: 'Pro Event Pass',
+  scale: 'Scale Event Pass',
+  unlimited: 'Scale Event Pass',
+}
+const FEATURE_PLAN = {
+  paid_channels: 'tier50',
+  notify_sms: 'tier50',
+  notify_whatsapp: 'tier50',
+  qr_checkin: 'tier50',
+  seating_enabled: 'tier50',
+  partner_pairing_enabled: 'tier150',
+  menu_enabled: 'tier50',
+  logistics_enabled: 'tier50',
+  registry_enabled: 'tier50',
+  venue_access_enabled: 'tier150',
+  source_sync: 'tier150',
+  self_checkin_enabled: 'tier300',
+  manual_checkin_enabled: 'tier300',
+  notify_mms: 'tier300',
+  experience_enabled: 'tier300',
+  consent_forms: 'tier300',
+}
+
+function normalizeRequiredPlan(value, fallback = 'tier50') {
+  const raw = String(value || '').toLowerCase()
+  if (PLAN_RANK[raw]) return raw
+  if (raw.includes('scale')) return 'scale'
+  if (raw.includes('pro')) return 'tier300'
+  if (raw.includes('standard')) return 'tier150'
+  if (raw.includes('starter')) return 'tier50'
+  return fallback
+}
+
+function planAtLeast(a, b) {
+  return (PLAN_RANK[a] || 0) >= (PLAN_RANK[b] || 0)
+}
+
+function requiredPlanFromError(err, fallback = 'tier50') {
+  return normalizeRequiredPlan(err?.requiredPlan || err?.message, fallback)
+}
+
+function recommendedPlanForEvent(event, fallback = 'tier50') {
+  const count = Number(event?.guest_count || event?.guest_count_estimate || 0)
+  let plan = fallback
+  if (count > 50) plan = 'tier150'
+  if (count > 150) plan = 'tier300'
+  if (count > 300) plan = 'scale'
+  return plan
+}
+
+function AddOnCatalog({ catalog }) {
+  const addons = catalog?.addons
+  if (!addons) return null
+  const sections = [
+    ['messaging', 'Messaging add-ons'],
+    ['design_studio', 'Design Studio add-ons'],
+    ['experience', 'Experience add-ons'],
+    ['operations', 'Operations add-ons'],
+    ['enterprise', 'Enterprise-only add-ons'],
+  ]
+  return (
+    <div className="rounded-xl border border-slate-200 bg-slate-50 p-4 dark:border-slate-700 dark:bg-slate-900/40">
+      <div className="text-sm font-semibold text-slate-800 dark:text-slate-100">Add-ons and manual quotes</div>
+      <div className="mt-3 grid gap-3 md:grid-cols-2">
+        {sections.map(([key, title]) => (
+          <div key={key}>
+            <div className="text-xs font-bold uppercase tracking-wide text-slate-500 dark:text-slate-400">{title}</div>
+            <ul className="mt-1 space-y-1 text-xs text-slate-600 dark:text-slate-300">
+              {(addons[key] || []).slice(0, 5).map((item) => (
+                <li key={typeof item === 'string' ? item : item.label}>- {typeof item === 'string' ? item : item.label}</li>
+              ))}
+            </ul>
+          </div>
+        ))}
+      </div>
+    </div>
+  )
+}
+
+function CreditLedger({ eventId }) {
+  const [data, setData] = useState(null)
+  const [err, setErr] = useState('')
+
+  useEffect(() => {
+    if (!eventId) return
+    api.getCreditLedger(eventId).then(setData).catch((e) => setErr(e.message))
+  }, [eventId])
+
+  if (err) return <div className="text-xs text-red-600 dark:text-red-400">{err}</div>
+  if (!data) return null
+  const rows = data.rows || []
+  return (
+    <div className="rounded-xl border border-slate-200 bg-white p-4 dark:border-slate-700 dark:bg-slate-900/40">
+      <div className="flex items-center justify-between gap-3">
+        <div className="text-sm font-semibold text-slate-800 dark:text-slate-100">Credit ledger</div>
+        <div className="text-xs font-bold text-slate-500 dark:text-slate-400">{data.balance?.toLocaleString()} credits available</div>
+      </div>
+      {rows.length === 0 ? (
+        <p className="mt-2 text-xs text-slate-500 dark:text-slate-400">No credit activity yet.</p>
+      ) : (
+        <div className="mt-3 overflow-x-auto">
+          <table className="min-w-full text-xs">
+            <thead className="text-left text-slate-500 dark:text-slate-400">
+              <tr>
+                <th className="py-1 pr-3">When</th>
+                <th className="py-1 pr-3">Action</th>
+                <th className="py-1 pr-3">Channel</th>
+                <th className="py-1 pr-3">Provider</th>
+                <th className="py-1 pr-3 text-right">Delta</th>
+                <th className="py-1 text-right">Balance</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
+              {rows.slice(0, 12).map((r) => (
+                <tr key={r.id} className="text-slate-700 dark:text-slate-300">
+                  <td className="py-1.5 pr-3 whitespace-nowrap">{r.created_at ? new Date(r.created_at).toLocaleString([], { dateStyle: 'short', timeStyle: 'short' }) : '-'}</td>
+                  <td className="py-1.5 pr-3">{r.reason || r.action}</td>
+                  <td className="py-1.5 pr-3 uppercase">{r.channel || '-'}</td>
+                  <td className="py-1.5 pr-3">{r.provider || '-'}</td>
+                  <td className={`py-1.5 pr-3 text-right font-bold ${r.delta >= 0 ? 'text-emerald-600' : 'text-slate-700 dark:text-slate-200'}`}>
+                    {r.delta > 0 ? '+' : ''}{r.delta}
+                  </td>
+                  <td className="py-1.5 text-right">{r.balance_after?.toLocaleString()}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </div>
+  )
+}
+
+function UpgradeGateModal({ event, gate, onClose, onStarted }) {
+  const [info, setInfo] = useState(null)
+  const [busy, setBusy] = useState('')
+  const [err, setErr] = useState('')
+  const required = normalizeRequiredPlan(gate?.requiredPlan || requiredPlanFromError(gate?.error), 'tier50')
+
+  useEffect(() => {
+    if (!gate || !event?.id) return
+    setErr('')
+    api.getBillingTiers(event.id).then(setInfo).catch((e) => setErr(e.message))
+  }, [gate, event?.id])
+
+  if (!gate) return null
+
+  const tiers = info?.tiers || []
+  const eligible = tiers.filter((t) => planAtLeast(t.key, required))
+  const selected = eligible.find((t) => t.key === required) || eligible[0] || tiers.find((t) => t.key === required) || tiers[0]
+
+  async function checkout(tierKey) {
+    if (!tierKey) return
+    setBusy(tierKey); setErr('')
+    try {
+      const { url } = await api.checkout(event.id, tierKey)
+      onStarted?.(tierKey)
+      window.location.href = url
+    } catch (e) { setErr(e.message); setBusy('') }
+  }
+
+  return (
+    <div className="fixed inset-0 z-[70] flex items-center justify-center bg-slate-950/60 p-4 backdrop-blur-sm" onClick={onClose}>
+      <div className="w-full max-w-2xl rounded-xl border border-slate-200 bg-white p-6 shadow-2xl dark:border-slate-700 dark:bg-slate-900" onClick={(e) => e.stopPropagation()}>
+        <div className="flex items-start justify-between gap-4">
+          <div>
+            <p className="text-xs font-black uppercase tracking-widest text-teal-700 dark:text-teal-300">Event Pass required</p>
+            <h2 className="mt-1 text-xl font-black text-slate-950 dark:text-white">{gate.title || 'Upgrade to activate this feature'}</h2>
+            <p className="mt-2 text-sm text-slate-600 dark:text-slate-300">
+              {gate.message || gate.error?.message || `This action requires ${PLAN_LABELS[required] || 'an Event Pass'}.`}
+            </p>
+          </div>
+          <button onClick={onClose} className="rounded-lg px-2 py-1 text-slate-400 hover:bg-slate-100 hover:text-slate-700 dark:hover:bg-slate-800 dark:hover:text-white">x</button>
+        </div>
+
+        <div className="mt-5 rounded-lg border border-teal-200 bg-teal-50 p-4 dark:border-teal-800 dark:bg-teal-950/30">
+          <div className="text-sm font-semibold text-teal-900 dark:text-teal-100">Recommended</div>
+          <div className="mt-1 text-lg font-black text-teal-800 dark:text-teal-200">
+            {selected ? `${selected.name || selected.label} · ${fmtMoney(selected.amount, selected.currency)}` : PLAN_LABELS[required]}
+          </div>
+          {selected && (
+            <p className="mt-1 text-xs text-teal-900 dark:text-teal-100">
+              Up to {selected.guest_cap?.toLocaleString()} guests · {selected.credits?.toLocaleString()} message credits
+            </p>
+          )}
+        </div>
+
+        <div className="mt-4 grid gap-3 sm:grid-cols-2">
+          {eligible.map((t) => (
+            <button key={t.key} onClick={() => checkout(t.key)} disabled={!info?.configured || !!busy}
+              className={`rounded-xl border p-4 text-left transition disabled:opacity-50 ${
+                t.key === selected?.key ? 'border-teal-500 bg-teal-50 dark:bg-teal-950/30' : 'border-slate-200 hover:border-teal-300 dark:border-slate-700'
+              }`}>
+              <div className="text-sm font-black text-slate-950 dark:text-white">{t.name || t.label}</div>
+              <div className="mt-1 text-2xl font-black text-teal-700 dark:text-teal-300">{fmtMoney(t.amount, t.currency)}</div>
+              <div className="mt-1 text-xs text-slate-500 dark:text-slate-400">Up to {t.guest_cap?.toLocaleString()} guests · {t.credits?.toLocaleString()} credits</div>
+              <div className="mt-3 text-xs font-bold text-teal-700 dark:text-teal-300">{busy === t.key ? 'Redirecting...' : 'Activate with this pass'}</div>
+            </button>
+          ))}
+        </div>
+
+        {info && !info.configured && (
+          <div className="mt-4 rounded-lg bg-amber-50 px-3 py-2 text-xs text-amber-800 dark:bg-amber-900/20 dark:text-amber-300">
+            {info.provider?.toUpperCase()} checkout is not configured. Contact sales or enable billing credentials.
+          </div>
+        )}
+        {err && <div className="mt-4 text-sm text-red-600 dark:text-red-400">{err}</div>}
+      </div>
+    </div>
+  )
+}
+
+function BillingPanel({ event, recommendedPlan }) {
   const [info, setInfo] = useState(null)
   const [busy, setBusy] = useState('')
   const [err, setErr] = useState('')
@@ -4063,8 +4301,8 @@ function BillingPanel({ event }) {
       {event.is_paid ? (
         <>
           <div className="rounded-lg bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 px-4 py-3 text-sm text-green-800 dark:text-green-300">
-            ✓ This event is on the <span className="font-semibold">{event.plan_tier}</span> plan
-            {event.guest_cap ? ` · up to ${event.guest_cap} guests` : ' · unlimited guests'}
+            ✓ This event is on the <span className="font-semibold">{event.plan_tier === 'scale' || event.plan_tier === 'unlimited' ? 'Scale' : event.plan_tier}</span> plan
+            {event.guest_cap ? ` · up to ${event.guest_cap.toLocaleString()} guests` : ' · custom guest volume'}
             {` · ${event.message_credits} message credits left`}.
           </div>
           <div className="text-sm font-semibold text-slate-700 dark:text-slate-300 pt-1">Top up message credits</div>
@@ -4085,6 +4323,8 @@ function BillingPanel({ event }) {
               </div>
             ))}
           </div>
+          <AddOnCatalog catalog={info?.catalog} />
+          <CreditLedger eventId={event.id} />
         </>
       ) : (
         <>
@@ -4099,10 +4339,20 @@ function BillingPanel({ event }) {
           )}
           <div className="grid sm:grid-cols-2 gap-3">
             {info?.tiers.map((t) => (
-              <div key={t.key} className="border dark:border-slate-700 rounded-xl p-4 flex flex-col gap-2">
-                <div className="font-semibold text-sm dark:text-white">{t.label}</div>
+              <div key={t.key} className={`border rounded-xl p-4 flex flex-col gap-2 ${
+                t.key === recommendedPlan ? 'border-teal-500 bg-teal-50/70 dark:bg-teal-950/20' : 'dark:border-slate-700'
+              }`}>
+                <div className="font-semibold text-sm dark:text-white">{t.name || t.label}</div>
+                {t.key === recommendedPlan && <div className="w-fit rounded-full bg-teal-600 px-2 py-0.5 text-[10px] font-black uppercase tracking-wide text-white">Recommended</div>}
                 <div className="text-2xl font-bold text-teal-700 dark:text-teal-300">{fmtMoney(t.amount, t.currency)}</div>
-                <div className="text-xs text-slate-500 dark:text-slate-400">{t.credits} SMS/WhatsApp credits</div>
+                <div className="text-xs text-slate-500 dark:text-slate-400">
+                  {t.guest_cap ? `Up to ${t.guest_cap.toLocaleString()} guests` : 'Custom guest volume'} · {t.credits.toLocaleString()} credits
+                </div>
+                {t.capabilities?.length > 0 && (
+                  <ul className="space-y-1 text-[11px] text-slate-500 dark:text-slate-400">
+                    {t.capabilities.slice(0, 3).map((item) => <li key={item}>✓ {item}</li>)}
+                  </ul>
+                )}
                 <button
                   onClick={() => upgrade(t.key)}
                   disabled={!info.configured || !!busy}
@@ -4112,6 +4362,8 @@ function BillingPanel({ event }) {
               </div>
             ))}
           </div>
+          <AddOnCatalog catalog={info?.catalog} />
+          <CreditLedger eventId={event.id} />
         </>
       )}
       {err && <div className="text-xs text-red-600 dark:text-red-400">{err}</div>}
@@ -6957,7 +7209,7 @@ function trialMoney(amount, currency) {
   return currency === 'NGN' ? `₦${major.toLocaleString()}` : `$${major.toLocaleString()}`
 }
 
-function TrialBanner({ events, user }) {
+function TrialBanner({ events, user, onCreateDraft }) {
   const [tiers, setTiers] = useState([])
   const [requests, setRequests] = useState(null)   // null = loading
   const [showForm, setShowForm] = useState(false)
@@ -7001,27 +7253,56 @@ function TrialBanner({ events, user }) {
     <div className="rounded-2xl border border-teal-200 dark:border-teal-800 bg-teal-50/60 dark:bg-teal-900/20 p-6 space-y-4">
       <div className="flex items-start justify-between gap-4 flex-wrap">
         <div>
-          <h2 className="font-bold text-lg text-slate-900 dark:text-white">Choose how to start</h2>
+          <h2 className="font-bold text-lg text-slate-900 dark:text-white">Create your draft event</h2>
           <p className="text-sm text-slate-600 dark:text-slate-300 mt-1 max-w-2xl">
-            Every event is free to start — email invites and up to 25 guests. Unlock SMS/WhatsApp,
-            check-in, seating, venue access and more with an Event Pass. Want to try the paid
-            features first? Request free trial credits and we’ll set you up.
+            Start with the free RSVP and email workflow for up to 25 guests. Design Studio, QR check-in,
+            SMS/WhatsApp, seating, access rules, logistics, registry, and Experience workflows unlock with an Event Pass.
           </p>
         </div>
-        {approved ? (
-          <span className="shrink-0 inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-green-100 dark:bg-green-900/40 text-green-700 dark:text-green-300 text-xs font-semibold">
-            ✓ Trial approved — check your events
-          </span>
-        ) : pending ? (
-          <span className="shrink-0 inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-amber-100 dark:bg-amber-900/40 text-amber-700 dark:text-amber-300 text-xs font-semibold">
-            ⏳ Trial request received — we’ll be in touch
-          </span>
-        ) : (
-          <button onClick={() => setShowForm((v) => !v)}
+        <div className="flex flex-wrap items-center gap-2">
+          <button onClick={onCreateDraft}
             className="shrink-0 bg-teal-600 hover:bg-teal-700 text-white px-4 py-2 rounded-lg text-sm font-semibold">
-            Request free trial credits
+            Create draft event
           </button>
-        )}
+          {approved ? (
+            <span className="shrink-0 inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-green-100 dark:bg-green-900/40 text-green-700 dark:text-green-300 text-xs font-semibold">
+              Trial approved — check your events
+            </span>
+          ) : pending ? (
+            <span className="shrink-0 inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-amber-100 dark:bg-amber-900/40 text-amber-700 dark:text-amber-300 text-xs font-semibold">
+              Trial request received — we’ll be in touch
+            </span>
+          ) : (
+            <button onClick={() => setShowForm((v) => !v)}
+              className="shrink-0 border border-teal-300 text-teal-700 hover:bg-teal-50 dark:border-teal-700 dark:text-teal-200 dark:hover:bg-teal-950/40 px-4 py-2 rounded-lg text-sm font-semibold">
+              Request trial credits
+            </button>
+          )}
+        </div>
+      </div>
+
+      <div className="grid gap-3 md:grid-cols-3">
+        <div className="rounded-xl border border-slate-200 bg-white p-4 dark:border-slate-700 dark:bg-slate-800">
+          <div className="text-xs font-black uppercase tracking-wide text-slate-400 dark:text-slate-500">Free event</div>
+          <h3 className="mt-1 text-sm font-bold text-slate-950 dark:text-white">RSVP and email only</h3>
+          <p className="mt-2 text-xs leading-5 text-slate-600 dark:text-slate-300">
+            Create a draft, publish a basic RSVP page, send email invitations, and manage up to 25 guests with Festio branding.
+          </p>
+        </div>
+        <div className="rounded-xl border border-slate-200 bg-white p-4 dark:border-slate-700 dark:bg-slate-800">
+          <div className="text-xs font-black uppercase tracking-wide text-teal-600 dark:text-teal-300">Event Pass</div>
+          <h3 className="mt-1 text-sm font-bold text-slate-950 dark:text-white">Operations and branded tools</h3>
+          <p className="mt-2 text-xs leading-5 text-slate-600 dark:text-slate-300">
+            Activate paid modules when you need Design Studio, QR check-in, SMS/WhatsApp, seating, access zones, registry, logistics, or Experience.
+          </p>
+        </div>
+        <div className="rounded-xl border border-slate-200 bg-white p-4 dark:border-slate-700 dark:bg-slate-800">
+          <div className="text-xs font-black uppercase tracking-wide text-amber-600 dark:text-amber-300">How checkout works</div>
+          <h3 className="mt-1 text-sm font-bold text-slate-950 dark:text-white">Draft first, pay at activation</h3>
+          <p className="mt-2 text-xs leading-5 text-slate-600 dark:text-slate-300">
+            The setup wizard asks for guest count, currency, channels, and modules, then recommends the smallest pass that fits.
+          </p>
+        </div>
       </div>
 
       {/* Plan tiers */}
@@ -7029,10 +7310,10 @@ function TrialBanner({ events, user }) {
         <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-3">
           {tiers.map((t) => (
             <div key={t.key} className="bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 p-3">
-              <div className="font-semibold text-sm text-slate-900 dark:text-white">{t.label}</div>
+              <div className="font-semibold text-sm text-slate-900 dark:text-white">{t.name || t.label}</div>
               <div className="text-xl font-extrabold text-teal-700 dark:text-teal-300">{trialMoney(t.amount, t.currency)}</div>
               <div className="text-xs text-slate-500 dark:text-slate-400 mt-1">
-                {t.guest_cap ? `Up to ${t.guest_cap} guests` : 'Unlimited guests'} · {t.credits} credits
+                {t.guest_cap ? `Up to ${t.guest_cap.toLocaleString()} guests` : 'Custom guest volume'} · {t.credits.toLocaleString()} credits
               </div>
             </div>
           ))}
@@ -7613,6 +7894,7 @@ function ResetEventModal({ event, onClose, onDone }) {
 
 export default function AdminPage() {
   const { user } = useAuth()
+  const navigate = useNavigate()
   const [events, setEvents] = useState([])
   const [selectedId, setSelectedId] = useCurrentEvent()
   const [showForm, setShowForm] = useState(false)
@@ -7628,11 +7910,13 @@ export default function AdminPage() {
   const [activeTab, setActiveTab] = useState('overview')
   const [tableGroups, setTableGroups] = useState([])
   const [groupFilter, setGroupFilter] = useState('')   // '' = all, 'none' = unassigned
-  const [guestFilter, setGuestFilter] = useState({ invited: 'all', admitted: 'all', qr: 'all' })
+  const [guestFilter, setGuestFilter] = useState({ invited: 'all', admitted: 'all', qr: 'all', relationship: 'all', submitter: 'all' })
   const [showReset, setShowReset] = useState(false)
   const [editingGuest, setEditingGuest] = useState(null)
   const [viewingGuest, setViewingGuest] = useState(null)
   const [showAddGuest, setShowAddGuest] = useState(false)
+  const [upgradeGate, setUpgradeGate] = useState(null)
+  const [recommendedPlan, setRecommendedPlan] = useState(() => localStorage.getItem('festio.recommendedPlan') || '')
   const fileRef = useRef()
 
   const PAGE_SIZE = 50
@@ -7651,6 +7935,19 @@ export default function AdminPage() {
       setTimeout(() => setMsg(''), 8000)
       window.history.replaceState({}, '', '/admin')
       api.listEvents().then(setEvents).catch(console.error)
+    } else if (params.get('tab') === 'billing') {
+      setActiveTab('overview')
+      setMsg('Open the Event Pass panel below to activate or upgrade this event.')
+      setTimeout(() => setMsg(''), 7000)
+      window.history.replaceState({}, '', '/admin')
+    } else if (params.get('recommended')) {
+      const labels = { free: 'Free', tier50: 'Starter', tier150: 'Standard', tier300: 'Pro', scale: 'Scale', enterprise: 'Enterprise' }
+      const plan = params.get('recommended')
+      setRecommendedPlan(plan)
+      localStorage.setItem('festio.recommendedPlan', plan)
+      setMsg(`Draft created. Recommended plan: ${labels[plan] || plan}. You can preview first and pay only when activating paid modules.`)
+      setTimeout(() => setMsg(''), 9000)
+      window.history.replaceState({}, '', '/admin')
     }
   }, [])
 
@@ -7682,6 +7979,24 @@ export default function AdminPage() {
   function flash(m, isErr = false) {
     isErr ? setError(m) : setMsg(m)
     setTimeout(() => { setMsg(''); setError('') }, 4000)
+  }
+
+  function openUpgradeGate({ title, message, requiredPlan, error } = {}) {
+    const fallback = requiredPlan || recommendedPlanForEvent(event, 'tier50')
+    setUpgradeGate({
+      title,
+      message,
+      error,
+      requiredPlan: requiredPlan || requiredPlanFromError(error, fallback),
+    })
+  }
+
+  function gateOrFlash(err, fallbackPlan = 'tier50') {
+    if (err?.status === 402) {
+      openUpgradeGate({ message: err.message, requiredPlan: requiredPlanFromError(err, fallbackPlan), error: err })
+    } else {
+      flash(err.message, true)
+    }
   }
 
   function updateEvent(updated) {
@@ -7732,7 +8047,7 @@ export default function AdminPage() {
       setSelectedId('')
       setGuests([])
       flash('Event deleted.')
-    } catch (err) { flash(err.message, true) }
+    } catch (err) { gateOrFlash(err, 'tier50') }
   }
 
   function flashImportResult(res) {
@@ -7761,7 +8076,7 @@ export default function AdminPage() {
       const res = await api.uploadGuests(selectedId, file)
       flashImportResult(res)
       setGuests(await api.listGuests(selectedId))
-    } catch (err) { flash(err.message, true) }
+    } catch (err) { gateOrFlash(err, 'tier50') }
     finally { setLoading(false); fileRef.current.value = '' }
   }
 
@@ -7776,7 +8091,7 @@ export default function AdminPage() {
       const res = await api.generateQR(selectedId)
       flash(`QR codes generated for ${res.generated} guests.`)
       setGuests(await api.listGuests(selectedId))
-    } catch (err) { flash(err.message, true) }
+    } catch (err) { gateOrFlash(err, 'tier50') }
     finally { setLoading(false) }
   }
 
@@ -7786,7 +8101,7 @@ export default function AdminPage() {
       const res = await api.sendInvites(selectedId)
       flash(`Invite emails queued for ${res.queued} guests.`)
       setGuests(await api.listGuests(selectedId))
-    } catch (err) { flash(err.message, true) }
+    } catch (err) { gateOrFlash(err, 'tier50') }
     finally { setLoading(false) }
   }
 
@@ -7797,7 +8112,7 @@ export default function AdminPage() {
       flash(`${label}: ${res.queued} invite${res.queued === 1 ? '' : 's'} queued.`)
       setGuests(await api.listGuests(selectedId))
       setSelectedGuests(new Set())
-    } catch (err) { flash(err.message, true) }
+    } catch (err) { gateOrFlash(err, 'tier50') }
     finally { setLoading(false) }
   }
 
@@ -7828,7 +8143,7 @@ export default function AdminPage() {
       setGuests(await api.listGuests(selectedId))
       setSheetUrl('')
       setShowUrlInput(false)
-    } catch (err) { flash(err.message, true) }
+    } catch (err) { gateOrFlash(err, 'tier150') }
     finally { setLoading(false) }
   }
 
@@ -7840,7 +8155,7 @@ export default function AdminPage() {
       })
       updateEvent(updated)
       flash(url ? 'Spreadsheet URL saved.' : 'Spreadsheet URL cleared.')
-    } catch (err) { flash(err.message, true) }
+    } catch (err) { gateOrFlash(err, 'tier150') }
   }
 
   async function handleToggleSync(enabled) {
@@ -7848,7 +8163,7 @@ export default function AdminPage() {
       const updated = await api.updateSource(selectedId, { source_sync_enabled: enabled })
       updateEvent(updated)
       flash(enabled ? 'Sync turned on.' : 'Sync paused — the spreadsheet will not be polled.')
-    } catch (err) { flash(err.message, true) }
+    } catch (err) { gateOrFlash(err, 'tier150') }
   }
 
   async function handleSyncNow() {
@@ -7860,7 +8175,7 @@ export default function AdminPage() {
       // Refresh the event so last_sync_at updates locally.
       const refreshed = await api.listEvents()
       setEvents(refreshed)
-    } catch (err) { flash(err.message, true) }
+    } catch (err) { gateOrFlash(err, 'tier150') }
     finally { setLoading(false) }
   }
 
@@ -7872,7 +8187,7 @@ export default function AdminPage() {
       setGuests(await api.listGuests(selectedId))
       setShowAddGuest(false)
       flash(sendInvite ? 'Guest added and invite sent.' : 'Guest added.')
-    } catch (err) { flash(err.message, true) }
+    } catch (err) { gateOrFlash(err, 'tier50') }
     finally { setLoading(false) }
   }
 
@@ -7972,18 +8287,32 @@ export default function AdminPage() {
     notSent: guests.filter((g) => !g.invite_sent_at).length,
     noPhone: guests.filter((g) => !g.phone).length,
   }
+  const effectiveRecommendedPlan = recommendedPlan && PLAN_RANK[recommendedPlan]
+    ? recommendedPlan
+    : event ? recommendedPlanForEvent(event, 'tier50') : ''
 
   return (
     <div className="space-y-6">
+      {event && (
+        <UpgradeGateModal
+          event={event}
+          gate={upgradeGate}
+          onClose={() => setUpgradeGate(null)}
+          onStarted={(plan) => {
+            localStorage.setItem('festio.recommendedPlan', plan)
+            setRecommendedPlan(plan)
+          }}
+        />
+      )}
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-bold dark:text-white">Event Setup</h1>
-        <button onClick={() => { setShowForm(true); setEditing(false) }}
+        <button onClick={() => navigate('/setup')}
           className="bg-indigo-600 text-white px-4 py-2 rounded-lg text-sm font-semibold hover:bg-indigo-700">
           New Event
         </button>
       </div>
 
-      {!event && <TrialBanner events={events} user={user} />}
+      {!event && <TrialBanner events={events} user={user} onCreateDraft={() => navigate('/setup')} />}
 
       {showForm && (
         <div className="bg-white dark:bg-slate-800 dark:border dark:border-slate-700/60 rounded-xl shadow p-6">
@@ -8086,12 +8415,12 @@ export default function AdminPage() {
               <div>
               <h2 className="font-semibold text-base dark:text-white">Event extras</h2>
               <p className="text-xs text-gray-400 dark:text-slate-500 mt-1">Turn optional tools on or off. Enabled tools appear in the sidebar. Requires an Event Pass.</p>
-                <FeatureToggles event={event} onChanged={updateEvent} />
+                <FeatureToggles event={event} onChanged={updateEvent} onGate={openUpgradeGate} />
               </div>
               <div className="border-t dark:border-slate-700 pt-5">
                 <h2 className="font-semibold text-base dark:text-white">Messaging channels</h2>
                 <p className="text-xs text-gray-400 dark:text-slate-500 mt-1">Which channels fire for invites &amp; admission notifications.</p>
-                <ChannelToggles event={event} onChanged={updateEvent} />
+                <ChannelToggles event={event} onChanged={updateEvent} onGate={openUpgradeGate} />
                 <label className="mt-4 flex items-start gap-2 cursor-pointer">
                   <input type="checkbox" checked={!!event.notify_rsvp_responses}
                     onChange={async (e) => {
@@ -8106,7 +8435,7 @@ export default function AdminPage() {
                 </label>
               </div>
 
-              <SelfCheckinPanel event={event} onChanged={updateEvent} onFlash={flash} />
+              <SelfCheckinPanel event={event} onChanged={updateEvent} onFlash={flash} onGate={openUpgradeGate} />
 
               {user?.is_platform_superadmin && (
                 <div className="border-t dark:border-slate-700 pt-5">
@@ -8125,7 +8454,7 @@ export default function AdminPage() {
                       className="mt-0.5 w-4 h-4 accent-indigo-600" />
                     <span>
                       <span className="text-sm font-medium text-slate-700 dark:text-slate-200">Manual check-in (no QR)</span>
-                      <span className="block text-xs text-gray-400 dark:text-slate-500">Adds a “Manual” tab on the Scanner so staff can admit guests by searching name or phone.</span>
+                      <span className="block text-xs text-gray-400 dark:text-slate-500">Adds a Manual / Walk-in tab on the Scanner so staff can admit guests by search or register a walk-in at the door.</span>
                     </span>
                   </label>
                   <label className="mt-3 flex items-start gap-2 cursor-pointer">
@@ -8228,7 +8557,7 @@ export default function AdminPage() {
           {stats.total > 0 && (
             <MessageDeliveryCard
               guests={guests}
-              onJump={(patch) => { setGuestFilter({ invited: 'all', admitted: 'all', qr: 'all', ...patch }); setPage(0); setActiveTab('guests') }}
+              onJump={(patch) => { setGuestFilter({ invited: 'all', admitted: 'all', qr: 'all', relationship: 'all', submitter: 'all', ...patch }); setPage(0); setActiveTab('guests') }}
             />
           )}
 
@@ -8394,7 +8723,7 @@ export default function AdminPage() {
                 </div>
               )
             })()}
-            <BillingPanel event={event} />
+            <BillingPanel event={event} recommendedPlan={effectiveRecommendedPlan} />
             <InvitePanel event={event} onChanged={updateEvent} />
             <ManualInvitePanel event={event} />
             <BroadcastPanel event={event} />
@@ -8440,6 +8769,19 @@ export default function AdminPage() {
             </div>
           )}
           {activeTab === 'guests' && guests.length > 0 && (() => {
+            const textKey = (value) => String(value || '').trim().toLowerCase()
+            const submitterOptions = Array.from(new Map(
+              guests
+                .filter((g) => g.rsvp_submitter_guest_id === g.id || g.rsvp_submitter_name)
+                .map((g) => {
+                  const id = g.rsvp_submitter_guest_id === g.id ? g.id : g.rsvp_submitter_guest_id
+                  const name = g.rsvp_submitter_guest_id === g.id
+                    ? `${g.first_name || ''} ${g.last_name || ''}`.trim()
+                    : g.rsvp_submitter_name
+                  return id && name ? [id, name] : null
+                })
+                .filter(Boolean)
+            ).entries()).sort((a, b) => a[1].localeCompare(b[1]))
             const byGroup = groupFilter === '' ? guests
               : groupFilter === 'none' ? guests.filter((g) => !g.assigned_table_group_id)
               : guests.filter((g) => g.assigned_table_group_id === groupFilter)
@@ -8450,9 +8792,18 @@ export default function AdminPage() {
               if (guestFilter.admitted === 'yes'   && !g.admitted)                  return false
               if (guestFilter.admitted === 'no'    && g.admitted)                   return false
               if (guestFilter.qr === 'pending'     && g.qr_generated_at)            return false
+              if (guestFilter.relationship === 'main' && g.rsvp_submitter_guest_id !== g.id) return false
+              if (guestFilter.relationship === 'additional' && !(g.rsvp_submitter_guest_id && g.rsvp_submitter_guest_id !== g.id)) return false
+              if (guestFilter.relationship === 'parent' && !textKey(g.rsvp_guest_type).includes('parent') && !textKey(g.rsvp_guest_type).includes('guardian') && !textKey(g.rsvp_relationship).includes('parent') && !textKey(g.rsvp_relationship).includes('guardian')) return false
+              if (guestFilter.relationship === 'teacher' && !textKey(g.rsvp_guest_type).includes('teacher') && !textKey(g.rsvp_guest_type).includes('staff') && !textKey(g.rsvp_relationship).includes('teacher') && !textKey(g.rsvp_relationship).includes('staff')) return false
+              if (guestFilter.relationship === 'vip' && !g.is_vip && !textKey(g.rsvp_guest_type).includes('vip') && !textKey(g.rsvp_guest_type).includes('dignitary')) return false
+              if (guestFilter.submitter !== 'all') {
+                const guestSubmitterId = g.rsvp_submitter_guest_id === g.id ? g.id : g.rsvp_submitter_guest_id
+                if (guestSubmitterId !== guestFilter.submitter) return false
+              }
               return true
             })
-            const anyFilter = guestFilter.invited !== 'all' || guestFilter.admitted !== 'all' || guestFilter.qr !== 'all'
+            const anyFilter = guestFilter.invited !== 'all' || guestFilter.admitted !== 'all' || guestFilter.qr !== 'all' || guestFilter.relationship !== 'all' || guestFilter.submitter !== 'all'
             const setGF = (patch) => { setGuestFilter((f) => ({ ...f, ...patch })); setPage(0) }
             const totalPages = Math.ceil(filteredGuests.length / PAGE_SIZE)
             const pageGuests = filteredGuests.slice(page * PAGE_SIZE, (page + 1) * PAGE_SIZE)
@@ -8516,6 +8867,22 @@ export default function AdminPage() {
                       {tableGroups.map((tg) => <option key={tg.id} value={tg.id}>{tg.name}</option>)}
                     </select>
                   )}
+                  <select value={guestFilter.relationship} onChange={(e) => setGF({ relationship: e.target.value })}
+                    className="text-xs border dark:border-slate-700 rounded-lg px-2 py-1.5 bg-white dark:bg-slate-700 dark:text-slate-200">
+                    <option value="all">All guest roles</option>
+                    <option value="main">Main invited guests</option>
+                    <option value="additional">Additional guests</option>
+                    <option value="parent">Parents / guardians</option>
+                    <option value="teacher">Teachers / staff</option>
+                    <option value="vip">VIP / dignitaries</option>
+                  </select>
+                  {submitterOptions.length > 0 && (
+                    <select value={guestFilter.submitter} onChange={(e) => setGF({ submitter: e.target.value })}
+                      className="text-xs border dark:border-slate-700 rounded-lg px-2 py-1.5 bg-white dark:bg-slate-700 dark:text-slate-200">
+                      <option value="all">All submitters / guest of</option>
+                      {submitterOptions.map(([id, name]) => <option key={id} value={id}>Guest of {name}</option>)}
+                    </select>
+                  )}
                   <button onClick={() => handleSendBatch({ force: false, label: 'Send unsent' })}
                     disabled={loading || stats.total - stats.invited === 0}
                     title={stats.total - stats.invited === 0 ? 'Everyone has been invited' : 'Send to everyone not yet invited'}
@@ -8573,7 +8940,7 @@ export default function AdminPage() {
                     </button>
                   ))}
                   {anyFilter && (
-                    <button onClick={() => setGF({ invited: 'all', admitted: 'all', qr: 'all' })}
+                    <button onClick={() => setGF({ invited: 'all', admitted: 'all', qr: 'all', relationship: 'all', submitter: 'all' })}
                       className="text-gray-500 dark:text-slate-400 hover:underline ml-1">Clear filters</button>
                   )}
                 </div>

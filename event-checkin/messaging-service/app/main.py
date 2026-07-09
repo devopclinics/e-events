@@ -1,3 +1,4 @@
+import asyncio
 import json
 import logging
 import os
@@ -255,7 +256,7 @@ async def current_user(
         raise HTTPException(401, "Not authenticated")
     _ensure_firebase()
     try:
-        decoded = firebase_auth.verify_id_token(creds.credentials)
+        decoded = await asyncio.to_thread(firebase_auth.verify_id_token, creds.credentials)
     except Exception:
         raise HTTPException(401, "Invalid or expired token")
     firebase_uid = decoded["uid"]

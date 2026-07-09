@@ -228,6 +228,18 @@ body {{ font-family:{font}; color:{text}; background:{bg}; }}
 </div></body></html>"""
 
 
+async def render_html_pdf(html: str, width: str = "1200px", height: str = "800px", landscape: bool = True, timeout_s: int = 30) -> bytes:
+    """Render arbitrary self-contained HTML to a PDF (used for the floor plan)."""
+    async with async_playwright() as p:
+        browser = await p.chromium.launch(args=["--no-sandbox", "--disable-dev-shm-usage"])
+        try:
+            page = await browser.new_page()
+            await page.set_content(html, wait_until="load", timeout=timeout_s * 1000)
+            return await page.pdf(width=width, height=height, landscape=landscape, print_background=True)
+        finally:
+            await browser.close()
+
+
 async def render_flyer(ctx: dict, size_key: str, fmt: str, timeout_s: int = 30) -> bytes:
     """Render the flyer. fmt='png' for social sizes, 'pdf' for a5/a4."""
     html = build_flyer_html(ctx, size_key)

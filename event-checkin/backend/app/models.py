@@ -236,6 +236,7 @@ class Event(Base):
     # Prepaid SMS/WhatsApp credits remaining (metering wired in Phase 3 billing).
     message_credits: Mapped[int] = mapped_column(Integer, default=0)
 
+    credit_ledger: Mapped[list["MessageCreditLedger"]] = relationship("MessageCreditLedger", back_populates="event", cascade="all, delete-orphan")
     members: Mapped[list["EventUser"]] = relationship("EventUser", back_populates="event", cascade="all, delete-orphan")
     guests: Mapped[list["Guest"]] = relationship("Guest", back_populates="event", cascade="all, delete-orphan")
     tables: Mapped[list["SeatingTable"]] = relationship("SeatingTable", back_populates="event", cascade="all, delete-orphan")
@@ -397,6 +398,38 @@ class Payment(Base):
     currency: Mapped[str] = mapped_column(String(10))
     status: Mapped[str] = mapped_column(String(20), default="pending")  # pending|paid|failed
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+
+
+class MessageCreditLedger(Base):
+    """Append-only event credit ledger.
+
+    `delta` is positive for grants/top-ups/refunds and negative for spend/reserve.
+    `credits` stores the absolute weighted credit amount for this operation.
+    """
+    __tablename__ = "message_credit_ledger"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+    org_id: Mapped[str] = mapped_column(String(36), ForeignKey("organizations.id"), index=True)
+    event_id: Mapped[str] = mapped_column(String(36), ForeignKey("events.id"), index=True)
+    guest_id: Mapped[str | None] = mapped_column(String(36), ForeignKey("guests.id"), nullable=True, index=True)
+    payment_id: Mapped[str | None] = mapped_column(String(36), ForeignKey("payments.id"), nullable=True, index=True)
+    action: Mapped[str] = mapped_column(String(30), index=True)  # grant|topup|reserve|spend|refund|adjust
+    status: Mapped[str] = mapped_column(String(30), default="posted", index=True)  # reserved|posted|refunded|failed
+    channel: Mapped[str | None] = mapped_column(String(30), nullable=True, index=True)
+    reason: Mapped[str | None] = mapped_column(String(120), nullable=True)
+    provider: Mapped[str | None] = mapped_column(String(60), nullable=True)
+    provider_message_id: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    units: Mapped[int] = mapped_column(Integer, default=1)
+    unit_weight: Mapped[int] = mapped_column(Integer, default=1)
+    credits: Mapped[int] = mapped_column(Integer, default=0)
+    delta: Mapped[int] = mapped_column(Integer, default=0)
+    balance_after: Mapped[int] = mapped_column(Integer, default=0)
+    provider_cost_cents: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    provider_currency: Mapped[str | None] = mapped_column(String(10), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, index=True)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    event: Mapped["Event"] = relationship("Event", back_populates="credit_ledger")
 
 
 class SeatingTable(Base):

@@ -7,15 +7,15 @@ import json
 import logging
 
 from fastapi import APIRouter, Depends, HTTPException, Request
-from sqlalchemy import select
+from sqlalchemy import desc, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..database import get_db
-from ..models import Event, Organization, Payment, User
+from ..models import Event, MessageCreditLedger, Organization, Payment, User
 from ..schemas import CheckoutRequest, CheckoutOut, CurrencyRequest
 from ..auth import get_current_user, _org_role
 from ..billing import (
-    get_plan, plan_amount, apply_purchase, tiers_public, packs_public,
+    get_plan, plan_amount, apply_purchase, tiers_public, packs_public, public_catalog,
 )
 from ..config import settings
 from services import payments
@@ -49,6 +49,8 @@ async def list_tiers(event_id: str, user: User = Depends(get_current_user), db: 
     org = await db.get(Organization, event.org_id)
     currency = (org.currency if org else "USD").upper()
     provider = _provider_for(currency)
+    tiers = await tiers_public(db, currency)
+    packs = await packs_public(db, currency)
     return {
         "currency": currency,
         "provider": provider,
@@ -56,8 +58,40 @@ async def list_tiers(event_id: str, user: User = Depends(get_current_user), db: 
         "is_paid": event.is_paid,
         "plan_tier": event.plan_tier,
         "message_credits": event.message_credits,
-        "tiers": await tiers_public(db, currency),
-        "packs": await packs_public(db, currency),
+        "tiers": tiers,
+        "packs": packs,
+        "catalog": public_catalog(currency, tiers, packs),
+    }
+
+
+@router.get("/credits/{event_id}")
+async def credit_ledger(event_id: str, limit: int = 50, user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
+    event = await _require_event_admin(event_id, user, db)
+    rows = (await db.execute(
+        select(MessageCreditLedger)
+        .where(MessageCreditLedger.event_id == event.id)
+        .order_by(desc(MessageCreditLedger.created_at))
+        .limit(min(max(limit, 1), 200))
+    )).scalars().all()
+    return {
+        "balance": event.message_credits,
+        "rows": [
+            {
+                "id": r.id,
+                "action": r.action,
+                "status": r.status,
+                "channel": r.channel,
+                "reason": r.reason,
+                "provider": r.provider,
+                "credits": r.credits,
+                "delta": r.delta,
+                "balance_after": r.balance_after,
+                "provider_cost_cents": r.provider_cost_cents,
+                "provider_currency": r.provider_currency,
+                "created_at": r.created_at.isoformat() if r.created_at else None,
+            }
+            for r in rows
+        ],
     }
 
 
@@ -67,7 +101,9 @@ async def public_pricing(currency: str = "USD", db: AsyncSession = Depends(get_d
     cur = currency.upper()
     if cur not in ("USD", "NGN"):
         cur = "USD"
-    return {"currency": cur, "tiers": await tiers_public(db, cur), "packs": await packs_public(db, cur)}
+    tiers = await tiers_public(db, cur)
+    packs = await packs_public(db, cur)
+    return public_catalog(cur, tiers, packs)
 
 
 @router.post("/currency")

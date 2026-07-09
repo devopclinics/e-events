@@ -22,9 +22,12 @@ export default function SmsPolicyPage() {
             <section>
               <h2 className="text-base font-bold text-slate-950 dark:text-white">How guests opt in</h2>
               <p className="mt-2">
-                Guests opt in when they provide or confirm their mobile number on a Festio RSVP, ticket, guest hub, or
-                event registration page and select SMS/text notifications for that event. Organizers may also add a
-                guest phone number when they already have permission to contact that guest for the event.
+                Mobile opt-in path: a guest opens their Festio RSVP link on a phone, for example
+                <strong> https://festio.events/rsvp/&#123;event-token&#125;</strong>, enters or confirms their mobile
+                number, checks the SMS/text notifications consent checkbox, and taps the RSVP or submit button. A
+                ticket/pass path such as <strong>https://festio.events/scan/&#123;guest-token&#125;</strong> also lets
+                guests view or update event messaging preferences. Organizers may add a guest phone number only when
+                they already have permission to contact that guest for the event.
               </p>
               <div className="mt-3 rounded-xl border border-teal-200 bg-teal-50 p-4 text-slate-800 dark:border-teal-800 dark:bg-teal-950/30 dark:text-teal-50">
                 <p className="font-semibold">Example opt-in statement shown to guests:</p>
@@ -50,9 +53,10 @@ export default function SmsPolicyPage() {
             <section>
               <h2 className="text-base font-bold text-slate-950 dark:text-white">HELP and STOP instructions</h2>
               <p className="mt-2">
-                Reply <strong>HELP</strong> for help. Reply <strong>STOP</strong> to opt out. After STOP, Festio will
-                stop sending SMS messages to that number except messages needed to confirm the opt-out or where legally
-                required. Guests may also contact <a href="mailto:events@festio.events" className="font-semibold text-teal-700 underline dark:text-teal-300">events@festio.events</a>.
+                Reply <strong>HELP</strong> for help. HELP responses direct guests to Festio support at
+                <a href="mailto:events@festio.events" className="font-semibold text-teal-700 underline dark:text-teal-300"> events@festio.events</a>.
+                Reply <strong>STOP</strong> to opt out. After STOP, Festio will stop sending SMS messages to that
+                number except messages needed to confirm the opt-out or where legally required.
               </p>
             </section>
 

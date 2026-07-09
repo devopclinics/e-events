@@ -39,13 +39,14 @@ from ..models import (
 )
 from ..schemas import GuestOut, GuestCreate, GuestUpdate, BulkAssignGroupRequest, ScanResult, WalkInRegister
 from ..auth import require_event_admin, require_official
-from ..entitlements import assert_within_guest_cap, guest_limit, can_use_paid_channels, take_message_credit
+from ..entitlements import assert_within_guest_cap, guest_limit, can_use_paid_channels, last_credit_ledger_id, take_message_credit
 from services.qr_service import generate_qr_bytes
 from services.email_service import send_invite_email, send_manual_invite_email, send_simple_email
 from ..template_resolve import load_overrides, channel_text as template_channel_text, email_override as template_email_override, channel_text_or_default as template_channel_or_default, email_or_default as template_email_or_default
 from services.templates import TEMPLATE_DEFS, build_context as build_template_context
 from .scanner import checkin_guard, perform_admission, queue_admission_email, queue_consent_copy_email
 from services import messaging
+from services.credit_ledger import send_with_credit_ledger
 from ..services.experience import next_guest_steps, sync_guest_progress
 
 router = APIRouter()
@@ -769,32 +770,36 @@ def _dispatch_invite(background_tasks: BackgroundTasks, event: Event, guest: Gue
         )
         dispatched = True
 
-    if paid_channels and event.notify_sms and guest.phone and guest.sms_consent and take_message_credit(event):
+    if paid_channels and event.notify_sms and guest.phone and guest.sms_consent and take_message_credit(event, "sms"):
         sms_text = (
             template_channel_or_default(overrides, "experience_invitation", "sms", ctx)
             if event.experience_enabled
             else template_channel_text(overrides, "sms_invitation", "sms", ctx)
         )
         if sms_text is not None:
-            background_tasks.add_task(messaging.send_custom_sms, phone=guest.phone, body=sms_text)
+            background_tasks.add_task(send_with_credit_ledger, last_credit_ledger_id(event), messaging.send_custom_sms, phone=guest.phone, body=sms_text)
         else:
             background_tasks.add_task(
+                send_with_credit_ledger,
+                last_credit_ledger_id(event),
                 messaging.send_invite_sms,
                 phone=guest.phone, first_name=guest.first_name,
                 event_name=event.name, ticket_url=ticket_url, event_date=event.event_date,
             )
         dispatched = True
 
-    if paid_channels and event.notify_whatsapp and guest.phone and guest.whatsapp_consent and take_message_credit(event):
+    if paid_channels and event.notify_whatsapp and guest.phone and guest.whatsapp_consent and take_message_credit(event, "whatsapp"):
         wa_text = (
             template_channel_or_default(overrides, "experience_invitation", "whatsapp", ctx)
             if event.experience_enabled
             else template_channel_text(overrides, "whatsapp_invitation", "whatsapp", ctx)
         )
         if wa_text is not None:
-            background_tasks.add_task(messaging.send_custom_whatsapp, phone=guest.phone, body=wa_text)
+            background_tasks.add_task(send_with_credit_ledger, last_credit_ledger_id(event), messaging.send_custom_whatsapp, phone=guest.phone, body=wa_text)
         else:
             background_tasks.add_task(
+                send_with_credit_ledger,
+                last_credit_ledger_id(event),
                 messaging.send_invite_whatsapp,
                 phone=guest.phone, first_name=guest.first_name,
                 event_name=event.name, ticket_url=ticket_url, event_date=event.event_date,
@@ -803,12 +808,12 @@ def _dispatch_invite(background_tasks: BackgroundTasks, event: Event, guest: Gue
 
     # MMS (ticket card) at invite time — super-admin-enabled per event.
     if (paid_channels and event.notify_mms and guest.phone and guest.sms_consent
-            and messaging.mms_ready() and event.checkin_base_url and take_message_credit(event)):
+            and messaging.mms_ready() and event.checkin_base_url and take_message_credit(event, "mms")):
         mms_key = "experience_invitation" if event.experience_enabled else "mms_invitation"
         mms_text = (template_channel_or_default(overrides, mms_key, "mms", ctx)
                     or f"Hi {guest.first_name}! You're invited to {event.name}.")
         card_url = f"{event.checkin_base_url.rstrip('/')}/api/scan/{guest.qr_token}/card.jpg"
-        background_tasks.add_task(messaging.send_mms, phone=guest.phone, body=mms_text, media_url=card_url)
+        background_tasks.add_task(send_with_credit_ledger, last_credit_ledger_id(event), messaging.send_mms, phone=guest.phone, body=mms_text, media_url=card_url)
         dispatched = True
 
     return dispatched
@@ -857,33 +862,39 @@ def _dispatch_rsvp_invite(background_tasks: BackgroundTasks, event: Event, guest
             )
         dispatched = True
 
-    if paid_channels and event.notify_sms and guest.phone and guest.sms_consent and take_message_credit(event):
+    if paid_channels and event.notify_sms and guest.phone and guest.sms_consent and take_message_credit(event, "sms"):
         if template_key == "rsvp_invitation":
             sms_text = template_channel_text(overrides, template_key, "sms", ctx)
         else:
             sms_text = template_channel_or_default(overrides, template_key, "sms", ctx)
         if sms_text is not None:
-            background_tasks.add_task(messaging.send_custom_sms, phone=guest.phone, body=sms_text)
+            background_tasks.add_task(send_with_credit_ledger, last_credit_ledger_id(event), messaging.send_custom_sms, phone=guest.phone, body=sms_text)
         else:
             background_tasks.add_task(
+                send_with_credit_ledger,
+                last_credit_ledger_id(event),
                 messaging.send_manual_invite_sms,
                 phone=guest.phone, name=name,
                 event_name=event.name, invite_url=invite_url,
             )
         dispatched = True
 
-    if paid_channels and event.notify_whatsapp and guest.phone and guest.whatsapp_consent and take_message_credit(event):
+    if paid_channels and event.notify_whatsapp and guest.phone and guest.whatsapp_consent and take_message_credit(event, "whatsapp"):
         wa_text = template_channel_text(overrides, template_key, "whatsapp", ctx)
         if wa_text is not None:
-            background_tasks.add_task(messaging.send_custom_whatsapp, phone=guest.phone, body=wa_text)
+            background_tasks.add_task(send_with_credit_ledger, last_credit_ledger_id(event), messaging.send_custom_whatsapp, phone=guest.phone, body=wa_text)
         elif template_key == "rsvp_reminder":
             background_tasks.add_task(
+                send_with_credit_ledger,
+                last_credit_ledger_id(event),
                 messaging.send_rsvp_reminder_whatsapp,
                 phone=guest.phone, first_name=guest.first_name,
                 event_name=event.name, invite_url=invite_url,
             )
         else:
             background_tasks.add_task(
+                send_with_credit_ledger,
+                last_credit_ledger_id(event),
                 messaging.send_manual_invite_whatsapp,
                 phone=guest.phone, name=name,
                 event_name=event.name, invite_url=invite_url,
@@ -939,19 +950,21 @@ def dispatch_approval_accepted(background_tasks: BackgroundTasks, event: Event, 
             sent = True
 
     if (can_use_paid_channels(event) and event.notify_sms and guest.phone
-            and guest.sms_consent and take_message_credit(event)):
+            and guest.sms_consent and take_message_credit(event, "sms")):
         sms = template_channel_or_default(overrides, "approval_accepted", "sms", ctx)
         if sms:
-            background_tasks.add_task(messaging.send_custom_sms, phone=guest.phone, body=sms)
+            background_tasks.add_task(send_with_credit_ledger, last_credit_ledger_id(event), messaging.send_custom_sms, phone=guest.phone, body=sms)
             sent = True
 
     if (can_use_paid_channels(event) and event.notify_whatsapp and guest.phone
-            and guest.whatsapp_consent and take_message_credit(event)):
+            and guest.whatsapp_consent and take_message_credit(event, "whatsapp")):
         wa_text = template_channel_text(overrides, "approval_accepted", "whatsapp", ctx)
         if wa_text is not None:
-            background_tasks.add_task(messaging.send_custom_whatsapp, phone=guest.phone, body=wa_text)
+            background_tasks.add_task(send_with_credit_ledger, last_credit_ledger_id(event), messaging.send_custom_whatsapp, phone=guest.phone, body=wa_text)
         else:
             background_tasks.add_task(
+                send_with_credit_ledger,
+                last_credit_ledger_id(event),
                 messaging.send_approval_accepted_whatsapp,
                 phone=guest.phone, first_name=guest.first_name,
                 event_name=event.name, ticket_url=ticket_url,
@@ -974,20 +987,22 @@ def dispatch_simple_notice(background_tasks: BackgroundTasks, event: Event, gues
             background_tasks.add_task(send_simple_email, guest.email, subj or event.name, body, event.id, None, guest.id, key)
             sent = True
     if (can_use_paid_channels(event) and event.notify_sms and guest.phone
-            and guest.sms_consent and take_message_credit(event)):
+            and guest.sms_consent and take_message_credit(event, "sms")):
         sms = template_channel_or_default(overrides, key, "sms", ctx)
         if sms:
-            background_tasks.add_task(messaging.send_custom_sms, phone=guest.phone, body=sms)
+            background_tasks.add_task(send_with_credit_ledger, last_credit_ledger_id(event), messaging.send_custom_sms, phone=guest.phone, body=sms)
             sent = True
     wa = template_channel_text(overrides, key, "whatsapp", ctx)
     if (wa is not None or key in {"rsvp_decline", "approval_pending", "rsvp_confirmation", "approval_rejected"}) and (
             can_use_paid_channels(event) and event.notify_whatsapp and guest.phone
-            and guest.whatsapp_consent and take_message_credit(event)):
+            and guest.whatsapp_consent and take_message_credit(event, "whatsapp")):
         if wa is not None:
-            background_tasks.add_task(messaging.send_custom_whatsapp, phone=guest.phone, body=wa)
+            background_tasks.add_task(send_with_credit_ledger, last_credit_ledger_id(event), messaging.send_custom_whatsapp, phone=guest.phone, body=wa)
             sent = True
         elif key == "rsvp_decline":
             background_tasks.add_task(
+                send_with_credit_ledger,
+                last_credit_ledger_id(event),
                 messaging.send_rsvp_decline_whatsapp,
                 phone=guest.phone, first_name=guest.first_name,
                 event_name=event.name,
@@ -995,6 +1010,8 @@ def dispatch_simple_notice(background_tasks: BackgroundTasks, event: Event, gues
             sent = True
         elif key == "approval_pending":
             background_tasks.add_task(
+                send_with_credit_ledger,
+                last_credit_ledger_id(event),
                 messaging.send_approval_pending_whatsapp,
                 phone=guest.phone, first_name=guest.first_name,
                 event_name=event.name,
@@ -1002,6 +1019,8 @@ def dispatch_simple_notice(background_tasks: BackgroundTasks, event: Event, gues
             sent = True
         elif key == "rsvp_confirmation":
             background_tasks.add_task(
+                send_with_credit_ledger,
+                last_credit_ledger_id(event),
                 messaging.send_rsvp_confirmation_whatsapp,
                 phone=guest.phone, first_name=guest.first_name,
                 event_name=event.name, event_date=event.event_date,
@@ -1466,7 +1485,7 @@ async def register_walk_in(
     event = await db.get(Event, event_id)
     if not event:
         raise HTTPException(404, "Event not found")
-    if not event.walk_in_enabled:
+    if not (event.walk_in_enabled or event.manual_checkin_enabled):
         raise HTTPException(403, "Walk-in registration is not enabled for this event")
     blocked = await checkin_guard(event, current_user, db)
     if blocked:

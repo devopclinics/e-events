@@ -16,9 +16,10 @@ from ..schemas import (
 )
 from ..schemas import ActiveToggle
 from ..auth import require_admin, require_event_admin, get_current_user, _org_role
-from ..entitlements import can_use_paid_channels, take_message_credit
+from ..entitlements import assert_feature_allowed, can_use_paid_channels, grant_message_credits, last_credit_ledger_id, take_message_credit
 from .guests import import_from_source_url, import_warning_summary, _normalize_phone
 from services import messaging
+from services.credit_ledger import send_with_credit_ledger
 from services.email_service import send_manual_invite_email, send_broadcast_email, send_simple_email
 from ..template_resolve import load_overrides, channel_text, email_override
 from services.templates import build_context as build_template_context
@@ -117,7 +118,7 @@ async def create_event(
             if plan:
                 apply_purchase(event, plan)
         if org.trial_credits:
-            event.message_credits = (event.message_credits or 0) + int(org.trial_credits)
+            grant_message_credits(event, int(org.trial_credits), reason="trial_grant")
         org.trial_tier = None
         org.trial_credits = None
 
@@ -418,6 +419,8 @@ async def update_event_source(
     event = await db.get(Event, event_id)
     if not event:
         raise HTTPException(404, "Event not found")
+    if body.source_url or body.source_sync_enabled:
+        assert_feature_allowed(event, "source_sync")
     if body.source_url is not None:
         event.source_url = body.source_url.strip() or None
         # Clear last error/warning on URL change so the UI doesn't show a stale message.
@@ -442,6 +445,7 @@ async def sync_event_now(
     event = await db.get(Event, event_id)
     if not event:
         raise HTTPException(404, "Event not found")
+    assert_feature_allowed(event, "source_sync")
     if not event.source_url:
         raise HTTPException(400, "No source URL configured for this event")
     try:
@@ -527,11 +531,13 @@ async def toggle_features(
     event = await db.get(Event, event_id)
     if not event:
         raise HTTPException(404, "Event not found")
-    # Seating, menu, logistics, registry, venue access & pairing are paid-plan features.
-    if (body.get("seating_enabled") or body.get("menu_enabled") or body.get("logistics_enabled")
-            or body.get("registry_enabled") or body.get("venue_access_enabled")
-            or body.get("partner_pairing_enabled")) and not event.is_paid:
-        raise HTTPException(402, "This feature requires an Event Pass — upgrade this event first.")
+    for feature in (
+        "seating_enabled", "menu_enabled", "logistics_enabled", "registry_enabled",
+        "venue_access_enabled", "partner_pairing_enabled", "experience_enabled",
+        "section_mode_enabled",
+    ):
+        if body.get(feature):
+            assert_feature_allowed(event, feature)
     if "seating_enabled" in body:
         event.seating_enabled = bool(body["seating_enabled"])
     if "menu_enabled" in body:
@@ -596,6 +602,8 @@ async def set_walk_in(event_id: str, body: dict, db: AsyncSession = Depends(get_
     event = await db.get(Event, event_id)
     if not event:
         raise HTTPException(404, "Event not found")
+    if body.get("active"):
+        assert_feature_allowed(event, "manual_checkin_enabled")
     event.walk_in_enabled = bool(body.get("active"))
     await db.commit()
     await db.refresh(event)
@@ -630,6 +638,8 @@ async def toggle_self_checkin(
     event = await db.get(Event, event_id)
     if not event:
         raise HTTPException(404, "Event not found")
+    if body.active:
+        assert_feature_allowed(event, "self_checkin_enabled")
     event.self_checkin_enabled = bool(body.active)
     if event.self_checkin_enabled and not event.event_code:
         event.event_code = await unique_event_code(db)
@@ -853,12 +863,14 @@ async def broadcast_message(
 
         if guest.phone:
             if "sms" in data.channels and guest.sms_consent:
-                if take_message_credit(event):
+                if take_message_credit(event, "sms", reason="broadcast", guest_id=guest.id):
                     sms_text = channel_text(overrides, "broadcast", "sms", _ctx(guest))
                     if sms_text is not None:
-                        background_tasks.add_task(messaging.send_custom_sms, phone=guest.phone, body=sms_text)
+                        background_tasks.add_task(send_with_credit_ledger, last_credit_ledger_id(event), messaging.send_custom_sms, phone=guest.phone, body=sms_text)
                     else:
                         background_tasks.add_task(
+                            send_with_credit_ledger,
+                            last_credit_ledger_id(event),
                             messaging.send_broadcast_sms,
                             phone=guest.phone,
                             first_name=guest.first_name,
@@ -868,12 +880,14 @@ async def broadcast_message(
                 else:
                     credit_blocked = True
             if "whatsapp" in data.channels and guest.whatsapp_consent:
-                if take_message_credit(event):
+                if take_message_credit(event, "whatsapp", reason="broadcast", guest_id=guest.id):
                     wa_text = channel_text(overrides, "broadcast", "whatsapp", _ctx(guest))
                     if wa_text is not None:
-                        background_tasks.add_task(messaging.send_custom_whatsapp, phone=guest.phone, body=wa_text)
+                        background_tasks.add_task(send_with_credit_ledger, last_credit_ledger_id(event), messaging.send_custom_whatsapp, phone=guest.phone, body=wa_text)
                     else:
                         background_tasks.add_task(
+                            send_with_credit_ledger,
+                            last_credit_ledger_id(event),
                             messaging.send_broadcast_whatsapp,
                             phone=guest.phone,
                             first_name=guest.first_name,
@@ -951,8 +965,10 @@ async def send_manual_invites(
             if phone is None:
                 errors.append(f"{name}: invalid phone '{r.phone}'")
             else:
-                if "sms" in data.channels and take_message_credit(event):
+                if "sms" in data.channels and take_message_credit(event, "sms", reason="manual_invite"):
                     background_tasks.add_task(
+                        send_with_credit_ledger,
+                        last_credit_ledger_id(event),
                         messaging.send_manual_invite_sms,
                         phone=phone,
                         name=name,
@@ -960,8 +976,10 @@ async def send_manual_invites(
                         invite_url=invite_url,
                     )
                     dispatched = True
-                if "whatsapp" in data.channels and take_message_credit(event):
+                if "whatsapp" in data.channels and take_message_credit(event, "whatsapp", reason="manual_invite"):
                     background_tasks.add_task(
+                        send_with_credit_ledger,
+                        last_credit_ledger_id(event),
                         messaging.send_manual_invite_whatsapp,
                         phone=phone,
                         name=name,

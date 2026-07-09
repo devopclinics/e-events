@@ -24,10 +24,11 @@ from ..schemas import (
     RSVPConfirm, RSVPSubmit, RSVPTokenSubmit,
 )
 from services import messaging
+from services.credit_ledger import send_with_credit_ledger
 from services.email_service import send_invite_email
 from ..template_resolve import load_overrides
 from .guests import _normalize_phone
-from ..entitlements import assert_within_guest_cap, can_use_paid_channels, take_message_credit
+from ..entitlements import assert_within_guest_cap, can_use_paid_channels, last_credit_ledger_id, take_message_credit
 
 logger = logging.getLogger(__name__)
 
@@ -245,16 +246,20 @@ def _send_rsvp_invite(
             hub_url=hub_url,
         )
 
-    if paid_channels and event.notify_sms and guest.phone and guest.sms_consent and take_message_credit(event):
+    if paid_channels and event.notify_sms and guest.phone and guest.sms_consent and take_message_credit(event, "sms"):
         background_tasks.add_task(
+            send_with_credit_ledger,
+            last_credit_ledger_id(event),
             messaging.send_invite_sms,
             phone=guest.phone, first_name=guest.first_name,
             event_name=event.name, ticket_url=ticket_url,
             event_date=event.event_date,
         )
 
-    if paid_channels and event.notify_whatsapp and guest.phone and guest.whatsapp_consent and take_message_credit(event):
+    if paid_channels and event.notify_whatsapp and guest.phone and guest.whatsapp_consent and take_message_credit(event, "whatsapp"):
         background_tasks.add_task(
+            send_with_credit_ledger,
+            last_credit_ledger_id(event),
             messaging.send_invite_whatsapp,
             phone=guest.phone, first_name=guest.first_name,
             event_name=event.name, ticket_url=ticket_url,
@@ -377,6 +382,8 @@ async def _submit_multi_invitee_rsvp(
     assert_within_guest_cap(event, count, adding=total_new_guests)
 
     submitter_email = data.email.lower().strip() if data.email else None
+    if event.rsvp_collect_email and not submitter_email:
+        raise HTTPException(422, "Submitter email is required.")
     submitter_phone = None
     if data.phone and data.phone.strip():
         submitter_phone = _normalize_phone(data.phone.strip())
@@ -397,6 +404,8 @@ async def _submit_multi_invitee_rsvp(
         if not first.strip():
             raise HTTPException(422, "Every invitee needs a name.")
         email = invitee.email.lower().strip() if invitee.email else None
+        if event.rsvp_collect_email and not email:
+            raise HTTPException(422, f"Email is required for {first} {last}".strip())
         phone = None
         if invitee.phone and invitee.phone.strip():
             phone = _normalize_phone(invitee.phone.strip())
@@ -586,6 +595,8 @@ async def submit_rsvp(
     await _require_questions_answered(event_id, data.answers, db)
 
     email = data.email.lower().strip() if data.email else None
+    if event.rsvp_collect_email and not email:
+        raise HTTPException(422, "Email is required.")
 
     # Validate / normalise phone first, so we can de-dupe on it too.
     phone: str | None = None

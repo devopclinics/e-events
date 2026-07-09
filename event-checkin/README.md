@@ -320,23 +320,28 @@ and pushes images; the two are decoupled by image tag.
 - DNS / Cloudflare tunnel: `festio-infra/docs/DNS-STAGING.md`
 - Migrating data into the cluster: `festio-infra/docs/DATA-MIGRATION.md`
 
-### Releasing a code change (the day-2 flow)
+### Release flow: Compose = STAGING, k8s = PROD
+Test on the Compose stack (staging.festio.events), then promote the *same*
+version to the k8s cluster (festio.events).
+
 ```bash
-# from this directory (event-checkin/)
+# 1. Build, push images, and deploy to the Compose STAGING stack
 git commit -am "…" && git push          # source history
-echo "1.8.1" > VERSION                    # bump to a new immutable tag
-./deploy.sh --push-only                   # build + push images, AND auto-bump
-                                          # festio-infra image.tag (commit + push)
+echo "1.8.1" > VERSION                    # new immutable tag
+./deploy.sh                               # builds+pushes AND deploys Compose (staging)
+
+# 2. Test at https://staging.festio.events
+
+# 3. Promote the tested version to k8s PROD (festio.events)
+cd ../../festio-infra
+make promote TAG=1.8.1                     # bumps prod image.tag → ArgoCD deploys
 ```
-`deploy.sh --push-only` pushes `dclinics/events:*-<VERSION>` to Docker Hub and
-then runs `festio-infra/scripts/set-image-tag.sh <VERSION>` — that commit is what
-ArgoCD watches, so it deploys the new version automatically (the `db-migrate`
-hook runs first if the schema changed).
+`make promote` commits the prod `image.tag` to the festio-infra repo; ArgoCD
+watches it and rolls out (the `db-migrate` hook runs first if the schema
+changed). Rollback = revert that commit. Promotion is deliberate — `deploy.sh`
+never touches prod on its own.
 
-> ⚠️ Plain `./deploy.sh` (no flag) ALSO runs the legacy **Compose** deploy to the
-> old prod host. For the k8s/GitOps path always use **`--push-only`**.
-
-Watch the rollout:
+Watch the prod rollout:
 ```bash
 kubectl -n argocd get application event-checkin      # Synced / Healthy
 kubectl -n festio rollout status deploy/backend

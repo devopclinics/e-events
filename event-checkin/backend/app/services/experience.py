@@ -15,6 +15,7 @@ from ..models import (
     GuestTag,
     GuestTagLink,
     GuestMenuChoice,
+    ScanEvent,
     TicketType,
 )
 
@@ -55,6 +56,17 @@ def default_step_specs(event: Event) -> list[dict]:
             "type": "meal_selection",
             "title": "Meal selection",
             "description": "Capture the guest's meal choices.",
+            "sort_order": order,
+            "required": False,
+            "enabled": True,
+        })
+        order += 10
+    if event.checkout_enabled:
+        steps.append({
+            "key": "check_out",
+            "type": "check_out",
+            "title": "Check-out",
+            "description": "Record the guest's exit by scanning their ticket/checkout QR.",
             "sort_order": order,
             "required": False,
             "enabled": True,
@@ -490,6 +502,14 @@ async def initialize_progress(event_id: str, workflow_id: str, db: AsyncSession)
         select(GuestMenuChoice.guest_id).join(Guest, Guest.id == GuestMenuChoice.guest_id)
         .where(Guest.event_id == event_id)
     )).scalars().all())
+    checked_out_guest_ids = set((await db.execute(
+        select(ScanEvent.guest_id).where(
+            ScanEvent.event_id == event_id,
+            ScanEvent.zone_id.is_(None),
+            ScanEvent.direction == "out",
+            ScanEvent.denied.is_(False),
+        )
+    )).scalars().all())
     now = datetime.utcnow()
     for guest in guests:
         progress_by_step_id: dict[str, GuestExperienceProgress] = {}
@@ -519,6 +539,10 @@ async def initialize_progress(event_id: str, workflow_id: str, db: AsyncSession)
                 completed_at = now
                 completed_by_source = "system"
             elif step.type == "meal_selection" and guest.id in meal_guest_ids:
+                status = "completed"
+                completed_at = now
+                completed_by_source = "system"
+            elif step.type == "check_out" and guest.id in checked_out_guest_ids:
                 status = "completed"
                 completed_at = now
                 completed_by_source = "system"
@@ -580,6 +604,17 @@ async def sync_guest_progress(
         .where(
             ConsentSignature.event_id == event_id,
             ConsentSignature.guest_id == guest_id,
+        )
+        .limit(1)
+    ))
+    checked_out = bool(await db.scalar(
+        select(ScanEvent.id)
+        .where(
+            ScanEvent.event_id == event_id,
+            ScanEvent.guest_id == guest_id,
+            ScanEvent.zone_id.is_(None),
+            ScanEvent.direction == "out",
+            ScanEvent.denied.is_(False),
         )
         .limit(1)
     ))
@@ -649,6 +684,7 @@ async def sync_guest_progress(
             or (step.type == "seating_assignment" and bool(guest.table_id and guest.seat_number))
             or (step.type == "meal_selection" and meal_has_choice)
             or (step.type == "consent" and consent_signed)
+            or (step.type == "check_out" and checked_out)
         )
         if should_complete:
             progress.status = "completed"

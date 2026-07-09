@@ -814,6 +814,11 @@ async def scan_qr_checkout(
     event = await db.get(Event, guest.event_id)
     if not event:
         return ScanResult(status="invalid", message="Event not found for this ticket.")
+    if not event.checkout_enabled:
+        return ScanResult(
+            status="checkout_disabled",
+            message="Check-out is not enabled for this event.",
+        )
     blocked = await checkin_guard(event, current_user, db)
     if blocked:
         return blocked
@@ -839,6 +844,13 @@ async def scan_qr_checkout(
 
     db.add(ScanEvent(event_id=event.id, guest_id=guest.id, zone_id=None, direction="out", scanned_by=current_user.id))
     await db.commit()
+    # Reflect the check-out into the guest's experience progress (completes the
+    # check_out step + records an ExperienceEvent). Best-effort — never block.
+    if event.experience_enabled:
+        try:
+            await sync_guest_progress(event.id, guest.id, db, source="staff", actor_user_id=current_user.id)
+        except Exception:
+            pass
     await broadcast(event.id, {
         "type": "checked_out",
         "guest_id": guest.id,

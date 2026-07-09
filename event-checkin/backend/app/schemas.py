@@ -115,6 +115,7 @@ class EventOut(BaseModel):
     section_mode_enabled: bool = False
     manual_checkin_enabled: bool = False
     self_checkin_enabled: bool = False
+    checkout_enabled: bool = False
     event_code: Optional[str] = None
     created_at: datetime
     source_url: Optional[str] = None

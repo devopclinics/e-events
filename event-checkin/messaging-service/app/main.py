@@ -91,6 +91,7 @@ class Event(Base):
     event_date: Mapped[datetime] = mapped_column(DateTime)
     rsvp_enabled: Mapped[bool] = mapped_column(Boolean, default=False)
     experience_enabled: Mapped[bool] = mapped_column(Boolean, default=False)
+    checkout_enabled: Mapped[bool] = mapped_column(Boolean, default=False)
     venue_name: Mapped[str | None] = mapped_column(String(255))
     admission_note: Mapped[str | None] = mapped_column(Text)
 
@@ -124,6 +125,19 @@ class GuestTagLink(Base):
     id: Mapped[str] = mapped_column(String(36), primary_key=True)
     guest_id: Mapped[str] = mapped_column(String(36), ForeignKey("guests.id"))
     tag_id: Mapped[str] = mapped_column(String(36))
+
+
+class ScanEvent(Base):
+    """Read-only subset of the backend's scan_events — used to surface check-out."""
+    __tablename__ = "scan_events"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True)
+    event_id: Mapped[str] = mapped_column(String(36), ForeignKey("events.id"))
+    guest_id: Mapped[str | None] = mapped_column(String(36), ForeignKey("guests.id"))
+    zone_id: Mapped[str | None] = mapped_column(String(36))
+    direction: Mapped[str | None] = mapped_column(String(10))
+    denied: Mapped[bool] = mapped_column(Boolean, default=False)
+    scanned_at: Mapped[datetime] = mapped_column(DateTime)
 
 
 class EventGuestMessagingSettings(Base):
@@ -443,12 +457,31 @@ async def guest_hub(event_id: str, token: str = Query(...), db: AsyncSession = D
                 anns.append({"id": ann.id, "title": ann.title, "body": ann.body, "created_at": ann.created_at.isoformat()})
     direct = await _direct_messages(event_id, guest, db)
     chat_enabled = bool(cfg.guest_chat_enabled)
+    # Check-out (when the event enables it): the guest's latest normal exit scan.
+    checked_out_at = None
+    if event and event.checkout_enabled:
+        last_out = await db.scalar(
+            select(ScanEvent)
+            .where(
+                ScanEvent.event_id == event_id,
+                ScanEvent.guest_id == guest.id,
+                ScanEvent.zone_id.is_(None),
+                ScanEvent.direction == "out",
+                ScanEvent.denied.is_(False),
+            )
+            .order_by(ScanEvent.scanned_at.desc())
+            .limit(1)
+        )
+        checked_out_at = last_out.scanned_at.isoformat() if last_out and last_out.scanned_at else None
     return {
         "guest": {
             "id": guest.id,
             "name": _display_name(guest),
             "rsvp_status": guest.rsvp_status,
             "admitted": guest.admitted,
+            "checkout_enabled": bool(event and event.checkout_enabled),
+            "checked_out": checked_out_at is not None,
+            "checked_out_at": checked_out_at,
             "qr_token": guest.qr_token,
             "table_name": table.name if table else None,
             "seat_number": guest.seat_number,

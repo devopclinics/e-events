@@ -168,6 +168,10 @@ class Event(Base):
     # Self check-in: guests admit themselves via a public page found by a short
     # event_code (no login). Off by default; code generated on enable/create.
     self_checkin_enabled: Mapped[bool] = mapped_column(Boolean, default=False)
+    # Check-out: when on, staff can scan a guest's ticket/checkout QR to record
+    # their exit (a ScanEvent with direction="out"), and the scanner shows the
+    # Check-out mode. Off by default.
+    checkout_enabled: Mapped[bool] = mapped_column(Boolean, default=False)
     # Short, human-shareable code (8 chars, no confusable letters). Unique;
     # nullable so existing events backfill lazily when self check-in is enabled.
     event_code: Mapped[str | None] = mapped_column(String(16), unique=True, nullable=True)

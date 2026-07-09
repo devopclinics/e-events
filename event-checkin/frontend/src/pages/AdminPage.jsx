@@ -1038,6 +1038,42 @@ function TableGroupsPanel({ eventId }) {
   )
 }
 
+// ── Check-out toggle ─────────────────────────────────────────────────────────
+// Shows/hides the scanner's Check-out mode. When on, staff can scan a guest's
+// ticket/checkout QR to record their exit; guests see it in their Guest Hub and
+// (if experience is on) as a check_out step in the workflow.
+
+function CheckoutToggle({ event, onChanged, onFlash }) {
+  const [loading, setLoading] = useState(false)
+  async function toggle() {
+    setLoading(true)
+    try {
+      const updated = await api.toggleFeatures(event.id, { checkout_enabled: !event.checkout_enabled })
+      onChanged(updated)
+      onFlash?.(`Check-out ${updated.checkout_enabled ? 'enabled' : 'disabled'}.`)
+    } catch (e) { onFlash?.(e.message, true) }
+    finally { setLoading(false) }
+  }
+  return (
+    <div className="bg-white dark:bg-slate-800 dark:border dark:border-slate-700/60 rounded-xl shadow p-6 mt-6">
+      <div className="flex items-center justify-between gap-3 flex-wrap">
+        <div>
+          <h2 className="font-semibold text-base dark:text-white">Guest check-out</h2>
+          <p className="text-xs text-gray-400 dark:text-slate-500 mt-1">Record when guests leave. Adds a Check-out mode to the Scanner; the exit time shows in the Guest Hub{event.experience_enabled ? ' and as a check-out step in the experience' : ''}.</p>
+        </div>
+        <button onClick={toggle} disabled={loading}
+          className={`px-4 py-2 rounded-lg text-sm font-semibold border transition-colors disabled:opacity-50 ${
+            event.checkout_enabled
+              ? 'bg-teal-600 text-white border-teal-600 hover:bg-teal-700'
+              : 'bg-white dark:bg-slate-700 text-gray-700 dark:text-slate-200 border-gray-300 dark:border-slate-600 hover:bg-gray-50 dark:hover:bg-slate-600'
+          }`}>
+          Check-out: {event.checkout_enabled ? 'ON' : 'OFF'}
+        </button>
+      </div>
+    </div>
+  )
+}
+
 // ── Walk-in toggle (ported from prod) ───────────────────────────────────────────
 // Lets staff register walk-in guests at the door (Scanner -> Manual / Walk-in). New walk-ins
 // are auto-assigned to a chosen table group.
@@ -8733,6 +8769,7 @@ export default function AdminPage() {
             <SeatingPanel eventId={selectedId} />
             <TableGroupsPanel eventId={selectedId} />
             <WalkInToggle event={event} onChanged={updateEvent} onFlash={flash} />
+            <CheckoutToggle event={event} onChanged={updateEvent} onFlash={flash} />
           </>}
 
           {activeTab === 'messages' && <MessageTemplatesPanel eventId={selectedId} event={event} />}

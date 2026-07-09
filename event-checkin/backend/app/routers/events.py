@@ -588,6 +588,8 @@ async def toggle_features(
                     400, "Add at least one table group before enabling section mode."
                 )
         event.section_mode_enabled = enable
+    if "checkout_enabled" in body:
+        event.checkout_enabled = bool(body["checkout_enabled"])
     for k in ("notify_email", "notify_sms", "notify_whatsapp", "notify_rsvp_responses"):
         if k in body:
             setattr(event, k, bool(body[k]))

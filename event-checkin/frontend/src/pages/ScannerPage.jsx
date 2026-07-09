@@ -683,7 +683,7 @@ export default function ScannerPage() {
   const manualWalkInEnabled = manualEnabled || walkInEnabled
   const selfCheckinEnabled = !!selectedEvent?.self_checkin_enabled
   const sectionMode = !!selectedEvent?.section_mode_enabled
-  const normalCheckoutEnabled = !!selectedEvent && !accessMode
+  const normalCheckoutEnabled = !!selectedEvent?.checkout_enabled && !accessMode
   const selectedZone = zones.find((z) => z.id === zoneId)
   const selectedGate = gates.find((g) => g.id === gateId)
   const scanningReady = !!selectedEvent && selectedEvent.status === 'active'

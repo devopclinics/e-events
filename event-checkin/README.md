@@ -309,23 +309,38 @@ Cloudflare (SSL)
 
 ---
 
-## Kubernetes Deployment (Helm + ArgoCD)
+## Kubernetes Deployment (GitOps)
 
-The `charts/event-checkin/` Helm chart follows the platform golden-path pattern.
+The k8s deployment lives in a **separate infra repo**, not here — the Helm chart,
+ArgoCD app-of-apps, secrets (External Secrets → AWS SSM), and runbooks are in
+**`festio-infra`** (`github.com/devopclinics/festio-infra`). This repo only builds
+and pushes images; the two are decoupled by image tag.
 
+- First-time cluster setup: `festio-infra/docs/DEPLOY.md`
+- DNS / Cloudflare tunnel: `festio-infra/docs/DNS-STAGING.md`
+- Migrating data into the cluster: `festio-infra/docs/DATA-MIGRATION.md`
+
+### Releasing a code change (the day-2 flow)
 ```bash
-# Preview rendered templates
-helm template event-checkin charts/event-checkin/ \
-  -f env/dev/workloads/event-checkin/values.yaml
-
-# Manual deploy (ArgoCD does this automatically via GitOps)
-helm upgrade --install event-checkin charts/event-checkin/ \
-  -f env/dev/workloads/event-checkin/values.yaml \
-  --namespace dev-platform-event-checkin \
-  --create-namespace
+# from this directory (event-checkin/)
+git commit -am "…" && git push          # source history
+echo "1.8.1" > VERSION                    # bump to a new immutable tag
+./deploy.sh --push-only                   # build + push images, AND auto-bump
+                                          # festio-infra image.tag (commit + push)
 ```
+`deploy.sh --push-only` pushes `dclinics/events:*-<VERSION>` to Docker Hub and
+then runs `festio-infra/scripts/set-image-tag.sh <VERSION>` — that commit is what
+ArgoCD watches, so it deploys the new version automatically (the `db-migrate`
+hook runs first if the schema changed).
 
-The ArgoCD Application at `clusters/local-k3s/apps/event-checkin-dev.yaml` syncs automatically on every push to `main`.
+> ⚠️ Plain `./deploy.sh` (no flag) ALSO runs the legacy **Compose** deploy to the
+> old prod host. For the k8s/GitOps path always use **`--push-only`**.
+
+Watch the rollout:
+```bash
+kubectl -n argocd get application event-checkin      # Synced / Healthy
+kubectl -n festio rollout status deploy/backend
+```
 
 ---
 

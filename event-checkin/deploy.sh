@@ -161,6 +161,20 @@ if $DO_BUILD; then
     ok "Pushed ${tag}"
   done
 
+  # ── GitOps handoff — bump the k8s infra image.tag so ArgoCD deploys this
+  # version. Non-fatal: the Compose path doesn't need it, and a missing infra
+  # checkout just skips. Override the location with FESTIO_INFRA_DIR.
+  FESTIO_INFRA_DIR="${FESTIO_INFRA_DIR:-${SCRIPT_DIR}/../../festio-infra}"
+  if [[ -x "${FESTIO_INFRA_DIR}/scripts/set-image-tag.sh" ]]; then
+    info "GitOps: bumping festio-infra image.tag → ${VERSION}"
+    if GIT_NAME="deploy.sh" GIT_EMAIL="deploy@festio.events" \
+         "${FESTIO_INFRA_DIR}/scripts/set-image-tag.sh" "${VERSION}"; then
+      ok "festio-infra image.tag set to ${VERSION} — ArgoCD will sync"
+    else
+      warn "Could not bump festio-infra image.tag — set it manually: (cd ${FESTIO_INFRA_DIR} && make set-image TAG=${VERSION})"
+    fi
+  fi
+
   # ── PHASE 3 — Prune old tags from Docker Hub ─────────────────────────────────
   step "3/6  Pruning old tags (keeping last ${KEEP_VERSIONS} per service)"
 

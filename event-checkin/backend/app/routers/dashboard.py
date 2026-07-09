@@ -5,7 +5,7 @@ from fastapi.responses import StreamingResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func
 from ..database import get_db
-from ..models import EmailDeliveryEvent, Guest, Event, User, Zone, MenuCategory, SeatingTable, TicketType, TableGroup
+from ..models import EmailDeliveryEvent, Guest, Event, User, Zone, MenuCategory, SeatingTable, TicketType, TableGroup, ScanEvent
 from ..schemas import DashboardStats, GuestOut, ZoneOccupancy, TableReport, DashboardBreakdown, DashboardTimelinePoint, DashboardInviteDelivery, DashboardContactStats, DashboardEmailDelivery
 from ..auth import require_dashboard_access, verify_token_user, user_has_dashboard_access
 from .access import zone_occupancy
@@ -27,6 +27,16 @@ async def get_dashboard(event_id: str, db: AsyncSession = Depends(get_db), _: Us
     total = await _count(db, Guest.event_id == event_id)
     admitted_count = await _count(db, Guest.event_id == event_id, Guest.admitted == True)
     walk_in_count = await _count(db, Guest.event_id == event_id, Guest.is_walk_in == True)
+    checked_out_count = 0
+    if event.checkout_enabled:
+        checked_out_count = await db.scalar(
+            select(func.count(func.distinct(ScanEvent.guest_id))).where(
+                ScanEvent.event_id == event_id,
+                ScanEvent.zone_id.is_(None),
+                ScanEvent.direction == "out",
+                ScanEvent.denied.is_(False),
+            )
+        ) or 0
 
     admitted_guests = (await db.execute(
         select(Guest).where(Guest.event_id == event_id, Guest.admitted == True)
@@ -211,6 +221,8 @@ async def get_dashboard(event_id: str, db: AsyncSession = Depends(get_db), _: Us
     return DashboardStats(
         total=total, admitted=admitted_count, pending=total - admitted_count,
         walk_in=walk_in_count,
+        checkout_enabled=event.checkout_enabled,
+        checked_out=checked_out_count,
         admitted_guests=[GuestOut.model_validate(g) for g in admitted_guests],
         rsvp_confirmed=rsvp_confirmed, rsvp_declined=rsvp_declined,
         rsvp_pending=rsvp_pending, rsvp_invited=rsvp_invited,

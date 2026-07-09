@@ -312,6 +312,9 @@ export default function DashboardPage() {
               <Kpi label="Responses received" value={responsesReceived} accent="text-violet-600" />
               <Kpi label="VIP checked in" value={stats.vip_total ? `${stats.vip_admitted}/${stats.vip_total}` : '0'} accent="text-fuchsia-600" />
               <Kpi label="Walk-ins / Manual" value={stats.walk_in || 0} accent="text-blue-600" />
+              {stats.checkout_enabled && (
+                <Kpi label="Checked out" value={stats.checked_out || 0} accent="text-rose-600" />
+              )}
             </div>
           </div>
 

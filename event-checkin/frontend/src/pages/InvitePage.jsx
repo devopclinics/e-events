@@ -3,6 +3,19 @@ import { useParams } from 'react-router-dom'
 import { api } from '../api'
 import { parseUtc } from '../timeutil'
 
+// Format a phone as an international number, defaulting to Nigeria (+234).
+// Already-international numbers (starting with +) are kept as-is.
+function normalizePhone(raw) {
+  const s = (raw || '').trim()
+  if (!s) return ''
+  if (s.startsWith('+')) return s.replace(/[^\d+]/g, '')
+  const digits = s.replace(/\D/g, '')
+  if (!digits) return ''
+  if (digits.startsWith('234')) return '+' + digits          // 234... → +234...
+  if (digits.startsWith('0')) return '+234' + digits.slice(1) // 080... → +23480...
+  return '+234' + digits                                      // bare local → +234...
+}
+
 // ── Theme definitions ─────────────────────────────────────────────────────────
 
 const THEMES = {
@@ -451,7 +464,7 @@ function RSVPForm({ event, theme, onConfirmed }) {
           first_name: form.first_name.trim(),
           last_name: form.last_name.trim(),
           email: form.email.trim(),
-          phone: form.phone.trim() || undefined,
+          phone: normalizePhone(form.phone) || undefined,
           sms_consent: Boolean(form.phone.trim() && smsConsent),
           answers,
           invitees: multiInvitee && acceptsAdditionalInvitees
@@ -460,7 +473,7 @@ function RSVPForm({ event, theme, onConfirmed }) {
                   first_name: row.first_name.trim(),
                   last_name: row.last_name.trim(),
                   relationship: row.relationship.trim(),
-                  phone: row.phone.trim() || undefined,
+                  phone: normalizePhone(row.phone) || undefined,
                   email: row.email.trim() || undefined,
                   guest_type: row.guest_type,
                   notes: row.notes.trim() || undefined,
@@ -542,7 +555,8 @@ function RSVPForm({ event, theme, onConfirmed }) {
           {event.rsvp_collect_phone && (
             <div>
               <label className="mb-2 block text-sm font-bold text-slate-700">{multiInvitee ? 'Submitter phone' : 'Phone'} <span className="text-slate-400">(optional)</span></label>
-              <input type="tel" value={form.phone} onChange={set('phone')} className={inputCls} placeholder="+1 (832) 000-0000" />
+              <input type="tel" value={form.phone} onChange={set('phone')} className={inputCls} placeholder="0803 000 0000" />
+              <p className="mt-1 text-xs text-slate-500">Nigerian number? Just enter it starting with 0 (e.g. 08030000000) — we'll add <span className="font-semibold">+234</span> for you. For another country, type your full number with its + code.</p>
             </div>
           )}
 
@@ -826,7 +840,7 @@ function TokenRSVPForm({ event, prefill, token, theme, onDone }) {
           status,
           first_name: form.first_name.trim(),
           last_name: form.last_name.trim(),
-          phone: form.phone.trim() || undefined,
+          phone: normalizePhone(form.phone) || undefined,
           sms_consent: Boolean(form.phone.trim() && smsConsent),
           answers,
           shipping_address: event.shipping ? shipAddr : undefined,

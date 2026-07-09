@@ -1483,6 +1483,8 @@ class DashboardStats(BaseModel):
     admitted: int
     pending: int
     walk_in: int = 0   # guests added at the door (kiosk or manual walk-in)
+    checkout_enabled: bool = False
+    checked_out: int = 0   # distinct guests with a recorded exit scan
     admitted_guests: list[GuestOut]
     # RSVP breakdown (always present)
     rsvp_confirmed: int = 0
@@ -1584,6 +1586,15 @@ class InviteSettingsUpdate(BaseModel):
     rsvp_multi_invitee_enabled: Optional[bool] = None
     rsvp_multi_invitee_limit: Optional[int] = None
     rsvp_multi_invitee_limit_rules: Optional[dict[str, int]] = None
+
+    @field_validator("rsvp_deadline", mode="after")
+    @classmethod
+    def _strip_tz(cls, v):
+        # The DB stores naive UTC; the frontend sends tz-aware ISO ("…Z"). Without
+        # this, setting rsvp_deadline raises asyncpg DataError (naive vs aware).
+        if v is not None and v.tzinfo is not None:
+            return v.astimezone(timezone.utc).replace(tzinfo=None)
+        return v
 
 
 class InvitePageOut(BaseModel):

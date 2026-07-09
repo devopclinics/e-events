@@ -53,6 +53,15 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(title="Event Check-In QR System", version="1.0.0", lifespan=lifespan)
 
+# Prometheus metrics at /metrics (scraped internally by kube-prometheus-stack via a
+# ServiceMonitor; not routed by the nginx proxy, so it isn't publicly exposed).
+try:
+    from prometheus_fastapi_instrumentator import Instrumentator
+    Instrumentator().instrument(app).expose(app, include_in_schema=False)
+except Exception:
+    # Metrics are best-effort — never block startup if the dep/instrumentation fails.
+    pass
+
 # The Capacitor native WebView serves the app from these origins, so the API
 # must allow them or every request from the mobile app fails CORS.
 _CAPACITOR_ORIGINS = ["https://localhost", "capacitor://localhost", "ionic://localhost"]

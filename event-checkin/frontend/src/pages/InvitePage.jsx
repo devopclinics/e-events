@@ -1426,7 +1426,7 @@ export default function InvitePage() {
   } else if (tokenMode) {
     rsvpPanel = deadlinePassed ? (
       <div className="rounded-3xl border border-slate-200 bg-slate-50 p-5 text-center">
-        <div className="text-lg font-extrabold text-slate-800">RSVP has closed for this event.</div>
+        <div className="text-lg font-extrabold text-slate-800">{deadline ? `RSVP closed on ${deadline}.` : 'RSVP has closed for this event.'}</div>
         {tokenMeta.already_responded && (
           <div className="mt-2 text-sm text-slate-500">
             Your response: <span className="font-bold">{guest?.rsvp_status === 'confirmed' ? 'Attending' : 'Not attending'}</span>
@@ -1459,7 +1459,7 @@ export default function InvitePage() {
   } else if (deadlinePassed) {
     rsvpPanel = (
       <div className="rounded-3xl border border-slate-200 bg-slate-50 p-5 text-center text-sm font-semibold text-slate-600">
-        RSVP has closed for this event.
+        {deadline ? `RSVP closed on ${deadline}. Contact the host if you still need to respond.` : 'RSVP has closed for this event.'}
       </div>
     )
   } else if (atCapacity) {

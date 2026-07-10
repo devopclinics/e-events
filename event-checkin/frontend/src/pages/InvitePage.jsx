@@ -1482,6 +1482,12 @@ export default function InvitePage() {
                 : 'You are on the guest list. Your ticket was sent to you.'}
         </div>
         <div className="mt-4 text-sm font-semibold text-slate-500">Need to change it? Contact the host.</div>
+        <button
+          onClick={() => { try { if (storageKey && typeof localStorage !== 'undefined') localStorage.removeItem(storageKey) } catch { /* ignore */ } setPrior(null); setConfirmed(null) }}
+          className="mt-3 text-xs font-semibold text-teal-700 underline underline-offset-2 hover:text-teal-900"
+        >
+          Not {prior.first_name || 'you'}? Start a new RSVP
+        </button>
       </div>
     )
   } else {

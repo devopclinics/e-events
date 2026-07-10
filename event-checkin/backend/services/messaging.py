@@ -3,6 +3,7 @@
 `MESSAGING_PROVIDER` env switch picks the backend:
   - 'bird'   → MessageBird/Bird Conversations API
   - 'twilio' → Twilio REST API
+  - 'signalhouse' → Signal House REST API (US SMS/MMS)
   - ''       → no-op (logs and returns)
 
 Each function is async and never raises — failures are logged so a misconfigured
@@ -243,6 +244,8 @@ def mms_ready() -> bool:
         return True
     if provider == "bird" and settings.bird_access_key and settings.bird_mms_channel_id:
         return True
+    if provider == "signalhouse" and settings.signalhouse_api_key and settings.signalhouse_from_number:
+        return True
     return False
 
 
@@ -260,6 +263,8 @@ async def send_mms(*, phone: str, body: str, media_url: str) -> dict | None:
         return await _twilio_mms(phone, body, media_url)
     elif provider == "bird":
         return await _bird_mms(phone, body, media_url)
+    elif provider == "signalhouse":
+        return await _signalhouse_mms(phone, body, media_url)
     else:
         logger.info("MMS requested but no MMS-capable provider configured — skipping")
 
@@ -321,6 +326,54 @@ async def _bird_mms(phone: str, body: str, media_url: str) -> dict | None:
     })
 
 
+def _signalhouse_result(data: dict, *, default_status: str = "queued") -> dict:
+    """Normalize Signal House's single- or batch-message response."""
+    root = data.get("data") if isinstance(data.get("data"), dict) else data
+    messages = root.get("messages") if isinstance(root, dict) else None
+    first = messages[0] if isinstance(messages, list) and messages else root
+    first = first if isinstance(first, dict) else {}
+    return {
+        "provider": "signalhouse",
+        "provider_message_id": (
+            first.get("messageId") or first.get("message_id") or first.get("id")
+            or root.get("batchId") or root.get("batch_id")
+        ),
+        "status": first.get("status") or root.get("status") or default_status,
+    }
+
+
+async def _signalhouse_request(path: str, *, json: dict | None = None,
+                               data: dict | None = None) -> dict | None:
+    base = (settings.signalhouse_api_base or "https://v2.signalhouse.io").rstrip("/")
+    headers = {"Authorization": f"Bearer {settings.signalhouse_api_key}"}
+    try:
+        async with httpx.AsyncClient(timeout=20) as c:
+            r = await c.post(f"{base}{path}", headers=headers, json=json, data=data)
+        if r.status_code >= 400:
+            logger.warning("Signal House %s → HTTP %s: %s", path, r.status_code, r.text[:300])
+            return {"provider": "signalhouse", "status": "failed"}
+        payload = r.json() if r.content else {}
+        return _signalhouse_result(payload if isinstance(payload, dict) else {})
+    except Exception:
+        logger.exception("Signal House request failed (%s)", path)
+        return {"provider": "signalhouse", "status": "failed"}
+
+
+async def _signalhouse_mms(phone: str, body: str, media_url: str) -> dict | None:
+    # Signal House accepts remote media URLs as a JSON-encoded multipart field.
+    import json
+    fields = {
+        "senderPhoneNumber": settings.signalhouse_from_number,
+        "recipientPhoneNumber": json.dumps([phone]),
+        "messageBody": body or " ",
+        "mediaUrls": json.dumps([media_url]),
+        "enableCompression": "true",
+    }
+    if settings.signalhouse_status_callback_url:
+        fields["statusCallbackUrl"] = settings.signalhouse_status_callback_url
+    return await _signalhouse_request("/message/mms", data=fields)
+
+
 async def send_custom_whatsapp(*, phone: str, body: str) -> dict | None:
     """Send a fully-rendered WhatsApp body as plain text (template engine).
 
@@ -364,6 +417,11 @@ def _channel_ready(channel: str, phone: str | None) -> bool:
         if channel == "whatsapp" and not settings.twilio_whatsapp_from:
             return False
         return True
+    if provider == "signalhouse":
+        if not settings.signalhouse_api_key or not settings.signalhouse_from_number:
+            logger.warning("Signal House configured but missing api_key/from_number — skipping %s", channel)
+            return False
+        return channel == "sms"
     return False  # provider unset → silent no-op
 
 
@@ -420,6 +478,16 @@ async def _send_sms(phone: str, body: str) -> dict | None:
         })
     elif provider == "twilio":
         return await asyncio.to_thread(_twilio_send_sync, settings.twilio_from_number, phone, body=body)
+    elif provider == "signalhouse":
+        payload = {
+            "senderPhoneNumber": settings.signalhouse_from_number,
+            "recipientPhoneNumber": [phone],
+            "messageBody": body,
+            "enableShortlink": False,
+        }
+        if settings.signalhouse_status_callback_url:
+            payload["statusCallbackUrl"] = settings.signalhouse_status_callback_url
+        return await _signalhouse_request("/message/sms", json=payload)
     return None
 
 

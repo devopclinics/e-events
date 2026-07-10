@@ -5,6 +5,9 @@ the matching environment variables. The backend sends variables **by name**, so
 the template's variable names must match the `Variables` column exactly and in
 the same order.
 
+For the matching Google RCS submission set, see
+[`BIRD-RCS-TEMPLATES.md`](./BIRD-RCS-TEMPLATES.md).
+
 ## Meta rules these templates must follow
 
 Learned the hard way (see `memory` / session history):
@@ -37,6 +40,22 @@ Learned the hard way (see `memory` / session history):
 | Check-in confirmation | `BIRD_WHATSAPP_ADMISSION_TEMPLATE` | `Hi {{firstName}}, you're checked in to {{eventName}}. Table: {{tableName}}, Seat: {{seatNumber}}. You're all set.` | `firstName`, `eventName`, `tableName`, `seatNumber` |
 | Logistics / shipping notification | `BIRD_WHATSAPP_LOGISTICS_TEMPLATE` | `Hi {{firstName}}, your item for {{eventName}} is on its way. Please check your delivery details if needed.` | `firstName`, `eventName` |
 | Gift registry message | `BIRD_WHATSAPP_REGISTRY_TEMPLATE` | `Gift registry information for {{eventName}} is available here: {{registryLink}} Thank you.` | `eventName`, `registryLink` |
+
+## Experience templates
+
+These templates were submitted programmatically as WhatsApp `UTILITY` templates.
+Use the `v2` names for souvenir and session; the first versions were rejected by
+Meta because the variable-to-fixed-word ratio was too high.
+
+| Flow | Env var | Bird template name | Body | Variables |
+| --- | --- | --- | --- | --- |
+| Experience pass / invite | `BIRD_WHATSAPP_EXPERIENCE_INVITE_TEMPLATE` | `festio_experience_pass_invite` | `Hi {{firstName}}, your {{eventName}} Experience Pass is ready. Use it for check-in, consent, activity steps, room assignments, and sessions: {{ticketUrl}} Keep it handy.` | `firstName`, `eventName`, `ticketUrl` |
+| Experience check-in confirmation | `BIRD_WHATSAPP_EXPERIENCE_ADMISSION_TEMPLATE` | `festio_experience_admission_confirmation` | `Welcome {{firstName}}, you are checked in for {{eventName}}. Your Experience steps are now active. Open your pass here: {{ticketUrl}} Keep it handy.` | `firstName`, `eventName`, `ticketUrl` |
+| Experience next steps | `BIRD_WHATSAPP_EXPERIENCE_NEXT_STEPS_TEMPLATE` | `festio_experience_next_steps` | `Hi {{firstName}}, your next steps for {{eventName}} are: {{experienceSteps}} Open your pass here: {{ticketUrl}} Staff can help onsite.` | `firstName`, `eventName`, `experienceSteps`, `ticketUrl` |
+| Experience consent copy | `BIRD_WHATSAPP_EXPERIENCE_CONSENT_COPY_TEMPLATE` | `festio_experience_consent_copy` | `Hi {{firstName}}, your signed consent copy for {{eventName}} is ready. Download it here: {{downloadLink}} Keep this for your records.` | `firstName`, `eventName`, `downloadLink` |
+| Experience souvenir completion | `BIRD_WHATSAPP_EXPERIENCE_SOUVENIR_TEMPLATE` | `festio_experience_souvenir_completion_v2` | `Hi {{firstName}}, your {{stepTitle}} step for {{eventName}} is complete. This records that staff finished the activity for your event visit. Thank you for attending.` | `firstName`, `stepTitle`, `eventName` |
+| Experience room assignment | `BIRD_WHATSAPP_EXPERIENCE_ROOM_TEMPLATE` | `festio_experience_room_assignment` | `Hi {{firstName}}, your room assignment for {{eventName}} is ready. Room: {{roomName}}. Table: {{tableName}}. Seat: {{seatNumber}}. Please show staff if needed.` | `firstName`, `eventName`, `roomName`, `tableName`, `seatNumber` |
+| Experience session attendance | `BIRD_WHATSAPP_EXPERIENCE_SESSION_TEMPLATE` | `festio_experience_session_attendance_v2` | `Hi {{firstName}}, your attendance for {{sessionTopic}} at {{eventName}} has been recorded. This confirms staff checked you in for that session. Thank you.` | `firstName`, `sessionTopic`, `eventName` |
 
 `broadcast` remains a free-text session message because hosts type the message
 at send time. It should only be used when the guest already has an open WhatsApp

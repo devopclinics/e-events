@@ -832,7 +832,17 @@ def _dispatch_rsvp_invite(background_tasks: BackgroundTasks, event: Event, guest
     name = f"{guest.first_name} {guest.last_name}".strip() or "Guest"
     paid_channels = can_use_paid_channels(event)
     overrides = overrides or {}
-    ctx = build_template_context(event, guest, extras={"rsvp_link": invite_url})
+    # Closed-mode invites don't issue a ticket yet, but the guest already has a
+    # qr_token — expose its self-hosted QR image so a template using {{qr_code}}
+    # can render a scannable pass (served by GET /api/scan/{token}/qr.png).
+    qr_img = ""
+    if guest.qr_token and event.checkin_base_url:
+        qr_url = f"{event.checkin_base_url.rstrip('/')}/api/scan/{guest.qr_token}/qr.png"
+        qr_img = (
+            f'<img src="{qr_url}" alt="Your check-in QR code" width="220" height="220" '
+            f'style="display:block;width:220px;height:220px;border:0;" />'
+        )
+    ctx = build_template_context(event, guest, extras={"rsvp_link": invite_url, "qr_code": qr_img})
     dispatched = False
 
     if event.notify_email and guest.email:

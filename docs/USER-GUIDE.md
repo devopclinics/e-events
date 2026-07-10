@@ -51,6 +51,18 @@ Site: **https://events.vsgs.io**
 - **Seating tab:** create tables, auto-assign or place guests, reserve seats.
 - **Menu tab:** add menu categories/items; guests pick meals; track catering.
 
+### Experience workflow
+- Open **Team & settings → Experience** to create a guest journey workflow.
+- Start with a workflow template such as **VIP dinner**, **Conference**, **Wedding reception**, or **Simple check-in**. You can also use **Create default workflow** or create a blank workflow.
+- Common steps include **Main check-in**, **Seating assignment**, **Meal selection**, and custom operational tasks such as **Welcome pack collected**.
+- Use **Consent form** to paste a waiver, media release, or event terms. Guests see it on their pass, type their signature, then can download HTML/PDF copies or email themselves a signed PDF copy.
+- Publish the workflow when the event team should use it as the live runbook.
+- Only one workflow can be live at a time. **Unpublish** returns a live workflow to draft, **Archive** stores a workflow out of live use, and **Unarchive** restores it as a draft.
+- Use **Guest journey** to review one guest's progress and mark operational steps complete, blocked, skipped, failed, or overridden. Steps with prerequisites stay blocked until the prior steps are complete. The scanner also shows the guest's next available Experience steps after check-in and queues step completions if the device briefly goes offline.
+- For offline scanning, open the scanner while online once so it can cache the active guest list and venue access rules. If connectivity drops, known QR tickets, gate scans, and zone scans can be processed on that device and replayed when the device comes online. Capacity is checked against the device cache while offline, then the server replays the final decision when syncing.
+- Use **Export progress** to download the workflow progress CSV for operations review.
+- See a sample setup in [Festio Sample Experience Guide](FESTIO-SAMPLE-EXPERIENCE-GUIDE.md).
+
 ### Add your team
 - **Team tab → "Add a teammate"**: enter their email + role (**Staff** to scan, **Admin** to manage). They sign in with that email and it links automatically.
 - Then **assign** staff to the specific event (dropdown) so they can scan it.
@@ -128,4 +140,3 @@ Images live in `docs/images/` (and the same set in `event-checkin/frontend/publi
 for the in-app `/help` page). Public + admin/scanner shots use a demo event, so no
 real guest data is shown. The operator Console is intentionally text-only here
 (it lists real tenants). To refresh a shot, replace the file with the same name.
-

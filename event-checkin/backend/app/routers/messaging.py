@@ -125,3 +125,26 @@ async def clicksend_status_callback(request: Request) -> Response:
     except Exception:
         logger.exception("ClickSend status callback reconciliation failed")
     return Response(status_code=204)
+
+
+@router.post("/signalhouse/status")
+async def signalhouse_status_callback(request: Request) -> Response:
+    """Reconcile Signal House SMS/MMS delivery callbacks."""
+    data = await _payload(request)
+    message = data.get("message") if isinstance(data.get("message"), dict) else {}
+    status = data.get("status") or data.get("messageStatus") or message.get("status")
+    message_id = (
+        data.get("messageId") or data.get("message_id") or data.get("id")
+        or message.get("messageId") or message.get("message_id") or message.get("id")
+    )
+    error = data.get("errorCode") or data.get("error_code") or data.get("error")
+    try:
+        await reconcile_provider_status(
+            provider="signalhouse",
+            provider_message_id=str(message_id) if message_id else None,
+            status=str(status) if status else None,
+            error_code=str(error) if error else None,
+        )
+    except Exception:
+        logger.exception("Signal House status callback reconciliation failed")
+    return Response(status_code=204)

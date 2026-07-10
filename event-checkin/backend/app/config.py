@@ -33,7 +33,7 @@ class Settings(BaseSettings):
     bird_email_api_base: str = ""
     bird_email_channel_id: str = ""
 
-    # Messaging provider switch: 'bird' | 'twilio' | '' (off)
+    # Messaging provider switch: 'bird' | 'twilio' | 'signalhouse' | '' (off)
     messaging_provider: str = ""
     # Optional per-channel override for WhatsApp (e.g. SMS via ClickSend but
     # WhatsApp via Bird). Falls back to messaging_provider when empty.
@@ -62,6 +62,12 @@ class Settings(BaseSettings):
     bird_whatsapp_logistics_template: str = ""        # Bird WhatsApp template NAME for logistics notification
     bird_whatsapp_registry_template: str = ""         # Bird WhatsApp template NAME for registry message
     bird_mms_channel_id: str = ""                     # Bird MMS channel (image-capable)
+
+    # Signal House — US 10DLC SMS/MMS.
+    signalhouse_api_key: str = ""
+    signalhouse_from_number: str = ""
+    signalhouse_api_base: str = "https://v2.signalhouse.io"
+    signalhouse_status_callback_url: str = ""
 
     meta_whatsapp_webhook_verify_token: str = "festio-whatsapp-webhook"
 

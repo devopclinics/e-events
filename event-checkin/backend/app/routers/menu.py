@@ -160,6 +160,17 @@ async def delete_item(event_id: str, item_id: str, db: AsyncSession = Depends(ge
     item = await db.get(MenuItem, item_id)
     if not item or item.event_id != event_id:
         raise HTTPException(404, "Item not found")
+    choices = (await db.execute(
+        select(GuestMenuChoice).where(GuestMenuChoice.menu_item_id == item_id)
+    )).scalars().all()
+    for choice in choices:
+        await db.delete(choice)
+    combo_links = (await db.execute(
+        select(MenuCombinationItem).where(MenuCombinationItem.menu_item_id == item_id)
+    )).scalars().all()
+    for link in combo_links:
+        await db.delete(link)
+    await db.flush()
     await db.delete(item)
     await db.commit()
 

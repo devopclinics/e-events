@@ -2788,13 +2788,14 @@ function MenuPanel({ eventId }) {
   }
 
   async function deleteItem(catId, itemId) {
+    if (!confirm('Delete this menu item? Existing guest selections for this item will be removed.')) return
     setLoading(true)
     try {
       await api.deleteMenuItem(eventId, itemId)
       setCategories((prev) => prev.map((c) =>
         c.id === catId ? { ...c, items: c.items.filter((i) => i.id !== itemId) } : c
       ))
-    } catch (e) { setMsg(e.message) }
+    } catch (e) { setMsg(`Could not delete menu item: ${e.message}`) }
     finally { setLoading(false) }
   }
 
@@ -7447,7 +7448,7 @@ function Sidebar({ active, onChange, groups }) {
 // ── Reset event data (superadmin) ───────────────────────────────────────────────
 
 const RESET_OPTIONS = [
-  { key: 'guests',            label: 'Guests',                 hint: 'Delete all guests (+ their menu, RSVP answers, tags, shipments, scans)' },
+  { key: 'guests',            label: 'Guests',                 hint: 'Delete all guests (+ their menu, RSVP answers, tags, shipments, scans) and pause source sync' },
   { key: 'checkins',          label: 'Check-ins',              hint: 'Clear admitted/served status and the scan log' },
   { key: 'seat_assignments',  label: 'Seat assignments',       hint: 'Clear each guest’s table & seat' },
   { key: 'group_assignments', label: 'Table-group tags',       hint: 'Clear each guest’s assigned table group' },

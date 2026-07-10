@@ -102,6 +102,9 @@ async def reset_event_data(
     async def _count(model, *where) -> int:
         return int(await db.scalar(select(func.count()).select_from(model).where(*where)) or 0)
 
+    async def _count_sql(stmt: str, params: dict | None = None) -> int:
+        return int(await db.scalar(text(stmt), params or {}) or 0)
+
     # ── Check-ins / scan log ──
     if body.checkins or body.guests:
         c = await _count(ScanEvent, ScanEvent.event_id == event_id)
@@ -129,11 +132,41 @@ async def reset_event_data(
     # ── Guests (+ all guest-owned rows), FK-safe order ──
     if body.guests:
         c = await _count(Guest, Guest.event_id == event_id)
+        if ev.source_sync_enabled:
+            ev.source_sync_enabled = False
+            cleared["source_sync_paused"] = True
+
+        # These tables either require the guest row or track guest-owned
+        # operational state. Keep long-lived audit rows where guest_id is
+        # nullable by detaching them before deleting guests.
+        cleared["guest_experience_progress"] = await _count_sql(
+            "SELECT count(*) FROM guest_experience_progress WHERE event_id=:event_id",
+            {"event_id": event_id},
+        )
+        await db.execute(text("DELETE FROM guest_experience_progress WHERE event_id=:event_id"), {"event_id": event_id})
+
+        cleared["consent_signatures"] = await _count_sql(
+            "SELECT count(*) FROM consent_signatures WHERE event_id=:event_id",
+            {"event_id": event_id},
+        )
+        await db.execute(text("DELETE FROM consent_signatures WHERE event_id=:event_id"), {"event_id": event_id})
+
+        await db.execute(text("UPDATE email_delivery_events SET guest_id=NULL WHERE event_id=:event_id"), {"event_id": event_id})
+        await db.execute(text("UPDATE message_credit_ledger SET guest_id=NULL WHERE event_id=:event_id"), {"event_id": event_id})
+        await db.execute(text("UPDATE experience_events SET guest_id=NULL WHERE event_id=:event_id"), {"event_id": event_id})
+        await db.execute(text("UPDATE event_message_threads SET guest_id=NULL WHERE event_id=:event_id"), {"event_id": event_id})
+        await db.execute(text("UPDATE event_messages SET guest_id=NULL WHERE event_id=:event_id"), {"event_id": event_id})
+        await db.execute(text("DELETE FROM event_message_delivery_logs WHERE event_id=:event_id AND guest_id IS NOT NULL"), {"event_id": event_id})
+        await db.execute(text("DELETE FROM event_message_reads WHERE event_id=:event_id AND guest_id IS NOT NULL"), {"event_id": event_id})
+
         await db.execute(delete(GuestTagLink).where(GuestTagLink.guest_id.in_(gids)))
         await db.execute(delete(GuestShipment).where(GuestShipment.guest_id.in_(gids)))
         await db.execute(delete(GuestMenuChoice).where(GuestMenuChoice.guest_id.in_(gids)))
         await db.execute(delete(RSVPAnswer).where(RSVPAnswer.guest_id.in_(gids)))
-        await db.execute(update(Guest).where(Guest.event_id == event_id).values(partner_guest_id=None))
+        await db.execute(update(Guest).where(Guest.event_id == event_id).values(
+            partner_guest_id=None,
+            rsvp_submitter_guest_id=None,
+        ))
         await db.execute(delete(Guest).where(Guest.event_id == event_id))
         cleared["guests"] = c
 

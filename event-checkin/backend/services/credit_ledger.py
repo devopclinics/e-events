@@ -46,6 +46,8 @@ async def send_with_credit_ledger(
             event = await db.get(Event, ledger.event_id)
             if event:
                 refund_message_credit(event, ledger, reason=f"provider_{status}")
+        elif status:
+            ledger.status = status
         await db.commit()
 
 
@@ -89,7 +91,7 @@ async def reconcile_provider_status(
             event = await db.get(Event, ledger.event_id)
             if event:
                 refund_message_credit(event, ledger, reason=f"delivery_{status_key}")
-        elif status_key in {"delivered", "sent"}:
-            ledger.status = "posted"
+        elif status_key:
+            ledger.status = status_key
         await db.commit()
         return True

@@ -24,6 +24,7 @@ from ..models import (
     Guest,
     GuestExperienceProgress,
     GuestMenuChoice,
+    MessageCreditLedger,
     GuestShipment,
     GuestTag,
     GuestTagLink,
@@ -770,7 +771,7 @@ def _dispatch_invite(background_tasks: BackgroundTasks, event: Event, guest: Gue
         )
         dispatched = True
 
-    if paid_channels and event.notify_sms and guest.phone and guest.sms_consent and take_message_credit(event, "sms"):
+    if paid_channels and event.notify_sms and guest.phone and guest.sms_consent and take_message_credit(event, "sms", guest_id=guest.id):
         sms_text = (
             template_channel_or_default(overrides, "experience_invitation", "sms", ctx)
             if event.experience_enabled
@@ -788,7 +789,7 @@ def _dispatch_invite(background_tasks: BackgroundTasks, event: Event, guest: Gue
             )
         dispatched = True
 
-    if paid_channels and event.notify_whatsapp and guest.phone and guest.whatsapp_consent and take_message_credit(event, "whatsapp"):
+    if paid_channels and event.notify_whatsapp and guest.phone and guest.whatsapp_consent and take_message_credit(event, "whatsapp", guest_id=guest.id):
         wa_text = (
             template_channel_or_default(overrides, "experience_invitation", "whatsapp", ctx)
             if event.experience_enabled
@@ -808,7 +809,7 @@ def _dispatch_invite(background_tasks: BackgroundTasks, event: Event, guest: Gue
 
     # MMS (ticket card) at invite time — super-admin-enabled per event.
     if (paid_channels and event.notify_mms and guest.phone and guest.sms_consent
-            and messaging.mms_ready() and event.checkin_base_url and take_message_credit(event, "mms")):
+            and messaging.mms_ready() and event.checkin_base_url and take_message_credit(event, "mms", guest_id=guest.id)):
         mms_key = "experience_invitation" if event.experience_enabled else "mms_invitation"
         mms_text = (template_channel_or_default(overrides, mms_key, "mms", ctx)
                     or f"Hi {guest.first_name}! You're invited to {event.name}.")
@@ -872,7 +873,7 @@ def _dispatch_rsvp_invite(background_tasks: BackgroundTasks, event: Event, guest
             )
         dispatched = True
 
-    if paid_channels and event.notify_sms and guest.phone and guest.sms_consent and take_message_credit(event, "sms"):
+    if paid_channels and event.notify_sms and guest.phone and guest.sms_consent and take_message_credit(event, "sms", guest_id=guest.id):
         if template_key == "rsvp_invitation":
             sms_text = template_channel_text(overrides, template_key, "sms", ctx)
         else:
@@ -889,7 +890,7 @@ def _dispatch_rsvp_invite(background_tasks: BackgroundTasks, event: Event, guest
             )
         dispatched = True
 
-    if paid_channels and event.notify_whatsapp and guest.phone and guest.whatsapp_consent and take_message_credit(event, "whatsapp"):
+    if paid_channels and event.notify_whatsapp and guest.phone and guest.whatsapp_consent and take_message_credit(event, "whatsapp", guest_id=guest.id):
         wa_text = template_channel_text(overrides, template_key, "whatsapp", ctx)
         if wa_text is not None:
             background_tasks.add_task(send_with_credit_ledger, last_credit_ledger_id(event), messaging.send_custom_whatsapp, phone=guest.phone, body=wa_text)
@@ -1218,6 +1219,26 @@ async def list_guests(event_id: str, db: AsyncSession = Depends(get_db), _: User
                 g.email_delivery_event_type = row.event_type
                 g.email_delivery_kind = row.message_kind
                 g.email_delivery_at = row.occurred_at
+        message_rows = (await db.execute(
+            select(MessageCreditLedger)
+            .where(
+                MessageCreditLedger.event_id == event_id,
+                MessageCreditLedger.guest_id.in_(guest_ids),
+                MessageCreditLedger.channel.in_(("sms", "mms", "whatsapp")),
+                MessageCreditLedger.action.in_(("spend", "refund")),
+            )
+            .order_by(MessageCreditLedger.created_at.desc())
+        )).scalars().all()
+        latest_by_guest_channel = {}
+        for row in message_rows:
+            latest_by_guest_channel.setdefault((row.guest_id, row.channel), row)
+        for g in guests:
+            for channel in ("sms", "mms", "whatsapp"):
+                row = latest_by_guest_channel.get((g.id, channel))
+                if row:
+                    setattr(g, f"{channel}_delivery_status", "failed" if row.action == "refund" else row.status)
+                    setattr(g, f"{channel}_delivery_at", row.updated_at or row.created_at)
+                    setattr(g, f"{channel}_provider", row.provider)
     return guests
 
 

@@ -1332,6 +1332,15 @@ class GuestOut(BaseModel):
     email_delivery_event_type: Optional[str] = None
     email_delivery_kind: Optional[str] = None
     email_delivery_at: Optional[datetime] = None
+    sms_delivery_status: Optional[str] = None
+    sms_delivery_at: Optional[datetime] = None
+    sms_provider: Optional[str] = None
+    mms_delivery_status: Optional[str] = None
+    mms_delivery_at: Optional[datetime] = None
+    mms_provider: Optional[str] = None
+    whatsapp_delivery_status: Optional[str] = None
+    whatsapp_delivery_at: Optional[datetime] = None
+    whatsapp_provider: Optional[str] = None
     invite_token: Optional[str] = None
     rsvp_status: str = "invited"
     rsvp_responded_at: Optional[datetime] = None

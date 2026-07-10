@@ -7117,6 +7117,26 @@ function EmailDeliveryBadge({ guest }) {
   return <span title={title} className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium capitalize ${c.cls}`}>{c.label}</span>
 }
 
+function MessageDeliveryBadge({ guest, channel }) {
+  const status = guest?.[`${channel}_delivery_status`]
+  if (!status) {
+    return <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-500 dark:bg-slate-700 dark:text-slate-400">Not sent</span>
+  }
+  const key = status.toLowerCase()
+  const delivered = ['delivered', 'read'].includes(key)
+  const failed = ['failed', 'undelivered', 'rejected', 'error', 'refunded'].includes(key)
+  const label = delivered ? (key === 'read' ? 'Read' : 'Delivered') : failed ? 'Failed' : key === 'posted' ? 'Queued' : key.replace(/_/g, ' ')
+  const cls = delivered
+    ? 'bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-300'
+    : failed
+      ? 'bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300'
+      : 'bg-sky-100 text-sky-700 dark:bg-sky-900/40 dark:text-sky-300'
+  const at = guest?.[`${channel}_delivery_at`]
+  const provider = guest?.[`${channel}_provider`]
+  const title = [provider, at ? new Date(at).toLocaleString() : ''].filter(Boolean).join(' · ')
+  return <span title={title} className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium capitalize ${cls}`}>{label}</span>
+}
+
 function OnboardingChecklist({ event, stats, onTab }) {
   const key = `onb_${event.id}`
   // Non-destructive: "Hide" collapses to a re-expandable progress pill rather
@@ -9004,6 +9024,9 @@ export default function AdminPage() {
                         <th className="px-4 py-3 text-center">QR</th>
                         <th className="px-4 py-3 text-center">Invited</th>
                         <th className="px-4 py-3 text-center">Email</th>
+                        {event?.notify_sms && <th className="px-4 py-3 text-center">SMS</th>}
+                        {event?.notify_mms && <th className="px-4 py-3 text-center">MMS</th>}
+                        {event?.notify_whatsapp && <th className="px-4 py-3 text-center">WhatsApp</th>}
                         <th className="px-4 py-3 text-center">RSVP</th>
                         <th className="px-4 py-3 text-center">Admitted</th>
                         <th className="px-4 py-3 text-center">Actions</th>
@@ -9052,6 +9075,9 @@ export default function AdminPage() {
                               : <Badge on={!!g.invite_sent_at} labels={['Sent', 'Unsent']} />}
                           </td>
                           <td className="px-4 py-3 text-center"><EmailDeliveryBadge guest={g} /></td>
+                          {event?.notify_sms && <td className="px-4 py-3 text-center"><MessageDeliveryBadge guest={g} channel="sms" /></td>}
+                          {event?.notify_mms && <td className="px-4 py-3 text-center"><MessageDeliveryBadge guest={g} channel="mms" /></td>}
+                          {event?.notify_whatsapp && <td className="px-4 py-3 text-center"><MessageDeliveryBadge guest={g} channel="whatsapp" /></td>}
                           <td className="px-4 py-3 text-center"><RsvpStatusBadge status={g.rsvp_status} /></td>
                           <td className="px-4 py-3 text-center">
                             {g.admitted
@@ -9135,6 +9161,9 @@ export default function AdminPage() {
                         <Badge on={!!g.qr_generated_at} labels={['QR Ready', 'No QR']} />
                         <Badge on={!!g.invite_sent_at} labels={['Invited', 'Unsent']} />
                         <EmailDeliveryBadge guest={g} />
+                        {event?.notify_sms && <MessageDeliveryBadge guest={g} channel="sms" />}
+                        {event?.notify_mms && <MessageDeliveryBadge guest={g} channel="mms" />}
+                        {event?.notify_whatsapp && <MessageDeliveryBadge guest={g} channel="whatsapp" />}
                         <RsvpStatusBadge status={g.rsvp_status} />
                       </div>
                       <div className="flex gap-4 pt-1">

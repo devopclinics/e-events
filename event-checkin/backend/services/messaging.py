@@ -327,18 +327,33 @@ async def _bird_mms(phone: str, body: str, media_url: str) -> dict | None:
 
 
 def _signalhouse_result(data: dict, *, default_status: str = "queued") -> dict:
-    """Normalize Signal House's single- or batch-message response."""
+    """Normalize Signal House's message response across the shapes we've seen:
+      - {"insertedMessages": [{..., "status": "ENQUEUED",
+                               "statusHistory": [{"status": ..., "_id": ...}]}]}  (live /message/sms|mms)
+      - {"data": {"messages": [{"messageId": ..., "status": ...}]}}              (documented/batch)
+      - {"messages": [{...}]} or a bare message dict
+    """
     root = data.get("data") if isinstance(data.get("data"), dict) else data
-    messages = root.get("messages") if isinstance(root, dict) else None
+    messages = None
+    if isinstance(root, dict):
+        messages = root.get("insertedMessages") or root.get("messages")
+    if messages is None:
+        messages = data.get("insertedMessages")
     first = messages[0] if isinstance(messages, list) and messages else root
     first = first if isinstance(first, dict) else {}
+    history = first.get("statusHistory")
+    last = history[-1] if isinstance(history, list) and history else {}
+    last = last if isinstance(last, dict) else {}
     return {
         "provider": "signalhouse",
         "provider_message_id": (
             first.get("messageId") or first.get("message_id") or first.get("id")
+            or first.get("_id") or last.get("_id")
+            or first.get("groupId") or first.get("subgroupId")
             or root.get("batchId") or root.get("batch_id")
         ),
-        "status": first.get("status") or root.get("status") or default_status,
+        "status": first.get("status") or last.get("status")
+        or root.get("status") or default_status,
     }
 
 

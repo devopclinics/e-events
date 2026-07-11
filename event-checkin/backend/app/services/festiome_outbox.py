@@ -1,0 +1,134 @@
+"""Transactional outbox and retry worker for GuestHub -> FestioMe commands."""
+
+import asyncio
+import logging
+from datetime import datetime, timedelta
+from typing import Any
+
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from ..database import AsyncSessionLocal
+from ..models import Event, FestioMeOutbox, Guest
+from .festiome_client import FestioMeClient, FestioMeUnavailable, get_festiome_client
+
+logger = logging.getLogger("festiome_outbox")
+TICK_SECONDS = 5
+MAX_ATTEMPTS = 10
+
+
+def _guest_payload(guest: Guest) -> dict[str, Any]:
+    return {
+        "guest_ref": guest.id,
+        "name": f"{guest.first_name} {guest.last_name}".strip(),
+        "email": guest.email,
+        "phone": guest.phone,
+        "status": guest.rsvp_status,
+    }
+
+
+def queue_guest_sync(db: AsyncSession, guest: Guest, *, revision: str | None = None) -> None:
+    """Queue an upsert for confirmed guests, otherwise a membership removal."""
+    command = "member.upsert" if guest.rsvp_status == "confirmed" else "member.remove"
+    rev = revision or datetime.utcnow().isoformat(timespec="microseconds")
+    db.add(FestioMeOutbox(
+        event_id=guest.event_id,
+        command=command,
+        idempotency_key=f"guest:{guest.id}:{command}:{rev}",
+        payload=_guest_payload(guest),
+    ))
+
+
+def queue_guest_remove(db: AsyncSession, *, event_id: str, guest_id: str) -> None:
+    db.add(FestioMeOutbox(
+        event_id=event_id,
+        command="member.remove",
+        idempotency_key=f"guest:{guest_id}:deleted:{datetime.utcnow().isoformat(timespec='microseconds')}",
+        payload={"guest_ref": guest_id},
+    ))
+
+
+def queue_announcement(
+    db: AsyncSession, *, event_id: str, title: str, body: str,
+    kind: str = "event", urgent: bool = False, source_ref: str | None = None,
+) -> FestioMeOutbox:
+    source = source_ref or f"manual:{datetime.utcnow().isoformat(timespec='microseconds')}"
+    row = FestioMeOutbox(
+        event_id=event_id,
+        command="announcement.publish",
+        idempotency_key=f"announcement:{event_id}:{source}",
+        payload={"title": title, "body": body, "kind": kind, "urgent": urgent, "source_ref": source},
+    )
+    db.add(row)
+    return row
+
+
+async def _deliver(row: FestioMeOutbox, client: FestioMeClient) -> None:
+    if row.command == "member.upsert":
+        await client.upsert_guest(row.event_id, **row.payload)
+    elif row.command == "member.remove":
+        await client.remove_guest(row.event_id, row.payload["guest_ref"])
+    elif row.command == "announcement.publish":
+        await client.publish_announcement(
+            row.event_id, idempotency_key=row.idempotency_key, **row.payload
+        )
+    else:
+        raise ValueError(f"Unknown FestioMe outbox command: {row.command}")
+
+
+async def process_due(*, limit: int = 50, client: FestioMeClient | None = None) -> int:
+    client = client or get_festiome_client()
+    if not client.configured:
+        return 0
+    delivered = 0
+    async with AsyncSessionLocal() as db:
+        rows = (await db.execute(
+            select(FestioMeOutbox)
+            .where(
+                FestioMeOutbox.status.in_(["pending", "retry"]),
+                FestioMeOutbox.next_attempt_at <= datetime.utcnow(),
+            )
+            .order_by(FestioMeOutbox.created_at)
+            .limit(limit)
+            .with_for_update(skip_locked=True)
+        )).scalars().all()
+        for row in rows:
+            event = await db.get(Event, row.event_id)
+            try:
+                await _deliver(row, client)
+            except (FestioMeUnavailable, ValueError) as exc:
+                row.attempts += 1
+                row.last_error = str(exc)[:2000]
+                row.status = "failed" if row.attempts >= MAX_ATTEMPTS else "retry"
+                delay = min(900, 2 ** min(row.attempts, 9))
+                row.next_attempt_at = datetime.utcnow() + timedelta(seconds=delay)
+                if event:
+                    event.festiome_last_error = row.last_error
+            except Exception as exc:  # contain unexpected integration failures
+                row.attempts += 1
+                row.last_error = f"Unexpected: {exc}"[:2000]
+                row.status = "failed" if row.attempts >= MAX_ATTEMPTS else "retry"
+                row.next_attempt_at = datetime.utcnow() + timedelta(seconds=60)
+                if event:
+                    event.festiome_last_error = row.last_error
+                logger.exception("FestioMe outbox delivery crashed for %s", row.id)
+            else:
+                row.status = "delivered"
+                row.delivered_at = datetime.utcnow()
+                row.last_error = None
+                if event:
+                    event.festiome_last_sync_at = row.delivered_at
+                    event.festiome_last_error = None
+                delivered += 1
+        await db.commit()
+    return delivered
+
+
+async def run() -> None:
+    logger.info("festiome_outbox started")
+    while True:
+        try:
+            await process_due()
+        except Exception:
+            logger.exception("festiome_outbox tick crashed")
+        await asyncio.sleep(TICK_SECONDS)

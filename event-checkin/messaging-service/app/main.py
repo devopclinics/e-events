@@ -91,6 +91,7 @@ class Event(Base):
     event_date: Mapped[datetime] = mapped_column(DateTime)
     rsvp_enabled: Mapped[bool] = mapped_column(Boolean, default=False)
     experience_enabled: Mapped[bool] = mapped_column(Boolean, default=False)
+    festiome_enabled: Mapped[bool] = mapped_column(Boolean, default=False)
     checkout_enabled: Mapped[bool] = mapped_column(Boolean, default=False)
     venue_name: Mapped[str | None] = mapped_column(String(255))
     admission_note: Mapped[str | None] = mapped_column(Text)
@@ -498,6 +499,7 @@ async def guest_hub(event_id: str, token: str = Query(...), db: AsyncSession = D
             "direct_host_messages": bool(cfg.direct_host_messages_enabled and guest.rsvp_status == "confirmed"),
             "guest_chat": chat_enabled,
             "guest_chat_posting": bool(chat_enabled and cfg.guest_chat_posting_enabled),
+            "festiome": bool(event and event.festiome_enabled),
         },
         "announcements": anns,
         "direct_messages": direct,

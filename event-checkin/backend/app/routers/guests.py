@@ -49,6 +49,7 @@ from .scanner import checkin_guard, perform_admission, queue_admission_email, qu
 from services import messaging
 from services.credit_ledger import send_with_credit_ledger
 from ..services.experience import next_guest_steps, sync_guest_progress
+from ..services.festiome_outbox import queue_guest_remove, queue_guest_sync
 
 router = APIRouter()
 
@@ -1490,6 +1491,7 @@ async def update_guest(
         await db.rollback()
         raise HTTPException(409, f"Seat {guest.seat_number} on that table was just taken — refresh and pick another seat.")
     await sync_guest_progress(event_id, guest.id, db, source="admin")
+    queue_guest_sync(db, guest)
     await db.commit()
     await db.refresh(guest)
     return guest
@@ -1721,6 +1723,7 @@ async def delete_guest(event_id: str, guest_id: str, db: AsyncSession = Depends(
     await db.execute(delete(EventMessageDeliveryLog).where(EventMessageDeliveryLog.guest_id == guest_id))
     await db.execute(delete(EventMessage).where(EventMessage.guest_id == guest_id))
     await db.execute(delete(EventMessageThread).where(EventMessageThread.guest_id == guest_id))
+    queue_guest_remove(db, event_id=event_id, guest_id=guest_id)
     await db.delete(guest)
     await db.commit()
 
@@ -1834,6 +1837,7 @@ async def resend_invite(event_id: str, guest_id: str, background_tasks: Backgrou
     ok = _dispatch_invite(background_tasks, event, guest, await load_overrides(event_id, db))
     guest.invite_sent_at = datetime.utcnow()
     guest.invite_status = "sent" if ok else "failed"
+    queue_guest_sync(db, guest)
     await db.commit()
     return {"ok": True}
 
@@ -1907,6 +1911,7 @@ async def approve_rsvp(event_id: str, guest_id: str, background_tasks: Backgroun
     if not ok:
         ok = _dispatch_invite(background_tasks, event, guest, overrides)
     guest.invite_status = "sent" if ok else "failed"
+    queue_guest_sync(db, guest)
     await db.commit()
     return {"ok": True, "rsvp_status": "confirmed"}
 
@@ -1924,6 +1929,7 @@ async def reject_rsvp(event_id: str, guest_id: str, background_tasks: Background
     if event and event.notify_rsvp_responses:
         dispatch_simple_notice(background_tasks, event, guest, "approval_rejected",
                                await load_overrides(event_id, db))
+    queue_guest_sync(db, guest)
     await db.commit()
     return {"ok": True, "rsvp_status": "declined"}
 

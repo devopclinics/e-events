@@ -59,6 +59,7 @@ from ..timeutil import EVENT_TZ
 from services.email_service import send_simple_email
 from services.templates import build_context as build_template_context
 from ..template_resolve import email_or_default as template_email_or_default, load_overrides
+from ..services.festiome_outbox import queue_announcement
 
 router = APIRouter()
 
@@ -1235,7 +1236,17 @@ async def publish(
     )
     if existing_published:
         raise HTTPException(409, f"Unpublish '{existing_published.name}' before publishing another workflow")
-    return await publish_workflow(workflow, event, db, actor_user_id=current_user.id)
+    published = await publish_workflow(workflow, event, db, actor_user_id=current_user.id)
+    queue_announcement(
+        db,
+        event_id=event_id,
+        title="Experience updated",
+        body=f"{workflow.name} is now available for {event.name}.",
+        kind="experience",
+        source_ref=f"workflow-published:{workflow.id}:v{workflow.version}",
+    )
+    await db.commit()
+    return published
 
 
 @router.post("/{event_id}/experience/workflows/{workflow_id}/unpublish", response_model=ExperienceWorkflowOut)

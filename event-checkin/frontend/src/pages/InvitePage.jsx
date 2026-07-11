@@ -1177,9 +1177,20 @@ function GuestHub({ event, accessToken, designTheme }) {
               </p>
             )}
             {hub?.guest?.qr_token && (
-              <a href={`/scan/${hub.guest.qr_token}`} style={colors.accent ? { background: colors.accent } : undefined} className="mt-4 inline-flex min-h-10 items-center justify-center rounded-xl bg-teal-400 px-4 py-2 text-sm font-extrabold text-slate-950 hover:bg-teal-300">
-                View Festio Pass
-              </a>
+              <div className="mt-4 flex flex-wrap gap-2">
+                <a href={`/scan/${hub.guest.qr_token}`} style={colors.accent ? { background: colors.accent } : undefined} className="inline-flex min-h-10 items-center justify-center rounded-xl bg-teal-400 px-4 py-2 text-sm font-extrabold text-slate-950 hover:bg-teal-300">
+                  View Festio Pass
+                </a>
+                {hub?.capabilities?.festiome && (
+                  <a
+                    href={`/festiome/guest?event=${encodeURIComponent(event.id)}&pass=${encodeURIComponent(hub.guest.qr_token)}`}
+                    className="inline-flex min-h-10 items-center justify-center rounded-xl border px-4 py-2 text-sm font-extrabold transition hover:opacity-90"
+                    style={{ background: tone.chip, borderColor: tone.border, color: tone.text }}
+                  >
+                    Open FestioMe
+                  </a>
+                )}
+              </div>
             )}
             {event?.registry_enabled && event?.registry_token && (
               <a href={`/registry/${event.registry_token}`} className="mt-3 flex min-h-10 items-center justify-center gap-2 rounded-xl border px-4 py-2 text-sm font-extrabold transition hover:opacity-90" style={{ background: tone.chip, borderColor: tone.border, color: tone.text }}>

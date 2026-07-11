@@ -4,9 +4,9 @@ import secrets
 import uuid as _uuid
 from fastapi import APIRouter, BackgroundTasks, Depends, File, HTTPException, UploadFile
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select
+from sqlalchemy import delete, select
 from ..database import get_db
-from ..models import Event, EventUser, EventUserSection, Guest, Membership, Organization, RSVPQuestion, TableGroup, User
+from ..models import Event, EventUser, EventUserSection, FestioMeOutbox, Guest, Membership, Organization, RSVPQuestion, TableGroup, User
 from ..schemas import (
     EventCreate, EventUpdate, EventOut, EventMemberOut, AssignUserRequest,
     OrgMemberInvite, OrgMemberOut, MemberRoleUpdate, UserOut, EventSourceUpdate,
@@ -24,6 +24,7 @@ from services.email_service import send_manual_invite_email, send_broadcast_emai
 from ..template_resolve import load_overrides, channel_text, email_override
 from services.templates import build_context as build_template_context
 from .. import storage
+from ..services.festiome_outbox import queue_announcement
 
 UPLOADS_DIR = "/app/uploads"
 ALLOWED_IMAGE_TYPES = {"image/jpeg", "image/png", "image/webp", "image/gif"}
@@ -207,11 +208,24 @@ async def update_event(
     event = await db.get(Event, event_id)
     if not event:
         raise HTTPException(404, "Event not found")
+    previous_date = event.event_date
+    previous_venue = event.venue_name
     payload = data.model_dump(exclude_none=True)
     if "checkin_base_url" in payload:
         payload["checkin_base_url"] = _normalize_public_base_url(payload.get("checkin_base_url"))
     for field, value in payload.items():
         setattr(event, field, value)
+    if event.event_date != previous_date or event.venue_name != previous_venue:
+        when = event.event_date.strftime("%A, %B %d at %I:%M %p")
+        venue = f" at {event.venue_name}" if event.venue_name else ""
+        queue_announcement(
+            db,
+            event_id=event.id,
+            title="Event schedule updated",
+            body=f"{event.name} is scheduled for {when}{venue}.",
+            kind="schedule",
+            source_ref=f"event-schedule:{datetime.utcnow().isoformat(timespec='microseconds')}",
+        )
     await db.commit()
     await db.refresh(event)
     return event
@@ -226,6 +240,7 @@ async def delete_event(
     event = await db.get(Event, event_id)
     if not event:
         raise HTTPException(404, "Event not found")
+    await db.execute(delete(FestioMeOutbox).where(FestioMeOutbox.event_id == event_id))
     await db.delete(event)
     await db.commit()
 
@@ -534,7 +549,7 @@ async def toggle_features(
     for feature in (
         "seating_enabled", "menu_enabled", "logistics_enabled", "registry_enabled",
         "venue_access_enabled", "partner_pairing_enabled", "experience_enabled",
-        "section_mode_enabled",
+        "section_mode_enabled", "festiome_addon_enabled",
     ):
         if body.get(feature):
             assert_feature_allowed(event, feature)
@@ -560,6 +575,11 @@ async def toggle_features(
         event.venue_access_enabled = enable
     if "experience_enabled" in body:
         event.experience_enabled = bool(body["experience_enabled"])
+    if "festiome_addon_enabled" in body:
+        # Turning the add-on off only revokes the offering; the cached remote
+        # link state (festiome_enabled/id/url) is left intact so re-enabling
+        # does not require re-provisioning through the FestioMe service.
+        event.festiome_addon_enabled = bool(body["festiome_addon_enabled"])
     if "partner_pairing_enabled" in body:
         event.partner_pairing_enabled = bool(body["partner_pairing_enabled"])
     if "registry_enabled" in body:

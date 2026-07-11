@@ -124,6 +124,16 @@ class Event(Base):
     # Experience workflow engine. Off by default so legacy RSVP, QR check-in,
     # seating, menu, and messaging flows remain unchanged until explicitly enabled.
     experience_enabled: Mapped[bool] = mapped_column(Boolean, default=False)
+    # Paid add-on entitlement + organizer opt-in. Gates whether FestioMe is
+    # offered for this event at all; distinct from festiome_enabled below, which
+    # only caches the remote service link state.
+    festiome_addon_enabled: Mapped[bool] = mapped_column(Boolean, default=False)
+    # Cached integration state only; FestioMe data remains service-owned.
+    festiome_enabled: Mapped[bool] = mapped_column(Boolean, default=False)
+    festiome_id: Mapped[str | None] = mapped_column(String(36), nullable=True)
+    festiome_open_url: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    festiome_last_sync_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    festiome_last_error: Mapped[str | None] = mapped_column(Text, nullable=True)
     # Optional invite CTA that lets guests pair with a spouse/partner for seating.
     # Requires seating to be useful, but is controlled separately from seating.
     partner_pairing_enabled: Mapped[bool] = mapped_column(Boolean, default=False)
@@ -434,6 +444,32 @@ class MessageCreditLedger(Base):
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
     event: Mapped["Event"] = relationship("Event", back_populates="credit_ledger")
+
+
+class FestioMeOutbox(Base):
+    """Durable, failure-isolated commands destined for the FestioMe service.
+
+    GuestHub commits these rows in the same transaction as the guest/event
+    change.  A bounded background worker delivers them later, so an unavailable
+    chat service can never fail RSVP, invitations, or check-in.
+    """
+    __tablename__ = "festiome_outbox"
+    __table_args__ = (
+        UniqueConstraint("idempotency_key", name="uq_festiome_outbox_idempotency"),
+        Index("ix_festiome_outbox_due", "status", "next_attempt_at"),
+    )
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+    event_id: Mapped[str] = mapped_column(String(36), ForeignKey("events.id"), index=True)
+    command: Mapped[str] = mapped_column(String(50), index=True)
+    idempotency_key: Mapped[str] = mapped_column(String(255))
+    payload: Mapped[dict] = mapped_column(JSON, default=dict)
+    status: Mapped[str] = mapped_column(String(20), default="pending", index=True)
+    attempts: Mapped[int] = mapped_column(Integer, default=0)
+    next_attempt_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    last_error: Mapped[str | None] = mapped_column(Text, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    delivered_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
 
 
 class SeatingTable(Base):

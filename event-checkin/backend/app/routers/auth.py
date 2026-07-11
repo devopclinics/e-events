@@ -1,3 +1,6 @@
+from datetime import datetime, timedelta, timezone
+
+import jwt
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
@@ -8,6 +11,25 @@ from ..schemas import UserOut
 from ..auth import get_current_user, require_superadmin
 
 router = APIRouter()
+
+
+@router.post("/festiome-token")
+async def festiome_token(user: User = Depends(get_current_user)):
+    """Exchange a Festio login for a short-lived FestioMe-only session token."""
+    from ..config import settings
+    if not settings.festiome_internal_token:
+        raise HTTPException(503, "FestioMe authentication is not configured")
+    now = datetime.now(timezone.utc)
+    token = jwt.encode({
+        "sub": user.firebase_uid or user.id,
+        "email": user.email,
+        "name": user.name,
+        "iss": "guesthub",
+        "aud": "festiome",
+        "iat": now,
+        "exp": now + timedelta(minutes=15),
+    }, settings.festiome_internal_token, algorithm="HS256")
+    return {"token": token, "expires_in": 900}
 
 
 @router.get("/me", response_model=UserOut)

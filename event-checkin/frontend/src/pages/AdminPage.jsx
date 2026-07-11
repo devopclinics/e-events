@@ -395,6 +395,7 @@ function FeatureToggles({ event, onChanged, onGate }) {
         { key: 'logistics_enabled', label: 'Deliveries' },
         { key: 'registry_enabled', label: 'Gift list' },
         { key: 'venue_access_enabled', label: 'Entry rules' },
+        { key: 'festiome_addon_enabled', label: 'FestioMe' },
       ].map(({ key, label }) => (
         <button
           key={key}
@@ -4097,6 +4098,7 @@ const FEATURE_PLAN = {
   menu_enabled: 'tier50',
   logistics_enabled: 'tier50',
   registry_enabled: 'tier50',
+  festiome_addon_enabled: 'tier50',
   venue_access_enabled: 'tier150',
   source_sync: 'tier150',
   self_checkin_enabled: 'tier300',
@@ -7164,6 +7166,44 @@ function MessageDeliveryBadge({ guest, channel }) {
   return <span title={title} className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium capitalize ${cls}`}>{label}</span>
 }
 
+function FestioMeEventControl({ event }) {
+  const [status, setStatus] = useState(null)
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState('')
+
+  useEffect(() => {
+    if (!event?.id) return
+    api.eventFestioMeStatus(event.id).then(setStatus).catch((e) => setError(e.message))
+  }, [event?.id])
+
+  async function enable() {
+    setBusy(true); setError('')
+    try { setStatus(await api.enableEventFestioMe(event.id)) }
+    catch (e) { setError(e.message) }
+    finally { setBusy(false) }
+  }
+
+  return (
+    <div className="mt-4 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-teal-200 bg-teal-50/60 px-4 py-3 dark:border-teal-800 dark:bg-teal-950/20">
+      <div>
+        <div className="text-sm font-semibold text-teal-900 dark:text-teal-100">💬 FestioMe</div>
+        <div className="text-xs text-teal-800/80 dark:text-teal-200/80">
+          {status?.enabled ? `${status.name || event.name} is ready for group messaging.` : 'Create a FestioMe group linked to this event.'}
+        </div>
+        {error && <div className="mt-1 text-xs text-red-600 dark:text-red-400">{error}</div>}
+      </div>
+      {status?.enabled ? (
+        <a href={status.open_url || '/festiome'} className="rounded-lg bg-teal-600 px-3 py-2 text-xs font-semibold text-white hover:bg-teal-700">Open FestioMe</a>
+      ) : (
+        <button onClick={enable} disabled={busy || status?.configured === false}
+          className="rounded-lg bg-teal-600 px-3 py-2 text-xs font-semibold text-white hover:bg-teal-700 disabled:opacity-50">
+          {busy ? 'Enabling…' : 'Enable FestioMe'}
+        </button>
+      )}
+    </div>
+  )
+}
+
 function OnboardingChecklist({ event, stats, onTab }) {
   const key = `onb_${event.id}`
   // Non-destructive: "Hide" collapses to a re-expandable progress pill rather
@@ -8562,6 +8602,7 @@ export default function AdminPage() {
                     <span className="block text-xs text-gray-400 dark:text-slate-500">Off by default. When on, declined/rejected guests get a polite notice (edit the wording in Messages → RSVP decline / Approval rejected).</span>
                   </span>
                 </label>
+                <FestioMeEventControl event={event} />
               </div>
 
               <SelfCheckinPanel event={event} onChanged={updateEvent} onFlash={flash} onGate={openUpgradeGate} />

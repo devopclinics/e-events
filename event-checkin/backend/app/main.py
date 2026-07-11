@@ -14,7 +14,9 @@ from .routers import admin as admin_router
 from .routers import design_proxy as design_proxy_router
 from .routers import og as og_router
 from .routers import floor as floor_router
+from .routers import festiome as festiome_router
 from . import sync_poller, db_migrate
+from .services import festiome_outbox
 from . import routers
 from . import storage
 
@@ -35,6 +37,11 @@ async def lifespan(app: FastAPI):
     # so events aren't re-imported by every replica.
     run_poller = os.environ.get("RUN_IN_APP_POLLER", "true").lower() not in ("false", "0", "no")
     poller_task = asyncio.create_task(sync_poller.run()) if run_poller else None
+    # The transactional outbox is safe on multiple web replicas (rows are
+    # claimed with SKIP LOCKED), so it has its own switch and must not silently
+    # stop when the single source-list poller is moved to a dedicated process.
+    run_festiome_outbox = os.environ.get("RUN_IN_APP_FESTIOME_OUTBOX", "true").lower() not in ("false", "0", "no")
+    festiome_task = asyncio.create_task(festiome_outbox.run()) if run_festiome_outbox else None
 
     # Start the Redis SSE fan-in subscriber (no-op unless REDIS_URL is set) so
     # dashboard events published by any replica reach the connections on this one.
@@ -47,6 +54,12 @@ async def lifespan(app: FastAPI):
             poller_task.cancel()
             try:
                 await poller_task
+            except asyncio.CancelledError:
+                pass
+        if festiome_task is not None:
+            festiome_task.cancel()
+            try:
+                await festiome_task
             except asyncio.CancelledError:
                 pass
 
@@ -104,6 +117,7 @@ app.include_router(self_checkin.router, prefix="/api/e", tags=["self-checkin"])
 app.include_router(design_proxy_router.router, prefix="/api/events", tags=["design"])
 app.include_router(og_router.router, prefix="/api/og", tags=["og"])
 app.include_router(floor_router.router, prefix="/api", tags=["floor-plan"])
+app.include_router(festiome_router.router, prefix="/api/events", tags=["FestioMe"])
 
 # Serve uploaded files (cover images, etc.). When S3 is configured, stream from
 # the bucket so any replica can serve any file; otherwise serve from local disk.

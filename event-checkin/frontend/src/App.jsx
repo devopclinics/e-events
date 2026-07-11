@@ -28,7 +28,7 @@ import KitchenPage from './pages/KitchenPage'
 import HelpPage from './pages/HelpPage'
 import MediaPage from './pages/MediaPage'
 import SelfCheckinPage from './pages/SelfCheckinPage'
-import CommunityPage from './pages/CommunityPage'
+import FestioMePage from './pages/FestioMePage'
 
 // ── Preferred-view helpers ────────────────────────────────────────────────────
 
@@ -71,7 +71,7 @@ function ThemeToggle({ className = '' }) {
 
 // ── Mobile-friendly Nav ───────────────────────────────────────────────────────
 
-function Nav({ hasMenu, eventName, canUseDesignStudio }) {
+function Nav({ hasMenu, eventName, canUseDesignStudio, hasFestioMe }) {
   const { user, logout } = useAuth()
   const navigate = useNavigate()
   const [open, setOpen] = useState(false)
@@ -90,7 +90,7 @@ function Nav({ hasMenu, eventName, canUseDesignStudio }) {
     ...(['admin', 'event_manager'].includes(user?.role) ? [{ to: '/admin', label: 'Event Setup', end: true }] : []),
     ...(user?.role === 'admin' && canUseDesignStudio ? [{ to: '/design-studio', label: 'Design Studio' }] : []),
     { to: '/dashboard', label: 'Results' },
-    { to: '/community', label: 'Community' },
+    ...(hasFestioMe ? [{ to: '/festiome', label: 'FestioMe' }] : []),
     { to: '/scanner', label: 'Check-in' },
     ...(hasMenu ? [{ to: '/kitchen', label: 'Orders' }] : []),
     ...(user?.is_platform_superadmin ? [{ to: '/console', label: 'Console' }] : []),
@@ -185,12 +185,12 @@ function Nav({ hasMenu, eventName, canUseDesignStudio }) {
 }
 
 // ── Mobile day-of bottom bar ───────────────────────────────────────────────────
-function MobileTabBar({ user, hasMenu }) {
+function MobileTabBar({ user, hasMenu, hasFestioMe }) {
   if (!user) return null
   const items = [
     ...(['admin', 'event_manager'].includes(user.role) ? [{ to: '/admin', label: 'Setup', icon: '🗂️' }] : []),
     { to: '/dashboard', label: 'Results', icon: '📊' },
-    { to: '/community', label: 'Chat', icon: '💬' },
+    ...(hasFestioMe ? [{ to: '/festiome', label: 'FestioMe', icon: '💬' }] : []),
     { to: '/scanner', label: 'Check-in', icon: '🎟️' },
     ...(hasMenu ? [{ to: '/kitchen', label: 'Orders', icon: '☑' }] : []),
   ]
@@ -214,6 +214,7 @@ function AuthedLayout({ children }) {
   const [currentEventId] = useCurrentEvent()
   const [eventName, setEventName] = useState('')
   const [canUseDesignStudio, setCanUseDesignStudio] = useState(false)
+  const [hasFestioMe, setHasFestioMe] = useState(false)
 
   useEffect(() => {
     if (!user) { setHasMenu(false); return }
@@ -225,23 +226,26 @@ function AuthedLayout({ children }) {
     if (!user || !currentEventId) {
       setEventName('')
       setCanUseDesignStudio(false)
+      setHasFestioMe(false)
       return
     }
     api.listEvents().then((evs) => {
       const current = evs.find((e) => e.id === currentEventId)
       setEventName(current?.name || '')
       setCanUseDesignStudio(!!current?.is_paid)
+      setHasFestioMe(!!current?.festiome_addon_enabled)
     }).catch(() => {
       setEventName('')
       setCanUseDesignStudio(false)
+      setHasFestioMe(false)
     })
   }, [user, currentEventId])
 
   return (
     <>
-      <Nav hasMenu={hasMenu} eventName={eventName} canUseDesignStudio={canUseDesignStudio} />
+      <Nav hasMenu={hasMenu} eventName={eventName} canUseDesignStudio={canUseDesignStudio} hasFestioMe={hasFestioMe} />
       <main className="flex-1 max-w-7xl mx-auto w-full px-4 sm:px-6 py-8 pb-24 sm:pb-8">{children}</main>
-      <MobileTabBar user={user} hasMenu={hasMenu} />
+      <MobileTabBar user={user} hasMenu={hasMenu} hasFestioMe={hasFestioMe} />
     </>
   )
 }
@@ -261,6 +265,8 @@ function AppRoutes() {
       <Route path="/rsvp/:rsvpToken" element={<InvitePage />} />
       {/* Personalised (closed-mode) invite link — no auth required */}
       <Route path="/r/:token" element={<InvitePage />} />
+      {/* Confirmed guests exchange their Festio pass for a scoped FestioMe session. */}
+      <Route path="/festiome/guest" element={<FestioMePage />} />
       {/* Public vendor packing list — no auth required */}
       <Route path="/vendor/:token" element={<VendorPage />} />
       {/* Public gift registry — no auth required (unguessable token) */}
@@ -290,7 +296,7 @@ function AppRoutes() {
               <Route path="/design-studio" element={<ProtectedRoute adminOnly><DesignStudioPage /></ProtectedRoute>} />
               <Route path="/floor-plan/:eventId" element={<ProtectedRoute adminOnly><FloorPlanPage /></ProtectedRoute>} />
               <Route path="/dashboard" element={<ProtectedRoute><DashboardPage /></ProtectedRoute>} />
-              <Route path="/community" element={<ProtectedRoute><CommunityPage /></ProtectedRoute>} />
+              <Route path="/festiome" element={<ProtectedRoute><FestioMePage /></ProtectedRoute>} />
               <Route path="/scanner" element={<ProtectedRoute><ScannerPage /></ProtectedRoute>} />
               <Route path="/kitchen" element={<ProtectedRoute><KitchenPage /></ProtectedRoute>} />
               <Route path="/console" element={<ProtectedRoute><ConsolePage /></ProtectedRoute>} />

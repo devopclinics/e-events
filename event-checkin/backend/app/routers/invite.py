@@ -29,6 +29,7 @@ from services.email_service import send_invite_email
 from ..template_resolve import load_overrides
 from .guests import _normalize_phone
 from ..entitlements import assert_within_guest_cap, can_use_paid_channels, last_credit_ledger_id, take_message_credit
+from ..services.festiome_outbox import queue_guest_sync
 
 logger = logging.getLogger(__name__)
 
@@ -501,6 +502,8 @@ async def _submit_multi_invitee_rsvp(
         await _save_answers(guest.id, event.id, data.answers, db)
         created.append(guest)
 
+    for created_guest in created:
+        queue_guest_sync(db, created_guest)
     await db.commit()
     overrides = await load_overrides(event.id, db)
     guest_count_text = (
@@ -657,6 +660,7 @@ async def submit_rsvp(
     await _save_answers(guest.id, event_id, data.answers, db)
     await _save_shipping(guest, event, data.shipping_address, data.sizes, db)
 
+    queue_guest_sync(db, guest)
     await db.commit()
     await db.refresh(guest)
 
@@ -782,6 +786,7 @@ async def submit_invite_token_rsvp(
 
     guest.rsvp_status = data.status
     guest.rsvp_responded_at = datetime.utcnow()
+    queue_guest_sync(db, guest)
     await _save_answers(guest.id, event.id, data.answers, db, replace=True)
     if data.status == "confirmed":
         await _save_shipping(guest, event, data.shipping_address, data.sizes, db)

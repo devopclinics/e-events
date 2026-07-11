@@ -42,6 +42,7 @@ FEATURE_MIN_PLAN = {
     "menu_enabled": "tier50",
     "logistics_enabled": "tier50",
     "registry_enabled": "tier50",
+    "festiome_addon_enabled": "tier50",
     "design_publish": "tier50",
     "floor_plan": "tier150",
     "source_sync": "tier150",

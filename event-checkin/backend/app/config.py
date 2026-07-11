@@ -10,6 +10,13 @@ class Settings(BaseSettings):
     design_service_url: str = "http://design-service:8010"
     design_internal_token: str = ""
 
+    # FestioMe is an isolated internal service presented as a Festio feature.
+    # GuestHub only communicates with it through its versioned HTTP contract;
+    # it never imports FestioMe code or accesses its database.
+    festiome_service_url: str = "http://festiome-service:8020"
+    festiome_internal_token: str = ""
+    festiome_request_timeout_seconds: float = 3.0
+
     # Firebase — paste the service account JSON as a single-line string
     firebase_credentials: str = ""
 

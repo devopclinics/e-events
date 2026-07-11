@@ -100,6 +100,12 @@ class EventOut(BaseModel):
     registry_enabled: bool = False
     venue_access_enabled: bool = False
     experience_enabled: bool = False
+    festiome_addon_enabled: bool = False
+    festiome_enabled: bool = False
+    festiome_id: Optional[str] = None
+    festiome_open_url: Optional[str] = None
+    festiome_last_sync_at: Optional[datetime] = None
+    festiome_last_error: Optional[str] = None
     partner_pairing_enabled: bool = False
     venue_name: Optional[str] = None
     venue_address: Optional[str] = None

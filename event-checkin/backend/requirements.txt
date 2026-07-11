@@ -10,6 +10,7 @@ aiosmtplib>=3.0.1
 twilio>=8.10.0
 python-multipart>=0.0.9
 firebase-admin>=6.4.0
+PyJWT>=2.8.0
 httpx>=0.26.0
 openpyxl>=3.1.0
 redis>=5.0.0

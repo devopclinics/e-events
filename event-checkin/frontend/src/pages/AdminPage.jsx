@@ -8684,6 +8684,36 @@ export default function AdminPage() {
               </p>
             )}
 
+            {/* Low message-credit warning — surfaces WHY paid channels show
+                "Not sent" so operators know to top up before/while sending. */}
+            {(() => {
+              const paidOn = event.is_paid && event.paid_channels
+              const chans = []
+              if (event.notify_sms) chans.push('SMS')
+              if (event.notify_whatsapp) chans.push('WhatsApp')
+              if (event.notify_mms) chans.push('MMS')
+              if (!paidOn || chans.length === 0) return null
+              // Cheapest enabled paid channel: SMS/WhatsApp cost 1 credit, MMS costs 3.
+              const minCost = (event.notify_sms || event.notify_whatsapp) ? 1 : 3
+              const bal = event.message_credits || 0
+              const names = chans.join('/')
+              if (bal < minCost) {
+                return (
+                  <div className="rounded-lg border border-red-300 dark:border-red-800 bg-red-50 dark:bg-red-900/30 px-3 py-2 text-sm text-red-800 dark:text-red-200">
+                    ⚠️ <strong>{bal} message credits left.</strong> {names} messages won’t be sent — they’ll show “Not sent.” Add message credits (Event Pass → Top up credits) to send {names}.
+                  </div>
+                )
+              }
+              if (bal < minCost * 20) {
+                return (
+                  <div className="rounded-lg border border-amber-300 dark:border-amber-800 bg-amber-50 dark:bg-amber-900/30 px-3 py-2 text-sm text-amber-800 dark:text-amber-200">
+                    Low balance: <strong>{bal} message credits</strong> left. Top up soon to keep {names} sending.
+                  </div>
+                )
+              }
+              return null
+            })()}
+
             {/* Action buttons */}
             <div className="flex flex-wrap gap-3 pt-1 border-t dark:border-slate-700">
               <button onClick={handleGenQR} disabled={loading || stats.total === 0}
@@ -8916,6 +8946,32 @@ export default function AdminPage() {
                   </div>
                 )}
                 <div className="px-4 sm:px-6 py-4 border-b dark:border-slate-700 flex items-center justify-between gap-2 flex-wrap">
+                  {(() => {
+                    const paidOn = event.is_paid && event.paid_channels
+                    const chans = []
+                    if (event.notify_sms) chans.push('SMS')
+                    if (event.notify_whatsapp) chans.push('WhatsApp')
+                    if (event.notify_mms) chans.push('MMS')
+                    if (!paidOn || chans.length === 0) return null
+                    const minCost = (event.notify_sms || event.notify_whatsapp) ? 1 : 3
+                    const bal = event.message_credits || 0
+                    const names = chans.join('/')
+                    if (bal < minCost) {
+                      return (
+                        <div className="w-full rounded-lg border border-red-300 dark:border-red-800 bg-red-50 dark:bg-red-900/30 px-3 py-2 text-sm text-red-800 dark:text-red-200">
+                          ⚠️ <strong>{bal} message credits left.</strong> {names} won’t be sent (they show “Not sent”). Add message credits (Event Pass → Top up credits) to send {names}.
+                        </div>
+                      )
+                    }
+                    if (bal < minCost * 20) {
+                      return (
+                        <div className="w-full rounded-lg border border-amber-300 dark:border-amber-800 bg-amber-50 dark:bg-amber-900/30 px-3 py-2 text-sm text-amber-800 dark:text-amber-200">
+                          Low balance: <strong>{bal} message credits</strong> left. Top up soon to keep {names} sending.
+                        </div>
+                      )
+                    }
+                    return null
+                  })()}
                   <h2 className="font-semibold text-sm sm:text-base dark:text-white">Guest List ({filteredGuests.length}{groupFilter ? ` of ${guests.length}` : ''})</h2>
                   {event?.seating_enabled && tableGroups.length > 0 && (
                     <select value={groupFilter} onChange={(e) => { setGroupFilter(e.target.value); setPage(0) }}

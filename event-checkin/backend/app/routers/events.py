@@ -16,6 +16,7 @@ from ..schemas import (
 )
 from ..schemas import ActiveToggle
 from ..auth import require_admin, require_event_admin, get_current_user, _org_role
+from ..config import settings
 from ..entitlements import assert_feature_allowed, can_use_paid_channels, grant_message_credits, last_credit_ledger_id, take_message_credit
 from .guests import import_from_source_url, import_warning_summary, _normalize_phone
 from services import messaging
@@ -34,8 +35,17 @@ router = APIRouter()
 
 # Event-code alphabet: uppercase, no confusable characters (0 O 1 I L).
 _CODE_ALPHABET = "ABCDEFGHJKMNPQRSTUVWXYZ23456789"
-FESTIO_PUBLIC_BASE_URL = "https://festio.events"
-LEGACY_PUBLIC_BASE_URLS = {"https://events.vsgs.io", "http://events.vsgs.io"}
+# Canonical public base for guest-facing links (QR scan, invite, RSVP, hub).
+# Driven by PUBLIC_BASE_URL so staging emits staging links and prod emits prod
+# links; defaults to the production host when unset. The browser hardcodes a
+# base and may send a stale one, so the backend is AUTHORITATIVE: any
+# Festio-managed host below is rewritten to this canonical base at write time.
+FESTIO_PUBLIC_BASE_URL = (settings.public_base_url or "https://festio.events").rstrip("/")
+LEGACY_PUBLIC_BASE_URLS = {
+    "https://events.vsgs.io", "http://events.vsgs.io",
+    "https://festio.events", "http://festio.events",
+    "https://staging.festio.events", "http://staging.festio.events",
+}
 
 
 def _gen_code(n: int = 8) -> str:

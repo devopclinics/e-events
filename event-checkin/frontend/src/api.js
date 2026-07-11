@@ -1,7 +1,14 @@
 import { auth } from './firebase'
 
 const BASE = '/api'
-export const PUBLIC_BASE_URL = 'https://festio.events'
+// Public base for guest-facing links. Prefer a build-time override, otherwise
+// use the domain the app is actually served from (so staging emits staging
+// links, prod emits prod links), falling back to the production host for SSR.
+// The backend re-normalizes this on save, so it is the authoritative source.
+export const PUBLIC_BASE_URL =
+  (import.meta.env.VITE_PUBLIC_BASE_URL || '').trim().replace(/\/+$/, '') ||
+  (typeof window !== 'undefined' && window.location?.origin) ||
+  'https://festio.events'
 
 export function publicBaseUrl(eventOrUrl) {
   const raw = typeof eventOrUrl === 'string' ? eventOrUrl : eventOrUrl?.checkin_base_url

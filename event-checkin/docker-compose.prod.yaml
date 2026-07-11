@@ -38,6 +38,15 @@ services:
       # SSE fan-out + rate-limit counters. Shared across replicas when scaled
       # out; harmless on single-host. Unset REDIS_URL to fall back to in-process.
       REDIS_URL: ${REDIS_URL:-redis://redis:6379/0}
+      # Canonical public host for guest-facing links (QR scan, invite, RSVP).
+      # MUST be set per environment — e.g. https://staging.festio.events on
+      # staging — or scan URLs point at production and read as "Invalid Ticket".
+      PUBLIC_BASE_URL: ${PUBLIC_BASE_URL:-}
+      # Optional FestioMe integration. The backend never hard-depends on this
+      # service (failure-contained); these just let enable/status/announcements
+      # and organizer group management reach it when configured.
+      FESTIOME_SERVICE_URL: ${FESTIOME_SERVICE_URL:-http://festiome-service:8020}
+      FESTIOME_INTERNAL_TOKEN: ${FESTIOME_INTERNAL_SERVICE_TOKEN:-}
     volumes:
       - uploads:/app/uploads
     depends_on:
@@ -98,6 +107,89 @@ services:
       interval: 15s
       timeout: 5s
       retries: 5
+    restart: unless-stopped
+
+  # ── FestioMe group messaging — isolated internal service (pulled) ─────────
+  # Independent container + database. GuestHub never reads/writes these tables;
+  # it talks to FestioMe only over HTTP. The service self-applies its own
+  # migrations on startup (`python -m app.migrate`) before serving.
+  festiome-service:
+    image: dclinics/events:festiome-${APP_VERSION:-latest}
+    pull_policy: always
+    environment:
+      DATABASE_URL: postgresql+asyncpg://festiome:${FESTIOME_DB_PASSWORD:-festiome}@festiome-db:5432/festiome
+      FIREBASE_PROJECT_ID: ${FESTIOME_FIREBASE_PROJECT_ID:-evets-f394d}
+      INTERNAL_SERVICE_TOKEN: ${FESTIOME_INTERNAL_SERVICE_TOKEN:-}
+      REDIS_URL: redis://festiome-redis:6379/0
+      UPLOAD_DIR: /data/festiome-uploads
+    volumes:
+      - festiome-uploads:/data/festiome-uploads
+    depends_on:
+      festiome-db:
+        condition: service_healthy
+      festiome-redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "python -c \"import urllib.request; urllib.request.urlopen('http://localhost:8020/health', timeout=3).read()\""]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+    restart: unless-stopped
+
+  festiome-redis:
+    image: redis:7-alpine
+    command: ["redis-server", "--appendonly", "yes"]
+    volumes:
+      - festiome-redisdata:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+    restart: unless-stopped
+
+  festiome-db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: festiome
+      POSTGRES_USER: festiome
+      POSTGRES_PASSWORD: ${FESTIOME_DB_PASSWORD:-festiome}
+    volumes:
+      - festiome-pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U festiome -d festiome"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+  festiome-db-backup:
+    image: postgres:16-alpine
+    user: "${BACKUP_UID:-1000}:${BACKUP_GID:-1000}"
+    environment:
+      PGHOST: festiome-db
+      PGPORT: 5432
+      PGDATABASE: festiome
+      PGUSER: festiome
+      PGPASSWORD: ${FESTIOME_DB_PASSWORD:-festiome}
+      BACKUP_RETENTION_DAYS: ${FESTIOME_BACKUP_RETENTION_DAYS:-14}
+    volumes:
+      - ./backups:/backups
+    depends_on:
+      festiome-db:
+        condition: service_healthy
+    command: >
+      sh -c '
+        set -eu
+        mkdir -p /backups
+        while true; do
+          file="/backups/festiome-$$(date -u +%Y%m%dT%H%M%SZ).sql.gz"
+          pg_dump --clean --if-exists --no-owner --no-privileges | gzip > "$$file"
+          find /backups -type f -name "festiome-*.sql.gz" -mtime +"$$BACKUP_RETENTION_DAYS" -delete
+          sleep 86400
+        done
+      '
     restart: unless-stopped
 
   # ── Redis (SSE fan-out + rate-limit counters) ─────────────────────────────
@@ -165,3 +257,9 @@ volumes:
     name: event-checkin_uploads
   design-assets:
     name: event-checkin_design-assets
+  festiome-pgdata:
+    name: event-checkin_festiome-pgdata
+  festiome-redisdata:
+    name: event-checkin_festiome-redisdata
+  festiome-uploads:
+    name: event-checkin_festiome-uploads

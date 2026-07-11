@@ -80,7 +80,7 @@ echo -e "\n${BOLD}EventQR Deployment Pipeline${NC}"
 echo    "  Version  : ${VERSION}"
 echo    "  Registry : ${REGISTRY}"
 echo    "  Compose  : ${PROD_COMPOSE}"
-echo    "  Services : backend, frontend, messaging, design"
+echo    "  Services : backend, frontend, messaging, design, festiome"
 echo    "  Keep tags: last ${KEEP_VERSIONS} per service"
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -140,6 +140,14 @@ if $DO_BUILD; then
     "${SCRIPT_DIR}/design-service"
   ok "Design service built → ${REGISTRY}:design-${VERSION}"
 
+  info "Building festiome-service..."
+  docker build $NO_CACHE \
+    "${BUILD_ARGS[@]}" \
+    --tag "${REGISTRY}:festiome-${VERSION}" \
+    --tag "${REGISTRY}:festiome-latest" \
+    "${SCRIPT_DIR}/festiome-service"
+  ok "FestioMe service built → ${REGISTRY}:festiome-${VERSION}"
+
   # ── PHASE 2 — Push to Docker Hub ────────────────────────────────────────────
   step "2/6  Pushing images to Docker Hub"
 
@@ -155,7 +163,9 @@ if $DO_BUILD; then
     "${REGISTRY}:messaging-${VERSION}" \
     "${REGISTRY}:messaging-latest" \
     "${REGISTRY}:design-${VERSION}" \
-    "${REGISTRY}:design-latest"; do
+    "${REGISTRY}:design-latest" \
+    "${REGISTRY}:festiome-${VERSION}" \
+    "${REGISTRY}:festiome-latest"; do
     info "Pushing ${tag}..."
     docker push "$tag"
     ok "Pushed ${tag}"
@@ -239,6 +249,7 @@ if $DO_BUILD; then
   prune_service_tags "frontend"
   prune_service_tags "messaging"
   prune_service_tags "design"
+  prune_service_tags "festiome"
 
   # Remove the dangling local build cache (optional, frees disk)
   info "Pruning dangling local image layers..."
@@ -261,7 +272,7 @@ if $DO_DEPLOY; then
 
   # ── Phase 4a — Pull new images ──────────────────────────────────────────────
   step "4/6  Pulling images from Docker Hub"
-  APP_VERSION="$VERSION" docker compose -f "$PROD_COMPOSE" pull backend frontend messaging-service design-service
+  APP_VERSION="$VERSION" docker compose -f "$PROD_COMPOSE" pull backend frontend messaging-service design-service festiome-service
   ok "Images pulled"
 
   # ── Phase 4b — Run DB migration in a one-off container ──────────────────────

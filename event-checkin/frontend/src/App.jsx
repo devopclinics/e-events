@@ -28,6 +28,7 @@ import KitchenPage from './pages/KitchenPage'
 import HelpPage from './pages/HelpPage'
 import MediaPage from './pages/MediaPage'
 import SelfCheckinPage from './pages/SelfCheckinPage'
+import CommunityPage from './pages/CommunityPage'
 
 // ── Preferred-view helpers ────────────────────────────────────────────────────
 
@@ -89,6 +90,7 @@ function Nav({ hasMenu, eventName, canUseDesignStudio }) {
     ...(['admin', 'event_manager'].includes(user?.role) ? [{ to: '/admin', label: 'Event Setup', end: true }] : []),
     ...(user?.role === 'admin' && canUseDesignStudio ? [{ to: '/design-studio', label: 'Design Studio' }] : []),
     { to: '/dashboard', label: 'Results' },
+    { to: '/community', label: 'Community' },
     { to: '/scanner', label: 'Check-in' },
     ...(hasMenu ? [{ to: '/kitchen', label: 'Orders' }] : []),
     ...(user?.is_platform_superadmin ? [{ to: '/console', label: 'Console' }] : []),
@@ -188,6 +190,7 @@ function MobileTabBar({ user, hasMenu }) {
   const items = [
     ...(['admin', 'event_manager'].includes(user.role) ? [{ to: '/admin', label: 'Setup', icon: '🗂️' }] : []),
     { to: '/dashboard', label: 'Results', icon: '📊' },
+    { to: '/community', label: 'Chat', icon: '💬' },
     { to: '/scanner', label: 'Check-in', icon: '🎟️' },
     ...(hasMenu ? [{ to: '/kitchen', label: 'Orders', icon: '☑' }] : []),
   ]
@@ -287,6 +290,7 @@ function AppRoutes() {
               <Route path="/design-studio" element={<ProtectedRoute adminOnly><DesignStudioPage /></ProtectedRoute>} />
               <Route path="/floor-plan/:eventId" element={<ProtectedRoute adminOnly><FloorPlanPage /></ProtectedRoute>} />
               <Route path="/dashboard" element={<ProtectedRoute><DashboardPage /></ProtectedRoute>} />
+              <Route path="/community" element={<ProtectedRoute><CommunityPage /></ProtectedRoute>} />
               <Route path="/scanner" element={<ProtectedRoute><ScannerPage /></ProtectedRoute>} />
               <Route path="/kitchen" element={<ProtectedRoute><KitchenPage /></ProtectedRoute>} />
               <Route path="/console" element={<ProtectedRoute><ConsolePage /></ProtectedRoute>} />

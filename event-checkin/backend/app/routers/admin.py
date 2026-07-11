@@ -5,7 +5,8 @@ without code: see all tenants, comp/credit events, manage operators, edit pricin
 """
 from datetime import datetime
 
-from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks
+from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks, Body
+from fastapi.responses import HTMLResponse
 from sqlalchemy import select, desc, func, text, delete, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -21,6 +22,7 @@ from ..auth import require_superadmin, set_firebase_disabled, delete_firebase_us
 from ..billing import get_plan, apply_purchase
 from ..entitlements import assert_feature_allowed, grant_message_credits
 from services.email_service import send_simple_email
+from services.readiness_report import build_readiness, render_readiness_html
 
 DEFAULT_ORG_ID = "00000000-0000-0000-0000-000000000001"  # legacy default org — protected
 
@@ -58,6 +60,42 @@ async def _delete_org(org_id: str, db: AsyncSession) -> None:
         await db.execute(text(stmt), {"o": org_id})
 
 router = APIRouter()
+
+
+@router.get("/events/{event_id}/readiness-report", response_class=HTMLResponse)
+async def readiness_report(event_id: str, _: User = Depends(require_superadmin), db: AsyncSession = Depends(get_db)):
+    event = await db.get(Event, event_id)
+    if not event:
+        raise HTTPException(404, "Event not found")
+    return HTMLResponse(render_readiness_html(await build_readiness(event, db)))
+
+
+@router.post("/events/{event_id}/readiness-report/send")
+async def send_readiness_report(
+    event_id: str,
+    background_tasks: BackgroundTasks,
+    body: dict = Body(default={}),
+    _: User = Depends(require_superadmin),
+    db: AsyncSession = Depends(get_db),
+):
+    event = await db.get(Event, event_id)
+    if not event:
+        raise HTTPException(404, "Event not found")
+    report = await build_readiness(event, db)
+    recipient = (body.get("email") or report["owner_email"] or "").strip().lower()
+    if not recipient:
+        raise HTTPException(400, "This organization has no owner email. Enter a recipient email.")
+    report_html = render_readiness_html(report)
+    body_html = (
+        f"<p>Hello,</p><p>Your event readiness audit for <strong>{event.name}</strong> is attached. "
+        "It includes the current readiness scorecard, action checklist, configuration, messaging templates, "
+        "and the complete Experience schedule.</p><p>Open the attached HTML file in any browser. You can print it to PDF if needed.</p>"
+    )
+    background_tasks.add_task(
+        send_simple_email, recipient, f"{event.name} — readiness audit", body_html, event.id,
+        [("readiness-report.html", report_html.encode("utf-8"), "text/html")], None, "readiness_report",
+    )
+    return {"queued": True, "email": recipient, "verdict": report["worst"]}
 
 
 @router.get("/overview")

@@ -510,6 +510,17 @@ export const api = {
   adminSetUserActive:  (userId, active)    => req('PATCH',  `/admin/users/${userId}/active`, { active }),
   adminDeleteUser:     (userId)            => req('DELETE', `/admin/users/${userId}`),
   adminGrant:          (eventId, body) => req('POST',   `/admin/events/${eventId}/grant`, body),
+  adminPreviewReadinessReport: async (eventId) => {
+    const token = await getToken()
+    const res = await fetch(`${BASE}/admin/events/${eventId}/readiness-report`, {
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
+    })
+    if (!res.ok) throw new Error((await res.json().catch(() => ({}))).detail || 'Could not generate report')
+    const url = URL.createObjectURL(new Blob([await res.text()], { type: 'text/html' }))
+    window.open(url, '_blank', 'noopener,noreferrer')
+    setTimeout(() => URL.revokeObjectURL(url), 60000)
+  },
+  adminSendReadinessReport: (eventId, email) => req('POST', `/admin/events/${eventId}/readiness-report/send`, email ? { email } : {}),
   adminResetEvent:     (eventId, body) => req('POST',   `/admin/events/${eventId}/reset`, body),
   adminListOperators:  ()              => req('GET',    '/admin/operators'),
   adminAddOperator:    (email)         => req('POST',   '/admin/operators', { email }),

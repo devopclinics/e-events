@@ -53,6 +53,25 @@ function OverviewTab() {
 function EventRow({ ev, plans, onGrant }) {
   const [tier, setTier] = useState('')
   const [credits, setCredits] = useState('')
+  const [reportBusy, setReportBusy] = useState('')
+
+  async function previewReport() {
+    setReportBusy('preview')
+    try { await api.adminPreviewReadinessReport(ev.id) }
+    catch (e) { window.alert(e.message) }
+    finally { setReportBusy('') }
+  }
+
+  async function sendReport() {
+    const custom = window.prompt('Send to the organization owner by default.\n\nOptionally enter a different recipient email, or leave blank for the owner:')
+    if (custom === null) return
+    setReportBusy('send')
+    try {
+      const result = await api.adminSendReadinessReport(ev.id, custom.trim())
+      window.alert(`Readiness report queued for ${result.email}.`)
+    } catch (e) { window.alert(e.message) }
+    finally { setReportBusy('') }
+  }
   return (
     <div className="py-3 flex items-end gap-4 flex-wrap text-sm">
       <div className="flex-1 min-w-[180px]">
@@ -82,6 +101,16 @@ function EventRow({ ev, plans, onGrant }) {
         className="bg-teal-600 text-white px-3 py-1.5 rounded text-xs font-semibold disabled:opacity-40 hover:bg-teal-700">
         Apply
       </button>
+      <div className="flex gap-2">
+        <button onClick={previewReport} disabled={!!reportBusy}
+          className="border border-indigo-300 text-indigo-700 dark:border-indigo-700 dark:text-indigo-300 px-3 py-1.5 rounded text-xs font-semibold disabled:opacity-40 hover:bg-indigo-50 dark:hover:bg-indigo-950/30">
+          {reportBusy === 'preview' ? 'Generating…' : 'Readiness report'}
+        </button>
+        <button onClick={sendReport} disabled={!!reportBusy}
+          className="bg-indigo-600 text-white px-3 py-1.5 rounded text-xs font-semibold disabled:opacity-40 hover:bg-indigo-700">
+          {reportBusy === 'send' ? 'Sending…' : 'Send to owner'}
+        </button>
+      </div>
     </div>
   )
 }

@@ -912,6 +912,20 @@ def _dispatch_rsvp_invite(background_tasks: BackgroundTasks, event: Event, guest
             )
         dispatched = True
 
+    # MMS (pass-card image) — closed-mode invites can carry the guest's pass card
+    # when the event opts in. The card renders from the guest's qr_token (present at
+    # creation; the ticket is only *activated* after RSVP). Mirrors the open-mode path.
+    if (paid_channels and event.notify_mms and guest.phone and guest.sms_consent
+            and messaging.mms_ready() and event.checkin_base_url and guest.qr_token
+            and take_message_credit(event, "mms", guest_id=guest.id)):
+        mms_key = "experience_invitation" if event.experience_enabled else "mms_invitation"
+        mms_text = (template_channel_or_default(overrides, mms_key, "mms", ctx)
+                    or f"Your {event.name} pass is attached — show it at check-in.")
+        card_url = f"{event.checkin_base_url.rstrip('/')}/api/scan/{guest.qr_token}/card.jpg"
+        background_tasks.add_task(send_with_credit_ledger, last_credit_ledger_id(event),
+                                  messaging.send_mms, phone=guest.phone, body=mms_text, media_url=card_url)
+        dispatched = True
+
     return dispatched
 
 

@@ -7949,6 +7949,51 @@ function ResetEventModal({ event, onClose, onDone }) {
   )
 }
 
+// Export picker — choose which sections (Guests / Messaging / Experience) and the
+// format. XLSX writes one sheet per section; CSV merges into a single sheet.
+function ExportMenu({ event, onExport }) {
+  const [open, setOpen] = useState(false)
+  const expEnabled = !!event?.experience_enabled
+  const [sel, setSel] = useState({ guests: true, messaging: true, experience: true })
+  const toggle = (k) => setSel((p) => ({ ...p, [k]: !p[k] }))
+  const sections = Object.entries(sel)
+    .filter(([k, v]) => v && (k !== 'experience' || expEnabled))
+    .map(([k]) => k)
+  const go = (fmt) => { if (sections.length === 0) return; onExport(fmt, sections.join(',')); setOpen(false) }
+  return (
+    <div className="relative">
+      <button onClick={() => setOpen((o) => !o)}
+        className="text-xs px-2.5 py-1.5 rounded-lg border border-gray-300 dark:border-slate-700 dark:text-slate-200 hover:bg-gray-50 dark:hover:bg-slate-700">
+        ⬇ Export…
+      </button>
+      {open && (
+        <>
+          <div className="fixed inset-0 z-10" onClick={() => setOpen(false)} />
+          <div className="absolute right-0 mt-1 z-20 w-64 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 shadow-lg p-3 space-y-2">
+            <div className="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wide">Include</div>
+            <label className="flex items-center gap-2 text-sm text-slate-700 dark:text-slate-200">
+              <input type="checkbox" checked={sel.guests} onChange={() => toggle('guests')} /> Guests + RSVP + seating
+            </label>
+            <label className="flex items-center gap-2 text-sm text-slate-700 dark:text-slate-200">
+              <input type="checkbox" checked={sel.messaging} onChange={() => toggle('messaging')} /> Messaging / delivery
+            </label>
+            <label className={`flex items-center gap-2 text-sm ${expEnabled ? 'text-slate-700 dark:text-slate-200' : 'text-slate-300 dark:text-slate-600'}`}>
+              <input type="checkbox" disabled={!expEnabled} checked={expEnabled && sel.experience} onChange={() => toggle('experience')} /> Experience {expEnabled ? '' : '(off)'}
+            </label>
+            <div className="flex gap-2 pt-2 border-t dark:border-slate-700">
+              <button onClick={() => go('xlsx')} disabled={sections.length === 0}
+                className="flex-1 text-xs px-2 py-1.5 rounded-lg bg-teal-600 text-white font-semibold hover:bg-teal-700 disabled:opacity-40">XLSX</button>
+              <button onClick={() => go('csv')} disabled={sections.length === 0}
+                className="flex-1 text-xs px-2 py-1.5 rounded-lg border border-gray-300 dark:border-slate-700 dark:text-slate-200 hover:bg-gray-50 dark:hover:bg-slate-700 disabled:opacity-40">CSV</button>
+            </div>
+            <div className="text-[11px] text-slate-400">XLSX: one sheet per section. CSV: single merged sheet.</div>
+          </div>
+        </>
+      )}
+    </div>
+  )
+}
+
 export default function AdminPage() {
   const { user } = useAuth()
   const navigate = useNavigate()
@@ -8062,8 +8107,8 @@ export default function AdminPage() {
 
   // Server-side export so the file includes each guest's RSVP-question answers
   // (the in-memory guest list doesn't carry them), with proper escaping.
-  async function handleExportGuests(fmt = 'csv') {
-    try { await api.downloadGuestList(selectedId, fmt) }
+  async function handleExportGuests(fmt = 'csv', sections = null) {
+    try { await api.downloadGuestList(selectedId, fmt, sections) }
     catch (err) { flash(err.message, true) }
   }
 
@@ -9016,14 +9061,7 @@ export default function AdminPage() {
                     className="text-xs px-2.5 py-1.5 rounded-lg bg-indigo-600 text-white font-semibold hover:bg-indigo-700">
                     + Add guest
                   </button>
-                  <button onClick={() => handleExportGuests('csv')}
-                    className="text-xs px-2.5 py-1.5 rounded-lg border border-gray-300 dark:border-slate-700 dark:text-slate-200 hover:bg-gray-50 dark:hover:bg-slate-700">
-                    ⬇ Full CSV
-                  </button>
-                  <button onClick={() => handleExportGuests('xlsx')}
-                    className="text-xs px-2.5 py-1.5 rounded-lg border border-gray-300 dark:border-slate-700 dark:text-slate-200 hover:bg-gray-50 dark:hover:bg-slate-700">
-                    ⬇ Full XLSX
-                  </button>
+                  <ExportMenu event={event} onExport={handleExportGuests} />
                   {totalPages > 1 && (
                     <div className="flex items-center gap-2">
                       <button onClick={() => setPage((p) => Math.max(0, p - 1))} disabled={page === 0}

@@ -1469,6 +1469,18 @@ class DashboardEmailDelivery(BaseModel):
     tracked: int = 0
 
 
+class DashboardChannelDelivery(BaseModel):
+    channel: str
+    sent: int = 0
+    delivered: int = 0
+    failed: int = 0
+
+
+class DashboardCredits(BaseModel):
+    balance: int = 0
+    spent: int = 0
+
+
 class DashboardContactStats(BaseModel):
     email_available: int = 0
     phone_available: int = 0
@@ -1504,6 +1516,8 @@ class DashboardStats(BaseModel):
     vip_admitted: int = 0
     invite_delivery: DashboardInviteDelivery = DashboardInviteDelivery()
     email_delivery: DashboardEmailDelivery = DashboardEmailDelivery()
+    message_delivery: list[DashboardChannelDelivery] = []
+    credits: DashboardCredits = DashboardCredits()
     contact_stats: DashboardContactStats = DashboardContactStats()
     arrival_timeline: list[DashboardTimelinePoint] = []
     pending_guests: list[GuestOut] = []

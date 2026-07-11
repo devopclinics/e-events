@@ -89,8 +89,11 @@ export const api = {
   listGuests:          (eventId)           => req('GET',  `/events/${eventId}/guests`),
   downloadGuestTemplate: (eventId, fmt = 'xlsx') =>
     downloadFile(`/events/${eventId}/guests/template?fmt=${fmt}`, `guest-template.${fmt}`),
-  downloadGuestList: (eventId, fmt = 'csv') =>
-    downloadFile(`/events/${eventId}/guests/export?fmt=${fmt}`, `guest-list.${fmt}`),
+  downloadGuestList: (eventId, fmt = 'csv', sections = null) =>
+    downloadFile(
+      `/events/${eventId}/guests/export?fmt=${fmt}` + (sections ? `&sections=${encodeURIComponent(sections)}` : ''),
+      `${sections && sections.split(',').length === 1 ? sections : 'event-export'}.${fmt}`,
+    ),
   importGuestsFromUrl: (eventId, url)      => req('POST', `/events/${eventId}/guests/import-url`, { url }),
   addGuest:            (eventId, data)     => req('POST', `/events/${eventId}/guests`, data),
 

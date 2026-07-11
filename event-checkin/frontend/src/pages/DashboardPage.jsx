@@ -193,6 +193,7 @@ export default function DashboardPage() {
   const [events, setEvents] = useState([])
   const [eventId, setEventId] = useCurrentEvent()
   const [stats, setStats] = useState(null)
+  const [expDash, setExpDash] = useState(null)
   const [error, setError] = useState('')
   const [connected, setConnected] = useState(false)
   const esRef = useRef(null)
@@ -211,8 +212,11 @@ export default function DashboardPage() {
   }, [])
 
   useEffect(() => {
-    if (!eventId) { setStats(null); setError(''); return }
+    if (!eventId) { setStats(null); setExpDash(null); setError(''); return }
     fetchStats(eventId)
+    // Experience metrics come from the Experience dashboard endpoint (404s when
+    // the add-on isn't enabled — treat as "no experience data").
+    api.getExperienceDashboard(eventId).then(setExpDash).catch(() => setExpDash(null))
     const poll = setInterval(() => fetchStats(eventId), 20000)   // refresh zones/rsvp/catering
 
     if (esRef.current) esRef.current.close()
@@ -342,6 +346,79 @@ export default function DashboardPage() {
           </div>
 
           <EmailDeliverySummary data={stats.email_delivery} />
+
+          {(stats.message_delivery?.length > 0 || (stats.credits && (stats.credits.balance || stats.credits.spent))) && (
+            <div className="grid lg:grid-cols-2 gap-4">
+              <Card title="Messaging delivery" right={<span className="text-xs text-slate-400">SMS · MMS · WhatsApp</span>}>
+                {stats.message_delivery?.length > 0 ? (
+                  <div className="space-y-3">
+                    {stats.message_delivery.map((m) => (
+                      <div key={m.channel}>
+                        <div className="flex justify-between text-xs mb-1">
+                          <span className="font-semibold uppercase text-slate-500 dark:text-slate-400">{m.channel}</span>
+                          <span className="text-slate-400">{m.delivered} delivered · {m.failed} failed · {m.sent} sent</span>
+                        </div>
+                        <Bar segments={[
+                          { label: 'Delivered', value: m.delivered, color: 'bg-green-500' },
+                          { label: 'Failed', value: m.failed, color: 'bg-red-400' },
+                          { label: 'Pending', value: Math.max(m.sent - m.delivered - m.failed, 0), color: 'bg-sky-400' },
+                        ]} />
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="text-sm text-slate-400">No SMS/MMS/WhatsApp messages sent yet.</div>
+                )}
+              </Card>
+              <Card title="Message credits">
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="rounded-xl border border-slate-200 dark:border-slate-700 p-3">
+                    <div className="text-2xl font-extrabold text-teal-600">{(stats.credits?.balance ?? 0).toLocaleString()}</div>
+                    <div className="text-xs text-slate-400">Credits remaining</div>
+                  </div>
+                  <div className="rounded-xl border border-slate-200 dark:border-slate-700 p-3">
+                    <div className="text-2xl font-extrabold text-amber-600">{(stats.credits?.spent ?? 0).toLocaleString()}</div>
+                    <div className="text-xs text-slate-400">Credits spent</div>
+                  </div>
+                </div>
+                {(stats.credits?.balance ?? 0) === 0 && (
+                  <div className="mt-3 text-xs text-red-600 dark:text-red-300">Balance is 0 — SMS/MMS/WhatsApp won’t send. Top up in Event Setup → Event Pass.</div>
+                )}
+              </Card>
+            </div>
+          )}
+
+          {expDash?.workflow && expDash.step_count > 0 && (
+            <Card title="Experience progress" right={<span className="text-xs text-slate-400">{Math.round(expDash.completion_rate || 0)}% complete</span>}>
+              <div className="grid grid-cols-3 gap-3 mb-4">
+                <div className="rounded-xl border border-slate-200 dark:border-slate-700 p-3">
+                  <div className="text-2xl font-extrabold text-indigo-600">{expDash.completed_total ?? 0}</div>
+                  <div className="text-xs text-slate-400">Steps completed</div>
+                </div>
+                <div className="rounded-xl border border-slate-200 dark:border-slate-700 p-3">
+                  <div className="text-2xl font-extrabold text-slate-600 dark:text-slate-300">{expDash.step_count ?? 0}</div>
+                  <div className="text-xs text-slate-400">Steps in workflow</div>
+                </div>
+                <div className="rounded-xl border border-slate-200 dark:border-slate-700 p-3">
+                  <div className="text-2xl font-extrabold text-teal-600">{expDash.guest_total ?? 0}</div>
+                  <div className="text-xs text-slate-400">Guests</div>
+                </div>
+              </div>
+              <div className="space-y-2">
+                {(expDash.steps || []).map((s) => (
+                  <div key={s.step_id}>
+                    <div className="flex justify-between text-xs mb-1">
+                      <span className="font-medium text-slate-600 dark:text-slate-300">{s.title}</span>
+                      <span className="text-slate-400">{s.completed}/{s.total} · {Math.round(s.completion_rate || 0)}%</span>
+                    </div>
+                    <div className="h-2 rounded-full bg-slate-100 dark:bg-slate-700 overflow-hidden">
+                      <div className="h-full bg-indigo-500 rounded-full" style={{ width: `${Math.min(Math.round(s.completion_rate || 0), 100)}%` }} />
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </Card>
+          )}
 
           <div className="grid lg:grid-cols-2 gap-4">
             <Card title="Contact coverage">

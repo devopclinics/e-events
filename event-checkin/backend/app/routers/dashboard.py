@@ -5,8 +5,8 @@ from fastapi.responses import StreamingResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func
 from ..database import get_db
-from ..models import EmailDeliveryEvent, Guest, Event, User, Zone, MenuCategory, SeatingTable, TicketType, TableGroup, ScanEvent
-from ..schemas import DashboardStats, GuestOut, ZoneOccupancy, TableReport, DashboardBreakdown, DashboardTimelinePoint, DashboardInviteDelivery, DashboardContactStats, DashboardEmailDelivery
+from ..models import EmailDeliveryEvent, Guest, Event, User, Zone, MenuCategory, SeatingTable, TicketType, TableGroup, ScanEvent, MessageCreditLedger
+from ..schemas import DashboardStats, GuestOut, ZoneOccupancy, TableReport, DashboardBreakdown, DashboardTimelinePoint, DashboardInviteDelivery, DashboardContactStats, DashboardEmailDelivery, DashboardChannelDelivery, DashboardCredits
 from ..auth import require_dashboard_access, verify_token_user, user_has_dashboard_access
 from .access import zone_occupancy
 from . import sse_subscribers
@@ -218,6 +218,35 @@ async def get_dashboard(event_id: str, db: AsyncSession = Depends(get_db), _: Us
             tables.append(TableReport(name=t.name, capacity=t.capacity,
                                       seated=int(n), checked_in=int(ci), served=int(sv)))
 
+    # Messaging (SMS/MMS/WhatsApp) delivery breakdown + credit balance/spend,
+    # derived from the message-credit ledger (spend = attempt, refund = failure).
+    msg_rows = (await db.execute(
+        select(MessageCreditLedger.channel, MessageCreditLedger.action,
+               MessageCreditLedger.status, MessageCreditLedger.delta)
+        .where(MessageCreditLedger.event_id == event_id,
+               MessageCreditLedger.channel.in_(("sms", "mms", "whatsapp")))
+    )).all()
+    chan = {c: {"sent": 0, "delivered": 0, "failed": 0} for c in ("sms", "mms", "whatsapp")}
+    credits_spent = 0
+    for c, action, status, delta in msg_rows:
+        d = chan.get(c)
+        if d is None:
+            continue
+        if action == "spend":
+            d["sent"] += 1
+            st = (status or "").lower()
+            if "deliver" in st:
+                d["delivered"] += 1
+            elif st in ("failed", "undelivered", "error", "rejected"):
+                d["failed"] += 1
+            credits_spent += abs(delta or 0)
+        elif action == "refund":
+            d["failed"] += 1
+    message_delivery = [DashboardChannelDelivery(channel=c, **chan[c])
+                        for c in ("sms", "mms", "whatsapp")
+                        if chan[c]["sent"] or chan[c]["failed"]]
+    credits = DashboardCredits(balance=event.message_credits or 0, spent=credits_spent)
+
     return DashboardStats(
         total=total, admitted=admitted_count, pending=total - admitted_count,
         walk_in=walk_in_count,
@@ -229,6 +258,8 @@ async def get_dashboard(event_id: str, db: AsyncSession = Depends(get_db), _: Us
         vip_total=vip_total, vip_admitted=vip_admitted,
         invite_delivery=invite_delivery,
         email_delivery=email_delivery,
+        message_delivery=message_delivery,
+        credits=credits,
         contact_stats=contact_stats,
         arrival_timeline=arrival_timeline,
         pending_guests=[GuestOut.model_validate(g) for g in pending_guests],

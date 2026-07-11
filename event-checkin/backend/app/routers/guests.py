@@ -613,20 +613,73 @@ async def download_guest_template(event_id: str, fmt: str = "xlsx", db: AsyncSes
     )
 
 
+async def _attach_message_status(guests, event_id: str, db: AsyncSession) -> None:
+    """Populate each guest's (non-mapped) per-channel delivery status from the
+    email-delivery events (email) and the message-credit ledger (sms/mms/whatsapp).
+    Shared by the guest list and the export so both show identical statuses."""
+    guest_ids = [g.id for g in guests]
+    if not guest_ids:
+        return
+    rows = (await db.execute(
+        select(EmailDeliveryEvent)
+        .where(EmailDeliveryEvent.event_id == event_id, EmailDeliveryEvent.guest_id.in_(guest_ids))
+        .order_by(EmailDeliveryEvent.occurred_at.desc(), EmailDeliveryEvent.created_at.desc())
+    )).scalars().all()
+    latest = {}
+    for row in rows:
+        latest.setdefault(row.guest_id, row)
+    for g in guests:
+        row = latest.get(g.id)
+        if row:
+            g.email_delivery_status = row.status
+            g.email_delivery_event_type = row.event_type
+            g.email_delivery_kind = row.message_kind
+            g.email_delivery_at = row.occurred_at
+    message_rows = (await db.execute(
+        select(MessageCreditLedger)
+        .where(MessageCreditLedger.event_id == event_id,
+               MessageCreditLedger.guest_id.in_(guest_ids),
+               MessageCreditLedger.channel.in_(("sms", "mms", "whatsapp")),
+               MessageCreditLedger.action.in_(("spend", "refund")))
+        .order_by(MessageCreditLedger.created_at.desc())
+    )).scalars().all()
+    latest_ch = {}
+    for row in message_rows:
+        latest_ch.setdefault((row.guest_id, row.channel), row)
+    for g in guests:
+        for channel in ("sms", "mms", "whatsapp"):
+            row = latest_ch.get((g.id, channel))
+            if row:
+                setattr(g, f"{channel}_delivery_status", "failed" if row.action == "refund" else row.status)
+                setattr(g, f"{channel}_delivery_at", row.updated_at or row.created_at)
+                setattr(g, f"{channel}_provider", row.provider)
+
+
+def _fmt_dt(dt) -> str:
+    try:
+        return dt.strftime("%Y-%m-%d %H:%M") if dt else ""
+    except Exception:
+        return ""
+
+
 @router.get("/{event_id}/guests/export")
 async def export_guests(
     event_id: str,
     fmt: str = "csv",
+    sections: str = "guests,messaging,experience",
     db: AsyncSession = Depends(get_db),
     _: User = Depends(require_event_admin),
 ):
-    """Download the full guest list — including each guest's answers to the
-    event's custom RSVP questions (one column per question). CSV or XLSX."""
+    """Download event data. `sections` (comma-separated: guests, messaging,
+    experience) selects what to include. CSV emits one flattened sheet; XLSX emits
+    one sheet per selected section. Includes RSVP answers, per-channel delivery
+    status, consent, timestamps, and Experience step progress."""
     event = await db.get(Event, event_id)
     if not event:
         raise HTTPException(404, "Event not found")
     if fmt not in ("csv", "xlsx"):
         raise HTTPException(400, "fmt must be csv or xlsx")
+    want = {s.strip().lower() for s in sections.split(",") if s.strip()} or {"guests"}
 
     guests = (await db.execute(
         select(Guest).where(Guest.event_id == event_id).order_by(Guest.last_name, Guest.first_name)
@@ -640,7 +693,6 @@ async def export_guests(
     questions = (await db.execute(
         select(RSVPQuestion).where(RSVPQuestion.event_id == event_id)
         .order_by(RSVPQuestion.sort_order, RSVPQuestion.question))).scalars().all()
-    # One pass over all answers for this event → {(guest_id, question_id): answer}.
     answers: dict[tuple[str, str], str] = {}
     for gid, qid, ans in (await db.execute(
         select(RSVPAnswer.guest_id, RSVPAnswer.question_id, RSVPAnswer.answer)
@@ -649,68 +701,141 @@ async def export_guests(
     )).all():
         answers[(gid, qid)] = ans
 
-    base_cols = ["First name", "Last name", "Email", "Phone", "RSVP status",
-                 "Checked in", "Table", "Seat", "Group", "Ticket type", "VIP",
-                 "Guest of", "Main guest ID", "Submitter email", "Submitter phone",
-                 "Relationship", "Guest type", "RSVP notes"]
-    cols = base_cols + [q.question for q in questions]
+    if "messaging" in want:
+        await _attach_message_status(guests, event_id, db)
 
-    def row_for(g: Guest) -> list[str]:
+    # Experience steps + progress (only if the section is requested and enabled).
+    exp_workflow = None
+    exp_steps: list = []
+    exp_progress: dict = {}
+    exp_done: dict = {}
+    show_exp = "experience" in want and event.experience_enabled
+    if show_exp:
+        from ..services.experience import active_workflow
+        exp_workflow = await active_workflow(event_id, db)
+        if exp_workflow:
+            exp_steps = sorted([s for s in exp_workflow.steps if s.enabled],
+                               key=lambda s: (s.sort_order, s.title))
+            prows = (await db.execute(
+                select(GuestExperienceProgress)
+                .where(GuestExperienceProgress.workflow_id == exp_workflow.id))).scalars().all()
+            exp_progress = {(p.guest_id, p.step_id): p for p in prows}
+            for g in guests:
+                done = sum(1 for s in exp_steps
+                           if exp_progress.get((g.id, s.id)) and exp_progress[(g.id, s.id)].status == "completed")
+                exp_done[g.id] = (done, len(exp_steps))
+    show_exp = show_exp and exp_workflow is not None
+
+    guest_cols = (["First name", "Last name", "Email", "Phone", "RSVP status",
+                   "RSVP responded at", "Checked in", "Checked in at", "Table", "Seat",
+                   "Group", "Ticket type", "VIP", "Guest of", "Submitter email",
+                   "Submitter phone", "Relationship", "Guest type", "RSVP notes"]
+                  + [q.question for q in questions]
+                  + (["Experience steps completed"] if show_exp else []))
+
+    def guest_row(g):
         row = [
             g.first_name or "", g.last_name or "", g.email or "", g.phone or "",
-            g.rsvp_status or "", "Yes" if g.admitted else "No",
+            g.rsvp_status or "", _fmt_dt(g.rsvp_responded_at),
+            "Yes" if g.admitted else "No", _fmt_dt(g.admitted_at),
             tnames.get(g.table_id, "") if g.table_id else "",
             g.seat_number or "",
             gnames.get(g.assigned_table_group_id, "") if g.assigned_table_group_id else "",
             ttnames.get(g.ticket_type_id, "") if g.ticket_type_id else "",
             "Yes" if g.is_vip else "No",
             "Self / main invited guest" if g.rsvp_submitter_guest_id == g.id else (g.rsvp_submitter_name or ""),
-            g.rsvp_submitter_guest_id or "",
-            g.rsvp_submitter_email or "",
-            g.rsvp_submitter_phone or "",
-            g.rsvp_relationship or "",
-            g.rsvp_guest_type or "",
-            g.rsvp_notes or "",
+            g.rsvp_submitter_email or "", g.rsvp_submitter_phone or "",
+            g.rsvp_relationship or "", g.rsvp_guest_type or "", g.rsvp_notes or "",
         ]
         row += [answers.get((g.id, q.id), "") for q in questions]
+        if show_exp:
+            done, tot = exp_done.get(g.id, (0, 0))
+            row.append(f"{done}/{tot}")
         return row
 
-    rows = [row_for(g) for g in guests]
+    msg_cols = ["First name", "Last name", "Email", "Phone", "SMS consent",
+                "WhatsApp consent", "QR generated", "Invite status", "Invite sent at",
+                "Email status", "Email at", "SMS status", "SMS at", "MMS status",
+                "MMS at", "WhatsApp status", "WhatsApp at"]
+
+    def msg_row(g):
+        return [
+            g.first_name or "", g.last_name or "", g.email or "", g.phone or "",
+            "Yes" if g.sms_consent else "No", "Yes" if g.whatsapp_consent else "No",
+            "Yes" if g.qr_generated_at else "No",
+            g.invite_status or "", _fmt_dt(g.invite_sent_at),
+            getattr(g, "email_delivery_status", "") or "", _fmt_dt(getattr(g, "email_delivery_at", None)),
+            getattr(g, "sms_delivery_status", "") or "", _fmt_dt(getattr(g, "sms_delivery_at", None)),
+            getattr(g, "mms_delivery_status", "") or "", _fmt_dt(getattr(g, "mms_delivery_at", None)),
+            getattr(g, "whatsapp_delivery_status", "") or "", _fmt_dt(getattr(g, "whatsapp_delivery_at", None)),
+        ]
+
+    exp_cols = ["First name", "Last name", "Email", "Phone", "Step", "Type",
+                "Status", "Completed at", "Completed by", "Override reason"]
+
+    def exp_rows():
+        for g in guests:
+            for s in exp_steps:
+                p = exp_progress.get((g.id, s.id))
+                yield [g.first_name or "", g.last_name or "", g.email or "", g.phone or "",
+                       s.title, s.type, p.status if p else "available",
+                       _fmt_dt(p.completed_at) if p else "",
+                       (p.completed_by_source if p else "") or "",
+                       (p.override_reason if p else "") or ""]
 
     if fmt == "csv":
         out = io.StringIO()
         writer = csv.writer(out)
-        writer.writerow(cols)
-        writer.writerows(rows)
-        return Response(
-            out.getvalue(),
-            media_type="text/csv; charset=utf-8",
-            headers={"Content-Disposition": 'attachment; filename="guest-list.csv"'},
-        )
+        if want == {"experience"} and show_exp:
+            writer.writerow(exp_cols)
+            writer.writerows(exp_rows())
+            fname = "experience.csv"
+        elif want == {"messaging"}:
+            writer.writerow(msg_cols)
+            writer.writerows(msg_row(g) for g in guests)
+            fname = "messaging.csv"
+        else:
+            # CSV can't hold multiple sheets — merge guests + messaging into one view.
+            extra = [c for c in msg_cols if c not in ("First name", "Last name", "Email", "Phone")]
+            writer.writerow(guest_cols + (extra if "messaging" in want else []))
+            for g in guests:
+                writer.writerow(guest_row(g) + (msg_row(g)[4:] if "messaging" in want else []))
+            fname = "event-export.csv"
+        return Response(out.getvalue(), media_type="text/csv; charset=utf-8",
+                        headers={"Content-Disposition": f'attachment; filename="{fname}"'})
 
     import openpyxl
     from openpyxl.styles import Font, PatternFill
     from openpyxl.utils import get_column_letter
-
     wb = openpyxl.Workbook()
-    ws = wb.active
-    ws.title = "Guests"
-    ws.append(cols)
-    for i, col in enumerate(cols, 1):
-        cell = ws.cell(row=1, column=i)
-        cell.font = Font(bold=True, color="FFFFFF")
-        cell.fill = PatternFill("solid", fgColor="0F766E")
-        ws.column_dimensions[get_column_letter(i)].width = max(len(str(col)) + 2, 14)
-    for row in rows:
-        ws.append(row)
-    ws.freeze_panes = "A2"
+    wb.remove(wb.active)
+
+    def add_sheet(title, cols, rows_iter):
+        ws = wb.create_sheet(title=title)
+        ws.append(cols)
+        for i, col in enumerate(cols, 1):
+            cell = ws.cell(row=1, column=i)
+            cell.font = Font(bold=True, color="FFFFFF")
+            cell.fill = PatternFill("solid", fgColor="0F766E")
+            ws.column_dimensions[get_column_letter(i)].width = max(len(str(col)) + 2, 14)
+        for row in rows_iter:
+            ws.append(row)
+        ws.freeze_panes = "A2"
+
+    if "guests" in want or not ({"messaging", "experience"} & want):
+        add_sheet("Guests", guest_cols, (guest_row(g) for g in guests))
+    if "messaging" in want:
+        add_sheet("Messaging", msg_cols, (msg_row(g) for g in guests))
+    if show_exp:
+        add_sheet("Experience", exp_cols, exp_rows())
+    if not wb.sheetnames:
+        add_sheet("Guests", guest_cols, (guest_row(g) for g in guests))
+
     buf = io.BytesIO()
     wb.save(buf)
-    return Response(
-        buf.getvalue(),
-        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-        headers={"Content-Disposition": 'attachment; filename="guest-list.xlsx"'},
-    )
+    return Response(buf.getvalue(),
+                    media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                    headers={"Content-Disposition": 'attachment; filename="event-export.xlsx"'})
 
 
 @router.post("/{event_id}/guests/upload")
@@ -1216,43 +1341,7 @@ async def list_guests(event_id: str, db: AsyncSession = Depends(get_db), _: User
     )).all())
     for g in guests:
         g.table_group_name = names.get(g.assigned_table_group_id)
-    guest_ids = [g.id for g in guests]
-    if guest_ids:
-        rows = (await db.execute(
-            select(EmailDeliveryEvent)
-            .where(EmailDeliveryEvent.event_id == event_id, EmailDeliveryEvent.guest_id.in_(guest_ids))
-            .order_by(EmailDeliveryEvent.occurred_at.desc(), EmailDeliveryEvent.created_at.desc())
-        )).scalars().all()
-        latest_by_guest = {}
-        for row in rows:
-            latest_by_guest.setdefault(row.guest_id, row)
-        for g in guests:
-            row = latest_by_guest.get(g.id)
-            if row:
-                g.email_delivery_status = row.status
-                g.email_delivery_event_type = row.event_type
-                g.email_delivery_kind = row.message_kind
-                g.email_delivery_at = row.occurred_at
-        message_rows = (await db.execute(
-            select(MessageCreditLedger)
-            .where(
-                MessageCreditLedger.event_id == event_id,
-                MessageCreditLedger.guest_id.in_(guest_ids),
-                MessageCreditLedger.channel.in_(("sms", "mms", "whatsapp")),
-                MessageCreditLedger.action.in_(("spend", "refund")),
-            )
-            .order_by(MessageCreditLedger.created_at.desc())
-        )).scalars().all()
-        latest_by_guest_channel = {}
-        for row in message_rows:
-            latest_by_guest_channel.setdefault((row.guest_id, row.channel), row)
-        for g in guests:
-            for channel in ("sms", "mms", "whatsapp"):
-                row = latest_by_guest_channel.get((g.id, channel))
-                if row:
-                    setattr(g, f"{channel}_delivery_status", "failed" if row.action == "refund" else row.status)
-                    setattr(g, f"{channel}_delivery_at", row.updated_at or row.created_at)
-                    setattr(g, f"{channel}_provider", row.provider)
+    await _attach_message_status(guests, event_id, db)
     return guests
 
 

@@ -4299,6 +4299,20 @@ function BillingPanel({ event, recommendedPlan }) {
   const [info, setInfo] = useState(null)
   const [busy, setBusy] = useState('')
   const [err, setErr] = useState('')
+  const collapseKey = `event_pass_collapsed_${event.id}`
+  const [collapsed, setCollapsed] = useState(() => localStorage.getItem(collapseKey) === '1')
+
+  useEffect(() => {
+    setCollapsed(localStorage.getItem(`event_pass_collapsed_${event.id}`) === '1')
+  }, [event.id])
+
+  function toggleCollapsed() {
+    setCollapsed((current) => {
+      const next = !current
+      localStorage.setItem(collapseKey, next ? '1' : '0')
+      return next
+    })
+  }
 
   function loadInfo() {
     api.getBillingTiers(event.id).then(setInfo).catch((e) => setErr(e.message))
@@ -4322,7 +4336,17 @@ function BillingPanel({ event, recommendedPlan }) {
   return (
     <div className="bg-white dark:bg-slate-800 dark:border dark:border-slate-700/60 rounded-xl shadow p-6 space-y-4">
       <div className="flex items-center justify-between gap-3 flex-wrap">
-        <h2 className="font-semibold text-base dark:text-white">💳 Event Pass</h2>
+        <button type="button" onClick={toggleCollapsed} aria-expanded={!collapsed}
+          className="flex items-center gap-2 rounded-lg text-left font-semibold text-base text-slate-800 hover:text-teal-700 dark:text-white dark:hover:text-teal-300">
+          <span className="w-4 text-xs" aria-hidden="true">{collapsed ? '▶' : '▼'}</span>
+          <span>💳 Event Pass</span>
+          {collapsed && event.is_paid && (
+            <span className="text-xs font-normal text-slate-500 dark:text-slate-400">
+              {event.plan_tier} · {event.message_credits?.toLocaleString()} credits
+            </span>
+          )}
+        </button>
+        {!collapsed && (
         <label className="flex items-center gap-2 text-xs text-slate-500 dark:text-slate-400">
           Currency
           <select
@@ -4333,8 +4357,10 @@ function BillingPanel({ event, recommendedPlan }) {
             <option value="NGN">NGN (₦) · Paystack</option>
           </select>
         </label>
+        )}
       </div>
 
+      {!collapsed && <>
       {event.is_paid ? (
         <>
           <div className="rounded-lg bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 px-4 py-3 text-sm text-green-800 dark:text-green-300">
@@ -4404,6 +4430,7 @@ function BillingPanel({ event, recommendedPlan }) {
         </>
       )}
       {err && <div className="text-xs text-red-600 dark:text-red-400">{err}</div>}
+      </>}
     </div>
   )
 }

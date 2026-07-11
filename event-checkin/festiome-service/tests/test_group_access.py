@@ -182,6 +182,47 @@ async def test_rules_must_be_accepted_before_posting(api):
 
 
 @pytest.mark.asyncio
+async def test_internal_admin_manages_subgroups_and_requests(api):
+    """GuestHub organizer tooling (service-authed) drives sub-groups without a
+    personal FestioMe login."""
+    await _event_with_guest(api)
+    created = await api.post("/internal/v1/guesthub/event-links/evt-1/subgroups", headers=SVC,
+                             json={"name": "Shuttle", "join_policy": "request"})
+    assert created.status_code == 201
+    grp = created.json()
+
+    listed = (await api.get("/internal/v1/guesthub/event-links/evt-1/subgroups", headers=SVC)).json()
+    assert [g["name"] for g in listed] == ["Shuttle"] and listed[0]["is_primary"] is False
+
+    # A guest requests to join; the organizer sees and approves it via internal API.
+    await api.post(f"/v1/groups/{grp['id']}/join", headers=guest("g1"), json={"message": "seat please"})
+    pending = (await api.get(f"/internal/v1/guesthub/event-links/evt-1/subgroups/{grp['id']}/join-requests", headers=SVC)).json()
+    assert len(pending) == 1 and pending[0]["identity_ref"] == "g1"
+
+    approved = await api.post(
+        f"/internal/v1/guesthub/event-links/evt-1/subgroups/{grp['id']}/join-requests/{pending[0]['id']}/approve",
+        headers=SVC, json={"role": "member"})
+    assert approved.status_code == 200
+    dir_g1 = {g["name"]: g for g in (await api.get("/v1/events/evt-1/groups", headers=guest("g1"))).json()}
+    assert dir_g1["Shuttle"]["is_member"] is True
+
+    # Update policy + rules via internal API.
+    patched = await api.patch(f"/internal/v1/guesthub/event-links/evt-1/subgroups/{grp['id']}", headers=SVC,
+                              json={"join_policy": "open", "rules": "Be on time."})
+    assert patched.status_code == 200
+    body = patched.json()
+    assert body["join_policy"] == "open" and body["rules_version"] == 1
+
+    # A sub-group from another event cannot be touched through this event's link.
+    await _event_with_guest(api, event="evt-2", host="host2", guest_ref="gz")
+    other = (await api.post("/internal/v1/guesthub/event-links/evt-2/subgroups", headers=SVC,
+             json={"name": "Other", "join_policy": "open"})).json()
+    cross = await api.patch(f"/internal/v1/guesthub/event-links/evt-1/subgroups/{other['id']}", headers=SVC,
+                            json={"join_policy": "closed"})
+    assert cross.status_code == 404
+
+
+@pytest.mark.asyncio
 async def test_primary_group_stays_closed_and_isolated(api):
     link = await _event_with_guest(api)
     primary_id = link["festiome_id"]

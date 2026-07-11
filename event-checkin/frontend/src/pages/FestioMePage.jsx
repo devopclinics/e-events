@@ -111,6 +111,10 @@ export default function FestioMePage() {
     muted: false,
   });
   const [connection, setConnection] = useState("polling");
+  const [discover, setDiscover] = useState([]),
+    [joinReqs, setJoinReqs] = useState([]),
+    [subForm, setSubForm] = useState({ name: "", join_policy: "request", visibility: "listed", rules: "" }),
+    [settingsForm, setSettingsForm] = useState({ join_policy: "request", visibility: "listed", rules: "" });
   const bottomRef = useRef(null),
     fileRef = useRef(null),
     initialLoad = useRef(true);
@@ -350,6 +354,97 @@ export default function FestioMePage() {
       setFormValue("");
       if (action !== "rename") setGroupId("");
       await loadGroups(action === "rename" ? groupId : "");
+    } catch (e) {
+      setNotice(errorText(e));
+    }
+  }
+  const eventRef = activeGroup?.external_event_ref;
+  const rulesBlocked =
+    activeGroup && activeGroup.rules && activeGroup.rules_accepted === false;
+
+  async function openDiscover() {
+    setPanel("discover");
+    if (!eventRef) {
+      setDiscover([]);
+      return;
+    }
+    try {
+      setDiscover(list(await api.festiomeEventGroups(eventRef)));
+    } catch (e) {
+      setNotice(errorText(e));
+    }
+  }
+  async function joinGroup(group) {
+    try {
+      const result = await api.festiomeJoinGroup(group.id);
+      if (result.status === "joined" || result.status === "already_member") {
+        setNotice(`You joined ${group.name}.`);
+        setPanel("");
+        await loadGroups(group.id);
+      } else {
+        setNotice("Your request to join was sent for approval.");
+        if (eventRef) setDiscover(list(await api.festiomeEventGroups(eventRef)));
+      }
+    } catch (e) {
+      setNotice(errorText(e));
+    }
+  }
+  async function acceptRules() {
+    try {
+      await api.festiomeAcceptRules(groupId);
+      setNotice("Thanks — you've accepted the group rules.");
+      await loadGroups(groupId);
+    } catch (e) {
+      setNotice(errorText(e));
+    }
+  }
+  async function openJoinRequests() {
+    setPanel("requests");
+    try {
+      setJoinReqs(list(await api.festiomeGroupJoinRequests(groupId)));
+    } catch (e) {
+      setNotice(errorText(e));
+    }
+  }
+  async function decideRequest(request, approve, role = "member") {
+    try {
+      if (approve)
+        await api.festiomeApproveJoinRequest(groupId, request.id, { role });
+      else await api.festiomeDenyJoinRequest(groupId, request.id);
+      setJoinReqs((current) => current.filter((r) => r.id !== request.id));
+      await loadGroupData();
+      await loadGroups(groupId);
+    } catch (e) {
+      setNotice(errorText(e));
+    }
+  }
+  async function createSubgroup(event) {
+    event.preventDefault();
+    if (!eventRef || !subForm.name.trim()) return;
+    try {
+      const created = await api.festiomeCreateSubgroup(eventRef, {
+        ...subForm,
+        name: subForm.name.trim(),
+        rules: subForm.rules.trim(),
+      });
+      setDialog("");
+      setSubForm({ name: "", join_policy: "request", visibility: "listed", rules: "" });
+      await loadGroups(created.id);
+    } catch (e) {
+      setNotice(errorText(e));
+    }
+  }
+  async function saveGroupSettings(event) {
+    event.preventDefault();
+    try {
+      await api.festiomeUpdateSpace(groupId, {
+        join_policy: settingsForm.join_policy,
+        visibility: settingsForm.visibility,
+        rules: settingsForm.rules.trim(),
+      });
+      setDialog("");
+      setNotice("Group settings saved.");
+      await loadGroups(groupId);
     } catch (e) {
       setNotice(errorText(e));
     }
@@ -682,6 +777,14 @@ export default function FestioMePage() {
                   </span>
                 </p>
               </div>
+              {eventRef && (
+                <button
+                  onClick={openDiscover}
+                  className="rounded-lg border px-3 py-2 text-xs dark:border-slate-600"
+                >
+                  Discover
+                </button>
+              )}
               <button
                 onClick={() => setPanel("search")}
                 className="rounded-lg border px-3 py-2 text-xs dark:border-slate-600"
@@ -918,7 +1021,23 @@ export default function FestioMePage() {
                     <div ref={bottomRef} />
                   </div>
                 </div>
-                {channelId && (
+                {channelId && rulesBlocked && (
+                  <div className="border-t bg-amber-50 p-4 dark:border-slate-700 dark:bg-amber-950/30">
+                    <b className="text-sm text-amber-800 dark:text-amber-200">
+                      Please review the group rules
+                    </b>
+                    <p className="mt-1 max-h-32 overflow-y-auto whitespace-pre-wrap text-xs text-slate-600 dark:text-slate-300">
+                      {activeGroup.rules}
+                    </p>
+                    <button
+                      onClick={acceptRules}
+                      className="mt-3 rounded-lg bg-teal-600 px-4 py-2 text-sm font-semibold text-white"
+                    >
+                      Accept &amp; continue
+                    </button>
+                  </div>
+                )}
+                {channelId && !rulesBlocked && (
                   <form
                     onSubmit={send}
                     className="relative border-t p-3 dark:border-slate-700"
@@ -1172,6 +1291,45 @@ export default function FestioMePage() {
                           Rename FestioMe group
                         </button>
                       )}
+                      {canModerate && !activeGroup.is_primary && (
+                        <button
+                          onClick={openJoinRequests}
+                          className="flex w-full items-center justify-between rounded-lg border p-3 text-left text-sm dark:border-slate-700"
+                        >
+                          <span>Join requests</span>
+                          {Number(activeGroup.pending_request_count || 0) > 0 && (
+                            <span className="rounded-full bg-teal-600 px-2 py-0.5 text-[11px] font-bold text-white">
+                              {activeGroup.pending_request_count}
+                            </span>
+                          )}
+                        </button>
+                      )}
+                      {canManage && !activeGroup.is_primary && (
+                        <button
+                          onClick={() => {
+                            setSettingsForm({
+                              join_policy: activeGroup.join_policy || "request",
+                              visibility: activeGroup.visibility || "listed",
+                              rules: activeGroup.rules || "",
+                            });
+                            setDialog("settings");
+                          }}
+                          className="w-full rounded-lg border p-3 text-left text-sm dark:border-slate-700"
+                        >
+                          Access &amp; rules
+                        </button>
+                      )}
+                      {canManage && eventRef && (
+                        <button
+                          onClick={() => {
+                            setSubForm({ name: "", join_policy: "request", visibility: "listed", rules: "" });
+                            setDialog("new-subgroup");
+                          }}
+                          className="w-full rounded-lg border p-3 text-left text-sm dark:border-slate-700"
+                        >
+                          New group for this event
+                        </button>
+                      )}
                       <button
                         onClick={openReports}
                         className="w-full rounded-lg border p-3 text-left text-sm dark:border-slate-700"
@@ -1192,6 +1350,101 @@ export default function FestioMePage() {
                           Archive group
                         </button>
                       )}
+                    </div>
+                  )}
+                  {panel === "discover" && (
+                    <div className="space-y-3">
+                      <p className="text-xs text-slate-500">
+                        Groups for this event you can join.
+                      </p>
+                      {!discover.length && (
+                        <p className="text-sm text-slate-500">
+                          No other groups to join right now.
+                        </p>
+                      )}
+                      {discover.map((group) => (
+                        <div
+                          key={group.id}
+                          className="rounded-xl border p-3 dark:border-slate-700"
+                        >
+                          <div className="flex items-center justify-between gap-2">
+                            <b className="text-sm dark:text-white">{group.name}</b>
+                            <span className="rounded bg-slate-100 px-1.5 py-0.5 text-[10px] capitalize text-slate-500 dark:bg-slate-800">
+                              {group.is_primary ? "everyone" : group.join_policy}
+                            </span>
+                          </div>
+                          {group.description && (
+                            <p className="mt-1 line-clamp-2 text-xs text-slate-500">
+                              {group.description}
+                            </p>
+                          )}
+                          <div className="mt-2 flex items-center justify-between">
+                            <small className="text-slate-400">
+                              {group.member_count || 0} members
+                            </small>
+                            {group.is_member ? (
+                              <button
+                                onClick={() => {
+                                  setPanel("");
+                                  setGroupId(group.id);
+                                }}
+                                className="rounded-lg border px-3 py-1.5 text-xs dark:border-slate-600"
+                              >
+                                Open
+                              </button>
+                            ) : group.is_primary || group.join_policy === "closed" ? (
+                              <span className="text-xs text-slate-400">Invite only</span>
+                            ) : group.has_pending_request ? (
+                              <span className="text-xs text-amber-600">Requested</span>
+                            ) : (
+                              <button
+                                onClick={() => joinGroup(group)}
+                                className="rounded-lg bg-teal-600 px-3 py-1.5 text-xs font-semibold text-white"
+                              >
+                                {group.join_policy === "open" ? "Join" : "Ask to join"}
+                              </button>
+                            )}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                  {panel === "requests" && (
+                    <div className="space-y-3">
+                      {!joinReqs.length && (
+                        <p className="text-sm text-slate-500">
+                          No pending join requests.
+                        </p>
+                      )}
+                      {joinReqs.map((request) => (
+                        <div
+                          key={request.id}
+                          className="rounded-xl border p-3 dark:border-slate-700"
+                        >
+                          <b className="text-sm dark:text-white">
+                            {request.display_name}
+                          </b>
+                          {request.message && (
+                            <p className="mt-1 text-xs text-slate-500">
+                              “{request.message}”
+                            </p>
+                          )}
+                          <div className="mt-2 flex gap-2">
+                            <button
+                              onClick={() => decideRequest(request, true)}
+                              className="rounded-lg bg-teal-600 px-3 py-1.5 text-xs font-semibold text-white"
+                            >
+                              Approve
+                            </button>
+                            <button
+                              onClick={() => decideRequest(request, false)}
+                              className="rounded-lg border px-3 py-1.5 text-xs text-rose-500 dark:border-slate-600"
+                            >
+                              Deny
+                            </button>
+                          </div>
+                        </div>
+                      ))}
                     </div>
                   )}
                   {panel === "reports" && (
@@ -1286,6 +1539,95 @@ export default function FestioMePage() {
             </select>
             <button className="w-full rounded-lg bg-teal-600 p-2 font-semibold text-white">
               Create channel
+            </button>
+          </form>
+        </Dialog>
+      )}
+      {dialog === "new-subgroup" && (
+        <Dialog title="New group for this event" onClose={() => setDialog("")}>
+          <form onSubmit={createSubgroup} className="space-y-3">
+            <input
+              autoFocus
+              required
+              value={subForm.name}
+              onChange={(e) => setSubForm({ ...subForm, name: e.target.value })}
+              placeholder="Group name (e.g. VIP, Table 5, Bus A)"
+              className="w-full rounded-lg border p-3 dark:bg-slate-800 dark:text-white"
+            />
+            <label className="block text-xs font-semibold text-slate-500">
+              Who can join
+              <select
+                value={subForm.join_policy}
+                onChange={(e) => setSubForm({ ...subForm, join_policy: e.target.value })}
+                className="mt-1 w-full rounded-lg border p-2 dark:bg-slate-800 dark:text-white"
+              >
+                <option value="open">Open — any guest can join instantly</option>
+                <option value="request">Request — you approve each guest</option>
+                <option value="closed">Closed — invite only</option>
+              </select>
+            </label>
+            <label className="block text-xs font-semibold text-slate-500">
+              Visibility
+              <select
+                value={subForm.visibility}
+                onChange={(e) => setSubForm({ ...subForm, visibility: e.target.value })}
+                className="mt-1 w-full rounded-lg border p-2 dark:bg-slate-800 dark:text-white"
+              >
+                <option value="listed">Listed in the event group directory</option>
+                <option value="unlisted">Unlisted — reachable only by invite</option>
+              </select>
+            </label>
+            <textarea
+              value={subForm.rules}
+              onChange={(e) => setSubForm({ ...subForm, rules: e.target.value })}
+              placeholder="Optional group rules members must accept before posting"
+              rows={3}
+              className="w-full rounded-lg border p-3 text-sm dark:bg-slate-800 dark:text-white"
+            />
+            <button className="w-full rounded-lg bg-teal-600 p-2 font-semibold text-white">
+              Create group
+            </button>
+          </form>
+        </Dialog>
+      )}
+      {dialog === "settings" && (
+        <Dialog title="Access & rules" onClose={() => setDialog("")}>
+          <form onSubmit={saveGroupSettings} className="space-y-3">
+            <label className="block text-xs font-semibold text-slate-500">
+              Who can join
+              <select
+                value={settingsForm.join_policy}
+                onChange={(e) => setSettingsForm({ ...settingsForm, join_policy: e.target.value })}
+                className="mt-1 w-full rounded-lg border p-2 dark:bg-slate-800 dark:text-white"
+              >
+                <option value="open">Open — any guest can join instantly</option>
+                <option value="request">Request — you approve each guest</option>
+                <option value="closed">Closed — invite only</option>
+              </select>
+            </label>
+            <label className="block text-xs font-semibold text-slate-500">
+              Visibility
+              <select
+                value={settingsForm.visibility}
+                onChange={(e) => setSettingsForm({ ...settingsForm, visibility: e.target.value })}
+                className="mt-1 w-full rounded-lg border p-2 dark:bg-slate-800 dark:text-white"
+              >
+                <option value="listed">Listed in the event group directory</option>
+                <option value="unlisted">Unlisted — reachable only by invite</option>
+              </select>
+            </label>
+            <label className="block text-xs font-semibold text-slate-500">
+              Group rules
+              <textarea
+                value={settingsForm.rules}
+                onChange={(e) => setSettingsForm({ ...settingsForm, rules: e.target.value })}
+                placeholder="Members must accept these before posting. Editing re-prompts everyone."
+                rows={3}
+                className="mt-1 w-full rounded-lg border p-3 text-sm dark:bg-slate-800 dark:text-white"
+              />
+            </label>
+            <button className="w-full rounded-lg bg-teal-600 p-2 font-semibold text-white">
+              Save settings
             </button>
           </form>
         </Dialog>

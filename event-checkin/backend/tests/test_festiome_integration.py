@@ -32,6 +32,9 @@ class FakeFestioMeClient:
     def __init__(self, *, unavailable: bool = False):
         self.unavailable = unavailable
         self.enabled_with = None
+        self.subgroups: list[dict] = []
+        self.requests: list[dict] = []
+        self.decisions: list[tuple] = []
 
     async def event_status(self, external_event_ref: str):
         if self.unavailable:
@@ -58,6 +61,40 @@ class FakeFestioMeClient:
         if self.unavailable:
             raise FestioMeUnavailable("offline")
         return {"token": "guest-session", "expires_at": "2026-09-01T12:00:00Z"}
+
+    async def list_subgroups(self, external_event_ref: str):
+        if self.unavailable:
+            raise FestioMeUnavailable("offline")
+        return self.subgroups
+
+    async def create_subgroup(self, external_event_ref: str, **payload):
+        if self.unavailable:
+            raise FestioMeUnavailable("offline")
+        group = {"id": f"g{len(self.subgroups) + 1}", "is_primary": False,
+                 "member_count": 0, "pending_request_count": 0, "rules_version": 0, **payload}
+        self.subgroups.append(group)
+        return group
+
+    async def update_subgroup(self, external_event_ref: str, group_id: str, patch: dict):
+        if self.unavailable:
+            raise FestioMeUnavailable("offline")
+        for group in self.subgroups:
+            if group["id"] == group_id:
+                group.update(patch)
+                return group
+        raise FestioMeUnavailable("FestioMe group not found")
+
+    async def list_join_requests(self, external_event_ref: str, group_id: str, *, status="pending"):
+        if self.unavailable:
+            raise FestioMeUnavailable("offline")
+        return [r for r in self.requests if r["group_id"] == group_id and r["status"] == status]
+
+    async def approve_join_request(self, external_event_ref: str, group_id: str, request_id: str, *, role="member"):
+        self.decisions.append(("approve", group_id, request_id, role))
+        return {"id": "m1", "group_id": group_id, "display_name": "Guest", "role": role, "joined_at": "2026-09-01T00:00:00Z"}
+
+    async def deny_join_request(self, external_event_ref: str, group_id: str, request_id: str):
+        self.decisions.append(("deny", group_id, request_id))
 
 
 @pytest.mark.asyncio
@@ -124,6 +161,54 @@ async def test_paid_event_without_addon_optin_is_refused(ctx):
     response = await ctx.client.get(f'/api/events/{ctx.ids["event_a"]}/festiome/status')
     assert response.status_code == 400
     assert "not enabled" in response.json()["detail"]
+
+
+@pytest.mark.asyncio
+async def test_organizer_manages_festiome_groups(ctx):
+    fake = FakeFestioMeClient()
+    app.dependency_overrides[get_festiome_client] = lambda: fake
+    await _enable_festiome_addon(ctx.ids["event_a"])
+    ctx.login(ctx.ids["user_a"])
+    ev = ctx.ids["event_a"]
+
+    created = await ctx.client.post(f"/api/events/{ev}/festiome/groups",
+                                    json={"name": "VIP", "join_policy": "request"})
+    assert created.status_code == 201
+    group_id = created.json()["id"]
+
+    listed = await ctx.client.get(f"/api/events/{ev}/festiome/groups")
+    assert [g["name"] for g in listed.json()] == ["VIP"]
+
+    patched = await ctx.client.patch(f"/api/events/{ev}/festiome/groups/{group_id}",
+                                     json={"join_policy": "open"})
+    assert patched.status_code == 200 and patched.json()["join_policy"] == "open"
+
+    fake.requests.append({"id": "r1", "group_id": group_id, "status": "pending", "display_name": "Ada"})
+    reqs = await ctx.client.get(f"/api/events/{ev}/festiome/groups/{group_id}/join-requests")
+    assert len(reqs.json()) == 1
+
+    approve = await ctx.client.post(f"/api/events/{ev}/festiome/groups/{group_id}/join-requests/r1/approve",
+                                    json={"role": "member"})
+    assert approve.status_code == 200
+    deny = await ctx.client.post(f"/api/events/{ev}/festiome/groups/{group_id}/join-requests/r2/deny")
+    assert deny.status_code == 204
+    assert ("approve", group_id, "r1", "member") in fake.decisions
+    assert ("deny", group_id, "r2") in fake.decisions
+
+
+@pytest.mark.asyncio
+async def test_group_management_is_addon_gated(ctx):
+    app.dependency_overrides[get_festiome_client] = lambda: FakeFestioMeClient()
+    ctx.login(ctx.ids["user_a"])
+    ev = ctx.ids["event_a"]
+    # Free event: refused at the paid gate.
+    assert (await ctx.client.get(f"/api/events/{ev}/festiome/groups")).status_code == 402
+    # Paid but no add-on opt-in: refused at the add-on gate.
+    async with _Session() as s:
+        obj = await s.get(Event, ev)
+        obj.is_paid = True
+        await s.commit()
+    assert (await ctx.client.get(f"/api/events/{ev}/festiome/groups")).status_code == 400
 
 
 @pytest.mark.asyncio

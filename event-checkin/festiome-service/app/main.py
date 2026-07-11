@@ -29,7 +29,7 @@ from .models import (
     ModerationReport, NotificationJob, NotificationPreference, PendingUpload, Poll, PollOption, PollVote, Reaction, Tenant,
 )
 from .schemas import (
-    AttachmentOut, ChannelCreate, ChannelOut, EventLinkCreate, EventLinkOut, GroupCreate, GroupDirectoryOut, GroupOut, GroupUpdate, InvitationCreate,
+    AttachmentOut, ChannelCreate, ChannelOut, EventGroupAdminOut, EventLinkCreate, EventLinkOut, GroupCreate, GroupDirectoryOut, GroupOut, GroupUpdate, InvitationCreate,
     InvitationOut, JoinGroupRequest, JoinGroupResult, JoinRequestDecision, JoinRequestOut, MemberOut, MessageCreate, MessageOut, MessagePage,
     MemberUpdate, MessageUpdate, NotificationPreferenceIn, NotificationPreferenceOut, OwnershipTransfer, PollCreate, PollVoteCreate,
     ReactionCreate, ReactionOut, ReadStateOut, ReadStateUpdate, ReportCreate, RulesAcceptResult, SubGroupCreate,
@@ -483,13 +483,9 @@ async def get_group(group_id: str, identity: Identity = Depends(current_identity
     return await _group_out(db, group, member)
 
 
-@app.patch("/v1/groups/{group_id}", response_model=GroupOut)
-async def update_group(group_id: str, body: GroupUpdate, identity: Identity = Depends(current_identity), db: AsyncSession = Depends(get_db)):
-    actor = await _member(db, group_id, identity)
-    _require_role(actor, ADMIN_ROLES)
-    group = await db.get(FestioMeGroup, group_id)
-    if not group:
-        raise HTTPException(404, "FestioMe group not found")
+def _apply_group_update(group: FestioMeGroup, body: GroupUpdate, actor: Member) -> None:
+    """Mutate `group` from a validated GroupUpdate. Shared by the member-authed
+    and internal (GuestHub organizer) update paths."""
     if body.name is not None:
         group.name = body.name.strip()
     if body.description is not None:
@@ -510,6 +506,38 @@ async def update_group(group_id: str, body: GroupUpdate, identity: Identity = De
             # treated as having accepted what they just wrote.
             group.rules_version = (group.rules_version or 0) + 1
             actor.rules_accepted_version = group.rules_version
+
+
+async def _decide_join_request(db: AsyncSession, group_id: str, request_id: str, actor: Member, *, approve: bool, role: str = "member") -> Member | None:
+    """Approve or deny a pending join request as `actor`. Returns the admitted
+    member on approval, else None. Shared by member-authed and internal paths."""
+    req = await db.get(JoinRequest, request_id)
+    if not req or req.group_id != group_id:
+        raise HTTPException(404, "FestioMe join request not found")
+    if req.status != "pending":
+        raise HTTPException(409, "This request has already been decided")
+    req.decided_by_member_id = actor.id
+    req.decided_at = datetime.utcnow()
+    if not approve:
+        req.status = "denied"
+        _audit(db, group_id, actor, "joinrequest.denied", "joinrequest", req.id)
+        return None
+    group = await db.get(FestioMeGroup, group_id)
+    admitted = Identity(req.identity_ref, "", req.display_name, req.identity_kind)
+    member = await _admit_member(db, group, admitted, role=role)
+    req.status = "approved"
+    _audit(db, group_id, actor, "joinrequest.approved", "member", member.id, request_id=req.id)
+    return member
+
+
+@app.patch("/v1/groups/{group_id}", response_model=GroupOut)
+async def update_group(group_id: str, body: GroupUpdate, identity: Identity = Depends(current_identity), db: AsyncSession = Depends(get_db)):
+    actor = await _member(db, group_id, identity)
+    _require_role(actor, ADMIN_ROLES)
+    group = await db.get(FestioMeGroup, group_id)
+    if not group:
+        raise HTTPException(404, "FestioMe group not found")
+    _apply_group_update(group, body, actor)
     _audit(db, group_id, actor, "group.updated", "group", group_id)
     await db.commit(); await db.refresh(group)
     return await _group_out(db, group, actor)
@@ -537,6 +565,93 @@ async def create_event_subgroup_internal(external_event_ref: str, body: SubGroup
     GuestHub rather than as a personal FestioMe login."""
     primary = await _event_group(db, external_event_ref)
     return await _create_subgroup(db, primary, body, creator_identity=None)
+
+
+async def _service_actor(db: AsyncSession, group: FestioMeGroup) -> Member:
+    """The Festio service member that acts inside `group` on GuestHub's behalf.
+    Created (as admin) on first use so internal moderation has an audit actor."""
+    actor = (await db.execute(select(Member).where(
+        Member.group_id == group.id, Member.identity_kind == "service",
+        Member.identity_ref == "guesthub"))).scalar_one_or_none()
+    if not actor:
+        actor = Member(group_id=group.id, identity_kind="service", identity_ref="guesthub",
+                       display_name="Festio", role="admin")
+        db.add(actor); await db.flush()
+    return actor
+
+
+async def _event_owned_group(db: AsyncSession, external_event_ref: str, group_id: str) -> FestioMeGroup:
+    """Resolve a group and assert it belongs to the given event. Used by the
+    internal organizer endpoints to keep one event from touching another's."""
+    primary = await _event_group(db, external_event_ref)
+    group = await db.get(FestioMeGroup, group_id)
+    if not group or group.tenant_id != primary.tenant_id or group.external_event_ref != primary.external_event_ref:
+        raise HTTPException(404, "FestioMe group not found")
+    return group
+
+
+@app.get("/internal/v1/guesthub/event-links/{external_event_ref}/subgroups", response_model=list[EventGroupAdminOut])
+async def list_event_subgroups_internal(external_event_ref: str, _: None = Depends(internal_service), db: AsyncSession = Depends(get_db)):
+    primary = await _event_group(db, external_event_ref)
+    groups = (await db.execute(select(FestioMeGroup).where(
+        FestioMeGroup.tenant_id == primary.tenant_id,
+        FestioMeGroup.external_event_ref == primary.external_event_ref,
+        FestioMeGroup.is_primary.is_(False),
+    ).order_by(FestioMeGroup.created_at))).scalars().all()
+    out: list[EventGroupAdminOut] = []
+    for group in groups:
+        member_count = (await db.execute(select(func.count(Member.id)).where(
+            Member.group_id == group.id, Member.removed_at.is_(None)))).scalar_one()
+        pending = (await db.execute(select(func.count(JoinRequest.id)).where(
+            JoinRequest.group_id == group.id, JoinRequest.status == "pending"))).scalar_one()
+        out.append(EventGroupAdminOut.model_validate(group).model_copy(update={
+            "member_count": member_count, "pending_request_count": pending}))
+    return out
+
+
+@app.patch("/internal/v1/guesthub/event-links/{external_event_ref}/subgroups/{group_id}", response_model=EventGroupAdminOut)
+async def update_event_subgroup_internal(external_event_ref: str, group_id: str, body: GroupUpdate, _: None = Depends(internal_service), db: AsyncSession = Depends(get_db)):
+    group = await _event_owned_group(db, external_event_ref, group_id)
+    if group.is_primary:
+        raise HTTPException(400, "The primary event group cannot be reconfigured")
+    actor = await _service_actor(db, group)
+    _apply_group_update(group, body, actor)
+    _audit(db, group.id, actor, "group.updated", "group", group.id)
+    await db.commit(); await db.refresh(group)
+    member_count = (await db.execute(select(func.count(Member.id)).where(
+        Member.group_id == group.id, Member.removed_at.is_(None)))).scalar_one()
+    pending = (await db.execute(select(func.count(JoinRequest.id)).where(
+        JoinRequest.group_id == group.id, JoinRequest.status == "pending"))).scalar_one()
+    return EventGroupAdminOut.model_validate(group).model_copy(update={
+        "member_count": member_count, "pending_request_count": pending})
+
+
+@app.get("/internal/v1/guesthub/event-links/{external_event_ref}/subgroups/{group_id}/join-requests", response_model=list[JoinRequestOut])
+async def list_subgroup_join_requests_internal(external_event_ref: str, group_id: str, status: str = Query("pending"), _: None = Depends(internal_service), db: AsyncSession = Depends(get_db)):
+    group = await _event_owned_group(db, external_event_ref, group_id)
+    if status not in {"pending", "approved", "denied"}:
+        raise HTTPException(422, "Invalid status filter")
+    rows = (await db.execute(select(JoinRequest).where(
+        JoinRequest.group_id == group.id, JoinRequest.status == status
+    ).order_by(JoinRequest.created_at))).scalars().all()
+    return [JoinRequestOut.model_validate(r) for r in rows]
+
+
+@app.post("/internal/v1/guesthub/event-links/{external_event_ref}/subgroups/{group_id}/join-requests/{request_id}/approve", response_model=MemberOut)
+async def approve_subgroup_join_internal(external_event_ref: str, group_id: str, request_id: str, body: JoinRequestDecision, _: None = Depends(internal_service), db: AsyncSession = Depends(get_db)):
+    group = await _event_owned_group(db, external_event_ref, group_id)
+    actor = await _service_actor(db, group)
+    member = await _decide_join_request(db, group.id, request_id, actor, approve=True, role=body.role)
+    await db.commit(); await db.refresh(member)
+    return MemberOut.model_validate(member)
+
+
+@app.post("/internal/v1/guesthub/event-links/{external_event_ref}/subgroups/{group_id}/join-requests/{request_id}/deny", status_code=204)
+async def deny_subgroup_join_internal(external_event_ref: str, group_id: str, request_id: str, _: None = Depends(internal_service), db: AsyncSession = Depends(get_db)):
+    group = await _event_owned_group(db, external_event_ref, group_id)
+    actor = await _service_actor(db, group)
+    await _decide_join_request(db, group.id, request_id, actor, approve=False)
+    await db.commit()
 
 
 @app.post("/v1/events/{external_event_ref}/subgroups", response_model=GroupOut, status_code=201)
@@ -677,16 +792,7 @@ async def list_join_requests(group_id: str, status: str = Query("pending"), iden
 async def approve_join_request(group_id: str, request_id: str, body: JoinRequestDecision, identity: Identity = Depends(current_identity), db: AsyncSession = Depends(get_db)):
     actor = await _member(db, group_id, identity)
     _require_role(actor, STAFF_ROLES)
-    req = await db.get(JoinRequest, request_id)
-    if not req or req.group_id != group_id:
-        raise HTTPException(404, "FestioMe join request not found")
-    if req.status != "pending":
-        raise HTTPException(409, "This request has already been decided")
-    group = await db.get(FestioMeGroup, group_id)
-    admitted = Identity(req.identity_ref, "", req.display_name, req.identity_kind)
-    member = await _admit_member(db, group, admitted, role=body.role)
-    req.status = "approved"; req.decided_by_member_id = actor.id; req.decided_at = datetime.utcnow()
-    _audit(db, group_id, actor, "joinrequest.approved", "member", member.id, request_id=req.id)
+    member = await _decide_join_request(db, group_id, request_id, actor, approve=True, role=body.role)
     await db.commit(); await db.refresh(member)
     return _member_out(member, identity)
 
@@ -695,13 +801,7 @@ async def approve_join_request(group_id: str, request_id: str, body: JoinRequest
 async def deny_join_request(group_id: str, request_id: str, identity: Identity = Depends(current_identity), db: AsyncSession = Depends(get_db)):
     actor = await _member(db, group_id, identity)
     _require_role(actor, STAFF_ROLES)
-    req = await db.get(JoinRequest, request_id)
-    if not req or req.group_id != group_id:
-        raise HTTPException(404, "FestioMe join request not found")
-    if req.status != "pending":
-        raise HTTPException(409, "This request has already been decided")
-    req.status = "denied"; req.decided_by_member_id = actor.id; req.decided_at = datetime.utcnow()
-    _audit(db, group_id, actor, "joinrequest.denied", "joinrequest", req.id)
+    await _decide_join_request(db, group_id, request_id, actor, approve=False)
     await db.commit()
 
 

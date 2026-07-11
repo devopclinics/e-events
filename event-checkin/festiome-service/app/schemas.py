@@ -56,6 +56,22 @@ class GroupDirectoryOut(BaseModel):
     has_pending_request: bool = False
 
 
+class EventGroupAdminOut(BaseModel):
+    """Full-detail listing for GuestHub organizer tooling (service-authed)."""
+    model_config = ConfigDict(from_attributes=True)
+    id: str
+    name: str
+    description: str
+    is_primary: bool
+    join_policy: str
+    visibility: str
+    rules: str
+    rules_version: int
+    archived: bool
+    member_count: int = 0
+    pending_request_count: int = 0
+
+
 class JoinGroupRequest(BaseModel):
     message: str = Field(default="", max_length=1000)
 

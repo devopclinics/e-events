@@ -72,6 +72,27 @@ class OutboxStatus(BaseModel):
     delivered: int = 0
 
 
+class SubGroupCreate(BaseModel):
+    name: str = Field(min_length=1, max_length=255)
+    description: str = Field(default="", max_length=5000)
+    join_policy: Literal["closed", "request", "open"] = "request"
+    visibility: Literal["listed", "unlisted"] = "listed"
+    rules: str = Field(default="", max_length=10000)
+
+
+class SubGroupUpdate(BaseModel):
+    name: str | None = Field(default=None, min_length=1, max_length=255)
+    description: str | None = Field(default=None, max_length=5000)
+    join_policy: Literal["closed", "request", "open"] | None = None
+    visibility: Literal["listed", "unlisted"] | None = None
+    rules: str | None = Field(default=None, max_length=10000)
+    archived: bool | None = None
+
+
+class JoinRequestDecision(BaseModel):
+    role: Literal["moderator", "member", "readonly"] = "member"
+
+
 @router.get("/{event_id}/festiome/status", response_model=FestioMeStatus)
 async def festiome_status(
     event_id: str,
@@ -306,3 +327,118 @@ async def festiome_sync_status(
         .group_by(FestioMeOutbox.status)
     )).all()
     return OutboxStatus(**{status: count for status, count in rows if status in OutboxStatus.model_fields})
+
+
+# ── Organizer group management ───────────────────────────────────────────────
+# Sub-groups and join-request moderation, gated behind the paid FestioMe add-on.
+# These proxy to FestioMe's internal admin API so any event admin can manage
+# groups without holding a personal FestioMe login.
+
+async def _gated_event(db: AsyncSession, event_id: str, client: FestioMeClient) -> Event:
+    event = await db.get(Event, event_id)
+    if not event:
+        raise HTTPException(404, "Event not found")
+    _require_festiome_addon(event)
+    if not client.configured:
+        raise HTTPException(503, "FestioMe integration is not configured")
+    return event
+
+
+@router.get("/{event_id}/festiome/groups")
+async def list_festiome_groups(
+    event_id: str,
+    db: AsyncSession = Depends(get_db),
+    _: User = Depends(require_paid_event_admin),
+    client: FestioMeClient = Depends(get_festiome_client),
+):
+    event = await _gated_event(db, event_id, client)
+    try:
+        return await client.list_subgroups(event.id)
+    except FestioMeUnavailable as exc:
+        raise HTTPException(503, str(exc)) from exc
+
+
+@router.post("/{event_id}/festiome/groups", status_code=201)
+async def create_festiome_group(
+    event_id: str,
+    data: SubGroupCreate,
+    db: AsyncSession = Depends(get_db),
+    _: User = Depends(require_paid_event_admin),
+    client: FestioMeClient = Depends(get_festiome_client),
+):
+    event = await _gated_event(db, event_id, client)
+    try:
+        return await client.create_subgroup(
+            event.id, name=data.name.strip(), description=data.description.strip(),
+            join_policy=data.join_policy, visibility=data.visibility, rules=data.rules.strip(),
+        )
+    except FestioMeUnavailable as exc:
+        raise HTTPException(503, str(exc)) from exc
+
+
+@router.patch("/{event_id}/festiome/groups/{group_id}")
+async def update_festiome_group(
+    event_id: str,
+    group_id: str,
+    data: SubGroupUpdate,
+    db: AsyncSession = Depends(get_db),
+    _: User = Depends(require_paid_event_admin),
+    client: FestioMeClient = Depends(get_festiome_client),
+):
+    event = await _gated_event(db, event_id, client)
+    patch = data.model_dump(exclude_none=True)
+    if not patch:
+        raise HTTPException(400, "No changes supplied")
+    try:
+        return await client.update_subgroup(event.id, group_id, patch)
+    except FestioMeUnavailable as exc:
+        raise HTTPException(503, str(exc)) from exc
+
+
+@router.get("/{event_id}/festiome/groups/{group_id}/join-requests")
+async def list_festiome_join_requests(
+    event_id: str,
+    group_id: str,
+    status: str = "pending",
+    db: AsyncSession = Depends(get_db),
+    _: User = Depends(require_paid_event_admin),
+    client: FestioMeClient = Depends(get_festiome_client),
+):
+    event = await _gated_event(db, event_id, client)
+    try:
+        return await client.list_join_requests(event.id, group_id, status=status)
+    except FestioMeUnavailable as exc:
+        raise HTTPException(503, str(exc)) from exc
+
+
+@router.post("/{event_id}/festiome/groups/{group_id}/join-requests/{request_id}/approve")
+async def approve_festiome_join_request(
+    event_id: str,
+    group_id: str,
+    request_id: str,
+    data: JoinRequestDecision,
+    db: AsyncSession = Depends(get_db),
+    _: User = Depends(require_paid_event_admin),
+    client: FestioMeClient = Depends(get_festiome_client),
+):
+    event = await _gated_event(db, event_id, client)
+    try:
+        return await client.approve_join_request(event.id, group_id, request_id, role=data.role)
+    except FestioMeUnavailable as exc:
+        raise HTTPException(503, str(exc)) from exc
+
+
+@router.post("/{event_id}/festiome/groups/{group_id}/join-requests/{request_id}/deny", status_code=204)
+async def deny_festiome_join_request(
+    event_id: str,
+    group_id: str,
+    request_id: str,
+    db: AsyncSession = Depends(get_db),
+    _: User = Depends(require_paid_event_admin),
+    client: FestioMeClient = Depends(get_festiome_client),
+):
+    event = await _gated_event(db, event_id, client)
+    try:
+        await client.deny_join_request(event.id, group_id, request_id)
+    except FestioMeUnavailable as exc:
+        raise HTTPException(503, str(exc)) from exc

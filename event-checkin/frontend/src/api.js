@@ -759,6 +759,27 @@ export const api = {
   festiomeSaveNotificationPreferences: (groupId, data) =>
     festiomeReq('PUT', `/festiome/v1/notification-preferences?group_id=${encodeURIComponent(groupId)}`, data),
   acceptFestioMeInvite: (token) => festiomeReq('POST', `/festiome/v1/invitations/${encodeURIComponent(token)}/accept`),
+  // Member/guest self-service (direct FestioMe proxy, scoped by the caller's session).
+  festiomeEventGroups: (eventRef) => festiomeReq('GET', `/festiome/v1/events/${encodeURIComponent(eventRef)}/groups`),
+  festiomeJoinGroup: (groupId, data) => festiomeReq('POST', `/festiome/v1/groups/${groupId}/join`, data || {}),
+  festiomeAcceptRules: (groupId) => festiomeReq('POST', `/festiome/v1/groups/${groupId}/accept-rules`),
+  festiomeCreateSubgroup: (eventRef, data) => festiomeReq('POST', `/festiome/v1/events/${encodeURIComponent(eventRef)}/subgroups`, data),
+  festiomeGroupJoinRequests: (groupId, status = 'pending') =>
+    festiomeReq('GET', `/festiome/v1/groups/${groupId}/join-requests?status=${encodeURIComponent(status)}`),
+  festiomeApproveJoinRequest: (groupId, requestId, data) =>
+    festiomeReq('POST', `/festiome/v1/groups/${groupId}/join-requests/${requestId}/approve`, data || {}),
+  festiomeDenyJoinRequest: (groupId, requestId) =>
+    festiomeReq('POST', `/festiome/v1/groups/${groupId}/join-requests/${requestId}/deny`),
   eventFestioMeStatus: (eventId) => req('GET', `/events/${eventId}/festiome/status`),
   enableEventFestioMe: (eventId) => req('POST', `/events/${eventId}/festiome/enable`),
+  // Organizer group management (gated GuestHub endpoints, service-authed to FestioMe).
+  festiomeManageGroups: (eventId) => req('GET', `/events/${eventId}/festiome/groups`),
+  festiomeManageCreateGroup: (eventId, data) => req('POST', `/events/${eventId}/festiome/groups`, data),
+  festiomeManageUpdateGroup: (eventId, groupId, data) => req('PATCH', `/events/${eventId}/festiome/groups/${groupId}`, data),
+  festiomeManageJoinRequests: (eventId, groupId, status = 'pending') =>
+    req('GET', `/events/${eventId}/festiome/groups/${groupId}/join-requests?status=${encodeURIComponent(status)}`),
+  festiomeManageApproveJoin: (eventId, groupId, requestId, data) =>
+    req('POST', `/events/${eventId}/festiome/groups/${groupId}/join-requests/${requestId}/approve`, data || {}),
+  festiomeManageDenyJoin: (eventId, groupId, requestId) =>
+    req('POST', `/events/${eventId}/festiome/groups/${groupId}/join-requests/${requestId}/deny`),
 }

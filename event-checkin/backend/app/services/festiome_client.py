@@ -159,6 +159,74 @@ class FestioMeClient:
             raise FestioMeUnavailable("FestioMe guest access is temporarily unavailable")
         return response.json()
 
+    # ── Organizer group management (sub-groups + join-request moderation) ────
+    # These proxy GuestHub organizer actions to FestioMe's internal admin API,
+    # acting as the Festio service identity so any event admin can manage groups
+    # without holding a personal FestioMe membership.
+
+    async def list_subgroups(self, external_event_ref: str) -> list[dict[str, Any]]:
+        response = await self._request(
+            "GET", f"/internal/v1/guesthub/event-links/{external_event_ref}/subgroups"
+        )
+        if response.status_code == 404:
+            return []
+        if response.status_code >= 400:
+            raise FestioMeUnavailable("FestioMe groups could not be listed")
+        return response.json()
+
+    async def create_subgroup(
+        self, external_event_ref: str, *, name: str, description: str = "",
+        join_policy: str = "request", visibility: str = "listed", rules: str = "",
+    ) -> dict[str, Any]:
+        response = await self._request(
+            "POST", f"/internal/v1/guesthub/event-links/{external_event_ref}/subgroups",
+            json={"name": name, "description": description, "join_policy": join_policy,
+                  "visibility": visibility, "rules": rules},
+        )
+        if response.status_code >= 400:
+            raise FestioMeUnavailable("FestioMe group could not be created")
+        return response.json()
+
+    async def update_subgroup(self, external_event_ref: str, group_id: str, patch: dict[str, Any]) -> dict[str, Any]:
+        response = await self._request(
+            "PATCH", f"/internal/v1/guesthub/event-links/{external_event_ref}/subgroups/{group_id}",
+            json=patch,
+        )
+        if response.status_code == 404:
+            raise FestioMeUnavailable("FestioMe group not found")
+        if response.status_code >= 400:
+            raise FestioMeUnavailable("FestioMe group could not be updated")
+        return response.json()
+
+    async def list_join_requests(self, external_event_ref: str, group_id: str, *, status: str = "pending") -> list[dict[str, Any]]:
+        response = await self._request(
+            "GET", f"/internal/v1/guesthub/event-links/{external_event_ref}/subgroups/{group_id}/join-requests",
+            params={"status": status},
+        )
+        if response.status_code == 404:
+            return []
+        if response.status_code >= 400:
+            raise FestioMeUnavailable("FestioMe join requests could not be listed")
+        return response.json()
+
+    async def approve_join_request(self, external_event_ref: str, group_id: str, request_id: str, *, role: str = "member") -> dict[str, Any]:
+        response = await self._request(
+            "POST", f"/internal/v1/guesthub/event-links/{external_event_ref}/subgroups/{group_id}/join-requests/{request_id}/approve",
+            json={"role": role},
+        )
+        if response.status_code in (404, 409):
+            raise FestioMeUnavailable("This FestioMe join request could not be approved")
+        if response.status_code >= 400:
+            raise FestioMeUnavailable("FestioMe join request could not be approved")
+        return response.json()
+
+    async def deny_join_request(self, external_event_ref: str, group_id: str, request_id: str) -> None:
+        response = await self._request(
+            "POST", f"/internal/v1/guesthub/event-links/{external_event_ref}/subgroups/{group_id}/join-requests/{request_id}/deny",
+        )
+        if response.status_code not in (200, 204, 404):
+            raise FestioMeUnavailable("FestioMe join request could not be denied")
+
     async def publish_announcement(
         self, external_event_ref: str, *, idempotency_key: str, title: str,
         body: str, kind: str, urgent: bool, source_ref: str | None = None,

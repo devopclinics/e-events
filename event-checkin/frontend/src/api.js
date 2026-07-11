@@ -561,4 +561,19 @@ export const api = {
     }
     return `${PUBLIC_BASE_URL}/invite/${eventOrId}`
   },
+
+  // FestioMe — in-app group chat
+  festiomeGroups:      ()          => req('GET',  '/festiome/groups'),
+  festiomeGroup:       (id)        => req('GET',  `/festiome/groups/${id}`),
+  festiomeCreateGroup: (data)      => req('POST', '/festiome/groups', data),
+  festiomeMembers:     (id)        => req('GET',  `/festiome/groups/${id}/members`),
+  festiomeMessages:    (id, before) =>
+    req('GET', `/festiome/groups/${id}/messages${before ? `?before=${encodeURIComponent(before)}` : ''}`),
+  festiomeSend:        (id, body)  => req('POST', `/festiome/groups/${id}/messages`, body),
+  festiomeLike:        (mid)       => req('POST', `/festiome/messages/${mid}/like`),
+  festiomeUnlike:      (mid)       => req('DELETE', `/festiome/messages/${mid}/like`),
+  festiomeRead:        (id)        => req('POST', `/festiome/groups/${id}/read`),
+  festiomeDeleteMsg:   (mid)       => req('DELETE', `/festiome/messages/${mid}`),
+  festiomeStreamTicket: (id)        => req('POST', `/festiome/groups/${id}/stream-ticket`),
+  festiomeStreamUrl:    (id, ticket) => `${BASE}/festiome/groups/${id}/stream?ticket=${encodeURIComponent(ticket)}`,
 }

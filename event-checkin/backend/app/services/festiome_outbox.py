@@ -2,6 +2,7 @@
 
 import asyncio
 import logging
+import random
 from datetime import datetime, timedelta
 from typing import Any
 
@@ -15,6 +16,14 @@ from .festiome_client import FestioMeClient, FestioMeUnavailable, get_festiome_c
 logger = logging.getLogger("festiome_outbox")
 TICK_SECONDS = 5
 MAX_ATTEMPTS = 10
+
+
+def _backoff_seconds(attempts: int, base_cap: int = 900) -> int:
+    """Exponential backoff with equal jitter. When FestioMe is down, a whole
+    batch of guest-sync rows fails at once; jitter spreads their retries so they
+    don't stampede the service in lockstep on recovery."""
+    base = min(base_cap, 2 ** min(attempts, 9))
+    return int(base / 2 + random.uniform(0, base / 2))
 
 
 def _guest_payload(guest: Guest) -> dict[str, Any]:
@@ -100,15 +109,14 @@ async def process_due(*, limit: int = 50, client: FestioMeClient | None = None) 
                 row.attempts += 1
                 row.last_error = str(exc)[:2000]
                 row.status = "failed" if row.attempts >= MAX_ATTEMPTS else "retry"
-                delay = min(900, 2 ** min(row.attempts, 9))
-                row.next_attempt_at = datetime.utcnow() + timedelta(seconds=delay)
+                row.next_attempt_at = datetime.utcnow() + timedelta(seconds=_backoff_seconds(row.attempts))
                 if event:
                     event.festiome_last_error = row.last_error
             except Exception as exc:  # contain unexpected integration failures
                 row.attempts += 1
                 row.last_error = f"Unexpected: {exc}"[:2000]
                 row.status = "failed" if row.attempts >= MAX_ATTEMPTS else "retry"
-                row.next_attempt_at = datetime.utcnow() + timedelta(seconds=60)
+                row.next_attempt_at = datetime.utcnow() + timedelta(seconds=_backoff_seconds(row.attempts, base_cap=120))
                 if event:
                     event.festiome_last_error = row.last_error
                 logger.exception("FestioMe outbox delivery crashed for %s", row.id)

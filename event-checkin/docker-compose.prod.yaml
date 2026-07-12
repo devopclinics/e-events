@@ -38,10 +38,11 @@ services:
       # SSE fan-out + rate-limit counters. Shared across replicas when scaled
       # out; harmless on single-host. Unset REDIS_URL to fall back to in-process.
       REDIS_URL: ${REDIS_URL:-redis://redis:6379/0}
-      # Canonical public host for guest-facing links (QR scan, invite, RSVP).
-      # MUST be set per environment — e.g. https://staging.festio.events on
-      # staging — or scan URLs point at production and read as "Invalid Ticket".
-      PUBLIC_BASE_URL: ${PUBLIC_BASE_URL:-}
+      # PUBLIC_BASE_URL (canonical host for guest-facing QR/scan/RSVP/invite
+      # links) is read from backend/.env — set it there per environment:
+      #   staging → https://staging.festio.events   prod → https://festio.events
+      # Not listed here so the env_file value is authoritative (a compose
+      # `environment:` entry would override it, and an empty default would blank it).
       # Optional FestioMe integration. The backend never hard-depends on this
       # service (failure-contained); these just let enable/status/announcements
       # and organizer group management reach it when configured.

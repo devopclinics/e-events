@@ -100,11 +100,20 @@ async def festiome_status(
     _: User = Depends(require_paid_event_admin),
     client: FestioMeClient = Depends(get_festiome_client),
 ):
-    """Report FestioMe state without making GuestHub health depend on it."""
+    """Report FestioMe state without making GuestHub health depend on it.
+
+    This is a read-only status probe the Admin UI polls to decide whether to show
+    the enable/open affordance, so it must NOT hard-fail on the add-on gate — it
+    reports `enabled=False` when the add-on is off instead of 400ing.
+    """
     event = await db.get(Event, event_id)
     if not event:
         raise HTTPException(404, "Event not found")
-    _require_festiome_addon(event)
+    if not event.festiome_addon_enabled:
+        return FestioMeStatus(
+            configured=client.configured, available=False, enabled=False,
+            detail="The FestioMe add-on is not enabled for this event.",
+        )
     if not client.configured:
         return FestioMeStatus(
             configured=False, available=False, enabled=False,

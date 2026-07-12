@@ -150,17 +150,26 @@ async def test_free_event_cannot_use_festiome(ctx):
 
 
 @pytest.mark.asyncio
-async def test_paid_event_without_addon_optin_is_refused(ctx):
-    """A paid event that has not opted into the add-on still cannot use it."""
-    app.dependency_overrides[get_festiome_client] = lambda: FakeFestioMeClient()
+async def test_status_probe_is_soft_when_addon_off_but_actions_are_refused(ctx):
+    """status is a read-only probe the Admin UI polls: it returns 200 with
+    enabled=False when the add-on is off (never 400, which would spam the
+    console). Mutating actions still hard-refuse."""
+    fake = FakeFestioMeClient()
+    app.dependency_overrides[get_festiome_client] = lambda: fake
     async with _Session() as s:
         ev = await s.get(Event, ctx.ids["event_a"])
         ev.is_paid = True  # paid, but festiome_addon_enabled stays False
         await s.commit()
     ctx.login(ctx.ids["user_a"])
-    response = await ctx.client.get(f'/api/events/{ctx.ids["event_a"]}/festiome/status')
-    assert response.status_code == 400
-    assert "not enabled" in response.json()["detail"]
+
+    status = await ctx.client.get(f'/api/events/{ctx.ids["event_a"]}/festiome/status')
+    assert status.status_code == 200
+    assert status.json()["enabled"] is False
+    assert "not enabled" in status.json()["detail"]
+
+    # A mutating action (provisioning) is still refused at the add-on gate.
+    enable = await ctx.client.post(f'/api/events/{ctx.ids["event_a"]}/festiome/enable')
+    assert enable.status_code == 400
 
 
 @pytest.mark.asyncio

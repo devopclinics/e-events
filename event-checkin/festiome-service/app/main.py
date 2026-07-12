@@ -75,7 +75,7 @@ async def _scheduled_publisher():
                     result = await _message_out(db, message, author.id if author else "")
                     await _publish(message.channel_id, "message.created", result.model_dump(mode="json"))
         except Exception:
-            pass
+            logger.exception("festiome_scheduled_publisher_failed")
         await asyncio.sleep(5)
 
 
@@ -125,6 +125,7 @@ async def _rate_limit(key: str, limit: int, seconds: int = 60) -> None:
     except HTTPException:
         raise
     except Exception:
+        logger.warning("festiome_rate_limit_unavailable", extra={"key": key})
         return
 
 
@@ -132,7 +133,7 @@ async def _publish(channel_id: str, event: str, payload: dict) -> None:
     try:
         await redis.publish(f"festiome:channel:{channel_id}", json.dumps({"event": event, "data": payload}, default=str))
     except Exception:
-        pass
+        logger.exception("festiome_publish_failed", extra={"channel_id": channel_id, "event": event})
 
 
 def _audit(db: AsyncSession, group_id: str, actor: Member | None, action: str, target_type: str, target_id: str, **details) -> None:
@@ -178,16 +179,26 @@ def _rules_accepted(group: FestioMeGroup, member: Member) -> bool:
 
 async def _group_out(db: AsyncSession, group: FestioMeGroup, member: Member) -> GroupOut:
     member_count = (await db.execute(select(func.count(Member.id)).where(Member.group_id == group.id, Member.removed_at.is_(None)))).scalar_one()
-    channel_ids = select(Channel.id).where(Channel.group_id == group.id, Channel.archived.is_(False))
-    if member.role not in STAFF_ROLES: channel_ids = channel_ids.where(Channel.kind != "staff")
-    states = (await db.execute(select(ChannelReadState).where(ChannelReadState.member_id == member.id))).scalars().all()
-    state_by_channel = {state.channel_id: state for state in states}
-    unread = 0
-    for channel_id in (await db.execute(channel_ids)).scalars().all():
-        query = select(func.count(Message.id)).where(Message.channel_id == channel_id, Message.deleted_at.is_(None),
-                    Message.published_at.is_not(None), Message.author_member_id != member.id)
-        if channel_id in state_by_channel: query = query.where(Message.created_at > state_by_channel[channel_id].read_at)
-        unread += (await db.execute(query)).scalar_one()
+    # Unread across every visible channel in ONE query: join each message to the
+    # viewer's per-channel read state (or none) instead of a count-per-channel loop.
+    unread_q = (
+        select(func.count(Message.id))
+        .select_from(Message)
+        .join(Channel, Channel.id == Message.channel_id)
+        .outerjoin(ChannelReadState, and_(
+            ChannelReadState.channel_id == Channel.id,
+            ChannelReadState.member_id == member.id,
+        ))
+        .where(
+            Channel.group_id == group.id, Channel.archived.is_(False),
+            Message.deleted_at.is_(None), Message.published_at.is_not(None),
+            Message.author_member_id != member.id,
+            or_(ChannelReadState.read_at.is_(None), Message.created_at > ChannelReadState.read_at),
+        )
+    )
+    if member.role not in STAFF_ROLES:
+        unread_q = unread_q.where(Channel.kind != "staff")
+    unread = (await db.execute(unread_q)).scalar_one()
     pending = 0
     if member.role in STAFF_ROLES:
         pending = (await db.execute(select(func.count(JoinRequest.id)).where(
@@ -213,36 +224,77 @@ def _require_role(member: Member, allowed: set[str]) -> None:
         raise HTTPException(403, "Insufficient FestioMe permission")
 
 
+async def _messages_out(db: AsyncSession, messages: list[Message], viewer_id: str) -> list[MessageOut]:
+    """Serialize a page of messages with a bounded number of queries — authors,
+    reactions, attachments, mentions and polls are batch-fetched for the whole
+    page rather than per message (avoids N+1 on message lists)."""
+    if not messages:
+        return []
+    ids = [m.id for m in messages]
+    authors = {a.id: a for a in (await db.execute(
+        select(Member).where(Member.id.in_({m.author_member_id for m in messages})))).scalars().all()}
+
+    reactions_by_msg: dict[str, list[Reaction]] = {}
+    for r in (await db.execute(select(Reaction).where(Reaction.message_id.in_(ids)))).scalars().all():
+        reactions_by_msg.setdefault(r.message_id, []).append(r)
+    attach_by_msg: dict[str, list[Attachment]] = {}
+    for a in (await db.execute(select(Attachment).where(Attachment.message_id.in_(ids)))).scalars().all():
+        attach_by_msg.setdefault(a.message_id, []).append(a)
+    mentions_by_msg: dict[str, list[str]] = {}
+    for mid, member_id in (await db.execute(
+            select(Mention.message_id, Mention.member_id).where(Mention.message_id.in_(ids)))).all():
+        mentions_by_msg.setdefault(mid, []).append(member_id)
+
+    polls = (await db.execute(select(Poll).where(Poll.message_id.in_(ids)))).scalars().all()
+    poll_by_msg = {p.message_id: p for p in polls}
+    poll_ids = [p.id for p in polls]
+    options_by_poll: dict[str, list[PollOption]] = {}
+    votes_by_option: dict[str, int] = {}
+    my_option_ids: set[str] = set()
+    if poll_ids:
+        for o in (await db.execute(
+                select(PollOption).where(PollOption.poll_id.in_(poll_ids)).order_by(PollOption.position))).scalars().all():
+            options_by_poll.setdefault(o.poll_id, []).append(o)
+        votes_by_option = dict((await db.execute(
+            select(PollVote.option_id, func.count(PollVote.id)).where(PollVote.poll_id.in_(poll_ids)).group_by(PollVote.option_id))).all())
+        my_option_ids = set((await db.execute(
+            select(PollVote.option_id).where(PollVote.poll_id.in_(poll_ids), PollVote.member_id == viewer_id))).scalars().all())
+
+    def _poll_data(message_id: str):
+        poll = poll_by_msg.get(message_id)
+        if not poll:
+            return None
+        return {"id": poll.id, "question": poll.question, "multiple_choice": poll.multiple_choice, "closes_at": poll.closes_at,
+                "options": [{"id": o.id, "label": o.label, "text": o.label,
+                             "votes": votes_by_option.get(o.id, 0), "voted_by_me": o.id in my_option_ids}
+                            for o in options_by_poll.get(poll.id, [])]}
+
+    result: list[MessageOut] = []
+    for message in messages:
+        rlist = reactions_by_msg.get(message.id, [])
+        counts = Counter(reaction.emoji for reaction in rlist)
+        mine = {reaction.emoji for reaction in rlist if reaction.member_id == viewer_id}
+        author = authors.get(message.author_member_id)
+        result.append(MessageOut(
+            id=message.id, group_id=message.group_id, channel_id=message.channel_id,
+            author_member_id=message.author_member_id,
+            author_name=author.display_name if author else "Former member",
+            parent_id=message.parent_id,
+            body="" if message.deleted_at else message.body,
+            edited_at=message.edited_at, deleted_at=message.deleted_at,
+            created_at=message.created_at,
+            scheduled_for=message.scheduled_for, published_at=message.published_at,
+            attachments=[AttachmentOut.model_validate({"id": a.id, "url": a.url, "filename": a.filename,
+                         "mime_type": a.mime_type, "size_bytes": a.size_bytes}) for a in attach_by_msg.get(message.id, [])],
+            mention_member_ids=mentions_by_msg.get(message.id, []),
+            poll=_poll_data(message.id),
+            reactions=[ReactionOut(emoji=emoji, count=count, reacted_by_me=emoji in mine) for emoji, count in counts.items()],
+        ))
+    return result
+
+
 async def _message_out(db: AsyncSession, message: Message, viewer_id: str) -> MessageOut:
-    author = await db.get(Member, message.author_member_id)
-    reactions = (await db.execute(select(Reaction).where(Reaction.message_id == message.id))).scalars().all()
-    counts = Counter(reaction.emoji for reaction in reactions)
-    mine = {reaction.emoji for reaction in reactions if reaction.member_id == viewer_id}
-    attachments = (await db.execute(select(Attachment).where(Attachment.message_id == message.id))).scalars().all()
-    mentions = (await db.execute(select(Mention.member_id).where(Mention.message_id == message.id))).scalars().all()
-    poll = (await db.execute(select(Poll).where(Poll.message_id == message.id))).scalar_one_or_none()
-    poll_data = None
-    if poll:
-        options = (await db.execute(select(PollOption).where(PollOption.poll_id == poll.id).order_by(PollOption.position))).scalars().all()
-        poll_counts = dict((await db.execute(select(PollVote.option_id, func.count(PollVote.id)).where(PollVote.poll_id == poll.id).group_by(PollVote.option_id))).all())
-        mine_votes = set((await db.execute(select(PollVote.option_id).where(PollVote.poll_id == poll.id, PollVote.member_id == viewer_id))).scalars().all())
-        poll_data = {"id": poll.id, "question": poll.question, "multiple_choice": poll.multiple_choice, "closes_at": poll.closes_at,
-                     "options": [{"id": o.id, "label": o.label, "text": o.label, "votes": poll_counts.get(o.id, 0), "voted_by_me": o.id in mine_votes} for o in options]}
-    return MessageOut(
-        id=message.id, group_id=message.group_id, channel_id=message.channel_id,
-        author_member_id=message.author_member_id,
-        author_name=author.display_name if author else "Former member",
-        parent_id=message.parent_id,
-        body="" if message.deleted_at else message.body,
-        edited_at=message.edited_at, deleted_at=message.deleted_at,
-        created_at=message.created_at,
-        scheduled_for=message.scheduled_for, published_at=message.published_at,
-        attachments=[AttachmentOut.model_validate({"id": a.id, "url": a.url, "filename": a.filename,
-                     "mime_type": a.mime_type, "size_bytes": a.size_bytes}) for a in attachments],
-        mention_member_ids=list(mentions),
-        poll=poll_data,
-        reactions=[ReactionOut(emoji=emoji, count=count, reacted_by_me=emoji in mine) for emoji, count in counts.items()],
-    )
+    return (await _messages_out(db, [message], viewer_id))[0]
 
 
 @app.get("/health")
@@ -700,20 +752,30 @@ async def list_event_groups(external_event_ref: str, identity: Identity = Depend
         FestioMeGroup.external_event_ref == primary.external_event_ref,
         FestioMeGroup.archived.is_(False),
     ).order_by(FestioMeGroup.is_primary.desc(), FestioMeGroup.created_at))).scalars().all()
+    group_ids = [g.id for g in groups]
+    # Batch the three per-group lookups across the whole directory.
+    member_counts = dict((await db.execute(
+        select(Member.group_id, func.count(Member.id))
+        .where(Member.group_id.in_(group_ids), Member.removed_at.is_(None))
+        .group_by(Member.group_id))).all())
+    my_group_ids = set((await db.execute(
+        select(Member.group_id).where(
+            Member.group_id.in_(group_ids), Member.identity_kind == identity.kind,
+            Member.identity_ref == identity.subject, Member.removed_at.is_(None)))).scalars().all())
+    requested_group_ids = set((await db.execute(
+        select(JoinRequest.group_id).where(
+            JoinRequest.group_id.in_(group_ids), JoinRequest.identity_kind == identity.kind,
+            JoinRequest.identity_ref == identity.subject, JoinRequest.status == "pending"))).scalars().all())
     out: list[GroupDirectoryOut] = []
     for group in groups:
-        my_member = await _active_member(db, group.id, identity)
-        if not group.is_primary and group.visibility != "listed" and not my_member:
+        is_member = group.id in my_group_ids
+        if not group.is_primary and group.visibility != "listed" and not is_member:
             continue
-        member_count = (await db.execute(select(func.count(Member.id)).where(
-            Member.group_id == group.id, Member.removed_at.is_(None)))).scalar_one()
-        has_request = bool((await db.execute(select(JoinRequest.id).where(
-            JoinRequest.group_id == group.id, JoinRequest.identity_kind == identity.kind,
-            JoinRequest.identity_ref == identity.subject, JoinRequest.status == "pending"))).first())
         out.append(GroupDirectoryOut(
             id=group.id, name=group.name, description=group.description, is_primary=group.is_primary,
-            join_policy=group.join_policy, visibility=group.visibility, member_count=member_count,
-            is_member=my_member is not None, has_pending_request=has_request,
+            join_policy=group.join_policy, visibility=group.visibility,
+            member_count=member_counts.get(group.id, 0),
+            is_member=is_member, has_pending_request=group.id in requested_group_ids,
         ))
     return out
 
@@ -824,15 +886,34 @@ async def list_channels(group_id: str, identity: Identity = Depends(current_iden
     if member.role not in STAFF_ROLES:
         query = query.where(Channel.kind != "staff")
     channels = (await db.execute(query.order_by(Channel.created_at))).scalars().all()
+    channel_ids = [channel.id for channel in channels]
+    unread_by_channel: dict[str, int] = {}
+    if channel_ids:
+        unread_rows = (await db.execute(
+            select(Message.channel_id, func.count(Message.id))
+            .outerjoin(
+                ChannelReadState,
+                and_(
+                    ChannelReadState.channel_id == Message.channel_id,
+                    ChannelReadState.member_id == member.id,
+                ),
+            )
+            .where(
+                Message.channel_id.in_(channel_ids),
+                Message.deleted_at.is_(None),
+                Message.author_member_id != member.id,
+                or_(Message.published_at.is_not(None), Message.scheduled_for.is_(None)),
+                or_(ChannelReadState.read_at.is_(None), Message.created_at > ChannelReadState.read_at),
+            )
+            .group_by(Message.channel_id)
+        )).all()
+        unread_by_channel = {
+            channel_id: int(count)
+            for channel_id, count in unread_rows
+        }
     result = []
     for channel in channels:
-        state = (await db.execute(select(ChannelReadState).where(ChannelReadState.channel_id == channel.id, ChannelReadState.member_id == member.id))).scalar_one_or_none()
-        message_query = select(func.count(Message.id)).where(Message.channel_id == channel.id, Message.deleted_at.is_(None), Message.author_member_id != member.id,
-            or_(Message.published_at.is_not(None), Message.scheduled_for.is_(None)))
-        if state:
-            message_query = message_query.where(Message.created_at > state.read_at)
-        count = (await db.execute(message_query)).scalar_one()
-        result.append(ChannelOut.model_validate(channel).model_copy(update={"unread_count": count}))
+        result.append(ChannelOut.model_validate(channel).model_copy(update={"unread_count": unread_by_channel.get(channel.id, 0)}))
     return result
 
 
@@ -989,7 +1070,7 @@ async def list_messages(
     has_more = len(rows) > limit
     rows = rows[:limit]
     return MessagePage(
-        items=[await _message_out(db, row, member.id) for row in rows],
+        items=await _messages_out(db, rows, member.id),
         next_cursor=_encode_cursor(rows[-1].created_at, rows[-1].id) if has_more and rows else None,
     )
 
@@ -1254,7 +1335,7 @@ async def search_group(group_id: str, q: str = Query(min_length=2, max_length=20
         Message.group_id == group_id, Message.channel_id.in_(channels), Message.deleted_at.is_(None),
         or_(Message.scheduled_for.is_(None), Message.published_at.is_not(None)), Message.body.ilike(pattern),
     ).order_by(Message.created_at.desc()).limit(limit))).scalars().all()
-    return {"items": [await _message_out(db, row, member.id) for row in rows]}
+    return {"items": await _messages_out(db, rows, member.id)}
 
 
 @app.post("/v1/channels/{channel_id}/polls", status_code=201)

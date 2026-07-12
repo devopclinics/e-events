@@ -30,6 +30,7 @@ The service uses the existing `backend/.env` pattern and shared Postgres DB.
 Important variables:
 
 - `DATABASE_URL`
+- `REDIS_URL` (distributed rate limiting)
 - `FIREBASE_CREDENTIALS`
 - `SUPERADMIN_EMAILS`
 - `MESSAGING_ENABLED=true`
@@ -42,6 +43,7 @@ Important variables:
 - `ANNOUNCEMENT_MAX_LENGTH=5000`
 - `GUEST_MESSAGE_RATE_LIMIT=10`
 - `GUEST_CHAT_RATE_LIMIT=20`
+- `GUEST_QUERY_TOKEN_FALLBACK_ENABLED=true` (set to `false` to require Authorization header for guest token)
 
 ## Routes
 
@@ -52,9 +54,9 @@ Public health:
 
 Guest routes:
 
-- `GET /api/messaging/events/{event_id}/guest-hub?token={invite_or_qr_token}`
-- `POST /api/messaging/events/{event_id}/messages/direct?token={invite_or_qr_token}`
-- `POST /api/messaging/events/{event_id}/messages/chat?token={invite_or_qr_token}`
+- `GET /api/messaging/events/{event_id}/guest-hub` (guest token via `Authorization: Bearer <token>`; query fallback still accepted)
+- `POST /api/messaging/events/{event_id}/messages/direct` (guest token via `Authorization: Bearer <token>`; query fallback still accepted)
+- `POST /api/messaging/events/{event_id}/messages/chat` (guest token via `Authorization: Bearer <token>`; query fallback still accepted)
 
 Admin routes:
 

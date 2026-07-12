@@ -1177,17 +1177,17 @@ function GuestHub({ event, accessToken, designTheme }) {
               </p>
             )}
             {hub?.guest?.qr_token && (
-              <div className="mt-4 flex flex-wrap gap-2">
-                <a href={`/scan/${hub.guest.qr_token}`} style={colors.accent ? { background: colors.accent } : undefined} className="inline-flex min-h-10 items-center justify-center rounded-xl bg-teal-400 px-4 py-2 text-sm font-extrabold text-slate-950 hover:bg-teal-300">
-                  View Festio Pass
+              <div className="mt-4 grid gap-2.5">
+                <a href={`/scan/${hub.guest.qr_token}`} style={colors.accent ? { background: colors.accent } : undefined} className="inline-flex min-h-12 w-full items-center justify-center gap-2 rounded-xl bg-teal-400 px-5 py-3 text-base font-extrabold text-slate-950 shadow-sm hover:bg-teal-300">
+                  🎫 View Festio Pass
                 </a>
                 {hub?.capabilities?.festiome && (
                   <a
                     href={`/festiome/guest?event=${encodeURIComponent(event.id)}&pass=${encodeURIComponent(hub.guest.qr_token)}`}
-                    className="inline-flex min-h-10 items-center justify-center rounded-xl border px-4 py-2 text-sm font-extrabold transition hover:opacity-90"
-                    style={{ background: tone.chip, borderColor: tone.border, color: tone.text }}
+                    className="inline-flex min-h-12 w-full items-center justify-center gap-2 rounded-xl border-2 px-5 py-3 text-base font-extrabold transition hover:opacity-90"
+                    style={{ background: tone.chip, borderColor: colors.accent || tone.text, color: tone.text }}
                   >
-                    Open FestioMe
+                    💬 Open FestioMe
                   </a>
                 )}
               </div>

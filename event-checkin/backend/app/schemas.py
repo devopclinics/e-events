@@ -1398,6 +1398,9 @@ class EventBrief(BaseModel):
     registry_enabled: bool = False
     registry_token: Optional[str] = None
     registry_message: Optional[str] = None
+    # FestioMe group messaging — surfaced on the pass/hub so admitted guests can
+    # open their event community directly.
+    festiome_addon_enabled: bool = False
 
 
 class PartnerInfo(BaseModel):

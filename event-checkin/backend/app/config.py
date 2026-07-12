@@ -57,7 +57,11 @@ class Settings(BaseSettings):
     bird_workspace_id: str = ""
     bird_sms_channel_id: str = ""
     bird_whatsapp_channel_id: str = ""
-    bird_whatsapp_invite_template: str = ""           # Bird WhatsApp template NAME for invite (e.g. event_invite_utility)
+    bird_whatsapp_locale: str = "en"                  # Locale of the WhatsApp templates (e.g. en, en_US) — must match Bird
+    # Each template below is the Bird template reference as "projectId:version"
+    # (both UUIDs from the channel-template project). Version is optional — omit
+    # the ":version" suffix to let Bird use the template's active version.
+    bird_whatsapp_invite_template: str = ""           # Bird WhatsApp template for invite → "projectId:version"
     bird_whatsapp_rsvp_invitation_template: str = ""  # Bird WhatsApp template NAME for RSVP invite
     bird_whatsapp_rsvp_reminder_template: str = ""    # Bird WhatsApp template NAME for RSVP reminder
     bird_whatsapp_rsvp_confirmation_template: str = ""# Bird WhatsApp template NAME for RSVP confirmation

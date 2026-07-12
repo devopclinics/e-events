@@ -441,6 +441,7 @@ async def view_ticket(qr_token: str, db: AsyncSession = Depends(get_db)):
         registry_enabled=event.registry_enabled,
         registry_token=event.registry_token,
         registry_message=event.registry_message,
+        festiome_addon_enabled=event.festiome_addon_enabled,
     ) if event else None
 
     table_name = None

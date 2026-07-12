@@ -12,6 +12,7 @@ from firebase_admin import auth as firebase_auth, credentials
 from fastapi import Depends, FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
+from redis.asyncio import Redis
 from pydantic import BaseModel, Field
 from pydantic_settings import BaseSettings
 from sqlalchemy import JSON, Boolean, DateTime, ForeignKey, Integer, String, Text, and_, func, or_, select
@@ -24,6 +25,7 @@ logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(mess
 
 class Settings(BaseSettings):
     database_url: str = "postgresql+asyncpg://checkin:checkin@db/checkin"
+    redis_url: str = "redis://redis:6379/0"
     frontend_url: str = "http://localhost:5173"
     firebase_credentials: str = ""
     superadmin_emails: str = ""
@@ -37,6 +39,7 @@ class Settings(BaseSettings):
     announcement_max_length: int = 5000
     guest_message_rate_limit: int = 10
     guest_chat_rate_limit: int = 20
+    guest_query_token_fallback_enabled: bool = True
 
     class Config:
         env_file = ".env"
@@ -47,8 +50,10 @@ settings = Settings()
 engine = create_async_engine(settings.database_url, echo=False)
 SessionLocal = async_sessionmaker(engine, expire_on_commit=False)
 bearer = HTTPBearer(auto_error=False)
+redis_client = Redis.from_url(settings.redis_url, decode_responses=True)
 _firebase_app = None
 _rate_buckets: dict[str, list[float]] = {}
+_RATE_BUCKET_MAX_KEYS = 20000
 
 
 class Base(DeclarativeBase):
@@ -322,6 +327,25 @@ async def guest_by_token(event_id: str, token: str, db: AsyncSession) -> Guest:
     return guest
 
 
+def _guest_access_token(
+    query_token: str | None,
+    creds: HTTPAuthorizationCredentials | None,
+) -> str:
+    # Prefer Authorization header to keep guest tokens out of URL logs.
+    if creds and creds.credentials and creds.scheme.lower() == "bearer":
+        token = creds.credentials.strip()
+        if token:
+            return token
+    if query_token:
+        token = query_token.strip()
+        if token:
+            if settings.guest_query_token_fallback_enabled:
+                logger.warning("guest_query_token_fallback_used")
+                return token
+            raise HTTPException(401, "Guest access token must be sent in Authorization: Bearer <token>")
+    raise HTTPException(401, "Guest access token is required")
+
+
 def require_hub_guest(guest: Guest, event: Event | None):
     event_allows_non_rsvp = bool(event and (event.experience_enabled or not event.rsvp_enabled))
     if guest.rsvp_status != "confirmed" and not event_allows_non_rsvp:
@@ -344,13 +368,32 @@ async def get_settings(event_id: str, db: AsyncSession) -> EventGuestMessagingSe
     return row
 
 
-def _rate_limit(key: str, limit: int, window_seconds: int = 300):
+async def _rate_limit(key: str, limit: int, window_seconds: int = 300):
+    try:
+        value = await redis_client.incr(f"msg-rate:{key}")
+        if value == 1:
+            await redis_client.expire(f"msg-rate:{key}", window_seconds)
+        if value > limit:
+            raise HTTPException(429, "Too many messages. Please wait a few minutes.")
+        return
+    except HTTPException:
+        raise
+    except Exception:
+        # Keep service available if Redis is temporarily unavailable.
+        pass
+
     now = time.time()
     bucket = [t for t in _rate_buckets.get(key, []) if now - t < window_seconds]
     if len(bucket) >= limit:
         raise HTTPException(429, "Too many messages. Please wait a few minutes.")
     bucket.append(now)
     _rate_buckets[key] = bucket
+    # This in-process path is only a fallback while Redis is down. Bound its
+    # memory: once the map is large, evict keys whose windows have fully expired
+    # (one-shot guest ids from key churn) so a long outage can't grow it forever.
+    if len(_rate_buckets) > _RATE_BUCKET_MAX_KEYS:
+        for stale in [k for k, v in _rate_buckets.items() if not v or now - v[-1] >= window_seconds]:
+            _rate_buckets.pop(stale, None)
 
 
 async def _audience_filter(announcement: EventAnnouncement):
@@ -436,9 +479,14 @@ async def health(db: AsyncSession = Depends(get_db)):
 
 
 @app.get("/api/messaging/events/{event_id}/guest-hub")
-async def guest_hub(event_id: str, token: str = Query(...), db: AsyncSession = Depends(get_db)):
+async def guest_hub(
+    event_id: str,
+    token: str | None = Query(default=None),
+    creds: HTTPAuthorizationCredentials | None = Depends(bearer),
+    db: AsyncSession = Depends(get_db),
+):
     _ensure_enabled()
-    guest = await guest_by_token(event_id, token, db)
+    guest = await guest_by_token(event_id, _guest_access_token(token, creds), db)
     event = await db.get(Event, event_id)
     require_hub_guest(guest, event)
     cfg = await get_settings(event_id, db)
@@ -457,7 +505,7 @@ async def guest_hub(event_id: str, token: str = Query(...), db: AsyncSession = D
             if await _announcement_visible(ann, guest, db):
                 anns.append({"id": ann.id, "title": ann.title, "body": ann.body, "created_at": ann.created_at.isoformat()})
     direct = await _direct_messages(event_id, guest, db)
-    chat_enabled = bool(cfg.guest_chat_enabled)
+    chat_enabled = bool(cfg.guest_chat_enabled and (guest.rsvp_status == "confirmed" or not cfg.attending_only_chat))
     # Check-out (when the event enables it): the guest's latest normal exit scan.
     checked_out_at = None
     if event and event.checkout_enabled:
@@ -570,9 +618,15 @@ async def _chat_messages(event_id: str, db: AsyncSession, include_hidden: bool =
 
 
 @app.post("/api/messaging/events/{event_id}/messages/direct")
-async def guest_direct_message(event_id: str, payload: MessageIn, token: str = Query(...), db: AsyncSession = Depends(get_db)):
+async def guest_direct_message(
+    event_id: str,
+    payload: MessageIn,
+    token: str | None = Query(default=None),
+    creds: HTTPAuthorizationCredentials | None = Depends(bearer),
+    db: AsyncSession = Depends(get_db),
+):
     _ensure_enabled()
-    guest = await guest_by_token(event_id, token, db)
+    guest = await guest_by_token(event_id, _guest_access_token(token, creds), db)
     cfg = await get_settings(event_id, db)
     event = await db.get(Event, event_id)
     require_hub_guest(guest, event)
@@ -580,7 +634,7 @@ async def guest_direct_message(event_id: str, payload: MessageIn, token: str = Q
         raise HTTPException(403, "Guest Hub is disabled for this event.")
     if not cfg.direct_host_messages_enabled:
         raise HTTPException(403, "Message Host is only available to confirmed guests")
-    _rate_limit(f"direct:{guest.id}", settings.guest_message_rate_limit)
+    await _rate_limit(f"direct:{guest.id}", settings.guest_message_rate_limit)
     thread = await _direct_thread(event_id, guest, db, create=True)
     body = _clean(payload.body, settings.message_max_length)
     msg = EventMessage(event_id=event_id, thread_id=thread.id, sender_type="guest", sender_id=guest.id, guest_id=guest.id, message_type="direct", body=body)
@@ -592,9 +646,15 @@ async def guest_direct_message(event_id: str, payload: MessageIn, token: str = Q
 
 
 @app.post("/api/messaging/events/{event_id}/messages/chat")
-async def guest_chat_message(event_id: str, payload: MessageIn, token: str = Query(...), db: AsyncSession = Depends(get_db)):
+async def guest_chat_message(
+    event_id: str,
+    payload: MessageIn,
+    token: str | None = Query(default=None),
+    creds: HTTPAuthorizationCredentials | None = Depends(bearer),
+    db: AsyncSession = Depends(get_db),
+):
     _ensure_enabled()
-    guest = await guest_by_token(event_id, token, db)
+    guest = await guest_by_token(event_id, _guest_access_token(token, creds), db)
     cfg = await get_settings(event_id, db)
     event = await db.get(Event, event_id)
     require_hub_guest(guest, event)
@@ -602,9 +662,11 @@ async def guest_chat_message(event_id: str, payload: MessageIn, token: str = Que
         raise HTTPException(403, "Guest Hub is disabled for this event.")
     if not cfg.guest_chat_enabled:
         raise HTTPException(403, "Guest Chat is disabled for this event")
+    if cfg.attending_only_chat and guest.rsvp_status != "confirmed":
+        raise HTTPException(403, "Guest Chat is only available to confirmed guests")
     if not cfg.guest_chat_posting_enabled:
         raise HTTPException(403, "Guest Chat posting is paused")
-    _rate_limit(f"chat:{guest.id}", settings.guest_chat_rate_limit)
+    await _rate_limit(f"chat:{guest.id}", settings.guest_chat_rate_limit)
     thread = await _chat_thread(event_id, db, create=True)
     msg = EventMessage(
         event_id=event_id,
@@ -698,17 +760,47 @@ async def admin_inbox(event_id: str, user: User = Depends(current_user), db: Asy
         EventMessageThread.thread_type == "direct",
         EventMessageThread.is_active.is_(True),
     ).order_by(EventMessageThread.updated_at.desc()))).all()
+    thread_ids = [thread.id for thread, _ in rows]
+    last_by_thread: dict[str, tuple[str, datetime | None]] = {}
+    guest_count_by_thread: dict[str, int] = {}
+    if thread_ids:
+        last_rows = (await db.execute(
+            select(EventMessage.thread_id, EventMessage.body, EventMessage.created_at)
+            .where(
+                EventMessage.thread_id.in_(thread_ids),
+                EventMessage.status == "active",
+            )
+            .order_by(EventMessage.thread_id, EventMessage.created_at.desc())
+            .distinct(EventMessage.thread_id)
+        )).all()
+        last_by_thread = {
+            thread_id: (body, created_at)
+            for thread_id, body, created_at in last_rows
+        }
+        count_rows = (await db.execute(
+            select(EventMessage.thread_id, func.count(EventMessage.id))
+            .where(
+                EventMessage.thread_id.in_(thread_ids),
+                EventMessage.sender_type == "guest",
+                EventMessage.status == "active",
+            )
+            .group_by(EventMessage.thread_id)
+        )).all()
+        guest_count_by_thread = {
+            thread_id: int(count)
+            for thread_id, count in count_rows
+        }
     out = []
     for thread, guest in rows:
-        last = await db.scalar(select(EventMessage).where(EventMessage.thread_id == thread.id, EventMessage.status == "active").order_by(EventMessage.created_at.desc()).limit(1))
-        count = await db.scalar(select(func.count(EventMessage.id)).where(EventMessage.thread_id == thread.id, EventMessage.sender_type == "guest", EventMessage.status == "active")) or 0
+        last_body, last_created_at = last_by_thread.get(thread.id, ("", None))
+        count = guest_count_by_thread.get(thread.id, 0)
         out.append({
             "thread_id": thread.id,
             "guest_id": guest.id,
             "guest_name": _display_name(guest),
             "rsvp_status": guest.rsvp_status,
-            "last_message": last.body if last else "",
-            "last_message_at": last.created_at.isoformat() if last and last.created_at else None,
+            "last_message": last_body,
+            "last_message_at": last_created_at.isoformat() if last_created_at else None,
             "guest_message_count": int(count),
         })
     return out

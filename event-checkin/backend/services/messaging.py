@@ -534,18 +534,22 @@ async def _send_whatsapp_template(*, phone: str, kind: str, params: list[str],
         if not template:
             logger.warning("Bird WhatsApp %s template not set — skipping", kind)
             return
+        # Bird references a WhatsApp template by its project id + version (both
+        # UUIDs), NOT by name. Config holds "projectId:version" (version optional;
+        # Bird uses the active version when omitted).
+        project_id, _, version = template.partition(":")
         keys = var_keys or [str(i + 1) for i in range(len(params))]
-        # Bird wants the template *name*, a locale, and parameters as an array of
-        # {type,key,value} objects. A flat {key:value} "variables" object 422s
-        # with "provided template information is invalid".
         parameters = [{"type": "string", "key": k, "value": v} for k, v in zip(keys, params)]
+        template_ref: dict = {
+            "projectId": project_id.strip(),
+            "locale": settings.bird_whatsapp_locale or "en",
+            "parameters": parameters,
+        }
+        if version.strip():
+            template_ref["version"] = version.strip()
         return await _bird_post(settings.bird_whatsapp_channel_id, {
             "receiver": _bird_recipient(phone),
-            "template": {
-                "name": template,
-                "locale": "en",
-                "parameters": parameters,
-            },
+            "template": template_ref,
         })
     elif provider == "twilio":
         sid = (

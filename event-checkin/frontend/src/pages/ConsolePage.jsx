@@ -50,10 +50,34 @@ function OverviewTab() {
   )
 }
 
+const MESSAGING_CHANNELS = [['email', 'Email'], ['sms', 'SMS'], ['whatsapp', 'WhatsApp'], ['mms', 'MMS']]
+const COMM_FEATURES = [['guest_hub', 'Guest Hub'], ['guest_chat', 'Guest Chat'], ['host_messages', 'Message Host'], ['announcements', 'Announcements'], ['festiome', 'FestioMe']]
+
 function EventRow({ ev, plans, onGrant }) {
   const [tier, setTier] = useState('')
   const [credits, setCredits] = useState('')
   const [reportBusy, setReportBusy] = useState('')
+  const [controls, setControls] = useState(null)   // { blocked_messaging_channels, blocked_comm_features }
+  const [savingCtl, setSavingCtl] = useState(false)
+
+  async function openControls() {
+    if (controls) { setControls(null); return }
+    try { setControls(await api.adminEventControls(ev.id)) }
+    catch (e) { window.alert(e.message) }
+  }
+  function toggleBlock(kind, key) {
+    setControls((c) => {
+      const set = new Set(c[kind] || [])
+      set.has(key) ? set.delete(key) : set.add(key)
+      return { ...c, [kind]: [...set] }
+    })
+  }
+  async function saveControls() {
+    setSavingCtl(true)
+    try { setControls(await api.adminSetEventControls(ev.id, controls)) }
+    catch (e) { window.alert(e.message) }
+    finally { setSavingCtl(false) }
+  }
 
   async function previewReport() {
     setReportBusy('preview')
@@ -73,7 +97,8 @@ function EventRow({ ev, plans, onGrant }) {
     finally { setReportBusy('') }
   }
   return (
-    <div className="py-3 flex items-end gap-4 flex-wrap text-sm">
+    <div className="py-3">
+    <div className="flex items-end gap-4 flex-wrap text-sm">
       <div className="flex-1 min-w-[180px]">
         <span className="font-medium dark:text-slate-100">{ev.name}</span>
         <div className="mt-1 flex items-center gap-2 text-xs">
@@ -110,7 +135,55 @@ function EventRow({ ev, plans, onGrant }) {
           className="bg-indigo-600 text-white px-3 py-1.5 rounded text-xs font-semibold disabled:opacity-40 hover:bg-indigo-700">
           {reportBusy === 'send' ? 'Sending…' : 'Send to owner'}
         </button>
+        <button onClick={openControls}
+          className="border border-rose-300 text-rose-700 dark:border-rose-800 dark:text-rose-300 px-3 py-1.5 rounded text-xs font-semibold hover:bg-rose-50 dark:hover:bg-rose-950/30">
+          {controls ? 'Close controls' : 'Channel controls'}
+        </button>
       </div>
+    </div>
+    {controls && (
+      <div className="mt-3 rounded-lg border border-rose-200 dark:border-rose-900/50 bg-rose-50/50 dark:bg-rose-950/20 p-3">
+        <p className="text-[11px] text-slate-600 dark:text-slate-300 mb-2">
+          Operator hard-block — organizers <strong>cannot</strong> override these. Click a chip to block it (red = blocked).
+        </p>
+        <div className="mb-2">
+          <div className="text-[11px] font-semibold uppercase tracking-wide text-slate-500 mb-1">Messaging channels</div>
+          <div className="flex flex-wrap gap-1.5">
+            {MESSAGING_CHANNELS.map(([key, label]) => {
+              const blocked = (controls.blocked_messaging_channels || []).includes(key)
+              return (
+                <button key={key} onClick={() => toggleBlock('blocked_messaging_channels', key)}
+                  className={`px-2.5 py-1 rounded-full text-xs font-semibold border ${blocked
+                    ? 'bg-rose-600 text-white border-rose-600'
+                    : 'bg-white dark:bg-slate-700 text-slate-600 dark:text-slate-200 border-slate-300 dark:border-slate-600'}`}>
+                  {blocked ? '⛔ ' : ''}{label}
+                </button>
+              )
+            })}
+          </div>
+        </div>
+        <div className="mb-3">
+          <div className="text-[11px] font-semibold uppercase tracking-wide text-slate-500 mb-1">Communication features</div>
+          <div className="flex flex-wrap gap-1.5">
+            {COMM_FEATURES.map(([key, label]) => {
+              const blocked = (controls.blocked_comm_features || []).includes(key)
+              return (
+                <button key={key} onClick={() => toggleBlock('blocked_comm_features', key)}
+                  className={`px-2.5 py-1 rounded-full text-xs font-semibold border ${blocked
+                    ? 'bg-rose-600 text-white border-rose-600'
+                    : 'bg-white dark:bg-slate-700 text-slate-600 dark:text-slate-200 border-slate-300 dark:border-slate-600'}`}>
+                  {blocked ? '⛔ ' : ''}{label}
+                </button>
+              )
+            })}
+          </div>
+        </div>
+        <button onClick={saveControls} disabled={savingCtl}
+          className="bg-rose-600 text-white px-3 py-1.5 rounded text-xs font-semibold disabled:opacity-40 hover:bg-rose-700">
+          {savingCtl ? 'Saving…' : 'Save blocks'}
+        </button>
+      </div>
+    )}
     </div>
   )
 }

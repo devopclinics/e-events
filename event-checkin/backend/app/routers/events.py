@@ -546,6 +546,39 @@ async def send_test_message(
     return {"ok": True, "channel": channel, "to": phone}
 
 
+_POLICY_FLOWS = {"invite", "admission", "reminder", "approval", "logistics", "registry", "broadcast"}
+_POLICY_CHANNELS = {"email", "sms", "whatsapp", "mms"}
+
+
+@router.put("/{event_id}/channel-policy", response_model=EventOut)
+async def set_channel_policy(
+    event_id: str,
+    body: dict,
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(require_event_admin),
+):
+    """Per-flow channel priority (cost control). Body: {flow: [ordered channels]}.
+    Unknown flows/channels are ignored; an empty map clears the policy (legacy
+    'send on all enabled channels')."""
+    event = await _get_accessible_event(event_id, user, db)
+    policy: dict[str, list[str]] = {}
+    for flow, channels in (body or {}).items():
+        if flow not in _POLICY_FLOWS or not isinstance(channels, list):
+            continue
+        ordered = [c for c in channels if c in _POLICY_CHANNELS]
+        # preserve order, drop dupes
+        seen: list[str] = []
+        for c in ordered:
+            if c not in seen:
+                seen.append(c)
+        if seen:
+            policy[flow] = seen
+    event.channel_policy = policy or None
+    await db.commit()
+    await db.refresh(event)
+    return EventOut.model_validate(event)
+
+
 @router.patch("/{event_id}/features", response_model=EventOut)
 async def toggle_features(
     event_id: str,

@@ -100,6 +100,14 @@ class Event(Base):
     checkout_enabled: Mapped[bool] = mapped_column(Boolean, default=False)
     venue_name: Mapped[str | None] = mapped_column(String(255))
     admission_note: Mapped[str | None] = mapped_column(Text)
+    # Platform-superadmin hard block (set from the backend console). Lists comm
+    # features the operator has disabled for this event: guest_hub / guest_chat /
+    # host_messages / announcements / festiome. Organizers cannot override it.
+    blocked_comm_features: Mapped[list | None] = mapped_column(JSON, nullable=True)
+
+
+def _comm_blocked(event: "Event | None", feature: str) -> bool:
+    return bool(event and feature in (event.blocked_comm_features or []))
 
 
 class SeatingTable(Base):
@@ -490,11 +498,11 @@ async def guest_hub(
     event = await db.get(Event, event_id)
     require_hub_guest(guest, event)
     cfg = await get_settings(event_id, db)
-    if not cfg.guest_hub_enabled:
+    if not cfg.guest_hub_enabled or _comm_blocked(event, "guest_hub"):
         raise HTTPException(403, "Guest Hub is disabled for this event.")
     table = await db.get(SeatingTable, guest.table_id) if guest.table_id else None
     anns = []
-    if cfg.announcements_enabled:
+    if cfg.announcements_enabled and not _comm_blocked(event, "announcements"):
         rows = (await db.execute(
             select(EventAnnouncement)
             .where(EventAnnouncement.event_id == event_id, EventAnnouncement.send_in_app.is_(True), EventAnnouncement.sent_at.isnot(None))
@@ -504,8 +512,10 @@ async def guest_hub(
         for ann in rows:
             if await _announcement_visible(ann, guest, db):
                 anns.append({"id": ann.id, "title": ann.title, "body": ann.body, "created_at": ann.created_at.isoformat()})
-    direct = await _direct_messages(event_id, guest, db)
-    chat_enabled = bool(cfg.guest_chat_enabled and (guest.rsvp_status == "confirmed" or not cfg.attending_only_chat))
+    host_messages_on = cfg.direct_host_messages_enabled and not _comm_blocked(event, "host_messages")
+    direct = await _direct_messages(event_id, guest, db) if host_messages_on else []
+    chat_enabled = bool(cfg.guest_chat_enabled and not _comm_blocked(event, "guest_chat")
+                        and (guest.rsvp_status == "confirmed" or not cfg.attending_only_chat))
     # Check-out (when the event enables it): the guest's latest normal exit scan.
     checked_out_at = None
     if event and event.checkout_enabled:
@@ -543,11 +553,11 @@ async def guest_hub(
             "admission_note": event.admission_note if event else None,
         },
         "capabilities": {
-            "announcements": bool(cfg.announcements_enabled),
-            "direct_host_messages": bool(cfg.direct_host_messages_enabled and guest.rsvp_status == "confirmed"),
+            "announcements": bool(cfg.announcements_enabled and not _comm_blocked(event, "announcements")),
+            "direct_host_messages": bool(host_messages_on and guest.rsvp_status == "confirmed"),
             "guest_chat": chat_enabled,
             "guest_chat_posting": bool(chat_enabled and cfg.guest_chat_posting_enabled),
-            "festiome": bool(event and event.festiome_enabled),
+            "festiome": bool(event and event.festiome_enabled and not _comm_blocked(event, "festiome")),
         },
         "announcements": anns,
         "direct_messages": direct,
@@ -630,9 +640,9 @@ async def guest_direct_message(
     cfg = await get_settings(event_id, db)
     event = await db.get(Event, event_id)
     require_hub_guest(guest, event)
-    if not cfg.guest_hub_enabled:
+    if not cfg.guest_hub_enabled or _comm_blocked(event, "guest_hub"):
         raise HTTPException(403, "Guest Hub is disabled for this event.")
-    if not cfg.direct_host_messages_enabled:
+    if not cfg.direct_host_messages_enabled or _comm_blocked(event, "host_messages"):
         raise HTTPException(403, "Message Host is only available to confirmed guests")
     await _rate_limit(f"direct:{guest.id}", settings.guest_message_rate_limit)
     thread = await _direct_thread(event_id, guest, db, create=True)
@@ -658,9 +668,9 @@ async def guest_chat_message(
     cfg = await get_settings(event_id, db)
     event = await db.get(Event, event_id)
     require_hub_guest(guest, event)
-    if not cfg.guest_hub_enabled:
+    if not cfg.guest_hub_enabled or _comm_blocked(event, "guest_hub"):
         raise HTTPException(403, "Guest Hub is disabled for this event.")
-    if not cfg.guest_chat_enabled:
+    if not cfg.guest_chat_enabled or _comm_blocked(event, "guest_chat"):
         raise HTTPException(403, "Guest Chat is disabled for this event")
     if cfg.attending_only_chat and guest.rsvp_status != "confirmed":
         raise HTTPException(403, "Guest Chat is only available to confirmed guests")

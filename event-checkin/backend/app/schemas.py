@@ -114,6 +114,11 @@ class EventOut(BaseModel):
     notify_sms: bool = True
     notify_whatsapp: bool = True
     notify_mms: bool = False
+    # Per-flow channel policy (organizer cost control) + superadmin hard blocks
+    # (read-only for organizers; set from the operator console).
+    channel_policy: Optional[dict] = None
+    blocked_messaging_channels: Optional[list[str]] = None
+    blocked_comm_features: Optional[list[str]] = None
     notify_rsvp_responses: bool = False
     walk_in_enabled: bool = False
     walk_in_table_group_id: Optional[str] = None

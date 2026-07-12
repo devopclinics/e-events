@@ -4,10 +4,10 @@ from types import SimpleNamespace
 from app.channels import channels_for_flow
 
 
-def _event(policy=None, **notify):
+def _event(policy=None, blocked=None, **notify):
     base = {"notify_email": True, "notify_sms": True, "notify_whatsapp": True, "notify_mms": False}
     base.update(notify)
-    return SimpleNamespace(channel_policy=policy, **base)
+    return SimpleNamespace(channel_policy=policy, blocked_messaging_channels=blocked, **base)
 
 
 def _guest(email="g@x.com", phone="+1", sms=True, whatsapp=True):
@@ -47,3 +47,12 @@ def test_flow_without_policy_entry_keeps_legacy():
     ev = _event(policy={"invite": ["email"]})
     # "admission" has no policy entry → all enabled+available.
     assert channels_for_flow(ev, _guest(), "admission", paid_ok=True) == {"email", "sms", "whatsapp"}
+
+
+def test_superadmin_block_wins_over_policy_and_flags():
+    # WhatsApp hard-blocked by the operator → never chosen, even without a policy.
+    ev = _event(blocked=["whatsapp"])
+    assert channels_for_flow(ev, _guest(), "invite", paid_ok=True) == {"email", "sms"}
+    # And it wins over a policy that lists it first (falls back to next).
+    ev2 = _event(policy={"invite": ["whatsapp", "sms"]}, blocked=["whatsapp"])
+    assert channels_for_flow(ev2, _guest(), "invite", paid_ok=True) == {"sms"}

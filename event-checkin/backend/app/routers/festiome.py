@@ -32,6 +32,8 @@ def _require_festiome_addon(event: Event) -> None:
     opted in via PATCH /events/{id}/features, which is itself plan-gated on
     `festiome_addon_enabled`. This mirrors the logistics/registry/access guards.
     """
+    if "festiome" in (event.blocked_comm_features or []):
+        raise HTTPException(403, "FestioMe has been disabled for this event by Festio.")
     if not event.festiome_addon_enabled:
         raise HTTPException(400, "FestioMe is not enabled for this event")
 

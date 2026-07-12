@@ -357,6 +357,84 @@ function ChannelToggles({ event, onChanged, onGate }) {
   )
 }
 
+const POLICY_FLOWS = [
+  ['invite', 'Invitation'],
+  ['admission', 'Check-in / admission'],
+  ['reminder', 'RSVP reminder'],
+  ['approval', 'Approval notices'],
+  ['logistics', 'Deliveries'],
+  ['registry', 'Gift list'],
+  ['broadcast', 'Host broadcast'],
+]
+const POLICY_CHANNELS = [['email', 'Email'], ['sms', 'SMS'], ['whatsapp', 'WhatsApp'], ['mms', 'MMS']]
+
+function ChannelRoutingPanel({ event, onChanged }) {
+  const blocked = event.blocked_messaging_channels || []
+  const [policy, setPolicy] = useState(event.channel_policy || {})
+  const [saving, setSaving] = useState(false)
+  const [msg, setMsg] = useState('')
+
+  function setSlot(flow, idx, value) {
+    setPolicy((p) => {
+      const cur = [...(p[flow] || [])]
+      cur[idx] = value
+      const cleaned = cur.filter(Boolean).filter((c, i, a) => a.indexOf(c) === i)
+      const next = { ...p }
+      if (cleaned.length) next[flow] = cleaned
+      else delete next[flow]
+      return next
+    })
+  }
+  async function save() {
+    setSaving(true); setMsg('')
+    try { const updated = await api.setChannelPolicy(event.id, policy); onChanged?.(updated); setMsg('Saved.') }
+    catch (e) { setMsg(e.message) }
+    finally { setSaving(false); setTimeout(() => setMsg(''), 2500) }
+  }
+  const options = POLICY_CHANNELS.filter(([c]) => !blocked.includes(c))
+
+  return (
+    <div className="pt-3 border-t dark:border-slate-700 mt-3">
+      <div className="flex items-center justify-between">
+        <div>
+          <span className="text-sm font-semibold dark:text-slate-100">Message routing</span>
+          <p className="text-xs text-slate-500 dark:text-slate-400">Pick which channel each message uses to cut cost. Falls back to the second choice if a guest lacks the first. Leave blank to send on every enabled channel. <span className="text-slate-400">(Invitations honor this now; other flows are rolling out.)</span></p>
+        </div>
+        <button onClick={save} disabled={saving} className="rounded-lg bg-teal-600 px-3 py-1.5 text-xs font-semibold text-white disabled:opacity-40 hover:bg-teal-700">
+          {saving ? 'Saving…' : 'Save routing'}
+        </button>
+      </div>
+      {blocked.length > 0 && (
+        <p className="mt-2 text-xs text-rose-600 dark:text-rose-400">⛔ Festio has disabled for this event: {blocked.join(', ')}. Those channels can’t be selected.</p>
+      )}
+      <div className="mt-2 space-y-1.5">
+        {POLICY_FLOWS.map(([flow, label]) => {
+          const cur = policy[flow] || []
+          return (
+            <div key={flow} className="flex items-center gap-2 text-xs">
+              <span className="w-40 shrink-0 text-slate-600 dark:text-slate-300">{label}</span>
+              {[0, 1].map((idx) => (
+                <select key={idx} value={cur[idx] || ''} onChange={(e) => setSlot(flow, idx, e.target.value)}
+                  className="rounded border bg-white px-2 py-1 dark:border-slate-600 dark:bg-slate-800 dark:text-white">
+                  <option value="">{idx === 0 ? 'All enabled' : '— no fallback —'}</option>
+                  {options.map(([c, l]) => <option key={c} value={c}>{l}</option>)}
+                </select>
+              ))}
+              {idx0Label(cur)}
+            </div>
+          )
+        })}
+      </div>
+      {msg && <p className="mt-2 text-xs text-slate-500">{msg}</p>}
+    </div>
+  )
+}
+
+function idx0Label(cur) {
+  if (!cur.length) return <span className="text-slate-400">→ every enabled channel</span>
+  return <span className="text-slate-400">→ {cur.join(' then ')}</span>
+}
+
 function FeatureToggles({ event, onChanged, onGate }) {
   const [loading, setLoading] = useState(false)
 
@@ -8590,6 +8668,7 @@ export default function AdminPage() {
                 <h2 className="font-semibold text-base dark:text-white">Messaging channels</h2>
                 <p className="text-xs text-gray-400 dark:text-slate-500 mt-1">Which channels fire for invites &amp; admission notifications.</p>
                 <ChannelToggles event={event} onChanged={updateEvent} onGate={openUpgradeGate} />
+                <ChannelRoutingPanel event={event} onChanged={updateEvent} />
                 <label className="mt-4 flex items-start gap-2 cursor-pointer">
                   <input type="checkbox" checked={!!event.notify_rsvp_responses}
                     onChange={async (e) => {

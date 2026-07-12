@@ -12,7 +12,20 @@ from .models import Event, Guest
 ALL_CHANNELS = ("email", "sms", "whatsapp", "mms")
 
 
+def messaging_channel_blocked(event: Event, channel: str) -> bool:
+    """Platform-superadmin hard block (console-only) — wins over notify_* + policy."""
+    return channel in (event.blocked_messaging_channels or [])
+
+
+def comm_feature_blocked(event: Event, feature: str) -> bool:
+    """Platform-superadmin hard block on a two-way communication feature
+    (guest_hub / guest_chat / host_messages / announcements / festiome)."""
+    return feature in (event.blocked_comm_features or [])
+
+
 def _channel_available(event: Event, guest: Guest, channel: str, *, paid_ok: bool) -> bool:
+    if messaging_channel_blocked(event, channel):
+        return False
     if not getattr(event, f"notify_{channel}", False):
         return False
     if channel == "email":

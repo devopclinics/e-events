@@ -159,6 +159,12 @@ class Event(Base):
     # (priority + fallback). Flows absent from the map keep the legacy behavior of
     # sending on every enabled+available channel. NULL/{} = legacy everywhere.
     channel_policy: Mapped[dict | None] = mapped_column(JSON, nullable=True)
+    # Platform-superadmin hard blocks (console-only). Organizers cannot override
+    # these — they win over notify_* flags and the channel policy. Lists of
+    # "email"/"sms"/"whatsapp"/"mms" and comm features
+    # ("guest_hub"/"guest_chat"/"host_messages"/"announcements"/"festiome").
+    blocked_messaging_channels: Mapped[list | None] = mapped_column(JSON, nullable=True)
+    blocked_comm_features: Mapped[list | None] = mapped_column(JSON, nullable=True)
     # Send a notice to a guest when they decline / are rejected. Off by default
     # (previously silent); organizer opt-in.
     notify_rsvp_responses: Mapped[bool] = mapped_column(Boolean, default=False)

@@ -271,6 +271,44 @@ async def set_mms(
     return {"ok": True, "notify_mms": ev.notify_mms}
 
 
+from pydantic import BaseModel, Field
+from typing import Literal
+
+_BLOCKABLE_CHANNELS = {"email", "sms", "whatsapp", "mms"}
+_BLOCKABLE_COMM = {"guest_hub", "guest_chat", "host_messages", "announcements", "festiome"}
+
+
+class EventControls(BaseModel):
+    blocked_messaging_channels: list[Literal["email", "sms", "whatsapp", "mms"]] = Field(default_factory=list)
+    blocked_comm_features: list[Literal["guest_hub", "guest_chat", "host_messages", "announcements", "festiome"]] = Field(default_factory=list)
+
+
+@router.get("/events/{event_id}/controls")
+async def get_event_controls(event_id: str, _: User = Depends(require_superadmin), db: AsyncSession = Depends(get_db)):
+    event = await db.get(Event, event_id)
+    if not event:
+        raise HTTPException(404, "Event not found")
+    return {
+        "blocked_messaging_channels": event.blocked_messaging_channels or [],
+        "blocked_comm_features": event.blocked_comm_features or [],
+    }
+
+
+@router.post("/events/{event_id}/controls")
+async def set_event_controls(event_id: str, body: EventControls, _: User = Depends(require_superadmin), db: AsyncSession = Depends(get_db)):
+    """Operator hard-blocks: disable messaging channels and/or communication
+    features for an event. Organizers cannot override these."""
+    event = await db.get(Event, event_id)
+    if not event:
+        raise HTTPException(404, "Event not found")
+    channels = sorted({c for c in body.blocked_messaging_channels if c in _BLOCKABLE_CHANNELS})
+    comm = sorted({c for c in body.blocked_comm_features if c in _BLOCKABLE_COMM})
+    event.blocked_messaging_channels = channels or None
+    event.blocked_comm_features = comm or None
+    await db.commit()
+    return {"ok": True, "blocked_messaging_channels": channels, "blocked_comm_features": comm}
+
+
 @router.post("/events/{event_id}/grant")
 async def grant(event_id: str, body: GrantRequest, _: User = Depends(require_superadmin), db: AsyncSession = Depends(get_db)):
     """Comp an event onto a tier and/or add message credits — no payment."""

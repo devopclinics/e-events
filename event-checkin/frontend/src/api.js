@@ -309,6 +309,7 @@ export const api = {
 
   // Features
   toggleFeatures: (eventId, body) => req('PATCH', `/events/${eventId}/features`, body),
+  setChannelPolicy: (eventId, policy) => req('PUT', `/events/${eventId}/channel-policy`, policy),
   sendTestMessage: (eventId, channel, phone) => req('POST', `/events/${eventId}/messaging/test`, { channel, phone }),
 
   // Experience workflows (admin)
@@ -664,6 +665,8 @@ export const api = {
   adminSetUserActive: (userId, active) => req('PATCH', `/admin/users/${userId}/active`, { active }),
   adminDeleteUser: (userId) => req('DELETE', `/admin/users/${userId}`),
   adminGrant: (eventId, body) => req('POST', `/admin/events/${eventId}/grant`, body),
+  adminEventControls: (eventId) => req('GET', `/admin/events/${eventId}/controls`),
+  adminSetEventControls: (eventId, body) => req('POST', `/admin/events/${eventId}/controls`, body),
   adminPreviewReadinessReport: async (eventId) => {
     const token = await getToken()
     const res = await fetch(`${BASE}/admin/events/${eventId}/readiness-report`, {

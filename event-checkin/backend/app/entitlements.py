@@ -282,6 +282,10 @@ def take_message_credit(
     The balance remains on `events.message_credits`; this appends a matching
     ledger row. Existing callers can still use the old boolean API.
     """
+    # Platform-superadmin hard block (console-only) wins over everything — no
+    # paid send on a blocked channel, regardless of credits or notify_* flags.
+    if channel in (event.blocked_messaging_channels or []):
+        return False
     credits = channel_weight(channel)
     if (event.message_credits or 0) < credits:
         return False

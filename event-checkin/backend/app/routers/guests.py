@@ -41,6 +41,7 @@ from ..models import (
 from ..schemas import GuestOut, GuestCreate, GuestUpdate, BulkAssignGroupRequest, ScanResult, WalkInRegister
 from ..auth import require_event_admin, require_official
 from ..entitlements import assert_within_guest_cap, guest_limit, can_use_paid_channels, last_credit_ledger_id, take_message_credit
+from ..channels import channels_for_flow
 from services.qr_service import generate_qr_bytes
 from services.email_service import send_invite_email, send_manual_invite_email, send_simple_email
 from ..template_resolve import load_overrides, channel_text as template_channel_text, email_override as template_email_override, channel_text_or_default as template_channel_or_default, email_or_default as template_email_or_default
@@ -873,8 +874,11 @@ def _dispatch_invite(background_tasks: BackgroundTasks, event: Event, guest: Gue
     overrides = overrides or {}
     ctx = build_template_context(event, guest, extras={"ticket_link": ticket_url, "qr_code": ticket_url})
     dispatched = False
+    # Cost control: the event's channel policy narrows "invite" to the first
+    # deliverable channel; with no policy this is every enabled+available channel.
+    chosen = channels_for_flow(event, guest, "invite", paid_ok=paid_channels)
 
-    if event.notify_email and guest.email:
+    if "email" in chosen:
         invite_key = "experience_invitation" if event.experience_enabled else "ticket_qr"
         ov = overrides.get(invite_key)
         spec = TEMPLATE_DEFS.get(invite_key, {})
@@ -897,7 +901,7 @@ def _dispatch_invite(background_tasks: BackgroundTasks, event: Event, guest: Gue
         )
         dispatched = True
 
-    if paid_channels and event.notify_sms and guest.phone and guest.sms_consent and take_message_credit(event, "sms", guest_id=guest.id):
+    if "sms" in chosen and take_message_credit(event, "sms", guest_id=guest.id):
         sms_text = (
             template_channel_or_default(overrides, "experience_invitation", "sms", ctx)
             if event.experience_enabled
@@ -915,14 +919,18 @@ def _dispatch_invite(background_tasks: BackgroundTasks, event: Event, guest: Gue
             )
         dispatched = True
 
-    if paid_channels and event.notify_whatsapp and guest.phone and guest.whatsapp_consent and take_message_credit(event, "whatsapp", guest_id=guest.id):
-        wa_text = (
-            template_channel_or_default(overrides, "experience_invitation", "whatsapp", ctx)
-            if event.experience_enabled
-            else template_channel_text(overrides, "whatsapp_invitation", "whatsapp", ctx)
-        )
-        if wa_text is not None:
-            background_tasks.add_task(send_with_credit_ledger, last_credit_ledger_id(event), messaging.send_custom_whatsapp, phone=guest.phone, body=wa_text)
+    if "whatsapp" in chosen and take_message_credit(event, "whatsapp", guest_id=guest.id):
+        # WhatsApp can only OPEN a conversation with an approved template — free
+        # text 15003s with "no active session". So the invite always goes via a
+        # template; a rendered/custom override can't initiate and is not used here.
+        if event.experience_enabled:
+            background_tasks.add_task(
+                send_with_credit_ledger,
+                last_credit_ledger_id(event),
+                messaging.send_experience_invite_whatsapp,
+                phone=guest.phone, first_name=guest.first_name,
+                event_name=event.name, ticket_url=ticket_url,
+            )
         else:
             background_tasks.add_task(
                 send_with_credit_ledger,
@@ -934,8 +942,8 @@ def _dispatch_invite(background_tasks: BackgroundTasks, event: Event, guest: Gue
         dispatched = True
 
     # MMS (ticket card) at invite time — super-admin-enabled per event.
-    if (paid_channels and event.notify_mms and guest.phone and guest.sms_consent
-            and messaging.mms_ready() and event.checkin_base_url and take_message_credit(event, "mms", guest_id=guest.id)):
+    if ("mms" in chosen and messaging.mms_ready() and event.checkin_base_url
+            and take_message_credit(event, "mms", guest_id=guest.id)):
         mms_key = "experience_invitation" if event.experience_enabled else "mms_invitation"
         mms_text = (template_channel_or_default(overrides, mms_key, "mms", ctx)
                     or f"Hi {guest.first_name}! You're invited to {event.name}.")
@@ -1017,10 +1025,8 @@ def _dispatch_rsvp_invite(background_tasks: BackgroundTasks, event: Event, guest
         dispatched = True
 
     if paid_channels and event.notify_whatsapp and guest.phone and guest.whatsapp_consent and take_message_credit(event, "whatsapp", guest_id=guest.id):
-        wa_text = template_channel_text(overrides, template_key, "whatsapp", ctx)
-        if wa_text is not None:
-            background_tasks.add_task(send_with_credit_ledger, last_credit_ledger_id(event), messaging.send_custom_whatsapp, phone=guest.phone, body=wa_text)
-        elif template_key == "rsvp_reminder":
+        # WhatsApp initiates → approved template only (free-text overrides 15003).
+        if template_key == "rsvp_reminder":
             background_tasks.add_task(
                 send_with_credit_ledger,
                 last_credit_ledger_id(event),
@@ -1109,17 +1115,14 @@ def dispatch_approval_accepted(background_tasks: BackgroundTasks, event: Event, 
 
     if (can_use_paid_channels(event) and event.notify_whatsapp and guest.phone
             and guest.whatsapp_consent and take_message_credit(event, "whatsapp")):
-        wa_text = template_channel_text(overrides, "approval_accepted", "whatsapp", ctx)
-        if wa_text is not None:
-            background_tasks.add_task(send_with_credit_ledger, last_credit_ledger_id(event), messaging.send_custom_whatsapp, phone=guest.phone, body=wa_text)
-        else:
-            background_tasks.add_task(
-                send_with_credit_ledger,
-                last_credit_ledger_id(event),
-                messaging.send_approval_accepted_whatsapp,
-                phone=guest.phone, first_name=guest.first_name,
-                event_name=event.name, ticket_url=ticket_url,
-            )
+        # WhatsApp initiates → approved template only (free-text overrides 15003).
+        background_tasks.add_task(
+            send_with_credit_ledger,
+            last_credit_ledger_id(event),
+            messaging.send_approval_accepted_whatsapp,
+            phone=guest.phone, first_name=guest.first_name,
+            event_name=event.name, ticket_url=ticket_url,
+        )
         sent = True
 
     return sent
@@ -1143,14 +1146,12 @@ def dispatch_simple_notice(background_tasks: BackgroundTasks, event: Event, gues
         if sms:
             background_tasks.add_task(send_with_credit_ledger, last_credit_ledger_id(event), messaging.send_custom_sms, phone=guest.phone, body=sms)
             sent = True
-    wa = template_channel_text(overrides, key, "whatsapp", ctx)
-    if (wa is not None or key in {"rsvp_decline", "approval_pending", "rsvp_confirmation", "approval_rejected"}) and (
+    # WhatsApp initiates → approved template only (free-text overrides 15003), so
+    # the custom-copy override is ignored for WhatsApp here.
+    if (key in {"rsvp_decline", "approval_pending", "rsvp_confirmation", "approval_rejected"}) and (
             can_use_paid_channels(event) and event.notify_whatsapp and guest.phone
             and guest.whatsapp_consent and take_message_credit(event, "whatsapp")):
-        if wa is not None:
-            background_tasks.add_task(send_with_credit_ledger, last_credit_ledger_id(event), messaging.send_custom_whatsapp, phone=guest.phone, body=wa)
-            sent = True
-        elif key == "rsvp_decline":
+        if key == "rsvp_decline":
             background_tasks.add_task(
                 send_with_credit_ledger,
                 last_credit_ledger_id(event),

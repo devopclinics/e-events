@@ -914,17 +914,18 @@ async def broadcast_message(
             if "whatsapp" in data.channels and guest.whatsapp_consent:
                 if take_message_credit(event, "whatsapp", reason="broadcast", guest_id=guest.id):
                     wa_text = channel_text(overrides, "broadcast", "whatsapp", _ctx(guest))
-                    if wa_text is not None:
-                        background_tasks.add_task(send_with_credit_ledger, last_credit_ledger_id(event), messaging.send_custom_whatsapp, phone=guest.phone, body=wa_text)
-                    else:
-                        background_tasks.add_task(
-                            send_with_credit_ledger,
-                            last_credit_ledger_id(event),
-                            messaging.send_broadcast_whatsapp,
-                            phone=guest.phone,
-                            first_name=guest.first_name,
-                            message=data.message,
-                        )
+                    # Freeform content can only initiate WhatsApp via an approved
+                    # generic announcement template; falls back to free text
+                    # (session-only) when that template isn't configured.
+                    background_tasks.add_task(
+                        send_with_credit_ledger,
+                        last_credit_ledger_id(event),
+                        messaging.send_announcement_whatsapp,
+                        phone=guest.phone,
+                        first_name=guest.first_name,
+                        event_name=event.name,
+                        message=wa_text if wa_text is not None else data.message,
+                    )
                     sent_any = True
                 else:
                     credit_blocked = True

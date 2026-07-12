@@ -259,16 +259,13 @@ async def send_registry_message(
         if ("whatsapp" in channels and can_use_paid_channels(ev) and ev.notify_whatsapp
                 and guest.phone and guest.whatsapp_consent):
             if take_message_credit(ev, "whatsapp", reason="registry_message", guest_id=guest.id):
-                wa = template_channel_text(overrides, "registry_message", "whatsapp", ctx)
-                if wa is not None:
-                    background_tasks.add_task(send_with_credit_ledger, last_credit_ledger_id(ev), messaging.send_custom_whatsapp, phone=guest.phone, body=wa)
-                else:
-                    background_tasks.add_task(
-                        send_with_credit_ledger,
-                        last_credit_ledger_id(ev),
-                        messaging.send_registry_whatsapp,
-                        phone=guest.phone, event_name=ev.name, registry_url=registry_url,
-                    )
+                # WhatsApp initiates → approved template only (free-text 15003s).
+                background_tasks.add_task(
+                    send_with_credit_ledger,
+                    last_credit_ledger_id(ev),
+                    messaging.send_registry_whatsapp,
+                    phone=guest.phone, event_name=ev.name, registry_url=registry_url,
+                )
                 sent_any = True
             else:
                 skipped_no_credits += 1

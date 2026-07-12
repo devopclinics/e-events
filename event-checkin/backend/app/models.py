@@ -153,6 +153,12 @@ class Event(Base):
     notify_whatsapp: Mapped[bool] = mapped_column(Boolean, default=True)
     # MMS (image ticket card). Superadmin-only per-event toggle; off by default.
     notify_mms: Mapped[bool] = mapped_column(Boolean, default=False)
+    # Optional per-flow channel policy for cost control, e.g.
+    # {"invite": ["email","sms"], "admission": ["mms","whatsapp"]}. For a flow
+    # with a policy, only the FIRST deliverable channel (consent+contact) is used
+    # (priority + fallback). Flows absent from the map keep the legacy behavior of
+    # sending on every enabled+available channel. NULL/{} = legacy everywhere.
+    channel_policy: Mapped[dict | None] = mapped_column(JSON, nullable=True)
     # Send a notice to a guest when they decline / are rejected. Off by default
     # (previously silent); organizer opt-in.
     notify_rsvp_responses: Mapped[bool] = mapped_column(Boolean, default=False)

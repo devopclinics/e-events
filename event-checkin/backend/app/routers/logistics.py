@@ -257,16 +257,14 @@ async def update_line(event_id: str, sid: str, gid: str, data: GuestShipmentUpda
                 background_tasks.add_task(send_with_credit_ledger, last_credit_ledger_id(ev), messaging.send_custom_sms, phone=g.phone, body=sms)
         if (can_use_paid_channels(ev) and ev.notify_whatsapp and g.phone
                 and g.whatsapp_consent and take_message_credit(ev, "whatsapp")):
-            wa = template_channel_text(overrides, "logistics_notification", "whatsapp", ctx)
-            if wa is not None:
-                background_tasks.add_task(send_with_credit_ledger, last_credit_ledger_id(ev), messaging.send_custom_whatsapp, phone=g.phone, body=wa)
-            else:
-                background_tasks.add_task(
-                    send_with_credit_ledger,
-                    last_credit_ledger_id(ev),
-                    messaging.send_logistics_whatsapp,
-                    phone=g.phone, first_name=g.first_name, event_name=ev.name,
-                )
+            # WhatsApp initiates the conversation → approved template only; a
+            # custom free-text override can't open a session (fails 15003).
+            background_tasks.add_task(
+                send_with_credit_ledger,
+                last_credit_ledger_id(ev),
+                messaging.send_logistics_whatsapp,
+                phone=g.phone, first_name=g.first_name, event_name=ev.name,
+            )
     await db.commit()
     return _line_out(line, g)
 

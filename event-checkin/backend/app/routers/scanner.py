@@ -1036,18 +1036,15 @@ async def perform_admission(guest, event, background_tasks, db) -> ScanResult:
                 table_name=table_name, seat_number=guest.seat_number,
             )
     if paid and event.notify_whatsapp and guest.phone and guest.whatsapp_consent and take_message_credit(event, "whatsapp"):
-        wa_text = _template_channel_for_event(overrides, event, "admission_confirmation", "experience_admission_confirmation", "whatsapp", tmpl_ctx)
-        if wa_text is not None:
-            background_tasks.add_task(send_with_credit_ledger, last_credit_ledger_id(event), messaging.send_custom_whatsapp, phone=guest.phone, body=wa_text)
-        else:
-            background_tasks.add_task(
-                send_with_credit_ledger,
-                last_credit_ledger_id(event),
-                messaging.send_admission_whatsapp,
-                phone=guest.phone, first_name=guest.first_name,
-                event_name=event.name if event else "the event",
-                table_name=table_name, seat_number=guest.seat_number,
-            )
+        # WhatsApp initiates → approved template only (free-text overrides 15003).
+        background_tasks.add_task(
+            send_with_credit_ledger,
+            last_credit_ledger_id(event),
+            messaging.send_admission_whatsapp,
+            phone=guest.phone, first_name=guest.first_name,
+            event_name=event.name if event else "the event",
+            table_name=table_name, seat_number=guest.seat_number,
+        )
     # MMS (image ticket card) — super-admin-enabled per event. Sends the styled
     # admitted card fetched directly from /api/scan/{token}/card.jpg.
     if (paid and event.notify_mms and guest.phone and guest.sms_consent

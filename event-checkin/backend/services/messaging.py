@@ -77,6 +77,20 @@ async def send_invite_whatsapp(*, phone: str, first_name: str, event_name: str, 
     )
 
 
+async def send_experience_invite_whatsapp(*, phone: str, first_name: str, event_name: str, ticket_url: str) -> dict | None:
+    """Experience-event pass invite. WhatsApp can only OPEN a conversation with
+    an approved template (free text 15003s with 'no active session'), so this
+    uses the Experience pass-invite template rather than rendered copy."""
+    if not _channel_ready("whatsapp", phone):
+        return
+    return await _send_whatsapp_template(
+        phone=phone,
+        kind="experience_invite",
+        params=[first_name, event_name, ticket_url],
+        var_keys=["firstName", "eventName", "ticketUrl"],
+    )
+
+
 async def send_admission_whatsapp(*, phone: str, first_name: str, event_name: str, table_name: str | None, seat_number: str | None) -> dict | None:
     if not _channel_ready("whatsapp", phone):
         return
@@ -195,6 +209,26 @@ async def send_broadcast_sms(*, phone: str, first_name: str, message: str) -> di
         return
     body = f"Hi {first_name}! {message}"
     return await _send_sms(phone, _brand_sms(body))
+
+
+async def send_announcement_whatsapp(*, phone: str, first_name: str, event_name: str, message: str) -> dict | None:
+    """Organizer broadcast / urgent announcement over WhatsApp.
+
+    Freeform content can only INITIATE a WhatsApp conversation through an approved
+    generic-announcement template with a {message} variable. If that template is
+    configured we use it (reaches everyone); otherwise we fall back to free text,
+    which only reaches guests with an open 24h session.
+    """
+    if not _channel_ready("whatsapp", phone):
+        return
+    if settings.bird_whatsapp_announcement_template:
+        return await _send_whatsapp_template(
+            phone=phone,
+            kind="announcement",
+            params=[first_name, event_name, message],
+            var_keys=["firstName", "eventName", "message"],
+        )
+    return await _send_sms_as_whatsapp(phone, message)
 
 
 async def send_broadcast_whatsapp(*, phone: str, first_name: str, message: str) -> dict | None:
@@ -509,6 +543,7 @@ async def _send_sms(phone: str, body: str) -> dict | None:
 def _bird_whatsapp_template_for(kind: str) -> str:
     return {
         "invite": settings.bird_whatsapp_invite_template,
+        "experience_invite": settings.bird_whatsapp_experience_invite_template,
         "rsvp_invitation": settings.bird_whatsapp_rsvp_invitation_template,
         "rsvp_reminder": settings.bird_whatsapp_rsvp_reminder_template,
         "rsvp_confirmation": settings.bird_whatsapp_rsvp_confirmation_template,
@@ -519,6 +554,7 @@ def _bird_whatsapp_template_for(kind: str) -> str:
         "admission": settings.bird_whatsapp_admission_template,
         "logistics": settings.bird_whatsapp_logistics_template,
         "registry": settings.bird_whatsapp_registry_template,
+        "announcement": settings.bird_whatsapp_announcement_template,
     }.get(kind, "")
 
 

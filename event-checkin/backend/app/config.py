@@ -62,6 +62,7 @@ class Settings(BaseSettings):
     # (both UUIDs from the channel-template project). Version is optional — omit
     # the ":version" suffix to let Bird use the template's active version.
     bird_whatsapp_invite_template: str = ""           # Bird WhatsApp template for invite → "projectId:version"
+    bird_whatsapp_experience_invite_template: str = ""# Bird WhatsApp template for Experience-event pass invite
     bird_whatsapp_rsvp_invitation_template: str = ""  # Bird WhatsApp template NAME for RSVP invite
     bird_whatsapp_rsvp_reminder_template: str = ""    # Bird WhatsApp template NAME for RSVP reminder
     bird_whatsapp_rsvp_confirmation_template: str = ""# Bird WhatsApp template NAME for RSVP confirmation
@@ -72,6 +73,7 @@ class Settings(BaseSettings):
     bird_whatsapp_admission_template: str = ""        # Bird WhatsApp template NAME for admission (e.g. event_admmision_utility)
     bird_whatsapp_logistics_template: str = ""        # Bird WhatsApp template NAME for logistics notification
     bird_whatsapp_registry_template: str = ""         # Bird WhatsApp template NAME for registry message
+    bird_whatsapp_announcement_template: str = ""     # Generic announcement template (vars firstName/eventName/message) for freeform broadcasts/escalations
     bird_mms_channel_id: str = ""                     # Bird MMS channel (image-capable)
 
     # Signal House — US 10DLC SMS/MMS.

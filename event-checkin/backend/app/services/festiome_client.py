@@ -146,6 +146,21 @@ class FestioMeClient:
         if response.status_code not in (200, 204, 404):
             raise FestioMeUnavailable("FestioMe guest removal failed")
 
+    async def upsert_user(
+        self, external_event_ref: str, *, subject: str, name: str,
+        email: str | None, role: str = "member",
+    ) -> dict[str, Any]:
+        response = await self._request(
+            "PUT",
+            f"/internal/v1/guesthub/event-links/{external_event_ref}/users/{subject}",
+            json={"name": name, "email": email, "role": role},
+        )
+        if response.status_code == 404:
+            return {"ignored": True}
+        if response.status_code >= 400:
+            raise FestioMeUnavailable("FestioMe user synchronization failed")
+        return response.json()
+
     async def guest_token(
         self, external_event_ref: str, *, guest_ref: str, name: str,
         email: str | None,

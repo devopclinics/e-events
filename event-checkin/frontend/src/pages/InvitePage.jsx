@@ -16,6 +16,13 @@ function normalizePhone(raw) {
   return '+234' + digits                                      // bare local → +234...
 }
 
+function vapidKeyToUint8Array(value) {
+  const padding = '='.repeat((4 - (value.length % 4)) % 4)
+  const base64 = (value + padding).replace(/-/g, '+').replace(/_/g, '/')
+  const raw = window.atob(base64)
+  return Uint8Array.from(raw, (char) => char.charCodeAt(0))
+}
+
 // ── Theme definitions ─────────────────────────────────────────────────────────
 
 const THEMES = {
@@ -84,6 +91,22 @@ function fmtLocalDateTime(value) {
   const d = parseUtc(value)
   if (!d) return ''
   return d.toLocaleString(undefined, { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })
+}
+
+const PASTED_URL_RE = /(https?:\/\/[^\s<]+|www\.[^\s<]+)/gi
+
+function LinkifiedText({ text, color }) {
+  return String(text || '').split(PASTED_URL_RE).map((part, index) => {
+    if (!/^(https?:\/\/|www\.)/i.test(part)) return <span key={index}>{part}</span>
+    const trailing = part.match(/[),.!?;:]+$/)?.[0] || ''
+    const label = trailing ? part.slice(0, -trailing.length) : part
+    const href = /^www\./i.test(label) ? `https://${label}` : label
+    return <span key={index}>
+      <a href={href} target="_blank" rel="noopener noreferrer" className="break-all font-semibold underline decoration-2 underline-offset-2 hover:opacity-80" style={{ color }}>
+        {label}
+      </a>{trailing}
+    </span>
+  })
 }
 
 function sessionSummary(session = {}) {
@@ -216,7 +239,7 @@ function SecondaryButton({ children, className = '', ...props }) {
   )
 }
 
-function EventPoster({ event, coverImage, colors = {}, titleOverride }) {
+function EventPoster({ event, coverImage, colors = {}, titleOverride, inviteLabel }) {
   const title = titleOverride || eventTitle(event)
   if (coverImage) {
     return (
@@ -226,7 +249,7 @@ function EventPoster({ event, coverImage, colors = {}, titleOverride }) {
           <img
             src={coverImage}
             alt={`${title} event flyer`}
-            className="aspect-[4/5] w-full object-cover"
+            className="aspect-[4/5] w-full object-contain"
           />
         </div>
       </div>
@@ -242,7 +265,7 @@ function EventPoster({ event, coverImage, colors = {}, titleOverride }) {
       >
         <div className="h-16 w-16 rounded-2xl border border-white/20 bg-white/10" />
         <div>
-          <div className="mb-3 text-xs font-extrabold uppercase tracking-[0.28em]" style={{ color: colors.accent || '#ccfbf1' }}>You're invited</div>
+          <div className="mb-3 text-xs font-extrabold uppercase tracking-[0.28em]" style={{ color: colors.accent || '#ccfbf1' }}>{inviteLabel || "You're invited"}</div>
           <div className="text-4xl font-extrabold leading-tight sm:text-5xl" style={{ color: readableTone(colors).text }}>{title}</div>
           {event.event_date && <div className="mt-5 text-sm font-semibold" style={{ color: readableTone(colors).muted }}>{fmtDate(event.event_date)}</div>}
         </div>
@@ -251,7 +274,39 @@ function EventPoster({ event, coverImage, colors = {}, titleOverride }) {
   )
 }
 
-function DetailRow({ icon, label, value, tone }) {
+function mapUrl(address) {
+  return address ? `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(address)}` : ''
+}
+
+function externalUrl(value) {
+  const text = String(value || '').trim()
+  if (!text) return ''
+  const candidate = /^https?:\/\//i.test(text) ? text : `https://${text}`
+  try {
+    const url = new URL(candidate)
+    return ['http:', 'https:'].includes(url.protocol) ? url.toString() : ''
+  } catch {
+    return ''
+  }
+}
+
+const DEFAULT_PAGE_CONFIG = {
+  hero: { showWelcomeLabel: true, showTitle: true, showHost: true },
+  organizer: { show: true, label: 'Organized by' },
+  details: { showVenue: true, showHotel: true, showHost: true, showAdmission: true },
+  about: { show: true, ctaLabel: '' },
+}
+
+function publicPageConfig(config = {}) {
+  return {
+    hero: { ...DEFAULT_PAGE_CONFIG.hero, ...(config.hero || {}) },
+    organizer: { ...DEFAULT_PAGE_CONFIG.organizer, ...(config.organizer || {}) },
+    details: { ...DEFAULT_PAGE_CONFIG.details, ...(config.details || {}) },
+    about: { ...DEFAULT_PAGE_CONFIG.about, ...(config.about || {}) },
+  }
+}
+
+function DetailRow({ icon, label, value, tone, href }) {
   if (!value) return null
   const t = tone || readableTone()
   return (
@@ -259,7 +314,8 @@ function DetailRow({ icon, label, value, tone }) {
       <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl text-lg" style={{ background: `${t.accent}22` }} aria-hidden="true">{icon}</span>
       <div>
         <div className="text-xs font-extrabold uppercase tracking-[0.16em]" style={{ color: t.label }}>{label}</div>
-        <div className="mt-1 text-sm font-semibold leading-relaxed sm:text-[15px]" style={{ color: t.text }}>{value}</div>
+        {href ? <a href={href} target="_blank" rel="noopener noreferrer" className="mt-1 block text-sm font-semibold leading-relaxed underline decoration-2 underline-offset-2 hover:opacity-80 sm:text-[15px]" style={{ color: t.accent }}>{value}</a>
+          : <div className="mt-1 text-sm font-semibold leading-relaxed sm:text-[15px]" style={{ color: t.text }}>{value}</div>}
       </div>
     </div>
   )
@@ -746,12 +802,12 @@ function ConfirmView({ confirm, event }) {
       </div>
       {hubUrl && (
         <div className="rounded-3xl border border-cyan-200 bg-cyan-50 p-5">
-          <div className="text-xs font-extrabold uppercase tracking-[0.18em] text-cyan-700">Your Guest Hub</div>
+          <div className="text-xs font-extrabold uppercase tracking-[0.18em] text-cyan-700">Your FestioHub</div>
           <div className="mt-2 text-sm font-semibold text-slate-600">
             Message the host, read announcements, and see your table — from any device. Save this personal link to come back anytime:
           </div>
           <div className="mt-3 flex flex-col gap-2 sm:flex-row">
-            <a href={hubPath} className="inline-flex min-h-11 flex-1 items-center justify-center rounded-xl bg-cyan-600 px-4 py-2 text-sm font-bold text-white transition hover:bg-cyan-500">Open my Guest Hub</a>
+            <a href={hubPath} className="inline-flex min-h-11 flex-1 items-center justify-center rounded-xl bg-cyan-600 px-4 py-2 text-sm font-bold text-white transition hover:bg-cyan-500">Open my FestioHub</a>
             <button type="button" onClick={copyHub} className="inline-flex min-h-11 items-center justify-center rounded-xl border border-cyan-300 bg-white px-4 py-2 text-sm font-bold text-cyan-700 transition hover:bg-cyan-100">
               {copied ? 'Link copied ✓' : 'Copy link'}
             </button>
@@ -945,6 +1001,7 @@ function GuestHub({ event, accessToken, designTheme }) {
   const [hidden, setHidden] = useState(false)
   const [message, setMessage] = useState('')
   const [chatMessage, setChatMessage] = useState('')
+  const [programDay, setProgramDay] = useState('')
   const [sending, setSending] = useState(false)
   const [sendingChat, setSendingChat] = useState(false)
   // Experience journey (only populated when the event has Experience enabled).
@@ -952,6 +1009,121 @@ function GuestHub({ event, accessToken, designTheme }) {
   const [signName, setSignName] = useState('')
   const [signing, setSigning] = useState(false)
   const [signError, setSignError] = useState('')
+  const [feedbackForms, setFeedbackForms] = useState([])
+  const [feedbackAnswers, setFeedbackAnswers] = useState({})
+  const [feedbackBusy, setFeedbackBusy] = useState('')
+  const [feedbackError, setFeedbackError] = useState('')
+  const [editingFeedback, setEditingFeedback] = useState('')
+  const [installPrompt, setInstallPrompt] = useState(null)
+  const [installState, setInstallState] = useState('')
+  const [showInstallDialog, setShowInstallDialog] = useState(false)
+  const [pushConfig, setPushConfig] = useState(null)
+  const [pushState, setPushState] = useState('')
+  const [pushBusy, setPushBusy] = useState(false)
+  const [pushError, setPushError] = useState('')
+
+  useEffect(() => {
+    const capture = (e) => { e.preventDefault(); setInstallPrompt(e); window.__festioInstallPrompt = e }
+    const ready = () => setInstallPrompt(window.__festioInstallPrompt || null)
+    const installed = () => { setInstallPrompt(null); setInstallState('installed') }
+    setInstallPrompt(window.__festioInstallPrompt || null)
+    window.addEventListener('beforeinstallprompt', capture)
+    window.addEventListener('festio-install-ready', ready)
+    window.addEventListener('appinstalled', installed)
+    return () => {
+      window.removeEventListener('beforeinstallprompt', capture)
+      window.removeEventListener('festio-install-ready', ready)
+      window.removeEventListener('appinstalled', installed)
+    }
+  }, [])
+
+  useEffect(() => {
+    if (!accessToken) return
+    try {
+      localStorage.setItem('festio:installed-guest-hub', `${window.location.pathname}${window.location.search}#guest-hub`)
+    } catch { /* installation remains optional in private browsing */ }
+  }, [accessToken])
+
+  useEffect(() => {
+    if (!installPrompt || sessionStorage.getItem('festio:install-prompt-dismissed')) return
+    const timer = setTimeout(() => setShowInstallDialog(true), 900)
+    return () => clearTimeout(timer)
+  }, [installPrompt])
+
+  const loadPush = useCallback(async () => {
+    if (!event?.id || !accessToken || !('serviceWorker' in navigator) || !('PushManager' in window) || !('Notification' in window)) return
+    try {
+      const config = await api.guestPushConfig(event.id, accessToken)
+      if (!config.enabled || !config.public_key) {
+        setPushConfig(null)
+        return
+      }
+      setPushConfig(config)
+      const registration = await navigator.serviceWorker.ready
+      const subscription = await registration.pushManager.getSubscription()
+      setPushState(subscription ? 'enabled' : Notification.permission === 'denied' ? 'blocked' : 'ready')
+    } catch {
+      // Push is optional. Keep the pass, QR, and event updates working normally.
+      setPushConfig(null)
+    }
+  }, [event?.id, accessToken])
+
+  useEffect(() => { loadPush() }, [loadPush])
+
+  function dismissInstall() {
+    sessionStorage.setItem('festio:install-prompt-dismissed', '1')
+    setShowInstallDialog(false)
+  }
+
+  async function installPass() {
+    if (!installPrompt) return
+    installPrompt.prompt()
+    const result = await installPrompt.userChoice.catch(() => null)
+    setInstallState(result?.outcome === 'accepted' ? 'installed' : '')
+    setInstallPrompt(null)
+    setShowInstallDialog(false)
+  }
+
+  async function enablePush() {
+    if (!pushConfig?.public_key || pushBusy) return
+    setPushBusy(true)
+    setPushError('')
+    try {
+      const permission = await Notification.requestPermission()
+      if (permission !== 'granted') {
+        setPushState(permission === 'denied' ? 'blocked' : 'ready')
+        return
+      }
+      const registration = await navigator.serviceWorker.ready
+      const subscription = await registration.pushManager.getSubscription()
+        || await registration.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: vapidKeyToUint8Array(pushConfig.public_key) })
+      await api.saveGuestPushSubscription(event.id, accessToken, subscription.toJSON())
+      setPushState('enabled')
+    } catch (err) {
+      setPushError(err.message || 'Notifications could not be enabled on this device.')
+    } finally {
+      setPushBusy(false)
+    }
+  }
+
+  async function disablePush() {
+    if (pushBusy) return
+    setPushBusy(true)
+    setPushError('')
+    try {
+      const registration = await navigator.serviceWorker.ready
+      const subscription = await registration.pushManager.getSubscription()
+      if (subscription) {
+        await api.removeGuestPushSubscription(event.id, accessToken, subscription.endpoint)
+        await subscription.unsubscribe()
+      }
+      setPushState('ready')
+    } catch (err) {
+      setPushError(err.message || 'Notifications could not be turned off on this device.')
+    } finally {
+      setPushBusy(false)
+    }
+  }
 
   const loadJourney = useCallback(async () => {
     if (!event?.id || !accessToken) return
@@ -962,6 +1134,45 @@ function GuestHub({ event, accessToken, designTheme }) {
   }, [event?.id, accessToken])
 
   useEffect(() => { loadJourney() }, [loadJourney])
+  useEffect(() => {
+    if (!event?.id || !accessToken) return undefined
+    const timer = setInterval(loadJourney, 30000)
+    return () => clearInterval(timer)
+  }, [event?.id, accessToken, loadJourney])
+
+  const loadFeedback = useCallback(async () => {
+    if (!event?.id || !accessToken) return
+    try {
+      const data = await api.guestFeedback(event.id, accessToken)
+      setFeedbackForms(data.forms || [])
+      setFeedbackAnswers(Object.fromEntries((data.forms || []).map((form) => [form.step_id, form.answers || {}])))
+    } catch { setFeedbackForms([]) }
+  }, [event?.id, accessToken])
+
+  useEffect(() => { loadFeedback() }, [loadFeedback])
+  useEffect(() => {
+    if (!feedbackForms.length || new URLSearchParams(window.location.search).get('focus') !== 'feedback') return
+    const timer = setTimeout(() => document.getElementById('feedback')?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 120)
+    return () => clearTimeout(timer)
+  }, [feedbackForms])
+
+  async function submitFeedback(e, form) {
+    e.preventDefault()
+    setFeedbackBusy(form.step_id)
+    setFeedbackError('')
+    try {
+      await api.submitGuestFeedback(event.id, accessToken, {
+        step_id: form.step_id,
+        answers: feedbackAnswers[form.step_id] || {},
+      })
+      setEditingFeedback('')
+      await Promise.all([loadFeedback(), loadJourney()])
+    } catch (err) {
+      setFeedbackError(err.message)
+    } finally {
+      setFeedbackBusy('')
+    }
+  }
 
   async function submitConsent(e) {
     e.preventDefault()
@@ -1038,6 +1249,11 @@ function GuestHub({ event, accessToken, designTheme }) {
   const colors = designColors(designTheme)
   const tone = readableTone(colors)
   const hasRsvp = event?.rsvp_enabled !== false
+  const programDays = journey?.program?.days || []
+  const selectedProgramDay = programDays.find((day) => day.date === programDay)
+    || programDays.find((day) => day.segments?.some((segment) => segment.active))
+    || programDays.find((day) => day.segments?.some((segment) => new Date(segment.ends_at) > new Date()))
+    || programDays[0]
 
   return (
     <section className="py-2">
@@ -1047,7 +1263,7 @@ function GuestHub({ event, accessToken, designTheme }) {
       >
         <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
           <div>
-            <h2 className="text-3xl font-extrabold">Guest Hub</h2>
+            <h2 className="text-3xl font-extrabold">FestioHub</h2>
             <p className="mt-2 text-sm leading-6" style={{ color: tone.muted }}>Your event updates, QR pass, and messages in one place.</p>
           </div>
           {hasRsvp && hub?.guest?.rsvp_status && (
@@ -1057,7 +1273,58 @@ function GuestHub({ event, accessToken, designTheme }) {
           )}
         </div>
 
+        {showInstallDialog && (
+          <div role="dialog" aria-modal="true" aria-labelledby="install-guest-hub" className="mt-5 rounded-2xl border p-5 shadow-xl" style={{ background: tone.panelStrong, borderColor: tone.accent }}>
+            <div className="flex items-start gap-3"><span className="grid h-11 w-11 shrink-0 place-items-center rounded-xl text-xl" style={{ background: tone.accent, color: tone.background }}>F</span><div><h3 id="install-guest-hub" className="text-lg font-extrabold">Install FestioHub</h3><p className="mt-1 text-sm leading-6" style={{ color: tone.muted }}>Keep your Festio Pass on your home screen for quick access to your QR code and event updates.</p></div></div>
+            <div className="mt-4 flex flex-wrap gap-2"><button type="button" onClick={installPass} className="min-h-11 rounded-xl px-4 py-2 text-sm font-extrabold text-slate-950" style={{ background: tone.accent }}>Install Festio</button><button type="button" onClick={dismissInstall} className="min-h-11 rounded-xl border px-4 py-2 text-sm font-bold" style={{ borderColor: tone.border, color: tone.text }}>Not now</button></div>
+          </div>
+        )}
+
+        <div className="mt-5 rounded-2xl border p-4" style={{ background: tone.panel, borderColor: tone.border }}>
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <div>
+              <div className="text-sm font-extrabold">Add your Festio Pass to this phone</div>
+              <p className="mt-1 text-sm" style={{ color: tone.muted }}>Open FestioHub like an app and keep your QR pass available when venue internet is weak.</p>
+            </div>
+            {installPrompt ? (
+              <button type="button" onClick={installPass} className="min-h-11 shrink-0 rounded-xl px-4 py-2 text-sm font-extrabold text-slate-950" style={{ background: tone.accent }}>Add to Home Screen</button>
+            ) : installState === 'installed' ? (
+              <span className="shrink-0 rounded-xl px-4 py-2 text-sm font-bold" style={{ background: `${tone.accent}22`, color: tone.text }}>Installed ✓</span>
+            ) : (
+              <p className="shrink-0 text-xs font-semibold sm:max-w-52" style={{ color: tone.label }}>On iPhone/iPad: Share → Add to Home Screen. On Android, use your browser menu.</p>
+            )}
+          </div>
+        </div>
+
+        {pushConfig && <div className="mt-3 rounded-2xl border p-4" style={{ background: tone.panel, borderColor: tone.border }}>
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <div>
+              <div className="text-sm font-extrabold">Event notifications</div>
+              <p className="mt-1 text-sm" style={{ color: tone.muted }}>Receive event updates and host replies directly on this device.</p>
+            </div>
+            {pushState === 'enabled' ? <button type="button" onClick={disablePush} disabled={pushBusy} className="min-h-11 shrink-0 rounded-xl border px-4 py-2 text-sm font-extrabold disabled:opacity-60" style={{ borderColor: tone.border, color: tone.text }}>{pushBusy ? 'Updating…' : 'Notifications on ✓'}</button>
+              : pushState === 'blocked' ? <span className="shrink-0 text-xs font-semibold sm:max-w-52" style={{ color: tone.label }}>Notifications are blocked in your browser settings.</span>
+              : <button type="button" onClick={enablePush} disabled={pushBusy} className="min-h-11 shrink-0 rounded-xl px-4 py-2 text-sm font-extrabold text-slate-950 disabled:opacity-60" style={{ background: tone.accent }}>{pushBusy ? 'Enabling…' : 'Enable notifications'}</button>}
+          </div>
+          {pushError && <p className="mt-2 text-xs font-semibold text-amber-200">{pushError}</p>}
+        </div>}
+
         {error && <div className="mt-5 rounded-2xl border border-amber-300/25 bg-amber-300/10 px-4 py-3 text-sm text-amber-50">{error}</div>}
+
+        {journey?.program?.enabled && <div className="mt-6 rounded-2xl border p-4" style={{ background: tone.panel, borderColor: tone.border }}>
+          <div className="flex items-center justify-between gap-3"><div><h3 className="text-lg font-extrabold">Live Program</h3><p className="mt-1 text-sm" style={{ color: tone.muted }}>The program updates automatically as the event moves forward.</p></div><span className="rounded-full px-2.5 py-1 text-xs font-bold" style={{ background: `${tone.accent}22`, color: tone.text }}>LIVE</span></div>
+          {journey.program.current_segments?.length ? <div className="mt-4 space-y-2">{journey.program.current_segments.map((segment) => <div key={segment.step_id} className="rounded-xl border p-3" style={{ background: tone.chip, borderColor: tone.border }}><div className="text-xs font-extrabold uppercase tracking-[0.16em]" style={{ color: tone.label }}>Happening now{segment.category ? ` · ${segment.category}` : ''}</div><div className="mt-1 font-extrabold">{segment.title}</div>{segment.description && <p className="mt-1 text-sm" style={{ color: tone.muted }}>{segment.description}</p>}<p className="mt-2 text-xs font-semibold" style={{ color: tone.label }}>Until {fmtTime(segment.ends_at)}</p></div>)}</div> : <p className="mt-4 text-sm" style={{ color: tone.muted }}>The next program item will appear here when it begins.</p>}
+          {!!journey.program.next_segments?.length && <div className="mt-4 border-t pt-3" style={{ borderColor: tone.border }}><div className="text-xs font-extrabold uppercase tracking-[0.16em]" style={{ color: tone.label }}>Up next</div>{journey.program.next_segments.slice(0, 2).map((segment) => <div key={segment.step_id} className="mt-2 text-sm"><span className="font-bold">{fmtLocalDateTime(segment.starts_at)}</span><span style={{ color: tone.muted }}> · {segment.title}</span></div>)}</div>}
+          {!!selectedProgramDay && <div className="mt-4 border-t pt-3" style={{ borderColor: tone.border }}>
+            <div className="flex flex-wrap gap-2" aria-label="Programme day">
+              {programDays.map((day) => <button key={day.date} type="button" onClick={() => setProgramDay(day.date)} className="rounded-full px-3 py-1.5 text-xs font-extrabold" style={{ background: selectedProgramDay.date === day.date ? tone.accent : tone.chip, color: selectedProgramDay.date === day.date ? tone.background : tone.text }}>{day.label}</button>)}
+            </div>
+            <div className="mt-3 text-xs font-extrabold uppercase tracking-[0.16em]" style={{ color: tone.label }}>{selectedProgramDay.label} programme</div>
+            <div className="mt-2 divide-y" style={{ borderColor: tone.border }}>
+              {selectedProgramDay.segments.map((segment) => <div key={segment.step_id} className="py-3 first:pt-0 last:pb-0"><div className="flex gap-3"><div className="w-24 shrink-0 text-xs font-extrabold" style={{ color: segment.active ? tone.accent : tone.label }}>{fmtTime(segment.starts_at)}–{fmtTime(segment.ends_at)}</div><div className="min-w-0"><div className="flex flex-wrap items-center gap-2 font-bold">{segment.title}{segment.active && <span className="rounded-full px-2 py-0.5 text-[10px] font-extrabold uppercase" style={{ background: `${tone.accent}22`, color: tone.accent }}>Now</span>}</div>{segment.description && <p className="mt-1 text-sm" style={{ color: tone.muted }}>{segment.description}</p>}</div></div></div>)}
+            </div>
+          </div>}
+        </div>}
 
         {journey?.experience_enabled && journey.steps?.length > 0 && (() => {
           const visible = journey.steps.filter((s) => s.status !== 'skipped')
@@ -1166,6 +1433,62 @@ function GuestHub({ event, accessToken, designTheme }) {
           )
         })()}
 
+        {feedbackForms.map((form, formIndex) => (
+          <div id={formIndex === 0 ? 'feedback' : undefined} key={form.step_id} className="mt-6 rounded-2xl border p-4" style={{ background: tone.panel, borderColor: tone.border }}>
+            <div className="flex items-start justify-between gap-3">
+              <div>
+                <h3 className="text-lg font-extrabold">{form.title}</h3>
+                {form.description && <p className="mt-1 text-sm" style={{ color: tone.muted }}>{form.description}</p>}
+              </div>
+              {form.submitted && <span className="rounded-full px-2.5 py-1 text-xs font-bold" style={{ background: `${tone.accent}22`, color: tone.text }}>Completed</span>}
+            </div>
+            {form.submitted && editingFeedback !== form.step_id ? (
+              <div className="mt-4 rounded-xl border p-3 text-sm" style={{ background: tone.chip, borderColor: tone.border, color: tone.muted }}><p>Thank you—your feedback has been recorded.</p>{form.can_edit && <button type="button" onClick={() => setEditingFeedback(form.step_id)} className="mt-2 font-bold underline">Edit response</button>}</div>
+            ) : (
+              <form onSubmit={(e) => submitFeedback(e, form)} className="mt-4 space-y-4">
+                {form.questions.map((question) => {
+                  const answers = feedbackAnswers[form.step_id] || {}
+                  const value = answers[question.id] ?? ''
+                  const setAnswer = (next) => setFeedbackAnswers((all) => ({ ...all, [form.step_id]: { ...(all[form.step_id] || {}), [question.id]: next } }))
+                  const condition = question.show_if
+                  const sourceValue = condition ? answers[condition.question_id] : undefined
+                  if (condition && !(Array.isArray(sourceValue) ? sourceValue.map(String).includes(String(condition.value)) : String(sourceValue ?? '').toLowerCase() === String(condition.value).toLowerCase())) return null
+                  return (
+                    <label key={question.id} className="block rounded-xl border p-3" style={{ background: tone.chip, borderColor: tone.border }}>
+                      <span className="block text-sm font-bold">{question.prompt}{question.required ? ' *' : ''}</span>
+                      {question.help_text && <span className="mt-1 block text-xs" style={{ color: tone.muted }}>{question.help_text}</span>}
+                      {question.type === 'text' && <textarea rows={3} value={value} onChange={(e) => setAnswer(e.target.value)} className="mt-2 w-full rounded-lg border px-3 py-2 text-sm" style={{ background: tone.panelStrong, borderColor: tone.border, color: tone.text }} />}
+                      {(question.type === 'rating' || question.type === 'nps') && (
+                        <div className="mt-2 flex flex-wrap gap-2">
+                          {Array.from({ length: question.type === 'rating' ? 5 : 11 }, (_, i) => question.type === 'rating' ? i + 1 : i).map((score) => (
+                            <button key={score} type="button" onClick={() => setAnswer(score)}
+                              className="h-10 min-w-10 rounded-lg border px-2 text-sm font-bold"
+                              style={{ background: Number(value) === score ? tone.accent : tone.panelStrong, borderColor: tone.border, color: Number(value) === score ? tone.background : tone.text }}>{score}</button>
+                          ))}
+                        </div>
+                      )}
+                      {question.type === 'single_choice' && (
+                        <select value={value} onChange={(e) => setAnswer(e.target.value)} className="mt-2 min-h-11 w-full rounded-lg border px-3 py-2 text-sm" style={{ background: tone.panelStrong, borderColor: tone.border, color: tone.text }}>
+                          <option value="">Select an answer</option>
+                          {(question.options || []).map((option) => <option key={option} value={option}>{option}</option>)}
+                        </select>
+                      )}
+                      {question.type === 'multi_choice' && <div className="mt-2 grid gap-2">{(question.options || []).map((option) => <label key={option} className="flex items-center gap-2 text-sm"><input type="checkbox" checked={(Array.isArray(value) ? value : []).includes(option)} onChange={(e) => setAnswer(e.target.checked ? [...(Array.isArray(value) ? value : []), option] : (Array.isArray(value) ? value : []).filter((v) => v !== option))} /> {option}</label>)}</div>}
+                      {question.type === 'yes_no' && (
+                        <div className="mt-2 flex gap-2">{['yes', 'no'].map((choice) => <button key={choice} type="button" onClick={() => setAnswer(choice)} className="rounded-lg border px-4 py-2 text-sm font-bold capitalize" style={{ background: value === choice ? tone.accent : tone.panelStrong, borderColor: tone.border, color: value === choice ? tone.background : tone.text }}>{choice}</button>)}</div>
+                      )}
+                    </label>
+                  )
+                })}
+                {feedbackError && <p className="text-sm text-amber-300">{feedbackError}</p>}
+                <button disabled={feedbackBusy === form.step_id} className="min-h-11 rounded-xl px-5 py-2 text-sm font-extrabold" style={{ background: tone.accent, color: tone.background }}>
+                  {feedbackBusy === form.step_id ? 'Submitting…' : form.submitted ? 'Save changes' : 'Submit feedback'}
+                </button>
+              </form>
+            )}
+          </div>
+        ))}
+
         <div className="mt-6 grid gap-4 md:grid-cols-3">
           <div className="rounded-2xl border p-4" style={{ background: tone.panel, borderColor: tone.border }}>
             <div className="text-xs font-extrabold uppercase tracking-[0.16em]" style={{ color: tone.label }}>{hasRsvp ? 'Your RSVP' : 'Your pass'}</div>
@@ -1177,7 +1500,17 @@ function GuestHub({ event, accessToken, designTheme }) {
               </p>
             )}
             {hub?.guest?.qr_token && (
-              <div className="mt-4 grid gap-2.5">
+              <div className="mt-4 grid gap-3">
+                <div className="rounded-2xl border p-3 text-center" style={{ background: tone.panelStrong, borderColor: tone.border }}>
+                  <img
+                    src={`/api/scan/${hub.guest.qr_token}/qr.png`}
+                    alt="Your QR pass code"
+                    className="mx-auto h-44 w-44 rounded-xl bg-white p-2"
+                  />
+                  <div className="mt-2 text-xs font-bold uppercase tracking-[0.14em]" style={{ color: tone.label }}>
+                    Show this code at entry
+                  </div>
+                </div>
                 <a href={`/scan/${hub.guest.qr_token}`} style={colors.accent ? { background: colors.accent } : undefined} className="inline-flex min-h-12 w-full items-center justify-center gap-2 rounded-xl bg-teal-400 px-5 py-3 text-base font-extrabold text-slate-950 shadow-sm hover:bg-teal-300">
                   🎫 View Festio Pass
                 </a>
@@ -1208,7 +1541,7 @@ function GuestHub({ event, accessToken, designTheme }) {
               {hub?.announcements?.length ? hub.announcements.map((a) => (
                 <div key={a.id} className="rounded-xl border p-3" style={{ background: tone.chip, borderColor: tone.border }}>
                   <div className="font-bold">{a.title}</div>
-                  <p className="mt-1 text-sm leading-6" style={{ color: tone.muted }}>{a.body}</p>
+                  <p className="mt-1 whitespace-pre-wrap text-sm leading-6" style={{ color: tone.muted }}><LinkifiedText text={a.body} color={tone.accent} /></p>
                 </div>
               )) : (
                 <p className="text-sm leading-6" style={{ color: tone.label }}>No updates yet. Important event messages will appear here.</p>
@@ -1217,6 +1550,12 @@ function GuestHub({ event, accessToken, designTheme }) {
           </div>
         </div>
 
+        {(event?.hotel_name || event?.hotel_address) && <div className="mt-4 rounded-2xl border p-4" style={{ background: tone.panel, borderColor: tone.border }}>
+          <div className="text-xs font-extrabold uppercase tracking-[0.16em]" style={{ color: tone.label }}>🏨 Hotel information</div>
+          {event.hotel_name && <div className="mt-2 text-lg font-extrabold">{event.hotel_name}</div>}
+          {event.hotel_address && <a href={mapUrl(event.hotel_address)} target="_blank" rel="noopener noreferrer" className="mt-2 inline-block text-sm font-semibold leading-6 underline decoration-2 underline-offset-2 hover:opacity-80" style={{ color: tone.accent }}>{event.hotel_address}</a>}
+        </div>}
+
         <div className="mt-4 rounded-2xl border p-4" style={{ background: tone.panel, borderColor: tone.border }}>
           <h3 className="text-lg font-extrabold">Message Host</h3>
           <p className="mt-1 text-sm" style={{ color: tone.muted }}>Have a question for the organizer?</p>
@@ -1224,7 +1563,7 @@ function GuestHub({ event, accessToken, designTheme }) {
             {hub?.direct_messages?.length ? hub.direct_messages.map((m) => (
               <div key={m.id} className={`rounded-xl px-3 py-2 text-sm ${m.sender_type === 'guest' ? 'ml-auto max-w-[85%]' : 'mr-auto max-w-[85%]'}`} style={{ background: m.sender_type === 'guest' ? `${tone.accent}22` : tone.chip, color: tone.text }}>
                 <div className="mb-1 text-[11px] font-bold uppercase tracking-wide" style={{ color: tone.label }}>{m.sender_name}</div>
-                <div className="leading-6">{m.body}</div>
+                <div className="whitespace-pre-wrap leading-6"><LinkifiedText text={m.body} color={tone.accent} /></div>
               </div>
             )) : (
               <p className="text-sm" style={{ color: tone.label }}>No messages yet.</p>
@@ -1312,6 +1651,7 @@ export default function InvitePage() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const [confirmed, setConfirmed] = useState(null)
+  const isStudioPreview = new URLSearchParams(window.location.search).get('studio-preview') === '1'
 
   // Anonymous shared/open links can't know who you are on load, so we remember a
   // prior RSVP in this browser and show an "already RSVP'd" message instead of
@@ -1364,6 +1704,16 @@ export default function InvitePage() {
       return
     }
     let cancelled = false
+    if (isStudioPreview) {
+      try {
+        const raw = sessionStorage.getItem(`festio:design-preview:${event.id}`)
+        const preview = raw ? JSON.parse(raw) : null
+        if (preview?.event_id === event.id && preview?.theme) {
+          setDesignTheme(preview.theme)
+          return () => { cancelled = true }
+        }
+      } catch { /* fall through to the published theme */ }
+    }
     api.publicDesignTheme(event.id)
       .then((themePayload) => {
         if (!cancelled) setDesignTheme(themePayload?.is_default ? null : themePayload)
@@ -1372,7 +1722,7 @@ export default function InvitePage() {
         if (!cancelled) setDesignTheme(null)
       })
     return () => { cancelled = true }
-  }, [event?.id])
+  }, [event?.id, isStudioPreview])
 
   if (loading) return (
     <div className="min-h-screen flex items-center justify-center bg-slate-100 dark:bg-slate-900">
@@ -1393,7 +1743,11 @@ export default function InvitePage() {
   const dColors = designColors(designTheme)
   const tone = readableTone(dColors)
   const dWording = designTheme?.wording || {}
+  const page = publicPageConfig(designTheme?.page_config)
   const dCover = designCover(designTheme, event)
+  // Rendered flyers already carry their own invitation heading and event name.
+  // Keep the flyer as the hero instead of repeating that artwork in text.
+  const flyerLedHero = !!designTheme?.flyer_image_url
   const atCapacity = event.rsvp_capacity != null && event.rsvp_count >= event.rsvp_capacity
   const deadlinePassed = !!event.deadline_passed
   const title = dWording.eventTitle || eventTitle(event)
@@ -1401,6 +1755,8 @@ export default function InvitePage() {
   const timeLabel = dWording.time || fmtTime(event.event_date)
   const venue = [dWording.venue, dWording.address].filter(Boolean).join(' · ') || venueText(event)
   const host = dWording.hostName || hostText(event)
+  const hostWebsite = externalUrl(dWording.hostWebsite)
+  const aboutWebsite = externalUrl(page.about.ctaUrl || dWording.aboutWebsite)
   const deadline = deadlineText(event)
   const about = dWording.customMessage || event.description || event.invite_message || (
     event.rsvp_enabled
@@ -1416,6 +1772,8 @@ export default function InvitePage() {
   const capacityLabel = event.rsvp_capacity != null ? `${event.rsvp_count} / ${event.rsvp_capacity} spots claimed` : ''
   const guestHubToken = confirmed?.rsvp_status === 'confirmed'
     ? confirmed.qr_token
+    : tokenMode && event?.rsvp_enabled === false && guest?.rsvp_status === 'invited'
+      ? token
     : tokenMode && event?.experience_enabled
       ? token
       : tokenMode && tokenMeta.already_responded && guest?.rsvp_status === 'confirmed'
@@ -1489,7 +1847,7 @@ export default function InvitePage() {
             : prior.rsvp_status === 'pending'
               ? 'Your RSVP is awaiting host approval.'
               : prior.qr_token
-                ? 'You are on the guest list. Your Guest Hub is available below.'
+                ? 'You are on the guest list. Your FestioHub is available below.'
                 : 'You are on the guest list. Your ticket was sent to you.'}
         </div>
         <div className="mt-4 text-sm font-semibold text-slate-500">Need to change it? Contact the host.</div>
@@ -1512,28 +1870,44 @@ export default function InvitePage() {
     >
       <header className="px-5 py-6 sm:px-6">
         <div className="mx-auto flex max-w-[1180px] items-center justify-between">
-          <span className="text-sm font-extrabold uppercase tracking-[0.24em]" style={{ color: tone.accent }}>You're invited</span>
-          <span className="rounded-full border px-4 py-2 text-sm font-bold" style={{ background: tone.chip, borderColor: tone.border, color: tone.text }}>Festio</span>
+          {page.hero.showWelcomeLabel
+            ? <span className="text-sm font-extrabold uppercase tracking-[0.24em]" style={{ color: tone.accent }}>{dWording.inviteLabel || 'Welcome to'}</span>
+            : <span />}
+          <div className="flex flex-col items-end gap-1">
+            <span className="rounded-full border px-4 py-2 text-sm font-bold" style={{ background: tone.chip, borderColor: tone.border, color: tone.text }}>Festio</span>
+            {flyerLedHero && page.organizer.show && host && (hostWebsite
+              ? <a href={hostWebsite} target="_blank" rel="noopener noreferrer" className="text-[11px] font-semibold underline underline-offset-2 hover:opacity-80" style={{ color: tone.muted }}>{page.organizer.label || 'Organized by'} {host}</a>
+              : <span className="text-[11px] font-semibold" style={{ color: tone.muted }}>{page.organizer.label || 'Organized by'} {host}</span>)}
+          </div>
         </div>
       </header>
 
+      {isStudioPreview && (
+        <div className="mx-auto max-w-[1180px] px-5 sm:px-6">
+          <div className="rounded-xl border border-amber-400/50 bg-amber-300/10 px-4 py-3 text-sm font-bold" style={{ color: tone.text }}>
+            Design Studio draft preview — only visible in this browser and not yet published.
+          </div>
+        </div>
+      )}
+
       <main className="mx-auto max-w-[1180px] px-5 pb-16 sm:px-6">
         <section className="grid items-center gap-10 py-7 md:grid-cols-[minmax(320px,420px)_minmax(0,1fr)] md:gap-12 lg:gap-16 lg:py-14">
-          <EventPoster event={event} coverImage={dCover} colors={dColors} titleOverride={title} />
+          <EventPoster event={event} coverImage={dCover} colors={dColors} titleOverride={title} inviteLabel={dWording.inviteLabel} />
 
           <div className="space-y-8">
             <div>
-              <div className="mb-4 text-sm font-extrabold uppercase tracking-[0.24em]" style={{ color: tone.accent }}>You're invited to</div>
-              <h1 className="max-w-3xl text-5xl font-extrabold leading-[1.02] sm:text-6xl lg:text-7xl" style={{ color: tone.primary }}>{title}</h1>
-              {host && <p className="mt-5 text-xl font-semibold" style={{ color: tone.text }}>{host}</p>}
-              <p className="mt-6 max-w-2xl text-lg leading-8" style={{ color: tone.muted }}>
+              {flyerLedHero || !page.hero.showTitle ? <h1 className="sr-only">{title}</h1> : <>{page.hero.showWelcomeLabel && <div className="mb-4 text-sm font-extrabold uppercase tracking-[0.24em]" style={{ color: tone.accent }}>{dWording.inviteLabel || "You're invited to"}</div>}<h1 className="max-w-3xl text-5xl font-extrabold leading-[1.02] sm:text-6xl lg:text-7xl" style={{ color: tone.primary }}>{title}</h1></>}
+              {!flyerLedHero && page.hero.showHost && host && (hostWebsite
+                ? <a href={hostWebsite} target="_blank" rel="noopener noreferrer" className="mt-5 inline-block text-xl font-semibold underline decoration-2 underline-offset-4 hover:opacity-80" style={{ color: tone.text }}>{host}</a>
+                : <p className="mt-5 text-xl font-semibold" style={{ color: tone.text }}>{host}</p>)}
+              <p className="mt-6 max-w-2xl whitespace-pre-line text-lg leading-8" style={{ color: tone.muted }}>
                 {dWording.rsvpNote || event.invite_message || 'Join us for a beautiful evening of celebration, food, memories, and good company.'}
               </p>
             </div>
 
             <div className="grid gap-4 sm:grid-cols-2">
               <DetailRow icon="📅" label="When" value={heroWhen} tone={tone} />
-              <DetailRow icon="📍" label="Location" value={venue || 'Venue details coming soon'} tone={tone} />
+              <DetailRow icon="📍" label="Location" value={venue || 'Venue details coming soon'} tone={tone} href={event.venue_address ? mapUrl(event.venue_address) : ''} />
               <DetailRow icon="🎟️" label="Admission" value="QR pass at entry" tone={tone} />
             </div>
 
@@ -1543,7 +1917,7 @@ export default function InvitePage() {
                 style={dColors.accent ? { background: dColors.accent } : undefined}
                 onClick={() => document.getElementById(hasGuestHub ? 'guest-hub' : 'rsvp')?.scrollIntoView({ behavior: 'smooth' })}
               >
-                {hasGuestHub ? 'Open Guest Hub' : 'Confirm My RSVP'}
+                {hasGuestHub ? 'Open FestioHub' : 'Confirm My RSVP'}
               </PrimaryButton>
               <SecondaryButton
                 type="button"
@@ -1571,22 +1945,30 @@ export default function InvitePage() {
             <div className="grid gap-4 sm:grid-cols-2">
               <DetailRow icon="📅" label="Date" value={dateLabel} tone={tone} />
               <DetailRow icon="🕐" label="Time" value={timeLabel} tone={tone} />
-              <DetailRow icon="📍" label="Venue" value={venue || 'Venue details coming soon'} tone={tone} />
-              <DetailRow icon="👤" label="Host" value={host} tone={tone} />
+              {page.details.showVenue && <DetailRow icon="📍" label="Venue" value={venue || 'Venue details coming soon'} tone={tone} href={event.venue_address ? mapUrl(event.venue_address) : ''} />}
+              {page.details.showHotel && (event.hotel_name || event.hotel_address) && <DetailRow icon="🏨" label="Hotel information" value={[event.hotel_name, event.hotel_address].filter(Boolean).join(' · ')} tone={tone} href={event.hotel_address ? mapUrl(event.hotel_address) : ''} />}
+              {page.details.showHost && <DetailRow icon="👤" label="Host" value={host} tone={tone} href={hostWebsite} />}
               {event.rsvp_enabled && <DetailRow icon="⏳" label="RSVP deadline" value={deadline} tone={tone} />}
-              <DetailRow icon="✓" label="Admission note" value={admissionNote} tone={tone} />
+              {page.details.showAdmission && <DetailRow icon="✓" label="Admission note" value={admissionNote} tone={tone} />}
             </div>
           </div>
 
-          <div className="rounded-3xl border p-6 shadow-xl backdrop-blur sm:p-7" style={{ background: tone.panelStrong, borderColor: tone.border, boxShadow: `0 22px 48px ${tone.shadow}`, color: tone.text }}>
+          {page.about.show && <div className="rounded-3xl border p-6 shadow-xl backdrop-blur sm:p-7" style={{ background: tone.panelStrong, borderColor: tone.border, boxShadow: `0 22px 48px ${tone.shadow}`, color: tone.text }}>
             <h2 className="text-3xl font-extrabold">About this event</h2>
-            <p className="mt-5 text-base leading-8" style={{ color: tone.muted }}>{about}</p>
+            <div className="mt-5 space-y-4 text-base leading-8" style={{ color: tone.muted }}>
+              {String(about).split(/\r?\n+/).filter(Boolean).map((paragraph, index) => <p key={index} className="whitespace-pre-line">{paragraph}</p>)}
+            </div>
+            {aboutWebsite && (
+              <a href={aboutWebsite} target="_blank" rel="noopener noreferrer" className="mt-5 inline-flex text-sm font-bold underline decoration-2 underline-offset-4 transition hover:opacity-80" style={{ color: tone.accent }}>
+                {page.about.ctaLabel || 'Learn more about this event'} ↗
+              </a>
+            )}
             {event.registry_enabled && event.registry_token && (
               <a href={`/registry/${event.registry_token}`} className="mt-5 inline-flex min-h-11 items-center justify-center rounded-2xl border px-4 py-2 text-sm font-bold transition" style={{ background: tone.chip, borderColor: tone.border, color: tone.text }}>
                 View gift list
               </a>
             )}
-          </div>
+          </div>}
         </section>
 
         {rsvpPanel && (
@@ -1602,7 +1984,7 @@ export default function InvitePage() {
 
       {!event.is_paid && (
         <footer className="pb-6 text-center text-xs font-semibold" style={{ color: tone.label }}>
-          Powered by Festio
+          Powered by <a href="https://festio.events" className="underline underline-offset-2 hover:opacity-80">Festio</a>
         </footer>
       )}
     </div>

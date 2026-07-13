@@ -1,7 +1,7 @@
-from datetime import datetime
+from datetime import datetime, timedelta
 
 import pytest
-from sqlalchemy import select
+from sqlalchemy import func, select
 
 from conftest import _Session
 from app.routers import experience as experience_router
@@ -9,6 +9,7 @@ from app.routers import scanner as scanner_router
 from app.models import (
     ConsentForm,
     Event,
+    EventAnnouncement,
     Gate,
     Guest,
     GuestMenuChoice,
@@ -24,6 +25,8 @@ from app.models import (
     Zone,
     ZoneTagRule,
 )
+from app.services import program as program_service
+from app.timeutil import to_event_local
 
 
 @pytest.fixture(autouse=True)
@@ -728,6 +731,16 @@ async def test_consent_signing_uses_versions_and_download(ctx):
         old_form = await s.get(ConsentForm, first.json()["id"])
         assert old_form.body == "Version one text"
         assert old_form.is_active is False
+
+    disabled = await ctx.client.delete(f"/api/events/{event_id}/experience/consent-form")
+    assert disabled.status_code == 200
+    assert disabled.json()["disabled"] is True
+    assert (await ctx.client.get(f"/api/events/{event_id}/experience/consent-form")).json() is None
+    hidden = await ctx.client.get(f"/api/scan/{token}/consent")
+    assert hidden.status_code == 200
+    assert hidden.json()["status"] == "none"
+    signatures_after_disable = await ctx.client.get(f"/api/events/{event_id}/experience/consent-signatures")
+    assert len(signatures_after_disable.json()) == 2
 
 
 @pytest.mark.asyncio
@@ -1474,3 +1487,171 @@ async def test_step_allowed_roles_are_enforced(ctx):
         json={"status": "completed"},
     )
     assert allowed.status_code == 200
+
+
+@pytest.mark.asyncio
+async def test_guest_submits_feedback_and_admin_sees_results(ctx):
+    ctx.login(ctx.ids["user_a"])
+    event_id = ctx.ids["event_a"]
+    async with _Session() as s:
+        event = await s.get(Event, event_id)
+        event.experience_enabled = True
+        guest = (await s.execute(select(Guest).where(Guest.event_id == event_id))).scalars().first()
+        token = guest.invite_token or guest.qr_token
+        await s.commit()
+
+    created = await ctx.client.post(
+        f"/api/events/{event_id}/experience/workflows",
+        json={"name": "Feedback", "steps": [{
+            "key": "feedback_prompt", "type": "feedback", "title": "Event feedback",
+            "config": {"feedback": {"audience": "all", "questions": [
+                {"id": "rating", "type": "rating", "prompt": "Rate the event", "required": True},
+                {"id": "comments", "type": "text", "prompt": "Comments", "required": False},
+            ]}},
+        }]},
+    )
+    assert created.status_code == 201
+    workflow = created.json()
+    assert (await ctx.client.post(f"/api/events/{event_id}/experience/workflows/{workflow['id']}/publish")).status_code == 200
+
+    available = await ctx.client.get(f"/api/events/{event_id}/experience/me/feedback?token={token}")
+    assert available.status_code == 200
+    form = available.json()["forms"][0]
+    submitted = await ctx.client.post(
+        f"/api/events/{event_id}/experience/me/feedback?token={token}",
+        json={"step_id": form["step_id"], "answers": {"rating": 5, "comments": "Excellent"}},
+    )
+    assert submitted.status_code == 201
+
+    results = await ctx.client.get(f"/api/events/{event_id}/experience/feedback/results")
+    assert results.status_code == 200
+    result = results.json()["forms"][0]
+    assert result["responses"][0]["answers"] == {"rating": 5, "comments": "Excellent"}
+    assert result["eligible_count"] >= 1
+    assert result["response_rate"] > 0
+    assert result["aggregates"][0]["average"] == 5
+
+    duplicate = await ctx.client.post(
+        f"/api/events/{event_id}/experience/me/feedback?token={token}",
+        json={"step_id": form["step_id"], "answers": {"rating": 4}},
+    )
+    assert duplicate.status_code == 409
+
+    preview = await ctx.client.get(
+        f"/api/events/{event_id}/experience/feedback/{form['step_id']}/reminders/preview?channels=email,sms"
+    )
+    assert preview.status_code == 200
+    assert preview.json()["nonresponders"] == result["eligible_count"] - 1
+
+
+@pytest.mark.asyncio
+async def test_feedback_supports_editing_multi_choice_and_conditions(ctx):
+    ctx.login(ctx.ids["user_a"])
+    event_id = ctx.ids["event_a"]
+    async with _Session() as s:
+        event = await s.get(Event, event_id)
+        event.experience_enabled = True
+        guest = (await s.execute(select(Guest).where(Guest.event_id == event_id))).scalars().first()
+        token = guest.invite_token or guest.qr_token
+        await s.commit()
+    created = await ctx.client.post(f"/api/events/{event_id}/experience/workflows", json={
+        "name": "Conditional feedback", "steps": [{
+            "key": "feedback", "type": "feedback", "title": "Feedback", "config": {"feedback": {
+                "audience": "all", "allow_edit": True, "status": "open", "questions": [
+                    {"id": "liked", "type": "yes_no", "prompt": "Did you enjoy it?", "required": True},
+                    {"id": "highlights", "type": "multi_choice", "prompt": "Highlights", "required": True,
+                     "options": ["Speaker", "Venue"]},
+                    {"id": "why", "type": "text", "prompt": "Tell us why", "required": True,
+                     "show_if": {"question_id": "liked", "value": "no"}},
+                ]
+            }}
+        }]
+    })
+    workflow = created.json()
+    assert (await ctx.client.post(f"/api/events/{event_id}/experience/workflows/{workflow['id']}/publish")).status_code == 200
+    form = (await ctx.client.get(f"/api/events/{event_id}/experience/me/feedback?token={token}")).json()["forms"][0]
+    first = await ctx.client.post(f"/api/events/{event_id}/experience/me/feedback?token={token}", json={
+        "step_id": form["step_id"], "answers": {"liked": "yes", "highlights": ["Speaker", "Venue"]}
+    })
+    assert first.status_code == 201
+    available = (await ctx.client.get(f"/api/events/{event_id}/experience/me/feedback?token={token}")).json()["forms"][0]
+    assert available["can_edit"] is True
+    edited = await ctx.client.post(f"/api/events/{event_id}/experience/me/feedback?token={token}", json={
+        "step_id": form["step_id"], "answers": {"liked": "no", "highlights": ["Speaker"], "why": "Too short"}
+    })
+    assert edited.status_code == 201
+
+
+@pytest.mark.asyncio
+async def test_live_program_state_and_clock_are_gated_and_idempotent(ctx):
+    ctx.login(ctx.ids["user_a"])
+    event_id = ctx.ids["event_a"]
+    async with _Session() as s:
+        event = await s.get(Event, event_id)
+        event.status = "active"
+        event.experience_enabled = True
+        event.live_program_enabled = True
+        event.event_date = datetime(2026, 7, 17, 16, 0)  # 11 AM America/Chicago, stored UTC
+        event.live_program_enabled_at = datetime(2026, 7, 17, 15, 0)
+        await s.commit()
+
+    created = await ctx.client.post(f"/api/events/{event_id}/experience/workflows", json={
+        "name": "Live program", "steps": [{
+            "key": "opening", "type": "custom", "title": "Opening Dua", "description": "Please take your seat.",
+            "required": False, "is_segment": True, "starts_offset_seconds": 9000, "duration_seconds": 300,
+            "config": {"program": {"category": "Main program"}, "announce": {"enabled": True}},
+        }],
+    })
+    assert created.status_code == 201
+    workflow = created.json()
+    assert (await ctx.client.post(f"/api/events/{event_id}/experience/workflows/{workflow['id']}/publish")).status_code == 200
+
+    async with _Session() as s:
+        event = await s.get(Event, event_id)
+        active = await program_service.active_workflow(event_id, s)
+        now = to_event_local(event.event_date) + timedelta(seconds=9050)
+        state = await program_service.program_state(event, active, s, now=now)
+        assert state["enabled"] is True
+        assert [item["key"] for item in state["current_segments"]] == ["opening"]
+        first = await program_service.tick(s, now=now)
+        second = await program_service.tick(s, now=now)
+        assert first["segments_started"] == 1
+        assert second["segments_started"] == 0
+        announcements = await s.scalar(select(func.count(EventAnnouncement.id)).where(EventAnnouncement.event_id == event_id))
+        assert announcements == 1
+
+
+@pytest.mark.asyncio
+async def test_live_program_opens_and_closes_linked_feedback_window(ctx):
+    ctx.login(ctx.ids["user_a"])
+    event_id = ctx.ids["event_a"]
+    async with _Session() as s:
+        event = await s.get(Event, event_id)
+        event.status = "active"
+        event.experience_enabled = True
+        event.live_program_enabled = True
+        event.event_date = datetime(2026, 7, 17, 16, 0)
+        event.live_program_enabled_at = datetime(2026, 7, 17, 15, 0)
+        await s.commit()
+    created = await ctx.client.post(f"/api/events/{event_id}/experience/workflows", json={
+        "name": "Program feedback", "steps": [
+            {"key": "talk", "type": "custom", "title": "Keynote", "required": False,
+             "is_segment": True, "starts_offset_seconds": 9000, "duration_seconds": 300,
+             "config": {"feedback": {"step_key": "pulse", "opens_on": "segment_end", "window_seconds": 120}}},
+            {"key": "pulse", "type": "feedback", "title": "Pulse", "required": False,
+             "config": {"feedback": {"questions": [{"id": "rating", "type": "rating", "prompt": "Rate it", "required": True}]}}},
+        ],
+    })
+    workflow = created.json()
+    assert (await ctx.client.post(f"/api/events/{event_id}/experience/workflows/{workflow['id']}/publish")).status_code == 200
+    async with _Session() as s:
+        event = await s.get(Event, event_id)
+        active = await program_service.active_workflow(event_id, s)
+        now = to_event_local(event.event_date) + timedelta(seconds=9400)
+        result = await program_service.tick(s, now=now)
+        assert result["feedback_opened"] == 1
+        feedback = next(step for step in active.steps if step.key == "pulse")
+        assert (await program_service.feedback_availability(event, active, s, feedback.id, now=now))["open"] is True
+        later = now + timedelta(seconds=121)
+        assert (await program_service.tick(s, now=later))["feedback_closed"] == 1
+        assert (await program_service.feedback_availability(event, active, s, feedback.id, now=later))["open"] is False

@@ -19,6 +19,34 @@ if (API_ORIGIN) {
   }
 }
 
+// A manifest has one start URL per domain. When a guest installs from their
+// personal Hub, remember that safe-on-this-device route so the installed app
+// returns to their pass rather than the Festio home page.
+if (new URLSearchParams(window.location.search).get('guesthub') === '1') {
+  try {
+    const savedHub = localStorage.getItem('festio:installed-guest-hub')
+    if (savedHub && savedHub.startsWith('/')) window.location.replace(savedHub)
+  } catch { /* storage can be unavailable in private browsing */ }
+}
+
+// The Guest Hub is a Progressive Web App. Registering this small worker makes
+// the pass installable and retains the guest's QR image for weak venue Wi-Fi.
+if ('serviceWorker' in navigator && window.isSecureContext) {
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('/guesthub-sw.js?v=2').catch(() => {
+      // Installing the app is optional; the browser experience stays usable.
+    })
+  })
+}
+
+// Keep Chrome/Android's install event until the Guest Hub has loaded. The
+// browser may dispatch it before the guest-specific React view mounts.
+window.addEventListener('beforeinstallprompt', (event) => {
+  event.preventDefault()
+  window.__festioInstallPrompt = event
+  window.dispatchEvent(new Event('festio-install-ready'))
+})
+
 class RootErrorBoundary extends React.Component {
   constructor(props) {
     super(props)

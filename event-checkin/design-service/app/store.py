@@ -63,6 +63,7 @@ def publish_design(event_id: str) -> dict:
         "theme_config": d.get("theme_config", {}),
         "wording_config": d.get("wording_config", {}),
         "asset_config": d.get("asset_config", {}),
+        "page_config": d.get("page_config", {}),
         "organization_id": d.get("organization_id"),
     }
     d["is_published"] = True

@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { useParams } from 'react-router-dom'
 import { api } from '../api'
 import { parseUtc } from '../timeutil'
+import FeedbackForms from '../components/FeedbackForms'
 
 function passThemeColors(theme) {
   return theme?.colors || {}
@@ -849,7 +850,7 @@ export default function ScanAutoPage() {
           {/* Admitted banner */}
           {status === 'admitted' && <AdmittedBanner guest={guest} event={event} />}
 
-          {status === 'admitted' && (
+          {status === 'admitted' && event?.checkout_enabled && (
             <div className="rounded-lg border border-slate-200 bg-slate-50 p-4 text-center dark:border-slate-700 dark:bg-slate-800">
               <p className="text-xs font-bold uppercase tracking-widest text-slate-500 dark:text-slate-400">Checkout QR</p>
               <div className="mt-3 flex justify-center">
@@ -877,17 +878,21 @@ export default function ScanAutoPage() {
             </div>
           )}
 
+          {event?.experience_enabled && guest?.event_id && guestHubToken && (
+            <FeedbackForms eventId={guest.event_id} token={guestHubToken} onSubmitted={reload} />
+          )}
+
           {/* Guest Hub + FestioMe entries — controlled from Design Studio pass
               options, always exposed for Experience events. */}
           {(showGuestHubButton || event?.festiome_addon_enabled) && (
             <div className="flex flex-col items-center gap-2">
               {showGuestHubButton && (
                 <a
-                  href={`/r/${guestHubToken}#guest-hub`}
+                  href={event?.live_program_enabled ? `/scan/${token}/hub` : `/r/${guestHubToken}#guest-hub`}
                   className="inline-flex min-h-11 w-full max-w-xs items-center justify-center rounded-lg px-5 py-2.5 text-sm font-bold text-slate-950"
                   style={{ background: colors.accent || '#14b8a6' }}
                 >
-                  {event?.experience_enabled ? 'Track my activity' : 'Open Guest Hub'}
+                  {event?.live_program_enabled ? 'Open Live Program' : event?.experience_enabled ? 'Track my activity' : 'Open FestioHub'}
                 </a>
               )}
               {event?.festiome_addon_enabled && guest?.event_id && (

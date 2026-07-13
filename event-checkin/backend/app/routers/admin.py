@@ -29,6 +29,7 @@ DEFAULT_ORG_ID = "00000000-0000-0000-0000-000000000001"  # legacy default org â€
 # Child tables to clear when hard-deleting an org, in FK-safe order. Scoped to
 # the org's events (E) or the org itself. See db FK map.
 _ORG_DELETE_SQL = [
+    "DELETE FROM feedback_submissions WHERE event_id IN (SELECT id FROM events WHERE org_id=:o)",
     "DELETE FROM scan_events WHERE event_id IN (SELECT id FROM events WHERE org_id=:o)",
     "DELETE FROM guest_shipments WHERE shipment_id IN (SELECT id FROM shipments WHERE event_id IN (SELECT id FROM events WHERE org_id=:o))",
     "DELETE FROM shipments WHERE event_id IN (SELECT id FROM events WHERE org_id=:o)",
@@ -182,6 +183,12 @@ async def reset_event_data(
             {"event_id": event_id},
         )
         await db.execute(text("DELETE FROM guest_experience_progress WHERE event_id=:event_id"), {"event_id": event_id})
+
+        cleared["feedback_submissions"] = await _count_sql(
+            "SELECT count(*) FROM feedback_submissions WHERE event_id=:event_id",
+            {"event_id": event_id},
+        )
+        await db.execute(text("DELETE FROM feedback_submissions WHERE event_id=:event_id"), {"event_id": event_id})
 
         cleared["consent_signatures"] = await _count_sql(
             "SELECT count(*) FROM consent_signatures WHERE event_id=:event_id",

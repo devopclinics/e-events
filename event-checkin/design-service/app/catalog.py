@@ -1,10 +1,10 @@
 """Data-driven template catalog.
 
-100 template families are *generated* from a 20-category × 5-style matrix layered
-over shared per-style surface layouts and design tokens — not hand-authored. Each
-family produces matching visuals for all five surfaces (event page, flyer, guest
-hub, Festio Pass, email). Adding a category or style scales the catalog with no
-new files.
+Only templates with a real, supported surface contract belong in the Studio.
+The older 20-category × 5-style matrix looked like 100 different templates but
+was five layouts with renamed cards.  The catalog is deliberately curated to
+five distinct, production-supported families.  Legacy ids remain aliases so an
+existing event keeps its appearance when the catalog is upgraded.
 """
 from functools import lru_cache
 import json
@@ -508,19 +508,86 @@ def _family(cat_key: str, cat: dict, style_key: str, style: dict) -> dict:
     }
 
 
+CURATED_FAMILIES = (
+    ("flyer-led", "Flyer-led", "photo-first", "Best for an organizer-supplied flyer or poster."),
+    ("signature", "Signature", "luxury", "Best for galas, anniversaries, and premium events."),
+    ("modern", "Modern", "minimal", "Best for clean, information-led events."),
+    ("celebration", "Celebration", "festive", "Best for lively community and family events."),
+    ("formal", "Formal", "classic", "Best for ceremonies, banquets, and formal programs."),
+)
+
+_REQUIRED_SURFACES = frozenset(SURFACES)
+_REQUIRED_LAYOUTS = frozenset({"eventPage", "flyer", "guestHub", "pass", "email"})
+_REQUIRED_COLORS = frozenset({"background", "surface", "primary", "accent", "text"})
+
+
+def template_quality_issues(template: dict) -> list[str]:
+    """Contract checks shared by the catalogue, API report, and staging gate."""
+    issues: list[str] = []
+    if not template.get("id") or not template.get("name"):
+        issues.append("missing id or name")
+    if set(template.get("surfaces") or []) != _REQUIRED_SURFACES:
+        issues.append("must define all five guest surfaces")
+    if not _REQUIRED_LAYOUTS.issubset(set((template.get("layout") or {}).keys())):
+        issues.append("missing a surface layout")
+    if not _REQUIRED_COLORS.issubset(set((template.get("defaultColors") or {}).keys())):
+        issues.append("missing a required color token")
+    flyer = template.get("flyerDefinition") or {}
+    if flyer.get("layout") not in FLYER_LAYER_SETS:
+        issues.append("flyer layout is not renderer-supported")
+    if not flyer.get("imageZones") or not flyer.get("textZones"):
+        issues.append("flyer must define image and text zones")
+    if not template.get("fontPairing") or not template.get("buttonStyle"):
+        issues.append("missing typography or button rules")
+    return issues
+
+
+def catalog_quality_report() -> list[dict]:
+    return [
+        {"id": template["id"], "name": template["name"], "issues": template_quality_issues(template)}
+        for template in build_catalog()
+    ]
+
+
+def _curated_family(template_id: str, name: str, style_key: str, description: str) -> dict:
+    """Build one honest template family, while accepting all retired ids of its style."""
+    style = STYLES[style_key]
+    general = CATEGORIES["general-modern"]
+    family = _family("general", general, style_key, style)
+    legacy_ids = [f"{category_key}-{style_key}" for category_key in CATEGORIES]
+    legacy_ids.extend(alias for _, aliases in BIRTHDAY_FLYER_NAMES.items() if _ == style_key for alias in aliases[:1])
+    family.update({
+        "id": template_id,
+        "name": name,
+        "aliases": list(dict.fromkeys([*family.get("aliases", []), *legacy_ids])),
+        "category": "Curated collection",
+        "categoryKey": "curated",
+        "description": description,
+        "type": "production-template",
+        "thumbnailUrl": None,
+    })
+    return family
+
+
 @lru_cache(maxsize=1)
 def build_catalog() -> list[dict]:
-    """All template families, generated deterministically (categories × styles)."""
-    generated = [
-        _family(ck, cv, sk, sv)
-        for ck, cv in CATEGORIES.items()
-        for sk, sv in STYLES.items()
-    ]
-    return generated + _pack_catalog()
+    """The Studio picker: only the curated, production-ready families."""
+    curated = [_curated_family(*family) for family in CURATED_FAMILIES]
+    invalid = [(template["id"], template_quality_issues(template)) for template in curated if template_quality_issues(template)]
+    if invalid:
+        detail = "; ".join(f"{template_id}: {', '.join(issues)}" for template_id, issues in invalid)
+        raise RuntimeError(f"Design Studio catalogue quality gate failed: {detail}")
+    return curated
 
 
 def get_template(template_id: str) -> dict | None:
-    return next((t for t in build_catalog() if t["id"] == template_id or template_id in t.get("aliases", [])), None)
+    selected = next((t for t in build_catalog() if t["id"] == template_id or template_id in t.get("aliases", [])), None)
+    if selected:
+        return selected
+    # Existing events using a legacy uploaded pack must remain renderable, but
+    # those packs are intentionally not offered to new designs until each has a
+    # verified public-page, flyer, pass, hub and email implementation.
+    return next((t for t in _pack_catalog() if t["id"] == template_id or template_id in t.get("aliases", [])), None)
 
 
 def default_template() -> dict:

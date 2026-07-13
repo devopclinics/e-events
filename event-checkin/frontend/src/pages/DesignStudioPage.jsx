@@ -9,29 +9,6 @@ import { parseUtc } from '../timeutil'
 
 const TABS = ['Templates', 'Flyer', 'Event Page', 'Festio Pass', 'Email Preview', 'Publish']
 
-const CATEGORY_OPTIONS = [
-  ['birthday', 'Birthday'],
-  ['wedding', 'Wedding'],
-  ['nikkah-aqdu', 'Nikkah / Aqdu'],
-  ['gala', 'Gala'],
-  ['banquet', 'Banquet'],
-  ['corporate', 'Corporate Event'],
-  ['conference', 'Conference'],
-  ['seminar', 'Seminar'],
-  ['fundraiser', 'Fundraiser'],
-  ['award-night', 'Award Night'],
-  ['community', 'Community Event'],
-  ['religious', 'Religious Event'],
-  ['graduation', 'Graduation'],
-  ['baby-shower', 'Baby Shower'],
-  ['naming-ceremony', 'Naming Ceremony'],
-  ['memorial', 'Memorial'],
-  ['dinner-party', 'Dinner Party'],
-  ['vip-private', 'VIP / Private Party'],
-  ['concert-social', 'Concert / Social'],
-  ['general-modern', 'General Modern Event'],
-]
-
 const STYLE_OPTIONS = [
   ['luxury', 'Luxury / Premium'],
   ['minimal', 'Modern Minimal'],
@@ -83,14 +60,31 @@ const FONT_STACKS = {
 const PASS_OPTION_FIELDS = [
   ['showTable', 'Show table assignment'],
   ['showSeat', 'Show seat number'],
-  ['showHubButton', 'Show Guest Hub button'],
+  ['showHubButton', 'Show FestioHub button'],
 ]
+
+const DEFAULT_PUBLIC_PAGE = {
+  hero: { showWelcomeLabel: true, showTitle: true, showHost: true },
+  organizer: { show: true, label: 'Organized by' },
+  details: { showVenue: true, showHotel: true, showHost: true, showAdmission: true },
+  about: { show: true, ctaLabel: '', ctaUrl: '' },
+}
+
+function publicPageSettings(config = {}) {
+  return {
+    hero: { ...DEFAULT_PUBLIC_PAGE.hero, ...(config.hero || {}) },
+    organizer: { ...DEFAULT_PUBLIC_PAGE.organizer, ...(config.organizer || {}) },
+    details: { ...DEFAULT_PUBLIC_PAGE.details, ...(config.details || {}) },
+    about: { ...DEFAULT_PUBLIC_PAGE.about, ...(config.about || {}) },
+  }
+}
 
 const WORDING_FIELDS = [
   ['inviteLabel', 'Invite label', "You're invited to"],
   ['eventTitle', 'Event title', 'Electron Jubilee'],
   ['eventSubtitle', 'Event subtitle', 'Celebrate with us'],
   ['hostName', 'Host name', 'Electron'],
+  ['hostWebsite', 'Host website', 'https://example.org'],
   ['date', 'Date', 'Tuesday, August 18, 2026'],
   ['time', 'Time', '6:00 PM'],
   ['venue', 'Venue', 'The Electron Place'],
@@ -103,6 +97,7 @@ const WORDING_FIELDS = [
   ['admissionNote', 'Admission note', 'Show your personal Festio Pass at the entrance.'],
   ['parkingNote', 'Parking note', 'Complimentary valet available.'],
   ['customMessage', 'Custom message', 'Join us for a night of food, music, memories, and celebration.'],
+  ['aboutWebsite', 'About website', 'https://example.org'],
   ['footerMessage', 'Footer message', "I can't wait to celebrate with you."],
   ['footerNote', 'Footer note', 'Powered by Festio'],
 ]
@@ -127,7 +122,7 @@ const EMAIL_TYPES = [
 const SURFACE_LABELS = {
   event_page: 'RSVP page',
   flyer: 'Flyer',
-  guest_hub: 'Guest Hub',
+  guest_hub: 'FestioHub',
   festio_pass: 'Festio Pass',
   email: 'Email',
 }
@@ -436,8 +431,9 @@ function FlyerPreview({ template, colors, wording, coverImageUrl, imagePosition,
   )
 }
 
-function EventPagePreview({ colors, wording, coverImageUrl, mode = 'desktop', fontFamily }) {
+function EventPagePreview({ colors, wording, coverImageUrl, pageConfig, mode = 'desktop', fontFamily }) {
   const tone = previewTone(colors)
+  const page = publicPageSettings(pageConfig)
   return (
     <div className={`overflow-hidden rounded-[1.5rem] border border-slate-200 bg-slate-950 shadow-xl dark:border-white/10 ${mode === 'mobile' ? 'mx-auto max-w-[320px]' : ''}`} style={fontFamily ? { fontFamily } : undefined}>
       <div className="p-3" style={{ background: `radial-gradient(circle at 20% 0%, ${tone.accent}55, transparent 48%), linear-gradient(140deg, ${tone.background}, ${tone.surface})`, color: tone.text }}>
@@ -448,7 +444,7 @@ function EventPagePreview({ colors, wording, coverImageUrl, mode = 'desktop', fo
         <div className={`grid gap-5 ${mode === 'mobile' ? '' : 'md:grid-cols-[0.9fr_1.1fr]'}`}>
           <div className="overflow-hidden rounded-2xl bg-white/10">
             {coverImageUrl ? (
-              <div className="aspect-[4/5] bg-cover bg-center" style={{ backgroundImage: `url(${coverImageUrl})` }} />
+              <img src={coverImageUrl} alt="Event flyer preview" className="aspect-[4/5] w-full object-contain" />
             ) : (
               <div className="grid aspect-[4/5] place-items-center p-6 text-center">
                 <div>
@@ -459,14 +455,16 @@ function EventPagePreview({ colors, wording, coverImageUrl, mode = 'desktop', fo
             )}
           </div>
           <div className="flex flex-col justify-center rounded-2xl p-4" style={{ background: tone.panel, color: tone.text }}>
-            <div className="text-[10px] font-black uppercase tracking-[0.22em]" style={{ color: tone.accent }}>You're invited to</div>
-            <div className="mt-2 text-3xl font-black leading-tight" style={{ color: tone.text }}>{wording.eventTitle}</div>
+            {page.hero.showWelcomeLabel && <div className="text-[10px] font-black uppercase tracking-[0.22em]" style={{ color: tone.accent }}>{wording.inviteLabel || "You're invited to"}</div>}
+            {page.hero.showTitle && <div className="mt-2 text-3xl font-black leading-tight" style={{ color: tone.text }}>{wording.eventTitle}</div>}
+            {page.hero.showHost && wording.hostName && <div className="mt-2 text-sm font-bold" style={{ color: tone.text }}>{wording.hostName}</div>}
             <p className="mt-3 text-sm leading-6" style={{ color: tone.muted }}>{wording.customMessage}</p>
             <div className="mt-4 grid gap-2 text-xs font-bold sm:grid-cols-2" style={{ color: tone.text }}>
               <span className="rounded-xl p-3" style={{ background: tone.chip }}>{wording.date}</span>
               <span className="rounded-xl p-3" style={{ background: tone.chip }}>{wording.time}</span>
-              <span className="rounded-xl p-3 sm:col-span-2" style={{ background: tone.chip }}>{wording.venue}</span>
+              {page.details.showVenue && <span className="rounded-xl p-3 sm:col-span-2" style={{ background: tone.chip }}>{wording.venue}</span>}
             </div>
+            {page.organizer.show && wording.hostName && <div className="mt-4 text-xs font-bold" style={{ color: tone.muted }}>{page.organizer.label || 'Organized by'} {wording.hostName}</div>}
             <button type="button" className="mt-4 min-h-11 rounded-xl px-4 py-2 text-sm font-black text-slate-950" style={{ background: colors.accent || '#14b8a6' }}>
               Confirm My RSVP
             </button>
@@ -501,7 +499,7 @@ function PassPreview({ colors, wording, coverImageUrl, passOptions = {}, fontFam
         <p className="mt-4 text-sm leading-6 text-slate-600">{wording.admissionNote}</p>
         {opts.showHubButton && (
           <button type="button" className="mt-4 min-h-11 w-full rounded-xl px-4 py-2 text-sm font-black text-slate-950" style={{ background: colors.accent || '#14b8a6' }}>
-            Open Guest Hub
+            Open FestioHub
           </button>
         )}
       </div>
@@ -656,7 +654,7 @@ export default function DesignStudioPage() {
   }, [filteredTemplates])
 
   const categoryOptions = useMemo(() => {
-    const seen = new Set(CATEGORY_OPTIONS.map(([key]) => key))
+    const seen = new Set()
     const dynamic = []
     templates.forEach((t) => {
       const key = t.categoryKey || t.category
@@ -665,7 +663,7 @@ export default function DesignStudioPage() {
         dynamic.push([key, t.category])
       }
     })
-    return [...CATEGORY_OPTIONS, ...dynamic]
+    return dynamic
   }, [templates])
 
   const styleOptions = useMemo(() => {
@@ -682,13 +680,13 @@ export default function DesignStudioPage() {
   }, [templates])
 
   const selectedTpl = useMemo(
-    () => templates.find((t) => t.id === design?.selected_template_id) || null,
+    () => templates.find((t) => t.id === design?.selected_template_id || t.aliases?.includes(design?.selected_template_id)) || null,
     [templates, design],
   )
 
   const selectedFlyerTpl = useMemo(
     () => {
-      const explicit = templates.find((t) => t.id === design?.selected_flyer_template_id)
+      const explicit = templates.find((t) => t.id === design?.selected_flyer_template_id || t.aliases?.includes(design?.selected_flyer_template_id))
       if (explicit) return explicit
       if (selectedTpl?.previewUrl || (selectedTpl?.sourceType === 'template-pack' && selectedTpl?.thumbnailUrl)) return selectedTpl
       return flyerTemplates[0] || selectedTpl || null
@@ -701,7 +699,7 @@ export default function DesignStudioPage() {
   const passOptions = { showTable: true, showSeat: true, showHubButton: true, ...(design?.theme_config?.passOptions || {}) }
   const fontPairing = design?.theme_config?.fontPairing || selectedTpl?.fontPairing || 'modern-sans'
   const previewFontFamily = FONT_STACKS[fontPairing] || FONT_STACKS['modern-sans']
-  const coverImageUrl = design?.asset_config?.flyer_image_url || design?.asset_config?.cover_image_url || currentEvent?.invite_cover_image || ''
+  const coverImageUrl = design?.asset_config?.cover_image_url || design?.asset_config?.flyer_image_url || currentEvent?.invite_cover_image || ''
   const photoCoverImageUrl = design?.asset_config?.cover_image_url || ''
   const flyerCoverImageUrl = design?.asset_config?.flyer_image_url || ''
   const imagePosition = {
@@ -719,6 +717,7 @@ export default function DesignStudioPage() {
     eventTitle: currentEvent?.name || 'Electron Jubilee',
     eventSubtitle: 'Celebrate with us',
     hostName: currentEvent?.host_name || currentEvent?.couples_name || 'Electron',
+    hostWebsite: '',
     date: fmtEventDate(currentEvent?.event_date) || 'Tuesday, August 18, 2026',
     time: fmtEventTime(currentEvent?.event_date) || '6:00 PM',
     venue: currentEvent?.venue_name || 'The Electron Place',
@@ -731,6 +730,7 @@ export default function DesignStudioPage() {
     admissionNote: currentEvent?.admission_note || 'Show your personal Festio Pass at the entrance.',
     parkingNote: 'Parking and arrival details will be shared before the event.',
     customMessage: currentEvent?.description || currentEvent?.invite_message || 'Join us for a night of food, music, memories, and celebration.',
+    aboutWebsite: '',
     footerMessage: "I can't wait to celebrate with you.",
     footerNote: 'Powered by Festio',
   }
@@ -742,6 +742,7 @@ export default function DesignStudioPage() {
       return [key, saved ?? (defaultWords[key] || fallback)]
     }),
   )
+  const publicPage = publicPageSettings(design?.page_config)
 
   async function patch(partial, successText = '') {
     if (!eventId) return note('Pick an event first.', true)
@@ -753,6 +754,7 @@ export default function DesignStudioPage() {
         theme_config: design?.theme_config || {},
         wording_config: design?.wording_config || {},
         asset_config: design?.asset_config || {},
+        page_config: design?.page_config || {},
         ...partial,
       }
       const saved = await api.saveEventDesign(eventId, merged)
@@ -833,6 +835,7 @@ export default function DesignStudioPage() {
           theme_config: d?.theme_config || {},
           wording_config: d?.wording_config || {},
           asset_config: d?.asset_config || {},
+          page_config: d?.page_config || {},
         })
       } catch (e) {
         note(e.message || 'Save failed', true)
@@ -855,6 +858,10 @@ export default function DesignStudioPage() {
     queueSave()
   }
   const setWord = (key, value) => setDesign((d) => ({ ...(d || { event_id: eventId }), wording_config: { ...(d?.wording_config || {}), [key]: value } }))
+  const setPublicPage = (section, key, value) => setDesign((d) => ({
+    ...(d || { event_id: eventId }),
+    page_config: { ...(d?.page_config || {}), [section]: { ...(d?.page_config?.[section] || {}), [key]: value } },
+  }))
   const setImagePosition = (key, value) => {
     const next = { ...imagePosition, [key]: Number(value) }
     setDesign((d) => ({ ...(d || { event_id: eventId }), asset_config: { ...(d?.asset_config || {}), image_position: next } }))
@@ -865,6 +872,34 @@ export default function DesignStudioPage() {
 
   async function saveWording() {
     await patch({ wording_config: Object.fromEntries(WORDING_FIELDS.map(([key]) => [key, wording[key]])) }, 'Wording saved.')
+  }
+
+  async function savePublicPage() {
+    await patch({ page_config: publicPage }, 'Public page settings saved. Preview and publish when ready.')
+  }
+
+  function openLiveDraftPreview() {
+    if (!eventId || !selectedTpl) return note('Select a supported design first.', true)
+    const theme = {
+      event_id: eventId,
+      template_id: selectedTpl.id,
+      is_default: false,
+      colors,
+      font_pairing: fontPairing,
+      button_style: design?.theme_config?.buttonStyle || selectedTpl.buttonStyle,
+      layout: selectedTpl.layout,
+      cover_image_url: design?.asset_config?.cover_image_url || currentEvent?.invite_cover_image || '',
+      flyer_image_url: design?.asset_config?.flyer_image_url || '',
+      wording,
+      pass_options: passOptions,
+      page_config: publicPage,
+    }
+    try {
+      sessionStorage.setItem(`festio:design-preview:${eventId}`, JSON.stringify({ event_id: eventId, theme, saved_at: Date.now() }))
+      window.open(`/invite/${eventId}?studio-preview=1`, '_blank')
+    } catch {
+      note('Could not open the draft preview. Please allow pop-ups and try again.', true)
+    }
   }
 
   async function saveFlyerSettings() {
@@ -929,7 +964,12 @@ export default function DesignStudioPage() {
       })
       if (useAsCover && result?.outputUrl) {
         const saved = await api.saveEventDesign(eventId, {
-          asset_config: { ...(design?.asset_config || {}), image_position: imagePosition, flyer_image_url: result.outputUrl },
+          asset_config: {
+            ...(design?.asset_config || {}),
+            image_position: imagePosition,
+            cover_image_url: result.outputUrl,
+            flyer_image_url: result.outputUrl,
+          },
         })
         setDesign(saved)
         const updated = await api.updateInviteSettings(eventId, { invite_cover_image: result.outputUrl })
@@ -948,7 +988,13 @@ export default function DesignStudioPage() {
     if (!eventId) return note('Pick an event first.', true)
     setBusy(true)
     try {
-      const rendered = selectedFlyerTpl ? await api.renderFlyer(eventId, {
+      // An uploaded cover belongs to the organizer. Publishing wording or
+      // color changes must not silently replace it with a generated template
+      // flyer. Generated flyers are promoted only through the explicit
+      // "Render and use as cover" action (or when no upload exists).
+      const existingCoverImageUrl = photoCoverImageUrl || currentEvent?.invite_cover_image || ''
+      const preserveExistingCover = Boolean(existingCoverImageUrl)
+      const rendered = !preserveExistingCover && selectedFlyerTpl ? await api.renderFlyer(eventId, {
         size: 'portrait',
         format: 'png',
         template_id: selectedFlyerTpl.id,
@@ -961,7 +1007,9 @@ export default function DesignStudioPage() {
         qr_position: flyer.qrPosition,
         qr_data: flyer.qr && flyer.rsvpLink ? `https://festio.events/invite/${eventId}` : null,
       }, { download: false }) : null
-      const flyerImageUrl = rendered?.outputUrl || design?.asset_config?.flyer_image_url || templateFlyerImageUrl(selectedFlyerTpl) || ''
+      const flyerImageUrl = preserveExistingCover
+        ? existingCoverImageUrl
+        : rendered?.outputUrl || design?.asset_config?.flyer_image_url || templateFlyerImageUrl(selectedFlyerTpl) || ''
       const saved = await api.saveEventDesign(eventId, {
         selected_template_id: selectedFlyerTpl?.id || design?.selected_template_id,
         selected_flyer_template_id: selectedFlyerTpl?.id || design?.selected_flyer_template_id,
@@ -971,13 +1019,13 @@ export default function DesignStudioPage() {
       })
       setDesign(saved)
       const published = await api.publishEventDesign(eventId)
-      const liveCover = flyerImageUrl || saved?.asset_config?.cover_image_url || coverImageUrl
+      const liveCover = saved?.asset_config?.cover_image_url || flyerImageUrl || coverImageUrl
       if (liveCover) {
         const updated = await api.updateInviteSettings(eventId, { invite_cover_image: liveCover })
         setEvents((prev) => prev.map((ev) => (ev.id === updated.id ? updated : ev)))
       }
       setDesign((d) => ({ ...(d || saved || {}), is_published: published.is_published, published_version: published.published_version, published_at: published.published_at }))
-      note('Design and selected flyer published to RSVP pages, Guest Hub, Festio Passes, and emails.')
+      note('Design and selected flyer published to RSVP pages, FestioHub, Festio Passes, and emails.')
     } catch (e) {
       if (e.status === 402) {
         setUpgradeMessage(e.message || 'Design Studio publishing requires an Event Pass.')
@@ -1001,7 +1049,7 @@ export default function DesignStudioPage() {
             <p className="text-xs font-black uppercase tracking-[0.2em] text-teal-700 dark:text-teal-300">Festio Design Studio</p>
             <h1 className="mt-2 text-3xl font-black tracking-tight text-slate-950 dark:text-white">Beautiful event pages, flyers, passes, and emails.</h1>
             <p className="mt-3 max-w-3xl text-sm leading-6 text-slate-600 dark:text-slate-300">
-              Pick a template family, upload your flyer or photo, edit wording, choose colors, preview every guest surface, then publish without changing RSVP, QR, Guest Hub, scanner, or messaging logic.
+              Pick a template family, upload your flyer or photo, edit wording, choose colors, preview every guest surface, then publish without changing RSVP, QR, FestioHub, scanner, or messaging logic.
             </p>
             <div className="mt-5 grid gap-2 text-xs font-bold text-slate-600 dark:text-slate-300 sm:grid-cols-3 lg:max-w-3xl">
               {['1. Choose a design', '2. Customize details', '3. Preview and publish'].map((step) => (
@@ -1017,12 +1065,12 @@ export default function DesignStudioPage() {
             </select>
             <div className="grid grid-cols-3 gap-2">
               <div className="rounded-xl bg-slate-50 p-3 text-center dark:bg-white/5">
-                <div className="text-xl font-black text-slate-950 dark:text-white">{templates.length || 100}+</div>
-                <div className="text-[10px] font-bold uppercase tracking-wider text-slate-500">Templates</div>
+                <div className="text-xl font-black text-slate-950 dark:text-white">{templates.length}</div>
+                <div className="text-[10px] font-bold uppercase tracking-wider text-slate-500">Supported designs</div>
               </div>
               <div className="rounded-xl bg-slate-50 p-3 text-center dark:bg-white/5">
-                <div className="text-xl font-black text-slate-950 dark:text-white">20</div>
-                <div className="text-[10px] font-bold uppercase tracking-wider text-slate-500">Categories</div>
+                <div className="text-xl font-black text-slate-950 dark:text-white">{categoryOptions.length}</div>
+                <div className="text-[10px] font-bold uppercase tracking-wider text-slate-500">Collections</div>
               </div>
               <div className="rounded-xl bg-slate-50 p-3 text-center dark:bg-white/5">
                 <div className="text-xl font-black text-slate-950 dark:text-white">5</div>
@@ -1065,8 +1113,8 @@ export default function DesignStudioPage() {
           <section>
             <SectionTitle
               eyebrow="Choose a design"
-              title="Start with one template family for the full guest experience."
-              copy="Each family styles the RSVP page, downloadable flyer, Guest Hub, Festio Pass, and email theme together."
+              title="Start with a supported design family for the full guest experience."
+              copy="Every design shown here has a defined RSVP page, downloadable flyer, FestioHub, Festio Pass, and email treatment."
             />
             <div className="mt-5 grid gap-3 rounded-2xl border border-slate-200 bg-white p-4 dark:border-white/10 dark:bg-slate-900 md:grid-cols-3 xl:grid-cols-6">
               <input
@@ -1094,7 +1142,7 @@ export default function DesignStudioPage() {
                 <option value="">All surfaces</option>
                 <option value="event_page">RSVP page</option>
                 <option value="flyer">Flyer</option>
-                <option value="guest_hub">Guest Hub</option>
+                <option value="guest_hub">FestioHub</option>
                 <option value="festio_pass">Festio Pass</option>
                 <option value="email">Email</option>
               </select>
@@ -1364,16 +1412,74 @@ export default function DesignStudioPage() {
       {eventId && tab === 'Event Page' && (
         <div className="space-y-6">
           <SectionTitle
-            eyebrow="RSVP and Guest Hub preview"
+            eyebrow="RSVP and FestioHub preview"
             title="Preview how guests see the published event design."
-            copy="The selected family, colors, cover image, and wording apply to the RSVP page and Guest Hub while existing RSVP behavior remains unchanged."
+            copy="Control the guest-facing page here. These settings change presentation only; RSVP, QR, FestioHub, and check-in rules remain unchanged."
           />
+          <div className="rounded-2xl border border-slate-200 bg-white p-5 dark:border-white/10 dark:bg-slate-900">
+            <div className="flex flex-wrap items-start justify-between gap-3">
+              <div>
+                <h3 className="text-lg font-black text-slate-950 dark:text-white">Public page controls</h3>
+                <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">Decide what appears on the RSVP page without changing event operations.</p>
+              </div>
+              <button type="button" disabled={busy} onClick={savePublicPage} className="min-h-11 rounded-xl bg-slate-950 px-4 py-2 text-sm font-black text-white hover:bg-slate-800 disabled:opacity-50 dark:bg-white dark:text-slate-950">
+                Save page settings
+              </button>
+              <button type="button" disabled={!selectedTpl} onClick={openLiveDraftPreview} className="min-h-11 rounded-xl border border-teal-400 px-4 py-2 text-sm font-black text-teal-700 hover:bg-teal-50 disabled:opacity-50 dark:text-teal-200 dark:hover:bg-teal-400/10">
+                Open true draft preview
+              </button>
+            </div>
+            <div className="mt-5 grid gap-5 lg:grid-cols-2">
+              <div className="rounded-xl border border-slate-200 p-4 dark:border-white/10">
+                <div className="text-sm font-black text-slate-950 dark:text-white">Hero and organizer</div>
+                <div className="mt-3 grid gap-2">
+                  {[
+                    ['hero', 'showWelcomeLabel', 'Show welcome label'],
+                    ['hero', 'showTitle', 'Show title beside the flyer'],
+                    ['hero', 'showHost', 'Show host beside the flyer'],
+                    ['organizer', 'show', 'Show organizer line above the page'],
+                  ].map(([section, key, text]) => (
+                    <label key={key} className="flex min-h-10 items-center gap-2 text-sm font-semibold text-slate-700 dark:text-slate-200">
+                      <input type="checkbox" checked={Boolean(publicPage[section][key])} onChange={(e) => setPublicPage(section, key, e.target.checked)} className="h-4 w-4 accent-teal-500" />
+                      {text}
+                    </label>
+                  ))}
+                  <label className="mt-2 text-xs font-bold text-slate-500 dark:text-slate-400">Organizer label
+                    <input className={`${input} mt-1`} value={publicPage.organizer.label || ''} onChange={(e) => setPublicPage('organizer', 'label', e.target.value)} placeholder="Organized by" />
+                  </label>
+                </div>
+              </div>
+              <div className="rounded-xl border border-slate-200 p-4 dark:border-white/10">
+                <div className="text-sm font-black text-slate-950 dark:text-white">Details and About section</div>
+                <div className="mt-3 grid gap-2">
+                  {[
+                    ['details', 'showVenue', 'Show venue and map link'],
+                    ['details', 'showHotel', 'Show hotel information'],
+                    ['details', 'showHost', 'Show host card'],
+                    ['details', 'showAdmission', 'Show admission note'],
+                    ['about', 'show', 'Show About this event'],
+                  ].map(([section, key, text]) => (
+                    <label key={key} className="flex min-h-10 items-center gap-2 text-sm font-semibold text-slate-700 dark:text-slate-200">
+                      <input type="checkbox" checked={Boolean(publicPage[section][key])} onChange={(e) => setPublicPage(section, key, e.target.checked)} className="h-4 w-4 accent-teal-500" />
+                      {text}
+                    </label>
+                  ))}
+                  <label className="mt-2 text-xs font-bold text-slate-500 dark:text-slate-400">About CTA label
+                    <input className={`${input} mt-1`} value={publicPage.about.ctaLabel || ''} onChange={(e) => setPublicPage('about', 'ctaLabel', e.target.value)} placeholder="Learn more about this event" />
+                  </label>
+                  <label className="text-xs font-bold text-slate-500 dark:text-slate-400">About CTA website
+                    <input className={`${input} mt-1`} value={publicPage.about.ctaUrl || ''} onChange={(e) => setPublicPage('about', 'ctaUrl', e.target.value)} placeholder="https://example.org" />
+                  </label>
+                </div>
+              </div>
+            </div>
+          </div>
           <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_360px]">
-            <EventPagePreview colors={colors} wording={wording} coverImageUrl={coverImageUrl} fontFamily={previewFontFamily} />
+            <EventPagePreview colors={colors} wording={wording} coverImageUrl={coverImageUrl} pageConfig={publicPage} fontFamily={previewFontFamily} />
             <div className="rounded-2xl border border-slate-200 bg-white p-5 dark:border-white/10 dark:bg-slate-900">
-              <h3 className="text-lg font-black text-slate-950 dark:text-white">Guest Hub preview</h3>
+              <h3 className="text-lg font-black text-slate-950 dark:text-white">FestioHub preview</h3>
               <div className="mt-4 rounded-2xl p-4" style={{ background: `linear-gradient(145deg, ${hubTone.background}, ${hubTone.surface})`, color: hubTone.text, fontFamily: previewFontFamily }}>
-                <div className="text-xs font-black uppercase tracking-[0.18em]" style={{ color: hubTone.accent }}>Guest Hub</div>
+                <div className="text-xs font-black uppercase tracking-[0.18em]" style={{ color: hubTone.accent }}>FestioHub</div>
                 <div className="mt-2 text-2xl font-black" style={{ color: hubTone.text }}>{wording.eventTitle}</div>
                 <div className="mt-4 space-y-2 text-sm">
                   <div className="rounded-xl p-3" style={{ background: hubTone.chip }}>Event update: Doors open at 5:30 PM.</div>
@@ -1393,7 +1499,7 @@ export default function DesignStudioPage() {
           </div>
           <div>
             <label className={label}>Mobile preview</label>
-            <EventPagePreview colors={colors} wording={wording} coverImageUrl={coverImageUrl} mode="mobile" fontFamily={previewFontFamily} />
+            <EventPagePreview colors={colors} wording={wording} coverImageUrl={coverImageUrl} pageConfig={publicPage} mode="mobile" fontFamily={previewFontFamily} />
           </div>
         </div>
       )}
@@ -1412,7 +1518,7 @@ export default function DesignStudioPage() {
                 {[
                   ['admissionNote', 'Admission wording'],
                   ['footerNote', 'Footer note'],
-                  ['customMessage', 'Guest Hub intro'],
+                  ['customMessage', 'FestioHub intro'],
                 ].map(([key, text]) => (
                   <div key={key}>
                     <label className="mb-1 block text-xs font-bold text-slate-500 dark:text-slate-400">{text}</label>
@@ -1468,7 +1574,7 @@ export default function DesignStudioPage() {
               copy="Publishing applies this design across public event surfaces through the design-service payload. Core RSVP, QR, messaging, scanner, seating, orders, registry, and delivery workflows are not changed."
             />
             <div className="grid gap-5 md:grid-cols-2">
-              <EventPagePreview colors={colors} wording={wording} coverImageUrl={coverImageUrl} mode="mobile" fontFamily={previewFontFamily} />
+              <EventPagePreview colors={colors} wording={wording} coverImageUrl={coverImageUrl} pageConfig={publicPage} mode="mobile" fontFamily={previewFontFamily} />
               <PassPreview colors={colors} wording={wording} coverImageUrl={coverImageUrl} passOptions={passOptions} fontFamily={previewFontFamily} />
             </div>
           </section>

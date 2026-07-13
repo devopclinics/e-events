@@ -71,7 +71,7 @@ function ThemeToggle({ className = '' }) {
 
 // ── Mobile-friendly Nav ───────────────────────────────────────────────────────
 
-function Nav({ hasMenu, eventName, canUseDesignStudio, hasFestioMe }) {
+function Nav({ hasMenu, eventName, canUseDesignStudio, hasFestioMe, canManageCurrentEvent, hasGuestDirectory }) {
   const { user, logout } = useAuth()
   const navigate = useNavigate()
   const [open, setOpen] = useState(false)
@@ -87,7 +87,9 @@ function Nav({ hasMenu, eventName, canUseDesignStudio, hasFestioMe }) {
   }
 
   const links = [
-    ...(['admin', 'event_manager'].includes(user?.role) ? [{ to: '/admin', label: 'Event Setup', end: true }] : []),
+    ...(((!eventName && ['admin', 'event_manager'].includes(user?.role)) || canManageCurrentEvent || hasGuestDirectory)
+      ? [{ to: '/admin', label: hasGuestDirectory && !canManageCurrentEvent ? 'Guests' : 'Event Setup', end: true }]
+      : []),
     ...(user?.role === 'admin' && canUseDesignStudio ? [{ to: '/design-studio', label: 'Design Studio' }] : []),
     { to: '/dashboard', label: 'Results' },
     ...(hasFestioMe ? [{ to: '/festiome', label: 'FestioMe' }] : []),
@@ -185,10 +187,12 @@ function Nav({ hasMenu, eventName, canUseDesignStudio, hasFestioMe }) {
 }
 
 // ── Mobile day-of bottom bar ───────────────────────────────────────────────────
-function MobileTabBar({ user, hasMenu, hasFestioMe }) {
+function MobileTabBar({ user, hasMenu, hasFestioMe, canManageCurrentEvent, hasGuestDirectory }) {
   if (!user) return null
   const items = [
-    ...(['admin', 'event_manager'].includes(user.role) ? [{ to: '/admin', label: 'Setup', icon: '🗂️' }] : []),
+    ...((canManageCurrentEvent || hasGuestDirectory)
+      ? [{ to: '/admin', label: hasGuestDirectory && !canManageCurrentEvent ? 'Guests' : 'Setup', icon: '🗂️' }]
+      : []),
     { to: '/dashboard', label: 'Results', icon: '📊' },
     ...(hasFestioMe ? [{ to: '/festiome', label: 'FestioMe', icon: '💬' }] : []),
     { to: '/scanner', label: 'Check-in', icon: '🎟️' },
@@ -215,6 +219,8 @@ function AuthedLayout({ children }) {
   const [eventName, setEventName] = useState('')
   const [canUseDesignStudio, setCanUseDesignStudio] = useState(false)
   const [hasFestioMe, setHasFestioMe] = useState(false)
+  const [canManageCurrentEvent, setCanManageCurrentEvent] = useState(false)
+  const [hasGuestDirectory, setHasGuestDirectory] = useState(false)
 
   useEffect(() => {
     if (!user) { setHasMenu(false); return }
@@ -227,6 +233,8 @@ function AuthedLayout({ children }) {
       setEventName('')
       setCanUseDesignStudio(false)
       setHasFestioMe(false)
+      setCanManageCurrentEvent(false)
+      setHasGuestDirectory(false)
       return
     }
     api.listEvents().then((evs) => {
@@ -234,18 +242,24 @@ function AuthedLayout({ children }) {
       setEventName(current?.name || '')
       setCanUseDesignStudio(!!current?.is_paid)
       setHasFestioMe(!!current?.festiome_addon_enabled)
+      setCanManageCurrentEvent(!!current?.my_can_manage_event)
+      setHasGuestDirectory(!!current?.my_can_view_guests)
     }).catch(() => {
       setEventName('')
       setCanUseDesignStudio(false)
       setHasFestioMe(false)
+      setCanManageCurrentEvent(false)
+      setHasGuestDirectory(false)
     })
   }, [user, currentEventId])
 
   return (
     <>
-      <Nav hasMenu={hasMenu} eventName={eventName} canUseDesignStudio={canUseDesignStudio} hasFestioMe={hasFestioMe} />
+      <Nav hasMenu={hasMenu} eventName={eventName} canUseDesignStudio={canUseDesignStudio} hasFestioMe={hasFestioMe}
+        canManageCurrentEvent={canManageCurrentEvent} hasGuestDirectory={hasGuestDirectory} />
       <main className="flex-1 max-w-7xl mx-auto w-full px-4 sm:px-6 py-8 pb-24 sm:pb-8">{children}</main>
-      <MobileTabBar user={user} hasMenu={hasMenu} hasFestioMe={hasFestioMe} />
+      <MobileTabBar user={user} hasMenu={hasMenu} hasFestioMe={hasFestioMe}
+        canManageCurrentEvent={canManageCurrentEvent} hasGuestDirectory={hasGuestDirectory} />
     </>
   )
 }
@@ -291,7 +305,7 @@ function AppRoutes() {
         element={
           <AuthedLayout>
             <Routes>
-              <Route path="/admin" element={<ProtectedRoute setupOnly><AdminPage /></ProtectedRoute>} />
+              <Route path="/admin" element={<ProtectedRoute><AdminPage /></ProtectedRoute>} />
               <Route path="/setup" element={<ProtectedRoute setupOnly><SetupWizardPage /></ProtectedRoute>} />
               <Route path="/design-studio" element={<ProtectedRoute adminOnly><DesignStudioPage /></ProtectedRoute>} />
               <Route path="/floor-plan/:eventId" element={<ProtectedRoute adminOnly><FloorPlanPage /></ProtectedRoute>} />

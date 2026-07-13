@@ -62,7 +62,9 @@ let festiomeSession = (() => {
 async function getFestioMeSession(force = false) {
   const now = Date.now()
   const firebaseUser = auth.currentUser
-  if (!force && festiomeSession?.token && festiomeSession.expiresAt > now + 30000 && (!firebaseUser || festiomeSession.kind !== 'guest')) {
+  const onGuestRoute = typeof window !== 'undefined' && window.location?.pathname === '/festiome/guest'
+  if (!force && festiomeSession?.token && festiomeSession.expiresAt > now + 30000 &&
+      (festiomeSession.kind !== 'guest' || !firebaseUser || onGuestRoute)) {
     return festiomeSession.token
   }
   const firebaseToken = await getToken()
@@ -316,11 +318,19 @@ export const api = {
   listExperienceWorkflows: (eventId) => req('GET', `/events/${eventId}/experience/workflows`),
   getExperienceDashboard: (eventId) => req('GET', `/events/${eventId}/experience/dashboard`),
   getExperienceAnalytics: (eventId) => req('GET', `/events/${eventId}/experience/analytics`),
+  getFeedbackResults: (eventId, filters = {}) => {
+    const qs = new URLSearchParams(Object.entries(filters).filter(([, value]) => value !== '' && value !== undefined && value !== null)).toString()
+    return req('GET', `/events/${eventId}/experience/feedback/results${qs ? `?${qs}` : ''}`)
+  },
+  getFeedbackReminderPreview: (eventId, stepId, channels) => req('GET', `/events/${eventId}/experience/feedback/${stepId}/reminders/preview?channels=${encodeURIComponent(channels.join(','))}`),
+  sendFeedbackReminders: (eventId, stepId, data) => req('POST', `/events/${eventId}/experience/feedback/${stepId}/reminders`, data),
+  prepareFeedbackDraft: (eventId) => req('POST', `/events/${eventId}/experience/feedback/prepare-draft`),
   createDefaultExperienceWorkflow: (eventId) => req('POST', `/events/${eventId}/experience/default-workflow`),
   createExperienceWorkflow: (eventId, data) => req('POST', `/events/${eventId}/experience/workflows`, data),
   getExperienceWorkflow: (eventId, workflowId) => req('GET', `/events/${eventId}/experience/workflows/${workflowId}`),
   deleteExperienceWorkflow: (eventId, workflowId) => req('DELETE', `/events/${eventId}/experience/workflows/${workflowId}`),
   createExperienceStep: (eventId, workflowId, data) => req('POST', `/events/${eventId}/experience/workflows/${workflowId}/steps`, data),
+  importProgramSegments: (eventId, workflowId, items) => req('POST', `/events/${eventId}/experience/workflows/${workflowId}/program/import`, { items }),
   updateExperienceStep: (eventId, workflowId, stepId, data) => req('PUT', `/events/${eventId}/experience/workflows/${workflowId}/steps/${stepId}`, data),
   deleteExperienceStep: (eventId, workflowId, stepId) => req('DELETE', `/events/${eventId}/experience/workflows/${workflowId}/steps/${stepId}`),
   reorderExperienceSteps: (eventId, workflowId, stepIds) =>
@@ -338,8 +348,10 @@ export const api = {
   listExperienceAudit: (eventId, limit = 100) => req('GET', `/events/${eventId}/experience/audit?limit=${limit}`),
   getExperienceNextSteps: (eventId, guestId) => req('GET', `/events/${eventId}/experience/guests/${guestId}/next-steps`),
   downloadExperienceExport: (eventId) => downloadFile(`/events/${eventId}/experience/export.csv`, `experience-progress.csv`),
+  downloadFeedbackExport: (eventId) => downloadFile(`/events/${eventId}/experience/feedback/export.csv`, 'feedback-results.csv'),
   getConsentForm: (eventId) => req('GET', `/events/${eventId}/experience/consent-form`),
   saveConsentForm: (eventId, data) => req('PUT', `/events/${eventId}/experience/consent-form`, data),
+  disableConsentForm: (eventId) => req('DELETE', `/events/${eventId}/experience/consent-form`),
   listConsentSignatures: (eventId) => req('GET', `/events/${eventId}/experience/consent-signatures`),
 
   // Seating
@@ -539,6 +551,18 @@ export const api = {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ body }),
     }).then((r) => (r.ok ? r.json() : r.json().then((e) => Promise.reject(new Error(e.detail || 'Chat message could not be sent.'))))),
+  guestPushConfig: (eventId, token) =>
+    fetch(`${BASE}/messaging/events/${encodeURIComponent(eventId)}/push/config?token=${encodeURIComponent(token)}`).then((r) =>
+      r.ok ? r.json() : r.json().then((e) => Promise.reject(new Error(e.detail || 'Push notifications are unavailable.'))),
+    ),
+  saveGuestPushSubscription: (eventId, token, subscription) =>
+    fetch(`${BASE}/messaging/events/${encodeURIComponent(eventId)}/push-subscription?token=${encodeURIComponent(token)}`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(subscription),
+    }).then((r) => (r.ok ? r.json() : r.json().then((e) => Promise.reject(new Error(e.detail || 'Push notifications could not be enabled.'))))),
+  removeGuestPushSubscription: (eventId, token, endpoint) =>
+    fetch(`${BASE}/messaging/events/${encodeURIComponent(eventId)}/push-subscription?token=${encodeURIComponent(token)}`, {
+      method: 'DELETE', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ endpoint }),
+    }).then((r) => (r.ok ? r.json() : r.json().then((e) => Promise.reject(new Error(e.detail || 'Push notifications could not be removed.'))))),
 
   // Guest-facing Experience journey (token auth, backend). Returns
   // { experience_enabled, steps, next_steps, consent, ... }.
@@ -552,10 +576,21 @@ export const api = {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ signer_name, signature_text }),
     }).then((r) => (r.ok ? r.json() : r.json().then((e) => Promise.reject(new Error(e.detail || 'Consent could not be recorded.'))))),
+  guestFeedback: (eventId, token) =>
+    fetch(`${BASE}/events/${encodeURIComponent(eventId)}/experience/me/feedback?token=${encodeURIComponent(token)}`).then((r) =>
+      r.ok ? r.json() : r.json().then((e) => Promise.reject(new Error(e.detail || 'Feedback is temporarily unavailable.'))),
+    ),
+  submitGuestFeedback: (eventId, token, data) =>
+    fetch(`${BASE}/events/${encodeURIComponent(eventId)}/experience/me/feedback?token=${encodeURIComponent(token)}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(data),
+    }).then((r) => r.ok ? r.json() : r.json().then((e) => Promise.reject(new Error(e.detail || 'Feedback could not be submitted.')))),
   messagingSettings: (eventId) => req('GET', `/messaging/admin/events/${eventId}/messaging/settings`),
   updateMessagingSettings: (eventId, data) => req('PATCH', `/messaging/admin/events/${eventId}/messaging/settings`, data),
   listAnnouncements: (eventId) => req('GET', `/messaging/admin/events/${eventId}/announcements`),
   createAnnouncement: (eventId, data) => req('POST', `/messaging/admin/events/${eventId}/announcements`, data),
+  updateAnnouncement: (eventId, announcementId, data) => req('PATCH', `/messaging/admin/events/${eventId}/announcements/${announcementId}`, data),
   messageInbox: (eventId) => req('GET', `/messaging/admin/events/${eventId}/messages/inbox`),
   messageThread: (eventId, threadId) => req('GET', `/messaging/admin/events/${eventId}/messages/inbox/${threadId}`),
   replyMessageThread: (eventId, threadId, body) => req('POST', `/messaging/admin/events/${eventId}/messages/inbox/${threadId}/reply`, { body }),

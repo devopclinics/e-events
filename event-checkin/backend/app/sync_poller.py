@@ -11,6 +11,7 @@ from fastapi import HTTPException
 from .database import AsyncSessionLocal
 from .models import Event
 from .routers.guests import import_from_source_url, import_warning_summary
+from .services import program
 
 logger = logging.getLogger("sync_poller")
 
@@ -73,6 +74,11 @@ async def _tick() -> None:
 
     if due_ids:
         await asyncio.gather(*(_sync_one(eid) for eid in due_ids), return_exceptions=True)
+
+    # Live Program is independently gated per event. Its transition ledger makes
+    # this safe to run on every poller wake-up and prevents duplicate notices.
+    async with AsyncSessionLocal() as db:
+        await program.tick(db)
 
 
 async def run() -> None:

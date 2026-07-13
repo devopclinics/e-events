@@ -112,6 +112,32 @@ async def test_non_event_member_cannot_discover_or_join(api):
 
 
 @pytest.mark.asyncio
+async def test_assigned_official_can_discover_group_and_read_messages(api):
+    link = await _event_with_guest(api)
+    official = await api.put(
+        "/internal/v1/guesthub/event-links/evt-1/users/official-uid",
+        headers=SVC,
+        json={"name": "Event Official", "email": "official@example.test", "role": "member"},
+    )
+    assert official.status_code == 200 and official.json()["role"] == "member"
+
+    groups = (await api.get("/v1/groups", headers=user("official-uid"))).json()
+    group_id = link["festiome_id"]
+    assert [group["id"] for group in groups] == [group_id]
+    channel = (await api.get(f"/v1/groups/{group_id}/channels", headers=user("host"))).json()[0]
+    posted = await api.post(
+        f"/v1/channels/{channel['id']}/messages",
+        headers=user("host"),
+        json={"body": "Welcome officials"},
+    )
+    assert posted.status_code == 201
+    visible = (await api.get(
+        f"/v1/channels/{channel['id']}/messages", headers=user("official-uid")
+    )).json()
+    assert visible["items"][0]["body"] == "Welcome officials"
+
+
+@pytest.mark.asyncio
 async def test_request_to_join_approve_and_deny(api):
     await _event_with_guest(api)
     await api.put("/internal/v1/guesthub/event-links/evt-1/members/g2", headers=SVC,

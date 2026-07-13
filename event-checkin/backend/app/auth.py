@@ -259,6 +259,58 @@ async def require_dashboard_access(
     raise HTTPException(403, "You don't have dashboard access for this event.")
 
 
+async def require_guest_view_access(
+    event_id: str,
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+) -> User:
+    """Allow read-only guest-directory access without granting event admin.
+
+    Org owners/admins and event managers always qualify. An assigned official
+    qualifies only when the event owner explicitly enables can_view_guests.
+    """
+    event = await db.get(Event, event_id)
+    if not event:
+        raise HTTPException(404, "Event not found")
+    if user.is_platform_superadmin:
+        return user
+    role = await _org_role(user, event.org_id, db)
+    if role is None:
+        raise HTTPException(404, "Event not found")
+    if role in ("owner", "admin"):
+        return user
+    eu = await db.scalar(select(EventUser).where(
+        EventUser.event_id == event_id, EventUser.user_id == user.id
+    ))
+    if eu and (eu.event_role == "manager" or eu.can_view_guests or eu.can_manage_guests):
+        return user
+    raise HTTPException(403, "You don't have permission to view guests for this event.")
+
+
+async def require_guest_manage_access(
+    event_id: str,
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+) -> User:
+    """Allow guest operations without granting general event administration."""
+    event = await db.get(Event, event_id)
+    if not event:
+        raise HTTPException(404, "Event not found")
+    if user.is_platform_superadmin:
+        return user
+    role = await _org_role(user, event.org_id, db)
+    if role is None:
+        raise HTTPException(404, "Event not found")
+    if role in ("owner", "admin"):
+        return user
+    eu = await db.scalar(select(EventUser).where(
+        EventUser.event_id == event_id, EventUser.user_id == user.id
+    ))
+    if eu and (eu.event_role == "manager" or eu.can_manage_guests):
+        return user
+    raise HTTPException(403, "You don't have permission to manage guests for this event.")
+
+
 async def verify_token_user(token: str, db: AsyncSession) -> User:
     """Resolve a User from a raw Firebase ID token. For SSE/EventSource, which
     can't send an Authorization header so passes the token as a query param.

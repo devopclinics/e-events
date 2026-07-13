@@ -49,6 +49,9 @@ FEATURE_MIN_PLAN = {
     "venue_access_enabled": "tier150",
     "partner_pairing_enabled": "tier150",
     "experience_enabled": "tier300",
+    # Live Program extends the Experience workflow; keep its commercial gate
+    # aligned so it cannot be enabled independently on lower-tier events.
+    "live_program_enabled": "tier300",
     "consent_forms": "tier300",
     "scanner_confirmation": "tier300",
     "souvenir_confirmation": "tier300",

@@ -94,7 +94,10 @@ services:
       DESIGN_SERVICE_PORT: 8010
       DESIGN_UPLOAD_MAX_MB: ${DESIGN_UPLOAD_MAX_MB:-10}
       DESIGN_ALLOWED_FILE_TYPES: ${DESIGN_ALLOWED_FILE_TYPES:-jpg,jpeg,png,webp}
-      DESIGN_PUBLIC_ASSET_BASE_URL: ${DESIGN_PUBLIC_ASSET_BASE_URL:-https://festio.events}
+      # This Compose stack is staging. Assets it creates must remain on staging
+      # rather than pointing guest browsers to a production URL where the file
+      # does not exist. Kubernetes production supplies its own value.
+      DESIGN_PUBLIC_ASSET_BASE_URL: ${DESIGN_PUBLIC_ASSET_BASE_URL:-https://staging.festio.events}
       DESIGN_STORAGE_PATH: /app/data/design-assets
       DESIGN_TEMPLATE_PACKS_PATH: ${DESIGN_TEMPLATE_PACKS_PATH:-/app/data/design-assets/packs}
       DESIGN_ENABLE_SVG_UPLOAD: ${DESIGN_ENABLE_SVG_UPLOAD:-false}

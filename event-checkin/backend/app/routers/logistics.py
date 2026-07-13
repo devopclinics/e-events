@@ -27,6 +27,7 @@ from ..schemas import (
 )
 from ..auth import require_paid_event_admin, require_paid_event_member
 from ..entitlements import can_use_paid_channels, last_credit_ledger_id, take_message_credit
+from ..channels import channels_for_flow
 from ..template_resolve import load_overrides, channel_text as template_channel_text, channel_text_or_default, email_or_default
 from services import messaging
 from services.credit_ledger import send_with_credit_ledger
@@ -243,20 +244,19 @@ async def update_line(event_id: str, sid: str, gid: str, data: GuestShipmentUpda
             "message": shipment.name,
             "tracking_number": line.tracking_number or "",
         })
-        if ev.notify_email and g.email:
+        chosen = channels_for_flow(ev, g, "logistics", paid_ok=can_use_paid_channels(ev))
+        if "email" in chosen:
             subj, body = email_or_default(overrides, "logistics_notification", ctx)
             if body:
                 background_tasks.add_task(
                     email_service.send_simple_email,
                     g.email, subj or f"Shipping update — {ev.name}", body, ev.id,
                 )
-        if (can_use_paid_channels(ev) and ev.notify_sms and g.phone
-                and g.sms_consent and take_message_credit(ev, "sms")):
+        if "sms" in chosen and take_message_credit(ev, "sms"):
             sms = channel_text_or_default(overrides, "logistics_notification", "sms", ctx)
             if sms:
                 background_tasks.add_task(send_with_credit_ledger, last_credit_ledger_id(ev), messaging.send_custom_sms, phone=g.phone, body=sms)
-        if (can_use_paid_channels(ev) and ev.notify_whatsapp and g.phone
-                and g.whatsapp_consent and take_message_credit(ev, "whatsapp")):
+        if "whatsapp" in chosen and take_message_credit(ev, "whatsapp"):
             # WhatsApp initiates the conversation → approved template only; a
             # custom free-text override can't open a session (fails 15003).
             background_tasks.add_task(

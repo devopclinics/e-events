@@ -203,6 +203,19 @@ TEMPLATES: list[TemplateDef] = [
         ("firstName", "sessionTopic", "eventName"),
         group="experience",
     ),
+    # Generic announcement carrier for host broadcasts + FestioMe urgent
+    # escalations (the only flows with freeform organizer text). Kept neutral /
+    # transactional — no promo or opt-out language — to stay Utility-classified.
+    TemplateDef(
+        "Event announcement",
+        "festio_event_announcement",
+        # WhatsApp rejects a body that ends with a variable, so {{ticketLink}} sits
+        # before the static closing line.
+        "Hi {{firstName}}, an update about {{eventName}}: {{message}} "
+        "Your pass: {{ticketLink}} — sent via Festio.",
+        ("firstName", "eventName", "message", "ticketLink"),
+        category="UTILITY",
+    ),
 ]
 
 
@@ -379,6 +392,24 @@ def create_project(workspace_id: str, access_key: str, template: TemplateDef, su
     return data
 
 
+def clear_unapproved_channel_templates(workspace_id: str, access_key: str, project_id: str) -> None:
+    """Delete any draft OR pending channel-template so a fresh version can be
+    created and activated. Used when re-submitting an unapproved project (a prior
+    activation failed, or the template is being revised before approval). Active
+    (approved) templates are never touched — the caller skips those projects."""
+    status, data = request_json(
+        "GET", f"/workspaces/{workspace_id}/projects/{project_id}/channel-templates", access_key=access_key)
+    if status >= 400:
+        return
+    for tmpl in (data.get("results") or []):
+        if str(tmpl.get("status", "")).lower() in {"draft", "pending"} and tmpl.get("id"):
+            request_json(
+                "DELETE",
+                f"/workspaces/{workspace_id}/projects/{project_id}/channel-templates/{tmpl['id']}",
+                access_key=access_key,
+            )
+
+
 def create_channel_template(workspace_id: str, access_key: str, project_id: str, payload: dict[str, Any],
                             submit: bool) -> dict[str, Any]:
     if not submit:
@@ -459,13 +490,19 @@ def main() -> int:
     failed = []
     for template in selected:
         existing = by_name.get(template.project_name.lower())
-        if existing and template_state(existing) in {"active", "pending"}:
-            skipped.append((template.project_name, template_state(existing)))
-            print(f"SKIP {template.project_name}: {template_state(existing)}")
+        if existing and template_state(existing) == "active":
+            skipped.append((template.project_name, "active"))
+            print(f"SKIP {template.project_name}: active")
             continue
         try:
             print(f"CREATE {template.project_name} -> {template.platform_name}")
-            project = create_project(args.workspace_id, args.access_key, template, args.submit)
+            # Reuse a leftover draft project (e.g. a prior activate failed) instead
+            # of re-creating it, which would 409 as a duplicate.
+            if existing and args.submit:
+                project = existing
+                clear_unapproved_channel_templates(args.workspace_id, args.access_key, project["id"])
+            else:
+                project = create_project(args.workspace_id, args.access_key, template, args.submit)
             channel_template = create_channel_template(
                 args.workspace_id,
                 args.access_key,

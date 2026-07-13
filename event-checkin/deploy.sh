@@ -320,11 +320,16 @@ data = json.loads(urllib.request.urlopen("http://localhost:8010/health", timeout
 print(data.get("templates", "unknown"))
 PY
   )
-  if [[ "$DESIGN_TEMPLATES" == "174" ]]; then
-    ok "Design Studio catalog has 174 templates, including uploaded flyer packs"
+  if [[ "$DESIGN_TEMPLATES" =~ ^[1-9][0-9]*$ ]]; then
+    ok "Design Studio catalog has ${DESIGN_TEMPLATES} supported template families"
   else
-    warn "Design Studio reported template count: ${DESIGN_TEMPLATES:-unknown}. Expected 174 after flyer pack deployment."
+    warn "Design Studio reported template count: ${DESIGN_TEMPLATES:-unknown}."
   fi
+
+  info "Running Design Studio visual smoke checks..."
+  APP_VERSION="$VERSION" docker compose -f "$PROD_COMPOSE" exec -T design-service \
+    python -m app.template_quality
+  ok "Every supported template rendered successfully"
 fi
 
 echo -e "\n${GREEN}${BOLD}Deployment complete — version ${VERSION} is live.${NC}\n"

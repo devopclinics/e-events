@@ -16,7 +16,7 @@ from ..services.festiome_client import (
     FestioMeUnavailable,
     get_festiome_client,
 )
-from ..services.festiome_outbox import queue_announcement, queue_guest_sync
+from ..services.festiome_outbox import guest_is_festiome_eligible, queue_announcement, queue_guest_sync
 from ..entitlements import can_use_paid_channels, last_credit_ledger_id, take_message_credit
 from services import messaging
 from services.credit_ledger import send_with_credit_ledger
@@ -177,12 +177,10 @@ async def enable_festiome(
     event.festiome_last_error = None
     # Initial membership sync is durable and non-blocking. FestioMe may go down
     # immediately after provisioning without affecting this request or GuestHub.
-    guests = (await db.execute(
-        select(Guest).where(Guest.event_id == event_id, Guest.rsvp_status == "confirmed")
-    )).scalars().all()
+    guests = (await db.execute(select(Guest).where(Guest.event_id == event_id))).scalars().all()
     revision = f"enable:{link.festiome_id}:{datetime.utcnow().isoformat(timespec='microseconds')}"
     for guest in guests:
-        queue_guest_sync(db, guest, revision=revision)
+        queue_guest_sync(db, guest, event=event, revision=revision)
     await db.commit()
     return FestioMeStatus(
         configured=True,
@@ -202,19 +200,23 @@ async def exchange_guest_pass(
     client: FestioMeClient = Depends(get_festiome_client),
     _: None = Depends(rate_limit(limit=120, window=60, scope="festiome_guest_token", key="event_id")),
 ):
-    """Exchange a valid confirmed guest pass for a scoped FestioMe session.
+    """Exchange an eligible guest pass for a scoped FestioMe session.
 
-    The pass itself is never forwarded or persisted by FestioMe. Declined,
-    pending, deleted, and cross-event passes are rejected.
+    Confirmed guests are eligible. For events with no RSVP step, imported
+    invitees are eligible as well. The pass itself is never forwarded or
+    persisted by FestioMe; declined, pending, deleted, and cross-event passes
+    are rejected.
     """
     guest = await db.scalar(
         select(Guest).where(Guest.event_id == event_id, Guest.qr_token == data.pass_token).limit(1)
     )
-    if not guest or guest.rsvp_status != "confirmed":
+    if not guest:
         raise HTTPException(404, "Eligible guest pass not found")
     event = await db.get(Event, event_id)
     if not event or event.status == "ended":
         raise HTTPException(410, "This event has ended")
+    if not guest_is_festiome_eligible(guest, event):
+        raise HTTPException(404, "Eligible guest pass not found")
     _require_festiome_addon(event)
     if not client.configured:
         raise HTTPException(503, "FestioMe integration is not configured")
@@ -247,7 +249,7 @@ async def reconcile_festiome_guests(
     guests = (await db.execute(select(Guest).where(Guest.event_id == event_id))).scalars().all()
     revision = f"reconcile:{datetime.utcnow().isoformat(timespec='microseconds')}"
     for guest in guests:
-        queue_guest_sync(db, guest, revision=revision)
+        queue_guest_sync(db, guest, event=event, revision=revision)
     await db.commit()
     return {"queued": len(guests)}
 
@@ -279,9 +281,8 @@ async def publish_festiome_announcement(
             raise HTTPException(400, "MMS escalation requires escalation_media_url")
         if data.escalation_media_url and not data.escalation_media_url.lower().startswith("https://"):
             raise HTTPException(400, "escalation_media_url must use HTTPS")
-        guests = (await db.execute(
-            select(Guest).where(Guest.event_id == event_id, Guest.rsvp_status == "confirmed")
-        )).scalars().all()
+        all_guests = (await db.execute(select(Guest).where(Guest.event_id == event_id))).scalars().all()
+        guests = [guest for guest in all_guests if guest_is_festiome_eligible(guest, event)]
         escalation_text = f"{data.title.strip()}: {data.body.strip()}"
         for guest in guests:
             if "email" in data.escalation_channels and guest.email:
@@ -320,6 +321,7 @@ async def publish_festiome_announcement(
                         messaging.send_announcement_whatsapp,
                         phone=guest.phone, first_name=guest.first_name,
                         event_name=event.name, message=escalation_text,
+                        ticket_url=f"{event.checkin_base_url.rstrip('/')}/scan/{guest.qr_token}",
                     )
                     escalation_queued += 1
     await db.commit()

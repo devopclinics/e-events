@@ -190,6 +190,8 @@ async def _invite_page_out(event: Event, db: AsyncSession) -> InvitePageOut:
         description=event.description,
         venue_name=event.venue_name,
         venue_address=event.venue_address,
+        hotel_name=event.hotel_name,
+        hotel_address=event.hotel_address,
         admission_note=event.admission_note,
         rsvp_token=event.rsvp_token,
         invite_theme=event.invite_theme,
@@ -503,7 +505,7 @@ async def _submit_multi_invitee_rsvp(
         created.append(guest)
 
     for created_guest in created:
-        queue_guest_sync(db, created_guest)
+        queue_guest_sync(db, created_guest, event=event)
     await db.commit()
     overrides = await load_overrides(event.id, db)
     guest_count_text = (
@@ -660,7 +662,7 @@ async def submit_rsvp(
     await _save_answers(guest.id, event_id, data.answers, db)
     await _save_shipping(guest, event, data.shipping_address, data.sizes, db)
 
-    queue_guest_sync(db, guest)
+    queue_guest_sync(db, guest, event=event)
     await db.commit()
     await db.refresh(guest)
 
@@ -786,7 +788,7 @@ async def submit_invite_token_rsvp(
 
     guest.rsvp_status = data.status
     guest.rsvp_responded_at = datetime.utcnow()
-    queue_guest_sync(db, guest)
+    queue_guest_sync(db, guest, event=event)
     await _save_answers(guest.id, event.id, data.answers, db, replace=True)
     if data.status == "confirmed":
         await _save_shipping(guest, event, data.shipping_address, data.sizes, db)

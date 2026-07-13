@@ -21,6 +21,7 @@ from ..models import (
     EventMessageRead,
     EventMessageThread,
     ExperienceEvent,
+    FeedbackSubmission,
     Guest,
     GuestExperienceProgress,
     GuestMenuChoice,
@@ -39,7 +40,7 @@ from ..models import (
     EventUserSection,
 )
 from ..schemas import GuestOut, GuestCreate, GuestUpdate, BulkAssignGroupRequest, ScanResult, WalkInRegister
-from ..auth import require_event_admin, require_official
+from ..auth import require_guest_manage_access, require_guest_view_access, require_official
 from ..entitlements import assert_within_guest_cap, guest_limit, can_use_paid_channels, last_credit_ledger_id, take_message_credit
 from ..channels import channels_for_flow
 from services.qr_service import generate_qr_bytes
@@ -515,7 +516,7 @@ def import_warning_summary(result: dict) -> str | None:
 
 
 @router.get("/{event_id}/guests/template")
-async def download_guest_template(event_id: str, fmt: str = "xlsx", db: AsyncSession = Depends(get_db), _: User = Depends(require_event_admin)):
+async def download_guest_template(event_id: str, fmt: str = "xlsx", db: AsyncSession = Depends(get_db), _: User = Depends(require_guest_manage_access)):
     """Downloadable guest-list template. Columns reflect the event's enabled
     add-ons (ticket_type for venue access, ship_* for logistics), so what the
     client fills in is exactly what upload / URL import / live sync ingest."""
@@ -670,7 +671,7 @@ async def export_guests(
     fmt: str = "csv",
     sections: str = "guests,messaging,experience",
     db: AsyncSession = Depends(get_db),
-    _: User = Depends(require_event_admin),
+    _: User = Depends(require_guest_manage_access),
 ):
     """Download event data. `sections` (comma-separated: guests, messaging,
     experience) selects what to include. CSV emits one flattened sheet; XLSX emits
@@ -841,7 +842,7 @@ async def export_guests(
 
 
 @router.post("/{event_id}/guests/upload")
-async def upload_guests(event_id: str, file: UploadFile = File(...), db: AsyncSession = Depends(get_db), _: User = Depends(require_event_admin)):
+async def upload_guests(event_id: str, file: UploadFile = File(...), db: AsyncSession = Depends(get_db), _: User = Depends(require_guest_manage_access)):
     event = await db.get(Event, event_id)
     if not event:
         raise HTTPException(404, "Event not found")
@@ -979,8 +980,9 @@ def _dispatch_rsvp_invite(background_tasks: BackgroundTasks, event: Event, guest
         )
     ctx = build_template_context(event, guest, extras={"rsvp_link": invite_url, "qr_code": qr_img})
     dispatched = False
+    chosen = channels_for_flow(event, guest, "invite" if template_key == "rsvp_invitation" else "reminder", paid_ok=paid_channels)
 
-    if event.notify_email and guest.email:
+    if "email" in chosen:
         if template_key == "rsvp_invitation":
             subj, body = template_email_override(overrides, template_key, ctx)
         else:
@@ -1007,7 +1009,7 @@ def _dispatch_rsvp_invite(background_tasks: BackgroundTasks, event: Event, guest
             )
         dispatched = True
 
-    if paid_channels and event.notify_sms and guest.phone and guest.sms_consent and take_message_credit(event, "sms", guest_id=guest.id):
+    if "sms" in chosen and take_message_credit(event, "sms", guest_id=guest.id):
         if template_key == "rsvp_invitation":
             sms_text = template_channel_text(overrides, template_key, "sms", ctx)
         else:
@@ -1024,7 +1026,7 @@ def _dispatch_rsvp_invite(background_tasks: BackgroundTasks, event: Event, guest
             )
         dispatched = True
 
-    if paid_channels and event.notify_whatsapp and guest.phone and guest.whatsapp_consent and take_message_credit(event, "whatsapp", guest_id=guest.id):
+    if "whatsapp" in chosen and take_message_credit(event, "whatsapp", guest_id=guest.id):
         # WhatsApp initiates → approved template only (free-text overrides 15003).
         if template_key == "rsvp_reminder":
             background_tasks.add_task(
@@ -1047,8 +1049,7 @@ def _dispatch_rsvp_invite(background_tasks: BackgroundTasks, event: Event, guest
     # MMS (pass-card image) — closed-mode invites can carry the guest's pass card
     # when the event opts in. The card renders from the guest's qr_token (present at
     # creation; the ticket is only *activated* after RSVP). Mirrors the open-mode path.
-    if (paid_channels and event.notify_mms and guest.phone and guest.sms_consent
-            and messaging.mms_ready() and event.checkin_base_url and guest.qr_token
+    if ("mms" in chosen and messaging.mms_ready() and event.checkin_base_url and guest.qr_token
             and take_message_credit(event, "mms", guest_id=guest.id)):
         mms_key = "experience_invitation" if event.experience_enabled else "mms_invitation"
         mms_text = (template_channel_or_default(overrides, mms_key, "mms", ctx)
@@ -1068,8 +1069,9 @@ def dispatch_approval_accepted(background_tasks: BackgroundTasks, event: Event, 
     overrides = overrides or {}
     ctx = build_template_context(event, guest, extras={"ticket_link": ticket_url, "qr_code": ticket_url})
     sent = False
+    chosen = channels_for_flow(event, guest, "approval", paid_ok=can_use_paid_channels(event))
 
-    if event.notify_email and guest.email:
+    if "email" in chosen:
         ov = overrides.get("approval_accepted")
         spec = TEMPLATE_DEFS.get("approval_accepted", {})
         subject_tmpl = (ov.subject if ov and ov.subject else None) or spec.get("subject")
@@ -1106,15 +1108,13 @@ def dispatch_approval_accepted(background_tasks: BackgroundTasks, event: Event, 
             )
             sent = True
 
-    if (can_use_paid_channels(event) and event.notify_sms and guest.phone
-            and guest.sms_consent and take_message_credit(event, "sms")):
+    if "sms" in chosen and take_message_credit(event, "sms"):
         sms = template_channel_or_default(overrides, "approval_accepted", "sms", ctx)
         if sms:
             background_tasks.add_task(send_with_credit_ledger, last_credit_ledger_id(event), messaging.send_custom_sms, phone=guest.phone, body=sms)
             sent = True
 
-    if (can_use_paid_channels(event) and event.notify_whatsapp and guest.phone
-            and guest.whatsapp_consent and take_message_credit(event, "whatsapp")):
+    if "whatsapp" in chosen and take_message_credit(event, "whatsapp"):
         # WhatsApp initiates → approved template only (free-text overrides 15003).
         background_tasks.add_task(
             send_with_credit_ledger,
@@ -1135,13 +1135,15 @@ def dispatch_simple_notice(background_tasks: BackgroundTasks, event: Event, gues
     event override or the registry default. Returns True if anything was scheduled."""
     ctx = build_template_context(event, guest, extras=extras or {})
     sent = False
-    if event.notify_email and guest.email:
+    # Approval notices route under "approval"; RSVP lifecycle notices under "reminder".
+    flow = "approval" if key.startswith("approval") else "reminder"
+    chosen = channels_for_flow(event, guest, flow, paid_ok=can_use_paid_channels(event))
+    if "email" in chosen:
         subj, body = template_email_or_default(overrides, key, ctx)
         if body:
             background_tasks.add_task(send_simple_email, guest.email, subj or event.name, body, event.id, None, guest.id, key)
             sent = True
-    if (can_use_paid_channels(event) and event.notify_sms and guest.phone
-            and guest.sms_consent and take_message_credit(event, "sms")):
+    if "sms" in chosen and take_message_credit(event, "sms"):
         sms = template_channel_or_default(overrides, key, "sms", ctx)
         if sms:
             background_tasks.add_task(send_with_credit_ledger, last_credit_ledger_id(event), messaging.send_custom_sms, phone=guest.phone, body=sms)
@@ -1149,8 +1151,7 @@ def dispatch_simple_notice(background_tasks: BackgroundTasks, event: Event, gues
     # WhatsApp initiates → approved template only (free-text overrides 15003), so
     # the custom-copy override is ignored for WhatsApp here.
     if (key in {"rsvp_decline", "approval_pending", "rsvp_confirmation", "approval_rejected"}) and (
-            can_use_paid_channels(event) and event.notify_whatsapp and guest.phone
-            and guest.whatsapp_consent and take_message_credit(event, "whatsapp")):
+            "whatsapp" in chosen and take_message_credit(event, "whatsapp")):
         if key == "rsvp_decline":
             background_tasks.add_task(
                 send_with_credit_ledger,
@@ -1280,7 +1281,7 @@ async def import_guests_from_url(
     event_id: str,
     body: dict = Body(...),
     db: AsyncSession = Depends(get_db),
-    _: User = Depends(require_event_admin),
+    _: User = Depends(require_guest_manage_access),
 ):
     event = await db.get(Event, event_id)
     if not event:
@@ -1294,7 +1295,7 @@ async def import_guests_from_url(
 
 
 @router.post("/{event_id}/guests", response_model=GuestOut, status_code=201)
-async def add_guest(event_id: str, data: GuestCreate, db: AsyncSession = Depends(get_db), _: User = Depends(require_event_admin)):
+async def add_guest(event_id: str, data: GuestCreate, db: AsyncSession = Depends(get_db), _: User = Depends(require_guest_manage_access)):
     """Manually add a single guest — used for VVIP walk-ins not on the original list.
     Email is optional; phone validated if provided. No invite is auto-sent."""
     event = await db.get(Event, event_id)
@@ -1331,7 +1332,7 @@ async def add_guest(event_id: str, data: GuestCreate, db: AsyncSession = Depends
 
 
 @router.get("/{event_id}/guests", response_model=list[GuestOut])
-async def list_guests(event_id: str, db: AsyncSession = Depends(get_db), _: User = Depends(require_event_admin)):
+async def list_guests(event_id: str, db: AsyncSession = Depends(get_db), _: User = Depends(require_guest_view_access)):
     result = await db.execute(
         select(Guest).where(Guest.event_id == event_id).order_by(Guest.last_name, Guest.first_name)
     )
@@ -1352,7 +1353,7 @@ async def guest_rsvp_answers(
     event_id: str,
     guest_id: str,
     db: AsyncSession = Depends(get_db),
-    _: User = Depends(require_event_admin),
+    _: User = Depends(require_guest_view_access),
 ):
     """The guest's answers to the event's custom RSVP questions, ordered as the
     questions appear on the invite page. Read-only — for the organizer to review
@@ -1374,7 +1375,7 @@ async def bulk_assign_table_group(
     event_id: str,
     body: BulkAssignGroupRequest,
     db: AsyncSession = Depends(get_db),
-    _: User = Depends(require_event_admin),
+    _: User = Depends(require_guest_manage_access),
 ):
     """Assign (or clear, when table_group_id is null) a table group for one or
     many guests. Used by the guest profile and the Guests-tab bulk action."""
@@ -1401,12 +1402,15 @@ async def update_guest(
     guest_id: str,
     data: GuestUpdate,
     db: AsyncSession = Depends(get_db),
-    _: User = Depends(require_event_admin),
+    _: User = Depends(require_guest_manage_access),
 ):
     """Edit a guest's core fields from the admin guest-edit modal (ported from prod)."""
     guest = await db.get(Guest, guest_id)
     if not guest or guest.event_id != event_id:
         raise HTTPException(404, "Guest not found")
+    event = await db.get(Event, event_id)
+    if not event:
+        raise HTTPException(404, "Event not found")
     if data.first_name is not None:
         guest.first_name = data.first_name.strip()
     if data.last_name is not None:
@@ -1492,7 +1496,7 @@ async def update_guest(
         await db.rollback()
         raise HTTPException(409, f"Seat {guest.seat_number} on that table was just taken — refresh and pick another seat.")
     await sync_guest_progress(event_id, guest.id, db, source="admin")
-    queue_guest_sync(db, guest)
+    queue_guest_sync(db, guest, event=event)
     await db.commit()
     await db.refresh(guest)
     return guest
@@ -1703,7 +1707,7 @@ async def my_sections(
 
 
 @router.delete("/{event_id}/guests/{guest_id}", status_code=204)
-async def delete_guest(event_id: str, guest_id: str, db: AsyncSession = Depends(get_db), _: User = Depends(require_event_admin)):
+async def delete_guest(event_id: str, guest_id: str, db: AsyncSession = Depends(get_db), _: User = Depends(require_guest_manage_access)):
     guest = await db.get(Guest, guest_id)
     if not guest or guest.event_id != event_id:
         raise HTTPException(404, "Guest not found")
@@ -1713,6 +1717,7 @@ async def delete_guest(event_id: str, guest_id: str, db: AsyncSession = Depends(
         .values(partner_guest_id=None)
     )
     await db.execute(delete(GuestExperienceProgress).where(GuestExperienceProgress.guest_id == guest_id))
+    await db.execute(delete(FeedbackSubmission).where(FeedbackSubmission.guest_id == guest_id))
     await db.execute(delete(ExperienceEvent).where(ExperienceEvent.guest_id == guest_id))
     await db.execute(delete(ConsentSignature).where(ConsentSignature.guest_id == guest_id))
     await db.execute(delete(ScanEvent).where(ScanEvent.guest_id == guest_id))
@@ -1724,13 +1729,25 @@ async def delete_guest(event_id: str, guest_id: str, db: AsyncSession = Depends(
     await db.execute(delete(EventMessageDeliveryLog).where(EventMessageDeliveryLog.guest_id == guest_id))
     await db.execute(delete(EventMessage).where(EventMessage.guest_id == guest_id))
     await db.execute(delete(EventMessageThread).where(EventMessageThread.guest_id == guest_id))
+    # Delivery and credit ledgers are event-level audit records. Keep them, but
+    # detach the deleted guest so their foreign keys do not prevent removal.
+    await db.execute(
+        EmailDeliveryEvent.__table__.update()
+        .where(EmailDeliveryEvent.guest_id == guest_id)
+        .values(guest_id=None)
+    )
+    await db.execute(
+        MessageCreditLedger.__table__.update()
+        .where(MessageCreditLedger.guest_id == guest_id)
+        .values(guest_id=None)
+    )
     queue_guest_remove(db, event_id=event_id, guest_id=guest_id)
     await db.delete(guest)
     await db.commit()
 
 
 @router.post("/{event_id}/guests/generate-qr")
-async def generate_qr_codes(event_id: str, db: AsyncSession = Depends(get_db), _: User = Depends(require_event_admin)):
+async def generate_qr_codes(event_id: str, db: AsyncSession = Depends(get_db), _: User = Depends(require_guest_manage_access)):
     event = await db.get(Event, event_id)
     if not event:
         raise HTTPException(404, "Event not found")
@@ -1748,7 +1765,7 @@ async def generate_qr_codes(event_id: str, db: AsyncSession = Depends(get_db), _
 
 
 @router.post("/{event_id}/guests/send-invites")
-async def send_invites(event_id: str, background_tasks: BackgroundTasks, db: AsyncSession = Depends(get_db), _: User = Depends(require_event_admin)):
+async def send_invites(event_id: str, background_tasks: BackgroundTasks, db: AsyncSession = Depends(get_db), _: User = Depends(require_guest_manage_access)):
     event = await db.get(Event, event_id)
     if not event:
         raise HTTPException(404, "Event not found")
@@ -1778,7 +1795,7 @@ async def send_invites_batch(
     body: dict = Body(default={}),
     background_tasks: BackgroundTasks = None,
     db: AsyncSession = Depends(get_db),
-    _: User = Depends(require_event_admin),
+    _: User = Depends(require_guest_manage_access),
 ):
     """Send (or resend) invites in bulk.
 
@@ -1824,7 +1841,7 @@ async def send_invites_batch(
 
 
 @router.post("/{event_id}/guests/{guest_id}/resend-invite")
-async def resend_invite(event_id: str, guest_id: str, background_tasks: BackgroundTasks, db: AsyncSession = Depends(get_db), _: User = Depends(require_event_admin)):
+async def resend_invite(event_id: str, guest_id: str, background_tasks: BackgroundTasks, db: AsyncSession = Depends(get_db), _: User = Depends(require_guest_manage_access)):
     event = await db.get(Event, event_id)
     if not event:
         raise HTTPException(404, "Event not found")
@@ -1838,7 +1855,7 @@ async def resend_invite(event_id: str, guest_id: str, background_tasks: Backgrou
     ok = _dispatch_invite(background_tasks, event, guest, await load_overrides(event_id, db))
     guest.invite_sent_at = datetime.utcnow()
     guest.invite_status = "sent" if ok else "failed"
-    queue_guest_sync(db, guest)
+    queue_guest_sync(db, guest, event=event)
     await db.commit()
     return {"ok": True}
 
@@ -1850,7 +1867,7 @@ async def resend_guest_email(
     background_tasks: BackgroundTasks,
     body: dict = Body(...),
     db: AsyncSession = Depends(get_db),
-    _: User = Depends(require_event_admin),
+    _: User = Depends(require_guest_manage_access),
 ):
     """Resend a specific guest-facing email from the portal."""
     kind = (body.get("kind") or "").strip()
@@ -1892,7 +1909,7 @@ async def resend_guest_email(
 
 
 @router.post("/{event_id}/guests/{guest_id}/approve")
-async def approve_rsvp(event_id: str, guest_id: str, background_tasks: BackgroundTasks, db: AsyncSession = Depends(get_db), _: User = Depends(require_event_admin)):
+async def approve_rsvp(event_id: str, guest_id: str, background_tasks: BackgroundTasks, db: AsyncSession = Depends(get_db), _: User = Depends(require_guest_manage_access)):
     """Approve a pending self-registered RSVP: confirm the guest, issue their QR,
     and send the ticket. No-op-safe if the guest is already confirmed."""
     event = await db.get(Event, event_id)
@@ -1912,13 +1929,13 @@ async def approve_rsvp(event_id: str, guest_id: str, background_tasks: Backgroun
     if not ok:
         ok = _dispatch_invite(background_tasks, event, guest, overrides)
     guest.invite_status = "sent" if ok else "failed"
-    queue_guest_sync(db, guest)
+    queue_guest_sync(db, guest, event=event)
     await db.commit()
     return {"ok": True, "rsvp_status": "confirmed"}
 
 
 @router.post("/{event_id}/guests/{guest_id}/reject")
-async def reject_rsvp(event_id: str, guest_id: str, background_tasks: BackgroundTasks, db: AsyncSession = Depends(get_db), _: User = Depends(require_event_admin)):
+async def reject_rsvp(event_id: str, guest_id: str, background_tasks: BackgroundTasks, db: AsyncSession = Depends(get_db), _: User = Depends(require_guest_manage_access)):
     """Reject a pending RSVP — marks the guest declined (no ticket) and notifies
     them via the 'approval_rejected' template. Keeps the record for history."""
     event = await db.get(Event, event_id)
@@ -1930,13 +1947,13 @@ async def reject_rsvp(event_id: str, guest_id: str, background_tasks: Background
     if event and event.notify_rsvp_responses:
         dispatch_simple_notice(background_tasks, event, guest, "approval_rejected",
                                await load_overrides(event_id, db))
-    queue_guest_sync(db, guest)
+    queue_guest_sync(db, guest, event=event)
     await db.commit()
     return {"ok": True, "rsvp_status": "declined"}
 
 
 @router.post("/{event_id}/guests/{guest_id}/invite-token")
-async def ensure_invite_token(event_id: str, guest_id: str, db: AsyncSession = Depends(get_db), _: User = Depends(require_event_admin)):
+async def ensure_invite_token(event_id: str, guest_id: str, db: AsyncSession = Depends(get_db), _: User = Depends(require_guest_manage_access)):
     """Mint (or return) a guest's personal RSVP-link token so the planner can
     copy /r/{token} from the dashboard without having to send the invite first."""
     guest = await db.get(Guest, guest_id)

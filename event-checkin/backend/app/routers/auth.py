@@ -6,22 +6,70 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 
 from ..database import get_db
-from ..models import User, Membership, EventUser
+from ..models import Event, User, Membership, EventUser
 from ..schemas import UserOut
 from ..auth import get_current_user, require_superadmin
+from ..services.festiome_client import FestioMeClient, FestioMeUnavailable, get_festiome_client
 
 router = APIRouter()
 
 
 @router.post("/festiome-token")
-async def festiome_token(user: User = Depends(get_current_user)):
-    """Exchange a Festio login for a short-lived FestioMe-only session token."""
+async def festiome_token(
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+    client: FestioMeClient = Depends(get_festiome_client),
+):
+    """Exchange a Festio login and reconcile its event-group memberships."""
     from ..config import settings
     if not settings.festiome_internal_token:
         raise HTTPException(503, "FestioMe authentication is not configured")
+    subject = user.firebase_uid or user.id
+
+    # Event access is scoped per event. Owning an unrelated personal org must
+    # not make this user a moderator here; explicit assignment maps to the
+    # event role, while an owner/admin in this event's org maps to group admin.
+    managed = (await db.execute(
+        select(Event)
+        .join(Membership, Membership.org_id == Event.org_id)
+        .where(
+            Membership.user_id == user.id,
+            Membership.role.in_(["owner", "admin"]),
+            Event.festiome_addon_enabled.is_(True),
+            Event.festiome_enabled.is_(True),
+        )
+    )).scalars().all()
+    assigned = (await db.execute(
+        select(Event, EventUser)
+        .join(EventUser, EventUser.event_id == Event.id)
+        .where(
+            EventUser.user_id == user.id,
+            Event.festiome_addon_enabled.is_(True),
+            Event.festiome_enabled.is_(True),
+        )
+    )).all()
+    access: dict[str, tuple[Event, str]] = {event.id: (event, "admin") for event in managed}
+    for event, event_user in assigned:
+        if event.id not in access:
+            role = "moderator" if event_user.event_role == "manager" else "member"
+            access[event.id] = (event, role)
+    if access:
+        if not client.configured:
+            raise HTTPException(503, "FestioMe integration is not configured")
+        try:
+            for event, role in access.values():
+                await client.upsert_user(
+                    event.id,
+                    subject=subject,
+                    name=user.name,
+                    email=user.email,
+                    role=role,
+                )
+        except FestioMeUnavailable as exc:
+            raise HTTPException(503, str(exc)) from exc
     now = datetime.now(timezone.utc)
     token = jwt.encode({
-        "sub": user.firebase_uid or user.id,
+        "sub": subject,
         "email": user.email,
         "name": user.name,
         "iss": "guesthub",

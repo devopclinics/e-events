@@ -12,7 +12,7 @@ from fastapi import APIRouter, Depends, File, Header, HTTPException, Query, Uplo
 from fastapi.responses import FileResponse, Response
 
 from ..config import settings
-from ..catalog import build_catalog, get_template, default_template, resolve_template_asset
+from ..catalog import build_catalog, catalog_quality_report, get_template, default_template, resolve_template_asset
 from ..store import load_design, save_design, publish_design
 from ..assets import save_upload, asset_path, UploadError
 from ..render import render_flyer, PNG_SIZES, PDF_SIZES
@@ -67,6 +67,12 @@ def list_templates(
     return {"count": len(items), "templates": items}
 
 
+@router.get("/templates/quality")
+def template_quality():
+    report = catalog_quality_report()
+    return {"ready": all(not item["issues"] for item in report), "templates": report}
+
+
 @router.get("/templates/{template_id}")
 def get_one_template(template_id: str):
     tpl = get_template(template_id)
@@ -96,6 +102,7 @@ def get_event_design(event_id: str):
         theme_config=d.get("theme_config", {}),
         wording_config=d.get("wording_config", {}),
         asset_config=d.get("asset_config", {}),
+        page_config=d.get("page_config", {}),
         is_published=bool(d.get("is_published")),
         published_version=d.get("published_version"),
         updated_at=d.get("updated_at"),
@@ -157,6 +164,7 @@ def public_theme(event_id: str):
         flyer_image_url=assets.get("flyer_image_url"),
         wording=design.get("wording_config", {}),
         pass_options=design.get("theme_config", {}).get("passOptions", {}),
+        page_config=design.get("page_config", {}),
     )
 
 

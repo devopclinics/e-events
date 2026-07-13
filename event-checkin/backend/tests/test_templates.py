@@ -1,5 +1,7 @@
 """Customizable message templates: rendering, validation, fallback/resolution,
 permissions, reset+audit, sanitization and test-send."""
+from types import SimpleNamespace
+
 import pytest
 
 from app.models import Event, Guest, User, Membership, MessageTemplate, MessageTemplateAudit
@@ -32,6 +34,49 @@ def test_sanitize_strips_script_and_handlers():
     assert "hi" in clean
 
 
+def test_festiome_link_is_secure_and_eligibility_gated():
+    event = SimpleNamespace(
+        id="event-1",
+        name="Gala",
+        event_date=None,
+        couples_name="Host",
+        venue_name=None,
+        venue_address=None,
+        checkin_base_url="https://staging.festio.events",
+        festiome_addon_enabled=True,
+        festiome_enabled=True,
+        status="active",
+    )
+    confirmed = SimpleNamespace(
+        first_name="Ada", last_name="Lovelace",
+        rsvp_status="confirmed", qr_token="secure-pass-token",
+    )
+    ctx = tpl.build_context(event, confirmed)
+    assert ctx["festiome_link"] == (
+        "https://staging.festio.events/festiome/guest?"
+        "event=event-1&pass=secure-pass-token"
+    )
+    assert "festiome_link" in tpl.PLACEHOLDERS
+
+    pending = SimpleNamespace(
+        first_name="Grace", last_name="Hopper",
+        rsvp_status="pending", qr_token="must-not-leak",
+    )
+    assert tpl.build_context(event, pending)["festiome_link"] == ""
+
+    event.rsvp_enabled = False
+    invited = SimpleNamespace(
+        first_name="Katherine", last_name="Johnson",
+        rsvp_status="invited", qr_token="no-rsvp-pass",
+    )
+    assert tpl.build_context(event, invited)["festiome_link"].endswith(
+        "event=event-1&pass=no-rsvp-pass"
+    )
+
+    event.festiome_enabled = False
+    assert tpl.build_context(event, confirmed)["festiome_link"] == ""
+
+
 # ── API: list / fallback ────────────────────────────────────────────────────────
 
 @pytest.mark.asyncio
@@ -44,6 +89,7 @@ async def test_list_shows_defaults_then_override(ctx):
     assert any(t["key"] == "experience_next_steps" for t in listing)
     bc = next(t for t in listing if t["key"] == "broadcast")
     assert bc["source"] == "default"
+    assert "festiome_link" in bc["placeholders"]
 
     saved = await ctx.client.put(f"/api/events/{ev}/templates/broadcast",
                                  json={"subject": "Hi", "sms_body": "Yo {{guest_first_name}}"})

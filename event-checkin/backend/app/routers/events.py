@@ -71,8 +71,12 @@ def _normalize_public_base_url(value: str | None) -> str:
 VALID_STATUSES = {"draft", "active", "ended"}
 STATUS_TRANSITIONS = {
     "draft":  {"active"},
-    "active": {"ended"},
-    "ended":  {"active"},   # allow reopen
+    # Draft is the planning / RSVP state.  It deliberately keeps public RSVP
+    # available while every staff and self check-in route stays disabled.
+    "active": {"draft", "ended"},
+    # A final end closes public RSVP, but an admin can reopen the event if a
+    # status was chosen by mistake or post-event work is still required.
+    "ended":  {"draft", "active"},
 }
 
 
@@ -87,6 +91,36 @@ async def _get_accessible_event(event_id: str, user: User, db: AsyncSession) -> 
     if await _org_role(user, event.org_id, db) is None:
         raise HTTPException(404, "Event not found")
     return event
+
+
+async def _event_out_for_user(event: Event, user: User, db: AsyncSession) -> EventOut:
+    """Serialize an event with access derived for this event, not the account."""
+    role = await _org_role(user, event.org_id, db)
+    eu = None
+    if not user.is_platform_superadmin:
+        eu = await db.scalar(select(EventUser).where(
+            EventUser.event_id == event.id, EventUser.user_id == user.id
+        ))
+    if user.is_platform_superadmin:
+        access_role, access_level, can_manage, can_view_guests, can_manage_guests = "platform_admin", "edit", True, True, True
+    elif role in ("owner", "admin"):
+        access_role, access_level, can_manage, can_view_guests, can_manage_guests = "org_admin", "edit", True, True, True
+    elif eu and eu.event_role == "manager":
+        access_role = "event_manager"
+        access_level = eu.access_level or "edit"
+        can_manage, can_view_guests, can_manage_guests = True, True, True
+    else:
+        access_role, access_level = "official", "view"
+        can_manage = False
+        can_manage_guests = bool(eu and eu.can_manage_guests)
+        can_view_guests = bool(eu and (eu.can_view_guests or eu.can_manage_guests))
+    return EventOut.model_validate(event).model_copy(update={
+        "my_access_role": access_role,
+        "my_access_level": access_level,
+        "my_can_manage_event": can_manage,
+        "my_can_view_guests": can_view_guests,
+        "my_can_manage_guests": can_manage_guests,
+    })
 
 
 # ── CRUD ──────────────────────────────────────────────────────────────────────
@@ -170,8 +204,8 @@ async def list_events(
             if event.id not in seen:
                 seen.add(event.id)
                 rows.append(event)
-        return rows
-    return result.scalars().all()
+        return [await _event_out_for_user(event, current_user, db) for event in rows]
+    return [await _event_out_for_user(event, current_user, db) for event in result.scalars().all()]
 
 
 @router.get("/me/menu-events", response_model=list[MenuEventOut])
@@ -205,7 +239,8 @@ async def get_event(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    return await _get_accessible_event(event_id, current_user, db)
+    event = await _get_accessible_event(event_id, current_user, db)
+    return await _event_out_for_user(event, current_user, db)
 
 
 @router.put("/{event_id}", response_model=EventOut)
@@ -312,6 +347,8 @@ async def list_members(
             can_reassign_seats=eu.can_reassign_seats,
             can_manage_menu=eu.can_manage_menu,
             can_view_dashboard=eu.can_view_dashboard,
+            can_view_guests=eu.can_view_guests,
+            can_manage_guests=eu.can_manage_guests,
             event_role=eu.event_role,
             access_level=eu.access_level,
             section_group_ids=sections_by_eu.get(eu.id, []),
@@ -360,6 +397,8 @@ async def assign_member(
         can_reassign_seats=eu.can_reassign_seats,
         can_manage_menu=eu.can_manage_menu,
         can_view_dashboard=eu.can_view_dashboard,
+        can_view_guests=eu.can_view_guests,
+        can_manage_guests=eu.can_manage_guests,
         event_role=eu.event_role,
         access_level=eu.access_level,
     )
@@ -546,7 +585,10 @@ async def send_test_message(
     return {"ok": True, "channel": channel, "to": phone}
 
 
-_POLICY_FLOWS = {"invite", "admission", "reminder", "approval", "logistics", "registry", "broadcast"}
+# Automated lifecycle flows the routing policy applies to. Manual sends where the
+# organizer already picks channels (registry / host broadcast) are excluded — only
+# the superadmin block constrains those.
+_POLICY_FLOWS = {"invite", "admission", "reminder", "approval", "logistics"}
 _POLICY_CHANNELS = {"email", "sms", "whatsapp", "mms"}
 
 
@@ -591,7 +633,7 @@ async def toggle_features(
         raise HTTPException(404, "Event not found")
     for feature in (
         "seating_enabled", "menu_enabled", "logistics_enabled", "registry_enabled",
-        "venue_access_enabled", "partner_pairing_enabled", "experience_enabled",
+        "venue_access_enabled", "partner_pairing_enabled", "experience_enabled", "live_program_enabled",
         "section_mode_enabled", "festiome_addon_enabled",
     ):
         if body.get(feature):
@@ -618,6 +660,15 @@ async def toggle_features(
         event.venue_access_enabled = enable
     if "experience_enabled" in body:
         event.experience_enabled = bool(body["experience_enabled"])
+    if "live_program_enabled" in body:
+        # Live Program is an Experience add-on. Enabling it is deliberately
+        # non-invasive; it only exposes timed agenda data and starts the clock
+        # from now so old announcements are never replayed.
+        enable = bool(body["live_program_enabled"])
+        if enable and not event.experience_enabled:
+            raise HTTPException(400, "Enable Experience before enabling Live Program")
+        event.live_program_enabled = enable
+        event.live_program_enabled_at = datetime.utcnow() if enable else None
     if "festiome_addon_enabled" in body:
         # Turning the add-on off only revokes the offering; the cached remote
         # link state (festiome_enabled/id/url) is left intact so re-enabling
@@ -904,11 +955,12 @@ async def broadcast_message(
 
     queued = skipped_no_contact = skipped_no_consent = skipped_no_credits = 0
 
+    email_blocked = "email" in (event.blocked_messaging_channels or [])
     for guest in guests:
         sent_any = False
         credit_blocked = False
 
-        if want_email and guest.email:
+        if want_email and guest.email and not email_blocked:
             subj, body = email_override(overrides, "broadcast", _ctx(guest))
             if body is not None:
                 background_tasks.add_task(
@@ -958,6 +1010,7 @@ async def broadcast_message(
                         first_name=guest.first_name,
                         event_name=event.name,
                         message=wa_text if wa_text is not None else data.message,
+                        ticket_url=f"{event.checkin_base_url.rstrip('/')}/scan/{guest.qr_token}",
                     )
                     sent_any = True
                 else:

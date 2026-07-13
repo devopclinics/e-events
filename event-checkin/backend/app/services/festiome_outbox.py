@@ -36,9 +36,19 @@ def _guest_payload(guest: Guest) -> dict[str, Any]:
     }
 
 
-def queue_guest_sync(db: AsyncSession, guest: Guest, *, revision: str | None = None) -> None:
-    """Queue an upsert for confirmed guests, otherwise a membership removal."""
-    command = "member.upsert" if guest.rsvp_status == "confirmed" else "member.remove"
+def guest_is_festiome_eligible(guest: Guest, event: Event | None = None) -> bool:
+    """Return whether a guest should be an event's FestioMe member."""
+    return guest.rsvp_status == "confirmed" or bool(
+        event and not event.rsvp_enabled and guest.rsvp_status == "invited"
+    )
+
+
+def queue_guest_sync(
+    db: AsyncSession, guest: Guest, *, event: Event | None = None,
+    revision: str | None = None,
+) -> None:
+    """Queue an upsert for eligible guests, otherwise a membership removal."""
+    command = "member.upsert" if guest_is_festiome_eligible(guest, event) else "member.remove"
     rev = revision or datetime.utcnow().isoformat(timespec="microseconds")
     db.add(FestioMeOutbox(
         event_id=guest.event_id,

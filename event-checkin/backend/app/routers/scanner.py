@@ -2,7 +2,7 @@ import html as html_escape
 import json
 from datetime import datetime
 from fastapi import APIRouter, Depends, BackgroundTasks, HTTPException, Request
-from fastapi.responses import Response
+from fastapi.responses import Response, RedirectResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func
 from sqlalchemy.exc import IntegrityError
@@ -12,6 +12,7 @@ from ..schemas import ConsentSignatureCreate, ExperienceNextStepOut, ExperienceS
 from ..auth import require_official, _org_role
 from .access import zone_occupancy, ticket_allows
 from ..entitlements import can_use_paid_channels, last_credit_ledger_id, take_message_credit
+from ..channels import channels_for_flow
 from services.email_service import send_admission_email, send_simple_email
 from services import messaging
 from services.credit_ledger import send_with_credit_ledger
@@ -50,6 +51,19 @@ async def _guest_by_token(qr_token: str, db: AsyncSession) -> tuple[Guest, Event
     if not event:
         raise HTTPException(404, "Event not found")
     return guest, event
+
+
+@router.get("/{qr_token}/hub", include_in_schema=False)
+async def open_live_program_hub(qr_token: str, db: AsyncSession = Depends(get_db)):
+    """Guest-only companion to the staff admission QR route.
+
+    The pass QR and staff POST scan remain unchanged; this explicit GET route
+    simply opens the same guest's Hub, optionally focused on timed feedback.
+    """
+    guest, event = await _guest_by_token(qr_token, db)
+    token = guest.invite_token or guest.qr_token
+    base = (event.checkin_base_url or "").rstrip("/")
+    return RedirectResponse(url=f"{base}/r/{token}?focus=feedback#guest-hub", status_code=302)
 
 
 async def _active_consent_form(event_id: str, db: AsyncSession) -> ConsentForm | None:
@@ -435,6 +449,8 @@ async def view_ticket(qr_token: str, db: AsyncSession = Depends(get_db)):
         seating_enabled=event.seating_enabled,
         partner_pairing_enabled=event.partner_pairing_enabled,
         experience_enabled=event.experience_enabled,
+        live_program_enabled=event.live_program_enabled,
+        checkout_enabled=event.checkout_enabled,
         menu_enabled=event.menu_enabled,
         notify_sms=event.notify_sms,
         notify_whatsapp=event.notify_whatsapp,
@@ -650,6 +666,9 @@ async def ticket_checkout_qr_image(qr_token: str, db: AsyncSession = Depends(get
     """Public — distinct QR payload for normal-event checkout/exit scans."""
     guest = (await db.execute(select(Guest).where(Guest.qr_token == qr_token))).scalar_one_or_none()
     if not guest:
+        return Response(status_code=404)
+    event = await db.get(Event, guest.event_id)
+    if not event or not event.checkout_enabled:
         return Response(status_code=404)
     return Response(content=generate_qr_for_url(f"festio-checkout:{qr_token}"), media_type="image/png")
 
@@ -1021,7 +1040,8 @@ async def perform_admission(guest, event, background_tasks, db) -> ScanResult:
     tmpl_ctx = build_template_context(
         event, guest, extras={"table_name": table_name or "", "ticket_link": ticket_url or "", "qr_code": ticket_url or ""}
     )
-    if paid and event.notify_sms and guest.phone and guest.sms_consent and take_message_credit(event, "sms"):
+    chosen = channels_for_flow(event, guest, "admission", paid_ok=paid)
+    if "sms" in chosen and take_message_credit(event, "sms"):
         sms_text = _template_channel_for_event(overrides, event, "admission_confirmation", "experience_admission_confirmation", "sms", tmpl_ctx)
         if sms_text is not None:
             background_tasks.add_task(send_with_credit_ledger, last_credit_ledger_id(event), messaging.send_custom_sms, phone=guest.phone, body=sms_text)
@@ -1035,7 +1055,7 @@ async def perform_admission(guest, event, background_tasks, db) -> ScanResult:
                 admitted_at=guest.admitted_at,
                 table_name=table_name, seat_number=guest.seat_number,
             )
-    if paid and event.notify_whatsapp and guest.phone and guest.whatsapp_consent and take_message_credit(event, "whatsapp"):
+    if "whatsapp" in chosen and take_message_credit(event, "whatsapp"):
         # WhatsApp initiates → approved template only (free-text overrides 15003).
         background_tasks.add_task(
             send_with_credit_ledger,
@@ -1047,8 +1067,7 @@ async def perform_admission(guest, event, background_tasks, db) -> ScanResult:
         )
     # MMS (image ticket card) — super-admin-enabled per event. Sends the styled
     # admitted card fetched directly from /api/scan/{token}/card.jpg.
-    if (paid and event.notify_mms and guest.phone and guest.sms_consent
-            and messaging.mms_ready() and event.checkin_base_url and take_message_credit(event, "mms")):
+    if ("mms" in chosen and messaging.mms_ready() and event.checkin_base_url and take_message_credit(event, "mms")):
         mms_text = (_template_channel_for_event(overrides, event, "admission_confirmation", "experience_admission_confirmation", "mms", tmpl_ctx)
                     or _template_channel_for_event(overrides, event, "admission_confirmation", "experience_admission_confirmation", "sms", tmpl_ctx)
                     or f"Welcome {guest.first_name}! You're checked in to {event.name}.")
@@ -1058,7 +1077,7 @@ async def perform_admission(guest, event, background_tasks, db) -> ScanResult:
     await sync_guest_progress(event.id, guest.id, db, source="staff", actor_user_id=None)
     await db.commit()
     experience_next = await _next_steps_for_scan(event.id, guest.id, db) if event else []
-    if event.notify_email:
+    if "email" in chosen:
         subj, intro = _template_email_for_event(overrides, event, "admission_confirmation", "experience_admission_confirmation", tmpl_ctx)
         guest_data["subject_override"] = subj
         guest_data["intro_block_override"] = intro

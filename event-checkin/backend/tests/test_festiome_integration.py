@@ -35,6 +35,7 @@ class FakeFestioMeClient:
         self.subgroups: list[dict] = []
         self.requests: list[dict] = []
         self.decisions: list[tuple] = []
+        self.upserted_users: list[dict] = []
 
     async def event_status(self, external_event_ref: str):
         if self.unavailable:
@@ -61,6 +62,12 @@ class FakeFestioMeClient:
         if self.unavailable:
             raise FestioMeUnavailable("offline")
         return {"token": "guest-session", "expires_at": "2026-09-01T12:00:00Z"}
+
+    async def upsert_user(self, external_event_ref: str, **payload):
+        if self.unavailable:
+            raise FestioMeUnavailable("offline")
+        self.upserted_users.append({"event_id": external_event_ref, **payload})
+        return {"id": "member-1", "role": payload["role"]}
 
     async def list_subgroups(self, external_event_ref: str):
         if self.unavailable:
@@ -138,6 +145,43 @@ async def test_cross_tenant_user_cannot_probe_festiome_status(ctx):
     ctx.login(ctx.ids["user_b"])
     response = await ctx.client.get(f'/api/events/{ctx.ids["event_a"]}/festiome/status')
     assert response.status_code == 404
+
+
+@pytest.mark.asyncio
+async def test_official_token_reconciles_event_group_membership(ctx, monkeypatch):
+    fake = FakeFestioMeClient()
+    app.dependency_overrides[get_festiome_client] = lambda: fake
+    monkeypatch.setattr("app.config.settings.festiome_internal_token", "test-secret")
+    event_id = ctx.ids["event_a"]
+    await _enable_festiome_addon(event_id)
+    async with _Session() as s:
+        event = await s.get(Event, event_id)
+        event.festiome_enabled = True
+        await s.commit()
+
+    ctx.login(ctx.ids["user_a"])
+    invited = await ctx.client.post(
+        f"/api/events/{event_id}/org-members",
+        json={"email": "official-chat@a.com", "name": "Official Chat", "role": "staff"},
+    )
+    official = invited.json()["user"]
+    assert (await ctx.client.post(
+        f"/api/events/{event_id}/members", json={"user_id": official["id"]}
+    )).status_code == 201
+
+    from app.models import User
+    async with _Session() as s:
+        official_user = await s.get(User, official["id"])
+    ctx.login(official_user)
+    token = await ctx.client.post("/api/auth/festiome-token")
+    assert token.status_code == 200
+    assert fake.upserted_users == [{
+        "event_id": event_id,
+        "subject": official["id"],
+        "name": "Official Chat",
+        "email": "official-chat@a.com",
+        "role": "member",
+    }]
 
 
 @pytest.mark.asyncio
@@ -322,6 +366,39 @@ async def test_guest_pass_exchange_requires_confirmed_matching_pass(ctx):
     denied = await ctx.client.post(
         f'/api/events/{ctx.ids["event_a"]}/festiome/guest-token',
         json={"pass_token": "00000000-0000-0000-0000-000000000000"},
+    )
+    assert denied.status_code == 404
+
+
+@pytest.mark.asyncio
+async def test_no_rsvp_invitee_can_exchange_festiome_pass(ctx):
+    fake = FakeFestioMeClient()
+    app.dependency_overrides[get_festiome_client] = lambda: fake
+    event_id = ctx.ids["event_a"]
+    await _enable_festiome_addon(event_id)
+    async with _Session() as s:
+        event = await s.get(Event, event_id)
+        event.rsvp_enabled = False
+        event.festiome_enabled = True
+        guest = await s.scalar(select(Guest).where(Guest.event_id == event_id))
+        guest.rsvp_status = "invited"
+        token = guest.qr_token
+        await s.commit()
+
+    allowed = await ctx.client.post(
+        f"/api/events/{event_id}/festiome/guest-token",
+        json={"pass_token": token},
+    )
+    assert allowed.status_code == 200
+    assert allowed.json()["token"] == "guest-session"
+
+    async with _Session() as s:
+        guest = await s.scalar(select(Guest).where(Guest.event_id == event_id))
+        guest.rsvp_status = "declined"
+        await s.commit()
+    denied = await ctx.client.post(
+        f"/api/events/{event_id}/festiome/guest-token",
+        json={"pass_token": token},
     )
     assert denied.status_code == 404
 

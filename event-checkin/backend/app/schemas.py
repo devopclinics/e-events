@@ -47,6 +47,8 @@ class EventCreate(BaseModel):
     checkin_base_url: str
     venue_name: Optional[str] = None
     venue_address: Optional[str] = None
+    hotel_name: Optional[str] = None
+    hotel_address: Optional[str] = None
     admission_note: Optional[str] = None
 
     @field_validator("event_date", mode="after")
@@ -65,6 +67,8 @@ class EventUpdate(BaseModel):
     checkin_base_url: Optional[str] = None
     venue_name: Optional[str] = None
     venue_address: Optional[str] = None
+    hotel_name: Optional[str] = None
+    hotel_address: Optional[str] = None
     admission_note: Optional[str] = None
     notify_email: Optional[bool] = None
     notify_sms: Optional[bool] = None
@@ -100,6 +104,7 @@ class EventOut(BaseModel):
     registry_enabled: bool = False
     venue_access_enabled: bool = False
     experience_enabled: bool = False
+    live_program_enabled: bool = False
     festiome_addon_enabled: bool = False
     festiome_enabled: bool = False
     festiome_id: Optional[str] = None
@@ -109,6 +114,8 @@ class EventOut(BaseModel):
     partner_pairing_enabled: bool = False
     venue_name: Optional[str] = None
     venue_address: Optional[str] = None
+    hotel_name: Optional[str] = None
+    hotel_address: Optional[str] = None
     admission_note: Optional[str] = None
     notify_email: bool = True
     notify_sms: bool = True
@@ -157,6 +164,13 @@ class EventOut(BaseModel):
     guest_cap: Optional[int] = None
     paid_channels: bool = False
     message_credits: int = 0
+    # Access for the requesting user on this specific event. Account-wide role
+    # is not sufficient because one person may own one org and be staff in another.
+    my_access_role: str = "official"
+    my_access_level: str = "view"
+    my_can_manage_event: bool = False
+    my_can_view_guests: bool = False
+    my_can_manage_guests: bool = False
 
 
 class EventMemberOut(BaseModel):
@@ -166,6 +180,8 @@ class EventMemberOut(BaseModel):
     can_reassign_seats: bool
     can_manage_menu: bool = False
     can_view_dashboard: bool = False
+    can_view_guests: bool = False
+    can_manage_guests: bool = False
     event_role: str = "staff"
     access_level: str = "edit"
     # Allowed sections (table group ids) for section-based scanning.
@@ -351,6 +367,7 @@ ExperienceStepType = Literal[
     "session_attendance",
     "certificate",
     "checkout",
+    "feedback",
     "custom",
 ]
 
@@ -363,6 +380,9 @@ class ExperienceStepCreate(BaseModel):
     sort_order: int = 0
     required: bool = True
     enabled: bool = True
+    starts_offset_seconds: Optional[int] = Field(default=None, ge=0)
+    duration_seconds: Optional[int] = Field(default=None, gt=0)
+    is_segment: bool = False
     conditions: Optional[dict] = None
     config: Optional[dict] = None
 
@@ -389,6 +409,9 @@ class ExperienceStepUpdate(BaseModel):
     sort_order: Optional[int] = None
     required: Optional[bool] = None
     enabled: Optional[bool] = None
+    starts_offset_seconds: Optional[int] = Field(default=None, ge=0)
+    duration_seconds: Optional[int] = Field(default=None, gt=0)
+    is_segment: Optional[bool] = None
     conditions: Optional[dict] = None
     config: Optional[dict] = None
 
@@ -430,6 +453,22 @@ class ExperienceWorkflowCreate(BaseModel):
         return cleaned
 
 
+class ProgramSegmentImportItem(BaseModel):
+    key: str
+    title: str
+    description: Optional[str] = None
+    starts_offset_seconds: int = Field(ge=0)
+    duration_seconds: int = Field(gt=0)
+    category: Optional[str] = None
+    announce: bool = False
+    announcement_title: Optional[str] = None
+    announcement_body: Optional[str] = None
+
+
+class ProgramSegmentImport(BaseModel):
+    items: list[ProgramSegmentImportItem] = Field(min_length=1, max_length=100)
+
+
 class ExperienceProgressUpdate(BaseModel):
     status: Literal["available", "blocked", "completed", "skipped", "failed", "overridden"]
     override_reason: Optional[str] = None
@@ -448,6 +487,9 @@ class ExperienceStepOut(BaseModel):
     sort_order: int
     required: bool
     enabled: bool
+    starts_offset_seconds: Optional[int] = None
+    duration_seconds: Optional[int] = None
+    is_segment: bool = False
     conditions: Optional[dict] = None
     config: Optional[dict] = None
     created_at: datetime
@@ -638,6 +680,32 @@ class GuestConsentStateOut(BaseModel):
     form: Optional[ConsentFormOut] = None
 
 
+class GuestProgramSegmentOut(BaseModel):
+    step_id: str
+    key: str
+    title: str
+    description: Optional[str] = None
+    starts_at: datetime
+    ends_at: datetime
+    category: Optional[str] = None
+    active: bool = False
+
+
+class GuestProgramDayOut(BaseModel):
+    """A local-calendar grouping for a multi-day live programme."""
+    date: str
+    label: str
+    segments: list[GuestProgramSegmentOut] = Field(default_factory=list)
+
+
+class GuestProgramOut(BaseModel):
+    enabled: bool = False
+    current_segments: list[GuestProgramSegmentOut] = Field(default_factory=list)
+    next_segments: list[GuestProgramSegmentOut] = Field(default_factory=list)
+    days: list[GuestProgramDayOut] = Field(default_factory=list)
+    feedback_open: Optional[dict[str, Any]] = None
+
+
 class GuestJourneyOut(BaseModel):
     experience_enabled: bool = False
     guest: Optional[GuestJourneyGuestOut] = None
@@ -645,6 +713,7 @@ class GuestJourneyOut(BaseModel):
     steps: list[GuestJourneyStepOut] = Field(default_factory=list)
     next_steps: list[GuestJourneyStepOut] = Field(default_factory=list)
     consent: Optional[GuestConsentStateOut] = None
+    program: Optional[GuestProgramOut] = None
     completed_count: int = 0
     total_count: int = 0
 
@@ -1396,6 +1465,10 @@ class EventBrief(BaseModel):
     seating_enabled: bool = False
     partner_pairing_enabled: bool = False
     experience_enabled: bool = False
+    live_program_enabled: bool = False
+    # Exit scanning is opt-in per event.  The pass must not expose an exit QR
+    # unless an organiser has explicitly enabled it.
+    checkout_enabled: bool = False
     menu_enabled: bool = False
     notify_sms: bool = True
     notify_whatsapp: bool = True
@@ -1644,6 +1717,8 @@ class InvitePageOut(BaseModel):
     description: Optional[str]
     venue_name: Optional[str] = None
     venue_address: Optional[str] = None
+    hotel_name: Optional[str] = None
+    hotel_address: Optional[str] = None
     admission_note: Optional[str] = None
     invite_theme: str
     invite_message: Optional[str]

@@ -6,16 +6,17 @@ import time
 import uuid
 from datetime import datetime
 from typing import Any
+from urllib.parse import urlparse
 
 import firebase_admin
 from firebase_admin import auth as firebase_auth, credentials
-from fastapi import Depends, FastAPI, HTTPException, Query
+from fastapi import BackgroundTasks, Depends, FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from redis.asyncio import Redis
 from pydantic import BaseModel, Field
 from pydantic_settings import BaseSettings
-from sqlalchemy import JSON, Boolean, DateTime, ForeignKey, Integer, String, Text, and_, func, or_, select
+from sqlalchemy import JSON, Boolean, DateTime, ForeignKey, Integer, String, Text, UniqueConstraint, and_, delete, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 
@@ -40,6 +41,13 @@ class Settings(BaseSettings):
     guest_message_rate_limit: int = 10
     guest_chat_rate_limit: int = 20
     guest_query_token_fallback_enabled: bool = True
+    # Web Push is disabled unless all VAPID settings are present. The private
+    # key stays in the server secret; the public key is returned only to an
+    # authenticated guest Hub session when it is time to subscribe.
+    web_push_enabled: bool = False
+    web_push_vapid_public_key: str = ""
+    web_push_vapid_private_key: str = ""
+    web_push_vapid_subject: str = "mailto:events@festio.events"
 
     class Config:
         env_file = ".env"
@@ -96,6 +104,9 @@ class Event(Base):
     event_date: Mapped[datetime] = mapped_column(DateTime)
     rsvp_enabled: Mapped[bool] = mapped_column(Boolean, default=False)
     experience_enabled: Mapped[bool] = mapped_column(Boolean, default=False)
+    # Organizer-facing add-on switch. `festiome_enabled` below only records
+    # whether a remote FestioMe group has already been provisioned.
+    festiome_addon_enabled: Mapped[bool] = mapped_column(Boolean, default=False)
     festiome_enabled: Mapped[bool] = mapped_column(Boolean, default=False)
     checkout_enabled: Mapped[bool] = mapped_column(Boolean, default=False)
     venue_name: Mapped[str | None] = mapped_column(String(255))
@@ -108,6 +119,16 @@ class Event(Base):
 
 def _comm_blocked(event: "Event | None", feature: str) -> bool:
     return bool(event and feature in (event.blocked_comm_features or []))
+
+
+def festiome_available(event: "Event | None") -> bool:
+    """Expose FestioMe only while its event add-on is currently enabled."""
+    return bool(
+        event
+        and event.festiome_addon_enabled
+        and event.festiome_enabled
+        and not _comm_blocked(event, "festiome")
+    )
 
 
 class SeatingTable(Base):
@@ -239,6 +260,27 @@ class EventMessageDeliveryLog(Base):
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
 
+class GuestPushSubscription(Base):
+    """One browser/device push endpoint, owned by a guest for one event.
+
+    Endpoints are opaque provider URLs and are never returned to the browser.
+    An endpoint can move to a different guest only when that browser explicitly
+    subscribes again using that guest's personal Hub link.
+    """
+    __tablename__ = "guest_push_subscriptions"
+    __table_args__ = (UniqueConstraint("endpoint", name="uq_guest_push_subscription_endpoint"),)
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+    event_id: Mapped[str] = mapped_column(String(36), ForeignKey("events.id"), index=True)
+    guest_id: Mapped[str] = mapped_column(String(36), ForeignKey("guests.id"), index=True)
+    endpoint: Mapped[str] = mapped_column(Text)
+    p256dh: Mapped[str] = mapped_column(String(255))
+    auth: Mapped[str] = mapped_column(String(255))
+    user_agent: Mapped[str | None] = mapped_column(String(500))
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+
 async def get_db():
     async with SessionLocal() as session:
         yield session
@@ -354,10 +396,17 @@ def _guest_access_token(
     raise HTTPException(401, "Guest access token is required")
 
 
+def guest_is_attending(guest: Guest, event: Event | None) -> bool:
+    """Treat imported invitees as attendees when an event has no RSVP step."""
+    return guest.rsvp_status == "confirmed" or bool(
+        event and not event.rsvp_enabled and guest.rsvp_status == "invited"
+    )
+
+
 def require_hub_guest(guest: Guest, event: Event | None):
-    event_allows_non_rsvp = bool(event and (event.experience_enabled or not event.rsvp_enabled))
-    if guest.rsvp_status != "confirmed" and not event_allows_non_rsvp:
-        raise HTTPException(403, "Guest Hub is available after your RSVP is accepted.")
+    event_allows_experience = bool(event and event.experience_enabled)
+    if not guest_is_attending(guest, event) and not event_allows_experience:
+        raise HTTPException(403, "FestioHub is available after your RSVP is accepted.")
 
 
 async def get_settings(event_id: str, db: AsyncSession) -> EventGuestMessagingSettings:
@@ -431,6 +480,96 @@ async def _announcement_visible(announcement: EventAnnouncement, guest: Guest, d
     return guest.id in set(ids)
 
 
+def _web_push_configured() -> bool:
+    return bool(
+        settings.web_push_enabled
+        and settings.web_push_vapid_public_key
+        and settings.web_push_vapid_private_key
+    )
+
+
+def _subscription_url_for(guest: Guest) -> str:
+    token = guest.invite_token or guest.qr_token
+    return f"{settings.frontend_url.rstrip('/')}/r/{token}#guest-hub"
+
+
+def _web_push_status(exc: Exception) -> int | None:
+    response = getattr(exc, "response", None)
+    return getattr(response, "status_code", None) if response is not None else None
+
+
+def _deliver_web_push(subscription: GuestPushSubscription, payload: dict[str, str]) -> None:
+    """Send one encrypted Web Push payload without ever logging its endpoint."""
+    from pywebpush import webpush
+
+    webpush(
+        subscription_info={
+            "endpoint": subscription.endpoint,
+            "keys": {"p256dh": subscription.p256dh, "auth": subscription.auth},
+        },
+        data=json.dumps(payload),
+        vapid_private_key=settings.web_push_vapid_private_key,
+        vapid_claims={"sub": settings.web_push_vapid_subject},
+        ttl=300,
+    )
+
+
+async def send_event_push(
+    *,
+    event_id: str,
+    guest_ids: list[str],
+    title: str,
+    body: str,
+    message_id: str | None = None,
+    announcement_id: str | None = None,
+) -> None:
+    """Best-effort delivery for organizer announcements and direct replies.
+
+    The source message remains in FestioHub even if a browser or push provider
+    is unavailable. Invalid/expired subscriptions (404/410) are removed so the
+    database does not accumulate dead device endpoints.
+    """
+    if not _web_push_configured() or not guest_ids:
+        return
+    async with SessionLocal() as db:
+        rows = (await db.execute(
+            select(GuestPushSubscription, Guest)
+            .join(Guest, Guest.id == GuestPushSubscription.guest_id)
+            .where(
+                GuestPushSubscription.event_id == event_id,
+                GuestPushSubscription.guest_id.in_(guest_ids),
+            )
+        )).all()
+        if not rows:
+            return
+
+        expired_ids: list[str] = []
+        for subscription, guest in rows:
+            try:
+                await asyncio.to_thread(
+                    _deliver_web_push,
+                    subscription,
+                    {"title": title[:255], "body": body[:5000], "url": _subscription_url_for(guest)},
+                )
+                db.add(EventMessageDeliveryLog(
+                    event_id=event_id, message_id=message_id, announcement_id=announcement_id,
+                    guest_id=guest.id, channel="web_push", status="sent", provider="web_push",
+                ))
+            except Exception as exc:  # Provider/browser errors must not affect messaging.
+                status = _web_push_status(exc)
+                if status in (404, 410):
+                    expired_ids.append(subscription.id)
+                db.add(EventMessageDeliveryLog(
+                    event_id=event_id, message_id=message_id, announcement_id=announcement_id,
+                    guest_id=guest.id, channel="web_push", status="failed", provider="web_push",
+                    error_message=f"HTTP {status}" if status else "Push delivery failed",
+                ))
+                logger.info("web_push_delivery_failed status=%s", status)
+        if expired_ids:
+            await db.execute(delete(GuestPushSubscription).where(GuestPushSubscription.id.in_(expired_ids)))
+        await db.commit()
+
+
 def _message_out(m: EventMessage, guest_name: str | None = None) -> dict[str, Any]:
     return {
         "id": m.id,
@@ -452,12 +591,28 @@ class AnnouncementIn(BaseModel):
     send_in_app: bool = True
 
 
+class AnnouncementPatch(BaseModel):
+    title: str | None = Field(default=None, min_length=1, max_length=255)
+    body: str | None = Field(default=None, min_length=1)
+    audience_type: str | None = None
+    audience_filter: dict[str, Any] | None = None
+
+
 class MessageIn(BaseModel):
     body: str
 
 
 class MessageModerationPatch(BaseModel):
     status: str
+
+
+class PushSubscriptionIn(BaseModel):
+    endpoint: str = Field(min_length=12, max_length=4096)
+    keys: dict[str, str]
+
+
+class PushSubscriptionDelete(BaseModel):
+    endpoint: str = Field(min_length=12, max_length=4096)
 
 
 class SettingsPatch(BaseModel):
@@ -486,6 +641,88 @@ async def health(db: AsyncSession = Depends(get_db)):
     return {"status": "ok", "service": "messaging-service"}
 
 
+async def _push_guest_access(
+    event_id: str,
+    token: str | None,
+    creds: HTTPAuthorizationCredentials | None,
+    db: AsyncSession,
+) -> Guest:
+    _ensure_enabled()
+    guest = await guest_by_token(event_id, _guest_access_token(token, creds), db)
+    event = await db.get(Event, event_id)
+    require_hub_guest(guest, event)
+    cfg = await get_settings(event_id, db)
+    if not cfg.guest_hub_enabled or _comm_blocked(event, "guest_hub"):
+        raise HTTPException(403, "FestioHub is disabled for this event.")
+    return guest
+
+
+@app.get("/api/messaging/events/{event_id}/push/config")
+async def guest_push_config(
+    event_id: str,
+    token: str | None = Query(default=None),
+    creds: HTTPAuthorizationCredentials | None = Depends(bearer),
+    db: AsyncSession = Depends(get_db),
+):
+    await _push_guest_access(event_id, token, creds, db)
+    return {
+        "enabled": _web_push_configured(),
+        "public_key": settings.web_push_vapid_public_key if _web_push_configured() else "",
+    }
+
+
+@app.post("/api/messaging/events/{event_id}/push-subscription", status_code=201)
+async def save_guest_push_subscription(
+    event_id: str,
+    payload: PushSubscriptionIn,
+    token: str | None = Query(default=None),
+    creds: HTTPAuthorizationCredentials | None = Depends(bearer),
+    db: AsyncSession = Depends(get_db),
+):
+    guest = await _push_guest_access(event_id, token, creds, db)
+    if not _web_push_configured():
+        raise HTTPException(503, "Push notifications are not configured")
+    parsed = urlparse(payload.endpoint)
+    p256dh = (payload.keys.get("p256dh") or "").strip()
+    auth = (payload.keys.get("auth") or "").strip()
+    if parsed.scheme != "https" or not parsed.netloc or not p256dh or not auth:
+        raise HTTPException(422, "Invalid push subscription")
+    await _rate_limit(f"push-subscription:{guest.id}", 20, 3600)
+    row = await db.scalar(select(GuestPushSubscription).where(GuestPushSubscription.endpoint == payload.endpoint))
+    if row is None:
+        row = GuestPushSubscription(
+            event_id=event_id, guest_id=guest.id, endpoint=payload.endpoint,
+            p256dh=p256dh, auth=auth,
+        )
+        db.add(row)
+    else:
+        row.event_id = event_id
+        row.guest_id = guest.id
+        row.p256dh = p256dh
+        row.auth = auth
+        row.updated_at = datetime.utcnow()
+    await db.commit()
+    return {"enabled": True}
+
+
+@app.delete("/api/messaging/events/{event_id}/push-subscription")
+async def remove_guest_push_subscription(
+    event_id: str,
+    payload: PushSubscriptionDelete,
+    token: str | None = Query(default=None),
+    creds: HTTPAuthorizationCredentials | None = Depends(bearer),
+    db: AsyncSession = Depends(get_db),
+):
+    guest = await _push_guest_access(event_id, token, creds, db)
+    await db.execute(delete(GuestPushSubscription).where(
+        GuestPushSubscription.event_id == event_id,
+        GuestPushSubscription.guest_id == guest.id,
+        GuestPushSubscription.endpoint == payload.endpoint,
+    ))
+    await db.commit()
+    return {"enabled": False}
+
+
 @app.get("/api/messaging/events/{event_id}/guest-hub")
 async def guest_hub(
     event_id: str,
@@ -499,7 +736,7 @@ async def guest_hub(
     require_hub_guest(guest, event)
     cfg = await get_settings(event_id, db)
     if not cfg.guest_hub_enabled or _comm_blocked(event, "guest_hub"):
-        raise HTTPException(403, "Guest Hub is disabled for this event.")
+        raise HTTPException(403, "FestioHub is disabled for this event.")
     table = await db.get(SeatingTable, guest.table_id) if guest.table_id else None
     anns = []
     if cfg.announcements_enabled and not _comm_blocked(event, "announcements"):
@@ -514,8 +751,9 @@ async def guest_hub(
                 anns.append({"id": ann.id, "title": ann.title, "body": ann.body, "created_at": ann.created_at.isoformat()})
     host_messages_on = cfg.direct_host_messages_enabled and not _comm_blocked(event, "host_messages")
     direct = await _direct_messages(event_id, guest, db) if host_messages_on else []
+    attending = guest_is_attending(guest, event)
     chat_enabled = bool(cfg.guest_chat_enabled and not _comm_blocked(event, "guest_chat")
-                        and (guest.rsvp_status == "confirmed" or not cfg.attending_only_chat))
+                        and (attending or not cfg.attending_only_chat))
     # Check-out (when the event enables it): the guest's latest normal exit scan.
     checked_out_at = None
     if event and event.checkout_enabled:
@@ -554,10 +792,10 @@ async def guest_hub(
         },
         "capabilities": {
             "announcements": bool(cfg.announcements_enabled and not _comm_blocked(event, "announcements")),
-            "direct_host_messages": bool(host_messages_on and guest.rsvp_status == "confirmed"),
+            "direct_host_messages": bool(host_messages_on and attending),
             "guest_chat": chat_enabled,
             "guest_chat_posting": bool(chat_enabled and cfg.guest_chat_posting_enabled),
-            "festiome": bool(event and event.festiome_enabled and not _comm_blocked(event, "festiome")),
+            "festiome": festiome_available(event),
         },
         "announcements": anns,
         "direct_messages": direct,
@@ -641,9 +879,11 @@ async def guest_direct_message(
     event = await db.get(Event, event_id)
     require_hub_guest(guest, event)
     if not cfg.guest_hub_enabled or _comm_blocked(event, "guest_hub"):
-        raise HTTPException(403, "Guest Hub is disabled for this event.")
+        raise HTTPException(403, "FestioHub is disabled for this event.")
     if not cfg.direct_host_messages_enabled or _comm_blocked(event, "host_messages"):
         raise HTTPException(403, "Message Host is only available to confirmed guests")
+    if not guest_is_attending(guest, event):
+        raise HTTPException(403, "Message Host is only available to attending guests")
     await _rate_limit(f"direct:{guest.id}", settings.guest_message_rate_limit)
     thread = await _direct_thread(event_id, guest, db, create=True)
     body = _clean(payload.body, settings.message_max_length)
@@ -669,10 +909,10 @@ async def guest_chat_message(
     event = await db.get(Event, event_id)
     require_hub_guest(guest, event)
     if not cfg.guest_hub_enabled or _comm_blocked(event, "guest_hub"):
-        raise HTTPException(403, "Guest Hub is disabled for this event.")
+        raise HTTPException(403, "FestioHub is disabled for this event.")
     if not cfg.guest_chat_enabled or _comm_blocked(event, "guest_chat"):
         raise HTTPException(403, "Guest Chat is disabled for this event")
-    if cfg.attending_only_chat and guest.rsvp_status != "confirmed":
+    if cfg.attending_only_chat and not guest_is_attending(guest, event):
         raise HTTPException(403, "Guest Chat is only available to confirmed guests")
     if not cfg.guest_chat_posting_enabled:
         raise HTTPException(403, "Guest Chat posting is paused")
@@ -734,7 +974,13 @@ async def admin_announcements(event_id: str, user: User = Depends(current_user),
 
 
 @app.post("/api/messaging/admin/events/{event_id}/announcements", status_code=201)
-async def admin_create_announcement(event_id: str, payload: AnnouncementIn, user: User = Depends(current_user), db: AsyncSession = Depends(get_db)):
+async def admin_create_announcement(
+    event_id: str,
+    payload: AnnouncementIn,
+    background_tasks: BackgroundTasks,
+    user: User = Depends(current_user),
+    db: AsyncSession = Depends(get_db),
+):
     await require_event_admin(event_id, user, db)
     cfg = await get_settings(event_id, db)
     if not cfg.announcements_enabled:
@@ -759,7 +1005,66 @@ async def admin_create_announcement(event_id: str, payload: AnnouncementIn, user
         for guest in guests:
             db.add(EventMessageDeliveryLog(event_id=event_id, message_id=msg.id, announcement_id=ann.id, guest_id=guest.id, channel="in_app", status="sent"))
     await db.commit()
+    if payload.send_in_app:
+        background_tasks.add_task(
+            send_event_push,
+            event_id=event_id,
+            guest_ids=[guest.id for guest in guests],
+            title=ann.title,
+            body=ann.body,
+            message_id=msg.id,
+            announcement_id=ann.id,
+        )
     return {"id": ann.id, "title": ann.title, "body": ann.body, "audience_type": ann.audience_type, "reached": len(guests), "sent_at": ann.sent_at.isoformat() if ann.sent_at else None}
+
+
+@app.patch("/api/messaging/admin/events/{event_id}/announcements/{announcement_id}")
+async def admin_update_announcement(
+    event_id: str,
+    announcement_id: str,
+    patch: AnnouncementPatch,
+    user: User = Depends(current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    await require_event_admin(event_id, user, db)
+    ann = await db.scalar(select(EventAnnouncement).where(
+        EventAnnouncement.id == announcement_id,
+        EventAnnouncement.event_id == event_id,
+    ))
+    if not ann:
+        raise HTTPException(404, "Announcement not found")
+    changes = patch.model_dump(exclude_unset=True)
+    if changes.get("title") is not None:
+        ann.title = _clean(changes["title"], 255)
+    if changes.get("body") is not None:
+        ann.body = _clean(changes["body"], settings.announcement_max_length)
+    if changes.get("audience_type") is not None:
+        ann.audience_type = changes["audience_type"]
+    if "audience_filter" in changes:
+        ann.audience_filter = changes["audience_filter"]
+    ann.updated_at = datetime.utcnow()
+
+    # Keep the historical in-app message representation aligned. Editing does
+    # not create new deliveries or re-send external notifications.
+    messages = (await db.scalars(select(EventMessage).where(
+        EventMessage.event_id == event_id,
+        EventMessage.message_type == "announcement",
+    ))).all()
+    for message in messages:
+        metadata = dict(message.message_metadata or {})
+        if metadata.get("announcement_id") != ann.id:
+            continue
+        message.body = ann.body
+        metadata["title"] = ann.title
+        message.message_metadata = metadata
+        message.updated_at = datetime.utcnow()
+    await db.commit()
+    return {
+        "id": ann.id, "title": ann.title, "body": ann.body,
+        "audience_type": ann.audience_type,
+        "sent_at": ann.sent_at.isoformat() if ann.sent_at else None,
+        "updated_at": ann.updated_at.isoformat() if ann.updated_at else None,
+    }
 
 
 @app.get("/api/messaging/admin/events/{event_id}/messages/inbox")
@@ -828,7 +1133,14 @@ async def admin_thread(event_id: str, thread_id: str, user: User = Depends(curre
 
 
 @app.post("/api/messaging/admin/events/{event_id}/messages/inbox/{thread_id}/reply")
-async def admin_reply(event_id: str, thread_id: str, payload: MessageIn, user: User = Depends(current_user), db: AsyncSession = Depends(get_db)):
+async def admin_reply(
+    event_id: str,
+    thread_id: str,
+    payload: MessageIn,
+    background_tasks: BackgroundTasks,
+    user: User = Depends(current_user),
+    db: AsyncSession = Depends(get_db),
+):
     await require_event_admin(event_id, user, db)
     thread = await db.scalar(select(EventMessageThread).where(EventMessageThread.id == thread_id, EventMessageThread.event_id == event_id))
     if not thread:
@@ -838,6 +1150,15 @@ async def admin_reply(event_id: str, thread_id: str, payload: MessageIn, user: U
     db.add(msg)
     await db.commit()
     await db.refresh(msg)
+    if thread.guest_id:
+        background_tasks.add_task(
+            send_event_push,
+            event_id=event_id,
+            guest_ids=[thread.guest_id],
+            title="New message from your event host",
+            body=msg.body,
+            message_id=msg.id,
+        )
     return _message_out(msg)
 
 

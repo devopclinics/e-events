@@ -2,6 +2,9 @@
 org's events/guests/dashboard, and global endpoints are operator-only."""
 import pytest
 
+from app.models import Event
+from conftest import _Session
+
 
 @pytest.mark.asyncio
 async def test_list_events_scoped_to_own_org(ctx):
@@ -115,3 +118,87 @@ async def test_me_reports_effective_admin_role(ctx):
     assert me["role"] == "admin"           # effective role from membership
     assert me["is_org_admin"] is True
     assert me["is_platform_superadmin"] is False
+
+
+@pytest.mark.asyncio
+async def test_official_guest_directory_has_view_and_manage_levels(ctx):
+    """Guest capabilities must not promote an official to event manager/admin."""
+    event_id = ctx.ids["event_a"]
+    async with _Session() as s:
+        event = await s.get(Event, event_id)
+        event.is_paid = True
+        await s.commit()
+
+    ctx.login(ctx.ids["user_a"])
+    invited = await ctx.client.post(
+        f"/api/events/{event_id}/org-members",
+        json={"email": "guest-viewer@a.com", "name": "Guest Viewer", "role": "staff"},
+    )
+    assert invited.status_code == 201
+    viewer = invited.json()["user"]
+    assigned = await ctx.client.post(
+        f"/api/events/{event_id}/members", json={"user_id": viewer["id"]}
+    )
+    assert assigned.status_code == 201
+
+    # Staff assignment alone is not enough to expose guest PII.
+    from app.models import User
+    async with _Session() as s:
+        viewer_user = await s.get(User, viewer["id"])
+    ctx.login(viewer_user)
+    assert (await ctx.client.get(f"/api/events/{event_id}/guests")).status_code == 403
+
+    # An event admin can grant only the read-only guest capability.
+    ctx.login(ctx.ids["user_a"])
+    grant = await ctx.client.patch(
+        f"/api/events/{event_id}/members/{viewer['id']}/permissions",
+        json={"can_view_guests": True},
+    )
+    assert grant.status_code == 200
+
+    ctx.login(viewer_user)
+    events = (await ctx.client.get("/api/events")).json()
+    access = next(e for e in events if e["id"] == event_id)
+    assert access["my_access_role"] == "official"
+    assert access["my_can_manage_event"] is False
+    assert access["my_can_view_guests"] is True
+    assert access["my_can_manage_guests"] is False
+
+    guests = await ctx.client.get(f"/api/events/{event_id}/guests")
+    assert guests.status_code == 200
+    assert len(guests.json()) == 1
+    # View access is read-only.
+    create = await ctx.client.post(
+        f"/api/events/{event_id}/guests",
+        json={"first_name": "No", "last_name": "Write"},
+    )
+    assert create.status_code == 403
+    assert (await ctx.client.post(f"/api/events/{event_id}/guests/missing/approve")).status_code == 403
+
+    # Manage grants guest operations while Team & Settings stays admin-only.
+    ctx.login(ctx.ids["user_a"])
+    grant_manage = await ctx.client.patch(
+        f"/api/events/{event_id}/members/{viewer['id']}/permissions",
+        json={"can_manage_guests": True},
+    )
+    assert grant_manage.status_code == 200
+
+    ctx.login(viewer_user)
+    access = next(e for e in (await ctx.client.get("/api/events")).json() if e["id"] == event_id)
+    assert access["my_access_role"] == "official"
+    assert access["my_can_manage_event"] is False
+    assert access["my_can_view_guests"] is True
+    assert access["my_can_manage_guests"] is True
+    created = await ctx.client.post(
+        f"/api/events/{event_id}/guests",
+        json={"first_name": "Can", "last_name": "Manage"},
+    )
+    assert created.status_code == 201
+    edited = await ctx.client.patch(
+        f"/api/events/{event_id}/guests/{created.json()['id']}",
+        json={"first_name": "Edited"},
+    )
+    assert edited.status_code == 200 and edited.json()["first_name"] == "Edited"
+    # Passing the permission guard reaches guest lookup (404), rather than 403.
+    assert (await ctx.client.post(f"/api/events/{event_id}/guests/missing/approve")).status_code == 404
+    assert (await ctx.client.get(f"/api/events/{event_id}/members")).status_code == 403

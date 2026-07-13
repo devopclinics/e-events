@@ -211,13 +211,13 @@ async def send_broadcast_sms(*, phone: str, first_name: str, message: str) -> di
     return await _send_sms(phone, _brand_sms(body))
 
 
-async def send_announcement_whatsapp(*, phone: str, first_name: str, event_name: str, message: str) -> dict | None:
+async def send_announcement_whatsapp(*, phone: str, first_name: str, event_name: str, message: str, ticket_url: str = "") -> dict | None:
     """Organizer broadcast / urgent announcement over WhatsApp.
 
     Freeform content can only INITIATE a WhatsApp conversation through an approved
-    generic-announcement template with a {message} variable. If that template is
-    configured we use it (reaches everyone); otherwise we fall back to free text,
-    which only reaches guests with an open 24h session.
+    generic-announcement template (vars firstName/eventName/message/ticketLink). If
+    that template is configured we use it (reaches everyone); otherwise we fall back
+    to free text, which only reaches guests with an open 24h session.
     """
     if not _channel_ready("whatsapp", phone):
         return
@@ -225,10 +225,11 @@ async def send_announcement_whatsapp(*, phone: str, first_name: str, event_name:
         return await _send_whatsapp_template(
             phone=phone,
             kind="announcement",
-            params=[first_name, event_name, message],
-            var_keys=["firstName", "eventName", "message"],
+            params=[first_name, event_name, message, ticket_url],
+            var_keys=["firstName", "eventName", "message", "ticketLink"],
         )
-    return await _send_sms_as_whatsapp(phone, message)
+    body = f"{message}\n{ticket_url}" if ticket_url else message
+    return await _send_sms_as_whatsapp(phone, body)
 
 
 async def send_broadcast_whatsapp(*, phone: str, first_name: str, message: str) -> dict | None:

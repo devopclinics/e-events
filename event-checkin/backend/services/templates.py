@@ -16,13 +16,14 @@ Two email shapes:
 import html as _html
 import re
 from html.parser import HTMLParser
+from urllib.parse import urlencode
 
 # ── Supported placeholders ─────────────────────────────────────────────────────
 
 PLACEHOLDERS = [
     "guest_first_name", "guest_last_name", "guest_full_name",
     "event_name", "event_date", "event_time", "organizer_name",
-    "rsvp_link", "ticket_link", "qr_code",
+    "rsvp_link", "ticket_link", "festiome_link", "qr_code",
     "venue_name", "venue_address", "event_location",
     "table_name", "table_group", "ticket_type",
     "experience_steps", "experience_steps_text",
@@ -187,7 +188,7 @@ TEMPLATE_DEFS: dict[str, dict] = {
               "{{qr_code}} inserts the QR image and {{ticket_link}} powers the "
               "View My Ticket button. Optional blocks like {{event_image_block}}, "
               "{{venue_row}}, {{calendar_link_block}}, {{directions_link_block}}, "
-              "{{pairing_cta}}, {{menu_cta}} and {{hub_cta}} (Guest Hub link) "
+              "{{pairing_cta}}, {{menu_cta}} and {{hub_cta}} (FestioHub link) "
               "are generated automatically. "
               "Keep {{qr_code}} and {{ticket_link}} so guests still get a scannable pass."),
     ),
@@ -578,6 +579,27 @@ def build_context(event, guest=None, *, extras: dict | None = None) -> dict:
         ctx["guest_first_name"] = first
         ctx["guest_last_name"] = last
         ctx["guest_full_name"] = f"{first} {last}".strip()
+        # FestioMe guest sessions are issued for confirmed guests, or imported
+        # invitees when an event intentionally has no RSVP step. Never render a
+        # pass-bearing URL for pending/declined guests or a disabled add-on.
+        if (
+            event is not None
+            and getattr(event, "festiome_addon_enabled", False)
+            and getattr(event, "festiome_enabled", False)
+            and getattr(event, "status", "") != "ended"
+            and (
+                getattr(guest, "rsvp_status", "") == "confirmed"
+                or (
+                    getattr(event, "rsvp_enabled", True) is False
+                    and getattr(guest, "rsvp_status", "") == "invited"
+                )
+            )
+            and getattr(guest, "qr_token", None)
+            and getattr(event, "checkin_base_url", None)
+            and getattr(event, "id", None)
+        ):
+            query = urlencode({"event": event.id, "pass": guest.qr_token})
+            ctx["festiome_link"] = f"{event.checkin_base_url.rstrip('/')}/festiome/guest?{query}"
     if extras:
         ctx.update({k: ("" if v is None else v) for k, v in extras.items()})
     return ctx
@@ -594,6 +616,7 @@ def sample_context(event=None) -> dict:
         "organizer_name": getattr(event, "couples_name", None) or "The Host",
         "rsvp_link": "https://events.example/r/sample",
         "ticket_link": "https://events.example/scan/sample",
+        "festiome_link": "https://events.example/festiome/guest?event=sample-event&pass=sample-pass",
         "qr_code": (
             '<img src="https://placehold.co/240x240/png?text=QR" alt="Your admission QR code" '
             'width="240" height="240" style="display:block;width:240px;height:240px;border:0;" />'

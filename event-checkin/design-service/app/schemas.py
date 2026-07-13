@@ -11,6 +11,10 @@ class EventDesignIn(BaseModel):
     theme_config: dict = Field(default_factory=dict)
     wording_config: dict = Field(default_factory=dict)
     asset_config: dict = Field(default_factory=dict)
+    # Public RSVP / Guest Hub composition: hero, organizer, detail and about
+    # visibility plus CTA copy. Kept separate from wording so page structure is
+    # explicit and can be previewed and versioned safely.
+    page_config: dict = Field(default_factory=dict)
 
 
 class EventDesignOut(EventDesignIn):
@@ -34,6 +38,7 @@ class PublicTheme(BaseModel):
     flyer_image_url: str | None = None
     wording: dict = Field(default_factory=dict)
     pass_options: dict = Field(default_factory=dict)
+    page_config: dict = Field(default_factory=dict)
 
 
 class EmailTheme(BaseModel):

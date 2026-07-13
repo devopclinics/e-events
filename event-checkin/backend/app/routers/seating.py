@@ -610,6 +610,14 @@ async def update_member_permissions(
         eu.can_manage_menu = bool(body["can_manage_menu"])
     if "can_view_dashboard" in body:
         eu.can_view_dashboard = bool(body["can_view_dashboard"])
+    if "can_view_guests" in body:
+        eu.can_view_guests = bool(body["can_view_guests"])
+        if not eu.can_view_guests:
+            eu.can_manage_guests = False
+    if "can_manage_guests" in body:
+        eu.can_manage_guests = bool(body["can_manage_guests"])
+        if eu.can_manage_guests:
+            eu.can_view_guests = True
     if "event_role" in body:
         role = str(body["event_role"] or "staff")
         if role not in ("staff", "manager"):
@@ -618,6 +626,8 @@ async def update_member_permissions(
         if role == "manager":
             eu.can_manage_menu = True
             eu.can_view_dashboard = True
+            eu.can_view_guests = True
+            eu.can_manage_guests = True
         else:
             eu.access_level = "edit"
     if "access_level" in body:

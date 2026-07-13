@@ -8,9 +8,9 @@ from fastapi.responses import Response
 from sqlalchemy import delete, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from ..auth import _org_role, is_org_manager, require_event_admin, require_event_member
+from ..auth import _org_role, is_org_manager, require_dashboard_access, require_event_admin, require_event_member
 from ..database import get_db
-from ..models import ConsentForm, ConsentSignature, Event, EventUser, ExperienceEvent, ExperienceStep, ExperienceWorkflow, Guest, GuestExperienceProgress, SeatingTable, TableGroup, TableGroupTable, User
+from ..models import ConsentForm, ConsentSignature, Event, EventUser, ExperienceEvent, ExperienceStep, ExperienceWorkflow, FeedbackSubmission, Guest, GuestExperienceProgress, SeatingTable, TableGroup, TableGroupTable, User
 from .seating import assign_next_seat, group_table_ids
 from ..schemas import (
     ConsentFormOut,
@@ -29,6 +29,7 @@ from ..schemas import (
     ExperienceWorkflowClone,
     ExperienceWorkflowCreate,
     ExperienceWorkflowOut,
+    ProgramSegmentImport,
     GuestConsentStateOut,
     GuestExperienceOut,
     GuestExperienceProgressOut,
@@ -36,6 +37,7 @@ from ..schemas import (
     GuestJourneyOut,
     GuestJourneyStepOut,
     GuestJourneyWorkflowOut,
+    GuestProgramOut,
 )
 from ..services.experience import (
     active_workflow,
@@ -55,11 +57,16 @@ from ..services.experience import (
     unpublish_workflow,
 )
 from ..entitlements import assert_feature_allowed
+from ..entitlements import can_use_paid_channels, last_credit_ledger_id, take_message_credit
+from ..ratelimit import rate_limit
 from ..timeutil import EVENT_TZ
 from services.email_service import send_simple_email
+from services import messaging
+from services.credit_ledger import send_with_credit_ledger
 from services.templates import build_context as build_template_context
 from ..template_resolve import email_or_default as template_email_or_default, load_overrides
 from ..services.festiome_outbox import queue_announcement
+from ..services.program import feedback_availability, program_state
 
 router = APIRouter()
 
@@ -582,7 +589,7 @@ async def _experience_enabled_event(event_id: str, db: AsyncSession) -> Event:
 # ── Guest-facing surface (Guest Hub journey) ─────────────────────────────────
 # Step types a guest may complete themselves from the Hub. Kept deliberately
 # small: everything else stays staff-driven and is shown read-only.
-GUEST_SELF_SERVICE_STEP_TYPES = {"consent"}
+GUEST_SELF_SERVICE_STEP_TYPES = {"consent", "feedback"}
 _PENDING_STATUSES = {"not_started", "available", "failed"}
 
 
@@ -991,6 +998,35 @@ async def save_consent_form(
     return form
 
 
+@router.delete("/{event_id}/experience/consent-form")
+async def disable_consent_form(
+    event_id: str,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_event_admin),
+):
+    event = await db.get(Event, event_id)
+    if not event:
+        raise HTTPException(404, "Event not found")
+    form = await _active_consent(event_id, db)
+    if not form:
+        return {"disabled": False, "message": "Consent form is already disabled"}
+    form.is_active = False
+    workflow = await active_workflow(event_id, db)
+    consent_step = next((step for step in (workflow.steps if workflow else []) if step.type == "consent" and step.enabled), None)
+    if workflow:
+        db.add(ExperienceEvent(
+            event_id=event_id,
+            workflow_id=workflow.id,
+            step_id=consent_step.id if consent_step else None,
+            actor_user_id=current_user.id,
+            event_type="consent_form_disabled",
+            source="admin",
+            payload={"form_id": form.id, "form_version": form.version},
+        ))
+    await db.commit()
+    return {"disabled": True, "form_id": form.id}
+
+
 @router.get("/{event_id}/experience/consent-signatures", response_model=list[ConsentSignatureOut])
 async def list_consent_signatures(
     event_id: str,
@@ -1108,6 +1144,53 @@ async def create_step(
     await db.commit()
     await db.refresh(step)
     return step
+
+
+@router.post("/{event_id}/experience/workflows/{workflow_id}/program/import", response_model=list[ExperienceStepOut], status_code=201)
+async def import_program_segments(
+    event_id: str,
+    workflow_id: str,
+    data: ProgramSegmentImport,
+    db: AsyncSession = Depends(get_db),
+    _: User = Depends(require_event_admin),
+):
+    """Bulk-create agenda steps in a draft only; publishing remains explicit."""
+    event = await db.get(Event, event_id)
+    if not event:
+        raise HTTPException(404, "Event not found")
+    _assert_experience_plan(event)
+    workflow = await _load_scoped_workflow(event_id, workflow_id, db)
+    _ensure_draft(workflow)
+    requested = [item.key for item in data.items]
+    if len(requested) != len(set(requested)):
+        raise HTTPException(422, "Program item keys must be unique")
+    existing = {step.key for step in workflow.steps}
+    conflict = next((key for key in requested if key in existing), None)
+    if conflict:
+        raise HTTPException(409, f"A step with key '{conflict}' already exists")
+    created = []
+    order = max([step.sort_order for step in workflow.steps] or [0]) + 10
+    for item in data.items:
+        config = {"program": {"category": item.category} if item.category else {}}
+        if item.announce:
+            config["announce"] = {
+                "enabled": True,
+                **({"title": item.announcement_title} if item.announcement_title else {}),
+                **({"body": item.announcement_body} if item.announcement_body else {}),
+            }
+        step = ExperienceStep(
+            workflow_id=workflow.id, key=item.key, type="custom", title=item.title,
+            description=item.description, sort_order=order, required=False, enabled=True,
+            is_segment=True, starts_offset_seconds=item.starts_offset_seconds,
+            duration_seconds=item.duration_seconds, config=config,
+        )
+        order += 10
+        db.add(step)
+        created.append(step)
+    await db.commit()
+    for step in created:
+        await db.refresh(step)
+    return created
 
 
 @router.put("/{event_id}/experience/workflows/{workflow_id}/steps/{step_id}", response_model=ExperienceStepOut)
@@ -1555,6 +1638,7 @@ async def my_experience(
         steps=steps_out,
         next_steps=next_out,
         consent=consent_state,
+        program=GuestProgramOut(**(await program_state(event, loaded, db))),
         completed_count=completed,
         total_count=len(steps_out),
     )
@@ -1619,3 +1703,464 @@ async def sign_my_consent(
     await db.commit()
     await db.refresh(signature)
     return signature
+
+
+# ── Feedback Experience step ────────────────────────────────────────────────
+
+_FEEDBACK_TYPES = {"rating", "nps", "single_choice", "multi_choice", "yes_no", "text"}
+
+
+def _feedback_questions(step: ExperienceStep) -> list[dict]:
+    raw = (step.config or {}).get("feedback") or {}
+    questions = raw.get("questions") if isinstance(raw, dict) else []
+    return [q for q in (questions or []) if isinstance(q, dict) and q.get("id") and q.get("prompt")]
+
+
+def _parse_feedback_time(value) -> datetime | None:
+    if not value:
+        return None
+    if isinstance(value, datetime):
+        return value.replace(tzinfo=None)
+    try:
+        return datetime.fromisoformat(str(value).replace("Z", "+00:00")).replace(tzinfo=None)
+    except (TypeError, ValueError):
+        return None
+
+
+def _feedback_availability(step: ExperienceStep) -> dict:
+    feedback = (step.config or {}).get("feedback") or {}
+    now = datetime.utcnow()
+    opens_at = _parse_feedback_time(feedback.get("opens_at"))
+    closes_at = _parse_feedback_time(feedback.get("closes_at"))
+    configured = str(feedback.get("status") or "open").lower()
+    if configured == "closed":
+        status = "closed"
+    elif opens_at and now < opens_at:
+        status = "scheduled"
+    elif closes_at and now > closes_at:
+        status = "closed"
+    else:
+        status = "open"
+    return {"status": status, "open": status == "open", "opens_at": opens_at, "closes_at": closes_at}
+
+
+async def _feedback_audience_allows(step: ExperienceStep, guest: Guest, db: AsyncSession) -> bool:
+    feedback = (step.config or {}).get("feedback") or {}
+    audience = feedback.get("audience", "all") if isinstance(feedback, dict) else "all"
+    if audience == "checked_in":
+        return bool(guest.admitted)
+    if audience in {"session", "session_attendees"}:
+        target = str(feedback.get("session_step_id") or "")
+        if not target:
+            target_key = str(feedback.get("session_step_key") or "")
+            if target_key:
+                target = str(await db.scalar(select(ExperienceStep.id).where(
+                    ExperienceStep.workflow_id == step.workflow_id, ExperienceStep.key == target_key
+                ).limit(1)) or "")
+        if not target:
+            return False
+        status = await db.scalar(select(GuestExperienceProgress.status).where(
+            GuestExperienceProgress.guest_id == guest.id,
+            GuestExperienceProgress.step_id == target,
+            GuestExperienceProgress.status.in_(["completed", "overridden"]),
+        ).limit(1))
+        return bool(status)
+    return True
+
+
+def _question_visible(question: dict, answers: dict) -> bool:
+    condition = question.get("show_if")
+    if not isinstance(condition, dict) or not condition.get("question_id"):
+        return True
+    actual = answers.get(str(condition["question_id"]))
+    expected = condition.get("value")
+    if isinstance(actual, list):
+        return str(expected) in [str(v) for v in actual]
+    return str(actual).lower() == str(expected).lower()
+
+
+def _validate_feedback_answers(questions: list[dict], answers: dict) -> dict:
+    if not isinstance(answers, dict):
+        raise HTTPException(422, "Feedback answers must be an object")
+    cleaned = {}
+    for question in questions:
+        qid = str(question["id"])
+        kind = str(question.get("type") or "text")
+        if kind not in _FEEDBACK_TYPES:
+            raise HTTPException(422, f"Unsupported feedback question type: {kind}")
+        if not _question_visible(question, answers):
+            continue
+        value = answers.get(qid)
+        missing = value is None or value == [] or (isinstance(value, str) and not value.strip())
+        if question.get("required") and missing:
+            raise HTTPException(422, f"Please answer: {question['prompt']}")
+        if missing:
+            continue
+        if kind == "rating":
+            try: value = int(value)
+            except (TypeError, ValueError): raise HTTPException(422, f"Invalid rating for: {question['prompt']}")
+            if value < 1 or value > 5: raise HTTPException(422, "Ratings must be between 1 and 5")
+        elif kind == "nps":
+            try: value = int(value)
+            except (TypeError, ValueError): raise HTTPException(422, f"Invalid score for: {question['prompt']}")
+            if value < 0 or value > 10: raise HTTPException(422, "Recommendation scores must be between 0 and 10")
+        elif kind == "yes_no":
+            value = str(value).lower()
+            if value not in {"yes", "no"}: raise HTTPException(422, "Yes/No answers must be yes or no")
+        elif kind == "single_choice":
+            value = str(value).strip()
+            if value not in [str(v) for v in (question.get("options") or [])]:
+                raise HTTPException(422, f"Invalid choice for: {question['prompt']}")
+        elif kind == "multi_choice":
+            if not isinstance(value, list):
+                raise HTTPException(422, f"Select one or more choices for: {question['prompt']}")
+            allowed = [str(v) for v in (question.get("options") or [])]
+            value = list(dict.fromkeys(str(v).strip() for v in value if str(v).strip()))
+            if any(v not in allowed for v in value):
+                raise HTTPException(422, f"Invalid choice for: {question['prompt']}")
+        else:
+            value = str(value).strip()[:5000]
+        cleaned[qid] = value
+    return cleaned
+
+
+@router.get("/{event_id}/experience/me/feedback")
+async def my_feedback(event_id: str, token: str = Query(...), db: AsyncSession = Depends(get_db)):
+    guest = await _guest_by_token(event_id, token, db)
+    event = await _experience_enabled_event(event_id, db)
+    workflow = await active_workflow(event_id, db)
+    if not workflow:
+        return {"forms": []}
+    loaded = await load_workflow(workflow.id, db)
+    forms = []
+    for step in sorted((loaded.steps if loaded else []), key=lambda s: (s.sort_order, s.title)):
+        questions = _feedback_questions(step)
+        if step.type != "feedback" or not step.enabled or not questions or not await _feedback_audience_allows(step, guest, db):
+            continue
+        program_window = await feedback_availability(event, loaded, db, step.id)
+        if program_window["controlled"] and not program_window["open"]:
+            continue
+        existing = await db.scalar(select(FeedbackSubmission).where(
+            FeedbackSubmission.step_id == step.id, FeedbackSubmission.guest_id == guest.id
+        ).limit(1))
+        feedback = (step.config or {}).get("feedback") or {}
+        availability = _feedback_availability(step)
+        allow_edit = bool(feedback.get("allow_edit"))
+        forms.append({
+            "step_id": step.id, "title": step.title, "description": step.description,
+            "questions": questions, "anonymous": bool(feedback.get("anonymous")),
+            "submitted": bool(existing), "submitted_at": existing.submitted_at if existing else None,
+            "answers": existing.answers if existing else {},
+            **availability, "allow_edit": allow_edit,
+            "can_edit": bool(existing and allow_edit and availability["open"]),
+            "program_window": program_window["window"],
+        })
+    return {"event_id": event.id, "forms": forms}
+
+
+@router.post("/{event_id}/experience/me/feedback", status_code=201)
+async def submit_my_feedback(
+    event_id: str, data: dict, token: str = Query(...), db: AsyncSession = Depends(get_db),
+    _: None = Depends(rate_limit(limit=12, window=60, scope="feedback_submit", key="event_id")),
+):
+    guest = await _guest_by_token(event_id, token, db)
+    await _experience_enabled_event(event_id, db)
+    workflow = await active_workflow(event_id, db)
+    step_id = str(data.get("step_id") or "")
+    step = await db.get(ExperienceStep, step_id)
+    if not workflow or not step or step.workflow_id != workflow.id or step.type != "feedback" or not step.enabled:
+        raise HTTPException(404, "Feedback form not found")
+    if not await _feedback_audience_allows(step, guest, db):
+        raise HTTPException(403, "This feedback form is not available for this guest")
+    loaded = await load_workflow(workflow.id, db)
+    program_window = await feedback_availability(await _experience_enabled_event(event_id, db), loaded or workflow, db, step.id)
+    if program_window["controlled"] and not program_window["open"]:
+        raise HTTPException(409, "This feedback form is not open")
+    questions = _feedback_questions(step)
+    answers = _validate_feedback_answers(questions, data.get("answers") or {})
+    feedback = (step.config or {}).get("feedback") or {}
+    availability = _feedback_availability(step)
+    if not availability["open"]:
+        raise HTTPException(409, "This feedback form is not open")
+    submission = await db.scalar(select(FeedbackSubmission).where(
+        FeedbackSubmission.step_id == step.id, FeedbackSubmission.guest_id == guest.id
+    ).limit(1))
+    was_existing = bool(submission)
+    if submission:
+        if not feedback.get("allow_edit"):
+            raise HTTPException(409, "This feedback response has already been submitted")
+        submission.answers = answers
+        submission.question_snapshot = questions
+        submission.updated_at = datetime.utcnow()
+    else:
+        submission = FeedbackSubmission(
+            event_id=event_id, workflow_id=workflow.id, step_id=step.id, guest_id=guest.id,
+            answers=answers, question_snapshot=questions, anonymous=bool(feedback.get("anonymous")),
+        )
+        db.add(submission)
+    await db.flush()
+    progress = await db.scalar(select(GuestExperienceProgress).where(
+        GuestExperienceProgress.step_id == step.id, GuestExperienceProgress.guest_id == guest.id
+    ).limit(1))
+    if not progress:
+        progress = GuestExperienceProgress(
+            event_id=event_id, workflow_id=workflow.id, step_id=step.id, guest_id=guest.id,
+        )
+        db.add(progress)
+    progress.status = "completed"
+    progress.completed_at = datetime.utcnow()
+    progress.completed_by_source = "guest"
+    progress.progress_metadata = {"feedback_submission_id": submission.id}
+    db.add(ExperienceEvent(
+        event_id=event_id, workflow_id=workflow.id, step_id=step.id, guest_id=guest.id,
+        event_type="feedback_updated" if was_existing else "feedback_submitted", source="guest", payload={"anonymous": bool(feedback.get("anonymous"))},
+    ))
+    await db.commit()
+    await db.refresh(submission)
+    return {"id": submission.id, "step_id": step.id, "submitted_at": submission.submitted_at}
+
+
+def _feedback_aggregates(questions: list[dict], responses: list[dict]) -> list[dict]:
+    aggregates = []
+    for question in questions:
+        qid = str(question["id"])
+        kind = str(question.get("type") or "text")
+        values = [r["answers"].get(qid) for r in responses if r["answers"].get(qid) not in (None, "", [])]
+        item = {"question_id": qid, "prompt": question["prompt"], "type": kind, "answer_count": len(values)}
+        if kind in {"rating", "nps"}:
+            numeric = [float(v) for v in values if isinstance(v, (int, float)) or str(v).replace(".", "", 1).isdigit()]
+            item["average"] = round(sum(numeric) / len(numeric), 2) if numeric else None
+            item["distribution"] = {str(n): sum(1 for v in numeric if int(v) == n) for n in range(1 if kind == "rating" else 0, 6 if kind == "rating" else 11)}
+            if kind == "nps" and numeric:
+                promoters = sum(1 for v in numeric if v >= 9)
+                detractors = sum(1 for v in numeric if v <= 6)
+                item.update({
+                    "nps": round((promoters - detractors) * 100 / len(numeric)),
+                    "promoters": promoters,
+                    "passives": len(numeric) - promoters - detractors,
+                    "detractors": detractors,
+                })
+        elif kind in {"single_choice", "multi_choice", "yes_no"}:
+            options = [str(v) for v in question.get("options") or []]
+            if kind == "yes_no": options = ["yes", "no"]
+            flat = [str(choice) for value in values for choice in (value if isinstance(value, list) else [value])]
+            item["distribution"] = {option: flat.count(option) for option in options}
+        elif kind == "text":
+            item["comments"] = [str(v) for v in values]
+        aggregates.append(item)
+    return aggregates
+
+
+async def _feedback_results_data(
+    event_id: str, db: AsyncSession, *, search: str = "", admitted: bool | None = None,
+    submitted_from: datetime | None = None, submitted_to: datetime | None = None,
+    guest_role: str = "", ticket_type_id: str = "", table_group_id: str = "",
+) -> dict:
+    workflow = await active_workflow(event_id, db)
+    if not workflow:
+        return {"forms": []}
+    loaded = await load_workflow(workflow.id, db)
+    forms = []
+    for step in sorted((loaded.steps if loaded else []), key=lambda s: (s.sort_order, s.title)):
+        questions = _feedback_questions(step)
+        if step.type != "feedback" or not questions:
+            continue
+        query = (select(FeedbackSubmission, Guest).join(Guest, Guest.id == FeedbackSubmission.guest_id)
+            .where(FeedbackSubmission.event_id == event_id, FeedbackSubmission.step_id == step.id))
+        if admitted is not None: query = query.where(Guest.admitted == admitted)
+        if guest_role: query = query.where(Guest.rsvp_guest_type == guest_role)
+        if ticket_type_id: query = query.where(Guest.ticket_type_id == ticket_type_id)
+        if table_group_id: query = query.where(Guest.assigned_table_group_id == table_group_id)
+        if submitted_from: query = query.where(FeedbackSubmission.submitted_at >= submitted_from)
+        if submitted_to: query = query.where(FeedbackSubmission.submitted_at <= submitted_to)
+        if search:
+            needle = f"%{search.strip()}%"
+            query = query.where(or_(Guest.first_name.ilike(needle), Guest.last_name.ilike(needle), Guest.email.ilike(needle)))
+        rows = (await db.execute(query.order_by(FeedbackSubmission.submitted_at.desc()))).all()
+        responses = [{
+            "id": submission.id,
+            "guest_name": None if submission.anonymous else _guest_display_name(guest),
+            "submitted_at": submission.submitted_at,
+            "answers": submission.answers,
+        } for submission, guest in rows]
+        guest_query = select(Guest).where(Guest.event_id == event_id)
+        if admitted is not None: guest_query = guest_query.where(Guest.admitted == admitted)
+        if guest_role: guest_query = guest_query.where(Guest.rsvp_guest_type == guest_role)
+        if ticket_type_id: guest_query = guest_query.where(Guest.ticket_type_id == ticket_type_id)
+        if table_group_id: guest_query = guest_query.where(Guest.assigned_table_group_id == table_group_id)
+        if search:
+            needle = f"%{search.strip()}%"
+            guest_query = guest_query.where(or_(Guest.first_name.ilike(needle), Guest.last_name.ilike(needle), Guest.email.ilike(needle)))
+        guests = (await db.scalars(guest_query)).all()
+        eligible_count = 0
+        for guest in guests:
+            if await _feedback_audience_allows(step, guest, db):
+                eligible_count += 1
+        response_count = len(responses)
+        feedback = (step.config or {}).get("feedback") or {}
+        forms.append({
+            "step_id": step.id, "title": step.title, "questions": questions,
+            "audience": feedback.get("audience", "all"), "availability": _feedback_availability(step),
+            "eligible_count": eligible_count, "response_count": response_count,
+            "response_rate": round(response_count * 100 / eligible_count, 1) if eligible_count else 0,
+            "aggregates": _feedback_aggregates(questions, responses), "responses": responses,
+        })
+    return {"workflow_id": workflow.id, "forms": forms}
+
+
+@router.get("/{event_id}/experience/feedback/results")
+async def feedback_results(
+    event_id: str, search: str = Query("", max_length=120), admitted: bool | None = Query(None),
+    submitted_from: datetime | None = Query(None), submitted_to: datetime | None = Query(None),
+    guest_role: str = Query("", max_length=120), ticket_type_id: str = Query("", max_length=36), table_group_id: str = Query("", max_length=36),
+    db: AsyncSession = Depends(get_db), _: User = Depends(require_dashboard_access),
+):
+    await _experience_enabled_event(event_id, db)
+    return await _feedback_results_data(event_id, db, search=search, admitted=admitted, submitted_from=submitted_from, submitted_to=submitted_to,
+        guest_role=guest_role, ticket_type_id=ticket_type_id, table_group_id=table_group_id)
+
+
+@router.get("/{event_id}/experience/feedback/export.csv")
+async def feedback_export(
+    event_id: str, search: str = Query("", max_length=120), admitted: bool | None = Query(None),
+    submitted_from: datetime | None = Query(None), submitted_to: datetime | None = Query(None),
+    guest_role: str = Query("", max_length=120), ticket_type_id: str = Query("", max_length=36), table_group_id: str = Query("", max_length=36),
+    db: AsyncSession = Depends(get_db), _: User = Depends(require_dashboard_access),
+):
+    await _experience_enabled_event(event_id, db)
+    data = await _feedback_results_data(event_id, db, search=search, admitted=admitted, submitted_from=submitted_from, submitted_to=submitted_to,
+        guest_role=guest_role, ticket_type_id=ticket_type_id, table_group_id=table_group_id)
+    out = io.StringIO()
+    writer = csv.writer(out)
+    writer.writerow(["form", "guest", "submitted_at", "question", "answer"])
+    for form in data["forms"]:
+        prompts = {str(q["id"]): q["prompt"] for q in form["questions"]}
+        for response in form["responses"]:
+            for qid, answer in response["answers"].items():
+                writer.writerow([form["title"], response["guest_name"] or "Anonymous", response["submitted_at"], prompts.get(str(qid), qid), answer])
+    return Response(
+        content=out.getvalue(), media_type="text/csv",
+        headers={"Content-Disposition": f'attachment; filename="feedback-{event_id}.csv"'},
+    )
+
+
+async def _feedback_nonresponders(event_id: str, step_id: str, db: AsyncSession) -> tuple[Event, ExperienceStep, list[Guest]]:
+    event = await _experience_enabled_event(event_id, db)
+    workflow = await active_workflow(event_id, db)
+    step = await db.get(ExperienceStep, step_id)
+    if not workflow or not step or step.workflow_id != workflow.id or step.type != "feedback":
+        raise HTTPException(404, "Feedback form not found")
+    submitted_ids = set((await db.scalars(select(FeedbackSubmission.guest_id).where(
+        FeedbackSubmission.event_id == event_id, FeedbackSubmission.step_id == step_id
+    ))).all())
+    guests = (await db.scalars(select(Guest).where(Guest.event_id == event_id).order_by(Guest.last_name, Guest.first_name))).all()
+    eligible = [g for g in guests if g.id not in submitted_ids and await _feedback_audience_allows(step, g, db)]
+    return event, step, eligible
+
+
+def _feedback_reminder_preview(event: Event, guests: list[Guest], channels: list[str]) -> dict:
+    supported = [c for c in channels if c in {"email", "sms", "whatsapp"}]
+    deliverable = {
+        "email": sum(1 for g in guests if event.notify_email and g.email),
+        "sms": sum(1 for g in guests if event.notify_sms and g.phone and g.sms_consent),
+        "whatsapp": sum(1 for g in guests if event.notify_whatsapp and g.phone and g.whatsapp_consent),
+    }
+    paid = can_use_paid_channels(event)
+    credits = sum(deliverable[c] for c in supported if c in {"sms", "whatsapp"}) if paid else 0
+    return {
+        "nonresponders": len(guests), "channels": supported,
+        "deliverable": {c: deliverable[c] for c in supported},
+        "paid_channels_available": paid, "credits_required": credits,
+        "credits_available": event.message_credits or 0,
+    }
+
+
+@router.get("/{event_id}/experience/feedback/{step_id}/reminders/preview")
+async def feedback_reminder_preview(
+    event_id: str, step_id: str, channels: str = Query("email"),
+    db: AsyncSession = Depends(get_db), _: User = Depends(require_event_admin),
+):
+    event, _, guests = await _feedback_nonresponders(event_id, step_id, db)
+    return _feedback_reminder_preview(event, guests, [c.strip().lower() for c in channels.split(",")])
+
+
+@router.post("/{event_id}/experience/feedback/{step_id}/reminders")
+async def send_feedback_reminders(
+    event_id: str, step_id: str, data: dict, background_tasks: BackgroundTasks,
+    db: AsyncSession = Depends(get_db), _: User = Depends(require_event_admin),
+):
+    event, step, guests = await _feedback_nonresponders(event_id, step_id, db)
+    channels = [str(c).lower() for c in (data.get("channels") or ["email"]) if str(c).lower() in {"email", "sms", "whatsapp"}]
+    if not channels:
+        raise HTTPException(422, "Choose at least one reminder channel")
+    subject = str(data.get("subject") or f"Share your feedback about {event.name}")[:200]
+    message = str(data.get("message") or f"Please take a moment to share your feedback about {event.name}.").strip()[:1500]
+    queued = {"email": 0, "sms": 0, "whatsapp": 0}
+    paid = can_use_paid_channels(event)
+    for guest in guests:
+        token = guest.invite_token or guest.qr_token
+        link = f"{event.checkin_base_url.rstrip('/')}/r/{token}#feedback"
+        personalized = f"{message}\n{link}"
+        if "email" in channels and event.notify_email and guest.email:
+            body = f"<p>Hi {html.escape(guest.first_name)},</p><p>{html.escape(message)}</p><p><a href=\"{html.escape(link)}\">Open feedback</a></p>"
+            background_tasks.add_task(send_simple_email, guest.email, subject, body, event.id, None, guest.id, "feedback_reminder")
+            queued["email"] += 1
+        if "sms" in channels and paid and event.notify_sms and guest.phone and guest.sms_consent:
+            if take_message_credit(event, "sms", reason="feedback_reminder", guest_id=guest.id):
+                background_tasks.add_task(send_with_credit_ledger, last_credit_ledger_id(event), messaging.send_broadcast_sms,
+                    phone=guest.phone, first_name=guest.first_name, message=personalized)
+                queued["sms"] += 1
+        if "whatsapp" in channels and paid and event.notify_whatsapp and guest.phone and guest.whatsapp_consent:
+            if take_message_credit(event, "whatsapp", reason="feedback_reminder", guest_id=guest.id):
+                background_tasks.add_task(send_with_credit_ledger, last_credit_ledger_id(event), messaging.send_broadcast_whatsapp,
+                    phone=guest.phone, first_name=guest.first_name, message=personalized)
+                queued["whatsapp"] += 1
+    db.add(ExperienceEvent(
+        event_id=event_id, workflow_id=step.workflow_id, step_id=step.id,
+        event_type="feedback_reminders_queued", source="admin",
+        payload={"channels": channels, "queued": queued, "nonresponders": len(guests)},
+    ))
+    await db.commit()
+    return {"nonresponders": len(guests), "queued": queued, "credits_remaining": event.message_credits or 0}
+
+
+@router.post("/{event_id}/experience/feedback/prepare-draft")
+async def prepare_feedback_draft(
+    event_id: str, db: AsyncSession = Depends(get_db), user: User = Depends(require_event_admin),
+):
+    """Clone the live workflow and safely convert the legacy reminder in the draft only."""
+    workflow = await active_workflow(event_id, db)
+    if not workflow:
+        raise HTTPException(404, "No published Experience workflow found")
+    loaded = await load_workflow(workflow.id, db)
+    clone = await clone_workflow(loaded or workflow, db, name=f"{workflow.name} — feedback draft", actor_user_id=user.id)
+    target = next((s for s in clone.steps if s.type == "feedback"), None)
+    if not target:
+        target = next((s for s in clone.steps if "feedback" in f"{s.key} {s.title}".lower()), None)
+    if target:
+        target.type = "feedback"
+        config = dict(target.config or {})
+        config["owner"] = "guest"
+        config["feedback"] = {
+            "audience": "checked_in", "anonymous": False, "status": "open", "allow_edit": True,
+            "questions": [
+                {"id": "overall_rating", "type": "rating", "prompt": "How would you rate your overall experience?", "required": True},
+                {"id": "recommend", "type": "nps", "prompt": "How likely are you to recommend this event?", "required": True},
+                {"id": "comments", "type": "text", "prompt": "What should we keep or improve?", "required": False},
+            ],
+        }
+        target.config = config
+    else:
+        db.add(ExperienceStep(
+            workflow_id=clone.id, key="feedback_prompt", type="feedback", title="Feedback",
+            description="Invite attendees to share feedback after the event.", sort_order=9990,
+            required=False, enabled=True, config={"owner": "guest", "feedback": {
+                "audience": "checked_in", "anonymous": False, "status": "open", "allow_edit": True,
+                "questions": [
+                    {"id": "overall_rating", "type": "rating", "prompt": "How would you rate your overall experience?", "required": True},
+                    {"id": "comments", "type": "text", "prompt": "What should we keep or improve?", "required": False},
+                ],
+            }},
+        ))
+    await db.commit()
+    return ExperienceWorkflowOut.model_validate(await load_workflow(clone.id, db))

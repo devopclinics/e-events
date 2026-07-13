@@ -154,7 +154,7 @@ const pillars = [
     items: ['Table groups', 'Zone permissions', 'Capacity rules'],
   },
   {
-    title: 'Messaging & Guest Hub',
+    title: 'Messaging & FestioHub',
     copy: 'Templates, email/SMS/WhatsApp/MMS, broadcasts, announcements, guest chat, and inbox.',
     items: ['Editable templates', 'Message Host', 'Admin moderation'],
   },
@@ -199,7 +199,7 @@ const designStudioBullets = [
   'Edit wording and colors',
   'Preview mobile and desktop',
   'Download PNG/PDF flyers',
-  'Reuse design across RSVP, Guest Hub, Festio Passes, and emails',
+  'Reuse design across RSVP, FestioHub, Festio Passes, and emails',
 ]
 
 const journey = [
@@ -284,7 +284,7 @@ const comparisonRows = [
   ['QR passes', false, true, true],
   ['Seating/table assignment', false, false, true],
   ['Guest messaging', 'Basic', false, true],
-  ['Guest Hub/chat', false, false, true],
+  ['FestioHub/chat', false, false, true],
   ['Zone/gate access rules', false, 'Basic', true],
   ['Menu/orders', false, false, true],
   ['Registry/deliveries', false, false, true],
@@ -363,7 +363,7 @@ function HeroVisual() {
               </div>
             </div>
             <div className="rounded-xl bg-white/10 p-3">
-              <div className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Guest Hub</div>
+              <div className="text-[10px] font-bold uppercase tracking-wider text-slate-400">FestioHub</div>
               <div className="mt-2 rounded-lg bg-white/10 p-2 text-xs text-slate-200">Announcement sent: Doors open at 5:30 PM.</div>
               <div className="mt-2 rounded-lg bg-teal-300/20 p-2 text-xs text-teal-100">3 guest questions waiting</div>
             </div>
@@ -958,7 +958,7 @@ export default function LandingPage() {
               <SectionHeader
                 eyebrow="Design Studio"
                 title="Beautiful pages and flyers, without design stress."
-                copy="Choose from template families, upload your own flyer, customize the wording, match your event colors, and publish a polished RSVP page, Guest Hub, Festio Pass, email style, and downloadable flyer in minutes."
+                copy="Choose from template families, upload your own flyer, customize the wording, match your event colors, and publish a polished RSVP page, FestioHub, Festio Pass, email style, and downloadable flyer in minutes."
               />
               <div className="mt-8 grid gap-3 sm:grid-cols-2">
                 {designStudioBullets.map((point) => (

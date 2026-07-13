@@ -30,6 +30,7 @@ from ..schemas import (
 )
 from ..auth import require_paid_event_admin, require_paid_event_member
 from ..entitlements import can_use_paid_channels, last_credit_ledger_id, take_message_credit
+from ..channels import messaging_channel_blocked
 from ..template_resolve import load_overrides, channel_text as template_channel_text, channel_text_or_default, email_or_default
 from services import messaging
 from services.credit_ledger import send_with_credit_ledger
@@ -237,7 +238,7 @@ async def send_registry_message(
             "rsvp_link": registry_url,
             "message": ev.registry_message or "",
         })
-        if "email" in channels and ev.notify_email and guest.email:
+        if "email" in channels and ev.notify_email and guest.email and not messaging_channel_blocked(ev, "email"):
             subj, html = email_or_default(overrides, "registry_message", ctx)
             if html:
                 background_tasks.add_task(

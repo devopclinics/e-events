@@ -69,6 +69,12 @@ class EventUser(Base):
     can_manage_menu: Mapped[bool] = mapped_column(Boolean, default=False)
     # Lets a non-admin staffer open the live event dashboard (admins always can).
     can_view_dashboard: Mapped[bool] = mapped_column(Boolean, default=False)
+    # Optional, event-scoped guest-directory access for officials. This is
+    # intentionally independent of manager/admin access and is read-only.
+    can_view_guests: Mapped[bool] = mapped_column(Boolean, default=False)
+    # Guest operations (add/edit/remove, approvals, invitations, imports) without
+    # granting access to event setup, Team & Settings, or other admin modules.
+    can_manage_guests: Mapped[bool] = mapped_column(Boolean, default=False)
     # Event-scoped role: "staff" (default scanner/day-of) or "manager"
     # (event owner/admin for this assigned event only).
     event_role: Mapped[str] = mapped_column(String(30), default="staff")
@@ -124,6 +130,11 @@ class Event(Base):
     # Experience workflow engine. Off by default so legacy RSVP, QR check-in,
     # seating, menu, and messaging flows remain unchanged until explicitly enabled.
     experience_enabled: Mapped[bool] = mapped_column(Boolean, default=False)
+    # Time-driven live program. Separate from Experience itself and off by
+    # default; enabling it only surfaces timed agenda items and never alters
+    # RSVP, admission, seating, or existing feedback steps.
+    live_program_enabled: Mapped[bool] = mapped_column(Boolean, default=False)
+    live_program_enabled_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     # Paid add-on entitlement + organizer opt-in. Gates whether FestioMe is
     # offered for this event at all; distinct from festiome_enabled below, which
     # only caches the remote service link state.
@@ -139,6 +150,8 @@ class Event(Base):
     partner_pairing_enabled: Mapped[bool] = mapped_column(Boolean, default=False)
     venue_name: Mapped[str | None] = mapped_column(String(255), nullable=True)
     venue_address: Mapped[str | None] = mapped_column(Text, nullable=True)
+    hotel_name: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    hotel_address: Mapped[str | None] = mapped_column(Text, nullable=True)
     admission_note: Mapped[str | None] = mapped_column(Text, nullable=True)
     # Unguessable public token for the registry page (cf. invite_token). Nullable
     # so existing rows backfill lazily; new events get one via the default.
@@ -309,6 +322,11 @@ class ExperienceStep(Base):
     sort_order: Mapped[int] = mapped_column(Integer, default=0)
     required: Mapped[bool] = mapped_column(Boolean, default=True)
     enabled: Mapped[bool] = mapped_column(Boolean, default=True)
+    # Optional timed agenda metadata. Operational Experience steps leave these
+    # NULL/false and retain their existing behavior.
+    starts_offset_seconds: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    duration_seconds: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    is_segment: Mapped[bool] = mapped_column(Boolean, default=False)
     conditions: Mapped[dict | None] = mapped_column(JSON, nullable=True)
     config: Mapped[dict | None] = mapped_column(JSON, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
@@ -353,6 +371,26 @@ class ExperienceEvent(Base):
     source: Mapped[str] = mapped_column(String(30), default="system")
     payload: Mapped[dict | None] = mapped_column(JSON, nullable=True)
     occurred_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, index=True)
+
+
+class FeedbackSubmission(Base):
+    """One guest response to one published Feedback Experience step."""
+    __tablename__ = "feedback_submissions"
+    __table_args__ = (
+        UniqueConstraint("guest_id", "step_id", name="uq_feedback_submission_guest_step"),
+        Index("ix_feedback_submission_event_step", "event_id", "step_id"),
+    )
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+    event_id: Mapped[str] = mapped_column(String(36), ForeignKey("events.id"), index=True)
+    workflow_id: Mapped[str] = mapped_column(String(36), ForeignKey("experience_workflows.id"), index=True)
+    step_id: Mapped[str] = mapped_column(String(36), ForeignKey("experience_steps.id"), index=True)
+    guest_id: Mapped[str] = mapped_column(String(36), ForeignKey("guests.id"), index=True)
+    answers: Mapped[dict] = mapped_column(JSON, default=dict)
+    question_snapshot: Mapped[list] = mapped_column(JSON, default=list)
+    anonymous: Mapped[bool] = mapped_column(Boolean, default=False)
+    submitted_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, index=True)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
 
 class ConsentForm(Base):
@@ -854,6 +892,26 @@ class EventMessageDeliveryLog(Base):
     provider: Mapped[str | None] = mapped_column(String(60), nullable=True)
     provider_message_id: Mapped[str | None] = mapped_column(String(255), nullable=True)
     error_message: Mapped[str | None] = mapped_column(Text, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+
+class GuestPushSubscription(Base):
+    """A guest-approved browser/device endpoint for FestioHub Web Push.
+
+    The endpoint and encryption keys remain server-side; the public event page
+    never receives another guest's subscription information.
+    """
+    __tablename__ = "guest_push_subscriptions"
+    __table_args__ = (UniqueConstraint("endpoint", name="uq_guest_push_subscription_endpoint"),)
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+    event_id: Mapped[str] = mapped_column(String(36), ForeignKey("events.id"), index=True)
+    guest_id: Mapped[str] = mapped_column(String(36), ForeignKey("guests.id"), index=True)
+    endpoint: Mapped[str] = mapped_column(Text)
+    p256dh: Mapped[str] = mapped_column(String(255))
+    auth: Mapped[str] = mapped_column(String(255))
+    user_agent: Mapped[str | None] = mapped_column(String(500), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 

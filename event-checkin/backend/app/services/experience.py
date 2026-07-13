@@ -393,6 +393,9 @@ async def clone_workflow(
             sort_order=step.sort_order,
             required=step.required,
             enabled=step.enabled,
+            starts_offset_seconds=step.starts_offset_seconds,
+            duration_seconds=step.duration_seconds,
+            is_segment=step.is_segment,
             conditions=step.conditions,
             config=step.config,
         ))

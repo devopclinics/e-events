@@ -6,3 +6,4 @@ pydantic>=2.5.3
 pydantic-settings>=2.1.0
 firebase-admin>=6.4.0
 redis>=5.0.1
+pywebpush>=2.0.0

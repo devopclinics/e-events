@@ -28,9 +28,15 @@ function StatusControls({ event, onChanged }) {
   const [err, setErr] = useState('')
 
   const actions = {
-    draft:  [{ label: '▶ Start Event',  next: 'active', cls: 'bg-green-600 hover:bg-green-700 text-white' }],
-    active: [{ label: '⏹ End Event',    next: 'ended',  cls: 'bg-red-600 hover:bg-red-700 text-white' }],
-    ended:  [{ label: '↩ Reopen',       next: 'active', cls: 'bg-amber-500 hover:bg-amber-600 text-white' }],
+    draft:  [{ label: '▶ Start check-in', next: 'active', cls: 'bg-green-600 hover:bg-green-700 text-white' }],
+    active: [
+      { label: '⏸ Stop check-in', next: 'draft', cls: 'bg-amber-500 hover:bg-amber-600 text-white' },
+      { label: '⏹ End event', next: 'ended', cls: 'bg-red-600 hover:bg-red-700 text-white' },
+    ],
+    ended:  [
+      { label: '↩ Reopen as draft', next: 'draft', cls: 'bg-amber-500 hover:bg-amber-600 text-white' },
+      { label: '▶ Restart check-in', next: 'active', cls: 'bg-green-600 hover:bg-green-700 text-white' },
+    ],
   }[event.status] || []
 
   async function change(next) {
@@ -53,10 +59,10 @@ function StatusControls({ event, onChanged }) {
       ))}
       {err && <span className="text-red-600 text-xs">{err}</span>}
       {event.status === 'draft' && (
-        <span className="text-xs text-gray-400">Start the event to enable scanning.</span>
+        <span className="text-xs text-gray-400">RSVP remains available; start check-in on the event day.</span>
       )}
       {event.status === 'ended' && (
-        <span className="text-xs text-gray-400">Event ended — scanning is disabled.</span>
+        <span className="text-xs text-gray-400">Event ended — RSVP and check-in are disabled.</span>
       )}
     </div>
   )
@@ -69,6 +75,7 @@ function GuestCommunicationPanel({ event }) {
   const [chatMessages, setChatMessages] = useState([])
   const [thread, setThread] = useState(null)
   const [draft, setDraft] = useState({ title: '', body: '', audience_type: 'attending_only' })
+  const [editingAnnouncementId, setEditingAnnouncementId] = useState('')
   const [reply, setReply] = useState('')
   const [msg, setMsg] = useState('')
   const [err, setErr] = useState('')
@@ -110,12 +117,26 @@ function GuestCommunicationPanel({ event }) {
     if (!draft.title.trim() || !draft.body.trim()) return
     setLoading(true); setErr(''); setMsg('')
     try {
-      const sent = await api.createAnnouncement(event.id, draft)
-      setAnnouncements((p) => [sent, ...p])
+      const sent = editingAnnouncementId
+        ? await api.updateAnnouncement(event.id, editingAnnouncementId, draft)
+        : await api.createAnnouncement(event.id, draft)
+      setAnnouncements((p) => editingAnnouncementId ? p.map((a) => a.id === sent.id ? { ...a, ...sent } : a) : [sent, ...p])
       setDraft({ title: '', body: '', audience_type: 'attending_only' })
-      setMsg(`Announcement sent to ${sent.reached ?? 0} guest${sent.reached === 1 ? '' : 's'}.`)
+      setEditingAnnouncementId('')
+      setMsg(editingAnnouncementId ? 'Announcement updated in FestioHub. No new notification was sent.' : `Announcement sent to ${sent.reached ?? 0} guest${sent.reached === 1 ? '' : 's'}.`)
     } catch (e) { setErr(e.message) }
     finally { setLoading(false) }
+  }
+
+  function editAnnouncement(announcement) {
+    setEditingAnnouncementId(announcement.id)
+    setDraft({ title: announcement.title || '', body: announcement.body || '', audience_type: announcement.audience_type || 'attending_only' })
+    setMsg(''); setErr('')
+  }
+
+  function cancelAnnouncementEdit() {
+    setEditingAnnouncementId('')
+    setDraft({ title: '', body: '', audience_type: 'attending_only' })
   }
 
   async function openThread(threadId) {
@@ -165,8 +186,8 @@ function GuestCommunicationPanel({ event }) {
         {settings && (
           <div className="mt-5 grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
             {[
-              ['guest_hub_enabled', 'Guest Hub', 'Show the post-RSVP hub for accepted attendees.'],
-              ['announcements_enabled', 'Event Updates', 'Show organizer updates in Guest Hub.'],
+              ['guest_hub_enabled', 'FestioHub', 'Show the post-RSVP hub for accepted attendees.'],
+              ['announcements_enabled', 'Event Updates', 'Show organizer updates in FestioHub.'],
               ['direct_host_messages_enabled', 'Message Host', 'Let guests send private questions to the organizer.'],
               ['guest_chat_enabled', 'Guest Chat', 'Show a shared guest-to-guest chat.'],
               ['guest_chat_posting_enabled', 'Guest Posts', 'Allow guests to add new chat messages.'],
@@ -188,7 +209,7 @@ function GuestCommunicationPanel({ event }) {
 
       <div className="grid gap-6 lg:grid-cols-[1fr_0.9fr]">
         <div className="bg-white dark:bg-slate-800 dark:border dark:border-slate-700/60 rounded-xl shadow p-6">
-          <h3 className="font-semibold text-base dark:text-white">Announcements</h3>
+          <div className="flex items-center justify-between gap-3"><h3 className="font-semibold text-base dark:text-white">Announcements</h3>{editingAnnouncementId && <span className="rounded-full bg-amber-50 px-2 py-1 text-xs font-bold text-amber-700 dark:bg-amber-900/30 dark:text-amber-200">Editing announcement</span>}</div>
           <form onSubmit={sendAnnouncement} className="mt-4 space-y-3">
             <input className={field} value={draft.title} onChange={(e) => setDraft((p) => ({ ...p, title: e.target.value }))} placeholder="Update title, e.g. Parking Update" maxLength={255} />
             <textarea className={field} rows={4} value={draft.body} onChange={(e) => setDraft((p) => ({ ...p, body: e.target.value }))} placeholder="Write a warm update for your guests..." maxLength={5000} />
@@ -200,15 +221,15 @@ function GuestCommunicationPanel({ event }) {
                 <option value="checked_in_only">Checked in</option>
                 <option value="not_checked_in">Not checked in</option>
               </select>
-              <button disabled={loading || !draft.title.trim() || !draft.body.trim()} className="rounded-lg bg-teal-600 px-4 py-2 text-sm font-semibold text-white hover:bg-teal-700 disabled:opacity-50">
-                Send update
-              </button>
+              <div className="flex gap-2"><button disabled={loading || !draft.title.trim() || !draft.body.trim()} className="rounded-lg bg-teal-600 px-4 py-2 text-sm font-semibold text-white hover:bg-teal-700 disabled:opacity-50">
+                {editingAnnouncementId ? 'Save changes' : 'Send update'}
+              </button>{editingAnnouncementId && <button type="button" onClick={cancelAnnouncementEdit} className="rounded-lg border border-slate-300 px-4 py-2 text-sm font-semibold dark:border-slate-600 dark:text-slate-200">Cancel</button>}</div>
             </div>
           </form>
           <div className="mt-5 space-y-3">
             {announcements.length ? announcements.map((a) => (
               <div key={a.id} className="rounded-lg border border-slate-200 dark:border-slate-700 p-3">
-                <div className="font-semibold text-sm dark:text-white">{a.title}</div>
+                <div className="flex items-start justify-between gap-3"><div className="font-semibold text-sm dark:text-white">{a.title}</div><button type="button" onClick={() => editAnnouncement(a)} className="text-xs font-bold text-teal-600 hover:underline dark:text-teal-300">Edit</button></div>
                 <p className="mt-1 text-sm text-slate-600 dark:text-slate-300">{a.body}</p>
                 <div className="mt-2 text-[11px] font-semibold uppercase tracking-wide text-slate-400">{a.audience_type?.replaceAll('_', ' ')}</div>
               </div>
@@ -218,7 +239,7 @@ function GuestCommunicationPanel({ event }) {
 
         <div className="bg-white dark:bg-slate-800 dark:border dark:border-slate-700/60 rounded-xl shadow p-6">
           <h3 className="font-semibold text-base dark:text-white">Guest Questions Inbox</h3>
-          <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">Questions sent through Message Host appear here. Replies are visible to that guest in their Guest Hub.</p>
+          <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">Questions sent through Message Host appear here. Replies are visible to that guest in FestioHub.</p>
           <div className="mt-4 space-y-2">
             {inbox.length ? inbox.map((t) => (
               <button key={t.thread_id} onClick={() => openThread(t.thread_id)} className="w-full rounded-lg border border-slate-200 dark:border-slate-700 p-3 text-left hover:bg-slate-50 dark:hover:bg-slate-700">
@@ -363,8 +384,6 @@ const POLICY_FLOWS = [
   ['reminder', 'RSVP reminder'],
   ['approval', 'Approval notices'],
   ['logistics', 'Deliveries'],
-  ['registry', 'Gift list'],
-  ['broadcast', 'Host broadcast'],
 ]
 const POLICY_CHANNELS = [['email', 'Email'], ['sms', 'SMS'], ['whatsapp', 'WhatsApp'], ['mms', 'MMS']]
 
@@ -398,7 +417,7 @@ function ChannelRoutingPanel({ event, onChanged }) {
       <div className="flex items-center justify-between">
         <div>
           <span className="text-sm font-semibold dark:text-slate-100">Message routing</span>
-          <p className="text-xs text-slate-500 dark:text-slate-400">Pick which channel each message uses to cut cost. Falls back to the second choice if a guest lacks the first. Leave blank to send on every enabled channel. <span className="text-slate-400">(Invitations honor this now; other flows are rolling out.)</span></p>
+          <p className="text-xs text-slate-500 dark:text-slate-400">Pick which channel each message uses to cut cost. Falls back to the second choice if a guest lacks the first. Leave blank to send on every enabled channel.</p>
         </div>
         <button onClick={save} disabled={saving} className="rounded-lg bg-teal-600 px-3 py-1.5 text-xs font-semibold text-white disabled:opacity-40 hover:bg-teal-700">
           {saving ? 'Saving…' : 'Save routing'}
@@ -1138,7 +1157,7 @@ function CheckoutToggle({ event, onChanged, onFlash }) {
       <div className="flex items-center justify-between gap-3 flex-wrap">
         <div>
           <h2 className="font-semibold text-base dark:text-white">Guest check-out</h2>
-          <p className="text-xs text-gray-400 dark:text-slate-500 mt-1">Record when guests leave. Adds a Check-out mode to the Scanner; the exit time shows in the Guest Hub{event.experience_enabled ? ' and as a check-out step in the experience' : ''}.</p>
+          <p className="text-xs text-gray-400 dark:text-slate-500 mt-1">Record when guests leave. Adds a Check-out mode to the Scanner; the exit time shows in FestioHub{event.experience_enabled ? ' and as a check-out step in the experience' : ''}.</p>
         </div>
         <button onClick={toggle} disabled={loading}
           className={`px-4 py-2 rounded-lg text-sm font-semibold border transition-colors disabled:opacity-50 ${
@@ -4898,8 +4917,18 @@ const EXPERIENCE_STEP_TYPES = [
   ['session_attendance', 'Session attendance'],
   ['certificate', 'Certificate'],
   ['checkout', 'Checkout'],
+  ['feedback', 'Feedback'],
   ['rsvp', 'RSVP'],
   ['approval', 'Approval'],
+]
+
+const FEEDBACK_QUESTION_TYPES = [
+  ['rating', 'Rating (1–5)'],
+  ['nps', 'Recommendation (0–10)'],
+  ['single_choice', 'Multiple choice'],
+  ['multi_choice', 'Choose multiple'],
+  ['yes_no', 'Yes / No'],
+  ['text', 'Written comments'],
 ]
 
 function experienceGuestActionLabel(step, status) {
@@ -4941,6 +4970,23 @@ const blankExperienceStep = () => ({
   room_assignment_scope: '',
   room_assignment_room: '',
   room_assignment_table_group: '',
+  feedback_audience: 'all',
+  feedback_session_step_id: '',
+  feedback_anonymous: false,
+  feedback_status: 'open',
+  feedback_opens_at: '',
+  feedback_closes_at: '',
+  feedback_allow_edit: true,
+  program_is_segment: false,
+  program_start_offset_seconds: '',
+  program_duration_seconds: '',
+  program_category: '',
+  program_announce_enabled: false,
+  program_announce_title: '',
+  program_announce_body: '',
+  program_feedback_step_key: '',
+  program_feedback_window_seconds: '1800',
+  feedback_questions: [],
   conditions: '',
   config: '',
 })
@@ -4981,6 +5027,29 @@ function normalizeRoomAssignmentConfig(config = {}) {
 }
 
 const EXPERIENCE_STEP_PRESETS = [
+  {
+    key: 'feedback_prompt',
+    type: 'feedback',
+    title: 'Feedback',
+    description: 'Invite attendees to share feedback after the event.',
+    required: false,
+    config: {
+      owner: 'guest',
+      messages: {
+        guest: 'Please take a moment to share your feedback.',
+        complete: 'Thank you for sharing your feedback.',
+      },
+      feedback: {
+        audience: 'all',
+        anonymous: false,
+        questions: [
+          { id: 'overall_rating', type: 'rating', prompt: 'How would you rate your overall experience?', required: true },
+          { id: 'recommend', type: 'nps', prompt: 'How likely are you to recommend this event?', required: true },
+          { id: 'comments', type: 'text', prompt: 'What should we keep or improve?', required: false },
+        ],
+      },
+    },
+  },
   {
     key: 'rsvp_approved',
     type: 'custom',
@@ -5205,6 +5274,9 @@ function ExperiencePanel({ event, onChanged, onFlash }) {
   const [consentForm, setConsentForm] = useState({ title: 'Event consent', body: '', require_signature: true })
   const [consentSignatures, setConsentSignatures] = useState([])
   const [auditRows, setAuditRows] = useState([])
+  const [feedbackResults, setFeedbackResults] = useState({ forms: [] })
+  const [feedbackFilters, setFeedbackFilters] = useState({ search: '', admitted: '' })
+  const [feedbackAction, setFeedbackAction] = useState('')
   const [consentOpen, setConsentOpen] = useState(false)
   const [workflowFilter, setWorkflowFilter] = useState('all')
   const [auditFilter, setAuditFilter] = useState('')
@@ -5249,7 +5321,7 @@ function ExperiencePanel({ event, onChanged, onFlash }) {
     if (!event?.id) return
     setErr('')
     try {
-      const [data, dash, analyticsData, guestRows, form, signatures, audit] = await Promise.all([
+      const [data, dash, analyticsData, guestRows, form, signatures, audit, feedback] = await Promise.all([
         api.listExperienceWorkflows(event.id),
         api.getExperienceDashboard(event.id).catch(() => null),
         api.getExperienceAnalytics(event.id).catch(() => null),
@@ -5257,6 +5329,7 @@ function ExperiencePanel({ event, onChanged, onFlash }) {
         api.getConsentForm(event.id).catch(() => null),
         api.listConsentSignatures(event.id).catch(() => []),
         api.listExperienceAudit(event.id, 50).catch(() => []),
+        api.getFeedbackResults(event.id).catch(() => ({ forms: [] })),
       ])
       setWorkflows(data)
       setDashboard(dash)
@@ -5265,6 +5338,7 @@ function ExperiencePanel({ event, onChanged, onFlash }) {
       setConsentForm(form || { title: 'Event consent', body: '', require_signature: true })
       setConsentSignatures(signatures)
       setAuditRows(audit)
+      setFeedbackResults(feedback || { forms: [] })
       if (data.length) {
         const remembered = readRememberedSelection()
         if (remembered.workflowFilter && remembered.workflowFilter !== workflowFilter) setWorkflowFilter(remembered.workflowFilter)
@@ -5352,6 +5426,23 @@ function ExperiencePanel({ event, onChanged, onFlash }) {
       room_assignment_scope: assignment.scope || '',
       room_assignment_room: assignment.room || '',
       room_assignment_table_group: assignment.table_group || '',
+      feedback_audience: config.feedback?.audience || 'all',
+      feedback_session_step_id: config.feedback?.session_step_id || '',
+      feedback_anonymous: !!config.feedback?.anonymous,
+      feedback_status: config.feedback?.status || 'open',
+      feedback_opens_at: config.feedback?.opens_at || '',
+      feedback_closes_at: config.feedback?.closes_at || '',
+      feedback_allow_edit: config.feedback?.allow_edit !== false,
+      feedback_questions: Array.isArray(config.feedback?.questions) ? config.feedback.questions : [],
+      program_is_segment: !!step.is_segment,
+      program_start_offset_seconds: step.starts_offset_seconds ?? '',
+      program_duration_seconds: step.duration_seconds ?? '',
+      program_category: config.program?.category || '',
+      program_announce_enabled: !!config.announce?.enabled,
+      program_announce_title: config.announce?.title || '',
+      program_announce_body: config.announce?.body || '',
+      program_feedback_step_key: config.feedback?.step_key || '',
+      program_feedback_window_seconds: config.feedback?.window_seconds ?? '1800',
       conditions: step.conditions ? JSON.stringify(step.conditions, null, 2) : '',
       config: step.config ? JSON.stringify(step.config, null, 2) : '',
     }
@@ -5424,6 +5515,51 @@ function ExperiencePanel({ event, onChanged, onFlash }) {
     } else {
       delete config.room_assignment
     }
+    if (stepForm.type === 'feedback') {
+      if (!stepForm.feedback_questions.length) throw new Error('Add at least one feedback question')
+      config.owner = 'guest'
+      config.feedback = {
+        ...(config.feedback || {}),
+        audience: stepForm.feedback_audience || 'all',
+        ...(stepForm.feedback_audience === 'session' && stepForm.feedback_session_step_id ? { session_step_id: stepForm.feedback_session_step_id } : {}),
+        anonymous: !!stepForm.feedback_anonymous,
+        status: stepForm.feedback_status || 'open',
+        ...(stepForm.feedback_opens_at ? { opens_at: stepForm.feedback_opens_at } : {}),
+        ...(stepForm.feedback_closes_at ? { closes_at: stepForm.feedback_closes_at } : {}),
+        allow_edit: !!stepForm.feedback_allow_edit,
+        questions: stepForm.feedback_questions.map((q, index) => ({
+          id: q.id || `question_${index + 1}`,
+          type: q.type || 'text',
+          prompt: String(q.prompt || '').trim(),
+          required: !!q.required,
+          ...(['single_choice', 'multi_choice'].includes(q.type) ? { options: (q.options || []).filter(Boolean) } : {}),
+          ...(q.help_text ? { help_text: String(q.help_text).trim() } : {}),
+          ...(q.show_if?.question_id && q.show_if?.value !== '' ? { show_if: q.show_if } : {}),
+        })),
+      }
+      if (config.feedback.questions.some((q) => !q.prompt)) throw new Error('Every feedback question needs wording')
+    } else {
+      delete config.feedback
+    }
+    if (stepForm.program_is_segment) {
+      const start = Number(stepForm.program_start_offset_seconds)
+      const duration = Number(stepForm.program_duration_seconds)
+      if (!Number.isFinite(start) || start < 0 || !Number.isFinite(duration) || duration <= 0) throw new Error('Live Program segments need a valid start offset and duration')
+      config.program = { ...(config.program || {}), ...(stepForm.program_category.trim() ? { category: stepForm.program_category.trim() } : {}) }
+      config.announce = {
+        ...(config.announce || {}), enabled: !!stepForm.program_announce_enabled,
+        ...(stepForm.program_announce_title.trim() ? { title: stepForm.program_announce_title.trim() } : {}),
+        ...(stepForm.program_announce_body.trim() ? { body: stepForm.program_announce_body.trim() } : {}),
+      }
+      if (stepForm.program_feedback_step_key) {
+        const feedbackWindow = Number(stepForm.program_feedback_window_seconds || 1800)
+        if (!Number.isFinite(feedbackWindow) || feedbackWindow < 60) throw new Error('Feedback window must be at least 60 seconds')
+        config.feedback = { step_key: stepForm.program_feedback_step_key, opens_on: 'segment_end', window_seconds: feedbackWindow }
+      }
+    } else {
+      delete config.program
+      delete config.announce
+    }
     return {
       key: stepForm.key.trim(),
       type: stepForm.type,
@@ -5432,6 +5568,9 @@ function ExperiencePanel({ event, onChanged, onFlash }) {
       sort_order: Number(stepForm.sort_order || 0),
       required: !!stepForm.required,
       enabled: !!stepForm.enabled,
+      is_segment: !!stepForm.program_is_segment,
+      starts_offset_seconds: stepForm.program_is_segment ? Number(stepForm.program_start_offset_seconds) : null,
+      duration_seconds: stepForm.program_is_segment ? Number(stepForm.program_duration_seconds) : null,
       conditions: parseJsonMaybe(stepForm.conditions, 'Conditions'),
       config: Object.keys(config).length ? config : null,
     }
@@ -5453,6 +5592,11 @@ function ExperiencePanel({ event, onChanged, onFlash }) {
 
   async function toggleExperience(active) {
     const updated = await run(() => api.toggleFeatures(event.id, { experience_enabled: active }), active ? 'Experience enabled.' : 'Experience disabled.')
+    if (updated) onChanged(updated)
+  }
+
+  async function toggleLiveProgram(active) {
+    const updated = await run(() => api.toggleFeatures(event.id, { live_program_enabled: active }), active ? 'Live Program enabled from the current item onward.' : 'Live Program disabled.')
     if (updated) onChanged(updated)
   }
 
@@ -5655,6 +5799,48 @@ function ExperiencePanel({ event, onChanged, onFlash }) {
     if (saved) await load(selected?.id)
   }
 
+  async function disableConsent() {
+    if (!window.confirm('Disable this consent form? It will disappear from FestioHub and Festio Pass. Existing signatures will be preserved.')) return
+    const disabled = await run(() => api.disableConsentForm(event.id), 'Consent form disabled.')
+    if (disabled) {
+      setConsentForm({ title: 'Event consent', body: '', require_signature: true })
+      await load(selected?.id)
+    }
+  }
+
+  async function refreshFeedback(filters = feedbackFilters) {
+    setFeedbackAction('filter')
+    try { setFeedbackResults(await api.getFeedbackResults(event.id, filters)) }
+    catch (e) { setErr(e.message) }
+    finally { setFeedbackAction('') }
+  }
+
+  async function remindFeedback(form) {
+    const channelText = window.prompt('Reminder channels (comma separated: email, sms, whatsapp)', 'email')
+    if (!channelText) return
+    const channels = channelText.split(',').map((v) => v.trim().toLowerCase()).filter(Boolean)
+    setFeedbackAction(`remind-${form.step_id}`)
+    try {
+      const preview = await api.getFeedbackReminderPreview(event.id, form.step_id, channels)
+      const detail = channels.map((c) => `${c}: ${preview.deliverable?.[c] || 0}`).join(', ')
+      if (!window.confirm(`Send to feedback non-responders?\n${preview.nonresponders} eligible · ${detail}\nCredits required: ${preview.credits_required} · available: ${preview.credits_available}`)) return
+      const result = await api.sendFeedbackReminders(event.id, form.step_id, { channels })
+      onFlash?.(`Feedback reminders queued — email ${result.queued.email}, SMS ${result.queued.sms}, WhatsApp ${result.queued.whatsapp}`)
+    } catch (e) { setErr(e.message) }
+    finally { setFeedbackAction('') }
+  }
+
+  async function prepareFeedbackDraft() {
+    setFeedbackAction('prepare')
+    try {
+      const draft = await api.prepareFeedbackDraft(event.id)
+      await load(draft.id)
+      setActiveExperienceTab('workflow')
+      onFlash?.('Feedback draft prepared. Review it, then publish when ready.')
+    } catch (e) { setErr(e.message) }
+    finally { setFeedbackAction('') }
+  }
+
   async function exportProgress() {
     await run(() => api.downloadExperienceExport(event.id), 'Experience export downloaded.')
   }
@@ -5740,6 +5926,7 @@ function ExperiencePanel({ event, onChanged, onFlash }) {
     ['workflow', 'Workflow'],
     ['guests', 'Guests'],
     ['consent', 'Consent'],
+    ['feedback', 'Feedback'],
     ['messages', 'Messages'],
     ['analytics', 'Analytics'],
   ]
@@ -5752,12 +5939,16 @@ function ExperiencePanel({ event, onChanged, onFlash }) {
             <h2 className="font-semibold text-base dark:text-white">Experience workflow</h2>
             <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">Configure attendee journey steps without changing the live scanner flow yet.</p>
           </div>
-          <label className="flex items-center gap-2 text-sm font-semibold text-slate-700 dark:text-slate-200">
+          <div className="flex flex-wrap items-center gap-3"><label className="flex items-center gap-2 text-sm font-semibold text-slate-700 dark:text-slate-200">
             <input type="checkbox" checked={!!event.experience_enabled} disabled={loading}
               onChange={(e) => toggleExperience(e.target.checked)}
               className="h-4 w-4 accent-teal-600" />
             Enabled
-          </label>
+          </label><label className="flex items-center gap-2 text-sm font-semibold text-slate-700 dark:text-slate-200">
+            <input type="checkbox" checked={!!event.live_program_enabled} disabled={loading || !event.experience_enabled}
+              onChange={(e) => toggleLiveProgram(e.target.checked)} className="h-4 w-4 accent-indigo-600" />
+            Live Program
+          </label></div>
         </div>
         {err && <div className="mt-4 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">{err}</div>}
 
@@ -5845,6 +6036,52 @@ function ExperiencePanel({ event, onChanged, onFlash }) {
         description="Customize messages generated by Experience workflows. These templates are separate from general invitations and day-of notices, but use the same placeholder and preview engine."
       />}
 
+      {activeExperienceTab === 'feedback' && (
+        <div className="rounded-xl bg-white p-6 shadow dark:border dark:border-slate-700/60 dark:bg-slate-800">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+            <div>
+              <h3 className="font-semibold text-slate-900 dark:text-white">Feedback results</h3>
+              <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">Responses submitted from FestioHub and Festio Pass.</p>
+            </div>
+            <div className="flex flex-wrap gap-2"><button type="button" onClick={prepareFeedbackDraft} disabled={!!feedbackAction}
+              className="rounded-lg border border-pink-300 px-3 py-2 text-sm font-semibold text-pink-700 disabled:opacity-50 dark:border-pink-800 dark:text-pink-200">Prepare feedback draft</button>
+              <button type="button" onClick={() => api.downloadFeedbackExport(event.id)} disabled={!feedbackResults.forms?.some((f) => f.response_count)}
+              className="rounded-lg border border-slate-300 px-3 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-50 dark:border-slate-600 dark:text-slate-200 dark:hover:bg-slate-700">Export CSV</button></div>
+          </div>
+          <form className="mt-4 flex flex-wrap gap-2" onSubmit={(e) => { e.preventDefault(); refreshFeedback() }}>
+            <input className={`${fieldCls} min-w-64 flex-1`} value={feedbackFilters.search} onChange={(e) => setFeedbackFilters((f) => ({ ...f, search: e.target.value }))} placeholder="Search guest name or email" />
+            <select className={fieldCls} value={feedbackFilters.admitted} onChange={(e) => setFeedbackFilters((f) => ({ ...f, admitted: e.target.value }))}><option value="">All guests</option><option value="true">Checked in</option><option value="false">Not checked in</option></select>
+            <button className="rounded-lg bg-slate-900 px-4 py-2 text-sm font-bold text-white dark:bg-teal-500 dark:text-slate-950">Apply filters</button>
+          </form>
+          <div className="mt-5 space-y-5">
+            {!feedbackResults.forms?.length && <p className="rounded-lg border border-dashed border-slate-300 px-4 py-8 text-center text-sm text-slate-500 dark:border-slate-600 dark:text-slate-400">Add and publish a Feedback Experience step to collect responses.</p>}
+            {(feedbackResults.forms || []).map((form) => (
+              <div key={form.step_id} className="rounded-xl border border-slate-200 p-4 dark:border-slate-700">
+                <div className="flex items-center justify-between gap-3">
+                  <h4 className="font-semibold text-slate-900 dark:text-white">{form.title}</h4>
+                  <div className="flex items-center gap-2"><span className="rounded-full bg-pink-50 px-2.5 py-1 text-xs font-bold text-pink-700 dark:bg-pink-950/30 dark:text-pink-200">{form.response_count} / {form.eligible_count} · {form.response_rate}%</span>
+                    <button type="button" disabled={!!feedbackAction || !form.eligible_count} onClick={() => remindFeedback(form)} className="rounded-lg border border-slate-300 px-2.5 py-1 text-xs font-bold disabled:opacity-40 dark:border-slate-600">Remind non-responders</button></div>
+                </div>
+                {!!form.aggregates?.length && <div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-3">{form.aggregates.map((metric) => <div key={metric.question_id} className="rounded-lg bg-slate-50 p-3 dark:bg-slate-900"><p className="text-xs font-bold text-slate-500">{metric.prompt}</p>
+                  {metric.type === 'rating' && <p className="mt-2 text-2xl font-black text-pink-600">{metric.average ?? '—'} <span className="text-xs font-normal text-slate-400">/ 5</span></p>}
+                  {metric.type === 'nps' && <p className="mt-2 text-2xl font-black text-pink-600">{metric.nps ?? '—'} <span className="text-xs font-normal text-slate-400">NPS · avg {metric.average ?? '—'}</span></p>}
+                  {metric.distribution && <div className="mt-2 space-y-1">{Object.entries(metric.distribution).map(([label, count]) => <div key={label} className="flex justify-between text-xs"><span>{label}</span><b>{count}</b></div>)}</div>}
+                  {metric.type === 'text' && <p className="mt-2 text-sm font-bold">{metric.answer_count} comments</p>}
+                </div>)}</div>}
+                {form.responses.length === 0 ? <p className="mt-3 text-sm text-slate-400">No responses yet.</p> : (
+                  <div className="mt-4 overflow-x-auto">
+                    <table className="w-full text-left text-sm">
+                      <thead className="text-xs uppercase text-slate-500"><tr><th className="px-2 py-2">Guest</th><th className="px-2 py-2">Submitted</th>{form.questions.map((q) => <th key={q.id} className="min-w-48 px-2 py-2">{q.prompt}</th>)}</tr></thead>
+                      <tbody className="divide-y divide-slate-100 dark:divide-slate-700">{form.responses.map((response) => <tr key={response.id}><td className="px-2 py-2 font-medium text-slate-800 dark:text-slate-200">{response.guest_name || 'Anonymous'}</td><td className="px-2 py-2 text-xs text-slate-500">{fmtLocalDateTime(response.submitted_at)}</td>{form.questions.map((q) => <td key={q.id} className="px-2 py-2 text-slate-700 dark:text-slate-300">{String(response.answers?.[q.id] ?? '—')}</td>)}</tr>)}</tbody>
+                    </table>
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
       {activeExperienceTab === 'analytics' && analytics?.workflow && (
         <div className="grid gap-4 lg:grid-cols-3">
           <div className="rounded-xl bg-white p-4 shadow dark:border dark:border-slate-700/60 dark:bg-slate-800">
@@ -5882,9 +6119,16 @@ function ExperiencePanel({ event, onChanged, onFlash }) {
             </p>
           </div>
           <div className="flex flex-wrap items-center gap-2">
+            <span className={`rounded-full px-2 py-1 text-xs font-semibold ${consentForm?.id ? 'bg-emerald-50 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-200' : 'bg-slate-100 text-slate-500 dark:bg-slate-700 dark:text-slate-300'}`}>
+              {consentForm?.id ? 'Enabled' : 'Disabled'}
+            </span>
             <span className="rounded-full bg-teal-50 px-2 py-1 text-xs font-semibold text-teal-700 dark:bg-teal-900/30 dark:text-teal-200">
               {consentSignatures.length} signed
             </span>
+            {consentForm?.id && <button type="button" onClick={disableConsent} disabled={loading}
+              className="rounded-lg border border-red-300 px-3 py-2 text-sm font-semibold text-red-700 hover:bg-red-50 disabled:opacity-50 dark:border-red-900 dark:text-red-300 dark:hover:bg-red-950/30">
+              Disable form
+            </button>}
             <button type="button" onClick={() => setConsentOpen((v) => !v)}
               className="rounded-lg border border-slate-300 px-3 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50 dark:border-slate-600 dark:text-slate-200 dark:hover:bg-slate-700">
               {consentOpen ? 'Collapse' : 'Expand'}
@@ -5918,7 +6162,7 @@ function ExperiencePanel({ event, onChanged, onFlash }) {
                   Require typed signature
                 </label>
                 <button disabled={loading} className="rounded-lg bg-teal-600 px-4 py-2 text-sm font-semibold text-white hover:bg-teal-700 disabled:opacity-50">
-                  Save consent form
+                  {consentForm?.id ? 'Save new version' : 'Enable consent form'}
                 </button>
               </div>
             </form>
@@ -6315,6 +6559,111 @@ function ExperiencePanel({ event, onChanged, onFlash }) {
                         </label>
                       </div>
                     </div>
+                    <div className="md:col-span-2 rounded-xl border border-indigo-200 bg-indigo-50/50 p-4 dark:border-indigo-900 dark:bg-indigo-950/20">
+                      <div className="flex items-start justify-between gap-3"><div><h4 className="text-sm font-semibold text-slate-900 dark:text-white">Live Program timing</h4><p className="mt-1 text-xs text-slate-500 dark:text-slate-400">Optional. Timed segments are inert until Live Program is enabled for the event.</p></div><label className="flex items-center gap-2 text-sm font-semibold"><input type="checkbox" checked={stepForm.program_is_segment} onChange={(e) => setStepForm((f) => ({ ...f, program_is_segment: e.target.checked }))} /> Include in Live Program</label></div>
+                      {stepForm.program_is_segment && <div className="mt-4 grid gap-3 md:grid-cols-2"><label><span className="mb-1 block text-xs font-semibold text-slate-500 dark:text-slate-400">Start offset in seconds</span><input type="number" min="0" className={`${fieldCls} w-full`} value={stepForm.program_start_offset_seconds} onChange={(e) => setStepForm((f) => ({ ...f, program_start_offset_seconds: e.target.value }))} placeholder="9000" /></label><label><span className="mb-1 block text-xs font-semibold text-slate-500 dark:text-slate-400">Duration in seconds</span><input type="number" min="1" className={`${fieldCls} w-full`} value={stepForm.program_duration_seconds} onChange={(e) => setStepForm((f) => ({ ...f, program_duration_seconds: e.target.value }))} placeholder="2700" /></label><label><span className="mb-1 block text-xs font-semibold text-slate-500 dark:text-slate-400">Category</span><input className={`${fieldCls} w-full`} value={stepForm.program_category} onChange={(e) => setStepForm((f) => ({ ...f, program_category: e.target.value }))} placeholder="Main session, prayer, hospitality" /></label><label className="flex items-center gap-2 self-end rounded-lg border border-indigo-200 bg-white px-3 py-2 text-sm dark:border-indigo-900 dark:bg-slate-900"><input type="checkbox" checked={stepForm.program_announce_enabled} onChange={(e) => setStepForm((f) => ({ ...f, program_announce_enabled: e.target.checked }))} /> Announce at start</label><label><span className="mb-1 block text-xs font-semibold text-slate-500 dark:text-slate-400">Open feedback after this segment</span><select className={`${fieldCls} w-full`} value={stepForm.program_feedback_step_key} onChange={(e) => setStepForm((f) => ({ ...f, program_feedback_step_key: e.target.value }))}><option value="">No feedback prompt</option>{(selected?.steps || []).filter((s) => s.type === 'feedback').map((s) => <option key={s.id} value={s.key}>{s.title}</option>)}</select></label>{stepForm.program_feedback_step_key && <label><span className="mb-1 block text-xs font-semibold text-slate-500 dark:text-slate-400">Feedback window (seconds)</span><input type="number" min="60" className={`${fieldCls} w-full`} value={stepForm.program_feedback_window_seconds} onChange={(e) => setStepForm((f) => ({ ...f, program_feedback_window_seconds: e.target.value }))} /></label>}{stepForm.program_announce_enabled && <><label className="md:col-span-2"><span className="mb-1 block text-xs font-semibold text-slate-500 dark:text-slate-400">Announcement title</span><input className={`${fieldCls} w-full`} value={stepForm.program_announce_title} onChange={(e) => setStepForm((f) => ({ ...f, program_announce_title: e.target.value }))} placeholder={`Now: ${stepForm.title || 'Program item'}`} /></label><label className="md:col-span-2"><span className="mb-1 block text-xs font-semibold text-slate-500 dark:text-slate-400">Announcement message</span><textarea rows={2} className={`${fieldCls} w-full`} value={stepForm.program_announce_body} onChange={(e) => setStepForm((f) => ({ ...f, program_announce_body: e.target.value }))} placeholder="Optional—uses the step description when blank." /></label></>}</div>}
+                    </div>
+                    {stepForm.type === 'feedback' && (
+                      <div className="md:col-span-2 rounded-xl border border-pink-200 bg-pink-50/50 p-4 dark:border-pink-900 dark:bg-pink-950/20">
+                        <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                          <div>
+                            <h4 className="text-sm font-semibold text-slate-900 dark:text-white">Feedback questions</h4>
+                            <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">Guests answer these directly from FestioHub or their Festio Pass.</p>
+                          </div>
+                          <button type="button" onClick={() => setStepForm((f) => ({
+                            ...f,
+                            feedback_questions: [...f.feedback_questions, {
+                              id: `question_${f.feedback_questions.length + 1}`,
+                              type: 'rating', prompt: '', required: true, options: [],
+                            }],
+                          }))} className="rounded-lg bg-pink-600 px-3 py-2 text-xs font-semibold text-white hover:bg-pink-700">
+                            + Add question
+                          </button>
+                        </div>
+                        <div className="mt-4 grid gap-3 sm:grid-cols-2">
+                          <label className="block">
+                            <span className="mb-1 block text-xs font-semibold text-slate-500 dark:text-slate-400">Audience</span>
+                            <select className={`${fieldCls} w-full`} value={stepForm.feedback_audience}
+                              onChange={(e) => setStepForm((f) => ({ ...f, feedback_audience: e.target.value }))}>
+                              <option value="all">All guests with a Festio Pass</option>
+                              <option value="checked_in">Checked-in guests only</option>
+                              <option value="session">Guests who attended a session</option>
+                            </select>
+                          </label>
+                          <label className="flex items-center gap-2 self-end rounded-lg border border-pink-200 bg-white px-3 py-2 text-sm text-slate-700 dark:border-pink-900 dark:bg-slate-900 dark:text-slate-200">
+                            <input type="checkbox" checked={stepForm.feedback_anonymous}
+                              onChange={(e) => setStepForm((f) => ({ ...f, feedback_anonymous: e.target.checked }))} />
+                            Hide guest names in results
+                          </label>
+                          {stepForm.feedback_audience === 'session' && <label className="block sm:col-span-2">
+                            <span className="mb-1 block text-xs font-semibold text-slate-500 dark:text-slate-400">Attendance session</span>
+                            <select className={`${fieldCls} w-full`} value={stepForm.feedback_session_step_id}
+                              onChange={(e) => setStepForm((f) => ({ ...f, feedback_session_step_id: e.target.value }))}>
+                              <option value="">Choose a session…</option>
+                              {(selected?.steps || []).filter((s) => s.type === 'session_attendance').map((s) => <option key={s.id} value={s.id}>{s.title}</option>)}
+                            </select>
+                          </label>}
+                          <label className="block">
+                            <span className="mb-1 block text-xs font-semibold text-slate-500 dark:text-slate-400">Form status</span>
+                            <select className={`${fieldCls} w-full`} value={stepForm.feedback_status} onChange={(e) => setStepForm((f) => ({ ...f, feedback_status: e.target.value }))}>
+                              <option value="open">Open</option><option value="closed">Closed</option>
+                            </select>
+                          </label>
+                          <label className="flex items-center gap-2 self-end rounded-lg border border-pink-200 bg-white px-3 py-2 text-sm text-slate-700 dark:border-pink-900 dark:bg-slate-900 dark:text-slate-200">
+                            <input type="checkbox" checked={stepForm.feedback_allow_edit} onChange={(e) => setStepForm((f) => ({ ...f, feedback_allow_edit: e.target.checked }))} />
+                            Let guests edit submitted responses
+                          </label>
+                          <label className="block"><span className="mb-1 block text-xs font-semibold text-slate-500 dark:text-slate-400">Opens at (optional)</span>
+                            <input type="datetime-local" className={`${fieldCls} w-full`} value={stepForm.feedback_opens_at} onChange={(e) => setStepForm((f) => ({ ...f, feedback_opens_at: e.target.value }))} />
+                          </label>
+                          <label className="block"><span className="mb-1 block text-xs font-semibold text-slate-500 dark:text-slate-400">Closes at (optional)</span>
+                            <input type="datetime-local" className={`${fieldCls} w-full`} value={stepForm.feedback_closes_at} onChange={(e) => setStepForm((f) => ({ ...f, feedback_closes_at: e.target.value }))} />
+                          </label>
+                        </div>
+                        <div className="mt-4 space-y-3">
+                          {stepForm.feedback_questions.length === 0 && (
+                            <p className="rounded-lg border border-dashed border-pink-300 px-4 py-5 text-center text-sm text-slate-500 dark:border-pink-800 dark:text-slate-400">Add the first feedback question.</p>
+                          )}
+                          {stepForm.feedback_questions.map((question, index) => {
+                            const updateQuestion = (patch) => setStepForm((f) => ({
+                              ...f,
+                              feedback_questions: f.feedback_questions.map((q, i) => i === index ? { ...q, ...patch } : q),
+                            }))
+                            return (
+                              <div key={`${question.id}-${index}`} className="rounded-xl border border-pink-200 bg-white p-3 dark:border-pink-900 dark:bg-slate-900">
+                                <div className="grid gap-2 md:grid-cols-[12rem_1fr_auto]">
+                                  <select className={`${fieldCls} w-full`} value={question.type}
+                                    onChange={(e) => updateQuestion({ type: e.target.value, options: e.target.value === 'single_choice' ? (question.options || []) : [] })}>
+                                    {FEEDBACK_QUESTION_TYPES.map(([value, label]) => <option key={value} value={value}>{label}</option>)}
+                                  </select>
+                                  <input className={`${fieldCls} w-full`} value={question.prompt || ''}
+                                    onChange={(e) => updateQuestion({ prompt: e.target.value })} placeholder="Question shown to guests" />
+                                  <div className="flex gap-1"><button type="button" disabled={index === 0} onClick={() => setStepForm((f) => { const next = [...f.feedback_questions]; [next[index - 1], next[index]] = [next[index], next[index - 1]]; return { ...f, feedback_questions: next } })} className="rounded px-2 py-2 text-xs disabled:opacity-30">↑</button>
+                                  <button type="button" disabled={index === stepForm.feedback_questions.length - 1} onClick={() => setStepForm((f) => { const next = [...f.feedback_questions]; [next[index], next[index + 1]] = [next[index + 1], next[index]]; return { ...f, feedback_questions: next } })} className="rounded px-2 py-2 text-xs disabled:opacity-30">↓</button>
+                                  <button type="button" onClick={() => setStepForm((f) => ({ ...f, feedback_questions: f.feedback_questions.filter((_, i) => i !== index) }))}
+                                    className="rounded-lg px-2 py-2 text-xs font-semibold text-red-600 hover:bg-red-50 dark:text-red-300 dark:hover:bg-red-950/30">Remove</button></div>
+                                </div>
+                                {['single_choice', 'multi_choice'].includes(question.type) && (
+                                  <input className={`${fieldCls} mt-2 w-full`} value={(question.options || []).join(', ')}
+                                    onChange={(e) => updateQuestion({ options: e.target.value.split(',').map((v) => v.trim()).filter(Boolean) })}
+                                    placeholder="Choices separated by commas" />
+                                )}
+                                <input className={`${fieldCls} mt-2 w-full`} value={question.help_text || ''} onChange={(e) => updateQuestion({ help_text: e.target.value })} placeholder="Optional help text" />
+                                {index > 0 && <div className="mt-2 grid gap-2 sm:grid-cols-2">
+                                  <select className={`${fieldCls} w-full`} value={question.show_if?.question_id || ''} onChange={(e) => updateQuestion({ show_if: { ...(question.show_if || {}), question_id: e.target.value } })}>
+                                    <option value="">Always show</option>{stepForm.feedback_questions.slice(0, index).map((q) => <option key={q.id} value={q.id}>Show based on: {q.prompt || q.id}</option>)}
+                                  </select>
+                                  {question.show_if?.question_id && <input className={`${fieldCls} w-full`} value={question.show_if?.value || ''} onChange={(e) => updateQuestion({ show_if: { ...question.show_if, value: e.target.value } })} placeholder="Show when answer equals…" />}
+                                </div>}
+                                <label className="mt-2 flex items-center gap-2 text-xs text-slate-600 dark:text-slate-300">
+                                  <input type="checkbox" checked={!!question.required} onChange={(e) => updateQuestion({ required: e.target.checked })} /> Required
+                                </label>
+                              </div>
+                            )
+                          })}
+                        </div>
+                      </div>
+                    )}
                     {stepForm.type === 'session_attendance' && (
                       <div className="md:col-span-2 rounded-xl border border-slate-200 bg-white p-4 dark:border-slate-700 dark:bg-slate-900">
                         <h4 className="text-sm font-semibold text-slate-900 dark:text-white">Session details</h4>
@@ -6752,6 +7101,19 @@ function TeamPanel({ eventId }) {
     finally { setLoading(false) }
   }
 
+  async function setGuestAccess(userId, level) {
+    setLoading(true)
+    try {
+      const patch = {
+        can_view_guests: level !== 'none',
+        can_manage_guests: level === 'manage',
+      }
+      await api.updateMemberPermissions(eventId, userId, patch)
+      setMembers((prev) => prev.map((m) => m.user.id === userId ? { ...m, ...patch } : m))
+    } catch (e) { setMsg(e.message) }
+    finally { setLoading(false) }
+  }
+
   async function updateEventAccess(userId, patch) {
     setLoading(true)
     try {
@@ -6850,6 +7212,17 @@ function TeamPanel({ eventId }) {
                     >
                       Dashboard: {m.can_view_dashboard ? 'Yes' : 'No'}
                     </button>
+                    <select
+                      value={m.can_manage_guests ? 'manage' : m.can_view_guests ? 'view' : 'none'}
+                      onChange={(e) => setGuestAccess(m.user.id, e.target.value)}
+                      disabled={loading}
+                      title="Guest-directory permission for this event"
+                      className="text-xs border border-gray-300 dark:border-slate-600 rounded-full px-2 py-1 bg-white dark:bg-slate-700 dark:text-white disabled:opacity-50"
+                    >
+                      <option value="none">Guests: None</option>
+                      <option value="view">Guests: View</option>
+                      <option value="manage">Guests: Manage</option>
+                    </select>
                   </>
                 )}
                 {groups.length > 0 && (
@@ -7021,6 +7394,14 @@ function EventForm({ initial, onSave, onCancel }) {
         <div>
           <label htmlFor="event-venue-address" className="block text-xs font-semibold text-gray-600 mb-1">Venue address</label>
           <input id="event-venue-address" className={field} value={form.venue_address || ''} onChange={set('venue_address')} placeholder="Street, city" />
+        </div>
+        <div>
+          <label htmlFor="event-hotel" className="block text-xs font-semibold text-gray-600 mb-1">Hotel information</label>
+          <input id="event-hotel" className={field} value={form.hotel_name || ''} onChange={set('hotel_name')} placeholder="e.g. Courtyard by Marriott Houston I-10 West/Energy Corridor" />
+        </div>
+        <div>
+          <label htmlFor="event-hotel-address" className="block text-xs font-semibold text-gray-600 mb-1">Hotel address</label>
+          <input id="event-hotel-address" className={field} value={form.hotel_address || ''} onChange={set('hotel_address')} placeholder="Street, city, state, ZIP" />
         </div>
         <div className="sm:col-span-2">
           <label htmlFor="event-admission-note" className="block text-xs font-semibold text-gray-600 mb-1">Admission note shown on invite page</label>
@@ -8157,6 +8538,7 @@ export default function AdminPage() {
   const [activeTab, setActiveTab] = useState('overview')
   const [tableGroups, setTableGroups] = useState([])
   const [groupFilter, setGroupFilter] = useState('')   // '' = all, 'none' = unassigned
+  const [guestSearch, setGuestSearch] = useState('')
   const [guestFilter, setGuestFilter] = useState({ invited: 'all', admitted: 'all', qr: 'all', relationship: 'all', submitter: 'all' })
   const [showReset, setShowReset] = useState(false)
   const [editingGuest, setEditingGuest] = useState(null)
@@ -8168,6 +8550,10 @@ export default function AdminPage() {
 
   const PAGE_SIZE = 50
   const event = events.find((e) => e.id === selectedId)
+  const canManageEvent = !!event?.my_can_manage_event
+  const canManageGuests = canManageEvent || !!event?.my_can_manage_guests
+  const canViewGuests = canManageGuests || !!event?.my_can_view_guests
+  const guestOnlyAccess = canViewGuests && !canManageEvent
 
   useEffect(() => { api.listEvents().then((evs) => {
     setEvents(evs)
@@ -8208,6 +8594,14 @@ export default function AdminPage() {
     api.listTableGroups(selectedId).then(setTableGroups).catch(() => setTableGroups([]))
   }, [selectedId])
 
+  // Officials enter this surface only for capabilities explicitly granted on
+  // the selected event. They never inherit setup access from another org.
+  useEffect(() => {
+    if (!event) return
+    if (guestOnlyAccess) setActiveTab('guests')
+    else if (!canManageEvent && !canViewGuests) navigate('/scanner', { replace: true })
+  }, [event?.id, canManageEvent, canViewGuests, guestOnlyAccess, navigate])
+
   // Poll the event list every 15s while a sync-enabled event is selected,
   // so the "Last sync" timestamp and guest count stay live without a refresh.
   useEffect(() => {
@@ -8247,7 +8641,15 @@ export default function AdminPage() {
   }
 
   function updateEvent(updated) {
-    setEvents((prev) => prev.map((e) => (e.id === updated.id ? updated : e)))
+    setEvents((prev) => prev.map((e) => (e.id === updated.id ? {
+      ...e,
+      ...updated,
+      my_access_role: e.my_access_role,
+      my_access_level: e.my_access_level,
+      my_can_manage_event: e.my_can_manage_event,
+      my_can_view_guests: e.my_can_view_guests,
+      my_can_manage_guests: e.my_can_manage_guests,
+    } : e)))
   }
 
   // Server-side export so the file includes each guest's RSVP-question answers
@@ -8552,11 +8954,13 @@ export default function AdminPage() {
         />
       )}
       <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-bold dark:text-white">Event Setup</h1>
-        <button onClick={() => navigate('/setup')}
-          className="bg-indigo-600 text-white px-4 py-2 rounded-lg text-sm font-semibold hover:bg-indigo-700">
-          New Event
-        </button>
+        <h1 className="text-2xl font-bold dark:text-white">{guestOnlyAccess ? 'Event Guests' : 'Event Setup'}</h1>
+        {!guestOnlyAccess && user?.role === 'admin' && (
+          <button onClick={() => navigate('/setup')}
+            className="bg-indigo-600 text-white px-4 py-2 rounded-lg text-sm font-semibold hover:bg-indigo-700">
+            New Event
+          </button>
+        )}
       </div>
 
       {!event && <TrialBanner events={events} user={user} onCreateDraft={() => navigate('/setup')} />}
@@ -8582,7 +8986,7 @@ export default function AdminPage() {
                 </option>
               ))}
             </select>
-            {event && (
+            {event && canManageEvent && (
               <div className="flex items-center gap-2 shrink-0">
                 <button onClick={() => setEditing(!editing)} className="text-sm text-indigo-600 hover:underline whitespace-nowrap">
                   {editing ? 'Cancel' : 'Edit'}
@@ -8595,7 +8999,7 @@ export default function AdminPage() {
             )}
           </div>
 
-          {editing && event && (
+          {editing && event && canManageEvent && (
             <div className="mt-4 pt-4 border-t dark:border-slate-700">
               <EventForm
                 initial={{ ...event, event_date: utcToLocal(event.event_date) }}
@@ -8612,9 +9016,13 @@ export default function AdminPage() {
 
       {event && (
         <>
-          <OnboardingChecklist event={event} stats={stats} onTab={setActiveTab} />
+          {canManageEvent && <OnboardingChecklist event={event} stats={stats} onTab={setActiveTab} />}
           <div className="lg:grid lg:grid-cols-[15rem_1fr] lg:gap-6 lg:items-start">
-            <Sidebar active={activeTab} onChange={setActiveTab} groups={[
+            <Sidebar active={activeTab} onChange={setActiveTab} groups={guestOnlyAccess ? [
+              { label: 'Event access', items: [
+                { id: 'guests', label: 'Guests', icon: '👥', count: guests.length },
+              ]},
+            ] : [
               { label: 'Setup', items: [
                 { id: 'overview', label: 'Start here', icon: '🏠' },
                 { id: 'guests', label: 'Guests', icon: '👥', count: guests.length },
@@ -8740,7 +9148,7 @@ export default function AdminPage() {
             </div>
           )}
 
-          {showReset && (
+          {canManageEvent && showReset && (
             <ResetEventModal
               event={event}
               onClose={() => setShowReset(false)}
@@ -8756,7 +9164,7 @@ export default function AdminPage() {
             />
           )}
 
-          {editingGuest && (
+          {canManageGuests && editingGuest && (
             <EditGuestModal
               guest={editingGuest}
               eventId={selectedId}
@@ -8775,7 +9183,7 @@ export default function AdminPage() {
             />
           )}
 
-          {showAddGuest && (
+          {canManageGuests && showAddGuest && (
             <AddGuestModal
               loading={loading}
               onSave={handleAddGuest}
@@ -9042,10 +9450,12 @@ export default function AdminPage() {
           {activeTab === 'guests' && guests.length === 0 && (
             <div className="bg-white dark:bg-slate-800 dark:border dark:border-slate-700/60 rounded-xl shadow p-10 text-center space-y-3">
               <p className="text-sm text-slate-500 dark:text-slate-400">
-                No guests yet. Go to <button onClick={() => setActiveTab('overview')} className="text-teal-600 hover:underline font-semibold">Start here</button> to upload a guest file, connect Google Sheets, or download the template.
+                {guestOnlyAccess
+                  ? 'No guests are currently available for this event.'
+                  : <>No guests yet. Go to <button onClick={() => setActiveTab('overview')} className="text-teal-600 hover:underline font-semibold">Start here</button> to upload a guest file, connect Google Sheets, or download the template.</>}
               </p>
-              <button onClick={() => setShowAddGuest(true)}
-                className="bg-indigo-600 text-white px-4 py-2 rounded-lg text-sm font-semibold hover:bg-indigo-700">+ Add guest</button>
+              {canManageGuests && <button onClick={() => setShowAddGuest(true)}
+                className="bg-indigo-600 text-white px-4 py-2 rounded-lg text-sm font-semibold hover:bg-indigo-700">+ Add guest</button>}
             </div>
           )}
           {activeTab === 'guests' && guests.length > 0 && (() => {
@@ -9066,6 +9476,10 @@ export default function AdminPage() {
               : groupFilter === 'none' ? guests.filter((g) => !g.assigned_table_group_id)
               : guests.filter((g) => g.assigned_table_group_id === groupFilter)
             const filteredGuests = byGroup.filter((g) => {
+              const search = textKey(guestSearch).replace(/\s+/g, ' ')
+              const guestName = textKey(`${g.first_name || ''} ${g.last_name || ''}`).replace(/\s+/g, ' ')
+              const reverseName = textKey(`${g.last_name || ''} ${g.first_name || ''}`).replace(/\s+/g, ' ')
+              if (search && !guestName.includes(search) && !reverseName.includes(search)) return false
               if (guestFilter.invited === 'sent'   && g.invite_status !== 'sent')   return false
               if (guestFilter.invited === 'failed' && g.invite_status !== 'failed') return false
               if (guestFilter.invited === 'unsent' && g.invite_sent_at)             return false
@@ -9083,7 +9497,7 @@ export default function AdminPage() {
               }
               return true
             })
-            const anyFilter = guestFilter.invited !== 'all' || guestFilter.admitted !== 'all' || guestFilter.qr !== 'all' || guestFilter.relationship !== 'all' || guestFilter.submitter !== 'all'
+            const anyFilter = Boolean(guestSearch.trim()) || guestFilter.invited !== 'all' || guestFilter.admitted !== 'all' || guestFilter.qr !== 'all' || guestFilter.relationship !== 'all' || guestFilter.submitter !== 'all'
             const setGF = (patch) => { setGuestFilter((f) => ({ ...f, ...patch })); setPage(0) }
             const totalPages = Math.ceil(filteredGuests.length / PAGE_SIZE)
             const pageGuests = filteredGuests.slice(page * PAGE_SIZE, (page + 1) * PAGE_SIZE)
@@ -9091,7 +9505,7 @@ export default function AdminPage() {
             const pageAllSelected = pageGuests.length > 0 && pageSelectedCount === pageGuests.length
             return (
               <div className="bg-white dark:bg-slate-800 dark:border dark:border-slate-700/60 rounded-xl shadow overflow-hidden">
-                {stats.pending > 0 && (
+                {canManageGuests && stats.pending > 0 && (
                   <div className="px-4 sm:px-6 py-3 bg-amber-50 dark:bg-amber-900/30 border-b border-amber-200 dark:border-amber-800 flex items-center gap-3 flex-wrap">
                     <span className="text-sm font-semibold text-amber-900 dark:text-amber-200">
                       ⏳ {stats.pending} RSVP{stats.pending === 1 ? '' : 's'} awaiting approval
@@ -9102,7 +9516,7 @@ export default function AdminPage() {
                     </button>
                   </div>
                 )}
-                {selectedGuests.size > 0 && (
+                {canManageGuests && selectedGuests.size > 0 && (
                   <div className="px-4 sm:px-6 py-3 bg-indigo-50 dark:bg-indigo-900/30 border-b border-indigo-200 dark:border-indigo-800 flex items-center gap-3 flex-wrap">
                     <span className="text-sm font-semibold text-indigo-900 dark:text-indigo-100">
                       {selectedGuests.size} selected
@@ -9138,7 +9552,7 @@ export default function AdminPage() {
                   </div>
                 )}
                 <div className="px-4 sm:px-6 py-4 border-b dark:border-slate-700 flex items-center justify-between gap-2 flex-wrap">
-                  {(() => {
+                  {canManageGuests && (() => {
                     const paidOn = event.is_paid && event.paid_channels
                     const chans = []
                     if (event.notify_sms) chans.push('SMS')
@@ -9164,7 +9578,18 @@ export default function AdminPage() {
                     }
                     return null
                   })()}
-                  <h2 className="font-semibold text-sm sm:text-base dark:text-white">Guest List ({filteredGuests.length}{groupFilter ? ` of ${guests.length}` : ''})</h2>
+                  <h2 className="font-semibold text-sm sm:text-base dark:text-white">Guest List ({filteredGuests.length}{groupFilter || guestSearch.trim() ? ` of ${guests.length}` : ''})</h2>
+                  <div className="relative min-w-[13rem] flex-1 sm:max-w-xs">
+                    <span className="pointer-events-none absolute inset-y-0 left-3 flex items-center text-slate-400" aria-hidden="true">⌕</span>
+                    <input
+                      type="search"
+                      value={guestSearch}
+                      onChange={(e) => { setGuestSearch(e.target.value); setPage(0) }}
+                      placeholder="Search guests by name"
+                      aria-label="Search guests by name"
+                      className="min-h-9 w-full rounded-lg border border-slate-300 bg-white py-1.5 pl-8 pr-3 text-sm text-slate-900 placeholder-slate-400 focus:border-teal-500 focus:outline-none focus:ring-2 focus:ring-teal-500/20 dark:border-slate-600 dark:bg-slate-700 dark:text-white"
+                    />
+                  </div>
                   {event?.seating_enabled && tableGroups.length > 0 && (
                     <select value={groupFilter} onChange={(e) => { setGroupFilter(e.target.value); setPage(0) }}
                       className="text-xs border dark:border-slate-700 rounded-lg px-2 py-1.5 bg-white dark:bg-slate-700 dark:text-slate-200">
@@ -9189,13 +9614,13 @@ export default function AdminPage() {
                       {submitterOptions.map(([id, name]) => <option key={id} value={id}>Guest of {name}</option>)}
                     </select>
                   )}
-                  <button onClick={() => handleSendBatch({ force: false, label: 'Send unsent' })}
+                  {canManageGuests && <button onClick={() => handleSendBatch({ force: false, label: 'Send unsent' })}
                     disabled={loading || stats.total - stats.invited === 0}
                     title={stats.total - stats.invited === 0 ? 'Everyone has been invited' : 'Send to everyone not yet invited'}
                     className="text-xs px-2.5 py-1.5 rounded-lg bg-amber-500 text-white font-semibold hover:bg-amber-600 disabled:opacity-50">
                     ✉ Send invitations ({stats.total - stats.invited})
-                  </button>
-                  <button onClick={() => {
+                  </button>}
+                  {canManageGuests && <button onClick={() => {
                       if (stats.total === 0) return
                       if (!confirm(`Re-send the invite to ALL ${stats.total} guests, including those already invited?`)) return
                       handleSendBatch({ force: true, label: 'Resend all' })
@@ -9203,12 +9628,12 @@ export default function AdminPage() {
                     disabled={loading || stats.total === 0}
                     className="text-xs px-2.5 py-1.5 rounded-lg border border-amber-300 dark:border-amber-700 text-amber-700 dark:text-amber-300 hover:bg-amber-50 dark:hover:bg-slate-700 disabled:opacity-50">
                     Resend to all
-                  </button>
-                  <button onClick={() => setShowAddGuest(true)}
+                  </button>}
+                  {canManageGuests && <button onClick={() => setShowAddGuest(true)}
                     className="text-xs px-2.5 py-1.5 rounded-lg bg-indigo-600 text-white font-semibold hover:bg-indigo-700">
                     + Add guest
-                  </button>
-                  <ExportMenu event={event} onExport={handleExportGuests} />
+                  </button>}
+                  {canManageGuests && <ExportMenu event={event} onExport={handleExportGuests} />}
                   {totalPages > 1 && (
                     <div className="flex items-center gap-2">
                       <button onClick={() => setPage((p) => Math.max(0, p - 1))} disabled={page === 0}
@@ -9239,17 +9664,23 @@ export default function AdminPage() {
                     </button>
                   ))}
                   {anyFilter && (
-                    <button onClick={() => setGF({ invited: 'all', admitted: 'all', qr: 'all', relationship: 'all', submitter: 'all' })}
+                    <button onClick={() => { setGuestSearch(''); setGF({ invited: 'all', admitted: 'all', qr: 'all', relationship: 'all', submitter: 'all' }) }}
                       className="text-gray-500 dark:text-slate-400 hover:underline ml-1">Clear filters</button>
                   )}
                 </div>
 
+                {filteredGuests.length === 0 && (
+                  <div className="px-6 py-10 text-center text-sm text-slate-500 dark:text-slate-400">
+                    No guests match your search and filters.
+                  </div>
+                )}
+
                 {/* Desktop table */}
-                <div className="hidden sm:block overflow-x-auto">
+                <div className={`${filteredGuests.length === 0 ? 'hidden' : 'hidden sm:block'} overflow-x-auto`}>
                   <table className="w-full text-sm">
                     <thead className="bg-gray-50 dark:bg-slate-700 text-xs font-semibold text-gray-500 dark:text-slate-400 uppercase tracking-wide">
                       <tr>
-                        <th className="px-3 py-3 w-8">
+                        {canManageGuests && <th className="px-3 py-3 w-8">
                           <input
                             type="checkbox"
                             checked={pageAllSelected}
@@ -9258,7 +9689,7 @@ export default function AdminPage() {
                             className="cursor-pointer"
                             aria-label="Select page"
                           />
-                        </th>
+                        </th>}
                         <th className="px-4 py-3 text-left">Name</th>
                         <th className="px-4 py-3 text-left">Email</th>
                         {event?.seating_enabled && <th className="px-4 py-3 text-left">Table Group</th>}
@@ -9276,7 +9707,7 @@ export default function AdminPage() {
                     <tbody className="divide-y divide-gray-100 dark:divide-slate-700">
                       {pageGuests.map((g) => (
                         <tr key={g.id} className={`hover:bg-gray-50 dark:hover:bg-slate-700 ${selectedGuests.has(g.id) ? 'bg-indigo-50/60 dark:bg-indigo-900/20' : ''}`}>
-                          <td className="px-3 py-3">
+                          {canManageGuests && <td className="px-3 py-3">
                             <input
                               type="checkbox"
                               checked={selectedGuests.has(g.id)}
@@ -9284,7 +9715,7 @@ export default function AdminPage() {
                               className="cursor-pointer"
                               aria-label={`Select ${g.first_name} ${g.last_name}`}
                             />
-                          </td>
+                          </td>}
                           <td className="px-4 py-3 font-medium dark:text-slate-100">
                             <span className="inline-flex items-center gap-2">{g.first_name} {g.last_name}{g.is_vip && <VipBadge />}</span>
                             {(g.rsvp_submitter_guest_id || g.rsvp_submitter_name || g.rsvp_guest_type) && (
@@ -9329,7 +9760,7 @@ export default function AdminPage() {
                           </td>
                           <td className="px-4 py-3 text-center">
                             <div className="flex items-center justify-center gap-3">
-                              {g.rsvp_status === 'pending' && (
+                              {canManageGuests && g.rsvp_status === 'pending' && (
                                 <>
                                   <button onClick={() => handleApproveRsvp(g.id)} disabled={loading}
                                     className="text-xs font-semibold text-green-600 hover:underline disabled:opacity-40">Approve</button>
@@ -9337,32 +9768,32 @@ export default function AdminPage() {
                                     className="text-xs text-red-500 hover:underline disabled:opacity-40">Reject</button>
                                 </>
                               )}
-                              {event?.invite_mode === 'closed' && (
+                              {canManageGuests && event?.invite_mode === 'closed' && (
                                 <button onClick={() => handleCopyInviteLink(g.id)}
                                   className="text-xs text-teal-600 hover:underline">Copy link</button>
                               )}
-                              {g.qr_generated_at && (
+                              {canManageGuests && g.qr_generated_at && (
                                 <a href={api.guestQrUrl(selectedId, g.id)} target="_blank" rel="noopener noreferrer"
                                   className="text-xs text-indigo-600 hover:underline">QR</a>
                               )}
-                              {(g.qr_generated_at || event?.invite_mode === 'closed') && (
+                              {canManageGuests && (g.qr_generated_at || event?.invite_mode === 'closed') && (
                                 <button onClick={() => handleResendInvite(g.id)} disabled={loading}
                                   className="text-xs text-amber-600 hover:underline disabled:opacity-40">Invite</button>
                               )}
-                              {g.admitted && (
+                              {canManageGuests && g.admitted && (
                                 <button onClick={() => handleResendGuestEmail(g.id, 'admission')} disabled={loading}
                                   className="text-xs text-green-600 hover:underline disabled:opacity-40">Admission</button>
                               )}
-                              {event?.experience_enabled && (
+                              {canManageGuests && event?.experience_enabled && (
                                 <button onClick={() => handleResendGuestEmail(g.id, 'experience_next_steps')} disabled={loading}
                                   className="text-xs text-teal-600 hover:underline disabled:opacity-40">Experience</button>
                               )}
                               <button onClick={() => setViewingGuest(g)}
                                 className="text-xs text-slate-500 dark:text-slate-300 hover:underline">View</button>
-                              <button onClick={() => setEditingGuest(g)} disabled={loading}
+                              {canManageGuests && <button onClick={() => setEditingGuest(g)} disabled={loading}
                                 className="text-xs text-teal-600 hover:underline disabled:opacity-40">Edit</button>
-                              <button onClick={() => handleDeleteGuest(g.id)} disabled={loading}
-                                className="text-xs text-red-400 hover:text-red-600 disabled:opacity-40">Remove</button>
+                              }{canManageGuests && <button onClick={() => handleDeleteGuest(g.id)} disabled={loading}
+                                className="text-xs text-red-400 hover:text-red-600 disabled:opacity-40">Remove</button>}
                             </div>
                           </td>
                         </tr>
@@ -9377,13 +9808,13 @@ export default function AdminPage() {
                     <div key={g.id} className={`px-4 py-4 space-y-2 ${selectedGuests.has(g.id) ? 'bg-indigo-50/60 dark:bg-indigo-900/20' : ''}`}>
                       <div className="flex items-start justify-between gap-2">
                         <div className="flex items-start gap-3">
-                          <input
+                          {canManageGuests && <input
                             type="checkbox"
                             checked={selectedGuests.has(g.id)}
                             onChange={() => toggleSelectGuest(g.id)}
                             className="mt-1 cursor-pointer"
                             aria-label={`Select ${g.first_name} ${g.last_name}`}
-                          />
+                          />}
                           <div>
                             <div className="font-semibold text-sm dark:text-slate-100 flex items-center gap-2">{g.first_name} {g.last_name}{g.is_vip && <VipBadge />}</div>
                             <div className="text-xs text-gray-500 dark:text-slate-400 break-all">{g.email}</div>
@@ -9408,7 +9839,7 @@ export default function AdminPage() {
                         <RsvpStatusBadge status={g.rsvp_status} />
                       </div>
                       <div className="flex gap-4 pt-1">
-                        {g.rsvp_status === 'pending' && (
+                        {canManageGuests && g.rsvp_status === 'pending' && (
                           <>
                             <button onClick={() => handleApproveRsvp(g.id)} disabled={loading}
                               className="text-xs font-semibold text-green-600 hover:underline disabled:opacity-40">Approve</button>
@@ -9416,32 +9847,32 @@ export default function AdminPage() {
                               className="text-xs text-red-500 hover:underline disabled:opacity-40">Reject</button>
                           </>
                         )}
-                        {event?.invite_mode === 'closed' && (
+                        {canManageGuests && event?.invite_mode === 'closed' && (
                           <button onClick={() => handleCopyInviteLink(g.id)}
                             className="text-xs text-teal-600 hover:underline">Copy RSVP link</button>
                         )}
-                        {g.qr_generated_at && (
+                        {canManageGuests && g.qr_generated_at && (
                           <a href={api.guestQrUrl(selectedId, g.id)} target="_blank" rel="noopener noreferrer"
                             className="text-xs text-indigo-600 hover:underline">View QR</a>
                         )}
-                        {(g.qr_generated_at || event?.invite_mode === 'closed') && (
+                        {canManageGuests && (g.qr_generated_at || event?.invite_mode === 'closed') && (
                           <button onClick={() => handleResendInvite(g.id)} disabled={loading}
                             className="text-xs text-amber-600 hover:underline disabled:opacity-40">Resend invite</button>
                         )}
-                        {g.admitted && (
+                        {canManageGuests && g.admitted && (
                           <button onClick={() => handleResendGuestEmail(g.id, 'admission')} disabled={loading}
                             className="text-xs text-green-600 hover:underline disabled:opacity-40">Admission email</button>
                         )}
-                        {event?.experience_enabled && (
+                        {canManageGuests && event?.experience_enabled && (
                           <button onClick={() => handleResendGuestEmail(g.id, 'experience_next_steps')} disabled={loading}
                             className="text-xs text-teal-600 hover:underline disabled:opacity-40">Experience steps</button>
                         )}
                         <button onClick={() => setViewingGuest(g)}
                           className="text-xs text-slate-500 dark:text-slate-300 hover:underline">View</button>
-                        <button onClick={() => setEditingGuest(g)} disabled={loading}
+                        {canManageGuests && <button onClick={() => setEditingGuest(g)} disabled={loading}
                           className="text-xs text-teal-600 hover:underline disabled:opacity-40">Edit</button>
-                        <button onClick={() => handleDeleteGuest(g.id)} disabled={loading}
-                          className="text-xs text-red-400 hover:text-red-600 disabled:opacity-40 ml-auto">Remove</button>
+                        }{canManageGuests && <button onClick={() => handleDeleteGuest(g.id)} disabled={loading}
+                          className="text-xs text-red-400 hover:text-red-600 disabled:opacity-40 ml-auto">Remove</button>}
                       </div>
                     </div>
                   ))}

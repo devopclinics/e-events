@@ -456,6 +456,45 @@ async def remove_event_guest(external_event_ref: str, guest_ref: str, _: None = 
     if member: member.removed_at = datetime.utcnow(); await db.commit()
 
 
+@app.put("/internal/v1/guesthub/event-links/{external_event_ref}/users/{subject}", response_model=MemberOut)
+async def upsert_event_user(
+    external_event_ref: str,
+    subject: str,
+    body: dict = Body(...),
+    _: None = Depends(internal_service),
+    db: AsyncSession = Depends(get_db),
+):
+    """Provision an assigned GuestHub user without making them an event admin."""
+    group = await _event_group(db, external_event_ref)
+    desired_role = str(body.get("role") or "member")
+    if desired_role not in {"admin", "moderator", "member", "readonly"}:
+        raise HTTPException(422, "Invalid FestioMe member role")
+    member = (await db.execute(select(Member).where(
+        Member.group_id == group.id,
+        Member.identity_kind == "user",
+        Member.identity_ref == subject,
+    ))).scalar_one_or_none()
+    display_name = str(body.get("name") or body.get("email") or "Festio member").strip()[:255]
+    if not member:
+        member = Member(
+            group_id=group.id,
+            identity_kind="user",
+            identity_ref=subject,
+            display_name=display_name,
+            role=desired_role,
+        )
+        db.add(member)
+    else:
+        member.display_name = display_name
+        member.removed_at = None
+        # The provisioning contract must never demote the group owner.
+        if member.role != "owner":
+            member.role = desired_role
+    await db.commit()
+    await db.refresh(member)
+    return member
+
+
 @app.post("/internal/v1/guesthub/event-links/{external_event_ref}/guest-token")
 async def issue_guest_token(external_event_ref: str, body: dict = Body(...), _: None = Depends(internal_service), db: AsyncSession = Depends(get_db)):
     group = await _event_group(db, external_event_ref); guest_ref = str(body.get("guest_ref") or "")

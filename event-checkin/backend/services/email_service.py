@@ -553,13 +553,13 @@ def _invite_hub_cta(hub_url: str) -> str:
         'border-radius:12px;border-collapse:separate;overflow:hidden;">'
         '<tr><td style="padding:14px 16px;">'
         '<div style="font-weight:700;color:#155e75;font-size:14px;">'
-        '💬 Your Guest Hub</div>'
+        '💬 Your FestioHub</div>'
         '<div style="color:#6b7280;font-size:13px;margin-top:2px;">'
         'Message the host, read announcements, and see your table — from any '
         'device. Bookmark this link to come back anytime.</div>'
         f'<a href="{hub_url}" style="display:inline-block;margin-top:10px;'
         'background:#0891b2;color:white;text-decoration:none;padding:8px 16px;'
-        'border-radius:8px;font-size:13px;font-weight:700;">Open my Guest Hub →</a>'
+        'border-radius:8px;font-size:13px;font-weight:700;">Open my FestioHub →</a>'
         '</td></tr></table>'
     )
 
@@ -976,7 +976,7 @@ async def send_admission_email(guest_data: dict):
             f'<p style="margin:14px 0 0 0;"><a href="{_html.escape(str(hub_url))}" '
             'style="display:inline-block;background:#0f172a;color:white;text-decoration:none;'
             'padding:10px 14px;border-radius:9px;font-size:13px;font-weight:800;">'
-            'Open Guest Hub to track my activity</a></p>'
+            'Open FestioHub to track my activity</a></p>'
             if hub_url else ""
         )
         experience_html = (

@@ -51,7 +51,7 @@ function OverviewTab() {
 }
 
 const MESSAGING_CHANNELS = [['email', 'Email'], ['sms', 'SMS'], ['whatsapp', 'WhatsApp'], ['mms', 'MMS']]
-const COMM_FEATURES = [['guest_hub', 'Guest Hub'], ['guest_chat', 'Guest Chat'], ['host_messages', 'Message Host'], ['announcements', 'Announcements'], ['festiome', 'FestioMe']]
+const COMM_FEATURES = [['guest_hub', 'FestioHub'], ['guest_chat', 'Guest Chat'], ['host_messages', 'Message Host'], ['announcements', 'Announcements'], ['festiome', 'FestioMe']]
 
 function EventRow({ ev, plans, onGrant }) {
   const [tier, setTier] = useState('')

@@ -202,7 +202,9 @@ export default function FestioMePage() {
       setChannels(next);
       setMembers(list(memberData));
       setChannelId((current) =>
-        next.some((item) => item.id === current) ? current : next[0]?.id || "",
+        next.some((item) => item.id === current)
+          ? current
+          : next.find((item) => Number(item.unread_count || 0) > 0)?.id || next[0]?.id || "",
       );
     } catch (error) {
       setNotice(errorText(error));

@@ -572,13 +572,13 @@ async def send_test_message(
             await messaging.send_invite_sms(
                 phone=phone, first_name="Festio",
                 event_name=f"{event.name} (TEST)",
-                ticket_url=ticket_url, event_date=event.event_date,
+                ticket_url=ticket_url, event_date=event.event_date, event_timezone=event.timezone,
             )
         else:
             await messaging.send_invite_whatsapp(
                 phone=phone, first_name="Festio",
                 event_name=f"{event.name} (TEST)",
-                ticket_url=ticket_url, event_date=event.event_date,
+                ticket_url=ticket_url, event_date=event.event_date, event_timezone=event.timezone,
             )
     except Exception as e:
         raise HTTPException(500, f"Send failed: {e}")
@@ -1076,6 +1076,7 @@ async def send_manual_invites(
                 event_date=event.event_date,
                 invite_message=event.invite_message,
                 event_id=event.id,
+                event_timezone=event.timezone,
             )
             dispatched = True
 

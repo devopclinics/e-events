@@ -3,6 +3,12 @@ import { api } from "../api";
 import { useAuth } from "../context/AuthContext";
 
 const KINDS = { discussion: "#", announcement: "📣", staff: "🔒" };
+const STAFF_ROLES = ["owner", "admin", "moderator"];
+// A DM shows as an envelope, a private (non-DM) channel as a lock, otherwise the
+// kind icon. Private topic channels reuse the discussion/announcement kind for
+// posting rules, so the lock takes precedence for the label.
+const channelIcon = (channel) =>
+  channel?.is_dm ? "✉️" : channel?.is_private ? "🔒" : KINDS[channel?.kind] || "#";
 const list = (value) =>
   Array.isArray(value)
     ? value
@@ -94,6 +100,12 @@ export default function FestioMePage() {
     [formValue, setFormValue] = useState("");
   const [channelKind, setChannelKind] = useState("discussion"),
     [inviteEmail, setInviteEmail] = useState("");
+  // Create-channel dialog: private toggle + selected member ids.
+  const [channelPrivate, setChannelPrivate] = useState(false),
+    [channelPickIds, setChannelPickIds] = useState([]);
+  // Manage-members dialog for an existing private channel.
+  const [channelMembers, setChannelMembers] = useState([]),
+    [channelAddIds, setChannelAddIds] = useState([]);
   const [editing, setEditing] = useState(null),
     [attachments, setAttachments] = useState([]),
     [uploading, setUploading] = useState(false);
@@ -456,12 +468,56 @@ export default function FestioMePage() {
     try {
       const created = await api.festiomeCreateChannel(groupId, {
         name: formValue.trim(),
-        kind: channelKind,
+        kind: channelPrivate ? "discussion" : channelKind,
+        is_private: channelPrivate,
+        ...(channelPrivate && { member_ids: channelPickIds }),
       });
       setDialog("");
       setFormValue("");
+      setChannelPrivate(false);
+      setChannelPickIds([]);
       await loadGroupData();
       setChannelId(created.id);
+    } catch (e) {
+      setNotice(errorText(e));
+    }
+  }
+  async function openChannelMembers() {
+    try {
+      const current = await api.festiomeChannelMembers(channelId);
+      setChannelMembers(list(current));
+      setChannelAddIds([]);
+      setDialog("channel-members");
+    } catch (e) {
+      setNotice(errorText(e));
+    }
+  }
+  async function addChannelMembers() {
+    if (!channelAddIds.length) return;
+    try {
+      const updated = await api.festiomeAddChannelMembers(channelId, channelAddIds);
+      setChannelMembers(list(updated));
+      setChannelAddIds([]);
+      await loadGroupData();
+    } catch (e) {
+      setNotice(errorText(e));
+    }
+  }
+  async function removeChannelMember(memberId) {
+    try {
+      await api.festiomeRemoveChannelMember(channelId, memberId);
+      setChannelMembers((current) => current.filter((m) => m.id !== memberId));
+      await loadGroupData();
+    } catch (e) {
+      setNotice(errorText(e));
+    }
+  }
+  async function startDirectMessage(member) {
+    try {
+      const dm = await api.festiomeOpenDirectMessage(groupId, member.id);
+      await loadGroupData();
+      setChannelId(dm.id);
+      setPanel("");
     } catch (e) {
       setNotice(errorText(e));
     }
@@ -831,21 +887,45 @@ export default function FestioMePage() {
                     </button>
                   )}
                 </div>
-                {channels.map((channel) => (
-                  <button
-                    key={channel.id}
-                    onClick={() => setChannelId(channel.id)}
-                    className={`mb-1 flex w-full items-center gap-2 rounded-lg px-2 py-2 text-left text-sm ${channel.id === channelId ? "bg-white font-semibold text-teal-700 shadow dark:bg-slate-800 dark:text-teal-300" : "text-slate-600 dark:text-slate-300"}`}
-                  >
-                    <span>{KINDS[channel.kind] || "#"}</span>
-                    <span className="truncate">{channel.name}</span>
-                    {Number(channel.unread_count || 0) > 0 && (
-                      <span className="ml-auto rounded-full bg-teal-600 px-1.5 text-[10px] text-white">
-                        {channel.unread_count}
-                      </span>
-                    )}
-                  </button>
-                ))}
+                {channels
+                  .filter((channel) => !channel.is_dm)
+                  .map((channel) => (
+                    <button
+                      key={channel.id}
+                      onClick={() => setChannelId(channel.id)}
+                      className={`mb-1 flex w-full items-center gap-2 rounded-lg px-2 py-2 text-left text-sm ${channel.id === channelId ? "bg-white font-semibold text-teal-700 shadow dark:bg-slate-800 dark:text-teal-300" : "text-slate-600 dark:text-slate-300"}`}
+                    >
+                      <span>{channelIcon(channel)}</span>
+                      <span className="truncate">{channel.name}</span>
+                      {Number(channel.unread_count || 0) > 0 && (
+                        <span className="ml-auto rounded-full bg-teal-600 px-1.5 text-[10px] text-white">
+                          {channel.unread_count}
+                        </span>
+                      )}
+                    </button>
+                  ))}
+                {channels.some((channel) => channel.is_dm) && (
+                  <div className="mt-4 px-2 py-2 text-[11px] font-bold uppercase text-slate-500">
+                    Direct Messages
+                  </div>
+                )}
+                {channels
+                  .filter((channel) => channel.is_dm)
+                  .map((channel) => (
+                    <button
+                      key={channel.id}
+                      onClick={() => setChannelId(channel.id)}
+                      className={`mb-1 flex w-full items-center gap-2 rounded-lg px-2 py-2 text-left text-sm ${channel.id === channelId ? "bg-white font-semibold text-teal-700 shadow dark:bg-slate-800 dark:text-teal-300" : "text-slate-600 dark:text-slate-300"}`}
+                    >
+                      <span>{channelIcon(channel)}</span>
+                      <span className="truncate">{channel.name}</span>
+                      {Number(channel.unread_count || 0) > 0 && (
+                        <span className="ml-auto rounded-full bg-teal-600 px-1.5 text-[10px] text-white">
+                          {channel.unread_count}
+                        </span>
+                      )}
+                    </button>
+                  ))}
               </aside>
               <main className="flex min-w-0 flex-1 flex-col">
                 <div className="border-b p-2 sm:hidden">
@@ -856,11 +936,34 @@ export default function FestioMePage() {
                   >
                     {channels.map((channel) => (
                       <option key={channel.id} value={channel.id}>
-                        {KINDS[channel.kind]} {channel.name}
+                        {channelIcon(channel)} {channel.name}
                       </option>
                     ))}
                   </select>
                 </div>
+                {activeChannel && (
+                  <div className="flex items-center gap-2 border-b px-4 py-2 text-sm dark:border-slate-700 sm:px-6">
+                    <span>{channelIcon(activeChannel)}</span>
+                    <b className="truncate dark:text-white">{activeChannel.name}</b>
+                    {activeChannel.is_private && !activeChannel.is_dm && (
+                      <>
+                        <span className="text-xs text-slate-400">
+                          · {activeChannel.member_count} member
+                          {activeChannel.member_count === 1 ? "" : "s"} · private
+                        </span>
+                        <button
+                          onClick={() => openChannelMembers(activeChannel)}
+                          className="ml-auto rounded-lg border px-2 py-1 text-xs text-teal-600 dark:border-slate-600 dark:text-teal-400"
+                        >
+                          Members
+                        </button>
+                      </>
+                    )}
+                    {activeChannel.is_dm && (
+                      <span className="text-xs text-slate-400">· direct message</span>
+                    )}
+                  </div>
+                )}
                 <div className="flex-1 overflow-y-auto px-4 py-3 sm:px-6">
                   {cursor && (
                     <div className="pb-4 text-center">
@@ -883,7 +986,7 @@ export default function FestioMePage() {
                       <div>
                         <div className="text-3xl">👋</div>
                         <h3 className="mt-3 font-bold dark:text-white">
-                          Start {KINDS[activeChannel?.kind]}{" "}
+                          Start {channelIcon(activeChannel)}{" "}
                           {activeChannel?.name}
                         </h3>
                       </div>
@@ -1148,7 +1251,7 @@ export default function FestioMePage() {
                       <input
                         value={draft}
                         onChange={(e) => setDraft(e.target.value)}
-                        placeholder={`Message ${KINDS[activeChannel?.kind]} ${activeChannel?.name || ""} — use @ to mention`}
+                        placeholder={`Message ${channelIcon(activeChannel)} ${activeChannel?.name || ""} — use @ to mention`}
                         className="min-w-0 flex-1 rounded-full border bg-white px-4 py-2.5 text-sm dark:border-slate-600 dark:bg-slate-800 dark:text-white"
                       />
                       <button
@@ -1192,6 +1295,26 @@ export default function FestioMePage() {
                           Invite
                         </button>
                       </form>
+                      {members.some((member) => STAFF_ROLES.includes(member.role)) && (
+                        <div className="mb-4">
+                          <p className="mb-1 text-[11px] font-bold uppercase text-slate-500">
+                            Event staff
+                          </p>
+                          <div className="flex flex-wrap gap-1.5">
+                            {members
+                              .filter((member) => STAFF_ROLES.includes(member.role))
+                              .map((member) => (
+                                <span
+                                  key={member.id}
+                                  className="rounded-full bg-teal-50 px-2 py-0.5 text-[11px] font-medium text-teal-700 dark:bg-teal-900/40 dark:text-teal-300"
+                                  title={member.role}
+                                >
+                                  {name(member)}
+                                </span>
+                              ))}
+                          </div>
+                        </div>
+                      )}
                       <div className="space-y-3">
                         {members.map((member) => (
                           <div
@@ -1223,6 +1346,15 @@ export default function FestioMePage() {
                                 </small>
                               )}
                             </span>
+                            {!member.is_me && (
+                              <button
+                                onClick={() => startDirectMessage(member)}
+                                title="Send a direct message"
+                                className="text-xs text-teal-600 dark:text-teal-400"
+                              >
+                                Message
+                              </button>
+                            )}
                             {canManage && !member.is_me && (
                               <button
                                 onClick={() => memberAction(member, "remove")}
@@ -1530,19 +1662,129 @@ export default function FestioMePage() {
               placeholder="Channel name"
               className="w-full rounded-lg border p-3 dark:bg-slate-800 dark:text-white"
             />
-            <select
-              value={channelKind}
-              onChange={(e) => setChannelKind(e.target.value)}
-              className="w-full rounded-lg border p-3 dark:bg-slate-800 dark:text-white"
-            >
-              <option value="discussion">Discussion — everyone can talk</option>
-              <option value="announcement">Announcement — admins post</option>
-              <option value="staff">Staff — private</option>
-            </select>
+            {!channelPrivate && (
+              <select
+                value={channelKind}
+                onChange={(e) => setChannelKind(e.target.value)}
+                className="w-full rounded-lg border p-3 dark:bg-slate-800 dark:text-white"
+              >
+                <option value="discussion">Discussion — everyone can talk</option>
+                <option value="announcement">Announcement — admins post</option>
+                <option value="staff">Staff — visible to staff only</option>
+              </select>
+            )}
+            <label className="flex items-center gap-2 text-sm text-slate-600 dark:text-slate-300">
+              <input
+                type="checkbox"
+                checked={channelPrivate}
+                onChange={(e) => setChannelPrivate(e.target.checked)}
+              />
+              Private — only the people you choose can see it
+            </label>
+            {channelPrivate && (
+              <div className="max-h-48 space-y-1 overflow-y-auto rounded-lg border p-2 dark:border-slate-700">
+                <p className="px-1 pb-1 text-[11px] text-slate-400">
+                  Select members (you are added automatically)
+                </p>
+                {members
+                  .filter((member) => !member.is_me)
+                  .map((member) => (
+                    <label
+                      key={member.id}
+                      className="flex items-center gap-2 rounded px-1 py-1 text-sm text-slate-600 hover:bg-slate-50 dark:text-slate-300 dark:hover:bg-slate-800"
+                    >
+                      <input
+                        type="checkbox"
+                        checked={channelPickIds.includes(member.id)}
+                        onChange={(e) =>
+                          setChannelPickIds((current) =>
+                            e.target.checked
+                              ? [...current, member.id]
+                              : current.filter((id) => id !== member.id),
+                          )
+                        }
+                      />
+                      {name(member)}
+                    </label>
+                  ))}
+              </div>
+            )}
             <button className="w-full rounded-lg bg-teal-600 p-2 font-semibold text-white">
               Create channel
             </button>
           </form>
+        </Dialog>
+      )}
+      {dialog === "channel-members" && (
+        <Dialog title="Channel members" onClose={() => setDialog("")}>
+          <div className="space-y-4">
+            <div className="space-y-2">
+              {channelMembers.map((member) => (
+                <div key={member.id} className="flex items-center gap-2 text-sm">
+                  <span className="grid h-7 w-7 place-items-center rounded-lg bg-slate-200 text-[10px] font-bold dark:bg-slate-700">
+                    {initials(name(member))}
+                  </span>
+                  <span className="min-w-0 flex-1 truncate dark:text-white">
+                    {name(member)}
+                    {member.is_me && " (you)"}
+                  </span>
+                  {!member.is_me && (
+                    <button
+                      onClick={() => removeChannelMember(member.id)}
+                      className="text-xs text-rose-500"
+                    >
+                      Remove
+                    </button>
+                  )}
+                </div>
+              ))}
+            </div>
+            <div>
+              <p className="mb-1 text-[11px] font-bold uppercase text-slate-500">
+                Add people
+              </p>
+              <div className="max-h-40 space-y-1 overflow-y-auto rounded-lg border p-2 dark:border-slate-700">
+                {members
+                  .filter(
+                    (member) =>
+                      !channelMembers.some((cm) => cm.id === member.id),
+                  )
+                  .map((member) => (
+                    <label
+                      key={member.id}
+                      className="flex items-center gap-2 rounded px-1 py-1 text-sm text-slate-600 dark:text-slate-300"
+                    >
+                      <input
+                        type="checkbox"
+                        checked={channelAddIds.includes(member.id)}
+                        onChange={(e) =>
+                          setChannelAddIds((current) =>
+                            e.target.checked
+                              ? [...current, member.id]
+                              : current.filter((id) => id !== member.id),
+                          )
+                        }
+                      />
+                      {name(member)}
+                    </label>
+                  ))}
+                {members.filter(
+                  (member) => !channelMembers.some((cm) => cm.id === member.id),
+                ).length === 0 && (
+                  <p className="px-1 py-1 text-xs text-slate-400">
+                    Everyone in this group is already in the channel.
+                  </p>
+                )}
+              </div>
+              <button
+                onClick={addChannelMembers}
+                disabled={!channelAddIds.length}
+                className="mt-2 w-full rounded-lg bg-teal-600 p-2 text-sm font-semibold text-white disabled:opacity-40"
+              >
+                Add selected
+              </button>
+            </div>
+          </div>
         </Dialog>
       )}
       {dialog === "new-subgroup" && (

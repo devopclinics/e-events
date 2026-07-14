@@ -899,6 +899,7 @@ def _dispatch_invite(background_tasks: BackgroundTasks, event: Event, guest: Gue
             ov.subject if ov else spec.get("subject"), ov.email_body if ov else spec.get("email_body"),
             event.venue_name, event.venue_address, event.admission_note,
             event.invite_cover_image,
+            event_timezone=event.timezone,
         )
         dispatched = True
 
@@ -916,7 +917,7 @@ def _dispatch_invite(background_tasks: BackgroundTasks, event: Event, guest: Gue
                 last_credit_ledger_id(event),
                 messaging.send_invite_sms,
                 phone=guest.phone, first_name=guest.first_name,
-                event_name=event.name, ticket_url=ticket_url, event_date=event.event_date,
+                event_name=event.name, ticket_url=ticket_url, event_date=event.event_date, event_timezone=event.timezone,
             )
         dispatched = True
 
@@ -938,7 +939,7 @@ def _dispatch_invite(background_tasks: BackgroundTasks, event: Event, guest: Gue
                 last_credit_ledger_id(event),
                 messaging.send_invite_whatsapp,
                 phone=guest.phone, first_name=guest.first_name,
-                event_name=event.name, ticket_url=ticket_url, event_date=event.event_date,
+                event_name=event.name, ticket_url=ticket_url, event_date=event.event_date, event_timezone=event.timezone,
             )
         dispatched = True
 
@@ -1006,6 +1007,7 @@ def _dispatch_rsvp_invite(background_tasks: BackgroundTasks, event: Event, guest
                 invite_message=event.invite_message,
                 event_id=event.id,
                 guest_id=guest.id,
+                event_timezone=event.timezone,
             )
         dispatched = True
 
@@ -1105,6 +1107,7 @@ def dispatch_approval_accepted(background_tasks: BackgroundTasks, event: Event, 
                 event.venue_address,
                 event.admission_note,
                 event.invite_cover_image,
+                event_timezone=event.timezone,
             )
             sent = True
 
@@ -1176,7 +1179,7 @@ def dispatch_simple_notice(background_tasks: BackgroundTasks, event: Event, gues
                 last_credit_ledger_id(event),
                 messaging.send_rsvp_confirmation_whatsapp,
                 phone=guest.phone, first_name=guest.first_name,
-                event_name=event.name, event_date=event.event_date,
+                event_name=event.name, event_date=event.event_date, event_timezone=event.timezone,
             )
             sent = True
         elif key == "approval_rejected":

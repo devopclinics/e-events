@@ -1,6 +1,21 @@
 from pydantic import BaseModel, ConfigDict, EmailStr, Field, field_validator
 from datetime import datetime, timezone
 from typing import Any, Optional, Literal
+from zoneinfo import ZoneInfo, available_timezones
+
+_VALID_TIMEZONES = available_timezones()
+
+
+def _validate_iana_timezone(v):
+    """Accept only a real IANA zone name (e.g. 'Europe/Zurich'). Event times are
+    rendered in this zone, so a typo must fail loudly rather than silently
+    falling back to the viewer's browser zone."""
+    if v is None:
+        return v
+    name = v.strip()
+    if name not in _VALID_TIMEZONES:
+        raise ValueError(f"Unknown timezone '{name}'. Use an IANA name like 'Europe/Zurich'.")
+    return name
 
 
 # ── Auth ─────────────────────────────────────────────────────────────────────
@@ -43,6 +58,9 @@ class EventCreate(BaseModel):
     # Optional host/organizer/honoree label — blank for events with no such party.
     couples_name: Optional[str] = ""
     event_date: datetime
+    # IANA timezone the event runs in; all event times render in this zone.
+    # Required so invite/Hub times are unambiguous rather than viewer-local.
+    timezone: str = Field(min_length=1, max_length=80)
     description: Optional[str] = None
     checkin_base_url: str
     venue_name: Optional[str] = None
@@ -58,11 +76,17 @@ class EventCreate(BaseModel):
             return v.astimezone(timezone.utc).replace(tzinfo=None)
         return v
 
+    @field_validator("timezone", mode="after")
+    @classmethod
+    def check_timezone(cls, v):
+        return _validate_iana_timezone(v)
+
 
 class EventUpdate(BaseModel):
     name: Optional[str] = None
     couples_name: Optional[str] = None
     event_date: Optional[datetime] = None
+    timezone: Optional[str] = Field(default=None, max_length=80)
     description: Optional[str] = None
     checkin_base_url: Optional[str] = None
     venue_name: Optional[str] = None
@@ -81,6 +105,11 @@ class EventUpdate(BaseModel):
             return v.astimezone(timezone.utc).replace(tzinfo=None)
         return v
 
+    @field_validator("timezone", mode="after")
+    @classmethod
+    def check_timezone(cls, v):
+        return _validate_iana_timezone(v)
+
 
 class EventSourceUpdate(BaseModel):
     source_url: Optional[str] = None
@@ -95,6 +124,7 @@ class EventOut(BaseModel):
     name: str
     couples_name: str
     event_date: datetime
+    timezone: Optional[str] = None
     description: Optional[str]
     checkin_base_url: str
     status: str

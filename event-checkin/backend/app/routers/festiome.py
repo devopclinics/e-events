@@ -10,7 +10,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..auth import require_paid_event_admin
 from ..database import get_db
-from ..models import Event, FestioMeOutbox, Guest, User
+from ..models import Event, EventUser, FestioMeOutbox, Guest, User
 from ..services.festiome_client import (
     FestioMeClient,
     FestioMeUnavailable,
@@ -25,6 +25,36 @@ from ..ratelimit import rate_limit
 
 
 router = APIRouter()
+
+
+async def _push_event_staff(db: AsyncSession, event: Event, client: FestioMeClient) -> int:
+    """Provision the event's assigned staff into the FestioMe group up front, so
+    organizers see them in the roster without waiting for each staffer to log in
+    (FestioMe token exchange also provisions them, but only on their own login).
+
+    Best-effort and failure-contained: a FestioMe outage never fails the caller.
+    Managers map to moderators; other staff to members. Org owners/admins still
+    resolve to group admins when they authenticate.
+    """
+    if not client.configured:
+        return 0
+    rows = (await db.execute(
+        select(EventUser, User).join(User, User.id == EventUser.user_id)
+        .where(EventUser.event_id == event.id)
+    )).all()
+    pushed = 0
+    for event_user, staff in rows:
+        role = "moderator" if event_user.event_role == "manager" else "member"
+        try:
+            result = await client.upsert_user(
+                event.id, subject=staff.firebase_uid or staff.id,
+                name=staff.name, email=staff.email, role=role,
+            )
+        except FestioMeUnavailable:
+            break
+        if not result.get("ignored"):
+            pushed += 1
+    return pushed
 
 
 def _require_festiome_addon(event: Event) -> None:
@@ -182,6 +212,7 @@ async def enable_festiome(
     for guest in guests:
         queue_guest_sync(db, guest, event=event, revision=revision)
     await db.commit()
+    await _push_event_staff(db, event, client)
     return FestioMeStatus(
         configured=True,
         available=True,
@@ -240,8 +271,10 @@ async def reconcile_festiome_guests(
     event_id: str,
     db: AsyncSession = Depends(get_db),
     _: User = Depends(require_paid_event_admin),
+    client: FestioMeClient = Depends(get_festiome_client),
 ):
-    """Queue a full idempotent membership reconciliation for an event."""
+    """Queue a full idempotent membership reconciliation for an event, and push
+    assigned staff into the group so they appear in the roster immediately."""
     event = await db.get(Event, event_id)
     if not event:
         raise HTTPException(404, "Event not found")
@@ -251,7 +284,8 @@ async def reconcile_festiome_guests(
     for guest in guests:
         queue_guest_sync(db, guest, event=event, revision=revision)
     await db.commit()
-    return {"queued": len(guests)}
+    staff = await _push_event_staff(db, event, client)
+    return {"queued": len(guests), "staff_synced": staff}
 
 
 @router.post("/{event_id}/festiome/announcements", status_code=202)

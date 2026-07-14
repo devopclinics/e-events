@@ -580,8 +580,8 @@ def _invite_menu_cta(ticket_url: str) -> str:
     )
 
 
-def _fmt_event_date(dt: datetime | None) -> str:
-    dt = to_event_local(dt)
+def _fmt_event_date(dt: datetime | None, tz=None) -> str:
+    dt = to_event_local(dt, tz)
     if not dt:
         return ""
     try:
@@ -590,8 +590,8 @@ def _fmt_event_date(dt: datetime | None) -> str:
         return dt.strftime("%A, %B %d, %Y").replace(" 0", " ")
 
 
-def _fmt_event_time(dt: datetime | None) -> str:
-    dt = to_event_local(dt)
+def _fmt_event_time(dt: datetime | None, tz=None) -> str:
+    dt = to_event_local(dt, tz)
     if not dt:
         return ""
     try:
@@ -713,6 +713,7 @@ async def send_invite_email(
     rsvp_link: str | None = None,
     support_email: str | None = None,
     hub_url: str | None = None,
+    event_timezone: str | None = None,
 ):
     """Render the ticket-QR invite from the message template (event override or
     the code default in TEMPLATE_DEFS) — all wording lives in the template. The
@@ -724,8 +725,8 @@ async def send_invite_email(
     qr_bytes = generate_qr_bytes(guest_data["qr_token"], checkin_base_url)
     theme = await _design_email_theme(guest_data.get("event_id"))
     ticket_url = f"{checkin_base_url.rstrip('/')}/scan/{guest_data['qr_token']}"
-    date_str = _fmt_event_date(event_date)
-    time_str = _fmt_event_time(event_date)
+    date_str = _fmt_event_date(event_date, event_timezone)
+    time_str = _fmt_event_time(event_date, event_timezone)
     venue_name = (venue_name or "").strip()
     venue_address = (venue_address or "").strip()
     venue_text = " - ".join([p for p in [venue_name, venue_address] if p]) or "Venue details coming soon."
@@ -845,7 +846,7 @@ async def send_admission_email(guest_data: dict):
         message_kind=guest_data.get("message_kind") or "admission",
     )
 
-    admitted_time = local_hhmm(guest_data.get("admitted_at"))
+    admitted_time = local_hhmm(guest_data.get("admitted_at"), guest_data.get("event_timezone"))
     first = _html.escape(guest_data["first_name"])
     table_name = guest_data.get("table_name")
     seat_number = guest_data.get("seat_number")
@@ -1036,6 +1037,7 @@ async def send_manual_invite_email(
     invite_message: str | None = None,
     event_id: str | None = None,
     guest_id: str | None = None,
+    event_timezone: str | None = None,
 ):
     """Send a personal invite link (no QR) to a recipient who hasn't RSVP'd yet."""
     msg = MIMEMultipart()
@@ -1047,7 +1049,7 @@ async def send_manual_invite_email(
     theme = await _design_email_theme(event_id)
     safe_name = _html.escape(name)
     safe_event = _html.escape(event_name)
-    _local_date = to_event_local(event_date)
+    _local_date = to_event_local(event_date, event_timezone)
     date_str = _local_date.strftime("%A, %d %B %Y") if _local_date else ""
     safe_msg = f"<p>{_html.escape(invite_message)}</p>" if invite_message else ""
 

@@ -75,22 +75,25 @@ const THEMES = {
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
-function fmtDate(iso) {
+// Render event times in the EVENT's timezone (passed from event.timezone), not
+// the viewer's browser zone — otherwise a guest in another region sees a shifted
+// time. Falls back to the viewer's zone only when the event has no tz set yet.
+function fmtDate(iso, tz) {
   const d = parseUtc(iso)
   if (!d) return ''
-  return d.toLocaleDateString(undefined, { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })
+  return d.toLocaleDateString(undefined, { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric', ...(tz && { timeZone: tz }) })
 }
 
-function fmtTime(iso) {
+function fmtTime(iso, tz) {
   const d = parseUtc(iso)
   if (!d) return ''
-  return d.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' })
+  return d.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit', ...(tz && { timeZone: tz, timeZoneName: 'short' }) })
 }
 
-function fmtLocalDateTime(value) {
+function fmtLocalDateTime(value, tz) {
   const d = parseUtc(value)
   if (!d) return ''
-  return d.toLocaleString(undefined, { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })
+  return d.toLocaleString(undefined, { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit', ...(tz && { timeZone: tz }) })
 }
 
 const PASTED_URL_RE = /(https?:\/\/[^\s<]+|www\.[^\s<]+)/gi
@@ -157,7 +160,7 @@ function hostText(event) {
 }
 
 function deadlineText(event) {
-  return event?.rsvp_deadline ? fmtDate(event.rsvp_deadline) : ''
+  return event?.rsvp_deadline ? fmtDate(event.rsvp_deadline, event?.timezone) : ''
 }
 
 function scrollToRsvp() {
@@ -267,7 +270,7 @@ function EventPoster({ event, coverImage, colors = {}, titleOverride, inviteLabe
         <div>
           <div className="mb-3 text-xs font-extrabold uppercase tracking-[0.28em]" style={{ color: colors.accent || '#ccfbf1' }}>{inviteLabel || "You're invited"}</div>
           <div className="text-4xl font-extrabold leading-tight sm:text-5xl" style={{ color: readableTone(colors).text }}>{title}</div>
-          {event.event_date && <div className="mt-5 text-sm font-semibold" style={{ color: readableTone(colors).muted }}>{fmtDate(event.event_date)}</div>}
+          {event.event_date && <div className="mt-5 text-sm font-semibold" style={{ color: readableTone(colors).muted }}>{fmtDate(event.event_date, event.timezone)}</div>}
         </div>
       </div>
     </div>
@@ -1313,15 +1316,15 @@ function GuestHub({ event, accessToken, designTheme }) {
 
         {journey?.program?.enabled && <div className="mt-6 rounded-2xl border p-4" style={{ background: tone.panel, borderColor: tone.border }}>
           <div className="flex items-center justify-between gap-3"><div><h3 className="text-lg font-extrabold">Live Program</h3><p className="mt-1 text-sm" style={{ color: tone.muted }}>The program updates automatically as the event moves forward.</p></div><span className="rounded-full px-2.5 py-1 text-xs font-bold" style={{ background: `${tone.accent}22`, color: tone.text }}>LIVE</span></div>
-          {journey.program.current_segments?.length ? <div className="mt-4 space-y-2">{journey.program.current_segments.map((segment) => <div key={segment.step_id} className="rounded-xl border p-3" style={{ background: tone.chip, borderColor: tone.border }}><div className="text-xs font-extrabold uppercase tracking-[0.16em]" style={{ color: tone.label }}>Happening now{segment.category ? ` · ${segment.category}` : ''}</div><div className="mt-1 font-extrabold">{segment.title}</div>{segment.description && <p className="mt-1 text-sm" style={{ color: tone.muted }}>{segment.description}</p>}<p className="mt-2 text-xs font-semibold" style={{ color: tone.label }}>Until {fmtTime(segment.ends_at)}</p></div>)}</div> : <p className="mt-4 text-sm" style={{ color: tone.muted }}>The next program item will appear here when it begins.</p>}
-          {!!journey.program.next_segments?.length && <div className="mt-4 border-t pt-3" style={{ borderColor: tone.border }}><div className="text-xs font-extrabold uppercase tracking-[0.16em]" style={{ color: tone.label }}>Up next</div>{journey.program.next_segments.slice(0, 2).map((segment) => <div key={segment.step_id} className="mt-2 text-sm"><span className="font-bold">{fmtLocalDateTime(segment.starts_at)}</span><span style={{ color: tone.muted }}> · {segment.title}</span></div>)}</div>}
+          {journey.program.current_segments?.length ? <div className="mt-4 space-y-2">{journey.program.current_segments.map((segment) => <div key={segment.step_id} className="rounded-xl border p-3" style={{ background: tone.chip, borderColor: tone.border }}><div className="text-xs font-extrabold uppercase tracking-[0.16em]" style={{ color: tone.label }}>Happening now{segment.category ? ` · ${segment.category}` : ''}</div><div className="mt-1 font-extrabold">{segment.title}</div>{segment.description && <p className="mt-1 text-sm" style={{ color: tone.muted }}>{segment.description}</p>}<p className="mt-2 text-xs font-semibold" style={{ color: tone.label }}>Until {fmtTime(segment.ends_at, event?.timezone)}</p></div>)}</div> : <p className="mt-4 text-sm" style={{ color: tone.muted }}>The next program item will appear here when it begins.</p>}
+          {!!journey.program.next_segments?.length && <div className="mt-4 border-t pt-3" style={{ borderColor: tone.border }}><div className="text-xs font-extrabold uppercase tracking-[0.16em]" style={{ color: tone.label }}>Up next</div>{journey.program.next_segments.slice(0, 2).map((segment) => <div key={segment.step_id} className="mt-2 text-sm"><span className="font-bold">{fmtLocalDateTime(segment.starts_at, event?.timezone)}</span><span style={{ color: tone.muted }}> · {segment.title}</span></div>)}</div>}
           {!!selectedProgramDay && <div className="mt-4 border-t pt-3" style={{ borderColor: tone.border }}>
             <div className="flex flex-wrap gap-2" aria-label="Programme day">
               {programDays.map((day) => <button key={day.date} type="button" onClick={() => setProgramDay(day.date)} className="rounded-full px-3 py-1.5 text-xs font-extrabold" style={{ background: selectedProgramDay.date === day.date ? tone.accent : tone.chip, color: selectedProgramDay.date === day.date ? tone.background : tone.text }}>{day.label}</button>)}
             </div>
             <div className="mt-3 text-xs font-extrabold uppercase tracking-[0.16em]" style={{ color: tone.label }}>{selectedProgramDay.label} programme</div>
             <div className="mt-2 divide-y" style={{ borderColor: tone.border }}>
-              {selectedProgramDay.segments.map((segment) => <div key={segment.step_id} className="py-3 first:pt-0 last:pb-0"><div className="flex gap-3"><div className="w-24 shrink-0 text-xs font-extrabold" style={{ color: segment.active ? tone.accent : tone.label }}>{fmtTime(segment.starts_at)}–{fmtTime(segment.ends_at)}</div><div className="min-w-0"><div className="flex flex-wrap items-center gap-2 font-bold">{segment.title}{segment.active && <span className="rounded-full px-2 py-0.5 text-[10px] font-extrabold uppercase" style={{ background: `${tone.accent}22`, color: tone.accent }}>Now</span>}</div>{segment.description && <p className="mt-1 text-sm" style={{ color: tone.muted }}>{segment.description}</p>}</div></div></div>)}
+              {selectedProgramDay.segments.map((segment) => <div key={segment.step_id} className="py-3 first:pt-0 last:pb-0"><div className="flex gap-3"><div className="w-24 shrink-0 text-xs font-extrabold" style={{ color: segment.active ? tone.accent : tone.label }}>{fmtTime(segment.starts_at, event?.timezone)}–{fmtTime(segment.ends_at, event?.timezone)}</div><div className="min-w-0"><div className="flex flex-wrap items-center gap-2 font-bold">{segment.title}{segment.active && <span className="rounded-full px-2 py-0.5 text-[10px] font-extrabold uppercase" style={{ background: `${tone.accent}22`, color: tone.accent }}>Now</span>}</div>{segment.description && <p className="mt-1 text-sm" style={{ color: tone.muted }}>{segment.description}</p>}</div></div></div>)}
             </div>
           </div>}
         </div>}
@@ -1380,7 +1383,7 @@ function GuestHub({ event, accessToken, designTheme }) {
                   const m = statusMeta(s)
                   const sessionInfo = s.session ? sessionSummary(s.session) : ''
                   const roomInfo = roomAssignmentText(s.metadata || {})
-                  const checkedInAt = s.metadata?.session_checked_in_at ? fmtLocalDateTime(s.metadata.session_checked_in_at) : ''
+                  const checkedInAt = s.metadata?.session_checked_in_at ? fmtLocalDateTime(s.metadata.session_checked_in_at, event?.timezone) : ''
                   const copy = detailText(s, m)
                   return (
                     <li key={s.id} className="flex items-start gap-3 rounded-xl border p-3" style={{ background: tone.chip, borderColor: s.actionable ? tone.accent : tone.border }}>
@@ -1395,7 +1398,7 @@ function GuestHub({ event, accessToken, designTheme }) {
                         {s.session && sessionWindowText(s.session) && <p className="mt-1 text-xs" style={{ color: tone.label }}>{sessionWindowText(s.session)}</p>}
                         {roomInfo && <p className="mt-2 text-sm font-bold" style={{ color: tone.text }}>Assignment: {roomInfo}</p>}
                         {checkedInAt && <p className="mt-1 text-xs" style={{ color: tone.label }}>Session check-in recorded {checkedInAt}</p>}
-                        {s.completed_at && !checkedInAt && <p className="mt-1 text-xs" style={{ color: tone.label }}>Completed {fmtLocalDateTime(s.completed_at)}</p>}
+                        {s.completed_at && !checkedInAt && <p className="mt-1 text-xs" style={{ color: tone.label }}>Completed {fmtLocalDateTime(s.completed_at, event?.timezone)}</p>}
                       </div>
                     </li>
                   )
@@ -1751,8 +1754,8 @@ export default function InvitePage() {
   const atCapacity = event.rsvp_capacity != null && event.rsvp_count >= event.rsvp_capacity
   const deadlinePassed = !!event.deadline_passed
   const title = dWording.eventTitle || eventTitle(event)
-  const dateLabel = dWording.date || fmtDate(event.event_date)
-  const timeLabel = dWording.time || fmtTime(event.event_date)
+  const dateLabel = dWording.date || fmtDate(event.event_date, event.timezone)
+  const timeLabel = dWording.time || fmtTime(event.event_date, event.timezone)
   const venue = [dWording.venue, dWording.address].filter(Boolean).join(' · ') || venueText(event)
   const host = dWording.hostName || hostText(event)
   const hostWebsite = externalUrl(dWording.hostWebsite)

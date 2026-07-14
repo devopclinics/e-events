@@ -19,7 +19,7 @@ from services.credit_ledger import send_with_credit_ledger
 from services.qr_service import generate_qr_bytes, generate_qr_for_url
 from . import broadcast
 from .seating import assign_next_seat
-from ..timeutil import local_hhmm
+from ..timeutil import event_tz, local_hhmm
 from ..template_resolve import load_overrides, channel_text as template_channel_text, channel_text_or_default as template_channel_or_default, email_override as template_email_override, email_or_default as template_email_or_default
 from services.templates import build_context as build_template_context
 from ..services.experience import active_workflow, next_guest_steps, sync_guest_progress
@@ -415,6 +415,7 @@ async def queue_admission_email(background_tasks: BackgroundTasks, event: Event,
         "menu_choices": menu_lines,
         "event_name": event.name,
         "event_id": event.id,
+        "event_timezone": event.timezone,
         "message_kind": "experience_admission" if event.experience_enabled else "admission",
         "ticket_url": ticket_url,
         "hub_url": hub_url,
@@ -705,6 +706,7 @@ async def ticket_card_image(
         event_name=event.name,
         couples_name=event.couples_name or "",
         event_date=event.event_date,
+        event_timezone=event.timezone,
         venue_name=event.venue_name or "",
         venue_address=event.venue_address or "",
         guest_first_name=guest.first_name,
@@ -858,7 +860,7 @@ async def scan_qr_checkout(
     if last_normal_scan and last_normal_scan.direction == "out":
         return ScanResult(
             status="already_checked_out",
-            message=f"{guest.first_name} {guest.last_name} was already checked out at {local_hhmm(last_normal_scan.scanned_at) or 'unknown'}.",
+            message=f"{guest.first_name} {guest.last_name} was already checked out at {local_hhmm(last_normal_scan.scanned_at, event_tz(event)) or 'unknown'}.",
             guest=GuestOut.model_validate(guest),
         )
 
@@ -915,7 +917,7 @@ async def perform_admission(guest, event, background_tasks, db) -> ScanResult:
     notifications, and SSE broadcast. Shared by QR scan and manual check-in.
     Caller must have already validated the event + access (see checkin_guard)."""
     if guest.admitted:
-        admitted_time = local_hhmm(guest.admitted_at) or "unknown"
+        admitted_time = local_hhmm(guest.admitted_at, event_tz(event)) or "unknown"
         table_name = None
         if guest.table_id:
             tbl = await db.get(SeatingTable, guest.table_id)
@@ -1028,6 +1030,7 @@ async def perform_admission(guest, event, background_tasks, db) -> ScanResult:
         "menu_choices": menu_lines,
         "event_name": event.name if event else None,
         "event_id": event.id if event else None,
+        "event_timezone": event.timezone if event else None,
         "message_kind": "experience_admission" if event and event.experience_enabled else "admission",
         "ticket_url": ticket_url,
         "hub_url": hub_url,
@@ -1054,6 +1057,7 @@ async def perform_admission(guest, event, background_tasks, db) -> ScanResult:
                 event_name=event.name if event else "the event",
                 admitted_at=guest.admitted_at,
                 table_name=table_name, seat_number=guest.seat_number,
+                event_timezone=event.timezone if event else None,
             )
     if "whatsapp" in chosen and take_message_credit(event, "whatsapp"):
         # WhatsApp initiates → approved template only (free-text overrides 15003).

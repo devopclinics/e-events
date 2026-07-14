@@ -3,6 +3,14 @@ import { useNavigate, useSearchParams } from 'react-router-dom'
 import { api, PUBLIC_BASE_URL } from '../api'
 import { useCurrentEvent } from '../hooks/useCurrentEvent'
 
+// Full IANA zone list where the browser supports it, else a small curated set.
+// Event times render in the chosen zone, so this is required at creation.
+const TIMEZONES =
+  typeof Intl.supportedValuesOf === 'function'
+    ? Intl.supportedValuesOf('timeZone')
+    : ['Europe/Zurich', 'Europe/London', 'America/New_York', 'America/Chicago', 'America/Los_Angeles', 'Asia/Dubai', 'Asia/Kolkata', 'UTC']
+const DETECTED_TZ = Intl.DateTimeFormat().resolvedOptions().timeZone || ''
+
 const featureOptions = [
   { key: 'qr', label: 'QR check-in', plan: 'tier50' },
   { key: 'seating', label: 'Seating/table allocation', plan: 'tier50' },
@@ -63,6 +71,7 @@ export default function SetupWizardPage() {
     name: '',
     event_type: '',
     event_date: localDateTimeValue(),
+    timezone: '',
     venue_name: '',
     venue_address: '',
     guest_count: params.get('guests') || '',
@@ -93,6 +102,7 @@ export default function SetupWizardPage() {
         name: form.name.trim(),
         couples_name: form.event_type.trim() || form.name.trim(),
         event_date: new Date(form.event_date).toISOString(),
+        timezone: form.timezone,
         description: '',
         checkin_base_url: PUBLIC_BASE_URL,
         venue_name: form.venue_name.trim() || null,
@@ -132,6 +142,15 @@ export default function SetupWizardPage() {
             <label>
               <span className="mb-1 block text-xs font-bold text-slate-500 dark:text-slate-400">Date and time</span>
               <input className={input} type="datetime-local" value={form.event_date} onChange={(e) => setField('event_date', e.target.value)} required />
+            </label>
+            <label>
+              <span className="mb-1 block text-xs font-bold text-slate-500 dark:text-slate-400">Timezone</span>
+              <select className={input} value={form.timezone} onChange={(e) => setField('timezone', e.target.value)} required>
+                <option value="" disabled>Select the event's timezone…</option>
+                {DETECTED_TZ && <option value={DETECTED_TZ}>{DETECTED_TZ} (detected)</option>}
+                {TIMEZONES.map((tz) => <option key={tz} value={tz}>{tz}</option>)}
+              </select>
+              <span className="mt-1 block text-[11px] text-slate-400">All invite and guest times display in this zone.</span>
             </label>
             <label>
               <span className="mb-1 block text-xs font-bold text-slate-500 dark:text-slate-400">Venue name</span>

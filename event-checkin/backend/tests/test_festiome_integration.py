@@ -422,3 +422,22 @@ async def test_announcement_is_queued_without_calling_festiome(ctx):
         assert row.payload["body"] == "Meet in room B"
     finally:
         await db_gen.aclose()
+
+
+@pytest.mark.asyncio
+async def test_reconcile_pushes_assigned_staff_into_group(ctx):
+    """Reconcile provisions assigned staff up front so organizers see them in
+    the roster without waiting for each staffer's own login."""
+    from app.models import EventUser
+    await _enable_festiome_addon(ctx.ids["event_a"])
+    async with _Session() as s:
+        s.add(EventUser(event_id=ctx.ids["event_a"], user_id=ctx.ids["user_b"].id, event_role="manager"))
+        await s.commit()
+    fake = FakeFestioMeClient()
+    app.dependency_overrides[get_festiome_client] = lambda: fake
+    ctx.login(ctx.ids["user_a"])
+    response = await ctx.client.post(f'/api/events/{ctx.ids["event_a"]}/festiome/sync-guests')
+    assert response.status_code == 202
+    assert response.json()["staff_synced"] == 1
+    pushed = {u["email"]: u["role"] for u in fake.upserted_users}
+    assert pushed == {"bob@b.com": "moderator"}

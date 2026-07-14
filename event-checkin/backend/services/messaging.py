@@ -43,31 +43,31 @@ def _brand_sms(body: str) -> str:
 
 # ── public API ────────────────────────────────────────────────────────────────
 
-async def send_invite_sms(*, phone: str, first_name: str, event_name: str, ticket_url: str, event_date: datetime) -> dict | None:
+async def send_invite_sms(*, phone: str, first_name: str, event_name: str, ticket_url: str, event_date: datetime, event_timezone: str | None = None) -> dict | None:
     if not _channel_ready("sms", phone):
         return
-    _local = to_event_local(event_date)
+    _local = to_event_local(event_date, event_timezone)
     date_str = _local.strftime("%b %d, %Y") if _local else ""
     body = f"Hi {first_name}! You're invited to {event_name}" + (f" on {date_str}" if date_str else "") + f". Your ticket: {ticket_url}"
     return await _send_sms(phone, _brand_sms(body))
 
 
-async def send_admission_sms(*, phone: str, first_name: str, event_name: str, admitted_at, table_name: str | None, seat_number: str | None) -> dict | None:
+async def send_admission_sms(*, phone: str, first_name: str, event_name: str, admitted_at, table_name: str | None, seat_number: str | None, event_timezone: str | None = None) -> dict | None:
     if not _channel_ready("sms", phone):
         return
     parts = [f"Welcome {first_name}!", f"You're checked in to {event_name}."]
     if admitted_at:
-        parts.append(f"Time: {local_hhmm(admitted_at)}.")
+        parts.append(f"Time: {local_hhmm(admitted_at, event_timezone)}.")
     if table_name:
         seat_bit = f" seat {seat_number}" if seat_number else ""
         parts.append(f"Table: {table_name}{seat_bit}.")
     return await _send_sms(phone, _brand_sms(" ".join(parts)))
 
 
-async def send_invite_whatsapp(*, phone: str, first_name: str, event_name: str, ticket_url: str, event_date: datetime) -> dict | None:
+async def send_invite_whatsapp(*, phone: str, first_name: str, event_name: str, ticket_url: str, event_date: datetime, event_timezone: str | None = None) -> dict | None:
     if not _channel_ready("whatsapp", phone):
         return
-    _local = to_event_local(event_date)
+    _local = to_event_local(event_date, event_timezone)
     date_str = _local.strftime("%A, %d %B %Y") if _local else ""
     return await _send_whatsapp_template(
         phone=phone,
@@ -124,10 +124,10 @@ async def send_rsvp_reminder_whatsapp(*, phone: str, first_name: str, event_name
     )
 
 
-async def send_rsvp_confirmation_whatsapp(*, phone: str, first_name: str, event_name: str, event_date: datetime) -> dict | None:
+async def send_rsvp_confirmation_whatsapp(*, phone: str, first_name: str, event_name: str, event_date: datetime, event_timezone: str | None = None) -> dict | None:
     if not _channel_ready("whatsapp", phone):
         return
-    _local = to_event_local(event_date)
+    _local = to_event_local(event_date, event_timezone)
     date_str = _local.strftime("%A, %d %B %Y") if _local else ""
     return await _send_whatsapp_template(
         phone=phone,

@@ -69,6 +69,7 @@ def generate_ticket_card(
     event_name: str,
     couples_name: str = "",
     event_date: datetime | None = None,
+    event_timezone: str | None = None,
     venue_name: str = "",
     venue_address: str = "",
     guest_first_name: str = "",
@@ -157,7 +158,7 @@ def generate_ticket_card(
         y += 30
 
     if event_date:
-        _local_date = to_event_local(event_date) or event_date
+        _local_date = to_event_local(event_date, event_timezone) or event_date
         _centered(draw, y, _local_date.strftime("%A, %B %-d, %Y"), f_small, _GRAY_400, W)
         y += 30
 

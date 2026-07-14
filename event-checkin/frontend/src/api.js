@@ -767,6 +767,13 @@ export const api = {
       ...data,
     }),
   festiomeMembers: (id) => festiomeReq('GET', `/festiome/v1/groups/${id}/members`),
+  festiomeChannelMembers: (channelId) => festiomeReq('GET', `/festiome/v1/channels/${channelId}/members`),
+  festiomeAddChannelMembers: (channelId, memberIds) =>
+    festiomeReq('POST', `/festiome/v1/channels/${channelId}/members`, { member_ids: memberIds }),
+  festiomeRemoveChannelMember: (channelId, memberId) =>
+    festiomeReq('DELETE', `/festiome/v1/channels/${channelId}/members/${memberId}`),
+  festiomeOpenDirectMessage: (groupId, memberId) =>
+    festiomeReq('POST', `/festiome/v1/groups/${groupId}/dms`, { member_id: memberId }),
   festiomeUpdateMember: (id, memberId, data) => festiomeReq('PATCH', `/festiome/v1/groups/${id}/members/${memberId}`, data),
   festiomeRemoveMember: (id, memberId) => festiomeReq('DELETE', `/festiome/v1/groups/${id}/members/${memberId}`),
   festiomeTransferOwner: (id, memberId) =>

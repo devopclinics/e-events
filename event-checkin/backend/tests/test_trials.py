@@ -96,7 +96,7 @@ async def test_org_level_grant_applies_to_next_event(ctx):
     ctx.login(ctx.ids["user_a"])
     ev = await ctx.client.post("/api/events", json={
         "name": "Trial Event", "event_date": "2026-09-01T18:00:00",
-        "checkin_base_url": "http://x"})
+        "timezone": "America/New_York", "checkin_base_url": "http://x"})
     assert ev.status_code in (200, 201)
     async with _Session() as s:
         org = await s.get(Organization, ctx.ids["org_a"])

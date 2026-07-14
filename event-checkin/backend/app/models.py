@@ -113,6 +113,10 @@ class Event(Base):
     name: Mapped[str] = mapped_column(String(255))
     couples_name: Mapped[str] = mapped_column(String(255))
     event_date: Mapped[datetime] = mapped_column(DateTime)
+    # IANA timezone (e.g. "Europe/Zurich") the event runs in. Nullable for events
+    # created before this field existed; those need a one-time backfill and fall
+    # back to UTC for server-rendered times until set.
+    timezone: Mapped[str | None] = mapped_column(String(80), nullable=True)
     description: Mapped[str | None] = mapped_column(Text, nullable=True)
     checkin_base_url: Mapped[str] = mapped_column(String(500))
     status: Mapped[str] = mapped_column(String(20), default="draft")

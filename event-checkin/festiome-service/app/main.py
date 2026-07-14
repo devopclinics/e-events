@@ -25,11 +25,11 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from .auth import Identity, current_identity, internal_service
 from .database import SessionLocal, get_db
 from .models import (
-    Attachment, AuditLog, Channel, ChannelReadState, FestioMeGroup, IntegrationCommand, Invitation, JoinRequest, Member, Mention, Message,
+    Attachment, AuditLog, Channel, ChannelMember, ChannelReadState, FestioMeGroup, IntegrationCommand, Invitation, JoinRequest, Member, Mention, Message,
     ModerationReport, NotificationJob, NotificationPreference, PendingUpload, Poll, PollOption, PollVote, Reaction, Tenant,
 )
 from .schemas import (
-    AttachmentOut, ChannelCreate, ChannelOut, EventGroupAdminOut, EventLinkCreate, EventLinkOut, GroupCreate, GroupDirectoryOut, GroupOut, GroupUpdate, InvitationCreate,
+    AttachmentOut, ChannelCreate, ChannelMemberAdd, ChannelMemberOut, ChannelOut, DirectMessageCreate, EventGroupAdminOut, EventLinkCreate, EventLinkOut, GroupCreate, GroupDirectoryOut, GroupOut, GroupUpdate, InvitationCreate,
     InvitationOut, JoinGroupRequest, JoinGroupResult, JoinRequestDecision, JoinRequestOut, MemberOut, MessageCreate, MessageOut, MessagePage,
     MemberUpdate, MessageUpdate, NotificationPreferenceIn, NotificationPreferenceOut, OwnershipTransfer, PollCreate, PollVoteCreate,
     ReactionCreate, ReactionOut, ReadStateOut, ReadStateUpdate, ReportCreate, RulesAcceptResult, SubGroupCreate,
@@ -196,8 +196,8 @@ async def _group_out(db: AsyncSession, group: FestioMeGroup, member: Member) -> 
             or_(ChannelReadState.read_at.is_(None), Message.created_at > ChannelReadState.read_at),
         )
     )
-    if member.role not in STAFF_ROLES:
-        unread_q = unread_q.where(Channel.kind != "staff")
+    enrolled_ids = await _enrolled_channel_ids(db, group.id, member.id)
+    unread_q = unread_q.where(_channel_visibility_condition(member, enrolled_ids))
     unread = (await db.execute(unread_q)).scalar_one()
     pending = 0
     if member.role in STAFF_ROLES:
@@ -209,12 +209,49 @@ async def _group_out(db: AsyncSession, group: FestioMeGroup, member: Member) -> 
     })
 
 
+async def _is_enrolled(db: AsyncSession, channel_id: str, member_id: str) -> bool:
+    return (await db.execute(select(ChannelMember.id).where(
+        ChannelMember.channel_id == channel_id, ChannelMember.member_id == member_id,
+    ))).scalar_one_or_none() is not None
+
+
+async def _can_access_channel(db: AsyncSession, channel: Channel, member: Member) -> bool:
+    """A member reaches an open channel if it isn't staff-only; a private channel
+    only if enrolled, with staff keeping oversight of private *topic* channels
+    (never DMs, which stay between their two members)."""
+    if not channel.is_private:
+        return channel.kind != "staff" or member.role in STAFF_ROLES
+    if await _is_enrolled(db, channel.id, member.id):
+        return True
+    return (not channel.is_dm) and member.role in STAFF_ROLES
+
+
+def _channel_visibility_condition(member: Member, enrolled_ids: set[str]):
+    """SQL predicate selecting the channels a member may see, for list/unread
+    queries. Mirrors _can_access_channel."""
+    conds = [and_(Channel.is_private.is_(False), Channel.kind != "staff")]
+    if member.role in STAFF_ROLES:
+        conds.append(and_(Channel.is_private.is_(False), Channel.kind == "staff"))
+        conds.append(and_(Channel.is_private.is_(True), Channel.is_dm.is_(False)))
+    if enrolled_ids:
+        conds.append(Channel.id.in_(enrolled_ids))
+    return or_(*conds)
+
+
+async def _enrolled_channel_ids(db: AsyncSession, group_id: str, member_id: str) -> set[str]:
+    return set((await db.execute(
+        select(ChannelMember.channel_id)
+        .join(Channel, Channel.id == ChannelMember.channel_id)
+        .where(Channel.group_id == group_id, ChannelMember.member_id == member_id)
+    )).scalars().all())
+
+
 async def _channel_access(db: AsyncSession, channel_id: str, identity: Identity) -> tuple[Channel, Member]:
     channel = (await db.execute(select(Channel).where(Channel.id == channel_id, Channel.archived.is_(False)))).scalar_one_or_none()
     if not channel:
         raise HTTPException(404, "FestioMe channel not found")
     member = await _member(db, channel.group_id, identity)
-    if channel.kind == "staff" and member.role not in STAFF_ROLES:
+    if not await _can_access_channel(db, channel, member):
         raise HTTPException(404, "FestioMe channel not found")
     return channel, member
 
@@ -921,9 +958,12 @@ async def accept_group_rules(group_id: str, identity: Identity = Depends(current
 @app.get("/v1/groups/{group_id}/channels", response_model=list[ChannelOut])
 async def list_channels(group_id: str, identity: Identity = Depends(current_identity), db: AsyncSession = Depends(get_db)):
     member = await _member(db, group_id, identity)
-    query = select(Channel).where(Channel.group_id == group_id, Channel.archived.is_(False))
-    if member.role not in STAFF_ROLES:
-        query = query.where(Channel.kind != "staff")
+    enrolled_ids = await _enrolled_channel_ids(db, group_id, member.id)
+    query = (
+        select(Channel)
+        .where(Channel.group_id == group_id, Channel.archived.is_(False))
+        .where(_channel_visibility_condition(member, enrolled_ids))
+    )
     channels = (await db.execute(query.order_by(Channel.created_at))).scalars().all()
     channel_ids = [channel.id for channel in channels]
     unread_by_channel: dict[str, int] = {}
@@ -950,9 +990,35 @@ async def list_channels(group_id: str, identity: Identity = Depends(current_iden
             channel_id: int(count)
             for channel_id, count in unread_rows
         }
+    # Enrolment counts and DM counterpart names for private/DM channels in one
+    # pass, so a member sees a DM titled by the other participant.
+    private_ids = [c.id for c in channels if c.is_private or c.is_dm]
+    counts_by_channel: dict[str, int] = {}
+    names_by_channel: dict[str, str] = {}
+    if private_ids:
+        for cid, cnt in (await db.execute(
+            select(ChannelMember.channel_id, func.count(ChannelMember.id))
+            .where(ChannelMember.channel_id.in_(private_ids))
+            .group_by(ChannelMember.channel_id)
+        )).all():
+            counts_by_channel[cid] = int(cnt)
+        dm_ids = [c.id for c in channels if c.is_dm]
+        if dm_ids:
+            for cid, disp in (await db.execute(
+                select(ChannelMember.channel_id, Member.display_name)
+                .join(Member, Member.id == ChannelMember.member_id)
+                .where(ChannelMember.channel_id.in_(dm_ids), ChannelMember.member_id != member.id)
+            )).all():
+                names_by_channel[cid] = disp
     result = []
     for channel in channels:
-        result.append(ChannelOut.model_validate(channel).model_copy(update={"unread_count": unread_by_channel.get(channel.id, 0)}))
+        update = {
+            "unread_count": unread_by_channel.get(channel.id, 0),
+            "member_count": counts_by_channel.get(channel.id, 0),
+        }
+        if channel.is_dm:
+            update["name"] = names_by_channel.get(channel.id, "Direct message")
+        result.append(ChannelOut.model_validate(channel).model_copy(update=update))
     return result
 
 
@@ -965,11 +1031,130 @@ async def create_channel(group_id: str, body: ChannelCreate, identity: Identity 
     suffix = 2
     while (await db.execute(select(Channel.id).where(Channel.group_id == group_id, Channel.slug == slug))).scalar_one_or_none():
         slug, suffix = f"{base[:75]}-{suffix}", suffix + 1
-    channel = Channel(group_id=group_id, name=body.name.strip(), slug=slug, description=body.description.strip(), kind=body.kind, created_by_member_id=member.id)
+    channel = Channel(group_id=group_id, name=body.name.strip(), slug=slug, description=body.description.strip(),
+                      kind=body.kind, is_private=body.is_private, created_by_member_id=member.id)
     db.add(channel)
+    await db.flush()
+    member_count = 0
+    if body.is_private:
+        # Enrol the creator plus any requested group members (validated to belong
+        # to this group). Open channels ignore member_ids.
+        wanted = {member.id, *body.member_ids}
+        valid = set((await db.execute(select(Member.id).where(
+            Member.group_id == group_id, Member.id.in_(wanted), Member.removed_at.is_(None),
+        ))).scalars().all())
+        for mid in valid:
+            db.add(ChannelMember(channel_id=channel.id, member_id=mid, added_by_member_id=member.id))
+        member_count = len(valid)
+    _audit(db, group_id, member, "channel.created", "channel", channel.id, is_private=body.is_private, kind=body.kind)
     await db.commit()
     await db.refresh(channel)
-    return channel
+    return ChannelOut.model_validate(channel).model_copy(update={"member_count": member_count})
+
+
+async def _channel_manage_access(db: AsyncSession, channel: Channel, member: Member) -> None:
+    """Who may change a private channel's roster: group admins/owners, or any
+    enrolled member of the channel (so a channel's own participants can invite)."""
+    if member.role in ADMIN_ROLES:
+        return
+    if channel.is_private and not channel.is_dm and await _is_enrolled(db, channel.id, member.id):
+        return
+    raise HTTPException(403, "Insufficient FestioMe permission")
+
+
+async def _channel_members_out(db: AsyncSession, channel_id: str, viewer_id: str) -> list[ChannelMemberOut]:
+    rows = (await db.execute(
+        select(Member)
+        .join(ChannelMember, ChannelMember.member_id == Member.id)
+        .where(ChannelMember.channel_id == channel_id, Member.removed_at.is_(None))
+        .order_by(Member.display_name)
+    )).scalars().all()
+    return [ChannelMemberOut(id=m.id, display_name=m.display_name, role=m.role, is_me=m.id == viewer_id) for m in rows]
+
+
+@app.get("/v1/channels/{channel_id}/members", response_model=list[ChannelMemberOut])
+async def list_channel_members(channel_id: str, identity: Identity = Depends(current_identity), db: AsyncSession = Depends(get_db)):
+    channel, member = await _channel_access(db, channel_id, identity)
+    if not channel.is_private:
+        raise HTTPException(400, "Open channels include every group member")
+    return await _channel_members_out(db, channel.id, member.id)
+
+
+@app.post("/v1/channels/{channel_id}/members", response_model=list[ChannelMemberOut], status_code=201)
+async def add_channel_members(channel_id: str, body: ChannelMemberAdd, identity: Identity = Depends(current_identity), db: AsyncSession = Depends(get_db)):
+    channel, actor = await _channel_access(db, channel_id, identity)
+    if not channel.is_private:
+        raise HTTPException(400, "Open channels include every group member")
+    if channel.is_dm:
+        raise HTTPException(400, "Direct messages have a fixed pair of members")
+    await _channel_manage_access(db, channel, actor)
+    valid = set((await db.execute(select(Member.id).where(
+        Member.group_id == channel.group_id, Member.id.in_(set(body.member_ids)), Member.removed_at.is_(None),
+    ))).scalars().all())
+    if len(valid) != len(set(body.member_ids)):
+        raise HTTPException(400, "A selected member does not belong to this FestioMe group")
+    existing = set((await db.execute(select(ChannelMember.member_id).where(
+        ChannelMember.channel_id == channel.id, ChannelMember.member_id.in_(valid),
+    ))).scalars().all())
+    for mid in valid - existing:
+        db.add(ChannelMember(channel_id=channel.id, member_id=mid, added_by_member_id=actor.id))
+    if valid - existing:
+        _audit(db, channel.group_id, actor, "channel.members_added", "channel", channel.id, count=len(valid - existing))
+    await db.commit()
+    return await _channel_members_out(db, channel.id, actor.id)
+
+
+@app.delete("/v1/channels/{channel_id}/members/{member_id}", status_code=204)
+async def remove_channel_member(channel_id: str, member_id: str, identity: Identity = Depends(current_identity), db: AsyncSession = Depends(get_db)):
+    channel, actor = await _channel_access(db, channel_id, identity)
+    if not channel.is_private or channel.is_dm:
+        raise HTTPException(400, "This channel has no editable roster")
+    # Members may always remove themselves; otherwise roster-manage rights apply.
+    if member_id != actor.id:
+        await _channel_manage_access(db, channel, actor)
+    row = (await db.execute(select(ChannelMember).where(
+        ChannelMember.channel_id == channel.id, ChannelMember.member_id == member_id,
+    ))).scalar_one_or_none()
+    if row:
+        await db.delete(row)
+        _audit(db, channel.group_id, actor, "channel.member_removed", "channel", channel.id, member_id=member_id)
+        await db.commit()
+
+
+@app.post("/v1/groups/{group_id}/dms", response_model=ChannelOut, status_code=201)
+async def open_direct_message(group_id: str, body: DirectMessageCreate, identity: Identity = Depends(current_identity), db: AsyncSession = Depends(get_db)):
+    """Find or create the private 1:1 channel between the caller and another
+    member of the same group."""
+    me = await _member(db, group_id, identity)
+    if body.member_id == me.id:
+        raise HTTPException(400, "Cannot start a direct message with yourself")
+    other = await db.get(Member, body.member_id)
+    if not other or other.group_id != group_id or other.removed_at:
+        raise HTTPException(404, "FestioMe member not found")
+    dm_key = "|".join(sorted([me.id, other.id]))
+    existing = (await db.execute(select(Channel).where(
+        Channel.group_id == group_id, Channel.is_dm.is_(True), Channel.dm_key == dm_key,
+    ))).scalar_one_or_none()
+    if existing:
+        return ChannelOut.model_validate(existing).model_copy(update={"member_count": 2, "name": other.display_name})
+    slug = f"dm-{secrets.token_hex(16)}"
+    channel = Channel(group_id=group_id, name="Direct message", slug=slug, description="",
+                      kind="discussion", is_private=True, is_dm=True, dm_key=dm_key, created_by_member_id=me.id)
+    db.add(channel)
+    await db.flush()
+    db.add(ChannelMember(channel_id=channel.id, member_id=me.id, added_by_member_id=me.id))
+    db.add(ChannelMember(channel_id=channel.id, member_id=other.id, added_by_member_id=me.id))
+    try:
+        await db.commit()
+    except IntegrityError:
+        # Concurrent open of the same pair — return the winner.
+        await db.rollback()
+        existing = (await db.execute(select(Channel).where(
+            Channel.group_id == group_id, Channel.is_dm.is_(True), Channel.dm_key == dm_key,
+        ))).scalar_one()
+        return ChannelOut.model_validate(existing).model_copy(update={"member_count": 2, "name": other.display_name})
+    await db.refresh(channel)
+    return ChannelOut.model_validate(channel).model_copy(update={"member_count": 2, "name": other.display_name})
 
 
 @app.get("/v1/groups/{group_id}/members", response_model=list[MemberOut])

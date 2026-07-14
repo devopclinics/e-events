@@ -108,6 +108,11 @@ class Channel(Base):
     __table_args__ = (
         UniqueConstraint("group_id", "slug", name="uq_channel_slug"),
         CheckConstraint("kind IN ('discussion','announcement','staff')", name="ck_channel_kind"),
+        # One DM channel per member pair per group.
+        Index(
+            "uq_channel_dm_pair", "group_id", "dm_key", unique=True,
+            sqlite_where=text("is_dm"), postgresql_where=text("is_dm"),
+        ),
     )
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=uid)
     group_id: Mapped[str] = mapped_column(String(36), ForeignKey("festiome_groups.id"), index=True)
@@ -115,9 +120,34 @@ class Channel(Base):
     slug: Mapped[str] = mapped_column(String(100))
     description: Mapped[str] = mapped_column(Text, default="")
     kind: Mapped[str] = mapped_column(String(20), default="discussion")
+    # When true, only members enrolled in channel_members (plus group staff, who
+    # keep moderation oversight) can see or post. A discussion/announcement kind
+    # governs *how* enrolled members post; is_private governs *who* is enrolled.
+    is_private: Mapped[bool] = mapped_column(Boolean, default=False, server_default=text("false"))
+    # A direct-message channel: a private channel with exactly two members and no
+    # staff oversight. Surfaced separately from topic channels in the UI.
+    is_dm: Mapped[bool] = mapped_column(Boolean, default=False, server_default=text("false"))
+    # For a DM, a stable, order-independent key of the two member ids so a pair
+    # resolves to one channel (find-or-create). Null for non-DM channels.
+    dm_key: Mapped[str | None] = mapped_column(String(80), nullable=True)
     created_by_member_id: Mapped[str] = mapped_column(String(36), ForeignKey("members.id"))
     archived: Mapped[bool] = mapped_column(Boolean, default=False)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, index=True)
+
+
+class ChannelMember(Base):
+    """Enrollment of a group member in a private channel (or DM). Absent for
+    open channels, which every group member may access."""
+    __tablename__ = "channel_members"
+    __table_args__ = (
+        UniqueConstraint("channel_id", "member_id", name="uq_channel_member"),
+        Index("ix_channel_members_member", "member_id"),
+    )
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=uid)
+    channel_id: Mapped[str] = mapped_column(String(36), ForeignKey("channels.id"), index=True)
+    member_id: Mapped[str] = mapped_column(String(36), ForeignKey("members.id"), index=True)
+    added_by_member_id: Mapped[str | None] = mapped_column(String(36), ForeignKey("members.id"), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
 
 
 class Invitation(Base):

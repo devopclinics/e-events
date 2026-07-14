@@ -21,7 +21,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..database import get_db
 from ..models import Event
-from ..timeutil import to_event_local
+from ..timeutil import event_tz, to_event_local
 from .invite import _get_public_event, _get_public_event_by_rsvp_token
 from .registry import _event_by_token as _get_event_by_registry_token
 
@@ -43,7 +43,7 @@ def _abs_url(base_url: str, value: str | None) -> str:
 
 
 def _fmt_date(event: Event) -> str:
-    local = to_event_local(event.event_date)
+    local = to_event_local(event.event_date, event_tz(event))
     if not local:
         return ""
     try:

@@ -247,6 +247,7 @@ def _send_rsvp_invite(
             event.venue_name, event.venue_address, event.admission_note,
             event.invite_cover_image,
             hub_url=hub_url,
+            event_timezone=event.timezone,
         )
 
     if paid_channels and event.notify_sms and guest.phone and guest.sms_consent and take_message_credit(event, "sms"):
@@ -256,7 +257,7 @@ def _send_rsvp_invite(
             messaging.send_invite_sms,
             phone=guest.phone, first_name=guest.first_name,
             event_name=event.name, ticket_url=ticket_url,
-            event_date=event.event_date,
+            event_date=event.event_date, event_timezone=event.timezone,
         )
 
     if paid_channels and event.notify_whatsapp and guest.phone and guest.whatsapp_consent and take_message_credit(event, "whatsapp"):
@@ -266,7 +267,7 @@ def _send_rsvp_invite(
             messaging.send_invite_whatsapp,
             phone=guest.phone, first_name=guest.first_name,
             event_name=event.name, ticket_url=ticket_url,
-            event_date=event.event_date,
+            event_date=event.event_date, event_timezone=event.timezone,
         )
 
 

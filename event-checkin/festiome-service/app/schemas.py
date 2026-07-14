@@ -109,6 +109,10 @@ class ChannelCreate(BaseModel):
     name: str = Field(min_length=1, max_length=100)
     description: str = Field(default="", max_length=2000)
     kind: Literal["discussion", "announcement", "staff"] = "discussion"
+    is_private: bool = False
+    # Group member ids to enrol when creating a private channel. Ignored for
+    # open channels. The creator is always enrolled.
+    member_ids: list[str] = Field(default_factory=list, max_length=500)
 
 
 class ChannelOut(BaseModel):
@@ -119,9 +123,29 @@ class ChannelOut(BaseModel):
     slug: str
     description: str
     kind: str
+    is_private: bool = False
+    is_dm: bool = False
     archived: bool
     created_at: datetime
     unread_count: int = 0
+    # Enrolment size for private channels/DMs (0 for open channels).
+    member_count: int = 0
+
+
+class ChannelMemberAdd(BaseModel):
+    member_ids: list[str] = Field(min_length=1, max_length=500)
+
+
+class ChannelMemberOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+    id: str
+    display_name: str
+    role: str
+    is_me: bool = False
+
+
+class DirectMessageCreate(BaseModel):
+    member_id: str = Field(min_length=1, max_length=36)
 
 
 class MemberOut(BaseModel):

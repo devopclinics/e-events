@@ -7348,9 +7348,17 @@ function TeamPanel({ eventId }) {
 // UTC first, so the datetime-local round trip is stable.
 const utcToLocal = utcToLocalInput
 
+// Event times render in the event's IANA timezone (required). Full list where
+// the browser supports it, else a small curated set.
+const EVENT_TIMEZONES =
+  typeof Intl.supportedValuesOf === 'function'
+    ? Intl.supportedValuesOf('timeZone')
+    : ['Europe/Zurich', 'Europe/London', 'America/New_York', 'America/Chicago', 'America/Los_Angeles', 'Asia/Dubai', 'Asia/Kolkata', 'UTC']
+const DETECTED_EVENT_TZ = Intl.DateTimeFormat().resolvedOptions().timeZone || ''
+
 function EventForm({ initial, onSave, onCancel }) {
   const [form, setForm] = useState(
-    initial || { name: '', couples_name: '', event_date: '', description: '', admission_note: '', checkin_base_url: PUBLIC_BASE_URL }
+    initial || { name: '', couples_name: '', event_date: '', timezone: '', description: '', admission_note: '', checkin_base_url: PUBLIC_BASE_URL }
   )
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
@@ -7382,6 +7390,14 @@ function EventForm({ initial, onSave, onCancel }) {
         <div>
           <label htmlFor="event-date" className="block text-xs font-semibold text-gray-600 mb-1">Event Date *</label>
           <input id="event-date" className={field} type="datetime-local" value={form.event_date?.slice(0, 16) || ''} onChange={set('event_date')} required />
+        </div>
+        <div>
+          <label htmlFor="event-timezone" className="block text-xs font-semibold text-gray-600 mb-1">Timezone *</label>
+          <select id="event-timezone" className={field} value={form.timezone || ''} onChange={set('timezone')} required>
+            <option value="" disabled>Select the event&apos;s timezone…</option>
+            {DETECTED_EVENT_TZ && <option value={DETECTED_EVENT_TZ}>{DETECTED_EVENT_TZ} (detected)</option>}
+            {EVENT_TIMEZONES.map((tz) => <option key={tz} value={tz}>{tz}</option>)}
+          </select>
         </div>
         <div>
           <label htmlFor="event-base-url" className="block text-xs font-semibold text-gray-600 mb-1">App Base URL *</label>

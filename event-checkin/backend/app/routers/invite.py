@@ -17,7 +17,7 @@ from sqlalchemy import func, select, or_
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..database import get_db
-from ..models import Event, Guest, RSVPAnswer, RSVPQuestion, Shipment, GuestShipment, TableGroup, TicketType
+from ..models import Event, Guest, RSVPAnswer, RSVPQuestion, SeatingTable, Shipment, GuestShipment, TableGroup, TicketType
 from ..schemas import (
     InviteGuestPrefill, InvitePageOut, InviteTokenPageOut,
     InviteShippingOut, InviteShipmentNeed, ShippingAddressUpdate,
@@ -288,6 +288,49 @@ def _type_key(value: str | None) -> str:
     return (value or "").strip().lower()
 
 
+def _category_seating_entry(event: Event, category: str | None, answers: dict[str, str]) -> dict | None:
+    """Resolve the {"submitter": bucket, "invitee": bucket} seating rule for the
+    submitter's selected invitation category. Matches the resolved category first,
+    then falls back to any RSVP answer value that names a configured category —
+    so it honours whatever the submitter actually selected on the RSVP page."""
+    rules = event.rsvp_category_seating_rules or {}
+    if not rules:
+        return None
+    if category:
+        wanted = _type_key(category)
+        for key, entry in rules.items():
+            if _type_key(key) == wanted and isinstance(entry, dict):
+                return entry
+    answer_keys = {_type_key(a) for a in (answers or {}).values()}
+    for key, entry in rules.items():
+        if _type_key(key) in answer_keys and isinstance(entry, dict):
+            return entry
+    return None
+
+
+async def _table_in_bucket(event_id: str, bucket: str | None, db: AsyncSession) -> str | None:
+    """Pick a specific table for a category bucket (matches SeatingTable.category).
+    Returns the first table in the bucket (by sort_order, name) that still has a
+    free seat, so multiple guests distribute across the bucket's tables; if every
+    table in the bucket is full, pins to the first anyway so the mapping is still
+    honoured. Only pins table_id — check-in seats the guest within that table."""
+    key = _type_key(bucket)
+    if not key:
+        return None
+    tables = (await db.execute(
+        select(SeatingTable)
+        .where(SeatingTable.event_id == event_id, func.lower(SeatingTable.category) == key)
+        .order_by(SeatingTable.sort_order, SeatingTable.name)
+    )).scalars().all()
+    if not tables:
+        return None
+    for table in tables:
+        used = await db.scalar(select(func.count(Guest.id)).where(Guest.table_id == table.id)) or 0
+        if used < table.capacity:
+            return table.id
+    return tables[0].id
+
+
 async def _default_group_for_invitee(event_id: str, guest_type: str | None, db: AsyncSession) -> str | None:
     key = _type_key(guest_type)
     wanted = "FAMILY"
@@ -446,6 +489,10 @@ async def _submit_multi_invitee_rsvp(
     submitter_group_id = await _default_group_for_invitee(event.id, submitter_guest_type, db)
     submitter_ticket_type_id = await _ticket_type_for_invitee(event.id, submitter_guest_type, db)
     submitter_is_vip = any(term in _type_key(submitter_guest_type) for term in ("vip", "dignitary", "honour", "honor", "chairman"))
+    # Category → table seating: the submitter's selected invitation category maps
+    # to a submitter table bucket and an invitee table bucket (SeatingTable.category).
+    seating_entry = _category_seating_entry(event, matched_limit_rule, data.answers)
+    submitter_table_id = await _table_in_bucket(event.id, (seating_entry or {}).get("submitter"), db)
     created: list[Guest] = []
 
     submitter_guest = Guest(
@@ -461,6 +508,7 @@ async def _submit_multi_invitee_rsvp(
         rsvp_status="pending" if needs_approval else "confirmed",
         rsvp_responded_at=now,
         assigned_table_group_id=submitter_group_id,
+        table_id=submitter_table_id,
         ticket_type_id=submitter_ticket_type_id,
         is_vip=submitter_is_vip,
         rsvp_guest_type=submitter_guest_type,
@@ -477,6 +525,8 @@ async def _submit_multi_invitee_rsvp(
         group_id = await _default_group_for_invitee(event.id, guest_type, db)
         ticket_type_id = await _ticket_type_for_invitee(event.id, guest_type, db)
         is_vip = any(term in _type_key(guest_type) for term in ("vip", "dignitary", "honour", "honor", "chairman"))
+        # Invited guests go to the invitee bucket of the SUBMITTER's category.
+        invitee_table_id = await _table_in_bucket(event.id, (seating_entry or {}).get("invitee"), db)
         guest = Guest(
             event_id=event.id,
             first_name=first,
@@ -490,6 +540,7 @@ async def _submit_multi_invitee_rsvp(
             rsvp_status="pending" if needs_approval else "confirmed",
             rsvp_responded_at=now,
             assigned_table_group_id=group_id,
+            table_id=invitee_table_id,
             ticket_type_id=ticket_type_id,
             is_vip=is_vip,
             rsvp_submitter_guest_id=submitter_guest.id,

@@ -267,6 +267,13 @@ class Event(Base):
     # Optional per-category invitee caps for multi-invitee RSVP. JSON object,
     # keyed by the submitter category/role answer, e.g. {"Parent": 2, "VIP": 10}.
     rsvp_multi_invitee_limit_rules: Mapped[dict | None] = mapped_column(JSON, nullable=True)
+    # Optional per-category seating map for multi-invitee RSVP. JSON object keyed
+    # by the same submitter category answer; each value is
+    # {"submitter": "<table category bucket>", "invitee": "<table category bucket>"}.
+    # On RSVP the submitter is pinned to a table in the submitter bucket and each
+    # invited guest to a table in the invitee bucket (values match SeatingTable.category).
+    # "invitee" may be omitted for submitter-only categories.
+    rsvp_category_seating_rules: Mapped[dict | None] = mapped_column(JSON, nullable=True)
 
     # ── Per-event entitlements (Phase 2) — what an Event Pass unlocks ─────────
     # plan_tier: "free" | "tier50" | "tier150" | "tier300" | "unlimited" | "comp"

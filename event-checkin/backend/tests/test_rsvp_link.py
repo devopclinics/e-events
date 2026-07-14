@@ -1,8 +1,8 @@
-from sqlalchemy import delete
+from sqlalchemy import delete, select
 
 import pytest
 
-from app.models import Event, Guest, RSVPQuestion, TableGroup, TicketType
+from app.models import Event, Guest, RSVPQuestion, SeatingTable, TableGroup, TicketType
 from conftest import _Session
 
 
@@ -281,3 +281,58 @@ async def test_multi_invitee_rsvp_can_allow_duplicate_emails(ctx):
     allowed = await ctx.client.post("/api/invite/link/duplicate-email-token/rsvp", json=payload)
     assert allowed.status_code == 201, allowed.text
     assert "Parent plus 2 invited guests" in allowed.json()["message"]
+
+
+@pytest.mark.asyncio
+async def test_multi_invitee_rsvp_maps_category_to_submitter_and_invitee_tables(ctx):
+    """The submitter's SELECTED invitation category maps to a submitter table
+    bucket and a separate invited-guests table bucket (SeatingTable.category)."""
+    ev = ctx.ids["event_a"]
+    async with _Session() as s:
+        event = await s.get(Event, ev)
+        event.rsvp_enabled = True
+        event.invite_mode = "open"
+        event.rsvp_token = "cat-seating-token"
+        event.rsvp_require_approval = False
+        event.rsvp_multi_invitee_enabled = True
+        event.rsvp_multi_invitee_limit = 10
+        event.rsvp_multi_invitee_limit_rules = {"Hafla & Graduands": 10, "Individual invited guest": 0}
+        event.rsvp_category_seating_rules = {
+            "Hafla & Graduands": {"submitter": "Hafla Parents", "invitee": "Graduands Guests"},
+        }
+        event.is_paid = True
+        event.guest_cap = 20
+        await s.execute(delete(Guest).where(Guest.event_id == ev))
+        q = RSVPQuestion(
+            event_id=ev, question="Invitation category", question_type="select",
+            options="[\"Hafla & Graduands\",\"Individual invited guest\"]", is_required=True, sort_order=1,
+        )
+        # Two tables sharing the invitee bucket → invitees distribute across them.
+        t_sub = SeatingTable(event_id=ev, name="Hafla Parents 1", capacity=10, category="Hafla Parents")
+        t_g1 = SeatingTable(event_id=ev, name="Graduands Guests 1", capacity=1, category="Graduands Guests", sort_order=1)
+        t_g2 = SeatingTable(event_id=ev, name="Graduands Guests 2", capacity=10, category="Graduands Guests", sort_order=2)
+        s.add_all([q, t_sub, t_g1, t_g2])
+        await s.commit()
+        question_id, sub_id, g1_id, g2_id = q.id, t_sub.id, t_g1.id, t_g2.id
+
+    response = await ctx.client.post(
+        "/api/invite/link/cat-seating-token/rsvp",
+        json={
+            "first_name": "Hafla", "last_name": "Parent", "email": "hafla@example.com",
+            "answers": {question_id: "Hafla & Graduands"},
+            "invitees": [
+                {"full_name": "Guest One", "email": "g1@example.com"},
+                {"full_name": "Guest Two", "email": "g2@example.com"},
+            ],
+        },
+    )
+    assert response.status_code == 201, response.text
+
+    async with _Session() as s:
+        guests = (await s.execute(select(Guest).where(Guest.event_id == ev))).scalars().all()
+        by_name = {f"{g.first_name} {g.last_name}".strip(): g for g in guests}
+        # Submitter → submitter bucket table.
+        assert by_name["Hafla Parent"].table_id == sub_id
+        # First invitee fills the capacity-1 bucket table, second overflows to the next.
+        assert by_name["Guest One"].table_id == g1_id
+        assert by_name["Guest Two"].table_id == g2_id

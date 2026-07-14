@@ -3634,10 +3634,28 @@ function InvitePanel({ event, onChanged }) {
   const [err, setErr] = useState('')
   const [coverImage, setCoverImage] = useState(event.invite_cover_image ?? null)
   const [uploading, setUploading] = useState(false)
+  // Category → table seating: the buckets available (distinct table categories)
+  // and the current per-category {submitter, invitee} mapping.
+  const [tableCategories, setTableCategories] = useState([])
+  const [seatingMap, setSeatingMap] = useState(() => event.rsvp_category_seating_rules || {})
 
   useEffect(() => {
     api.listRSVPQuestions(event.id).then(setQuestions).catch(console.error)
+    api.listTables(event.id)
+      .then((tables) => setTableCategories(
+        [...new Set((tables || []).map((t) => (t.category || '').trim()).filter(Boolean))]
+      ))
+      .catch(console.error)
   }, [event.id])
+
+  // Invitation categories come from the limit-rules JSON (same keys the RSVP page shows).
+  let inviteeCategories = []
+  try {
+    const parsed = JSON.parse(form.rsvp_multi_invitee_limit_rules_text || '{}')
+    if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) inviteeCategories = Object.keys(parsed)
+  } catch { inviteeCategories = [] }
+  const setSeat = (cat, role) => (e) =>
+    setSeatingMap((p) => ({ ...p, [cat]: { ...(p[cat] || {}), [role]: e.target.value } }))
 
   const set = (k) => (e) => setForm((p) => ({ ...p, [k]: e.target.type === 'checkbox' ? e.target.checked : e.target.value }))
 
@@ -3651,6 +3669,13 @@ function InvitePanel({ event, onChanged }) {
           throw new Error('Category invitee limits must be a JSON object.')
         }
       }
+      const seatingRules = {}
+      for (const [cat, m] of Object.entries(seatingMap || {})) {
+        const entry = {}
+        if (m?.submitter) entry.submitter = m.submitter
+        if (m?.invitee) entry.invitee = m.invitee
+        if (Object.keys(entry).length) seatingRules[cat] = entry
+      }
       const { rsvp_multi_invitee_limit_rules_text, ...saveForm } = form
       const payload = {
         ...saveForm,
@@ -3658,6 +3683,7 @@ function InvitePanel({ event, onChanged }) {
         rsvp_deadline: form.rsvp_deadline ? new Date(form.rsvp_deadline).toISOString() : null,
         rsvp_multi_invitee_limit: Math.max(1, Math.min(Number(form.rsvp_multi_invitee_limit) || 10, 100)),
         rsvp_multi_invitee_limit_rules: limitRules,
+        rsvp_category_seating_rules: Object.keys(seatingRules).length ? seatingRules : null,
       }
       const updated = await api.updateInviteSettings(event.id, payload)
       onChanged(updated)
@@ -3946,6 +3972,37 @@ function InvitePanel({ event, onChanged }) {
                         Optional. Use 0 for submitter-only categories. The public RSVP page shows these categories and the backend enforces the selected additional guest limit.
                       </p>
                     </div>
+                  </div>
+                )}
+                {form.rsvp_multi_invitee_enabled && inviteeCategories.length > 0 && (
+                  <div className="mt-4 border-t border-slate-200 dark:border-slate-700 pt-3">
+                    <label className="block text-xs font-semibold text-slate-500 dark:text-slate-400 mb-1">Category → tables</label>
+                    {tableCategories.length === 0 ? (
+                      <p className="text-xs text-amber-600 dark:text-amber-400">
+                        Add tables with a <span className="font-semibold">Category</span> (e.g. "Hafla Parents", "Graduands Guests") in the Seating tab first — those categories become the table options here.
+                      </p>
+                    ) : (
+                      <>
+                        <div className="space-y-2">
+                          {inviteeCategories.map((cat) => (
+                            <div key={cat} className="grid gap-2 sm:grid-cols-[1fr,1fr,1fr] items-center">
+                              <span className="text-xs font-medium text-slate-600 dark:text-slate-300 truncate" title={cat}>{cat}</span>
+                              <select value={seatingMap[cat]?.submitter || ''} onChange={setSeat(cat, 'submitter')} className={inputCls}>
+                                <option value="">Submitter table…</option>
+                                {tableCategories.map((tc) => <option key={tc} value={tc}>{tc}</option>)}
+                              </select>
+                              <select value={seatingMap[cat]?.invitee || ''} onChange={setSeat(cat, 'invitee')} className={inputCls}>
+                                <option value="">Invited-guests table…</option>
+                                {tableCategories.map((tc) => <option key={tc} value={tc}>{tc}</option>)}
+                              </select>
+                            </div>
+                          ))}
+                        </div>
+                        <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
+                          When a submitter picks a category, they're seated in the submitter table and the guests they invite are seated in the invited-guests table. Leave a column blank to skip it.
+                        </p>
+                      </>
+                    )}
                   </div>
                 )}
               </div>

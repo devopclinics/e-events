@@ -791,6 +791,22 @@ async def update_invite_settings(
                 rules[label] = max(0, min(int(limit or 0), 100))
             value = rules or None
             synced_limit_rules = value
+        if field == "rsvp_category_seating_rules":
+            seating = {}
+            for key, mapping in (value or {}).items():
+                label = str(key or "").strip()
+                if not label or not isinstance(mapping, dict):
+                    continue
+                sub = str(mapping.get("submitter") or "").strip()
+                inv = str(mapping.get("invitee") or "").strip()
+                entry = {}
+                if sub:
+                    entry["submitter"] = sub
+                if inv:
+                    entry["invitee"] = inv
+                if entry:
+                    seating[label] = entry
+            value = seating or None
         setattr(event, field, value)
     if synced_limit_rules:
         category = await db.scalar(

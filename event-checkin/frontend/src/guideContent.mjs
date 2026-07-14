@@ -35,7 +35,7 @@ export const CONTENT = {
       },
       {
         id: 'org-create', icon: '📅', title: 'Create your event',
-        img: '/media/help-event-setup.png',
+        img: '/media/help2-event-setup.png',
         intro: 'Each event is a self-contained workspace with its own guests, invites, settings, and day-of tools.',
         steps: [
           'In Event Setup, click New Event.',
@@ -50,7 +50,7 @@ export const CONTENT = {
       },
       {
         id: 'org-guests', icon: '👥', title: 'Add your guest list',
-        img: '/media/help-guests.png',
+        img: '/media/help2-guests.png',
         intro: 'Import from a spreadsheet, sync from Google Sheets, or add guests one at a time.',
         steps: [
           'Go to Start here → Download template. It contains exactly the columns your event uses — with an Excel dropdown for ticket types — so nothing is missed.',
@@ -68,11 +68,12 @@ export const CONTENT = {
       },
       {
         id: 'org-rsvp', icon: '✉️', title: 'Set up your RSVP & invite page',
-        img: '/media/help-invites-rsvp.png',
+        img: '/media/help2-invites-rsvp.png',
         intro: 'The invite page is what guests see when they open their link. Make it yours.',
         steps: [
           'Go to Invites & RSVP → Invitation page & RSVP.',
           'Choose Anyone with event link (one shared link, anyone can RSVP) or Only guests with personal invite link (unique private link per guest — only that guest can use it).',
+          'RSVP form fields: for Email and Phone, choose Don\'t ask / Optional / Required for the submitter, and Optional / Required for any additional guests they register. Name is always required.',
           'Optionally: set an RSVP deadline, enable approval required (you manually approve each RSVP), add custom questions (dietary, t-shirt size, table preference, etc.), upload a cover image, and write a welcome message.',
           'Click "Preview invite page" to see exactly what guests will see before you send anything.',
           'For Orders events: add choices for meals, drinks, gifts, or any other item guests should select on the invite page.',
@@ -82,8 +83,24 @@ export const CONTENT = {
         tip: 'Personal invite links prevent forwarding and double-booking. Use them for formal events or when you need a precise headcount.',
       },
       {
+        id: 'org-categories', icon: '🗂️', title: 'Invitation categories & automatic seating',
+        img: '/media/help2-categories.png',
+        intro: 'For schools, conventions, and large family events: let one person register a whole party, gate how many guests each category may bring, and seat everyone at the right tables automatically.',
+        steps: [
+          'Invites & RSVP → tick "Let one submitter register multiple invitees". Each registered person becomes a separate guest with their own QR pass.',
+          'Set the Default max invitees, then define your categories in Category invitee limits — e.g. {"Graduating Family": 6, "Friends of Graduand": 3, "Individual invited guest": 0}. Use 0 for submitter-only categories.',
+          'Saving the categories automatically creates a required "Invitation category" question on the public RSVP page — the submitter picks their category first, and the form enforces that category\'s guest allowance.',
+          'Give your tables a Category label in the Seating tab (e.g. "Family", "Friends", "Staff"). Several tables can share one label — together they form a bucket that fills table by table.',
+          'Back in Invites & RSVP, the Category → tables section lists each invitation category with two dropdowns: the Submitter table bucket and the Invited-guests table bucket. Leave one blank to skip it.',
+          'From then on, every RSVP is seated on submission: the submitter is pinned to a table in their category\'s submitter bucket, and each guest they registered is pinned to the invited-guests bucket.',
+          'At check-in, each guest gets the next free seat at their pinned table — full tables overflow to the next table in the same bucket.',
+          'Guests who registered before you configured the mapping aren\'t re-seated automatically — assign them a table group or table from the Guests tab.',
+        ],
+        tip: 'Name your categories exactly as guests should read them ("Hafla & Graduands — up to 10 additional guests" reads better than "CAT-A"). The RSVP dropdown shows each category with its guest allowance.',
+      },
+      {
         id: 'org-send', icon: '📤', title: 'Send invitations',
-        img: '/media/help-invites-rsvp.png',
+        img: '/media/help2-invites-rsvp.png',
         intro: 'Reach guests on the channel they actually check — WhatsApp, SMS, or email.',
         steps: [
           'Shared link: copy the event link and share it yourself (WhatsApp group, email, social). Or use Manual invite — search a specific guest and send them a personal link.',
@@ -99,7 +116,7 @@ export const CONTENT = {
       },
       {
         id: 'org-track', icon: '✅', title: 'Track RSVPs & approvals',
-        img: '/media/help-guests.png',
+        img: '/media/help2-guests.png',
         steps: [
           'The Guests tab shows every guest with their current status: Attending, Declined, Pending (submitted, awaiting your approval), or No reply.',
           'Each row also shows whether the guest has been checked in on the day.',
@@ -113,7 +130,7 @@ export const CONTENT = {
       },
       {
         id: 'org-broadcast', icon: '📣', title: 'Broadcast an update',
-        img: '/media/help-invites-rsvp.png',
+        img: '/media/help2-invites-rsvp.png',
         intro: 'Push a message to any subset of guests at any time — before, during, or after the event.',
         steps: [
           'Invites & RSVP → Broadcast Message.',
@@ -129,11 +146,12 @@ export const CONTENT = {
       {
         id: 'org-seating', icon: '🍽️', title: 'Seating & orders',
         badge: 'Paid',
-        imgs: ['/media/help-orders.png', '/media/help-orders-view.png'],
+        imgs: ['/media/help2-seating.png', '/media/help2-orders.png'],
         intro: 'Assign tables, let guests pick meals, drinks, gifts, or other items, and give staff a live Orders view.',
         steps: [
           'Team &amp; settings → Features → turn on Seating and/or Orders (requires an Event Pass).',
-          'Seating tab → Create tables: set a name (Table 1, Head Table, VIP Round…), capacity, and optionally a section label.',
+          'Seating tab → Create tables: set a name (Table 1, Head Table, VIP Round…), capacity, a display order, and optionally a Category label (the label groups tables into buckets used by Invitation categories & automatic seating).',
+          'Floor layout: open Floor layout to drag tables onto a canvas of your venue — add the stage, entrances, dance floor, and bar, and share a read-only link with your planner or venue.',
           'Use Auto-assign to fill tables automatically by RSVP order, or drag guests to specific seats manually.',
           'Reserve a seat for a guest: click an empty seat on the chart and pick the guest — they\'re placed in exactly that seat (handy for a head table or a specific arrangement).',
           'Partner pairing: guests can link their plus-one on their ticket page — auto-assign keeps them together.',
@@ -149,7 +167,7 @@ export const CONTENT = {
       {
         id: 'org-access', icon: '🎫', title: 'Entry areas & ticket rules',
         badge: 'Paid',
-        img: '/media/help-entry-areas.png',
+        img: '/media/help2-entry-areas.png',
         intro: 'Control which guests can enter which areas of your venue — enforced automatically at every scan.',
         steps: [
           'Team &amp; settings → Features → turn on Entry rules (requires an Event Pass).',
@@ -197,7 +215,7 @@ export const CONTENT = {
       {
         id: 'org-logistics', icon: '📦', title: 'Deliveries: ship merch, aso-ebi & gifts',
         badge: 'Paid',
-        img: '/media/help-deliveries.png',
+        img: '/media/help2-deliveries.png',
         steps: [
           'Team &amp; settings → Features → turn on Deliveries.',
           'Deliveries tab → New Shipment. Name it (e.g. "Aso-ebi fabric", "Welcome bag", "Gift delivery").',
@@ -212,7 +230,7 @@ export const CONTENT = {
       {
         id: 'org-registry', icon: '🎁', title: 'Gift list',
         badge: 'Paid',
-        img: '/media/help-gift-list.png',
+        img: '/media/help2-gift-list.png',
         steps: [
           'Team &amp; settings → Features → turn on Gift list.',
           'Gift list tab → Add items: paste a store link and the platform auto-fills the title, image, and price. Or add cash funds (e.g. "Honeymoon fund", "New home contribution").',
@@ -224,8 +242,21 @@ export const CONTENT = {
         ],
       },
       {
+        id: 'org-community', icon: '💬', title: 'Guest Hub & FestioMe community',
+        intro: 'Every guest gets a personal hub, and your event can host its own private community for announcements, groups, and chat.',
+        steps: [
+          'Guest Hub: every guest\'s pass includes a personal FestioHub link — their QR code, seating details, order choices, event updates, and a message thread to your team, on any device. It\'s sent automatically with their ticket; nothing to configure.',
+          'Guest Communication tab: control which channels guests can use to reach you (email, chat, announcements), and see every guest thread in one inbox.',
+          'FestioMe: open the FestioMe area from the top navigation to create your event\'s community — post announcements, share photos, and create groups (e.g. "Parents", "Volunteers").',
+          'Groups can be open to all guests, join-on-request, or private (selected members only). Members can chat in group channels or one-to-one.',
+          'Guests reach the community from their FestioHub — the link is on their pass, scoped to your event.',
+          'Push notifications: guests who allow notifications on their hub get announcement pushes even when the page is closed.',
+        ],
+        tip: 'Post day-of logistics (parking, doors-open time, dress code) as announcements — every guest sees them on their hub without you spending SMS credits.',
+      },
+      {
         id: 'org-team', icon: '🧑‍🤝‍🧑', title: 'Add your team',
-        img: '/media/help-team.png',
+        img: '/media/help2-team.png',
         steps: [
           'Team tab → "Add a teammate" → enter their email address and choose a role.',
           'Roles: Owner and Admin can manage the event (settings, guests, seating, etc.); Staff can only check guests in on events they\'re assigned to.',
@@ -239,7 +270,7 @@ export const CONTENT = {
       },
       {
         id: 'org-checkin', icon: '🎟️', title: 'Check-in day',
-        img: '/media/help-check-in.png',
+        img: '/media/help2-checkin.png',
         steps: [
           'The day before: set the event to Active in Start here. This enables Check-in to process guests.',
           'Ensure all scanning staff are added to the Team tab and assigned to this event.',
@@ -256,7 +287,7 @@ export const CONTENT = {
       },
       {
         id: 'org-dashboard', icon: '📊', title: 'Results',
-        img: '/media/help-results.png',
+        img: '/media/help2-results.png',
         steps: [
           'Open Results from the nav during or after your event.',
           'Top row: total RSVP\'d, total checked in, currently in venue (if using Entry areas).',
@@ -272,7 +303,7 @@ export const CONTENT = {
       },
       {
         id: 'org-upgrade', icon: '💳', title: 'Event Pass & message credits',
-        img: '/media/help-event-pass.png',
+        img: '/media/help2-event-pass.png',
         steps: [
           'Free tier: email invites, up to 25 guests, Festio branding on invite pages, no paid features.',
           'Event Pass: buy per event in Invites & RSVP → Event Pass. Unlocks SMS/WhatsApp invites, more guests, QR check-in, seating & orders, entry areas, deliveries, gift list, and removes Festio branding.',
@@ -338,7 +369,7 @@ export const CONTENT = {
       },
       {
         id: 'staff-scan', icon: '📷', title: 'Check guests in',
-        img: '/media/help-check-in.png',
+        img: '/media/help2-checkin.png',
         steps: [
           'Open Check-in on your phone or tablet. No app download needed.',
           'Select your event from the list.',
@@ -381,7 +412,7 @@ export const CONTENT = {
       },
       {
         id: 'staff-zones', icon: '🚪', title: 'Zone scanning & gates',
-        img: '/media/help-check-in.png',
+        img: '/media/help2-checkin.png',
         steps: [
           'If the event has Entry areas enabled, Check-in shows an Area/Gate picker before you start.',
           'Gate mode (recommended): select your named gate once (e.g. "VIP Lounge Door"). The zone and direction are pre-configured — every scan automatically enforces the rules for that gate.',
@@ -420,7 +451,7 @@ export const CONTENT = {
     topics: [
       {
         id: 'guest-open', icon: '🔗', title: 'Open your invite',
-        img: '/media/help-guest-invite.png',
+        img: '/media/help2-guest-invite.png',
         steps: [
           'Tap the link in your email, SMS, or WhatsApp message. It opens in your phone browser — no app download needed.',
           'If the link asks you to "Open with…" — choose your browser (Chrome, Safari, etc.).',
@@ -431,7 +462,9 @@ export const CONTENT = {
       {
         id: 'guest-rsvp', icon: '📝', title: 'RSVP',
         steps: [
-          'Fill in your name and any questions the host has set (dietary preference, item choice, t-shirt size, etc.).',
+          'Fill in your name and any questions the host has set (dietary preference, item choice, t-shirt size, etc.). Fields marked * are required; the rest are optional.',
+          'If the form asks for an Invitation category (schools, ceremonies, conventions): pick the category that describes you first — it sets how many additional guests you may register and where your party will be seated.',
+          'Registering your party: use "Add additional guest" to enter each person you\'re bringing (name, and contact details if asked). Every person you register gets their own QR pass — so register everyone in one submission.',
           'Click Confirm to say yes, or "Can\'t make it" to decline.',
           'On a personal (closed) invite link, you can return and change your answer until the RSVP deadline.',
           'If the host requires approval, you\'ll see "RSVP submitted — awaiting confirmation" until they approve. You\'ll get a notification when you\'re confirmed.',
@@ -464,6 +497,8 @@ export const CONTENT = {
       {
         id: 'guest-experience', icon: '🧭', title: 'FestioHub & event activity',
         steps: [
+          'Your confirmation includes a personal FestioHub link — your event pass, QR code, seating details, host updates, and a direct message line to the event team, on any device.',
+          'FestioMe community: if the host opened a community, your hub links to it — announcements, photos, and groups you can join or request to join. Allow notifications to get updates even when the page is closed.',
           'For Experience events, your ticket page includes a FestioHub or Track my activity button.',
           'Open FestioHub to see your event pass, updates from the organiser, and your activity progress.',
           'After check-in, FestioHub can show next steps such as signing consent, collecting a badge or souvenir, receiving a room/table assignment, and attending sessions.',

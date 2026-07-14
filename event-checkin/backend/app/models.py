@@ -242,6 +242,13 @@ class Event(Base):
     invite_message: Mapped[str | None] = mapped_column(Text, nullable=True)
     rsvp_collect_phone: Mapped[bool] = mapped_column(Boolean, default=True)
     rsvp_collect_email: Mapped[bool] = mapped_column(Boolean, default=True)
+    # Per-field required/optional for the RSVP form, split by audience. A field is
+    # only enforced when it is also collected (rsvp_collect_*). Defaults preserve
+    # historical behavior: submitter email required, everything else optional.
+    rsvp_email_required: Mapped[bool] = mapped_column(Boolean, default=True)
+    rsvp_phone_required: Mapped[bool] = mapped_column(Boolean, default=False)
+    rsvp_invitee_email_required: Mapped[bool] = mapped_column(Boolean, default=False)
+    rsvp_invitee_phone_required: Mapped[bool] = mapped_column(Boolean, default=False)
     # Some family/school workflows use one parent email for multiple invitees.
     # Off by default so ordinary RSVP still blocks duplicate email submissions.
     rsvp_allow_duplicate_emails: Mapped[bool] = mapped_column(Boolean, default=False)

@@ -429,13 +429,15 @@ async def _submit_multi_invitee_rsvp(
     assert_within_guest_cap(event, count, adding=total_new_guests)
 
     submitter_email = data.email.lower().strip() if data.email else None
-    if event.rsvp_collect_email and not submitter_email:
+    if event.rsvp_collect_email and event.rsvp_email_required and not submitter_email:
         raise HTTPException(422, "Submitter email is required.")
     submitter_phone = None
     if data.phone and data.phone.strip():
         submitter_phone = _normalize_phone(data.phone.strip())
         if submitter_phone is None:
             raise HTTPException(422, "Submitter phone format not recognised.")
+    elif event.rsvp_collect_phone and event.rsvp_phone_required:
+        raise HTTPException(422, "Submitter phone is required.")
 
     normalized_invitees = []
     dup_filters = []
@@ -450,14 +452,20 @@ async def _submit_multi_invitee_rsvp(
         first, last = _split_invitee_name(invitee.full_name, invitee.first_name, invitee.last_name)
         if not first.strip():
             raise HTTPException(422, "Every invitee needs a name.")
+        # Additional invited guests: email/phone are required only when the event
+        # both collects the field AND marks it required for invitees (defaults off,
+        # since the submitter is the point of contact). Phone is format-checked
+        # whenever provided.
         email = invitee.email.lower().strip() if invitee.email else None
-        if event.rsvp_collect_email and not email:
+        if event.rsvp_collect_email and event.rsvp_invitee_email_required and not email:
             raise HTTPException(422, f"Email is required for {first} {last}".strip())
         phone = None
         if invitee.phone and invitee.phone.strip():
             phone = _normalize_phone(invitee.phone.strip())
             if phone is None:
                 raise HTTPException(422, f"Phone format not recognised for {first} {last}".strip())
+        elif event.rsvp_collect_phone and event.rsvp_invitee_phone_required:
+            raise HTTPException(422, f"Phone is required for {first} {last}".strip())
         contact_keys = []
         if email and not event.rsvp_allow_duplicate_emails:
             contact_keys.append(email)
@@ -652,7 +660,7 @@ async def submit_rsvp(
     await _require_questions_answered(event_id, data.answers, db)
 
     email = data.email.lower().strip() if data.email else None
-    if event.rsvp_collect_email and not email:
+    if event.rsvp_collect_email and event.rsvp_email_required and not email:
         raise HTTPException(422, "Email is required.")
 
     # Validate / normalise phone first, so we can de-dupe on it too.
@@ -664,6 +672,8 @@ async def submit_rsvp(
                 422,
                 "Phone format not recognised. Use E.164 (e.g. +18327941707) or US 10-digit.",
             )
+    elif event.rsvp_collect_phone and event.rsvp_phone_required:
+        raise HTTPException(422, "Phone is required.")
 
     # Duplicate guard: block a repeat RSVP from the same email OR phone, so a
     # guest can't keep submitting (and re-triggering their ticket). Uses .first()

@@ -3617,6 +3617,10 @@ function InvitePanel({ event, onChanged }) {
     invite_message:    event.invite_message     ?? '',
     rsvp_collect_phone:event.rsvp_collect_phone ?? true,
     rsvp_collect_email:event.rsvp_collect_email ?? true,
+    rsvp_email_required: event.rsvp_email_required ?? true,
+    rsvp_phone_required: event.rsvp_phone_required ?? false,
+    rsvp_invitee_email_required: event.rsvp_invitee_email_required ?? false,
+    rsvp_invitee_phone_required: event.rsvp_invitee_phone_required ?? false,
     rsvp_allow_duplicate_emails: event.rsvp_allow_duplicate_emails ?? false,
     rsvp_capacity:     event.rsvp_capacity      ?? '',
     invite_mode:       event.invite_mode        ?? 'open',
@@ -3658,6 +3662,20 @@ function InvitePanel({ event, onChanged }) {
     setSeatingMap((p) => ({ ...p, [cat]: { ...(p[cat] || {}), [role]: e.target.value } }))
 
   const set = (k) => (e) => setForm((p) => ({ ...p, [k]: e.target.type === 'checkbox' ? e.target.checked : e.target.value }))
+
+  // Per-field required model for the RSVP form. Submitter has three states
+  // (Off = not collected / Optional / Required); additional guests choose
+  // Optional/Required (only meaningful when the field is collected).
+  const submitterFieldState = (collectKey, reqKey) =>
+    !form[collectKey] ? 'off' : (form[reqKey] ? 'required' : 'optional')
+  const setSubmitterFieldState = (collectKey, reqKey) => (e) =>
+    setForm((p) => ({ ...p, [collectKey]: e.target.value !== 'off', [reqKey]: e.target.value === 'required' }))
+  const setInviteeFieldState = (inviteeReqKey) => (e) =>
+    setForm((p) => ({ ...p, [inviteeReqKey]: e.target.value === 'required' }))
+  const RSVP_FORM_FIELDS = [
+    { name: 'Email', collect: 'rsvp_collect_email', req: 'rsvp_email_required', invReq: 'rsvp_invitee_email_required' },
+    { name: 'Phone', collect: 'rsvp_collect_phone', req: 'rsvp_phone_required', invReq: 'rsvp_invitee_phone_required' },
+  ]
 
   async function save() {
     setLoading(true); setMsg(''); setErr('')
@@ -3898,13 +3916,28 @@ function InvitePanel({ event, onChanged }) {
       {form.rsvp_enabled && (
         <div className="space-y-4 rounded-xl border border-slate-200 dark:border-slate-700 p-4">
           <div className="grid sm:grid-cols-2 gap-4">
-            <div className="flex items-center gap-2">
-              <input id="collect_phone" type="checkbox" checked={form.rsvp_collect_phone} onChange={set('rsvp_collect_phone')} className="w-4 h-4 accent-teal-600" />
-              <label htmlFor="collect_phone" className="text-sm font-medium text-slate-700 dark:text-slate-300 cursor-pointer">Ask for phone number</label>
-            </div>
-            <div className="flex items-center gap-2">
-              <input id="collect_email" type="checkbox" checked={form.rsvp_collect_email} onChange={set('rsvp_collect_email')} className="w-4 h-4 accent-teal-600" />
-              <label htmlFor="collect_email" className="text-sm font-medium text-slate-700 dark:text-slate-300 cursor-pointer">Ask for email address</label>
+            <div className="sm:col-span-2">
+              <label className="block text-xs font-semibold text-slate-500 dark:text-slate-400 mb-2">RSVP form fields</label>
+              <div className="space-y-2">
+                <div className="hidden sm:grid grid-cols-[70px,1fr,1fr] gap-2 text-[11px] font-semibold uppercase tracking-wide text-slate-400">
+                  <span></span><span>Submitter</span><span>Additional guests</span>
+                </div>
+                {RSVP_FORM_FIELDS.map((f) => (
+                  <div key={f.name} className="grid grid-cols-2 sm:grid-cols-[70px,1fr,1fr] gap-2 items-center">
+                    <span className="text-sm font-medium text-slate-700 dark:text-slate-300 col-span-2 sm:col-span-1">{f.name}</span>
+                    <select value={submitterFieldState(f.collect, f.req)} onChange={setSubmitterFieldState(f.collect, f.req)} className={inputCls}>
+                      <option value="off">Don't ask</option>
+                      <option value="optional">Optional</option>
+                      <option value="required">Required</option>
+                    </select>
+                    <select value={form[f.invReq] ? 'required' : 'optional'} onChange={setInviteeFieldState(f.invReq)} disabled={!form[f.collect]} className={`${inputCls} disabled:opacity-50`}>
+                      <option value="optional">Optional</option>
+                      <option value="required">Required</option>
+                    </select>
+                  </div>
+                ))}
+              </div>
+              <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">Name is always required. "Don't ask" hides the field for everyone; the Additional-guests setting applies to invitees in multi-invitee RSVPs.</p>
             </div>
             <div className="flex items-start gap-2 sm:col-span-2">
               <input id="allow_duplicate_emails" type="checkbox" checked={form.rsvp_allow_duplicate_emails} onChange={set('rsvp_allow_duplicate_emails')} className="w-4 h-4 mt-0.5 accent-teal-600" />

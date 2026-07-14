@@ -478,7 +478,13 @@ function RSVPForm({ event, theme, onConfirmed }) {
   const needsInviteeCategory = Boolean(categoryQuestion && !selectedCategory)
   const acceptsAdditionalInvitees = !needsInviteeCategory && additionalInviteeLimit > 0
   const submitterOnlyCategory = !needsInviteeCategory && additionalInviteeLimit <= 0
-  const emailRequired = event.rsvp_collect_email !== false
+  const collectEmail = event.rsvp_collect_email !== false
+  const collectPhone = event.rsvp_collect_phone !== false
+  // Per-field required flags (default: submitter email required, all else optional).
+  const emailRequired = collectEmail && (event.rsvp_email_required !== false)
+  const phoneRequired = collectPhone && !!event.rsvp_phone_required
+  const inviteeEmailRequired = collectEmail && !!event.rsvp_invitee_email_required
+  const inviteePhoneRequired = collectPhone && !!event.rsvp_invitee_phone_required
   const inviteeTypes = ['Parent/Guardian', 'Invited Guest', 'Teacher', 'School/Staff', 'VIP/Dignitary', 'Other']
 
   useEffect(() => {
@@ -604,17 +610,17 @@ function RSVPForm({ event, theme, onConfirmed }) {
             </div>
           </div>
 
-          {emailRequired && (
+          {collectEmail && (
             <div>
-              <label className="mb-2 block text-sm font-bold text-slate-700">{multiInvitee ? 'Submitter email' : 'Email'} <span className="text-red-500">*</span></label>
-              <input required type="email" value={form.email} onChange={set('email')} className={inputCls} placeholder="jane@example.com" />
+              <label className="mb-2 block text-sm font-bold text-slate-700">{multiInvitee ? 'Submitter email' : 'Email'} {emailRequired ? <span className="text-red-500">*</span> : <span className="text-slate-400">(optional)</span>}</label>
+              <input required={emailRequired} type="email" value={form.email} onChange={set('email')} className={inputCls} placeholder="jane@example.com" />
             </div>
           )}
 
-          {event.rsvp_collect_phone && (
+          {collectPhone && (
             <div>
-              <label className="mb-2 block text-sm font-bold text-slate-700">{multiInvitee ? 'Submitter phone' : 'Phone'} <span className="text-slate-400">(optional)</span></label>
-              <input type="tel" value={form.phone} onChange={set('phone')} className={inputCls} placeholder="0803 000 0000" />
+              <label className="mb-2 block text-sm font-bold text-slate-700">{multiInvitee ? 'Submitter phone' : 'Phone'} {phoneRequired ? <span className="text-red-500">*</span> : <span className="text-slate-400">(optional)</span>}</label>
+              <input required={phoneRequired} type="tel" value={form.phone} onChange={set('phone')} className={inputCls} placeholder="0803 000 0000" />
               <p className="mt-1 text-xs text-slate-500">Nigerian number? Just enter it starting with 0 (e.g. 08030000000) — we'll add <span className="font-semibold">+234</span> for you. For another country, type your full number with its + code.</p>
             </div>
           )}
@@ -706,16 +712,20 @@ function RSVPForm({ event, theme, onConfirmed }) {
                       <label className="mb-1 block text-xs font-bold text-slate-600">Relationship / role</label>
                       <input value={row.relationship} onChange={(e) => setInvitee(index, 'relationship', e.target.value)} className={inputCls} placeholder="Aunt, teacher, chairman, etc." />
                     </div>
+                    {collectPhone && (
                     <div>
-                      <label className="mb-1 block text-xs font-bold text-slate-600">Phone</label>
-                      <input type="tel" value={row.phone} onChange={(e) => setInvitee(index, 'phone', e.target.value)} className={inputCls} placeholder="+234..." />
+                      <label className="mb-1 block text-xs font-bold text-slate-600">Phone {inviteePhoneRequired ? <span className="text-red-500">*</span> : <span className="text-slate-400">(optional)</span>}</label>
+                      <input required={inviteePhoneRequired} type="tel" value={row.phone} onChange={(e) => setInvitee(index, 'phone', e.target.value)} className={inputCls} placeholder="+234..." />
                     </div>
+                    )}
+                    {collectEmail && (
                     <div className="sm:col-span-2">
                       <label className="mb-1 block text-xs font-bold text-slate-600">
-                        Email {emailRequired ? <span className="text-red-500">*</span> : <span className="text-slate-400">(optional)</span>}
+                        Email {inviteeEmailRequired ? <span className="text-red-500">*</span> : <span className="text-slate-400">(optional)</span>}
                       </label>
-                      <input required={emailRequired} type="email" value={row.email} onChange={(e) => setInvitee(index, 'email', e.target.value)} className={inputCls} placeholder="invitee@example.com" />
+                      <input required={inviteeEmailRequired} type="email" value={row.email} onChange={(e) => setInvitee(index, 'email', e.target.value)} className={inputCls} placeholder="invitee@example.com" />
                     </div>
+                    )}
                     <div className="sm:col-span-2">
                       <label className="mb-1 block text-xs font-bold text-slate-600">Notes</label>
                       <input value={row.notes} onChange={(e) => setInvitee(index, 'notes', e.target.value)} className={inputCls} placeholder="Any seating, protocol, or meal note for this person" />

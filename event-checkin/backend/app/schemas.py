@@ -179,6 +179,10 @@ class EventOut(BaseModel):
     invite_message: Optional[str] = None
     rsvp_collect_phone: bool = True
     rsvp_collect_email: bool = True
+    rsvp_email_required: bool = True
+    rsvp_phone_required: bool = False
+    rsvp_invitee_email_required: bool = False
+    rsvp_invitee_phone_required: bool = False
     rsvp_allow_duplicate_emails: bool = False
     rsvp_capacity: Optional[int] = None
     invite_cover_image: Optional[str] = None
@@ -1718,6 +1722,10 @@ class InviteSettingsUpdate(BaseModel):
     invite_message: Optional[str] = None
     rsvp_collect_phone: Optional[bool] = None
     rsvp_collect_email: Optional[bool] = None
+    rsvp_email_required: Optional[bool] = None
+    rsvp_phone_required: Optional[bool] = None
+    rsvp_invitee_email_required: Optional[bool] = None
+    rsvp_invitee_phone_required: Optional[bool] = None
     rsvp_allow_duplicate_emails: Optional[bool] = None
     rsvp_capacity: Optional[int] = None
     invite_cover_image: Optional[str] = None
@@ -1759,6 +1767,10 @@ class InvitePageOut(BaseModel):
     experience_enabled: bool = False
     rsvp_collect_phone: bool
     rsvp_collect_email: bool
+    rsvp_email_required: bool = True
+    rsvp_phone_required: bool = False
+    rsvp_invitee_email_required: bool = False
+    rsvp_invitee_phone_required: bool = False
     rsvp_allow_duplicate_emails: bool = False
     rsvp_capacity: Optional[int]
     invite_cover_image: Optional[str] = None

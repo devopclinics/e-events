@@ -336,3 +336,47 @@ async def test_multi_invitee_rsvp_maps_category_to_submitter_and_invitee_tables(
         # First invitee fills the capacity-1 bucket table, second overflows to the next.
         assert by_name["Guest One"].table_id == g1_id
         assert by_name["Guest Two"].table_id == g2_id
+
+
+@pytest.mark.asyncio
+async def test_multi_invitee_rsvp_per_field_required_flags(ctx):
+    """Submitter and invitee email/phone required-ness is driven independently by
+    the rsvp_*_required flags (only enforced when the field is also collected)."""
+    ev = ctx.ids["event_a"]
+    async with _Session() as s:
+        event = await s.get(Event, ev)
+        event.rsvp_enabled = True
+        event.invite_mode = "open"
+        event.rsvp_token = "req-flags-token"
+        event.rsvp_require_approval = False
+        event.rsvp_multi_invitee_enabled = True
+        event.rsvp_multi_invitee_limit = 5
+        event.is_paid = True
+        event.guest_cap = 20
+        event.rsvp_collect_email = True
+        event.rsvp_collect_phone = True
+        # Submitter: email optional, phone required. Invitees: email required, phone optional.
+        event.rsvp_email_required = False
+        event.rsvp_phone_required = True
+        event.rsvp_invitee_email_required = True
+        event.rsvp_invitee_phone_required = False
+        await s.execute(delete(Guest).where(Guest.event_id == ev))
+        await s.commit()
+
+    base = {"first_name": "Sub", "last_name": "Mitter", "answers": {}}
+
+    # Submitter phone required → missing phone is rejected (email may be omitted).
+    r1 = await ctx.client.post("/api/invite/link/req-flags-token/rsvp",
+        json={**base, "invitees": []})
+    assert r1.status_code == 422 and "phone is required" in r1.text.lower()
+
+    # Invitee email required → invitee without email is rejected.
+    r2 = await ctx.client.post("/api/invite/link/req-flags-token/rsvp",
+        json={**base, "phone": "+14155550100", "invitees": [{"full_name": "No Email Guest"}]})
+    assert r2.status_code == 422 and "email is required" in r2.text.lower()
+
+    # Satisfies both: submitter phone present (no email), invitee has email (no phone).
+    r3 = await ctx.client.post("/api/invite/link/req-flags-token/rsvp",
+        json={**base, "phone": "+14155550100",
+              "invitees": [{"full_name": "Emailed Guest", "email": "g@example.com"}]})
+    assert r3.status_code == 201, r3.text

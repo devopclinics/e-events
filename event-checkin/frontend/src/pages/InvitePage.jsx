@@ -1490,20 +1490,40 @@ function GuestHub({ event, accessToken, designTheme }) {
                   ))}
                 </div>
               )}
-              <div className="mt-4 space-y-4">
-                {visibleCats.map((cat) => (
-                  <div key={cat.id}>
-                    <div className="font-bold">{cat.name}</div>
-                    <ul className="mt-1.5 space-y-1">
-                      {cat.items.map((i) => (
-                        <li key={i.id} className="text-sm" style={{ color: tone.muted }}>
-                          <span className="font-medium" style={{ color: tone.text }}>{i.name}</span>
-                          {i.description ? ` — ${i.description}` : ''}
-                        </li>
-                      ))}
-                    </ul>
-                  </div>
-                ))}
+              <div className="mt-4 grid gap-3 sm:grid-cols-2">
+                {visibleCats.map((cat) => {
+                  const dashParts = cat.name.split(/\s*\u2014\s*/)
+                  const slot = dashParts.length > 1 ? dashParts[0] : ''
+                  const dish = dashParts.length > 1 ? dashParts.slice(1).join(' \u2014 ') : cat.name
+                  const key = (slot || dish).toLowerCase()
+                  const glyph = key.includes('lounge') || key.includes('snack') ? '\ud83c\udf7f'
+                    : key.includes('dinner') ? '\ud83c\udf7d\ufe0f'
+                    : key.includes('lunch') ? '\ud83c\udf5b'
+                    : key.includes('breakfast') ? '\u2615'
+                    : '\ud83c\udf74'
+                  return (
+                    <div key={cat.id} className="rounded-xl border p-4" style={{ background: tone.panelStrong, borderColor: tone.border }}>
+                      {slot && (
+                        <div className="text-[11px] font-extrabold uppercase tracking-[0.18em]" style={{ color: tone.accent }}>{slot}</div>
+                      )}
+                      <div className="mt-1 flex items-start gap-2 text-base font-extrabold leading-snug">
+                        <span aria-hidden="true" className="text-lg leading-none">{glyph}</span>
+                        <span>{dish}</span>
+                      </div>
+                      <ul className="mt-3 space-y-2">
+                        {cat.items.map((i) => (
+                          <li key={i.id} className="flex items-start gap-2.5 text-sm leading-6">
+                            <span aria-hidden="true" className="mt-2 h-1.5 w-1.5 shrink-0 rounded-full" style={{ background: tone.accent }} />
+                            <span>
+                              <span className="font-semibold" style={{ color: tone.text }}>{i.name}</span>
+                              {i.description ? <span style={{ color: tone.muted }}>{' — '}{i.description}</span> : null}
+                            </span>
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  )
+                })}
               </div>
             </div>
           )

@@ -67,7 +67,7 @@ function Reveal({ children, className = '', delay = 0 }) {
     <div
       ref={ref}
       style={{ transitionDelay: `${delay}ms` }}
-      className={`transition-all duration-700 ease-out ${shown ? 'translate-y-0 opacity-100' : 'translate-y-6 opacity-0'} ${className}`}
+      className={`transition-all duration-300 ease-out ${shown ? 'translate-y-0 opacity-100' : 'translate-y-4 opacity-0'} ${className}`}
     >
       {children}
     </div>
@@ -119,17 +119,17 @@ const accentGradients = [
 ]
 
 const trustChips = [
-  'RSVP', 'Guest Management', 'Seating', 'Messaging', 'QR Passes',
-  'Check-In', 'Live Dashboard', 'Design Studio', 'Orders', 'Gift List', 'Registry', 'Deliveries',
+  'RSVP', 'Seating', 'QR Passes', 'Check-In',
+  'Messaging', 'Live Dashboard', 'Orders', 'Design Studio',
 ]
 
 const problemCards = [
-  'Guest lists get messy',
-  'RSVPs are hard to track',
-  'Invite links get forwarded',
-  'Tables and seats cause confusion',
-  'Staff keep calling the organizer',
-  'No live view of attendance or access',
+  ['Guest lists get messy', 'Three spreadsheets, two WhatsApp exports, and nobody knows which one is current.'],
+  ['RSVPs are hard to track', 'Confirmations arrive as texts, calls, and "my cousin said yes" — the headcount is a guess.'],
+  ['Invite links get forwarded', 'One shared link and suddenly there are 40 extra names at the door.'],
+  ['Tables and seats cause confusion', 'Seat changes live on paper printouts that are stale before the doors open.'],
+  ['Staff keep calling the organizer', 'Every "where does she sit?" interrupts the one person who should be hosting.'],
+  ['No live view of attendance or access', 'You find out how many people actually came days later — if you count wristbands.'],
 ]
 
 const pillars = [
@@ -192,14 +192,12 @@ const addOnHighlights = [
 ]
 
 const designStudioBullets = [
-  '100+ starter template families',
-  '20 event categories',
-  '5 styles per category',
+  '100+ templates across 20 event categories',
   'Upload your own flyer or image',
   'Edit wording and colors',
   'Preview mobile and desktop',
   'Download PNG/PDF flyers',
-  'Reuse design across RSVP, FestioHub, Festio Passes, and emails',
+  'One design across RSVP, FestioHub, Passes & emails',
 ]
 
 const journey = [
@@ -211,59 +209,30 @@ const journey = [
 
 const detailSections = [
   {
-    id: 'guest-database',
-    eyebrow: 'Guest database',
-    title: 'Turn your guest list into a live event database.',
-    copy: 'Import, clean, segment, approve, tag, seat, message, and track every guest from one place.',
-    points: ['Manual guest add', 'CSV/XLSX upload', 'Import template', 'Export guest list', 'Google Sheets/OneDrive sync', 'Duplicate handling', 'RSVP status', 'Guest profiles', 'RSVP answers', 'Check-in history', 'Ticket types', 'Tags', 'Table groups', 'Personal invite links', 'Resend invites'],
-    alt: 'Festio guest database with RSVP status and guest records',
-  },
-  {
     id: 'rsvp',
-    eyebrow: 'RSVP and invitations',
+    eyebrow: 'Invite & RSVP',
     title: 'RSVPs that match how your event actually works.',
-    copy: 'Run open or private RSVPs, set deadlines, control capacity, approve guests, collect custom answers, and automatically issue QR passes only when guests are accepted.',
-    points: ['Public RSVP page', 'Personal invite links', 'Open/shared RSVP link', 'Closed/private RSVP mode', 'RSVP deadline', 'Max RSVP capacity', 'Approval-required RSVP mode', 'Custom RSVP questions', 'Cover/flyer image', 'RSVP theme/message', 'Attending/declined flow', 'RSVP update before deadline', 'No-reply reminders', 'Broadcasts to guest segments'],
+    copy: 'Import or sync your guest list, run open or private RSVPs with per-category guest allowances, approve who gets in, and message everyone by email, SMS, or WhatsApp — every reply lands on the same live guest record.',
+    points: ['Open or personal invite links', 'Invitation categories & guest limits', 'Approval before tickets go out', 'CSV/XLSX & Google Sheets import', 'Email, SMS & WhatsApp templates'],
+    screenshot: '/media/help2-invites-rsvp.png',
     alt: 'Festio invitation and RSVP setup screen',
   },
   {
-    id: 'messaging',
-    eyebrow: 'Messaging and templates',
-    title: 'Every message, under your control.',
-    copy: 'Customize invitations, reminders, QR pass emails, RSVP confirmations, approval messages, broadcasts, admission alerts, and check-in confirmations across email, SMS, WhatsApp, and MMS.',
-    points: ['Editable templates', 'Template preview', 'Test send', 'Reset to default', 'Variable helper list', 'Template audit history', 'Plain-text fallback', 'SMS/WhatsApp/MMS support', 'Notification consent preferences'],
-    alt: 'Festio messaging and invite tools',
-  },
-  {
     id: 'seating',
-    eyebrow: 'Seating',
+    eyebrow: 'Seat & serve',
     title: 'Seat guests without confusion.',
-    copy: 'Create tables, set capacity, assign seats manually or automatically, reserve seats, group tables by section, pair partners, and prevent double-booking or over-capacity mistakes.',
-    points: ['Tables', 'Capacity', 'Seating chart', 'Manual assignment', 'Auto assignment', 'Seat reservation', 'Table groups/sections', 'Bulk assignment', 'Partner pairing', 'Double-booking prevention', 'Staff section assignment'],
-    alt: 'Festio seating and orders workspace',
-  },
-  {
-    id: 'check-in',
-    eyebrow: 'Access and check-in',
-    title: 'Scan, verify, and guide guests instantly.',
-    copy: 'Use phone-based scanning, manual search, self check-in, walk-in registration, gate rules, zones, pass permissions, and duplicate protection to manage entry with confidence.',
-    points: ['Browser scanner', 'Camera QR scanning', 'Manual check-in/search', 'Admitted, already admitted, denied, invalid', 'Active-event requirement', 'Duplicate-scan protection', 'Admission notifications', 'Walk-in registration', 'Self check-in', 'Staff scanner permissions', 'Section/gate/zone scanning', 'Access denied reasons'],
-    alt: 'Festio mobile QR pass scanner for event check-in',
-  },
-  {
-    id: 'access-rules',
-    eyebrow: 'Venue access rules',
-    title: 'Access control for real venues.',
-    copy: 'Create zones, gates, pass permissions, tag requirements, capacity rules, entry/exit modes, and live occupancy tracking for complex venues and VIP areas.',
-    points: ['Zones/areas', 'Zone capacity', 'Entry/exit/both direction modes', 'Ticket type permissions', 'Guest tag requirements', 'Gate scan mode', 'Live occupancy', 'Peak arrival analytics', 'Zone flow analytics', 'Guest journey history'],
-    alt: 'Festio venue access areas and gate rules',
+    copy: 'Tables, capacities, and a drag-and-drop floor plan. Seat by category automatically at RSVP, keep sections enforced at the door, and hand your caterer a live per-table order view.',
+    points: ['Auto-seating by invitation category', 'Table groups & sections', 'Double-booking prevention', 'Partner pairing', 'Live kitchen & orders view'],
+    screenshot: '/media/help2-seating.png',
+    alt: 'Festio seating workspace with tables and categories',
   },
   {
     id: 'analytics',
-    eyebrow: 'Live dashboard and analytics',
+    eyebrow: 'Scan & track live',
     title: 'Know what is happening while it is happening.',
-    copy: 'Track RSVPs, invite delivery, contact completeness, check-ins, VIP arrivals, pending guests, table reports, catering summaries, occupancy, and guest flow live.',
-    points: ['Total guest count', 'RSVP breakdown', 'Confirmed/declined/pending/no-reply', 'Checked-in count', 'Recent admitted guests', 'Pending guests', 'Invite delivery stats', 'Contact completeness', 'Check-in timeline', 'VIP stats', 'Ticket-type breakdown', 'Table-group breakdown', 'Per-table reports', 'Catering/order summary', 'Live auto-refresh/SSE', 'Venue occupancy analytics'],
+    copy: 'Phone-camera scanning with instant admit/deny, walk-ins, zones and gates for real venues, and a live dashboard of arrivals, occupancy, and per-table status — no app installs.',
+    points: ['QR scanning in any browser', 'Zones, gates & VIP rules', 'Duplicate-scan protection', 'Live arrivals & occupancy', 'Per-table & catering reports'],
+    screenshot: '/media/help2-results.png',
     alt: 'Festio live event dashboard and attendance analytics',
   },
 ]
@@ -279,17 +248,12 @@ const eventTypes = [
 
 const comparisonRows = [
   ['Branded RSVP page', true, false, true],
-  ['Guest import/sync', false, false, true],
   ['Approval workflow', 'Some', false, true],
   ['QR passes', false, true, true],
-  ['Seating/table assignment', false, false, true],
-  ['Guest messaging', 'Basic', false, true],
-  ['FestioHub/chat', false, false, true],
+  ['Seating & auto-assignment', false, false, true],
+  ['Guest messaging (email/SMS/WhatsApp)', 'Basic', false, true],
   ['Zone/gate access rules', false, 'Basic', true],
-  ['Menu/orders', false, false, true],
-  ['Registry/deliveries', false, false, true],
   ['Live analytics', false, 'Basic', true],
-  ['Team/staff roles', false, 'Basic', true],
 ]
 
 function HeroVisual() {
@@ -914,12 +878,12 @@ export default function LandingPage() {
               />
             </Reveal>
             <div className="mt-12 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-              {problemCards.map((problem, index) => (
+              {problemCards.map(([problem, consequence], index) => (
                 <Reveal key={problem} delay={(index % 3) * 70}>
                   <div className="h-full rounded-2xl border border-slate-200 bg-white p-5 shadow-sm dark:border-white/10 dark:bg-slate-950">
                     <div className="mb-4 grid h-9 w-9 place-items-center rounded-full bg-rose-100 text-sm font-black text-rose-700 dark:bg-rose-400/10 dark:text-rose-300">!</div>
                     <h3 className="text-base font-black text-slate-950 dark:text-white">{problem}</h3>
-                    <p className="mt-2 text-sm leading-6 text-slate-600 dark:text-slate-400">Festio connects this workflow back to the same live guest record.</p>
+                    <p className="mt-2 text-sm leading-6 text-slate-600 dark:text-slate-400">{consequence}</p>
                   </div>
                 </Reveal>
               ))}
@@ -1046,7 +1010,19 @@ export default function LandingPage() {
                   )}
                 </Reveal>
                 <Reveal delay={120} className={index % 2 ? 'lg:order-1' : ''}>
-                  <ProductMockup type={section.id} alt={section.alt} />
+                  {section.screenshot ? (
+                    <div className="relative">
+                      <div className="absolute -inset-4 rounded-[1.75rem] bg-gradient-to-tr from-teal-400/25 via-transparent to-violet-400/20 blur-2xl" aria-hidden="true" />
+                      <img
+                        src={section.screenshot}
+                        alt={section.alt}
+                        loading="lazy"
+                        className="relative max-h-[540px] w-full rounded-2xl border border-slate-200 object-cover object-top shadow-2xl shadow-slate-950/30 dark:border-white/15"
+                      />
+                    </div>
+                  ) : (
+                    <ProductMockup type={section.id} alt={section.alt} />
+                  )}
                 </Reveal>
               </div>
             </section>
@@ -1126,8 +1102,8 @@ export default function LandingPage() {
             </Reveal>
             <div className="mt-12 grid gap-5 md:grid-cols-3">
               {[
-                ['Real event screenshots', 'Use product views for guest lists, RSVP setup, scan results, entry rules, orders, and dashboard proof.'],
-                ['Customer testimonials', '"Festio helped us manage RSVPs, seating, check-in, and guest communication without the usual confusion at the door."'],
+                ['One live guest record', 'RSVP, seat, meal, pass, messages, and check-in history live on the same record — staff and hosts always see the same truth.'],
+                ['Built for the door', 'Scanning works in any phone browser, walk-ins are handled, duplicates are blocked, and denied scans say exactly why.'],
                 ['Security and control', 'Unique QR passes, role-based access, staff permissions, private links, audit history, and exportable records.'],
               ].map(([title, copy]) => (
                 <Reveal key={title}>

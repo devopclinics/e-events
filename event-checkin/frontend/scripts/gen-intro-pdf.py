@@ -75,7 +75,7 @@ def label(draw, x, y, text, fill=TEAL, bg=TEAL_SOFT):
 
 def footer(draw, n):
     draw.line((M, H - 62, W - M, H - 62), fill="#e5e7eb", width=2)
-    draw.text((M, H - 43), "EventQR - Introductory Guide", font=F["small"], fill=MUTED)
+    draw.text((M, H - 43), "Festio - Introductory Guide", font=F["small"], fill=MUTED)
     txt = f"{n:02d}"
     bbox = draw.textbbox((0, 0), txt, font=F["small_b"])
     draw.text((W - M - (bbox[2] - bbox[0]), H - 43), txt, font=F["small_b"], fill=TEAL)
@@ -137,7 +137,7 @@ def cover():
     d.rectangle((0, 0, W, 320), fill=INK)
     d.rectangle((0, 320, W, H), fill=BG)
     label(d, M, 82, "introductory guide", WHITE, TEAL)
-    draw_text(d, (M, 135), "EventQR", F["display"], WHITE)
+    draw_text(d, (M, 135), "Festio", F["display"], WHITE)
     draw_text(d, (M, 226), "Invitations, RSVPs, QR check-in, and live event operations in one app.", F["body"], "#cbd5e1", width=660)
     title_bottom = draw_text(d, (M, 420), "Built for organizers who need a clean guest list, reliable entry, and real-time visibility on event day.", F["h2"], INK, width=650, line_gap=10)
     draw_text(d, (M, title_bottom + 26), "Use this short PDF to understand the end-to-end workflow before creating your first event.", F["body"], MUTED, width=575)
@@ -154,8 +154,8 @@ def cover():
     for item in audience:
         d.ellipse((M + 30, y + 9, M + 44, y + 23), fill=TEAL_2)
         y = draw_text(d, (M + 62, y), item, F["small"], MUTED, width=490, line_gap=5) + 6
-    browser_frame(p, "help-event-setup.png", (825, 112, 1498, 690))
-    browser_frame(p, "help-guest-invite.png", (720, 690, 1390, 1040))
+    browser_frame(p, "help2-event-setup.png", (825, 112, 1498, 690))
+    browser_frame(p, "help2-guest-invite.png", (720, 690, 1390, 1040))
     footer(d, 1)
     return p
 
@@ -165,7 +165,7 @@ def workflow():
     d = ImageDraw.Draw(p)
     label(d, M, 78, "how it works")
     title_bottom = draw_text(d, (M, 125), "From guest list to the door", F["h1"], INK)
-    draw_text(d, (M, title_bottom + 22), "EventQR keeps the event lifecycle in one workspace, so your team is not stitching together spreadsheets, messaging apps, and paper lists.", F["body"], MUTED, width=930)
+    draw_text(d, (M, title_bottom + 22), "Festio keeps the event lifecycle in one workspace, so your team is not stitching together spreadsheets, messaging apps, and paper lists.", F["body"], MUTED, width=930)
     steps = [
         ("1", "Create event", "Set name, host, date, slug, and status."),
         ("2", "Add guests", "Import a spreadsheet or sync from a shared sheet."),
@@ -181,8 +181,8 @@ def workflow():
         title_bottom = draw_text(d, (x + 24, y + 104), title, F["h3"], INK, width=200)
         draw_text(d, (x + 24, title_bottom + 14), body, F["small"], MUTED, width=205, line_gap=6)
         x += 285
-    browser_frame(p, "help-guests.png", (M, 680, 735, 985), "Guest management: import, search, RSVP status, ticket type, and check-in record.")
-    browser_frame(p, "help-results.png", (820, 680, W - M, 985), "Results: live counts, RSVP breakdown, check-in timing, and operational summaries.")
+    browser_frame(p, "help2-guests.png", (M, 680, 735, 985), "Guest management: import, search, RSVP status, ticket type, and check-in record.")
+    browser_frame(p, "help2-results.png", (820, 680, W - M, 985), "Results: live counts, RSVP breakdown, check-in timing, and operational summaries.")
     footer(d, 2)
     return p
 
@@ -205,7 +205,7 @@ def setup_invites():
         draw_text(d, (M + 82, y + 24), title, F["body_b"], INK, width=520)
         draw_text(d, (M + 82, y + 61), body, F["small"], MUTED, width=520, line_gap=5)
         y += 140
-    browser_frame(p, "help-invites-rsvp.png", (775, 92, W - M, 970), "Invite and RSVP setup with deadlines, approval, custom questions, cover image, and preview.")
+    browser_frame(p, "help2-invites-rsvp.png", (775, 92, W - M, 970), "Invite and RSVP setup with deadlines, approval, custom questions, cover image, and preview.")
     footer(d, 3)
     return p
 
@@ -220,7 +220,7 @@ def checkin():
     feature_card(d, (M + 440, 425, M + 856, 615), "Access rules", "Paid events can enforce ticket types, zones, gates, and venue capacity.", VIOLET)
     feature_card(d, (M, 655, 500, 845), "Live feedback", "Green, yellow, and red outcomes help staff act quickly at the door.", GREEN)
     feature_card(d, (M + 440, 655, M + 856, 845), "Team roles", "Admins manage the event; staff get focused access to check-in and results.", AMBER)
-    browser_frame(p, "help-check-in.png", (1000, 130, W - M, 995), "Check-in page: camera scanning, manual lookup, recent scans, and gate context.")
+    browser_frame(p, "help2-checkin.png", (1000, 130, W - M, 995), "Check-in page: camera scanning, manual lookup, recent scans, and gate context.")
     footer(d, 4)
     return p
 
@@ -232,10 +232,10 @@ def operations():
     title_bottom = draw_text(d, (M, 125), "Add the tools your event actually needs", F["h1"], INK, width=800)
     draw_text(d, (M, title_bottom + 22), "Event Passes unlock the higher-touch workflows that matter for formal events, venues, teams, vendors, and multi-zone entry.", F["body"], MUTED, width=820)
     cards = [
-        ("Seating and orders", "Assign tables, collect meal or item choices, and give staff a live orders view.", "help-orders-view.png"),
-        ("Entry areas", "Control who can enter VIP, backstage, or other areas using ticket rules and tags.", "help-entry-areas.png"),
-        ("Deliveries", "Collect addresses and manage packing, shipping, or gift delivery by guest.", "help-deliveries.png"),
-        ("Gift list", "Coordinate gift items or cash funds without duplicate claims.", "help-gift-list.png"),
+        ("Seating and orders", "Assign tables, collect meal or item choices, and give staff a live orders view.", "help2-orders.png"),
+        ("Entry areas", "Control who can enter VIP, backstage, or other areas using ticket rules and tags.", "help2-entry-areas.png"),
+        ("Deliveries", "Collect addresses and manage packing, shipping, or gift delivery by guest.", "help2-deliveries.png"),
+        ("Gift list", "Coordinate gift items or cash funds without duplicate claims.", "help2-gift-list.png"),
     ]
     positions = [(M, 380), (830, 380), (M, 720), (830, 720)]
     for (title, body, image), (x, y) in zip(cards, positions):
@@ -257,8 +257,8 @@ def team_billing():
     feature_card(d, (M + 445, 410, M + 866, 620), "Event Pass", "Unlock QR check-in, message credits, seating, orders, access zones, logistics, and registry.", VIOLET)
     feature_card(d, (M, 670, 505, 880), "Team access", "Assign admins, staff, and read-only order access to the right event.", GREEN)
     feature_card(d, (M + 445, 670, M + 866, 880), "Message credits", "Top up credits for SMS and WhatsApp broadcasts or personal invite sends.", AMBER)
-    browser_frame(p, "help-team.png", (1010, 110, W - M, 555), "Team permissions and event assignment.")
-    browser_frame(p, "help-event-pass.png", (940, 610, W - M, 985), "Event Pass area with tiers and usage.")
+    browser_frame(p, "help2-team.png", (1010, 110, W - M, 555), "Team permissions and event assignment.")
+    browser_frame(p, "help2-event-pass.png", (940, 610, W - M, 985), "Event Pass area with tiers and usage.")
     footer(d, 6)
     return p
 
@@ -267,12 +267,12 @@ def close():
     p = page(INK)
     d = ImageDraw.Draw(p)
     label(d, M, 90, "next step", INK, TEAL_SOFT)
-    draw_text(d, (M, 150), "Run your first event in EventQR", F["display"], WHITE, width=850, line_gap=12)
+    draw_text(d, (M, 150), "Run your first event in Festio", F["display"], WHITE, width=850, line_gap=12)
     draw_text(d, (M, 350), "1. Create an account\n2. Create a draft event\n3. Import a small test guest list\n4. Send yourself an invite\n5. Activate the event and scan your ticket", F["h3"], "#dbeafe", width=700, line_gap=18)
     d.rounded_rectangle((M, 750, 690, 855), radius=20, fill=TEAL)
-    draw_text(d, (M + 36, 779), "events.vsgs.io/register", F["h3"], WHITE)
-    browser_frame(p, "help-guest-invite.png", (820, 150, W - M, 930), "Guest ticket page with RSVP details and QR access.")
-    draw_text(d, (M, 980), "EventQR - invitations, RSVPs, QR check-in, and event operations.", F["body"], "#94a3b8", width=660)
+    draw_text(d, (M + 36, 779), "festio.events/register", F["h3"], WHITE)
+    browser_frame(p, "help2-guest-invite.png", (820, 150, W - M, 930), "Guest ticket page with RSVP details and QR access.")
+    draw_text(d, (M, 980), "Festio - invitations, RSVPs, QR check-in, and event operations.", F["body"], "#94a3b8", width=660)
     footer(d, 7)
     return p
 

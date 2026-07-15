@@ -97,7 +97,10 @@ function Nav({ hasMenu, eventName, canUseDesignStudio, hasFestioMe, canManageCur
     ...(hasMenu ? [{ to: '/kitchen', label: 'Orders' }] : []),
     ...(user?.is_platform_superadmin ? [{ to: '/console', label: 'Console' }] : []),
     ...(user?.is_platform_superadmin ? [{ to: '/media-library', label: 'Media' }] : []),
-    ...(user?.role !== 'event_manager' ? [{ to: '/help', label: 'Help' }] : []),
+    // Help is a paid perk: visible only when the selected event is paid
+    // (same flag as Design Studio). Superadmins always see it.
+    ...(user?.role !== 'event_manager' && (canUseDesignStudio || user?.is_platform_superadmin)
+      ? [{ to: '/help', label: 'Help' }] : []),
   ]
 
   return (
@@ -294,7 +297,6 @@ function AppRoutes() {
       <Route path="/terms" element={<TermsPage />} />
       <Route path="/sms-policy" element={<SmsPolicyPage />} />
       {/* Unlisted public help — shareable with prospects, no account needed */}
-      <Route path="/guide" element={<HelpPage publicMode />} />
 
       {/* Landing page: public marketing page — logged-in users keep their session */}
       <Route path="/" element={<LandingPage />} />
@@ -307,7 +309,7 @@ function AppRoutes() {
             <Routes>
               <Route path="/admin" element={<ProtectedRoute><AdminPage /></ProtectedRoute>} />
               <Route path="/setup" element={<ProtectedRoute setupOnly><SetupWizardPage /></ProtectedRoute>} />
-              <Route path="/design-studio" element={<ProtectedRoute adminOnly><DesignStudioPage /></ProtectedRoute>} />
+              <Route path="/design-studio" element={<ProtectedRoute adminOnly paidOnly><DesignStudioPage /></ProtectedRoute>} />
               <Route path="/floor-plan/:eventId" element={<ProtectedRoute adminOnly><FloorPlanPage /></ProtectedRoute>} />
               <Route path="/dashboard" element={<ProtectedRoute><DashboardPage /></ProtectedRoute>} />
               <Route path="/festiome" element={<ProtectedRoute><FestioMePage /></ProtectedRoute>} />
@@ -315,7 +317,7 @@ function AppRoutes() {
               <Route path="/kitchen" element={<ProtectedRoute><KitchenPage /></ProtectedRoute>} />
               <Route path="/console" element={<ProtectedRoute><ConsolePage /></ProtectedRoute>} />
               <Route path="/media-library" element={<ProtectedRoute><MediaPage /></ProtectedRoute>} />
-              <Route path="/help" element={<ProtectedRoute><HelpPage /></ProtectedRoute>} />
+              <Route path="/help" element={<ProtectedRoute paidOnly><HelpPage /></ProtectedRoute>} />
               <Route path="*" element={<Navigate to="/" replace />} />
             </Routes>
           </AuthedLayout>

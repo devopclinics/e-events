@@ -2,7 +2,7 @@
 
 The Firebase-authed admin UI can't (and shouldn't) hold the design-service
 internal token. So the admin calls THESE endpoints; we verify the user owns the
-event (require_event_admin), then forward to the decoupled design-service with
+event (require_paid_event_admin — Design Studio is a paid feature), then forward to the decoupled design-service with
 the internal token + org context. If the design-service is down, we degrade
 gracefully (503 with a friendly message) — never a hard crash, and no core flow
 is affected.
@@ -20,7 +20,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..database import get_db
 from ..models import Event, User
-from ..auth import require_event_admin
+from ..auth import require_paid_event_admin
 from ..entitlements import assert_feature_allowed
 
 router = APIRouter()
@@ -49,7 +49,7 @@ def _passthrough(r: httpx.Response) -> Response:
 
 
 @router.get("/{event_id}/design")
-async def get_design(event_id: str, db: AsyncSession = Depends(get_db), _: User = Depends(require_event_admin)):
+async def get_design(event_id: str, db: AsyncSession = Depends(get_db), _: User = Depends(require_paid_event_admin)):
     try:
         async with httpx.AsyncClient(timeout=_TIMEOUT) as c:
             r = await c.get(f"{DESIGN_URL}/api/v1/design/events/{event_id}", headers=_headers())
@@ -59,7 +59,7 @@ async def get_design(event_id: str, db: AsyncSession = Depends(get_db), _: User 
 
 
 @router.put("/{event_id}/design")
-async def put_design(event_id: str, body: dict = Body(...), db: AsyncSession = Depends(get_db), _: User = Depends(require_event_admin)):
+async def put_design(event_id: str, body: dict = Body(...), db: AsyncSession = Depends(get_db), _: User = Depends(require_paid_event_admin)):
     org = await _org_id(event_id, db)
     try:
         async with httpx.AsyncClient(timeout=_TIMEOUT) as c:
@@ -70,7 +70,7 @@ async def put_design(event_id: str, body: dict = Body(...), db: AsyncSession = D
 
 
 @router.post("/{event_id}/design/publish")
-async def publish_design(event_id: str, db: AsyncSession = Depends(get_db), _: User = Depends(require_event_admin)):
+async def publish_design(event_id: str, db: AsyncSession = Depends(get_db), _: User = Depends(require_paid_event_admin)):
     event = await db.get(Event, event_id)
     if not event:
         raise HTTPException(404, "Event not found")
@@ -84,7 +84,7 @@ async def publish_design(event_id: str, db: AsyncSession = Depends(get_db), _: U
 
 
 @router.get("/{event_id}/design/outputs")
-async def list_outputs(event_id: str, db: AsyncSession = Depends(get_db), _: User = Depends(require_event_admin)):
+async def list_outputs(event_id: str, db: AsyncSession = Depends(get_db), _: User = Depends(require_paid_event_admin)):
     try:
         async with httpx.AsyncClient(timeout=_TIMEOUT) as c:
             r = await c.get(f"{DESIGN_URL}/api/v1/design/events/{event_id}/outputs", headers=_headers())
@@ -95,7 +95,7 @@ async def list_outputs(event_id: str, db: AsyncSession = Depends(get_db), _: Use
 
 @router.post("/{event_id}/design/assets")
 async def upload_asset(event_id: str, file: UploadFile = File(...),
-                       db: AsyncSession = Depends(get_db), _: User = Depends(require_event_admin)):
+                       db: AsyncSession = Depends(get_db), _: User = Depends(require_paid_event_admin)):
     org = await _org_id(event_id, db)
     data = await file.read()
     try:
@@ -112,7 +112,7 @@ async def upload_asset(event_id: str, file: UploadFile = File(...),
 
 @router.post("/{event_id}/design/render/flyer")
 async def render_flyer(event_id: str, body: dict = Body(default={}),
-                       db: AsyncSession = Depends(get_db), _: User = Depends(require_event_admin)):
+                       db: AsyncSession = Depends(get_db), _: User = Depends(require_paid_event_admin)):
     try:
         async with httpx.AsyncClient(timeout=_TIMEOUT) as c:
             r = await c.post(f"{DESIGN_URL}/api/v1/design/events/{event_id}/render/flyer", json=body, headers=_headers())

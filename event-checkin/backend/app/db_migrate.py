@@ -14,6 +14,7 @@ Run standalone:
 Exits 0 on success, 1 on any failure.
 """
 import asyncio
+import os
 import logging
 import sys
 from sqlalchemy import text
@@ -33,17 +34,36 @@ _PG_DIALECT = postgresql.dialect()
 # data backfills, column renames, type changes, server_default tweaks,
 # index/constraint adds, etc. Plain ORM column additions DO NOT need an
 # entry here — apply() auto-generates ALTERs for those.
+def _guarded_drop_not_null(table: str, column: str) -> str:
+    """DROP NOT NULL only while the column is still NOT NULL. A bare
+    ALTER takes an AccessExclusiveLock on every deploy even when it is a
+    no-op — against a live multi-replica backend that queues/deadlocks
+    (bit us on the 2.0.56 promote). The guard makes re-runs lock-free."""
+    return (
+        "DO $$ BEGIN "
+        "IF EXISTS (SELECT 1 FROM information_schema.columns "
+        f"WHERE table_name = '{table}' AND column_name = '{column}' "
+        "AND is_nullable = 'NO') THEN "
+        f"ALTER TABLE {table} ALTER COLUMN {column} DROP NOT NULL; "
+        "END IF; END $$"
+    )
+
+
 SCHEMA_PATCHES: list[str] = [
-    "ALTER TABLE guest_menu_choices DROP CONSTRAINT IF EXISTS uq_guest_category",
+    # Guarded: only touches the table while the constraint still exists.
+    "DO $$ BEGIN "
+    "IF EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'uq_guest_category') THEN "
+    "ALTER TABLE guest_menu_choices DROP CONSTRAINT uq_guest_category; "
+    "END IF; END $$",
     # Relax menu_item_id: a row may now hold a combination_id instead (combo categories).
     # Original table created the column NOT NULL; auto-patch only adds columns,
     # so this constraint-drop has to live here.
-    "ALTER TABLE guest_menu_choices ALTER COLUMN menu_item_id DROP NOT NULL",
+    _guarded_drop_not_null("guest_menu_choices", "menu_item_id"),
     # guests.email was created NOT NULL; events with rsvp_collect_email=False now
     # register guests with no email. Auto-patch only adds columns, so relax here.
-    "ALTER TABLE guests ALTER COLUMN email DROP NOT NULL",
+    _guarded_drop_not_null("guests", "email"),
     # Payments are org-level audit rows; deleting an event detaches them.
-    "ALTER TABLE payments ALTER COLUMN event_id DROP NOT NULL",
+    _guarded_drop_not_null("payments", "event_id"),
 
     # ── Multi-tenancy backfill (idempotent) — see docs/PHASE1-MULTITENANCY-PLAN.md.
     # Runs after create_all (organizations/memberships tables) and auto-patch
@@ -225,6 +245,29 @@ async def auto_patch(eng: AsyncEngine) -> list[str]:
     return patches
 
 
+# DDL vs a live backend: never queue behind traffic (lock_timeout) and treat
+# lock timeouts/deadlocks as retryable — every statement here is idempotent.
+# The 2.0.56 promote deadlocked twice against the running replicas before the
+# third attempt won; this makes each attempt fail fast and retry in-process.
+DDL_LOCK_TIMEOUT = os.getenv("MIGRATE_LOCK_TIMEOUT", "5s")
+DDL_LOCK_ATTEMPTS = max(1, int(os.getenv("MIGRATE_LOCK_ATTEMPTS", "10")))
+DDL_RETRY_WAIT_SECONDS = float(os.getenv("MIGRATE_RETRY_WAIT_SECONDS", "5"))
+
+
+def _is_lock_contention(exc: Exception) -> bool:
+    s = str(exc).lower()
+    return "deadlock detected" in s or "lock timeout" in s
+
+
+async def _apply_patches_once(eng: AsyncEngine, auto: list[str]) -> None:
+    async with eng.begin() as conn:
+        await conn.execute(text(f"SET lock_timeout = '{DDL_LOCK_TIMEOUT}'"))
+        for stmt in auto:
+            await conn.execute(text(stmt))
+        for stmt in SCHEMA_PATCHES:
+            await conn.execute(text(stmt))
+
+
 async def apply(eng: AsyncEngine) -> None:
     """Create missing tables, auto-generate + run column ALTERs, then run any
     manual SCHEMA_PATCHES. Idempotent."""
@@ -241,12 +284,20 @@ async def apply(eng: AsyncEngine) -> None:
     else:
         logger.info("No ORM/DB column drift detected")
 
-    # 3. Apply auto patches + any manual escape-hatch patches.
-    async with eng.begin() as conn:
-        for stmt in auto:
-            await conn.execute(text(stmt))
-        for stmt in SCHEMA_PATCHES:
-            await conn.execute(text(stmt))
+    # 3. Apply auto patches + any manual escape-hatch patches, retrying on
+    # lock contention with the live backend.
+    for attempt in range(1, DDL_LOCK_ATTEMPTS + 1):
+        try:
+            await _apply_patches_once(eng, auto)
+            break
+        except Exception as exc:
+            if not _is_lock_contention(exc) or attempt == DDL_LOCK_ATTEMPTS:
+                raise
+            logger.warning(
+                "DDL lock contention (attempt %d/%d): %s — retrying in %.0fs",
+                attempt, DDL_LOCK_ATTEMPTS, str(exc).splitlines()[0], DDL_RETRY_WAIT_SECONDS,
+            )
+            await asyncio.sleep(DDL_RETRY_WAIT_SECONDS)
 
     logger.info(
         "Applied %d auto + %d manual schema patches",

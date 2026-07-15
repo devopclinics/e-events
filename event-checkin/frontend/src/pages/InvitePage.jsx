@@ -1020,6 +1020,7 @@ function GuestHub({ event, accessToken, designTheme }) {
   const [sendingChat, setSendingChat] = useState(false)
   // Experience journey (only populated when the event has Experience enabled).
   const [journey, setJourney] = useState(null)
+  const [hubMenuDay, setHubMenuDay] = useState('')
   const [signName, setSignName] = useState('')
   const [signing, setSigning] = useState(false)
   const [signError, setSignError] = useState('')
@@ -1339,6 +1340,45 @@ function GuestHub({ event, accessToken, designTheme }) {
             </div>
           </div>}
         </div>}
+
+        {!!journey?.menu_categories?.length && (() => {
+          const cats = journey.menu_categories
+          const days = [...new Set(cats.filter((c) => c.day_label).map((c) => c.day_label))]
+          const day = days.includes(hubMenuDay) ? hubMenuDay : (days[0] || '')
+          const visibleCats = days.length ? cats.filter((c) => !c.day_label || c.day_label === day) : cats
+          return (
+            <div className="mt-6 rounded-2xl border p-4" style={{ background: tone.panel, borderColor: tone.border }}>
+              <h3 className="text-lg font-extrabold">Food menu</h3>
+              <p className="mt-1 text-sm" style={{ color: tone.muted }}>What is being served at this event.</p>
+              {days.length > 0 && (
+                <div className="mt-3 flex flex-wrap gap-2" aria-label="Menu day">
+                  {days.map((d) => (
+                    <button key={d} type="button" onClick={() => setHubMenuDay(d)}
+                      className="rounded-full px-3 py-1.5 text-xs font-extrabold"
+                      style={{ background: day === d ? tone.accent : tone.chip, color: day === d ? tone.background : tone.text }}>
+                      {d}
+                    </button>
+                  ))}
+                </div>
+              )}
+              <div className="mt-4 space-y-4">
+                {visibleCats.map((cat) => (
+                  <div key={cat.id}>
+                    <div className="font-bold">{cat.name}</div>
+                    <ul className="mt-1.5 space-y-1">
+                      {cat.items.map((i) => (
+                        <li key={i.id} className="text-sm" style={{ color: tone.muted }}>
+                          <span className="font-medium" style={{ color: tone.text }}>{i.name}</span>
+                          {i.description ? ` — ${i.description}` : ''}
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )
+        })()}
 
         {journey?.experience_enabled && journey.steps?.length > 0 && (() => {
           const visible = journey.steps.filter((s) => s.status !== 'skipped')

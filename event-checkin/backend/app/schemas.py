@@ -753,6 +753,9 @@ class GuestJourneyOut(BaseModel):
     next_steps: list[GuestJourneyStepOut] = Field(default_factory=list)
     consent: Optional[GuestConsentStateOut] = None
     program: Optional[GuestProgramOut] = None
+    # Informational (display-only) food menu for the Hub. Selectable menus stay
+    # on the Festio Pass only; forward ref resolved by model_rebuild at EOF.
+    menu_categories: list["MenuCategoryOut"] = Field(default_factory=list)
     completed_count: int = 0
     total_count: int = 0
 
@@ -1930,3 +1933,7 @@ class ManualInviteResult(BaseModel):
     sent: int
     skipped: int
     errors: list[str] = []
+
+
+# Resolve forward refs declared before their targets (MenuCategoryOut).
+GuestJourneyOut.model_rebuild()

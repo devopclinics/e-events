@@ -1592,12 +1592,25 @@ async def my_experience(
             form=ConsentFormOut.model_validate(consent_form),
         )
 
+    async def _hub_menu():
+        """Display-only menus surface on the Hub too (informational — selections
+        stay on the Festio Pass). Selectable menus return empty here."""
+        if not event.menu_enabled:
+            return []
+        from .scanner import _load_menu  # deferred: avoids import cycle
+        cats, _ = await _load_menu(event.id, guest.id, db)
+        if cats and all(c.display_only for c in cats):
+            return cats
+        return []
+
     if not event.experience_enabled:
-        return GuestJourneyOut(experience_enabled=False, guest=guest_out, consent=consent_state)
+        return GuestJourneyOut(experience_enabled=False, guest=guest_out, consent=consent_state,
+                               menu_categories=await _hub_menu())
 
     workflow = await active_workflow(event_id, db)
     if not workflow:
-        return GuestJourneyOut(experience_enabled=True, guest=guest_out, consent=consent_state)
+        return GuestJourneyOut(experience_enabled=True, guest=guest_out, consent=consent_state,
+                               menu_categories=await _hub_menu())
 
     # next_guest_steps() syncs progress off the guest's current state (admitted,
     # seat, meal choice, consent signature) before returning the pending set.
@@ -1606,7 +1619,8 @@ async def my_experience(
 
     loaded = await load_workflow(workflow.id, db)
     if not loaded:
-        return GuestJourneyOut(experience_enabled=True, guest=guest_out, consent=consent_state)
+        return GuestJourneyOut(experience_enabled=True, guest=guest_out, consent=consent_state,
+                               menu_categories=await _hub_menu())
     progress_by_step = {
         row.step_id: row
         for row in (await db.execute(
@@ -1650,6 +1664,7 @@ async def my_experience(
         next_steps=next_out,
         consent=consent_state,
         program=GuestProgramOut(**(await program_state(event, loaded, db))),
+        menu_categories=await _hub_menu(),
         completed_count=completed,
         total_count=len(steps_out),
     )

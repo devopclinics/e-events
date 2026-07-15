@@ -317,6 +317,53 @@ def last_credit_ledger_id(event: Event) -> str | None:
     return getattr(event, "_last_credit_ledger_id", None)
 
 
+# First N guest emails per event are free; override with EMAIL_FREE_QUOTA.
+EMAIL_FREE_QUOTA = max(0, int(os.getenv("EMAIL_FREE_QUOTA", "25")))
+
+
+def take_email_credit(event: Event, *, guest_id: str | None = None, reason: str = "email") -> bool:
+    """Meter a guest email: free up to EMAIL_FREE_QUOTA per event, then 0.5
+    credit each. Credits are integers, so halves accumulate in
+    email_half_pending and 1 credit posts on every second chargeable email.
+
+    Returns False (send must be skipped) when the event is past the free quota
+    and has no credit to cover the email; the attempt is not counted."""
+    if "email" in (event.blocked_messaging_channels or []):
+        return False
+    sent = (event.emails_sent or 0) + 1
+    if sent <= EMAIL_FREE_QUOTA:
+        event.emails_sent = sent
+        return True
+    # Beyond the free quota an email needs cover: either a half already paid
+    # for (pending) or at least 1 credit in the balance.
+    if not (event.email_half_pending or 0) and (event.message_credits or 0) < 1:
+        return False
+    event.emails_sent = sent
+    if event.email_half_pending:
+        # Second half of an already-paid credit.
+        event.email_half_pending = 0
+        return True
+    # First half: deduct the full credit now, remember the prepaid half.
+    event.message_credits -= 1
+    event.email_half_pending = 1
+    row = _ledger_row(
+        event,
+        action="spend",
+        status="posted",
+        channel="email",
+        reason=f"{reason}_x2",
+        credits=1,
+        delta=-1,
+        balance_after=event.message_credits,
+        guest_id=guest_id,
+    )
+    if not row.id:
+        row.id = str(uuid.uuid4())
+    _add_ledger(event, row)
+    event._last_credit_ledger_id = row.id
+    return True
+
+
 def refund_message_credit(event: Event, ledger: MessageCreditLedger, *, reason: str = "refund") -> None:
     if ledger.status == "refunded" or ledger.delta >= 0:
         return

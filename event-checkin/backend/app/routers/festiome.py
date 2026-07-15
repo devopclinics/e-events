@@ -323,6 +323,7 @@ async def publish_festiome_announcement(
                 background_tasks.add_task(
                     send_broadcast_email,
                     email=guest.email,
+                    guest_id=guest.id,
                     first_name=guest.first_name,
                     message=escalation_text,
                     event_name=event.name,

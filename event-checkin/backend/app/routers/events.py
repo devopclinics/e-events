@@ -990,6 +990,7 @@ async def broadcast_message(
                 background_tasks.add_task(
                     send_broadcast_email,
                     email=guest.email,
+                    guest_id=guest.id,
                     first_name=guest.first_name,
                     message=data.message,
                     event_name=event.name,

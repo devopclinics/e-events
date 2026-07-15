@@ -105,7 +105,7 @@ export const CONTENT = {
         steps: [
           'Shared link: copy the event link and share it yourself (WhatsApp group, email, social). Or use Manual invite — search a specific guest and send them a personal link.',
           'Personal links: use Invites & RSVP to send to guests who have not been invited yet, remind no-replies, or resend links.',
-          'Pick your channels: Email (always free), SMS (uses message credits), WhatsApp (uses message credits).',
+          'Pick your channels: Email (first 25 per event free, then ½ credit each), SMS (1 credit), WhatsApp (1 credit), MMS (3 credits).',
           'Each guest receives their personal Festio Pass automatically by email when they RSVP as Attending.',
           'For guests without email: if you have their phone number, their QR pass is delivered via SMS or WhatsApp instead.',
           'Message credits are pre-purchased from the Event Pass area — top up as needed. Check your balance before a bulk send.',
@@ -308,7 +308,7 @@ export const CONTENT = {
           'Free tier: email invites, up to 25 guests, Festio branding on invite pages, no paid features.',
           'Event Pass: buy per event in Invites & RSVP → Event Pass. Unlocks SMS/WhatsApp invites, more guests, QR check-in, seating & orders, entry areas, deliveries, gift list, and removes Festio branding.',
           'Event Passes are tiered by guest cap — choose the tier that fits your event size. You can upgrade to a higher tier if your guest list grows.',
-          'Message credits: buy in the Event Pass area. Credits are shared across all your events. 1 credit = 1 SMS or 1 WhatsApp message to 1 guest.',
+          'Message credits: buy in the Event Pass area. 1 credit = 1 SMS or 1 WhatsApp message; MMS costs 3; after your first 25 emails per event, 2 emails cost 1 credit.',
           'Low on credits mid-event? Buy a top-up instantly from Event Setup — credits are available immediately.',
           'Trial: new accounts can request a free trial from the Event Setup banner — send the request and we\'ll comp your first event.',
         ],

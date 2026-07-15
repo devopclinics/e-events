@@ -325,9 +325,45 @@ async def _send_via_bird(msg: MIMEMultipart):
         return {}
 
 
+async def _charge_email_credit(msg: MIMEMultipart) -> bool:
+    """Central email metering: every guest-facing email (event + guest context
+    on the message) counts against the event's free quota, then 0.5 credit each.
+    Operational mail (vendor pages, demo/trial notices — no guest context) stays
+    free. Returns False when the send must be skipped for lack of credits."""
+    event_id = (msg["X-Festio-Event-Id"] or "").strip()
+    guest_id = (msg["X-Festio-Guest-Id"] or "").strip()
+    if not event_id or not guest_id:
+        return True
+    from app.database import AsyncSessionLocal
+    from app.entitlements import take_email_credit
+    from app.models import Event
+    try:
+        async with AsyncSessionLocal() as db:
+            event = await db.get(Event, event_id)
+            if not event:
+                return True
+            allowed = take_email_credit(event, guest_id=guest_id)
+            await db.commit()
+            return allowed
+    except Exception:
+        # Metering must never take the email pipeline down — send unmetered.
+        logger.exception("Email credit metering failed for event %s; sending unmetered", event_id)
+        return True
+
+
 async def _send(msg: MIMEMultipart):
     if not (msg["To"] or "").strip():
         logger.info("Skipping email — recipient has no email address (likely a VVIP walk-in)")
+        return
+    if not await _charge_email_credit(msg):
+        logger.warning("Email to %s blocked — event past free email quota with no credits", msg["To"])
+        await _record_email_delivery(
+            msg,
+            provider="internal",
+            event_type="email.blocked",
+            status="blocked_no_credits",
+            payload={"source": "credit_gate"},
+        )
         return
     # Prefer the Resend HTTP API when configured; otherwise fall back to SMTP.
     if settings.resend_api_key:
@@ -1135,12 +1171,13 @@ async def send_vendor_shipping_email(
     await _send(msg)
 
 
-async def send_broadcast_email(*, email: str, first_name: str, message: str, event_name: str, event_id: str | None = None):
+async def send_broadcast_email(*, email: str, first_name: str, message: str, event_name: str, event_id: str | None = None, guest_id: str | None = None):
     """Send a free-text broadcast update (no QR/link) to a guest."""
     msg = MIMEMultipart()
     msg["Subject"] = f"Update — {event_name}"
     msg["From"] = settings.email_from
     msg["To"] = email
+    _set_delivery_context(msg, event_id=event_id, guest_id=guest_id, message_kind="broadcast")
 
     theme = await _design_email_theme(event_id)
     safe_name = _html.escape(first_name or "there")

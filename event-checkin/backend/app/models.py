@@ -295,6 +295,12 @@ class Event(Base):
     paid_channels: Mapped[bool] = mapped_column(Boolean, default=False)
     # Prepaid SMS/WhatsApp credits remaining (metering wired in Phase 3 billing).
     message_credits: Mapped[int] = mapped_column(Integer, default=0)
+    # Email metering: emails count too. The first EMAIL_FREE_QUOTA (25) guest
+    # emails per event are free; after that each email costs 0.5 credit. Credits
+    # are integers, so a "half" is accumulated in email_half_pending and 1 full
+    # credit is deducted on every second chargeable email.
+    emails_sent: Mapped[int] = mapped_column(Integer, default=0)
+    email_half_pending: Mapped[int] = mapped_column(Integer, default=0)
 
     credit_ledger: Mapped[list["MessageCreditLedger"]] = relationship("MessageCreditLedger", back_populates="event", cascade="all, delete-orphan")
     members: Mapped[list["EventUser"]] = relationship("EventUser", back_populates="event", cascade="all, delete-orphan")

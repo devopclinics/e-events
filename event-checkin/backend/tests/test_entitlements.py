@@ -175,3 +175,43 @@ async def test_broadcast_out_of_credits_reported(ctx):
     )
     assert r.status_code == 200
     assert r.json()["skipped_no_credits"] >= 1
+
+
+def test_take_email_credit_quota_and_halves():
+    """First EMAIL_FREE_QUOTA emails free; then 0.5 each (1 credit per 2);
+    blocked when past quota with no balance."""
+    from app.entitlements import take_email_credit, EMAIL_FREE_QUOTA
+    from app.models import Event
+
+    ev = Event(name="x", couples_name="", event_date=None, timezone="UTC",
+               checkin_base_url="http://t", org_id="o")
+    ev.message_credits = 2
+    ev.emails_sent = 0
+    ev.email_half_pending = 0
+
+    # Free quota consumes no credits.
+    for _ in range(EMAIL_FREE_QUOTA):
+        assert take_email_credit(ev) is True
+    assert ev.message_credits == 2 and ev.emails_sent == EMAIL_FREE_QUOTA
+
+    # Email 26: first half — deducts a full credit, remembers the half.
+    assert take_email_credit(ev) is True
+    assert ev.message_credits == 1 and ev.email_half_pending == 1
+    # Email 27: second half — no new deduction.
+    assert take_email_credit(ev) is True
+    assert ev.message_credits == 1 and ev.email_half_pending == 0
+    # Emails 28+29 consume the last credit.
+    assert take_email_credit(ev) is True
+    assert take_email_credit(ev) is True
+    assert ev.message_credits == 0 and ev.email_half_pending == 0
+    # Email 30: past quota, no credits → blocked and not counted.
+    before = ev.emails_sent
+    assert take_email_credit(ev) is False
+    assert ev.emails_sent == before
+
+    # Superadmin channel block wins even inside free quota.
+    ev2 = Event(name="y", couples_name="", event_date=None, timezone="UTC",
+                checkin_base_url="http://t", org_id="o")
+    ev2.emails_sent = 0
+    ev2.blocked_messaging_channels = ["email"]
+    assert take_email_credit(ev2) is False

@@ -927,8 +927,8 @@ export default function ScanAutoPage() {
           {(showGuestHubButton || event?.festiome_addon_enabled) && (
             <div className="flex flex-col items-center gap-2">
               {showGuestHubButton && (
-                {/* The Live Program lives on the guest hub — /scan/:token/hub
-                    was never a real route and fell through to the landing page. */}
+                // The Live Program lives on the guest hub — /scan/:token/hub
+                // was never a real route and fell through to the landing page.
                 <a
                   href={`/r/${guestHubToken}#guest-hub`}
                   className="inline-flex min-h-11 w-full max-w-xs items-center justify-center rounded-lg px-5 py-2.5 text-sm font-bold text-slate-950"

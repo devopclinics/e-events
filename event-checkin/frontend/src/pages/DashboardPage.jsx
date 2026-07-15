@@ -442,15 +442,15 @@ export default function DashboardPage() {
               </div>
             </Card>
 
-            <Card title="Sent and received" right={<span className="text-xs text-slate-400">{pct(responsesReceived, sentInvites)}% response from sent</span>}>
+            <Card title="Invites and RSVP responses" right={<span className="text-xs text-slate-400">{pct(responsesReceived, sentInvites)}% response from sent</span>}>
               <div className="grid grid-cols-3 gap-3 mb-4">
                 <div className="rounded-xl border border-slate-200 dark:border-slate-700 p-3">
                   <div className="text-2xl font-extrabold text-sky-600">{contactStats.invite_sent || 0}</div>
-                  <div className="text-xs text-slate-400">Sent</div>
+                  <div className="text-xs text-slate-400">Invites sent</div>
                 </div>
                 <div className="rounded-xl border border-slate-200 dark:border-slate-700 p-3">
                   <div className="text-2xl font-extrabold text-violet-600">{responsesReceived}</div>
-                  <div className="text-xs text-slate-400">Received</div>
+                  <div className="text-xs text-slate-400">RSVP responses</div>
                 </div>
                 <div className="rounded-xl border border-slate-200 dark:border-slate-700 p-3">
                   <div className="text-2xl font-extrabold text-red-500">{contactStats.invite_failed || 0}</div>
@@ -460,7 +460,7 @@ export default function DashboardPage() {
               <div className="h-3 rounded-full bg-slate-100 dark:bg-slate-700 overflow-hidden">
                 <div className="h-full bg-violet-500 rounded-full transition-all" style={{ width: `${pct(responsesReceived, sentInvites)}%` }} />
               </div>
-              <div className="mt-2 text-xs text-slate-400">Received means the guest has submitted an RSVP response.</div>
+              <div className="mt-2 text-xs text-slate-400">This card tracks RSVP activity, not SMS delivery.</div>
             </Card>
           </div>
 

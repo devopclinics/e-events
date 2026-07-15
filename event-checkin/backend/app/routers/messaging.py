@@ -83,6 +83,39 @@ async def _payload(request: Request) -> dict:
     return {k: v for k, v in form.items()}
 
 
+def _signalhouse_extract_status_and_message_id(data: dict) -> tuple[str | None, str | None]:
+    """Extract status + message id from Signal House callback payloads.
+
+    Signal House callbacks can arrive in multiple shapes. We support:
+    - flat: status/messageStatus + messageId/message_id/id
+    - nested message object
+    - insertedMessages[0].status + insertedMessages[0].statusHistory[-1]._id
+    """
+    message = data.get("message") if isinstance(data.get("message"), dict) else {}
+
+    status = data.get("status") or data.get("messageStatus") or message.get("status")
+    message_id = (
+        data.get("messageId") or data.get("message_id") or data.get("id")
+        or message.get("messageId") or message.get("message_id") or message.get("id")
+    )
+
+    inserted = data.get("insertedMessages")
+    first = inserted[0] if isinstance(inserted, list) and inserted and isinstance(inserted[0], dict) else {}
+    history = first.get("statusHistory")
+    last = history[-1] if isinstance(history, list) and history and isinstance(history[-1], dict) else {}
+
+    status = status or first.get("status") or last.get("status")
+    message_id = (
+        message_id
+        or first.get("messageId") or first.get("message_id") or first.get("id") or first.get("_id")
+        or last.get("messageId") or last.get("message_id") or last.get("id") or last.get("_id")
+        or first.get("groupId") or first.get("subgroupId")
+        or data.get("batchId") or data.get("batch_id")
+    )
+
+    return (str(status) if status else None, str(message_id) if message_id else None)
+
+
 @router.post("/bird/status")
 async def bird_status_callback(request: Request) -> Response:
     data = await _payload(request)
@@ -131,18 +164,13 @@ async def clicksend_status_callback(request: Request) -> Response:
 async def signalhouse_status_callback(request: Request) -> Response:
     """Reconcile Signal House SMS/MMS delivery callbacks."""
     data = await _payload(request)
-    message = data.get("message") if isinstance(data.get("message"), dict) else {}
-    status = data.get("status") or data.get("messageStatus") or message.get("status")
-    message_id = (
-        data.get("messageId") or data.get("message_id") or data.get("id")
-        or message.get("messageId") or message.get("message_id") or message.get("id")
-    )
+    status, message_id = _signalhouse_extract_status_and_message_id(data)
     error = data.get("errorCode") or data.get("error_code") or data.get("error")
     try:
         await reconcile_provider_status(
             provider="signalhouse",
-            provider_message_id=str(message_id) if message_id else None,
-            status=str(status) if status else None,
+            provider_message_id=message_id,
+            status=status,
             error_code=str(error) if error else None,
         )
     except Exception:

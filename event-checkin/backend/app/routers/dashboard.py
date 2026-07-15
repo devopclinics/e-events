@@ -221,27 +221,49 @@ async def get_dashboard(event_id: str, db: AsyncSession = Depends(get_db), _: Us
     # Messaging (SMS/MMS/WhatsApp) delivery breakdown + credit balance/spend,
     # derived from the message-credit ledger (spend = attempt, refund = failure).
     msg_rows = (await db.execute(
-        select(MessageCreditLedger.channel, MessageCreditLedger.action,
-               MessageCreditLedger.status, MessageCreditLedger.delta)
-        .where(MessageCreditLedger.event_id == event_id,
-               MessageCreditLedger.channel.in_(("sms", "mms", "whatsapp")))
+        select(
+            MessageCreditLedger.id,
+            MessageCreditLedger.channel,
+            MessageCreditLedger.action,
+            MessageCreditLedger.status,
+            MessageCreditLedger.delta,
+            MessageCreditLedger.provider_message_id,
+        )
+        .where(
+            MessageCreditLedger.event_id == event_id,
+            MessageCreditLedger.channel.in_(("sms", "mms", "whatsapp")),
+        )
     )).all()
     chan = {c: {"sent": 0, "delivered": 0, "failed": 0} for c in ("sms", "mms", "whatsapp")}
     credits_spent = 0
-    for c, action, status, delta in msg_rows:
-        d = chan.get(c)
+    # Deduplicate by provider_message_id so a spend + refund pair is treated as
+    # one logical message outcome instead of two separate failures.
+    msg_ids = {c: {"sent": set(), "delivered": set(), "failed": set()} for c in ("sms", "mms", "whatsapp")}
+    failed_statuses = {"failed", "undelivered", "error", "rejected"}
+    for row_id, c, action, status, delta, provider_message_id in msg_rows:
+        d = msg_ids.get(c)
         if d is None:
             continue
+        message_key = provider_message_id or f"ledger:{row_id}"
         if action == "spend":
-            d["sent"] += 1
+            d["sent"].add(message_key)
             st = (status or "").lower()
             if "deliver" in st:
-                d["delivered"] += 1
-            elif st in ("failed", "undelivered", "error", "rejected"):
-                d["failed"] += 1
+                d["delivered"].add(message_key)
+            elif st in failed_statuses:
+                d["failed"].add(message_key)
             credits_spent += abs(delta or 0)
         elif action == "refund":
-            d["failed"] += 1
+            d["failed"].add(message_key)
+    for c in ("sms", "mms", "whatsapp"):
+        sent_ids = msg_ids[c]["sent"]
+        failed_ids = msg_ids[c]["failed"]
+        delivered_ids = msg_ids[c]["delivered"] - failed_ids
+        chan[c] = {
+            "sent": len(sent_ids),
+            "delivered": len(delivered_ids),
+            "failed": len(failed_ids),
+        }
     message_delivery = [DashboardChannelDelivery(channel=c, **chan[c])
                         for c in ("sms", "mms", "whatsapp")
                         if chan[c]["sent"] or chan[c]["failed"]]

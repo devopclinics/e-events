@@ -375,7 +375,32 @@ function ComboCategory({ category, value, onChange }) {
   )
 }
 
+function DisplayCategory({ category }) {
+  return (
+    <div>
+      <h4 className="text-sm font-bold text-slate-800 dark:text-slate-100">{category.name}</h4>
+      <ul className="mt-2 space-y-1.5">
+        {category.items.map((i) => (
+          <li key={i.id} className="text-sm text-slate-700 dark:text-slate-300">
+            <span className="font-medium">{i.name}</span>
+            {i.description && <span className="text-xs text-slate-500 dark:text-slate-400"> — {i.description}</span>}
+          </li>
+        ))}
+      </ul>
+    </div>
+  )
+}
+
 function MenuSelection({ token, categories, initialChoices, mealServed }) {
+  // Multi-day menus: categories may carry a day_label; render one day at a time
+  // behind tabs. Label-less categories stay visible on every tab.
+  const dayLabels = [...new Set(categories.filter((c) => c.day_label).map((c) => c.day_label))]
+  const [menuDay, setMenuDay] = useState(dayLabels[0] || '')
+  const selectable = categories.filter((c) => !c.display_only)
+  const allDisplayOnly = selectable.length === 0
+  const visibleCategories = dayLabels.length
+    ? categories.filter((c) => !c.day_label || c.day_label === menuDay)
+    : categories
   const [single, setSingle] = useState(initialChoices?.single || {})
   const [multi, setMulti] = useState(initialChoices?.multi || {})
   const [combo, setCombo] = useState(initialChoices?.combo || {})
@@ -412,7 +437,7 @@ function MenuSelection({ token, categories, initialChoices, mealServed }) {
     return null
   }
 
-  const canSubmit = categories.every((cat) => categoryError(cat) === null)
+  const canSubmit = selectable.every((cat) => categoryError(cat) === null)
 
   async function submit(e) {
     e.preventDefault()
@@ -430,7 +455,7 @@ function MenuSelection({ token, categories, initialChoices, mealServed }) {
     }
   }
 
-  if (mealServed) {
+  if (mealServed && !allDisplayOnly) {
     return (
       <div className="border-2 border-amber-300 bg-amber-50 dark:bg-amber-900/20 rounded-lg p-4 text-center">
         <p className="text-sm text-amber-700 dark:text-amber-200 font-semibold">Your order has been served — selection is locked</p>
@@ -445,15 +470,28 @@ function MenuSelection({ token, categories, initialChoices, mealServed }) {
         <div className="flex items-center gap-2">
           <span className="text-2xl">🍽️</span>
           <div>
-            <h3 className="text-base font-bold">Pick your items</h3>
+            <h3 className="text-base font-bold">{allDisplayOnly ? 'Food menu' : 'Pick your items'}</h3>
             <p className="text-xs text-amber-50">
-              {hasExistingChoice ? 'Tap any option to change your choice.' : 'Tap to choose what you want.'}
+              {allDisplayOnly ? 'What is being served at this event.' : hasExistingChoice ? 'Tap any option to change your choice.' : 'Tap to choose what you want.'}
             </p>
           </div>
         </div>
       </div>
       <form onSubmit={submit} className="p-4 space-y-5 bg-white dark:bg-slate-900">
-        {categories.map((cat) => {
+        {dayLabels.length > 0 && (
+          <div className="flex flex-wrap gap-2" aria-label="Menu day">
+            {dayLabels.map((day) => (
+              <button key={day} type="button" onClick={() => setMenuDay(day)}
+                className={`rounded-full px-3 py-1.5 text-xs font-extrabold transition-colors ${menuDay === day ? 'bg-amber-500 text-white' : 'bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-200'}`}>
+                {day}
+              </button>
+            ))}
+          </div>
+        )}
+        {visibleCategories.map((cat) => {
+          if (cat.display_only) {
+            return <DisplayCategory key={cat.id} category={cat} />
+          }
           const err = categoryError(cat)
           return (
             <div key={cat.id}>
@@ -484,6 +522,7 @@ function MenuSelection({ token, categories, initialChoices, mealServed }) {
         })}
         {error && <p className="text-sm text-red-600 dark:text-red-400 font-medium">{error}</p>}
         {msg && <p className="text-sm text-green-600 dark:text-green-400 font-bold text-center">✓ {msg}</p>}
+        {!allDisplayOnly && (
         <button
           type="submit"
           disabled={saving || !canSubmit}
@@ -491,6 +530,7 @@ function MenuSelection({ token, categories, initialChoices, mealServed }) {
         >
           {saving ? 'Saving…' : hasExistingChoice ? 'Update Selection' : 'Save Selection'}
         </button>
+        )}
       </form>
     </div>
   )

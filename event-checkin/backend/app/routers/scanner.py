@@ -350,6 +350,8 @@ async def _load_menu(event_id: str, guest_id: str, db: AsyncSession):
             id=cat.id,
             event_id=event_id,
             name=cat.name,
+            day_label=cat.day_label,
+            display_only=bool(cat.display_only),
             sort_order=cat.sort_order,
             selection_type=cat.selection_type,
             min_selections=cat.min_selections,

@@ -58,6 +58,8 @@ async def _cat_out(cat: MenuCategory, db: AsyncSession) -> MenuCategoryOut:
         id=cat.id,
         event_id=cat.event_id,
         name=cat.name,
+        day_label=cat.day_label,
+        display_only=bool(cat.display_only),
         sort_order=cat.sort_order,
         selection_type=cat.selection_type,
         min_selections=cat.min_selections,
@@ -86,6 +88,8 @@ async def create_category(event_id: str, data: MenuCategoryCreate, db: AsyncSess
     cat = MenuCategory(
         event_id=event_id,
         name=data.name,
+        day_label=(data.day_label or "").strip() or None,
+        display_only=bool(data.display_only),
         sort_order=data.sort_order,
         selection_type=data.selection_type,
         min_selections=data.min_selections,
@@ -107,6 +111,8 @@ async def update_category(event_id: str, category_id: str, data: MenuCategoryCre
     if data.selection_type not in ("single", "multi", "combo"):
         raise HTTPException(400, "selection_type must be single, multi, or combo")
     cat.name = data.name
+    cat.day_label = (data.day_label or "").strip() or None
+    cat.display_only = bool(data.display_only)
     cat.sort_order = data.sort_order
     cat.selection_type = data.selection_type
     cat.min_selections = data.min_selections

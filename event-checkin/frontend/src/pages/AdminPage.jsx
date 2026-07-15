@@ -2840,6 +2840,8 @@ function MenuPanel({ eventId }) {
           ? (catForm.max_selections === '' || catForm.max_selections == null ? null : Number(catForm.max_selections))
           : 1,
         is_required: !!catForm.is_required,
+        day_label: (catForm.day_label || '').trim() || null,
+        display_only: !!catForm.display_only,
       }
       if (catForm.id) {
         const updated = await api.updateMenuCategory(eventId, catForm.id, payload)
@@ -3119,12 +3121,24 @@ function MenuPanel({ eventId }) {
               </div>
             </>
           )}
+          <div>
+            <label className="block text-xs font-semibold text-gray-600 dark:text-slate-300 mb-1">Day (optional)</label>
+            <input value={catForm.day_label || ''} onChange={(e) => setCatForm((f) => ({ ...f, day_label: e.target.value }))}
+              className={`${fieldCls} w-40`} placeholder="Friday · July 17" />
+          </div>
           <label className="flex items-center gap-2 text-sm text-gray-700 dark:text-slate-200 select-none cursor-pointer">
             <input type="checkbox"
               checked={!!catForm.is_required}
               onChange={(e) => setCatForm((f) => ({ ...f, is_required: e.target.checked }))}
               className="w-4 h-4 accent-amber-500" />
             Required
+          </label>
+          <label className="flex items-center gap-2 text-sm text-gray-700 dark:text-slate-200 select-none cursor-pointer" title="Shown on the ticket as information only — guests make no selection">
+            <input type="checkbox"
+              checked={!!catForm.display_only}
+              onChange={(e) => setCatForm((f) => ({ ...f, display_only: e.target.checked }))}
+              className="w-4 h-4 accent-amber-500" />
+            Display only
           </label>
           <button type="submit" disabled={loading}
             className="bg-indigo-600 text-white px-4 py-2 rounded-lg text-sm font-semibold hover:bg-indigo-700 disabled:opacity-50">

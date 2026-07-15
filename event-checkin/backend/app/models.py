@@ -648,6 +648,11 @@ class MenuCategory(Base):
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
     event_id: Mapped[str] = mapped_column(String(36), ForeignKey("events.id"))
     name: Mapped[str] = mapped_column(String(100))
+    # Optional day grouping for multi-day events (e.g. "Friday · July 17").
+    # Categories sharing a label render under one day tab on the guest ticket.
+    day_label: Mapped[str | None] = mapped_column(String(80), nullable=True)
+    # Display-only: shown on the ticket as an informational menu (no selection).
+    display_only: Mapped[bool] = mapped_column(Boolean, default=False)
     sort_order: Mapped[int] = mapped_column(Integer, default=0)
     selection_type: Mapped[str] = mapped_column(String(10), default="single")
     min_selections: Mapped[int] = mapped_column(Integer, default=0)

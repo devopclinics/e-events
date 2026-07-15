@@ -1350,6 +1350,8 @@ class MenuItemOut(BaseModel):
 
 class MenuCategoryCreate(BaseModel):
     name: str
+    day_label: Optional[str] = None
+    display_only: bool = False
     sort_order: int = 0
     selection_type: str = "single"  # single|multi|combo
     min_selections: int = 0
@@ -1387,6 +1389,8 @@ class MenuCategoryOut(BaseModel):
     id: str
     event_id: str
     name: str
+    day_label: Optional[str] = None
+    display_only: bool = False
     sort_order: int
     selection_type: str = "single"
     min_selections: int = 0

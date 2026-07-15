@@ -472,8 +472,16 @@ async def view_ticket(qr_token: str, db: AsyncSession = Depends(get_db)):
     menu_locked = bool(event and event.menu_enabled and not guest.admitted)
     menu_categories = []
     guest_choices: dict[str, dict] = {"single": {}, "multi": {}, "combo": {}}
-    if event and event.menu_enabled and event.status == "active" and guest.admitted:
-        menu_categories, guest_choices = await _load_menu(guest.event_id, guest.id, db)
+    if event and event.menu_enabled:
+        cats, choices = await _load_menu(guest.event_id, guest.id, db)
+        # A fully display-only menu is informational — show it any time (even
+        # pre-admission and pre-event) and never lock it. Selectable menus keep
+        # the original gate: event active + guest admitted.
+        if cats and all(c.display_only for c in cats):
+            menu_categories, guest_choices = cats, choices
+            menu_locked = False
+        elif event.status == "active" and guest.admitted:
+            menu_categories, guest_choices = cats, choices
 
     partner_info = None
     if guest.partner_guest_id:

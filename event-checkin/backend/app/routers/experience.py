@@ -1617,7 +1617,14 @@ async def my_experience(
         )).scalars().all()
     }
     consent_signed = bool(consent_state and consent_state.signed)
-    steps_sorted = sorted((s for s in loaded.steps if s.enabled), key=lambda s: (s.sort_order, s.title))
+    # With the Live Program on, timed segments render in the program section —
+    # repeating all of them in the activity checklist buried the few actionable
+    # steps under dozens of agenda cards (and inflated "N/M done").
+    hide_segments = bool(event.live_program_enabled)
+    steps_sorted = sorted(
+        (s for s in loaded.steps if s.enabled and not (hide_segments and s.is_segment)),
+        key=lambda s: (s.sort_order, s.title),
+    )
     steps_out = [_guest_step_out(step, progress_by_step.get(step.id)) for step in steps_sorted]
     # A guest can sign consent from the Hub before check-in, so the workflow may
     # still hold the consent step "blocked" behind earlier steps. Once signed,
@@ -1628,7 +1635,11 @@ async def my_experience(
             if s.type == "consent" and s.status not in ("completed", "overridden"):
                 s.status = "completed"
                 s.actionable = False
-    next_out = [_guest_step_out(step, row) for step, row in next_rows]
+    next_out = [
+        _guest_step_out(step, row)
+        for step, row in next_rows
+        if not (hide_segments and step.is_segment)
+    ]
     completed = sum(1 for s in steps_out if s.status in ("completed", "overridden"))
 
     return GuestJourneyOut(

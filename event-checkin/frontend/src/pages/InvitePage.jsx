@@ -1015,6 +1015,7 @@ function GuestHub({ event, accessToken, designTheme }) {
   const [message, setMessage] = useState('')
   const [chatMessage, setChatMessage] = useState('')
   const [programDay, setProgramDay] = useState('')
+  const [showAllActivity, setShowAllActivity] = useState(false)
   const [sending, setSending] = useState(false)
   const [sendingChat, setSendingChat] = useState(false)
   // Experience journey (only populated when the event has Experience enabled).
@@ -1388,8 +1389,17 @@ function GuestHub({ event, accessToken, designTheme }) {
                   </div>
                 </div>
               )}
+              {(() => {
+                // Long checklists collapse: keep pending steps in view, tuck
+                // completed ones (and any overflow) behind a toggle.
+                const pending = visible.filter((s) => !['completed', 'overridden'].includes(s.status))
+                const collapsible = visible.length > 8
+                const shown = !collapsible || showAllActivity ? visible : pending.slice(0, 8)
+                const hiddenCount = visible.length - shown.length
+                return (
+                  <>
               <ol className="mt-4 space-y-2">
-                {visible.map((s) => {
+                {shown.map((s) => {
                   const m = statusMeta(s)
                   const sessionInfo = s.session ? sessionSummary(s.session) : ''
                   const roomInfo = roomAssignmentText(s.metadata || {})
@@ -1414,6 +1424,19 @@ function GuestHub({ event, accessToken, designTheme }) {
                   )
                 })}
               </ol>
+              {collapsible && (
+                <button
+                  type="button"
+                  onClick={() => setShowAllActivity((v) => !v)}
+                  className="mt-3 w-full rounded-xl border px-3 py-2 text-sm font-bold"
+                  style={{ background: tone.chip, borderColor: tone.border, color: tone.text }}
+                >
+                  {showAllActivity ? 'Show fewer steps' : `Show all ${visible.length} steps${hiddenCount ? ` (${hiddenCount} hidden)` : ''}`}
+                </button>
+              )}
+                  </>
+                )
+              })()}
 
               {consent?.form && (
                 <div className="mt-4 rounded-xl border p-4" style={{ background: tone.panelStrong, borderColor: needsConsent ? tone.accent : tone.border }}>

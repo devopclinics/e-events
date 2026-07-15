@@ -11,14 +11,14 @@ const PDFS = [
   },
   {
     title: 'Festio One-Pager',
-    description: 'Compact sales handout for quick sharing.',
+    description: 'Compact sales handout for quick sharing. ⚠ Stale: no source file in the repo to regenerate — needs an external redesign pass to reflect current branding and features.',
     href: '/media/eventqr-onepager.pdf',
     filename: 'eventqr-onepager.pdf',
     type: 'PDF',
   },
   {
     title: 'Festio Pitch Deck',
-    description: 'Longer investor/product pitch deck.',
+    description: 'Longer investor/product pitch deck. ⚠ Stale: no source file in the repo to regenerate — needs an external redesign pass to reflect current branding and features.',
     href: '/media/eventqr-pitch.pdf',
     filename: 'eventqr-pitch.pdf',
     type: 'PDF',
@@ -35,7 +35,7 @@ const HTML_ASSETS = [
   },
   {
     title: 'Pitch Deck HTML',
-    description: 'Editable HTML source for the target-audience pitch deck.',
+    description: 'Editable HTML source for the target-audience pitch deck. ⚠ Stale: still says "EventQR" and links the old domain throughout — deliberately deferred during the June 2026 rebrand pending a content review (investor-facing, not just a brand string).',
     href: '/media/eventqr-pitch-v3-target-audience.html',
     filename: 'eventqr-pitch-v3-target-audience.html',
     type: 'HTML',
@@ -49,21 +49,30 @@ const HTML_ASSETS = [
   },
 ]
 
+// Refreshed 2026-07-15 against the live 2.0.69 app — includes features that
+// shipped after the July-14 set (per-field RSVP requirements, invitation
+// categories & auto-seating, multi-day display-only menus, FestioHub).
+// SAME filenames as guideContent.mjs (Help guide) reuse this exact set, so
+// keeping this list current keeps the in-app guide current too.
 const SCREENSHOTS = [
   ['Event setup', '/media/help2-event-setup.png'],
   ['Guests', '/media/help2-guests.png'],
   ['Invites and RSVP', '/media/help2-invites-rsvp.png'],
-  ['Invitation categories', '/media/help2-categories.png'],
+  ['RSVP form fields (per-field required/optional)', '/media/help2-rsvp-fields.png'],
+  ['Invitation categories & auto-seating', '/media/help2-categories.png'],
   ['Seating', '/media/help2-seating.png'],
+  ['Orders: multi-day menu (day + display-only)', '/media/help2-menu-fields.png'],
+  ['Orders', '/media/help2-orders.png'],
+  ['Entry areas', '/media/help2-entry-areas.png'],
+  ['Team', '/media/help2-team.png'],
   ['Check-in', '/media/help2-checkin.png'],
   ['Results', '/media/help2-results.png'],
-  ['Team', '/media/help2-team.png'],
   ['Event Pass', '/media/help2-event-pass.png'],
-  ['Entry areas', '/media/help2-entry-areas.png'],
-  ['Orders', '/media/help2-orders.png'],
+  ['Guest invite (RSVP page)', '/media/help2-guest-invite.png'],
+  ['Festio Pass — ticket with day-tabbed menu', '/media/help2-festio-pass.png'],
+  ['FestioHub — Live Program, activity, food menu', '/media/help2-festiohub.png'],
   ['Deliveries', '/media/help2-deliveries.png'],
   ['Gift list', '/media/help2-gift-list.png'],
-  ['Guest invite', '/media/help2-guest-invite.png'],
 ].map(([title, href]) => ({
   title,
   href,
@@ -149,6 +158,10 @@ export default function MediaPage() {
         <h1 className="text-2xl font-bold text-slate-950 dark:text-white">Media Library</h1>
         <p className="mt-2 text-sm text-slate-500 dark:text-slate-400">
           Operator-only links for viewing and downloading Festio PDFs, HTML tours, and product screenshots.
+        </p>
+        <p className="mt-1 text-xs text-slate-400 dark:text-slate-500">
+          Screenshots and the Introductory Guide PDF last refreshed 2026-07-15 against live 2.0.69.
+          The pitch deck and one-pager below still reflect an earlier feature set — see their cards.
         </p>
       </div>
 

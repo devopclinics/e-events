@@ -191,14 +191,14 @@ def setup_invites():
     p = page(BG)
     d = ImageDraw.Draw(p)
     label(d, M, 78, "organizer setup")
-    draw_text(d, (M, 125), "Create the event, then invite the right people", F["h1"], INK, width=720)
+    title_bottom = draw_text(d, (M, 125), "Create the event, then invite the right people", F["h1"], INK, width=720)
     bullets = [
         ("Event workspace", "Each event has its own guests, invite settings, features, and team permissions."),
         ("Flexible import", "Upload CSV/Excel-style guest files or use shared sheet links for repeat sync."),
-        ("Invite page", "Guests can RSVP, answer custom questions, choose orders, and receive a personal QR ticket."),
-        ("Private or shared links", "Use one public event link or personal invite links when forwarding needs control."),
+        ("Invitation categories", "Let one submitter register a whole party, cap guests per category, and auto-seat everyone at the right table."),
+        ("Per-field RSVP control", "Choose Optional, Required, or Don't ask for email and phone, separately for the submitter and their guests."),
     ]
-    y = 320
+    y = title_bottom + 30
     for title, body in bullets:
         d.rounded_rectangle((M, y, 690, y + 118), radius=18, fill=WHITE, outline=SUBTLE, width=2)
         d.ellipse((M + 28, y + 36, M + 58, y + 66), fill=TEAL_2)
@@ -232,7 +232,7 @@ def operations():
     title_bottom = draw_text(d, (M, 125), "Add the tools your event actually needs", F["h1"], INK, width=800)
     draw_text(d, (M, title_bottom + 22), "Event Passes unlock the higher-touch workflows that matter for formal events, venues, teams, vendors, and multi-zone entry.", F["body"], MUTED, width=820)
     cards = [
-        ("Seating and orders", "Assign tables, collect meal or item choices, and give staff a live orders view.", "help2-orders.png"),
+        ("Seating and multi-day menus", "Auto-seat guests by invitation category, and publish a day-tabbed food menu on every pass and FestioHub.", "help2-orders.png"),
         ("Entry areas", "Control who can enter VIP, backstage, or other areas using ticket rules and tags.", "help2-entry-areas.png"),
         ("Deliveries", "Collect addresses and manage packing, shipping, or gift delivery by guest.", "help2-deliveries.png"),
         ("Gift list", "Coordinate gift items or cash funds without duplicate claims.", "help2-gift-list.png"),
@@ -241,8 +241,9 @@ def operations():
     for (title, body, image), (x, y) in zip(cards, positions):
         d.rounded_rectangle((x, y, x + 680, y + 300), radius=24, fill=WHITE, outline=SUBTLE, width=2)
         rounded_paste(p, img(image), (x + 26, y + 24, x + 310, y + 218), radius=16, shadow=False)
-        draw_text(d, (x + 335, y + 40), title, F["h3"], INK, width=300)
-        draw_text(d, (x + 335, y + 92), body, F["small"], MUTED, width=300, line_gap=6)
+        title_bottom = draw_text(d, (x + 335, y + 40), title, F["h3"], INK, width=300)
+        body_y = max(y + 92, title_bottom + 12)
+        draw_text(d, (x + 335, body_y), body, F["small"], MUTED, width=300, line_gap=6)
     footer(d, 5)
     return p
 

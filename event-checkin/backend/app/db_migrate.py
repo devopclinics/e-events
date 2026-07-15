@@ -42,6 +42,8 @@ SCHEMA_PATCHES: list[str] = [
     # guests.email was created NOT NULL; events with rsvp_collect_email=False now
     # register guests with no email. Auto-patch only adds columns, so relax here.
     "ALTER TABLE guests ALTER COLUMN email DROP NOT NULL",
+    # Payments are org-level audit rows; deleting an event detaches them.
+    "ALTER TABLE payments ALTER COLUMN event_id DROP NOT NULL",
 
     # ── Multi-tenancy backfill (idempotent) — see docs/PHASE1-MULTITENANCY-PLAN.md.
     # Runs after create_all (organizations/memberships tables) and auto-patch

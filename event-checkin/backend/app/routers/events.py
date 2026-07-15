@@ -4,9 +4,9 @@ import secrets
 import uuid as _uuid
 from fastapi import APIRouter, BackgroundTasks, Depends, File, HTTPException, UploadFile
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import delete, select
+from sqlalchemy import delete, select, update
 from ..database import get_db
-from ..models import Event, EventUser, EventUserSection, FestioMeOutbox, Guest, Membership, Organization, RSVPQuestion, TableGroup, User
+from ..models import Event, EventUser, EventUserSection, FestioMeOutbox, Guest, Membership, Organization, Payment, RSVPQuestion, TableGroup, User
 from ..schemas import (
     EventCreate, EventUpdate, EventOut, EventMemberOut, AssignUserRequest,
     OrgMemberInvite, OrgMemberOut, MemberRoleUpdate, UserOut, EventSourceUpdate,
@@ -286,6 +286,9 @@ async def delete_event(
     if not event:
         raise HTTPException(404, "Event not found")
     await db.execute(delete(FestioMeOutbox).where(FestioMeOutbox.event_id == event_id))
+    # Detach payments (org-level financial audit records) so the FK doesn't
+    # block deletion — any event with an initiated checkout was undeletable.
+    await db.execute(update(Payment).where(Payment.event_id == event_id).values(event_id=None))
     await db.delete(event)
     await db.commit()
 

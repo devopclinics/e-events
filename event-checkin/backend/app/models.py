@@ -112,6 +112,9 @@ class Event(Base):
     org_id: Mapped[str] = mapped_column(String(36), ForeignKey("organizations.id"), nullable=False, index=True)
     name: Mapped[str] = mapped_column(String(255))
     couples_name: Mapped[str] = mapped_column(String(255))
+    # What kind of event this is (Wedding, Graduation, Conference, …). Chosen
+    # from a preset list at creation; nullable for pre-existing events.
+    event_type: Mapped[str | None] = mapped_column(String(80), nullable=True)
     event_date: Mapped[datetime] = mapped_column(DateTime)
     # IANA timezone (e.g. "Europe/Zurich") the event runs in. Nullable for events
     # created before this field existed; those need a one-time backfill and fall
@@ -472,7 +475,10 @@ class Payment(Base):
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
     org_id: Mapped[str] = mapped_column(String(36), ForeignKey("organizations.id"), index=True)
-    event_id: Mapped[str] = mapped_column(String(36), ForeignKey("events.id"), index=True)
+    # Nullable: payments are org-level financial audit records — deleting an
+    # event detaches its payments (event_id → NULL) instead of blocking the
+    # delete or destroying the audit trail.
+    event_id: Mapped[str | None] = mapped_column(String(36), ForeignKey("events.id"), index=True, nullable=True)
     provider: Mapped[str] = mapped_column(String(20))           # "stripe" | "paystack"
     reference: Mapped[str] = mapped_column(String(255), unique=True, index=True)
     tier_key: Mapped[str] = mapped_column(String(20))

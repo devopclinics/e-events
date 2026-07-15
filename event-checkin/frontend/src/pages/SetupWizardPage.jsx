@@ -70,6 +70,7 @@ export default function SetupWizardPage() {
   const [form, setForm] = useState({
     name: '',
     event_type: '',
+    host_name: '',
     event_date: localDateTimeValue(),
     timezone: '',
     venue_name: '',
@@ -100,7 +101,8 @@ export default function SetupWizardPage() {
     try {
       const event = await api.createEvent({
         name: form.name.trim(),
-        couples_name: form.event_type.trim() || form.name.trim(),
+        couples_name: form.host_name.trim(),
+        event_type: form.event_type || null,
         event_date: new Date(form.event_date).toISOString(),
         timezone: form.timezone,
         description: '',
@@ -137,7 +139,18 @@ export default function SetupWizardPage() {
             </label>
             <label>
               <span className="mb-1 block text-xs font-bold text-slate-500 dark:text-slate-400">Event type</span>
-              <input className={input} value={form.event_type} onChange={(e) => setField('event_type', e.target.value)} placeholder="Wedding, gala, conference" />
+              <select className={input} value={form.event_type} onChange={(e) => setField('event_type', e.target.value)} required>
+                <option value="" disabled>Select event type…</option>
+                {[
+                  'Wedding', 'Nikkah / Aqd', 'Graduation ceremony', 'Birthday party',
+                  'Gala / banquet', 'Conference / seminar', 'Community / religious event',
+                  'Corporate event', 'Concert / show', 'Private party', 'Other',
+                ].map((t) => <option key={t} value={t}>{t}</option>)}
+              </select>
+            </label>
+            <label>
+              <span className="mb-1 block text-xs font-bold text-slate-500 dark:text-slate-400">Host / organizer name <span className="font-normal text-slate-400">(optional)</span></span>
+              <input className={input} value={form.host_name} onChange={(e) => setField('host_name', e.target.value)} placeholder="Shown on invites, e.g. Al-Azeemah Schools" />
             </label>
             <label>
               <span className="mb-1 block text-xs font-bold text-slate-500 dark:text-slate-400">Date and time</span>

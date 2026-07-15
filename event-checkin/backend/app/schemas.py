@@ -57,6 +57,8 @@ class EventCreate(BaseModel):
     name: str
     # Optional host/organizer/honoree label — blank for events with no such party.
     couples_name: Optional[str] = ""
+    # Preset event kind (Wedding, Graduation, Conference, …).
+    event_type: Optional[str] = None
     event_date: datetime
     # IANA timezone the event runs in; all event times render in this zone.
     # Required so invite/Hub times are unambiguous rather than viewer-local.
@@ -85,6 +87,7 @@ class EventCreate(BaseModel):
 class EventUpdate(BaseModel):
     name: Optional[str] = None
     couples_name: Optional[str] = None
+    event_type: Optional[str] = None
     event_date: Optional[datetime] = None
     timezone: Optional[str] = Field(default=None, max_length=80)
     description: Optional[str] = None
@@ -123,6 +126,7 @@ class EventOut(BaseModel):
     id: str
     name: str
     couples_name: str
+    event_type: Optional[str] = None
     event_date: datetime
     timezone: Optional[str] = None
     description: Optional[str]

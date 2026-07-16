@@ -33,6 +33,7 @@ class Settings(BaseSettings):
 
     support_ai_enabled: bool = True
     support_ai_hourly_cap: int = 20   # per-org Gemini drafts/hour before we skip drafting and just log
+    support_ai_auto_send: bool = True  # send safe topics directly; gated topics always fall back to a private note
 
     chatwoot_base_url: str = ""
     chatwoot_account_id: str = ""
@@ -168,6 +169,37 @@ information.
 {knowledge_base}
 """
 
+# Topics an AI should never answer unsupervised — account/billing/security
+# questions where a wrong auto-sent answer could cost the organizer money or
+# access. Matched against the organizer's incoming message; a hit always
+# routes to a private note for a human, regardless of support_ai_auto_send.
+GATED_KEYWORDS = [
+    "billing", "invoice", "refund", "charge", "chargeback", "dispute",
+    "payment", "credit card", "card", "subscription", "cancel", "downgrade",
+    "delete my account", "delete account", "close my account",
+    "password", "2fa", "security", "hacked", "breach", "compromised",
+    "legal", "lawsuit", "gdpr", "data request", "sue",
+]
+
+# Signals the model itself couldn't confidently answer (per SYSTEM_PROMPT's
+# own instruction to defer on account-specific questions) — treated the same
+# as a keyword hit, so a good-faith deferral never gets auto-sent as-is.
+DEFERRAL_PHRASES = [
+    "can't see", "cannot see", "can't access", "cannot access",
+    "don't have access", "do not have access", "teammate will follow up",
+    "flagging for a teammate", "a teammate will",
+]
+
+
+def _is_gated(text: str) -> bool:
+    lowered = (text or "").lower()
+    return any(kw in lowered for kw in GATED_KEYWORDS)
+
+
+def _is_deferral(text: str) -> bool:
+    lowered = (text or "").lower()
+    return any(p in lowered for p in DEFERRAL_PHRASES)
+
 
 # ── Chatwoot API client ──────────────────────────────────────────────────
 
@@ -204,6 +236,19 @@ async def _post_private_note(conversation_id: int, content: str) -> None:
             url,
             headers=_chatwoot_headers(),
             json={"content": content, "message_type": "outgoing", "private": True},
+        )
+        resp.raise_for_status()
+
+
+async def _post_reply(conversation_id: int, content: str) -> None:
+    """A real, visible reply to the organizer — only used for non-gated topics
+    when support_ai_auto_send is on. Always discloses it's automated."""
+    url = f"{settings.chatwoot_base_url}/api/v1/accounts/{settings.chatwoot_account_id}/conversations/{conversation_id}/messages"
+    async with httpx.AsyncClient(timeout=15) as client:
+        resp = await client.post(
+            url,
+            headers=_chatwoot_headers(),
+            json={"content": f"{content}\n\n_🤖 Automated reply from Festio's AI assistant_", "message_type": "outgoing", "private": False},
         )
         resp.raise_for_status()
 
@@ -272,12 +317,19 @@ async def identify(user: User = Depends(current_user), db: AsyncSession = Depend
     }
 
 
-async def _draft_and_post(conversation_id: int) -> None:
+async def _draft_and_post(conversation_id: int, gated: bool) -> None:
     try:
         transcript = await _fetch_conversation_transcript(conversation_id)
         draft = await _draft_reply(transcript)
-        if draft:
+        if not draft:
+            return
+        # Gated by the incoming message's own topic, OR the model itself
+        # deferred (per SYSTEM_PROMPT's instruction on account-specific
+        # questions) — either way this never gets auto-sent as-is.
+        if not settings.support_ai_auto_send or gated or _is_deferral(draft):
             await _post_private_note(conversation_id, f"\U0001F916 AI-drafted reply (review before sending):\n\n{draft}")
+        else:
+            await _post_reply(conversation_id, draft)
     except Exception:
         logger.exception("failed to draft/post AI reply for conversation %s", conversation_id)
 
@@ -321,5 +373,6 @@ async def chatwoot_webhook(request: Request, background_tasks: BackgroundTasks, 
         logger.warning("support AI hourly cap reached for %s, skipping draft for conversation %s", org_key, conversation_id)
         return {"status": "rate_limited"}
 
-    background_tasks.add_task(_draft_and_post, conversation_id)
+    gated = _is_gated(payload.get("content") or "")
+    background_tasks.add_task(_draft_and_post, conversation_id, gated)
     return {"status": "queued"}

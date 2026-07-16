@@ -10,9 +10,9 @@ This service:
    so Chatwoot's agent inbox shows the real organizer, not an anonymous visitor.
 2. Receives a Chatwoot webhook whenever an organizer sends a message
    (`POST /api/support/webhooks/chatwoot`), drafts a reply with Gemini using
-   the same content that powers the in-app Help guide, and posts the draft
-   back into Chatwoot as a **private note** — a human agent always reviews
-   and sends it. Nothing is ever auto-sent to an organizer.
+   the same content that powers the in-app Help guide, and either sends it
+   directly to the organizer or posts it as a Chatwoot **private note** for
+   a human to review, depending on the topic (see Guardrails below).
 
 It is intentionally non-critical: if this service is down, Chatwoot's widget
 and inbox keep working — agents just don't get an AI-drafted starting point.
@@ -47,6 +47,7 @@ Shared with the rest of the app (via `env_file: ./backend/.env`):
 Support/Chatwoot/Gemini-specific:
 
 - `SUPPORT_AI_ENABLED=true` — kill-switch; set `false` to stop AI drafting instantly without a redeploy
+- `SUPPORT_AI_AUTO_SEND=true` — send safe-topic replies directly to the organizer; set `false` to fall back to private-note-only (human reviews everything, no auto-send at all)
 - `SUPPORT_AI_HOURLY_CAP=20` — per-org Gemini drafts/hour before we skip drafting (logged, not an error)
 - `CHATWOOT_BASE_URL` — e.g. `https://chat.festio.events`
 - `CHATWOOT_ACCOUNT_ID`, `CHATWOOT_INBOX_ID` — numeric IDs, from Chatwoot's UI after the inbox is created
@@ -97,7 +98,9 @@ full rather than retrieved piecemeal.
 
 ## Guardrails
 
-- AI drafts are always posted as a Chatwoot **private note** — never sent to the organizer directly.
-- The prompt only ever contains the Help-guide knowledge base + conversation transcript, never raw account/billing data. Account-specific questions get a deferral, not a guess (see `SYSTEM_PROMPT` in `app/main.py`).
+- **Gated topics never auto-send.** `GATED_KEYWORDS` in `app/main.py` (billing, payments, refunds, account deletion, password/security, legal) matches against the organizer's incoming message; a hit always routes to a private note for a human, regardless of `SUPPORT_AI_AUTO_SEND`. Everything else is sent directly, with a disclosure line (`🤖 Automated reply from Festio's AI assistant`) so organizers always know they're talking to a bot.
+- **The model's own deferrals are also caught.** If the draft itself contains a phrase like "can't access your account" or "a teammate will follow up" (per `SYSTEM_PROMPT`'s instruction on account-specific questions), that's treated the same as a keyword hit — a good-faith deferral never gets auto-sent as a non-answer.
+- The prompt only ever contains the Help-guide knowledge base + conversation transcript, never raw account/billing data — the gating above is what keeps auto-sent replies confined to topics the knowledge base can actually answer correctly.
 - Per-org hourly cap on Gemini calls via the shared Redis, to bound cost/abuse risk.
-- The webhook handler ignores `outgoing`/`private` messages, which is what stops the AI's own note from re-triggering itself.
+- The webhook handler ignores `outgoing`/`private` messages, which is what stops our own posts from re-triggering another draft.
+- Set `SUPPORT_AI_AUTO_SEND=false` to go back to reviewing every reply by hand — no code change needed.

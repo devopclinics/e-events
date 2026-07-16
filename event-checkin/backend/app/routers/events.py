@@ -1,4 +1,5 @@
 from datetime import datetime
+import logging
 import os
 import secrets
 import uuid as _uuid
@@ -125,9 +126,38 @@ async def _event_out_for_user(event: Event, user: User, db: AsyncSession) -> Eve
 
 # ── CRUD ──────────────────────────────────────────────────────────────────────
 
+async def _notify_operators_new_event(event_id: str, event_name: str, org_name: str, creator_name: str, creator_email: str) -> None:
+    """Platform-operator visibility: there is no other signal today when an
+    event is created anywhere on the platform, and Console → Overview shows
+    no creation date. Fires to every current is_platform_superadmin — new
+    operators added later start receiving these automatically, no config.
+
+    Fire-and-forget background task: any failure here (mail provider down,
+    DB hiccup) must never surface to the organizer whose event already
+    committed successfully, so every step is caught and logged, not raised.
+    """
+    try:
+        from ..database import AsyncSessionLocal
+        from services.email_service import send_simple_email
+        async with AsyncSessionLocal() as db:
+            emails = (await db.execute(select(User.email).where(User.is_platform_superadmin.is_(True)))).scalars().all()
+        body = (
+            f"<p>A new event was created on Festio.</p>"
+            f"<p><strong>Event:</strong> {event_name}<br>"
+            f"<strong>Organization:</strong> {org_name}<br>"
+            f"<strong>Created by:</strong> {creator_name} ({creator_email})</p>"
+        )
+        for email in emails:
+            if email:
+                await send_simple_email(email, f"New event: {event_name}", body, message_kind="operator_new_event")
+    except Exception:
+        logging.getLogger(__name__).exception("Failed to notify operators of new event %s", event_id)
+
+
 @router.post("", response_model=EventOut, status_code=201)
 async def create_event(
     data: EventCreate,
+    background_tasks: BackgroundTasks,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_admin),
 ):
@@ -169,6 +199,10 @@ async def create_event(
 
     await db.commit()
     await db.refresh(event)
+    background_tasks.add_task(
+        _notify_operators_new_event, event.id, event.name,
+        org.name if org else "", current_user.name, current_user.email,
+    )
     return event
 
 

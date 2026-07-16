@@ -10,7 +10,7 @@ from urllib.parse import urlparse
 
 import firebase_admin
 from firebase_admin import auth as firebase_auth, credentials
-from fastapi import BackgroundTasks, Depends, FastAPI, HTTPException, Query
+from fastapi import BackgroundTasks, Depends, FastAPI, HTTPException, Query, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from redis.asyncio import Redis
@@ -93,6 +93,18 @@ class Membership(Base):
     org_id: Mapped[str] = mapped_column(String(36), ForeignKey("organizations.id"))
     user_id: Mapped[str] = mapped_column(String(36), ForeignKey("users.id"))
     role: Mapped[str] = mapped_column(String(20))
+
+
+class EventUser(Base):
+    """Mirrors the main backend's event_users junction table — a per-event
+    manager grant for users who aren't org owner/admin (see app/models.py)."""
+    __tablename__ = "event_users"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True)
+    event_id: Mapped[str] = mapped_column(String(36), ForeignKey("events.id"))
+    user_id: Mapped[str] = mapped_column(String(36), ForeignKey("users.id"))
+    event_role: Mapped[str] = mapped_column(String(30), default="staff")
+    access_level: Mapped[str] = mapped_column(String(20), default="edit")
 
 
 class Event(Base):
@@ -343,7 +355,14 @@ async def current_user(
     return user
 
 
-async def require_event_admin(event_id: str, user: User, db: AsyncSession) -> Event:
+async def require_event_admin(
+    event_id: str, user: User, db: AsyncSession, request: Request | None = None
+) -> Event:
+    """Org owner/admin, or an assigned event manager (EventUser.event_role
+    == 'manager'), matching the main backend's require_event_admin. Without
+    this per-event check, a manager granted access to just this one event
+    (not an org owner/admin) was always blocked here with a 403, even though
+    every other admin panel correctly recognized their grant."""
     event = await db.get(Event, event_id)
     if not event:
         raise HTTPException(404, "Event not found")
@@ -361,7 +380,13 @@ async def require_event_admin(event_id: str, user: User, db: AsyncSession) -> Ev
     if role is None:
         raise HTTPException(404, "Event not found")
     if role not in ("owner", "admin"):
-        raise HTTPException(403, "Admin access required")
+        eu = await db.scalar(select(EventUser).where(
+            EventUser.event_id == event_id, EventUser.user_id == user.id
+        ))
+        if not eu or eu.event_role != "manager":
+            raise HTTPException(403, "Admin access required")
+        if (eu.access_level or "edit") != "edit" and request is not None and request.method not in ("GET", "HEAD", "OPTIONS"):
+            raise HTTPException(403, "This event access is view-only.")
     return event
 
 
@@ -935,8 +960,8 @@ async def guest_chat_message(
 
 
 @app.get("/api/messaging/admin/events/{event_id}/messaging/settings")
-async def admin_settings(event_id: str, user: User = Depends(current_user), db: AsyncSession = Depends(get_db)):
-    await require_event_admin(event_id, user, db)
+async def admin_settings(event_id: str, request: Request, user: User = Depends(current_user), db: AsyncSession = Depends(get_db)):
+    await require_event_admin(event_id, user, db, request)
     cfg = await get_settings(event_id, db)
     await db.commit()
     return {
@@ -950,18 +975,18 @@ async def admin_settings(event_id: str, user: User = Depends(current_user), db: 
 
 
 @app.patch("/api/messaging/admin/events/{event_id}/messaging/settings")
-async def admin_patch_settings(event_id: str, patch: SettingsPatch, user: User = Depends(current_user), db: AsyncSession = Depends(get_db)):
-    await require_event_admin(event_id, user, db)
+async def admin_patch_settings(event_id: str, patch: SettingsPatch, request: Request, user: User = Depends(current_user), db: AsyncSession = Depends(get_db)):
+    await require_event_admin(event_id, user, db, request)
     cfg = await get_settings(event_id, db)
     for key, value in patch.model_dump(exclude_none=True).items():
         setattr(cfg, key, value)
     await db.commit()
-    return await admin_settings(event_id, user, db)
+    return await admin_settings(event_id, request, user, db)
 
 
 @app.get("/api/messaging/admin/events/{event_id}/announcements")
-async def admin_announcements(event_id: str, user: User = Depends(current_user), db: AsyncSession = Depends(get_db)):
-    await require_event_admin(event_id, user, db)
+async def admin_announcements(event_id: str, request: Request, user: User = Depends(current_user), db: AsyncSession = Depends(get_db)):
+    await require_event_admin(event_id, user, db, request)
     rows = (await db.execute(select(EventAnnouncement).where(EventAnnouncement.event_id == event_id).order_by(EventAnnouncement.created_at.desc()))).scalars().all()
     return [{
         "id": a.id,
@@ -978,10 +1003,11 @@ async def admin_create_announcement(
     event_id: str,
     payload: AnnouncementIn,
     background_tasks: BackgroundTasks,
+    request: Request,
     user: User = Depends(current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    await require_event_admin(event_id, user, db)
+    await require_event_admin(event_id, user, db, request)
     cfg = await get_settings(event_id, db)
     if not cfg.announcements_enabled:
         raise HTTPException(403, "Announcements are disabled for this event")
@@ -1023,10 +1049,11 @@ async def admin_update_announcement(
     event_id: str,
     announcement_id: str,
     patch: AnnouncementPatch,
+    request: Request,
     user: User = Depends(current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    await require_event_admin(event_id, user, db)
+    await require_event_admin(event_id, user, db, request)
     ann = await db.scalar(select(EventAnnouncement).where(
         EventAnnouncement.id == announcement_id,
         EventAnnouncement.event_id == event_id,
@@ -1068,8 +1095,8 @@ async def admin_update_announcement(
 
 
 @app.get("/api/messaging/admin/events/{event_id}/messages/inbox")
-async def admin_inbox(event_id: str, user: User = Depends(current_user), db: AsyncSession = Depends(get_db)):
-    await require_event_admin(event_id, user, db)
+async def admin_inbox(event_id: str, request: Request, user: User = Depends(current_user), db: AsyncSession = Depends(get_db)):
+    await require_event_admin(event_id, user, db, request)
     rows = (await db.execute(select(EventMessageThread, Guest).join(Guest, Guest.id == EventMessageThread.guest_id).where(
         EventMessageThread.event_id == event_id,
         EventMessageThread.thread_type == "direct",
@@ -1122,8 +1149,8 @@ async def admin_inbox(event_id: str, user: User = Depends(current_user), db: Asy
 
 
 @app.get("/api/messaging/admin/events/{event_id}/messages/inbox/{thread_id}")
-async def admin_thread(event_id: str, thread_id: str, user: User = Depends(current_user), db: AsyncSession = Depends(get_db)):
-    await require_event_admin(event_id, user, db)
+async def admin_thread(event_id: str, thread_id: str, request: Request, user: User = Depends(current_user), db: AsyncSession = Depends(get_db)):
+    await require_event_admin(event_id, user, db, request)
     thread = await db.scalar(select(EventMessageThread).where(EventMessageThread.id == thread_id, EventMessageThread.event_id == event_id))
     if not thread:
         raise HTTPException(404, "Thread not found")
@@ -1138,10 +1165,11 @@ async def admin_reply(
     thread_id: str,
     payload: MessageIn,
     background_tasks: BackgroundTasks,
+    request: Request,
     user: User = Depends(current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    await require_event_admin(event_id, user, db)
+    await require_event_admin(event_id, user, db, request)
     thread = await db.scalar(select(EventMessageThread).where(EventMessageThread.id == thread_id, EventMessageThread.event_id == event_id))
     if not thread:
         raise HTTPException(404, "Thread not found")
@@ -1163,8 +1191,8 @@ async def admin_reply(
 
 
 @app.get("/api/messaging/admin/events/{event_id}/messages/chat")
-async def admin_chat_messages(event_id: str, user: User = Depends(current_user), db: AsyncSession = Depends(get_db)):
-    await require_event_admin(event_id, user, db)
+async def admin_chat_messages(event_id: str, request: Request, user: User = Depends(current_user), db: AsyncSession = Depends(get_db)):
+    await require_event_admin(event_id, user, db, request)
     return await _chat_messages(event_id, db, include_hidden=True)
 
 
@@ -1173,10 +1201,11 @@ async def admin_moderate_chat_message(
     event_id: str,
     message_id: str,
     patch: MessageModerationPatch,
+    request: Request,
     user: User = Depends(current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    await require_event_admin(event_id, user, db)
+    await require_event_admin(event_id, user, db, request)
     if patch.status not in {"active", "hidden"}:
         raise HTTPException(422, "Status must be active or hidden")
     msg = await db.scalar(select(EventMessage).where(

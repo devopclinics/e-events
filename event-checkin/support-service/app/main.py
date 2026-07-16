@@ -10,7 +10,7 @@ from pathlib import Path
 import firebase_admin
 import httpx
 from firebase_admin import auth as firebase_auth, credentials
-from fastapi import Depends, FastAPI, HTTPException, Query, Request
+from fastapi import BackgroundTasks, Depends, FastAPI, HTTPException, Query, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from google import genai
@@ -272,11 +272,27 @@ async def identify(user: User = Depends(current_user), db: AsyncSession = Depend
     }
 
 
+async def _draft_and_post(conversation_id: int) -> None:
+    try:
+        transcript = await _fetch_conversation_transcript(conversation_id)
+        draft = await _draft_reply(transcript)
+        if draft:
+            await _post_private_note(conversation_id, f"\U0001F916 AI-drafted reply (review before sending):\n\n{draft}")
+    except Exception:
+        logger.exception("failed to draft/post AI reply for conversation %s", conversation_id)
+
+
 @app.post("/api/support/webhooks/chatwoot")
-async def chatwoot_webhook(request: Request, token: str | None = Query(default=None)):
+async def chatwoot_webhook(request: Request, background_tasks: BackgroundTasks, token: str | None = Query(default=None)):
     """Chatwoot's outgoing webhooks are plain, unsigned POSTs (unlike Twilio/
     Resend), so authenticity is a shared secret in the URL configured once in
-    Chatwoot's Settings > Integrations > Webhooks screen, not a computed HMAC."""
+    Chatwoot's Settings > Integrations > Webhooks screen, not a computed HMAC.
+
+    Chatwoot's own webhook delivery has a tight default timeout (5s) and treats
+    a slow/failed response as delivery failure — it does not retry, it just
+    logs a warning. The actual Gemini call + Chatwoot post-back routinely takes
+    longer than that, so this handler validates fast and hands the slow work to
+    a background task, returning 200 immediately."""
     if not settings.chatwoot_webhook_token or not secrets.compare_digest(token or "", settings.chatwoot_webhook_token):
         raise HTTPException(403, "Invalid webhook token")
 
@@ -305,13 +321,5 @@ async def chatwoot_webhook(request: Request, token: str | None = Query(default=N
         logger.warning("support AI hourly cap reached for %s, skipping draft for conversation %s", org_key, conversation_id)
         return {"status": "rate_limited"}
 
-    try:
-        transcript = await _fetch_conversation_transcript(conversation_id)
-        draft = await _draft_reply(transcript)
-        if draft:
-            await _post_private_note(conversation_id, f"\U0001F916 AI-drafted reply (review before sending):\n\n{draft}")
-    except Exception:
-        logger.exception("failed to draft/post AI reply for conversation %s", conversation_id)
-        return {"status": "error"}
-
-    return {"status": "drafted"}
+    background_tasks.add_task(_draft_and_post, conversation_id)
+    return {"status": "queued"}

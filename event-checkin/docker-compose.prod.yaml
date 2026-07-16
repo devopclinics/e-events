@@ -121,11 +121,11 @@ services:
     image: chatwoot/chatwoot:latest-ce
     command: ["bundle", "exec", "rails", "s", "-b", "0.0.0.0", "-p", "3000"]
     ports:
-      - "4001:3000"
+      - "4002:3000"
     environment:
       RAILS_ENV: production
       SECRET_KEY_BASE: ${CHATWOOT_SECRET_KEY_BASE:-change-me-in-prod}
-      FRONTEND_URL: ${CHATWOOT_FRONTEND_URL:-http://localhost:4001}
+      FRONTEND_URL: ${CHATWOOT_FRONTEND_URL:-http://localhost:4002}
       POSTGRES_HOST: chatwoot-db
       POSTGRES_PORT: 5432
       POSTGRES_DATABASE: chatwoot
@@ -143,7 +143,7 @@ services:
       chatwoot-redis:
         condition: service_healthy
     healthcheck:
-      test: ["CMD-SHELL", "wget -qO- http://localhost:3000 >/dev/null 2>&1 || exit 1"]
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:3000 >/dev/null 2>&1 || exit 1"]
       interval: 15s
       timeout: 5s
       retries: 8
@@ -156,7 +156,7 @@ services:
     environment:
       RAILS_ENV: production
       SECRET_KEY_BASE: ${CHATWOOT_SECRET_KEY_BASE:-change-me-in-prod}
-      FRONTEND_URL: ${CHATWOOT_FRONTEND_URL:-http://localhost:4001}
+      FRONTEND_URL: ${CHATWOOT_FRONTEND_URL:-http://localhost:4002}
       POSTGRES_HOST: chatwoot-db
       POSTGRES_PORT: 5432
       POSTGRES_DATABASE: chatwoot
@@ -188,7 +188,7 @@ services:
     restart: unless-stopped
 
   chatwoot-db:
-    image: postgres:16-alpine
+    image: pgvector/pgvector:pg16
     environment:
       POSTGRES_DB: chatwoot
       POSTGRES_USER: chatwoot

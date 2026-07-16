@@ -29,6 +29,7 @@ import HelpPage from './pages/HelpPage'
 import MediaPage from './pages/MediaPage'
 import SelfCheckinPage from './pages/SelfCheckinPage'
 import FestioMePage from './pages/FestioMePage'
+import SupportWidget from './components/SupportWidget'
 
 // ── Preferred-view helpers ────────────────────────────────────────────────────
 
@@ -263,6 +264,7 @@ function AuthedLayout({ children }) {
       <main className="flex-1 max-w-7xl mx-auto w-full px-4 sm:px-6 py-8 pb-24 sm:pb-8">{children}</main>
       <MobileTabBar user={user} hasMenu={hasMenu} hasFestioMe={hasFestioMe}
         canManageCurrentEvent={canManageCurrentEvent} hasGuestDirectory={hasGuestDirectory} />
+      <SupportWidget />
     </>
   )
 }

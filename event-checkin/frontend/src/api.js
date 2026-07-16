@@ -597,6 +597,9 @@ export const api = {
   guestChatMessages: (eventId) => req('GET', `/messaging/admin/events/${eventId}/messages/chat`),
   moderateGuestChatMessage: (eventId, messageId, status) => req('PATCH', `/messaging/admin/events/${eventId}/messages/chat/${messageId}`, { status }),
 
+  // Organizer support widget (Chatwoot identity)
+  supportIdentify: () => req('GET', '/support/identify'),
+
   // Message templates (admin)
   listTemplates: (eventId) => req('GET', `/events/${eventId}/templates`),
   getTemplate: (eventId, key) => req('GET', `/events/${eventId}/templates/${key}`),

@@ -192,9 +192,25 @@ DEFERRAL_PHRASES = [
 ]
 
 
+# Explicit requests to talk to a person — not a product question, so we skip
+# Gemini entirely (saves quota, faster) and just acknowledge + flag the
+# conversation for a human, rather than forcing an answer out of the docs.
+ESCALATION_PHRASES = [
+    "live agent", "real person", "real human", "talk to a human", "talk to someone",
+    "speak to a human", "speak with a human", "speak to someone", "speak with someone",
+    "human agent", "customer service rep", "connect me with", "speak to a person",
+    "speak with a person", "actual person", "talk to a person",
+]
+
+
 def _is_gated(text: str) -> bool:
     lowered = (text or "").lower()
     return any(kw in lowered for kw in GATED_KEYWORDS)
+
+
+def _is_escalation_request(text: str) -> bool:
+    lowered = (text or "").lower()
+    return any(p in lowered for p in ESCALATION_PHRASES)
 
 
 def _is_deferral(text: str) -> bool:
@@ -252,6 +268,26 @@ async def _post_reply(conversation_id: int, content: str) -> None:
             json={"content": f"{content}\n\n_🤖 Automated reply from Festio's AI assistant_", "message_type": "outgoing", "private": False},
         )
         resp.raise_for_status()
+
+
+ESCALATION_ACK = (
+    "Of course — I've flagged this conversation for our team and a teammate "
+    "will jump in shortly. In the meantime, feel free to keep describing what "
+    "you need help with so they have full context when they join."
+)
+
+
+async def _escalate_conversation(conversation_id: int) -> None:
+    """No Gemini call — this isn't a product question. Acknowledge immediately
+    and mark the conversation urgent so a human notices it faster."""
+    try:
+        await _post_reply(conversation_id, ESCALATION_ACK)
+        url = f"{settings.chatwoot_base_url}/api/v1/accounts/{settings.chatwoot_account_id}/conversations/{conversation_id}/toggle_priority"
+        async with httpx.AsyncClient(timeout=15) as client:
+            resp = await client.post(url, headers=_chatwoot_headers(), json={"priority": "urgent"})
+            resp.raise_for_status()
+    except Exception:
+        logger.exception("failed to escalate conversation %s", conversation_id)
 
 
 # ── Gemini drafting ───────────────────────────────────────────────────────
@@ -360,13 +396,21 @@ async def chatwoot_webhook(request: Request, background_tasks: BackgroundTasks, 
     if payload.get("event") != "message_created" or not is_incoming or payload.get("private"):
         return {"status": "ignored"}
 
-    if not settings.support_ai_enabled or _gemini_client is None:
-        return {"status": "ai_disabled"}
-
     conversation = payload.get("conversation") or {}
     conversation_id = conversation.get("id")
     if not conversation_id:
         return {"status": "no_conversation"}
+
+    content = payload.get("content") or ""
+
+    # "Talk to a human" isn't a product question — skip Gemini/rate-limit
+    # entirely (nothing to draft) and just acknowledge + flag for a human.
+    if _is_escalation_request(content):
+        background_tasks.add_task(_escalate_conversation, conversation_id)
+        return {"status": "escalated"}
+
+    if not settings.support_ai_enabled or _gemini_client is None:
+        return {"status": "ai_disabled"}
 
     contact = payload.get("sender") or payload.get("contact") or {}
     org_key = (contact.get("custom_attributes") or {}).get("org_id") or contact.get("email") or "unknown"
@@ -375,6 +419,6 @@ async def chatwoot_webhook(request: Request, background_tasks: BackgroundTasks, 
         logger.warning("support AI hourly cap reached for %s, skipping draft for conversation %s", org_key, conversation_id)
         return {"status": "rate_limited"}
 
-    gated = _is_gated(payload.get("content") or "")
+    gated = _is_gated(content)
     background_tasks.add_task(_draft_and_post, conversation_id, gated)
     return {"status": "queued"}

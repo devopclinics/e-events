@@ -104,4 +104,5 @@ full rather than retrieved piecemeal.
 - The prompt only ever contains the Help-guide knowledge base + conversation transcript, never raw account/billing data — regardless of the gating setting, the model itself has no way to see real account/billing state, so at worst it defers or is generically wrong, never leaks data.
 - Per-org hourly cap on Gemini calls via the shared Redis, to bound cost/abuse risk.
 - The webhook handler ignores `outgoing`/`private` messages, which is what stops our own posts from re-triggering another draft.
+- **Explicit "talk to a human" requests skip Gemini entirely.** `ESCALATION_PHRASES` in `app/main.py` ("live agent", "real person", "talk to a human", ...) matches against the incoming message; a hit sends a canned acknowledgment (no AI drafting — this isn't a product question) and sets the conversation's Chatwoot priority to **urgent** so a human notices it faster.
 - Set `SUPPORT_AI_AUTO_SEND=false` to go back to reviewing every reply by hand — no code change needed.

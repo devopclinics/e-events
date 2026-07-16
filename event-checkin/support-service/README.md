@@ -47,7 +47,8 @@ Shared with the rest of the app (via `env_file: ./backend/.env`):
 Support/Chatwoot/Gemini-specific:
 
 - `SUPPORT_AI_ENABLED=true` — kill-switch; set `false` to stop AI drafting instantly without a redeploy
-- `SUPPORT_AI_AUTO_SEND=true` — send safe-topic replies directly to the organizer; set `false` to fall back to private-note-only (human reviews everything, no auto-send at all)
+- `SUPPORT_AI_AUTO_SEND=true` — send replies directly to the organizer; set `false` to fall back to private-note-only (human reviews everything, no auto-send at all)
+- `SUPPORT_AI_GATING_ENABLED=false` — **currently off**: every reply auto-sends, including billing/account/security topics. Set `true` to bring back GATED_KEYWORDS/deferral-phrase routing (those topics fall back to a private note instead of auto-sending) — no code change needed, the logic is already in place.
 - `SUPPORT_AI_HOURLY_CAP=20` — per-org Gemini drafts/hour before we skip drafting (logged, not an error)
 - `CHATWOOT_BASE_URL` — e.g. `https://chat.festio.events`
 - `CHATWOOT_ACCOUNT_ID`, `CHATWOOT_INBOX_ID` — numeric IDs, from Chatwoot's UI after the inbox is created
@@ -98,9 +99,9 @@ full rather than retrieved piecemeal.
 
 ## Guardrails
 
-- **Gated topics never auto-send.** `GATED_KEYWORDS` in `app/main.py` (billing, payments, refunds, account deletion, password/security, legal) matches against the organizer's incoming message; a hit always routes to a private note for a human, regardless of `SUPPORT_AI_AUTO_SEND`. Everything else is sent directly, with a disclosure line (`🤖 Automated reply from Festio's AI assistant`) so organizers always know they're talking to a bot.
-- **The model's own deferrals are also caught.** If the draft itself contains a phrase like "can't access your account" or "a teammate will follow up" (per `SYSTEM_PROMPT`'s instruction on account-specific questions), that's treated the same as a keyword hit — a good-faith deferral never gets auto-sent as a non-answer.
-- The prompt only ever contains the Help-guide knowledge base + conversation transcript, never raw account/billing data — the gating above is what keeps auto-sent replies confined to topics the knowledge base can actually answer correctly.
+- **`SUPPORT_AI_GATING_ENABLED` is currently `false`** — every AI reply auto-sends directly to the organizer, including billing/account/security topics, with a disclosure line (`🤖 Automated reply from Festio's AI assistant`) so they know it's a bot. This was a deliberate call to prioritize answering everything over caution, made after the original always-gate design proved too conservative in practice (a single billing question earlier in a thread caused later, perfectly-answerable questions to also get held back). Revisit before this carries real billing/account risk.
+- **When `SUPPORT_AI_GATING_ENABLED=true`**: `GATED_KEYWORDS` in `app/main.py` (billing, payments, refunds, account deletion, password/security, legal) matches against the organizer's incoming message; a hit routes to a private note for a human instead of auto-sending. The model's own deferrals are also caught the same way — if a draft contains a phrase like "can't access your account" or "a teammate will follow up" (per `SYSTEM_PROMPT`'s instruction on account-specific questions), that's treated as a hit too.
+- The prompt only ever contains the Help-guide knowledge base + conversation transcript, never raw account/billing data — regardless of the gating setting, the model itself has no way to see real account/billing state, so at worst it defers or is generically wrong, never leaks data.
 - Per-org hourly cap on Gemini calls via the shared Redis, to bound cost/abuse risk.
 - The webhook handler ignores `outgoing`/`private` messages, which is what stops our own posts from re-triggering another draft.
 - Set `SUPPORT_AI_AUTO_SEND=false` to go back to reviewing every reply by hand — no code change needed.

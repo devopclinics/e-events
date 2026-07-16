@@ -33,7 +33,8 @@ class Settings(BaseSettings):
 
     support_ai_enabled: bool = True
     support_ai_hourly_cap: int = 20   # per-org Gemini drafts/hour before we skip drafting and just log
-    support_ai_auto_send: bool = True  # send safe topics directly; gated topics always fall back to a private note
+    support_ai_auto_send: bool = True  # master switch: off = every draft is always a private note
+    support_ai_gating_enabled: bool = False  # on = GATED_KEYWORDS/deferral topics still fall back to a private note even when auto_send is on
 
     chatwoot_base_url: str = ""
     chatwoot_account_id: str = ""
@@ -325,8 +326,9 @@ async def _draft_and_post(conversation_id: int, gated: bool) -> None:
             return
         # Gated by the incoming message's own topic, OR the model itself
         # deferred (per SYSTEM_PROMPT's instruction on account-specific
-        # questions) — either way this never gets auto-sent as-is.
-        if not settings.support_ai_auto_send or gated or _is_deferral(draft):
+        # questions) — only enforced while support_ai_gating_enabled is on.
+        held_back = settings.support_ai_gating_enabled and (gated or _is_deferral(draft))
+        if not settings.support_ai_auto_send or held_back:
             await _post_private_note(conversation_id, f"\U0001F916 AI-drafted reply (review before sending):\n\n{draft}")
         else:
             await _post_reply(conversation_id, draft)

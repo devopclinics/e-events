@@ -12,6 +12,91 @@ const TABS = [
   { id: 'operators', label: 'Operators' },
 ]
 
+// ── Accounts summary: aggregated per-org stats for quick assessment ─────────
+function AccountsSummaryTable() {
+  const [rows, setRows] = useState(null)
+  const [err, setErr] = useState('')
+  const [q, setQ] = useState('')
+
+  useEffect(() => { api.adminAccountsSummary().then(setRows).catch((e) => setErr(e.message)) }, [])
+
+  if (err) return <div className="text-sm text-red-500">{err}</div>
+  if (!rows) return <div className="text-sm text-slate-500">Loading…</div>
+
+  const needle = q.trim().toLowerCase()
+  const filtered = needle
+    ? rows.filter((r) => r.name.toLowerCase().includes(needle)
+        || (r.owner_email || '').toLowerCase().includes(needle)
+        || (r.owner_name || '').toLowerCase().includes(needle))
+    : rows
+
+  return (
+    <div className="bg-white dark:bg-slate-800 rounded-xl shadow border dark:border-slate-700 overflow-hidden">
+      <div className="flex items-center justify-between gap-3 p-4 border-b dark:border-slate-700 flex-wrap">
+        <div>
+          <h2 className="font-semibold dark:text-white">Accounts at a glance</h2>
+          <p className="text-xs text-slate-400">{filtered.length} of {rows.length} organization(s)</p>
+        </div>
+        <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search org or owner…"
+          className="border dark:border-slate-600 rounded px-2 py-1.5 text-sm bg-white dark:bg-slate-700 dark:text-white w-56" />
+      </div>
+      <div className="overflow-x-auto">
+        <table className="w-full text-sm">
+          <thead className="bg-slate-50 dark:bg-slate-900/50 text-left text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">
+            <tr>
+              <th className="px-3 py-2">Organization</th>
+              <th className="px-3 py-2">Created</th>
+              <th className="px-3 py-2">Owner</th>
+              <th className="px-3 py-2">Plan</th>
+              <th className="px-3 py-2">Events</th>
+              <th className="px-3 py-2">Types</th>
+              <th className="px-3 py-2">Credits (used / left)</th>
+              <th className="px-3 py-2">Last event</th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-gray-100 dark:divide-slate-700">
+            {filtered.map((r) => (
+              <tr key={r.id} className={!r.is_active ? 'opacity-50' : ''}>
+                <td className="px-3 py-2">
+                  <div className="font-medium dark:text-slate-100">{r.name}</div>
+                  <div className="text-xs text-slate-400">{r.member_count} member(s){!r.is_active ? ' · suspended' : ''}</div>
+                </td>
+                <td className="px-3 py-2 text-slate-500 dark:text-slate-400 whitespace-nowrap">
+                  {r.created_at ? new Date(r.created_at).toLocaleDateString() : '—'}
+                </td>
+                <td className="px-3 py-2">
+                  <div className="dark:text-slate-100">{r.owner_name || '—'}</div>
+                  <div className="text-xs text-slate-400">{r.owner_email || ''}</div>
+                </td>
+                <td className="px-3 py-2">
+                  <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${r.paid_event_count > 0 ? 'bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-300' : 'bg-gray-100 text-gray-500 dark:bg-slate-700 dark:text-slate-300'}`}>
+                    {r.paid_event_count > 0 ? `Paid (${r.paid_event_count})` : 'Free'}
+                  </span>
+                </td>
+                <td className="px-3 py-2 dark:text-slate-200">{r.event_count}</td>
+                <td className="px-3 py-2 text-xs text-slate-500 dark:text-slate-400">
+                  {r.event_types.length ? r.event_types.join(', ') : '—'}
+                </td>
+                <td className="px-3 py-2 text-xs whitespace-nowrap">
+                  <span className="text-slate-500 dark:text-slate-400">{r.message_credits_spent} used</span>
+                  {' / '}
+                  <span className="dark:text-slate-200">{r.message_credits_remaining} left</span>
+                </td>
+                <td className="px-3 py-2 text-slate-500 dark:text-slate-400 whitespace-nowrap">
+                  {r.last_event_at ? new Date(r.last_event_at).toLocaleDateString() : '—'}
+                </td>
+              </tr>
+            ))}
+            {filtered.length === 0 && (
+              <tr><td colSpan={8} className="px-3 py-6 text-center text-slate-400">No matching organizations.</td></tr>
+            )}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  )
+}
+
 // ── Overview: all orgs + events, with comp/credit grant ─────────────────────
 function OverviewTab() {
   const [orgs, setOrgs] = useState(null)
@@ -30,6 +115,8 @@ function OverviewTab() {
   if (!orgs) return <div className="text-sm text-slate-500">Loading…</div>
   return (
     <div className="space-y-6">
+      <AccountsSummaryTable />
+      <h2 className="text-sm font-bold uppercase tracking-wide text-slate-500 dark:text-slate-400 pt-2">Grant &amp; comp</h2>
       <p className="text-xs text-slate-500 dark:text-slate-400 bg-slate-100 dark:bg-slate-800 rounded-lg px-3 py-2">
         <strong>Comp a plan</strong> to make an event paid — that unlocks SMS/WhatsApp, seating, menu &amp; QR check-in.
         <strong> Add credits</strong> only tops up the message balance (it does <em>not</em> unlock features).

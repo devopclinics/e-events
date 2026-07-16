@@ -121,6 +121,85 @@ async def overview(_: User = Depends(require_superadmin), db: AsyncSession = Dep
     ]
 
 
+@router.get("/accounts/summary")
+async def accounts_dashboard(_: User = Depends(require_superadmin), db: AsyncSession = Depends(get_db)):
+    """One row per organization for at-a-glance account assessment: when it
+    signed up, who owns it, paid or free, how many events of what type, and
+    message-credit usage. Built because Overview only supports the comp/grant
+    workflow — it has no creation date, no owner, and no aggregate numbers,
+    so answering "when did this account sign up" meant querying the DB by
+    hand. Three grouped queries (not one-per-org) keep this fast regardless
+    of tenant count."""
+    orgs = (await db.execute(select(Organization).order_by(Organization.created_at.desc()))).scalars().all()
+    if not orgs:
+        return []
+    org_ids = [o.id for o in orgs]
+
+    event_agg = (await db.execute(
+        select(
+            Event.org_id,
+            func.count(Event.id).label("event_count"),
+            func.count(Event.id).filter(Event.is_paid.is_(True)).label("paid_event_count"),
+            func.coalesce(func.sum(Event.message_credits), 0).label("credits_remaining"),
+            func.max(Event.created_at).label("last_event_at"),
+        ).where(Event.org_id.in_(org_ids)).group_by(Event.org_id)
+    )).all()
+    event_agg_by_org = {row.org_id: row for row in event_agg}
+
+    # Distinct event types per org (small result set; simpler than an array_agg).
+    type_rows = (await db.execute(
+        select(Event.org_id, Event.event_type)
+        .where(Event.org_id.in_(org_ids), Event.event_type.isnot(None))
+        .distinct()
+    )).all()
+    types_by_org: dict[str, list[str]] = {}
+    for org_id, event_type in type_rows:
+        types_by_org.setdefault(org_id, []).append(event_type)
+
+    spend_rows = (await db.execute(
+        select(MessageCreditLedger.org_id, func.coalesce(func.sum(MessageCreditLedger.credits), 0).label("spent"))
+        .where(MessageCreditLedger.org_id.in_(org_ids), MessageCreditLedger.action == "spend", MessageCreditLedger.status == "posted")
+        .group_by(MessageCreditLedger.org_id)
+    )).all()
+    spend_by_org = {row.org_id: row.spent for row in spend_rows}
+
+    # One owner (or earliest member as fallback) per org, in a single query.
+    member_rows = (await db.execute(
+        select(Membership.org_id, Membership.role, Membership.created_at, User.name, User.email)
+        .join(User, User.id == Membership.user_id)
+        .where(Membership.org_id.in_(org_ids))
+        .order_by(Membership.created_at)
+    )).all()
+    owner_by_org: dict[str, dict] = {}
+    member_count_by_org: dict[str, int] = {}
+    for org_id, role, created_at, name, email in member_rows:
+        member_count_by_org[org_id] = member_count_by_org.get(org_id, 0) + 1
+        current = owner_by_org.get(org_id)
+        # Prefer the earliest "owner"; fall back to the earliest member of any role.
+        if current is None or (role == "owner" and current["role"] != "owner"):
+            owner_by_org[org_id] = {"name": name, "email": email, "role": role}
+
+    rows = []
+    for o in orgs:
+        agg = event_agg_by_org.get(o.id)
+        owner = owner_by_org.get(o.id)
+        rows.append({
+            "id": o.id, "name": o.name, "slug": o.slug,
+            "created_at": o.created_at, "region": o.region, "currency": o.currency,
+            "plan": o.plan, "is_active": o.is_active,
+            "owner_name": owner["name"] if owner else None,
+            "owner_email": owner["email"] if owner else None,
+            "member_count": member_count_by_org.get(o.id, 0),
+            "event_count": agg.event_count if agg else 0,
+            "paid_event_count": agg.paid_event_count if agg else 0,
+            "event_types": sorted(types_by_org.get(o.id, [])),
+            "message_credits_remaining": int(agg.credits_remaining) if agg else 0,
+            "message_credits_spent": int(spend_by_org.get(o.id, 0)),
+            "last_event_at": agg.last_event_at if agg else None,
+        })
+    return rows
+
+
 @router.post("/events/{event_id}/reset")
 async def reset_event_data(
     event_id: str,

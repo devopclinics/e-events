@@ -689,6 +689,7 @@ export const api = {
 
   // Superadmin console
   adminOverview: () => req('GET', '/admin/overview'),
+  adminAccountsSummary: () => req('GET', '/admin/accounts/summary'),
   adminListTrials: () => req('GET', '/admin/trial-requests'),
   adminResolveTrial: (id, body) => req('POST', `/admin/trial-requests/${id}/resolve`, body),
   // Account management

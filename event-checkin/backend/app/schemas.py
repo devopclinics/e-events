@@ -1765,6 +1765,11 @@ class InvitePageOut(BaseModel):
     name: str
     couples_name: str
     event_date: datetime
+    # IANA timezone the event runs in (e.g. "Africa/Lagos"). Without this the
+    # frontend falls back to each guest's own browser timezone to format
+    # event_date, which silently shows the wrong wall-clock time to anyone not
+    # in the same offset as whoever happens to view it "correctly" by luck.
+    timezone: Optional[str] = None
     description: Optional[str]
     venue_name: Optional[str] = None
     venue_address: Optional[str] = None

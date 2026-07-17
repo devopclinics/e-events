@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { api, PUBLIC_BASE_URL, publicBaseUrl } from '../api'
-import { utcToLocalInput } from '../timeutil'
+import { utcToLocalInput, zonedWallTimeToUtcISOString, utcToZonedInput } from '../timeutil'
 import { useAuth } from '../context/AuthContext'
 import { useCurrentEvent } from '../hooks/useCurrentEvent'
 
@@ -7446,11 +7446,11 @@ function TeamPanel({ eventId }) {
 
 // ── EventForm ─────────────────────────────────────────────────────────────────
 
-// NB: backend timestamps have no timezone suffix — parsing them with a bare
-// `new Date()` reads them as LOCAL time, which made every edit+save cycle
-// shift event_date by the viewer's UTC offset. utcToLocalInput tags them as
-// UTC first, so the datetime-local round trip is stable.
-const utcToLocal = utcToLocalInput
+// event_date is a wall-clock time in the event's own IANA timezone, not the
+// editor's browser timezone — see zonedWallTimeToUtcISOString/utcToZonedInput
+// in timeutil.js for why utcToLocalInput's browser-local round trip isn't
+// used here (it silently mis-saved event_date whenever the editor's browser
+// timezone differed from the event's own).
 
 // Event times render in the event's IANA timezone (required). Full list where
 // the browser supports it, else a small curated set.
@@ -7473,7 +7473,7 @@ function EventForm({ initial, onSave, onCancel }) {
     e.preventDefault()
     setSaving(true); setError('')
     try {
-      await onSave({ ...form, event_date: new Date(form.event_date).toISOString() })
+      await onSave({ ...form, event_date: zonedWallTimeToUtcISOString(form.event_date, form.timezone) })
     } catch (err) { setError(err.message) }
     finally { setSaving(false) }
   }
@@ -9122,7 +9122,7 @@ export default function AdminPage() {
           {editing && event && canManageEvent && (
             <div className="mt-4 pt-4 border-t dark:border-slate-700">
               <EventForm
-                initial={{ ...event, event_date: utcToLocal(event.event_date) }}
+                initial={{ ...event, event_date: utcToZonedInput(event.event_date, event.timezone) }}
                 onSave={handleUpdate}
                 onCancel={() => setEditing(false)}
               />

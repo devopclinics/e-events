@@ -577,7 +577,7 @@ function AdmittedBanner({ guest, event }) {
       </p>
       {guest.admitted_at && (
         <p className="text-teal-100 text-sm mt-0.5">
-          Admitted at {new Date(guest.admitted_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+          Admitted at {parseUtc(guest.admitted_at)?.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', ...(event?.timezone && { timeZone: event.timezone }) })}
         </p>
       )}
     </div>

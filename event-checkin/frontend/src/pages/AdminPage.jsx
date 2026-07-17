@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { api, PUBLIC_BASE_URL, publicBaseUrl } from '../api'
-import { utcToLocalInput, zonedWallTimeToUtcISOString, utcToZonedInput } from '../timeutil'
+import { utcToLocalInput, zonedWallTimeToUtcISOString, utcToZonedInput, parseUtc } from '../timeutil'
 import { useAuth } from '../context/AuthContext'
 import { useCurrentEvent } from '../hooks/useCurrentEvent'
 
@@ -9882,7 +9882,7 @@ export default function AdminPage() {
                           <td className="px-4 py-3 text-center">
                             {g.admitted
                               ? <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-700">
-                                  {g.admitted_at ? new Date(g.admitted_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : 'Yes'}
+                                  {g.admitted_at ? parseUtc(g.admitted_at)?.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', ...(event?.timezone && { timeZone: event.timezone }) }) : 'Yes'}
                                 </span>
                               : <Badge on={false} labels={['', 'Pending']} />}
                           </td>
@@ -9953,7 +9953,7 @@ export default function AdminPage() {
                         </div>
                         {g.admitted && (
                           <span className="shrink-0 inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-700">
-                            ✓ {g.admitted_at ? new Date(g.admitted_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : 'In'}
+                            ✓ {g.admitted_at ? parseUtc(g.admitted_at)?.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', ...(event?.timezone && { timeZone: event.timezone }) }) : 'In'}
                           </span>
                         )}
                       </div>

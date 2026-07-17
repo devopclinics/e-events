@@ -65,9 +65,9 @@ function pct(part, total) {
   return total > 0 ? Math.round((part / total) * 100) : 0
 }
 
-function fmtHour(value) {
+function fmtHour(value, timeZone) {
   if (!value) return '—'
-  return new Date(value).toLocaleTimeString([], { hour: 'numeric' })
+  return parseUtc(value)?.toLocaleTimeString([], { hour: 'numeric', ...(timeZone && { timeZone }) }) ?? '—'
 }
 
 function ProgressRow({ name, total, admitted, pending, capacity }) {
@@ -141,14 +141,14 @@ function EmailDeliverySummary({ data }) {
   )
 }
 
-function Timeline({ points }) {
+function Timeline({ points, timezone }) {
   const max = Math.max(...points.map((p) => p.count), 1)
   return (
     <div className="flex items-end gap-2 h-36 pt-4">
       {points.map((p) => (
         <div key={p.label} className="flex-1 min-w-[26px] flex flex-col items-center justify-end gap-2">
-          <div className="w-full rounded-t-md bg-teal-500/80 min-h-[4px]" style={{ height: `${Math.max((p.count / max) * 100, 8)}%` }} title={`${fmtHour(p.label)}: ${p.count}`} />
-          <div className="text-[10px] text-slate-400 whitespace-nowrap">{fmtHour(p.label)}</div>
+          <div className="w-full rounded-t-md bg-teal-500/80 min-h-[4px]" style={{ height: `${Math.max((p.count / max) * 100, 8)}%` }} title={`${fmtHour(p.label, timezone)}: ${p.count}`} />
+          <div className="text-[10px] text-slate-400 whitespace-nowrap">{fmtHour(p.label, timezone)}</div>
         </div>
       ))}
     </div>
@@ -285,7 +285,7 @@ export default function DashboardPage() {
       {event && (
         <div className="bg-gradient-to-br from-teal-600 to-cyan-700 text-white rounded-2xl px-6 py-5">
           <div className="text-xl font-bold">{event.name}</div>
-          <div className="text-white/80 text-sm mt-0.5">{event.couples_name ? `${event.couples_name} · ` : ''}{parseUtc(event.event_date)?.toLocaleDateString(undefined, { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}</div>
+          <div className="text-white/80 text-sm mt-0.5">{event.couples_name ? `${event.couples_name} · ` : ''}{parseUtc(event.event_date)?.toLocaleDateString(undefined, { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric', ...(event.timezone && { timeZone: event.timezone }) })}</div>
         </div>
       )}
 
@@ -489,7 +489,7 @@ export default function DashboardPage() {
             <div className="lg:col-span-2">
               <Card title="Arrival timeline" right={<span className="text-xs text-slate-400">{stats.admitted} arrivals</span>}>
                 {stats.arrival_timeline?.length > 0 ? (
-                  <Timeline points={stats.arrival_timeline} />
+                  <Timeline points={stats.arrival_timeline} timezone={event?.timezone} />
                 ) : (
                   <div className="py-8 text-center text-gray-400 dark:text-slate-500 text-sm">No arrival data yet.</div>
                 )}
@@ -611,7 +611,7 @@ export default function DashboardPage() {
                         </div>
                         <div className="text-xs text-slate-400 truncate">{g.email || 'No email'} · {g.phone || 'No phone'}</div>
                       </div>
-                      <div className="text-xs text-slate-400 shrink-0">{g.admitted_at ? new Date(g.admitted_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '—'}</div>
+                      <div className="text-xs text-slate-400 shrink-0">{g.admitted_at ? parseUtc(g.admitted_at)?.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', ...(event?.timezone && { timeZone: event.timezone }) }) : '—'}</div>
                     </div>
                   ))}
                 </div>

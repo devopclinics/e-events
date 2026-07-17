@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from 'react'
 import { Html5Qrcode } from 'html5-qrcode'
 import { Capacitor } from '@capacitor/core'
 import { api } from '../api'
+import { parseUtc } from '../timeutil'
 import { useCurrentEvent } from '../hooks/useCurrentEvent'
 import {
   drainExperienceQueue,
@@ -102,7 +103,7 @@ function ZoneResultCard({ result, onReset }) {
   )
 }
 
-function ResultCard({ result, onReset, onStepComplete, stepActionLoading }) {
+function ResultCard({ result, onReset, onStepComplete, stepActionLoading, timezone }) {
   const cfg = {
     admitted:        { bg: 'bg-green-500',  icon: '✓', heading: 'ADMITTED' },
     offline_queued:  { bg: 'bg-teal-600',   icon: '✓', heading: 'ADMITTED OFFLINE' },
@@ -131,13 +132,13 @@ function ResultCard({ result, onReset, onStepComplete, stepActionLoading }) {
       <p className="mt-2 text-white/90">{result.message}</p>
       {result.guest?.admitted_at && result.status === 'admitted' && (
         <p className="mt-1 text-white/75 text-sm">
-          {new Date(result.guest.admitted_at).toLocaleTimeString()}
+          {parseUtc(result.guest.admitted_at)?.toLocaleTimeString([], { ...(timezone && { timeZone: timezone }) })}
         </p>
       )}
       {result.guest?.admitted_at && result.status === 'already_admitted' && (
         <div className="mt-4 inline-block bg-black/25 rounded-xl px-5 py-3">
           <div className="text-xs uppercase tracking-wide text-white/80">Checked in at</div>
-          <div className="text-2xl font-bold">{new Date(result.guest.admitted_at).toLocaleTimeString()}</div>
+          <div className="text-2xl font-bold">{parseUtc(result.guest.admitted_at)?.toLocaleTimeString([], { ...(timezone && { timeZone: timezone }) })}</div>
         </div>
       )}
       {result.step_error && (
@@ -447,7 +448,7 @@ function extractScanPayload(raw) {
   return { token: extractToken(value), action: null }
 }
 
-function ManualCheckin({ eventId, onResult, manualEnabled, walkInEnabled, sectionMode, sectionId, sectionPickable }) {
+function ManualCheckin({ eventId, onResult, manualEnabled, walkInEnabled, sectionMode, sectionId, sectionPickable, timezone }) {
   const [q, setQ] = useState('')
   const [results, setResults] = useState([])
   const [searching, setSearching] = useState(false)
@@ -604,7 +605,7 @@ function ManualCheckin({ eventId, onResult, manualEnabled, walkInEnabled, sectio
             </div>
             {g.admitted
               ? <span className="text-xs text-amber-600 dark:text-amber-400 font-semibold shrink-0">
-                  Review{g.admitted_at ? ` · ${new Date(g.admitted_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}` : ''}
+                  Review{g.admitted_at ? ` · ${parseUtc(g.admitted_at)?.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', ...(timezone && { timeZone: timezone }) })}` : ''}
                 </span>
               : <span className="text-teal-600 dark:text-teal-400 text-sm font-semibold shrink-0">Check in →</span>}
           </button>
@@ -1221,7 +1222,7 @@ export default function ScannerPage() {
 
         {!loading && result && result.zoneMode && <ZoneResultCard result={result} onReset={reset} />}
         {!loading && result && !result.zoneMode && (
-          <ResultCard result={result} onReset={reset} onStepComplete={completeNextStep} stepActionLoading={stepActionLoading} />
+          <ResultCard result={result} onReset={reset} onStepComplete={completeNextStep} stepActionLoading={stepActionLoading} timezone={selectedEvent?.timezone} />
         )}
 
         {!loading && !result && !scanningReady && (
@@ -1259,6 +1260,7 @@ export default function ScannerPage() {
             ) : manualWalkInEnabled && mode === 'manual' ? (
               <ManualCheckin eventId={eventId} manualEnabled={manualEnabled} walkInEnabled={walkInEnabled || manualEnabled}
                 sectionMode={sectionMode} sectionId={sectionId} sectionPickable={tableGroups.length > 1}
+                timezone={selectedEvent?.timezone}
                 onResult={(res) => setResult(res)} />
             ) : (
               <>

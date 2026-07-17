@@ -114,6 +114,10 @@ class Event(Base):
     org_id: Mapped[str] = mapped_column(String(36), ForeignKey("organizations.id"))
     name: Mapped[str] = mapped_column(String(255))
     event_date: Mapped[datetime] = mapped_column(DateTime)
+    # IANA timezone (e.g. "Africa/Lagos"). Without this, FestioHub falls back
+    # to each guest's own browser timezone to format event_date and program
+    # segment times — silently wrong for anyone not in the organizer's zone.
+    timezone: Mapped[str | None] = mapped_column(String(80), nullable=True)
     rsvp_enabled: Mapped[bool] = mapped_column(Boolean, default=False)
     experience_enabled: Mapped[bool] = mapped_column(Boolean, default=False)
     # Organizer-facing add-on switch. `festiome_enabled` below only records
@@ -812,6 +816,7 @@ async def guest_hub(
             "id": event.id if event else event_id,
             "name": event.name if event else "",
             "event_date": event.event_date.isoformat() if event and event.event_date else None,
+            "timezone": event.timezone if event else None,
             "venue_name": event.venue_name if event else None,
             "admission_note": event.admission_note if event else None,
         },

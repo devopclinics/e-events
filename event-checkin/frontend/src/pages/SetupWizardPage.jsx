@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import { api, PUBLIC_BASE_URL } from '../api'
 import { useCurrentEvent } from '../hooks/useCurrentEvent'
+import { zonedWallTimeToUtcISOString } from '../timeutil'
 
 // Full IANA zone list where the browser supports it, else a small curated set.
 // Event times render in the chosen zone, so this is required at creation.
@@ -103,7 +104,7 @@ export default function SetupWizardPage() {
         name: form.name.trim(),
         couples_name: form.host_name.trim(),
         event_type: form.event_type || null,
-        event_date: new Date(form.event_date).toISOString(),
+        event_date: zonedWallTimeToUtcISOString(form.event_date, form.timezone),
         timezone: form.timezone,
         description: '',
         checkin_base_url: PUBLIC_BASE_URL,

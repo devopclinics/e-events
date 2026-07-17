@@ -4880,6 +4880,14 @@ function MessageTemplatesPanel({
                 </div>
                 <input value={testTo} onChange={(e) => setTestTo(e.target.value)} placeholder={testChannel === 'email' ? 'you@example.com' : '+1832...'} className={`${fieldCls} flex-1 min-w-[10rem]`} />
                 <button onClick={doTestSend} disabled={loading} className="text-xs px-3 py-2 rounded-lg border border-gray-300 dark:border-slate-600 dark:text-slate-200 hover:bg-gray-50 dark:hover:bg-slate-700">Send test</button>
+                {testChannel === 'whatsapp' && (
+                  <p className="w-full text-xs text-amber-600 dark:text-amber-400 mt-1">
+                    ⚠️ Test sends use free text, not your approved WhatsApp template — WhatsApp only allows that
+                    if <strong>{testTo || 'this number'}</strong> has messaged you within the last 24 hours. If it
+                    hasn't, the test will fail with a &quot;no active session&quot; error. This only affects test
+                    sends here — real messages to guests always use your approved Bird template and aren't affected.
+                  </p>
+                )}
               </div>
 
               {preview && (

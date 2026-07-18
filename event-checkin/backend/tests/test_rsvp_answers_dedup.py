@@ -121,3 +121,33 @@ async def test_guest_export_includes_answers(ctx):
     assert "Meal?" in body          # the question becomes a column header
     assert "Fish" in body           # the guest's answer is in their row
     assert "Mo" in body and "Khan" in body
+
+
+@pytest.mark.asyncio
+async def test_guest_export_shows_event_local_time_not_raw_utc(ctx):
+    """Regression test: the export used to strftime stored (naive-UTC)
+    timestamps directly with no timezone conversion, so check-in/RSVP times
+    looked shifted by the event's UTC offset -- e.g. a 1pm Central check-in
+    showed as 6pm in the exported CSV. A live organizer hit this exact bug."""
+    import datetime as dt
+    ev = ctx.ids["event_a"]
+    await _open_event(ev)
+    async with _Session() as s:
+        event = await s.get(Event, ev)
+        event.timezone = "America/Chicago"
+        guest = Guest(
+            event_id=ev, first_name="Zara", last_name="Bello",
+            email="zara@example.com", rsvp_status="confirmed",
+            admitted=True,
+            # 18:00 UTC in July = 13:00 America/Chicago (CDT, UTC-5).
+            admitted_at=dt.datetime(2026, 7, 18, 18, 0, 0),
+        )
+        s.add(guest)
+        await s.commit()
+
+    ctx.login(ctx.ids["superadmin"])
+    exp = await ctx.client.get(f"/api/events/{ev}/guests/export?fmt=csv")
+    assert exp.status_code == 200, exp.text
+    body = exp.text
+    assert "2026-07-18 13:00" in body, f"expected event-local 13:00 (CDT), export was: {body}"
+    assert "2026-07-18 18:00" not in body, "export still shows raw UTC instead of event-local time"

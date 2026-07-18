@@ -11,6 +11,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import delete, select, func
 from sqlalchemy.exc import IntegrityError
 from ..database import get_db
+from ..timeutil import to_event_local
 from sqlalchemy import or_
 from ..models import (
     ConsentSignature,
@@ -658,9 +659,14 @@ async def _attach_message_status(guests, event_id: str, db: AsyncSession) -> Non
                 setattr(g, f"{channel}_provider", row.provider)
 
 
-def _fmt_dt(dt) -> str:
+def _fmt_dt(dt, tz=None) -> str:
+    """Format a stored (naive-UTC) timestamp as the event's local wall-clock
+    time. Exports previously showed raw UTC here, so check-in/RSVP/delivery
+    times looked shifted by the event's UTC offset (e.g. 5 hours early for a
+    Central-time event) -- always pass the event's timezone."""
     try:
-        return dt.strftime("%Y-%m-%d %H:%M") if dt else ""
+        local = to_event_local(dt, tz)
+        return local.strftime("%Y-%m-%d %H:%M") if local else ""
     except Exception:
         return ""
 
@@ -739,8 +745,8 @@ async def export_guests(
     def guest_row(g):
         row = [
             g.first_name or "", g.last_name or "", g.email or "", g.phone or "",
-            g.rsvp_status or "", _fmt_dt(g.rsvp_responded_at),
-            "Yes" if g.admitted else "No", _fmt_dt(g.admitted_at),
+            g.rsvp_status or "", _fmt_dt(g.rsvp_responded_at, event.timezone),
+            "Yes" if g.admitted else "No", _fmt_dt(g.admitted_at, event.timezone),
             tnames.get(g.table_id, "") if g.table_id else "",
             g.seat_number or "",
             gnames.get(g.assigned_table_group_id, "") if g.assigned_table_group_id else "",
@@ -766,11 +772,11 @@ async def export_guests(
             g.first_name or "", g.last_name or "", g.email or "", g.phone or "",
             "Yes" if g.sms_consent else "No", "Yes" if g.whatsapp_consent else "No",
             "Yes" if g.qr_generated_at else "No",
-            g.invite_status or "", _fmt_dt(g.invite_sent_at),
-            getattr(g, "email_delivery_status", "") or "", _fmt_dt(getattr(g, "email_delivery_at", None)),
-            getattr(g, "sms_delivery_status", "") or "", _fmt_dt(getattr(g, "sms_delivery_at", None)),
-            getattr(g, "mms_delivery_status", "") or "", _fmt_dt(getattr(g, "mms_delivery_at", None)),
-            getattr(g, "whatsapp_delivery_status", "") or "", _fmt_dt(getattr(g, "whatsapp_delivery_at", None)),
+            g.invite_status or "", _fmt_dt(g.invite_sent_at, event.timezone),
+            getattr(g, "email_delivery_status", "") or "", _fmt_dt(getattr(g, "email_delivery_at", None), event.timezone),
+            getattr(g, "sms_delivery_status", "") or "", _fmt_dt(getattr(g, "sms_delivery_at", None), event.timezone),
+            getattr(g, "mms_delivery_status", "") or "", _fmt_dt(getattr(g, "mms_delivery_at", None), event.timezone),
+            getattr(g, "whatsapp_delivery_status", "") or "", _fmt_dt(getattr(g, "whatsapp_delivery_at", None), event.timezone),
         ]
 
     exp_cols = ["First name", "Last name", "Email", "Phone", "Step", "Type",
@@ -782,7 +788,7 @@ async def export_guests(
                 p = exp_progress.get((g.id, s.id))
                 yield [g.first_name or "", g.last_name or "", g.email or "", g.phone or "",
                        s.title, s.type, p.status if p else "available",
-                       _fmt_dt(p.completed_at) if p else "",
+                       _fmt_dt(p.completed_at, event.timezone) if p else "",
                        (p.completed_by_source if p else "") or "",
                        (p.override_reason if p else "") or ""]
 

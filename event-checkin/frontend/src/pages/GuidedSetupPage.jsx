@@ -83,6 +83,7 @@ export default function GuidedSetupPage() {
 
   const [event, setEvent] = useState(null)
   const [rec, setRec] = useState(null)
+  const [rsvpEnabled, setRsvpEnabled] = useState(false)
   const [progress, setProgress] = useState({})
   const [openStep, setOpenStep] = useState('team')
   const [loading, setLoading] = useState(true)
@@ -102,6 +103,7 @@ export default function GuidedSetupPage() {
       const ev = events.find((e) => e.id === eventId)
       if (!ev) throw new Error('Event not found')
       setEvent(ev)
+      setRsvpEnabled(!!ev.rsvp_enabled)
       const [r, p] = await Promise.all([
         api.getSetupRecommendations(ev.event_type || ''),
         api.getSetupProgress(eventId),
@@ -138,7 +140,7 @@ export default function GuidedSetupPage() {
     return <div className="min-h-screen flex items-center justify-center text-sm text-red-600">{loadErr || 'Event not found'}</div>
   }
 
-  const stepProps = { event, rec, progress, markStep, openStep, setOpenStep, initialSuggest }
+  const stepProps = { event, rec, progress, markStep, openStep, setOpenStep, initialSuggest, rsvpEnabled, setRsvpEnabled }
 
   return (
     <div className="min-h-screen bg-slate-50 px-4 py-10 dark:bg-slate-950">
@@ -265,8 +267,9 @@ function MessagingStep({ event, progress, markStep, openStep, setOpenStep }) {
 }
 
 // ── 3. RSVP Questions ─────────────────────────────────────────────────────
-function RsvpQuestionsStep({ event, rec, progress, markStep, openStep, setOpenStep }) {
+function RsvpQuestionsStep({ event, rec, progress, markStep, openStep, setOpenStep, rsvpEnabled, setRsvpEnabled }) {
   const [selected, setSelected] = useState(() => new Set(rec?.rsvp_question_presets || []))
+  const [customRows, setCustomRows] = useState([])
   const [busy, setBusy] = useState(false)
   const [err, setErr] = useState('')
 
@@ -278,21 +281,41 @@ function RsvpQuestionsStep({ event, rec, progress, markStep, openStep, setOpenSt
     })
   }
 
+  function addCustomRow() {
+    setCustomRows((r) => [...r, { question: '', is_required: false }])
+  }
+  function updateCustomRow(i, key, value) {
+    setCustomRows((r) => r.map((row, idx) => idx === i ? { ...row, [key]: value } : row))
+  }
+  function removeCustomRow(i) {
+    setCustomRows((r) => r.filter((_, idx) => idx !== i))
+  }
+
   async function save() {
     setBusy(true); setErr('')
     try {
-      let order = 0
-      for (const preset of RSVP_QUESTION_PRESETS) {
-        if (!selected.has(preset.label)) continue
-        await api.createRSVPQuestion(event.id, {
-          question: preset.question,
-          question_type: preset.question_type,
-          is_required: preset.is_required,
-          sort_order: order++,
-          options: preset.question_type === 'select' && preset.options
-            ? JSON.stringify(preset.options.split(',').map((s) => s.trim()).filter(Boolean))
-            : null,
-        })
+      await api.updateInviteSettings(event.id, { rsvp_enabled: rsvpEnabled })
+      if (rsvpEnabled) {
+        let order = 0
+        for (const preset of RSVP_QUESTION_PRESETS) {
+          if (!selected.has(preset.label)) continue
+          await api.createRSVPQuestion(event.id, {
+            question: preset.question,
+            question_type: preset.question_type,
+            is_required: preset.is_required,
+            sort_order: order++,
+            options: preset.question_type === 'select' && preset.options
+              ? JSON.stringify(preset.options.split(',').map((s) => s.trim()).filter(Boolean))
+              : null,
+          })
+        }
+        for (const row of customRows) {
+          if (!row.question.trim()) continue
+          await api.createRSVPQuestion(event.id, {
+            question: row.question.trim(), question_type: 'text', is_required: row.is_required,
+            sort_order: order++, options: null,
+          })
+        }
       }
       markStep('rsvp_questions', 'completed')
     } catch (e) {
@@ -303,25 +326,54 @@ function RsvpQuestionsStep({ event, rec, progress, markStep, openStep, setOpenSt
   }
 
   return (
-    <StepShell stepKey="rsvp_questions" title="RSVP questions" subtitle="Add common questions to your RSVP form"
+    <StepShell stepKey="rsvp_questions" title="RSVP" subtitle="Are guests RSVPing through Festio, or do you already have your guest list?"
       status={progress.rsvp_questions} open={openStep === 'rsvp_questions'} onToggle={() => setOpenStep(openStep === 'rsvp_questions' ? '' : 'rsvp_questions')}
       recommended={(rec?.rsvp_question_presets || []).length > 0}>
-      <div className="grid gap-2 sm:grid-cols-2">
-        {RSVP_QUESTION_PRESETS.map((p) => (
-          <label key={p.label} className="inline-flex items-center gap-2 rounded-lg border border-slate-200 px-3 py-2 text-sm dark:border-slate-700 dark:text-slate-200">
-            <input type="checkbox" checked={selected.has(p.label)} onChange={() => toggle(p.label)} />
-            {p.label}
-          </label>
-        ))}
+      <div className="grid gap-3 sm:grid-cols-2">
+        <button type="button" onClick={() => setRsvpEnabled(false)}
+          className={`rounded-xl border-2 p-4 text-left transition-colors ${!rsvpEnabled ? 'border-teal-500 bg-teal-50 dark:bg-teal-900/20' : 'border-slate-200 dark:border-slate-700'}`}>
+          <div className="flex items-center gap-2 text-sm font-bold dark:text-white">{!rsvpEnabled && <span className="text-teal-600">✓</span>} Skip RSVP</div>
+          <div className="mt-1 text-xs text-slate-500 dark:text-slate-400">You already have your guest list (e.g. from another platform) — send everyone their QR ticket straight away, no confirmation needed.</div>
+        </button>
+        <button type="button" onClick={() => setRsvpEnabled(true)}
+          className={`rounded-xl border-2 p-4 text-left transition-colors ${rsvpEnabled ? 'border-teal-500 bg-teal-50 dark:bg-teal-900/20' : 'border-slate-200 dark:border-slate-700'}`}>
+          <div className="flex items-center gap-2 text-sm font-bold dark:text-white">{rsvpEnabled && <span className="text-teal-600">✓</span>} With RSVP</div>
+          <div className="mt-1 text-xs text-slate-500 dark:text-slate-400">Ask guests to confirm through Festio first. Adds an RSVP form to the invite page, with whatever questions you add below.</div>
+        </button>
       </div>
+
+      {rsvpEnabled && (
+        <>
+          <div className="mt-4 grid gap-2 sm:grid-cols-2">
+            {RSVP_QUESTION_PRESETS.map((p) => (
+              <label key={p.label} className="inline-flex items-center gap-2 rounded-lg border border-slate-200 px-3 py-2 text-sm dark:border-slate-700 dark:text-slate-200">
+                <input type="checkbox" checked={selected.has(p.label)} onChange={() => toggle(p.label)} />
+                {p.label}
+              </label>
+            ))}
+          </div>
+          <div className="mt-3 space-y-2">
+            {customRows.map((row, i) => (
+              <div key={i} className="flex items-center gap-2">
+                <input className={input('flex-1')} placeholder="Your own question" value={row.question} onChange={(e) => updateCustomRow(i, 'question', e.target.value)} />
+                <label className="inline-flex items-center gap-1 whitespace-nowrap text-xs text-slate-500 dark:text-slate-400">
+                  <input type="checkbox" checked={row.is_required} onChange={(e) => updateCustomRow(i, 'is_required', e.target.checked)} /> Required
+                </label>
+                <button type="button" onClick={() => removeCustomRow(i)} className="text-xs text-red-500">Remove</button>
+              </div>
+            ))}
+            <button type="button" onClick={addCustomRow} className="text-xs font-bold text-teal-700 dark:text-teal-300">+ Add your own question</button>
+          </div>
+        </>
+      )}
       {err && <p className="mt-2 text-xs font-semibold text-red-600">{err}</p>}
-      <StepFooter onSkip={() => markStep('rsvp_questions', 'skipped')} onSave={save} saving={busy} canSave={selected.size > 0} />
+      <StepFooter onSkip={() => markStep('rsvp_questions', 'skipped')} onSave={save} saving={busy} saveLabel={rsvpEnabled ? 'Save & continue' : 'Continue'} />
     </StepShell>
   )
 }
 
 // ── 4. Multi-invitee ──────────────────────────────────────────────────────
-function MultiInviteeStep({ event, rec, progress, markStep, openStep, setOpenStep }) {
+function MultiInviteeStep({ event, rec, progress, markStep, openStep, setOpenStep, rsvpEnabled }) {
   const [rows, setRows] = useState([{ category_name: '', limit: 1, submitter_table_category: '', invitee_table_category: '' }])
   const [busy, setBusy] = useState(false)
   const [err, setErr] = useState('')
@@ -358,21 +410,30 @@ function MultiInviteeStep({ event, rec, progress, markStep, openStep, setOpenSte
   return (
     <StepShell stepKey="multi_invitee" title="Let submitters register a group" subtitle="Optional: one RSVP can bring additional guests, with per-category limits"
       status={progress.multi_invitee} open={openStep === 'multi_invitee'} onToggle={() => setOpenStep(openStep === 'multi_invitee' ? '' : 'multi_invitee')}
-      recommended={rec?.multi_invitee_common === 'suggest'}>
-      <div className="space-y-2">
-        {rows.map((row, i) => (
-          <div key={i} className="grid grid-cols-1 gap-2 sm:grid-cols-[2fr_1fr_1fr_1fr_auto] items-center">
-            <input className={input()} placeholder="Category (e.g. Parent/guardian)" value={row.category_name} onChange={(e) => updateRow(i, 'category_name', e.target.value)} />
-            <input className={input()} type="number" min="0" placeholder="Max invitees" value={row.limit} onChange={(e) => updateRow(i, 'limit', e.target.value)} />
-            <input className={input()} placeholder="Submitter table cat. (optional)" value={row.submitter_table_category} onChange={(e) => updateRow(i, 'submitter_table_category', e.target.value)} />
-            <input className={input()} placeholder="Invitee table cat. (optional)" value={row.invitee_table_category} onChange={(e) => updateRow(i, 'invitee_table_category', e.target.value)} />
-            {rows.length > 1 && <button type="button" onClick={() => removeRow(i)} className="text-xs text-red-500">Remove</button>}
+      recommended={rsvpEnabled && rec?.multi_invitee_common === 'suggest'}>
+      {!rsvpEnabled ? (
+        <>
+          <p className="text-sm text-slate-500 dark:text-slate-400">This only applies when guests RSVP through Festio — you chose to skip RSVP in the previous step, so there's nothing to set up here.</p>
+          <button type="button" onClick={() => markStep('multi_invitee', 'skipped')} className="mt-4 rounded-lg bg-teal-600 px-4 py-2 text-xs font-black text-white hover:bg-teal-700">Continue</button>
+        </>
+      ) : (
+        <>
+          <div className="space-y-2">
+            {rows.map((row, i) => (
+              <div key={i} className="grid grid-cols-1 gap-2 sm:grid-cols-[2fr_1fr_1fr_1fr_auto] items-center">
+                <input className={input()} placeholder="Category (e.g. Parent/guardian)" value={row.category_name} onChange={(e) => updateRow(i, 'category_name', e.target.value)} />
+                <input className={input()} type="number" min="0" placeholder="Max invitees" value={row.limit} onChange={(e) => updateRow(i, 'limit', e.target.value)} />
+                <input className={input()} placeholder="Submitter table cat. (optional)" value={row.submitter_table_category} onChange={(e) => updateRow(i, 'submitter_table_category', e.target.value)} />
+                <input className={input()} placeholder="Invitee table cat. (optional)" value={row.invitee_table_category} onChange={(e) => updateRow(i, 'invitee_table_category', e.target.value)} />
+                {rows.length > 1 && <button type="button" onClick={() => removeRow(i)} className="text-xs text-red-500">Remove</button>}
+              </div>
+            ))}
+            <button type="button" onClick={addRow} className="text-xs font-bold text-teal-700 dark:text-teal-300">+ Add category</button>
           </div>
-        ))}
-        <button type="button" onClick={addRow} className="text-xs font-bold text-teal-700 dark:text-teal-300">+ Add category</button>
-      </div>
-      {err && <p className="mt-2 text-xs font-semibold text-red-600">{err}</p>}
-      <StepFooter onSkip={() => markStep('multi_invitee', 'skipped')} onSave={save} saving={busy} />
+          {err && <p className="mt-2 text-xs font-semibold text-red-600">{err}</p>}
+          <StepFooter onSkip={() => markStep('multi_invitee', 'skipped')} onSave={save} saving={busy} />
+        </>
+      )}
     </StepShell>
   )
 }
@@ -494,6 +555,7 @@ function MenuStep({ event, progress, markStep, openStep, setOpenStep }) {
 // ── 7. Gift Registry ──────────────────────────────────────────────────────
 function RegistryStep({ event, rec, progress, markStep, openStep, setOpenStep }) {
   const [selected, setSelected] = useState(new Set())
+  const [customRows, setCustomRows] = useState([])
   const [busy, setBusy] = useState(false)
   const [err, setErr] = useState('')
   const [requiredPlan, setRequiredPlan] = useState('')
@@ -506,6 +568,16 @@ function RegistryStep({ event, rec, progress, markStep, openStep, setOpenStep })
     })
   }
 
+  function addCustomRow() {
+    setCustomRows((r) => [...r, { title: '', kind: 'item', description: '' }])
+  }
+  function updateCustomRow(i, key, value) {
+    setCustomRows((r) => r.map((row, idx) => idx === i ? { ...row, [key]: value } : row))
+  }
+  function removeCustomRow(i) {
+    setCustomRows((r) => r.filter((_, idx) => idx !== i))
+  }
+
   async function save() {
     setBusy(true); setErr(''); setRequiredPlan('')
     try {
@@ -513,6 +585,13 @@ function RegistryStep({ event, rec, progress, markStep, openStep, setOpenStep })
         if (!selected.has(preset.label)) continue
         await api.createRegistryItem(event.id, {
           kind: preset.kind, title: preset.title, description: preset.description,
+          currency: 'USD', quantity_wanted: 1,
+        })
+      }
+      for (const row of customRows) {
+        if (!row.title.trim()) continue
+        await api.createRegistryItem(event.id, {
+          kind: row.kind, title: row.title.trim(), description: row.description.trim() || null,
           currency: 'USD', quantity_wanted: 1,
         })
       }
@@ -540,8 +619,23 @@ function RegistryStep({ event, rec, progress, markStep, openStep, setOpenStep })
               </label>
             ))}
           </div>
+          <div className="mt-3 space-y-2">
+            {customRows.map((row, i) => (
+              <div key={i} className="grid grid-cols-1 gap-2 sm:grid-cols-[1fr_1fr_2fr_auto] items-center">
+                <input className={input()} placeholder="Item name" value={row.title} onChange={(e) => updateCustomRow(i, 'title', e.target.value)} />
+                <select className={input()} value={row.kind} onChange={(e) => updateCustomRow(i, 'kind', e.target.value)}>
+                  <option value="item">Item</option>
+                  <option value="fund">Cash fund</option>
+                  <option value="link">Store link</option>
+                </select>
+                <input className={input()} placeholder="Description (optional)" value={row.description} onChange={(e) => updateCustomRow(i, 'description', e.target.value)} />
+                <button type="button" onClick={() => removeCustomRow(i)} className="text-xs text-red-500">Remove</button>
+              </div>
+            ))}
+            <button type="button" onClick={addCustomRow} className="text-xs font-bold text-teal-700 dark:text-teal-300">+ Add your own item</button>
+          </div>
           {err && <p className="mt-2 text-xs font-semibold text-red-600">{err}</p>}
-          <StepFooter onSkip={() => markStep('registry', 'skipped')} onSave={save} saving={busy} canSave={selected.size > 0} />
+          <StepFooter onSkip={() => markStep('registry', 'skipped')} onSave={save} saving={busy} canSave={selected.size > 0 || customRows.some((r) => r.title.trim())} />
         </>
       )}
     </StepShell>

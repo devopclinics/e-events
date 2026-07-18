@@ -200,7 +200,7 @@ async def tick(db: AsyncSession, *, now: datetime | None = None) -> dict[str, in
                     title, body = notice
                     await _write_in_hub_announcement(event, step, title, body, db)
                     if event.festiome_addon_enabled and event.festiome_enabled:
-                        queue_announcement(
+                        await queue_announcement(
                             db, event_id=event.id, title=title, body=body, kind="program",
                             source_ref=f"program-segment:{step.id}",
                         )
@@ -221,7 +221,7 @@ async def tick(db: AsyncSession, *, now: datetime | None = None) -> dict[str, in
                     feedback_body = "Your feedback is now open in FestioHub. It only takes a moment."
                     await _write_in_hub_announcement(event, step, feedback_title, feedback_body, db)
                     if event.festiome_addon_enabled and event.festiome_enabled:
-                        queue_announcement(
+                        await queue_announcement(
                             db, event_id=event.id, title=feedback_title, body=feedback_body,
                             kind="program_feedback", source_ref=f"program-feedback:{step.id}",
                         )

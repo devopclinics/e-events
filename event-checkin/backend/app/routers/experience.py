@@ -1320,7 +1320,7 @@ async def publish(
     if existing_published:
         raise HTTPException(409, f"Unpublish '{existing_published.name}' before publishing another workflow")
     published = await publish_workflow(workflow, event, db, actor_user_id=current_user.id)
-    queue_announcement(
+    await queue_announcement(
         db,
         event_id=event_id,
         title="Experience updated",

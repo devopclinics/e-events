@@ -1,6 +1,7 @@
 from datetime import datetime
 
 from sqlalchemy import select
+from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -514,7 +515,10 @@ async def initialize_progress(event_id: str, workflow_id: str, db: AsyncSession)
         )
     )).scalars().all())
     now = datetime.utcnow()
+    to_insert: list[dict] = []
     for guest in guests:
+        # In-memory only (never added to the session) — dependencies_satisfied
+        # just needs prior steps' computed status within this same pass.
         progress_by_step_id: dict[str, GuestExperienceProgress] = {}
         steps = sorted(workflow.steps, key=lambda s: (s.sort_order, s.title))
         steps_by_key_or_id = {value: step for step in steps for value in (step.id, step.key)}
@@ -559,8 +563,26 @@ async def initialize_progress(event_id: str, workflow_id: str, db: AsyncSession)
                 completed_by_source=completed_by_source,
                 progress_metadata=metadata,
             )
-            db.add(progress)
             progress_by_step_id[step.id] = progress
+            to_insert.append({
+                "event_id": event_id,
+                "workflow_id": workflow_id,
+                "step_id": step.id,
+                "guest_id": guest.id,
+                "status": status,
+                "completed_at": completed_at,
+                "completed_by_source": completed_by_source,
+                "progress_metadata": metadata,
+            })
+
+    if to_insert:
+        # A concurrent call (double-click, client retry) can compute the same
+        # rows before either commits — ON CONFLICT DO NOTHING makes a retried
+        # publish a safe no-op instead of an unhandled UniqueViolationError.
+        stmt = pg_insert(GuestExperienceProgress).values(to_insert).on_conflict_do_nothing(
+            index_elements=["guest_id", "step_id"]
+        )
+        await db.execute(stmt)
 
 
 async def sync_guest_progress(

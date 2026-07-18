@@ -300,7 +300,7 @@ async def publish_festiome_announcement(
     if not event:
         raise HTTPException(404, "Event not found")
     _require_festiome_addon(event)
-    row = queue_announcement(
+    row = await queue_announcement(
         db, event_id=event_id, title=data.title.strip(), body=data.body.strip(),
         kind=data.kind, urgent=data.urgent,
     )

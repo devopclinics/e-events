@@ -25,7 +25,10 @@ from app.models import (
     Zone,
     ZoneTagRule,
 )
+from app.services import experience as experience_service
 from app.services import program as program_service
+from app.services.festiome_outbox import queue_announcement
+from app.models import FestioMeOutbox, GuestExperienceProgress
 from app.timeutil import to_event_local
 
 
@@ -1655,3 +1658,54 @@ async def test_live_program_opens_and_closes_linked_feedback_window(ctx):
         later = now + timedelta(seconds=121)
         assert (await program_service.tick(s, now=later))["feedback_closed"] == 1
         assert (await program_service.feedback_availability(event, active, s, feedback.id, now=later))["open"] is False
+
+
+async def test_republishing_does_not_crash_on_duplicate_progress_or_outbox_rows(ctx):
+    """Regression test: a retried/double-submitted publish call used to crash
+    with an unhandled UniqueViolationError instead of no-oping, because
+    initialize_progress() and queue_announcement() inserted rows without a
+    conflict guard. This hit production for Women's Convention 2026 — a
+    retried publish left guests unable to load Experience content (404s)
+    for ~1.5 days until the workflow's state happened to settle."""
+    ctx.login(ctx.ids["user_a"])
+    event_id = ctx.ids["event_a"]
+    created = await ctx.client.post(f"/api/events/{event_id}/experience/workflows", json={
+        "name": "Idempotent Publish Journey",
+        "steps": [{"key": "checkin", "type": "check_in", "title": "Check in"}],
+    })
+    assert created.status_code == 201
+    workflow_id = created.json()["id"]
+    publish = await ctx.client.post(f"/api/events/{event_id}/experience/workflows/{workflow_id}/publish")
+    assert publish.status_code == 200
+
+    async with _Session() as s:
+        # Simulates the race: a second concurrent/retried call computing the
+        # exact same rows the first call already committed. Must not raise.
+        await experience_service.initialize_progress(event_id, workflow_id, s)
+        await s.commit()
+        await queue_announcement(
+            s, event_id=event_id, title="Experience updated", body="dup",
+            kind="experience", source_ref=f"workflow-published:{workflow_id}:v1",
+        )
+        await queue_announcement(
+            s, event_id=event_id, title="Experience updated", body="dup",
+            kind="experience", source_ref=f"workflow-published:{workflow_id}:v1",
+        )
+        await s.commit()
+
+        # No duplicate outbox row despite two identical queue_announcement calls.
+        outbox_count = (await s.execute(
+            select(func.count(FestioMeOutbox.id)).where(
+                FestioMeOutbox.idempotency_key == f"announcement:{event_id}:workflow-published:{workflow_id}:v1"
+            )
+        )).scalar()
+        assert outbox_count == 1
+        # No duplicate (guest_id, step_id) progress rows despite the repeated
+        # initialize_progress() call recomputing the same pairs.
+        dupes = (await s.execute(
+            select(GuestExperienceProgress.guest_id, GuestExperienceProgress.step_id, func.count())
+            .where(GuestExperienceProgress.workflow_id == workflow_id)
+            .group_by(GuestExperienceProgress.guest_id, GuestExperienceProgress.step_id)
+            .having(func.count() > 1)
+        )).all()
+        assert dupes == []

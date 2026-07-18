@@ -303,7 +303,7 @@ async def update_event(
     if event.event_date != previous_date or event.venue_name != previous_venue:
         when = event.event_date.strftime("%A, %B %d at %I:%M %p")
         venue = f" at {event.venue_name}" if event.venue_name else ""
-        queue_announcement(
+        await queue_announcement(
             db,
             event_id=event.id,
             title="Event schedule updated",

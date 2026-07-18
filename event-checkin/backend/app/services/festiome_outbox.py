@@ -7,6 +7,7 @@ from datetime import datetime, timedelta
 from typing import Any
 
 from sqlalchemy import select
+from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..database import AsyncSessionLocal
@@ -67,18 +68,34 @@ def queue_guest_remove(db: AsyncSession, *, event_id: str, guest_id: str) -> Non
     ))
 
 
-def queue_announcement(
+async def queue_announcement(
     db: AsyncSession, *, event_id: str, title: str, body: str,
     kind: str = "event", urgent: bool = False, source_ref: str | None = None,
 ) -> FestioMeOutbox:
+    """Queue a FestioMe announcement, idempotently.
+
+    Callers that pass a request-scoped (not time-unique) source_ref — e.g. a
+    workflow-publish event that may legitimately be retried by the client
+    after a timeout, or double-submitted by a double-click — can otherwise
+    race two concurrent inserts into the same idempotency_key and crash with
+    an unhandled UniqueViolationError. ON CONFLICT DO NOTHING makes a repeat
+    call a safe no-op instead, matching what an idempotency key is for.
+    """
     source = source_ref or f"manual:{datetime.utcnow().isoformat(timespec='microseconds')}"
+    idempotency_key = f"announcement:{event_id}:{source}"
     row = FestioMeOutbox(
         event_id=event_id,
         command="announcement.publish",
-        idempotency_key=f"announcement:{event_id}:{source}",
+        idempotency_key=idempotency_key,
         payload={"title": title, "body": body, "kind": kind, "urgent": urgent, "source_ref": source},
     )
-    db.add(row)
+    stmt = pg_insert(FestioMeOutbox).values(
+        event_id=event_id,
+        command="announcement.publish",
+        idempotency_key=idempotency_key,
+        payload=row.payload,
+    ).on_conflict_do_nothing(index_elements=["idempotency_key"])
+    await db.execute(stmt)
     return row
 
 

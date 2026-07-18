@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useMemo, useRef, useState } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import { api, PUBLIC_BASE_URL } from '../api'
 import { useCurrentEvent } from '../hooks/useCurrentEvent'
@@ -81,6 +81,12 @@ export default function SetupWizardPage() {
   })
   const [channels, setChannels] = useState({ email: true, sms: false, whatsapp: false })
   const [features, setFeatures] = useState({})
+  // "Spans multiple days" composes with any event_type (a 3-day wedding is
+  // still a Wedding) rather than being its own type — Conference/seminar
+  // pre-checks it by default since that's the common case there.
+  const [spansMultipleDays, setSpansMultipleDays] = useState(false)
+  const [eventEndDate, setEventEndDate] = useState('')
+  const spansMultipleDaysTouched = useRef(false)
 
   const rec = useMemo(
     () => recommendedPlan(form.guest_count, channels, features),
@@ -92,28 +98,61 @@ export default function SetupWizardPage() {
     setForm((current) => ({ ...current, [key]: value }))
   }
 
+  function selectEventType(newType) {
+    setField('event_type', newType)
+    // Pre-check "spans multiple days" for types where it's the common case;
+    // never override an explicit user choice on re-selecting the type.
+    if (!spansMultipleDaysTouched.current) {
+      setSpansMultipleDays(newType === 'Conference / seminar')
+    }
+  }
+
   function toggleFeature(key) {
     setFeatures((current) => ({ ...current, [key]: !current[key] }))
   }
 
+  // Wizard feature keys → real Event *_enabled column names, for the
+  // "suggested features" handoff into the guided setup flow.
+  const FEATURE_TO_COLUMN = {
+    seating: 'seating_enabled',
+    menu: 'menu_enabled',
+    access: 'venue_access_enabled',
+    logistics: 'logistics_enabled',
+    registry: 'registry_enabled',
+    experience: 'experience_enabled',
+  }
+
   async function submit(e) {
     e.preventDefault()
-    setBusy(true); setErr('')
+    setErr('')
+    if (spansMultipleDays) {
+      const startUtc = zonedWallTimeToUtcISOString(form.event_date, form.timezone)
+      const endUtc = eventEndDate ? zonedWallTimeToUtcISOString(eventEndDate, form.timezone) : null
+      if (!endUtc || new Date(endUtc) < new Date(startUtc)) {
+        setErr('End date must be on or after the start date.')
+        return
+      }
+    }
+    setBusy(true)
     try {
       const event = await api.createEvent({
         name: form.name.trim(),
         couples_name: form.host_name.trim(),
         event_type: form.event_type || null,
         event_date: zonedWallTimeToUtcISOString(form.event_date, form.timezone),
+        event_end_date: spansMultipleDays ? zonedWallTimeToUtcISOString(eventEndDate, form.timezone) : null,
         timezone: form.timezone,
         description: '',
         checkin_base_url: PUBLIC_BASE_URL,
         venue_name: form.venue_name.trim() || null,
         venue_address: form.venue_address.trim() || null,
+        notify_sms: channels.sms,
+        notify_whatsapp: channels.whatsapp,
       })
       await api.setBillingCurrency(event.id, form.currency)
       setCurrentEvent(event.id)
-      navigate(`/admin?recommended=${encodeURIComponent(displayedPlan)}`, { replace: true })
+      const suggestKeys = Object.keys(features).filter((k) => features[k] && FEATURE_TO_COLUMN[k]).map((k) => FEATURE_TO_COLUMN[k])
+      navigate(`/setup/guided?event=${event.id}&recommended=${encodeURIComponent(displayedPlan)}&suggest=${encodeURIComponent(suggestKeys.join(','))}`, { replace: true })
     } catch (e) {
       setErr(e.message)
     } finally {
@@ -140,7 +179,7 @@ export default function SetupWizardPage() {
             </label>
             <label>
               <span className="mb-1 block text-xs font-bold text-slate-500 dark:text-slate-400">Event type</span>
-              <select className={input} value={form.event_type} onChange={(e) => setField('event_type', e.target.value)} required>
+              <select className={input} value={form.event_type} onChange={(e) => selectEventType(e.target.value)} required>
                 <option value="" disabled>Select event type…</option>
                 {[
                   'Wedding', 'Nikkah / Aqd', 'Graduation ceremony', 'Birthday party',
@@ -186,6 +225,22 @@ export default function SetupWizardPage() {
               </select>
             </label>
           </div>
+
+          <section className="mt-6">
+            <label className="inline-flex items-center gap-2 text-sm font-semibold text-slate-700 dark:text-slate-200">
+              <input type="checkbox" checked={spansMultipleDays} onChange={(e) => {
+                spansMultipleDaysTouched.current = true
+                setSpansMultipleDays(e.target.checked)
+              }} />
+              This event spans multiple days
+            </label>
+            {spansMultipleDays && (
+              <label className="mt-3 block max-w-xs">
+                <span className="mb-1 block text-xs font-bold text-slate-500 dark:text-slate-400">End date and time</span>
+                <input className={input} type="datetime-local" value={eventEndDate} onChange={(e) => setEventEndDate(e.target.value)} required={spansMultipleDays} />
+              </label>
+            )}
+          </section>
 
           <section className="mt-6">
             <h2 className="text-sm font-black text-slate-950 dark:text-white">Messaging channels needed</h2>

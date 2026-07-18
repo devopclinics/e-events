@@ -116,6 +116,10 @@ class Event(Base):
     # from a preset list at creation; nullable for pre-existing events.
     event_type: Mapped[str | None] = mapped_column(String(80), nullable=True)
     event_date: Mapped[datetime] = mapped_column(DateTime)
+    # Optional end date/time for events that span multiple days (e.g. a 3-day
+    # conference or a wedding weekend). NULL for the vast majority of (single-day)
+    # events; when set, event_date is treated as the start of the range.
+    event_end_date: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     # IANA timezone (e.g. "Europe/Zurich") the event runs in. Nullable for events
     # created before this field existed; those need a one-time backfill and fall
     # back to UTC for server-rendered times until set.

@@ -64,3 +64,23 @@ export function utcToZonedInput(value, timeZone) {
   const parts = Object.fromEntries(fmt.formatToParts(d).map((p) => [p.type, p.value]))
   return `${parts.year}-${parts.month}-${parts.day}T${parts.hour}:${parts.minute}`
 }
+
+// Format an event's date for display, collapsing to today's familiar
+// single-date string unless `endIso` is set AND lands on a different
+// calendar day (in `timeZone`) than `startIso` — in which case it renders a
+// compact range. Safe to call for the ~100% of events with no end date.
+export function fmtEventDateRange(startIso, endIso, timeZone, opts = {}) {
+  const start = parseUtc(startIso)
+  if (!start) return ''
+  const dateOpts = { month: 'long', day: 'numeric', year: 'numeric', ...(timeZone && { timeZone }) }
+  const single = () => start.toLocaleDateString(undefined, dateOpts)
+  const end = parseUtc(endIso)
+  if (!end) return single()
+  const dayKey = (d) => new Intl.DateTimeFormat('en-CA', { ...(timeZone && { timeZone }) }).format(d)
+  if (dayKey(start) === dayKey(end)) return single()
+  const shortOpts = { month: 'short', day: 'numeric', ...(timeZone && { timeZone }) }
+  const sameYear = start.getUTCFullYear() === end.getUTCFullYear()
+  const startLabel = start.toLocaleDateString(undefined, sameYear ? shortOpts : { ...shortOpts, year: 'numeric' })
+  const endLabel = end.toLocaleDateString(undefined, opts.short ? shortOpts : dateOpts)
+  return `${startLabel} – ${endLabel}`
+}

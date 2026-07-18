@@ -3604,7 +3604,7 @@ const RSVP_QUESTION_TYPES = [
   { value: 'boolean', label: 'Yes / No' },
 ]
 
-const RSVP_QUESTION_PRESETS = [
+export const RSVP_QUESTION_PRESETS = [
   { label: 'Dietary restriction', question: 'Do you have any dietary restrictions?', question_type: 'text', options: '', is_required: false },
   { label: 'Meal choice', question: 'Please choose your meal', question_type: 'select', options: 'Chicken, Fish, Vegetarian, No meal', is_required: true },
   { label: 'Plus-one', question: 'Will you be bringing a plus-one?', question_type: 'boolean', options: '', is_required: false },
@@ -5138,7 +5138,7 @@ function normalizeRoomAssignmentConfig(config = {}) {
   }
 }
 
-const EXPERIENCE_STEP_PRESETS = [
+export const EXPERIENCE_STEP_PRESETS = [
   {
     key: 'feedback_prompt',
     type: 'feedback',
@@ -5280,7 +5280,7 @@ const EXPERIENCE_STEP_PRESETS = [
   },
 ]
 
-const EXPERIENCE_WORKFLOW_TEMPLATES = [
+export const EXPERIENCE_WORKFLOW_TEMPLATES = [
   {
     id: 'vip_dinner',
     name: 'VIP Dinner Guest Journey',
@@ -5311,7 +5311,7 @@ const EXPERIENCE_WORKFLOW_TEMPLATES = [
   },
 ]
 
-const EXPERIENCE_PRESET_BY_KEY = Object.fromEntries(EXPERIENCE_STEP_PRESETS.map((preset) => [preset.key, preset]))
+export const EXPERIENCE_PRESET_BY_KEY = Object.fromEntries(EXPERIENCE_STEP_PRESETS.map((preset) => [preset.key, preset]))
 
 function listValue(raw) {
   if (!raw) return []
@@ -5354,7 +5354,7 @@ function slugifyKey(value, fallback = 'session') {
   return key || fallback
 }
 
-function experienceStepPayload(preset, sortOrder = 10) {
+export function experienceStepPayload(preset, sortOrder = 10) {
   return {
     key: preset.key,
     type: preset.type,
@@ -7151,10 +7151,21 @@ function TeamPanel({ eventId }) {
   const assignedIds = new Set(members.map((m) => m.user.id))
   const unassigned = orgMembers.map((om) => om.user).filter((u) => !assignedIds.has(u.id))
 
-  async function inviteMember() {
+  async function inviteMember(confirmedNoAccount = false) {
     if (!invite.email.trim()) return
     setLoading(true); setMsg('')
     try {
+      if (!confirmedNoAccount) {
+        // Best-effort pre-check — if the check itself fails (service down,
+        // network), don't block the invite over it; just skip straight to
+        // the normal invite call.
+        const check = await api.checkTeamEmail(invite.email.trim()).catch(() => ({ exists: true }))
+        if (!check.exists) {
+          setInvite((cur) => ({ ...cur, needsConfirmation: true }))
+          setLoading(false)
+          return
+        }
+      }
       await api.inviteOrgMember(eventId, { email: invite.email.trim(), role: invite.role })
       setInvite({ email: '', role: 'staff' })
       loadOrgMembers()
@@ -7428,7 +7439,7 @@ function TeamPanel({ eventId }) {
           <input
             type="email"
             value={invite.email}
-            onChange={(e) => setInvite((p) => ({ ...p, email: e.target.value }))}
+            onChange={(e) => setInvite((p) => ({ ...p, email: e.target.value, needsConfirmation: false }))}
             placeholder="teammate@email.com"
             className="flex-1 min-w-[180px] border border-gray-300 dark:border-slate-700 rounded-lg px-3 py-2 text-sm bg-white dark:bg-slate-700 text-gray-900 dark:text-white"
           />
@@ -7437,11 +7448,20 @@ function TeamPanel({ eventId }) {
             <option value="staff">Staff (scan / day-of)</option>
             <option value="admin">Admin (manage events)</option>
           </select>
-          <button onClick={inviteMember} disabled={loading || !invite.email.trim()}
+          <button onClick={() => inviteMember()} disabled={loading || !invite.email.trim()}
             className="bg-teal-600 text-white px-4 py-2 rounded-lg text-sm font-semibold hover:bg-teal-700 disabled:opacity-50">
             Add teammate
           </button>
         </div>
+        {invite.needsConfirmation && (
+          <div className="rounded-lg border border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-900/30 text-amber-700 dark:text-amber-300 px-3 py-2 text-xs">
+            We don't see an account for this email yet — they'll need to sign up with this exact address before they can access the event.
+            <div className="mt-2 flex gap-3">
+              <button onClick={() => inviteMember(true)} className="font-bold underline">Invite anyway</button>
+              <button onClick={() => setInvite((p) => ({ ...p, needsConfirmation: false }))} className="text-slate-500 dark:text-slate-400">Cancel</button>
+            </div>
+          </div>
+        )}
         <p className="text-xs text-slate-400 dark:text-slate-500">
           They sign in with this email (Google/email) and the account links automatically.
           Staff also need assigning to a specific event above to scan it.
@@ -7470,7 +7490,9 @@ const DETECTED_EVENT_TZ = Intl.DateTimeFormat().resolvedOptions().timeZone || ''
 
 function EventForm({ initial, onSave, onCancel }) {
   const [form, setForm] = useState(
-    initial || { name: '', couples_name: '', event_date: '', timezone: '', description: '', admission_note: '', checkin_base_url: PUBLIC_BASE_URL }
+    initial
+      ? { ...initial, spans_multiple_days: !!initial.event_end_date }
+      : { name: '', couples_name: '', event_date: '', timezone: '', description: '', admission_note: '', checkin_base_url: PUBLIC_BASE_URL, spans_multiple_days: false }
   )
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
@@ -7481,7 +7503,13 @@ function EventForm({ initial, onSave, onCancel }) {
     e.preventDefault()
     setSaving(true); setError('')
     try {
-      await onSave({ ...form, event_date: zonedWallTimeToUtcISOString(form.event_date, form.timezone) })
+      await onSave({
+        ...form,
+        event_date: zonedWallTimeToUtcISOString(form.event_date, form.timezone),
+        event_end_date: form.spans_multiple_days && form.event_end_date
+          ? zonedWallTimeToUtcISOString(form.event_end_date, form.timezone)
+          : null,
+      })
     } catch (err) { setError(err.message) }
     finally { setSaving(false) }
   }
@@ -7511,6 +7539,18 @@ function EventForm({ initial, onSave, onCancel }) {
             {EVENT_TIMEZONES.map((tz) => <option key={tz} value={tz}>{tz}</option>)}
           </select>
         </div>
+        <div className="sm:col-span-2">
+          <label className="inline-flex items-center gap-2 text-xs font-semibold text-gray-600 dark:text-slate-300">
+            <input type="checkbox" checked={!!form.spans_multiple_days} onChange={(e) => setForm((f) => ({ ...f, spans_multiple_days: e.target.checked }))} />
+            This event spans multiple days
+          </label>
+        </div>
+        {form.spans_multiple_days && (
+          <div>
+            <label htmlFor="event-end-date" className="block text-xs font-semibold text-gray-600 mb-1">End date and time *</label>
+            <input id="event-end-date" className={field} type="datetime-local" value={form.event_end_date?.slice(0, 16) || ''} onChange={set('event_end_date')} required />
+          </div>
+        )}
         <div>
           <label htmlFor="event-base-url" className="block text-xs font-semibold text-gray-600 mb-1">App Base URL *</label>
           <input id="event-base-url" className={field} value={form.checkin_base_url} onChange={set('checkin_base_url')} required placeholder="https://festio.events" />
@@ -9130,7 +9170,11 @@ export default function AdminPage() {
           {editing && event && canManageEvent && (
             <div className="mt-4 pt-4 border-t dark:border-slate-700">
               <EventForm
-                initial={{ ...event, event_date: utcToZonedInput(event.event_date, event.timezone) }}
+                initial={{
+                  ...event,
+                  event_date: utcToZonedInput(event.event_date, event.timezone),
+                  event_end_date: event.event_end_date ? utcToZonedInput(event.event_end_date, event.timezone) : '',
+                }}
                 onSave={handleUpdate}
                 onCancel={() => setEditing(false)}
               />

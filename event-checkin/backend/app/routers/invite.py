@@ -187,6 +187,7 @@ async def _invite_page_out(event: Event, db: AsyncSession) -> InvitePageOut:
         name=event.name,
         couples_name=event.couples_name,
         event_date=event.event_date,
+        event_end_date=event.event_end_date,
         timezone=event.timezone,
         description=event.description,
         venue_name=event.venue_name,

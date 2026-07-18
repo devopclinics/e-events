@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
 import { api } from '../api'
-import { parseUtc } from '../timeutil'
+import { parseUtc, fmtEventDateRange } from '../timeutil'
 import { auth } from '../firebase'
 import { useCurrentEvent } from '../hooks/useCurrentEvent'
 
@@ -285,7 +285,9 @@ export default function DashboardPage() {
       {event && (
         <div className="bg-gradient-to-br from-teal-600 to-cyan-700 text-white rounded-2xl px-6 py-5">
           <div className="text-xl font-bold">{event.name}</div>
-          <div className="text-white/80 text-sm mt-0.5">{event.couples_name ? `${event.couples_name} · ` : ''}{parseUtc(event.event_date)?.toLocaleDateString(undefined, { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric', ...(event.timezone && { timeZone: event.timezone }) })}</div>
+          <div className="text-white/80 text-sm mt-0.5">{event.couples_name ? `${event.couples_name} · ` : ''}{event.event_end_date
+            ? fmtEventDateRange(event.event_date, event.event_end_date, event.timezone)
+            : parseUtc(event.event_date)?.toLocaleDateString(undefined, { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric', ...(event.timezone && { timeZone: event.timezone }) })}</div>
         </div>
       )}
 

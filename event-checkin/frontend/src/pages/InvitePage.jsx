@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from 'react'
 import { useParams } from 'react-router-dom'
 import { api } from '../api'
-import { parseUtc } from '../timeutil'
+import { parseUtc, fmtEventDateRange } from '../timeutil'
 
 // Format a phone as an international number, defaulting to Nigeria (+234).
 // Already-international numbers (starting with +) are kept as-is.
@@ -1847,7 +1847,9 @@ export default function InvitePage() {
   const atCapacity = event.rsvp_capacity != null && event.rsvp_count >= event.rsvp_capacity
   const deadlinePassed = !!event.deadline_passed
   const title = dWording.eventTitle || eventTitle(event)
-  const dateLabel = dWording.date || fmtDate(event.event_date, event.timezone)
+  const dateLabel = dWording.date || (event.event_end_date
+    ? fmtEventDateRange(event.event_date, event.event_end_date, event.timezone)
+    : fmtDate(event.event_date, event.timezone))
   const timeLabel = dWording.time || fmtTime(event.event_date, event.timezone)
   const venue = [dWording.venue, dWording.address].filter(Boolean).join(' · ') || venueText(event)
   const host = dWording.hostName || hostText(event)

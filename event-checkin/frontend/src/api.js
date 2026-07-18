@@ -838,4 +838,15 @@ export const api = {
     req('POST', `/events/${eventId}/festiome/groups/${groupId}/join-requests/${requestId}/approve`, data || {}),
   festiomeManageDenyJoin: (eventId, groupId, requestId) =>
     req('POST', `/events/${eventId}/festiome/groups/${groupId}/join-requests/${requestId}/deny`),
+
+  // Guided event setup (setup-service — orchestrates bulk/structured operations
+  // against backend's own gated endpoints; see setup-service/app/main.py).
+  bulkCreateTables: (eventId, groups) => req('POST', `/setup/${eventId}/tables/bulk`, { groups }),
+  addTablesToGroup: (eventId, body) => req('PATCH', `/setup/${eventId}/tables/bulk`, body),
+  setMultiInviteeRules: (eventId, rules) => req('PUT', `/setup/${eventId}/multi-invitee`, { rules }),
+  bulkImportProgram: (eventId, workflowId, items) => req('POST', `/setup/${eventId}/program/bulk`, { workflow_id: workflowId, items }),
+  checkTeamEmail: (email) => req('POST', `/setup/team/check-email`, { email }),
+  getSetupRecommendations: (eventType) => req('GET', `/setup/recommendations?event_type=${encodeURIComponent(eventType || '')}`),
+  getSetupProgress: (eventId) => req('GET', `/setup/progress?event_id=${eventId}`),
+  setSetupProgress: (eventId, stepKey, status) => req('POST', `/setup/progress`, { event_id: eventId, step_key: stepKey, status }),
 }

@@ -18,6 +18,7 @@ import RegistryPage from './pages/RegistryPage'
 import FloorPlanPage from './pages/FloorPlanPage'
 import PricingPage from './pages/PricingPage'
 import SetupWizardPage from './pages/SetupWizardPage'
+import GuidedSetupPage from './pages/GuidedSetupPage'
 import RefundPolicyPage from './pages/RefundPolicyPage'
 import PrivacyPage from './pages/PrivacyPage'
 import TermsPage from './pages/TermsPage'
@@ -311,6 +312,7 @@ function AppRoutes() {
             <Routes>
               <Route path="/admin" element={<ProtectedRoute><AdminPage /></ProtectedRoute>} />
               <Route path="/setup" element={<ProtectedRoute setupOnly><SetupWizardPage /></ProtectedRoute>} />
+              <Route path="/setup/guided" element={<ProtectedRoute setupOnly><GuidedSetupPage /></ProtectedRoute>} />
               <Route path="/design-studio" element={<ProtectedRoute adminOnly paidOnly><DesignStudioPage /></ProtectedRoute>} />
               <Route path="/floor-plan/:eventId" element={<ProtectedRoute adminOnly><FloorPlanPage /></ProtectedRoute>} />
               <Route path="/dashboard" element={<ProtectedRoute><DashboardPage /></ProtectedRoute>} />

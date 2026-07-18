@@ -80,7 +80,7 @@ echo -e "\n${BOLD}EventQR Deployment Pipeline${NC}"
 echo    "  Version  : ${VERSION}"
 echo    "  Registry : ${REGISTRY}"
 echo    "  Compose  : ${PROD_COMPOSE}"
-echo    "  Services : backend, frontend, messaging, design, festiome, support"
+echo    "  Services : backend, frontend, messaging, design, festiome, support, setup"
 echo    "  Keep tags: last ${KEEP_VERSIONS} per service"
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -156,6 +156,14 @@ if $DO_BUILD; then
     "${SCRIPT_DIR}/support-service"
   ok "Support service built → ${REGISTRY}:support-${VERSION}"
 
+  info "Building setup-service..."
+  docker build $NO_CACHE \
+    "${BUILD_ARGS[@]}" \
+    --tag "${REGISTRY}:setup-${VERSION}" \
+    --tag "${REGISTRY}:setup-latest" \
+    "${SCRIPT_DIR}/setup-service"
+  ok "Setup service built → ${REGISTRY}:setup-${VERSION}"
+
   # ── PHASE 2 — Push to Docker Hub ────────────────────────────────────────────
   step "2/6  Pushing images to Docker Hub"
 
@@ -175,7 +183,9 @@ if $DO_BUILD; then
     "${REGISTRY}:festiome-${VERSION}" \
     "${REGISTRY}:festiome-latest" \
     "${REGISTRY}:support-${VERSION}" \
-    "${REGISTRY}:support-latest"; do
+    "${REGISTRY}:support-latest" \
+    "${REGISTRY}:setup-${VERSION}" \
+    "${REGISTRY}:setup-latest"; do
     info "Pushing ${tag}..."
     docker push "$tag"
     ok "Pushed ${tag}"
@@ -261,6 +271,7 @@ if $DO_BUILD; then
   prune_service_tags "design"
   prune_service_tags "festiome"
   prune_service_tags "support"
+  prune_service_tags "setup"
 
   # Remove the dangling local build cache (optional, frees disk)
   info "Pruning dangling local image layers..."
@@ -283,7 +294,7 @@ if $DO_DEPLOY; then
 
   # ── Phase 4a — Pull new images ──────────────────────────────────────────────
   step "4/6  Pulling images from Docker Hub"
-  APP_VERSION="$VERSION" docker compose -f "$PROD_COMPOSE" pull backend frontend messaging-service design-service festiome-service support-service chatwoot chatwoot-sidekiq
+  APP_VERSION="$VERSION" docker compose -f "$PROD_COMPOSE" pull backend frontend messaging-service design-service festiome-service support-service setup-service chatwoot chatwoot-sidekiq
   ok "Images pulled"
 
   # ── Phase 4b — Run DB migration in a one-off container ──────────────────────

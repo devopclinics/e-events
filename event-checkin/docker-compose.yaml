@@ -14,6 +14,7 @@ services:
       - messaging-service
       - design-service
       - support-service
+      - setup-service
     restart: unless-stopped
 
   # ── React frontend ─────────────────────────────────────────────────────────
@@ -173,6 +174,26 @@ services:
         condition: service_healthy
     healthcheck:
       test: ["CMD-SHELL", "python -c \"import urllib.request; urllib.request.urlopen('http://localhost:8002/health', timeout=3).read()\""]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+  # ── Guided event setup helper — orchestrates backend's REST API ────────────
+  setup-service:
+    build: ./setup-service
+    image: dclinics/events:setup-1.0.0
+    env_file: ./backend/.env
+    environment:
+      PORT: 8003
+      BACKEND_BASE_URL: http://backend:8000
+    depends_on:
+      db:
+        condition: service_healthy
+      backend:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "python -c \"import urllib.request; urllib.request.urlopen('http://localhost:8003/health', timeout=3).read()\""]
       interval: 10s
       timeout: 5s
       retries: 5

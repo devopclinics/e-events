@@ -1,4 +1,4 @@
-from pydantic import BaseModel, ConfigDict, EmailStr, Field, field_validator
+from pydantic import BaseModel, ConfigDict, EmailStr, Field, field_validator, model_validator
 from datetime import datetime, timezone
 from typing import Any, Optional, Literal
 from zoneinfo import ZoneInfo, available_timezones
@@ -60,6 +60,9 @@ class EventCreate(BaseModel):
     # Preset event kind (Wedding, Graduation, Conference, …).
     event_type: Optional[str] = None
     event_date: datetime
+    # Optional end date/time for events spanning multiple days (e.g. a 3-day
+    # conference). When set, must not be before event_date.
+    event_end_date: Optional[datetime] = None
     # IANA timezone the event runs in; all event times render in this zone.
     # Required so invite/Hub times are unambiguous rather than viewer-local.
     timezone: str = Field(min_length=1, max_length=80)
@@ -70,8 +73,11 @@ class EventCreate(BaseModel):
     hotel_name: Optional[str] = None
     hotel_address: Optional[str] = None
     admission_note: Optional[str] = None
+    notify_sms: Optional[bool] = None
+    notify_whatsapp: Optional[bool] = None
+    rsvp_capacity: Optional[int] = None
 
-    @field_validator("event_date", mode="after")
+    @field_validator("event_date", "event_end_date", mode="after")
     @classmethod
     def strip_tz(cls, v):
         if v is not None and v.tzinfo is not None:
@@ -83,12 +89,19 @@ class EventCreate(BaseModel):
     def check_timezone(cls, v):
         return _validate_iana_timezone(v)
 
+    @model_validator(mode="after")
+    def check_end_after_start(self):
+        if self.event_end_date is not None and self.event_end_date < self.event_date:
+            raise ValueError("event_end_date must not be before event_date")
+        return self
+
 
 class EventUpdate(BaseModel):
     name: Optional[str] = None
     couples_name: Optional[str] = None
     event_type: Optional[str] = None
     event_date: Optional[datetime] = None
+    event_end_date: Optional[datetime] = None
     timezone: Optional[str] = Field(default=None, max_length=80)
     description: Optional[str] = None
     checkin_base_url: Optional[str] = None
@@ -101,7 +114,7 @@ class EventUpdate(BaseModel):
     notify_sms: Optional[bool] = None
     notify_whatsapp: Optional[bool] = None
 
-    @field_validator("event_date", mode="after")
+    @field_validator("event_date", "event_end_date", mode="after")
     @classmethod
     def strip_tz(cls, v):
         if v is not None and v.tzinfo is not None:
@@ -112,6 +125,12 @@ class EventUpdate(BaseModel):
     @classmethod
     def check_timezone(cls, v):
         return _validate_iana_timezone(v)
+
+    @model_validator(mode="after")
+    def check_end_after_start(self):
+        if self.event_end_date is not None and self.event_date is not None and self.event_end_date < self.event_date:
+            raise ValueError("event_end_date must not be before event_date")
+        return self
 
 
 class EventSourceUpdate(BaseModel):
@@ -128,6 +147,7 @@ class EventOut(BaseModel):
     couples_name: str
     event_type: Optional[str] = None
     event_date: datetime
+    event_end_date: Optional[datetime] = None
     timezone: Optional[str] = None
     description: Optional[str]
     checkin_base_url: str
@@ -1765,6 +1785,8 @@ class InvitePageOut(BaseModel):
     name: str
     couples_name: str
     event_date: datetime
+    # Optional end date/time for multi-day events; NULL for single-day events.
+    event_end_date: Optional[datetime] = None
     # IANA timezone the event runs in (e.g. "Africa/Lagos"). Without this the
     # frontend falls back to each guest's own browser timezone to format
     # event_date, which silently shows the wrong wall-clock time to anyone not

@@ -175,6 +175,12 @@ async def create_event(
         raise HTTPException(403, "You don't belong to an organization")
     payload = data.model_dump()
     payload["checkin_base_url"] = _normalize_public_base_url(payload.get("checkin_base_url"))
+    # notify_sms/notify_whatsapp are non-nullable columns (default True) — drop
+    # them when the caller left them unset so the column default applies,
+    # instead of passing an explicit None that would violate NOT NULL.
+    for key in ("notify_sms", "notify_whatsapp"):
+        if payload.get(key) is None:
+            payload.pop(key, None)
     event = Event(**payload, org_id=org_id)
     event.event_code = await unique_event_code(db)
     event.rsvp_token = event.rsvp_token or str(_uuid.uuid4())

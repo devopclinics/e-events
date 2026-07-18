@@ -1,0 +1,22 @@
+EAAMGaTLXIigBRwb7703c97Tib2BjhX4Vm3qDZBocWSoQrIeMKXeJgMSzzCkdaxdZBmkKEbDiyFaAPnSUZCineEFKj3UCM1P02XWNbX5paMIx1vdfih6R5BWDjuDmZBuZCglBScgk6ZBr4CCiomxITXvIyF8dSZAZAlNm0BvRSnzhhZARRmrtI5ZAktBnI3hK3OlgZDZD
+
+
+/festio-infra$ curl 'https://graph.facebook.com/v23.0/+15556720941/messages'   -H 'Con
+tent-Type: application/json'   -H 'Authorization: Bearer EAAMGaTLXIigBRwb7703c97Tib2BjhX4Vm3qDZBocWSoQrIeMKXeJg
+MSzzCkdaxdZBmkKEbDiyFaAPnSUZCineEFKj3UCM1P02XWNbX5paMIx1vdfih6R5BWDjuDmZBuZCglBScgk6ZBr4CCiomxITXvIyF8dSZAZAlNm
+0BvRSnzhhZARRmrtI5ZAktBnI3hK3OlgZDZD'   -d '{
+    "messaging_product": "whatsapp",
+    "recipient_type": "individual",
+    "to": "+18327941707",
+    "type": "text",
+    "text": {
+      "body": "Hello!"
+    }
+  }'
+{"error":{"message":"Unsupported post request. Object with ID '+15556720941' does not exist, cannot be loaded due to missing permissions, or does not support this operation. Please read the Graph API documentation at https:\/\/developers.facebook.com\/docs\/graph-api","type":"GraphMethodException","code":100,"error_subcode":33,"fbtrace_id":"AMP017nUVSZsRxtOQDS_2Mb"}}dev@trade-worker:~/events/festio-infra$ 
+
+
+
+
+
+EAAMGaTLXIigBRzHVfaW6EcYp6iL1dt0zRZCmq3sjPotV13S2JZCSU7jtBwxXjK07XrXwalM1hJ86Xr7a9o3XwRoLb7SqLZBZA0b2fcTK7jN6AhtJ00qJaCkuhTcfSq53w1jl926ZCF6LWOsc0etMZClmqdSygdMLLg221p4RBlWmbS58Uz9rlXoV47GVoUxgZDZD

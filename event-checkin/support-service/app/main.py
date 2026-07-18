@@ -35,6 +35,11 @@ class Settings(BaseSettings):
     support_ai_hourly_cap: int = 20   # per-org Gemini drafts/hour before we skip drafting and just log
     support_ai_auto_send: bool = True  # master switch: off = every draft is always a private note
     support_ai_gating_enabled: bool = False  # on = GATED_KEYWORDS/deferral topics still fall back to a private note even when auto_send is on
+    support_local_ai_enabled: bool = False
+    support_local_ai_url: str = "http://local-ai:8080"
+    support_local_ai_model: str = ""
+    support_local_ai_timeout_seconds: float = 5.0
+    support_local_ai_confidence_threshold: float = 0.90
 
     chatwoot_base_url: str = ""
     chatwoot_account_id: str = ""
@@ -311,6 +316,43 @@ async def _under_rate_cap(org_key: str) -> bool:
     return count <= settings.support_ai_hourly_cap
 
 
+async def _local_route(message: str) -> dict | None:
+    """Ask an optional local model to classify a message before Gemini.
+
+    The local service is deliberately treated as untrusted: malformed output,
+    timeouts, and low confidence all fall back to the normal Gemini path.
+    """
+    if not settings.support_local_ai_enabled or not settings.support_local_ai_model:
+        return None
+    prompt = (
+        'Classify this support message. Return JSON only with keys '
+        'intent (faq|billing|security|escalation|unknown) and confidence (0..1).\n'
+        f'Message: {message[:4000]}'
+    )
+    try:
+        async with httpx.AsyncClient(timeout=settings.support_local_ai_timeout_seconds) as client:
+            response = await client.post(
+                f"{settings.support_local_ai_url.rstrip('/')}/v1/chat/completions",
+                json={
+                    "model": settings.support_local_ai_model,
+                    "messages": [{"role": "user", "content": prompt}],
+                    "temperature": 0,
+                    "response_format": {"type": "json_object"},
+                },
+            )
+            response.raise_for_status()
+            content = response.json()["choices"][0]["message"]["content"]
+            result = json.loads(content) if isinstance(content, str) else content
+            intent = result.get("intent")
+            confidence = float(result.get("confidence", 0))
+            if intent not in {"faq", "billing", "security", "escalation", "unknown"}:
+                return None
+            return {"intent": intent, "confidence": max(0.0, min(1.0, confidence))}
+    except Exception:
+        logger.warning("local AI routing failed; falling back to Gemini", exc_info=True)
+        return None
+
+
 # ── App ────────────────────────────────────────────────────────────────────
 
 app = FastAPI(title="Festio Support Service", version="0.1.0")
@@ -420,5 +462,13 @@ async def chatwoot_webhook(request: Request, background_tasks: BackgroundTasks, 
         return {"status": "rate_limited"}
 
     gated = _is_gated(content)
+    local_route = await _local_route(content)
+    if (
+        local_route
+        and local_route["confidence"] >= settings.support_local_ai_confidence_threshold
+        and local_route["intent"] in {"billing", "security", "escalation"}
+    ):
+        background_tasks.add_task(_escalate_conversation, conversation_id)
+        return {"status": "escalated", "router": "local"}
     background_tasks.add_task(_draft_and_post, conversation_id, gated)
     return {"status": "queued"}

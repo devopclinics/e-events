@@ -924,7 +924,7 @@ export default function ScanAutoPage() {
 
           {/* Guest Hub + FestioMe entries — controlled from Design Studio pass
               options, always exposed for Experience events. */}
-          {(showGuestHubButton || event?.festiome_addon_enabled) && (
+          {(showGuestHubButton || (event?.festiome_addon_enabled && event?.festiome_enabled)) && (
             <div className="flex flex-col items-center gap-2">
               {showGuestHubButton && (
                 // The Live Program lives on the guest hub — /scan/:token/hub
@@ -937,7 +937,7 @@ export default function ScanAutoPage() {
                   {event?.live_program_enabled ? 'Open Live Program' : event?.experience_enabled ? 'Track my activity' : 'Open FestioHub'}
                 </a>
               )}
-              {event?.festiome_addon_enabled && guest?.event_id && (
+              {event?.festiome_addon_enabled && event?.festiome_enabled && guest?.event_id && (
                 <a
                   href={`/festiome/guest?event=${encodeURIComponent(guest.event_id)}&pass=${encodeURIComponent(token)}`}
                   className="inline-flex min-h-11 w-full max-w-xs items-center justify-center gap-2 rounded-lg border border-teal-500/60 bg-teal-500/10 px-5 py-2.5 text-sm font-bold text-teal-200 transition hover:bg-teal-500/20"

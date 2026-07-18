@@ -17,6 +17,8 @@ from app.models import (
     GuestTagLink,
     MenuCategory,
     MenuItem,
+    RSVPAnswer,
+    RSVPQuestion,
     SeatingTable,
     TableGroup,
     TableGroupTable,
@@ -783,6 +785,14 @@ async def test_scan_returns_next_steps_and_staff_can_complete_them(ctx):
     body = scan.json()
     assert body["status"] == "admitted"
     assert [item["step"]["key"] for item in body["experience_next_steps"]] == ["welcome"]
+    assert body["station_action"] == {
+        "step_id": welcome_step_id,
+        "label": "Welcome pack",
+        "step_type": "custom",
+        "completion_allowed": True,
+    }
+    assert body["remaining_action_count"] == 0
+    assert body["eligibilities"] == []
 
     complete = await ctx.client.put(
         f"/api/events/{event_id}/experience/guests/{guest_id}/steps/{welcome_step_id}",
@@ -848,6 +858,9 @@ async def test_souvenir_unlocks_after_guest_consent_signature(ctx):
     scan = await ctx.client.post(f"/api/scan/{token}")
     assert scan.status_code == 200
     assert [item["step"]["key"] for item in scan.json()["experience_next_steps"]] == ["consent"]
+    # Souvenir is implicitly blocked until consent is signed, so it must not
+    # be reported as an eligible staff action yet.
+    assert scan.json()["eligibilities"] == []
 
     sign = await ctx.client.post(
         f"/api/scan/{token}/consent",
@@ -858,6 +871,10 @@ async def test_souvenir_unlocks_after_guest_consent_signature(ctx):
     next_steps = await ctx.client.get(f"/api/events/{event_id}/experience/guests/{guest.id}/next-steps")
     assert next_steps.status_code == 200
     assert [item["step"]["key"] for item in next_steps.json()] == ["souvenir"]
+
+    rescan = await ctx.client.post(f"/api/scan/{token}")
+    assert rescan.status_code == 200
+    assert rescan.json()["eligibilities"] == [{"key": "souvenir", "label": "Souvenir", "status": "eligible"}]
 
 
 @pytest.mark.asyncio
@@ -1709,3 +1726,112 @@ async def test_republishing_does_not_crash_on_duplicate_progress_or_outbox_rows(
             .having(func.count() > 1)
         )).all()
         assert dupes == []
+
+
+@pytest.mark.asyncio
+async def test_scan_guest_summary_derives_age_group_from_rsvp_answer(ctx):
+    ctx.login(ctx.ids["user_a"])
+    event_id = ctx.ids["event_a"]
+
+    async with _Session() as s:
+        ev = await s.get(Event, event_id)
+        ev.is_paid = True
+        ev.status = "active"
+        guest = (await s.execute(select(Guest).where(Guest.event_id == event_id))).scalars().first()
+        token = guest.qr_token
+        guest_id = guest.id
+        question = RSVPQuestion(event_id=event_id, question="Guest age group", question_type="text", sort_order=0)
+        s.add(question)
+        await s.commit()
+        s.add(RSVPAnswer(guest_id=guest_id, question_id=question.id, answer="Child (5-12)"))
+        await s.commit()
+
+    scan = await ctx.client.post(f"/api/scan/{token}")
+    assert scan.status_code == 200
+    assert scan.json()["guest_summary"]["age_group"] == "Child (5-12)"
+
+
+@pytest.mark.asyncio
+async def test_scan_station_prioritization_orders_matching_step_first(ctx):
+    ctx.login(ctx.ids["user_a"])
+    event_id = ctx.ids["event_a"]
+
+    async with _Session() as s:
+        ev = await s.get(Event, event_id)
+        ev.is_paid = True
+        ev.status = "active"
+        ev.experience_enabled = True
+        ev.notify_email = False
+        ev.notify_sms = False
+        ev.notify_whatsapp = False
+        guest = (await s.execute(select(Guest).where(Guest.event_id == event_id))).scalars().first()
+        token = guest.qr_token
+        await s.commit()
+
+    workflow = await ctx.client.post(
+        f"/api/events/{event_id}/experience/workflows",
+        json={
+            "name": "Station Routing",
+            "steps": [
+                {"key": "general", "type": "custom", "title": "General desk", "sort_order": 0},
+                {"key": "kids", "type": "custom", "title": "Kids room", "sort_order": 1, "config": {"stations": ["kids-room"]}},
+            ],
+        },
+    )
+    assert workflow.status_code == 201
+    assert (await ctx.client.post(f"/api/events/{event_id}/experience/workflows/{workflow.json()['id']}/publish")).status_code == 200
+
+    # Without a station hint, steps stay in their configured sort order.
+    scan_default = await ctx.client.post(f"/api/scan/{token}")
+    assert scan_default.status_code == 200
+    assert [item["step"]["key"] for item in scan_default.json()["experience_next_steps"]] == ["general", "kids"]
+    assert scan_default.json()["station_action"]["step_type"] == "custom"
+
+    # A station hint reorders the matching step to the front, even though it
+    # sorts second by default. Re-scanning the same (already-admitted) guest
+    # still recomputes this, since station routing is a per-scan staff hint.
+    scan_kids = await ctx.client.post(f"/api/scan/{token}", json={"station": "kids-room"})
+    assert scan_kids.status_code == 200
+    assert [item["step"]["key"] for item in scan_kids.json()["experience_next_steps"]] == ["kids", "general"]
+    assert scan_kids.json()["station_action"]["label"] == "Kids room"
+
+
+@pytest.mark.asyncio
+async def test_scan_operational_context_omitted_when_staff_checkin_v2_disabled(ctx, monkeypatch):
+    monkeypatch.setattr(scanner_router.settings, "staff_checkin_v2", False)
+    ctx.login(ctx.ids["user_a"])
+    event_id = ctx.ids["event_a"]
+
+    async with _Session() as s:
+        ev = await s.get(Event, event_id)
+        ev.is_paid = True
+        ev.status = "active"
+        ev.experience_enabled = True
+        ev.notify_email = False
+        ev.notify_sms = False
+        ev.notify_whatsapp = False
+        guest = (await s.execute(select(Guest).where(Guest.event_id == event_id))).scalars().first()
+        token = guest.qr_token
+        await s.commit()
+
+    workflow = await ctx.client.post(
+        f"/api/events/{event_id}/experience/workflows",
+        json={
+            "name": "Flag Off Journey",
+            "steps": [{"key": "welcome", "type": "custom", "title": "Welcome pack"}],
+        },
+    )
+    assert workflow.status_code == 201
+    assert (await ctx.client.post(f"/api/events/{event_id}/experience/workflows/{workflow.json()['id']}/publish")).status_code == 200
+
+    scan = await ctx.client.post(f"/api/scan/{token}")
+    assert scan.status_code == 200
+    body = scan.json()
+    # The additive v2 fields fall back to their pre-redesign empty defaults —
+    # the kill switch must not merely hide them client-side.
+    assert body["guest_summary"] == {}
+    assert body["eligibilities"] == []
+    assert body["station_action"] is None
+    assert body["remaining_action_count"] == 0
+    # Underlying Experience data is untouched — only the staff-context surface is gated.
+    assert [item["step"]["key"] for item in body["experience_next_steps"]] == ["welcome"]

@@ -1,13 +1,14 @@
 import html as html_escape
 import json
 from datetime import datetime
-from fastapi import APIRouter, Depends, BackgroundTasks, HTTPException, Request
+from fastapi import APIRouter, Body, Depends, BackgroundTasks, HTTPException, Request
 from fastapi.responses import Response, RedirectResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func
 from sqlalchemy.exc import IntegrityError
+from ..config import settings
 from ..database import get_db
-from ..models import ConsentForm, ConsentSignature, Guest, Event, EventUser, User, SeatingTable, MenuCategory, MenuItem, GuestMenuChoice, MenuCombination, MenuCombinationItem, Zone, TicketType, ScanEvent, TableGroup, Gate, GuestTag, GuestTagLink, ZoneTagRule
+from ..models import ConsentForm, ConsentSignature, Guest, Event, EventUser, User, SeatingTable, MenuCategory, MenuItem, GuestMenuChoice, MenuCombination, MenuCombinationItem, Zone, TicketType, ScanEvent, TableGroup, Gate, GuestTag, GuestTagLink, ZoneTagRule, RSVPAnswer, RSVPQuestion
 from ..schemas import ConsentSignatureCreate, ExperienceNextStepOut, ExperienceStepOut, GuestExperienceProgressOut, PublicConsentOut, SendConsentCopyOut, ScanResult, GuestOut, TicketView, EventBrief, MenuCategoryOut, MenuItemOut, MenuCombinationOut, MenuCombinationItemOut, GuestMenuSubmit, PartnerInfo, PairRequest, ScanZoneRequest, ScanZoneResult
 from ..auth import require_official, _org_role
 from .access import zone_occupancy, ticket_allows
@@ -208,6 +209,73 @@ async def _next_steps_for_scan(event_id: str, guest_id: str, db: AsyncSession) -
         )
         for step, progress in rows
     ]
+
+
+async def _scan_operational_context(guest: Guest, table_name: str | None,
+                                    steps: list[ExperienceNextStepOut], db: AsyncSession) -> dict:
+    """Build display-only staff context without affecting admission rules."""
+    if not settings.staff_checkin_v2:
+        return {"guest_summary": {}, "eligibilities": [], "station_action": None, "remaining_action_count": 0}
+    ticket_label = None
+    if guest.ticket_type_id:
+        ticket = await db.get(TicketType, guest.ticket_type_id)
+        ticket_label = ticket.name if ticket else None
+    age_group = None
+    age_rows = (await db.execute(
+        select(RSVPQuestion.question, RSVPAnswer.answer)
+        .join(RSVPAnswer, RSVPAnswer.question_id == RSVPQuestion.id)
+        .where(RSVPAnswer.guest_id == guest.id)
+    )).all()
+    for question, answer in age_rows:
+        label = (question or "").lower()
+        if "age" in label and answer:
+            age_group = answer
+            break
+    summary = {
+        "age_group": age_group,
+        "guest_category": guest.rsvp_guest_type,
+        "ticket_label": ticket_label,
+        "table": table_name,
+        "seat": guest.seat_number,
+        "guest_flag": "VIP" if guest.is_vip else "Walk-in" if guest.is_walk_in else None,
+    }
+    summary = {key: value for key, value in summary.items() if value}
+    eligibilities = []
+    souvenir = next((item for item in steps if item.step.type == "souvenir"), None)
+    if souvenir:
+        eligibilities.append({"key": "souvenir", "label": "Souvenir", "status": "eligible"})
+    primary = steps[0] if steps else None
+    return {
+        "guest_summary": summary,
+        "eligibilities": eligibilities,
+        "station_action": ({
+            "step_id": primary.step.id,
+            "label": primary.step.title,
+            "step_type": primary.step.type,
+            "completion_allowed": primary.step.type not in {"check_in", "seating_assignment", "meal_selection", "consent"},
+        } if primary else None),
+        "remaining_action_count": max(0, len(steps) - 1),
+    }
+
+
+def _prioritize_steps_for_station(steps: list[ExperienceNextStepOut], station: str | None,
+                                  station_id: str | None) -> list[ExperienceNextStepOut]:
+    if not station and not station_id:
+        return steps
+    wanted = {value.strip().lower() for value in (station, station_id) if value and value.strip()}
+
+    def rank(item: ExperienceNextStepOut) -> int:
+        configured = (item.step.config or {}).get("stations")
+        if isinstance(configured, str):
+            configured = [configured]
+        configured = {str(value).strip().lower() for value in (configured or []) if str(value).strip()}
+        if configured & wanted:
+            return 0
+        if not configured:
+            return 1
+        return 2
+
+    return sorted(steps, key=rank)
 
 
 def _step_message_config(step) -> dict:
@@ -461,6 +529,7 @@ async def view_ticket(qr_token: str, db: AsyncSession = Depends(get_db)):
         registry_token=event.registry_token,
         registry_message=event.registry_message,
         festiome_addon_enabled=event.festiome_addon_enabled,
+        festiome_enabled=event.festiome_enabled,
     ) if event else None
 
     table_name = None
@@ -819,6 +888,7 @@ async def offline_manifest(
 async def scan_qr(
     qr_token: str,
     background_tasks: BackgroundTasks,
+    body: dict | None = Body(default=None),
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_official),
 ):
@@ -831,7 +901,15 @@ async def scan_qr(
     blocked = await checkin_guard(event, current_user, db)
     if blocked:
         return blocked
-    return await perform_admission(guest, event, background_tasks, db)
+    result = await perform_admission(guest, event, background_tasks, db)
+    station = (body or {}).get("station")
+    station_id = (body or {}).get("station_id")
+    if result.experience_next_steps and (station or station_id):
+        result.experience_next_steps = _prioritize_steps_for_station(result.experience_next_steps, station, station_id)
+        context = await _scan_operational_context(guest, result.table_name, result.experience_next_steps, db)
+        result.station_action = context["station_action"]
+        result.remaining_action_count = context["remaining_action_count"]
+    return result
 
 
 @router.post("/{qr_token}/checkout", response_model=ScanResult)
@@ -933,13 +1011,16 @@ async def perform_admission(guest, event, background_tasks, db) -> ScanResult:
             tbl = await db.get(SeatingTable, guest.table_id)
             if tbl:
                 table_name = tbl.name
+        next_steps = await _next_steps_for_scan(event.id, guest.id, db) if event else []
+        context = await _scan_operational_context(guest, table_name, next_steps, db)
         return ScanResult(
             status="already_admitted",
             message=f"{guest.first_name} {guest.last_name} was already admitted at {admitted_time}.",
             guest=GuestOut.model_validate(guest),
             table_name=table_name,
             seat_number=guest.seat_number,
-            experience_next_steps=await _next_steps_for_scan(event.id, guest.id, db) if event else [],
+            experience_next_steps=next_steps,
+            **context,
         )
 
     # First-come-first-served seat assignment if this guest has no seat yet.
@@ -1091,6 +1172,7 @@ async def perform_admission(guest, event, background_tasks, db) -> ScanResult:
     await sync_guest_progress(event.id, guest.id, db, source="staff", actor_user_id=None)
     await db.commit()
     experience_next = await _next_steps_for_scan(event.id, guest.id, db) if event else []
+    operational_context = await _scan_operational_context(guest, table_name, experience_next, db)
     if "email" in chosen:
         subj, intro = _template_email_for_event(overrides, event, "admission_confirmation", "experience_admission_confirmation", tmpl_ctx)
         guest_data["subject_override"] = subj
@@ -1114,6 +1196,7 @@ async def perform_admission(guest, event, background_tasks, db) -> ScanResult:
         table_name=table_name,
         seat_number=guest.seat_number,
         experience_next_steps=experience_next,
+        **operational_context,
     )
 
 

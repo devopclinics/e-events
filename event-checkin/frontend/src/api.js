@@ -240,10 +240,20 @@ export const api = {
   saveEventDesign: (eventId, data) => req('PUT', `/events/${eventId}/design`, data),
   publishEventDesign: (eventId) => req('POST', `/events/${eventId}/design/publish`),
   designOutputs: (eventId) => req('GET', `/events/${eventId}/design/outputs`),
-  publicDesignTheme: (eventId) =>
-    fetch(`/api/v1/design/events/${encodeURIComponent(eventId)}/public-theme`, {
+  // capabilities gates hub_layout module visibility server-side too (not just
+  // in the render logic here) -- pass the event's real feature flags so a
+  // stale/over-permissive saved layout can never come back showing a module
+  // for a feature this event doesn't actually have.
+  publicDesignTheme: (eventId, capabilities = {}) => {
+    const params = new URLSearchParams({
+      experience_enabled: String(!!capabilities.experience_enabled),
+      live_program_enabled: String(!!capabilities.live_program_enabled),
+      festiome_enabled: String(!!capabilities.festiome_enabled),
+    })
+    return fetch(`/api/v1/design/events/${encodeURIComponent(eventId)}/public-theme?${params}`, {
       cache: 'no-store',
-    }).then((r) => (r.ok ? r.json() : Promise.reject(new Error('Design theme unavailable')))),
+    }).then((r) => (r.ok ? r.json() : Promise.reject(new Error('Design theme unavailable'))))
+  },
   uploadDesignAsset: (eventId, file) => {
     const fd = new FormData()
     fd.append('file', file)
@@ -430,7 +440,7 @@ export const api = {
   deleteCombination: (eventId, comboId) => req('DELETE', `/events/${eventId}/menu-combinations/${comboId}`),
 
   // Scanner
-  scan: (token) => req('POST', `/scan/${token}`),
+  scan: (token, body) => req('POST', `/scan/${token}`, body),
   scanCheckout: (token) => req('POST', `/scan/${token}/checkout`),
   offlineManifest: (eventId) => req('GET', `/scan/offline-manifest/${eventId}`),
   // Manual check-in (no QR)

@@ -80,6 +80,7 @@ function Dialog({ title, children, onClose }) {
 
 export default function FestioMePage() {
   const { user } = useAuth();
+  const guestMode = typeof window !== "undefined" && window.location.pathname === "/festiome/guest";
   const [groups, setGroups] = useState([]),
     [groupId, setGroupId] = useState("");
   const [channels, setChannels] = useState([]),
@@ -754,12 +755,11 @@ export default function FestioMePage() {
       >
         <div className="flex items-center justify-between border-b p-4 dark:border-slate-700">
           <div>
+            {guestMode && <a href="#" onClick={(event) => { event.preventDefault(); history.back(); }} className="mb-1 inline-flex items-center gap-1 text-xs font-bold text-teal-600 dark:text-teal-300">← FestioHub</a>}
             <h1 className="font-bold dark:text-white">FestioMe</h1>
-            <p className="text-xs text-slate-500">
-              Messages that bring people together
-            </p>
+            <p className="text-xs text-slate-500">Connect, share and stay updated.</p>
           </div>
-          <button
+          {!guestMode && <button
             onClick={() => {
               setDialog("new-group");
               setFormValue("");
@@ -767,7 +767,7 @@ export default function FestioMePage() {
             className="grid h-9 w-9 place-items-center rounded-xl bg-teal-600 text-xl text-white"
           >
             +
-          </button>
+          </button>}
         </div>
         <div className="flex-1 overflow-y-auto p-2">
           {!groups.length && (
@@ -818,7 +818,7 @@ export default function FestioMePage() {
           </div>
         ) : (
           <>
-            <header className="flex items-center gap-2 border-b p-3 dark:border-slate-700">
+            <header className="flex flex-wrap items-center gap-2 border-b p-3 dark:border-slate-700">
               <button onClick={() => setGroupId("")} className="p-2 md:hidden">
                 ←
               </button>
@@ -835,6 +835,7 @@ export default function FestioMePage() {
                   </span>
                 </p>
               </div>
+              {guestMode && <a href="#" onClick={(event) => { event.preventDefault(); history.back(); }} className="rounded-lg border px-3 py-2 text-xs font-bold text-teal-700 dark:border-slate-600 dark:text-teal-300">FestioHub</a>}
               {eventRef && (
                 <button
                   onClick={openDiscover}

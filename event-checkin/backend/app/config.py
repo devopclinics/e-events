@@ -89,6 +89,12 @@ class Settings(BaseSettings):
     clicksend_api_key: str = ""
     clicksend_from: str = ""
 
+    # ── Staging rollout flags — three-surface redesign. Default True since the
+    # v2 behavior is already live on staging; set False to instantly fall back
+    # to the pre-redesign response shape without a code revert/redeploy.
+    staff_checkin_v2: bool = True
+    guest_hub_v2: bool = True
+
     # ── Billing (Phase 3) — Event Pass checkout. Empty = provider disabled. ──
     # Public base used to build checkout return URLs (defaults to frontend_url).
     public_base_url: str = ""

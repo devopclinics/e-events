@@ -697,6 +697,19 @@ export default function DesignStudioPage() {
   const baseColors = selectedTpl?.defaultColors || {}
   const colors = { ...baseColors, ...(design?.theme_config?.colors || {}) }
   const passOptions = { showTable: true, showSeat: true, showHubButton: true, ...(design?.theme_config?.passOptions || {}) }
+  const hubLayout = {
+    version: 1,
+    defaultTab: 'activity_when_actionable',
+    modules: [
+      { key: 'guest_pass', label: 'Guest pass', visible: true },
+      { key: 'next_action', label: 'Next action', visible: true },
+      { key: 'activity_progress', label: 'Activity progress', visible: true },
+      { key: 'live_program', label: 'Live Program', visible: true, variant: 'now_plus_two' },
+      { key: 'festiome', label: 'FestioMe community', visible: true },
+      { key: 'messages', label: 'Messages', visible: true },
+    ],
+    ...(design?.theme_config?.hubLayout || {}),
+  }
   const fontPairing = design?.theme_config?.fontPairing || selectedTpl?.fontPairing || 'modern-sans'
   const previewFontFamily = FONT_STACKS[fontPairing] || FONT_STACKS['modern-sans']
   const coverImageUrl = design?.asset_config?.cover_image_url || design?.asset_config?.flyer_image_url || currentEvent?.invite_cover_image || ''
@@ -850,6 +863,27 @@ export default function DesignStudioPage() {
   const setThemeSetting = (key, value) => {
     setDesign((d) => ({ ...(d || { event_id: eventId }), theme_config: { ...(d?.theme_config || {}), [key]: value } }))
     queueSave()
+  }
+  const setHubLayout = (next) => setThemeSetting('hubLayout', { ...hubLayout, ...next, version: 1 })
+  const moveHubModule = (index, direction) => {
+    const target = index + direction
+    if (target < 0 || target >= hubLayout.modules.length) return
+    const modules = [...hubLayout.modules]
+    ;[modules[index], modules[target]] = [modules[target], modules[index]]
+    setHubLayout({ modules })
+  }
+  const dropHubModule = (targetIndex, event) => {
+    event.preventDefault()
+    const sourceIndex = Number(event.dataTransfer.getData('text/festio-hub-module'))
+    if (!Number.isInteger(sourceIndex) || sourceIndex === targetIndex || sourceIndex < 0 || sourceIndex >= hubLayout.modules.length) return
+    const modules = [...hubLayout.modules]
+    const [moved] = modules.splice(sourceIndex, 1)
+    modules.splice(targetIndex, 0, moved)
+    setHubLayout({ modules })
+  }
+  const toggleHubModule = (index, visible) => {
+    const modules = hubLayout.modules.map((module, position) => position === index ? { ...module, visible } : module)
+    setHubLayout({ modules })
   }
   const setFlyerSetting = (key, value) => {
     const next = { ...flyer, [key]: value }
@@ -1496,6 +1530,44 @@ export default function DesignStudioPage() {
                 </button>
               </div>
             </div>
+          </div>
+          <div className="rounded-2xl border border-slate-200 bg-white p-5 dark:border-white/10 dark:bg-slate-900">
+            <div className="flex flex-wrap items-start justify-between gap-3">
+              <div>
+                <h3 className="text-lg font-black text-slate-950 dark:text-white">FestioHub layout</h3>
+                <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">Reorder presentation modules. Event feature toggles and workflow dependencies remain unchanged.</p>
+              </div>
+              <label className="text-xs font-bold text-slate-500 dark:text-slate-400">Default view
+                <select className={`${input} mt-1 min-w-56`} value={hubLayout.defaultTab} onChange={(event) => setHubLayout({ defaultTab: event.target.value })}>
+                  <option value="activity_when_actionable">Activity when actionable</option>
+                  <option value="pass">Pass</option>
+                  <option value="activity">Activity</option>
+                  <option value="program">Program</option>
+                </select>
+              </label>
+            </div>
+            <div className="mt-5 grid gap-2">
+              {hubLayout.modules.map((module, index) => {
+                const capabilityOff = (module.key === 'live_program' && !currentEvent?.live_program_enabled)
+                  || (module.key === 'activity_progress' && !currentEvent?.experience_enabled)
+                  || (module.key === 'next_action' && !currentEvent?.experience_enabled)
+                  || (module.key === 'festiome' && !(currentEvent?.festiome_addon_enabled && currentEvent?.festiome_enabled))
+                return (
+                  <div key={module.key} draggable onDragStart={(event) => event.dataTransfer.setData('text/festio-hub-module', String(index))} onDragOver={(event) => event.preventDefault()} onDrop={(event) => dropHubModule(index, event)} className="flex min-h-14 items-center gap-3 rounded-xl border border-slate-200 px-3 dark:border-white/10">
+                    <span className="cursor-grab text-slate-400" aria-hidden="true">⋮⋮</span>
+                    <label className="flex min-w-0 flex-1 items-center gap-3 text-sm font-bold text-slate-800 dark:text-slate-100">
+                      <input type="checkbox" checked={module.visible && !capabilityOff} disabled={capabilityOff || module.key === 'guest_pass'} onChange={(event) => toggleHubModule(index, event.target.checked)} className="h-4 w-4 accent-teal-500" />
+                      <span>{module.label || module.key.replaceAll('_', ' ')}</span>
+                      {capabilityOff && <span className="text-xs font-semibold text-amber-600">Enable this event feature first</span>}
+                    </label>
+                    <button type="button" disabled={index === 0} onClick={() => moveHubModule(index, -1)} className="h-9 w-9 rounded-lg border disabled:opacity-30 dark:border-white/10" aria-label={`Move ${module.label} up`}>↑</button>
+                    <button type="button" disabled={index === hubLayout.modules.length - 1} onClick={() => moveHubModule(index, 1)} className="h-9 w-9 rounded-lg border disabled:opacity-30 dark:border-white/10" aria-label={`Move ${module.label} down`}>↓</button>
+                  </div>
+                )
+              })}
+            </div>
+            <button type="button" onClick={() => setThemeSetting('hubLayout', {})} className="mt-4 min-h-10 rounded-xl border border-slate-300 px-4 text-sm font-bold dark:border-white/10 dark:text-white">Reset safe default</button>
+            <p className="mt-3 text-xs font-semibold text-slate-500">Saved automatically and applied only after the design is published.</p>
           </div>
           <div>
             <label className={label}>Mobile preview</label>

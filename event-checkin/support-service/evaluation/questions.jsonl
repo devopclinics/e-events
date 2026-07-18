@@ -1,0 +1,54 @@
+{"question":"Please refund the duplicate charge on my card","route":"sensitive"}
+{"question":"My account was hacked and I cannot sign in","route":"sensitive"}
+{"question":"I need to speak with a real person","route":"human"}
+{"question":"How do I import guests?","route":"faq"}
+{"question":"How do I send invitations?","route":"faq"}
+{"question":"Thanks!","route":"acknowledgement"}
+{"question":"How can staff scan tickets at another entrance?","route":"model"}
+{"question":"I was billed twice for this month","route":"sensitive"}
+{"question":"Cancel my subscription immediately","route":"sensitive"}
+{"question":"Someone changed my password","route":"sensitive"}
+{"question":"I need a copy of my invoice","route":"sensitive"}
+{"question":"I want to dispute a payment","route":"sensitive"}
+{"question":"Please delete my account and data","route":"sensitive"}
+{"question":"I have a GDPR data request","route":"sensitive"}
+{"question":"There may have been a security breach","route":"sensitive"}
+{"question":"Connect me with customer service","route":"human"}
+{"question":"Can I talk to someone?","route":"human"}
+{"question":"Please let me speak with a human","route":"human"}
+{"question":"Where is my QR code?","route":"faq"}
+{"question":"How do I check guests in?","route":"faq"}
+{"question":"How do I export guests?","route":"faq"}
+{"question":"Hello!","route":"greeting"}
+{"question":"Good morning","route":"greeting"}
+{"question":"Okay.","route":"acknowledgement"}
+{"question":"Got it","route":"acknowledgement"}
+{"question":"How do invitation categories work?","route":"model"}
+{"question":"Can staff use different entry areas?","route":"model"}
+{"question":"How do I assign tables?","route":"model"}
+{"question":"Can guests update their RSVP?","route":"model"}
+{"question":"How do I broadcast an event update?","route":"model"}
+{"question":"What is the Festio support phone number?","route":"human"}
+{"question":"Do you have a customer support email address?","route":"human"}
+{"question":"Is there a Festio helpdesk hotline?","route":"human"}
+{"question":"Please connect me to an agent","route":"human"}
+{"question":"I want to talk to a person","route":"human"}
+{"question":"Why was my card charged?","route":"sensitive"}
+{"question":"Can you change my subscription plan?","route":"sensitive"}
+{"question":"I forgot my password and need account access","route":"sensitive"}
+{"question":"Please remove all of my personal information","route":"sensitive"}
+{"question":"I think someone accessed my account","route":"sensitive"}
+{"question":"How do I create an event?","route":"model"}
+{"question":"How do I configure an RSVP page?","route":"model"}
+{"question":"How do I upload a spreadsheet of attendees?","route":"model"}
+{"question":"What are Festio's main features?","route":"feature_overview"}
+{"question":"How do Experience workflows work?","route":"model"}
+{"question":"How do I enable a gift list?","route":"model"}
+{"question":"Can I run several check-in stations?","route":"model"}
+{"question":"Good evening!","route":"greeting"}
+{"question":"Thank you very much","route":"acknowledgement"}
+{"question":"","route":"unsupported"}
+{"question":"How can I get pricing?","route":"pricing_info"}
+{"question":"How do platform operators edit pricing and plans?","route":"pricing_info"}
+{"question":"How much does Festio cost?","route":"pricing_info"}
+{"question":"What plan am I currently on?","route":"sensitive"}

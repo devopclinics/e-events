@@ -22,6 +22,48 @@ from ..schemas import (
 
 router = APIRouter(prefix="/api/v1/design")
 
+HUB_MODULES = {"guest_pass", "next_action", "activity_progress", "live_program", "festiome", "messages"}
+HUB_DEFAULT_TABS = {"pass", "activity", "program", "messages", "activity_when_actionable"}
+HUB_VARIANTS = {"guest_pass": {"compact"}, "live_program": {"now_plus_two", "now_only"}}
+DEFAULT_HUB_LAYOUT = {
+    "version": 1,
+    "defaultTab": "activity_when_actionable",
+    "modules": [
+        {"key": "guest_pass", "label": "Guest pass", "visible": True},
+        {"key": "next_action", "label": "Next action", "visible": True},
+        {"key": "activity_progress", "label": "Activity progress", "visible": True},
+        {"key": "live_program", "label": "Live Program", "visible": True, "variant": "now_plus_two"},
+        {"key": "festiome", "label": "FestioMe community", "visible": True},
+        {"key": "messages", "label": "Messages", "visible": True},
+    ],
+}
+
+
+def validate_hub_layout(value: dict | None, *, strict: bool = True) -> dict:
+    if not value:
+        return DEFAULT_HUB_LAYOUT
+    try:
+        if value.get("version") != 1 or value.get("defaultTab") not in HUB_DEFAULT_TABS:
+            raise ValueError("unsupported version or default tab")
+        modules = value.get("modules")
+        if not isinstance(modules, list) or not 1 <= len(modules) <= len(HUB_MODULES):
+            raise ValueError("invalid module list")
+        keys = [item.get("key") for item in modules if isinstance(item, dict)]
+        if len(keys) != len(modules) or len(set(keys)) != len(keys) or not set(keys) <= HUB_MODULES:
+            raise ValueError("unknown or duplicate module")
+        pass_module = next((item for item in modules if item.get("key") == "guest_pass"), None)
+        if not pass_module or pass_module.get("visible") is False:
+            raise ValueError("guest_pass is required")
+        for item in modules:
+            variant = item.get("variant")
+            if variant and variant not in HUB_VARIANTS.get(item["key"], set()):
+                raise ValueError("unsupported module variant")
+        return {"version": 1, "defaultTab": value["defaultTab"], "modules": modules}
+    except (AttributeError, TypeError, ValueError) as exc:
+        if strict:
+            raise HTTPException(400, f"invalid FestioHub layout: {exc}") from exc
+        return DEFAULT_HUB_LAYOUT
+
 
 def require_internal(x_internal_token: str | None = Header(default=None)) -> None:
     """Write + internal-read guard. If no token is configured (local dev), allow;
@@ -116,6 +158,9 @@ def put_event_design(event_id: str, body: EventDesignIn, x_org_id: str | None = 
     if body.selected_flyer_template_id and not get_template(body.selected_flyer_template_id):
         raise HTTPException(400, "unknown selected_flyer_template_id")
     data = body.model_dump(exclude_unset=True, exclude_none=True)
+    theme = data.get("theme_config")
+    if isinstance(theme, dict) and "hubLayout" in theme:
+        theme["hubLayout"] = validate_hub_layout(theme.get("hubLayout"))
     if x_org_id:
         data["organization_id"] = x_org_id
     saved = save_design(event_id, data)
@@ -147,11 +192,47 @@ def _resolve(event_id: str, *, published_only: bool = False) -> tuple[dict, dict
     return tpl, design, False
 
 
+HUB_MODULE_CAPABILITY = {
+    "next_action": "experience_enabled",
+    "activity_progress": "experience_enabled",
+    "live_program": "live_program_enabled",
+    "festiome": "festiome_enabled",
+}
+
+
+def _intersect_hub_layout(layout: dict, capabilities: dict) -> dict:
+    """Server-side safety net: a module stays visible only if BOTH the saved
+    layout says so AND the caller-supplied capability for it is true. This is
+    additive-only filtering (never adds visibility a caller didn't already
+    have) — the frontend already pairs each render with its own capability
+    check, but a future consumer of this endpoint that forgets to replicate
+    that pairing should still get an already-safe layout back, per "ignore
+    disabled modules even if stale layout data says they are visible."
+    """
+    modules = []
+    for module in layout.get("modules", []):
+        cap_key = HUB_MODULE_CAPABILITY.get(module.get("key"))
+        visible = module.get("visible", True) and (cap_key is None or capabilities.get(cap_key, False))
+        modules.append({**module, "visible": visible})
+    return {**layout, "modules": modules}
+
+
 @router.get("/events/{event_id}/public-theme", response_model=PublicTheme)
-def public_theme(event_id: str):
+def public_theme(
+    event_id: str,
+    experience_enabled: bool = False,
+    live_program_enabled: bool = False,
+    festiome_enabled: bool = False,
+):
     tpl, design, is_default = _resolve(event_id, published_only=True)
     colors = {**tpl["defaultColors"], **(design.get("theme_config", {}).get("colors", {}))}
     assets = design.get("asset_config", {})
+    hub_layout = validate_hub_layout(design.get("theme_config", {}).get("hubLayout"), strict=False)
+    hub_layout = _intersect_hub_layout(hub_layout, {
+        "experience_enabled": experience_enabled,
+        "live_program_enabled": live_program_enabled,
+        "festiome_enabled": festiome_enabled,
+    })
     return PublicTheme(
         event_id=event_id,
         template_id=tpl["id"],
@@ -164,6 +245,7 @@ def public_theme(event_id: str):
         flyer_image_url=assets.get("flyer_image_url"),
         wording=design.get("wording_config", {}),
         pass_options=design.get("theme_config", {}).get("passOptions", {}),
+        hub_layout=hub_layout,
         page_config=design.get("page_config", {}),
     )
 

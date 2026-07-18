@@ -1521,6 +1521,12 @@ class ScanResult(BaseModel):
     table_name: Optional[str] = None
     seat_number: Optional[str] = None
     experience_next_steps: list[ExperienceNextStepOut] = Field(default_factory=list)
+    # Additive, staff-only operational context. Missing values are omitted by
+    # clients, so basic and legacy events keep their compact admission result.
+    guest_summary: dict[str, Optional[str]] = Field(default_factory=dict)
+    eligibilities: list[dict[str, str]] = Field(default_factory=list)
+    station_action: Optional[dict] = None
+    remaining_action_count: int = 0
 
 
 class EventBrief(BaseModel):
@@ -1545,6 +1551,7 @@ class EventBrief(BaseModel):
     # FestioMe group messaging — surfaced on the pass/hub so admitted guests can
     # open their event community directly.
     festiome_addon_enabled: bool = False
+    festiome_enabled: bool = False
 
 
 class PartnerInfo(BaseModel):
@@ -1803,6 +1810,10 @@ class InvitePageOut(BaseModel):
     rsvp_token: Optional[str] = None
     rsvp_enabled: bool
     experience_enabled: bool = False
+    live_program_enabled: bool = False
+    festiome_addon_enabled: bool = False
+    festiome_enabled: bool = False
+    guest_hub_v2: bool = True
     rsvp_collect_phone: bool
     rsvp_collect_email: bool
     rsvp_email_required: bool = True

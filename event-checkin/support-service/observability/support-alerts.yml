@@ -1,0 +1,26 @@
+groups:
+  - name: support-ai-staging
+    rules:
+      - alert: SupportDeadLettersPresent
+        expr: support_ai{metric="dead_depth"} > 0
+        for: 2m
+        labels: { severity: warning, environment: staging }
+        annotations:
+          summary: Support AI has dead-letter jobs
+      - alert: SupportQueueBacklog
+        expr: support_ai{metric="queue_depth"} > 25
+        for: 5m
+        labels: { severity: warning, environment: staging }
+        annotations:
+          summary: Support AI queue has sustained backlog
+      - alert: SupportOldJob
+        expr: support_ai{metric="oldest_job_age_seconds"} > 300
+        for: 2m
+        labels: { severity: warning, environment: staging }
+        annotations:
+          summary: Oldest support job is over five minutes old
+      - alert: SupportLocalTimeouts
+        expr: increase(support_ai{metric="local_timeout"}[15m]) > 3
+        labels: { severity: info, environment: staging }
+        annotations:
+          summary: Local classifier is repeatedly timing out

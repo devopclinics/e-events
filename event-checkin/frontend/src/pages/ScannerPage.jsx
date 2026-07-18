@@ -104,6 +104,7 @@ function ZoneResultCard({ result, onReset }) {
 }
 
 function ResultCard({ result, onReset, onStepComplete, stepActionLoading, timezone }) {
+  const [showRemaining, setShowRemaining] = useState(false)
   const cfg = {
     admitted:        { bg: 'bg-green-500',  icon: '✓', heading: 'ADMITTED' },
     offline_queued:  { bg: 'bg-teal-600',   icon: '✓', heading: 'ADMITTED OFFLINE' },
@@ -120,12 +121,49 @@ function ResultCard({ result, onReset, onStepComplete, stepActionLoading, timezo
     no_seat_available:{ bg: 'bg-red-600',   icon: '🚫', heading: 'NO SEAT AVAILABLE' },
   }[result.status] || { bg: 'bg-gray-500', icon: '?', heading: 'UNKNOWN' }
 
+  const steps = result.experience_next_steps || []
+  const renderStep = ({ step, progress }, priority = false) => {
+    const messages = step.config?.messages || {}
+    const prompt = messages.staff || step.config?.staff_prompt || step.description
+    const session = normalizeSessionConfig(step.config || {})
+    const sessionInfo = step.type === 'session_attendance' ? sessionSummary(session) : ''
+    const sessionNeedsSetup = step.type === 'session_attendance' && !hasSessionDetails(session)
+    const windowState = step.type === 'session_attendance' ? sessionWindowState(session) : { open: true, reason: '' }
+    const sessionWindowClosed = step.type === 'session_attendance' && !windowState.open
+    const completable = !['check_in', 'seating_assignment', 'meal_selection', 'consent'].includes(step.type)
+    return (
+      <div key={step.id} className={`rounded-xl border border-white/20 ${priority ? 'bg-white/20 p-4' : 'bg-white/10 p-3'}`}>
+        {priority && <div className="mb-2 text-[10px] font-extrabold uppercase tracking-[0.18em] text-white/70">Station action</div>}
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div className="min-w-0 flex-1">
+            <div className="flex flex-wrap items-center gap-2">
+              <span className={priority ? 'text-base font-extrabold' : 'text-sm font-bold'}>{step.title}</span>
+              {step.required && <span className="rounded-full bg-amber-300 px-2 py-0.5 text-[10px] font-bold text-amber-950">Required</span>}
+            </div>
+            {prompt && <div className="mt-1 text-xs leading-5 text-white/80">{prompt}</div>}
+            {sessionInfo && <div className="mt-1 text-xs font-bold text-teal-100">{sessionInfo}</div>}
+            {sessionNeedsSetup && <div className="mt-1 text-xs font-bold text-amber-100">Session setup needed in Admin before check-in.</div>}
+            {!sessionNeedsSetup && sessionWindowClosed && <div className="mt-1 text-xs font-bold text-amber-100">{windowState.reason}</div>}
+          </div>
+          {completable && (
+            <button type="button" onClick={() => onStepComplete?.(step)}
+              disabled={stepActionLoading || sessionNeedsSetup || sessionWindowClosed}
+              className={`${priority ? 'min-h-11 bg-white px-4 text-slate-900' : 'bg-white/20 px-3 text-white'} rounded-lg py-2 text-xs font-extrabold hover:opacity-90 disabled:opacity-50`}>
+              {experienceStepActionLabel(step, sessionNeedsSetup, sessionWindowClosed)}
+            </button>
+          )}
+        </div>
+      </div>
+    )
+  }
+
   return (
-    <div className={`${cfg.bg} ${cfg.ring || ''} text-white rounded-2xl p-8 text-center shadow-2xl`}>
-      <div className={`${cfg.big ? 'text-8xl' : 'text-7xl'} font-bold mb-2 leading-none`}>{cfg.icon}</div>
-      <div className={`${cfg.big ? 'text-3xl' : 'text-2xl'} font-bold mb-1`}>{cfg.heading}</div>
+    <div className={`${cfg.bg} ${cfg.ring || ''} overflow-hidden rounded-2xl text-white shadow-2xl`}>
+      <div className="p-5 text-center sm:p-6">
+      <div className={`${cfg.big ? 'text-6xl' : 'text-5xl'} font-bold mb-2 leading-none`}>{cfg.icon}</div>
+      <div className={`${cfg.big ? 'text-2xl' : 'text-xl'} font-extrabold tracking-wide mb-1`}>{cfg.heading}</div>
       {result.guest && (
-        <div className="mt-4 text-xl font-semibold">
+        <div className="mt-3 text-2xl font-extrabold">
           {result.guest.first_name} {result.guest.last_name}
         </div>
       )}
@@ -146,8 +184,9 @@ function ResultCard({ result, onReset, onStepComplete, stepActionLoading, timezo
           {result.step_error}
         </div>
       )}
-      {(result.table_name || result.seat_number) && (
-        <div className="mt-3 flex justify-center gap-4 text-sm text-white/90">
+      {(result.table_name || result.seat_number || result.ticket_type) && (
+        <div className="mt-4 flex flex-wrap justify-center gap-2 text-sm text-white/90">
+          {result.ticket_type && <span className="rounded-full bg-white/20 px-3 py-1">Ticket: <strong>{result.ticket_type}</strong></span>}
           {result.table_name && (
             <span className="bg-white/20 px-3 py-1 rounded-full">
               Table: <strong>{result.table_name}</strong>
@@ -160,54 +199,50 @@ function ResultCard({ result, onReset, onStepComplete, stepActionLoading, timezo
           )}
         </div>
       )}
-      {result.experience_next_steps?.length > 0 && (
-        <div className="mt-5 rounded-xl bg-black/20 p-4 text-left">
-          <div className="text-xs font-bold uppercase tracking-wide text-white/70">Next steps</div>
-          <div className="mt-2 space-y-2">
-            {result.experience_next_steps.map(({ step, progress }) => {
-              const messages = step.config?.messages || {}
-              const prompt = messages.staff || step.config?.staff_prompt || step.description
-              const session = normalizeSessionConfig(step.config || {})
-              const sessionInfo = step.type === 'session_attendance' ? sessionSummary(session) : ''
-              const sessionNeedsSetup = step.type === 'session_attendance' && !hasSessionDetails(session)
-              const windowState = step.type === 'session_attendance' ? sessionWindowState(session) : { open: true, reason: '' }
-              const sessionWindowClosed = step.type === 'session_attendance' && !windowState.open
-              return (
-              <div key={step.id} className="rounded-lg bg-white/15 px-3 py-2">
-                <div className="flex flex-wrap items-start justify-between gap-2">
-                  <div className="min-w-0">
-                    <div className="flex flex-wrap items-center gap-2">
-                      <span className="text-sm font-bold">{step.title}</span>
-                      {step.required && <span className="rounded-full bg-amber-300 px-2 py-0.5 text-[10px] font-bold text-amber-950">Required</span>}
-                      <span className="rounded-full bg-white/20 px-2 py-0.5 text-[10px] font-bold capitalize text-white/90">
-                        {(progress?.status || 'available').replaceAll('_', ' ')}
-                      </span>
-                    </div>
-                    {prompt && <div className="mt-1 text-xs text-white/80">{prompt}</div>}
-                    {sessionInfo && <div className="mt-1 text-xs font-bold text-teal-100">{sessionInfo}</div>}
-                    {sessionNeedsSetup && <div className="mt-1 text-xs font-bold text-amber-100">Session setup needed in Admin before check-in.</div>}
-                    {!sessionNeedsSetup && sessionWindowClosed && <div className="mt-1 text-xs font-bold text-amber-100">{windowState.reason}</div>}
-                  </div>
-                  {!['check_in', 'seating_assignment', 'meal_selection', 'consent'].includes(step.type) && (
-                    <button type="button" onClick={() => onStepComplete?.(step)}
-                      disabled={stepActionLoading || sessionNeedsSetup || sessionWindowClosed}
-                      className="rounded-lg bg-white/20 px-3 py-1.5 text-xs font-bold text-white hover:bg-white/30 disabled:opacity-50">
-                      {experienceStepActionLabel(step, sessionNeedsSetup, sessionWindowClosed)}
-                    </button>
-                  )}
-                </div>
-              </div>
-              )
-            })}
-          </div>
+      {!!Object.keys(result.guest_summary || {}).length && (
+        <div className="mt-4 grid grid-cols-2 gap-2 text-left text-xs">
+          {Object.entries(result.guest_summary).map(([key, value]) => (
+            <div key={key} className="rounded-xl bg-black/15 px-3 py-2">
+              <div className="capitalize text-white/65">{key.replaceAll('_', ' ')}</div>
+              <div className="mt-0.5 font-extrabold text-white">{value}</div>
+            </div>
+          ))}
         </div>
       )}
+      {!!result.eligibilities?.length && (
+        <div className="mt-3 space-y-2">
+          {result.eligibilities.map((item) => (
+            <div key={item.key} className="flex items-center justify-between rounded-xl bg-black/15 px-4 py-3 text-sm">
+              <span className="font-bold">{item.label}</span>
+              <span className="rounded-full bg-emerald-100 px-3 py-1 text-xs font-extrabold capitalize text-emerald-800">✓ {item.status}</span>
+            </div>
+          ))}
+        </div>
+      )}
+      {steps.length > 0 && (
+        <div className="mt-5 space-y-2 text-left">
+          {renderStep(steps[0], true)}
+          {steps.length > 1 && (
+            <>
+              <button type="button" onClick={() => setShowRemaining((value) => !value)} aria-expanded={showRemaining}
+                className="flex min-h-11 w-full items-center justify-between rounded-xl border border-white/20 bg-black/15 px-4 py-2 text-sm font-bold">
+                <span>{steps.length - 1} more Experience step{steps.length === 2 ? '' : 's'}</span>
+                <span aria-hidden="true">{showRemaining ? '▲' : '▼'}</span>
+              </button>
+              {showRemaining && <div className="space-y-2">{steps.slice(1).map((item) => renderStep(item))}</div>}
+            </>
+          )}
+        </div>
+      )}
+      </div>
+      <div className="sticky bottom-0 border-t border-white/20 bg-black/20 p-4 backdrop-blur">
       <button
         onClick={onReset}
-        className="mt-8 bg-white/20 hover:bg-white/30 text-white font-semibold px-8 py-3 rounded-xl transition-colors"
+        className="min-h-14 w-full rounded-xl bg-white px-6 py-3 text-base font-extrabold text-slate-900 shadow-lg transition hover:bg-slate-100"
       >
-        {result.status === 'checked_out' || result.status === 'already_checked_out' ? 'Check out next guest' : 'Check in next guest'}
+        {result.status === 'checked_out' || result.status === 'already_checked_out' ? 'Check out next guest' : 'Scan next guest'}
       </button>
+      </div>
     </div>
   )
 }
@@ -687,6 +722,7 @@ export default function ScannerPage() {
   const normalCheckoutEnabled = !!selectedEvent?.checkout_enabled && !accessMode
   const selectedZone = zones.find((z) => z.id === zoneId)
   const selectedGate = gates.find((g) => g.id === gateId)
+  const selectedSection = tableGroups.find((group) => group.id === sectionId)
   const scanningReady = !!selectedEvent && selectedEvent.status === 'active'
 
   async function refreshEvents() {
@@ -849,7 +885,8 @@ export default function ScannerPage() {
           offlineAdmit(token)
           return
         }
-        const res = await api.scan(token)
+        const selectedSection = tableGroups.find((group) => group.id === sectionId)
+        const res = await api.scan(token, selectedSection ? { station: selectedSection.name, station_id: selectedSection.id } : undefined)
         setResult(res)
         refreshOfflineManifest(eventId)
       }
@@ -1082,12 +1119,31 @@ export default function ScannerPage() {
   }
 
   return (
-    <div className="max-w-lg mx-auto space-y-6">
-      <div className="text-center space-y-1">
-        <h1 className="text-2xl font-bold dark:text-white">Guest check-in</h1>
-        <p className="text-sm text-gray-500 dark:text-slate-400">
-          {scanningReady ? "Start the camera and point it at a guest's QR code." : 'Choose an active event before scanning guests.'}
-        </p>
+    <div className="mx-auto max-w-2xl space-y-4 pb-24">
+      <div className="rounded-3xl border border-teal-400/20 bg-gradient-to-br from-slate-950 via-slate-900 to-teal-950 p-5 text-white shadow-2xl sm:p-6">
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div>
+            <div className="text-xs font-extrabold uppercase tracking-[0.2em] text-teal-300">Staff operations</div>
+            <h1 className="mt-1 text-3xl font-black">Check-in</h1>
+            <p className="mt-1 text-sm text-slate-300">Scan quickly, confirm the guest, then complete the station action.</p>
+          </div>
+          <span className={`inline-flex items-center gap-2 rounded-full px-3 py-1.5 text-xs font-extrabold ${navigator.onLine ? 'bg-emerald-400/15 text-emerald-200' : 'bg-amber-400/15 text-amber-200'}`}>
+            <span className={`h-2 w-2 rounded-full ${navigator.onLine ? 'bg-emerald-400' : 'bg-amber-400'}`} />
+            {navigator.onLine ? 'Online' : 'Offline mode'}
+          </span>
+        </div>
+        <div className="mt-5 grid gap-3 sm:grid-cols-[minmax(0,1fr)_220px]">
+          <label className="text-xs font-bold text-slate-300">Event
+            <select className="mt-1 min-h-12 w-full rounded-xl border border-white/15 bg-slate-900 px-3 text-sm font-bold text-white" value={eventId} onChange={(e) => setEventId(e.target.value)}>
+              <option value="">— select event —</option>
+              {events.map((ev) => <option key={ev.id} value={ev.id}>{ev.couples_name ? `${ev.name} — ${ev.couples_name}` : ev.name}</option>)}
+            </select>
+          </label>
+          <div className="rounded-xl border border-white/15 bg-white/5 px-4 py-3">
+            <div className="text-[10px] font-extrabold uppercase tracking-[0.16em] text-slate-400">Station</div>
+            <div className="mt-1 truncate text-sm font-extrabold">{selectedSection?.name || selectedGate?.name || selectedZone?.name || 'Registration desk'}</div>
+          </div>
+        </div>
         {queuedActions > 0 && (
           <p className="text-xs font-semibold text-amber-600 dark:text-amber-300">
             {queuedActions} Experience action{queuedActions === 1 ? '' : 's'} pending sync
@@ -1100,7 +1156,7 @@ export default function ScannerPage() {
         )}
       </div>
 
-      {events.length > 1 && (
+      {false && events.length > 1 && (
         <div className="bg-white dark:bg-slate-800 dark:border dark:border-slate-700/60 rounded-xl shadow p-4">
           <label className="block text-xs font-semibold text-gray-600 dark:text-slate-300 mb-1">Event</label>
           <select
@@ -1212,7 +1268,7 @@ export default function ScannerPage() {
         </div>
       )}
 
-      <div className="bg-white dark:bg-slate-800 dark:border dark:border-slate-700/60 rounded-xl shadow p-6">
+      <div className="rounded-3xl border border-slate-200 bg-white p-4 shadow-xl dark:border-slate-700/60 dark:bg-slate-900 sm:p-6">
         {loading && (
           <div className="text-center py-8">
             <div className="inline-block w-10 h-10 border-4 border-indigo-500 border-t-transparent rounded-full animate-spin" />
@@ -1239,16 +1295,16 @@ export default function ScannerPage() {
         {!loading && !result && scanningReady && (
           <div>
             {(normalCheckoutEnabled || manualWalkInEnabled || selfCheckinEnabled) && (
-              <div className="flex gap-2 mb-4">
+              <div className="mb-5 grid grid-cols-3 gap-2 rounded-2xl bg-slate-100 p-1.5 dark:bg-slate-800">
                 {[
-                  ['qr', 'QR Scan'],
+                  ['qr', 'Camera'],
                   ...(normalCheckoutEnabled ? [['checkout', 'Check-out']] : []),
-                  ...(manualWalkInEnabled ? [['manual', 'Manual / Walk-in']] : []),
+                  ...(manualWalkInEnabled ? [['manual', 'Manual search']] : []),
                   ...(selfCheckinEnabled ? [['eventqr', 'Event QR']] : []),
                 ].map(([m, label]) => (
                   <button key={m} onClick={() => setMode(m)}
-                    className={`flex-1 py-2 rounded-lg text-sm font-semibold ${
-                      mode === m ? 'bg-teal-600 text-white' : 'bg-gray-100 dark:bg-slate-700 text-gray-600 dark:text-slate-300'
+                    className={`min-h-11 rounded-xl px-2 py-2 text-xs font-extrabold sm:text-sm ${
+                      mode === m ? 'bg-teal-500 text-slate-950 shadow' : 'text-gray-600 dark:text-slate-300'
                     }`}>
                     {label}
                   </button>
@@ -1277,8 +1333,8 @@ export default function ScannerPage() {
       </div>
 
       {scanningReady && (
-      <div className="bg-white dark:bg-slate-800 dark:border dark:border-slate-700/60 rounded-xl shadow p-4">
-        <p className="text-xs font-semibold text-gray-600 dark:text-slate-300 mb-2">Look up by QR link or code</p>
+      <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-lg dark:border-slate-700/60 dark:bg-slate-900">
+        <p className="mb-2 text-xs font-extrabold uppercase tracking-[0.14em] text-gray-500 dark:text-slate-400">Enter a QR code manually</p>
         <form
           onSubmit={(e) => {
             e.preventDefault()
@@ -1293,7 +1349,7 @@ export default function ScannerPage() {
             placeholder="Paste QR link or code..."
             className="flex-1 border border-gray-300 dark:border-slate-700 rounded-lg px-3 py-2 text-sm bg-white dark:bg-slate-700 text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-slate-500"
           />
-          <button type="submit" className="bg-indigo-600 text-white px-4 py-2 rounded-lg text-sm font-semibold">
+          <button type="submit" className="min-h-11 rounded-xl bg-teal-500 px-5 py-2 text-sm font-extrabold text-slate-950">
             Check in
           </button>
         </form>

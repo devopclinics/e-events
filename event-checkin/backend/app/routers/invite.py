@@ -16,6 +16,7 @@ from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException
 from sqlalchemy import func, select, or_
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from ..config import settings
 from ..database import get_db
 from ..models import Event, Guest, RSVPAnswer, RSVPQuestion, SeatingTable, Shipment, GuestShipment, TableGroup, TicketType
 from ..schemas import (
@@ -201,6 +202,10 @@ async def _invite_page_out(event: Event, db: AsyncSession) -> InvitePageOut:
         invite_cover_image=event.invite_cover_image,
         rsvp_enabled=event.rsvp_enabled,
         experience_enabled=event.experience_enabled,
+        live_program_enabled=event.live_program_enabled,
+        festiome_addon_enabled=event.festiome_addon_enabled,
+        festiome_enabled=event.festiome_enabled,
+        guest_hub_v2=settings.guest_hub_v2,
         rsvp_collect_phone=event.rsvp_collect_phone,
         rsvp_collect_email=event.rsvp_collect_email,
         rsvp_allow_duplicate_emails=event.rsvp_allow_duplicate_emails,

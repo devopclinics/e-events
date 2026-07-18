@@ -10,6 +10,7 @@ async def _prep(event_id, *, manual=True):
     async with _Session() as s:
         ev = await s.get(Event, event_id)
         ev.is_paid = True
+        ev.plan_tier = "tier300"
         ev.status = "active"
         ev.manual_checkin_enabled = manual
         await s.execute(delete(Guest).where(Guest.event_id == event_id))  # clean seeded guest
@@ -32,6 +33,7 @@ async def test_toggle_requires_superadmin(ctx):
 @pytest.mark.asyncio
 async def test_superadmin_can_toggle(ctx):
     ev = ctx.ids["event_a"]
+    await _prep(ev, manual=False)
     ctx.login(ctx.ids["superadmin"])
     r = await ctx.client.patch(f"/api/admin/events/{ev}/manual-checkin", json={"active": True})
     assert r.status_code == 200 and r.json()["manual_checkin_enabled"] is True

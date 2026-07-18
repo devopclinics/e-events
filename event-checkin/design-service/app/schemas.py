@@ -38,6 +38,7 @@ class PublicTheme(BaseModel):
     flyer_image_url: str | None = None
     wording: dict = Field(default_factory=dict)
     pass_options: dict = Field(default_factory=dict)
+    hub_layout: dict = Field(default_factory=dict)
     page_config: dict = Field(default_factory=dict)
 
 

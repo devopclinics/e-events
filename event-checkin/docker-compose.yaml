@@ -154,13 +154,22 @@ services:
   support-service:
     build: ./support-service
     image: dclinics/events:support-1.0.0
+    command: ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8002", "--no-access-log"]
     env_file: ./backend/.env
     environment:
       PORT: 8002
       SUPPORT_AI_ENABLED: ${SUPPORT_AI_ENABLED:-true}
       SUPPORT_AI_HOURLY_CAP: ${SUPPORT_AI_HOURLY_CAP:-20}
-      SUPPORT_AI_AUTO_SEND: ${SUPPORT_AI_AUTO_SEND:-true}
-      SUPPORT_AI_GATING_ENABLED: ${SUPPORT_AI_GATING_ENABLED:-false}
+      SUPPORT_AI_AUTO_SEND: ${SUPPORT_AI_AUTO_SEND:-false}
+      SUPPORT_AI_GLOBAL_HOURLY_CAP: ${SUPPORT_AI_GLOBAL_HOURLY_CAP:-500}
+      SUPPORT_AI_GATING_ENABLED: ${SUPPORT_AI_GATING_ENABLED:-true}
+      SUPPORT_RUN_WORKER: "false"
+      SUPPORT_LOCAL_AI_ENABLED: ${SUPPORT_LOCAL_AI_ENABLED:-false}
+      SUPPORT_LOCAL_AI_URL: ${SUPPORT_LOCAL_AI_URL:-http://local-ai:8080}
+      SUPPORT_LOCAL_AI_MODEL: ${SUPPORT_LOCAL_AI_MODEL:-support-router-3b}
+      SUPPORT_LOCAL_AI_SHADOW_MODE: ${SUPPORT_LOCAL_AI_SHADOW_MODE:-true}
+      SUPPORT_LOCAL_AI_AUTO_REPLY: ${SUPPORT_LOCAL_AI_AUTO_REPLY:-false}
+      SUPPORT_LOCAL_AI_DRAFTING_ENABLED: ${SUPPORT_LOCAL_AI_DRAFTING_ENABLED:-false}
       CHATWOOT_BASE_URL: ${CHATWOOT_BASE_URL:-http://chatwoot:3000}
       CHATWOOT_ACCOUNT_ID: ${CHATWOOT_ACCOUNT_ID:-}
       CHATWOOT_INBOX_ID: ${CHATWOOT_INBOX_ID:-}
@@ -172,11 +181,100 @@ services:
     depends_on:
       db:
         condition: service_healthy
+      redis:
+        condition: service_healthy
     healthcheck:
       test: ["CMD-SHELL", "python -c \"import urllib.request; urllib.request.urlopen('http://localhost:8002/health', timeout=3).read()\""]
       interval: 10s
       timeout: 5s
       retries: 5
+    restart: unless-stopped
+
+  support-worker:
+    build: ./support-service
+    image: dclinics/events:support-1.0.0
+    command: ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8002", "--no-access-log"]
+    env_file: ./backend/.env
+    environment:
+      SUPPORT_RUN_WORKER: "true"
+      SUPPORT_WORKER_CONCURRENCY: ${SUPPORT_WORKER_CONCURRENCY:-1}
+      SUPPORT_AI_ENABLED: ${SUPPORT_AI_ENABLED:-true}
+      SUPPORT_AI_AUTO_SEND: ${SUPPORT_AI_AUTO_SEND:-false}
+      SUPPORT_AI_GATING_ENABLED: ${SUPPORT_AI_GATING_ENABLED:-true}
+      SUPPORT_LOCAL_AI_ENABLED: ${SUPPORT_LOCAL_AI_ENABLED:-false}
+      SUPPORT_LOCAL_AI_URL: ${SUPPORT_LOCAL_AI_URL:-http://local-ai:8080}
+      SUPPORT_LOCAL_AI_MODEL: ${SUPPORT_LOCAL_AI_MODEL:-support-router-3b}
+      SUPPORT_LOCAL_AI_TIMEOUT_SECONDS: ${SUPPORT_LOCAL_AI_TIMEOUT_SECONDS:-30}
+      SUPPORT_LOCAL_AI_SHADOW_MODE: ${SUPPORT_LOCAL_AI_SHADOW_MODE:-true}
+      SUPPORT_LOCAL_AI_AUTO_REPLY: ${SUPPORT_LOCAL_AI_AUTO_REPLY:-false}
+      SUPPORT_LOCAL_AI_DRAFTING_ENABLED: ${SUPPORT_LOCAL_AI_DRAFTING_ENABLED:-false}
+      GEMINI_MAX_OUTPUT_TOKENS: ${GEMINI_MAX_OUTPUT_TOKENS:-1400}
+      REDIS_URL: ${REDIS_URL:-redis://redis:6379/0}
+      CHATWOOT_BASE_URL: ${CHATWOOT_BASE_URL:-http://chatwoot:3000}
+      CHATWOOT_ACCOUNT_ID: ${CHATWOOT_ACCOUNT_ID:-}
+      CHATWOOT_API_ACCESS_TOKEN: ${CHATWOOT_API_ACCESS_TOKEN:-}
+      CHATWOOT_HMAC_SECRET: ${CHATWOOT_HMAC_SECRET:-}
+      CHATWOOT_WEBHOOK_TOKEN: ${CHATWOOT_WEBHOOK_TOKEN:-}
+      GEMINI_API_KEY: ${GEMINI_API_KEY:-}
+    depends_on:
+      redis:
+        condition: service_healthy
+    restart: unless-stopped
+
+  local-ai:
+    image: ghcr.io/ggml-org/llama.cpp:server
+    profiles: ["local-ai"]
+    command: ["-m", "/models/llama-3.2-3b-instruct-q4_k_m.gguf", "--alias", "support-router-3b", "--host", "0.0.0.0", "--port", "8080", "-c", "4096", "-np", "1", "-n", "512"]
+    volumes:
+      - local-ai-models:/models
+    expose:
+      - "8080"
+    deploy:
+      resources:
+        limits:
+          cpus: "2"
+          memory: 4G
+    restart: unless-stopped
+
+  support-prometheus:
+    image: prom/prometheus:v3.5.0
+    profiles: ["support-observability"]
+    command: ["--config.file=/etc/prometheus/prometheus.yml", "--storage.tsdb.retention.time=7d"]
+    volumes:
+      - ./support-service/observability/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - ./support-service/observability/support-alerts.yml:/etc/prometheus/support-alerts.yml:ro
+      - support-prometheus-data:/prometheus
+    ports:
+      - "9091:9090"
+    restart: unless-stopped
+
+  support-alertmanager:
+    image: prom/alertmanager:v0.28.1
+    profiles: ["support-observability"]
+    command: ["--config.file=/etc/alertmanager/alertmanager.yml", "--storage.path=/alertmanager"]
+    volumes:
+      - ./support-service/observability/alertmanager.yml:/etc/alertmanager/alertmanager.yml:ro
+      - support-alertmanager-data:/alertmanager
+    ports:
+      - "9094:9093"
+    restart: unless-stopped
+
+  support-grafana:
+    image: grafana/grafana:12.1.0
+    profiles: ["support-observability"]
+    environment:
+      GF_SECURITY_ADMIN_USER: ${SUPPORT_GRAFANA_USER:-admin}
+      GF_SECURITY_ADMIN_PASSWORD: ${SUPPORT_GRAFANA_PASSWORD:-staging-only-change-me}
+      GF_USERS_ALLOW_SIGN_UP: "false"
+    volumes:
+      - ./support-service/observability/grafana-datasource.yml:/etc/grafana/provisioning/datasources/support.yml:ro
+      - ./support-service/observability/grafana-dashboard-provider.yml:/etc/grafana/provisioning/dashboards/support.yml:ro
+      - ./support-service/observability/support-dashboard.json:/var/lib/grafana/dashboards/support.json:ro
+      - support-grafana-data:/var/lib/grafana
+    ports:
+      - "3001:3000"
+    depends_on:
+      - support-prometheus
     restart: unless-stopped
 
   # ── Guided event setup helper — orchestrates backend's REST API ────────────
@@ -412,3 +510,11 @@ volumes:
     name: event-checkin_chatwoot-pgdata
   chatwoot-redisdata:
     name: event-checkin_chatwoot-redisdata
+  local-ai-models:
+    name: event-checkin_local-ai-models
+  support-prometheus-data:
+    name: event-checkin_support-prometheus-data
+  support-alertmanager-data:
+    name: event-checkin_support-alertmanager-data
+  support-grafana-data:
+    name: event-checkin_support-grafana-data

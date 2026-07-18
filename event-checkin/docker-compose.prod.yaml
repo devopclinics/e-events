@@ -97,12 +97,16 @@ services:
       PORT: 8002
       SUPPORT_AI_ENABLED: ${SUPPORT_AI_ENABLED:-true}
       SUPPORT_AI_HOURLY_CAP: ${SUPPORT_AI_HOURLY_CAP:-20}
-      SUPPORT_AI_AUTO_SEND: ${SUPPORT_AI_AUTO_SEND:-true}
-      SUPPORT_AI_GATING_ENABLED: ${SUPPORT_AI_GATING_ENABLED:-false}
+      SUPPORT_AI_AUTO_SEND: ${SUPPORT_AI_AUTO_SEND:-false}
+      SUPPORT_AI_GLOBAL_HOURLY_CAP: ${SUPPORT_AI_GLOBAL_HOURLY_CAP:-500}
+      SUPPORT_AI_GATING_ENABLED: ${SUPPORT_AI_GATING_ENABLED:-true}
       SUPPORT_LOCAL_AI_ENABLED: ${SUPPORT_LOCAL_AI_ENABLED:-false}
       SUPPORT_LOCAL_AI_URL: ${SUPPORT_LOCAL_AI_URL:-http://local-ai:8080}
-      SUPPORT_LOCAL_AI_MODEL: ${SUPPORT_LOCAL_AI_MODEL:-}
+      SUPPORT_LOCAL_AI_MODEL: ${SUPPORT_LOCAL_AI_MODEL:-support-router-3b}
       SUPPORT_LOCAL_AI_CONFIDENCE_THRESHOLD: ${SUPPORT_LOCAL_AI_CONFIDENCE_THRESHOLD:-0.90}
+      SUPPORT_LOCAL_AI_SHADOW_MODE: ${SUPPORT_LOCAL_AI_SHADOW_MODE:-true}
+      SUPPORT_LOCAL_AI_AUTO_REPLY: ${SUPPORT_LOCAL_AI_AUTO_REPLY:-false}
+      SUPPORT_RUN_WORKER: "false"
       CHATWOOT_BASE_URL: ${CHATWOOT_BASE_URL:-http://chatwoot:3000}
       CHATWOOT_ACCOUNT_ID: ${CHATWOOT_ACCOUNT_ID:-}
       CHATWOOT_INBOX_ID: ${CHATWOOT_INBOX_ID:-}
@@ -119,6 +123,47 @@ services:
       interval: 10s
       timeout: 5s
       retries: 5
+    restart: unless-stopped
+
+  support-worker:
+    image: dclinics/events:support-${APP_VERSION:-latest}
+    pull_policy: always
+    env_file: ./backend/.env
+    environment:
+      SUPPORT_RUN_WORKER: "true"
+      SUPPORT_WORKER_CONCURRENCY: ${SUPPORT_WORKER_CONCURRENCY:-1}
+      SUPPORT_LOCAL_AI_ENABLED: ${SUPPORT_LOCAL_AI_ENABLED:-false}
+      SUPPORT_LOCAL_AI_URL: ${SUPPORT_LOCAL_AI_URL:-http://local-ai:8080}
+      SUPPORT_LOCAL_AI_MODEL: ${SUPPORT_LOCAL_AI_MODEL:-support-router-3b}
+      SUPPORT_LOCAL_AI_TIMEOUT_SECONDS: ${SUPPORT_LOCAL_AI_TIMEOUT_SECONDS:-20}
+      SUPPORT_LOCAL_AI_SHADOW_MODE: ${SUPPORT_LOCAL_AI_SHADOW_MODE:-true}
+      SUPPORT_LOCAL_AI_AUTO_REPLY: ${SUPPORT_LOCAL_AI_AUTO_REPLY:-false}
+      REDIS_URL: ${REDIS_URL:-redis://redis:6379/0}
+      CHATWOOT_BASE_URL: ${CHATWOOT_BASE_URL:-http://chatwoot:3000}
+      CHATWOOT_ACCOUNT_ID: ${CHATWOOT_ACCOUNT_ID:-}
+      CHATWOOT_API_ACCESS_TOKEN: ${CHATWOOT_API_ACCESS_TOKEN:-}
+      CHATWOOT_HMAC_SECRET: ${CHATWOOT_HMAC_SECRET:-}
+      CHATWOOT_WEBHOOK_TOKEN: ${CHATWOOT_WEBHOOK_TOKEN:-}
+      GEMINI_API_KEY: ${GEMINI_API_KEY:-}
+    command: ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8002"]
+    depends_on:
+      redis:
+        condition: service_healthy
+    restart: unless-stopped
+
+  local-ai:
+    image: ghcr.io/ggml-org/llama.cpp:server
+    profiles: ["local-ai"]
+    command: ["-m", "/models/llama-3.2-3b-instruct-q4_k_m.gguf", "--alias", "support-router-3b", "--host", "0.0.0.0", "--port", "8080", "-c", "4096", "-np", "1", "-n", "512"]
+    volumes:
+      - local-ai-models:/models
+    expose:
+      - "8080"
+    deploy:
+      resources:
+        limits:
+          cpus: "2"
+          memory: 4G
     restart: unless-stopped
 
   # ── Guided event setup helper — orchestrates backend's REST API ────────────
@@ -430,6 +475,8 @@ volumes:
     name: event-checkin_pgdata
   uploads:
     name: event-checkin_uploads
+  local-ai-models:
+    name: event-checkin_local-ai-models
   design-assets:
     name: event-checkin_design-assets
   festiome-pgdata:

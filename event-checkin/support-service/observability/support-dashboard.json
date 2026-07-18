@@ -1,0 +1,14 @@
+{
+  "title": "Support AI — Staging",
+  "uid": "support-ai-staging",
+  "schemaVersion": 39,
+  "refresh": "15s",
+  "panels": [
+    {"id": 1, "type": "stat", "title": "Queue Depth", "targets": [{"expr": "support_ai{metric=\"queue_depth\"}"}], "gridPos": {"h": 6, "w": 6, "x": 0, "y": 0}},
+    {"id": 2, "type": "stat", "title": "Oldest Job (seconds)", "targets": [{"expr": "support_ai{metric=\"oldest_job_age_seconds\"}"}], "gridPos": {"h": 6, "w": 6, "x": 6, "y": 0}},
+    {"id": 3, "type": "stat", "title": "Dead Letters", "targets": [{"expr": "support_ai{metric=\"dead_depth\"}"}], "gridPos": {"h": 6, "w": 6, "x": 12, "y": 0}},
+    {"id": 4, "type": "stat", "title": "Cache Hit Rate", "targets": [{"expr": "support_ai{metric=\"cache_hit\"} / clamp_min(support_ai{metric=\"cache_hit\"} + support_ai{metric=\"cache_miss\"}, 1)"}], "gridPos": {"h": 6, "w": 6, "x": 18, "y": 0}},
+    {"id": 5, "type": "timeseries", "title": "Routing and Provider Activity", "targets": [{"expr": "rate(support_ai{metric=~\"local_requests|gemini_requests|human_escalated\"}[5m])", "legendFormat": "{{metric}}"}], "gridPos": {"h": 8, "w": 12, "x": 0, "y": 6}},
+    {"id": 6, "type": "timeseries", "title": "Failures and Retries", "targets": [{"expr": "increase(support_ai{metric=~\"local_timeout|gemini_failed|retried|dead\"}[15m])", "legendFormat": "{{metric}}"}], "gridPos": {"h": 8, "w": 12, "x": 12, "y": 6}}
+  ]
+}

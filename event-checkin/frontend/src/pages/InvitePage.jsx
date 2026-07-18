@@ -1015,6 +1015,7 @@ function GuestHub({ event, accessToken, designTheme }) {
   const [message, setMessage] = useState('')
   const [chatMessage, setChatMessage] = useState('')
   const [programDay, setProgramDay] = useState('')
+  const [hubTab, setHubTab] = useState('pass')
   const [showAllActivity, setShowAllActivity] = useState(false)
   const [sending, setSending] = useState(false)
   const [sendingChat, setSendingChat] = useState(false)
@@ -1036,6 +1037,25 @@ function GuestHub({ event, accessToken, designTheme }) {
   const [pushState, setPushState] = useState('')
   const [pushBusy, setPushBusy] = useState(false)
   const [pushError, setPushError] = useState('')
+  const hubLayout = designTheme?.hub_layout || {}
+  const hubModuleVisible = (key) => {
+    const module = (hubLayout.modules || []).find((item) => item.key === key)
+    return module ? module.visible !== false : true
+  }
+  const effectiveHubModules = hubLayout.modules?.length ? hubLayout.modules : [
+    { key: 'guest_pass', visible: true },
+    { key: 'next_action', visible: true },
+    { key: 'activity_progress', visible: true },
+    { key: 'live_program', visible: true },
+    { key: 'festiome', visible: true },
+    { key: 'messages', visible: true },
+  ]
+  // Staging rollout flag: when off, fall back to the pre-tab layout — every
+  // section renders at once (as it did before the tab bar existed) instead
+  // of being gated to a single active tab.
+  const guestHubV2 = event?.guest_hub_v2 !== false
+  const tabActive = (key) => !guestHubV2 || hubTab === key
+  const tabsActive = (keys) => !guestHubV2 || keys.includes(hubTab)
 
   useEffect(() => {
     const capture = (e) => { e.preventDefault(); setInstallPrompt(e); window.__festioInstallPrompt = e }
@@ -1149,6 +1169,16 @@ function GuestHub({ event, accessToken, designTheme }) {
   }, [event?.id, accessToken])
 
   useEffect(() => { loadJourney() }, [loadJourney])
+  useEffect(() => {
+    const configured = hubLayout.defaultTab
+    if (configured === 'activity_when_actionable') {
+      setHubTab(journey?.next_steps?.length ? 'activity' : 'pass')
+    } else if (['pass', 'activity', 'program', 'messages'].includes(configured)) {
+      setHubTab(configured)
+    } else if (journey?.next_steps?.length) {
+      setHubTab((current) => current === 'pass' ? 'activity' : current)
+    }
+  }, [journey?.next_steps?.length, hubLayout.defaultTab])
   useEffect(() => {
     if (!event?.id || !accessToken) return undefined
     const timer = setInterval(loadJourney, 30000)
@@ -1288,14 +1318,68 @@ function GuestHub({ event, accessToken, designTheme }) {
           )}
         </div>
 
-        {showInstallDialog && (
+        {guestHubV2 && (
+          <div className="mt-5 grid grid-cols-4 gap-1 rounded-2xl border p-1" style={{ background: tone.panel, borderColor: tone.border }} role="tablist" aria-label="FestioHub sections">
+            {[
+              ['pass', 'Pass'],
+              ['activity', 'Activity'],
+              ['program', 'Program'],
+              ['messages', 'Messages'],
+            ].filter(([key]) => key !== 'program' || (journey?.program?.enabled && hubModuleVisible('live_program')))
+              .filter(([key]) => key !== 'messages' || (hubModuleVisible('messages') && (hub?.capabilities?.direct_host_messages || hub?.capabilities?.guest_chat)))
+              .map(([key, label]) => (
+                <button key={key} type="button" role="tab" aria-selected={hubTab === key} onClick={() => setHubTab(key)}
+                  className="min-h-11 rounded-xl px-2 py-2 text-xs font-extrabold sm:text-sm"
+                  style={{ background: hubTab === key ? tone.accent : 'transparent', color: hubTab === key ? tone.background : tone.text }}>
+                  {label}
+                </button>
+              ))}
+          </div>
+        )}
+
+        {guestHubV2 && hubTab === 'activity' && (
+          <div className="mt-5 grid gap-3">
+            {effectiveHubModules.filter((module) => module.visible !== false).map((module) => {
+              const activityDetailShown = hubModuleVisible('activity_progress') && journey?.experience_enabled && journey.steps?.length > 0
+              if (module.key === 'guest_pass' && hub?.guest?.qr_token) return (
+                <a key={module.key} href={`/scan/${hub.guest.qr_token}`} className="flex min-h-16 items-center justify-between rounded-2xl border p-4" style={{ background: tone.panel, borderColor: tone.border, color: tone.text }}>
+                  <span><span className="block text-xs font-extrabold uppercase tracking-[0.16em]" style={{ color: tone.label }}>Festio Pass</span><strong className="mt-1 block">Show admission QR</strong></span><span aria-hidden="true">›</span>
+                </a>
+              )
+              // The full "Your activity" checklist below already shows the next step and
+              // progress bar, so skip these two compact duplicates whenever it will render.
+              if (module.key === 'next_action' && journey?.next_steps?.[0] && !activityDetailShown) {
+                const next = journey.next_steps[0]
+                return <div key={module.key} className="rounded-2xl border p-5" style={{ background: tone.panelStrong, borderColor: tone.accent }}><div className="text-xs font-extrabold uppercase tracking-[0.18em]" style={{ color: tone.accent }}>Your next step</div><div className="mt-2 text-xl font-extrabold">{next.title}</div>{(next.guest_message || next.description) && <p className="mt-2 text-sm leading-6" style={{ color: tone.muted }}>{next.guest_message || next.description}</p>}</div>
+              }
+              if (module.key === 'activity_progress' && journey?.experience_enabled && !activityDetailShown) {
+                const total = journey.total_count || journey.steps?.length || 0
+                const done = journey.completed_count || 0
+                const percent = total ? Math.round((done / total) * 100) : 0
+                return <div key={module.key} className="rounded-2xl border p-4" style={{ background: tone.panel, borderColor: tone.border }}><div className="flex items-center justify-between"><strong>Activity progress</strong><span className="text-sm font-bold">{done}/{total}</span></div><div className="mt-3 h-2 overflow-hidden rounded-full" style={{ background: tone.chip }}><div className="h-full rounded-full" style={{ width: `${percent}%`, background: tone.accent }} /></div></div>
+              }
+              if (module.key === 'live_program' && journey?.program?.enabled) return (
+                <button key={module.key} type="button" onClick={() => setHubTab('program')} className="rounded-2xl border p-4 text-left" style={{ background: tone.panel, borderColor: tone.border, color: tone.text }}><div className="flex items-center justify-between"><strong>Live Program</strong><span className="text-xs font-extrabold" style={{ color: tone.accent }}>VIEW ALL ›</span></div>{journey.program.current_segments?.[0] ? <div className="mt-3"><div className="text-xs font-extrabold uppercase" style={{ color: tone.label }}>Happening now</div><div className="mt-1 font-bold">{journey.program.current_segments[0].title}</div></div> : <p className="mt-2 text-sm" style={{ color: tone.muted }}>The next item will appear here when it begins.</p>}</button>
+              )
+              if (module.key === 'festiome' && hub?.capabilities?.festiome && hub?.guest?.qr_token) return (
+                <a key={module.key} href={`/festiome/guest?event=${encodeURIComponent(event.id)}&pass=${encodeURIComponent(hub.guest.qr_token)}`} className="flex min-h-16 items-center justify-between rounded-2xl border p-4" style={{ background: tone.panel, borderColor: tone.border, color: tone.text }}><span><strong className="block">FestioMe community</strong><span className="mt-1 block text-sm" style={{ color: tone.muted }}>Announcements, groups and conversations</span></span><span aria-hidden="true">›</span></a>
+              )
+              if (module.key === 'messages' && (hub?.capabilities?.direct_host_messages || hub?.capabilities?.guest_chat)) return (
+                <button key={module.key} type="button" onClick={() => setHubTab('messages')} className="flex min-h-16 items-center justify-between rounded-2xl border p-4 text-left" style={{ background: tone.panel, borderColor: tone.border, color: tone.text }}><span><strong className="block">Messages</strong><span className="mt-1 block text-sm" style={{ color: tone.muted }}>{hub?.direct_messages?.length ? `${hub.direct_messages.length} message${hub.direct_messages.length === 1 ? '' : 's'}` : 'Contact your event team'}</span></span><span aria-hidden="true">›</span></button>
+              )
+              return null
+            })}
+          </div>
+        )}
+
+        {tabActive('pass') && showInstallDialog && (
           <div role="dialog" aria-modal="true" aria-labelledby="install-guest-hub" className="mt-5 rounded-2xl border p-5 shadow-xl" style={{ background: tone.panelStrong, borderColor: tone.accent }}>
             <div className="flex items-start gap-3"><span className="grid h-11 w-11 shrink-0 place-items-center rounded-xl text-xl" style={{ background: tone.accent, color: tone.background }}>F</span><div><h3 id="install-guest-hub" className="text-lg font-extrabold">Install FestioHub</h3><p className="mt-1 text-sm leading-6" style={{ color: tone.muted }}>Keep your Festio Pass on your home screen for quick access to your QR code and event updates.</p></div></div>
             <div className="mt-4 flex flex-wrap gap-2"><button type="button" onClick={installPass} className="min-h-11 rounded-xl px-4 py-2 text-sm font-extrabold text-slate-950" style={{ background: tone.accent }}>Install Festio</button><button type="button" onClick={dismissInstall} className="min-h-11 rounded-xl border px-4 py-2 text-sm font-bold" style={{ borderColor: tone.border, color: tone.text }}>Not now</button></div>
           </div>
         )}
 
-        <div className="mt-5 rounded-2xl border p-4" style={{ background: tone.panel, borderColor: tone.border }}>
+        {tabActive('pass') && <div className="mt-5 rounded-2xl border p-4" style={{ background: tone.panel, borderColor: tone.border }}>
           <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <div>
               <div className="text-sm font-extrabold">Add your Festio Pass to this phone</div>
@@ -1309,9 +1393,9 @@ function GuestHub({ event, accessToken, designTheme }) {
               <p className="shrink-0 text-xs font-semibold sm:max-w-52" style={{ color: tone.label }}>On iPhone/iPad: Share → Add to Home Screen. On Android, use your browser menu.</p>
             )}
           </div>
-        </div>
+        </div>}
 
-        {pushConfig && <div className="mt-3 rounded-2xl border p-4" style={{ background: tone.panel, borderColor: tone.border }}>
+        {tabActive('pass') && pushConfig && <div className="mt-3 rounded-2xl border p-4" style={{ background: tone.panel, borderColor: tone.border }}>
           <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <div>
               <div className="text-sm font-extrabold">Event notifications</div>
@@ -1326,11 +1410,11 @@ function GuestHub({ event, accessToken, designTheme }) {
 
         {error && <div className="mt-5 rounded-2xl border border-amber-300/25 bg-amber-300/10 px-4 py-3 text-sm text-amber-50">{error}</div>}
 
-        {journey?.program?.enabled && <div className="mt-6 rounded-2xl border p-4" style={{ background: tone.panel, borderColor: tone.border }}>
+        {hubModuleVisible('live_program') && journey?.program?.enabled && tabActive('program') && <div className="mt-6 rounded-2xl border p-4" style={{ background: tone.panel, borderColor: tone.border }}>
           <div className="flex items-center justify-between gap-3"><div><h3 className="text-lg font-extrabold">Live Program</h3><p className="mt-1 text-sm" style={{ color: tone.muted }}>The program updates automatically as the event moves forward.</p></div><span className="rounded-full px-2.5 py-1 text-xs font-bold" style={{ background: `${tone.accent}22`, color: tone.text }}>LIVE</span></div>
           {journey.program.current_segments?.length ? <div className="mt-4 space-y-2">{journey.program.current_segments.map((segment) => <div key={segment.step_id} className="rounded-xl border p-3" style={{ background: tone.chip, borderColor: tone.border }}><div className="text-xs font-extrabold uppercase tracking-[0.16em]" style={{ color: tone.label }}>Happening now{segment.category ? ` · ${segment.category}` : ''}</div><div className="mt-1 font-extrabold">{segment.title}</div>{segment.description && <p className="mt-1 text-sm" style={{ color: tone.muted }}>{segment.description}</p>}<p className="mt-2 text-xs font-semibold" style={{ color: tone.label }}>Until {fmtTime(segment.ends_at, event?.timezone)}</p></div>)}</div> : <p className="mt-4 text-sm" style={{ color: tone.muted }}>The next program item will appear here when it begins.</p>}
           {!!journey.program.next_segments?.length && <div className="mt-4 border-t pt-3" style={{ borderColor: tone.border }}><div className="text-xs font-extrabold uppercase tracking-[0.16em]" style={{ color: tone.label }}>Up next</div>{journey.program.next_segments.slice(0, 2).map((segment) => <div key={segment.step_id} className="mt-2 text-sm"><span className="font-bold">{fmtLocalDateTime(segment.starts_at, event?.timezone)}</span><span style={{ color: tone.muted }}> · {segment.title}</span></div>)}</div>}
-          {!!selectedProgramDay && <div className="mt-4 border-t pt-3" style={{ borderColor: tone.border }}>
+          {tabActive('program') && !!selectedProgramDay && <div className="mt-4 border-t pt-3" style={{ borderColor: tone.border }}>
             <div className="flex flex-wrap gap-2" aria-label="Programme day">
               {programDays.map((day) => <button key={day.date} type="button" onClick={() => setProgramDay(day.date)} className="rounded-full px-3 py-1.5 text-xs font-extrabold" style={{ background: selectedProgramDay.date === day.date ? tone.accent : tone.chip, color: selectedProgramDay.date === day.date ? tone.background : tone.text }}>{day.label}</button>)}
             </div>
@@ -1341,7 +1425,7 @@ function GuestHub({ event, accessToken, designTheme }) {
           </div>}
         </div>}
 
-        {journey?.experience_enabled && journey.steps?.length > 0 && (() => {
+        {tabActive('activity') && hubModuleVisible('activity_progress') && journey?.experience_enabled && journey.steps?.length > 0 && (() => {
           const visible = journey.steps.filter((s) => s.status !== 'skipped')
           const remaining = journey.next_steps?.length || 0
           const done = journey.completed_count || 0
@@ -1470,7 +1554,7 @@ function GuestHub({ event, accessToken, designTheme }) {
           )
         })()}
 
-        {!!journey?.menu_categories?.length && (() => {
+        {tabActive('activity') && !!journey?.menu_categories?.length && (() => {
           const cats = journey.menu_categories
           const days = [...new Set(cats.filter((c) => c.day_label).map((c) => c.day_label))]
           const day = days.includes(hubMenuDay) ? hubMenuDay : (days[0] || '')
@@ -1529,7 +1613,7 @@ function GuestHub({ event, accessToken, designTheme }) {
           )
         })()}
 
-        {feedbackForms.map((form, formIndex) => (
+        {tabActive('activity') && feedbackForms.map((form, formIndex) => (
           <div id={formIndex === 0 ? 'feedback' : undefined} key={form.step_id} className="mt-6 rounded-2xl border p-4" style={{ background: tone.panel, borderColor: tone.border }}>
             <div className="flex items-start justify-between gap-3">
               <div>
@@ -1585,8 +1669,8 @@ function GuestHub({ event, accessToken, designTheme }) {
           </div>
         ))}
 
-        <div className="mt-6 grid gap-4 md:grid-cols-3">
-          <div className="rounded-2xl border p-4" style={{ background: tone.panel, borderColor: tone.border }}>
+        {tabsActive(['pass', 'messages']) && <div className="mt-6 grid gap-4 md:grid-cols-3">
+          <div className={`${tabActive('pass') ? '' : 'hidden'} rounded-2xl border p-4`} style={{ background: tone.panel, borderColor: tone.border }}>
             <div className="text-xs font-extrabold uppercase tracking-[0.16em]" style={{ color: tone.label }}>{hasRsvp ? 'Your RSVP' : 'Your pass'}</div>
             <div className="mt-3 text-lg font-extrabold">{hub?.guest?.name || 'Guest'}</div>
             {hub?.guest?.table_name && (
@@ -1610,7 +1694,7 @@ function GuestHub({ event, accessToken, designTheme }) {
                 <a href={`/scan/${hub.guest.qr_token}`} style={colors.accent ? { background: colors.accent } : undefined} className="inline-flex min-h-12 w-full items-center justify-center gap-2 rounded-xl bg-teal-400 px-5 py-3 text-base font-extrabold text-slate-950 shadow-sm hover:bg-teal-300">
                   🎫 View Festio Pass
                 </a>
-                {hub?.capabilities?.festiome && (
+                {hubModuleVisible('festiome') && hub?.capabilities?.festiome && (
                   <a
                     href={`/festiome/guest?event=${encodeURIComponent(event.id)}&pass=${encodeURIComponent(hub.guest.qr_token)}`}
                     className="inline-flex min-h-12 w-full items-center justify-center gap-2 rounded-xl border-2 px-5 py-3 text-base font-extrabold transition hover:opacity-90"
@@ -1628,7 +1712,7 @@ function GuestHub({ event, accessToken, designTheme }) {
             )}
           </div>
 
-          <div className="rounded-2xl border p-4 md:col-span-2" style={{ background: tone.panel, borderColor: tone.border }}>
+          <div className={`${tabActive('messages') ? 'md:col-span-3' : 'hidden'} rounded-2xl border p-4`} style={{ background: tone.panel, borderColor: tone.border }}>
             <div className="flex items-center justify-between gap-3">
               <h3 className="text-lg font-extrabold">Event Updates</h3>
               {!!hub?.announcements?.length && <span className="rounded-full px-2.5 py-1 text-xs font-bold" style={{ background: `${tone.accent}22`, color: tone.text }}>{hub.announcements.length}</span>}
@@ -1644,15 +1728,15 @@ function GuestHub({ event, accessToken, designTheme }) {
               )}
             </div>
           </div>
-        </div>
+        </div>}
 
-        {(event?.hotel_name || event?.hotel_address) && <div className="mt-4 rounded-2xl border p-4" style={{ background: tone.panel, borderColor: tone.border }}>
+        {tabActive('pass') && (event?.hotel_name || event?.hotel_address) && <div className="mt-4 rounded-2xl border p-4" style={{ background: tone.panel, borderColor: tone.border }}>
           <div className="text-xs font-extrabold uppercase tracking-[0.16em]" style={{ color: tone.label }}>🏨 Hotel information</div>
           {event.hotel_name && <div className="mt-2 text-lg font-extrabold">{event.hotel_name}</div>}
           {event.hotel_address && <a href={mapUrl(event.hotel_address)} target="_blank" rel="noopener noreferrer" className="mt-2 inline-block text-sm font-semibold leading-6 underline decoration-2 underline-offset-2 hover:opacity-80" style={{ color: tone.accent }}>{event.hotel_address}</a>}
         </div>}
 
-        <div className="mt-4 rounded-2xl border p-4" style={{ background: tone.panel, borderColor: tone.border }}>
+        {tabActive('messages') && <div className="mt-4 rounded-2xl border p-4" style={{ background: tone.panel, borderColor: tone.border }}>
           <h3 className="text-lg font-extrabold">Message Host</h3>
           <p className="mt-1 text-sm" style={{ color: tone.muted }}>Have a question for the organizer?</p>
           <div className="mt-4 max-h-56 space-y-2 overflow-auto">
@@ -1686,9 +1770,9 @@ function GuestHub({ event, accessToken, designTheme }) {
                 : 'Message Host is not enabled for this event.'}
             </div>
           )}
-        </div>
+        </div>}
 
-        <div className="mt-4 rounded-2xl border p-4" style={{ background: tone.panel, borderColor: tone.border }}>
+        {tabActive('messages') && <div className="mt-4 rounded-2xl border p-4" style={{ background: tone.panel, borderColor: tone.border }}>
           <h3 className="text-lg font-extrabold">Guest Chat</h3>
           <p className="mt-1 text-sm" style={{ color: tone.label }}>A shared space for attending guests.</p>
           {hub?.capabilities?.guest_chat ? (
@@ -1728,7 +1812,7 @@ function GuestHub({ event, accessToken, designTheme }) {
               Guest Chat is not enabled for this event.
             </div>
           )}
-        </div>
+        </div>}
       </div>
     </section>
   )
@@ -1810,7 +1894,11 @@ export default function InvitePage() {
         }
       } catch { /* fall through to the published theme */ }
     }
-    api.publicDesignTheme(event.id)
+    api.publicDesignTheme(event.id, {
+      experience_enabled: event.experience_enabled,
+      live_program_enabled: event.live_program_enabled,
+      festiome_enabled: event.festiome_addon_enabled && event.festiome_enabled,
+    })
       .then((themePayload) => {
         if (!cancelled) setDesignTheme(themePayload?.is_default ? null : themePayload)
       })

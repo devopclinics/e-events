@@ -1294,6 +1294,18 @@ function GuestHub({ event, accessToken, designTheme }) {
   const colors = designColors(designTheme)
   const tone = readableTone(colors)
   const hasRsvp = event?.rsvp_enabled !== false
+  const passStatus = hub?.guest?.checked_out
+    ? { label: 'Checked out', icon: '↩' }
+    : hub?.guest?.admitted
+      ? { label: 'Ready for entry', icon: '✓' }
+      : { label: 'Not checked in yet', icon: '◷' }
+  const passCells = [
+    hub?.guest?.table_name && { l: 'Table', v: hub.guest.table_name, ic: '🪑' },
+    hub?.guest?.seat_number && { l: 'Seat', v: hub.guest.seat_number, ic: '🎟️' },
+    { l: 'Status', v: hub?.guest?.admitted ? 'Admitted' : 'Not yet', ic: hub?.guest?.admitted ? '🟢' : '⚪' },
+    event?.venue_name && { l: 'Venue', v: event.venue_name, ic: '📍' },
+  ].filter(Boolean)
+  const passNextStep = hub?.guest?.admitted ? journey?.next_steps?.[0] : null
   const programDays = journey?.program?.days || []
   const selectedProgramDay = programDays.find((day) => day.date === programDay)
     || programDays.find((day) => day.segments?.some((segment) => segment.active))
@@ -1319,19 +1331,20 @@ function GuestHub({ event, accessToken, designTheme }) {
         </div>
 
         {guestHubV2 && (
-          <div className="mt-5 grid grid-cols-4 gap-1 rounded-2xl border p-1" style={{ background: tone.panel, borderColor: tone.border }} role="tablist" aria-label="FestioHub sections">
+          <div className="mt-5 flex gap-1 rounded-2xl border p-1" style={{ background: tone.panel, borderColor: tone.border }} role="tablist" aria-label="FestioHub sections">
             {[
-              ['pass', 'Pass'],
-              ['activity', 'Activity'],
-              ['program', 'Program'],
-              ['messages', 'Messages'],
+              ['pass', 'Pass', '🎫'],
+              ['activity', 'Activity', '✅'],
+              ['program', 'Program', '📅'],
+              ['messages', 'Messages', '💬'],
             ].filter(([key]) => key !== 'program' || (journey?.program?.enabled && hubModuleVisible('live_program')))
               .filter(([key]) => key !== 'messages' || (hubModuleVisible('messages') && (hub?.capabilities?.direct_host_messages || hub?.capabilities?.guest_chat)))
-              .map(([key, label]) => (
+              .map(([key, label, icon]) => (
                 <button key={key} type="button" role="tab" aria-selected={hubTab === key} onClick={() => setHubTab(key)}
-                  className="min-h-11 rounded-xl px-2 py-2 text-xs font-extrabold sm:text-sm"
-                  style={{ background: hubTab === key ? tone.accent : 'transparent', color: hubTab === key ? tone.background : tone.text }}>
-                  {label}
+                  className="flex min-h-14 flex-1 flex-col items-center justify-center gap-0.5 rounded-xl text-[11px] font-extrabold"
+                  style={{ background: hubTab === key ? tone.panelStrong : 'transparent' }}>
+                  <span className="text-base leading-none" style={{ opacity: hubTab === key ? 1 : 0.55 }} aria-hidden="true">{icon}</span>
+                  <span style={{ color: hubTab === key ? tone.accent : tone.muted }}>{label}</span>
                 </button>
               ))}
           </div>
@@ -1669,28 +1682,70 @@ function GuestHub({ event, accessToken, designTheme }) {
           </div>
         ))}
 
-        {tabsActive(['pass', 'messages']) && <div className="mt-6 grid gap-4 md:grid-cols-3">
-          <div className={`${tabActive('pass') ? '' : 'hidden'} rounded-2xl border p-4`} style={{ background: tone.panel, borderColor: tone.border }}>
-            <div className="text-xs font-extrabold uppercase tracking-[0.16em]" style={{ color: tone.label }}>{hasRsvp ? 'Your RSVP' : 'Your pass'}</div>
-            <div className="mt-3 text-lg font-extrabold">{hub?.guest?.name || 'Guest'}</div>
-            {hub?.guest?.table_name && (
-              <p className="mt-2 text-sm" style={{ color: tone.muted }}>
-                Table: <span className="font-bold" style={{ color: tone.text }}>{hub.guest.table_name}</span>
-                {hub.guest.seat_number ? ` · Seat ${hub.guest.seat_number}` : ''}
-              </p>
-            )}
+        {tabsActive(['pass', 'messages']) && <div className="mt-6">
+          <div className={`${tabActive('pass') ? '' : 'hidden'} rounded-2xl border p-4 md:mx-auto md:max-w-md`} style={{ background: tone.panel, borderColor: tone.border }}>
+            <div className="flex justify-center">
+              <span className="inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-extrabold" style={{ background: `${tone.accent}22`, color: tone.accent }}>
+                <span aria-hidden="true">{passStatus.icon}</span>{passStatus.label}
+              </span>
+            </div>
+
             {hub?.guest?.qr_token && (
-              <div className="mt-4 grid gap-3">
-                <div className="rounded-2xl border p-3 text-center" style={{ background: tone.panelStrong, borderColor: tone.border }}>
+              <div
+                className="relative mx-auto mt-4 max-w-[260px] rounded-[1.4rem] border-2 p-4"
+                style={{ background: `linear-gradient(160deg, ${tone.accent}1f, ${tone.panelStrong})`, borderColor: `${tone.accent}55`, boxShadow: `0 0 32px -8px ${tone.accent}70` }}
+              >
+                <div className="rounded-2xl bg-white p-3">
                   <img
                     src={`/api/scan/${hub.guest.qr_token}/qr.png`}
                     alt="Your QR pass code"
-                    className="mx-auto h-44 w-44 rounded-xl bg-white p-2"
+                    className="mx-auto h-40 w-40"
                   />
-                  <div className="mt-2 text-xs font-bold uppercase tracking-[0.14em]" style={{ color: tone.label }}>
-                    Show this code at entry
-                  </div>
                 </div>
+              </div>
+            )}
+
+            <div className="mt-3 text-center">
+              <div className="text-base font-extrabold">{hub?.guest?.name || 'Guest'}</div>
+              {hasRsvp && hub?.guest?.rsvp_status && (
+                <div className="mt-0.5 text-xs font-bold" style={{ color: tone.muted }}>
+                  {hub.guest.rsvp_status === 'confirmed' ? 'Attending' : hub.guest.rsvp_status}
+                </div>
+              )}
+            </div>
+
+            {hub?.guest?.qr_token && (
+              <div className="mt-3 flex items-center justify-center gap-1.5 text-xs font-bold" style={{ color: tone.label }}>
+                <span aria-hidden="true">📶</span>Show this QR at the entrance
+              </div>
+            )}
+
+            {!!passCells.length && (
+              <div className="mt-4 grid grid-cols-2 gap-2">
+                {passCells.map((cell) => (
+                  <div key={cell.l} className="rounded-xl border p-2.5" style={{ background: tone.panelStrong, borderColor: tone.border }}>
+                    <div className="flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-wide" style={{ color: tone.label }}>
+                      <span aria-hidden="true">{cell.ic}</span>{cell.l}
+                    </div>
+                    <div className="mt-0.5 line-clamp-2 text-sm font-extrabold leading-snug">{cell.v}</div>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {passNextStep && (
+              <div className="mt-3 flex items-center justify-between gap-2 rounded-xl border border-dashed p-3" style={{ borderColor: tone.border }}>
+                <span className="text-xs font-semibold" style={{ color: tone.muted }}>
+                  <span aria-hidden="true">🎁</span> After entry · {passNextStep.title}
+                </span>
+                <button type="button" onClick={() => setHubTab('activity')} className="shrink-0 text-xs font-extrabold" style={{ color: tone.accent }}>
+                  Open Activity →
+                </button>
+              </div>
+            )}
+
+            {hub?.guest?.qr_token && (
+              <div className="mt-4 grid gap-2">
                 <a href={`/scan/${hub.guest.qr_token}`} style={colors.accent ? { background: colors.accent } : undefined} className="inline-flex min-h-12 w-full items-center justify-center gap-2 rounded-xl bg-teal-400 px-5 py-3 text-base font-extrabold text-slate-950 shadow-sm hover:bg-teal-300">
                   🎫 View Festio Pass
                 </a>
@@ -1712,7 +1767,7 @@ function GuestHub({ event, accessToken, designTheme }) {
             )}
           </div>
 
-          <div className={`${tabActive('messages') ? 'md:col-span-3' : 'hidden'} rounded-2xl border p-4`} style={{ background: tone.panel, borderColor: tone.border }}>
+          <div className={`${tabActive('messages') ? '' : 'hidden'} rounded-2xl border p-4`} style={{ background: tone.panel, borderColor: tone.border }}>
             <div className="flex items-center justify-between gap-3">
               <h3 className="text-lg font-extrabold">Event Updates</h3>
               {!!hub?.announcements?.length && <span className="rounded-full px-2.5 py-1 text-xs font-bold" style={{ background: `${tone.accent}22`, color: tone.text }}>{hub.announcements.length}</span>}

@@ -38,9 +38,21 @@ async def get_dashboard(event_id: str, db: AsyncSession = Depends(get_db), _: Us
             )
         ) or 0
 
+    # Full admitted_at history (cheap: one column) drives the arrival-timeline
+    # chart, which needs every check-in, not just the most recent ones.
+    admitted_at_values = (await db.execute(
+        select(Guest.admitted_at).where(Guest.event_id == event_id, Guest.admitted == True)
+    )).scalars().all()
+    # The "Recent check-ins" list only ever shows the newest 50 (frontend
+    # slices to 50 regardless), so cap it here too -- serializing every
+    # admitted guest's full record on every dashboard load doesn't scale
+    # past a few hundred check-ins and was causing multi-hundred-KB
+    # responses (and client-side "Failed to fetch" timeouts) on well-attended
+    # live events.
     admitted_guests = (await db.execute(
         select(Guest).where(Guest.event_id == event_id, Guest.admitted == True)
         .order_by(Guest.admitted_at.desc())
+        .limit(50)
     )).scalars().all()
     pending_guests = (await db.execute(
         select(Guest).where(Guest.event_id == event_id, Guest.admitted == False)
@@ -120,10 +132,10 @@ async def get_dashboard(event_id: str, db: AsyncSession = Depends(get_db), _: Us
     )
 
     admitted_by_hour: dict[str, int] = {}
-    for guest in admitted_guests:
-        if not guest.admitted_at:
+    for admitted_at in admitted_at_values:
+        if not admitted_at:
             continue
-        hour = guest.admitted_at.replace(minute=0, second=0, microsecond=0)
+        hour = admitted_at.replace(minute=0, second=0, microsecond=0)
         admitted_by_hour[hour.isoformat()] = admitted_by_hour.get(hour.isoformat(), 0) + 1
     arrival_timeline = [
         DashboardTimelinePoint(label=label, count=count)

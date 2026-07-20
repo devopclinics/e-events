@@ -62,6 +62,7 @@ class Settings(BaseSettings):
     support_max_reply_chars: int = 4000
     support_max_prompt_chars: int = 18000
     support_gemini_timeout_seconds: float = 20.0
+    support_llm_provider: str = "gemini"
     support_worker_concurrency: int = 1
     support_job_max_attempts: int = 3
     support_job_retry_base_seconds: int = 5
@@ -81,6 +82,11 @@ class Settings(BaseSettings):
     gemini_input_cost_per_million: float = 0.0
     gemini_output_cost_per_million: float = 0.0
 
+    zai_api_key: str = ""
+    zai_base_url: str = "https://api.z.ai/api/paas/v4"
+    zai_model: str = "glm-4.5-air"
+    zai_simple_model: str = "glm-4.5-air"
+
 settings = Settings()
 engine = create_async_engine(settings.database_url, echo=False)
 SessionLocal = async_sessionmaker(engine, expire_on_commit=False)
@@ -94,6 +100,18 @@ AI_DEAD_KEY = "support:ai:dead"
 AI_RETRY_KEY = "support:ai:retry"
 _firebase_app = None
 _gemini_client = genai.Client(api_key=settings.gemini_api_key) if settings.gemini_api_key else None
+
+
+def _active_provider() -> str:
+    provider = (settings.support_llm_provider or "gemini").strip().lower()
+    return provider if provider in {"gemini", "zai"} else "gemini"
+
+
+def _provider_ready() -> bool:
+    provider = _active_provider()
+    if provider == "zai":
+        return bool(settings.zai_api_key)
+    return _gemini_client is not None
 
 
 class Base(DeclarativeBase):
@@ -586,7 +604,46 @@ async def _escalate_conversation(conversation_id: int) -> None:
     await redis_client.incr("support:metrics:human_escalated")
 
 
-# ── Gemini drafting ───────────────────────────────────────────────────────
+# ── LLM drafting (Gemini or z.ai) ────────────────────────────────────────
+
+async def _draft_with_zai(prompt: str, route: dict | None, transcript: str) -> tuple[str, str]:
+    confidence = float((route or {}).get("confidence", 0))
+    simple = (route or {}).get("intent") == "faq" and confidence >= 0.70 and len(transcript) < 6000
+    selected_model = settings.zai_simple_model if simple else settings.zai_model
+    base_url = settings.zai_base_url.rstrip("/")
+    headers = {
+        "Authorization": f"Bearer {settings.zai_api_key}",
+        "Content-Type": "application/json",
+    }
+    request_body = {
+        "model": selected_model,
+        "temperature": 0.2,
+        "max_tokens": settings.gemini_max_output_tokens,
+    }
+
+    async def _request(request_prompt: str) -> str:
+        body = {**request_body, "messages": [{"role": "user", "content": request_prompt}]}
+        async with httpx.AsyncClient(timeout=settings.support_gemini_timeout_seconds) as client:
+            response = await client.post(f"{base_url}/chat/completions", headers=headers, json=body)
+            response.raise_for_status()
+            payload = response.json()
+        choices = payload.get("choices") or []
+        if not choices:
+            raise RuntimeError("z.ai returned no choices")
+        message = choices[0].get("message") or {}
+        return (message.get("content") or "").strip()
+
+    answer = await _request(prompt)
+    if not _answer_looks_complete(answer):
+        retry_prompt = (
+            prompt
+            + "\n\nYour previous draft was incomplete. Regenerate the entire answer from the beginning. "
+            "Return plain Markdown, complete every sentence and numbered step, and do not wrap the answer in quotes."
+        )
+        answer = await _request(retry_prompt)
+    if not _answer_looks_complete(answer):
+        raise RuntimeError("z.ai returned an incomplete support answer")
+    return answer, selected_model
 
 async def _draft_reply(transcript: str, route: dict | None = None, latest_question: str = "") -> tuple[str, str]:
     knowledge_base, _ = _knowledge_for_route(latest_question or transcript, route)
@@ -594,7 +651,7 @@ async def _draft_reply(transcript: str, route: dict | None = None, latest_questi
     prompt = SYSTEM_PROMPT.format(knowledge_base=knowledge_base) + f"\n\n# Conversation so far\n{safe_transcript}\n\nDraft a reply to the organizer's latest message."
     prompt = prompt[-settings.support_max_prompt_chars:]
 
-    def _call():
+    def _call_gemini():
         confidence = float((route or {}).get("confidence", 0))
         simple = (route or {}).get("intent") == "faq" and confidence >= 0.70 and len(transcript) < 6000
         selected_model = settings.gemini_simple_model if simple else settings.gemini_model
@@ -620,10 +677,20 @@ async def _draft_reply(transcript: str, route: dict | None = None, latest_questi
         return answer, selected_model
 
     started = time.monotonic()
+    provider = _active_provider()
     try:
-        result, selected_model = await asyncio.wait_for(asyncio.to_thread(_call), timeout=settings.support_gemini_timeout_seconds)
+        if provider == "zai":
+            result, selected_model = await asyncio.wait_for(
+                _draft_with_zai(prompt, route, transcript), timeout=settings.support_gemini_timeout_seconds,
+            )
+        else:
+            result, selected_model = await asyncio.wait_for(
+                asyncio.to_thread(_call_gemini), timeout=settings.support_gemini_timeout_seconds,
+            )
     except Exception:
-        await redis_client.incr("support:metrics:gemini_failed")
+        await redis_client.incr("support:metrics:provider_failed")
+        if provider == "gemini":
+            await redis_client.incr("support:metrics:gemini_failed")
         raise
     input_tokens = max(1, len(prompt) // 4)
     output_tokens = max(1, len(result) // 4)
@@ -635,11 +702,17 @@ async def _draft_reply(transcript: str, route: dict | None = None, latest_questi
     pipe.incrby("support:metrics:gemini_input_tokens", input_tokens)
     pipe.incrby("support:metrics:gemini_output_tokens", output_tokens)
     pipe.incrby("support:metrics:estimated_cost_microusd", cost_micros)
-    pipe.incrby("support:metrics:gemini_latency_ms", int((time.monotonic() - started) * 1000))
-    pipe.incr("support:metrics:gemini_requests")
-    pipe.incr(f"support:metrics:gemini_model:{selected_model}")
+    latency_ms = int((time.monotonic() - started) * 1000)
+    pipe.incrby("support:metrics:provider_latency_ms", latency_ms)
+    pipe.incr("support:metrics:provider_requests")
+    pipe.incr(f"support:metrics:provider:{provider}")
+    pipe.incr(f"support:metrics:provider_model:{provider}:{selected_model}")
+    if provider == "gemini":
+        pipe.incrby("support:metrics:gemini_latency_ms", latency_ms)
+        pipe.incr("support:metrics:gemini_requests")
+        pipe.incr(f"support:metrics:gemini_model:{selected_model}")
     await pipe.execute()
-    return result, selected_model
+    return result, f"{provider}:{selected_model}"
 
 
 async def _under_rate_cap(org_key: str) -> bool:
@@ -933,6 +1006,7 @@ async def _metrics_snapshot():
     keys = (
         "queued", "completed", "retried", "recovered", "dead", "cache_hit", "cache_miss",
         "duplicate_jobs", "local_timeout", "local_requests", "local_latency_ms",
+        "provider_failed", "provider_requests", "provider_latency_ms",
         "gemini_failed", "gemini_requests", "gemini_latency_ms", "gemini_input_tokens",
         "gemini_output_tokens", "estimated_cost_microusd", "human_escalated",
         "suggestion_accepted", "suggestion_edited",
@@ -1017,7 +1091,7 @@ async def _draft_and_post(
     if draft and not _answer_looks_complete(draft):
         await redis_client.delete(cache_key)
         draft = None
-    provider = "cache" if draft else "gemini"
+    provider = "cache" if draft else _active_provider()
     cache_hit = draft is not None
     if draft is None and local_eligible:
         draft = await _local_faq_draft(question, knowledge)
@@ -1025,16 +1099,16 @@ async def _draft_and_post(
             provider = "local"
             await redis_client.setex(cache_key, 86400, draft)
     if draft is None:
-        if _gemini_client is None:
-            raise RuntimeError("Gemini is unavailable")
+        if not _provider_ready():
+            raise RuntimeError("Configured LLM provider is unavailable")
         draft, selected_model = await _draft_reply(transcript, route, question)
-        provider = f"gemini:{selected_model}"
+        provider = selected_model
         if draft:
             draft = draft[:settings.support_max_reply_chars]
             await redis_client.setex(cache_key, 86400, draft)
     await redis_client.incr(f"support:metrics:cache_{'hit' if cache_hit else 'miss'}")
     if not draft:
-        raise RuntimeError("Gemini returned an empty draft")
+        raise RuntimeError("LLM provider returned an empty draft")
     held_back = settings.support_ai_gating_enabled and (gated or _is_deferral(draft))
     intent = (route or {}).get("intent", "faq" if question in KNOWN_FAQS else "unknown")
     confidence = float((route or {}).get("confidence", 0.0))
@@ -1275,7 +1349,7 @@ async def chatwoot_webhook(request: Request, token: str | None = Query(default=N
             return {"status": "duplicate"}
         return {"status": "queued", "route": "sensitive"}
 
-    if not settings.support_ai_enabled or _gemini_client is None:
+    if not settings.support_ai_enabled or not _provider_ready():
         queued = await _enqueue_once(message_id, {
             "kind": "escalate", "conversation_id": conversation_id,
             "message_id": message_id, "org_key": org_key,

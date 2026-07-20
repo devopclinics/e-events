@@ -1,0 +1,714 @@
+{
+  "format": "festio-qa-results",
+  "version": 2,
+  "tester": "Codex automated + live staging",
+  "exported_at": "2026-07-19T14:36:43.957025+00:00",
+  "user_agent": "API live run + pytest isolated suites",
+  "results": {
+    "setup-0": {
+      "status": "pass",
+      "note": "Verified by live staging run or isolated automated service/backend coverage.",
+      "evidence": "Live report: support-service/docs/qa/staging-live-run.json; automated suites run 2026-07-19."
+    },
+    "setup-1": {
+      "status": "pass",
+      "note": "Verified by live staging run or isolated automated service/backend coverage.",
+      "evidence": "Live report: support-service/docs/qa/staging-live-run.json; automated suites run 2026-07-19."
+    },
+    "setup-2": {
+      "status": "pass",
+      "note": "Verified by live staging run or isolated automated service/backend coverage.",
+      "evidence": "Live report: support-service/docs/qa/staging-live-run.json; automated suites run 2026-07-19."
+    },
+    "setup-3": {
+      "status": "blocked",
+      "note": "Requires a human browser/device, real provider/payment delivery, controlled network simulation, or visual/accessibility inspection; not falsely marked as passed.",
+      "evidence": "Assigned to staff manual run on the published staging checklist."
+    },
+    "setup-4": {
+      "status": "pass",
+      "note": "Verified by live staging run or isolated automated service/backend coverage.",
+      "evidence": "Live report: support-service/docs/qa/staging-live-run.json; automated suites run 2026-07-19."
+    },
+    "setup-5": {
+      "status": "pass",
+      "note": "Verified by live staging run or isolated automated service/backend coverage.",
+      "evidence": "Live report: support-service/docs/qa/staging-live-run.json; automated suites run 2026-07-19."
+    },
+    "rsvp-0": {
+      "status": "pass",
+      "note": "Verified by live staging run or isolated automated service/backend coverage.",
+      "evidence": "Live report: support-service/docs/qa/staging-live-run.json; automated suites run 2026-07-19."
+    },
+    "rsvp-1": {
+      "status": "pass",
+      "note": "Verified by live staging run or isolated automated service/backend coverage.",
+      "evidence": "Live report: support-service/docs/qa/staging-live-run.json; automated suites run 2026-07-19."
+    },
+    "rsvp-2": {
+      "status": "pass",
+      "note": "Verified by live staging run or isolated automated service/backend coverage.",
+      "evidence": "Live report: support-service/docs/qa/staging-live-run.json; automated suites run 2026-07-19."
+    },
+    "rsvp-3": {
+      "status": "pass",
+      "note": "Verified by live staging run or isolated automated service/backend coverage.",
+      "evidence": "Live report: support-service/docs/qa/staging-live-run.json; automated suites run 2026-07-19."
+    },
+    "rsvp-4": {
+      "status": "pass",
+      "note": "Verified by live staging run or isolated automated service/backend coverage.",
+      "evidence": "Live report: support-service/docs/qa/staging-live-run.json; automated suites run 2026-07-19."
+    },
+    "rsvp-5": {
+      "status": "pass",
+      "note": "Verified by live staging run or isolated automated service/backend coverage.",
+      "evidence": "Live report: support-service/docs/qa/staging-live-run.json; automated suites run 2026-07-19."
+    },
+    "seating-0": {
+      "status": "pass",
+      "note": "Verified by live staging run or isolated automated service/backend coverage.",
+      "evidence": "Live report: support-service/docs/qa/staging-live-run.json; automated suites run 2026-07-19."
+    },
+    "seating-1": {
+      "status": "pass",
+      "note": "Verified by live staging run or isolated automated service/backend coverage.",
+      "evidence": "Live report: support-service/docs/qa/staging-live-run.json; automated suites run 2026-07-19."
+    },
+    "seating-2": {
+      "status": "pass",
+      "note": "Verified by live staging run or isolated automated service/backend coverage.",
+      "evidence": "Live report: support-service/docs/qa/staging-live-run.json; automated suites run 2026-07-19."
+    },
+    "menu-0": {
+      "status": "pass",
+      "note": "Verified by live staging run or isolated automated service/backend coverage.",
+      "evidence": "Live report: support-service/docs/qa/staging-live-run.json; automated suites run 2026-07-19."
+    },
+    "menu-1": {
+      "status": "pass",
+      "note": "Verified by live staging run or isolated automated service/backend coverage.",
+      "evidence": "Live report: support-service/docs/qa/staging-live-run.json; automated suites run 2026-07-19."
+    },
+    "experience-0": {
+      "status": "pass",
+      "note": "Verified by live staging run or isolated automated service/backend coverage.",
+      "evidence": "Live report: support-service/docs/qa/staging-live-run.json; automated suites run 2026-07-19."
+    },
+    "experience-1": {
+      "status": "pass",
+      "note": "Verified by live staging run or isolated automated service/backend coverage.",
+      "evidence": "Live report: support-service/docs/qa/staging-live-run.json; automated suites run 2026-07-19."
+    },
+    "experience-2": {
+      "status": "pass",
+      "note": "Verified by live staging run or isolated automated service/backend coverage.",
+      "evidence": "Live report: support-service/docs/qa/staging-live-run.json; automated suites run 2026-07-19."
+    },
+    "experience-3": {
+      "status": "pass",
+      "note": "Verified by live staging run or isolated automated service/backend coverage.",
+      "evidence": "Live report: support-service/docs/qa/staging-live-run.json; automated suites run 2026-07-19."
+    },
+    "experience-4": {
+      "status": "pass",
+      "note": "Verified by live staging run or isolated automated service/backend coverage.",
+      "evidence": "Live report: support-service/docs/qa/staging-live-run.json; automated suites run 2026-07-19."
+    },
+    "experience-5": {
+      "status": "blocked",
+      "note": "Requires a human browser/device, real provider/payment delivery, controlled network simulation, or visual/accessibility inspection; not falsely marked as passed.",
+      "evidence": "Assigned to staff manual run on the published staging checklist."
+    },
+    "hub-0": {
+      "status": "blocked",
+      "note": "Requires a human browser/device, real provider/payment delivery, controlled network simulation, or visual/accessibility inspection; not falsely marked as passed.",
+      "evidence": "Assigned to staff manual run on the published staging checklist."
+    },
+    "hub-1": {
+      "status": "blocked",
+      "note": "Requires a human browser/device, real provider/payment delivery, controlled network simulation, or visual/accessibility inspection; not falsely marked as passed.",
+      "evidence": "Assigned to staff manual run on the published staging checklist."
+    },
+    "hub-2": {
+      "status": "blocked",
+      "note": "Requires a human browser/device, real provider/payment delivery, controlled network simulation, or visual/accessibility inspection; not falsely marked as passed.",
+      "evidence": "Assigned to staff manual run on the published staging checklist."
+    },
+    "hub-3": {
+      "status": "pass",
+      "note": "Verified by live staging run or isolated automated service/backend coverage.",
+      "evidence": "Live report: support-service/docs/qa/staging-live-run.json; automated suites run 2026-07-19."
+    },
+    "hub-4": {
+      "status": "blocked",
+      "note": "Requires a human browser/device, real provider/payment delivery, controlled network simulation, or visual/accessibility inspection; not falsely marked as passed.",
+      "evidence": "Assigned to staff manual run on the published staging checklist."
+    },
+    "hub-5": {
+      "status": "blocked",
+      "note": "Requires a human browser/device, real provider/payment delivery, controlled network simulation, or visual/accessibility inspection; not falsely marked as passed.",
+      "evidence": "Assigned to staff manual run on the published staging checklist."
+    },
+    "checkin-0": {
+      "status": "pass",
+      "note": "Verified by live staging run or isolated automated service/backend coverage.",
+      "evidence": "Live report: support-service/docs/qa/staging-live-run.json; automated suites run 2026-07-19."
+    },
+    "checkin-1": {
+      "status": "pass",
+      "note": "Verified by live staging run or isolated automated service/backend coverage.",
+      "evidence": "Live report: support-service/docs/qa/staging-live-run.json; automated suites run 2026-07-19."
+    },
+    "checkin-2": {
+      "status": "blocked",
+      "note": "Requires a human browser/device, real provider/payment delivery, controlled network simulation, or visual/accessibility inspection; not falsely marked as passed.",
+      "evidence": "Assigned to staff manual run on the published staging checklist."
+    },
+    "checkin-3": {
+      "status": "blocked",
+      "note": "Requires a human browser/device, real provider/payment delivery, controlled network simulation, or visual/accessibility inspection; not falsely marked as passed.",
+      "evidence": "Assigned to staff manual run on the published staging checklist."
+    },
+    "checkin-4": {
+      "status": "pass",
+      "note": "Verified by live staging run or isolated automated service/backend coverage.",
+      "evidence": "Live report: support-service/docs/qa/staging-live-run.json; automated suites run 2026-07-19."
+    },
+    "checkin-5": {
+      "status": "blocked",
+      "note": "Requires a human browser/device, real provider/payment delivery, controlled network simulation, or visual/accessibility inspection; not falsely marked as passed.",
+      "evidence": "Assigned to staff manual run on the published staging checklist."
+    },
+    "checkin-6": {
+      "status": "pass",
+      "note": "Verified by live staging run or isolated automated service/backend coverage.",
+      "evidence": "Live report: support-service/docs/qa/staging-live-run.json; automated suites run 2026-07-19."
+    },
+    "checkin-7": {
+      "status": "blocked",
+      "note": "The isolated walk-in test currently stops at an entitlement 402 because its fixture is unpaid; rerun with a paid fixture before certifying the workflow.",
+      "evidence": "Backend failure: test_walk_in_register (2026-07-19)."
+    },
+    "checkin-8": {
+      "status": "pass",
+      "note": "Verified by live staging run or isolated automated service/backend coverage.",
+      "evidence": "Live report: support-service/docs/qa/staging-live-run.json; automated suites run 2026-07-19."
+    },
+    "venue-0": {
+      "status": "pass",
+      "note": "Verified by live staging run or isolated automated service/backend coverage.",
+      "evidence": "Live report: support-service/docs/qa/staging-live-run.json; automated suites run 2026-07-19."
+    },
+    "venue-1": {
+      "status": "pass",
+      "note": "Verified by live staging run or isolated automated service/backend coverage.",
+      "evidence": "Live report: support-service/docs/qa/staging-live-run.json; automated suites run 2026-07-19."
+    },
+    "venue-2": {
+      "status": "blocked",
+      "note": "Requires a human browser/device, real provider/payment delivery, controlled network simulation, or visual/accessibility inspection; not falsely marked as passed.",
+      "evidence": "Assigned to staff manual run on the published staging checklist."
+    },
+    "festiome-0": {
+      "status": "pass",
+      "note": "Verified by live staging run or isolated automated service/backend coverage.",
+      "evidence": "Live report: support-service/docs/qa/staging-live-run.json; automated suites run 2026-07-19."
+    },
+    "festiome-1": {
+      "status": "pass",
+      "note": "Verified by live staging run or isolated automated service/backend coverage.",
+      "evidence": "Live report: support-service/docs/qa/staging-live-run.json; automated suites run 2026-07-19."
+    },
+    "festiome-2": {
+      "status": "pass",
+      "note": "Verified by live staging run or isolated automated service/backend coverage.",
+      "evidence": "Live report: support-service/docs/qa/staging-live-run.json; automated suites run 2026-07-19."
+    },
+    "festiome-3": {
+      "status": "pass",
+      "note": "Verified by live staging run or isolated automated service/backend coverage.",
+      "evidence": "Live report: support-service/docs/qa/staging-live-run.json; automated suites run 2026-07-19."
+    },
+    "festiome-4": {
+      "status": "pass",
+      "note": "Verified by live staging run or isolated automated service/backend coverage.",
+      "evidence": "Live report: support-service/docs/qa/staging-live-run.json; automated suites run 2026-07-19."
+    },
+    "registry-0": {
+      "status": "pass",
+      "note": "Verified by live staging run or isolated automated service/backend coverage.",
+      "evidence": "Live report: support-service/docs/qa/staging-live-run.json; automated suites run 2026-07-19."
+    },
+    "registry-1": {
+      "status": "pass",
+      "note": "Verified by live staging run or isolated automated service/backend coverage.",
+      "evidence": "Live report: support-service/docs/qa/staging-live-run.json; automated suites run 2026-07-19."
+    },
+    "registry-2": {
+      "status": "pass",
+      "note": "Verified by live staging run or isolated automated service/backend coverage.",
+      "evidence": "Live report: support-service/docs/qa/staging-live-run.json; automated suites run 2026-07-19."
+    },
+    "design-0": {
+      "status": "blocked",
+      "note": "Requires a human browser/device, real provider/payment delivery, controlled network simulation, or visual/accessibility inspection; not falsely marked as passed.",
+      "evidence": "Assigned to staff manual run on the published staging checklist."
+    },
+    "design-1": {
+      "status": "blocked",
+      "note": "Requires a human browser/device, real provider/payment delivery, controlled network simulation, or visual/accessibility inspection; not falsely marked as passed.",
+      "evidence": "Assigned to staff manual run on the published staging checklist."
+    },
+    "design-2": {
+      "status": "blocked",
+      "note": "Requires a human browser/device, real provider/payment delivery, controlled network simulation, or visual/accessibility inspection; not falsely marked as passed.",
+      "evidence": "Assigned to staff manual run on the published staging checklist."
+    },
+    "messaging-0": {
+      "status": "blocked",
+      "note": "Requires a human browser/device, real provider/payment delivery, controlled network simulation, or visual/accessibility inspection; not falsely marked as passed.",
+      "evidence": "Assigned to staff manual run on the published staging checklist."
+    },
+    "messaging-1": {
+      "status": "blocked",
+      "note": "Requires a human browser/device, real provider/payment delivery, controlled network simulation, or visual/accessibility inspection; not falsely marked as passed.",
+      "evidence": "Assigned to staff manual run on the published staging checklist."
+    },
+    "messaging-2": {
+      "status": "pass",
+      "note": "Verified by live staging run or isolated automated service/backend coverage.",
+      "evidence": "Live report: support-service/docs/qa/staging-live-run.json; automated suites run 2026-07-19."
+    },
+    "team-0": {
+      "status": "pass",
+      "note": "Verified by live staging run or isolated automated service/backend coverage.",
+      "evidence": "Live report: support-service/docs/qa/staging-live-run.json; automated suites run 2026-07-19."
+    },
+    "team-1": {
+      "status": "pass",
+      "note": "Verified by live staging run or isolated automated service/backend coverage.",
+      "evidence": "Live report: support-service/docs/qa/staging-live-run.json; automated suites run 2026-07-19."
+    },
+    "team-2": {
+      "status": "pass",
+      "note": "Verified by live staging run or isolated automated service/backend coverage.",
+      "evidence": "Live report: support-service/docs/qa/staging-live-run.json; automated suites run 2026-07-19."
+    },
+    "guest-data-0": {
+      "status": "pass",
+      "note": "Verified by live staging run or isolated automated service/backend coverage.",
+      "evidence": "Live report: support-service/docs/qa/staging-live-run.json; automated suites run 2026-07-19."
+    },
+    "guest-data-1": {
+      "status": "blocked",
+      "note": "Requires a human browser/device, real provider/payment delivery, controlled network simulation, or visual/accessibility inspection; not falsely marked as passed.",
+      "evidence": "Assigned to staff manual run on the published staging checklist."
+    },
+    "guest-data-2": {
+      "status": "blocked",
+      "note": "Requires a human browser/device, real provider/payment delivery, controlled network simulation, or visual/accessibility inspection; not falsely marked as passed.",
+      "evidence": "Assigned to staff manual run on the published staging checklist."
+    },
+    "guest-data-3": {
+      "status": "blocked",
+      "note": "Requires a human browser/device, real provider/payment delivery, controlled network simulation, or visual/accessibility inspection; not falsely marked as passed.",
+      "evidence": "Assigned to staff manual run on the published staging checklist."
+    },
+    "guest-data-4": {
+      "status": "pass",
+      "note": "Verified by live staging run or isolated automated service/backend coverage.",
+      "evidence": "Live report: support-service/docs/qa/staging-live-run.json; automated suites run 2026-07-19."
+    },
+    "guest-data-5": {
+      "status": "blocked",
+      "note": "Requires a human browser/device, real provider/payment delivery, controlled network simulation, or visual/accessibility inspection; not falsely marked as passed.",
+      "evidence": "Assigned to staff manual run on the published staging checklist."
+    },
+    "guest-data-6": {
+      "status": "pass",
+      "note": "Verified by live staging run or isolated automated service/backend coverage.",
+      "evidence": "Live report: support-service/docs/qa/staging-live-run.json; automated suites run 2026-07-19."
+    },
+    "tickets-billing-0": {
+      "status": "pass",
+      "note": "Verified by live staging run or isolated automated service/backend coverage.",
+      "evidence": "Live report: support-service/docs/qa/staging-live-run.json; automated suites run 2026-07-19."
+    },
+    "tickets-billing-1": {
+      "status": "pass",
+      "note": "Verified by live staging run or isolated automated service/backend coverage.",
+      "evidence": "Live report: support-service/docs/qa/staging-live-run.json; automated suites run 2026-07-19."
+    },
+    "tickets-billing-2": {
+      "status": "pass",
+      "note": "Verified by live staging run or isolated automated service/backend coverage.",
+      "evidence": "Live report: support-service/docs/qa/staging-live-run.json; automated suites run 2026-07-19."
+    },
+    "tickets-billing-3": {
+      "status": "blocked",
+      "note": "Requires a human browser/device, real provider/payment delivery, controlled network simulation, or visual/accessibility inspection; not falsely marked as passed.",
+      "evidence": "Assigned to staff manual run on the published staging checklist."
+    },
+    "tickets-billing-4": {
+      "status": "blocked",
+      "note": "Requires a human browser/device, real provider/payment delivery, controlled network simulation, or visual/accessibility inspection; not falsely marked as passed.",
+      "evidence": "Assigned to staff manual run on the published staging checklist."
+    },
+    "tickets-billing-5": {
+      "status": "blocked",
+      "note": "Requires a human browser/device, real provider/payment delivery, controlled network simulation, or visual/accessibility inspection; not falsely marked as passed.",
+      "evidence": "Assigned to staff manual run on the published staging checklist."
+    },
+    "tickets-billing-6": {
+      "status": "blocked",
+      "note": "Requires a human browser/device, real provider/payment delivery, controlled network simulation, or visual/accessibility inspection; not falsely marked as passed.",
+      "evidence": "Assigned to staff manual run on the published staging checklist."
+    },
+    "tickets-billing-7": {
+      "status": "pass",
+      "note": "Verified by live staging run or isolated automated service/backend coverage.",
+      "evidence": "Live report: support-service/docs/qa/staging-live-run.json; automated suites run 2026-07-19."
+    },
+    "tickets-billing-8": {
+      "status": "blocked",
+      "note": "Requires a human browser/device, real provider/payment delivery, controlled network simulation, or visual/accessibility inspection; not falsely marked as passed.",
+      "evidence": "Assigned to staff manual run on the published staging checklist."
+    },
+    "guest-communication-0": {
+      "status": "pass",
+      "note": "Verified by live staging run or isolated automated service/backend coverage.",
+      "evidence": "Live report: support-service/docs/qa/staging-live-run.json; automated suites run 2026-07-19."
+    },
+    "guest-communication-1": {
+      "status": "pass",
+      "note": "Verified by live staging run or isolated automated service/backend coverage.",
+      "evidence": "Live report: support-service/docs/qa/staging-live-run.json; automated suites run 2026-07-19."
+    },
+    "guest-communication-2": {
+      "status": "pass",
+      "note": "Verified by live staging run or isolated automated service/backend coverage.",
+      "evidence": "Live report: support-service/docs/qa/staging-live-run.json; automated suites run 2026-07-19."
+    },
+    "guest-communication-3": {
+      "status": "pass",
+      "note": "Verified by live staging run or isolated automated service/backend coverage.",
+      "evidence": "Live report: support-service/docs/qa/staging-live-run.json; automated suites run 2026-07-19."
+    },
+    "guest-communication-4": {
+      "status": "pass",
+      "note": "Verified by live staging run or isolated automated service/backend coverage.",
+      "evidence": "Live report: support-service/docs/qa/staging-live-run.json; automated suites run 2026-07-19."
+    },
+    "guest-communication-5": {
+      "status": "pass",
+      "note": "Verified by live staging run or isolated automated service/backend coverage.",
+      "evidence": "Live report: support-service/docs/qa/staging-live-run.json; automated suites run 2026-07-19."
+    },
+    "guest-communication-6": {
+      "status": "pass",
+      "note": "Verified by live staging run or isolated automated service/backend coverage.",
+      "evidence": "Live report: support-service/docs/qa/staging-live-run.json; automated suites run 2026-07-19."
+    },
+    "guest-communication-7": {
+      "status": "blocked",
+      "note": "Requires a human browser/device, real provider/payment delivery, controlled network simulation, or visual/accessibility inspection; not falsely marked as passed.",
+      "evidence": "Assigned to staff manual run on the published staging checklist."
+    },
+    "festiome-unified-0": {
+      "status": "blocked",
+      "note": "Requires a human browser/device, real provider/payment delivery, controlled network simulation, or visual/accessibility inspection; not falsely marked as passed.",
+      "evidence": "Assigned to staff manual run on the published staging checklist."
+    },
+    "festiome-unified-1": {
+      "status": "blocked",
+      "note": "Requires a human browser/device, real provider/payment delivery, controlled network simulation, or visual/accessibility inspection; not falsely marked as passed.",
+      "evidence": "Assigned to staff manual run on the published staging checklist."
+    },
+    "festiome-unified-2": {
+      "status": "blocked",
+      "note": "Requires a human browser/device, real provider/payment delivery, controlled network simulation, or visual/accessibility inspection; not falsely marked as passed.",
+      "evidence": "Assigned to staff manual run on the published staging checklist."
+    },
+    "festiome-unified-3": {
+      "status": "blocked",
+      "note": "Requires a human browser/device, real provider/payment delivery, controlled network simulation, or visual/accessibility inspection; not falsely marked as passed.",
+      "evidence": "Assigned to staff manual run on the published staging checklist."
+    },
+    "festiome-unified-4": {
+      "status": "pass",
+      "note": "Verified by live staging run or isolated automated service/backend coverage.",
+      "evidence": "Live report: support-service/docs/qa/staging-live-run.json; automated suites run 2026-07-19."
+    },
+    "festiome-unified-5": {
+      "status": "pass",
+      "note": "Verified by live staging run or isolated automated service/backend coverage.",
+      "evidence": "Live report: support-service/docs/qa/staging-live-run.json; automated suites run 2026-07-19."
+    },
+    "festiome-unified-6": {
+      "status": "blocked",
+      "note": "Requires a human browser/device, real provider/payment delivery, controlled network simulation, or visual/accessibility inspection; not falsely marked as passed.",
+      "evidence": "Assigned to staff manual run on the published staging checklist."
+    },
+    "festiome-unified-7": {
+      "status": "blocked",
+      "note": "Requires a human browser/device, real provider/payment delivery, controlled network simulation, or visual/accessibility inspection; not falsely marked as passed.",
+      "evidence": "Assigned to staff manual run on the published staging checklist."
+    },
+    "staff-identity-0": {
+      "status": "pass",
+      "note": "Verified by live staging run or isolated automated service/backend coverage.",
+      "evidence": "Live report: support-service/docs/qa/staging-live-run.json; automated suites run 2026-07-19."
+    },
+    "staff-identity-1": {
+      "status": "pass",
+      "note": "Verified by live staging run or isolated automated service/backend coverage.",
+      "evidence": "Live report: support-service/docs/qa/staging-live-run.json; automated suites run 2026-07-19."
+    },
+    "staff-identity-2": {
+      "status": "pass",
+      "note": "Verified by live staging run or isolated automated service/backend coverage.",
+      "evidence": "Live report: support-service/docs/qa/staging-live-run.json; automated suites run 2026-07-19."
+    },
+    "staff-identity-3": {
+      "status": "blocked",
+      "note": "Separate staff assignment was verified live, but section-routing certification is blocked by an isolated fixture receiving entitlement 402.",
+      "evidence": "Backend failure: test_section_scanning_routes_and_respects_own_group (2026-07-19)."
+    },
+    "staff-identity-4": {
+      "status": "issue",
+      "note": "Normal QR admission sets admitted state but writes no scan_events row; scanned_by is therefore unavailable for ordinary Check-in.",
+      "evidence": "Live event 4416b81d-89e8-4ff7-8f82-9822a05e9f8a; database scan_events count remained 0 after admitted QR scan."
+    },
+    "staff-identity-5": {
+      "status": "pass",
+      "note": "Verified by live staging run or isolated automated service/backend coverage.",
+      "evidence": "Live report: support-service/docs/qa/staging-live-run.json; automated suites run 2026-07-19."
+    },
+    "reliability-0": {
+      "status": "blocked",
+      "note": "Requires a human browser/device, real provider/payment delivery, controlled network simulation, or visual/accessibility inspection; not falsely marked as passed.",
+      "evidence": "Assigned to staff manual run on the published staging checklist."
+    },
+    "reliability-1": {
+      "status": "blocked",
+      "note": "Requires a human browser/device, real provider/payment delivery, controlled network simulation, or visual/accessibility inspection; not falsely marked as passed.",
+      "evidence": "Assigned to staff manual run on the published staging checklist."
+    },
+    "reliability-2": {
+      "status": "pass",
+      "note": "Verified by live staging run or isolated automated service/backend coverage.",
+      "evidence": "Live report: support-service/docs/qa/staging-live-run.json; automated suites run 2026-07-19."
+    },
+    "reliability-3": {
+      "status": "pass",
+      "note": "Verified by live staging run or isolated automated service/backend coverage.",
+      "evidence": "Live report: support-service/docs/qa/staging-live-run.json; automated suites run 2026-07-19."
+    },
+    "reliability-4": {
+      "status": "blocked",
+      "note": "Requires a human browser/device, real provider/payment delivery, controlled network simulation, or visual/accessibility inspection; not falsely marked as passed.",
+      "evidence": "Assigned to staff manual run on the published staging checklist."
+    },
+    "reliability-5": {
+      "status": "pass",
+      "note": "Verified by live staging run or isolated automated service/backend coverage.",
+      "evidence": "Live report: support-service/docs/qa/staging-live-run.json; automated suites run 2026-07-19."
+    },
+    "reliability-6": {
+      "status": "pass",
+      "note": "Verified by live staging run or isolated automated service/backend coverage.",
+      "evidence": "Live report: support-service/docs/qa/staging-live-run.json; automated suites run 2026-07-19."
+    },
+    "notifications-0": {
+      "status": "blocked",
+      "note": "Requires a human browser/device, real provider/payment delivery, controlled network simulation, or visual/accessibility inspection; not falsely marked as passed.",
+      "evidence": "Assigned to staff manual run on the published staging checklist."
+    },
+    "notifications-1": {
+      "status": "blocked",
+      "note": "Requires a human browser/device, real provider/payment delivery, controlled network simulation, or visual/accessibility inspection; not falsely marked as passed.",
+      "evidence": "Assigned to staff manual run on the published staging checklist."
+    },
+    "notifications-2": {
+      "status": "pass",
+      "note": "Verified by live staging run or isolated automated service/backend coverage.",
+      "evidence": "Live report: support-service/docs/qa/staging-live-run.json; automated suites run 2026-07-19."
+    },
+    "notifications-3": {
+      "status": "blocked",
+      "note": "Requires a human browser/device, real provider/payment delivery, controlled network simulation, or visual/accessibility inspection; not falsely marked as passed.",
+      "evidence": "Assigned to staff manual run on the published staging checklist."
+    },
+    "notifications-4": {
+      "status": "blocked",
+      "note": "Requires a human browser/device, real provider/payment delivery, controlled network simulation, or visual/accessibility inspection; not falsely marked as passed.",
+      "evidence": "Assigned to staff manual run on the published staging checklist."
+    },
+    "security-0": {
+      "status": "pass",
+      "note": "Verified by live staging run or isolated automated service/backend coverage.",
+      "evidence": "Live report: support-service/docs/qa/staging-live-run.json; automated suites run 2026-07-19."
+    },
+    "security-1": {
+      "status": "pass",
+      "note": "Verified by live staging run or isolated automated service/backend coverage.",
+      "evidence": "Live report: support-service/docs/qa/staging-live-run.json; automated suites run 2026-07-19."
+    },
+    "security-2": {
+      "status": "pass",
+      "note": "Verified by live staging run or isolated automated service/backend coverage.",
+      "evidence": "Live report: support-service/docs/qa/staging-live-run.json; automated suites run 2026-07-19."
+    },
+    "security-3": {
+      "status": "pass",
+      "note": "Verified by live staging run or isolated automated service/backend coverage.",
+      "evidence": "Live report: support-service/docs/qa/staging-live-run.json; automated suites run 2026-07-19."
+    },
+    "security-4": {
+      "status": "pass",
+      "note": "Verified by live staging run or isolated automated service/backend coverage.",
+      "evidence": "Live report: support-service/docs/qa/staging-live-run.json; automated suites run 2026-07-19."
+    },
+    "security-5": {
+      "status": "pass",
+      "note": "Verified by live staging run or isolated automated service/backend coverage.",
+      "evidence": "Live report: support-service/docs/qa/staging-live-run.json; automated suites run 2026-07-19."
+    },
+    "security-6": {
+      "status": "blocked",
+      "note": "Requires a human browser/device, real provider/payment delivery, controlled network simulation, or visual/accessibility inspection; not falsely marked as passed.",
+      "evidence": "Assigned to staff manual run on the published staging checklist."
+    },
+    "security-7": {
+      "status": "pass",
+      "note": "Verified by live staging run or isolated automated service/backend coverage.",
+      "evidence": "Live report: support-service/docs/qa/staging-live-run.json; automated suites run 2026-07-19."
+    },
+    "accessibility-0": {
+      "status": "blocked",
+      "note": "Requires a human browser/device, real provider/payment delivery, controlled network simulation, or visual/accessibility inspection; not falsely marked as passed.",
+      "evidence": "Assigned to staff manual run on the published staging checklist."
+    },
+    "accessibility-1": {
+      "status": "blocked",
+      "note": "Requires a human browser/device, real provider/payment delivery, controlled network simulation, or visual/accessibility inspection; not falsely marked as passed.",
+      "evidence": "Assigned to staff manual run on the published staging checklist."
+    },
+    "accessibility-2": {
+      "status": "blocked",
+      "note": "Requires a human browser/device, real provider/payment delivery, controlled network simulation, or visual/accessibility inspection; not falsely marked as passed.",
+      "evidence": "Assigned to staff manual run on the published staging checklist."
+    },
+    "accessibility-3": {
+      "status": "blocked",
+      "note": "Requires a human browser/device, real provider/payment delivery, controlled network simulation, or visual/accessibility inspection; not falsely marked as passed.",
+      "evidence": "Assigned to staff manual run on the published staging checklist."
+    },
+    "accessibility-4": {
+      "status": "blocked",
+      "note": "Requires a human browser/device, real provider/payment delivery, controlled network simulation, or visual/accessibility inspection; not falsely marked as passed.",
+      "evidence": "Assigned to staff manual run on the published staging checklist."
+    },
+    "accessibility-5": {
+      "status": "blocked",
+      "note": "Requires a human browser/device, real provider/payment delivery, controlled network simulation, or visual/accessibility inspection; not falsely marked as passed.",
+      "evidence": "Assigned to staff manual run on the published staging checklist."
+    },
+    "accessibility-6": {
+      "status": "blocked",
+      "note": "Requires a human browser/device, real provider/payment delivery, controlled network simulation, or visual/accessibility inspection; not falsely marked as passed.",
+      "evidence": "Assigned to staff manual run on the published staging checklist."
+    },
+    "compat-performance-0": {
+      "status": "blocked",
+      "note": "Requires a human browser/device, real provider/payment delivery, controlled network simulation, or visual/accessibility inspection; not falsely marked as passed.",
+      "evidence": "Assigned to staff manual run on the published staging checklist."
+    },
+    "compat-performance-1": {
+      "status": "blocked",
+      "note": "Requires a human browser/device, real provider/payment delivery, controlled network simulation, or visual/accessibility inspection; not falsely marked as passed.",
+      "evidence": "Assigned to staff manual run on the published staging checklist."
+    },
+    "compat-performance-2": {
+      "status": "blocked",
+      "note": "Requires a human browser/device, real provider/payment delivery, controlled network simulation, or visual/accessibility inspection; not falsely marked as passed.",
+      "evidence": "Assigned to staff manual run on the published staging checklist."
+    },
+    "compat-performance-3": {
+      "status": "blocked",
+      "note": "Requires a human browser/device, real provider/payment delivery, controlled network simulation, or visual/accessibility inspection; not falsely marked as passed.",
+      "evidence": "Assigned to staff manual run on the published staging checklist."
+    },
+    "compat-performance-4": {
+      "status": "pass",
+      "note": "Verified by live staging run or isolated automated service/backend coverage.",
+      "evidence": "Live report: support-service/docs/qa/staging-live-run.json; automated suites run 2026-07-19."
+    },
+    "compat-performance-5": {
+      "status": "pass",
+      "note": "Verified by live staging run or isolated automated service/backend coverage.",
+      "evidence": "Live report: support-service/docs/qa/staging-live-run.json; automated suites run 2026-07-19."
+    },
+    "lifecycle-0": {
+      "status": "blocked",
+      "note": "Requires a human browser/device, real provider/payment delivery, controlled network simulation, or visual/accessibility inspection; not falsely marked as passed.",
+      "evidence": "Assigned to staff manual run on the published staging checklist."
+    },
+    "lifecycle-1": {
+      "status": "blocked",
+      "note": "Requires a human browser/device, real provider/payment delivery, controlled network simulation, or visual/accessibility inspection; not falsely marked as passed.",
+      "evidence": "Assigned to staff manual run on the published staging checklist."
+    },
+    "lifecycle-2": {
+      "status": "pass",
+      "note": "Verified by live staging run or isolated automated service/backend coverage.",
+      "evidence": "Live report: support-service/docs/qa/staging-live-run.json; automated suites run 2026-07-19."
+    },
+    "lifecycle-3": {
+      "status": "pass",
+      "note": "Verified by live staging run or isolated automated service/backend coverage.",
+      "evidence": "Live report: support-service/docs/qa/staging-live-run.json; automated suites run 2026-07-19."
+    },
+    "lifecycle-4": {
+      "status": "pass",
+      "note": "Verified by live staging run or isolated automated service/backend coverage.",
+      "evidence": "Live report: support-service/docs/qa/staging-live-run.json; automated suites run 2026-07-19."
+    },
+    "lifecycle-5": {
+      "status": "pass",
+      "note": "Verified by live staging run or isolated automated service/backend coverage.",
+      "evidence": "Live report: support-service/docs/qa/staging-live-run.json; automated suites run 2026-07-19."
+    },
+    "other-surfaces-0": {
+      "status": "blocked",
+      "note": "Requires a human browser/device, real provider/payment delivery, controlled network simulation, or visual/accessibility inspection; not falsely marked as passed.",
+      "evidence": "Assigned to staff manual run on the published staging checklist."
+    },
+    "other-surfaces-1": {
+      "status": "pass",
+      "note": "Verified by live staging run or isolated automated service/backend coverage.",
+      "evidence": "Live report: support-service/docs/qa/staging-live-run.json; automated suites run 2026-07-19."
+    },
+    "other-surfaces-2": {
+      "status": "pass",
+      "note": "Verified by live staging run or isolated automated service/backend coverage.",
+      "evidence": "Live report: support-service/docs/qa/staging-live-run.json; automated suites run 2026-07-19."
+    },
+    "other-surfaces-3": {
+      "status": "blocked",
+      "note": "Requires a human browser/device, real provider/payment delivery, controlled network simulation, or visual/accessibility inspection; not falsely marked as passed.",
+      "evidence": "Assigned to staff manual run on the published staging checklist."
+    },
+    "other-surfaces-4": {
+      "status": "blocked",
+      "note": "Requires a human browser/device, real provider/payment delivery, controlled network simulation, or visual/accessibility inspection; not falsely marked as passed.",
+      "evidence": "Assigned to staff manual run on the published staging checklist."
+    },
+    "other-surfaces-5": {
+      "status": "pass",
+      "note": "Verified by live staging run or isolated automated service/backend coverage.",
+      "evidence": "Live report: support-service/docs/qa/staging-live-run.json; automated suites run 2026-07-19."
+    }
+  }
+}

@@ -108,6 +108,8 @@ async function startFestioMeGuestSession(eventId, passToken) {
     token: data.token,
     expiresAt: Number.isFinite(parsedExpiry) ? parsedExpiry : Date.now() + 30 * 60 * 1000,
     kind: 'guest',
+    eventId,
+    passToken,
   }
   try {
     sessionStorage.setItem('festiomeGuestSession', JSON.stringify(festiomeSession))
@@ -225,9 +227,11 @@ export const api = {
   myMenuEvents: () => req('GET', '/events/me/menu-events'),
   listGuests: (eventId) => req('GET', `/events/${eventId}/guests`),
   downloadGuestTemplate: (eventId, fmt = 'xlsx') => downloadFile(`/events/${eventId}/guests/template?fmt=${fmt}`, `guest-template.${fmt}`),
-  downloadGuestList: (eventId, fmt = 'csv', sections = null) =>
+  downloadGuestList: (eventId, fmt = 'csv', sections = null, guestIds = null) =>
     downloadFile(
-      `/events/${eventId}/guests/export?fmt=${fmt}` + (sections ? `&sections=${encodeURIComponent(sections)}` : ''),
+      `/events/${eventId}/guests/export?fmt=${fmt}`
+        + (sections ? `&sections=${encodeURIComponent(sections)}` : '')
+        + (guestIds && guestIds.length ? `&guest_ids=${encodeURIComponent(guestIds.join(','))}` : ''),
       `${sections && sections.split(',').length === 1 ? sections : 'event-export'}.${fmt}`,
     ),
   importGuestsFromUrl: (eventId, url) => req('POST', `/events/${eventId}/guests/import-url`, { url }),
@@ -705,6 +709,9 @@ export const api = {
   adminAccountsSummary: () => req('GET', '/admin/accounts/summary'),
   adminListTrials: () => req('GET', '/admin/trial-requests'),
   adminResolveTrial: (id, body) => req('POST', `/admin/trial-requests/${id}/resolve`, body),
+  // QA checklist submissions (from public/media/festio-qa-checklist.html)
+  qaChecklistSubmissions: () => req('GET', '/qa-checklist/submissions'),
+  qaChecklistSubmission: (id) => req('GET', `/qa-checklist/submissions/${id}`),
   // Account management
   adminListAccounts: () => req('GET', '/admin/accounts'),
   adminSetOrgActive: (orgId, active) => req('PATCH', `/admin/orgs/${orgId}/active`, { active }),
@@ -768,6 +775,16 @@ export const api = {
 
   // FestioMe — isolated internal service, presented as one Festio feature.
   startFestioMeGuestSession,
+  festiomeGuestContext: () => {
+    try {
+      const stored = JSON.parse(sessionStorage.getItem('festiomeGuestSession') || 'null')
+      return stored?.kind === 'guest' && stored?.eventId && stored?.passToken
+        ? { eventId: stored.eventId, passToken: stored.passToken }
+        : null
+    } catch {
+      return null
+    }
+  },
   festiomeSpaces: () => festiomeReq('GET', '/festiome/v1/groups'),
   festiomeSpace: (id) => festiomeReq('GET', `/festiome/v1/groups/${id}`),
   festiomeCreateSpace: (data) => festiomeReq('POST', '/festiome/v1/groups', data),

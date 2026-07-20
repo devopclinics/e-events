@@ -435,11 +435,11 @@ function SmsConsentCheckbox({ checked, onChange, disabled = false }) {
         className="mt-1 h-5 w-5 shrink-0 accent-teal-600"
       />
       <span>
-        I agree to receive SMS/text messages from Festio for this event, including my invitation or ticket link,
-        QR pass, RSVP updates, check-in confirmation, seating updates, session reminders, and other event-service
-        notifications. Message frequency varies by event. Message and data rates may apply. Reply HELP for help.
-        Reply STOP to opt out at any time. Consent is not required to buy goods or services. View our{' '}
-        <a href="/privacy" target="_blank" rel="noreferrer" className="font-bold text-teal-700 underline">Privacy Policy</a>.
+        I agree to receive SMS/text and WhatsApp messages from Festio for this event, including my invitation or
+        ticket link, QR pass, RSVP updates, check-in confirmation, seating updates, session reminders, and other
+        event-service notifications. Message frequency varies by event. Message and data rates may apply. Reply
+        HELP for help. Reply STOP to opt out at any time. Consent is not required to buy goods or services. View
+        our <a href="/privacy" target="_blank" rel="noreferrer" className="font-bold text-teal-700 underline">Privacy Policy</a>.
       </span>
     </label>
   )
@@ -531,6 +531,7 @@ function RSVPForm({ event, theme, onConfirmed }) {
           email: form.email.trim(),
           phone: normalizePhone(form.phone) || undefined,
           sms_consent: Boolean(form.phone.trim() && smsConsent),
+          whatsapp_consent: Boolean(form.phone.trim() && smsConsent),
           answers,
           invitees: multiInvitee && acceptsAdditionalInvitees
             ? invitees
@@ -911,6 +912,7 @@ function TokenRSVPForm({ event, prefill, token, theme, onDone }) {
           last_name: form.last_name.trim(),
           phone: normalizePhone(form.phone) || undefined,
           sms_consent: Boolean(form.phone.trim() && smsConsent),
+          whatsapp_consent: Boolean(form.phone.trim() && smsConsent),
           answers,
           shipping_address: event.shipping ? shipAddr : undefined,
           sizes: event.shipping ? sizes : undefined,

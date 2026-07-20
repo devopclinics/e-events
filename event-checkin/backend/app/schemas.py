@@ -359,6 +359,43 @@ class TrialRequestOut(BaseModel):
     requester_email: Optional[str] = None
 
 
+class QaChecklistResultItem(BaseModel):
+    section_id: str
+    section_title: Optional[str] = None
+    case_id: str
+    case_title: Optional[str] = None
+    priority: Optional[str] = None
+    status: Literal["pass", "issue", "blocked", "na"]
+    note: Optional[str] = None
+    evidence: Optional[str] = None
+
+
+class QaChecklistSubmissionCreate(BaseModel):
+    tester_name: str = Field(min_length=1, max_length=255)
+    summary: Optional[str] = Field(default=None, max_length=500)
+    results: list[QaChecklistResultItem] = Field(default_factory=list, max_length=500)
+    user_agent: Optional[str] = Field(default=None, max_length=500)
+
+
+class QaChecklistSubmissionOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: str
+    tester_name: str
+    summary: Optional[str] = None
+    tested_count: int
+    pass_count: int
+    issue_count: int
+    blocked_count: int
+    na_count: int
+    user_agent: Optional[str] = None
+    created_at: datetime
+
+
+class QaChecklistSubmissionDetail(QaChecklistSubmissionOut):
+    results: list[QaChecklistResultItem] = Field(default_factory=list)
+
+
 class DemoRequestCreate(BaseModel):
     contact_name: str = Field(min_length=2, max_length=120)
     email: EmailStr
@@ -1856,6 +1893,7 @@ class RSVPSubmit(BaseModel):
     email: Optional[EmailStr] = None
     phone: Optional[str] = None
     sms_consent: bool = False
+    whatsapp_consent: bool = False
     # key = question_id, value = answer string
     answers: dict[str, str] = {}
     invitees: list[RSVPInviteeSubmit] = []
@@ -1888,6 +1926,7 @@ class InviteGuestPrefill(BaseModel):
     email: Optional[str] = None
     phone: Optional[str] = None
     sms_consent: bool = False
+    whatsapp_consent: bool = False
     rsvp_status: str = "invited"
     email_locked: bool = False
     phone_locked: bool = False
@@ -1909,6 +1948,7 @@ class RSVPTokenSubmit(BaseModel):
     last_name: Optional[str] = None
     phone: Optional[str] = None
     sms_consent: bool = False
+    whatsapp_consent: bool = False
     answers: dict[str, str] = {}
     shipping_address: Optional[ShippingAddressUpdate] = None
     sizes: dict[str, str] = {}  # shipment_id -> size

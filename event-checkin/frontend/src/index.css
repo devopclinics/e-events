@@ -4,6 +4,46 @@
 @tailwind components;
 @tailwind utilities;
 
+/* FestioMe's unified home contains data from several independent sources.
+   These guards keep long event names and user content from forcing a mobile
+   viewport wider than the device, while retaining the desktop composition. */
+.festiome-unified-home,
+.festiome-unified-home main,
+.festiome-unified-home section,
+.festiome-unified-home article,
+.festiome-unified-home form,
+.festiome-unified-home form > * {
+  min-width: 0;
+  max-width: 100%;
+}
+
+.festiome-unified-home h1,
+.festiome-unified-home h2,
+.festiome-unified-home h3,
+.festiome-unified-home h4,
+.festiome-unified-home p,
+.festiome-unified-home strong {
+  overflow-wrap: anywhere;
+}
+
+@media (max-width: 639px) {
+  .festiome-unified-home input,
+  .festiome-unified-home textarea {
+    font-size: 16px;
+  }
+
+  .festiome-unified-home main button,
+  .festiome-unified-home main a {
+    min-height: 44px;
+  }
+
+  .festiome-unified-home article > .flex,
+  .festiome-unified-home section > .flex {
+    align-items: flex-start;
+    flex-wrap: wrap;
+  }
+}
+
 :root {
   color-scheme: light;
   --app-bg: #f4f7f8;

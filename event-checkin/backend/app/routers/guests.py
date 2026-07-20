@@ -676,13 +676,16 @@ async def export_guests(
     event_id: str,
     fmt: str = "csv",
     sections: str = "guests,messaging,experience",
+    guest_ids: str | None = None,
     db: AsyncSession = Depends(get_db),
     _: User = Depends(require_guest_manage_access),
 ):
     """Download event data. `sections` (comma-separated: guests, messaging,
     experience) selects what to include. CSV emits one flattened sheet; XLSX emits
     one sheet per selected section. Includes RSVP answers, per-channel delivery
-    status, consent, timestamps, and Experience step progress."""
+    status, consent, timestamps, and Experience step progress. `guest_ids`
+    (comma-separated) restricts the export to those guests, e.g. to match a
+    filtered view in the UI; omit to export the whole event."""
     event = await db.get(Event, event_id)
     if not event:
         raise HTTPException(404, "Event not found")
@@ -690,8 +693,13 @@ async def export_guests(
         raise HTTPException(400, "fmt must be csv or xlsx")
     want = {s.strip().lower() for s in sections.split(",") if s.strip()} or {"guests"}
 
+    guest_query = select(Guest).where(Guest.event_id == event_id)
+    if guest_ids:
+        ids = {g.strip() for g in guest_ids.split(",") if g.strip()}
+        if ids:
+            guest_query = guest_query.where(Guest.id.in_(ids))
     guests = (await db.execute(
-        select(Guest).where(Guest.event_id == event_id).order_by(Guest.last_name, Guest.first_name)
+        guest_query.order_by(Guest.last_name, Guest.first_name)
     )).scalars().all()
     tnames = dict((await db.execute(
         select(SeatingTable.id, SeatingTable.name).where(SeatingTable.event_id == event_id))).all())

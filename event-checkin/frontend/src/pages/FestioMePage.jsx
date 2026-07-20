@@ -81,6 +81,7 @@ function Dialog({ title, children, onClose }) {
 export default function FestioMePage() {
   const { user } = useAuth();
   const guestMode = typeof window !== "undefined" && window.location.pathname === "/festiome/guest";
+  const [showHome, setShowHome] = useState(true);
   const [groups, setGroups] = useState([]),
     [groupId, setGroupId] = useState("");
   const [channels, setChannels] = useState([]),
@@ -124,6 +125,11 @@ export default function FestioMePage() {
     muted: false,
   });
   const [connection, setConnection] = useState("polling");
+  const [homeSection, setHomeSection] = useState("home"),
+    [communication, setCommunication] = useState(null),
+    [communicationLoading, setCommunicationLoading] = useState(false),
+    [communicationError, setCommunicationError] = useState(""),
+    [homeDraft, setHomeDraft] = useState("");
   const [discover, setDiscover] = useState([]),
     [joinReqs, setJoinReqs] = useState([]),
     [subForm, setSubForm] = useState({ name: "", join_policy: "request", visibility: "listed", rules: "" }),
@@ -133,6 +139,7 @@ export default function FestioMePage() {
     initialLoad = useRef(true);
   const activeGroup = groups.find((item) => item.id === groupId),
     activeChannel = channels.find((item) => item.id === channelId);
+  const eventRef = activeGroup?.external_event_ref;
   const me = members.find(
     (member) =>
       member.is_me ||
@@ -230,6 +237,67 @@ export default function FestioMePage() {
     if (groupId) loadGroupData();
   }, [groupId, loadGroupData]);
 
+  const loadCommunication = useCallback(async () => {
+    if (!eventRef) return;
+    setCommunicationLoading(true);
+    setCommunicationError("");
+    try {
+      const guestContext = guestMode ? api.festiomeGuestContext() : null;
+      if (guestMode) {
+        if (!guestContext?.passToken) {
+          setCommunication(null);
+          setCommunicationError("Open FestioMe from your FestioHub link to see event communication here.");
+          return;
+        }
+        const hub = await api.guestHub(guestContext.eventId || eventRef, guestContext.passToken);
+        setCommunication({
+          mode: "guest",
+          event: hub.event,
+          guest: hub.guest,
+          capabilities: hub.capabilities || {},
+          announcements: hub.announcements || [],
+          chat: hub.chat_messages || [],
+          direct: hub.direct_messages || [],
+          inbox: [],
+        });
+      } else {
+        const results = await Promise.allSettled([
+          api.messagingSettings(eventRef),
+          api.listAnnouncements(eventRef),
+          api.guestChatMessages(eventRef),
+          api.messageInbox(eventRef),
+        ]);
+        const value = (index, fallback) => results[index].status === "fulfilled" ? results[index].value : fallback;
+        const settings = value(0, {});
+        setCommunication({
+          mode: "organizer",
+          event: { id: eventRef, name: activeGroup?.name },
+          capabilities: {
+            announcements: !!settings.announcements_enabled,
+            direct_host_messages: !!settings.direct_host_messages_enabled,
+            guest_chat: !!settings.guest_chat_enabled,
+            guest_chat_posting: !!settings.guest_chat_posting_enabled,
+          },
+          announcements: list(value(1, [])),
+          chat: list(value(2, [])),
+          direct: [],
+          inbox: list(value(3, [])),
+        });
+        if (results.every((result) => result.status === "rejected")) {
+          setCommunicationError("Guest Communication is temporarily unavailable. FestioMe groups still work.");
+        }
+      }
+    } catch (error) {
+      setCommunicationError(error?.message || "Guest Communication is temporarily unavailable.");
+    } finally {
+      setCommunicationLoading(false);
+    }
+  }, [activeGroup?.name, eventRef, guestMode]);
+
+  useEffect(() => {
+    if (showHome && eventRef) loadCommunication();
+  }, [eventRef, loadCommunication, showHome]);
+
   const mergeMessages = useCallback((incoming, prepend = false) => {
     setMessages((current) => {
       const map = new Map(
@@ -251,7 +319,7 @@ export default function FestioMePage() {
           next = list(result).reverse();
       setMessages(next);
       setCursor(result?.next_cursor || result?.cursor || "");
-      if (next.at(-1)?.id) {
+      if (!showHome && next.at(-1)?.id) {
         api.festiomeRead(channelId, next.at(-1).id).catch(() => {});
         setChannels((current) =>
           current.map((item) =>
@@ -265,7 +333,7 @@ export default function FestioMePage() {
         if (!quiet) setThreadLoading(false);
       }
     },
-    [channelId],
+    [channelId, showHome],
   );
 
   useEffect(() => {
@@ -373,7 +441,6 @@ export default function FestioMePage() {
       setNotice(errorText(e));
     }
   }
-  const eventRef = activeGroup?.external_event_ref;
   const rulesBlocked =
     activeGroup && activeGroup.rules && activeGroup.rules_accepted === false;
 
@@ -720,6 +787,34 @@ export default function FestioMePage() {
     );
   }
 
+  async function sendHomePost(event) {
+    event.preventDefault();
+    const body = homeDraft.trim();
+    if (!body) return;
+    const guestContext = api.festiomeGuestContext();
+    try {
+      setSending(true);
+      if (guestMode && communication?.capabilities?.guest_chat_posting && guestContext) {
+        await api.sendGuestChatMessage(guestContext.eventId || eventRef, guestContext.passToken, body);
+        setHomeDraft("");
+        await loadCommunication();
+        setHomeSection("guest-chat");
+        return;
+      }
+      const target = channels.find((channel) => !channel.is_dm && channel.kind === "discussion")
+        || channels.find((channel) => !channel.is_dm);
+      if (!target) throw new Error("No conversation is available for this post.");
+      await api.festiomeSend(target.id, { body });
+      setHomeDraft("");
+      setChannelId(target.id);
+      setShowHome(false);
+    } catch (error) {
+      setNotice(errorText(error));
+    } finally {
+      setSending(false);
+    }
+  }
+
   if (loading)
     return (
       <div className="min-h-[60vh] grid place-items-center text-sm text-slate-500">
@@ -747,6 +842,82 @@ export default function FestioMePage() {
         </button>
       </div>
     );
+
+  if (showHome) {
+    const displayName = name(user).split(" ")[0] || "there";
+    const unreadTotal = groups.reduce((total, group) => total + Number(group.unread_count || 0), 0)
+      + channels.reduce((total, channel) => total + Number(channel.unread_count || 0), 0);
+    const announcements = communication?.announcements || [];
+    const guestChat = communication?.chat || [];
+    const hostMessages = communication?.direct || [];
+    const hostInbox = communication?.inbox || [];
+    const latestAnnouncement = announcements[0];
+    const latestChat = guestChat.slice(-2);
+    const latestHostMessage = [...hostMessages].reverse().find((item) => item.sender_type === "organizer") || hostMessages.at(-1);
+    const nativeLatest = messages.at(-1);
+    const dmChannels = channels.filter((channel) => channel.is_dm);
+    const openWorkspace = (group = activeGroup, preferredChannel = "") => {
+      if (group?.id) setGroupId(group.id);
+      if (preferredChannel) setChannelId(preferredChannel);
+      setShowHome(false);
+    };
+    const nav = [
+      ["home", "⌂", "Home"],
+      ["feed", "▤", "Event feed"],
+      ["groups", "♧", "Groups"],
+      ["messages", "✉", "Messages"],
+    ];
+    const sourceBadge = (children, tone = "teal") => <span className={`rounded-md border px-2 py-1 text-[10px] font-black uppercase tracking-wide ${tone === "purple" ? "border-purple-400/30 bg-purple-500/10 text-purple-300" : "border-teal-400/30 bg-teal-500/10 text-teal-300"}`}>{children}</span>;
+    return (
+      <div className="festiome-unified-home mx-auto flex min-h-[calc(100dvh-5.5rem)] w-full max-w-7xl overflow-hidden border-y border-teal-400/15 bg-[#061120] text-white shadow-2xl sm:min-h-[calc(100vh-7rem)] sm:rounded-3xl sm:border">
+        <aside className="hidden w-56 shrink-0 flex-col border-r border-white/10 bg-[#050e1e] p-4 md:flex">
+          <div className="mb-8 px-2 text-2xl font-black">Festio<span className="text-teal-300">Me</span></div>
+          <nav className="space-y-2">
+            {nav.map(([key, icon, label]) => <button key={key} onClick={() => setHomeSection(key)} className={`flex w-full items-center gap-3 rounded-xl px-4 py-3 text-left text-sm font-bold ${homeSection === key ? "bg-teal-600/30 text-white" : "text-slate-300 hover:bg-white/5"}`}><span className="text-lg">{icon}</span>{label}{key === "messages" && unreadTotal > 0 && <span className="ml-auto rounded-full bg-purple-500 px-2 py-0.5 text-[10px]">{unreadTotal}</span>}</button>)}
+          </nav>
+          <button onClick={() => setHomeSection("profile")} className={`mt-auto flex items-center gap-3 rounded-xl border border-white/10 px-3 py-3 text-sm font-bold ${homeSection === "profile" ? "bg-white/10" : ""}`}><span className="grid h-8 w-8 place-items-center rounded-full bg-teal-700">{initials(name(user))}</span>Profile</button>
+        </aside>
+
+        <div className="min-w-0 flex-1">
+          <header className="flex items-center justify-between gap-3 border-b border-white/10 px-3 py-3 sm:gap-4 sm:px-7 sm:py-4">
+            <div className="min-w-0"><h1 className="line-clamp-2 break-words text-sm font-black leading-5 sm:text-lg">{activeGroup?.name || communication?.event?.name || "Your event community"}</h1><p className="mt-0.5 text-[11px] text-teal-300 sm:text-xs">FestioMe community</p></div>
+            <div className="flex items-center gap-3"><button onClick={() => { setShowHome(false); openPreferences(); }} className="relative grid h-10 w-10 place-items-center rounded-full border border-white/15" aria-label="Notifications">🔔{unreadTotal > 0 && <span className="absolute -right-1 -top-1 rounded-full bg-purple-500 px-1.5 text-[10px] font-black">{unreadTotal}</span>}</button><span className="grid h-10 w-10 place-items-center rounded-full bg-teal-700 text-xs font-black">{initials(name(user))}</span></div>
+          </header>
+
+          <div className="sticky top-0 z-30 border-b border-white/10 bg-[#061120]/95 p-1.5 backdrop-blur md:hidden"><div className="grid grid-cols-5 gap-0.5">{[...nav, ["profile", "◯", "Profile"]].map(([key, icon, label]) => <button key={key} onClick={() => setHomeSection(key)} className={`min-w-0 rounded-lg px-0.5 py-2 text-[9px] font-bold ${homeSection === key ? "bg-teal-600/30 text-teal-200" : "text-slate-400"}`}><span className="block text-sm">{icon}</span><span className="block truncate">{label}</span></button>)}</div></div>
+
+          <main className="min-w-0 overflow-x-hidden p-3 pb-8 sm:p-7">
+            {communicationError && <div className="mb-5 flex items-center justify-between gap-3 rounded-xl border border-amber-400/30 bg-amber-500/10 px-4 py-3 text-sm text-amber-100"><span>{communicationError}</span><button onClick={loadCommunication} className="font-black underline">Retry</button></div>}
+            {communicationLoading && <div className="mb-5 text-xs font-bold text-teal-300">Refreshing Guest Communication…</div>}
+
+            {homeSection === "home" && <div className="space-y-6">
+              <div><h2 className="text-3xl font-black">Welcome back, {displayName}</h2><p className="mt-1 text-slate-400">Join the conversation. Sources stay separate and permission controlled.</p></div>
+              <form onSubmit={sendHomePost} className="rounded-2xl border border-white/10 bg-white/[0.035] p-4"><div className="flex gap-3"><span className="grid h-11 w-11 shrink-0 place-items-center rounded-full bg-teal-700 text-sm font-black">{initials(name(user))}</span><textarea value={homeDraft} onChange={(event) => setHomeDraft(event.target.value)} rows={2} maxLength={1000} placeholder={guestMode && communication?.capabilities?.guest_chat_posting ? "Share something in Guest Chat…" : "Share something with your FestioMe community…"} className="min-h-16 flex-1 resize-none rounded-xl border border-white/15 bg-[#0b1a30] px-4 py-3 text-sm text-white outline-none focus:border-teal-400" /></div><div className="mt-3 flex justify-end"><button disabled={sending || !homeDraft.trim()} className="rounded-xl bg-teal-500 px-8 py-2.5 text-sm font-black text-slate-950 disabled:opacity-40">{sending ? "Posting…" : "Post"}</button></div></form>
+
+              <section><h3 className="mb-3 text-xl font-black">Happening now</h3><div className="grid gap-4 lg:grid-cols-2">
+                {communication?.capabilities?.guest_chat ? <article className="rounded-2xl border border-white/10 bg-white/[0.035] p-5"><div className="flex items-center justify-between gap-3"><div className="flex items-center gap-3"><span className="grid h-10 w-10 place-items-center rounded-full bg-orange-500/30 text-xl">#</span><strong># General</strong></div>{sourceBadge("Guest Chat")}</div><div className="mt-4 space-y-3">{latestChat.length ? latestChat.map((item) => <div key={item.id} className="border-b border-white/10 pb-3 last:border-0"><div className="text-xs font-black">{name(item)} <span className="ml-1 font-normal text-slate-500">{time(item.created_at)}</span></div><p className="mt-1 line-clamp-2 text-sm text-slate-300">{text(item)}</p></div>) : <p className="text-sm text-slate-400">No guest messages yet.</p>}</div><button onClick={() => setHomeSection("guest-chat")} className="mt-4 w-full rounded-xl border border-teal-400/50 py-2.5 text-sm font-black text-teal-300">Join conversation</button></article> : <article className="rounded-2xl border border-dashed border-white/10 p-5 text-sm text-slate-500">Guest Chat is not enabled for this event.</article>}
+                {communication?.capabilities?.announcements ? <article className="rounded-2xl border border-white/10 bg-white/[0.035] p-5"><div className="flex items-center justify-between gap-3"><div className="flex items-center gap-3"><span className="grid h-10 w-10 place-items-center rounded-full bg-purple-500/30">📣</span><strong>Event announcement</strong></div>{sourceBadge("Event Updates", "purple")}</div>{latestAnnouncement ? <><h4 className="mt-5 text-xl font-black">{latestAnnouncement.title}</h4><p className="mt-2 line-clamp-3 text-sm leading-6 text-slate-300">{latestAnnouncement.body}</p></> : <><h4 className="mt-5 text-xl font-black">Welcome to your event community</h4><p className="mt-2 text-sm text-slate-400">Organizer updates will appear here.</p></>}<button onClick={() => setHomeSection("feed")} className="mt-4 w-full rounded-xl border border-purple-400/50 py-2.5 text-sm font-black text-purple-300">Read announcements</button></article> : null}
+              </div></section>
+
+              {(latestHostMessage || hostInbox.length || communication?.capabilities?.direct_host_messages) && <section className="rounded-2xl border border-blue-400/20 bg-blue-500/[0.06] p-5"><div className="flex flex-wrap items-center justify-between gap-3"><div><div className="flex items-center gap-2"><strong>{guestMode ? "Message from host" : "Guest Questions Inbox"}</strong>{sourceBadge("Message Host")}</div><p className="mt-2 text-sm text-slate-300">{guestMode ? (latestHostMessage ? text(latestHostMessage) : "Your private organizer conversation is ready.") : (hostInbox.length ? `${hostInbox.length} private guest conversation${hostInbox.length === 1 ? "" : "s"}.` : "No guest questions yet.")}</p></div><div className="flex items-center gap-3"><span className="text-xs text-amber-200">🔒 Private</span><button onClick={() => setHomeSection("messages")} className="rounded-xl border border-blue-300/40 px-4 py-2 text-sm font-black text-blue-200">View messages</button></div></div></section>}
+
+              <section><h3 className="mb-3 text-xl font-black">People you may know</h3><div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">{members.filter((member) => !member.is_me).slice(0, 3).map((member) => <div key={member.id} className="flex items-center gap-3 rounded-2xl border border-white/10 bg-white/[0.03] p-4"><span className="grid h-11 w-11 place-items-center rounded-full bg-teal-700/70 text-xs font-black">{initials(name(member))}</span><div className="min-w-0 flex-1"><strong className="block truncate text-sm">{name(member)}</strong><span className="text-xs capitalize text-slate-400">{member.role || "Member"}</span></div><button onClick={() => { setShowHome(false); setPanel("people"); }} className="text-xs font-black text-teal-300">Message</button></div>)}</div></section>
+            </div>}
+
+            {homeSection === "feed" && <section><div className="mb-5"><h2 className="text-3xl font-black">Event feed</h2><p className="mt-1 text-sm text-slate-400">Organizer updates from Guest Communication.</p></div><div className="space-y-4">{announcements.length ? announcements.map((item) => <article key={item.id} className="rounded-2xl border border-purple-400/20 bg-white/[0.035] p-5"><div className="flex items-center justify-between gap-3">{sourceBadge("Event Updates", "purple")}<time className="text-xs text-slate-500">{time(item.created_at || item.sent_at)}</time></div><h3 className="mt-4 text-xl font-black">{item.title}</h3><p className="mt-2 whitespace-pre-wrap text-sm leading-6 text-slate-300">{item.body}</p>{item.audience_type && <p className="mt-3 text-[10px] font-black uppercase tracking-wide text-slate-500">Audience: {item.audience_type.replaceAll("_", " ")}</p>}</article>) : <div className="rounded-2xl border border-dashed border-white/15 p-8 text-center text-slate-400">No event updates yet.</div>}</div></section>}
+
+            {homeSection === "guest-chat" && <section><div className="mb-5 flex items-center justify-between gap-3"><div><h2 className="text-3xl font-black"># General</h2><p className="mt-1 text-sm text-slate-400">Shared Guest Chat · not merged with FestioMe channels</p></div>{sourceBadge("Guest Chat")}</div><div className="space-y-3 rounded-2xl border border-white/10 bg-white/[0.025] p-4">{guestChat.length ? guestChat.map((item) => <div key={item.id} className="flex gap-3 rounded-xl p-2"><span className="grid h-9 w-9 shrink-0 place-items-center rounded-full bg-orange-500/20 text-xs font-black">{initials(name(item))}</span><div><div className="text-xs font-black">{name(item)} <span className="ml-1 font-normal text-slate-500">{time(item.created_at)}</span></div><p className="mt-1 text-sm text-slate-200">{text(item)}</p></div></div>) : <p className="p-4 text-sm text-slate-400">No messages yet.</p>}</div>{guestMode && communication?.capabilities?.guest_chat_posting && <form onSubmit={sendHomePost} className="mt-4 flex gap-2"><input value={homeDraft} onChange={(event) => setHomeDraft(event.target.value)} placeholder="Message Guest Chat…" className="min-w-0 flex-1 rounded-xl border border-white/15 bg-[#0b1a30] px-4 py-3 text-sm"/><button disabled={sending || !homeDraft.trim()} className="rounded-xl bg-teal-500 px-5 font-black text-slate-950 disabled:opacity-40">Send</button></form>}{!communication?.capabilities?.guest_chat_posting && <p className="mt-4 rounded-xl border border-amber-400/20 bg-amber-500/10 p-3 text-sm text-amber-100">Guest posting is paused. Existing messages remain visible.</p>}</section>}
+
+            {homeSection === "groups" && <section><div className="mb-5 flex items-center justify-between gap-3"><div><h2 className="text-3xl font-black">Groups</h2><p className="mt-1 text-sm text-slate-400">Native FestioMe communities.</p></div>{!guestMode && <button onClick={() => { setShowHome(false); setDialog("new-group"); setFormValue(""); }} className="rounded-xl bg-teal-500 px-4 py-2 text-sm font-black text-slate-950">New group</button>}</div><div className="space-y-3">{groups.map((group) => <div key={group.id} className="flex items-center gap-4 rounded-2xl border border-white/10 bg-white/[0.035] p-4"><span className="grid h-12 w-12 place-items-center rounded-xl bg-teal-500/20 font-black text-teal-200">{initials(group.name)}</span><div className="min-w-0 flex-1"><strong className="block truncate">{group.name}</strong><span className="text-sm text-slate-400">{group.member_count || 0} members</span></div><button onClick={() => openWorkspace(group)} className="rounded-xl border border-teal-400/40 px-4 py-2 text-sm font-black text-teal-300">Open group</button></div>)}</div></section>}
+
+            {homeSection === "messages" && <section><div className="mb-5"><h2 className="text-3xl font-black">Messages</h2><p className="mt-1 text-sm text-slate-400">Private conversations stay in their original inbox.</p></div><div className="space-y-4">{guestMode && <article className="rounded-2xl border border-blue-400/20 bg-blue-500/[0.05] p-5"><div className="flex items-center justify-between gap-3"><strong>Message Host</strong><span className="text-xs text-amber-200">🔒 Only you and the organizer</span></div><div className="mt-4 space-y-3">{hostMessages.length ? hostMessages.map((item) => <div key={item.id} className="rounded-xl bg-white/[0.04] p-3"><div className="text-xs font-black">{item.sender_type === "organizer" ? "Event organizer" : "You"} · <span className="font-normal text-slate-500">{time(item.created_at)}</span></div><p className="mt-1 text-sm">{text(item)}</p></div>) : <p className="text-sm text-slate-400">No private messages yet. Use FestioHub to start a host conversation.</p>}</div>{guestMode && <button onClick={() => history.back()} className="mt-4 rounded-xl border border-blue-300/40 px-4 py-2 text-sm font-black text-blue-200">Open in FestioHub</button>}</article>}{!guestMode && <article className="rounded-2xl border border-blue-400/20 p-5"><strong>Guest Questions Inbox</strong><div className="mt-4 space-y-2">{hostInbox.length ? hostInbox.map((thread) => <div key={thread.thread_id || thread.id} className="rounded-xl bg-white/[0.04] p-3"><div className="text-sm font-black">{thread.guest_name || thread.title || "Guest question"}</div><p className="mt-1 text-sm text-slate-400">{thread.latest_message || thread.preview || "Private guest conversation"}</p></div>) : <p className="text-sm text-slate-400">No guest questions.</p>}</div><a href={`/admin?event=${encodeURIComponent(eventRef || "")}#communication`} className="mt-4 inline-flex rounded-xl border border-blue-300/40 px-4 py-2 text-sm font-black text-blue-200">Open organizer inbox</a></article>}{dmChannels.map((channel) => <button key={channel.id} onClick={() => openWorkspace(activeGroup, channel.id)} className="flex w-full items-center gap-3 rounded-2xl border border-white/10 p-4 text-left"><span className="grid h-10 w-10 place-items-center rounded-full bg-purple-500/20">✉</span><span className="flex-1"><strong className="block">{channel.name}</strong><span className="text-xs text-slate-400">FestioMe direct message</span></span><span className="text-sm font-black text-teal-300">Open</span></button>)}</div></section>}
+
+            {homeSection === "profile" && <section><h2 className="text-3xl font-black">Profile</h2><div className="mt-5 max-w-lg rounded-2xl border border-white/10 bg-white/[0.035] p-6"><span className="grid h-20 w-20 place-items-center rounded-full bg-teal-700 text-xl font-black">{initials(name(user))}</span><h3 className="mt-4 text-xl font-black">{name(user)}</h3><p className="mt-1 text-sm capitalize text-slate-400">{me?.role || (guestMode ? "Guest" : "Organizer")}</p><button onClick={() => { setShowHome(false); setPanel("people"); }} className="mt-5 rounded-xl border border-teal-400/40 px-4 py-2 text-sm font-black text-teal-300">View community profile</button></div></section>}
+          </main>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="mx-auto flex h-[calc(100vh-8rem)] max-w-7xl overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm dark:border-slate-700 dark:bg-slate-900">
@@ -819,6 +990,7 @@ export default function FestioMePage() {
         ) : (
           <>
             <header className="flex flex-wrap items-center gap-2 border-b p-3 dark:border-slate-700">
+              <button onClick={() => setShowHome(true)} className="rounded-lg border px-3 py-2 text-xs font-bold text-teal-600 dark:border-slate-600 dark:text-teal-300">← Home</button>
               <button onClick={() => setGroupId("")} className="p-2 md:hidden">
                 ←
               </button>

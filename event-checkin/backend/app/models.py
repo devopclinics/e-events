@@ -1271,3 +1271,25 @@ class MessageTemplateAudit(Base):
     changed_by: Mapped[str | None] = mapped_column(String(36), ForeignKey("users.id"), nullable=True)
     changed_by_email: Mapped[str | None] = mapped_column(String(255), nullable=True)
     changed_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, index=True)
+
+
+class QaChecklistSubmission(Base):
+    """One tester's saved progress from the standalone staging QA checklist
+    (public/media/festio-qa-checklist.html). That page has no login of its own —
+    testers just type a name — so this table is the only durable record of who
+    tested what. `results` is a flat list of per-case entries the page already
+    has in memory: {section_id, section_title, case_id, case_title, priority,
+    status, note, evidence}. Visible to operators only, via the Console."""
+    __tablename__ = "qa_checklist_submissions"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+    tester_name: Mapped[str] = mapped_column(String(255), index=True)
+    summary: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    tested_count: Mapped[int] = mapped_column(Integer, default=0)
+    pass_count: Mapped[int] = mapped_column(Integer, default=0)
+    issue_count: Mapped[int] = mapped_column(Integer, default=0)
+    blocked_count: Mapped[int] = mapped_column(Integer, default=0)
+    na_count: Mapped[int] = mapped_column(Integer, default=0)
+    results: Mapped[list] = mapped_column(JSON, default=list)
+    user_agent: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, index=True)

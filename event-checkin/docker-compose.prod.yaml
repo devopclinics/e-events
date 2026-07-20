@@ -100,6 +100,7 @@ services:
       SUPPORT_AI_AUTO_SEND: ${SUPPORT_AI_AUTO_SEND:-false}
       SUPPORT_AI_GLOBAL_HOURLY_CAP: ${SUPPORT_AI_GLOBAL_HOURLY_CAP:-500}
       SUPPORT_AI_GATING_ENABLED: ${SUPPORT_AI_GATING_ENABLED:-true}
+      SUPPORT_LLM_PROVIDER: ${SUPPORT_LLM_PROVIDER:-gemini}
       SUPPORT_LOCAL_AI_ENABLED: ${SUPPORT_LOCAL_AI_ENABLED:-false}
       SUPPORT_LOCAL_AI_URL: ${SUPPORT_LOCAL_AI_URL:-http://local-ai:8080}
       SUPPORT_LOCAL_AI_MODEL: ${SUPPORT_LOCAL_AI_MODEL:-support-router-3b}
@@ -115,6 +116,9 @@ services:
       CHATWOOT_WEBHOOK_TOKEN: ${CHATWOOT_WEBHOOK_TOKEN:-}
       GEMINI_API_KEY: ${GEMINI_API_KEY:-}
       GEMINI_MODEL: ${GEMINI_MODEL:-gemini-3.5-flash}
+      ZAI_API_KEY: ${ZAI_API_KEY:-}
+      ZAI_BASE_URL: ${ZAI_BASE_URL:-https://api.z.ai/api/paas/v4}
+      ZAI_MODEL: ${ZAI_MODEL:-glm-4.5-air}
     depends_on:
       db:
         condition: service_healthy
@@ -132,6 +136,7 @@ services:
     environment:
       SUPPORT_RUN_WORKER: "true"
       SUPPORT_WORKER_CONCURRENCY: ${SUPPORT_WORKER_CONCURRENCY:-1}
+      SUPPORT_LLM_PROVIDER: ${SUPPORT_LLM_PROVIDER:-gemini}
       SUPPORT_LOCAL_AI_ENABLED: ${SUPPORT_LOCAL_AI_ENABLED:-false}
       SUPPORT_LOCAL_AI_URL: ${SUPPORT_LOCAL_AI_URL:-http://local-ai:8080}
       SUPPORT_LOCAL_AI_MODEL: ${SUPPORT_LOCAL_AI_MODEL:-support-router-3b}
@@ -145,6 +150,9 @@ services:
       CHATWOOT_HMAC_SECRET: ${CHATWOOT_HMAC_SECRET:-}
       CHATWOOT_WEBHOOK_TOKEN: ${CHATWOOT_WEBHOOK_TOKEN:-}
       GEMINI_API_KEY: ${GEMINI_API_KEY:-}
+      ZAI_API_KEY: ${ZAI_API_KEY:-}
+      ZAI_BASE_URL: ${ZAI_BASE_URL:-https://api.z.ai/api/paas/v4}
+      ZAI_MODEL: ${ZAI_MODEL:-glm-4.5-air}
     command: ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8002"]
     depends_on:
       redis:

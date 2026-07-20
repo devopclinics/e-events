@@ -1,0 +1,310 @@
+{
+  "run": "live-staging",
+  "generated_at": "2026-07-19T14:33:29Z",
+  "base_url": "https://staging.festio.events",
+  "fixture": {
+    "event_id": "4416b81d-89e8-4ff7-8f82-9822a05e9f8a",
+    "event_name": "CODEX QA RELEASE 20260719092538",
+    "staff": {
+      "a": {
+        "email": "codex.qa.staff.a.1784471139@festio.events",
+        "user_id": "52b4cd42-af1e-4a47-9ba0-4f208529c8a7"
+      },
+      "b": {
+        "email": "codex.qa.staff.b.1784471139@festio.events",
+        "user_id": "be835666-77cf-4a5d-a21c-a64c6f6727fd"
+      },
+      "c": {
+        "email": "codex.qa.staff.c.1784471139@festio.events",
+        "user_id": "3b6a5f73-e3fe-40fd-b1f7-8aa90ae6f591"
+      }
+    },
+    "table_id": "1573673c-5360-4b97-bfc6-d6f6422c1288",
+    "group_id": "86655ab2-4f3f-45d7-984a-cd5301aa6c99",
+    "guest_ids": [
+      "0356f515-0cf8-40e0-bc6a-2b90b7ea4112",
+      "f9ffac9b-d113-4c3b-9f16-73dc93221bca",
+      "d388f647-e6f1-4261-8c4e-e2a68f07022e",
+      "81df2e75-3c0a-44d4-92b6-a18affdbf07b"
+    ],
+    "ticket_type_id": "7072bbb0-dea3-4ed2-8d00-b59705393039",
+    "guest_tokens": [
+      "7dd889ee-88bd-4059-9761-180713a4a0ac",
+      "5a70193d-5dbc-48b5-8a2c-ed5daa3324c5",
+      "ecb7ae00-bb19-4949-9243-08efdb52b676",
+      "aff1c7a8-964e-43a3-aeba-e8a2772961af"
+    ],
+    "announcement_id": "9e9306f3-e9ee-4204-8c9c-2c4ee954d00e",
+    "festiome_enable": {
+      "configured": true,
+      "available": true,
+      "enabled": true,
+      "festiome_id": "d2cfcfca-7dee-40e7-a94a-5e524da17a42",
+      "name": "CODEX QA RELEASE 20260719092538",
+      "open_url": "/festiome?group=d2cfcfca-7dee-40e7-a94a-5e524da17a42",
+      "detail": null
+    }
+  },
+  "summary": {
+    "total": 22,
+    "pass": 21,
+    "issue": 1,
+    "blocked": 0
+  },
+  "results": [
+    {
+      "test_id": "SETUP-001",
+      "title": "Owner account and isolated multi-day event",
+      "status": "pass",
+      "duration_ms": 154,
+      "evidence": {
+        "event_id": "4416b81d-89e8-4ff7-8f82-9822a05e9f8a",
+        "event_name": "CODEX QA RELEASE 20260719092538"
+      },
+      "error": null
+    },
+    {
+      "test_id": "SETUP-003",
+      "title": "Event timezone persisted",
+      "status": "pass",
+      "duration_ms": 132,
+      "evidence": {
+        "timezone": "America/Chicago",
+        "multi_day": true
+      },
+      "error": null
+    },
+    {
+      "test_id": "TICKETS-BILLING-004",
+      "title": "Staging entitlement and credits",
+      "status": "pass",
+      "duration_ms": 139,
+      "evidence": {
+        "plan_tier": "scale",
+        "guest_cap": 1000,
+        "credits": 7000
+      },
+      "error": null
+    },
+    {
+      "test_id": "STAFF-IDENTITY-001",
+      "title": "Separate staff accounts",
+      "status": "pass",
+      "duration_ms": 270,
+      "evidence": {
+        "assigned_staff": [
+          "52b4cd42-af1e-4a47-9ba0-4f208529c8a7",
+          "be835666-77cf-4a5d-a21c-a64c6f6727fd"
+        ]
+      },
+      "error": null
+    },
+    {
+      "test_id": "STAFF-IDENTITY-002",
+      "title": "Unassigned staff isolation",
+      "status": "pass",
+      "duration_ms": 127,
+      "evidence": {
+        "unassigned_event_hidden": true
+      },
+      "error": null
+    },
+    {
+      "test_id": "SETUP-006",
+      "title": "Paid feature gating after entitlement",
+      "status": "pass",
+      "duration_ms": 0,
+      "evidence": {
+        "enabled": [
+          "seating",
+          "orders",
+          "deliveries",
+          "gift list",
+          "experience",
+          "live program",
+          "pairing",
+          "festiome",
+          "entry rules"
+        ]
+      },
+      "error": null
+    },
+    {
+      "test_id": "GUEST-DATA-001",
+      "title": "Create/list/edit guest fixture",
+      "status": "pass",
+      "duration_ms": 146,
+      "evidence": {
+        "guest_id": "0356f515-0cf8-40e0-bc6a-2b90b7ea4112",
+        "qr_stable": true
+      },
+      "error": null
+    },
+    {
+      "test_id": "TICKETS-BILLING-001",
+      "title": "Ticket capacity enforcement",
+      "status": "pass",
+      "duration_ms": 285,
+      "evidence": {
+        "overflow_status": 409,
+        "detail": {
+          "detail": "QA General is sold out (capacity 4)."
+        }
+      },
+      "error": null
+    },
+    {
+      "test_id": "GUEST-DATA-007",
+      "title": "Guest list filtering source data",
+      "status": "pass",
+      "duration_ms": 137,
+      "evidence": {
+        "guest_count": 9
+      },
+      "error": null
+    },
+    {
+      "test_id": "GUEST-COMMUNICATION-002",
+      "title": "Communication settings persisted",
+      "status": "pass",
+      "duration_ms": 128,
+      "evidence": {
+        "guest_hub_enabled": true,
+        "announcements_enabled": true,
+        "direct_host_messages_enabled": true,
+        "guest_chat_enabled": true,
+        "guest_chat_posting_enabled": true,
+        "attending_only_chat": true
+      },
+      "error": null
+    },
+    {
+      "test_id": "FESTIOME-001",
+      "title": "Enable FestioMe",
+      "status": "pass",
+      "evidence": {
+        "status": 200
+      },
+      "error": null
+    },
+    {
+      "test_id": "CHECKIN-001",
+      "title": "QR admission by Staff A",
+      "status": "pass",
+      "duration_ms": 178,
+      "evidence": {
+        "guest_id": "0356f515-0cf8-40e0-bc6a-2b90b7ea4112",
+        "staff_id": "52b4cd42-af1e-4a47-9ba0-4f208529c8a7",
+        "scan_status": "admitted",
+        "seat": "1"
+      },
+      "error": null
+    },
+    {
+      "test_id": "CHECKIN-002",
+      "title": "Idempotent re-scan by Staff B",
+      "status": "pass",
+      "duration_ms": 146,
+      "evidence": {
+        "guest_id": "0356f515-0cf8-40e0-bc6a-2b90b7ea4112",
+        "staff_id": "be835666-77cf-4a5d-a21c-a64c6f6727fd",
+        "scan_status": "already_admitted"
+      },
+      "error": null
+    },
+    {
+      "test_id": "STAFF-IDENTITY-005",
+      "title": "Scan attribution persisted",
+      "status": "issue",
+      "duration_ms": 364,
+      "evidence": {
+        "event_id": "4416b81d-89e8-4ff7-8f82-9822a05e9f8a",
+        "scan_event_rows_after_normal_scan": 0,
+        "guest_admitted": true
+      },
+      "error": "Normal QR admission did not create a scan_events row, so scanned_by attribution is unavailable for ordinary Check-in."
+    },
+    {
+      "test_id": "TEAM-002",
+      "title": "Dashboard reflects admission",
+      "status": "pass",
+      "duration_ms": 155,
+      "evidence": {
+        "admitted": 1
+      },
+      "error": null
+    },
+    {
+      "test_id": "CHECKIN-009",
+      "title": "Invalid QR response",
+      "status": "pass",
+      "duration_ms": 138,
+      "evidence": {
+        "status": "invalid",
+        "message": "Invalid QR code. This ticket was not found."
+      },
+      "error": null
+    },
+    {
+      "test_id": "SECURITY-002",
+      "title": "Unassigned staff cannot read event",
+      "status": "pass",
+      "duration_ms": 132,
+      "evidence": {
+        "status": 403
+      },
+      "error": null
+    },
+    {
+      "test_id": "OTHER-SURFACES-006",
+      "title": "Support health endpoint",
+      "status": "pass",
+      "duration_ms": 120,
+      "evidence": {
+        "status": 200
+      },
+      "error": null
+    },
+    {
+      "test_id": "GUEST-COMMUNICATION-001",
+      "title": "Attending announcement visible",
+      "status": "pass",
+      "evidence": {
+        "http": 200,
+        "announcement_count": 1
+      },
+      "error": null
+    },
+    {
+      "test_id": "GUEST-COMMUNICATION-002",
+      "title": "Guest Chat post",
+      "status": "pass",
+      "evidence": {
+        "http": 200,
+        "message_id": "d550dc6c-7a0d-4094-b993-2bc9cf1cc41a"
+      },
+      "error": null
+    },
+    {
+      "test_id": "GUEST-COMMUNICATION-005",
+      "title": "Message Host isolation",
+      "status": "pass",
+      "evidence": {
+        "post_http": 200,
+        "guest_b_http": 200,
+        "guest_b_direct_count": 0
+      },
+      "error": null
+    },
+    {
+      "test_id": "GUEST-COMMUNICATION-003",
+      "title": "Guest posting pause",
+      "status": "pass",
+      "evidence": {
+        "post_http": 403,
+        "history_count": 1
+      },
+      "error": null
+    }
+  ]
+}

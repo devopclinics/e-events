@@ -1,5 +1,31 @@
 import { Navigate } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
+import GUIDE_CONTENT_SOURCE from '../guideContent.mjs?raw'
+import { KNOWLEDGE_BASE_MD, QA_RELEASE_RUNBOOK_MD } from '../generated/internalMediaDocs.mjs'
+
+const INTERNAL_DOCS = [
+  {
+    title: 'Customer Help Source',
+    description: 'Canonical structured content powering the customer-facing Help guide. Update this source, then regenerate the support knowledge base.',
+    filename: 'guideContent.mjs',
+    type: 'MJS',
+    content: GUIDE_CONTENT_SOURCE,
+  },
+  {
+    title: 'Support Knowledge Base',
+    description: 'Generated Markdown used by the support service. Its source of truth is guideContent.mjs.',
+    filename: 'knowledge_base.md',
+    type: 'MD',
+    content: KNOWLEDGE_BASE_MD,
+  },
+  {
+    title: 'QA Release Certification Runbook',
+    description: 'Internal instructions for safely executing the full staging checklist, including identity, reliability, security, accessibility, and evidence requirements.',
+    filename: 'QA_RELEASE_CERTIFICATION_RUNBOOK.md',
+    type: 'MD',
+    content: QA_RELEASE_RUNBOOK_MD,
+  },
+]
 
 const PDFS = [
   {
@@ -45,6 +71,20 @@ const HTML_ASSETS = [
     description: "Organizer-facing proposal deck for using Festio Experience at Masjid Mumineen Women's Convention 2026.",
     href: '/media/womens-convention-experience-proposal.html',
     filename: 'womens-convention-experience-proposal.html',
+    type: 'HTML',
+  },
+  {
+    title: 'Staging QA Checklist',
+    description: 'Full feature-by-feature test pass for staff to run on staging — ~55 test cases across setup, RSVP, check-in, FestioHub, FestioMe, messaging, and more. Testers enter their name, work through the checklist, and download a results file to send back.',
+    href: '/media/festio-qa-checklist.html',
+    filename: 'festio-qa-checklist.html',
+    type: 'HTML',
+  },
+  {
+    title: 'Staging QA Checklist — Modules',
+    description: 'Same test cases as the full checklist, split into one page per feature area (25 modules) so you can hand a single module link to one tester. Each module has its own sign-in, progress bar, and Save button; results land in the same place (Console → QA checklist).',
+    href: '/media/festio-qa-modules.html',
+    filename: 'festio-qa-modules.html',
     type: 'HTML',
   },
 ]
@@ -147,6 +187,40 @@ function ScreenshotCard({ asset }) {
   )
 }
 
+function InternalDocCard({ asset }) {
+  function openDocument(download = false) {
+    const blob = new Blob([asset.content], { type: 'text/plain;charset=utf-8' })
+    const url = URL.createObjectURL(blob)
+    const link = document.createElement('a')
+    link.href = url
+    if (download) link.download = asset.filename
+    else link.target = '_blank'
+    link.rel = 'noreferrer'
+    document.body.appendChild(link)
+    link.click()
+    link.remove()
+    window.setTimeout(() => URL.revokeObjectURL(url), 1000)
+  }
+
+  return (
+    <div className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl p-4 shadow-sm">
+      <div className="text-xs font-bold uppercase tracking-wide text-teal-700 dark:text-teal-300">{asset.type}</div>
+      <h3 className="mt-1 font-semibold text-slate-950 dark:text-white">{asset.title}</h3>
+      <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">{asset.description}</p>
+      <div className="mt-4 flex flex-wrap gap-2">
+        <button type="button" onClick={() => openDocument(false)}
+          className="inline-flex items-center gap-1.5 rounded-lg border border-slate-300 dark:border-slate-600 px-3 py-2 text-sm font-semibold text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-700">
+          <ExternalIcon className="h-4 w-4" /> Open
+        </button>
+        <button type="button" onClick={() => openDocument(true)}
+          className="inline-flex items-center gap-1.5 rounded-lg bg-teal-600 px-3 py-2 text-sm font-semibold text-white hover:bg-teal-700">
+          <DownloadIcon className="h-4 w-4" /> Download
+        </button>
+      </div>
+    </div>
+  )
+}
+
 export default function MediaPage() {
   const { user } = useAuth()
   if (user === undefined) return null
@@ -164,6 +238,13 @@ export default function MediaPage() {
           2026-07-15 against live 2.0.69. Only the one-pager still needs a redesign pass — see its card.
         </p>
       </div>
+
+      <section>
+        <h2 className="text-sm font-bold uppercase tracking-wide text-slate-500 dark:text-slate-400 mb-3">Internal documentation</h2>
+        <div className="grid md:grid-cols-3 gap-4">
+          {INTERNAL_DOCS.map((asset) => <InternalDocCard key={asset.filename} asset={asset} />)}
+        </div>
+      </section>
 
       <section>
         <h2 className="text-sm font-bold uppercase tracking-wide text-slate-500 dark:text-slate-400 mb-3">PDF downloads</h2>

@@ -517,6 +517,7 @@ async def _submit_multi_invitee_rsvp(
         email=submitter_email,
         phone=submitter_phone,
         sms_consent=bool(data.sms_consent and submitter_phone),
+        whatsapp_consent=bool(data.whatsapp_consent and submitter_phone),
         invite_token=str(uuid.uuid4()),
         qr_generated_at=None if needs_approval else now,
         invite_sent_at=None if needs_approval else now,
@@ -549,6 +550,7 @@ async def _submit_multi_invitee_rsvp(
             email=email,
             phone=phone,
             sms_consent=False,
+            whatsapp_consent=False,
             invite_token=str(uuid.uuid4()),
             qr_generated_at=None if needs_approval else now,
             invite_sent_at=None if needs_approval else now,
@@ -714,6 +716,7 @@ async def submit_rsvp(
         email=email,
         phone=phone,
         sms_consent=bool(data.sms_consent and phone),
+        whatsapp_consent=bool(data.whatsapp_consent and phone),
         # Give self-registrations a personal token up front so their Guest Hub
         # link (/r/{invite_token}) works on any device — not just the browser
         # that RSVP'd. Bulk-invited guests already get one when invited.
@@ -813,6 +816,7 @@ async def get_invite_token_page(invite_token: str, db: AsyncSession = Depends(ge
             email=guest.email,
             phone=guest.phone,
             sms_consent=bool(guest.sms_consent),
+            whatsapp_consent=bool(guest.whatsapp_consent),
             rsvp_status=guest.rsvp_status,
             email_locked=bool(guest.email),
             phone_locked=False,
@@ -854,6 +858,7 @@ async def submit_invite_token_rsvp(
             )
         guest.phone = phone
     guest.sms_consent = bool(data.sms_consent and guest.phone)
+    guest.whatsapp_consent = bool(data.whatsapp_consent and guest.phone)
 
     guest.rsvp_status = data.status
     guest.rsvp_responded_at = datetime.utcnow()

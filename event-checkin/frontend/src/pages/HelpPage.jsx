@@ -93,7 +93,10 @@ export default function HelpPage({ publicMode = false }) {
 
   // Keep role in sync when user data loads (fixes race where role initialises
   // as 'staff' because user is null on first render, then isAdmin becomes true)
-  const [role, setRole] = useState(roles[0] || 'guest')
+  const [role, setRole] = useState(() => {
+    const requested = typeof window !== 'undefined' ? new URLSearchParams(window.location.search).get('role') : ''
+    return roles.includes(requested) ? requested : roles[0] || 'guest'
+  })
   useEffect(() => {
     if (!roles.includes(role)) setRole(roles[0] || 'guest')
   }, [roles]) // eslint-disable-line react-hooks/exhaustive-deps
@@ -109,7 +112,12 @@ export default function HelpPage({ publicMode = false }) {
   }, [data, query])
 
   // open topics: all open when searching, else first open
-  const [openSet, setOpenSet] = useState(() => new Set([data.topics[0]?.id]))
+  const [openSet, setOpenSet] = useState(() => {
+    const requested = typeof window !== 'undefined'
+      ? new URLSearchParams(window.location.search).get('topic') || window.location.hash.slice(1)
+      : ''
+    return new Set([requested || data.topics[0]?.id])
+  })
   const isOpen = (id) => (query.trim() ? true : openSet.has(id))
   const toggle = (id) => setOpenSet((prev) => {
     const n = new Set(prev); n.has(id) ? n.delete(id) : n.add(id); return n
@@ -123,6 +131,14 @@ export default function HelpPage({ publicMode = false }) {
     setOpenSet((prev) => new Set(prev).add(id))
     setTimeout(() => document.getElementById(id)?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 30)
   }
+
+  useEffect(() => {
+    const requested = new URLSearchParams(window.location.search).get('topic') || window.location.hash.slice(1)
+    if (!requested || !data.topics.some((topic) => topic.id === requested)) return
+    setOpenSet((prev) => new Set(prev).add(requested))
+    const timer = setTimeout(() => document.getElementById(requested)?.scrollIntoView({ block: 'start' }), 60)
+    return () => clearTimeout(timer)
+  }, [data])
 
   return (
     <div className="max-w-5xl mx-auto px-4 py-8">

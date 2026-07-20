@@ -7,6 +7,7 @@ const TABS = [
   { id: 'overview', label: 'Overview' },
   { id: 'accounts', label: 'Accounts' },
   { id: 'trials', label: 'Trial requests' },
+  { id: 'qa', label: 'QA checklist' },
   { id: 'pricing', label: 'Pricing' },
   { id: 'affiliates', label: 'Affiliate stores' },
   { id: 'operators', label: 'Operators' },
@@ -461,6 +462,116 @@ function TrialRow({ req, events, plans, onResolve }) {
   )
 }
 
+// ── QA checklist: submissions from the standalone staging checklist page ────
+const QA_STATUS_STYLE = {
+  pass: 'bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-300',
+  issue: 'bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300',
+  blocked: 'bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300',
+  na: 'bg-gray-100 text-gray-500 dark:bg-slate-700 dark:text-slate-300',
+}
+const QA_STATUS_LABEL = { pass: 'Pass', issue: 'Issue', blocked: 'Blocked', na: 'N/A' }
+
+function QaChecklistCounts({ row }) {
+  return (
+    <div className="flex gap-1.5 flex-wrap">
+      {row.pass_count > 0 && <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${QA_STATUS_STYLE.pass}`}>{row.pass_count} pass</span>}
+      {row.issue_count > 0 && <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${QA_STATUS_STYLE.issue}`}>{row.issue_count} issue</span>}
+      {row.blocked_count > 0 && <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${QA_STATUS_STYLE.blocked}`}>{row.blocked_count} blocked</span>}
+      {row.na_count > 0 && <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${QA_STATUS_STYLE.na}`}>{row.na_count} n/a</span>}
+    </div>
+  )
+}
+
+function QaChecklistDetail({ id, onClose }) {
+  const [detail, setDetail] = useState(null)
+  const [err, setErr] = useState('')
+  useEffect(() => { api.qaChecklistSubmission(id).then(setDetail).catch((e) => setErr(e.message)) }, [id])
+
+  if (err) return <div className="text-sm text-red-500 p-4">{err}</div>
+  if (!detail) return <div className="text-sm text-slate-500 p-4">Loading…</div>
+
+  const bySection = []
+  const seen = new Map()
+  for (const item of detail.results) {
+    let group = seen.get(item.section_id)
+    if (!group) {
+      group = { section_id: item.section_id, section_title: item.section_title || item.section_id, items: [] }
+      seen.set(item.section_id, group)
+      bySection.push(group)
+    }
+    group.items.push(item)
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 bg-black/40 flex items-start justify-center overflow-y-auto py-8" onClick={onClose}>
+      <div className="bg-white dark:bg-slate-800 rounded-xl shadow-xl max-w-3xl w-full mx-4" onClick={(e) => e.stopPropagation()}>
+        <div className="p-4 border-b dark:border-slate-700 flex items-center justify-between sticky top-0 bg-white dark:bg-slate-800 rounded-t-xl">
+          <div>
+            <h3 className="font-semibold dark:text-white">{detail.tester_name}</h3>
+            <p className="text-xs text-slate-400">{new Date(detail.created_at).toLocaleString()} · {detail.summary}</p>
+          </div>
+          <button onClick={onClose} className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 text-xl leading-none">&times;</button>
+        </div>
+        <div className="p-4 space-y-5 max-h-[70vh] overflow-y-auto">
+          {bySection.map((group) => (
+            <div key={group.section_id}>
+              <h4 className="text-xs font-semibold uppercase tracking-wide text-slate-400 mb-2">{group.section_title}</h4>
+              <div className="space-y-2">
+                {group.items.map((it) => (
+                  <div key={it.case_id} className="border dark:border-slate-700 rounded-lg p-3">
+                    <div className="flex items-center justify-between gap-2 flex-wrap">
+                      <span className="text-sm font-medium dark:text-slate-100">{it.case_title || it.case_id}</span>
+                      <span className={`px-2 py-0.5 rounded-full text-xs font-medium shrink-0 ${QA_STATUS_STYLE[it.status] || QA_STATUS_STYLE.na}`}>
+                        {QA_STATUS_LABEL[it.status] || it.status}
+                      </span>
+                    </div>
+                    {it.note && <p className="text-xs text-slate-500 dark:text-slate-400 mt-1.5 whitespace-pre-wrap">{it.note}</p>}
+                    {it.evidence && <p className="text-xs text-slate-400 dark:text-slate-500 mt-1 font-mono break-all">{it.evidence}</p>}
+                  </div>
+                ))}
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  )
+}
+
+function QaChecklistTab() {
+  const [rows, setRows] = useState(null)
+  const [err, setErr] = useState('')
+  const [openId, setOpenId] = useState(null)
+
+  useEffect(() => { api.qaChecklistSubmissions().then(setRows).catch((e) => setErr(e.message)) }, [])
+
+  if (err) return <div className="text-sm text-red-500">{err}</div>
+  if (!rows) return <div className="text-sm text-slate-500">Loading…</div>
+
+  return (
+    <div className="space-y-3">
+      <p className="text-xs text-slate-500 dark:text-slate-400 bg-slate-100 dark:bg-slate-800 rounded-lg px-3 py-2">
+        Every "Save" click from <code>/media/festio-qa-checklist.html</code> lands here — testers don't need an account.
+        Click a row for the full per-case breakdown (notes, evidence).
+      </p>
+      {rows.length === 0 && <div className="text-sm text-slate-400">No submissions yet.</div>}
+      <div className="bg-white dark:bg-slate-800 rounded-xl shadow border dark:border-slate-700 divide-y divide-gray-100 dark:divide-slate-700">
+        {rows.map((r) => (
+          <button key={r.id} onClick={() => setOpenId(r.id)}
+            className="w-full text-left p-4 flex items-center justify-between gap-3 flex-wrap hover:bg-slate-50 dark:hover:bg-slate-700/50">
+            <div>
+              <div className="font-medium dark:text-slate-100">{r.tester_name}</div>
+              <div className="text-xs text-slate-400">{new Date(r.created_at).toLocaleString()} · {r.tested_count} tested</div>
+            </div>
+            <QaChecklistCounts row={r} />
+          </button>
+        ))}
+      </div>
+      {openId && <QaChecklistDetail id={openId} onClose={() => setOpenId(null)} />}
+    </div>
+  )
+}
+
 // ── Pricing: edit plans ─────────────────────────────────────────────────────
 function PricingTab() {
   const [plans, setPlans] = useState(null)
@@ -652,6 +763,7 @@ export default function ConsolePage() {
       {tab === 'overview' && <OverviewTab />}
       {tab === 'accounts' && <AccountsTab me={user} />}
       {tab === 'trials' && <TrialsTab />}
+      {tab === 'qa' && <QaChecklistTab />}
       {tab === 'pricing' && <PricingTab />}
       {tab === 'affiliates' && <AffiliateStoresTab />}
       {tab === 'operators' && <OperatorsTab me={user} />}

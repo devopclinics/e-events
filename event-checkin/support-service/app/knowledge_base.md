@@ -38,14 +38,14 @@ Tip: RSVP-only fits the free plan: email invites + up to 25 guests, no Event Pas
 Each event is a self-contained workspace with its own guests, invites, settings, and day-of tools.
 
 1. In Event Setup, click New Event.
-2. Enter the event name, an optional host/organiser display name, date & time, and a base URL slug (used in invite links).
+2. Enter the event name, event type, optional host/organiser name, date and time, timezone, venue, location, expected guest count, and currency. Enable the multi-day option and add an end date when needed.
 3. Save. Open the event — navigation is grouped into Setup (Start here, Guests, Invites & RSVP), Entry areas/rules, Add-ons (Seating, Orders, Deliveries, Gift list), and Team & settings. On a phone the sidebar becomes a dropdown.
 4. Under Team &amp; settings → Features, toggle on the features you need: Seating, Orders, Entry rules, Deliveries, and Gift list. Each requires an Event Pass — once enabled it appears in the sidebar.
 5. The event you pick is remembered across Results, Check-in, and Orders — you only choose it once. The current event shows as a chip in the top bar.
 6. Set the event to Draft while preparing, Active on the day to enable check-in, and Ended afterwards.
 7. You can create multiple events — each is independent with its own guest list and settings.
 
-Tip: The base URL slug is used in all invite and RSVP links (e.g. festio.events/invite/your-slug). Keep it short and memorable.
+Tip: Confirm the timezone before inviting guests. Festio displays invite, ticket, and check-in times in the event timezone, which may differ from the timezone on your device.
 
 ### Add your guest list
 
@@ -109,7 +109,7 @@ Reach guests on the channel they actually check — WhatsApp, SMS, or email.
 
 Tip: Run a small test send to yourself first (add your own phone/email as a test guest) to confirm message formatting and delivery before sending to all guests.
 
-Warning: WhatsApp and SMS sends consume message credits. A bulk send to 300 guests uses 300 credits. Check your balance first — the send will stop mid-way if you run out.
+Warning: WhatsApp and SMS sends consume message credits. Check the estimated cost and available balance before confirming. If the balance is insufficient, do not assume every recipient was contacted: read the result, review the credit ledger and delivery report, top up if needed, then retry only recipients that were not sent.
 
 ### Track RSVPs & approvals
 
@@ -236,6 +236,23 @@ Every guest gets a personal hub, and your event can host its own private communi
 
 Tip: Post day-of logistics (parking, doors-open time, dress code) as announcements — every guest sees them on their hub without you spending SMS credits.
 
+### Guest communication controls
+
+Event Updates, Guest Chat, Message Host, and FestioMe groups are separate surfaces. Enable only the conversations your event needs.
+
+1. Open Guest Communication for the selected event. Review Event Updates, Guest Chat, Guest posting, Message Host, and any attending-only option one at a time.
+2. Use Event Updates for host-to-guest announcements. Choose the intended audience before publishing, such as attending, declined, checked-in, or not checked-in.
+3. Use Guest Chat for a shared event conversation. Turn Guest posting off when guests should be able to read existing messages but not add new ones.
+4. Use Message Host for private guest questions. Replies belong to that guest's private thread and must never be copied into Guest Chat or a public FestioMe group.
+5. Use FestioMe groups for native community conversations. Group membership and privacy are managed separately from Guest Chat eligibility.
+6. After changing a toggle, open one eligible and one ineligible test guest link in separate browser sessions. Confirm that only the intended module or composer changed.
+7. Moderate shared Guest Chat from the organizer view. Hiding a message removes it from guest views without turning a private host message into shared content.
+8. Turning communication modules off must not disable RSVP, QR tickets, or Check-in. Test those core paths after making a major communication change.
+
+Tip: Before launch, use clearly different test text in Event Updates, Guest Chat, Message Host, and FestioMe. This makes accidental cross-posting or private-content leakage easy to spot.
+
+Warning: Treat Message Host and direct messages as private. Never paste private message text into an announcement or shared group while troubleshooting.
+
 ### Add your team
 
 1. Team tab → "Add a teammate" → enter their email address and choose a role.
@@ -244,7 +261,9 @@ Tip: Post day-of logistics (parking, doors-open time, dress code) as announcemen
 4. For Section scanning events: assign each staffer their section (table group) from the same Team panel, so walk-ins they handle route to the right part of the room.
 5. The teammate signs in with that exact email — their account links to your organisation automatically.
 6. Assign the teammate to specific events from the Team tab — they only see events they've been assigned to.
-7. Remove a teammate from the Team tab at any time. Their account continues to exist but loses access to your events.
+7. Sign in as each staff member in a separate browser session and verify their displayed identity, assigned event, and permitted navigation. Staff should not see owner/admin setup controls unless their organisation role was intentionally changed.
+8. After changing permissions or removing an assignment, have the staff member refresh and retry an action. Revoked access should stop promptly while historical scan attribution remains intact.
+9. Remove a teammate from the Team tab at any time. Their account continues to exist but loses access to your events.
 
 Tip: Add all check-in staff before the event day. Have them test-login and open the Check-in page the day before so there are no surprises on the day.
 
@@ -327,7 +346,8 @@ Check guests in at the door. No app needed — runs in your phone browser.
 3. You'll see the events you've been assigned to in the Check-in screen.
 4. Open Check-in on the device you'll use on the day and confirm you can see the event. Do this at least the day before.
 5. Grant camera permission: the browser will ask the first time you start the camera. Allow it — if you accidentally denied, go to your browser Settings → Site permissions → Camera and re-enable it.
-6. Check your internet connection. Check-in works best with a reliable connection; for low-signal venues ask your organiser about offline mode.
+6. Check your internet connection and the scanner's Online/Offline status. If connectivity drops, do not keep scanning unless the screen explicitly says the scan was queued for offline sync.
+7. After reconnecting, wait for the scanner to report Online, retry one test guest, and confirm Results contains only one admission. Escalate any queued or uncertain scan before continuing the line.
 
 Tip: Do a test scan the day before. Your organiser can add themselves as a guest — scan their QR to confirm the green admitted screen appears.
 
@@ -392,6 +412,7 @@ Tip: If you're covering multiple gates, stay on Gate mode and switch your gate s
 6. Guests who can't find their QR: ask them to check their confirmation email/SMS/WhatsApp. If still missing, direct them to the organiser desk for lookup in Guests.
 7. Manual lookup: ask the organiser to use Guests or the ticket code lookup to confirm the guest before entry.
 8. Noisy lighting (direct sunlight, flashing lights): tilt the guest's screen slightly towards you or ask them to cup their hand over it to reduce glare.
+9. If two stations may scan the same guest, let the first confirmed admission win. The second device should show Already admitted; never use a manual override merely because the devices raced.
 
 ## Guest
 

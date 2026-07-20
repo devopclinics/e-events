@@ -190,7 +190,7 @@ function GuestCommunicationPanel({ event }) {
               ['announcements_enabled', 'Event Updates', 'Show organizer updates in FestioHub.'],
               ['direct_host_messages_enabled', 'Message Host', 'Let guests send private questions to the organizer.'],
               ['guest_chat_enabled', 'Guest Chat', 'Show a shared guest-to-guest chat.'],
-              ['guest_chat_posting_enabled', 'Guest Posts', 'Allow guests to add new chat messages.'],
+              ['guest_chat_posting_enabled', 'Guest posting', 'Allow guests to post in Guest Chat.'],
             ].map(([key, label, help]) => (
               <label key={key} className="flex min-h-[92px] flex-col justify-between gap-3 rounded-lg border border-slate-200 p-3 text-sm dark:border-slate-700 dark:text-slate-200">
                 <span>
@@ -7256,7 +7256,20 @@ function TeamPanel({ eventId }) {
 
   return (
     <div className="bg-white dark:bg-slate-800 dark:border dark:border-slate-700/60 rounded-xl shadow p-6 space-y-4">
-      <h2 className="font-semibold text-base dark:text-white">Event Team</h2>
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <h2 className="font-semibold text-base dark:text-white">Event Team</h2>
+        <a href="/help?role=organizer&topic=org-team#org-team" className="text-sm font-semibold text-teal-600 hover:underline dark:text-teal-300">
+          How to create staff accounts →
+        </a>
+      </div>
+      <div className="rounded-xl border border-teal-200 bg-teal-50 p-4 text-sm text-teal-900 dark:border-teal-800 dark:bg-teal-950/30 dark:text-teal-100">
+        <p className="font-semibold">Use one account for each staff member</p>
+        <p className="mt-1 text-xs leading-5 text-teal-800 dark:text-teal-200">Add each person with their exact email, assign them to this event, then have them sign in with that same email. Scans and staff actions will be attributed to their individual account.</p>
+        <div className="mt-3 flex flex-wrap gap-2">
+          <a href="/login" target="_blank" rel="noopener noreferrer" className="rounded-lg bg-teal-600 px-3 py-2 text-xs font-bold text-white hover:bg-teal-700">Open staff sign-in</a>
+          <a href="/guide?role=staff&topic=staff-join#staff-join" target="_blank" rel="noopener noreferrer" className="rounded-lg border border-teal-300 px-3 py-2 text-xs font-bold text-teal-800 hover:bg-teal-100 dark:border-teal-700 dark:text-teal-200 dark:hover:bg-teal-900/40">Share staff setup guide</a>
+        </div>
+      </div>
 
       {members.length === 0 ? (
         <p className="text-sm text-gray-400 dark:text-slate-500">No members assigned yet.</p>
@@ -8645,15 +8658,22 @@ function ResetEventModal({ event, onClose, onDone }) {
 
 // Export picker — choose which sections (Guests / Messaging / Experience) and the
 // format. XLSX writes one sheet per section; CSV merges into a single sheet.
-function ExportMenu({ event, onExport }) {
+function ExportMenu({ event, onExport, filteredIds, filteredCount, totalCount }) {
   const [open, setOpen] = useState(false)
   const expEnabled = !!event?.experience_enabled
   const [sel, setSel] = useState({ guests: true, messaging: true, experience: true })
+  const hasFilter = typeof filteredCount === 'number' && filteredCount < totalCount
+  const [onlyFiltered, setOnlyFiltered] = useState(hasFilter)
+  useEffect(() => { setOnlyFiltered(hasFilter) }, [hasFilter])
   const toggle = (k) => setSel((p) => ({ ...p, [k]: !p[k] }))
   const sections = Object.entries(sel)
     .filter(([k, v]) => v && (k !== 'experience' || expEnabled))
     .map(([k]) => k)
-  const go = (fmt) => { if (sections.length === 0) return; onExport(fmt, sections.join(',')); setOpen(false) }
+  const go = (fmt) => {
+    if (sections.length === 0) return
+    onExport(fmt, sections.join(','), onlyFiltered && hasFilter ? filteredIds : null)
+    setOpen(false)
+  }
   return (
     <div className="relative">
       <button onClick={() => setOpen((o) => !o)}
@@ -8674,6 +8694,12 @@ function ExportMenu({ event, onExport }) {
             <label className={`flex items-center gap-2 text-sm ${expEnabled ? 'text-slate-700 dark:text-slate-200' : 'text-slate-300 dark:text-slate-600'}`}>
               <input type="checkbox" disabled={!expEnabled} checked={expEnabled && sel.experience} onChange={() => toggle('experience')} /> Experience {expEnabled ? '' : '(off)'}
             </label>
+            {hasFilter && (
+              <label className="flex items-center gap-2 text-sm text-slate-700 dark:text-slate-200 pt-2 border-t dark:border-slate-700">
+                <input type="checkbox" checked={onlyFiltered} onChange={() => setOnlyFiltered((v) => !v)} />
+                Only the {filteredCount} filtered guests (of {totalCount})
+              </label>
+            )}
             <div className="flex gap-2 pt-2 border-t dark:border-slate-700">
               <button onClick={() => go('xlsx')} disabled={sections.length === 0}
                 className="flex-1 text-xs px-2 py-1.5 rounded-lg bg-teal-600 text-white font-semibold hover:bg-teal-700 disabled:opacity-40">XLSX</button>
@@ -8822,8 +8848,8 @@ export default function AdminPage() {
 
   // Server-side export so the file includes each guest's RSVP-question answers
   // (the in-memory guest list doesn't carry them), with proper escaping.
-  async function handleExportGuests(fmt = 'csv', sections = null) {
-    try { await api.downloadGuestList(selectedId, fmt, sections) }
+  async function handleExportGuests(fmt = 'csv', sections = null, guestIds = null) {
+    try { await api.downloadGuestList(selectedId, fmt, sections, guestIds) }
     catch (err) { flash(err.message, true) }
   }
 
@@ -9805,7 +9831,8 @@ export default function AdminPage() {
                     className="text-xs px-2.5 py-1.5 rounded-lg bg-indigo-600 text-white font-semibold hover:bg-indigo-700">
                     + Add guest
                   </button>}
-                  {canManageGuests && <ExportMenu event={event} onExport={handleExportGuests} />}
+                  {canManageGuests && <ExportMenu event={event} onExport={handleExportGuests}
+                    filteredIds={filteredGuests.map((g) => g.id)} filteredCount={filteredGuests.length} totalCount={guests.length} />}
                   {totalPages > 1 && (
                     <div className="flex items-center gap-2">
                       <button onClick={() => setPage((p) => Math.max(0, p - 1))} disabled={page === 0}

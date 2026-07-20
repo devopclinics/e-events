@@ -42,7 +42,7 @@ Shared with the rest of the app (via `env_file: ./backend/.env`):
 
 - `DATABASE_URL`, `REDIS_URL`, `FIREBASE_CREDENTIALS`, `SUPERADMIN_EMAILS`
 
-Support/Chatwoot/Gemini-specific:
+Support/Chatwoot/LLM-specific:
 
 - `SUPPORT_AI_ENABLED=true` — kill-switch; set `false` to stop AI drafting instantly without a redeploy
 - `SUPPORT_AI_AUTO_SEND=false` — safe default: Gemini suggestions are private notes until explicitly enabled
@@ -54,6 +54,7 @@ Support/Chatwoot/Gemini-specific:
 - `SUPPORT_LOCAL_AI_ENABLED=false`, `SUPPORT_LOCAL_AI_SHADOW_MODE=true` — safe local-classifier rollout defaults
 - `SUPPORT_LOCAL_AI_AUTO_REPLY=false` — local models cannot publish replies unless separately enabled
 - `SUPPORT_LOCAL_AI_DRAFTING_ENABLED=false` — keep the local 3B model limited to classification/summarization
+- `SUPPORT_LLM_PROVIDER=gemini` — remote drafting provider (`gemini` or `zai`)
 - `GEMINI_MAX_OUTPUT_TOKENS=1400` — visible response budget; Gemini thinking is disabled in code
 - `SUPPORT_AI_HOURLY_CAP=20` — per-org Gemini drafts/hour before we skip drafting (logged, not an error)
 - `CHATWOOT_BASE_URL` — e.g. `https://chat.festio.events`
@@ -63,6 +64,9 @@ Support/Chatwoot/Gemini-specific:
 - `CHATWOOT_WEBHOOK_TOKEN` — a secret **we** generate; pasted into Chatwoot's webhook URL config as `?token=...`
 - `GEMINI_API_KEY` — start on the free tier to prototype; switch to a paid key (same env var) before routing real organizer conversations through it long-term, since the free tier may use prompts for model training
 - `GEMINI_MODEL=gemini-3.5-flash` (default)
+- `ZAI_API_KEY` — required when `SUPPORT_LLM_PROVIDER=zai`
+- `ZAI_BASE_URL=https://api.z.ai/api/paas/v4` (default)
+- `ZAI_MODEL=glm-4.5-air` (default)
 
 ## One-time Chatwoot bootstrap (manual — no infra-as-code path for this)
 

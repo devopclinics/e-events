@@ -795,7 +795,9 @@ export default function ScannerPage() {
     if (scanningReady) refreshOfflineManifest(eventId)
   }, [eventId, scanningReady])
 
-  // Load zones + gates only for venue-access events.
+  // Load zones + gates only for venue-access events. Depends on the resolved
+  // flag (not just eventId) because `events` loads asynchronously — without
+  // it, this can fire before venue_access_enabled resolves and never refire.
   useEffect(() => {
     setZoneId(''); setZones([]); setGateId(''); setGates([]); setMode('qr')
     if (eventId && selectedEvent?.venue_access_enabled) {
@@ -810,7 +812,7 @@ export default function ScannerPage() {
         setScanBy(fallbackGates.length ? 'gate' : 'zone')
       })
     }
-  }, [eventId]) // eslint-disable-line
+  }, [eventId, selectedEvent?.venue_access_enabled])
 
   // Section-based scanning: load the sections this staffer is allowed to check
   // into (admin-assigned). Exactly one → auto-route, no picker. Two+ → restore any

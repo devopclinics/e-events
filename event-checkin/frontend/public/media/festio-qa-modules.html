@@ -1,0 +1,825 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Festio QA — Modules</title>
+<style>
+  :root {
+    --bg: #f3f5f9; --surface: #ffffff; --surface-2: #f8f9fc; --border: #e0e4ec;
+    --ink: #101827; --muted: #5b6577; --label: #7a8496;
+    --accent: #0f9c8f; --accent-ink: #086b62; --accent-soft: #0f9c8f1a;
+    --pass: #1f9d63; --pass-soft: #1f9d631a;
+    --issue: #d64545; --issue-soft: #d645451a;
+    --blocked: #b8860b; --blocked-soft: #b8860b1a;
+    --shadow: 0 1px 2px rgba(16,24,39,.05), 0 8px 24px -10px rgba(16,24,39,.12);
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #0b0f18; --surface: #121826; --surface-2: #161d2d; --border: #232c40;
+      --ink: #edf1f8; --muted: #98a3ba; --label: #7c879c;
+      --accent: #2dd4c4; --accent-ink: #7ce8dc; --accent-soft: #2dd4c422;
+      --pass: #34d399; --pass-soft: #34d39922;
+      --issue: #f2685c; --issue-soft: #f2685c22;
+      --blocked: #f0b84f; --blocked-soft: #f0b84f22;
+      --shadow: 0 1px 2px rgba(0,0,0,.3), 0 8px 24px -10px rgba(0,0,0,.55);
+    }
+  }
+  * { box-sizing: border-box; }
+  html { scroll-behavior: smooth; }
+  body {
+    margin: 0; background: var(--bg); color: var(--ink);
+    font-family: -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    -webkit-font-smoothing: antialiased;
+  }
+  a { color: var(--accent-ink); }
+  ::selection { background: var(--accent-soft); }
+
+  /* ── sign-in gate ────────────────────────────────────────────────────── */
+  #gate { position: fixed; inset: 0; z-index: 100; background: var(--bg); display: flex; align-items: center; justify-content: center; padding: 20px; }
+  #gate.hidden { display: none; }
+  .gate-card { max-width: 420px; width: 100%; background: var(--surface); border: 1px solid var(--border); border-radius: 16px; padding: 28px; box-shadow: var(--shadow); }
+  .gate-card .mark { width: 36px; height: 36px; border-radius: 10px; background: var(--accent); color: #06231f;
+    display: flex; align-items: center; justify-content: center; font-weight: 900; font-size: 17px; margin-bottom: 14px; }
+  .gate-card h1 { font-size: 20px; margin: 0 0 6px; font-weight: 800; }
+  .gate-card p { font-size: 13.5px; line-height: 1.55; color: var(--muted); margin: 0 0 18px; }
+  .gate-card label { display: block; font-size: 12.5px; font-weight: 700; color: var(--label); margin-bottom: 6px; }
+  .gate-card input { width: 100%; font: inherit; font-size: 14px; padding: 10px 12px; border-radius: 9px;
+    border: 1px solid var(--border); background: var(--surface-2); color: var(--ink); margin-bottom: 14px; }
+  .gate-card input:focus { outline: 2px solid var(--accent); outline-offset: 1px; }
+  .gate-card button { width: 100%; font-weight: 800; font-size: 14px; padding: 11px; border-radius: 10px;
+    border: none; background: var(--accent); color: #06231f; cursor: pointer; }
+  .gate-card .back { display: inline-block; margin-top: 12px; font-size: 12.5px; font-weight: 700; color: var(--label); text-decoration: none; }
+  #app, #landing { display: none; }
+  #app.ready, #landing.ready { display: block; }
+
+  /* ── top bar (module view) ──────────────────────────────────────────── */
+  .topbar {
+    position: sticky; top: 0; z-index: 30; background: color-mix(in srgb, var(--surface) 92%, transparent);
+    backdrop-filter: blur(10px); border-bottom: 1px solid var(--border);
+  }
+  .topbar-inner { max-width: 980px; margin: 0 auto; padding: 14px 20px; display: flex; align-items: center; gap: 16px; flex-wrap: wrap; }
+  .brand { display: flex; align-items: center; gap: 10px; font-weight: 800; font-size: 15px; flex: none; }
+  .brand .mark { width: 26px; height: 26px; border-radius: 8px; background: var(--accent); color: #06231f;
+    display: flex; align-items: center; justify-content: center; font-weight: 900; font-size: 13px; }
+  .back-link { flex: none; font-size: 12.5px; font-weight: 700; color: var(--label); text-decoration: none; padding: 6px 10px; border-radius: 8px; }
+  .back-link:hover { background: var(--surface-2); color: var(--ink); }
+  .tester-chip { flex: none; display: flex; align-items: center; gap: 6px; font-size: 12px; font-weight: 700; color: var(--muted);
+    background: var(--surface-2); border: 1px solid var(--border); border-radius: 100px; padding: 5px 10px 5px 5px; }
+  .tester-chip .dot { width: 20px; height: 20px; border-radius: 50%; background: var(--accent-soft); color: var(--accent-ink);
+    display: flex; align-items: center; justify-content: center; font-size: 10px; font-weight: 800; }
+  .tester-chip button { border: none; background: none; color: var(--label); font-size: 11px; font-weight: 700; cursor: pointer; padding: 0 0 0 4px; }
+  .progress-wrap { flex: 1; min-width: 160px; display: flex; align-items: center; gap: 10px; }
+  .progress-track { flex: 1; height: 8px; border-radius: 100px; background: var(--surface-2); border: 1px solid var(--border); overflow: hidden; }
+  .progress-fill { height: 100%; border-radius: 100px; background: linear-gradient(90deg, var(--accent), var(--accent-ink)); width: 0%; transition: width .25s ease; }
+  .progress-label { font-size: 12.5px; font-weight: 700; color: var(--muted); font-variant-numeric: tabular-nums; white-space: nowrap; }
+  .topbar-btn { flex: none; font-size: 12px; font-weight: 700; color: var(--muted); background: var(--surface-2);
+    border: 1px solid var(--border); border-radius: 8px; padding: 7px 11px; cursor: pointer; }
+  .topbar-btn:hover { color: var(--ink); }
+  .topbar-btn.primary { color: var(--accent-ink); border-color: color-mix(in srgb, var(--accent) 40%, var(--border)); }
+  #resetBtn:hover { color: var(--issue); border-color: var(--issue); }
+
+  /* ── module view shell ──────────────────────────────────────────────── */
+  .shell { max-width: 980px; margin: 0 auto; padding: 28px 20px 100px; }
+  .hero .eyebrow { font-size: 11.5px; font-weight: 800; letter-spacing: .1em; text-transform: uppercase; color: var(--accent-ink); margin: 0 0 10px; }
+  .hero h1 { font-size: clamp(24px, 3.4vw, 30px); line-height: 1.18; margin: 0 0 10px; letter-spacing: -.01em; font-weight: 800; text-wrap: balance; }
+  .hero p { font-size: 14.5px; line-height: 1.6; color: var(--muted); max-width: 720px; margin: 0 0 6px; }
+  .hero .meta-row { display: flex; flex-wrap: wrap; gap: 6px; margin: 14px 0 0; }
+  .hero .link-row { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 16px; }
+  .hero .site-link { display: inline-flex; align-items: center; gap: 8px; padding: 10px 16px; border-radius: 10px;
+    background: var(--accent-soft); color: var(--accent-ink); font-weight: 700; font-size: 14px; text-decoration: none; border: 1px solid color-mix(in srgb, var(--accent) 35%, transparent); }
+  .hero .site-link:hover { background: color-mix(in srgb, var(--accent) 22%, transparent); }
+
+  .sections { display: flex; flex-direction: column; gap: 20px; min-width: 0; margin-top: 24px; }
+  .section { background: var(--surface); border: 1px solid var(--border); border-radius: 16px; box-shadow: var(--shadow); overflow: hidden; scroll-margin-top: 76px; }
+  .section-head { padding: 18px 20px; border-bottom: 1px solid var(--border); display: flex; align-items: baseline; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+  .section-head h2 { margin: 0; font-size: 18px; font-weight: 800; letter-spacing: -.01em; display: flex; align-items: center; gap: 9px; }
+  .section-head .sec-progress { font-size: 12px; font-weight: 700; color: var(--muted); font-variant-numeric: tabular-nums; }
+  .section-head p { margin: 4px 0 0; font-size: 13px; color: var(--muted); flex-basis: 100%; }
+
+  .cases { display: flex; flex-direction: column; }
+  .case { padding: 16px 20px; border-bottom: 1px solid var(--border); display: grid; grid-template-columns: auto 1fr; gap: 12px; }
+  .case:last-child { border-bottom: none; }
+  .case-num { font-size: 12px; font-weight: 800; color: var(--label); padding-top: 2px; font-variant-numeric: tabular-nums; }
+  .case-body { min-width: 0; }
+  .case-title { font-size: 14.5px; font-weight: 700; line-height: 1.4; }
+  .case-meta { margin-top: 7px; display: flex; flex-wrap: wrap; gap: 5px; }
+  .meta-chip { display: inline-flex; align-items: center; border: 1px solid var(--border); border-radius: 100px; padding: 3px 8px;
+    background: var(--surface-2); color: var(--muted); font-size: 10.5px; font-weight: 700; }
+  .case-path, .case-pre, .case-cleanup { margin-top: 7px; color: var(--muted); font-size: 12.5px; line-height: 1.5; }
+  .case-path b, .case-pre b, .case-cleanup b { color: var(--ink); }
+  .case-steps { margin: 6px 0 0; padding-left: 18px; font-size: 13px; line-height: 1.6; color: var(--muted); }
+  .case-steps li { margin: 1px 0; }
+  .case-expected { margin-top: 8px; font-size: 13px; line-height: 1.55; padding: 8px 11px; border-radius: 8px;
+    background: var(--surface-2); border-left: 3px solid var(--accent); color: var(--ink); }
+  .case-expected b { color: var(--accent-ink); font-weight: 700; }
+
+  .case-controls { margin-top: 10px; display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+  .status-btn {
+    font-size: 12px; font-weight: 700; padding: 6px 12px; border-radius: 100px; border: 1px solid var(--border);
+    background: var(--surface); color: var(--muted); cursor: pointer; display: inline-flex; align-items: center; gap: 5px;
+  }
+  .status-btn:hover { border-color: var(--label); }
+  .status-btn[data-active="pass"] { background: var(--pass-soft); border-color: var(--pass); color: var(--pass); }
+  .status-btn[data-active="issue"] { background: var(--issue-soft); border-color: var(--issue); color: var(--issue); }
+  .status-btn[data-active="blocked"] { background: var(--blocked-soft); border-color: var(--blocked); color: var(--blocked); }
+  .status-btn[data-active="na"] { background: var(--surface-2); border-color: var(--label); color: var(--label); }
+  .note-toggle { font-size: 12px; font-weight: 700; color: var(--label); background: none; border: none; cursor: pointer; padding: 6px 4px; }
+  .note-toggle:hover { color: var(--accent-ink); }
+  .case-note { display: none; margin-top: 8px; }
+  .case-note.open { display: block; }
+  .case-note textarea {
+    width: 100%; min-height: 56px; resize: vertical; font: inherit; font-size: 13px; padding: 8px 10px;
+    border-radius: 8px; border: 1px solid var(--border); background: var(--surface-2); color: var(--ink);
+  }
+  .case-note textarea:focus { outline: 2px solid var(--accent); outline-offset: 1px; }
+  .evidence-input { width: 100%; margin-top: 7px; font: inherit; font-size: 13px; padding: 8px 10px; border-radius: 8px;
+    border: 1px solid var(--border); background: var(--surface-2); color: var(--ink); }
+  .case[data-status="pass"] { background: color-mix(in srgb, var(--pass) 4%, transparent); }
+  .case[data-status="issue"] { background: color-mix(in srgb, var(--issue) 5%, transparent); }
+  .case[data-status="blocked"] { background: color-mix(in srgb, var(--blocked) 5%, transparent); }
+
+  footer { margin-top: 8px; padding-top: 20px; border-top: 1px solid var(--border); }
+  footer p { font-size: 13px; color: var(--muted); line-height: 1.6; max-width: 720px; }
+
+  /* ── landing / module picker ─────────────────────────────────────────── */
+  .landing-top { position: sticky; top: 0; z-index: 30; background: color-mix(in srgb, var(--surface) 92%, transparent);
+    backdrop-filter: blur(10px); border-bottom: 1px solid var(--border); }
+  .landing-top-inner { max-width: 1180px; margin: 0 auto; padding: 14px 20px; display: flex; align-items: center; gap: 12px; }
+  .landing-shell { max-width: 1180px; margin: 0 auto; padding: 36px 20px 100px; }
+  .landing-hero .eyebrow { font-size: 11.5px; font-weight: 800; letter-spacing: .1em; text-transform: uppercase; color: var(--accent-ink); margin: 0 0 10px; }
+  .landing-hero h1 { font-size: clamp(26px, 3.6vw, 36px); line-height: 1.16; margin: 0 0 12px; letter-spacing: -.01em; font-weight: 800; text-wrap: balance; }
+  .landing-hero p { font-size: 15px; line-height: 1.65; color: var(--muted); max-width: 700px; margin: 0 0 8px; }
+  .landing-hero .site-link { display: inline-flex; align-items: center; gap: 8px; margin-top: 12px; padding: 9px 15px; border-radius: 10px;
+    background: var(--surface); color: var(--ink); font-weight: 700; font-size: 13.5px; text-decoration: none; border: 1px solid var(--border); }
+  .landing-hero .site-link:hover { background: var(--surface-2); }
+
+  .module-grid { margin-top: 32px; display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 14px; }
+  .module-card { background: var(--surface); border: 1px solid var(--border); border-radius: 14px; padding: 18px 20px; box-shadow: var(--shadow);
+    display: flex; flex-direction: column; gap: 10px; }
+  .module-card-head { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; }
+  .module-card h3 { margin: 0; font-size: 15.5px; font-weight: 800; letter-spacing: -.01em; }
+  .module-card .count { font-size: 11.5px; font-weight: 700; color: var(--label); white-space: nowrap; font-variant-numeric: tabular-nums; }
+  .module-card p { margin: 0; font-size: 13px; line-height: 1.55; color: var(--muted); flex: 1; }
+  .module-card .chips { display: flex; flex-wrap: wrap; gap: 5px; }
+  .module-progress-track { height: 6px; border-radius: 100px; background: var(--surface-2); border: 1px solid var(--border); overflow: hidden; }
+  .module-progress-fill { height: 100%; background: linear-gradient(90deg, var(--accent), var(--accent-ink)); width: 0%; }
+  .module-progress-label { font-size: 11px; font-weight: 700; color: var(--label); font-variant-numeric: tabular-nums; }
+  .module-card-actions { display: flex; gap: 8px; margin-top: 4px; }
+  .module-card-actions button, .module-card-actions a {
+    flex: 1; text-align: center; font-size: 12.5px; font-weight: 700; padding: 9px 10px; border-radius: 9px; cursor: pointer;
+    text-decoration: none; border: 1px solid var(--border); background: var(--surface-2); color: var(--ink);
+  }
+  .module-card-actions button:hover, .module-card-actions a:hover { background: var(--border); }
+  .module-card-actions .primary { background: var(--accent); color: #06231f; border-color: var(--accent); }
+  .module-card-actions .primary:hover { background: var(--accent-ink); }
+  .module-card.p0 { border-left: 3px solid var(--issue); }
+  .module-card.p1 { border-left: 3px solid var(--blocked); }
+  .module-card.p2 { border-left: 3px solid var(--label); }
+
+  .toast { position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%); background: var(--ink); color: var(--bg);
+    font-size: 13px; font-weight: 700; padding: 10px 16px; border-radius: 10px; opacity: 0; pointer-events: none; transition: opacity .2s ease; z-index: 200; }
+  .toast.show { opacity: 1; }
+
+  @media (prefers-reduced-motion: reduce) { html { scroll-behavior: auto; } .progress-fill, .module-progress-fill { transition: none; } }
+</style>
+</head>
+<body>
+<!-- ── module picker (landing) ─────────────────────────────────────────── -->
+<div id="landing">
+  <div class="landing-top">
+    <div class="landing-top-inner">
+      <strong>🧩 Festio QA — Modules</strong>
+    </div>
+  </div>
+  <div class="landing-shell">
+    <div class="landing-hero">
+      <p class="eyebrow">Staging · Assign one module at a time</p>
+      <h1>Pick a feature area to test</h1>
+      <p>This is the modular version of the full staging QA checklist — same test cases, split into one page per feature so you can hand a single module's link to one tester instead of the whole suite. Every module has its own sign-in, progress bar, and Save button, and results land in the same place as the full checklist.</p>
+      <p>To assign work: click <b>Copy link</b> on a module and send it to whoever's testing that area. They open it, sign in with their name, and only see that module's cases.</p>
+      <a class="site-link" href="/media/festio-qa-checklist.html">📋 Prefer the full single-page checklist?</a>
+    </div>
+    <div class="module-grid" id="moduleGrid"></div>
+    <footer>
+      <p><b>Scope:</b> all staging guest, staff, organizer, communication, billing, reliability and cross-cutting release paths. The platform-operator Console requires its own restricted security checklist because ordinary testers must not receive operator access. Anything genuinely marked "coming soon" should be N/A with a note.</p>
+    </footer>
+  </div>
+</div>
+
+<!-- ── sign-in gate (module view) ──────────────────────────────────────── -->
+<div id="gate">
+  <div class="gate-card">
+    <div class="mark">F</div>
+    <h1 id="gateTitle">Sign in to start testing</h1>
+    <p id="gateDesc">Your name tags every result so we know who found what. Progress saves in this browser as you go; click <b>Save</b> any time to send your current results to the team — no account needed.</p>
+    <label for="testerName">Your name</label>
+    <input id="testerName" type="text" placeholder="e.g. Sherifat Fakos" autocomplete="name" />
+    <button id="gateSubmit" type="button">Start testing →</button>
+    <a class="back" href="festio-qa-modules.html">← All modules</a>
+  </div>
+</div>
+
+<!-- ── module view ──────────────────────────────────────────────────────── -->
+<div id="app">
+  <div class="topbar">
+    <div class="topbar-inner">
+      <div class="brand"><span class="mark">F</span>Festio QA</div>
+      <a class="back-link" href="festio-qa-modules.html">← Modules</a>
+      <div class="tester-chip"><span class="dot" id="testerInitial">?</span><span id="testerLabel"></span><button type="button" id="switchTester">switch</button></div>
+      <div class="progress-wrap">
+        <div class="progress-track"><div class="progress-fill" id="progressFill"></div></div>
+        <div class="progress-label" id="progressLabel">0 / 0 tested</div>
+      </div>
+      <button class="topbar-btn primary" id="saveBtn" type="button">☁ Save</button>
+      <button class="topbar-btn" id="downloadBtn" type="button">⭳ Download</button>
+      <button class="topbar-btn" id="exportJsonBtn" type="button">Export backup</button>
+      <button class="topbar-btn" id="importBtn" type="button">Import backup</button>
+      <input id="importFile" type="file" accept="application/json,.json" hidden />
+      <button class="topbar-btn" id="resetBtn" type="button">Clear my answers</button>
+    </div>
+  </div>
+
+  <div class="shell">
+    <div class="hero">
+      <p class="eyebrow">Staging · Module</p>
+      <h1 id="moduleTitle">Module</h1>
+      <p id="moduleDesc"></p>
+      <div class="meta-row" id="moduleMetaRow"></div>
+      <div class="link-row">
+        <a class="site-link" href="https://staging.festio.events" target="_blank" rel="noopener noreferrer">↗ Open staging.festio.events</a>
+      </div>
+    </div>
+
+    <div class="sections" id="sections"></div>
+
+    <footer>
+      <p>Assigned as one module of the full staging QA checklist. Add reproducible evidence for every issue — URL, event, account role, exact time, browser/device and screenshot link.</p>
+    </footer>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+const DATA = [
+  { id: 'setup', title: 'Event Setup & Configuration', desc: 'Creating and configuring an event from scratch.', cases: [
+    { t: 'Create a new event', steps: ['Go to the dashboard → "New Event"', 'Fill in name, date, timezone, and venue', 'Save'], exp: 'Event is created and appears in your event list.' },
+    { t: 'Multi-day event', steps: ['While creating or editing an event, enable "This event spans multiple days"', 'Set an end date after the start date'], exp: 'End date saves. On the guest invite page, the WHEN field shows a date range, not just one day.' },
+    { t: 'Timezone correctness', steps: ['Set the event timezone to one different from your own device’s timezone', 'Check the dashboard, invite page, and scanner for any displayed time'], exp: 'Every time shown is in the <b>event’s</b> timezone, not your browser’s local time.' },
+    { t: 'Guided setup wizard', steps: ['Create a new event and follow the redirect to the guided setup', 'Complete Team, Messaging, and RSVP Questions steps', 'Reach a paid-gated step like Tables or Menu on an unpaid event'], exp: 'Ungated steps save normally. Paid-gated steps show a clear upgrade prompt with a "Skip for now" option — never a silent failure.' },
+    { t: 'Team invite safety check', steps: ['From the Team tab, invite a colleague by an email address that has never signed into Festio'], exp: 'You get a warning that no account matches that email, with an explicit confirm step — it does not silently send the invite.' },
+    { t: 'Feature gating on an unpaid event', steps: ['On an event that is not on a paid plan, try to enable a paid feature (e.g. Section scanning or Registry)'], exp: 'Blocked with a clear "upgrade required" message — never enables silently.' },
+  ]},
+  { id: 'rsvp', title: 'RSVP & Invitations', desc: 'The guest-facing invite and RSVP flow.', cases: [
+    { t: 'Submit an RSVP (attending)', steps: ['Open a guest invite link', 'Fill required fields and submit "Attending"'], exp: 'Confirmation screen appears. The guest shows as confirmed in the Guests list.' },
+    { t: 'Submit an RSVP (declining)', steps: ['Open an invite link', 'Submit "Can’t Attend"'], exp: 'Guest is marked declined. No QR/ticket is generated for them.' },
+    { t: 'Bring-a-group RSVP', steps: ['On an event with multi-invitee enabled, RSVP and add one or more additional guests'], exp: 'All invitees are created together, and any per-category limit is enforced (you can’t exceed it).' },
+    { t: 'Duplicate RSVP attempt', steps: ['Submit an RSVP with a phone number or email that already RSVP’d'], exp: 'Blocked or treated as an update — you should not end up with two guest records for the same person.' },
+    { t: 'RSVP deadline enforcement', steps: ['Test on an event whose RSVP deadline has passed'], exp: 'The form is disabled and clearly explains the deadline has passed.' },
+    { t: 'Invitation category → table mapping', steps: ['RSVP under a specific invitation category (if the event uses them)', 'Check the resulting guest’s assigned table'], exp: 'Submitter and invitees land in the table category configured for that invitation category.' },
+  ]},
+  { id: 'seating', title: 'Seating & Tables', desc: 'Table groups and seat assignment.', cases: [
+    { t: 'Bulk table creation', steps: ['In Seating (or guided setup), create a group of tables in one action'], exp: 'The correct number of tables is created, each with the capacity you set.' },
+    { t: 'Table group enforcement', steps: ['Enable "enforce table groups" on an event', 'Try to seat a guest at a table outside their assigned group'], exp: 'Blocked with a clear message — guest is not silently seated in the wrong group.' },
+    { t: 'Auto seat assignment', steps: ['RSVP or check in a guest who doesn’t have a seat yet'], exp: 'They’re automatically assigned a seat consistent with their table-group rules.' },
+  ]},
+  { id: 'menu', title: 'Menu & Food', desc: 'Menu categories and guest meal selection.', cases: [
+    { t: 'Menu setup', steps: ['Add a menu category and a few items', 'Mark one category as "display only"'], exp: 'Display-only categories show on the guest side but aren’t selectable; regular categories are.' },
+    { t: 'Guest meal selection', steps: ['As a guest, choose a meal option from FestioHub or the ticket page'], exp: 'The choice saves and is visible on the guest’s record to the organizer.' },
+  ]},
+  { id: 'experience', title: 'Experience / Guest Journey', desc: 'Workflow templates, steps, consent, and Live Program.', cases: [
+    { t: 'Create workflow from a template', steps: ['In Experience settings, pick one of the journey templates (VIP dinner, Conference registration, Wedding reception, or Simple check-in)'], exp: 'A full workflow with all its steps is created in one action — no manual step-by-step building needed.' },
+    { t: 'Re-publish without crashing', steps: ['Publish a workflow', 'Publish it again right away (simulating a double-tap or retry)'], exp: 'No error — the second publish is a safe no-op.' },
+    { t: 'Consent step', steps: ['As a guest, sign a consent form from FestioHub'], exp: 'Signature is recorded, and any step that depends on consent (like Souvenir) becomes available right after.' },
+    { t: 'Souvenir eligibility', steps: ['Check souvenir status for a guest before and after they complete the step it depends on (e.g. consent)'], exp: 'Souvenir shows "Eligible" only once the real prerequisite is met — both in the scanner and on the guest’s FestioHub.' },
+    { t: 'Next step consistency', steps: ['Compare a guest’s "next step" on their FestioHub Activity tab against what the check-in scanner shows for the same guest'], exp: 'Both sides agree on what’s next.' },
+    { t: 'Live Program timing', steps: ['Create two short staging segments: one starting in two minutes and the next immediately after it', 'Keep FestioHub Program open across both boundaries without refreshing'], exp: '"Happening now" and "Up next" update automatically at each event-timezone boundary.' },
+  ]},
+  { id: 'hub', title: 'FestioHub — Guest View', desc: 'The tabbed guest hub: Pass, Activity, Program, Messages.', cases: [
+    { t: 'Pass tab', steps: ['Open FestioHub as an admitted guest', 'Check the Pass tab'], exp: 'Shows QR code, a correct status badge ("Ready for entry" / "Not checked in yet" / "Checked out"), table/seat, and an "after entry" banner naming the guest’s real next step.' },
+    { t: 'Activity tab', steps: ['Open the Activity tab for a guest partway through their journey'], exp: 'Compact tiles and the full checklist agree with each other and don’t repeat the same info twice.' },
+    { t: 'Program tab visibility', steps: ['Check the tab bar on an event with Live Program off, then one with it on and active'], exp: 'The Program tab only appears when Live Program is actually enabled and running.' },
+    { t: 'Messages tab', steps: ['Open Messages as a guest', 'Send a message to the host if enabled'], exp: 'Message Host and Guest Chat each reflect the event’s actual messaging settings (on, off, or "unlocks after RSVP confirmed").' },
+    { t: 'Install & notification prompts', steps: ['On a mobile browser, check the "Add to Home Screen" and "Enable notifications" banners'], exp: 'Both work as expected and can be dismissed.' },
+    { t: 'Tab bar reachability', steps: ['Open FestioHub on a phone', 'Try switching tabs without scrolling'], exp: 'The tab bar is right at the top, under the header — reachable without scrolling down first.' },
+  ]},
+  { id: 'checkin', title: 'Check-in / Scanner', desc: 'QR scanning, manual check-in, and staff tools at the door.', cases: [
+    { t: 'QR scan admission', steps: ['Scan a confirmed guest’s QR code'], exp: 'Big ADMITTED confirmation with the correct name and check-in time.' },
+    { t: 'Re-scan an admitted guest', steps: ['Scan the same guest’s QR a second time'], exp: 'Clear "already admitted" message — not an error, not a duplicate check-in.' },
+    { t: 'Age group on the scan result', steps: ['Scan a guest who answered an "age" RSVP question'], exp: 'Their age group shows on the scan result for staff.' },
+    { t: 'Station action card', steps: ['Scan a guest with a pending Experience step'], exp: 'One clear action shows (e.g. "Issue name tag") with a "Mark complete" button, and any remaining steps collapse under "N more Experience steps" instead of listing everything.' },
+    { t: 'Souvenir eligibility (staff side)', steps: ['Compare "Souvenir: Eligible" on the scan result against the guest’s real progress'], exp: 'Only shows Eligible once the guest has actually met the prerequisite — matches what the guest sees on their own Activity tab.' },
+    { t: 'Station-based routing', steps: ['In Experience, assign a workflow step to a named station such as Kids room', 'Open Check-in and select that station', 'Scan a guest with that step pending'], exp: 'The step assigned to the selected station is prioritized to the top even when another step has an earlier default order.' },
+    { t: 'Manual check-in', steps: ['Check in a guest by name/search instead of scanning a QR (e.g. lost ticket)'], exp: 'Same admission result as a normal QR scan.' },
+    { t: 'Walk-in registration', steps: ['Register a brand-new walk-in guest at the door'], exp: 'Guest is created, admitted, and seated correctly per table-group rules if enabled.' },
+    { t: 'Invalid or denied scan', steps: ['Scan an invalid QR, or one for a guest who has already checked out'], exp: 'A clear denial message — never a silent failure or crash.' },
+  ]},
+  { id: 'venue', title: 'Venue Access & Section Scanning', desc: 'Zone tracking and per-entrance table-group routing.', cases: [
+    { t: 'Zone entry/exit scan', steps: ['Scan a guest into a zone, then out of it'], exp: 'Occupancy count for that zone updates correctly both ways.' },
+    { t: 'Multi-zone access', steps: ['Test a guest who has access to more than one zone'], exp: 'They can enter every zone they’re permitted for, and are blocked from ones they aren’t.' },
+    { t: 'Section-based device routing', steps: ['On an event with two check-in stations by table group, scan a guest whose group doesn’t match the device’s assigned group'], exp: 'The guest’s own group still wins — they’re recognized correctly, no manual override needed.' },
+  ]},
+  { id: 'festiome', title: 'FestioMe Community', desc: 'Groups, channels, and messaging inside the community add-on.', cases: [
+    { t: 'Enable FestioMe for an event', steps: ['Turn on the FestioMe add-on for an event that doesn’t have it yet'], exp: 'A default group and a General channel are created automatically — no extra setup required to turn it on.' },
+    { t: 'Guest opens FestioMe', steps: ['From a guest’s FestioHub Pass tab, open FestioMe'], exp: 'Guest lands in their communities and can see the General channel.' },
+    { t: 'Staff announcement', steps: ['Open Event Setup → Guest Communication', 'Publish an Event Update to Attending only', 'Open FestioMe as an attending and a declined guest'], exp: 'The update appears once in the attending guest’s Event feed with an Event Updates source label and remains hidden from the declined guest.' },
+    { t: 'Private channel', steps: ['Create a private channel with a specific set of members'], exp: 'Only the selected members can see or open it — everyone else in the group can’t.' },
+    { t: 'Native group message', steps: ['Open FestioMe → Groups as an organizer', 'Open a native group channel and post a message', 'Open the same channel as a member and non-member'], exp: 'The member receives the message in that native channel (and push if enabled); the non-member cannot access it.' },
+  ]},
+  { id: 'registry', title: 'Registry & Logistics', desc: 'Gift registry and merch/gift shipping.', cases: [
+    { t: 'Registry setup', steps: ['Add a cash fund and a couple of physical item entries to Registry'], exp: 'Both types save and show correctly to guests.' },
+    { t: 'Guest marks a gift', steps: ['As a guest, mark a registry item as purchased'], exp: 'It’s reflected to the organizer as mark-only — no payment is ever collected through the platform.' },
+    { t: 'Logistics shipment', steps: ['Create a shipment (e.g. "Welcome gift")', 'Populate it with confirmed guests'], exp: 'The right guest list and shipping details are captured for packing.' },
+  ]},
+  { id: 'design', title: 'Design Studio', desc: 'Event branding and the FestioHub layout editor.', cases: [
+    { t: 'Custom branding', steps: ['Set custom colors and fonts for an event'], exp: 'Applied consistently across the invite page, FestioHub, and the Festio Pass.' },
+    { t: 'FestioHub layout editor', steps: ['Reorder or toggle FestioHub modules', 'Set a default tab', 'Compare the live preview to the actual guest view'], exp: 'Live preview matches what a real guest sees.' },
+    { t: 'Locked / gated modules', steps: ['Try enabling a module tied to a feature the event doesn’t have (e.g. Live Program when it’s off)'], exp: 'It can’t be turned on, and stays hidden to guests even if an old saved layout says otherwise.' },
+  ]},
+  { id: 'messaging', title: 'Messaging', desc: 'Email, SMS, and WhatsApp to guests.', cases: [
+    { t: 'Email campaign', steps: ['Send an announcement email to all confirmed guests'], exp: 'Delivered correctly; any displayed send time is in event-local time.' },
+    { t: 'SMS / WhatsApp send', steps: ['Send a test message on each channel enabled for the event'], exp: 'Delivered through the right provider, and message credits are decremented correctly.' },
+    { t: 'Message templates', steps: ['Customize a template (e.g. admission confirmation)', 'Trigger that message'], exp: 'Your custom template is used instead of the default.' },
+  ]},
+  { id: 'team', title: 'Team, Dashboard & Support', desc: 'Roles, live numbers, and the support widget.', cases: [
+    { t: 'Role permissions', steps: ['Log in as a scanner/official-only account', 'Try to reach admin-only settings'], exp: 'Blocked from admin areas — can still do their scanning job normally.' },
+    { t: 'Dashboard accuracy', steps: ['Compare the dashboard’s admitted count and arrival timeline against the scans you actually performed'], exp: 'Numbers match reality.' },
+    { t: 'Support chat', steps: ['Open the in-app support widget', 'Ask one documented question and one question outside the knowledge base', 'Wait up to 30 seconds for each automated response'], exp: 'The documented answer is relevant and actionable; the unknown question receives a clear fallback or human-escalation state within 30 seconds—never silence.' },
+  ]},
+  { id: 'guest-data', title: 'Guest Data, Import & Synchronization', desc: 'Guest CRUD, bulk import, source sync, validation, approvals, and exports.', cases: [
+    { t: 'Create and edit a guest', steps: ['Open Event Setup → Guests', 'Add a guest with name, email and phone', 'Edit the guest and save'], exp: 'One guest record exists with the edited values; its personal link and QR remain valid.', priority: 'P0' },
+    { t: 'CSV/XLSX import with valid rows', steps: ['Download the current import template', 'Add at least three valid guests with different statuses/categories', 'Import it from Guests'], exp: 'Preview counts are correct; all valid rows import once with the mapped fields.', priority: 'P0' },
+    { t: 'Import validation and partial failure', steps: ['Import a file containing a valid row, missing name, malformed phone, duplicate email and unknown ticket type', 'Review warnings before confirming'], exp: 'Each invalid row has a specific reason; valid rows can proceed without silently importing bad data.' },
+    { t: 'Google Sheets source sync', steps: ['Connect a staging Google Sheet shared for viewing', 'Run sync', 'Change, add and remove source rows', 'Sync again'], exp: 'Adds and updates are deterministic; deletion policy is explicit; sync status and last-run time are accurate.' },
+    { t: 'Duplicate guest handling', steps: ['Try manual add, import and RSVP using the same normalized email/phone'], exp: 'The product updates or blocks according to policy and never creates unexplained duplicate identities.', priority: 'P0' },
+    { t: 'Pending approval workflow', steps: ['Submit an RSVP requiring approval', 'Approve one pending guest and reject another'], exp: 'Statuses, guest communication, QR eligibility and capacity counts update correctly for each decision.' },
+    { t: 'Guest filtering and export', steps: ['Filter Guests by status, category and check-in state', 'Export the resulting list'], exp: 'Rows and totals match the active filters; exported values preserve names, statuses and UTF-8 characters.' },
+  ]},
+  { id: 'tickets-billing', title: 'Tickets, Event Pass, Pricing & Credits', desc: 'Ticket rules, event upgrades, checkout and message-credit accounting. Use staging/test payments only.', cases: [
+    { t: 'Ticket type setup and capacity', steps: ['Create two ticket types with different capacities and guest rules', 'Fill one to capacity', 'Attempt one more assignment'], exp: 'Capacity is enforced consistently in RSVP, manual assignment and import; the full tier is clearly sold out.', priority: 'P0' },
+    { t: 'Ticket rules at admission', steps: ['Configure a ticket type with an entry-area restriction', 'Scan an allowed guest and a disallowed guest'], exp: 'Allowed entry succeeds; disallowed entry names the failed rule without changing admission state.', priority: 'P0' },
+    { t: 'Free plan limits', steps: ['Use an unpaid event at its guest/message limit', 'Attempt the next restricted action'], exp: 'The action is blocked before data is lost and the required upgrade is named.' },
+    { t: 'Event Pass checkout', steps: ['Start an Event Pass purchase using the staging payment method', 'Complete checkout', 'Return to the event'], exp: 'Exactly one purchase is recorded; the selected tier and guest cap activate immediately.', priority: 'P0' },
+    { t: 'Upgrade to a larger Event Pass', steps: ['Upgrade a paid test event to a higher guest cap', 'Reload and add guests beyond the old cap'], exp: 'The new cap applies without losing event data or charging twice.' },
+    { t: 'Checkout cancellation and retry', steps: ['Begin checkout and cancel before payment', 'Retry and complete once'], exp: 'Cancellation does not activate a plan; retry creates one successful order and no duplicate entitlement.' },
+    { t: 'Message credit purchase and ledger', steps: ['Record the starting credit balance', 'Buy a staging credit pack', 'Send email/SMS/WhatsApp according to configured costs'], exp: 'Purchase and each debit appear once in the ledger; displayed balance equals calculated balance.', priority: 'P0' },
+    { t: 'Insufficient credits', steps: ['Use an event without enough credits for a bulk send', 'Attempt the send'], exp: 'Nothing is partially sent without disclosure; required credits and top-up path are clear.' },
+    { t: 'Public pricing consistency', steps: ['Compare active Console pricing tiers with the public pricing page and checkout'], exp: 'Names, currencies, prices, guest caps and active status match across all three surfaces.' },
+  ]},
+  { id: 'guest-communication', title: 'Guest Communication', desc: 'Organizer updates, shared Guest Chat, posting control and private Message Host threads.', cases: [
+    { t: 'Event Update audience enforcement', steps: ['Publish separate updates for attending, declined, checked-in and not-checked-in audiences', 'Open each matching guest link'], exp: 'Each guest sees only updates whose audience includes them; no cross-audience leakage.', priority: 'P0' },
+    { t: 'Guest Chat enabled and disabled', steps: ['Enable Guest Chat and open two guest sessions', 'Exchange messages', 'Disable Guest Chat and refresh both'], exp: 'Messages are shared only while the surface is enabled; disabling hides entry points without deleting history.' },
+    { t: 'Guest posting paused', steps: ['Leave Guest Chat enabled but turn Guest posting off', 'Open the chat as a guest'], exp: 'Existing chat remains readable; composer is disabled or hidden; direct API posting is rejected.' },
+    { t: 'Attending-only Guest Chat', steps: ['Open Guest Chat as confirmed, pending and declined guests'], exp: 'Only eligible attending guests can read/post; others receive a clear eligibility message.' },
+    { t: 'Private Message Host isolation', steps: ['Guest A and Guest B each message the host', 'Reply to each from Guest Questions Inbox', 'Reopen both guest sessions'], exp: 'Each guest sees only their own thread and correct reply; the shared chat contains none of it.', priority: 'P0' },
+    { t: 'Organizer chat moderation', steps: ['Post a guest chat message', 'Hide it from the organizer moderation view', 'Refresh guest sessions', 'Restore it'], exp: 'Hidden content disappears for guests without deleting the thread; restore returns it once.' },
+    { t: 'Communication toggles do not affect RSVP/check-in', steps: ['Disable every Guest Communication toggle', 'RSVP a test guest and scan their QR'], exp: 'Communication surfaces are hidden, but RSVP, ticket display and Check-in continue normally.', priority: 'P0' },
+    { t: 'Communication partial outage', steps: ['Use the approved staging failure simulation to make messaging unavailable', 'Open RSVP, FestioHub, FestioMe and Check-in'], exp: 'Communication modules show a recoverable error while RSVP, Ticket, groups and Check-in remain usable.' },
+  ]},
+  { id: 'festiome-unified', title: 'FestioMe Unified Home', desc: 'The source-labelled Home that surfaces existing communication without merging ownership or permissions.', cases: [
+    { t: 'Unified Home source mapping', steps: ['Create an Event Update, Guest Chat message, Message Host reply and native FestioMe group message', 'Open FestioMe Home'], exp: 'Each appears only in its intended module with Event Updates, Guest Chat, Message Host or FestioMe source label.' },
+    { t: 'Home previews do not mark read', steps: ['Create unread native and private messages', 'Open only FestioMe Home', 'Compare unread counts before and after'], exp: 'Preview loading does not mark any message read; opening its destination does.' },
+    { t: 'Distinct navigation destinations', steps: ['Open Home, Event feed, Groups, Messages and Profile in turn'], exp: 'Each navigation item opens a distinct surface; no unrelated links lead to the same workspace.' },
+    { t: 'Guest Communication toggle projection', steps: ['Toggle Event Updates, Guest Chat, Guest posting and Message Host one at a time', 'Refresh FestioMe after each change'], exp: 'Only the corresponding FestioMe module or write control changes; native groups remain intact.' },
+    { t: 'Native group ownership preserved', steps: ['Reply to a Guest Chat preview and a native FestioMe channel', 'Inspect both source conversations'], exp: 'Each reply is written only to its owning service; messages are not copied across channels.', priority: 'P0' },
+    { t: 'Private content never enters public Home', steps: ['Send distinct private host and DM secrets', 'Inspect Home, Event feed, groups, search and another guest account'], exp: 'Private bodies appear only to participants in the private destination; public surfaces contain no secret or preview leakage.', priority: 'P0' },
+    { t: 'FestioMe responsive navigation', steps: ['Test Home at 320px, 375px, tablet and desktop widths', 'Open every section and composer'], exp: 'No horizontal scroll, clipped controls or hidden destination; touch targets remain usable.' },
+    { t: 'Old guest session recovery', steps: ['Open a previously saved FestioMe guest session without current communication context'], exp: 'A clear recovery message directs the guest to reopen from FestioHub; native access does not crash.' },
+  ]},
+  { id: 'staff-identity', title: 'Staff Accounts, Permissions & Attribution', desc: 'Separate identities, event assignment, stations and auditability.', cases: [
+    { t: 'Create separate staff accounts', steps: ['Add Staff A and Staff B with different exact emails', 'Assign both to the event', 'Sign in separately on two devices'], exp: 'Each sees their own name, role and assigned event; neither session becomes the organizer or the other staff member.', priority: 'P0' },
+    { t: 'Unassigned staff isolation', steps: ['Add Staff C to the organization but do not assign the event', 'Sign in as Staff C'], exp: 'The event is absent from Check-in and direct event URLs are denied.' },
+    { t: 'Per-staff permissions', steps: ['Give Staff A Seats access and Staff B Dashboard access', 'Test both accounts'], exp: 'Each account sees only its granted functions; UI and direct API access agree.' },
+    { t: 'Section assignment per staff', steps: ['Assign Staff A to one section and Staff B to two sections', 'Open Check-in as each'], exp: 'Staff A is auto-routed; Staff B chooses only from assigned sections; owner/admin behavior is unchanged.' },
+    { t: 'Scan attribution', steps: ['Staff A scans Guest 1 and Staff B scans Guest 2', 'Review scan records/results'], exp: 'Each scan records the correct authenticated staff identity, device/station context and time.', priority: 'P0' },
+    { t: 'Role change and access revocation', steps: ['Change a staff role, then remove their event assignment while they have an open session', 'Refresh and try an API-backed action'], exp: 'New permissions apply promptly; revoked access is rejected server-side without deleting historical attribution.' },
+  ]},
+  { id: 'reliability', title: 'Offline, Concurrency & Recovery', desc: 'Weak networks, retries, duplicate submissions and service isolation.', cases: [
+    { t: 'Scanner loses network before scan', steps: ['Open Check-in, then enable airplane mode before scanning', 'Restore connectivity'], exp: 'The UI clearly reports offline state and whether the scan was queued; recovery does not create duplicate admission.' },
+    { t: 'Network drops during confirmation', steps: ['Start a manual or QR admission', 'Interrupt the network while confirming', 'Retry after reconnect'], exp: 'Final state is deterministic and the guest has at most one admission record.' },
+    { t: 'Two devices scan the same guest concurrently', steps: ['Have Staff A and Staff B scan one QR at nearly the same time'], exp: 'Exactly one first admission succeeds; the other receives Already admitted with no duplicate seat allocation.', priority: 'P0' },
+    { t: 'Double-submit protections', steps: ['Double-click RSVP, announcement publish, checkout return and Experience completion actions'], exp: 'Each logical action is recorded once or returns the existing result without a crash.' },
+    { t: 'Refresh and back-button safety', steps: ['Refresh and use browser Back during multi-step setup, RSVP and Check-in confirmation'], exp: 'Committed data remains; uncommitted state fails safely; no duplicate write occurs.' },
+    { t: 'FestioMe service outage isolation', steps: ['Use the staging outage simulation for FestioMe', 'Test Event Setup, RSVP, Ticket and Check-in'], exp: 'Core event operations stay healthy and FestioMe alone shows a retryable error.' },
+    { t: 'Messaging provider timeout retry', steps: ['Use the staging provider timeout simulation for one outbound message', 'Observe retry and ledger'], exp: 'Retries are bounded and idempotent; status is visible; credits are not debited repeatedly.' },
+  ]},
+  { id: 'notifications', title: 'Notifications & Delivery Tracking', desc: 'Push, email and external-channel delivery lifecycle.', cases: [
+    { t: 'Web Push opt-in and opt-out', steps: ['Enable notifications from a supported guest browser', 'Trigger an eligible update', 'Disable notifications'], exp: 'Push arrives only while subscribed; opt-out removes that device without affecting another guest.' },
+    { t: 'Push private targeting', steps: ['Send a Message Host reply to Guest A while Guest B is subscribed'], exp: 'Only Guest A receives the private notification; payload and click destination disclose nothing to Guest B.', priority: 'P0' },
+    { t: 'Email delivery lifecycle', steps: ['Send to delivered, bounced and suppressed staging recipients', 'Open delivery reporting'], exp: 'Provider events map to the correct recipient and final status without changing unrelated sends.' },
+    { t: 'Notification preferences', steps: ['Change FestioMe in-app/email/digest/mute preferences', 'Trigger applicable events'], exp: 'Each channel respects the saved preference; security/transactional notices follow documented exceptions.' },
+    { t: 'Notification deep links', steps: ['Open an announcement, DM and host-message notification'], exp: 'Each opens the authorized source destination after sign-in and handles expired access safely.' },
+  ]},
+  { id: 'security', title: 'Security & Privacy', desc: 'Authorization, tenant isolation, token handling and sensitive data.', cases: [
+    { t: 'Cross-event guest token isolation', steps: ['Use Event A guest token against Event B GuestHub, Experience and messaging endpoints'], exp: 'Every request is denied without revealing whether the target guest/thread exists.', priority: 'P0' },
+    { t: 'Cross-organization admin isolation', steps: ['As an admin in Organization A, request Event B resources by changing IDs'], exp: 'All reads and writes are denied server-side; no names, counts or error details leak.', priority: 'P0' },
+    { t: 'Private channel membership enforcement', steps: ['Use a non-member session to open/search/post to a private channel by ID'], exp: 'All operations are denied; private name, member list and messages are not exposed.' },
+    { t: 'Expired and revoked links', steps: ['Test expired/revoked guest, invitation, realtime and attachment tokens'], exp: 'Access is denied with a safe recovery path; tokens are not printed into the page or logs.' },
+    { t: 'Input and stored-content safety', steps: ['Submit HTML/script-like text in names, RSVP answers, messages and announcements', 'Open every surface that renders it'], exp: 'Content is displayed as text or safely sanitized; no script executes and layout remains usable.' },
+    { t: 'Attachment authorization', steps: ['Upload an allowed attachment', 'Try oversized/disallowed content', 'Try downloading as a non-member'], exp: 'Type/size policy is enforced and only authorized members can retrieve the file.' },
+    { t: 'Sensitive browser storage', steps: ['Inspect URLs, local/session storage and downloaded QA results after guest/private workflows'], exp: 'No unnecessary private message bodies, payment secrets or long-lived credentials are exposed.' },
+    { t: 'Rate limiting and abuse feedback', steps: ['Rapidly submit guest chat, Message Host, login and RSVP requests'], exp: 'Abuse is throttled per policy with a clear retry response; other guests remain available.' },
+  ]},
+  { id: 'accessibility', title: 'Accessibility & Responsive UX', desc: 'Keyboard, screen reader, contrast, zoom and common viewport behavior.', cases: [
+    { t: 'Keyboard-only critical flows', steps: ['Complete sign-in, event creation, RSVP, FestioMe navigation and manual Check-in using keyboard only'], exp: 'Focus is visible and logical; every control is operable; dialogs trap and restore focus correctly.' },
+    { t: 'Screen-reader names and status', steps: ['Use VoiceOver/NVDA on forms, status badges, scanner results and dialogs'], exp: 'Controls have meaningful names; errors and dynamic admission/message status are announced.' },
+    { t: 'Color contrast and non-color cues', steps: ['Check light/dark themes and Pass/Issue/Denied/Admitted states'], exp: 'Text and controls meet readable contrast; meaning is not communicated by color alone.' },
+    { t: 'Zoom and text scaling', steps: ['Use browser zoom at 200% and mobile large-text settings', 'Complete core flows'], exp: 'Content reflows without clipping, overlap, horizontal scrolling or hidden actions.' },
+    { t: 'Small phone layout', steps: ['Test at 320×568 with long event, guest and group names'], exp: 'Navigation, cards, dialogs and composers fit; long content wraps; inputs do not trigger disruptive zoom.' },
+    { t: 'Reduced motion', steps: ['Enable prefers-reduced-motion', 'Open loading, navigation and progress interactions'], exp: 'Nonessential animation is removed and no information depends on motion.' },
+    { t: 'Touch target and orientation', steps: ['Use a phone in portrait and landscape', 'Operate scanner tabs, FestioHub tabs and FestioMe nav'], exp: 'Primary targets are comfortably tappable and remain reachable after orientation changes.' },
+  ]},
+  { id: 'compat-performance', title: 'Browser Compatibility & Performance', desc: 'Supported browsers, load time, high-volume data and realtime behavior.', cases: [
+    { t: 'Supported browser matrix', steps: ['Run core guest and staff smoke flows in current Chrome, Safari, Firefox and Edge'], exp: 'Behavior and layout are equivalent; unsupported capabilities have explicit fallbacks.' },
+    { t: 'Mobile browser matrix', steps: ['Run FestioHub, FestioMe and Check-in on current iOS Safari and Android Chrome'], exp: 'Camera, sticky navigation, inputs, installation prompts and deep links work on both.' },
+    { t: 'Cold-load performance', steps: ['Measure first load on a throttled mobile connection with cache disabled'], exp: 'A usable shell appears promptly, loading state is visible, and no route downloads unnecessary media before use.' },
+    { t: 'Large guest list', steps: ['Use an approved staging event with thousands of guests', 'Search, filter, paginate and open profiles'], exp: 'Responses remain bounded; UI stays responsive; counts and selected rows remain correct.' },
+    { t: 'Large communication history', steps: ['Open Guest Chat/FestioMe channels with long histories', 'Load older messages and search'], exp: 'Pagination is stable, messages do not duplicate, and the browser remains responsive.' },
+    { t: 'Realtime update convergence', steps: ['Open Results/FestioMe on two devices', 'Perform scans and messages', 'Interrupt one connection and restore it'], exp: 'Both devices converge to the same state without manual reload or duplicate events.' },
+  ]},
+  { id: 'lifecycle', title: 'Lifecycle, Deletion & Recovery', desc: 'Event status, archival, destructive actions and retained audit data.', cases: [
+    { t: 'Draft, Active and Ended behavior', steps: ['Move a test event through Draft, Active and Ended', 'Try RSVP, Check-in and guest access at each state'], exp: 'Each surface follows the documented status rules and explains unavailable actions.' },
+    { t: 'Archive and reopen event', steps: ['Archive a completed event', 'Find and reopen it'], exp: 'It leaves active lists but remains available for authorized reporting with intact data.' },
+    { t: 'Scoped reset tools', steps: ['Reset only check-ins on a disposable staging event', 'Verify guests, seats and messages', 'Then reset seats separately'], exp: 'Only the explicitly selected data category changes and the confirmation names its scope.' },
+    { t: 'Guest deletion cascade', steps: ['Delete a disposable guest with RSVP answers, seat, scans, messages and shipment links'], exp: 'The documented dependent records are removed/anonymized without damaging other guests or aggregate integrity.' },
+    { t: 'Feature disable and re-enable retention', steps: ['Create data in Seating, Experience, Guest Communication and FestioMe', 'Disable and re-enable each feature'], exp: 'Entry points follow the toggle and historical data follows documented retention; nothing is silently lost.' },
+    { t: 'Destructive confirmation safety', steps: ['Open event/guest/data deletion controls', 'Cancel once, then confirm on disposable data'], exp: 'Cancel changes nothing; confirmation clearly names the target and broad destructive actions require strong confirmation.' },
+  ]},
+  { id: 'other-surfaces', title: 'Media, Feedback, Support & Remaining Surfaces', desc: 'Media Library, feedback, partner pairing, exports and support quality.', cases: [
+    { t: 'Media Library upload and reuse', steps: ['Upload supported image/media', 'Use it in an event surface', 'Replace and remove it'], exp: 'Preview and final surface match; permissions and file limits apply; broken assets fail gracefully.' },
+    { t: 'Guest feedback form', steps: ['Complete rating, NPS and text feedback as a guest', 'Review organizer results'], exp: 'Required fields are enforced; one guest submission is attributed correctly and aggregates update.' },
+    { t: 'Session-specific feedback', steps: ['Complete an eligible session step', 'Submit session feedback', 'Try before eligibility'], exp: 'Eligible feedback saves to the correct session; premature access is blocked.' },
+    { t: 'Partner pairing', steps: ['Enable pairing on a disposable event', 'Create eligible guests and run pairing', 'Edit an assignment'], exp: 'Pairs follow configured eligibility and remain consistent on organizer/guest views.' },
+    { t: 'Reports and printable/exported output', steps: ['Export or print Guests, Results, seating and fulfillment views'], exp: 'Output contains the intended filtered data, event timezone and readable headers without clipped columns.' },
+    { t: 'Support knowledge response quality', steps: ['Ask Support about pricing, staff setup, Check-in, FestioHub and an unknown question'], exp: 'Known answers are accurate and detailed with relevant guide links; unknown questions receive a safe fallback or human escalation, never silence.' },
+  ]},
+];
+const SECTION_META = {
+  setup: { role: 'Owner/Admin', device: 'Desktop', priority: 'P0', path: 'Event selector → New Event / Event Setup', pre: 'A clean staging organization and permission to create events.', cleanup: 'Archive or clearly label disposable events.' },
+  rsvp: { role: 'Guest + Admin', device: 'Desktop + Phone', priority: 'P0', path: 'Invites & RSVP → public invitation link', pre: 'A staging event with RSVP enabled and capacity available.', cleanup: 'Remove or label generated test guests.' },
+  seating: { role: 'Admin + Staff', device: 'Desktop + Phone', priority: 'P1', path: 'Event Setup → Seating; Check-in', pre: 'Paid staging event with Seating enabled and at least two table groups.' },
+  menu: { role: 'Admin + Guest', device: 'Desktop + Phone', priority: 'P1', path: 'Event Setup → Orders; FestioHub', pre: 'Orders enabled with a confirmed test guest.' },
+  experience: { role: 'Admin + Guest + Staff', device: 'Desktop + Phone', priority: 'P0', path: 'Team & settings → Experience; FestioHub Activity; Check-in', pre: 'Experience enabled with one published workflow.' },
+  hub: { role: 'Guest', device: 'Phone', priority: 'P0', path: 'Open a guest’s personal FestioHub link', pre: 'A confirmed test guest with a valid personal link.' },
+  checkin: { role: 'Staff', device: 'Real phone', priority: 'P0', path: 'Check-in', pre: 'Active paid staging event, assigned staff account and scannable test guest.', cleanup: 'Reset only disposable test check-ins if another run needs the guest.' },
+  venue: { role: 'Admin + Staff', device: 'Desktop + Real phone', priority: 'P0', path: 'Event Setup → Entry areas / Entry rules; Check-in', pre: 'Venue access enabled with test zones, gates and ticket/tag rules.' },
+  festiome: { role: 'Admin + Guest', device: 'Desktop + Phone', priority: 'P1', path: 'FestioMe; guest FestioHub → FestioMe', pre: 'FestioMe add-on enabled for the staging event.' },
+  registry: { role: 'Admin + Guest', device: 'Desktop + Phone', priority: 'P1', path: 'Event Setup → Gift list / Deliveries; FestioHub', pre: 'Relevant add-on enabled with a confirmed guest.' },
+  design: { role: 'Admin + Guest', device: 'Desktop + Phone', priority: 'P1', path: 'Design Studio; public invite/FestioHub', pre: 'A staging event with guest-facing pages.' },
+  messaging: { role: 'Admin + Guest', device: 'Desktop + Phone', priority: 'P0', path: 'Invites & RSVP / Team & settings → Messages', pre: 'Staging recipients, configured providers and known starting credits.' },
+  team: { role: 'Owner/Admin + Staff', device: 'Desktop + Phone', priority: 'P0', path: 'Team & settings → Team; Results; Help', pre: 'Separate admin and staff accounts with exact sign-in emails.' },
+  'guest-data': { role: 'Admin', device: 'Desktop', priority: 'P0', path: 'Event Setup → Guests', pre: 'Disposable import files and a staging Google Sheet.' },
+  'tickets-billing': { role: 'Owner/Admin', device: 'Desktop', priority: 'P0', path: 'Invites & RSVP → Event Pass / Console → Pricing', pre: 'Staging payment method only; never use a real charge.', cleanup: 'Record and void/refund staging transactions according to the test-payment process.' },
+  'guest-communication': { role: 'Admin + Guest', device: 'Desktop + Phone', priority: 'P0', path: 'Event Setup → Guest Communication; FestioHub Messages', pre: 'Confirmed, pending, declined and checked-in test guests.' },
+  'festiome-unified': { role: 'Admin + Guest', device: 'Desktop + Phone', priority: 'P0', path: 'FestioMe Home', pre: 'FestioMe plus Guest Communication enabled with source-specific sample messages.' },
+  'staff-identity': { role: 'Owner/Admin + 2 Staff', device: 'Desktop + 2 phones', priority: 'P0', path: 'Team & settings → Team; Check-in; Results', pre: 'Staff A and Staff B must use separate accounts and devices.' },
+  reliability: { role: 'Admin + Staff + Guest', device: 'Desktop + Phone', priority: 'P0', path: 'Relevant feature route', pre: 'Approved staging failure simulation; do not disrupt shared staging testers.' },
+  notifications: { role: 'Admin + Guest', device: 'Desktop + Phone', priority: 'P1', path: 'FestioHub/FestioMe notification controls and delivery reporting', pre: 'Supported push browser and staging provider recipients.' },
+  security: { role: 'Authorized QA', device: 'Desktop', priority: 'P0', path: 'Relevant UI plus browser network tools', pre: 'Two isolated staging organizations/events; test only data you are authorized to access.' },
+  accessibility: { role: 'All roles', device: 'Desktop + Phone', priority: 'P1', path: 'Critical flows across the application', pre: 'Keyboard, VoiceOver or NVDA, and browser accessibility tools.' },
+  'compat-performance': { role: 'All roles', device: 'Browser matrix', priority: 'P1', path: 'Critical flows across the application', pre: 'Supported browsers and approved high-volume staging fixtures.' },
+  lifecycle: { role: 'Owner/Admin', device: 'Desktop', priority: 'P0', path: 'Event Setup → Start here / Features / destructive controls', pre: 'Disposable staging event only.', cleanup: 'Verify the intended retained/deleted state and remove disposable data.' },
+  'other-surfaces': { role: 'Admin + Guest', device: 'Desktop + Phone', priority: 'P2', path: 'Media, Experience Feedback, Results, Help and relevant guest pages', pre: 'Enable the feature under test and prepare eligible guests.' },
+};
+
+// ── module resolution ─────────────────────────────────────────────────────
+const params = new URLSearchParams(location.search);
+const moduleId = params.get('m');
+const activeSection = moduleId ? DATA.find(s => s.id === moduleId) : null;
+
+function esc(value) { return String(value ?? '').replace(/[&<>"']/g, ch => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[ch])); }
+function caseMeta(sec, c) { return { ...(SECTION_META[sec.id] || {}), ...(c || {}) }; }
+function caseId(sec, ci) { return sec.id + '-' + ci; }
+function displayId(sec, ci) { return sec.id.toUpperCase().replace(/[^A-Z0-9]+/g, '-') + '-' + String(ci + 1).padStart(3, '0'); }
+function initials(name) {
+  const parts = name.trim().split(/\s+/).filter(Boolean);
+  if (!parts.length) return '?';
+  return (parts[0][0] + (parts[1] ? parts[1][0] : '')).toUpperCase();
+}
+function showToast(msg) {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.classList.add('show');
+  setTimeout(() => t.classList.remove('show'), 1800);
+}
+function assignmentUrl(id) {
+  return location.origin + location.pathname + '?m=' + encodeURIComponent(id);
+}
+
+// ── landing (module picker) ─────────────────────────────────────────────
+function renderLanding() {
+  document.getElementById('landing').classList.add('ready');
+  const grid = document.getElementById('moduleGrid');
+  grid.innerHTML = '';
+  DATA.forEach(sec => {
+    const meta = SECTION_META[sec.id] || {};
+    const total = sec.cases.length;
+    const p0count = sec.cases.filter(c => (c.priority || meta.priority || 'P1') === 'P0').length;
+    const card = document.createElement('div');
+    card.className = 'module-card ' + (meta.priority || 'p1').toLowerCase();
+    card.innerHTML =
+      '<div class="module-card-head"><h3>' + esc(sec.title) + '</h3><span class="count">' + total + ' case' + (total === 1 ? '' : 's') + '</span></div>' +
+      '<p>' + esc(sec.desc) + '</p>' +
+      '<div class="chips">' +
+        '<span class="meta-chip">' + esc(meta.priority || 'P1') + (p0count ? ' · ' + p0count + ' P0' : '') + '</span>' +
+        '<span class="meta-chip">Role: ' + esc(meta.role || 'Admin') + '</span>' +
+        '<span class="meta-chip">Device: ' + esc(meta.device || 'Desktop') + '</span>' +
+      '</div>' +
+      '<div class="module-progress-track"><div class="module-progress-fill" data-fill></div></div>' +
+      '<div class="module-progress-label" data-label>Not started on this device</div>' +
+      '<div class="module-card-actions">' +
+        '<button type="button" data-copy>🔗 Copy link</button>' +
+        '<a class="primary" href="?m=' + encodeURIComponent(sec.id) + '">Open →</a>' +
+      '</div>';
+    grid.appendChild(card);
+
+    // local-only progress hint, if this browser has ever worked this module under the last-used name
+    const lastTester = localStorage.getItem(NAME_KEY);
+    if (lastTester) {
+      const st = JSON.parse(localStorage.getItem(storeKeyFor(sec.id, lastTester)) || '{}');
+      const tested = sec.cases.filter((_, ci) => st[caseId(sec, ci)]?.status).length;
+      if (tested > 0) {
+        card.querySelector('[data-fill]').style.width = (tested / total * 100) + '%';
+        card.querySelector('[data-label]').textContent = tested + ' / ' + total + ' tested (as ' + lastTester + ', this device)';
+      }
+    }
+
+    card.querySelector('[data-copy]').addEventListener('click', async () => {
+      const url = assignmentUrl(sec.id);
+      try { await navigator.clipboard.writeText(url); showToast('Link copied — send it to your tester'); }
+      catch { prompt('Copy this link:', url); }
+    });
+  });
+}
+
+// ── module (test-taking) view ───────────────────────────────────────────
+const NAME_KEY = 'festio-qa-tester';
+let tester = localStorage.getItem(NAME_KEY) || '';
+function storeKeyFor(secId, name) { return 'festio-qa-module-v1:' + secId + ':' + name.trim().toLowerCase(); }
+let store = {};
+function loadStore() { store = JSON.parse(localStorage.getItem(storeKeyFor(activeSection.id, tester)) || '{}'); }
+function saveLocal() { localStorage.setItem(storeKeyFor(activeSection.id, tester), JSON.stringify(store)); }
+
+function enterApp(name) {
+  tester = name.trim();
+  localStorage.setItem(NAME_KEY, tester);
+  loadStore();
+  document.getElementById('gate').classList.add('hidden');
+  document.getElementById('app').classList.add('ready');
+  document.getElementById('testerInitial').textContent = initials(tester);
+  document.getElementById('testerLabel').textContent = tester;
+  render();
+}
+
+function render() {
+  const sec = activeSection;
+  const meta = SECTION_META[sec.id] || {};
+  document.getElementById('moduleTitle').textContent = sec.title;
+  document.getElementById('moduleDesc').textContent = sec.desc;
+  document.getElementById('moduleMetaRow').innerHTML =
+    '<span class="meta-chip">' + esc(meta.priority || 'P1') + '</span>' +
+    '<span class="meta-chip">Role: ' + esc(meta.role || 'Admin') + '</span>' +
+    '<span class="meta-chip">Device: ' + esc(meta.device || 'Desktop') + '</span>' +
+    (meta.pre ? '<span class="meta-chip">Needs: ' + esc(meta.pre) + '</span>' : '');
+
+  const sectionsEl = document.getElementById('sections');
+  sectionsEl.innerHTML = '';
+  const section = document.createElement('section');
+  section.className = 'section';
+  section.id = sec.id;
+  section.innerHTML =
+    '<div class="section-head"><h2>' + esc(sec.title) + '</h2><span class="sec-progress" id="secProgress"></span></div>' +
+    '<div class="cases" id="cases"></div>';
+  sectionsEl.appendChild(section);
+
+  const casesEl = section.querySelector('#cases');
+  sec.cases.forEach((c, ci) => {
+    const id = caseId(sec, ci);
+    const testId = displayId(sec, ci);
+    const cmeta = caseMeta(sec, c);
+    const state = store[id] || {};
+    const row = document.createElement('div');
+    row.className = 'case';
+    row.dataset.status = state.status || '';
+    row.innerHTML =
+      '<div class="case-num">' + esc(testId) + '</div>' +
+      '<div class="case-body">' +
+        '<div class="case-title">' + esc(c.t) + '</div>' +
+        '<div class="case-meta"><span class="meta-chip">' + esc(cmeta.priority || 'P1') + '</span><span class="meta-chip">Role: ' + esc(cmeta.role || 'Admin') + '</span><span class="meta-chip">Device: ' + esc(cmeta.device || 'Desktop') + '</span></div>' +
+        '<div class="case-path"><b>Path:</b> ' + esc(cmeta.path || 'Relevant application screen') + '</div>' +
+        '<div class="case-pre"><b>Preconditions:</b> ' + esc(cmeta.pre || 'Use authorized staging test data.') + '</div>' +
+        '<ol class="case-steps">' + c.steps.map(s => '<li>' + esc(s) + '</li>').join('') + '</ol>' +
+        '<div class="case-expected"><b>Expected —</b> ' + esc(c.exp) + '</div>' +
+        (cmeta.cleanup ? '<div class="case-cleanup"><b>Cleanup:</b> ' + esc(cmeta.cleanup) + '</div>' : '') +
+        '<div class="case-controls">' +
+          '<button type="button" class="status-btn" data-status-btn="pass" data-active="' + (state.status === 'pass' ? 'pass' : '') + '">✓ Pass</button>' +
+          '<button type="button" class="status-btn" data-status-btn="issue" data-active="' + (state.status === 'issue' ? 'issue' : '') + '">✕ Issue found</button>' +
+          '<button type="button" class="status-btn" data-status-btn="blocked" data-active="' + (state.status === 'blocked' ? 'blocked' : '') + '">⧗ Couldn’t test</button>' +
+          '<button type="button" class="status-btn" data-status-btn="na" data-active="' + (state.status === 'na' ? 'na' : '') + '">— N/A</button>' +
+          '<button type="button" class="note-toggle" data-note-toggle>' + (state.note ? 'Edit note' : '+ Add note') + '</button>' +
+        '</div>' +
+        '<div class="case-note' + (state.note || state.evidence ? ' open' : '') + '" data-note-wrap><textarea placeholder="Issue/retest notes: exact action, actual result and how to reproduce.">' + esc(state.note || '') + '</textarea><input class="evidence-input" value="' + esc(state.evidence || '') + '" placeholder="Evidence: screenshot/video URL, event ID, guest, device and timestamp" /></div>' +
+      '</div>';
+    casesEl.appendChild(row);
+
+    row.querySelectorAll('[data-status-btn]').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const val = btn.getAttribute('data-status-btn');
+        const cur = store[id] || {};
+        cur.status = cur.status === val ? null : val;
+        store[id] = cur;
+        saveLocal();
+        row.dataset.status = cur.status || '';
+        row.querySelectorAll('[data-status-btn]').forEach(b => b.setAttribute('data-active', b.getAttribute('data-status-btn') === cur.status ? cur.status : ''));
+        updateProgress();
+      });
+    });
+
+    const noteToggle = row.querySelector('[data-note-toggle]');
+    const noteWrap = row.querySelector('[data-note-wrap]');
+    noteToggle.addEventListener('click', () => {
+      noteWrap.classList.toggle('open');
+      if (noteWrap.classList.contains('open')) noteWrap.querySelector('textarea').focus();
+    });
+    const textarea = noteWrap.querySelector('textarea');
+    textarea.addEventListener('input', () => {
+      const cur = store[id] || {};
+      cur.note = textarea.value;
+      store[id] = cur;
+      saveLocal();
+      noteToggle.textContent = textarea.value ? 'Edit note' : '+ Add note';
+    });
+    const evidence = noteWrap.querySelector('.evidence-input');
+    evidence.addEventListener('input', () => {
+      const cur = store[id] || {};
+      cur.evidence = evidence.value;
+      store[id] = cur;
+      saveLocal();
+    });
+  });
+
+  updateProgress();
+}
+
+function updateProgress() {
+  const sec = activeSection;
+  const total = sec.cases.length;
+  let tested = 0;
+  sec.cases.forEach((_, ci) => { if (store[caseId(sec, ci)]?.status) tested++; });
+  const label = document.getElementById('secProgress');
+  if (label) label.textContent = tested + ' / ' + total + ' tested';
+  document.getElementById('progressFill').style.width = (total ? (tested / total * 100) : 0) + '%';
+  document.getElementById('progressLabel').textContent = tested + ' / ' + total + ' tested';
+}
+
+function buildResultsPayload() {
+  const sec = activeSection;
+  let totalPass = 0, totalIssue = 0, totalBlocked = 0, totalNA = 0, totalTested = 0;
+  const results = [];
+  sec.cases.forEach((c, ci) => {
+    const state = store[caseId(sec, ci)] || {};
+    if (!state.status) return;
+    totalTested++;
+    if (state.status === 'pass') totalPass++;
+    if (state.status === 'issue') totalIssue++;
+    if (state.status === 'blocked') totalBlocked++;
+    if (state.status === 'na') totalNA++;
+    const meta = caseMeta(sec, c);
+    results.push({
+      section_id: sec.id, section_title: sec.title,
+      case_id: caseId(sec, ci), case_title: c.t,
+      priority: meta.priority || 'P1',
+      status: state.status, note: state.note || '', evidence: state.evidence || '',
+    });
+  });
+  const summary = '[' + sec.title + '] ' + totalTested + ' tested (' + totalPass + ' pass, ' + totalIssue + ' issue, ' + totalBlocked + ' blocked, ' + totalNA + ' N/A)';
+  return { tester_name: tester, summary, results, user_agent: navigator.userAgent };
+}
+
+function initModuleView() {
+  document.getElementById('gateTitle').textContent = 'Sign in to test: ' + activeSection.title;
+  document.getElementById('gateDesc').innerHTML = esc(activeSection.desc) + ' Your name tags every result. Progress saves in this browser as you go; click <b>Save</b> any time to send your current results to the team — no account needed.';
+
+  document.getElementById('gateSubmit').addEventListener('click', () => {
+    const val = document.getElementById('testerName').value;
+    if (!val.trim()) { document.getElementById('testerName').focus(); return; }
+    enterApp(val);
+  });
+  document.getElementById('testerName').addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') document.getElementById('gateSubmit').click();
+  });
+  document.getElementById('switchTester').addEventListener('click', () => {
+    document.getElementById('app').classList.remove('ready');
+    document.getElementById('gate').classList.remove('hidden');
+    document.getElementById('testerName').value = '';
+    document.getElementById('testerName').focus();
+  });
+
+  document.getElementById('resetBtn').addEventListener('click', () => {
+    if (!confirm('Clear your answers for this module on this device? This can’t be undone.')) return;
+    Object.keys(store).forEach(k => delete store[k]);
+    saveLocal();
+    render();
+  });
+
+  const saveBtn = document.getElementById('saveBtn');
+  saveBtn.addEventListener('click', async () => {
+    const payload = buildResultsPayload();
+    if (payload.results.length === 0) { alert('Mark at least one case before saving.'); return; }
+    const original = saveBtn.textContent;
+    saveBtn.textContent = 'Saving…'; saveBtn.disabled = true;
+    try {
+      const res = await fetch('/api/qa-checklist/submissions', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.detail || ('HTTP ' + res.status));
+      }
+      saveBtn.textContent = '✓ Saved';
+    } catch (error) {
+      saveBtn.textContent = '⚠ Save failed';
+      alert('Could not save your results: ' + error.message + '\n\nYour progress is still safe in this browser — try again, or use Download as a backup.');
+    } finally {
+      saveBtn.disabled = false;
+      setTimeout(() => { saveBtn.textContent = original; }, 2500);
+    }
+  });
+
+  document.getElementById('downloadBtn').addEventListener('click', () => {
+    const sec = activeSection;
+    const lines = ['Festio QA — ' + sec.title + ' — ' + tester, 'Generated ' + new Date().toLocaleString(), 'Browser: ' + navigator.userAgent, ''];
+    let totalTested = 0, totalPass = 0, totalIssue = 0, totalBlocked = 0, totalNA = 0;
+    sec.cases.forEach((c, ci) => {
+      const state = store[caseId(sec, ci)] || {};
+      if (state.status) {
+        totalTested++;
+        if (state.status === 'pass') totalPass++;
+        if (state.status === 'issue') totalIssue++;
+        if (state.status === 'blocked') totalBlocked++;
+        if (state.status === 'na') totalNA++;
+      }
+      const label = state.status === 'pass' ? 'PASS' : state.status === 'issue' ? 'ISSUE' : state.status === 'blocked' ? 'BLOCKED' : state.status === 'na' ? 'N/A' : 'NOT TESTED';
+      const meta = caseMeta(sec, c);
+      lines.push('- [' + label + '] ' + displayId(sec, ci) + ' — ' + c.t + ' (' + (meta.priority || 'P1') + ', ' + (meta.role || 'Admin') + ')' +
+        (state.note ? '\n      note: ' + state.note.replace(/\n/g, ' ') : '') +
+        (state.evidence ? '\n      evidence: ' + state.evidence.replace(/\n/g, ' ') : ''));
+    });
+    lines.splice(3, 0, 'Summary: ' + totalTested + ' tested (' + totalPass + ' pass, ' + totalIssue + ' issue, ' + totalBlocked + ' blocked, ' + totalNA + ' N/A), ' + (sec.cases.length - totalTested) + ' not yet tested', '');
+    const blob = new Blob([lines.join('\n')], { type: 'text/plain' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'festio-qa-' + sec.id + '-' + tester.trim().toLowerCase().replace(/\s+/g, '-') + '.txt';
+    document.body.appendChild(a); a.click(); a.remove(); URL.revokeObjectURL(url);
+  });
+
+  document.getElementById('exportJsonBtn').addEventListener('click', () => {
+    const payload = {
+      format: 'festio-qa-module-results', version: 1, module: activeSection.id, tester,
+      exported_at: new Date().toISOString(), user_agent: navigator.userAgent, results: store,
+    };
+    const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'festio-qa-' + activeSection.id + '-backup-' + tester.trim().toLowerCase().replace(/\s+/g, '-') + '.json';
+    document.body.appendChild(a); a.click(); a.remove(); URL.revokeObjectURL(url);
+  });
+
+  document.getElementById('importBtn').addEventListener('click', () => document.getElementById('importFile').click());
+  document.getElementById('importFile').addEventListener('change', async (event) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+    try {
+      const payload = JSON.parse(await file.text());
+      if (payload?.format !== 'festio-qa-module-results' || payload.module !== activeSection.id || !payload.results) throw new Error('Not a backup for this module');
+      if (!confirm('Merge this backup into ' + tester + '’s current results for this module?')) return;
+      store = { ...store, ...payload.results };
+      saveLocal(); render();
+    } catch (error) {
+      alert('Could not import this backup: ' + error.message);
+    } finally {
+      event.target.value = '';
+    }
+  });
+
+  if (tester) enterApp(tester);
+  else document.getElementById('testerName').focus();
+}
+
+// ── boot ─────────────────────────────────────────────────────────────────
+if (activeSection) {
+  document.getElementById('landing').remove();
+  initModuleView();
+} else {
+  document.getElementById('gate').remove();
+  document.getElementById('app').remove();
+  renderLanding();
+}
+</script>
+</body>
+</html>

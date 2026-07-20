@@ -15,6 +15,7 @@ from .routers import design_proxy as design_proxy_router
 from .routers import og as og_router
 from .routers import floor as floor_router
 from .routers import festiome as festiome_router
+from .routers import qa_checklist as qa_checklist_router
 from . import sync_poller, db_migrate
 from .services import festiome_outbox
 from . import routers
@@ -118,6 +119,7 @@ app.include_router(design_proxy_router.router, prefix="/api/events", tags=["desi
 app.include_router(og_router.router, prefix="/api/og", tags=["og"])
 app.include_router(floor_router.router, prefix="/api", tags=["floor-plan"])
 app.include_router(festiome_router.router, prefix="/api/events", tags=["FestioMe"])
+app.include_router(qa_checklist_router.router, prefix="/api/qa-checklist", tags=["qa-checklist"])
 
 # Serve uploaded files (cover images, etc.). When S3 is configured, stream from
 # the bucket so any replica can serve any file; otherwise serve from local disk.

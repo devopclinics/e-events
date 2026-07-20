@@ -46,6 +46,7 @@ Support/Chatwoot/LLM-specific:
 
 - `SUPPORT_AI_ENABLED=true` — kill-switch; set `false` to stop AI drafting instantly without a redeploy
 - `SUPPORT_AI_AUTO_SEND=false` — safe default: Gemini suggestions are private notes until explicitly enabled
+- `SUPPORT_AI_AUTO_SEND_ORG_ALLOWLIST=""` — comma-separated org_key cohort (org_id, or contact email if org_id isn't set). Empty means no org gets auto-sent replies even with `SUPPORT_AI_AUTO_SEND=true` — add orgs here one at a time for a controlled rollout, per `docs/STAGING_AUDIT.md`'s cohort-gate recommendation.
 - `SUPPORT_AI_GATING_ENABLED=true` — sensitive billing/account/security topics are always routed to a human
 - `SUPPORT_RUN_WORKER=false` on the API and `true` on the separate worker deployment
 - `SUPPORT_JOB_MAX_ATTEMPTS=3` — failed jobs are retried, then moved to the dead-letter list
@@ -68,11 +69,35 @@ Support/Chatwoot/LLM-specific:
 - `ZAI_BASE_URL=https://api.z.ai/api/paas/v4` (default)
 - `ZAI_MODEL=glm-4.5-air` (default)
 
-## One-time Chatwoot bootstrap (manual — no infra-as-code path for this)
+## One-time Chatwoot bootstrap
 
-Chatwoot has no documented way to create its first admin account, inbox, or
-tokens via env vars/API before it's running. After `chatwoot`/`chatwoot-sidekiq`
-are up and `db:chatwoot_prepare` has run once:
+After `chatwoot`/`chatwoot-sidekiq` are up and `db:chatwoot_prepare` has run
+once, provision the account/inbox/agent-bot/webhook with:
+
+```bash
+BOOTSTRAP_ADMIN_EMAIL=ops@festio.events \
+BOOTSTRAP_WEBHOOK_BASE_URL=https://festio.events \
+  ./scripts/bootstrap_chatwoot.sh
+```
+
+This runs `scripts/chatwoot_bootstrap.rb` inside the `chatwoot` deployment via
+`rails runner`, then pushes the resulting `CHATWOOT_ACCOUNT_ID`,
+`CHATWOOT_INBOX_ID`, `CHATWOOT_API_ACCESS_TOKEN`, `CHATWOOT_HMAC_SECRET`, and
+`CHATWOOT_WEBHOOK_TOKEN` straight to SSM (same per-key convention as
+`festio-infra/scripts/push-secrets-eso.sh`), so ESO syncs them into
+`festio-secrets` without any manual copy-paste. It's idempotent — every step
+finds-or-creates by a stable key, so re-running after a partial failure (or
+to rotate the webhook token) doesn't create duplicate accounts/inboxes. Set
+`PUSH_TO_SSM=false` to only print the values (e.g. for staging's Compose
+`.env` instead of k8s/SSM). See the script header for the full env var list
+(admin/account/inbox naming, widget website URL, password override).
+
+Chatwoot's internal models aren't a stable public API across CE releases —
+if `chatwoot_bootstrap.rb` raises on a fresh `chatwoot/chatwoot:latest-ce`
+image, a column/association moved; diagnose with
+`kubectl exec deploy/chatwoot -- bundle exec rails runner "puts Inbox.column_names"`
+(etc.) and patch the script. The manual UI fallback, if you need it while
+that's being fixed:
 
 1. Open Chatwoot's setup wizard, create the first admin (agent) account.
 2. Create a **Website** inbox. Copy its `website_token` (goes into the
@@ -84,6 +109,19 @@ are up and `db:chatwoot_prepare` has run once:
    `https://<app-domain>/api/support/webhooks/chatwoot?token=<CHATWOOT_WEBHOOK_TOKEN>`
    (a random secret you generate) subscribed to **Message Created**.
 5. Fill these into secrets/`.env`, redeploy `support-service`.
+
+Either way, verify it actually took with:
+
+```bash
+python scripts/verify_chatwoot_bootstrap.py
+```
+
+This checks all five env vars are set, that `CHATWOOT_ACCOUNT_ID`/`CHATWOOT_INBOX_ID`
+resolve against Chatwoot's own API with the configured token, and that a
+webhook subscribed to `message_created` with our `CHATWOOT_WEBHOOK_TOKEN` is
+actually registered on the account. Re-run after any Chatwoot-side change
+(new token, webhook edit) to catch drift immediately instead of at the next
+crash or silently-missing reply.
 
 ## Knowledge base
 

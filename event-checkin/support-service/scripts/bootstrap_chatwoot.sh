@@ -54,17 +54,22 @@ fi
 
 echo "→ Running bootstrap inside deploy/$DEPLOYMENT (namespace $NAMESPACE)…"
 
+# Only forward optional vars the caller actually set — chatwoot_bootstrap.rb
+# uses ENV.fetch(key, default), which falls back to the default ONLY when the
+# key is absent. Passing it through `env KEY=""` when unset sets it to an
+# empty string instead, which ENV.fetch treats as "present" and returns
+# verbatim — e.g. Account.find_or_create_by!(name: "") then fails validation
+# instead of falling back to "Festio Support".
+FORWARD_ENV=(BOOTSTRAP_ADMIN_EMAIL="$BOOTSTRAP_ADMIN_EMAIL" BOOTSTRAP_WEBHOOK_BASE_URL="$BOOTSTRAP_WEBHOOK_BASE_URL")
+for var in BOOTSTRAP_ACCOUNT_NAME BOOTSTRAP_INBOX_NAME BOOTSTRAP_ADMIN_NAME \
+           BOOTSTRAP_ADMIN_PASSWORD BOOTSTRAP_WEBHOOK_TOKEN BOOTSTRAP_WIDGET_WEBSITE_URL; do
+  if [[ -n "${!var:-}" ]]; then
+    FORWARD_ENV+=("$var=${!var}")
+  fi
+done
+
 RAW_OUTPUT="$(kubectl -n "$NAMESPACE" exec -i "deploy/$DEPLOYMENT" -- \
-  env \
-    BOOTSTRAP_ACCOUNT_NAME="${BOOTSTRAP_ACCOUNT_NAME:-}" \
-    BOOTSTRAP_INBOX_NAME="${BOOTSTRAP_INBOX_NAME:-}" \
-    BOOTSTRAP_ADMIN_EMAIL="$BOOTSTRAP_ADMIN_EMAIL" \
-    BOOTSTRAP_ADMIN_NAME="${BOOTSTRAP_ADMIN_NAME:-}" \
-    BOOTSTRAP_ADMIN_PASSWORD="${BOOTSTRAP_ADMIN_PASSWORD:-}" \
-    BOOTSTRAP_WEBHOOK_BASE_URL="$BOOTSTRAP_WEBHOOK_BASE_URL" \
-    BOOTSTRAP_WEBHOOK_TOKEN="${BOOTSTRAP_WEBHOOK_TOKEN:-}" \
-    BOOTSTRAP_WIDGET_WEBSITE_URL="${BOOTSTRAP_WIDGET_WEBSITE_URL:-}" \
-    bundle exec rails runner - < "$RUBY_SCRIPT")"
+  env "${FORWARD_ENV[@]}" bundle exec rails runner - < "$RUBY_SCRIPT")"
 
 echo "$RAW_OUTPUT"
 

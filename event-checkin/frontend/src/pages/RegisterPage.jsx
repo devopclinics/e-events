@@ -53,6 +53,15 @@ export default function RegisterPage() {
     if (user && !pickerRole) navigate(`/setup${setupQuery}`, { replace: true })
   }, [user, pickerRole, navigate, setupQuery])
 
+  // Partner referral: remember the code through the Firebase signup redirect
+  // so AuthContext can attribute this org once the account exists.
+  useEffect(() => {
+    const ref = params.get('ref')
+    if (ref) {
+      try { localStorage.setItem('festio:referral-code', ref) } catch { /* storage unavailable */ }
+    }
+  }, [params])
+
   const set = (k) => (e) => setForm((f) => ({ ...f, [k]: e.target.value }))
 
   async function submit(e) {

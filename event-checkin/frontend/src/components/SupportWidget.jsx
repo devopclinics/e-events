@@ -14,22 +14,38 @@ export default function SupportWidget() {
 
   useEffect(() => {
     if (!user || !CHATWOOT_BASE_URL || !CHATWOOT_WEBSITE_TOKEN) return
-    if (window.$chatwoot) {
-      identify()
-      return
+    let cancelled = false
+
+    // Console-controlled kill switch, independent of support-service's own
+    // health — lets an operator hide the widget instantly without a redeploy.
+    api.platformSettings()
+      .then(({ support_chat_enabled }) => {
+        if (cancelled || !support_chat_enabled) return
+        load()
+      })
+      .catch(() => {})   // settings lookup failing never blocks the app
+
+    return () => {
+      cancelled = true
+      window.removeEventListener('chatwoot:ready', identify)
     }
 
-    const script = document.createElement('script')
-    script.src = `${CHATWOOT_BASE_URL}/packs/js/sdk.js`
-    script.defer = true
-    script.async = true
-    script.onload = () => {
-      window.chatwootSDK?.run({ websiteToken: CHATWOOT_WEBSITE_TOKEN, baseUrl: CHATWOOT_BASE_URL })
-    }
-    document.body.appendChild(script)
-    window.addEventListener('chatwoot:ready', identify)
+    function load() {
+      if (window.$chatwoot) {
+        identify()
+        return
+      }
 
-    return () => window.removeEventListener('chatwoot:ready', identify)
+      const script = document.createElement('script')
+      script.src = `${CHATWOOT_BASE_URL}/packs/js/sdk.js`
+      script.defer = true
+      script.async = true
+      script.onload = () => {
+        window.chatwootSDK?.run({ websiteToken: CHATWOOT_WEBSITE_TOKEN, baseUrl: CHATWOOT_BASE_URL })
+      }
+      document.body.appendChild(script)
+      window.addEventListener('chatwoot:ready', identify)
+    }
 
     function identify() {
       api.supportIdentify()

@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { Link, useNavigate } from 'react-router-dom'
+import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import { signInWithEmailAndPassword } from 'firebase/auth'
 import { auth } from '../firebase'
 import { googleSignIn } from '../auth/googleSignIn'
@@ -41,6 +41,7 @@ function ViewPicker({ role, onPick }) {
 export default function LoginPage() {
   const { user } = useAuth()
   const navigate = useNavigate()
+  const [params] = useSearchParams()
   const [form, setForm] = useState({ email: '', password: '' })
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
@@ -49,6 +50,15 @@ export default function LoginPage() {
   useEffect(() => {
     if (user && !pickerRole) navigate(getPreferredView(user.role), { replace: true })
   }, [user, pickerRole, navigate])
+
+  // Partner referral: someone may share a /login?ref= link even though
+  // /register is the primary entry point — capture it here too.
+  useEffect(() => {
+    const ref = params.get('ref')
+    if (ref) {
+      try { localStorage.setItem('festio:referral-code', ref) } catch { /* storage unavailable */ }
+    }
+  }, [params])
 
   const set = (k) => (e) => setForm((f) => ({ ...f, [k]: e.target.value }))
 

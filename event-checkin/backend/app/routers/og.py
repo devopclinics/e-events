@@ -15,12 +15,14 @@ it is bounced straight into the app.
 import html as _html
 from urllib.parse import urljoin
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import HTMLResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from sqlalchemy import select
+
 from ..database import get_db
-from ..models import Event
+from ..models import Event, Guest
 from ..timeutil import event_tz, to_event_local
 from .invite import _get_public_event, _get_public_event_by_rsvp_token
 from .registry import _event_by_token as _get_event_by_registry_token
@@ -134,3 +136,32 @@ async def og_registry(token: str, db: AsyncSession = Depends(get_db)):
     description = f"See the gift registry and reserve a gift.{(' ' + tail) if tail else ''}"
     return _render(event, title=title, description=description,
                    canonical_path=f"/registry/{token}")
+
+
+async def _get_event_by_guest_token(token: str, db: AsyncSession) -> Event:
+    """Resolve the Guest Hub's `/r/{token}` link to its event. Deliberately does
+    NOT reject ended events like _get_guest_by_token in invite.py does — the
+    post-event thank-you/feedback message links here specifically after the
+    event has ended, so a preview card still needs to render for it."""
+    guest = (await db.execute(
+        select(Guest).where((Guest.invite_token == token) | (Guest.qr_token == token)).limit(1)
+    )).scalar_one_or_none()
+    if not guest:
+        raise HTTPException(404, "Invite not found")
+    event = await db.get(Event, guest.event_id)
+    if not event:
+        raise HTTPException(404, "Event not found")
+    return event
+
+
+@router.get("/r/{token}", response_class=HTMLResponse)
+async def og_guest_hub(token: str, db: AsyncSession = Depends(get_db)):
+    event = await _get_event_by_guest_token(token, db)
+    if event.status == "ended":
+        name = event.name or "Festio"
+        title = f"{name} — Guest Hub"
+        description = "Your pass, program recap, and feedback — all in one place."
+    else:
+        title, description = _invite_copy(event)
+    return _render(event, title=title, description=description,
+                   canonical_path=f"/r/{token}")

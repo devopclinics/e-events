@@ -181,6 +181,10 @@ class EventOut(BaseModel):
     blocked_messaging_channels: Optional[list[str]] = None
     blocked_comm_features: Optional[list[str]] = None
     notify_rsvp_responses: bool = False
+    post_event_thankyou_enabled: bool = False
+    post_event_thankyou_delay_hours: int = 4
+    post_event_thankyou_audience: str = "admitted"
+    post_event_thankyou_sent_at: Optional[datetime] = None
     walk_in_enabled: bool = False
     walk_in_table_group_id: Optional[str] = None
     enforce_table_groups: bool = True
@@ -394,6 +398,34 @@ class QaChecklistSubmissionOut(BaseModel):
 
 class QaChecklistSubmissionDetail(QaChecklistSubmissionOut):
     results: list[QaChecklistResultItem] = Field(default_factory=list)
+
+
+class PlatformSettingsOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    support_chat_enabled: bool
+
+
+class PlatformSettingsUpdate(BaseModel):
+    support_chat_enabled: bool
+
+
+class ReferredOrgOut(BaseModel):
+    name: str
+    created_at: datetime
+    converted: bool
+
+
+class ReferralInfoOut(BaseModel):
+    referral_code: str
+    referral_link: str
+    referred_count: int
+    converted_count: int
+    referred_orgs: list[ReferredOrgOut]
+
+
+class ReferralClaim(BaseModel):
+    code: str
 
 
 class DemoRequestCreate(BaseModel):

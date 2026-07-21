@@ -24,6 +24,11 @@ class Organization(Base):
     # yet. Consumed (applied + cleared) by the next event the org creates.
     trial_tier: Mapped[str | None] = mapped_column(String(50), nullable=True)
     trial_credits: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    # Partner referral program: which org's referral link/code this one signed
+    # up through. `slug` doubles as the referral code — set once, at signup,
+    # never overwritten (an org can't be re-attributed later).
+    referred_by_org_id: Mapped[str | None] = mapped_column(
+        String(36), ForeignKey("organizations.id"), nullable=True)
 
 
 class Membership(Base):
@@ -192,6 +197,17 @@ class Event(Base):
     # Send a notice to a guest when they decline / are rejected. Off by default
     # (previously silent); organizer opt-in.
     notify_rsvp_responses: Mapped[bool] = mapped_column(Boolean, default=False)
+    # Post-event thank-you + feedback message, sent once via whichever channels
+    # are enabled, `post_event_thankyou_delay_hours` after event_end_date (or
+    # event_date for single-day events). Off by default — organizer opt-in, same
+    # as notify_rsvp_responses above. `_sent_at` is the idempotency guard the
+    # poller checks before sending (see app/services/post_event_message.py).
+    post_event_thankyou_enabled: Mapped[bool] = mapped_column(Boolean, default=False)
+    post_event_thankyou_delay_hours: Mapped[int] = mapped_column(Integer, default=4)
+    # Guest segment the message goes to: "admitted" (checked in — the default,
+    # since a no-show has nothing to give feedback on) | "confirmed" | "all".
+    post_event_thankyou_audience: Mapped[str] = mapped_column(String(20), default="admitted")
+    post_event_thankyou_sent_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     # Walk-in registration at the door (Scanner → Manual). Off by default. New
     # walk-ins are auto-assigned to walk_in_table_group_id. Stored as a plain
     # String (no FK) to avoid an extra Event↔TableGroup mapper relationship.
@@ -1293,3 +1309,15 @@ class QaChecklistSubmission(Base):
     results: Mapped[list] = mapped_column(JSON, default=list)
     user_agent: Mapped[str | None] = mapped_column(String(500), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, index=True)
+
+
+class PlatformSettings(Base):
+    """Single-row table of platform-wide operational toggles, controlled from
+    the operator Console. Off by default — flip on only once the gated
+    feature is actually ready (e.g. support_chat_enabled requires the manual
+    Chatwoot bootstrap in support-service/README.md to be done first)."""
+    __tablename__ = "platform_settings"
+
+    id: Mapped[str] = mapped_column(String(20), primary_key=True, default=lambda: "singleton")
+    support_chat_enabled: Mapped[bool] = mapped_column(Boolean, default=False)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)

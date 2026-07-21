@@ -27,6 +27,7 @@ from ..template_resolve import load_overrides, channel_text, email_override
 from services.templates import build_context as build_template_context
 from .. import storage
 from ..services.festiome_outbox import queue_announcement
+from ..services import post_event_message
 
 UPLOADS_DIR = "/app/uploads"
 ALLOWED_IMAGE_TYPES = {"image/jpeg", "image/png", "image/webp", "image/gif"}
@@ -747,9 +748,19 @@ async def toggle_features(
         event.section_mode_enabled = enable
     if "checkout_enabled" in body:
         event.checkout_enabled = bool(body["checkout_enabled"])
-    for k in ("notify_email", "notify_sms", "notify_whatsapp", "notify_rsvp_responses"):
+    for k in ("notify_email", "notify_sms", "notify_whatsapp", "notify_rsvp_responses", "post_event_thankyou_enabled"):
         if k in body:
             setattr(event, k, bool(body[k]))
+    if "post_event_thankyou_delay_hours" in body:
+        hours = int(body["post_event_thankyou_delay_hours"])
+        if hours < 0 or hours > 24 * 30:
+            raise HTTPException(400, "post_event_thankyou_delay_hours must be between 0 and 720")
+        event.post_event_thankyou_delay_hours = hours
+    if "post_event_thankyou_audience" in body:
+        audience = body["post_event_thankyou_audience"]
+        if audience not in ("admitted", "confirmed", "all"):
+            raise HTTPException(400, "post_event_thankyou_audience must be admitted, confirmed, or all")
+        event.post_event_thankyou_audience = audience
     await db.commit()
     await db.refresh(event)
     return event
@@ -1094,6 +1105,37 @@ async def broadcast_message(
         skipped_no_consent=skipped_no_consent,
         skipped_no_credits=skipped_no_credits,
     )
+
+
+@router.post("/{event_id}/post-event-thankyou/test-send")
+async def test_send_post_event_thankyou(
+    event_id: str,
+    data: dict,
+    db: AsyncSession = Depends(get_db),
+    _: User = Depends(require_event_admin),
+):
+    """Send the real post-event thank-you/feedback message to one real guest,
+    right now — for verifying it before relying on the automatic per-event
+    send. Body: {guest_id}. Does not require the toggle to be on, and does not
+    mark the event as sent (that's the automatic trigger's own guard)."""
+    event = await db.get(Event, event_id)
+    if not event:
+        raise HTTPException(404, "Event not found")
+    guest_id = (data or {}).get("guest_id")
+    if not guest_id:
+        raise HTTPException(400, "guest_id is required")
+    guest = await db.get(Guest, guest_id)
+    if not guest or guest.event_id != event_id:
+        raise HTTPException(404, "Guest not found for this event")
+    sent = await post_event_message.send_to_guest(event, guest, db)
+    await db.commit()  # persist message-credit decrements + minted invite_token
+    if not sent:
+        raise HTTPException(
+            400,
+            "Nothing was sent — this guest has no deliverable channel (missing "
+            "email/phone, consent, or the event doesn't have paid SMS/WhatsApp).",
+        )
+    return {"ok": True, "channels_sent": sent}
 
 
 # ── Manual invites ────────────────────────────────────────────────────────────

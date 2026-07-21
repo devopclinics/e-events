@@ -415,6 +415,27 @@ TEMPLATE_DEFS: dict[str, dict] = {
         placeholders=PLACEHOLDERS + ["message"],
         note="{{message}} is the free-text update typed when sending the broadcast.",
     ),
+    "post_event_thankyou": _t(
+        "Post-event thank-you & feedback", ["email", "sms", "whatsapp"], group="Day-of",
+        subject="Thank you for celebrating {{event_name}} with us",
+        email_body=(
+            "<h2>Thank you, {{guest_first_name}}!</h2>"
+            "<p>We hope you had a wonderful time at {{event_name}}.</p>"
+            "{{feedback_cta_html}}"
+        ),
+        sms_body="Thanks for celebrating {{event_name}} with us, {{guest_first_name}}!{{feedback_cta_text}}",
+        whatsapp_body="Thanks for celebrating {{event_name}} with us, {{guest_first_name}}!{{feedback_cta_text}}",
+        placeholders=PLACEHOLDERS + ["feedback_link", "feedback_cta_html", "feedback_cta_text"],
+        note=(
+            "Sent once automatically after the event ends, if enabled in Features & "
+            "messaging. {{feedback_cta_html}}/{{feedback_cta_text}} are a ready-made "
+            "\"share your feedback\" sentence + link — they render blank (this becomes "
+            "a plain thank-you) unless the event actually has a Feedback step "
+            "configured under Experience that this guest can currently see. "
+            "{{feedback_link}} is the guest's personal Guest Hub link on its own, in "
+            "case you want to place it yourself instead."
+        ),
+    ),
     # ── Add-ons ─────────────────────────────────────────────────────────────────
     "logistics_notification": _t(
         "Logistics / shipping notification", ["email", "sms", "whatsapp"], group="Add-ons",

@@ -11,7 +11,7 @@ from fastapi import HTTPException
 from .database import AsyncSessionLocal
 from .models import Event
 from .routers.guests import import_from_source_url, import_warning_summary
-from .services import program
+from .services import post_event_message, program
 
 logger = logging.getLogger("sync_poller")
 
@@ -79,6 +79,11 @@ async def _tick() -> None:
     # this safe to run on every poller wake-up and prevents duplicate notices.
     async with AsyncSessionLocal() as db:
         await program.tick(db)
+
+    # Post-event thank-you/feedback message. post_event_thankyou_sent_at makes
+    # this safe to run on every poller wake-up — each event fires at most once.
+    async with AsyncSessionLocal() as db:
+        await post_event_message.tick(db)
 
 
 async def run() -> None:

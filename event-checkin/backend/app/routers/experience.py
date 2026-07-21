@@ -2,6 +2,7 @@ import csv
 import html
 import io
 from datetime import datetime, timedelta
+from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
 
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query, Request
 from fastapi.responses import Response
@@ -1503,7 +1504,7 @@ async def update_guest_step_progress(
         progress_by_step_id = {row.step_id: row for row in progress_rows}
         progress_by_step_id[progress.step_id] = progress
         steps_by_key_or_id = {value: item for item in workflow.steps for value in (item.id, item.key)}
-        if not dependencies_satisfied(step, steps_by_key_or_id, progress_by_step_id):
+        if not dependencies_satisfied(step, steps_by_key_or_id, progress_by_step_id, event=event):
             raise HTTPException(409, "This step is blocked until its required prior steps are complete")
 
     metadata = data.metadata
@@ -1736,6 +1737,20 @@ async def sign_my_consent(
 _FEEDBACK_TYPES = {"rating", "nps", "single_choice", "multi_choice", "yes_no", "text"}
 
 
+def _embeddable_form_url(url: str) -> str:
+    """Google Forms only renders its clean, iframe-safe view (and drops its
+    report-only frame-ancestors CSP) when `embedded=true` is present — a bare
+    /viewform link is meant for a full tab, not a frame. Organizers paste the
+    normal share link, so add it for them rather than requiring a specific
+    URL format they'd have no way to know about."""
+    parsed = urlsplit(url)
+    if not parsed.netloc.endswith("docs.google.com") or "/forms/" not in parsed.path:
+        return url
+    query = dict(parse_qsl(parsed.query))
+    query["embedded"] = "true"
+    return urlunsplit(parsed._replace(query=urlencode(query)))
+
+
 def _feedback_questions(step: ExperienceStep) -> list[dict]:
     raw = (step.config or {}).get("feedback") or {}
     questions = raw.get("questions") if isinstance(raw, dict) else []
@@ -1861,7 +1876,11 @@ async def my_feedback(event_id: str, token: str = Query(...), db: AsyncSession =
     forms = []
     for step in sorted((loaded.steps if loaded else []), key=lambda s: (s.sort_order, s.title)):
         questions = _feedback_questions(step)
-        if step.type != "feedback" or not step.enabled or not questions or not await _feedback_audience_allows(step, guest, db):
+        feedback = (step.config or {}).get("feedback") or {}
+        external_url = str(feedback.get("external_url") or "").strip()
+        if step.type != "feedback" or not step.enabled or (not questions and not external_url):
+            continue
+        if not await _feedback_audience_allows(step, guest, db):
             continue
         program_window = await feedback_availability(event, loaded, db, step.id)
         if program_window["controlled"] and not program_window["open"]:
@@ -1869,9 +1888,9 @@ async def my_feedback(event_id: str, token: str = Query(...), db: AsyncSession =
         existing = await db.scalar(select(FeedbackSubmission).where(
             FeedbackSubmission.step_id == step.id, FeedbackSubmission.guest_id == guest.id
         ).limit(1))
-        feedback = (step.config or {}).get("feedback") or {}
         availability = _feedback_availability(step)
         allow_edit = bool(feedback.get("allow_edit"))
+        embed_enabled = bool(feedback.get("embed_enabled")) if external_url else False
         forms.append({
             "step_id": step.id, "title": step.title, "description": step.description,
             "questions": questions, "anonymous": bool(feedback.get("anonymous")),
@@ -1880,6 +1899,8 @@ async def my_feedback(event_id: str, token: str = Query(...), db: AsyncSession =
             **availability, "allow_edit": allow_edit,
             "can_edit": bool(existing and allow_edit and availability["open"]),
             "program_window": program_window["window"],
+            "external_url": (_embeddable_form_url(external_url) if embed_enabled else external_url) or None,
+            "embed_enabled": embed_enabled,
         })
     return {"event_id": event.id, "forms": forms}
 

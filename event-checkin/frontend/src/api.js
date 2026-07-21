@@ -547,6 +547,7 @@ export const api = {
   deleteRSVPQuestion: (eventId, qId) => req('DELETE', `/events/${eventId}/rsvp-questions/${qId}`),
   // Broadcast (admin)
   broadcast: (eventId, data) => req('POST', `/events/${eventId}/broadcast`, data),
+  testSendPostEventThankyou: (eventId, guestId) => req('POST', `/events/${eventId}/post-event-thankyou/test-send`, { guest_id: guestId }),
 
   // Guest Hub / event communication (messaging-service)
   guestHub: (eventId, token) =>
@@ -712,6 +713,13 @@ export const api = {
   // QA checklist submissions (from public/media/festio-qa-checklist.html)
   qaChecklistSubmissions: () => req('GET', '/qa-checklist/submissions'),
   qaChecklistSubmission: (id) => req('GET', `/qa-checklist/submissions/${id}`),
+  // Platform-wide operational toggles (operator Console)
+  platformSettings: () => req('GET', '/platform-settings'),
+  updatePlatformSettings: (data) => req('PATCH', '/platform-settings', data),
+  // Partner referral program
+  myReferral: () => req('GET', '/organizations/me/referral'),
+  claimReferral: (code) => req('POST', '/organizations/me/referral/claim', { code }),
+  adminAllReferrals: () => req('GET', '/organizations/referrals/all'),
   // Account management
   adminListAccounts: () => req('GET', '/admin/accounts'),
   adminSetOrgActive: (orgId, active) => req('PATCH', `/admin/orgs/${orgId}/active`, { active }),

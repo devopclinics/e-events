@@ -513,6 +513,60 @@ function FeatureToggles({ event, onChanged, onGate }) {
   )
 }
 
+// Org-level (not event-scoped) — every organizer has exactly one referral
+// link, independent of which event they're currently viewing.
+function PartnerReferralPanel() {
+  const [info, setInfo] = useState(null)
+  const [err, setErr] = useState('')
+  const [copied, setCopied] = useState(false)
+
+  useEffect(() => { api.myReferral().then(setInfo).catch((e) => setErr(e.message)) }, [])
+
+  function copyLink() {
+    if (!info) return
+    navigator.clipboard.writeText(info.referral_link).catch(() => {})
+    setCopied(true)
+    setTimeout(() => setCopied(false), 1800)
+  }
+
+  if (err) return null
+  if (!info) return null
+
+  return (
+    <div className="border-t dark:border-slate-700 pt-5 space-y-3">
+      <div>
+        <h2 className="font-semibold text-base dark:text-white">Partner referrals</h2>
+        <p className="text-xs text-gray-400 dark:text-slate-500 mt-1">Share your link — organizations that sign up through it are credited to you.</p>
+      </div>
+      <div className="flex flex-wrap items-center gap-2">
+        <code className="flex-1 min-w-[200px] rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900/40 px-3 py-2 text-sm text-slate-700 dark:text-slate-200 truncate">
+          {info.referral_link}
+        </code>
+        <button onClick={copyLink}
+          className="px-4 py-2 rounded-lg text-sm font-semibold border border-slate-300 dark:border-slate-600 text-gray-700 dark:text-slate-200 hover:bg-gray-50 dark:hover:bg-slate-700">
+          {copied ? 'Copied!' : 'Copy link'}
+        </button>
+      </div>
+      <div className="flex gap-6 text-sm text-slate-600 dark:text-slate-300">
+        <span><strong className="text-slate-950 dark:text-white">{info.referred_count}</strong> referred</span>
+        <span><strong className="text-slate-950 dark:text-white">{info.converted_count}</strong> converted to a paid Event Pass</span>
+      </div>
+      {info.referred_orgs.length > 0 && (
+        <ul className="divide-y divide-gray-100 dark:divide-slate-700 text-sm">
+          {info.referred_orgs.map((r, i) => (
+            <li key={i} className="flex items-center justify-between py-1.5">
+              <span className="text-slate-700 dark:text-slate-200">{r.name}</span>
+              <span className={`text-xs font-semibold ${r.converted ? 'text-emerald-600 dark:text-emerald-400' : 'text-slate-400'}`}>
+                {r.converted ? 'Converted' : 'Signed up'}
+              </span>
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
+  )
+}
+
 function SelfCheckinPanel({ event, onChanged, onFlash, onGate }) {
   const [loading, setLoading] = useState(false)
   const [copied, setCopied] = useState(false)
@@ -7844,6 +7898,48 @@ function FestioMeEventControl({ event }) {
   )
 }
 
+function PostEventThankyouTestSend({ event, guests }) {
+  const [guestId, setGuestId] = useState('')
+  const [busy, setBusy] = useState(false)
+  const [result, setResult] = useState(null)
+
+  async function send() {
+    if (!guestId) return
+    setBusy(true); setResult(null)
+    try {
+      const res = await api.testSendPostEventThankyou(event.id, guestId)
+      setResult({ ok: true, text: `Sent on ${res.channels_sent} channel${res.channels_sent === 1 ? '' : 's'}.` })
+    } catch (e) {
+      setResult({ ok: false, text: e.message })
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  return (
+    <div className="mt-2 flex flex-wrap items-center gap-2 text-sm">
+      <select value={guestId} onChange={(e) => { setGuestId(e.target.value); setResult(null) }}
+        className="rounded border border-gray-300 dark:border-slate-600 dark:bg-slate-900 px-2 py-1 text-sm">
+        <option value="">Send a real test to…</option>
+        {guests.map((g) => (
+          <option key={g.id} value={g.id}>
+            {`${g.first_name || ''} ${g.last_name || ''}`.trim() || g.email || g.phone || g.id}
+          </option>
+        ))}
+      </select>
+      <button type="button" onClick={send} disabled={!guestId || busy}
+        className="rounded bg-teal-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-teal-700 disabled:opacity-50">
+        {busy ? 'Sending…' : 'Send test'}
+      </button>
+      {result && (
+        <span className={result.ok ? 'text-teal-700 dark:text-teal-400' : 'text-red-600 dark:text-red-400'}>
+          {result.text}
+        </span>
+      )}
+    </div>
+  )
+}
+
 function OnboardingChecklist({ event, stats, onTab }) {
   const key = `onb_${event.id}`
   // Non-destructive: "Hide" collapses to a re-expandable progress pill rather
@@ -9287,10 +9383,56 @@ export default function AdminPage() {
                     <span className="block text-xs text-gray-400 dark:text-slate-500">Off by default. When on, declined/rejected guests get a polite notice (edit the wording in Messages → RSVP decline / Approval rejected).</span>
                   </span>
                 </label>
+                <label className="mt-4 flex items-start gap-2 cursor-pointer">
+                  <input type="checkbox" checked={!!event.post_event_thankyou_enabled}
+                    onChange={async (e) => {
+                      try { updateEvent(await api.toggleFeatures(event.id, { post_event_thankyou_enabled: e.target.checked })) }
+                      catch (err) { flash(err.message, true) }
+                    }}
+                    className="mt-0.5 w-4 h-4 accent-teal-600" />
+                  <span>
+                    <span className="text-sm font-medium text-slate-700 dark:text-slate-200">Send post-event thank-you &amp; feedback message</span>
+                    <span className="block text-xs text-gray-400 dark:text-slate-500">Off by default. When on, guests get a one-time thank-you with a link to their Guest Hub (edit the wording in Messages → Post-event thank-you).</span>
+                  </span>
+                </label>
+                {event.post_event_thankyou_enabled && (
+                  <div className="ml-6 mt-2 flex flex-wrap items-center gap-x-6 gap-y-2 text-sm text-slate-600 dark:text-slate-300">
+                    <label className="flex items-center gap-2">
+                      Send
+                      <input type="number" min={0} max={720}
+                        value={event.post_event_thankyou_delay_hours ?? 4}
+                        onChange={async (e) => {
+                          const hours = Math.max(0, Math.min(720, Number(e.target.value) || 0))
+                          try { updateEvent(await api.toggleFeatures(event.id, { post_event_thankyou_delay_hours: hours })) }
+                          catch (err) { flash(err.message, true) }
+                        }}
+                        className="w-16 rounded border border-gray-300 dark:border-slate-600 dark:bg-slate-900 px-2 py-1 text-sm" />
+                      hours after the event ends, to
+                    </label>
+                    <select
+                      value={event.post_event_thankyou_audience || 'admitted'}
+                      onChange={async (e) => {
+                        try { updateEvent(await api.toggleFeatures(event.id, { post_event_thankyou_audience: e.target.value })) }
+                        catch (err) { flash(err.message, true) }
+                      }}
+                      className="rounded border border-gray-300 dark:border-slate-600 dark:bg-slate-900 px-2 py-1 text-sm">
+                      <option value="admitted">Checked-in guests</option>
+                      <option value="confirmed">Confirmed guests</option>
+                      <option value="all">All guests</option>
+                    </select>
+                  </div>
+                )}
+                {event.post_event_thankyou_enabled && guests.length > 0 && (
+                  <div className="ml-6">
+                    <PostEventThankyouTestSend event={event} guests={guests} />
+                  </div>
+                )}
                 <FestioMeEventControl event={event} />
               </div>
 
               <SelfCheckinPanel event={event} onChanged={updateEvent} onFlash={flash} onGate={openUpgradeGate} />
+
+              <PartnerReferralPanel />
 
               {user?.is_platform_superadmin && (
                 <div className="border-t dark:border-slate-700 pt-5">

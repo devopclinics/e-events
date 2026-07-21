@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import datetime, timedelta, timezone
 
 from sqlalchemy import select
 from sqlalchemy.dialects.postgresql import insert as pg_insert
@@ -19,6 +19,7 @@ from ..models import (
     ScanEvent,
     TicketType,
 )
+from ..timeutil import event_tz, to_event_local
 
 
 def default_step_specs(event: Event) -> list[dict]:
@@ -224,22 +225,45 @@ def dependency_keys(step: ExperienceStep) -> set[str]:
     return {str(value).strip() for value in raw if str(value).strip()}
 
 
+def _segment_ended(event: Event, step: ExperienceStep, *, now: datetime) -> bool:
+    """Timed Live Program segments (is_segment=True) have no guest-facing
+    completion action — and are hidden from the checklist entirely once Live
+    Program is on — so a depends_on pointing at one would otherwise never
+    resolve. Treat "the segment's scheduled window has ended" as satisfied,
+    matching what organizers actually mean by depending on one (see
+    services/program.py's identical segment_window math)."""
+    if step.starts_offset_seconds is None or not step.duration_seconds:
+        return False
+    anchor = to_event_local(event.event_date, event_tz(event))
+    if not anchor:
+        return False
+    end = anchor + timedelta(seconds=step.starts_offset_seconds) + timedelta(seconds=step.duration_seconds)
+    return end <= now
+
+
 def dependencies_satisfied(
     step: ExperienceStep,
     steps_by_key_or_id: dict[str, ExperienceStep],
     progress_by_step_id: dict[str, GuestExperienceProgress],
+    *,
+    event: Event | None = None,
+    now: datetime | None = None,
 ) -> bool:
     deps = dependency_keys(step)
     if not deps:
         return True
     complete_statuses = {"completed", "skipped", "overridden"}
+    moment = now or datetime.now(timezone.utc)
     for dep in deps:
         dep_step = steps_by_key_or_id.get(dep)
         if not dep_step:
             return False
         dep_progress = progress_by_step_id.get(dep_step.id)
-        if not dep_progress or dep_progress.status not in complete_statuses:
-            return False
+        if dep_progress and dep_progress.status in complete_statuses:
+            continue
+        if dep_step.is_segment and event and _segment_ended(event, dep_step, now=moment):
+            continue
+        return False
     return True
 
 
@@ -494,6 +518,7 @@ async def initialize_progress(event_id: str, workflow_id: str, db: AsyncSession)
     workflow = await load_workflow(workflow_id, db)
     if not workflow:
         return
+    event = await db.get(Event, event_id)
     guests = (await db.execute(select(Guest).where(Guest.event_id == event_id))).scalars().all()
     existing_pairs = {
         (guest_id, step_id)
@@ -534,7 +559,7 @@ async def initialize_progress(event_id: str, workflow_id: str, db: AsyncSession)
                 completed_at = now
                 completed_by_source = "system"
                 metadata = {"condition_skipped": True}
-            elif not dependencies_satisfied(step, steps_by_key_or_id, progress_by_step_id):
+            elif not dependencies_satisfied(step, steps_by_key_or_id, progress_by_step_id, event=event, now=datetime.now(timezone.utc)):
                 status = "blocked"
                 metadata = {"blocked_by": sorted(dependency_keys(step))}
             if status != "skipped" and step.type == "check_in" and guest.admitted:
@@ -684,7 +709,10 @@ async def sync_guest_progress(
             progress.progress_metadata = metadata or None
 
         implicit_consent_block = should_block_souvenir_until_consent(step, steps, consent_signed)
-        deps_ok = dependencies_satisfied(step, steps_by_key_or_id, existing) and not implicit_consent_block
+        deps_ok = (
+            dependencies_satisfied(step, steps_by_key_or_id, existing, event=event, now=datetime.now(timezone.utc))
+            and not implicit_consent_block
+        )
         if not deps_ok and progress.status not in ("completed", "skipped", "overridden"):
             progress.status = "blocked"
             progress.completed_at = None

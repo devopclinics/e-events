@@ -74,6 +74,20 @@ const HTML_ASSETS = [
     type: 'HTML',
   },
   {
+    title: 'PAMAN Partnership Pitch Deck',
+    description: "Slide deck for the Party Managers Association of Nigeria — an ongoing association partnership (not tied to a single conference), with real product screenshots from the demo event and a working referral link (?ref=paman). Arrow keys or the on-screen controls navigate; three fields (member benefit, contact name/email/phone) need filling in before sending.",
+    href: '/media/paman-partnership-pitch.html',
+    filename: 'paman-partnership-pitch.html',
+    type: 'HTML',
+  },
+  {
+    title: 'PAMAN Live Presentation Deck',
+    description: "For presenting in person during the 15-minute meeting itself (not for sending ahead) — same screenshots and branding as the proposal deck, but opens with an agenda slide and closes with a \"what happens next\" timeline instead of asking to schedule the meeting you're already in.",
+    href: '/media/paman-live-presentation.html',
+    filename: 'paman-live-presentation.html',
+    type: 'HTML',
+  },
+  {
     title: 'Staging QA Checklist',
     description: 'Full feature-by-feature test pass for staff to run on staging — ~55 test cases across setup, RSVP, check-in, FestioHub, FestioMe, messaging, and more. Testers enter their name, work through the checklist, and download a results file to send back.',
     href: '/media/festio-qa-checklist.html',

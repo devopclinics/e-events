@@ -8,6 +8,8 @@ const TABS = [
   { id: 'accounts', label: 'Accounts' },
   { id: 'trials', label: 'Trial requests' },
   { id: 'qa', label: 'QA checklist' },
+  { id: 'support', label: 'Support chat' },
+  { id: 'referrals', label: 'Referrals' },
   { id: 'pricing', label: 'Pricing' },
   { id: 'affiliates', label: 'Affiliate stores' },
   { id: 'operators', label: 'Operators' },
@@ -704,6 +706,121 @@ function AffiliateStoresTab() {
 }
 
 // ── Operators ───────────────────────────────────────────────────────────────
+// ── Support chat: kill switch for the Chatwoot widget across the whole app ──
+function SupportChatTab() {
+  const [settings, setSettings] = useState(null)
+  const [busy, setBusy] = useState(false)
+  const [msg, setMsg] = useState('')
+
+  function load() { api.platformSettings().then(setSettings).catch((e) => setMsg(e.message)) }
+  useEffect(() => { load() }, [])
+
+  async function toggle() {
+    if (!settings) return
+    const next = !settings.support_chat_enabled
+    setBusy(true); setMsg('')
+    try {
+      const updated = await api.updatePlatformSettings({ support_chat_enabled: next })
+      setSettings(updated)
+      setMsg(next ? 'Support chat is now visible to organizers.' : 'Support chat is now hidden.')
+    } catch (e) { setMsg(e.message) }
+    finally { setBusy(false) }
+  }
+
+  if (!settings) return <div className="text-sm text-slate-500">Loading…</div>
+  const on = settings.support_chat_enabled
+
+  return (
+    <div className="max-w-lg space-y-4">
+      <div className="bg-white dark:bg-slate-800 rounded-xl shadow border dark:border-slate-700 p-5 space-y-3">
+        <div className="flex items-center justify-between gap-4">
+          <div>
+            <h2 className="font-semibold dark:text-white">Support chat widget</h2>
+            <p className="text-xs text-slate-400 mt-0.5">Chatwoot bubble shown to logged-in organizers app-wide.</p>
+          </div>
+          <button onClick={toggle} disabled={busy}
+            className={`shrink-0 relative h-7 w-12 rounded-full transition-colors disabled:opacity-50 ${on ? 'bg-teal-600' : 'bg-slate-300 dark:bg-slate-600'}`}>
+            <span className={`absolute top-1 h-5 w-5 rounded-full bg-white shadow transition-transform ${on ? 'translate-x-6' : 'translate-x-1'}`} />
+          </button>
+        </div>
+        <p className="text-xs text-slate-500 dark:text-slate-400">
+          {on
+            ? 'Widget is live. Requires the one-time Chatwoot bootstrap (support-service/README.md) to actually be usable — otherwise organizers see nothing, since the SDK never loads without a website token.'
+            : 'Widget is hidden. Per support-service/docs/STAGING_AUDIT.md, this was audited for staging only ("not a recommendation to deploy to production") — leave this off in prod until that gate is revisited.'}
+        </p>
+        {msg && <div className="text-xs text-teal-600 dark:text-teal-400">{msg}</div>}
+      </div>
+    </div>
+  )
+}
+
+// ── Referrals: platform-wide view of the partner referral program ──────────
+function ReferralsTab() {
+  const [rows, setRows] = useState(null)
+  const [err, setErr] = useState('')
+
+  useEffect(() => { api.adminAllReferrals().then(setRows).catch((e) => setErr(e.message)) }, [])
+
+  if (err) return <div className="text-sm text-red-500">{err}</div>
+  if (!rows) return <div className="text-sm text-slate-500">Loading…</div>
+
+  const byReferrer = {}
+  for (const r of rows) {
+    const key = r.referrer_code || '—'
+    byReferrer[key] = byReferrer[key] || { name: r.referrer_name, referred: 0, converted: 0 }
+    byReferrer[key].referred += 1
+    if (r.converted) byReferrer[key].converted += 1
+  }
+
+  return (
+    <div className="space-y-6">
+      <div className="bg-white dark:bg-slate-800 rounded-xl shadow border dark:border-slate-700 overflow-hidden">
+        <div className="p-4 border-b dark:border-slate-700">
+          <h2 className="font-semibold dark:text-white">By referrer</h2>
+          <p className="text-xs text-slate-400">{Object.keys(byReferrer).length} active referral code(s)</p>
+        </div>
+        <table className="w-full text-sm">
+          <thead className="text-left text-slate-500 dark:text-slate-400 border-b dark:border-slate-700">
+            <tr><th className="p-3">Code</th><th className="p-3">Org</th><th className="p-3">Referred</th><th className="p-3">Converted</th></tr>
+          </thead>
+          <tbody>
+            {Object.entries(byReferrer).map(([code, v]) => (
+              <tr key={code} className="border-t dark:border-slate-700">
+                <td className="p-3 font-mono text-xs">{code}</td>
+                <td className="p-3 dark:text-slate-200">{v.name}</td>
+                <td className="p-3 dark:text-slate-200">{v.referred}</td>
+                <td className="p-3 dark:text-slate-200">{v.converted}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+      <div className="bg-white dark:bg-slate-800 rounded-xl shadow border dark:border-slate-700 overflow-hidden">
+        <div className="p-4 border-b dark:border-slate-700">
+          <h2 className="font-semibold dark:text-white">All referred organizations</h2>
+        </div>
+        <table className="w-full text-sm">
+          <thead className="text-left text-slate-500 dark:text-slate-400 border-b dark:border-slate-700">
+            <tr><th className="p-3">Org</th><th className="p-3">Signed up</th><th className="p-3">Referred by</th><th className="p-3">Status</th></tr>
+          </thead>
+          <tbody>
+            {rows.map((r, i) => (
+              <tr key={i} className="border-t dark:border-slate-700">
+                <td className="p-3 dark:text-slate-200">{r.org_name}</td>
+                <td className="p-3 text-slate-500 dark:text-slate-400">{new Date(r.org_created_at).toLocaleDateString()}</td>
+                <td className="p-3 dark:text-slate-200">{r.referrer_name} <span className="text-slate-400 font-mono text-xs">({r.referrer_code})</span></td>
+                <td className={`p-3 text-xs font-semibold ${r.converted ? 'text-emerald-600 dark:text-emerald-400' : 'text-slate-400'}`}>
+                  {r.converted ? 'Converted' : 'Signed up'}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  )
+}
+
 function OperatorsTab({ me }) {
   const [ops, setOps] = useState(null)
   const [email, setEmail] = useState('')
@@ -764,6 +881,8 @@ export default function ConsolePage() {
       {tab === 'accounts' && <AccountsTab me={user} />}
       {tab === 'trials' && <TrialsTab />}
       {tab === 'qa' && <QaChecklistTab />}
+      {tab === 'support' && <SupportChatTab />}
+      {tab === 'referrals' && <ReferralsTab />}
       {tab === 'pricing' && <PricingTab />}
       {tab === 'affiliates' && <AffiliateStoresTab />}
       {tab === 'operators' && <OperatorsTab me={user} />}

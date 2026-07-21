@@ -48,6 +48,11 @@ class Settings(BaseSettings):
     support_ai_org_concurrency: int = 1
     support_ai_concurrency_lease_seconds: int = 90
     support_ai_auto_send: bool = False
+    # Comma-separated org_key (org_id, falling back to contact email) allowlist.
+    # Empty = no org is auto-sent to, even with support_ai_auto_send=true — a
+    # gradual public rollout requires explicitly opting orgs in one at a time,
+    # per the staging audit's cohort-gate recommendation.
+    support_ai_auto_send_org_allowlist: str = ""
     support_ai_gating_enabled: bool = True
     support_local_ai_enabled: bool = False
     support_local_ai_url: str = "http://local-ai:8080"
@@ -105,6 +110,11 @@ _gemini_client = genai.Client(api_key=settings.gemini_api_key) if settings.gemin
 def _active_provider() -> str:
     provider = (settings.support_llm_provider or "gemini").strip().lower()
     return provider if provider in {"gemini", "zai"} else "gemini"
+
+
+def _org_allowed_for_auto_send(org_key: str) -> bool:
+    allowlist = {o.strip() for o in (settings.support_ai_auto_send_org_allowlist or "").split(",") if o.strip()}
+    return bool(org_key) and org_key in allowlist
 
 
 def _provider_ready() -> bool:
@@ -388,11 +398,11 @@ def _is_general_pricing_question(text: str) -> bool:
     ))
 
 
-def _deterministic_route(text: str) -> str:
+def _deterministic_route(text: str, has_attachments: bool = False) -> str:
     """Conservative rules which always run before either model."""
     normalized = (text or "").lower().strip().strip(string.punctuation)
     if not normalized:
-        return "unsupported"
+        return "attachment_only" if has_attachments else "unsupported"
     if _is_escalation_request(normalized):
         return "human"
     if any(phrase in normalized for phrase in CONTACT_SUPPORT_PHRASES):
@@ -549,6 +559,12 @@ ESCALATION_ACK = (
 GREETING_REPLY = (
     "Hello! I’m Festio Support. I can help you create an event, add guests, configure RSVPs "
     "and invitations, send updates, manage seating, and run check-in. What would you like to do?"
+)
+
+ATTACHMENT_ONLY_REPLY = (
+    "Thanks for sending that over — I can't read images or files yet, so could you describe "
+    "in a sentence or two what you need help with? A teammate can take a look at the attachment "
+    "itself if it turns out to matter."
 )
 
 FEATURE_OVERVIEW_REPLY = """Festio features are organized around four roles:
@@ -1073,6 +1089,7 @@ async def _draft_and_post(
     latest_question: str = "",
     force_review: bool = False,
     review_reason: str | None = None,
+    org_key: str = "",
 ) -> None:
     started = time.monotonic()
     full_transcript = await _fetch_conversation_transcript(conversation_id)
@@ -1112,8 +1129,10 @@ async def _draft_and_post(
     held_back = settings.support_ai_gating_enabled and (gated or _is_deferral(draft))
     intent = (route or {}).get("intent", "faq" if question in KNOWN_FAQS else "unknown")
     confidence = float((route or {}).get("confidence", 0.0))
-    can_auto_send = settings.support_ai_auto_send and (
-        provider != "local" or settings.support_local_ai_auto_reply
+    can_auto_send = (
+        settings.support_ai_auto_send
+        and _org_allowed_for_auto_send(org_key)
+        and (provider != "local" or settings.support_local_ai_auto_reply)
     )
     if held_back:
         await _post_private_note(
@@ -1187,6 +1206,7 @@ async def _process_job(payload: dict) -> None:
                     latest_question=message,
                     force_review=medium_confidence,
                     review_reason="medium-confidence local classification" if medium_confidence else None,
+                    org_key=org_key,
                 )
         await redis_client.set(done_key, "1", ex=7 * 86400)
     finally:
@@ -1312,9 +1332,17 @@ async def chatwoot_webhook(request: Request, token: str | None = Query(default=N
         return {"status": "duplicate"}
     contact = payload.get("sender") or payload.get("contact") or {}
     org_key = (contact.get("custom_attributes") or {}).get("org_id") or contact.get("email") or "unknown"
-    route = _deterministic_route(content)
+    has_attachments = bool(payload.get("attachments"))
+    route = _deterministic_route(content, has_attachments)
     if route in {"unsupported", "acknowledgement"}:
         return {"status": "no_reply_needed"}
+
+    if route == "attachment_only":
+        queued = await _enqueue_once(message_id, {
+            "kind": "canned", "content": ATTACHMENT_ONLY_REPLY,
+            "conversation_id": conversation_id, "message_id": message_id, "org_key": org_key,
+        })
+        return {"status": "queued", "route": "attachment_only"} if queued else {"status": "duplicate"}
 
     if route == "greeting":
         queued = await _enqueue_once(message_id, {

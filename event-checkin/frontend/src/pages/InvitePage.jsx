@@ -1199,6 +1199,7 @@ function GuestHub({ event, accessToken, designTheme }) {
   useEffect(() => { loadFeedback() }, [loadFeedback])
   useEffect(() => {
     if (!feedbackForms.length || new URLSearchParams(window.location.search).get('focus') !== 'feedback') return
+    setHubTab('activity')
     const timer = setTimeout(() => document.getElementById('feedback')?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 120)
     return () => clearTimeout(timer)
   }, [feedbackForms])
@@ -1637,7 +1638,19 @@ function GuestHub({ event, accessToken, designTheme }) {
               </div>
               {form.submitted && <span className="rounded-full px-2.5 py-1 text-xs font-bold" style={{ background: `${tone.accent}22`, color: tone.text }}>Completed</span>}
             </div>
-            {form.submitted && editingFeedback !== form.step_id ? (
+            {form.questions.length === 0 && form.external_url ? (
+              form.embed_enabled ? (
+                <div className="mt-4 overflow-hidden rounded-xl border" style={{ borderColor: tone.border }}>
+                  <iframe src={form.external_url} title={form.title} className="h-[70vh] w-full" style={{ border: 0 }} />
+                </div>
+              ) : (
+                <a href={form.external_url} target="_blank" rel="noreferrer"
+                  className="mt-4 inline-flex min-h-11 items-center rounded-xl px-5 py-2 text-sm font-extrabold"
+                  style={{ background: tone.accent, color: tone.background }}>
+                  Open feedback form ↗
+                </a>
+              )
+            ) : form.submitted && editingFeedback !== form.step_id ? (
               <div className="mt-4 rounded-xl border p-3 text-sm" style={{ background: tone.chip, borderColor: tone.border, color: tone.muted }}><p>Thank you—your feedback has been recorded.</p>{form.can_edit && <button type="button" onClick={() => setEditingFeedback(form.step_id)} className="mt-2 font-bold underline">Edit response</button>}</div>
             ) : (
               <form onSubmit={(e) => submitFeedback(e, form)} className="mt-4 space-y-4">

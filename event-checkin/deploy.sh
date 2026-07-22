@@ -68,6 +68,24 @@ done
 VERSION=$(tr -d '[:space:]' < "$VERSION_FILE")
 [[ -n "$VERSION" ]] || die "VERSION file is empty"
 
+# dashboard-service's connection URL is interpolated from the root .env,
+# while db_migrate.py reads the role password from backend/.env. Refuse to
+# deploy if either side is missing or they differ; otherwise the migration can
+# rotate the role to one password and immediately deploy a client using another.
+[[ -n "${DASHBOARD_RO_DB_PASSWORD:-}" ]] || die "DASHBOARD_RO_DB_PASSWORD is not set in ${ENV_FILE}"
+BACKEND_ENV_FILE="${SCRIPT_DIR}/backend/.env"
+[[ -f "$BACKEND_ENV_FILE" ]] || die "backend/.env is required for dashboard_ro provisioning"
+BACKEND_DASHBOARD_RO_DB_PASSWORD=$(
+  set +u
+  # shellcheck source=/dev/null
+  source "$BACKEND_ENV_FILE"
+  printf '%s' "${dashboard_ro_db_password:-}"
+)
+[[ -n "$BACKEND_DASHBOARD_RO_DB_PASSWORD" ]] || die "dashboard_ro_db_password is not set in backend/.env"
+[[ "$DASHBOARD_RO_DB_PASSWORD" == "$BACKEND_DASHBOARD_RO_DB_PASSWORD" ]] || \
+  die "Dashboard read-only DB passwords differ between .env and backend/.env"
+unset BACKEND_DASHBOARD_RO_DB_PASSWORD
+
 if $DO_BUILD; then
   [[ -n "${DOCKER_USERNAME:-}" ]] || die "DOCKER_USERNAME is not set. Export it before running."
   [[ -n "${DOCKER_PASSWORD:-}" ]] || die "DOCKER_PASSWORD (or access token) is not set. Export it before running."

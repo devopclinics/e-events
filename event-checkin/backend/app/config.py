@@ -3,6 +3,10 @@ from pydantic_settings import BaseSettings
 
 class Settings(BaseSettings):
     database_url: str = "postgresql+asyncpg://checkin:checkin@localhost/checkin"
+    # Read-only Postgres role dashboard-service connects with (SELECT-only —
+    # enforced at the DB layer, provisioned idempotently by db_migrate.py).
+    # Must match dashboard-service's own DATABASE_URL password.
+    dashboard_ro_db_password: str = "dashboard_ro"
     frontend_url: str = "http://localhost:5173"
     # Extra CORS origins (comma-separated) on top of frontend_url + the Capacitor
     # native WebView origins. Set to add e.g. a staging URL.

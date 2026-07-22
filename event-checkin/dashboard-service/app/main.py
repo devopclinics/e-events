@@ -14,7 +14,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from .auth import current_user, require_event_admin
+from .auth import current_user, require_dashboard_access
 from .config import settings
 from .database import get_db
 from .models import (
@@ -49,7 +49,7 @@ async def admin_event(
     user: User = Depends(current_user),
     db: AsyncSession = Depends(get_db),
 ) -> Event:
-    return await require_event_admin(event_id, user, db)
+    return await require_dashboard_access(event_id, user, db)
 
 
 # ── scope parser ──────────────────────────────────────────────────────────────
@@ -68,7 +68,20 @@ def _local_midnight(d: date, tz) -> datetime:
     return datetime(d.year, d.month, d.day, tzinfo=tz)
 
 
-def resolve_scope(event: Event, day: str | None, start: str | None, end: str | None, venue_id: str | None) -> Scope:
+async def resolve_scope(
+    db: AsyncSession, event: Event, day: str | None, start: str | None, end: str | None, venue_id: str | None,
+) -> Scope:
+    if day and (start or end):
+        raise HTTPException(400, "Use either day or start/end, not both")
+    if bool(start) != bool(end):
+        raise HTTPException(400, "start and end must be provided together")
+    if venue_id:
+        if not event.venue_access_enabled:
+            raise HTTPException(400, "This event doesn't have venue/zone tracking enabled")
+        zone = await db.get(Zone, venue_id)
+        if not zone or zone.event_id != event.id:
+            raise HTTPException(404, "Venue/zone not found")
+
     tz = event_tz(event)
     event_start_local = to_event_local(event.event_date, tz)
     event_end_local = to_event_local(event.event_end_date, tz) if event.event_end_date else event_start_local
@@ -91,6 +104,10 @@ def resolve_scope(event: Event, day: str | None, start: str | None, end: str | N
             ed = datetime.strptime(end, "%Y-%m-%d").date()
         except ValueError:
             raise HTTPException(400, "start/end must be YYYY-MM-DD")
+        if sd > ed:
+            raise HTTPException(400, "start must be on or before end")
+        if sd < entire_start_date or ed > entire_end_date:
+            raise HTTPException(400, "start/end are outside the event's date range")
         local_start = _local_midnight(sd, tz)
         local_end = _local_midnight(ed, tz) + timedelta(days=1)
     else:
@@ -128,60 +145,87 @@ async def _expected_count(db: AsyncSession, event_id: str) -> int:
     ) or 0
 
 
-async def _distinct_guest_ids(db: AsyncSession, event_id: str, direction: str, start_at: datetime, end_at: datetime) -> set[str]:
-    rows = (await db.execute(
-        select(ScanEvent.guest_id).distinct().where(
-            ScanEvent.event_id == event_id, ScanEvent.direction == direction,
-            ScanEvent.denied.is_(False),
-            ScanEvent.scanned_at >= start_at, ScanEvent.scanned_at < end_at,
-        )
-    )).scalars().all()
+async def _distinct_guest_ids(
+    db: AsyncSession, event_id: str, direction: str, start_at: datetime, end_at: datetime,
+    zone_id: str | None = None,
+) -> set[str]:
+    where = [
+        ScanEvent.event_id == event_id, ScanEvent.direction == direction,
+        ScanEvent.denied.is_(False),
+        ScanEvent.scanned_at >= start_at, ScanEvent.scanned_at < end_at,
+    ]
+    if zone_id:
+        where.append(ScanEvent.zone_id == zone_id)
+    rows = (await db.execute(select(ScanEvent.guest_id).distinct().where(*where))).scalars().all()
     return set(rows)
 
 
-async def _first_scan_map(db: AsyncSession, event_id: str) -> dict[str, datetime]:
+async def _first_scan_map(db: AsyncSession, event_id: str, zone_id: str | None = None) -> dict[str, datetime]:
     """Each guest's first-ever accepted entry scan, across the whole event
     (not scoped to `day`) — this is what makes a same-scope arrival
-    "first-time" vs "returning"."""
+    "first-time" vs "returning". When `zone_id` is set, "first-time" means
+    first time in THAT zone specifically, not the event overall."""
+    where = [ScanEvent.event_id == event_id, ScanEvent.direction == "in", ScanEvent.denied.is_(False)]
+    if zone_id:
+        where.append(ScanEvent.zone_id == zone_id)
     rows = (await db.execute(
-        select(ScanEvent.guest_id, func.min(ScanEvent.scanned_at))
-        .where(ScanEvent.event_id == event_id, ScanEvent.direction == "in", ScanEvent.denied.is_(False))
-        .group_by(ScanEvent.guest_id)
+        select(ScanEvent.guest_id, func.min(ScanEvent.scanned_at)).where(*where).group_by(ScanEvent.guest_id)
     )).all()
     return {gid: first_at for gid, first_at in rows}
 
 
-async def _on_site_count(db: AsyncSession, event_id: str, cutoff: datetime) -> int:
-    """Guests whose latest accepted scan at/before `cutoff` is an entry."""
+async def _on_site_count(db: AsyncSession, event_id: str, cutoff: datetime, zone_id: str | None = None) -> int:
+    """Guests whose latest accepted scan at/before `cutoff` is an entry —
+    scoped to a single zone when `zone_id` is given (answers "who's
+    currently inside this venue/zone", not the event as a whole)."""
+    sub_where = [ScanEvent.event_id == event_id, ScanEvent.denied.is_(False), ScanEvent.scanned_at <= cutoff]
+    if zone_id:
+        sub_where.append(ScanEvent.zone_id == zone_id)
     sub = (
         select(ScanEvent.guest_id, func.max(ScanEvent.scanned_at).label("last_at"))
-        .where(ScanEvent.event_id == event_id, ScanEvent.denied.is_(False), ScanEvent.scanned_at <= cutoff)
-        .group_by(ScanEvent.guest_id)
-        .subquery()
+        .where(*sub_where).group_by(ScanEvent.guest_id).subquery()
     )
+    join_on = (
+        (ScanEvent.guest_id == sub.c.guest_id)
+        & (ScanEvent.scanned_at == sub.c.last_at)
+        & (ScanEvent.event_id == event_id)
+    )
+    if zone_id:
+        join_on = join_on & (ScanEvent.zone_id == zone_id)
     cnt = await db.scalar(
         select(func.count(func.distinct(sub.c.guest_id)))
         .select_from(sub)
-        .join(
-            ScanEvent,
-            (ScanEvent.guest_id == sub.c.guest_id)
-            & (ScanEvent.scanned_at == sub.c.last_at)
-            & (ScanEvent.event_id == event_id),
-        )
+        .join(ScanEvent, join_on)
         .where(ScanEvent.direction == "in", ScanEvent.denied.is_(False))
     )
     return int(cnt or 0)
 
 
 async def attendance_stats(db: AsyncSession, event: Event, scope: Scope) -> dict:
+    zid = scope.venue_id
     expected = await _expected_count(db, event.id)
-    checked_in_ids = await _distinct_guest_ids(db, event.id, "in", scope.start_at, scope.end_at)
-    checked_out_ids = await _distinct_guest_ids(db, event.id, "out", scope.start_at, scope.end_at)
-    first_at = await _first_scan_map(db, event.id)
+    checked_in_ids = await _distinct_guest_ids(db, event.id, "in", scope.start_at, scope.end_at, zid)
+    checked_out_ids = await _distinct_guest_ids(db, event.id, "out", scope.start_at, scope.end_at, zid)
+    first_at = await _first_scan_map(db, event.id, zid)
     first_time_ids = {gid for gid in checked_in_ids if first_at.get(gid) and scope.start_at <= first_at[gid] < scope.end_at}
     returning_ids = checked_in_ids - first_time_ids
-    cutoff = min(datetime.utcnow(), scope.end_at)
-    on_site = await _on_site_count(db, event.id, cutoff)
+
+    # "On-site now" only means something in the present tense. A future scope
+    # hasn't started (today's global occupancy would be a misleading answer to
+    # "who's on-site on that future day"); a past scope gets occupancy AS OF
+    # that period's close, not "now" — both explicitly labeled via
+    # occupancy_mode/occupancy_as_of rather than one ambiguous number.
+    now = datetime.utcnow()
+    if scope.start_at > now:
+        occupancy_mode, occupancy_as_of, on_site = "future", None, None
+    elif scope.end_at <= now:
+        occupancy_mode = "historical"
+        occupancy_as_of = scope.end_at
+        on_site = await _on_site_count(db, event.id, scope.end_at, zid)
+    else:
+        occupancy_mode = "live"
+        occupancy_as_of = now
+        on_site = await _on_site_count(db, event.id, now, zid)
 
     declined = await db.scalar(select(func.count()).select_from(Guest).where(
         Guest.event_id == event.id, Guest.rsvp_status == "declined")) or 0
@@ -193,10 +237,15 @@ async def attendance_stats(db: AsyncSession, event: Event, scope: Scope) -> dict
     walk_ins = len(walk_in_ids & checked_in_ids)
 
     tz = event_tz(event)
+    hourly_where = [
+        ScanEvent.event_id == event.id, ScanEvent.denied.is_(False),
+        ScanEvent.scanned_at >= scope.start_at, ScanEvent.scanned_at < scope.end_at,
+    ]
+    if zid:
+        hourly_where.append(ScanEvent.zone_id == zid)
     rows = (await db.execute(
         select(ScanEvent.guest_id, ScanEvent.direction, ScanEvent.scanned_at)
-        .where(ScanEvent.event_id == event.id, ScanEvent.denied.is_(False),
-               ScanEvent.scanned_at >= scope.start_at, ScanEvent.scanned_at < scope.end_at)
+        .where(*hourly_where)
         .order_by(ScanEvent.scanned_at)
     )).all()
     hourly: dict[str, dict[str, int]] = defaultdict(lambda: {"first_arrival": 0, "returning": 0, "exit": 0})
@@ -209,10 +258,12 @@ async def attendance_stats(db: AsyncSession, event: Event, scope: Scope) -> dict
             hourly[bucket]["exit"] += 1
 
     return {
-        "scope": {"start_at": scope.start_at.isoformat() + "Z", "end_at": scope.end_at.isoformat() + "Z", "timezone": scope.timezone},
+        "scope": {"start_at": scope.start_at.isoformat() + "Z", "end_at": scope.end_at.isoformat() + "Z", "timezone": scope.timezone, "venue_id": scope.venue_id},
         "expected": expected,
         "checked_in": len(checked_in_ids),
         "on_site": on_site,
+        "occupancy_mode": occupancy_mode,
+        "occupancy_as_of": occupancy_as_of.isoformat() + "Z" if occupancy_as_of else None,
         "first_time": len(first_time_ids),
         "returning": len(returning_ids),
         "checked_out": len(checked_out_ids),
@@ -226,18 +277,30 @@ async def attendance_stats(db: AsyncSession, event: Event, scope: Scope) -> dict
 async def attendance_by_day(db: AsyncSession, event: Event) -> list[dict]:
     tz = event_tz(event)
     expected = await _expected_count(db, event.id)
+    now = datetime.utcnow()
     out = []
     for d in _event_days(event):
         local_start = _local_midnight(d, tz)
         local_end = local_start + timedelta(days=1)
         start_at, end_at = to_utc_naive(local_start), to_utc_naive(local_end)
-        checked_in = len(await _distinct_guest_ids(db, event.id, "in", start_at, end_at))
+        # Bug fixed: this used to check `end_at > now`, which is true for
+        # TODAY too (today's midnight-tomorrow is still in the future) — so
+        # the current, currently-live day was mislabeled "upcoming" and its
+        # attendance hidden. "upcoming" now means "hasn't started yet".
+        if start_at > now:
+            status = "upcoming"
+        elif end_at <= now:
+            status = "past"
+        else:
+            status = "live"
+        checked_in = len(await _distinct_guest_ids(db, event.id, "in", start_at, end_at)) if status != "upcoming" else 0
         out.append({
             "day": d.isoformat(),
             "expected": expected,
             "checked_in": checked_in,
             "attendance_rate": round(checked_in / expected * 100) if expected else 0,
-            "upcoming": end_at > datetime.utcnow(),
+            "status": status,
+            "upcoming": status == "upcoming",  # back-compat for the current frontend
         })
     return out
 
@@ -252,7 +315,7 @@ async def get_attendance(
     event: Event = Depends(admin_event),
     db: AsyncSession = Depends(get_db),
 ):
-    scope = resolve_scope(event, day, start, end, venue_id)
+    scope = await resolve_scope(db, event, day, start, end, venue_id)
     stats = await attendance_stats(db, event, scope)
     stats["by_day"] = await attendance_by_day(db, event)
     return stats
@@ -260,21 +323,38 @@ async def get_attendance(
 
 # ── venue occupancy (reuse the same logic as backend/app/routers/access.py) ──
 
-async def _zone_occupancy(db: AsyncSession, zone_id: str) -> int:
-    ins = await db.scalar(select(func.count(ScanEvent.id)).where(
-        ScanEvent.zone_id == zone_id, ScanEvent.direction == "in", ScanEvent.denied.is_(False))) or 0
-    outs = await db.scalar(select(func.count(ScanEvent.id)).where(
-        ScanEvent.zone_id == zone_id, ScanEvent.direction == "out", ScanEvent.denied.is_(False))) or 0
-    return max(int(ins) - int(outs), 0)
-
-
-async def venue_occupancy(db: AsyncSession, event: Event) -> list[dict]:
+async def venue_occupancy(db: AsyncSession, event: Event, zone_id: str | None = None) -> list[dict]:
+    """Occupancy = accepted ins minus accepted outs per zone — matches
+    backend/app/routers/access.py::zone_occupancy's exact semantics
+    intentionally, even though it's fragile to duplicate scans (a double
+    entry-scan inflates occupancy, a double exit-scan can mask it): diverging
+    only here would make the same zone show two different numbers between
+    the legacy Venue Access page and this one. Fix both together if this
+    changes. One grouped query for all zones instead of 2 queries per zone."""
     if not event.venue_access_enabled:
         return []
+    zone_where = [Zone.event_id == event.id, Zone.is_active.is_(True)]
+    if zone_id:
+        zone_where.append(Zone.id == zone_id)
     zones = (await db.execute(
-        select(Zone).where(Zone.event_id == event.id, Zone.is_active.is_(True)).order_by(Zone.sort_order)
+        select(Zone).where(*zone_where).order_by(Zone.sort_order)
     )).scalars().all()
-    return [{"id": z.id, "name": z.name, "occupancy": await _zone_occupancy(db, z.id), "capacity": z.capacity} for z in zones]
+    if not zones:
+        return []
+    zone_ids = [z.id for z in zones]
+    counts = (await db.execute(
+        select(ScanEvent.zone_id, ScanEvent.direction, func.count())
+        .where(ScanEvent.zone_id.in_(zone_ids), ScanEvent.denied.is_(False))
+        .group_by(ScanEvent.zone_id, ScanEvent.direction)
+    )).all()
+    ins: dict[str, int] = defaultdict(int)
+    outs: dict[str, int] = defaultdict(int)
+    for zid, direction, cnt in counts:
+        (ins if direction == "in" else outs)[zid] = cnt
+    return [
+        {"id": z.id, "name": z.name, "occupancy": max(ins.get(z.id, 0) - outs.get(z.id, 0), 0), "capacity": z.capacity}
+        for z in zones
+    ]
 
 
 # ── program (session) analytics ───────────────────────────────────────────────
@@ -305,23 +385,38 @@ def _session_config(step: ExperienceStep) -> dict:
     return session
 
 
-def _parse_session_dt(session: dict, time_key: str) -> datetime | None:
+def _parse_session_dt(session: dict, time_key: str, tz) -> datetime | None:
+    """Session date/time is entered in the organizer's event-local time (e.g.
+    "10:00" means 10am Chicago, not 10am UTC) — parse naive, attach the
+    event's tz, then convert to naive UTC so it's comparable with
+    datetime.utcnow(). Previously this compared naive-local against naive-UTC
+    directly, so a session could show "in progress" hours off from reality."""
     d = str(session.get("date") or "").strip()
     t = str(session.get(time_key) or "").strip()
     if not d or not t:
         return None
     try:
-        return datetime.fromisoformat(f"{d}T{t}")
+        naive_local = datetime.fromisoformat(f"{d}T{t}")
     except ValueError:
         return None
+    return to_utc_naive(naive_local.replace(tzinfo=tz))
 
 
 async def _default_workflow(db: AsyncSession, event_id: str) -> ExperienceWorkflow | None:
-    return await db.scalar(select(ExperienceWorkflow).where(
-        ExperienceWorkflow.event_id == event_id, ExperienceWorkflow.is_default.is_(True)))
+    """Mirrors backend/app/services/experience.py::active_workflow — the
+    runtime workflow real guest progress uses. Previously this just grabbed
+    is_default=True unconditionally, which could surface a draft/archived
+    default's stats in Results even when a newer published version (or none
+    at all) is what's actually governing guest behavior."""
+    return await db.scalar(
+        select(ExperienceWorkflow)
+        .where(ExperienceWorkflow.event_id == event_id, ExperienceWorkflow.status == "published")
+        .order_by(ExperienceWorkflow.version.desc(), ExperienceWorkflow.created_at.desc())
+        .limit(1)
+    )
 
 
-async def program_sessions(db: AsyncSession, event: Event) -> list[dict]:
+async def program_sessions(db: AsyncSession, event: Event, day: str | None = None) -> list[dict]:
     if not event.experience_enabled:
         return []
     wf = await _default_workflow(db, event.id)
@@ -331,23 +426,41 @@ async def program_sessions(db: AsyncSession, event: Event) -> list[dict]:
         ExperienceStep.workflow_id == wf.id, ExperienceStep.type == "session_attendance",
         ExperienceStep.enabled.is_(True),
     ).order_by(ExperienceStep.sort_order))).scalars().all()
+    if not steps:
+        return []
+    if day:
+        # Session config's own "date" string (YYYY-MM-DD, event-local) is
+        # already in the same format the day-scope selector uses — filter on
+        # it directly rather than converting start_at back to a local date.
+        steps = [s for s in steps if str((_session_config(s).get("date") or "")) == day]
+        if not steps:
+            return []
+    step_ids = [s.id for s in steps]
 
+    # Grouped queries instead of 2-per-session (N+1).
+    registered_by_step: dict[str, int] = dict((await db.execute(
+        select(GuestExperienceProgress.step_id, func.count())
+        .where(GuestExperienceProgress.step_id.in_(step_ids)).group_by(GuestExperienceProgress.step_id)
+    )).all())
+    attended_by_step: dict[str, int] = dict((await db.execute(
+        select(GuestExperienceProgress.step_id, func.count())
+        .where(GuestExperienceProgress.step_id.in_(step_ids),
+               GuestExperienceProgress.status.in_(["completed", "overridden"]))
+        .group_by(GuestExperienceProgress.step_id)
+    )).all())
+
+    tz = event_tz(event)
     now = datetime.utcnow()
     out = []
     for step in steps:
         session = _session_config(step)
-        start = _parse_session_dt(session, "start_time")
-        end = _parse_session_dt(session, "end_time")
+        start = _parse_session_dt(session, "start_time", tz)
+        end = _parse_session_dt(session, "end_time", tz)
         # "Registered" = every guest with a progress row for this step (workflow
         # assignment creates one per eligible guest); "attended" = actually
         # checked into the session. Approximate — see plan doc Track A/A3.
-        attended = await db.scalar(select(func.count()).select_from(GuestExperienceProgress).where(
-            GuestExperienceProgress.step_id == step.id,
-            GuestExperienceProgress.status.in_(["completed", "overridden"]),
-        )) or 0
-        registered = await db.scalar(select(func.count()).select_from(GuestExperienceProgress).where(
-            GuestExperienceProgress.step_id == step.id
-        )) or 0
+        attended = attended_by_step.get(step.id, 0)
+        registered = registered_by_step.get(step.id, 0)
         state = "upcoming"
         if start and end:
             if start <= now <= end:
@@ -371,8 +484,10 @@ async def program_sessions(db: AsyncSession, event: Event) -> list[dict]:
 
 
 @app.get("/api/results/events/{event_id}/analytics/program")
-async def get_program(event: Event = Depends(admin_event), db: AsyncSession = Depends(get_db)):
-    sessions = await program_sessions(db, event)
+async def get_program(
+    day: str | None = Query(None), event: Event = Depends(admin_event), db: AsyncSession = Depends(get_db),
+):
+    sessions = await program_sessions(db, event, day)
     return {
         "sessions": sessions,
         "in_progress_count": sum(1 for s in sessions if s["state"] == "in_progress"),
@@ -391,24 +506,36 @@ async def experience_funnel(db: AsyncSession, event: Event) -> list[dict]:
     steps = (await db.execute(select(ExperienceStep).where(
         ExperienceStep.workflow_id == wf.id, ExperienceStep.enabled.is_(True),
     ).order_by(ExperienceStep.sort_order))).scalars().all()
+    if not steps:
+        return []
+    step_ids = [s.id for s in steps]
 
-    out = []
-    for step in steps:
-        total = await db.scalar(select(func.count()).select_from(GuestExperienceProgress).where(
-            GuestExperienceProgress.step_id == step.id
-        )) or 0
-        completed = await db.scalar(select(func.count()).select_from(GuestExperienceProgress).where(
-            GuestExperienceProgress.step_id == step.id,
-            GuestExperienceProgress.status.in_(["completed", "overridden"]),
-        )) or 0
-        failed = await db.scalar(select(func.count()).select_from(GuestExperienceProgress).where(
-            GuestExperienceProgress.step_id == step.id, GuestExperienceProgress.status == "failed",
-        )) or 0
-        out.append({
+    # One grouped query per status bucket instead of 3-per-step (N+1).
+    total_by_step: dict[str, int] = dict((await db.execute(
+        select(GuestExperienceProgress.step_id, func.count())
+        .where(GuestExperienceProgress.step_id.in_(step_ids)).group_by(GuestExperienceProgress.step_id)
+    )).all())
+    completed_by_step: dict[str, int] = dict((await db.execute(
+        select(GuestExperienceProgress.step_id, func.count())
+        .where(GuestExperienceProgress.step_id.in_(step_ids),
+               GuestExperienceProgress.status.in_(["completed", "overridden"]))
+        .group_by(GuestExperienceProgress.step_id)
+    )).all())
+    failed_by_step: dict[str, int] = dict((await db.execute(
+        select(GuestExperienceProgress.step_id, func.count())
+        .where(GuestExperienceProgress.step_id.in_(step_ids), GuestExperienceProgress.status == "failed")
+        .group_by(GuestExperienceProgress.step_id)
+    )).all())
+
+    return [
+        {
             "step_id": step.id, "title": step.title, "type": step.type, "required": step.required,
-            "total": total, "completed": completed, "failed": failed,
-        })
-    return out
+            "total": total_by_step.get(step.id, 0),
+            "completed": completed_by_step.get(step.id, 0),
+            "failed": failed_by_step.get(step.id, 0),
+        }
+        for step in steps
+    ]
 
 
 @app.get("/api/results/events/{event_id}/analytics/experience")
@@ -419,7 +546,13 @@ async def get_experience(event: Event = Depends(admin_event), db: AsyncSession =
 # ── RSVP funnel ────────────────────────────────────────────────────────────────
 
 async def rsvp_funnel(db: AsyncSession, event: Event) -> dict:
-    invited = await db.scalar(select(func.count()).select_from(Guest).where(Guest.event_id == event.id)) or 0
+    # "guests" = every guest record, regardless of invite/RSVP state — NOT
+    # "invited". "invited" is guests an invite actually went out to
+    # (invite_status == "sent"); conflating the two previously mislabeled the
+    # whole-guest-list count as "Total invitations sent".
+    guests = await db.scalar(select(func.count()).select_from(Guest).where(Guest.event_id == event.id)) or 0
+    invited = await db.scalar(select(func.count()).select_from(Guest).where(
+        Guest.event_id == event.id, Guest.invite_status == "sent")) or 0
     confirmed = await db.scalar(select(func.count()).select_from(Guest).where(
         Guest.event_id == event.id, Guest.rsvp_status == "confirmed")) or 0
     declined = await db.scalar(select(func.count()).select_from(Guest).where(
@@ -429,6 +562,7 @@ async def rsvp_funnel(db: AsyncSession, event: Event) -> dict:
     checked_in = await db.scalar(select(func.count(func.distinct(ScanEvent.guest_id))).where(
         ScanEvent.event_id == event.id, ScanEvent.direction == "in", ScanEvent.denied.is_(False))) or 0
     return {
+        "guests": guests,
         "invited": invited,
         "responded": confirmed + declined + pending,
         "confirmed": confirmed,
@@ -481,9 +615,12 @@ async def communication_health(db: AsyncSession, event: Event) -> dict:
     for provider_email_id, provider_event_id, row_id, status, _occurred in email_rows:
         key = provider_email_id or provider_event_id or row_id
         latest_by_email.setdefault(key, status)
-    bad = {"bounced", "failed", "complained", "suppressed"}
+    # Only count confirmed-delivered outcomes as "reached" — "sent"/"delayed"/
+    # an unrecognized provider status is still in flight, not confirmed
+    # reached, so it must not count toward the rate as if it had arrived.
+    reached_statuses = {"delivered", "opened", "clicked"}
     email_sent = len(latest_by_email)
-    email_reached = sum(1 for s in latest_by_email.values() if s not in bad)
+    email_reached = sum(1 for s in latest_by_email.values() if s in reached_statuses)
 
     return {
         "email": {"sent": email_sent, "reached": email_reached,
@@ -496,12 +633,21 @@ async def communication_health(db: AsyncSession, event: Event) -> dict:
 
 # ── recent activity feed ──────────────────────────────────────────────────────
 
-async def recent_activity(db: AsyncSession, event: Event, limit: int = 15) -> list[dict]:
+async def recent_activity(db: AsyncSession, event: Event, scope: "Scope | None" = None, limit: int = 15) -> list[dict]:
+    where = [ScanEvent.event_id == event.id, ScanEvent.denied.is_(False)]
+    # Day/venue scoped when a scope is given (this feed genuinely has a time
+    # dimension, unlike RSVP/communication/meals-category data) — see review
+    # notes on day scope not propagating past the Attendance tab.
+    if scope is not None:
+        if scope.day:
+            where += [ScanEvent.scanned_at >= scope.start_at, ScanEvent.scanned_at < scope.end_at]
+        if scope.venue_id:
+            where.append(ScanEvent.zone_id == scope.venue_id)
     rows = (await db.execute(
         select(ScanEvent, Guest.first_name, Guest.last_name, Guest.is_walk_in, Zone.name)
         .join(Guest, Guest.id == ScanEvent.guest_id)
         .outerjoin(Zone, Zone.id == ScanEvent.zone_id)
-        .where(ScanEvent.event_id == event.id, ScanEvent.denied.is_(False))
+        .where(*where)
         .order_by(ScanEvent.scanned_at.desc())
         .limit(limit)
     )).all()
@@ -525,42 +671,81 @@ async def recent_activity(db: AsyncSession, event: Event, limit: int = 15) -> li
 # ── meals (Track B — per-category fulfillment, replaces the coarse
 # Guest.meal_served total now that guest_meal_fulfillment exists) ────────────
 
-async def meals_breakdown(db: AsyncSession, event: Event) -> list[dict]:
+async def meals_breakdown(db: AsyncSession, event: Event) -> dict:
+    """Per-category eligible/served/remaining, PLUS distinct-guest totals —
+    NOT a sum of the per-category numbers. A guest eligible for breakfast,
+    lunch, and dinner is one guest, not three; summing counted them three
+    times, so the headline was really "meal entitlements", not "guests"."""
     if not event.menu_enabled:
-        return []
-    cats = (await db.execute(
-        select(MenuCategory).where(MenuCategory.event_id == event.id, MenuCategory.display_only.is_(False))
-        .order_by(MenuCategory.sort_order)
+        return {"categories": [], "eligible_guests": 0, "served_guests": 0, "missing_selection": 0}
+    cat_ids = (await db.execute(
+        select(MenuCategory.id).where(MenuCategory.event_id == event.id, MenuCategory.display_only.is_(False))
     )).scalars().all()
-    out = []
+    if not cat_ids:
+        return {"categories": [], "eligible_guests": 0, "served_guests": 0, "missing_selection": 0}
+
+    cats = (await db.execute(
+        select(MenuCategory).where(MenuCategory.id.in_(cat_ids)).order_by(MenuCategory.sort_order)
+    )).scalars().all()
+    # One grouped query instead of one per category (N+1) — see review notes
+    # on dashboard-service's query pattern.
+    eligible_by_cat: dict[str, int] = dict((await db.execute(
+        select(GuestMenuChoice.category_id, func.count(func.distinct(GuestMenuChoice.guest_id)))
+        .where(GuestMenuChoice.category_id.in_(cat_ids)).group_by(GuestMenuChoice.category_id)
+    )).all())
+    served_by_cat: dict[str, int] = dict((await db.execute(
+        select(GuestMealFulfillment.category_id, func.count())
+        .where(GuestMealFulfillment.category_id.in_(cat_ids), GuestMealFulfillment.status == "served")
+        .group_by(GuestMealFulfillment.category_id)
+    )).all())
+
+    categories = []
     for cat in cats:
-        eligible = await db.scalar(select(func.count(func.distinct(GuestMenuChoice.guest_id))).where(
-            GuestMenuChoice.category_id == cat.id)) or 0
-        served = await db.scalar(select(func.count()).select_from(GuestMealFulfillment).where(
-            GuestMealFulfillment.category_id == cat.id, GuestMealFulfillment.status == "served")) or 0
-        out.append({
+        eligible = eligible_by_cat.get(cat.id, 0)
+        served = served_by_cat.get(cat.id, 0)
+        categories.append({
             "category_id": cat.id, "name": cat.name, "day_label": cat.day_label,
             "eligible": eligible, "served": served, "remaining": max(eligible - served, 0),
             "rate": round(served / eligible * 100) if eligible else 0,
         })
-    return out
+
+    eligible_guests = await db.scalar(select(func.count(func.distinct(GuestMenuChoice.guest_id))).where(
+        GuestMenuChoice.category_id.in_(cat_ids))) or 0
+    served_guests = await db.scalar(select(func.count(func.distinct(GuestMealFulfillment.guest_id))).where(
+        GuestMealFulfillment.category_id.in_(cat_ids), GuestMealFulfillment.status == "served")) or 0
+
+    # "eligible" above is choice-based (a guest who never made a selection is
+    # otherwise invisible to this metric entirely) — surface that gap
+    # explicitly rather than silently excluding those guests from the
+    # picture. Same "not declined" definition already used by the
+    # missing_meal_selection alert, kept consistent with it here.
+    not_declined = set((await db.execute(select(Guest.id).where(
+        Guest.event_id == event.id, Guest.rsvp_status != "declined"))).scalars().all())
+    chosen_ids = set((await db.execute(select(GuestMenuChoice.guest_id).distinct().where(
+        GuestMenuChoice.category_id.in_(cat_ids)))).scalars().all())
+    missing_selection = len(not_declined - chosen_ids)
+
+    return {
+        "categories": categories, "eligible_guests": eligible_guests,
+        "served_guests": served_guests, "missing_selection": missing_selection,
+    }
 
 
 @app.get("/api/results/events/{event_id}/analytics/meals")
 async def get_meals(event: Event = Depends(admin_event), db: AsyncSession = Depends(get_db)):
-    categories = await meals_breakdown(db, event)
+    breakdown = await meals_breakdown(db, event)
     return {
-        "categories": categories,
-        "eligible_total": sum(c["eligible"] for c in categories),
-        "served_total": sum(c["served"] for c in categories),
+        "categories": breakdown["categories"],
+        "eligible_total": breakdown["eligible_guests"],
+        "served_total": breakdown["served_guests"],
+        "missing_selection": breakdown["missing_selection"],
     }
 
 
 # ── operational alerts ────────────────────────────────────────────────────────
 
 async def _consent_step(db: AsyncSession, event_id: str) -> ExperienceStep | None:
-    wf = await db.scalar(select(ExperienceWorkflow).where(
-        ExperienceWorkflow.event_id == event_id, ExperienceWorkflow.is_default.is_(True)))
+    wf = await _default_workflow(db, event_id)
     if not wf:
         return None
     return await db.scalar(select(ExperienceStep).where(
@@ -620,11 +805,12 @@ async def denied_scans_breakdown(db: AsyncSession, event: Event) -> dict:
 
 @app.get("/api/results/events/{event_id}/analytics/operations")
 async def get_operations(event: Event = Depends(admin_event), db: AsyncSession = Depends(get_db)):
-    meal_cats = await meals_breakdown(db, event)
+    breakdown = await meals_breakdown(db, event)
     return {
-        "meals": {"categories": meal_cats,
-                  "eligible_total": sum(c["eligible"] for c in meal_cats),
-                  "served_total": sum(c["served"] for c in meal_cats)},
+        "meals": {"categories": breakdown["categories"],
+                  "eligible_total": breakdown["eligible_guests"],
+                  "served_total": breakdown["served_guests"],
+                  "missing_selection": breakdown["missing_selection"]},
         "consent": await consent_status(db, event),
         "denied_scans": await denied_scans_breakdown(db, event),
         "venue_occupancy": await venue_occupancy(db, event),
@@ -768,24 +954,26 @@ async def command_center(
     event: Event = Depends(admin_event),
     db: AsyncSession = Depends(get_db),
 ):
-    scope = resolve_scope(event, day, None, None, venue_id)
+    scope = await resolve_scope(db, event, day, None, None, venue_id)
     attendance = await attendance_stats(db, event, scope)
-    sessions = await program_sessions(db, event)
+    sessions = await program_sessions(db, event, day)
     funnel = await experience_funnel(db, event)
-    meal_cats = await meals_breakdown(db, event)
+    meals = await meals_breakdown(db, event)
     return {
         "scope": attendance["scope"],
         "attendance": {k: v for k, v in attendance.items() if k != "scope"},
         "attendance_by_day": await attendance_by_day(db, event),
-        "venue_occupancy": await venue_occupancy(db, event),
+        "venue_occupancy": await venue_occupancy(db, event, scope.venue_id),
         "alerts": await build_alerts(db, event),
         # Real per-category fulfillment now that Track B (guest_meal_fulfillment)
-        # has shipped; Overview gets the aggregate, the Meals tab gets the
+        # has shipped; Overview gets the distinct-guest aggregate (not a sum of
+        # per-category counts — see meals_breakdown), Meals tab gets the
         # per-category/per-day breakdown via /analytics/meals.
         "meals": {
-            "categories": meal_cats,
-            "eligible_total": sum(c["eligible"] for c in meal_cats),
-            "served_total": sum(c["served"] for c in meal_cats),
+            "categories": meals["categories"],
+            "eligible_total": meals["eligible_guests"],
+            "served_total": meals["served_guests"],
+            "missing_selection": meals["missing_selection"],
         },
         # Overview-card-sized summaries; full detail lives behind /analytics/program
         # and /analytics/experience for the dedicated tabs.
@@ -796,5 +984,10 @@ async def command_center(
         "experience": {"steps": funnel[:6]},
         "rsvp_funnel": await rsvp_funnel(db, event),
         "communication": await communication_health(db, event),
-        "recent_activity": await recent_activity(db, event),
+        "recent_activity": await recent_activity(db, event, scope),
+        # Which sections actually change with the day/venue selector, so the
+        # frontend can label the rest "Entire event" instead of silently
+        # implying everything scoped when only some of it does.
+        "day_scoped_sections": ["attendance", "attendance_by_day", "program", "recent_activity"],
+        "venue_scoped_sections": ["attendance", "venue_occupancy", "recent_activity"],
     }

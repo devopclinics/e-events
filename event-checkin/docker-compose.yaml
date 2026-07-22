@@ -151,28 +151,6 @@ services:
       retries: 5
     restart: unless-stopped
 
-  # ── Results / multi-day command center — read-only analytics (ours) ──────
-  # Reads the same Postgres DB as `backend` via the dashboard_ro role
-  # (SELECT-only grants — see docs/MULTI-DAY-DASHBOARD-IMPLEMENTATION-PLAN.md,
-  # Track A). Never writes guest data; backend/frontend/dashboard.py are
-  # untouched by this service.
-  dashboard-service:
-    build: ./dashboard-service
-    image: dclinics/events:dashboard-1.0.0
-    env_file: ./backend/.env
-    environment:
-      PORT: 8030
-      DATABASE_URL: postgresql+asyncpg://dashboard_ro:${DASHBOARD_RO_DB_PASSWORD:-dashboard_ro}@db:5432/checkin
-    depends_on:
-      db:
-        condition: service_healthy
-    healthcheck:
-      test: ["CMD-SHELL", "python - <<'PY'\nimport urllib.request\nurllib.request.urlopen('http://localhost:8030/health', timeout=3).read()\nPY"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-    restart: unless-stopped
-
   # ── Organizer support: AI-draft microservice (ours) ───────────────────────
   support-service:
     build: ./support-service
@@ -323,6 +301,27 @@ services:
         condition: service_healthy
     healthcheck:
       test: ["CMD-SHELL", "python -c \"import urllib.request; urllib.request.urlopen('http://localhost:8003/health', timeout=3).read()\""]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+  # ── Results / multi-day command center — read-only analytics ─────────────
+  dashboard-service:
+    build: ./dashboard-service
+    image: dclinics/events:dashboard-1.0.0
+    env_file: ./backend/.env
+    environment:
+      PORT: 8030
+      # Compose interpolation reads the root .env, not backend/.env. Keep this
+      # value aligned with backend/.env's dashboard_ro_db_password so the
+      # migration provisioner and this client use the same credential.
+      DATABASE_URL: postgresql+asyncpg://dashboard_ro:${DASHBOARD_RO_DB_PASSWORD:-dashboard_ro}@db:5432/checkin
+    depends_on:
+      db:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "python - <<'PY'\nimport urllib.request\nurllib.request.urlopen('http://localhost:8030/health', timeout=3).read()\nPY"]
       interval: 10s
       timeout: 5s
       retries: 5

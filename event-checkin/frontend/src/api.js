@@ -551,7 +551,7 @@ export const api = {
     const qs = params.toString()
     return req('GET', `/results/events/${eventId}/analytics/attendance${qs ? `?${qs}` : ''}`)
   },
-  resultsProgram: (eventId) => req('GET', `/results/events/${eventId}/analytics/program`),
+  resultsProgram: (eventId, day) => req('GET', `/results/events/${eventId}/analytics/program${day ? `?day=${day}` : ''}`),
   resultsExperience: (eventId) => req('GET', `/results/events/${eventId}/analytics/experience`),
   resultsMeals: (eventId) => req('GET', `/results/events/${eventId}/analytics/meals`),
   resultsInvitations: (eventId) => req('GET', `/results/events/${eventId}/analytics/invitations`),

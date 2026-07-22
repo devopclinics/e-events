@@ -21,6 +21,7 @@ from sqlalchemy import text
 from sqlalchemy.dialects import postgresql
 from sqlalchemy.ext.asyncio import AsyncEngine
 from sqlalchemy.schema import CreateColumn
+from .config import settings
 from .database import engine, Base
 from . import models  # noqa: F401 — ensure all models register on Base.metadata
 
@@ -275,12 +276,50 @@ async def _apply_patches_once(eng: AsyncEngine, auto: list[str]) -> None:
             await conn.execute(text(stmt))
 
 
+def _pg_literal(s: str) -> str:
+    """Single-quote a string for interpolation into DDL (CREATE ROLE has no
+    bind-parameter form). Values come from server-side settings, not user
+    input, but escape quotes defensively anyway."""
+    return "'" + s.replace("'", "''") + "'"
+
+
+async def provision_dashboard_ro(eng: AsyncEngine) -> None:
+    """Idempotently create/refresh the dashboard-service read-only Postgres
+    role: SELECT on every current table, plus a default-privilege so future
+    tables are readable without a manual grant. Runs every deploy — cheap,
+    and keeps the role's password in sync if it's ever rotated via env var.
+
+    Without this, a fresh prod database has no `dashboard_ro` role at all —
+    dashboard-service was only ever provisioned by hand on staging."""
+    db_name = eng.url.database
+    pw = _pg_literal(settings.dashboard_ro_db_password)
+    async with eng.begin() as conn:
+        await conn.execute(text(
+            "DO $$ BEGIN "
+            "IF NOT EXISTS (SELECT FROM pg_roles WHERE rolname = 'dashboard_ro') THEN "
+            f"CREATE ROLE dashboard_ro LOGIN PASSWORD {pw}; "
+            "END IF; END $$"
+        ))
+        # Keep the password current even if the role already existed (e.g. rotation).
+        await conn.execute(text(f"ALTER ROLE dashboard_ro PASSWORD {pw}"))
+        await conn.execute(text(f'GRANT CONNECT ON DATABASE "{db_name}" TO dashboard_ro'))
+        await conn.execute(text("GRANT USAGE ON SCHEMA public TO dashboard_ro"))
+        await conn.execute(text("GRANT SELECT ON ALL TABLES IN SCHEMA public TO dashboard_ro"))
+        await conn.execute(text(
+            "ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT SELECT ON TABLES TO dashboard_ro"
+        ))
+    logger.info("dashboard_ro role provisioned/refreshed (db=%s)", db_name)
+
+
 async def apply(eng: AsyncEngine) -> None:
     """Create missing tables, auto-generate + run column ALTERs, then run any
     manual SCHEMA_PATCHES. Idempotent."""
     # 1. New tables.
     async with eng.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
+
+    # 1.5 Read-only role for dashboard-service — see provision_dashboard_ro.
+    await provision_dashboard_ro(eng)
 
     # 2. Auto-generated patches from ORM-vs-DB diff.
     auto = await auto_patch(eng)

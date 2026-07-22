@@ -53,12 +53,17 @@ async def current_user(
     return user
 
 
-async def require_event_admin(
+async def require_dashboard_access(
     event_id: str, user: User, db: AsyncSession, request: Request | None = None
 ) -> Event:
-    """Org owner/admin, or an assigned event manager — matches
-    `backend`'s require_event_admin (duplicated here since this service reads
-    the same tables but never calls back into `backend`)."""
+    """Org owner/admin (or superadmin) always; a staffer only if granted
+    can_view_dashboard on this event — matches backend/app/auth.py's
+    require_dashboard_access exactly. The Results page replaces the legacy
+    dashboard, so it must honor the SAME access rule that dashboard used,
+    not the stricter event-setup admin check: a can_view_dashboard staffer
+    could previously open the /results nav link (ProtectedRoute is general)
+    and then get 403s from every API call, since this service was checking
+    require_event_admin's rule instead."""
     event = await db.get(Event, event_id)
     if not event:
         raise HTTPException(404, "Event not found")
@@ -80,6 +85,6 @@ async def require_event_admin(
     eu = await db.scalar(select(EventUser).where(
         EventUser.event_id == event_id, EventUser.user_id == user.id
     ))
-    if not eu or eu.event_role != "manager":
-        raise HTTPException(403, "Admin access required")
-    return event
+    if eu and (eu.can_view_dashboard or eu.event_role == "manager"):
+        return event
+    raise HTTPException(403, "You don't have dashboard access for this event.")

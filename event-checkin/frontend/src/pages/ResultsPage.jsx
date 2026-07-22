@@ -62,17 +62,18 @@ function Donut({ pct, label, sub }) {
   )
 }
 
-function RsvpFunnel({ funnel }) {
+function RsvpFunnel({ funnel, showEntireEventBadge }) {
   if (!funnel) return null
   const steps = [
-    { label: 'Invited', value: funnel.invited, sub: 'Total invitations sent' },
+    { label: 'Guests', value: funnel.guests, sub: 'Total guest list' },
+    { label: 'Invited', value: funnel.invited, sub: 'Invitations actually sent' },
     { label: 'Responded', value: funnel.responded, sub: 'Guests who replied' },
     { label: 'Confirmed', value: funnel.confirmed, sub: 'Guests who accepted' },
     { label: 'Checked in', value: funnel.checked_in, sub: 'Guests who arrived' },
   ]
   return (
     <div className="bg-white dark:bg-slate-800 dark:border dark:border-slate-700/60 rounded-xl shadow-sm p-4">
-      <h3 className="font-semibold text-sm dark:text-white mb-3">RSVP funnel</h3>
+      <h3 className="font-semibold text-sm dark:text-white mb-3">RSVP funnel{showEntireEventBadge && <EntireEventBadge />}</h3>
       <div className="flex items-center gap-3 overflow-x-auto">
         {steps.map((s, i) => (
           <div key={s.label} className="flex items-center gap-3 shrink-0">
@@ -89,7 +90,7 @@ function RsvpFunnel({ funnel }) {
   )
 }
 
-function CommHealthCard({ comm }) {
+function CommHealthCard({ comm, showEntireEventBadge }) {
   if (!comm) return null
   const rows = [
     { icon: '✉️', label: 'Email reached', data: comm.email },
@@ -99,7 +100,7 @@ function CommHealthCard({ comm }) {
   return (
     <div className="bg-white dark:bg-slate-800 dark:border dark:border-slate-700/60 rounded-xl shadow-sm p-4">
       <div className="flex items-center justify-between mb-3">
-        <h3 className="font-semibold text-sm dark:text-white">Communication health</h3>
+        <h3 className="font-semibold text-sm dark:text-white">Communication health{showEntireEventBadge && <EntireEventBadge />}</h3>
         <span className="text-xs text-slate-500 dark:text-slate-400">💳 {comm.credits_remaining?.toLocaleString()} credits</span>
       </div>
       <div className="grid grid-cols-3 gap-3">
@@ -148,11 +149,11 @@ const SEVERITY_STYLE = {
 }
 const SEVERITY_ICON = { critical: '⛔', warning: '⚠️' }
 
-function AttentionPanel({ alerts, onNavigate }) {
+function AttentionPanel({ alerts, onNavigate, showEntireEventBadge }) {
   if (!alerts) return null
   return (
     <div className="bg-white dark:bg-slate-800 dark:border dark:border-slate-700/60 rounded-xl shadow-sm p-4">
-      <h3 className="font-semibold text-sm dark:text-white mb-3">Needs attention</h3>
+      <h3 className="font-semibold text-sm dark:text-white mb-3">Needs attention{showEntireEventBadge && <EntireEventBadge />}</h3>
       {alerts.length === 0 ? (
         <p className="text-sm text-slate-400">Nothing needs attention right now.</p>
       ) : (
@@ -255,6 +256,15 @@ function SessionRow({ s }) {
   )
 }
 
+function EntireEventBadge() {
+  return (
+    <span className="ml-2 align-middle rounded-full bg-slate-100 dark:bg-slate-700 text-slate-500 dark:text-slate-400 text-[10px] font-semibold px-2 py-0.5 uppercase tracking-wide"
+      title="This section isn't affected by the day/venue selector above — it reflects the whole event.">
+      Entire event
+    </span>
+  )
+}
+
 function EmptyFeatureState({ tab }) {
   return (
     <div className="bg-white dark:bg-slate-800 dark:border dark:border-slate-700/60 rounded-xl shadow-sm p-8 text-center">
@@ -270,6 +280,8 @@ export default function ResultsPage() {
   const [eventId, setEventId] = useCurrentEvent()
   const [activeTab, setActiveTab] = useState('overview')
   const [day, setDay] = useState('') // '' = entire event
+  const [venueId, setVenueId] = useState('') // '' = all venues/zones
+  const [zones, setZones] = useState([])
   const [data, setData] = useState(null)
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
@@ -288,11 +300,11 @@ export default function ResultsPage() {
     }).catch(() => {})
   }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
-  const load = useCallback(async (id, d) => {
+  const load = useCallback(async (id, d, v) => {
     if (!id) return
     setLoading(true)
     try {
-      setData(await api.resultsCommandCenter(id, { day: d || undefined }))
+      setData(await api.resultsCommandCenter(id, { day: d || undefined, venueId: v || undefined }))
       setError('')
     } catch (err) {
       setError(err.message || 'Results are temporarily unavailable.')
@@ -302,11 +314,17 @@ export default function ResultsPage() {
   }, [])
 
   useEffect(() => {
-    if (!eventId) { setData(null); return }
-    load(eventId, day)
-    const poll = setInterval(() => load(eventId, day), 20000)
+    if (!eventId) { setData(null); setZones([]); return }
+    load(eventId, day, venueId)
+    const poll = setInterval(() => load(eventId, day, venueId), 20000)
     return () => clearInterval(poll)
-  }, [eventId, day, load])
+  }, [eventId, day, venueId, load])
+
+  useEffect(() => {
+    setVenueId('')
+    if (!eventId) { setZones([]); return }
+    api.listZones(eventId).then(setZones).catch(() => setZones([]))
+  }, [eventId])
 
   // Real live updates: reuse the existing authenticated admission SSE stream
   // (backend/app/routers/dashboard.py, same one DashboardPage.jsx already
@@ -314,6 +332,8 @@ export default function ResultsPage() {
   // triggers an immediate refetch instead of waiting for the 20s poll.
   const dayRef = useRef(day)
   dayRef.current = day
+  const venueRef = useRef(venueId)
+  venueRef.current = venueId
   useEffect(() => {
     if (!eventId) { setConnected(false); return }
     let es, closed = false
@@ -325,39 +345,45 @@ export default function ResultsPage() {
       esRef.current = es
       es.onopen = () => setConnected(true)
       es.onerror = () => setConnected(false)
-      es.onmessage = () => load(eventId, dayRef.current)
+      es.onmessage = () => load(eventId, dayRef.current, venueRef.current)
     })()
     return () => { closed = true; if (es) es.close(); setConnected(false) }
   }, [eventId, load])
 
   useEffect(() => {
     if (!eventId || activeTab !== 'program') return
-    api.resultsProgram(eventId).then(setProgram).catch(() => setProgram(null))
-  }, [eventId, activeTab])
+    setProgram(null)
+    api.resultsProgram(eventId, day || undefined).then(setProgram).catch(() => setProgram(null))
+  }, [eventId, activeTab, day])
 
   useEffect(() => {
     if (!eventId || activeTab !== 'experience') return
+    setExperience(null)
     api.resultsExperience(eventId).then(setExperience).catch(() => setExperience(null))
   }, [eventId, activeTab])
 
   useEffect(() => {
     if (!eventId || activeTab !== 'meals') return
+    setMeals(null)
     api.resultsMeals(eventId).then(setMeals).catch(() => setMeals(null))
   }, [eventId, activeTab])
 
   useEffect(() => {
     if (!eventId || activeTab !== 'invitations') return
+    setInvitations(null)
     api.resultsInvitations(eventId).then(setInvitations).catch(() => setInvitations(null))
   }, [eventId, activeTab])
 
   useEffect(() => {
     if (!eventId || activeTab !== 'operations') return
+    setOperations(null)
     api.resultsOperations(eventId).then(setOperations).catch(() => setOperations(null))
   }, [eventId, activeTab])
 
   const event = events.find((e) => e.id === eventId)
   const a = data?.attendance
   const days = data?.attendance_by_day || []
+  const hasScopeFilter = Boolean(day || venueId)
 
   function navigateTo(url) {
     if (url) window.location.href = url
@@ -425,18 +451,34 @@ export default function ResultsPage() {
 
       {event && (
         <>
-          {/* Scope bar: entire event + one tab per day */}
-          {days.length > 1 && (
-            <div className="flex gap-2 overflow-x-auto pb-1">
-              <button onClick={() => setDay('')} className={`shrink-0 rounded-lg px-4 py-2 text-sm font-semibold border ${!day ? 'bg-teal-600 border-teal-600 text-white' : 'border-slate-300 dark:border-slate-600 text-slate-600 dark:text-slate-300'}`}>
-                Entire event
-              </button>
-              {days.map((d, i) => (
-                <button key={d.day} onClick={() => setDay(d.day)} className={`shrink-0 rounded-lg px-4 py-2 text-sm font-semibold border ${day === d.day ? 'bg-teal-600 border-teal-600 text-white' : 'border-slate-300 dark:border-slate-600 text-slate-600 dark:text-slate-300'}`}>
-                  Day {i + 1} · {fmtDay(d.day)}
-                </button>
-              ))}
+          {/* Scope bar: entire event + one tab per day, plus a venue/zone filter */}
+          {(days.length > 1 || zones.length > 0) && (
+            <div className="flex items-center gap-3 flex-wrap">
+              {days.length > 1 && (
+                <div className="flex gap-2 overflow-x-auto pb-1">
+                  <button onClick={() => setDay('')} className={`shrink-0 rounded-lg px-4 py-2 text-sm font-semibold border ${!day ? 'bg-teal-600 border-teal-600 text-white' : 'border-slate-300 dark:border-slate-600 text-slate-600 dark:text-slate-300'}`}>
+                    Entire event
+                  </button>
+                  {days.map((d, i) => (
+                    <button key={d.day} onClick={() => setDay(d.day)} className={`shrink-0 rounded-lg px-4 py-2 text-sm font-semibold border ${day === d.day ? 'bg-teal-600 border-teal-600 text-white' : 'border-slate-300 dark:border-slate-600 text-slate-600 dark:text-slate-300'}`}>
+                      Day {i + 1} · {fmtDay(d.day)}
+                    </button>
+                  ))}
+                </div>
+              )}
+              {zones.length > 0 && (
+                <select value={venueId} onChange={(e) => setVenueId(e.target.value)}
+                  className="rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 px-3 py-2 text-sm text-slate-700 dark:text-slate-200">
+                  <option value="">All venues</option>
+                  {zones.map((z) => <option key={z.id} value={z.id}>{z.name}</option>)}
+                </select>
+              )}
             </div>
+          )}
+          {venueId && (
+            <p className="text-xs text-slate-400">
+              Filtered to <strong className="text-slate-600 dark:text-slate-300">{zones.find((z) => z.id === venueId)?.name}</strong> — attendance/occupancy reflect movement through this zone specifically, not overall event admission.
+            </p>
           )}
 
           {/* Tabs */}
@@ -452,9 +494,9 @@ export default function ResultsPage() {
           {activeTab === 'overview' && a && (
             <div className="space-y-6">
               <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
-                <MetricCard icon="👥" tint="bg-teal-50 dark:bg-teal-900/30" label="Expected" value={a.expected} />
+                <MetricCard icon="👥" tint="bg-teal-50 dark:bg-teal-900/30" label={venueId ? 'Expected (event-wide)' : 'Expected'} value={a.expected} />
                 <MetricCard icon="✅" tint="bg-green-50 dark:bg-green-900/30" label="Checked in" value={a.checked_in} />
-                <MetricCard icon="⏰" tint="bg-amber-50 dark:bg-amber-900/30" label="Confirmed, not here" value={a.confirmed_not_here} sub="excludes declined & pending" />
+                <MetricCard icon="⏰" tint="bg-amber-50 dark:bg-amber-900/30" label={venueId ? 'Confirmed, not in zone' : 'Confirmed, not here'} value={a.confirmed_not_here} sub="excludes declined & pending" />
                 <MetricCard icon="❌" tint="bg-red-50 dark:bg-red-900/30" label="Declined" value={a.declined} accent="text-red-600 dark:text-red-400" />
                 <MetricCard icon="🚶" tint="bg-violet-50 dark:bg-violet-900/30" label="Walk-ins" value={a.walk_ins} />
                 <MetricCard icon="🚪" tint="bg-slate-100 dark:bg-slate-700" label="Checked out" value={a.checked_out} />
@@ -475,19 +517,19 @@ export default function ResultsPage() {
                     </div>
                   </div>
                 </div>
-                <AttentionPanel alerts={data.alerts} onNavigate={navigateTo} />
+                <AttentionPanel alerts={data.alerts} onNavigate={navigateTo} showEntireEventBadge={hasScopeFilter} />
               </div>
 
               <div className="grid gap-6 lg:grid-cols-2">
-                <RsvpFunnel funnel={data.rsvp_funnel} />
-                <CommHealthCard comm={data.communication} />
+                <RsvpFunnel funnel={data.rsvp_funnel} showEntireEventBadge={hasScopeFilter} />
+                <CommHealthCard comm={data.communication} showEntireEventBadge={hasScopeFilter} />
               </div>
 
               {(event.menu_enabled || data.program?.in_progress_count > 0 || event.experience_enabled) && (
                 <div className="grid gap-6 lg:grid-cols-3">
                   {event.menu_enabled && (
                     <div className="bg-white dark:bg-slate-800 dark:border dark:border-slate-700/60 rounded-xl shadow-sm p-4">
-                      <h3 className="font-semibold text-sm dark:text-white mb-3">Meals</h3>
+                      <h3 className="font-semibold text-sm dark:text-white mb-3">Meals{hasScopeFilter && <EntireEventBadge />}</h3>
                       {data.meals.categories.length === 0 ? (
                         <p className="text-sm text-slate-400">No selectable meal categories.</p>
                       ) : (
@@ -503,7 +545,7 @@ export default function ResultsPage() {
                   )}
                   {event.experience_enabled && (
                     <div className="bg-white dark:bg-slate-800 dark:border dark:border-slate-700/60 rounded-xl shadow-sm p-4">
-                      <h3 className="font-semibold text-sm dark:text-white mb-3">Program right now</h3>
+                      <h3 className="font-semibold text-sm dark:text-white mb-3">Program right now{venueId && <EntireEventBadge />}</h3>
                       {data.program.in_progress_count === 0 ? (
                         <p className="text-sm text-slate-400">No sessions in progress.</p>
                       ) : (
@@ -518,7 +560,7 @@ export default function ResultsPage() {
                   )}
                   {event.experience_enabled && (
                     <div className="bg-white dark:bg-slate-800 dark:border dark:border-slate-700/60 rounded-xl shadow-sm p-4">
-                      <h3 className="font-semibold text-sm dark:text-white mb-3">Experience journey</h3>
+                      <h3 className="font-semibold text-sm dark:text-white mb-3">Experience journey{hasScopeFilter && <EntireEventBadge />}</h3>
                       {data.experience.steps.length === 0 ? (
                         <p className="text-sm text-slate-400">No Experience steps configured.</p>
                       ) : (
@@ -560,10 +602,13 @@ export default function ResultsPage() {
                   <tbody>
                     {days.map((d, i) => (
                       <tr key={d.day} className="border-b border-slate-50 dark:border-slate-700/60 last:border-0">
-                        <td className="py-2 text-slate-700 dark:text-slate-200">Day {i + 1} · {fmtDay(d.day)}</td>
+                        <td className="py-2 text-slate-700 dark:text-slate-200">
+                          Day {i + 1} · {fmtDay(d.day)}
+                          {d.status === 'live' && <span className="ml-2 rounded-full bg-green-50 dark:bg-green-900/30 text-green-700 dark:text-green-300 text-[10px] font-bold px-1.5 py-0.5 uppercase align-middle">Live</span>}
+                        </td>
                         <td className="py-2 tabular-nums">{d.expected}</td>
-                        <td className="py-2 tabular-nums">{d.upcoming ? '—' : d.checked_in}</td>
-                        <td className="py-2 tabular-nums">{d.upcoming ? 'Upcoming' : `${d.attendance_rate}%`}</td>
+                        <td className="py-2 tabular-nums">{d.status === 'upcoming' ? '—' : d.checked_in}</td>
+                        <td className="py-2 tabular-nums">{d.status === 'upcoming' ? 'Upcoming' : `${d.attendance_rate}%`}</td>
                       </tr>
                     ))}
                   </tbody>
@@ -575,15 +620,17 @@ export default function ResultsPage() {
           {activeTab === 'attendance' && a && (
             <div className="space-y-6">
               <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
-                <MetricCard icon="👥" tint="bg-teal-50 dark:bg-teal-900/30" label="Expected" value={a.expected} />
+                <MetricCard icon="👥" tint="bg-teal-50 dark:bg-teal-900/30" label={venueId ? 'Expected (event-wide)' : 'Expected'} value={a.expected} />
                 <MetricCard icon="✅" tint="bg-green-50 dark:bg-green-900/30" label="Checked in" value={a.checked_in} />
-                <MetricCard icon="🟢" tint="bg-teal-50 dark:bg-teal-900/30" label="On-site now" value={a.on_site} accent="text-teal-600 dark:text-teal-400" />
+                <MetricCard icon="🟢" tint="bg-teal-50 dark:bg-teal-900/30"
+                  label={a.occupancy_mode === 'historical' ? 'Occupancy at day close' : a.occupancy_mode === 'future' ? 'On-site (not started)' : 'On-site now'}
+                  value={a.occupancy_mode === 'future' ? '—' : a.on_site} accent="text-teal-600 dark:text-teal-400" />
                 <MetricCard icon="✨" tint="bg-sky-50 dark:bg-sky-900/30" label="First-time" value={a.first_time} />
                 <MetricCard icon="🔁" tint="bg-sky-50 dark:bg-sky-900/30" label="Returning" value={a.returning} />
                 <MetricCard icon="🚪" tint="bg-slate-100 dark:bg-slate-700" label="Checked out" value={a.checked_out} />
               </div>
               <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-                <MetricCard icon="⏰" tint="bg-amber-50 dark:bg-amber-900/30" label="Confirmed, not here" value={a.confirmed_not_here} />
+                <MetricCard icon="⏰" tint="bg-amber-50 dark:bg-amber-900/30" label={venueId ? 'Confirmed, not in zone' : 'Confirmed, not here'} value={a.confirmed_not_here} />
                 <MetricCard icon="❌" tint="bg-red-50 dark:bg-red-900/30" label="Declined" value={a.declined} accent="text-red-600 dark:text-red-400" />
                 <MetricCard icon="🚶" tint="bg-violet-50 dark:bg-violet-900/30" label="Walk-ins" value={a.walk_ins} />
               </div>
@@ -617,7 +664,7 @@ export default function ResultsPage() {
                   <MetricCard icon="📋" tint="bg-sky-50 dark:bg-sky-900/30" label="Total sessions" value={program.sessions.length} />
                 </div>
                 <div className="bg-white dark:bg-slate-800 dark:border dark:border-slate-700/60 rounded-xl shadow-sm p-4">
-                  <h3 className="font-semibold text-sm dark:text-white mb-2">All sessions</h3>
+                  <h3 className="font-semibold text-sm dark:text-white mb-2">All sessions{venueId && <EntireEventBadge />}</h3>
                   <div>{program.sessions.map((s) => <SessionRow key={s.step_id} s={s} />)}</div>
                 </div>
               </div>
@@ -633,7 +680,7 @@ export default function ResultsPage() {
               </div>
             ) : (
               <div className="bg-white dark:bg-slate-800 dark:border dark:border-slate-700/60 rounded-xl shadow-sm p-4">
-                <h3 className="font-semibold text-sm dark:text-white mb-3">Completion funnel</h3>
+                <h3 className="font-semibold text-sm dark:text-white mb-3">Completion funnel{hasScopeFilter && <EntireEventBadge />}</h3>
                 <div className="space-y-4">
                   {experience.steps.map((s) => (
                     <ProgressBar key={s.step_id} label={`${s.title}${s.required ? '' : ' (optional)'}`} completed={s.completed} total={s.total}
@@ -653,13 +700,17 @@ export default function ResultsPage() {
               </div>
             ) : (
               <div className="space-y-6">
-                <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-                  <MetricCard icon="🍽️" tint="bg-teal-50 dark:bg-teal-900/30" label="Served" value={meals.served_total} accent="text-teal-600 dark:text-teal-400" />
-                  <MetricCard icon="👥" tint="bg-slate-100 dark:bg-slate-700" label="Eligible" value={meals.eligible_total} />
-                  <MetricCard icon="⏳" tint="bg-amber-50 dark:bg-amber-900/30" label="Remaining" value={meals.eligible_total - meals.served_total} />
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                  <MetricCard icon="🍽️" tint="bg-teal-50 dark:bg-teal-900/30" label="Served" value={meals.served_total} accent="text-teal-600 dark:text-teal-400" sub="Distinct guests" />
+                  <MetricCard icon="👥" tint="bg-slate-100 dark:bg-slate-700" label="Made a selection" value={meals.eligible_total} sub="Distinct guests" />
+                  <MetricCard icon="⏳" tint="bg-amber-50 dark:bg-amber-900/30" label="Remaining to serve" value={meals.eligible_total - meals.served_total} />
+                  {meals.missing_selection > 0 && (
+                    <MetricCard icon="⚠️" tint="bg-red-50 dark:bg-red-900/30" label="No selection yet" value={meals.missing_selection} accent="text-red-600 dark:text-red-400" sub="Not counted above" />
+                  )}
                 </div>
                 <div className="bg-white dark:bg-slate-800 dark:border dark:border-slate-700/60 rounded-xl shadow-sm p-4">
-                  <h3 className="font-semibold text-sm dark:text-white mb-3">By category</h3>
+                  <h3 className="font-semibold text-sm dark:text-white mb-3">By category{hasScopeFilter && <EntireEventBadge />}</h3>
+                  <p className="text-xs text-slate-400 mb-3">Guests who chose that category's item — a guest with 3 categories counts once per category here, but only once in the totals above.</p>
                   <div className="space-y-4">
                     {meals.categories.map((c) => (
                       <ProgressBar key={c.category_id} label={c.day_label ? `${c.name} — ${c.day_label}` : c.name}
@@ -675,17 +726,17 @@ export default function ResultsPage() {
           {activeTab === 'invitations' && (
             invitations === null ? <p className="text-sm text-slate-400">Loading…</p> : (
               <div className="space-y-6">
-                <RsvpFunnel funnel={invitations.rsvp_funnel} />
+                <RsvpFunnel funnel={invitations.rsvp_funnel} showEntireEventBadge={hasScopeFilter} />
                 <div className="grid gap-6 lg:grid-cols-2">
                   <div className="bg-white dark:bg-slate-800 dark:border dark:border-slate-700/60 rounded-xl shadow-sm p-4">
-                    <h3 className="font-semibold text-sm dark:text-white mb-3">Invite delivery</h3>
+                    <h3 className="font-semibold text-sm dark:text-white mb-3">Invite delivery{hasScopeFilter && <EntireEventBadge />}</h3>
                     <div className="grid grid-cols-3 gap-3">
                       <MetricCard icon="✅" tint="bg-green-50 dark:bg-green-900/30" label="Sent" value={invitations.delivery.sent} />
                       <MetricCard icon="⚠️" tint="bg-amber-50 dark:bg-amber-900/30" label="Failed" value={invitations.delivery.failed} accent="text-amber-600 dark:text-amber-400" />
                       <MetricCard icon="⏳" tint="bg-slate-100 dark:bg-slate-700" label="Not sent yet" value={invitations.delivery.unsent} />
                     </div>
                   </div>
-                  <CommHealthCard comm={invitations.communication} />
+                  <CommHealthCard comm={invitations.communication} showEntireEventBadge={hasScopeFilter} />
                 </div>
               </div>
             )
@@ -696,7 +747,7 @@ export default function ResultsPage() {
               <div className="space-y-6">
                 <div className="grid gap-6 lg:grid-cols-2">
                   <div className="bg-white dark:bg-slate-800 dark:border dark:border-slate-700/60 rounded-xl shadow-sm p-4">
-                    <h3 className="font-semibold text-sm dark:text-white mb-3">Meals served</h3>
+                    <h3 className="font-semibold text-sm dark:text-white mb-3">Meals served{hasScopeFilter && <EntireEventBadge />}</h3>
                     {operations.meals.categories.length === 0 ? (
                       <p className="text-sm text-slate-400">Not applicable for this event.</p>
                     ) : (
@@ -704,7 +755,7 @@ export default function ResultsPage() {
                     )}
                   </div>
                   <div className="bg-white dark:bg-slate-800 dark:border dark:border-slate-700/60 rounded-xl shadow-sm p-4">
-                    <h3 className="font-semibold text-sm dark:text-white mb-3">Consent signed</h3>
+                    <h3 className="font-semibold text-sm dark:text-white mb-3">Consent signed{hasScopeFilter && <EntireEventBadge />}</h3>
                     {!operations.consent ? (
                       <p className="text-sm text-slate-400">No consent step configured.</p>
                     ) : (

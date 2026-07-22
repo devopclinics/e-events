@@ -132,7 +132,9 @@ class ExperienceWorkflow(Base):
     event_id: Mapped[str] = mapped_column(String(36), ForeignKey("events.id"))
     name: Mapped[str] = mapped_column(String(255), default="Default Experience")
     status: Mapped[str] = mapped_column(String(20), default="draft")
+    version: Mapped[int] = mapped_column(Integer, default=1)
     is_default: Mapped[bool] = mapped_column(Boolean, default=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
 
 
 class ExperienceStep(Base):

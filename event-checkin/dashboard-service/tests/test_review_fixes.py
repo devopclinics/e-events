@@ -6,8 +6,8 @@ from app.auth import require_dashboard_access
 from app.main import _consent_step, _parse_session_dt
 from app.models import (
     EmailDeliveryEvent, Event, EventUser, ExperienceStep, ExperienceWorkflow,
-    GuestMealFulfillment, GuestMenuChoice, MenuCategory, Membership, ScanEvent,
-    User, Zone,
+    GuestExperienceProgress, GuestMealFulfillment, GuestMenuChoice, MenuCategory,
+    Membership, ScanEvent, User, Zone,
 )
 
 
@@ -157,6 +157,54 @@ def test_session_datetime_uses_event_timezone():
     session = {"date": "2026-07-22", "start_time": "10:00"}
     parsed = _parse_session_dt(session, "start_time", ZoneInfo("America/Chicago"))
     assert parsed == datetime(2026, 7, 22, 15, 0)
+
+
+async def test_program_combines_timed_agenda_and_attendance_sessions(ctx):
+    await _set_event(ctx, experience_enabled=True, timezone="UTC")
+    async with ctx.session_factory() as s:
+        workflow = ExperienceWorkflow(
+            id="program-workflow", event_id=ctx.event_id, name="Program",
+            status="published", version=1, is_default=True,
+        )
+        agenda = ExperienceStep(
+            id="agenda-talk", workflow_id=workflow.id, key="talk", type="custom",
+            title="Opening talk", enabled=True, is_segment=True,
+            starts_offset_seconds=3600, duration_seconds=1800,
+            config={"program": {"category": "program"}},
+        )
+        checkin = ExperienceStep(
+            id="day-two-checkin", workflow_id=workflow.id, key="day2", type="session_attendance",
+            title="Day 2 Check-in", enabled=True,
+            config={"session": {
+                "date": "2026-08-03", "start_time": "09:00", "end_time": "10:00",
+            }},
+        )
+        guest = await ctx.add_guest(s, id="program-guest")
+        s.add_all([workflow, agenda, checkin])
+        await s.flush()
+        s.add(GuestExperienceProgress(
+            id="program-progress", event_id=ctx.event_id, workflow_id=workflow.id,
+            step_id=checkin.id, guest_id=guest.id, status="completed",
+        ))
+        await s.commit()
+
+    payload = (await ctx.client.get(
+        f"/api/results/events/{ctx.event_id}/analytics/program"
+    )).json()
+    assert [item["topic"] for item in payload["sessions"]] == ["Opening talk", "Day 2 Check-in"]
+    talk, tracked = payload["sessions"]
+    assert talk["day"] == "2026-08-02"
+    assert talk["category"] == "program"
+    assert talk["attendance_tracked"] is False
+    assert talk["attended"] is None
+    assert tracked["attendance_tracked"] is True
+    assert tracked["attended"] == 1
+    assert payload["attendance_tracked_count"] == 1
+
+    day_two = (await ctx.client.get(
+        f"/api/results/events/{ctx.event_id}/analytics/program?day=2026-08-03"
+    )).json()
+    assert [item["topic"] for item in day_two["sessions"]] == ["Day 2 Check-in"]
 
 
 async def test_meal_totals_count_distinct_guests(ctx):

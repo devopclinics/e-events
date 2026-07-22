@@ -246,11 +246,17 @@ function SessionRow({ s }) {
           {s.state === 'in_progress' && <span className="w-2 h-2 rounded-full bg-green-500 shrink-0" />}
           <span className="font-medium text-sm text-slate-800 dark:text-slate-100 truncate">{s.topic}</span>
         </div>
-        <div className="text-xs text-slate-400 mt-0.5">{s.room || 'No room set'}{s.speaker ? ` · ${s.speaker}` : ''}</div>
+        <div className="text-xs text-slate-400 mt-1 flex flex-wrap gap-x-2">
+          {s.start_time && <span>{s.start_time}{s.end_time ? `–${s.end_time}` : ''}</span>}
+          {s.category && <span className="capitalize">{s.category}</span>}
+          {s.room && <span>{s.room}</span>}
+          {s.speaker && <span>{s.speaker}</span>}
+          {s.attendance_tracked && <span className="font-medium text-teal-600 dark:text-teal-400">Attendance tracked</span>}
+        </div>
       </div>
       <div className="flex items-center gap-2 shrink-0">
         <span className={`rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide ${badge}`}>{s.state.replace('_', ' ')}</span>
-        <span className="text-sm font-semibold tabular-nums text-slate-700 dark:text-slate-200">{s.attended}{s.capacity ? `/${s.capacity}` : ''}</span>
+        {s.attendance_tracked && <span className="text-sm font-semibold tabular-nums text-slate-700 dark:text-slate-200" title="Recorded attendance">{s.attended}{s.capacity ? `/${s.capacity}` : ''}</span>}
       </div>
     </div>
   )
@@ -679,14 +685,31 @@ export default function ResultsPage() {
               </div>
             ) : (
               <div className="space-y-6">
-                <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
                   <MetricCard icon="🟢" tint="bg-teal-50 dark:bg-teal-900/30" label="In progress" value={program.in_progress_count} accent="text-teal-600 dark:text-teal-400" />
                   <MetricCard icon="⏳" tint="bg-slate-100 dark:bg-slate-700" label="Upcoming" value={program.upcoming_count} />
+                  <MetricCard icon="✓" tint="bg-slate-100 dark:bg-slate-700" label="Completed" value={program.ended_count} />
                   <MetricCard icon="📋" tint="bg-sky-50 dark:bg-sky-900/30" label="Total sessions" value={program.sessions.length} />
                 </div>
                 <div className="bg-white dark:bg-slate-800 dark:border dark:border-slate-700/60 rounded-xl shadow-sm p-4">
-                  <h3 className="font-semibold text-sm dark:text-white mb-2">All sessions{venueId && <EntireEventBadge />}</h3>
-                  <div>{program.sessions.map((s) => <SessionRow key={s.step_id} s={s} />)}</div>
+                  <div className="flex items-center justify-between gap-3 mb-3">
+                    <h3 className="font-semibold text-sm dark:text-white">Complete program{venueId && <EntireEventBadge />}</h3>
+                    <span className="text-xs text-slate-400">{program.attendance_tracked_count} attendance-tracked</span>
+                  </div>
+                  <div className="space-y-5">
+                    {Object.entries(program.sessions.reduce((groups, session) => {
+                      const key = session.day || 'Unscheduled'
+                      ;(groups[key] ||= []).push(session)
+                      return groups
+                    }, {})).map(([programDay, sessions]) => (
+                      <section key={programDay}>
+                        <h4 className="mb-1 border-b border-slate-100 pb-2 text-xs font-bold uppercase tracking-wide text-slate-500 dark:border-slate-700 dark:text-slate-300">
+                          {programDay === 'Unscheduled' ? programDay : fmtDay(programDay)}
+                        </h4>
+                        <div>{sessions.map((s) => <SessionRow key={s.step_id} s={s} />)}</div>
+                      </section>
+                    ))}
+                  </div>
                 </div>
               </div>
             )

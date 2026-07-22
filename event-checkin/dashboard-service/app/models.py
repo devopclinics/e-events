@@ -150,11 +150,13 @@ class ExperienceStep(Base):
     key: Mapped[str] = mapped_column(String(120))
     type: Mapped[str] = mapped_column(String(40))
     title: Mapped[str] = mapped_column(String(255))
+    description: Mapped[str | None] = mapped_column(Text, nullable=True)
     sort_order: Mapped[int] = mapped_column(Integer, default=0)
     required: Mapped[bool] = mapped_column(Boolean, default=True)
     enabled: Mapped[bool] = mapped_column(Boolean, default=True)
     starts_offset_seconds: Mapped[int | None] = mapped_column(Integer, nullable=True)
     duration_seconds: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    is_segment: Mapped[bool] = mapped_column(Boolean, default=False)
     config: Mapped[dict | None] = mapped_column(JSON, nullable=True)
 
 

@@ -484,39 +484,53 @@ async def program_sessions(db: AsyncSession, event: Event, day: str | None = Non
     if not wf:
         return []
     steps = (await db.execute(select(ExperienceStep).where(
-        ExperienceStep.workflow_id == wf.id, ExperienceStep.type == "session_attendance",
+        ExperienceStep.workflow_id == wf.id,
         ExperienceStep.enabled.is_(True),
+        # The convention program is stored as timed Experience segments. A
+        # session_attendance step is a separate, attendance-tracked program
+        # item. Results must expose both instead of treating the latter as the
+        # entire agenda.
+        ((ExperienceStep.is_segment.is_(True)) | (ExperienceStep.type == "session_attendance")),
     ).order_by(ExperienceStep.sort_order))).scalars().all()
     if not steps:
         return []
-    if day:
-        # Session config's own "date" string (YYYY-MM-DD, event-local) is
-        # already in the same format the day-scope selector uses — filter on
-        # it directly rather than converting start_at back to a local date.
-        steps = [s for s in steps if str((_session_config(s).get("date") or "")) == day]
-        if not steps:
-            return []
-    step_ids = [s.id for s in steps]
+    tracked_steps = [s for s in steps if s.type == "session_attendance"]
+    step_ids = [s.id for s in tracked_steps]
 
     # Grouped queries instead of 2-per-session (N+1).
     registered_by_step: dict[str, int] = dict((await db.execute(
         select(GuestExperienceProgress.step_id, func.count())
         .where(GuestExperienceProgress.step_id.in_(step_ids)).group_by(GuestExperienceProgress.step_id)
-    )).all())
+    )).all()) if step_ids else {}
     attended_by_step: dict[str, int] = dict((await db.execute(
         select(GuestExperienceProgress.step_id, func.count())
         .where(GuestExperienceProgress.step_id.in_(step_ids),
                GuestExperienceProgress.status.in_(["completed", "overridden"]))
         .group_by(GuestExperienceProgress.step_id)
-    )).all())
+    )).all()) if step_ids else {}
 
     tz = event_tz(event)
     now = utc_now_naive()
+    event_anchor = to_event_local(event.event_date, tz)
     out = []
     for step in steps:
-        session = _session_config(step)
-        start = _parse_session_dt(session, "start_time", tz)
-        end = _parse_session_dt(session, "end_time", tz)
+        tracked = step.type == "session_attendance"
+        session = _session_config(step) if tracked else {}
+        if step.is_segment and event_anchor and step.starts_offset_seconds is not None and step.duration_seconds:
+            local_start = event_anchor + timedelta(seconds=step.starts_offset_seconds)
+            local_end = local_start + timedelta(seconds=step.duration_seconds)
+            start = to_utc_naive(local_start)
+            end = to_utc_naive(local_end)
+            category = ((step.config or {}).get("program") or {}).get("category")
+        else:
+            start = _parse_session_dt(session, "start_time", tz)
+            end = _parse_session_dt(session, "end_time", tz)
+            local_start = to_event_local(start, tz) if start else None
+            local_end = to_event_local(end, tz) if end else None
+            category = None
+        item_day = local_start.date().isoformat() if local_start else str(session.get("date") or "")
+        if day and item_day != day:
+            continue
         # "Registered" = every guest with a progress row for this step (workflow
         # assignment creates one per eligible guest); "attended" = actually
         # checked into the session. Approximate — see plan doc Track A/A3.
@@ -531,17 +545,23 @@ async def program_sessions(db: AsyncSession, event: Event, day: str | None = Non
         out.append({
             "step_id": step.id,
             "topic": session.get("topic") or step.title,
+            "description": step.description,
+            "category": category,
+            "day": item_day or None,
+            "start_time": local_start.strftime("%-I:%M %p") if local_start else None,
+            "end_time": local_end.strftime("%-I:%M %p") if local_end else None,
             "room": session.get("room") or None,
             "speaker": session.get("speaker") or None,
             "capacity": session.get("capacity"),
             "start_at": start.isoformat() if start else None,
             "end_at": end.isoformat() if end else None,
             "state": state,
-            "registered": registered,
-            "attended": attended,
-            "no_show_rate": round((registered - attended) / registered * 100) if registered else 0,
+            "attendance_tracked": tracked,
+            "registered": registered if tracked else None,
+            "attended": attended if tracked else None,
+            "no_show_rate": round((registered - attended) / registered * 100) if tracked and registered else None,
         })
-    return out
+    return sorted(out, key=lambda item: (item["start_at"] or "", item["topic"]))
 
 
 @app.get("/api/results/events/{event_id}/analytics/program")
@@ -553,6 +573,8 @@ async def get_program(
         "sessions": sessions,
         "in_progress_count": sum(1 for s in sessions if s["state"] == "in_progress"),
         "upcoming_count": sum(1 for s in sessions if s["state"] == "upcoming"),
+        "ended_count": sum(1 for s in sessions if s["state"] == "ended"),
+        "attendance_tracked_count": sum(1 for s in sessions if s["attendance_tracked"]),
     }
 
 

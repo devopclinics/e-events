@@ -21,6 +21,7 @@ services:
       - design-service
       - support-service
       - setup-service
+      - dashboard-service
     restart: unless-stopped
 
   # ── React frontend (pulled from Docker Hub) ────────────────────────────────
@@ -83,6 +84,26 @@ services:
         condition: service_healthy
     healthcheck:
       test: ["CMD-SHELL", "python - <<'PY'\nimport urllib.request\nurllib.request.urlopen('http://localhost:8001/health', timeout=3).read()\nPY"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+  # ── Results / multi-day command center — read-only analytics (pulled from
+  # Docker Hub). Reads the same Postgres DB as `backend` via the dashboard_ro
+  # role (SELECT-only) — see docs/MULTI-DAY-DASHBOARD-IMPLEMENTATION-PLAN.md.
+  dashboard-service:
+    image: dclinics/events:dashboard-${APP_VERSION:-latest}
+    pull_policy: always
+    env_file: ./backend/.env
+    environment:
+      PORT: 8030
+      DATABASE_URL: postgresql+asyncpg://dashboard_ro:${DASHBOARD_RO_DB_PASSWORD:-dashboard_ro}@db:5432/checkin
+    depends_on:
+      db:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "python - <<'PY'\nimport urllib.request\nurllib.request.urlopen('http://localhost:8030/health', timeout=3).read()\nPY"]
       interval: 10s
       timeout: 5s
       retries: 5

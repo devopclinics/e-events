@@ -345,10 +345,10 @@ textarea:focus {
 
 /* Results command center: stronger hierarchy for dense operational screens. */
 .results-dashboard h3 {
-  font-size: 1rem;
-  line-height: 1.4;
-  font-weight: 750;
-  letter-spacing: -0.01em;
+  font-size: 1.125rem;
+  line-height: 1.35;
+  font-weight: 800;
+  letter-spacing: -0.015em;
   color: rgb(15 23 42);
 }
 

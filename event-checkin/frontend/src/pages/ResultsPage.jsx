@@ -576,7 +576,7 @@ export default function ResultsPage() {
                 </div>
               )}
 
-              <div className="grid gap-6 lg:grid-cols-2">
+              <div className={`grid gap-6 ${data.venue_occupancy?.length > 0 ? 'lg:grid-cols-2' : 'grid-cols-1'}`}>
                 {data.venue_occupancy?.length > 0 && (
                   <div className="bg-white dark:bg-slate-800 dark:border dark:border-slate-700/60 rounded-xl shadow-sm p-4">
                     <h3 className="font-semibold text-sm dark:text-white mb-3">Live venue occupancy</h3>
@@ -585,7 +585,9 @@ export default function ResultsPage() {
                     </div>
                   </div>
                 )}
-                <RecentActivity items={data.recent_activity} />
+                <div className={data.venue_occupancy?.length > 0 ? '' : 'w-full'}>
+                  <RecentActivity items={data.recent_activity} />
+                </div>
               </div>
 
               <div className="bg-white dark:bg-slate-800 dark:border dark:border-slate-700/60 rounded-xl shadow-sm p-4">

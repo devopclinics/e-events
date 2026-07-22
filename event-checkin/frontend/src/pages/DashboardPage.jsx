@@ -267,7 +267,10 @@ export default function DashboardPage() {
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold dark:text-white">Event Results</h1>
-          <p className="text-sm text-gray-500 dark:text-slate-400 mt-1">Track RSVPs, check-ins, and live attendance.</p>
+          <p className="text-sm text-gray-500 dark:text-slate-400 mt-1">
+            Track RSVPs, check-ins, and live attendance.{' '}
+            <a href="/results" className="text-teal-600 hover:underline font-semibold">Try the new multi-day command center (preview) →</a>
+          </p>
         </div>
         <div className="flex items-center gap-2">
           <span className={`w-2.5 h-2.5 rounded-full ${connected ? 'bg-green-500 animate-pulse' : 'bg-gray-300 dark:bg-slate-600'}`} />

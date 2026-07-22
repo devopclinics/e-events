@@ -8,6 +8,7 @@ import ProtectedRoute from './components/ProtectedRoute'
 import AdminPage from './pages/AdminPage'
 import ScannerPage from './pages/ScannerPage'
 import DashboardPage from './pages/DashboardPage'
+import ResultsPage from './pages/ResultsPage'
 import ScanAutoPage from './pages/ScanAutoPage'
 import LoginPage from './pages/LoginPage'
 import RegisterPage from './pages/RegisterPage'
@@ -316,6 +317,7 @@ function AppRoutes() {
               <Route path="/design-studio" element={<ProtectedRoute adminOnly paidOnly><DesignStudioPage /></ProtectedRoute>} />
               <Route path="/floor-plan/:eventId" element={<ProtectedRoute adminOnly><FloorPlanPage /></ProtectedRoute>} />
               <Route path="/dashboard" element={<ProtectedRoute><DashboardPage /></ProtectedRoute>} />
+              <Route path="/results" element={<ProtectedRoute><ResultsPage /></ProtectedRoute>} />
               <Route path="/festiome" element={<ProtectedRoute><FestioMePage /></ProtectedRoute>} />
               <Route path="/scanner" element={<ProtectedRoute><ScannerPage /></ProtectedRoute>} />
               <Route path="/kitchen" element={<ProtectedRoute><KitchenPage /></ProtectedRoute>} />

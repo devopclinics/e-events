@@ -528,6 +528,26 @@ export const api = {
   // Dashboard
   getDashboard: (eventId) => req('GET', `/events/${eventId}/dashboard`),
 
+  // Results / multi-day command center (dashboard-service, read-only, Track A —
+  // see docs/MULTI-DAY-DASHBOARD-IMPLEMENTATION-PLAN.md). Separate service from
+  // the legacy dashboard endpoint above; both can be called independently.
+  resultsCommandCenter: (eventId, { day, venueId } = {}) => {
+    const params = new URLSearchParams()
+    if (day) params.set('day', day)
+    if (venueId) params.set('venue_id', venueId)
+    const qs = params.toString()
+    return req('GET', `/results/events/${eventId}/command-center${qs ? `?${qs}` : ''}`)
+  },
+  resultsAttendance: (eventId, { day, start, end, venueId } = {}) => {
+    const params = new URLSearchParams()
+    if (day) params.set('day', day)
+    if (start) params.set('start', start)
+    if (end) params.set('end', end)
+    if (venueId) params.set('venue_id', venueId)
+    const qs = params.toString()
+    return req('GET', `/results/events/${eventId}/analytics/attendance${qs ? `?${qs}` : ''}`)
+  },
+
   // Users
   listUsers: () => req('GET', '/auth/users'),
   updateUserRole: (userId, role) => req('PUT', `/auth/users/${userId}/role?role=${role}`),

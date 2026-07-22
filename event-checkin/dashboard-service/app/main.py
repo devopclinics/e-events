@@ -18,8 +18,9 @@ from .auth import current_user, require_event_admin
 from .config import settings
 from .database import get_db
 from .models import (
-    Event, ExperienceStep, ExperienceWorkflow, Guest, GuestExperienceProgress,
-    GuestMenuChoice, MenuCategory, ScanEvent, User, Zone,
+    EmailDeliveryEvent, Event, ExperienceStep, ExperienceWorkflow, Guest,
+    GuestExperienceProgress, GuestMenuChoice, MenuCategory, MessageCreditLedger,
+    ScanEvent, SeatingTable, User, Zone,
 )
 from .timeutil import event_tz, to_event_local, to_utc_naive
 
@@ -182,6 +183,15 @@ async def attendance_stats(db: AsyncSession, event: Event, scope: Scope) -> dict
     cutoff = min(datetime.utcnow(), scope.end_at)
     on_site = await _on_site_count(db, event.id, cutoff)
 
+    declined = await db.scalar(select(func.count()).select_from(Guest).where(
+        Guest.event_id == event.id, Guest.rsvp_status == "declined")) or 0
+    confirmed_ids = set((await db.execute(select(Guest.id).where(
+        Guest.event_id == event.id, Guest.rsvp_status == "confirmed"))).scalars().all())
+    confirmed_not_here = len(confirmed_ids - checked_in_ids)
+    walk_in_ids = set((await db.execute(select(Guest.id).where(
+        Guest.event_id == event.id, Guest.is_walk_in.is_(True)))).scalars().all())
+    walk_ins = len(walk_in_ids & checked_in_ids)
+
     tz = event_tz(event)
     rows = (await db.execute(
         select(ScanEvent.guest_id, ScanEvent.direction, ScanEvent.scanned_at)
@@ -206,6 +216,9 @@ async def attendance_stats(db: AsyncSession, event: Event, scope: Scope) -> dict
         "first_time": len(first_time_ids),
         "returning": len(returning_ids),
         "checked_out": len(checked_out_ids),
+        "declined": declined,
+        "confirmed_not_here": confirmed_not_here,
+        "walk_ins": walk_ins,
         "hourly": [{"hour": h, **v} for h, v in sorted(hourly.items())],
     }
 
@@ -403,6 +416,112 @@ async def get_experience(event: Event = Depends(admin_event), db: AsyncSession =
     return {"steps": await experience_funnel(db, event)}
 
 
+# ── RSVP funnel ────────────────────────────────────────────────────────────────
+
+async def rsvp_funnel(db: AsyncSession, event: Event) -> dict:
+    invited = await db.scalar(select(func.count()).select_from(Guest).where(Guest.event_id == event.id)) or 0
+    confirmed = await db.scalar(select(func.count()).select_from(Guest).where(
+        Guest.event_id == event.id, Guest.rsvp_status == "confirmed")) or 0
+    declined = await db.scalar(select(func.count()).select_from(Guest).where(
+        Guest.event_id == event.id, Guest.rsvp_status == "declined")) or 0
+    pending = await db.scalar(select(func.count()).select_from(Guest).where(
+        Guest.event_id == event.id, Guest.rsvp_status == "pending")) or 0
+    checked_in = await db.scalar(select(func.count(func.distinct(ScanEvent.guest_id))).where(
+        ScanEvent.event_id == event.id, ScanEvent.direction == "in", ScanEvent.denied.is_(False))) or 0
+    return {
+        "invited": invited,
+        "responded": confirmed + declined + pending,
+        "confirmed": confirmed,
+        "checked_in": checked_in,
+    }
+
+
+# ── communication health (mirrors backend/app/routers/dashboard.py exactly —
+# same message_credit_ledger dedup-by-provider-message-id logic, same email
+# delivery event dedup-by-latest-per-message) ─────────────────────────────────
+
+async def communication_health(db: AsyncSession, event: Event) -> dict:
+    msg_rows = (await db.execute(
+        select(MessageCreditLedger.id, MessageCreditLedger.channel, MessageCreditLedger.action,
+               MessageCreditLedger.status, MessageCreditLedger.provider_message_id)
+        .where(MessageCreditLedger.event_id == event.id, MessageCreditLedger.channel.in_(("sms", "mms", "whatsapp")))
+    )).all()
+    failed_statuses = {"failed", "undelivered", "error", "rejected"}
+    msg_ids = {c: {"sent": set(), "delivered": set(), "failed": set()} for c in ("sms", "mms", "whatsapp")}
+    for row_id, c, action, status, provider_message_id in msg_rows:
+        d = msg_ids.get(c)
+        if d is None:
+            continue
+        key = provider_message_id or f"ledger:{row_id}"
+        if action == "spend":
+            d["sent"].add(key)
+            st = (status or "").lower()
+            if "deliver" in st:
+                d["delivered"].add(key)
+            elif st in failed_statuses:
+                d["failed"].add(key)
+        elif action == "refund":
+            d["failed"].add(key)
+
+    def _rate(c):
+        sent = len(msg_ids[c]["sent"])
+        delivered = len(msg_ids[c]["delivered"] - msg_ids[c]["failed"])
+        return {"sent": sent, "delivered": delivered, "rate": round(delivered / sent * 100) if sent else None}
+
+    sms_rate = _rate("sms")
+    whatsapp_rate = _rate("whatsapp")
+
+    email_rows = (await db.execute(
+        select(EmailDeliveryEvent.provider_email_id, EmailDeliveryEvent.provider_event_id,
+               EmailDeliveryEvent.id, EmailDeliveryEvent.status, EmailDeliveryEvent.occurred_at)
+        .where(EmailDeliveryEvent.event_id == event.id)
+        .order_by(EmailDeliveryEvent.occurred_at.desc())
+    )).all()
+    latest_by_email = {}
+    for provider_email_id, provider_event_id, row_id, status, _occurred in email_rows:
+        key = provider_email_id or provider_event_id or row_id
+        latest_by_email.setdefault(key, status)
+    bad = {"bounced", "failed", "complained", "suppressed"}
+    email_sent = len(latest_by_email)
+    email_reached = sum(1 for s in latest_by_email.values() if s not in bad)
+
+    return {
+        "email": {"sent": email_sent, "reached": email_reached,
+                   "rate": round(email_reached / email_sent * 100) if email_sent else None},
+        "sms": sms_rate,
+        "whatsapp": whatsapp_rate,
+        "credits_remaining": event.message_credits,
+    }
+
+
+# ── recent activity feed ──────────────────────────────────────────────────────
+
+async def recent_activity(db: AsyncSession, event: Event, limit: int = 15) -> list[dict]:
+    rows = (await db.execute(
+        select(ScanEvent, Guest.first_name, Guest.last_name, Guest.is_walk_in, Zone.name)
+        .join(Guest, Guest.id == ScanEvent.guest_id)
+        .outerjoin(Zone, Zone.id == ScanEvent.zone_id)
+        .where(ScanEvent.event_id == event.id, ScanEvent.denied.is_(False))
+        .order_by(ScanEvent.scanned_at.desc())
+        .limit(limit)
+    )).all()
+    out = []
+    for scan, first_name, last_name, is_walk_in, zone_name in rows:
+        if scan.direction == "in" and is_walk_in:
+            action = "Walk-in added"
+        elif scan.direction == "in":
+            action = "Guest checked in"
+        else:
+            action = "Guest checked out"
+        out.append({
+            "guest_name": f"{first_name} {last_name}".strip(),
+            "action": action,
+            "location": zone_name,
+            "at": scan.scanned_at.isoformat() + "Z",
+        })
+    return out
+
+
 # ── operational alerts ────────────────────────────────────────────────────────
 
 async def _consent_step(db: AsyncSession, event_id: str) -> ExperienceStep | None:
@@ -416,6 +535,48 @@ async def _consent_step(db: AsyncSession, event_id: str) -> ExperienceStep | Non
 
 async def build_alerts(db: AsyncSession, event: Event) -> list[dict]:
     alerts: list[dict] = []
+
+    failed_invites = await db.scalar(select(func.count()).select_from(Guest).where(
+        Guest.event_id == event.id, Guest.invite_status == "failed")) or 0
+    if failed_invites:
+        alerts.append({
+            "id": "failed_invitations", "type": "failed_invitations", "severity": "warning",
+            "title": f"{failed_invites} invitation{'s' if failed_invites != 1 else ''} failed",
+            "description": "No channel could reach these guests — check contact info or delivery status.",
+            "count": failed_invites, "action_label": "Review",
+            "action_url": f"/admin?event={event.id}&tab=invite",
+        })
+
+    no_contact = await db.scalar(select(func.count()).select_from(Guest).where(
+        Guest.event_id == event.id,
+        (Guest.email.is_(None) | (Guest.email == "")),
+        (Guest.phone.is_(None) | (Guest.phone == "")),
+    )) or 0
+    if no_contact:
+        alerts.append({
+            "id": "no_contact_info", "type": "no_contact_info", "severity": "warning",
+            "title": f"{no_contact} guest{'s' if no_contact != 1 else ''} have no contact info",
+            "description": "No email or phone on file — they can't be messaged on any channel.",
+            "count": no_contact, "action_label": "View guests",
+            "action_url": f"/admin?event={event.id}&tab=guests",
+        })
+
+    if event.seating_enabled:
+        table_rows = (await db.execute(
+            select(SeatingTable.id, SeatingTable.capacity, func.count(Guest.id))
+            .outerjoin(Guest, Guest.table_id == SeatingTable.id)
+            .where(SeatingTable.event_id == event.id)
+            .group_by(SeatingTable.id, SeatingTable.capacity)
+        )).all()
+        over_capacity = sum(1 for _id, capacity, seated in table_rows if capacity and seated > capacity)
+        if over_capacity:
+            alerts.append({
+                "id": "tables_over_capacity", "type": "tables_over_capacity", "severity": "critical",
+                "title": f"{over_capacity} table{'s' if over_capacity != 1 else ''} over capacity",
+                "description": "More guests are assigned to these tables than they seat.",
+                "count": over_capacity, "action_label": "Fix seating",
+                "action_url": f"/admin?event={event.id}&tab=seating",
+            })
 
     if event.message_credits <= 20:
         alerts.append({
@@ -530,4 +691,7 @@ async def command_center(
             "in_progress_count": sum(1 for s in sessions if s["state"] == "in_progress"),
         },
         "experience": {"steps": funnel[:6]},
+        "rsvp_funnel": await rsvp_funnel(db, event),
+        "communication": await communication_health(db, event),
+        "recent_activity": await recent_activity(db, event),
     }

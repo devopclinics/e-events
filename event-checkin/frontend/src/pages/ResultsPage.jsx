@@ -1,7 +1,8 @@
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import { api } from '../api'
 import { fmtEventDateRange } from '../timeutil'
 import { useCurrentEvent } from '../hooks/useCurrentEvent'
+import { auth } from '../firebase'
 
 // New, standalone Results page reading from dashboard-service (/api/results/*) —
 // a separate read-only service from the legacy /api/events/:id/dashboard this
@@ -24,12 +25,119 @@ function fmtDay(iso) {
   return d.toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' })
 }
 
-function MetricCard({ label, value, sub, accent }) {
+function MetricCard({ icon, tint, label, value, sub, accent }) {
   return (
     <div className="bg-white dark:bg-slate-800 dark:border dark:border-slate-700/60 rounded-xl shadow-sm p-4">
-      <div className={`text-3xl font-extrabold ${accent || 'text-slate-900 dark:text-white'}`}>{value ?? '—'}</div>
-      <div className="text-xs text-slate-500 dark:text-slate-400 mt-1">{label}</div>
-      {sub && <div className="text-[11px] text-slate-400 mt-0.5">{sub}</div>}
+      <div className="flex items-center gap-3">
+        {icon && (
+          <span className={`grid place-items-center w-9 h-9 rounded-full text-base shrink-0 ${tint || 'bg-teal-50 dark:bg-teal-900/30'}`}>
+            {icon}
+          </span>
+        )}
+        <div className="min-w-0">
+          <div className={`text-2xl font-extrabold leading-tight tabular-nums ${accent || 'text-slate-900 dark:text-white'}`}>{value ?? '—'}</div>
+          <div className="text-xs text-slate-500 dark:text-slate-400 leading-tight">{label}</div>
+        </div>
+      </div>
+      {sub && <div className="text-[11px] text-slate-400 mt-2">{sub}</div>}
+    </div>
+  )
+}
+
+function Donut({ pct, label, sub }) {
+  const r = 46, c = 2 * Math.PI * r, off = c - (Math.min(pct, 100) / 100) * c
+  return (
+    <div className="relative w-32 h-32 shrink-0">
+      <svg viewBox="0 0 108 108" className="w-32 h-32 -rotate-90">
+        <circle cx="54" cy="54" r={r} fill="none" strokeWidth="11" className="stroke-slate-100 dark:stroke-slate-700" />
+        <circle cx="54" cy="54" r={r} fill="none" strokeWidth="11" strokeLinecap="round"
+          className="stroke-teal-500 transition-all duration-700" strokeDasharray={c} strokeDashoffset={off} />
+      </svg>
+      <div className="absolute inset-0 flex flex-col items-center justify-center">
+        <div className="text-2xl font-extrabold text-slate-900 dark:text-white">{pct}%</div>
+        <div className="text-[10px] text-slate-500 dark:text-slate-400 text-center px-2 leading-tight">{label}</div>
+      </div>
+      {sub && <div className="text-[10px] text-slate-400 text-center mt-1">{sub}</div>}
+    </div>
+  )
+}
+
+function RsvpFunnel({ funnel }) {
+  if (!funnel) return null
+  const steps = [
+    { label: 'Invited', value: funnel.invited, sub: 'Total invitations sent' },
+    { label: 'Responded', value: funnel.responded, sub: 'Guests who replied' },
+    { label: 'Confirmed', value: funnel.confirmed, sub: 'Guests who accepted' },
+    { label: 'Checked in', value: funnel.checked_in, sub: 'Guests who arrived' },
+  ]
+  return (
+    <div className="bg-white dark:bg-slate-800 dark:border dark:border-slate-700/60 rounded-xl shadow-sm p-4">
+      <h3 className="font-semibold text-sm dark:text-white mb-3">RSVP funnel</h3>
+      <div className="flex items-center gap-3 overflow-x-auto">
+        {steps.map((s, i) => (
+          <div key={s.label} className="flex items-center gap-3 shrink-0">
+            <div className="text-center">
+              <div className="text-2xl font-extrabold text-slate-900 dark:text-white tabular-nums">{s.value}</div>
+              <div className="text-xs font-semibold text-slate-600 dark:text-slate-300">{s.label}</div>
+              <div className="text-[10px] text-slate-400 max-w-[110px]">{s.sub}</div>
+            </div>
+            {i < steps.length - 1 && <span className="text-slate-300 dark:text-slate-600 text-lg">→</span>}
+          </div>
+        ))}
+      </div>
+    </div>
+  )
+}
+
+function CommHealthCard({ comm }) {
+  if (!comm) return null
+  const rows = [
+    { icon: '✉️', label: 'Email reached', data: comm.email },
+    { icon: '💬', label: 'SMS delivered', data: comm.sms },
+    { icon: '🟢', label: 'WhatsApp delivered', data: comm.whatsapp },
+  ]
+  return (
+    <div className="bg-white dark:bg-slate-800 dark:border dark:border-slate-700/60 rounded-xl shadow-sm p-4">
+      <div className="flex items-center justify-between mb-3">
+        <h3 className="font-semibold text-sm dark:text-white">Communication health</h3>
+        <span className="text-xs text-slate-500 dark:text-slate-400">💳 {comm.credits_remaining?.toLocaleString()} credits</span>
+      </div>
+      <div className="grid grid-cols-3 gap-3">
+        {rows.map((r) => (
+          <div key={r.label} className="text-center">
+            <div className="text-xl">{r.icon}</div>
+            <div className="text-lg font-extrabold text-slate-900 dark:text-white mt-1 tabular-nums">{r.data.rate === null ? '—' : `${r.data.rate}%`}</div>
+            <div className="text-[11px] text-slate-500 dark:text-slate-400">{r.label}</div>
+          </div>
+        ))}
+      </div>
+    </div>
+  )
+}
+
+function RecentActivity({ items }) {
+  if (!items) return null
+  return (
+    <div className="bg-white dark:bg-slate-800 dark:border dark:border-slate-700/60 rounded-xl shadow-sm p-4">
+      <h3 className="font-semibold text-sm dark:text-white mb-3">Recent activity</h3>
+      {items.length === 0 ? (
+        <p className="text-sm text-slate-400">No activity yet.</p>
+      ) : (
+        <div className="space-y-2.5 max-h-72 overflow-y-auto">
+          {items.map((it, i) => (
+            <div key={i} className="flex items-center gap-3 text-sm">
+              <span className="grid place-items-center w-7 h-7 rounded-full bg-slate-100 dark:bg-slate-700 text-[10px] font-bold text-slate-500 dark:text-slate-300 shrink-0">
+                {it.guest_name.split(' ').filter(Boolean).map((p) => p[0]).slice(0, 2).join('').toUpperCase() || '?'}
+              </span>
+              <div className="min-w-0 flex-1 truncate">
+                <span className="text-slate-700 dark:text-slate-200">{it.action}</span>
+                {it.location && <span className="text-slate-400"> · {it.location}</span>}
+              </div>
+              <span className="text-xs text-slate-400 shrink-0">{new Date(it.at).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}</span>
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   )
 }
@@ -167,6 +275,8 @@ export default function ResultsPage() {
   const [loading, setLoading] = useState(false)
   const [program, setProgram] = useState(null)
   const [experience, setExperience] = useState(null)
+  const [connected, setConnected] = useState(false)
+  const esRef = useRef(null)
 
   useEffect(() => {
     api.listEvents().then((evs) => {
@@ -195,6 +305,28 @@ export default function ResultsPage() {
     return () => clearInterval(poll)
   }, [eventId, day, load])
 
+  // Real live updates: reuse the existing authenticated admission SSE stream
+  // (backend/app/routers/dashboard.py, same one DashboardPage.jsx already
+  // uses) rather than building a second push channel — any admission event
+  // triggers an immediate refetch instead of waiting for the 20s poll.
+  const dayRef = useRef(day)
+  dayRef.current = day
+  useEffect(() => {
+    if (!eventId) { setConnected(false); return }
+    let es, closed = false
+    ;(async () => {
+      let token = ''
+      try { token = (await auth.currentUser?.getIdToken()) || '' } catch { /* not signed in */ }
+      if (closed) return
+      es = new EventSource(`/api/events/${eventId}/stream?token=${encodeURIComponent(token)}`)
+      esRef.current = es
+      es.onopen = () => setConnected(true)
+      es.onerror = () => setConnected(false)
+      es.onmessage = () => load(eventId, dayRef.current)
+    })()
+    return () => { closed = true; if (es) es.close(); setConnected(false) }
+  }, [eventId, load])
+
   useEffect(() => {
     if (!eventId || activeTab !== 'program') return
     api.resultsProgram(eventId).then(setProgram).catch(() => setProgram(null))
@@ -215,6 +347,12 @@ export default function ResultsPage() {
 
   return (
     <div className="space-y-6 max-w-6xl mx-auto">
+      <div className="flex items-center gap-1.5 text-xs text-slate-400 dark:text-slate-500">
+        <a href="/dashboard" className="hover:underline">Events</a>
+        <span>/</span>
+        <span className="text-slate-600 dark:text-slate-300">{event?.name || 'Select an event'}</span>
+      </div>
+
       <div className="flex items-start justify-between gap-3 flex-wrap">
         <div>
           <h1 className="text-2xl font-bold dark:text-white">Event command center <span className="align-middle ml-1 rounded-full bg-teal-50 dark:bg-teal-900/30 text-teal-700 dark:text-teal-300 text-[10px] font-bold px-2 py-0.5 uppercase tracking-wide">Preview</span></h1>
@@ -223,7 +361,17 @@ export default function ResultsPage() {
             <a href="/dashboard" className="text-teal-600 hover:underline font-semibold">Results page</a> is unaffected.
           </p>
         </div>
-        <span className="text-xs text-gray-400 dark:text-slate-500">{loading ? 'Refreshing…' : 'Updated just now'}</span>
+        {event && (
+          <div className="flex items-center gap-2">
+            <button onClick={() => api.downloadGuestList(eventId, 'csv')}
+              className="rounded-lg border border-slate-300 dark:border-slate-600 px-3 py-2 text-sm font-semibold text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700">
+              ⬇ Export report
+            </button>
+            <a href="/scanner" className="rounded-lg bg-teal-600 px-3 py-2 text-sm font-semibold text-white hover:bg-teal-700">
+              📷 Open scanner
+            </a>
+          </div>
+        )}
       </div>
 
       {events.length > 1 && (
@@ -236,7 +384,18 @@ export default function ResultsPage() {
 
       {event && (
         <div className="bg-gradient-to-br from-teal-600 to-cyan-700 text-white rounded-2xl px-6 py-5">
-          <div className="text-xl font-bold">{event.name}</div>
+          <div className="flex items-center gap-2 flex-wrap">
+            <div className="text-xl font-bold">{event.name}</div>
+            {event.status === 'active' && (
+              <span className="flex items-center gap-1 rounded-full bg-white/15 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide">
+                <span className="w-1.5 h-1.5 rounded-full bg-green-300 animate-pulse" /> Live
+              </span>
+            )}
+            <span className={`flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-semibold ${connected ? 'bg-white/15' : 'bg-black/10 text-white/60'}`}>
+              <span className={`w-1.5 h-1.5 rounded-full ${connected ? 'bg-green-300 animate-pulse' : 'bg-white/40'}`} />
+              {connected ? 'Updates connected' : (loading ? 'Connecting…' : 'Refreshing every 20s')}
+            </span>
+          </div>
           <div className="text-white/80 text-sm mt-0.5">
             {event.event_end_date ? fmtEventDateRange(event.event_date, event.event_end_date, event.timezone) : new Date(event.event_date).toLocaleDateString()}
             {event.venue_name ? ` · ${event.venue_name}` : ''}
@@ -275,25 +434,35 @@ export default function ResultsPage() {
           {activeTab === 'overview' && a && (
             <div className="space-y-6">
               <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
-                <MetricCard label="Expected" value={a.expected} />
-                <MetricCard label="Checked in" value={a.checked_in} />
-                <MetricCard label="On-site now" value={a.on_site} sub="entries − exits" accent="text-teal-600 dark:text-teal-400" />
-                <MetricCard label="First-time" value={a.first_time} />
-                <MetricCard label="Returning" value={a.returning} />
-                <MetricCard label="Checked out" value={a.checked_out} />
+                <MetricCard icon="👥" tint="bg-teal-50 dark:bg-teal-900/30" label="Expected" value={a.expected} />
+                <MetricCard icon="✅" tint="bg-green-50 dark:bg-green-900/30" label="Checked in" value={a.checked_in} />
+                <MetricCard icon="⏰" tint="bg-amber-50 dark:bg-amber-900/30" label="Confirmed, not here" value={a.confirmed_not_here} sub="excludes declined & pending" />
+                <MetricCard icon="❌" tint="bg-red-50 dark:bg-red-900/30" label="Declined" value={a.declined} accent="text-red-600 dark:text-red-400" />
+                <MetricCard icon="🚶" tint="bg-violet-50 dark:bg-violet-900/30" label="Walk-ins" value={a.walk_ins} />
+                <MetricCard icon="🚪" tint="bg-slate-100 dark:bg-slate-700" label="Checked out" value={a.checked_out} />
               </div>
 
               <div className="grid gap-6 lg:grid-cols-[1.3fr_1fr]">
                 <div className="bg-white dark:bg-slate-800 dark:border dark:border-slate-700/60 rounded-xl shadow-sm p-4">
-                  <h3 className="font-semibold text-sm dark:text-white mb-3">Arrivals &amp; exits</h3>
-                  <HourlyChart hourly={a.hourly} />
-                  <div className="flex gap-4 mt-3 text-xs text-slate-500 dark:text-slate-400">
-                    <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-full bg-teal-500" />First arrival</span>
-                    <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-full bg-sky-300" />Returning</span>
-                    <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-full bg-slate-300" />Exit</span>
+                  <h3 className="font-semibold text-sm dark:text-white mb-3">Attendance</h3>
+                  <div className="flex flex-col sm:flex-row items-center gap-6">
+                    <Donut pct={a.expected ? Math.round((a.checked_in / a.expected) * 100) : 0} label="of expected arrivals" />
+                    <div className="flex-1 w-full min-w-0">
+                      <HourlyChart hourly={a.hourly} />
+                      <div className="flex gap-4 mt-3 text-xs text-slate-500 dark:text-slate-400 flex-wrap">
+                        <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-full bg-teal-500" />First arrival</span>
+                        <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-full bg-sky-300" />Returning</span>
+                        <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-full bg-slate-300" />Exit</span>
+                      </div>
+                    </div>
                   </div>
                 </div>
                 <AttentionPanel alerts={data.alerts} onNavigate={navigateTo} />
+              </div>
+
+              <div className="grid gap-6 lg:grid-cols-2">
+                <RsvpFunnel funnel={data.rsvp_funnel} />
+                <CommHealthCard comm={data.communication} />
               </div>
 
               {(event.menu_enabled || data.program?.in_progress_count > 0 || event.experience_enabled) && (
@@ -338,14 +507,17 @@ export default function ResultsPage() {
                 </div>
               )}
 
-              {data.venue_occupancy?.length > 0 && (
-                <div className="bg-white dark:bg-slate-800 dark:border dark:border-slate-700/60 rounded-xl shadow-sm p-4">
-                  <h3 className="font-semibold text-sm dark:text-white mb-3">Live venue occupancy</h3>
-                  <div className="space-y-3">
-                    {data.venue_occupancy.map((z) => <OccupancyBar key={z.id} {...z} />)}
+              <div className="grid gap-6 lg:grid-cols-2">
+                {data.venue_occupancy?.length > 0 && (
+                  <div className="bg-white dark:bg-slate-800 dark:border dark:border-slate-700/60 rounded-xl shadow-sm p-4">
+                    <h3 className="font-semibold text-sm dark:text-white mb-3">Live venue occupancy</h3>
+                    <div className="space-y-3">
+                      {data.venue_occupancy.map((z) => <OccupancyBar key={z.id} {...z} />)}
+                    </div>
                   </div>
-                </div>
-              )}
+                )}
+                <RecentActivity items={data.recent_activity} />
+              </div>
 
               <div className="bg-white dark:bg-slate-800 dark:border dark:border-slate-700/60 rounded-xl shadow-sm p-4">
                 <h3 className="font-semibold text-sm dark:text-white mb-3">Attendance by day</h3>
@@ -376,12 +548,17 @@ export default function ResultsPage() {
           {activeTab === 'attendance' && a && (
             <div className="space-y-6">
               <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
-                <MetricCard label="Expected" value={a.expected} />
-                <MetricCard label="Checked in" value={a.checked_in} />
-                <MetricCard label="On-site now" value={a.on_site} />
-                <MetricCard label="First-time" value={a.first_time} />
-                <MetricCard label="Returning" value={a.returning} />
-                <MetricCard label="Checked out" value={a.checked_out} />
+                <MetricCard icon="👥" tint="bg-teal-50 dark:bg-teal-900/30" label="Expected" value={a.expected} />
+                <MetricCard icon="✅" tint="bg-green-50 dark:bg-green-900/30" label="Checked in" value={a.checked_in} />
+                <MetricCard icon="🟢" tint="bg-teal-50 dark:bg-teal-900/30" label="On-site now" value={a.on_site} accent="text-teal-600 dark:text-teal-400" />
+                <MetricCard icon="✨" tint="bg-sky-50 dark:bg-sky-900/30" label="First-time" value={a.first_time} />
+                <MetricCard icon="🔁" tint="bg-sky-50 dark:bg-sky-900/30" label="Returning" value={a.returning} />
+                <MetricCard icon="🚪" tint="bg-slate-100 dark:bg-slate-700" label="Checked out" value={a.checked_out} />
+              </div>
+              <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+                <MetricCard icon="⏰" tint="bg-amber-50 dark:bg-amber-900/30" label="Confirmed, not here" value={a.confirmed_not_here} />
+                <MetricCard icon="❌" tint="bg-red-50 dark:bg-red-900/30" label="Declined" value={a.declined} accent="text-red-600 dark:text-red-400" />
+                <MetricCard icon="🚶" tint="bg-violet-50 dark:bg-violet-900/30" label="Walk-ins" value={a.walk_ins} />
               </div>
               <div className="bg-white dark:bg-slate-800 dark:border dark:border-slate-700/60 rounded-xl shadow-sm p-4">
                 <h3 className="font-semibold text-sm dark:text-white mb-3">Hourly arrivals &amp; exits — {day ? fmtDay(day) : 'entire event'}</h3>
@@ -408,9 +585,9 @@ export default function ResultsPage() {
             ) : (
               <div className="space-y-6">
                 <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-                  <MetricCard label="In progress" value={program.in_progress_count} accent="text-teal-600 dark:text-teal-400" />
-                  <MetricCard label="Upcoming" value={program.upcoming_count} />
-                  <MetricCard label="Total sessions" value={program.sessions.length} />
+                  <MetricCard icon="🟢" tint="bg-teal-50 dark:bg-teal-900/30" label="In progress" value={program.in_progress_count} accent="text-teal-600 dark:text-teal-400" />
+                  <MetricCard icon="⏳" tint="bg-slate-100 dark:bg-slate-700" label="Upcoming" value={program.upcoming_count} />
+                  <MetricCard icon="📋" tint="bg-sky-50 dark:bg-sky-900/30" label="Total sessions" value={program.sessions.length} />
                 </div>
                 <div className="bg-white dark:bg-slate-800 dark:border dark:border-slate-700/60 rounded-xl shadow-sm p-4">
                   <h3 className="font-semibold text-sm dark:text-white mb-2">All sessions</h3>

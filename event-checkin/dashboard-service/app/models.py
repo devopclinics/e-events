@@ -65,6 +65,7 @@ class Event(Base):
     status: Mapped[str] = mapped_column(String(20), default="draft")
     seating_term: Mapped[str | None] = mapped_column(String(30), nullable=True)
     venue_access_enabled: Mapped[bool] = mapped_column(Boolean, default=False)
+    seating_enabled: Mapped[bool] = mapped_column(Boolean, default=False)
     menu_enabled: Mapped[bool] = mapped_column(Boolean, default=False)
     experience_enabled: Mapped[bool] = mapped_column(Boolean, default=False)
     message_credits: Mapped[int] = mapped_column(Integer, default=0)
@@ -87,6 +88,7 @@ class Guest(Base):
     email: Mapped[str | None] = mapped_column(String(255), nullable=True)
     phone: Mapped[str | None] = mapped_column(String(50), nullable=True)
     invite_status: Mapped[str | None] = mapped_column(String(20), nullable=True)
+    table_id: Mapped[str | None] = mapped_column(String(36), ForeignKey("seating_tables.id"), nullable=True)
 
 
 class Zone(Base):
@@ -179,3 +181,36 @@ class GuestMenuChoice(Base):
     guest_id: Mapped[str] = mapped_column(String(36), ForeignKey("guests.id"))
     category_id: Mapped[str] = mapped_column(String(36), ForeignKey("menu_categories.id"))
     chosen_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+
+
+class SeatingTable(Base):
+    __tablename__ = "seating_tables"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True)
+    event_id: Mapped[str] = mapped_column(String(36), ForeignKey("events.id"))
+    name: Mapped[str] = mapped_column(String(100))
+    capacity: Mapped[int] = mapped_column(Integer)
+
+
+class MessageCreditLedger(Base):
+    __tablename__ = "message_credit_ledger"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True)
+    event_id: Mapped[str] = mapped_column(String(36), ForeignKey("events.id"))
+    action: Mapped[str] = mapped_column(String(30))
+    status: Mapped[str | None] = mapped_column(String(30), nullable=True)
+    channel: Mapped[str | None] = mapped_column(String(30), nullable=True)
+    provider_message_id: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    delta: Mapped[int] = mapped_column(Integer)
+
+
+class EmailDeliveryEvent(Base):
+    __tablename__ = "email_delivery_events"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True)
+    event_id: Mapped[str | None] = mapped_column(String(36), ForeignKey("events.id"), nullable=True)
+    provider_event_id: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    provider_email_id: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    status: Mapped[str] = mapped_column(String(40))
+    occurred_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    created_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)

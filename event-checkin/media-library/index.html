@@ -1,0 +1,369 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<title>Festio Pricing Restructure — Plan v1</title>
+<style>
+  :root {
+    --bg: #f6f7f9;
+    --card: #ffffff;
+    --border: #e2e5ea;
+    --text: #1b2028;
+    --muted: #6b7280;
+    --accent: #0f8f82;
+    --accent-soft: #e3f5f2;
+    --ok: #1a7f4e;
+    --ok-soft: #e6f6ec;
+    --warn: #92620a;
+    --warn-soft: #fdf1dc;
+    --flag: #3d5a80;
+    --flag-soft: #ecf1f7;
+    --mono-num: "tabular-nums";
+  }
+  :root[data-theme="dark"] {
+    --bg: #0b0e14;
+    --card: #12161f;
+    --border: #232936;
+    --text: #d7dbe3;
+    --muted: #8b93a3;
+    --accent: #35d1bf;
+    --accent-soft: #12302d;
+    --ok: #4ade80;
+    --ok-soft: #12291b;
+    --warn: #f0b249;
+    --warn-soft: #2e2412;
+    --flag: #8fb2d9;
+    --flag-soft: #17222f;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #0b0e14;
+      --card: #12161f;
+      --border: #232936;
+      --text: #d7dbe3;
+      --muted: #8b93a3;
+      --accent: #35d1bf;
+      --accent-soft: #12302d;
+      --ok: #4ade80;
+      --ok-soft: #12291b;
+      --warn: #f0b249;
+      --warn-soft: #2e2412;
+      --flag: #8fb2d9;
+      --flag-soft: #17222f;
+    }
+  }
+
+  * { box-sizing: border-box; }
+  body { margin: 0; }
+  .doc {
+    background: var(--bg);
+    color: var(--text);
+    font-family: ui-sans-serif, "Segoe UI", system-ui, -apple-system, Roboto, sans-serif;
+    line-height: 1.55;
+    padding: 3rem 1.25rem 6rem;
+  }
+  .wrap { max-width: 880px; margin: 0 auto; }
+
+  .cover { padding: 1rem 0 2.5rem; border-bottom: 1px solid var(--border); margin-bottom: 2.5rem; }
+  .eyebrow {
+    text-transform: uppercase; letter-spacing: 0.14em; font-size: 0.7rem;
+    color: var(--accent); font-weight: 700; margin: 0 0 0.75rem;
+  }
+  h1 {
+    font-size: clamp(1.9rem, 4vw, 2.6rem); margin: 0 0 0.75rem; font-weight: 800;
+    letter-spacing: -0.01em; text-wrap: balance;
+  }
+  .subtitle { color: var(--muted); font-size: 1.05rem; max-width: 62ch; margin: 0 0 1.25rem; text-wrap: pretty; }
+  .cover-meta { display: flex; gap: 0.6rem; color: var(--muted); font-size: 0.85rem; font-weight: 600; }
+
+  nav.toc {
+    background: var(--card); border: 1px solid var(--border); border-radius: 12px;
+    padding: 1.25rem 1.5rem; margin-bottom: 3rem;
+  }
+  .toc-label { margin: 0 0 0.6rem; font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.1em; color: var(--muted); font-weight: 700; }
+  nav.toc ol { margin: 0; padding-left: 1.2rem; columns: 2; column-gap: 2rem; }
+  nav.toc li { margin-bottom: 0.35rem; break-inside: avoid; }
+  nav.toc a { color: var(--text); text-decoration: none; font-size: 0.92rem; }
+  nav.toc a:hover { color: var(--accent); text-decoration: underline; }
+
+  section { margin-bottom: 3.25rem; scroll-margin-top: 1rem; }
+  h2 {
+    font-size: 1.35rem; margin: 0 0 0.35rem; display: flex; align-items: baseline; gap: 0.6rem;
+  }
+  section > h2::before {
+    content: attr(data-n); font-size: 0.85rem; color: var(--accent); font-weight: 800;
+    background: var(--accent-soft); border-radius: 6px; padding: 0.1rem 0.5rem;
+  }
+  .lede { color: var(--muted); margin: 0 0 1.25rem; max-width: 68ch; }
+  h3.sub { font-size: 1.02rem; margin: 1.75rem 0 0.35rem; color: var(--text); }
+
+  table {
+    width: 100%; border-collapse: collapse; background: var(--card);
+    border: 1px solid var(--border); border-radius: 10px; overflow: hidden;
+    font-size: 0.92rem;
+  }
+  .table-scroll { overflow-x: auto; border-radius: 10px; }
+  thead th {
+    text-align: left; font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.06em;
+    color: var(--muted); padding: 0.7rem 0.9rem; border-bottom: 1px solid var(--border);
+    font-weight: 700;
+  }
+  tbody td {
+    padding: 0.75rem 0.9rem; border-bottom: 1px solid var(--border); vertical-align: top;
+  }
+  tbody tr:last-child td { border-bottom: none; }
+  td.num, th.num { text-align: right; font-variant-numeric: var(--mono-num); white-space: nowrap; font-weight: 600; }
+  td.included { color: var(--ok); font-weight: 700; }
+
+  .badge {
+    display: inline-block; font-size: 0.72rem; font-weight: 700; padding: 0.15rem 0.5rem;
+    border-radius: 999px; margin-left: 0.4rem; white-space: nowrap;
+  }
+  .ok { color: var(--ok); }
+  .warn { color: var(--warn); }
+  .flag, td.flag { color: var(--flag); }
+  span.flag {
+    background: var(--flag-soft); color: var(--flag); border-radius: 999px;
+    font-size: 0.68rem; padding: 0.1rem 0.5rem; margin-left: 0.4rem; font-weight: 700;
+    text-transform: uppercase; letter-spacing: 0.04em;
+  }
+  span.rec { color: var(--accent); font-weight: 700; }
+
+  .note { font-size: 0.88rem; color: var(--muted); margin-top: 0.9rem; max-width: 68ch; }
+  .note.flag-note { color: var(--flag); background: var(--flag-soft); border-radius: 8px; padding: 0.7rem 0.9rem; }
+  .note.warn-note { color: var(--warn); background: var(--warn-soft); border-radius: 8px; padding: 0.7rem 0.9rem; }
+
+  ol.decisions { padding-left: 1.3rem; margin: 0; }
+  ol.decisions li {
+    background: var(--warn-soft); border: 1px solid color-mix(in srgb, var(--warn) 30%, transparent);
+    border-radius: 10px; padding: 0.85rem 1rem; margin-bottom: 0.75rem; list-style-position: outside;
+  }
+  ol.decisions li::marker { color: var(--warn); font-weight: 800; }
+  ol.decisions strong { color: var(--text); }
+
+  .size-s { color: var(--ok); font-weight: 700; }
+  .size-m { color: var(--warn); font-weight: 700; }
+  .size-l { color: var(--flag); font-weight: 700; }
+
+  code {
+    background: var(--accent-soft); color: var(--accent); padding: 0.1rem 0.35rem;
+    border-radius: 5px; font-size: 0.85em;
+  }
+
+  @media (max-width: 640px) {
+    nav.toc ol { columns: 1; }
+  }
+</style>
+</head>
+<body>
+
+<div class="doc">
+<div class="wrap">
+
+<div class="cover">
+  <p class="eyebrow">Internal — pricing &amp; messaging economics</p>
+  <h1>Festio Pricing Restructure</h1>
+  <p class="subtitle">Event Pass, per-message billing, add-ons, and staffing — unbundled into four separate revenue lines. This is the planning reference before anything gets built.</p>
+  <div class="cover-meta">
+    <span>Draft v1</span>
+    <span>&middot;</span>
+    <span>Not yet implemented</span>
+  </div>
+</div>
+
+<nav class="toc">
+  <p class="toc-label">Contents</p>
+  <ol>
+    <li><a href="#tiers">1. Event Passes</a></li>
+    <li><a href="#messaging">2. Messaging — internal pricing</a></li>
+    <li><a href="#messaging-ux">2b. What the customer sees</a></li>
+    <li><a href="#bundles">3. Message bundles</a></li>
+    <li><a href="#addons">4. Add-ons</a></li>
+    <li><a href="#staffing">5. Staffing &amp; support services</a></li>
+    <li><a href="#margins">6. Margin check vs. real provider cost</a></li>
+    <li><a href="#open">7. Open decisions</a></li>
+    <li><a href="#build">8. Build-mapping appendix</a></li>
+  </ol>
+</nav>
+
+<section id="tiers">
+<h2 data-n="1">Event Passes</h2>
+<p class="lede">Software and operational workflow only. No messaging bundled in — that's priced separately in §2.</p>
+<div class="table-scroll">
+<table>
+<thead><tr><th>Plan</th><th class="num">Price</th><th>Guests</th><th>Includes</th></tr></thead>
+<tbody>
+<tr><td><strong>Free</strong></td><td class="num">$0</td><td>25</td><td>Email invitations and RSVP only. Festio branding remains. No paid messaging, QR check-in, or premium operations.</td></tr>
+<tr><td><strong>Starter Event Pass</strong></td><td class="num">$49</td><td>50</td><td>QR check-in, seating, basic menu, registry, logistics, Design Studio, email invitations.</td></tr>
+<tr><td><strong>Standard Event Pass</strong></td><td class="num">$99</td><td>150</td><td>Everything in Starter, plus floor plans, access zones, guest imports, ticket types, advanced seating.</td></tr>
+<tr><td><strong>Pro Event Pass</strong></td><td class="num">$199</td><td>300</td><td>Everything in Standard, plus multi-day operations, Experience journeys, live program, consent forms, scanner confirmations, manual check-in, advanced guest workflows.</td></tr>
+<tr><td><strong>Scale Event Pass</strong></td><td class="num">$399</td><td>1,000</td><td>Everything in Pro, plus higher-volume operations, priority support queue, larger guest-management workflows.</td></tr>
+<tr><td><strong>Enterprise</strong></td><td class="num">Custom</td><td>1,000+</td><td>Custom integrations, API access, white-label, custom sender setup, SLA, dedicated support, complex multi-day conventions.</td></tr>
+</tbody>
+</table>
+</div>
+<p class="note">NGN prices not yet set. NGN pricing will be a straight FX conversion of the finalized USD figures — see §7.</p>
+</section>
+
+<section id="messaging">
+<h2 data-n="2">Messaging — internal per-recipient pricing</h2>
+<p class="lede">This table is the internal cost/pricing basis only. <strong>None of it is shown to customers</strong> — see §2b for what the customer actually sees. Billed per recipient, per channel, per send: SMS and WhatsApp to the same guest is two billed messages, not one.</p>
+<div class="table-scroll">
+<table>
+<thead><tr><th>Channel</th><th class="num">Price / message</th><th>Positioning</th></tr></thead>
+<tbody>
+<tr><td>Email</td><td class="num included">Included</td><td>Default RSVP/invitation channel</td></tr>
+<tr><td>SMS</td><td class="num">$0.50</td><td>Standard urgent/event communication</td></tr>
+<tr><td>WhatsApp utility</td><td class="num">$0.75</td><td>RSVP, ticket, reminder, check-in communication</td></tr>
+<tr><td>RCS <span class="flag">not yet available</span></td><td class="num">$0.75</td><td>Rich branded reminder</td></tr>
+<tr><td>MMS / rich ticket card</td><td class="num">$1.00</td><td>Premium visual ticket or urgent guest communication</td></tr>
+<tr><td>WhatsApp marketing</td><td class="num">$1.00</td><td>Promotional or re-engagement message</td></tr>
+</tbody>
+</table>
+</div>
+<p class="note flag-note">RCS: SignalHouse (our SMS/MMS/RCS provider) doesn't have RCS priced or live yet — their own docs list it as "in active development." Don't publish or sell RCS until it's actually deliverable, or mark it "coming soon."</p>
+</section>
+
+<section id="messaging-ux">
+<h2 data-n="2b">What the customer actually sees</h2>
+<p class="lede">Channel and rate are internal-only. The customer only ever sees plain "credits" and dollars.</p>
+<div class="table-scroll">
+<table>
+<thead><tr><th>Surface</th><th>Customer sees</th></tr></thead>
+<tbody>
+<tr><td>Public pricing page</td><td>One line under the Event Pass grid: <em>"Messaging (SMS, WhatsApp, and more) is pay-as-you-go — top up inside your event dashboard."</em> No numbers, no channels.</td></tr>
+<tr><td>Billing panel</td><td>A credit balance ("175 credits remaining") and "Buy credits" buttons ("100 credits — $50", "500 credits — $250", "2,000 credits — $1,000") — no channel name anywhere.</td></tr>
+<tr><td>Before sending a broadcast</td><td>A single estimated cost in dollars plus recipient count ("$150 for 300 recipients"), no per-channel breakdown.</td></tr>
+<tr><td>Send history / ledger</td><td>Plain line items ("RSVP reminder — 300 sent — $150"), not channel/rate/weight detail.</td></tr>
+</tbody>
+</table>
+</div>
+<p class="note">Internally the system can still use one fungible "credit" as its unit of account (an implementation detail, see §8) — the customer never sees per-channel math.</p>
+</section>
+
+<section id="bundles">
+<h2 data-n="3">Message bundles</h2>
+<p class="lede">Customer-facing label is just <strong>"buy credits"</strong> — no channel name, no per-message rate shown. Internally each price point still maps to a real per-channel rate (§2), it's just never surfaced. Flat per-unit price at every size — no volume discount below the $0.50-equivalent floor.</p>
+<div class="table-scroll">
+<table>
+<thead><tr><th>Customer sees</th><th class="num">Price</th><th>Internal mapping (not shown)</th></tr></thead>
+<tbody>
+<tr><td>100 credits</td><td class="num">$50</td><td>≈100 SMS, or fewer WhatsApp/MMS sends at their internal rate</td></tr>
+<tr><td>500 credits</td><td class="num">$250</td><td>same rate, larger balance</td></tr>
+<tr><td>2,000 credits</td><td class="num">$1,000</td><td>same rate, largest balance</td></tr>
+</tbody>
+</table>
+</div>
+<p class="note">A credit still spends at a worse "exchange rate" on pricier channels (WhatsApp/MMS/marketing) under the hood — the customer just sees their balance go down faster on those sends, never why.</p>
+</section>
+
+<section id="addons">
+<h2 data-n="4">Add-ons</h2>
+<div class="table-scroll">
+<table>
+<thead><tr><th>Add-on</th><th class="num">Price</th><th>Note</th></tr></thead>
+<tbody>
+<tr><td>Multi-day Operations</td><td class="num">75% of tier price, per day from day 2</td><td class="ok">Starter/Standard only, priced off their own tier (e.g. Standard $99 → day 2 = $74.25, day 3 = $74.25). Included free at Pro+ regardless of day count.</td></tr>
+<tr><td>Advanced Access &amp; Zone Control</td><td class="num">$49/event</td><td class="warn">Standard ($99) already includes basic access zones. This add-on is the deeper Venue Access Intelligence layer (multi-zone scan, occupancy/flow/peak/journey analytics).</td></tr>
+<tr><td>Premium Design Pack</td><td class="num">$49/event</td><td class="ok">No overlap with what's already bundled.</td></tr>
+<tr><td>White-label branding</td><td class="num">$99/event</td><td class="ok">No overlap.</td></tr>
+<tr><td>Custom domain</td><td class="num">$99 setup + annual renewal</td><td class="warn">Renewal amount not yet set (recommended: $49/year).</td></tr>
+<tr><td>Additional 100 guests</td><td class="num">$50</td><td class="warn">Scale-tier only, recommended — otherwise undercuts the tier ladder.</td></tr>
+<tr><td>Additional 500 guests</td><td class="num">$150</td><td class="warn">Same as above.</td></tr>
+<tr><td>Custom WhatsApp sender/template setup</td><td class="num">From $149</td><td class="warn">Open-ended "from" price — needs a defined base scope.</td></tr>
+<tr><td>Data import, cleanup, or integration setup</td><td class="num">From $149</td><td class="warn">Same as above.</td></tr>
+</tbody>
+</table>
+</div>
+<h3 class="sub">Service charges</h3>
+<p class="lede">These four move from bundled-free-at-Starter+ to a flat per-event activation charge.</p>
+<div class="table-scroll">
+<table>
+<thead><tr><th>Service</th><th class="num">Price</th><th>Note</th></tr></thead>
+<tbody>
+<tr><td>Deliveries (Logistics)</td><td class="num">$50/event</td><td class="ok">No longer included free at Starter+ — activated per event at this flat charge.</td></tr>
+<tr><td>Gift (Registry)</td><td class="num">$50/event</td><td class="ok">Same — no longer bundled, flat per-event charge to activate.</td></tr>
+<tr><td>FestioMe (guest group access)</td><td class="num">$50/event</td><td class="ok">Sub-groups, join policies, private channels, DMs, staff push.</td></tr>
+<tr><td>Guest Communication</td><td class="num">$10/event</td><td class="ok">Per-event customizable email/SMS/WhatsApp message templates.</td></tr>
+</tbody>
+</table>
+</div>
+</section>
+
+<section id="staffing">
+<h2 data-n="5">Staffing &amp; support services</h2>
+<p class="lede">Priced at cost ÷ (1 − 60% target margin). All three figures land exactly on a 60% margin.</p>
+<div class="table-scroll">
+<table>
+<thead><tr><th>Service</th><th class="num">Price</th><th class="num">Implied cost</th><th class="num">Margin</th></tr></thead>
+<tbody>
+<tr><td>Remote event-day support</td><td class="num">$250/day</td><td class="num">$100/day</td><td class="num ok">60%</td></tr>
+<tr><td>Onsite event coordinator</td><td class="num">$500/day/staff</td><td class="num">$200/day</td><td class="num ok">60%</td></tr>
+<tr><td>Onsite technical/check-in lead</td><td class="num">$750/day/staff</td><td class="num">$300/day</td><td class="num ok">60%</td></tr>
+<tr><td>Travel, lodging, equipment, overtime</td><td class="num">Billed separately</td><td class="num">—</td><td class="num">—</td></tr>
+</tbody>
+</table>
+</div>
+<p class="note warn-note">No booking/invoicing flow exists for this today. Realistically this starts as a manual quote → Stripe custom invoice, not a self-serve checkout item, at least initially.</p>
+</section>
+
+<section id="margins">
+<h2 data-n="6">Margin check against real provider cost</h2>
+<p class="lede">SignalHouse (SMS/MMS/RCS) and Bird (WhatsApp) confirmed as the live providers. Public list-rate estimate, not the actual invoiced rate.</p>
+<div class="table-scroll">
+<table>
+<thead><tr><th>Channel</th><th class="num">Sell price</th><th class="num">Real cost (public est.)</th><th class="num">Margin</th></tr></thead>
+<tbody>
+<tr><td>SMS</td><td class="num">$0.50</td><td class="num">$0.0235</td><td class="num ok">95.3%</td></tr>
+<tr><td>WhatsApp utility</td><td class="num">$0.75</td><td class="num">$0.011–0.017</td><td class="num ok">97.7–98.5%</td></tr>
+<tr><td>MMS</td><td class="num">$1.00</td><td class="num">$0.05</td><td class="num ok">95%</td></tr>
+<tr><td>RCS</td><td class="num">$0.75</td><td class="num">unpriced</td><td class="num flag">n/a — not yet available</td></tr>
+</tbody>
+</table>
+</div>
+<p class="note">All priced channels clear the 70% target margin with wide headroom.</p>
+</section>
+
+<section id="open">
+<h2 data-n="7">Open decisions</h2>
+<p class="lede">Resolved items are marked <span class="ok">✓</span>. Everything else carries a recommendation.</p>
+<ol class="decisions">
+<li><span class="ok">✓ Resolved</span> — <strong>Refund policy: no refunds, ever.</strong> Once a send is attempted, the credit is spent — regardless of provider outcome, immediate rejection, or later delivery failure.</li>
+<li><strong>Guest-capacity add-on blocks — which tiers can buy them?</strong> <span class="rec">Recommend: Scale-only.</span> Otherwise a cheap tier plus guest blocks can undercut Scale's price for a similar guest count.</li>
+<li><strong>Advanced Access &amp; Zone Control wording.</strong> Needs the sentence written: "included at Standard+; this add-on is the deeper Venue Access Intelligence layer."</li>
+<li><strong>Email — truly unlimited, or a soft cap?</strong> <span class="rec">Recommend: unlimited in customer-facing language, invisible anti-abuse rate limit underneath.</span></li>
+<li><strong>Existing customers / already-granted credits.</strong> <span class="rec">Recommend: grandfather in place</span> — no retroactive clawback or conversion.</li>
+<li><strong>Bundle/credit expiry.</strong> <span class="rec">Recommend: keep the 30-days-post-event expiry.</span></li>
+<li><span class="ok">✓ Resolved</span> — <strong>NGN pricing is a straight FX conversion</strong> of the finalized USD figures, decided once USD is locked in.</li>
+<li><strong>Custom domain annual renewal.</strong> <span class="rec">Recommend: $49/year.</span></li>
+<li><strong>"From $149" items base scope.</strong> <span class="rec">Recommend: define a concrete floor for each</span> — e.g. sender setup covers registration + 3 templates, $25/template after; import covers one clean file up to 2,000 records.</li>
+<li><strong>Top-up amounts.</strong> <span class="rec">Recommend: keep $50 / $250 / $1,000 as-is.</span></li>
+<li><strong>Pre-send cost estimate.</strong> <span class="rec">Recommend: show both</span> dollar amount and recipient count.</li>
+<li><span class="ok">✓ Resolved</span> — <strong>Deliveries/Gift/FestioMe/Guest Communication</strong> are now flat per-event service charges ($50/$50/$50/$10 — see §4), no longer included free at Starter+.</li>
+</ol>
+</section>
+
+<section id="build">
+<h2 data-n="8">Build-mapping appendix</h2>
+<p class="lede">For when this moves to implementation. Sized only — nothing here is being built yet.</p>
+<div class="table-scroll">
+<table>
+<thead><tr><th>Piece</th><th>Size</th><th>What it touches</th></tr></thead>
+<tbody>
+<tr><td>Strip credit grants from tier purchases, new tier prices</td><td class="size-s">Small</td><td>Data-only edit to the <code>pricing_plans</code> table (already superadmin-editable) — no code change.</td></tr>
+<tr><td>Repriced credit packs (fungible-credit approach)</td><td class="size-s">Small</td><td>Change base credit value + <code>MESSAGE_CREDIT_WEIGHTS</code>; allow fractional weights (currently forced to whole numbers).</td></tr>
+<tr><td>WhatsApp utility vs. marketing category pricing</td><td class="size-m">Medium</td><td>Thread template category through to the credit-charging call site; extend weight lookup to key on <code>(channel, category)</code>.</td></tr>
+<tr><td>Guest-capacity add-on blocks</td><td class="size-m">Medium</td><td>New <code>pricing_plans</code> kind (<code>guest_block</code>) + one new branch in <code>apply_purchase()</code>.</td></tr>
+<tr><td>Tier-independent feature add-ons (Advanced Access, Premium Design, white-label, etc.)</td><td class="size-l">Large</td><td>New entitlements concept — today every feature gate is pure tier-rank. Needs a purchased-add-on flag independent of <code>plan_tier</code>.</td></tr>
+<tr><td>Staff day-rate booking</td><td class="size-l">Out of scope for now</td><td>No booking/invoicing flow exists. Manual quote → Stripe custom invoice.</td></tr>
+</tbody>
+</table>
+</div>
+</section>
+
+</div>
+</div>
+</body>
+</html>

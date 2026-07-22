@@ -9,7 +9,7 @@ backend/.env
 frontend/.env
 **/.env
 **/*.env.local
-proxy-htpasswd
+proxy-htpasswd-team-docs
 
 # Python cache
 **/__pycache__/

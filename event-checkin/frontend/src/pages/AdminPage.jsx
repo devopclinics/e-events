@@ -8970,6 +8970,14 @@ function ExportMenu({ event, onExport, filteredIds, filteredCount, totalCount })
   )
 }
 
+// Valid Sidebar tab ids (see the `groups` passed to <Sidebar> below) — used to
+// validate a `?tab=` deep link so a stale or made-up value can't strand the
+// page on a tab that renders nothing.
+const VALID_ADMIN_TABS = new Set([
+  'overview', 'guests', 'invite', 'communication', 'billing', 'access', 'rules',
+  'seating', 'menu', 'logistics', 'registry', 'team', 'experience', 'messages', 'features',
+])
+
 export default function AdminPage() {
   const { user } = useAuth()
   const navigate = useNavigate()
@@ -8985,7 +8993,14 @@ export default function AdminPage() {
   const [sheetUrl, setSheetUrl] = useState('')
   const [showUrlInput, setShowUrlInput] = useState(false)
   const [selectedGuests, setSelectedGuests] = useState(new Set())
-  const [activeTab, setActiveTab] = useState('overview')
+  const [activeTab, setActiveTab] = useState(() => {
+    const tab = new URLSearchParams(window.location.search).get('tab')
+    return VALID_ADMIN_TABS.has(tab) ? tab : 'overview'
+  })
+  // Guards the selectedId-change effect below so a tab deep link (?event=&tab=)
+  // survives the initial event selection instead of being immediately reset to
+  // 'overview' — it should still reset on a genuine, later event switch.
+  const initialTabAppliedRef = useRef(false)
   const [tableGroups, setTableGroups] = useState([])
   const [groupFilter, setGroupFilter] = useState('')   // '' = all, 'none' = unassigned
   const [guestSearch, setGuestSearch] = useState('')
@@ -9010,19 +9025,21 @@ export default function AdminPage() {
     if (selectedId && !evs.some((e) => e.id === selectedId)) setSelectedId('')
   }).catch(console.error) }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Returning from a successful Event Pass checkout (Stripe/Paystack).
+  // Returning from a successful Event Pass checkout (Stripe/Paystack), or a
+  // deep link from elsewhere in the app (e.g. a Results "Needs attention"
+  // alert linking to /admin?event=&tab=). The event/tab themselves are
+  // already applied by the selectedId/activeTab initializers above — this
+  // just handles the one-off flash messages and cleans up the URL after.
   useEffect(() => {
     const params = new URLSearchParams(window.location.search)
+    const eventParam = params.get('event')
+    if (eventParam && eventParam !== selectedId) setSelectedId(eventParam)
+
     if (params.get('upgraded')) {
       setMsg('Payment received — your Event Pass is being applied. Refresh in a moment if the plan hasn’t updated.')
       setTimeout(() => setMsg(''), 8000)
       window.history.replaceState({}, '', '/admin')
       api.listEvents().then(setEvents).catch(console.error)
-    } else if (params.get('tab') === 'billing') {
-      setActiveTab('overview')
-      setMsg('Open the Event Pass panel below to activate or upgrade this event.')
-      setTimeout(() => setMsg(''), 7000)
-      window.history.replaceState({}, '', '/admin')
     } else if (params.get('recommended')) {
       const labels = { free: 'Free', tier50: 'Starter', tier150: 'Standard', tier300: 'Pro', scale: 'Scale', enterprise: 'Enterprise' }
       const plan = params.get('recommended')
@@ -9031,14 +9048,20 @@ export default function AdminPage() {
       setMsg(`Draft created. Recommended plan: ${labels[plan] || plan}. You can preview first and pay only when activating paid modules.`)
       setTimeout(() => setMsg(''), 9000)
       window.history.replaceState({}, '', '/admin')
+    } else if (params.get('tab') || eventParam) {
+      window.history.replaceState({}, '', '/admin')
     }
-  }, [])
+  }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     setPage(0)
     setSelectedGuests(new Set())
-    setActiveTab('overview')
     setGroupFilter('')
+    // A tab deep link (?tab=) should survive the very first selectedId
+    // application (the URL-driven one above) but a later, genuine event
+    // switch should still land back on the overview tab like before.
+    if (initialTabAppliedRef.current) setActiveTab('overview')
+    initialTabAppliedRef.current = true
     if (!selectedId) { setGuests([]); setTableGroups([]); return }
     api.listGuests(selectedId).then(setGuests).catch(console.error)
     api.listTableGroups(selectedId).then(setTableGroups).catch(() => setTableGroups([]))

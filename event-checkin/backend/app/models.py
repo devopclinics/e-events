@@ -744,6 +744,65 @@ class GuestMealFulfillment(Base):
     override_reason: Mapped[str | None] = mapped_column(Text, nullable=True)
 
 
+class MealService(Base):
+    """A scheduled serving occurrence of a menu category — Track B v2.
+
+    GuestMealFulfillment (above) tracked fulfillment directly against a
+    category, with no service date/time, station, capacity, or eligibility
+    concept, and reversing a "served" mark deleted the row outright (no
+    audit trail). This table + GuestMealService replace it: a category can
+    have one or more MealService rows (normally one; the schema doesn't
+    force that), each with its own schedule/venue/capacity/status, and
+    GuestMealService keeps a durable per-guest fulfillment record instead of
+    an all-or-nothing row that vanishes on reversal.
+
+    GuestMealFulfillment itself is left in place (unused by new code) rather
+    than dropped — existing rows were migrated forward via SCHEMA_PATCHES,
+    dropping a live production table is not worth the risk for a rename."""
+    __tablename__ = "meal_services"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+    event_id: Mapped[str] = mapped_column(String(36), ForeignKey("events.id"), index=True)
+    category_id: Mapped[str] = mapped_column(String(36), ForeignKey("menu_categories.id"), index=True)
+    name: Mapped[str] = mapped_column(String(150))
+    service_date: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    starts_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    ends_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    venue_id: Mapped[str | None] = mapped_column(String(36), ForeignKey("zones.id"), nullable=True)
+    status: Mapped[str] = mapped_column(String(20), default="open")  # draft | open | closed | cancelled
+    capacity: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+
+class GuestMealService(Base):
+    """Per-guest record for a MealService — the durable replacement for
+    GuestMealFulfillment. Reversing a "served" mark sets fulfillment_status
+    back to "pending" with an override_reason instead of deleting the row,
+    so who-served-whom-when survives a correction. eligibility_status is a
+    real, overridable field (default "eligible" for every non-declined
+    guest) rather than inferring eligibility from whether they happened to
+    make a menu choice, which excluded non-responders from the count
+    entirely."""
+    __tablename__ = "guest_meal_services"
+    __table_args__ = (
+        UniqueConstraint("service_id", "guest_id", name="uq_guest_meal_service"),
+        Index("ix_guest_meal_service_service_status", "service_id", "fulfillment_status"),
+    )
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+    service_id: Mapped[str] = mapped_column(String(36), ForeignKey("meal_services.id"), index=True)
+    guest_id: Mapped[str] = mapped_column(String(36), ForeignKey("guests.id"), index=True)
+    eligibility_status: Mapped[str] = mapped_column(String(20), default="eligible")  # eligible | not_eligible
+    fulfillment_status: Mapped[str] = mapped_column(String(20), default="pending")  # pending | served | skipped | denied
+    served_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    served_by_user_id: Mapped[str | None] = mapped_column(String(36), ForeignKey("users.id"), nullable=True)
+    station_id: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    override_reason: Mapped[str | None] = mapped_column(Text, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+
 class MenuCombination(Base):
     __tablename__ = "menu_combinations"
 

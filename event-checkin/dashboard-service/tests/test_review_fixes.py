@@ -6,8 +6,8 @@ from app.auth import require_dashboard_access
 from app.main import _consent_step, _parse_session_dt
 from app.models import (
     EmailDeliveryEvent, Event, EventUser, ExperienceStep, ExperienceWorkflow,
-    GuestExperienceProgress, GuestMealFulfillment, GuestMenuChoice, MenuCategory,
-    Membership, ScanEvent, User, Zone,
+    GuestExperienceProgress, GuestMealService, GuestMenuChoice, MealService, MenuCategory,
+    Membership, ScanEvent, SeatingTable, User, Zone,
 )
 
 
@@ -215,11 +215,15 @@ async def test_meal_totals_count_distinct_guests(ctx):
         lunch = MenuCategory(id="lunch", event_id=ctx.event_id, name="Lunch", display_only=False)
         s.add_all([breakfast, lunch])
         await s.flush()
+        breakfast_svc = MealService(id="svc-breakfast", event_id=ctx.event_id, category_id=breakfast.id, name="Breakfast")
+        lunch_svc = MealService(id="svc-lunch", event_id=ctx.event_id, category_id=lunch.id, name="Lunch")
+        s.add_all([breakfast_svc, lunch_svc])
+        await s.flush()
         s.add_all([
             GuestMenuChoice(id="choice-1", guest_id=guest.id, category_id=breakfast.id),
             GuestMenuChoice(id="choice-2", guest_id=guest.id, category_id=lunch.id),
-            GuestMealFulfillment(id="served-1", guest_id=guest.id, category_id=breakfast.id, status="served"),
-            GuestMealFulfillment(id="served-2", guest_id=guest.id, category_id=lunch.id, status="served"),
+            GuestMealService(id="served-1", service_id=breakfast_svc.id, guest_id=guest.id, fulfillment_status="served"),
+            GuestMealService(id="served-2", service_id=lunch_svc.id, guest_id=guest.id, fulfillment_status="served"),
         ])
         await s.commit()
     payload = (await ctx.client.get(
@@ -228,6 +232,75 @@ async def test_meal_totals_count_distinct_guests(ctx):
     assert payload["eligible_total"] == 1
     assert payload["served_total"] == 1
     assert len(payload["categories"]) == 2
+
+
+async def test_alert_guests_no_contact_info(ctx):
+    async with ctx.session_factory() as s:
+        await ctx.add_guest(s, id="no-contact", email=None, phone=None)
+        await ctx.add_guest(s, id="has-email", email="a@test.com", phone=None)
+        await s.commit()
+
+    payload = (await ctx.client.get(
+        f"/api/results/events/{ctx.event_id}/alerts/no_contact_info/guests"
+    )).json()
+    assert [g["id"] for g in payload["guests"]] == ["no-contact"]
+
+
+async def test_alert_guests_tables_over_capacity_includes_context(ctx):
+    await _set_event(ctx, seating_enabled=True)
+    async with ctx.session_factory() as s:
+        table = SeatingTable(id="table-1", event_id=ctx.event_id, name="Table 1", capacity=1)
+        s.add(table)
+        await s.flush()
+        await ctx.add_guest(s, id="overbook-a", table_id=table.id)
+        await ctx.add_guest(s, id="overbook-b", table_id=table.id)
+        await s.commit()
+
+    payload = (await ctx.client.get(
+        f"/api/results/events/{ctx.event_id}/alerts/tables_over_capacity/guests"
+    )).json()
+    ids = {g["id"] for g in payload["guests"]}
+    assert ids == {"overbook-a", "overbook-b"}
+    assert all("Table 1" in g["context"] for g in payload["guests"])
+
+
+async def test_alert_guests_unknown_type_404s(ctx):
+    resp = await ctx.client.get(f"/api/results/events/{ctx.event_id}/alerts/not_a_real_alert/guests")
+    assert resp.status_code == 404
+
+
+async def test_experience_step_guests_only_returns_failed_status(ctx):
+    await _set_event(ctx, experience_enabled=True)
+    async with ctx.session_factory() as s:
+        workflow = ExperienceWorkflow(
+            id="wf-blocked", event_id=ctx.event_id, name="Consent", status="published",
+            version=1, is_default=True,
+        )
+        step = ExperienceStep(
+            id="consent-step", workflow_id=workflow.id, key="consent", type="consent",
+            title="Consent", enabled=True,
+        )
+        blocked_guest = await ctx.add_guest(s, id="blocked-guest")
+        started_guest = await ctx.add_guest(s, id="not-started-guest")
+        s.add_all([workflow, step])
+        await s.flush()
+        s.add_all([
+            GuestExperienceProgress(
+                id="prog-failed", event_id=ctx.event_id, workflow_id=workflow.id,
+                step_id=step.id, guest_id=blocked_guest.id, status="failed",
+            ),
+            GuestExperienceProgress(
+                id="prog-not-started", event_id=ctx.event_id, workflow_id=workflow.id,
+                step_id=step.id, guest_id=started_guest.id, status="not_started",
+            ),
+        ])
+        await s.commit()
+
+    payload = (await ctx.client.get(
+        f"/api/results/events/{ctx.event_id}/analytics/experience/steps/{step.id}/guests"
+    )).json()
+    assert [g["id"] for g in payload["guests"]] == ["blocked-guest"]
+    assert payload["step_title"] == "Consent"
 
 
 async def test_dashboard_permission_allows_event_staff(ctx):

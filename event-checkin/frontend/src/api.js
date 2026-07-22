@@ -535,9 +535,11 @@ export const api = {
   // Results / multi-day command center (dashboard-service, read-only, Track A —
   // see docs/MULTI-DAY-DASHBOARD-IMPLEMENTATION-PLAN.md). Separate service from
   // the legacy dashboard endpoint above; both can be called independently.
-  resultsCommandCenter: (eventId, { day, venueId } = {}) => {
+  resultsCommandCenter: (eventId, { day, start, end, venueId } = {}) => {
     const params = new URLSearchParams()
     if (day) params.set('day', day)
+    if (start) params.set('start', start)
+    if (end) params.set('end', end)
     if (venueId) params.set('venue_id', venueId)
     const qs = params.toString()
     return req('GET', `/results/events/${eventId}/command-center${qs ? `?${qs}` : ''}`)
@@ -556,6 +558,8 @@ export const api = {
   resultsMeals: (eventId) => req('GET', `/results/events/${eventId}/analytics/meals`),
   resultsInvitations: (eventId) => req('GET', `/results/events/${eventId}/analytics/invitations`),
   resultsOperations: (eventId) => req('GET', `/results/events/${eventId}/analytics/operations`),
+  resultsAlertGuests: (eventId, alertId) => req('GET', `/results/events/${eventId}/alerts/${encodeURIComponent(alertId)}/guests`),
+  resultsExperienceStepGuests: (eventId, stepId) => req('GET', `/results/events/${eventId}/analytics/experience/steps/${encodeURIComponent(stepId)}/guests`),
 
   // Users
   listUsers: () => req('GET', '/auth/users'),

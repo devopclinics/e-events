@@ -6,7 +6,7 @@ from ..database import get_db
 from ..models import (
     Event, MenuCategory, MenuItem, GuestMenuChoice, Guest, User,
     EventUser, MenuCombination, MenuCombinationItem, SeatingTable,
-    GuestMealFulfillment,
+    MealService, GuestMealService,
 )
 from ..schemas import (
     MenuCategoryCreate, MenuCategoryOut, MenuItemCreate, MenuItemOut,
@@ -255,29 +255,56 @@ async def _category_or_404(event_id: str, category_id: str, db: AsyncSession) ->
     return cat
 
 
+async def _default_service_for_category(event_id: str, cat: MenuCategory, db: AsyncSession) -> MealService:
+    """The category's MealService (normally auto-created by db_migrate.py's
+    backfill on deploy; self-heals here too in case a category was created
+    and used within the same request cycle, before the next deploy runs)."""
+    service = await db.scalar(select(MealService).where(MealService.category_id == cat.id))
+    if service:
+        return service
+    service = MealService(event_id=event_id, category_id=cat.id, name=cat.name, status="open")
+    db.add(service)
+    await db.flush()
+    return service
+
+
+async def _sync_legacy_meal_served(guest_id: str, db: AsyncSession) -> None:
+    """Guest.meal_served stays "at least one service served", for any code
+    that still reads the legacy boolean."""
+    served = await db.scalar(select(func.count()).select_from(GuestMealService).where(
+        GuestMealService.guest_id == guest_id, GuestMealService.fulfillment_status == "served"))
+    guest = await db.get(Guest, guest_id)
+    if guest:
+        guest.meal_served = bool(served)
+
+
 @router.patch("/{event_id}/menu-categories/{category_id}/guests/{guest_id}/served")
 async def mark_category_served(
     event_id: str, category_id: str, guest_id: str,
+    station_id: str | None = None,
     db: AsyncSession = Depends(get_db), current_user: User = Depends(require_paid_event_member),
 ):
     await _require_menu_access(event_id, db, current_user)
-    await _category_or_404(event_id, category_id, db)
+    cat = await _category_or_404(event_id, category_id, db)
     guest = await db.get(Guest, guest_id)
     if not guest or guest.event_id != event_id:
         raise HTTPException(404, "Guest not found")
 
-    existing = await db.scalar(select(GuestMealFulfillment).where(
-        GuestMealFulfillment.guest_id == guest_id, GuestMealFulfillment.category_id == category_id))
+    service = await _default_service_for_category(event_id, cat, db)
+    existing = await db.scalar(select(GuestMealService).where(
+        GuestMealService.service_id == service.id, GuestMealService.guest_id == guest_id))
     if existing:
-        existing.status = "served"
+        existing.fulfillment_status = "served"
         existing.served_at = datetime.utcnow()
         existing.served_by_user_id = current_user.id
+        existing.station_id = station_id
+        existing.override_reason = None
     else:
-        db.add(GuestMealFulfillment(
-            guest_id=guest_id, category_id=category_id,
-            status="served", served_by_user_id=current_user.id,
+        db.add(GuestMealService(
+            service_id=service.id, guest_id=guest_id, fulfillment_status="served",
+            served_at=datetime.utcnow(), served_by_user_id=current_user.id, station_id=station_id,
         ))
-    guest.meal_served = True  # legacy dual-write: "at least one category served"
+    await _sync_legacy_meal_served(guest_id, db)
     await db.commit()
     return {"ok": True}
 
@@ -288,18 +315,17 @@ async def unmark_category_served(
     db: AsyncSession = Depends(get_db), current_user: User = Depends(require_paid_event_member),
 ):
     await _require_menu_access(event_id, db, current_user)
-    await _category_or_404(event_id, category_id, db)
-    existing = await db.scalar(select(GuestMealFulfillment).where(
-        GuestMealFulfillment.guest_id == guest_id, GuestMealFulfillment.category_id == category_id))
+    cat = await _category_or_404(event_id, category_id, db)
+    service = await _default_service_for_category(event_id, cat, db)
+    existing = await db.scalar(select(GuestMealService).where(
+        GuestMealService.service_id == service.id, GuestMealService.guest_id == guest_id))
     if existing:
-        await db.delete(existing)
-        await db.flush()
-        remaining = await db.scalar(select(func.count()).select_from(GuestMealFulfillment).where(
-            GuestMealFulfillment.guest_id == guest_id, GuestMealFulfillment.status == "served"))
-        if not remaining:
-            guest = await db.get(Guest, guest_id)
-            if guest:
-                guest.meal_served = False
+        # Audit trail preserved: the row stays, with who un-served it and why —
+        # a prior version deleted this row outright, losing the history.
+        existing.fulfillment_status = "pending"
+        existing.override_reason = f"Un-served by {current_user.email}"
+        existing.served_at = None
+        await _sync_legacy_meal_served(guest_id, db)
         await db.commit()
 
 
@@ -372,8 +398,9 @@ async def menu_dashboard(event_id: str, db: AsyncSession = Depends(get_db), curr
     )).scalars().all()
 
     fulfillment_rows = (await db.execute(
-        select(GuestMealFulfillment.guest_id, GuestMealFulfillment.category_id, GuestMealFulfillment.status)
-        .where(GuestMealFulfillment.guest_id.in_([g.id for g in guests]) if guests else GuestMealFulfillment.guest_id.is_(None))
+        select(GuestMealService.guest_id, MealService.category_id, GuestMealService.fulfillment_status)
+        .join(MealService, MealService.id == GuestMealService.service_id)
+        .where(GuestMealService.guest_id.in_([g.id for g in guests]) if guests else GuestMealService.guest_id.is_(None))
     )).all()
     served_by_guest: dict[str, dict[str, bool]] = {}
     for gid, cat_id, status in fulfillment_rows:

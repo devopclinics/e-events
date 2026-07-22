@@ -192,14 +192,31 @@ class GuestMenuChoice(Base):
     chosen_at: Mapped[datetime] = mapped_column(DateTime, default=utc_now_naive)
 
 
-class GuestMealFulfillment(Base):
-    __tablename__ = "guest_meal_fulfillment"
+class MealService(Base):
+    __tablename__ = "meal_services"
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True)
-    guest_id: Mapped[str] = mapped_column(String(36), ForeignKey("guests.id"))
+    event_id: Mapped[str] = mapped_column(String(36), ForeignKey("events.id"))
     category_id: Mapped[str] = mapped_column(String(36), ForeignKey("menu_categories.id"))
-    status: Mapped[str] = mapped_column(String(20), default="served")
-    served_at: Mapped[datetime] = mapped_column(DateTime, default=utc_now_naive)
+    name: Mapped[str] = mapped_column(String(150))
+    service_date: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    starts_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    ends_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    venue_id: Mapped[str | None] = mapped_column(String(36), nullable=True)
+    status: Mapped[str] = mapped_column(String(20), default="open")
+    capacity: Mapped[int | None] = mapped_column(Integer, nullable=True)
+
+
+class GuestMealService(Base):
+    __tablename__ = "guest_meal_services"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True)
+    service_id: Mapped[str] = mapped_column(String(36), ForeignKey("meal_services.id"))
+    guest_id: Mapped[str] = mapped_column(String(36), ForeignKey("guests.id"))
+    eligibility_status: Mapped[str] = mapped_column(String(20), default="eligible")
+    fulfillment_status: Mapped[str] = mapped_column(String(20), default="pending")
+    served_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    station_id: Mapped[str | None] = mapped_column(String(100), nullable=True)
 
 
 class SeatingTable(Base):

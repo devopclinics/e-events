@@ -25,7 +25,24 @@ function fmtDay(iso) {
   return d.toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' })
 }
 
-function MetricCard({ icon, tint, label, value, sub, accent }) {
+// Hover/focus tooltip explaining what a metric actually counts — several of
+// these (Expected vs Confirmed, First-time vs Returning, arrival-gap labels)
+// mean something more specific than the label alone suggests. Native `title`
+// keeps this dependency-free; aria-label gives screen readers the same text.
+function MetricHint({ text }) {
+  return (
+    <span
+      tabIndex={0}
+      title={text}
+      aria-label={text}
+      className="inline-grid place-items-center w-3.5 h-3.5 rounded-full border border-slate-300 dark:border-slate-600 text-[9px] font-bold leading-none text-slate-400 dark:text-slate-500 cursor-help shrink-0 hover:border-slate-400 hover:text-slate-500 dark:hover:text-slate-400"
+    >
+      ?
+    </span>
+  )
+}
+
+function MetricCard({ icon, tint, label, value, sub, accent, hint }) {
   return (
     <div className="bg-white dark:bg-slate-800 dark:border dark:border-slate-700/60 rounded-xl shadow-sm p-4">
       <div className="flex items-center gap-3">
@@ -35,7 +52,10 @@ function MetricCard({ icon, tint, label, value, sub, accent }) {
           </span>
         )}
         <div className="min-w-0">
-          <div className="text-sm font-bold text-slate-600 dark:text-slate-300 leading-snug mb-2">{label}</div>
+          <div className="flex items-center gap-1.5 text-sm font-bold text-slate-600 dark:text-slate-300 leading-snug mb-2">
+            <span>{label}</span>
+            {hint && <MetricHint text={hint} />}
+          </div>
           <div className={`text-2xl font-extrabold leading-tight tabular-nums ${accent || 'text-slate-900 dark:text-white'}`}>{value ?? '—'}</div>
         </div>
       </div>
@@ -148,8 +168,51 @@ const SEVERITY_STYLE = {
   warning: 'border-amber-200 bg-amber-50 dark:bg-amber-900/20 dark:border-amber-800',
 }
 const SEVERITY_ICON = { critical: '⛔', warning: '⚠️' }
+// Alert types with a real guest-level resolution list behind them (see
+// dashboard-service GET /alerts/{alert_id}/guests). low_credits and
+// zone_capacity's aggregate-only cousins aren't guest-scoped so they're
+// excluded on purpose.
+const GUEST_LIST_ALERT_TYPES = new Set([
+  'failed_invitations', 'no_contact_info', 'tables_over_capacity',
+  'missing_meal_selection', 'unsigned_consent', 'denied_scans', 'zone_capacity',
+])
 
-function AttentionPanel({ alerts, onNavigate, showEntireEventBadge }) {
+// Shared by the alert panel ("View guests") and the Experience journey card
+// ("View blocked guests") — both resolve to a concrete guest list instead of
+// just a count, fetched lazily only once expanded.
+function InlineGuestList({ eventId, kind, resourceId }) {
+  const [state, setState] = useState({ loading: true, error: '', guests: null })
+  useEffect(() => {
+    let cancelled = false
+    setState({ loading: true, error: '', guests: null })
+    const promise = kind === 'step'
+      ? api.resultsExperienceStepGuests(eventId, resourceId)
+      : api.resultsAlertGuests(eventId, resourceId)
+    promise.then((res) => {
+      if (!cancelled) setState({ loading: false, error: '', guests: res.guests })
+    }).catch(() => {
+      if (!cancelled) setState({ loading: false, error: 'Could not load guest list.', guests: null })
+    })
+    return () => { cancelled = true }
+  }, [eventId, kind, resourceId])
+
+  if (state.loading) return <p className="text-xs text-slate-400 px-1 py-2">Loading guests…</p>
+  if (state.error) return <p className="text-xs text-red-500 px-1 py-2">{state.error}</p>
+  if (!state.guests || state.guests.length === 0) return <p className="text-xs text-slate-400 px-1 py-2">No guests found.</p>
+  return (
+    <div className="max-h-64 overflow-y-auto border-t border-slate-100 dark:border-slate-700/60 mt-2 pt-2 space-y-1">
+      {state.guests.map((g) => (
+        <div key={g.id} className="flex items-center justify-between gap-3 text-xs py-0.5">
+          <span className="font-medium text-slate-700 dark:text-slate-200 truncate">{g.name}</span>
+          <span className="text-slate-400 truncate">{g.context || g.email || g.phone || '—'}</span>
+        </div>
+      ))}
+    </div>
+  )
+}
+
+function AttentionPanel({ eventId, alerts, onNavigate, showEntireEventBadge }) {
+  const [expandedId, setExpandedId] = useState(null)
   if (!alerts) return null
   return (
     <div className="bg-white dark:bg-slate-800 dark:border dark:border-slate-700/60 rounded-xl shadow-sm p-4">
@@ -158,19 +221,33 @@ function AttentionPanel({ alerts, onNavigate, showEntireEventBadge }) {
         <p className="text-sm text-slate-400">Nothing needs attention right now.</p>
       ) : (
         <div className="space-y-2">
-          {alerts.map((a) => (
-            <div key={a.id} className={`flex items-center justify-between gap-3 rounded-lg border px-3 py-2 text-sm ${SEVERITY_STYLE[a.severity] || 'border-slate-200 dark:border-slate-700'}`}>
-              <span className="flex items-center gap-2">
-                <span>{SEVERITY_ICON[a.severity] || '•'}</span>
-                <span className="text-slate-700 dark:text-slate-200">{a.title}</span>
-              </span>
-              {a.action_label && (
-                <button onClick={() => onNavigate?.(a.action_url)} className="shrink-0 rounded-lg border border-slate-300 dark:border-slate-600 px-2.5 py-1 text-xs font-semibold text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700">
-                  {a.action_label}
-                </button>
-              )}
-            </div>
-          ))}
+          {alerts.map((a) => {
+            const hasList = GUEST_LIST_ALERT_TYPES.has(a.type)
+            const isOpen = expandedId === a.id
+            return (
+              <div key={a.id} className={`rounded-lg border px-3 py-2 text-sm ${SEVERITY_STYLE[a.severity] || 'border-slate-200 dark:border-slate-700'}`}>
+                <div className="flex items-center justify-between gap-3">
+                  <span className="flex items-center gap-2 min-w-0">
+                    <span>{SEVERITY_ICON[a.severity] || '•'}</span>
+                    <span className="text-slate-700 dark:text-slate-200 truncate">{a.title}</span>
+                  </span>
+                  <div className="flex items-center gap-2 shrink-0">
+                    {hasList && (
+                      <button onClick={() => setExpandedId(isOpen ? null : a.id)} className="rounded-lg border border-slate-300 dark:border-slate-600 px-2.5 py-1 text-xs font-semibold text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700">
+                        {isOpen ? 'Hide' : 'View guests'}
+                      </button>
+                    )}
+                    {a.action_label && (
+                      <button onClick={() => onNavigate?.(a.action_url)} className="rounded-lg border border-slate-300 dark:border-slate-600 px-2.5 py-1 text-xs font-semibold text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700">
+                        {a.action_label}
+                      </button>
+                    )}
+                  </div>
+                </div>
+                {isOpen && <InlineGuestList eventId={eventId} kind="alert" resourceId={a.id} />}
+              </div>
+            )
+          })}
         </div>
       )}
     </div>
@@ -284,9 +361,15 @@ function EmptyFeatureState({ tab }) {
 export default function ResultsPage() {
   const [events, setEvents] = useState([])
   const [eventId, setEventId] = useCurrentEvent()
-  const [activeTab, setActiveTab] = useState('overview')
-  const [day, setDay] = useState('') // '' = entire event
-  const [venueId, setVenueId] = useState('') // '' = all venues/zones
+  // Initial scope comes from the URL (?event=&day=&venue=&tab=) so a refresh
+  // or a shared link lands back on the same view instead of always resetting
+  // to the entire-event Overview.
+  const [activeTab, setActiveTab] = useState(() => new URLSearchParams(window.location.search).get('tab') || 'overview')
+  const [day, setDay] = useState(() => new URLSearchParams(window.location.search).get('day') || '') // '' = entire event
+  const [venueId, setVenueId] = useState(() => new URLSearchParams(window.location.search).get('venue') || '') // '' = all venues/zones
+  const [customStart, setCustomStart] = useState(() => new URLSearchParams(window.location.search).get('start') || '')
+  const [customEnd, setCustomEnd] = useState(() => new URLSearchParams(window.location.search).get('end') || '')
+  const [showCustomRange, setShowCustomRange] = useState(() => Boolean(new URLSearchParams(window.location.search).get('start')))
   const [zones, setZones] = useState([])
   const [data, setData] = useState(null)
   const [error, setError] = useState('')
@@ -297,6 +380,7 @@ export default function ResultsPage() {
   const [invitations, setInvitations] = useState(null)
   const [operations, setOperations] = useState(null)
   const [connected, setConnected] = useState(false)
+  const [blockedStepId, setBlockedStepId] = useState(null)
   const esRef = useRef(null)
 
   useEffect(() => {
@@ -306,11 +390,18 @@ export default function ResultsPage() {
     }).catch(() => {})
   }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
-  const load = useCallback(async (id, d, v) => {
+  const load = useCallback(async (id, d, v, rangeStart, rangeEnd) => {
     if (!id) return
+    // Both ends of a custom range are required together — the backend
+    // rejects one without the other, so wait for both before sending either.
+    const hasRange = !d && rangeStart && rangeEnd
     setLoading(true)
     try {
-      setData(await api.resultsCommandCenter(id, { day: d || undefined, venueId: v || undefined }))
+      setData(await api.resultsCommandCenter(id, {
+        day: d || undefined, venueId: v || undefined,
+        start: hasRange ? rangeStart : undefined,
+        end: hasRange ? rangeEnd : undefined,
+      }))
       setError('')
     } catch (err) {
       setError(err.message || 'Results are temporarily unavailable.')
@@ -321,25 +412,74 @@ export default function ResultsPage() {
 
   useEffect(() => {
     if (!eventId) { setData(null); setZones([]); return }
-    load(eventId, day, venueId)
-    const poll = setInterval(() => load(eventId, day, venueId), 20000)
+    load(eventId, day, venueId, customStart, customEnd)
+    const poll = setInterval(() => load(eventId, day, venueId, customStart, customEnd), 20000)
     return () => clearInterval(poll)
-  }, [eventId, day, venueId, load])
+  }, [eventId, day, venueId, customStart, customEnd, load])
 
+  // Only reset the venue filter on a REAL event change, not on first mount —
+  // otherwise a venue supplied via the URL (?venue=...) would be clobbered
+  // immediately after loading the shared link.
+  const prevEventIdRef = useRef(eventId)
   useEffect(() => {
-    setVenueId('')
     if (!eventId) { setZones([]); return }
+    if (prevEventIdRef.current !== eventId) setVenueId('')
+    prevEventIdRef.current = eventId
     api.listZones(eventId).then(setZones).catch(() => setZones([]))
   }, [eventId])
+
+  // Apply ?event= from a shared link once, on mount, without fighting the
+  // shared useCurrentEvent/localStorage selection on every render.
+  useEffect(() => {
+    const urlEvent = new URLSearchParams(window.location.search).get('event')
+    if (urlEvent) setEventId(urlEvent)
+  }, []) // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Keep the URL in sync with the current scope so a refresh or a shared
+  // link reproduces the same view (day/venue/range/tab), not just the event.
+  useEffect(() => {
+    if (!eventId) return
+    const params = new URLSearchParams()
+    params.set('event', eventId)
+    if (day) params.set('day', day)
+    if (!day && customStart) params.set('start', customStart)
+    if (!day && customEnd) params.set('end', customEnd)
+    if (venueId) params.set('venue', venueId)
+    if (activeTab && activeTab !== 'overview') params.set('tab', activeTab)
+    window.history.replaceState({}, '', `/results?${params.toString()}`)
+  }, [eventId, day, venueId, customStart, customEnd, activeTab])
+
+  // Tab-specific fetchers, reused by the tab-switch effects below (which
+  // null the state first, for a clean loading indicator) AND by the SSE/poll
+  // refresh further down (which refetches in place, no flicker).
+  const refetchTab = useCallback(async (tab, id, d) => {
+    if (!id) return
+    try {
+      if (tab === 'program') setProgram(await api.resultsProgram(id, d || undefined))
+      else if (tab === 'experience') setExperience(await api.resultsExperience(id))
+      else if (tab === 'meals') setMeals(await api.resultsMeals(id))
+      else if (tab === 'invitations') setInvitations(await api.resultsInvitations(id))
+      else if (tab === 'operations') setOperations(await api.resultsOperations(id))
+    } catch { /* leave prior data visible rather than blanking on a transient error */ }
+  }, [])
 
   // Real live updates: reuse the existing authenticated admission SSE stream
   // (backend/app/routers/dashboard.py, same one DashboardPage.jsx already
   // uses) rather than building a second push channel — any admission event
   // triggers an immediate refetch instead of waiting for the 20s poll.
+  // Previously this only refreshed Overview/Attendance (command-center);
+  // Program/Meals/Experience/Invitations/Operations sat stale until the next
+  // tab switch or manual reload.
   const dayRef = useRef(day)
   dayRef.current = day
   const venueRef = useRef(venueId)
   venueRef.current = venueId
+  const customStartRef = useRef(customStart)
+  customStartRef.current = customStart
+  const customEndRef = useRef(customEnd)
+  customEndRef.current = customEnd
+  const activeTabRef = useRef(activeTab)
+  activeTabRef.current = activeTab
   useEffect(() => {
     if (!eventId) { setConnected(false); return }
     let es, closed = false
@@ -351,48 +491,70 @@ export default function ResultsPage() {
       esRef.current = es
       es.onopen = () => setConnected(true)
       es.onerror = () => setConnected(false)
-      es.onmessage = () => load(eventId, dayRef.current, venueRef.current)
+      es.onmessage = () => {
+        load(eventId, dayRef.current, venueRef.current, customStartRef.current, customEndRef.current)
+        if (activeTabRef.current !== 'overview' && activeTabRef.current !== 'attendance') {
+          refetchTab(activeTabRef.current, eventId, dayRef.current)
+        }
+      }
     })()
     return () => { closed = true; if (es) es.close(); setConnected(false) }
-  }, [eventId, load])
+  }, [eventId, load, refetchTab])
+
+  // Also poll tab-specific data every 20s while that tab is open, matching
+  // the Overview/Attendance cadence (previously these only fetched once on
+  // tab activation and never refreshed again until you left and came back).
+  useEffect(() => {
+    if (!eventId || activeTab === 'overview' || activeTab === 'attendance') return
+    const poll = setInterval(() => refetchTab(activeTab, eventId, day), 20000)
+    return () => clearInterval(poll)
+  }, [eventId, activeTab, day, refetchTab])
 
   useEffect(() => {
     if (!eventId || activeTab !== 'program') return
     setProgram(null)
-    api.resultsProgram(eventId, day || undefined).then(setProgram).catch(() => setProgram(null))
-  }, [eventId, activeTab, day])
+    refetchTab('program', eventId, day)
+  }, [eventId, activeTab, day, refetchTab])
 
   useEffect(() => {
     if (!eventId || activeTab !== 'experience') return
     setExperience(null)
-    api.resultsExperience(eventId).then(setExperience).catch(() => setExperience(null))
-  }, [eventId, activeTab])
+    refetchTab('experience', eventId, day)
+  }, [eventId, activeTab, refetchTab])
 
   useEffect(() => {
     if (!eventId || activeTab !== 'meals') return
     setMeals(null)
-    api.resultsMeals(eventId).then(setMeals).catch(() => setMeals(null))
-  }, [eventId, activeTab])
+    refetchTab('meals', eventId, day)
+  }, [eventId, activeTab, refetchTab])
 
   useEffect(() => {
     if (!eventId || activeTab !== 'invitations') return
     setInvitations(null)
-    api.resultsInvitations(eventId).then(setInvitations).catch(() => setInvitations(null))
-  }, [eventId, activeTab])
+    refetchTab('invitations', eventId, day)
+  }, [eventId, activeTab, refetchTab])
 
   useEffect(() => {
     if (!eventId || activeTab !== 'operations') return
     setOperations(null)
-    api.resultsOperations(eventId).then(setOperations).catch(() => setOperations(null))
-  }, [eventId, activeTab])
+    refetchTab('operations', eventId, day)
+  }, [eventId, activeTab, refetchTab])
 
   const event = events.find((e) => e.id === eventId)
   const a = data?.attendance
   const arrivalGapLabel = venueId
     ? 'Confirmed, not in zone'
     : a?.arrival_gap_mode === 'expected' ? 'Not yet in' : 'Confirmed, not here'
+  const arrivalGapHint = venueId
+    ? 'Guests confirmed as attending who have not been scanned into this zone.'
+    : a?.arrival_gap_mode === 'expected'
+      ? "Invited guests who haven't declined and haven't been scanned in yet — this event doesn't track RSVP confirmation, so it can't be narrowed to just those who said yes."
+      : 'Guests who confirmed they\'re coming (accepted RSVP) but have not been scanned in yet — excludes declined and no-response guests.'
   const days = data?.attendance_by_day || []
   const hasScopeFilter = Boolean(day || venueId)
+  const experienceSteps = data?.experience?.steps || []
+  const blockedExperienceSteps = experienceSteps.filter((s) => s.failed > 0)
+  const totalBlockedGuests = blockedExperienceSteps.reduce((sum, s) => sum + s.failed, 0)
 
   function navigateTo(url) {
     if (url) window.location.href = url
@@ -475,19 +637,25 @@ export default function ResultsPage() {
 
       {event && (
         <>
-          {/* Scope bar: entire event + one tab per day, plus a venue/zone filter */}
+          {/* Scope bar: entire event + one tab per day, a custom range, plus a venue/zone filter */}
           {(days.length > 1 || zones.length > 0) && (
             <div className="flex items-center gap-3 flex-wrap">
               {days.length > 1 && (
                 <div className="flex gap-2 overflow-x-auto pb-1">
-                  <button onClick={() => setDay('')} className={`shrink-0 rounded-lg px-4 py-2 text-sm font-semibold border ${!day ? 'bg-teal-600 border-teal-600 text-white' : 'border-slate-300 dark:border-slate-600 text-slate-600 dark:text-slate-300'}`}>
+                  <button onClick={() => { setDay(''); setCustomStart(''); setCustomEnd(''); setShowCustomRange(false) }}
+                    className={`shrink-0 rounded-lg px-4 py-2 text-sm font-semibold border ${!day && !customStart ? 'bg-teal-600 border-teal-600 text-white' : 'border-slate-300 dark:border-slate-600 text-slate-600 dark:text-slate-300'}`}>
                     Entire event
                   </button>
                   {days.map((d, i) => (
-                    <button key={d.day} onClick={() => setDay(d.day)} className={`shrink-0 rounded-lg px-4 py-2 text-sm font-semibold border ${day === d.day ? 'bg-teal-600 border-teal-600 text-white' : 'border-slate-300 dark:border-slate-600 text-slate-600 dark:text-slate-300'}`}>
+                    <button key={d.day} onClick={() => { setDay(d.day); setCustomStart(''); setCustomEnd(''); setShowCustomRange(false) }}
+                      className={`shrink-0 rounded-lg px-4 py-2 text-sm font-semibold border ${day === d.day ? 'bg-teal-600 border-teal-600 text-white' : 'border-slate-300 dark:border-slate-600 text-slate-600 dark:text-slate-300'}`}>
                       Day {i + 1} · {fmtDay(d.day)}
                     </button>
                   ))}
+                  <button onClick={() => { setDay(''); setShowCustomRange((s) => !s) }}
+                    className={`shrink-0 rounded-lg px-4 py-2 text-sm font-semibold border ${customStart ? 'bg-teal-600 border-teal-600 text-white' : 'border-slate-300 dark:border-slate-600 text-slate-600 dark:text-slate-300'}`}>
+                    {customStart ? `${fmtDay(customStart)} – ${fmtDay(customEnd)}` : 'Custom range'}
+                  </button>
                 </div>
               )}
               {zones.length > 0 && (
@@ -496,6 +664,23 @@ export default function ResultsPage() {
                   <option value="">All venues</option>
                   {zones.map((z) => <option key={z.id} value={z.id}>{z.name}</option>)}
                 </select>
+              )}
+            </div>
+          )}
+          {showCustomRange && days.length > 1 && (
+            <div className="flex items-center gap-2 text-sm bg-white dark:bg-slate-800 dark:border dark:border-slate-700/60 rounded-lg px-3 py-2 w-fit">
+              <label className="text-slate-500 dark:text-slate-400">From
+                <input type="date" value={customStart} min={days[0].day} max={days[days.length - 1].day}
+                  onChange={(e) => setCustomStart(e.target.value)}
+                  className="ml-2 rounded border border-slate-300 dark:border-slate-600 bg-transparent px-2 py-1" />
+              </label>
+              <label className="text-slate-500 dark:text-slate-400">to
+                <input type="date" value={customEnd} min={customStart || days[0].day} max={days[days.length - 1].day}
+                  onChange={(e) => setCustomEnd(e.target.value)}
+                  className="ml-2 rounded border border-slate-300 dark:border-slate-600 bg-transparent px-2 py-1" />
+              </label>
+              {customStart && customEnd && (
+                <button onClick={() => { setCustomStart(''); setCustomEnd(''); setShowCustomRange(false) }} className="text-xs text-slate-400 hover:underline">Clear</button>
               )}
             </div>
           )}
@@ -518,13 +703,18 @@ export default function ResultsPage() {
           {activeTab === 'overview' && a && (
             <div className="space-y-6">
               <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
-                <MetricCard icon="👥" tint="bg-teal-50 dark:bg-teal-900/30" label={venueId ? 'Expected (event-wide)' : 'Expected'} value={a.expected} />
-                <MetricCard icon="✅" tint="bg-green-50 dark:bg-green-900/30" label="Checked in" value={a.checked_in} />
+                <MetricCard icon="👥" tint="bg-teal-50 dark:bg-teal-900/30" label={venueId ? 'Expected (event-wide)' : 'Expected'} value={a.expected}
+                  hint="Invited guests who haven't declined — not the same as 'confirmed'. A guest who never responds still counts as expected until they explicitly decline." />
+                <MetricCard icon="✅" tint="bg-green-50 dark:bg-green-900/30" label="Checked in" value={a.checked_in}
+                  hint="Guests with at least one accepted (non-denied) entry scan recorded in this scope." />
                 <MetricCard icon="⏰" tint="bg-amber-50 dark:bg-amber-900/30" label={arrivalGapLabel} value={a.confirmed_not_here}
-                  sub={a.arrival_gap_mode === 'confirmed' ? 'excludes declined & pending' : undefined} />
-                <MetricCard icon="❌" tint="bg-red-50 dark:bg-red-900/30" label="Declined" value={a.declined} accent="text-red-600 dark:text-red-400" />
-                <MetricCard icon="🚶" tint="bg-violet-50 dark:bg-violet-900/30" label="Walk-ins" value={a.walk_ins} />
-                <MetricCard icon="🚪" tint="bg-slate-100 dark:bg-slate-700" label="Checked out" value={a.checked_out} />
+                  sub={a.arrival_gap_mode === 'confirmed' ? 'excludes declined & pending' : undefined} hint={arrivalGapHint} />
+                <MetricCard icon="❌" tint="bg-red-50 dark:bg-red-900/30" label="Declined" value={a.declined} accent="text-red-600 dark:text-red-400"
+                  hint="Guests who explicitly declined the invitation." />
+                <MetricCard icon="🚶" tint="bg-violet-50 dark:bg-violet-900/30" label="Walk-ins" value={a.walk_ins}
+                  hint="Admitted guests who weren't on an invite list ahead of time." />
+                <MetricCard icon="🚪" tint="bg-slate-100 dark:bg-slate-700" label="Checked out" value={a.checked_out}
+                  hint="Guests with an accepted exit scan — they may still return." />
               </div>
 
               <div className="grid gap-6 lg:grid-cols-[1.3fr_1fr]">
@@ -542,7 +732,7 @@ export default function ResultsPage() {
                     </div>
                   </div>
                 </div>
-                <AttentionPanel alerts={data.alerts} onNavigate={navigateTo} showEntireEventBadge={hasScopeFilter} />
+                <AttentionPanel eventId={eventId} alerts={data.alerts} onNavigate={navigateTo} showEntireEventBadge={hasScopeFilter} />
               </div>
 
               <div className="grid gap-6 lg:grid-cols-2">
@@ -586,16 +776,29 @@ export default function ResultsPage() {
                   {event.experience_enabled && (
                     <div className="bg-white dark:bg-slate-800 dark:border dark:border-slate-700/60 rounded-xl shadow-sm p-4">
                       <h3 className="font-semibold text-sm dark:text-white mb-3">Experience journey{hasScopeFilter && <EntireEventBadge />}</h3>
-                      {data.experience.steps.length === 0 ? (
+                      {experienceSteps.length === 0 ? (
                         <p className="text-sm text-slate-400">No Experience steps configured.</p>
                       ) : (
                         <div className="space-y-3">
-                          {data.experience.steps.map((s) => (
-                            <ProgressBar key={s.step_id} label={s.title} completed={s.completed} total={s.total} />
+                          {experienceSteps.map((s) => (
+                            <ProgressBar key={s.step_id} label={s.title} completed={s.completed} total={s.total}
+                              sub={s.failed > 0 ? `${s.failed} blocked` : undefined} />
                           ))}
                         </div>
                       )}
-                      <button onClick={() => setActiveTab('experience')} className="mt-3 text-xs font-semibold text-teal-600 hover:underline">View blocked guests →</button>
+                      {totalBlockedGuests > 0 ? (
+                        <>
+                          <button
+                            onClick={() => setBlockedStepId(blockedStepId ? null : blockedExperienceSteps[0].step_id)}
+                            className="mt-3 text-xs font-semibold text-teal-600 hover:underline"
+                          >
+                            {blockedStepId ? 'Hide' : `View ${totalBlockedGuests} blocked guest${totalBlockedGuests === 1 ? '' : 's'}`} →
+                          </button>
+                          {blockedStepId && <InlineGuestList eventId={eventId} kind="step" resourceId={blockedStepId} />}
+                        </>
+                      ) : (
+                        <button onClick={() => setActiveTab('experience')} className="mt-3 text-xs font-semibold text-teal-600 hover:underline">Open Experience tab →</button>
+                      )}
                     </div>
                   )}
                 </div>
@@ -647,18 +850,29 @@ export default function ResultsPage() {
           {activeTab === 'attendance' && a && (
             <div className="space-y-6">
               <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
-                <MetricCard icon="👥" tint="bg-teal-50 dark:bg-teal-900/30" label={venueId ? 'Expected (event-wide)' : 'Expected'} value={a.expected} />
-                <MetricCard icon="✅" tint="bg-green-50 dark:bg-green-900/30" label="Checked in" value={a.checked_in} />
+                <MetricCard icon="👥" tint="bg-teal-50 dark:bg-teal-900/30" label={venueId ? 'Expected (event-wide)' : 'Expected'} value={a.expected}
+                  hint="Invited guests who haven't declined — not the same as 'confirmed'. A guest who never responds still counts as expected until they explicitly decline." />
+                <MetricCard icon="✅" tint="bg-green-50 dark:bg-green-900/30" label="Checked in" value={a.checked_in}
+                  hint="Guests with at least one accepted (non-denied) entry scan recorded in this scope." />
                 <MetricCard icon="🟢" tint="bg-teal-50 dark:bg-teal-900/30"
                   label={a.occupancy_mode === 'historical' ? 'Occupancy at day close' : a.occupancy_mode === 'future' ? 'On-site (not started)' : 'On-site now'}
-                  value={a.occupancy_mode === 'future' ? '—' : a.on_site} accent="text-teal-600 dark:text-teal-400" />
-                <MetricCard icon="✨" tint="bg-sky-50 dark:bg-sky-900/30" label="First-time" value={a.first_time} />
-                <MetricCard icon="🔁" tint="bg-sky-50 dark:bg-sky-900/30" label="Returning" value={a.returning} />
-                <MetricCard icon="🚪" tint="bg-slate-100 dark:bg-slate-700" label="Checked out" value={a.checked_out} />
+                  value={a.occupancy_mode === 'future' ? '—' : a.on_site} accent="text-teal-600 dark:text-teal-400"
+                  hint={a.occupancy_mode === 'historical'
+                    ? 'Net entries minus exits as of the end of this past day — not a live count.'
+                    : a.occupancy_mode === 'future'
+                      ? "This day hasn't happened yet, so there's no occupancy to show."
+                      : 'Net entries minus exits right now: guests scanned in who have not since been scanned out.'} />
+                <MetricCard icon="✨" tint="bg-sky-50 dark:bg-sky-900/30" label="First-time" value={a.first_time}
+                  hint="Guests scanned in for the very first time within this scope." />
+                <MetricCard icon="🔁" tint="bg-sky-50 dark:bg-sky-900/30" label="Returning" value={a.returning}
+                  hint="Guests who had already checked in before and are entering again (e.g. a multi-day event, or leaving and coming back)." />
+                <MetricCard icon="🚪" tint="bg-slate-100 dark:bg-slate-700" label="Checked out" value={a.checked_out}
+                  hint="Guests with an accepted exit scan — they may still return." />
               </div>
               <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-                <MetricCard icon="⏰" tint="bg-amber-50 dark:bg-amber-900/30" label={arrivalGapLabel} value={a.confirmed_not_here} />
-                <MetricCard icon="❌" tint="bg-red-50 dark:bg-red-900/30" label="Declined" value={a.declined} accent="text-red-600 dark:text-red-400" />
+                <MetricCard icon="⏰" tint="bg-amber-50 dark:bg-amber-900/30" label={arrivalGapLabel} value={a.confirmed_not_here} hint={arrivalGapHint} />
+                <MetricCard icon="❌" tint="bg-red-50 dark:bg-red-900/30" label="Declined" value={a.declined} accent="text-red-600 dark:text-red-400"
+                  hint="Guests who explicitly declined the invitation." />
                 <MetricCard icon="🚶" tint="bg-violet-50 dark:bg-violet-900/30" label="Walk-ins" value={a.walk_ins} />
               </div>
               <div className="bg-white dark:bg-slate-800 dark:border dark:border-slate-700/60 rounded-xl shadow-sm p-4">
@@ -745,11 +959,15 @@ export default function ResultsPage() {
             ) : (
               <div className="space-y-6">
                 <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-                  <MetricCard icon="🍽️" tint="bg-teal-50 dark:bg-teal-900/30" label="Served" value={meals.served_total} accent="text-teal-600 dark:text-teal-400" sub="Distinct guests" />
-                  <MetricCard icon="👥" tint="bg-slate-100 dark:bg-slate-700" label="Made a selection" value={meals.eligible_total} sub="Distinct guests" />
-                  <MetricCard icon="⏳" tint="bg-amber-50 dark:bg-amber-900/30" label="Remaining to serve" value={meals.eligible_total - meals.served_total} />
+                  <MetricCard icon="🍽️" tint="bg-teal-50 dark:bg-teal-900/30" label="Served" value={meals.served_total} accent="text-teal-600 dark:text-teal-400" sub="Distinct guests"
+                    hint="Distinct guests with at least one meal category marked served, across all categories." />
+                  <MetricCard icon="👥" tint="bg-slate-100 dark:bg-slate-700" label="Made a selection" value={meals.eligible_total} sub="Distinct guests"
+                    hint="Distinct guests with at least one menu choice recorded — based on who actually picked something, regardless of RSVP status." />
+                  <MetricCard icon="⏳" tint="bg-amber-50 dark:bg-amber-900/30" label="Remaining to serve" value={meals.eligible_total - meals.served_total}
+                    hint="Made a selection minus Served." />
                   {meals.missing_selection > 0 && (
-                    <MetricCard icon="⚠️" tint="bg-red-50 dark:bg-red-900/30" label="No selection yet" value={meals.missing_selection} accent="text-red-600 dark:text-red-400" sub="Not counted above" />
+                    <MetricCard icon="⚠️" tint="bg-red-50 dark:bg-red-900/30" label="No selection yet" value={meals.missing_selection} accent="text-red-600 dark:text-red-400" sub="Not counted above"
+                      hint="Invited guests (not declined) with no menu choice on file — a different, and not necessarily overlapping, group from 'Made a selection' above, which only counts guests who did pick something." />
                   )}
                 </div>
                 <div className="bg-white dark:bg-slate-800 dark:border dark:border-slate-700/60 rounded-xl shadow-sm p-4">
@@ -791,7 +1009,10 @@ export default function ResultsPage() {
               <div className="space-y-6">
                 <div className="grid gap-6 lg:grid-cols-2">
                   <div className="bg-white dark:bg-slate-800 dark:border dark:border-slate-700/60 rounded-xl shadow-sm p-4">
-                    <h3 className="font-semibold text-sm dark:text-white mb-3">Meals served{hasScopeFilter && <EntireEventBadge />}</h3>
+                    <h3 className="font-semibold text-sm dark:text-white mb-3 flex items-center gap-1.5">
+                      Meals served{hasScopeFilter && <EntireEventBadge />}
+                      <MetricHint text="Total = distinct guests who made a menu selection, regardless of RSVP status. Guests who never chose don't count toward this total at all." />
+                    </h3>
                     {operations.meals.categories.length === 0 ? (
                       <p className="text-sm text-slate-400">Not applicable for this event.</p>
                     ) : (
@@ -799,7 +1020,10 @@ export default function ResultsPage() {
                     )}
                   </div>
                   <div className="bg-white dark:bg-slate-800 dark:border dark:border-slate-700/60 rounded-xl shadow-sm p-4">
-                    <h3 className="font-semibold text-sm dark:text-white mb-3">Consent signed{hasScopeFilter && <EntireEventBadge />}</h3>
+                    <h3 className="font-semibold text-sm dark:text-white mb-3 flex items-center gap-1.5">
+                      Consent signed{hasScopeFilter && <EntireEventBadge />}
+                      <MetricHint text="Eligible = invited guests who haven't declined, same definition used for 'Expected' on Overview. Signed includes staff-overridden completions." />
+                    </h3>
                     {!operations.consent ? (
                       <p className="text-sm text-slate-400">No consent step configured.</p>
                     ) : (

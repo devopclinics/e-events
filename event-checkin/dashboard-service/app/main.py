@@ -19,7 +19,7 @@ from .config import settings
 from .database import get_db
 from .models import (
     EmailDeliveryEvent, Event, ExperienceStep, ExperienceWorkflow, Guest,
-    GuestExperienceProgress, GuestMealFulfillment, GuestMenuChoice, MenuCategory,
+    GuestExperienceProgress, GuestMealService, GuestMenuChoice, MealService, MenuCategory,
     MessageCreditLedger, ScanEvent, SeatingTable, User, Zone,
 )
 from .timeutil import event_tz, to_event_local, to_utc_naive
@@ -800,9 +800,11 @@ async def meals_breakdown(db: AsyncSession, event: Event) -> dict:
         .where(GuestMenuChoice.category_id.in_(cat_ids)).group_by(GuestMenuChoice.category_id)
     )).all())
     served_by_cat: dict[str, int] = dict((await db.execute(
-        select(GuestMealFulfillment.category_id, func.count())
-        .where(GuestMealFulfillment.category_id.in_(cat_ids), GuestMealFulfillment.status == "served")
-        .group_by(GuestMealFulfillment.category_id)
+        select(MealService.category_id, func.count())
+        .select_from(GuestMealService)
+        .join(MealService, MealService.id == GuestMealService.service_id)
+        .where(MealService.category_id.in_(cat_ids), GuestMealService.fulfillment_status == "served")
+        .group_by(MealService.category_id)
     )).all())
 
     categories = []
@@ -817,8 +819,12 @@ async def meals_breakdown(db: AsyncSession, event: Event) -> dict:
 
     eligible_guests = await db.scalar(select(func.count(func.distinct(GuestMenuChoice.guest_id))).where(
         GuestMenuChoice.category_id.in_(cat_ids))) or 0
-    served_guests = await db.scalar(select(func.count(func.distinct(GuestMealFulfillment.guest_id))).where(
-        GuestMealFulfillment.category_id.in_(cat_ids), GuestMealFulfillment.status == "served")) or 0
+    served_guests = await db.scalar(
+        select(func.count(func.distinct(GuestMealService.guest_id)))
+        .select_from(GuestMealService)
+        .join(MealService, MealService.id == GuestMealService.service_id)
+        .where(MealService.category_id.in_(cat_ids), GuestMealService.fulfillment_status == "served")
+    ) or 0
 
     # "eligible" above is choice-based (a guest who never made a selection is
     # otherwise invisible to this metric entirely) — surface that gap
@@ -1051,16 +1057,145 @@ async def build_alerts(db: AsyncSession, event: Event) -> list[dict]:
     return alerts
 
 
+# ── alert resolution lists (guest-level detail behind a "Needs attention" card) ─
+# Each branch mirrors the exact guest-selection logic used above in build_alerts
+# for the matching alert id, so the count shown on the card always matches the
+# number of rows returned here.
+
+async def _guest_rows(db: AsyncSession, guest_ids, context: dict[str, str] | None = None) -> list[dict]:
+    if not guest_ids:
+        return []
+    context = context or {}
+    rows = (await db.execute(
+        select(Guest.id, Guest.first_name, Guest.last_name, Guest.email, Guest.phone, Guest.rsvp_status)
+        .where(Guest.id.in_(guest_ids))
+        .order_by(Guest.last_name, Guest.first_name)
+    )).all()
+    return [
+        {
+            "id": r.id, "name": f"{r.first_name} {r.last_name}".strip() or "(no name)",
+            "email": r.email, "phone": r.phone, "rsvp_status": r.rsvp_status,
+            "context": context.get(r.id),
+        }
+        for r in rows
+    ]
+
+
+@app.get("/api/results/events/{event_id}/alerts/{alert_id}/guests")
+async def get_alert_guests(
+    alert_id: str, event: Event = Depends(admin_event), db: AsyncSession = Depends(get_db),
+):
+    if alert_id == "failed_invitations":
+        ids = (await db.execute(select(Guest.id).where(
+            Guest.event_id == event.id, Guest.invite_status == "failed"))).scalars().all()
+        return {"guests": await _guest_rows(db, ids)}
+
+    if alert_id == "no_contact_info":
+        ids = (await db.execute(select(Guest.id).where(
+            Guest.event_id == event.id,
+            (Guest.email.is_(None) | (Guest.email == "")),
+            (Guest.phone.is_(None) | (Guest.phone == "")),
+        ))).scalars().all()
+        return {"guests": await _guest_rows(db, ids)}
+
+    if alert_id == "tables_over_capacity":
+        tables = (await db.execute(select(SeatingTable).where(SeatingTable.event_id == event.id))).scalars().all()
+        context: dict[str, str] = {}
+        for t in tables:
+            if not t.capacity:
+                continue
+            seated = (await db.execute(select(Guest.id).where(Guest.table_id == t.id))).scalars().all()
+            if len(seated) > t.capacity:
+                for gid in seated:
+                    context[gid] = f"{t.name} ({len(seated)}/{t.capacity} seated)"
+        return {"guests": await _guest_rows(db, list(context.keys()), context)}
+
+    if alert_id == "missing_meal_selections":
+        selectable_cat_ids = set((await db.execute(
+            select(MenuCategory.id).where(MenuCategory.event_id == event.id, MenuCategory.display_only.is_(False))
+        )).scalars().all())
+        expected_ids = set((await db.execute(
+            select(Guest.id).where(Guest.event_id == event.id, Guest.rsvp_status != "declined")
+        )).scalars().all()) if selectable_cat_ids else set()
+        chosen_ids = set((await db.execute(
+            select(GuestMenuChoice.guest_id).distinct().where(GuestMenuChoice.category_id.in_(selectable_cat_ids))
+        )).scalars().all()) if selectable_cat_ids else set()
+        return {"guests": await _guest_rows(db, list(expected_ids - chosen_ids))}
+
+    if alert_id == "unsigned_consent":
+        consent_step = await _consent_step(db, event.id)
+        if not consent_step:
+            return {"guests": []}
+        eligible_ids = set((await db.execute(select(Guest.id).where(
+            Guest.event_id == event.id, Guest.rsvp_status != "declined"))).scalars().all())
+        signed_ids = set((await db.execute(select(GuestExperienceProgress.guest_id).where(
+            GuestExperienceProgress.step_id == consent_step.id,
+            GuestExperienceProgress.status.in_(["completed", "overridden"]),
+        ))).scalars().all())
+        return {"guests": await _guest_rows(db, list(eligible_ids - signed_ids))}
+
+    if alert_id == "denied_scans":
+        ids = (await db.execute(select(ScanEvent.guest_id).distinct().where(
+            ScanEvent.event_id == event.id, ScanEvent.denied.is_(True)))).scalars().all()
+        return {"guests": await _guest_rows(db, ids)}
+
+    if alert_id.startswith("zone_capacity_"):
+        zone_id = alert_id[len("zone_capacity_"):]
+        # "Currently inside" = each guest's most recent non-denied scan in this
+        # zone was an entry. This is a per-guest view of the same underlying
+        # scan_events used by venue_occupancy's net in/out count above — the two
+        # can diverge on duplicate/missed scans for the same reason documented
+        # on venue_occupancy, but it's the correct definition for "who is inside".
+        latest = (
+            select(ScanEvent.guest_id, func.max(ScanEvent.scanned_at).label("latest_at"))
+            .where(ScanEvent.zone_id == zone_id, ScanEvent.denied.is_(False))
+            .group_by(ScanEvent.guest_id)
+            .subquery()
+        )
+        rows = (await db.execute(
+            select(ScanEvent.guest_id, ScanEvent.direction)
+            .join(latest, (ScanEvent.guest_id == latest.c.guest_id) & (ScanEvent.scanned_at == latest.c.latest_at))
+            .where(ScanEvent.zone_id == zone_id, ScanEvent.denied.is_(False))
+        )).all()
+        ids = [gid for gid, direction in rows if direction == "in"]
+        return {"guests": await _guest_rows(db, ids)}
+
+    raise HTTPException(404, "Unknown alert type")
+
+
+@app.get("/api/results/events/{event_id}/analytics/experience/steps/{step_id}/guests")
+async def get_experience_step_guests(
+    step_id: str, event: Event = Depends(admin_event), db: AsyncSession = Depends(get_db),
+):
+    """Guest list behind the Experience journey card's "blocked" count —
+    guests whose progress on this step is 'failed' (attempted and rejected,
+    e.g. a denied consent or ID check), which is what actually blocks someone
+    from completing the journey, as opposed to 'not_started' which just means
+    they haven't gotten there yet."""
+    step = await db.get(ExperienceStep, step_id)
+    if not step:
+        raise HTTPException(404, "Step not found")
+    wf = await db.get(ExperienceWorkflow, step.workflow_id)
+    if not wf or wf.event_id != event.id:
+        raise HTTPException(404, "Step not found")
+    ids = (await db.execute(select(GuestExperienceProgress.guest_id).where(
+        GuestExperienceProgress.step_id == step_id, GuestExperienceProgress.status == "failed",
+    ))).scalars().all()
+    return {"guests": await _guest_rows(db, ids), "step_title": step.title}
+
+
 # ── command-center composite endpoint ─────────────────────────────────────────
 
 @app.get("/api/results/events/{event_id}/command-center")
 async def command_center(
     day: str | None = Query(None),
+    start: str | None = Query(None),
+    end: str | None = Query(None),
     venue_id: str | None = Query(None),
     event: Event = Depends(admin_event),
     db: AsyncSession = Depends(get_db),
 ):
-    scope = await resolve_scope(db, event, day, None, None, venue_id)
+    scope = await resolve_scope(db, event, day, start, end, venue_id)
     attendance = await attendance_stats(db, event, scope)
     sessions = await program_sessions(db, event, day)
     funnel = await experience_funnel(db, event)

@@ -1,9 +1,10 @@
+from datetime import datetime
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func
 from sqlalchemy.exc import IntegrityError
 from ..database import get_db
-from ..models import Event, SeatingTable, Guest, EventUser, EventUserSection, User, TableGroup, TableGroupTable, MenuCategory, GuestMealFulfillment
+from ..models import Event, SeatingTable, Guest, EventUser, EventUserSection, User, TableGroup, TableGroupTable, MenuCategory, MealService, GuestMealService
 from ..schemas import (
     SeatingTableCreate, SeatingTableOut, SeatAssignRequest,
     TableGroupCreate, TableGroupOut, TableGroupTablesUpdate,
@@ -594,12 +595,22 @@ async def mark_meal_served(
         select(MenuCategory.id).where(MenuCategory.event_id == event_id, MenuCategory.display_only.is_(False))
     )).scalars().all()
     if len(selectable) == 1:
-        existing = await db.scalar(select(GuestMealFulfillment).where(
-            GuestMealFulfillment.guest_id == guest.id, GuestMealFulfillment.category_id == selectable[0]))
-        if not existing:
-            db.add(GuestMealFulfillment(
-                guest_id=guest.id, category_id=selectable[0],
-                status="served", served_by_user_id=current_user.id,
+        service = await db.scalar(select(MealService).where(MealService.category_id == selectable[0]))
+        if not service:
+            cat = await db.get(MenuCategory, selectable[0])
+            service = MealService(event_id=event_id, category_id=selectable[0], name=cat.name if cat else "Meal", status="open")
+            db.add(service)
+            await db.flush()
+        existing = await db.scalar(select(GuestMealService).where(
+            GuestMealService.guest_id == guest.id, GuestMealService.service_id == service.id))
+        if existing:
+            existing.fulfillment_status = "served"
+            existing.served_at = datetime.utcnow()
+            existing.served_by_user_id = current_user.id
+        else:
+            db.add(GuestMealService(
+                service_id=service.id, guest_id=guest.id, fulfillment_status="served",
+                served_at=datetime.utcnow(), served_by_user_id=current_user.id,
             ))
     await sync_guest_progress(event_id, guest.id, db, source="staff", actor_user_id=current_user.id)
     await db.commit()

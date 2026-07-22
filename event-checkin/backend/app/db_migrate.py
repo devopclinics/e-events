@@ -168,6 +168,26 @@ SCHEMA_PATCHES: list[str] = [
     # table, so existing installs need these added here.
     "CREATE INDEX IF NOT EXISTS ix_scan_events_event_scanned_at ON scan_events (event_id, scanned_at)",
     "CREATE INDEX IF NOT EXISTS ix_scan_events_event_guest_scanned_at ON scan_events (event_id, guest_id, scanned_at)",
+
+    # ── Track B v2: meal_services / guest_meal_services ────────────────────────
+    # 1) Every selectable category gets a default MealService (1:1 today; the
+    #    schema allows more later). Runs every deploy — guard makes it a no-op
+    #    once a category has one, and picks up categories added since.
+    "INSERT INTO meal_services (id, event_id, category_id, name, status, created_at, updated_at) "
+    "SELECT gen_random_uuid()::text, mc.event_id, mc.id, mc.name, 'open', now(), now() "
+    "FROM menu_categories mc "
+    "WHERE mc.display_only = false "
+    "AND NOT EXISTS (SELECT 1 FROM meal_services ms WHERE ms.category_id = mc.id)",
+    # 2) One-time-per-row backfill of the old category-keyed fulfillment table
+    #    into the new service-keyed one. guest_meal_fulfillment is left in
+    #    place afterward (unused by new code) rather than dropped.
+    "INSERT INTO guest_meal_services "
+    "(id, service_id, guest_id, eligibility_status, fulfillment_status, served_at, served_by_user_id, override_reason, created_at, updated_at) "
+    "SELECT gen_random_uuid()::text, ms.id, gmf.guest_id, 'eligible', gmf.status, "
+    "gmf.served_at, gmf.served_by_user_id, gmf.override_reason, gmf.served_at, gmf.served_at "
+    "FROM guest_meal_fulfillment gmf "
+    "JOIN meal_services ms ON ms.category_id = gmf.category_id "
+    "WHERE NOT EXISTS (SELECT 1 FROM guest_meal_services gms WHERE gms.service_id = ms.id AND gms.guest_id = gmf.guest_id)",
 ]
 
 

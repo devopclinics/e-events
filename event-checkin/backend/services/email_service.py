@@ -886,6 +886,7 @@ async def send_admission_email(guest_data: dict):
     first = _html.escape(guest_data["first_name"])
     table_name = guest_data.get("table_name")
     seat_number = guest_data.get("seat_number")
+    seating_label = guest_data.get("seating_term") or "Table"
     menu_choices = guest_data.get("menu_choices") or []  # list[(category, item)]
     experience_steps = guest_data.get("experience_next_steps") or []
     hub_url = guest_data.get("hub_url")
@@ -898,7 +899,7 @@ async def send_admission_email(guest_data: dict):
             chips.append(
                 f'<span style="display:inline-block;background:rgba(255,255,255,0.18);'
                 f'padding:6px 14px;border-radius:999px;margin:4px 4px 0 0;font-size:14px;">'
-                f'Table: <strong>{_html.escape(str(table_name))}</strong></span>'
+                f'{_html.escape(seating_label)}: <strong>{_html.escape(str(table_name))}</strong></span>'
             )
         if seat_number:
             chips.append(

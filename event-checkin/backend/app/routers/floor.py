@@ -21,6 +21,7 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..auth import require_paid_event_admin, require_paid_event_member
+from ..seating_terms import seating_term as _seating_term
 from ..config import settings
 from ..database import get_db
 from .. import storage
@@ -84,6 +85,7 @@ async def _build_plan_out(event: Event, plan: FloorPlan, db: AsyncSession, *, ed
 
     return FloorPlanOut(
         event_id=event.id, event_name=event.name,
+        seating_term=_seating_term(event),
         width=plan.width, height=plan.height,
         bg_image_url=plan.bg_image_url, bg_opacity=plan.bg_opacity,
         editable=editable,
@@ -307,9 +309,9 @@ def _floor_html(plan: FloorPlanOut) -> str:
       th,td{{border:1px solid #e2e8f0;padding:6px 10px;text-align:left}} th{{background:#f1f5f9}}
     </style></head><body>
       <h1>{_html.escape(plan.event_name)} — Floor plan</h1>
-      <div class="sub">{len(plan.tables)} tables · {total_seats} seats</div>
+      <div class="sub">{len(plan.tables)} {_html.escape(plan.seating_term.lower())}s · {total_seats} seats</div>
       {_floor_svg(plan)}
-      <table><thead><tr><th>Table</th><th>Seats</th><th>Group</th></tr></thead><tbody>{rows}</tbody></table>
+      <table><thead><tr><th>{_html.escape(plan.seating_term)}</th><th>Seats</th><th>Group</th></tr></thead><tbody>{rows}</tbody></table>
     </body></html>"""
 
 

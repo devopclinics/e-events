@@ -761,6 +761,11 @@ async def toggle_features(
         if audience not in ("admitted", "confirmed", "all"):
             raise HTTPException(400, "post_event_thankyou_audience must be admitted, confirmed, or all")
         event.post_event_thankyou_audience = audience
+    if "seating_term" in body:
+        term = (body["seating_term"] or "").strip()
+        if len(term) > 30:
+            raise HTTPException(400, "seating_term must be 30 characters or fewer")
+        event.seating_term = term or None
     await db.commit()
     await db.refresh(event)
     return event
@@ -1136,6 +1141,35 @@ async def test_send_post_event_thankyou(
             "email/phone, consent, or the event doesn't have paid SMS/WhatsApp).",
         )
     return {"ok": True, "channels_sent": sent}
+
+
+@router.post("/{event_id}/post-event-thankyou/send-now")
+async def send_now_post_event_thankyou(
+    event_id: str,
+    data: dict | None = None,
+    db: AsyncSession = Depends(get_db),
+    _: User = Depends(require_event_admin),
+):
+    """Send the post-event thank-you/feedback message to the whole configured
+    audience right now, instead of waiting for event_end_date + delay_hours.
+    Marks the event as sent so the automatic poller doesn't also send it
+    later — a manual send-now and the automatic one are mutually exclusive.
+
+    Body: {force: bool} — required to resend once already sent (e.g. testing,
+    or a real resend after fixing the template/audience); the frontend makes
+    the admin confirm this explicitly rather than silently allowing repeats."""
+    event = await db.get(Event, event_id)
+    if not event:
+        raise HTTPException(404, "Event not found")
+    if event.post_event_thankyou_sent_at and not (data or {}).get("force"):
+        raise HTTPException(
+            400,
+            f"Already sent {event.post_event_thankyou_sent_at.isoformat()} — pass force=true to send again.",
+        )
+    sent = await post_event_message.send_for_event(event, db)
+    event.post_event_thankyou_sent_at = datetime.utcnow()
+    await db.commit()
+    return {"ok": True, "messages_sent": sent}
 
 
 # ── Manual invites ────────────────────────────────────────────────────────────

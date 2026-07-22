@@ -78,6 +78,7 @@ def generate_ticket_card(
     admitted: bool = False,
     table_name: str = "",
     seat_number: str = "",
+    seating_term: str = "Table",
 ) -> bytes:
     W = 640
     QR_SIZE = 260
@@ -203,7 +204,7 @@ def generate_ticket_card(
     if has_seat_info:
         parts = []
         if table_name:
-            parts.append(f"Table: {table_name}")
+            parts.append(f"{seating_term}: {table_name}")
         if seat_number:
             parts.append(f"Seat: {seat_number}")
         _centered(draw, y, "  ·  ".join(parts), f_bold, _WHITE, W)

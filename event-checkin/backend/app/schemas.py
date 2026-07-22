@@ -188,6 +188,7 @@ class EventOut(BaseModel):
     walk_in_enabled: bool = False
     walk_in_table_group_id: Optional[str] = None
     enforce_table_groups: bool = True
+    seating_term: Optional[str] = None
     section_mode_enabled: bool = False
     manual_checkin_enabled: bool = False
     self_checkin_enabled: bool = False
@@ -970,6 +971,7 @@ class FloorTableOut(BaseModel):
 class FloorPlanOut(BaseModel):
     event_id: str
     event_name: str
+    seating_term: str = "Table"
     width: int = 1200
     height: int = 800
     bg_image_url: Optional[str] = None
@@ -1081,6 +1083,7 @@ class SelfCheckinResult(BaseModel):
     table_name: Optional[str] = None
     seat_number: Optional[str] = None
     admitted_at: Optional[datetime] = None
+    seating_term: Optional[str] = None
 
 
 # ── Superadmin: reset event data ────────────────────────────────────────────────
@@ -1621,6 +1624,7 @@ class EventBrief(BaseModel):
     # open their event community directly.
     festiome_addon_enabled: bool = False
     festiome_enabled: bool = False
+    seating_term: Optional[str] = None
 
 
 class PartnerInfo(BaseModel):
@@ -1906,6 +1910,7 @@ class InvitePageOut(BaseModel):
     shipping: Optional[InviteShippingOut] = None
     registry_enabled: bool = False
     registry_token: Optional[str] = None
+    seating_term: Optional[str] = None
 
 
 class RSVPInviteeSubmit(BaseModel):

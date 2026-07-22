@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { useParams } from 'react-router-dom'
 import { api } from '../api'
 import { parseUtc } from '../timeutil'
+import { seatingTerm } from '../seatingTerm'
 import FeedbackForms from '../components/FeedbackForms'
 
 function passThemeColors(theme) {
@@ -647,7 +648,7 @@ function NotificationPreferences({ token, guest, eventNotifySms, eventNotifyWa, 
   )
 }
 
-function PartnerPairing({ token, partner, onChange, eventSeatingEnabled }) {
+function PartnerPairing({ token, partner, onChange, eventSeatingEnabled, seatingLabel = 'table' }) {
   const [open, setOpen] = useState(false)
   const [first, setFirst] = useState('')
   const [last, setLast] = useState('')
@@ -669,7 +670,7 @@ function PartnerPairing({ token, partner, onChange, eventSeatingEnabled }) {
   }
 
   async function unpair() {
-    if (!confirm('Remove your pairing? You may not end up at the same table as your partner.')) return
+    if (!confirm(`Remove your pairing? You may not end up at the same ${seatingLabel} as your partner.`)) return
     setBusy(true); setError('')
     try {
       await api.unpairPartner(token)
@@ -688,7 +689,7 @@ function PartnerPairing({ token, partner, onChange, eventSeatingEnabled }) {
           You & {partner.first_name} {partner.last_name}
         </div>
         <p className="text-xs text-slate-500 dark:text-slate-400">
-          When you both check in, you'll be placed at the same table — side by side.
+          When you both check in, you'll be placed at the same {seatingLabel} — side by side.
           {partner.admitted && ' (Your partner has already arrived.)'}
         </p>
         <button onClick={unpair} disabled={busy}
@@ -967,6 +968,7 @@ export default function ScanAutoPage() {
               token={token}
               partner={partner}
               eventSeatingEnabled={event?.seating_enabled}
+              seatingLabel={seatingTerm(event, { lower: true })}
               onChange={reload}
             />
           )}

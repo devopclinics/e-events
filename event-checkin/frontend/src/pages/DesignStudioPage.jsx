@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { api } from '../api'
 import { useCurrentEvent } from '../hooks/useCurrentEvent'
 import { parseUtc } from '../timeutil'
+import { seatingTerm } from '../seatingTerm'
 
 // Admin shell for the decoupled Festio Design Studio. Core event logic stays in
 // the existing backend; this page only saves design settings through the
@@ -475,7 +476,7 @@ function EventPagePreview({ colors, wording, coverImageUrl, pageConfig, mode = '
   )
 }
 
-function PassPreview({ colors, wording, coverImageUrl, passOptions = {}, fontFamily }) {
+function PassPreview({ colors, wording, coverImageUrl, passOptions = {}, fontFamily, seatingLabel = 'Table' }) {
   const opts = { showTable: true, showSeat: true, showHubButton: true, ...passOptions }
   return (
     <div className="mx-auto max-w-[360px] overflow-hidden rounded-[1.6rem] border border-slate-200 bg-white text-slate-950 shadow-xl dark:border-white/10" style={fontFamily ? { fontFamily } : undefined}>
@@ -486,7 +487,7 @@ function PassPreview({ colors, wording, coverImageUrl, passOptions = {}, fontFam
         <p className="mt-1 text-sm font-semibold text-slate-500">{wording.date} - {wording.time}</p>
         {(opts.showTable || opts.showSeat) && (
           <p className="mt-2 inline-flex rounded-full bg-slate-100 px-3 py-1 text-xs font-black text-slate-700">
-            {[opts.showTable && 'Table VIP-2', opts.showSeat && 'Seat 4'].filter(Boolean).join(' · ')}
+            {[opts.showTable && `${seatingLabel} VIP-2`, opts.showSeat && 'Seat 4'].filter(Boolean).join(' · ')}
           </p>
         )}
         <div className="mt-5 grid place-items-center rounded-2xl bg-white p-4 shadow-inner">
@@ -1612,7 +1613,7 @@ export default function DesignStudioPage() {
                     onChange={(e) => setThemeSetting('passOptions', { ...passOptions, [key]: e.target.checked })}
                     className="h-4 w-4 accent-teal-500"
                   />
-                  {text}
+                  {key === 'showTable' ? `Show ${seatingTerm(currentEvent, { lower: true })} assignment` : text}
                 </label>
               ))}
             </div>
@@ -1621,7 +1622,7 @@ export default function DesignStudioPage() {
             </p>
           </section>
           <aside>
-            <PassPreview colors={colors} wording={wording} coverImageUrl={coverImageUrl} passOptions={passOptions} fontFamily={previewFontFamily} />
+            <PassPreview colors={colors} wording={wording} coverImageUrl={coverImageUrl} passOptions={passOptions} fontFamily={previewFontFamily} seatingLabel={seatingTerm(currentEvent)} />
           </aside>
         </div>
       )}
@@ -1647,7 +1648,7 @@ export default function DesignStudioPage() {
             />
             <div className="grid gap-5 md:grid-cols-2">
               <EventPagePreview colors={colors} wording={wording} coverImageUrl={coverImageUrl} pageConfig={publicPage} mode="mobile" fontFamily={previewFontFamily} />
-              <PassPreview colors={colors} wording={wording} coverImageUrl={coverImageUrl} passOptions={passOptions} fontFamily={previewFontFamily} />
+              <PassPreview colors={colors} wording={wording} coverImageUrl={coverImageUrl} passOptions={passOptions} fontFamily={previewFontFamily} seatingLabel={seatingTerm(currentEvent)} />
             </div>
           </section>
           <aside className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm dark:border-white/10 dark:bg-slate-900 lg:sticky lg:top-24 lg:self-start">
@@ -1665,7 +1666,17 @@ export default function DesignStudioPage() {
               <div className="mt-1 text-xs text-slate-500 dark:text-slate-400">Last saved: {design?.updated_at ? new Date(design.updated_at).toLocaleString() : 'Not saved yet'}</div>
               <div className="mt-1 text-xs text-slate-500 dark:text-slate-400">Last published: {design?.published_at ? new Date(design.published_at).toLocaleString() : 'Not published yet'}</div>
             </div>
-            <button type="button" disabled={busy || !selectedTpl} onClick={publish} className="mt-5 min-h-12 w-full rounded-xl bg-teal-500 px-5 py-3 text-sm font-black text-slate-950 hover:bg-teal-300 disabled:opacity-50">
+            {!selectedTpl && (
+              <div className="mt-5 rounded-xl border border-amber-300 bg-amber-50 p-3 text-sm text-amber-900 dark:border-amber-500/40 dark:bg-amber-500/10 dark:text-amber-200">
+                Publishing needs a template family first.{' '}
+                <button type="button" onClick={() => setTab('Templates')} className="font-black underline underline-offset-2">
+                  Pick one on the Templates tab →
+                </button>
+              </div>
+            )}
+            <button type="button" disabled={busy || !selectedTpl} onClick={publish}
+              title={!selectedTpl ? 'Select a template family on the Templates tab first' : undefined}
+              className="mt-5 min-h-12 w-full rounded-xl bg-teal-500 px-5 py-3 text-sm font-black text-slate-950 hover:bg-teal-300 disabled:opacity-50">
               Publish to event
             </button>
           </aside>

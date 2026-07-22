@@ -52,7 +52,7 @@ async def send_invite_sms(*, phone: str, first_name: str, event_name: str, ticke
     return await _send_sms(phone, _brand_sms(body))
 
 
-async def send_admission_sms(*, phone: str, first_name: str, event_name: str, admitted_at, table_name: str | None, seat_number: str | None, event_timezone: str | None = None) -> dict | None:
+async def send_admission_sms(*, phone: str, first_name: str, event_name: str, admitted_at, table_name: str | None, seat_number: str | None, event_timezone: str | None = None, seating_term: str = "Table") -> dict | None:
     if not _channel_ready("sms", phone):
         return
     parts = [f"Welcome {first_name}!", f"You're checked in to {event_name}."]
@@ -60,7 +60,7 @@ async def send_admission_sms(*, phone: str, first_name: str, event_name: str, ad
         parts.append(f"Time: {local_hhmm(admitted_at, event_timezone)}.")
     if table_name:
         seat_bit = f" seat {seat_number}" if seat_number else ""
-        parts.append(f"Table: {table_name}{seat_bit}.")
+        parts.append(f"{seating_term}: {table_name}{seat_bit}.")
     return await _send_sms(phone, _brand_sms(" ".join(parts)))
 
 
@@ -91,9 +91,24 @@ async def send_experience_invite_whatsapp(*, phone: str, first_name: str, event_
     )
 
 
-async def send_admission_whatsapp(*, phone: str, first_name: str, event_name: str, table_name: str | None, seat_number: str | None) -> dict | None:
+async def send_admission_whatsapp(*, phone: str, first_name: str, event_name: str, table_name: str | None, seat_number: str | None, seating_term: str = "Table", hub_url: str | None = None) -> dict | None:
     if not _channel_ready("whatsapp", phone):
         return
+    # Prefer the link-based template once configured: its approved copy only
+    # has firstName/eventName/hubLink variables, so any future wording change
+    # (seating label, extra fields, restyled Hub, ...) needs zero Meta
+    # re-approval — the real content lives server-side, in the Guest Hub the
+    # link opens. Falls back to the inline table/seat template (which DOES
+    # have "Table" hardcoded into its approved text, so `seating_term` can't
+    # reach it) when the link template isn't configured yet, or there's no
+    # hub_url to send.
+    if settings.bird_whatsapp_admission_link_template and hub_url:
+        return await _send_whatsapp_template(
+            phone=phone,
+            kind="admission_link",
+            params=[first_name, event_name, hub_url],
+            var_keys=["firstName", "eventName", "hubLink"],
+        )
     return await _send_whatsapp_template(
         phone=phone,
         kind="admission",
@@ -553,6 +568,7 @@ def _bird_whatsapp_template_for(kind: str) -> str:
         "approval_accepted": settings.bird_whatsapp_approval_accepted_template,
         "approval_rejected": settings.bird_whatsapp_approval_rejected_template,
         "admission": settings.bird_whatsapp_admission_template,
+        "admission_link": settings.bird_whatsapp_admission_link_template,
         "logistics": settings.bird_whatsapp_logistics_template,
         "registry": settings.bird_whatsapp_registry_template,
         "announcement": settings.bird_whatsapp_announcement_template,

@@ -237,7 +237,7 @@ export default function FloorPlanPage() {
             )}
 
             {selItem && sel.kind === 'table' && (
-              <Panel title={`Table · ${selItem.name}`}>
+              <Panel title={`${plan.seating_term || 'Table'} · ${selItem.name}`}>
                 <Row label="Shape">
                   {['round', 'rect'].map((sh) => <button key={sh} onClick={() => patchSel({ shape: sh })} className={`rounded-lg px-3 py-1 text-xs font-bold ${selItem.shape === sh ? 'bg-teal-600 text-white' : 'border border-slate-300'}`}>{sh}</button>)}
                 </Row>

@@ -3,6 +3,7 @@ import { Html5Qrcode } from 'html5-qrcode'
 import { Capacitor } from '@capacitor/core'
 import { api } from '../api'
 import { parseUtc } from '../timeutil'
+import { seatingTerm } from '../seatingTerm'
 import { useCurrentEvent } from '../hooks/useCurrentEvent'
 import {
   drainExperienceQueue,
@@ -103,7 +104,7 @@ function ZoneResultCard({ result, onReset }) {
   )
 }
 
-function ResultCard({ result, onReset, onStepComplete, stepActionLoading, timezone }) {
+function ResultCard({ result, onReset, onStepComplete, stepActionLoading, timezone, seatingLabel = 'Table' }) {
   const [showRemaining, setShowRemaining] = useState(false)
   const cfg = {
     admitted:        { bg: 'bg-green-500',  icon: '✓', heading: 'ADMITTED' },
@@ -189,7 +190,7 @@ function ResultCard({ result, onReset, onStepComplete, stepActionLoading, timezo
           {result.ticket_type && <span className="rounded-full bg-white/20 px-3 py-1">Ticket: <strong>{result.ticket_type}</strong></span>}
           {result.table_name && (
             <span className="bg-white/20 px-3 py-1 rounded-full">
-              Table: <strong>{result.table_name}</strong>
+              {seatingLabel}: <strong>{result.table_name}</strong>
             </span>
           )}
           {result.seat_number && (
@@ -483,7 +484,7 @@ function extractScanPayload(raw) {
   return { token: extractToken(value), action: null }
 }
 
-function ManualCheckin({ eventId, onResult, manualEnabled, walkInEnabled, sectionMode, sectionId, sectionPickable, timezone }) {
+function ManualCheckin({ eventId, onResult, manualEnabled, walkInEnabled, sectionMode, sectionId, sectionPickable, timezone, seatingLabel = 'Table' }) {
   const [q, setQ] = useState('')
   const [results, setResults] = useState([])
   const [searching, setSearching] = useState(false)
@@ -550,7 +551,7 @@ function ManualCheckin({ eventId, onResult, manualEnabled, walkInEnabled, sectio
         </p>
         {(confirm.table_name || confirm.seat_number) && (
           <p className="text-sm text-gray-500 dark:text-slate-400">
-            {confirm.table_name && <>Table <strong>{confirm.table_name}</strong></>}
+            {confirm.table_name && <>{seatingLabel} <strong>{confirm.table_name}</strong></>}
             {confirm.seat_number && <> · Seat <strong>{confirm.seat_number}</strong></>}
           </p>
         )}
@@ -635,7 +636,7 @@ function ManualCheckin({ eventId, onResult, manualEnabled, walkInEnabled, sectio
               </div>
               <div className="text-xs text-gray-500 dark:text-slate-400 truncate">
                 {g.phone_masked || 'no phone'}
-                {g.table_name ? ` · Table ${g.table_name}${g.seat_number ? ` seat ${g.seat_number}` : ''}` : ''}
+                {g.table_name ? ` · ${seatingLabel} ${g.table_name}${g.seat_number ? ` seat ${g.seat_number}` : ''}` : ''}
               </div>
             </div>
             {g.admitted
@@ -1280,7 +1281,7 @@ export default function ScannerPage() {
 
         {!loading && result && result.zoneMode && <ZoneResultCard result={result} onReset={reset} />}
         {!loading && result && !result.zoneMode && (
-          <ResultCard result={result} onReset={reset} onStepComplete={completeNextStep} stepActionLoading={stepActionLoading} timezone={selectedEvent?.timezone} />
+          <ResultCard result={result} onReset={reset} onStepComplete={completeNextStep} stepActionLoading={stepActionLoading} timezone={selectedEvent?.timezone} seatingLabel={seatingTerm(selectedEvent)} />
         )}
 
         {!loading && !result && !scanningReady && (
@@ -1318,7 +1319,7 @@ export default function ScannerPage() {
             ) : manualWalkInEnabled && mode === 'manual' ? (
               <ManualCheckin eventId={eventId} manualEnabled={manualEnabled} walkInEnabled={walkInEnabled || manualEnabled}
                 sectionMode={sectionMode} sectionId={sectionId} sectionPickable={tableGroups.length > 1}
-                timezone={selectedEvent?.timezone}
+                timezone={selectedEvent?.timezone} seatingLabel={seatingTerm(selectedEvent)}
                 onResult={(res) => setResult(res)} />
             ) : (
               <>

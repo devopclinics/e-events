@@ -25,7 +25,7 @@ PLACEHOLDERS = [
     "event_name", "event_date", "event_time", "organizer_name",
     "rsvp_link", "ticket_link", "festiome_link", "qr_code",
     "venue_name", "venue_address", "event_location",
-    "table_name", "table_group", "ticket_type",
+    "table_name", "table_group", "seating_term", "ticket_type",
     "experience_steps", "experience_steps_text",
     "experience_step_title", "experience_step_message",
     "session_topic", "session_date", "session_time", "session_room", "session_speaker",
@@ -298,9 +298,9 @@ TEMPLATE_DEFS: dict[str, dict] = {
         email_kind="block",
         subject="You're checked in — {{event_name}}",
         email_body="<p>Welcome, {{guest_first_name}}! You have been successfully admitted.</p>",
-        sms_body="Welcome {{guest_first_name}}! You're checked in to {{event_name}}. Table: {{table_name}}.",
-        whatsapp_body="Welcome {{guest_first_name}}! You're checked in. Table: {{table_name}}.",
-        mms_body="Welcome {{guest_first_name}}! You're checked in to {{event_name}}. Table: {{table_name}}. Your ticket card is attached.",
+        sms_body="Welcome {{guest_first_name}}! You're checked in to {{event_name}}. {{seating_term}}: {{table_name}}.",
+        whatsapp_body="Welcome {{guest_first_name}}! You're checked in. {{seating_term}}: {{table_name}}.",
+        mms_body="Welcome {{guest_first_name}}! You're checked in to {{event_name}}. {{seating_term}}: {{table_name}}. Your ticket card is attached.",
         note=("The seating/menu blocks are added automatically; edit the subject and intro copy here. "
               "The MMS body is the caption sent with the ticket-card image."),
     ),
@@ -594,6 +594,7 @@ def build_context(event, guest=None, *, extras: dict | None = None) -> dict:
         ctx["organizer_name"] = getattr(event, "couples_name", "") or ""
         ctx["venue_name"] = getattr(event, "venue_name", "") or ""
         ctx["venue_address"] = getattr(event, "venue_address", "") or ""
+        ctx["seating_term"] = (getattr(event, "seating_term", None) or "Table").strip() or "Table"
     if guest is not None:
         first = getattr(guest, "first_name", "") or ""
         last = getattr(guest, "last_name", "") or ""

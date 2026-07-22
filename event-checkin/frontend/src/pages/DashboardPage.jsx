@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
 import { api } from '../api'
 import { parseUtc, fmtEventDateRange } from '../timeutil'
+import { seatingTerm } from '../seatingTerm'
 import { auth } from '../firebase'
 import { useCurrentEvent } from '../hooks/useCurrentEvent'
 
@@ -546,7 +547,7 @@ export default function DashboardPage() {
 
           {/* Per-table report — for table-assigned staff */}
           {stats.tables && stats.tables.length > 0 && (
-            <Card title="By table" right={
+            <Card title={`By ${seatingTerm(event, { lower: true })}`} right={
               <div className="flex items-center gap-3 text-[11px] text-slate-500 dark:text-slate-400">
                 <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-full bg-green-500" />Space</span>
                 <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-full bg-amber-500" />Filling</span>
@@ -557,7 +558,7 @@ export default function DashboardPage() {
                 <table className="w-full text-sm">
                   <thead className="text-xs uppercase text-slate-400">
                     <tr>
-                      <th className="text-left font-semibold px-2 py-2">Table</th>
+                      <th className="text-left font-semibold px-2 py-2">{seatingTerm(event)}</th>
                       <th className="text-right font-semibold px-2 py-2">Seated</th>
                       <th className="text-right font-semibold px-2 py-2">Checked in</th>
                       <th className="text-right font-semibold px-2 py-2">Served</th>

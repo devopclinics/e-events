@@ -157,7 +157,11 @@ async def send_to_guest(event: Event, guest: Guest, db: AsyncSession, *, overrid
     return sent
 
 
-async def _send_for_event(event: Event, db: AsyncSession) -> int:
+async def send_for_event(event: Event, db: AsyncSession) -> int:
+    """Send to every guest in the event's configured audience, right now.
+    Used by the automatic tick() below (once event_end_date + delay has
+    passed) and by the admin's manual "Send now" (routers/events.py) — the
+    caller is responsible for setting post_event_thankyou_sent_at afterward."""
     q = select(Guest).where(Guest.event_id == event.id)
     if event.post_event_thankyou_audience == "admitted":
         q = q.where(Guest.admitted == True)  # noqa: E712
@@ -186,7 +190,7 @@ async def tick(db: AsyncSession, *, now: datetime | None = None) -> dict[str, in
     sent_messages = 0
     for event in due:
         try:
-            sent_messages += await _send_for_event(event, db)
+            sent_messages += await send_for_event(event, db)
         except Exception:
             logger.exception("post_event_thankyou send crashed for event=%s", event.id)
             continue

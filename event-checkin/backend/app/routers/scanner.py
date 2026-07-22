@@ -13,6 +13,7 @@ from ..schemas import ConsentSignatureCreate, ExperienceNextStepOut, ExperienceS
 from ..auth import require_official, _org_role
 from .access import zone_occupancy, ticket_allows
 from ..entitlements import can_use_paid_channels, last_credit_ledger_id, take_message_credit
+from ..seating_terms import seating_term as _seating_term
 from ..channels import channels_for_flow
 from services.email_service import send_admission_email, send_simple_email
 from services import messaging
@@ -490,6 +491,7 @@ async def queue_admission_email(background_tasks: BackgroundTasks, event: Event,
         "ticket_url": ticket_url,
         "hub_url": hub_url,
         "menu_enabled": bool(event.menu_enabled),
+        "seating_term": _seating_term(event),
     }
 
     overrides = await load_overrides(event.id, db)
@@ -530,6 +532,7 @@ async def view_ticket(qr_token: str, db: AsyncSession = Depends(get_db)):
         registry_message=event.registry_message,
         festiome_addon_enabled=event.festiome_addon_enabled,
         festiome_enabled=event.festiome_enabled,
+        seating_term=event.seating_term,
     ) if event else None
 
     table_name = None
@@ -794,6 +797,7 @@ async def ticket_card_image(
         admitted=admitted,
         table_name=table_name,
         seat_number=guest.seat_number or "",
+        seating_term=_seating_term(event),
     )
     return Response(content=card, media_type="image/jpeg", headers={"Cache-Control": "no-store"})
 
@@ -1126,6 +1130,7 @@ async def perform_admission(guest, event, background_tasks, db) -> ScanResult:
         "ticket_url": ticket_url,
         "hub_url": hub_url,
         "menu_enabled": bool(event and event.menu_enabled),
+        "seating_term": _seating_term(event) if event else "Table",
     }
     paid = can_use_paid_channels(event) if event else False
     # Customizable-template overrides for the check-in messages (fall back to the
@@ -1149,6 +1154,7 @@ async def perform_admission(guest, event, background_tasks, db) -> ScanResult:
                 admitted_at=guest.admitted_at,
                 table_name=table_name, seat_number=guest.seat_number,
                 event_timezone=event.timezone if event else None,
+                seating_term=_seating_term(event) if event else "Table",
             )
     if "whatsapp" in chosen and take_message_credit(event, "whatsapp"):
         # WhatsApp initiates → approved template only (free-text overrides 15003).
@@ -1159,6 +1165,8 @@ async def perform_admission(guest, event, background_tasks, db) -> ScanResult:
             phone=guest.phone, first_name=guest.first_name,
             event_name=event.name if event else "the event",
             table_name=table_name, seat_number=guest.seat_number,
+            seating_term=_seating_term(event) if event else "Table",
+            hub_url=hub_url,
         )
     # MMS (image ticket card) — super-admin-enabled per event. Sends the styled
     # admitted card fetched directly from /api/scan/{token}/card.jpg.

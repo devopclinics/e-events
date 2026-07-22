@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { api, PUBLIC_BASE_URL, publicBaseUrl } from '../api'
 import { utcToLocalInput, zonedWallTimeToUtcISOString, utcToZonedInput, parseUtc } from '../timeutil'
+import { seatingTerm } from '../seatingTerm'
 import { useAuth } from '../context/AuthContext'
 import { useCurrentEvent } from '../hooks/useCurrentEvent'
 
@@ -68,7 +69,7 @@ function StatusControls({ event, onChanged }) {
   )
 }
 
-function GuestCommunicationPanel({ event }) {
+function GuestCommunicationPanel({ event, onNavigateBilling }) {
   const [settings, setSettings] = useState(null)
   const [announcements, setAnnouncements] = useState([])
   const [inbox, setInbox] = useState([])
@@ -179,7 +180,17 @@ function GuestCommunicationPanel({ event }) {
             <h2 className="font-semibold text-base dark:text-white">Guest Communication</h2>
             <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">Send event updates and respond to guest questions. Messaging never blocks RSVP or QR admission.</p>
           </div>
-          <button onClick={load} className="text-xs font-semibold text-teal-600 hover:underline">Refresh</button>
+          <div className="flex items-center gap-3">
+            {typeof event.message_credits === 'number' && (
+              <button
+                onClick={onNavigateBilling}
+                title="Go to Billing"
+                className={`rounded-full px-3 py-1 text-xs font-semibold ${event.message_credits <= 20 ? 'bg-red-50 text-red-700 dark:bg-red-900/30 dark:text-red-300' : 'bg-slate-100 text-slate-600 dark:bg-slate-700 dark:text-slate-300'} hover:opacity-80`}>
+                💳 {event.message_credits.toLocaleString()} credits left
+              </button>
+            )}
+            <button onClick={load} className="text-xs font-semibold text-teal-600 hover:underline">Refresh</button>
+          </div>
         </div>
         {err && <div className="mt-4 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">{err}</div>}
         {msg && <div className="mt-4 rounded-lg border border-green-200 bg-green-50 px-3 py-2 text-sm text-green-700">{msg}</div>}
@@ -691,7 +702,7 @@ function CategoryBadge({ value, className = '' }) {
   )
 }
 
-function SeatingPanel({ eventId }) {
+function SeatingPanel({ eventId, seatingLabel = 'Table' }) {
   const [tables, setTables]       = useState([])
   const [chart, setChart]         = useState(null)
   const [showChart, setShowChart] = useState(false)
@@ -796,7 +807,7 @@ function SeatingPanel({ eventId }) {
   }
 
   async function deleteTable(id) {
-    if (!confirm('Delete this table? Assigned guests will be unassigned.')) return
+    if (!confirm(`Delete this ${seatingLabel.toLowerCase()}? Assigned guests will be unassigned.`)) return
     setLoading(true)
     try {
       await api.deleteTable(eventId, id)
@@ -838,20 +849,20 @@ function SeatingPanel({ eventId }) {
           </button>
           <button onClick={() => setForm({ name: '', capacity: 10, category: '', sort_order: tables.length })} disabled={loading}
             className="bg-indigo-600 text-white px-3 py-1.5 rounded-lg text-xs font-semibold hover:bg-indigo-700">
-            + Table
+            + {seatingLabel}
           </button>
         </div>
       </div>
 
       {tables.length === 0 && !form ? (
-        <p className="text-sm text-gray-400 dark:text-slate-500">No tables yet. Add tables to enable seating.</p>
+        <p className="text-sm text-gray-400 dark:text-slate-500">No {seatingLabel.toLowerCase()}s yet. Add {seatingLabel.toLowerCase()}s to enable seating.</p>
       ) : (
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead className="bg-gray-50 dark:bg-slate-700 text-xs font-semibold text-gray-500 dark:text-slate-400 uppercase">
               <tr>
                 <th className="px-4 py-2 text-center">Order</th>
-                <th className="px-4 py-2 text-left">Table</th>
+                <th className="px-4 py-2 text-left">{seatingLabel}</th>
                 <th className="px-4 py-2 text-center">Category</th>
                 <th className="px-4 py-2 text-center">Capacity</th>
                 <th className="px-4 py-2 text-center">Assigned</th>
@@ -890,9 +901,9 @@ function SeatingPanel({ eventId }) {
       {form && (
         <form onSubmit={saveTable} className="flex flex-wrap gap-2 items-end bg-gray-50 dark:bg-slate-700 rounded-lg p-3 border dark:border-slate-600">
           <div>
-            <label className="block text-xs font-semibold text-gray-600 dark:text-slate-300 mb-1">Table Name</label>
+            <label className="block text-xs font-semibold text-gray-600 dark:text-slate-300 mb-1">{seatingLabel} Name</label>
             <input value={form.name} onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))} required
-              className={fieldCls} placeholder="Table 1" />
+              className={fieldCls} placeholder={`${seatingLabel} 1`} />
           </div>
           <div>
             <label className="block text-xs font-semibold text-gray-600 dark:text-slate-300 mb-1">Category</label>
@@ -1006,7 +1017,7 @@ function SeatingPanel({ eventId }) {
 // Group existing tables under a tag and assign guests to the group. Guests with a
 // group can only be seated/checked-in at tables in that group (enforced server-side).
 
-function TableGroupsPanel({ eventId }) {
+function TableGroupsPanel({ eventId, seatingLabel = 'Table' }) {
   const [groups, setGroups] = useState([])
   const [tables, setTables] = useState([])
   const [form, setForm]     = useState(null)   // {id?, name, tag, description, table_ids:[]}
@@ -1053,7 +1064,7 @@ function TableGroupsPanel({ eventId }) {
   }
 
   async function remove(id) {
-    if (!confirm('Delete this table group?')) return
+    if (!confirm(`Delete this ${seatingLabel.toLowerCase()} group?`)) return
     setLoading(true); setErr('')
     try {
       await api.deleteTableGroup(eventId, id)
@@ -1066,21 +1077,21 @@ function TableGroupsPanel({ eventId }) {
     <div className="bg-white dark:bg-slate-800 dark:border dark:border-slate-700/60 rounded-xl shadow p-6 space-y-4 mt-6">
       <div className="flex items-center justify-between flex-wrap gap-2">
         <div>
-          <h2 className="font-semibold text-base dark:text-white">Table Groups</h2>
+          <h2 className="font-semibold text-base dark:text-white">{seatingLabel} Groups</h2>
           <p className="text-xs text-gray-400 dark:text-slate-500 mt-1">
-            Group tables (e.g. VIP, Family) and tag guests to them. Tagged guests can only be seated within their group.
+            Group {seatingLabel.toLowerCase()}s (e.g. VIP, Family) and tag guests to them. Tagged guests can only be seated within their group.
           </p>
         </div>
         <button onClick={() => setForm({ name: '', tag: '', description: '', sort_order: groups.length, table_ids: [], table_orders: {} })} disabled={loading}
           className="bg-indigo-600 text-white px-3 py-1.5 rounded-lg text-xs font-semibold hover:bg-indigo-700">
-          + Table Group
+          + {seatingLabel} Group
         </button>
       </div>
 
       {err && <p className="text-sm text-red-500">{err}</p>}
 
       {groups.length === 0 && !form ? (
-        <p className="text-sm text-gray-400 dark:text-slate-500">No table groups yet.</p>
+        <p className="text-sm text-gray-400 dark:text-slate-500">No {seatingLabel.toLowerCase()} groups yet.</p>
       ) : (
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           {groups.map((g) => (
@@ -1099,7 +1110,7 @@ function TableGroupsPanel({ eventId }) {
               </div>
               {g.description && <p className="text-xs text-gray-500 dark:text-slate-400 mt-1">{g.description}</p>}
               <div className="mt-2 text-xs text-gray-500 dark:text-slate-400">
-                Tables: {(g.table_ids || []).length ? (g.table_ids).map(tableName).join(', ') : <span className="italic">none</span>}
+                {seatingLabel}s: {(g.table_ids || []).length ? (g.table_ids).map(tableName).join(', ') : <span className="italic">none</span>}
               </div>
               <div className="mt-1 flex items-center gap-3 text-xs">
                 <span className="dark:text-slate-300">👤 {g.assigned_guest_count} assigned</span>
@@ -1141,9 +1152,9 @@ function TableGroupsPanel({ eventId }) {
             </div>
           </div>
           <div>
-            <label className="block text-xs font-semibold text-gray-600 dark:text-slate-300 mb-1">Tables in this group</label>
+            <label className="block text-xs font-semibold text-gray-600 dark:text-slate-300 mb-1">{seatingLabel}s in this group</label>
             {tables.length === 0 ? (
-              <p className="text-xs text-gray-400">Create tables first (in Seating above).</p>
+              <p className="text-xs text-gray-400">Create {seatingLabel.toLowerCase()}s first (in Seating above).</p>
             ) : (
               <div className="flex flex-wrap gap-2">
                 {tables.map((t) => (
@@ -1161,7 +1172,7 @@ function TableGroupsPanel({ eventId }) {
           </div>
           {form.table_ids.length > 0 && (
             <div>
-              <label className="block text-xs font-semibold text-gray-600 dark:text-slate-300 mb-1">Order of tables in this group</label>
+              <label className="block text-xs font-semibold text-gray-600 dark:text-slate-300 mb-1">Order of {seatingLabel.toLowerCase()}s in this group</label>
               <div className="flex flex-wrap gap-2">
                 {form.table_ids.map((id) => (
                   <div key={id} className="flex items-center gap-1 text-xs">
@@ -1230,6 +1241,37 @@ function CheckoutToggle({ event, onChanged, onFlash }) {
 // Lets staff register walk-in guests at the door (Scanner -> Manual / Walk-in). New walk-ins
 // are auto-assigned to a chosen table group.
 
+function SeatingLabelPanel({ event, onChanged, onFlash }) {
+  const [value, setValue] = useState(event.seating_term || '')
+  const [saving, setSaving] = useState(false)
+
+  async function save() {
+    setSaving(true)
+    try {
+      onChanged(await api.toggleFeatures(event.id, { seating_term: value }))
+      onFlash?.(value ? `Now shown as "${value}" instead of "Table".` : 'Reset to "Table".')
+    } catch (e) { onFlash?.(e.message, true) }
+    finally { setSaving(false) }
+  }
+
+  return (
+    <div className="bg-white dark:bg-slate-800 dark:border dark:border-slate-700/60 rounded-xl shadow p-6 space-y-2">
+      <h2 className="font-semibold text-base dark:text-white">What should we call it?</h2>
+      <p className="text-xs text-gray-400 dark:text-slate-500">
+        This event still uses ordinary Seating underneath — only the word "Table" changes, everywhere a guest or staff member sees it (pass, check-in, messages). Leave blank for the default.
+      </p>
+      <div className="flex flex-wrap items-center gap-2 pt-1">
+        <input type="text" value={value} onChange={(e) => setValue(e.target.value)} placeholder="Table" maxLength={30}
+          className="w-48 rounded border border-gray-300 dark:border-slate-600 dark:bg-slate-900 px-2 py-1.5 text-sm" />
+        <button onClick={save} disabled={saving || value === (event.seating_term || '')}
+          className="rounded bg-teal-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-teal-700 disabled:opacity-50">
+          {saving ? 'Saving…' : 'Save'}
+        </button>
+      </div>
+    </div>
+  )
+}
+
 function WalkInToggle({ event, onChanged, onFlash }) {
   const [groups, setGroups] = useState([])
   const [loading, setLoading] = useState(false)
@@ -1279,7 +1321,7 @@ function WalkInToggle({ event, onChanged, onFlash }) {
       </div>
       {event.walk_in_enabled && !event.section_mode_enabled && (
         <div>
-          <label className="block text-xs font-semibold text-gray-600 dark:text-slate-300 mb-1">Auto-assign walk-ins to table group</label>
+          <label className="block text-xs font-semibold text-gray-600 dark:text-slate-300 mb-1">Auto-assign walk-ins to {seatingTerm(event, { lower: true })} group</label>
           <select value={event.walk_in_table_group_id || ''} onChange={(e) => setGroup(e.target.value)}
             className="border border-gray-300 dark:border-slate-700 rounded-lg px-3 py-2 text-sm bg-white dark:bg-slate-700 text-gray-900 dark:text-white">
             <option value="">— none (seat anywhere) —</option>
@@ -7898,10 +7940,63 @@ function FestioMeEventControl({ event }) {
   )
 }
 
-function PostEventThankyouTestSend({ event, guests }) {
-  const [guestId, setGuestId] = useState('')
+function PostEventThankyouSendNow({ event, guests, onSent }) {
   const [busy, setBusy] = useState(false)
   const [result, setResult] = useState(null)
+  const count = guests.filter((g) => {
+    if (event.post_event_thankyou_audience === 'confirmed') return g.rsvp_status === 'confirmed'
+    if (event.post_event_thankyou_audience === 'all') return true
+    return !!g.admitted
+  }).length
+
+  const alreadySent = !!event.post_event_thankyou_sent_at
+
+  async function sendNow(force) {
+    const prefix = force ? 'This was already sent once. Send it again' : 'Send the post-event thank-you message'
+    if (!window.confirm(`${prefix} to ${count} guest${count === 1 ? '' : 's'} now? This can't be undone.`)) return
+    setBusy(true); setResult(null)
+    try {
+      const res = await api.sendNowPostEventThankyou(event.id, force)
+      setResult({ ok: true, text: `Sent — ${res.messages_sent} message${res.messages_sent === 1 ? '' : 's'} across ${count} guest${count === 1 ? '' : 's'}.` })
+      onSent()
+    } catch (err) {
+      setResult({ ok: false, text: err.message })
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  return (
+    <div className="flex flex-wrap items-center gap-2">
+      {alreadySent && (
+        <span className="text-xs text-gray-400 dark:text-slate-500">
+          Already sent {new Date(event.post_event_thankyou_sent_at).toLocaleString()}.
+        </span>
+      )}
+      <button type="button" onClick={() => sendNow(alreadySent)} disabled={busy || count === 0}
+        className={`rounded px-3 py-1.5 text-xs font-semibold text-white disabled:opacity-50 ${alreadySent ? 'bg-slate-500 hover:bg-slate-600' : 'bg-amber-600 hover:bg-amber-700'}`}>
+        {busy ? 'Sending…' : alreadySent ? `Send again to ${count} guest${count === 1 ? '' : 's'}` : `Send now to ${count} guest${count === 1 ? '' : 's'}`}
+      </button>
+      {result && (
+        <span className={result.ok ? 'text-teal-700 dark:text-teal-400' : 'text-red-600 dark:text-red-400'}>{result.text}</span>
+      )}
+    </div>
+  )
+}
+
+function PostEventThankyouTestSend({ event, guests }) {
+  const [guestId, setGuestId] = useState('')
+  const [search, setSearch] = useState('')
+  const [open, setOpen] = useState(false)
+  const [busy, setBusy] = useState(false)
+  const [result, setResult] = useState(null)
+
+  const selected = guests.find((g) => g.id === guestId)
+  const guestLabel = (g) => `${g.first_name || ''} ${g.last_name || ''}`.trim() || g.email || g.phone || g.id
+  const term = search.trim().toLowerCase()
+  const filtered = term
+    ? guests.filter((g) => guestLabel(g).toLowerCase().includes(term) || (g.email || '').toLowerCase().includes(term)).slice(0, 20)
+    : guests.slice(0, 20)
 
   async function send() {
     if (!guestId) return
@@ -7918,15 +8013,28 @@ function PostEventThankyouTestSend({ event, guests }) {
 
   return (
     <div className="mt-2 flex flex-wrap items-center gap-2 text-sm">
-      <select value={guestId} onChange={(e) => { setGuestId(e.target.value); setResult(null) }}
-        className="rounded border border-gray-300 dark:border-slate-600 dark:bg-slate-900 px-2 py-1 text-sm">
-        <option value="">Send a real test to…</option>
-        {guests.map((g) => (
-          <option key={g.id} value={g.id}>
-            {`${g.first_name || ''} ${g.last_name || ''}`.trim() || g.email || g.phone || g.id}
-          </option>
-        ))}
-      </select>
+      <div className="relative">
+        <input type="text"
+          value={selected ? guestLabel(selected) : search}
+          onChange={(e) => { setSearch(e.target.value); setGuestId(''); setResult(null); setOpen(true) }}
+          onFocus={(e) => { e.target.select(); setOpen(true) }}
+          onBlur={() => setTimeout(() => setOpen(false), 150)}
+          placeholder="Search a guest to test-send to…"
+          className="w-64 rounded border border-gray-300 dark:border-slate-600 dark:bg-slate-900 px-2 py-1 text-sm" />
+        {open && filtered.length > 0 && (
+          <ul className="absolute z-10 mt-1 max-h-56 w-72 overflow-auto rounded border border-gray-300 bg-white shadow-lg dark:border-slate-600 dark:bg-slate-800">
+            {filtered.map((g) => (
+              <li key={g.id}>
+                <button type="button"
+                  onMouseDown={(e) => { e.preventDefault(); setGuestId(g.id); setSearch(''); setOpen(false); setResult(null) }}
+                  className="block w-full px-2 py-1 text-left text-sm hover:bg-teal-50 dark:hover:bg-slate-700">
+                  {guestLabel(g)}
+                </button>
+              </li>
+            ))}
+          </ul>
+        )}
+      </div>
       <button type="button" onClick={send} disabled={!guestId || busy}
         className="rounded bg-teal-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-teal-700 disabled:opacity-50">
         {busy ? 'Sending…' : 'Send test'}
@@ -8463,7 +8571,7 @@ function AddGuestModal({ onSave, onClose, loading }) {
 
 // ── Edit Guest Modal (ported from prod) ─────────────────────────────────────────
 
-function EditGuestModal({ guest, eventId, seatingEnabled, onSave, onClose, loading }) {
+function EditGuestModal({ guest, eventId, seatingEnabled, seatingLabel = 'Table', onSave, onClose, loading }) {
   const [form, setForm] = useState({
     first_name: guest.first_name || '',
     last_name:  guest.last_name  || '',
@@ -8569,10 +8677,10 @@ function EditGuestModal({ guest, eventId, seatingEnabled, onSave, onClose, loadi
           {seatingEnabled && (
             <div className="grid grid-cols-2 gap-2 pt-1 border-t dark:border-slate-700 mt-1">
               <div>
-                <label className="block text-xs font-medium text-slate-500 dark:text-slate-400 mb-1 mt-2">Table</label>
+                <label className="block text-xs font-medium text-slate-500 dark:text-slate-400 mb-1 mt-2">{seatingLabel}</label>
                 <select className={inputCls} value={form.table_id}
                   onChange={(e) => setForm((f) => ({ ...f, table_id: e.target.value, seat_number: e.target.value ? f.seat_number : '' }))}>
-                  <option value="">— No table —</option>
+                  <option value="">— No {seatingLabel.toLowerCase()} —</option>
                   {tables.map((t) => (
                     <option key={t.id} value={t.id}>{t.name}{t.capacity != null ? ` (${t.assigned_count ?? 0}/${t.capacity})` : ''}</option>
                   ))}
@@ -8617,7 +8725,7 @@ function EditGuestModal({ guest, eventId, seatingEnabled, onSave, onClose, loadi
 }
 
 // Read-only guest view: details + answers to the custom RSVP questions.
-function ViewGuestModal({ guest, eventId, onClose }) {
+function ViewGuestModal({ guest, eventId, seatingLabel = 'Table', onClose }) {
   const [answers, setAnswers] = useState(null)
   useEffect(() => {
     if (!eventId || !guest?.id) return
@@ -8633,7 +8741,7 @@ function ViewGuestModal({ guest, eventId, onClose }) {
     ['Phone', guest.phone],
     ['RSVP', guest.rsvp_status],
     ['Checked in', guest.admitted ? 'Yes' : 'No'],
-    ['Table group', guest.table_group_name],
+    [`${seatingLabel} group`, guest.table_group_name],
     ['Seat', guest.seat_number],
     ['VIP', guest.is_vip ? 'Yes' : null],
     ['Guest of', guest.rsvp_submitter_guest_id && guest.rsvp_submitter_guest_id === guest.id ? 'Self / main invited guest' : guest.rsvp_submitter_name],
@@ -8957,7 +9065,7 @@ export default function AdminPage() {
       await api.bulkAssignTableGroup(selectedId, ids, groupId || null)
       const [gs, tg] = await Promise.all([api.listGuests(selectedId), api.listTableGroups(selectedId)])
       setGuests(gs); setTableGroups(tg); setSelectedGuests(new Set())
-      flash(groupId ? 'Table group assigned.' : 'Table group cleared.')
+      flash(groupId ? `${seatingTerm(event)} group assigned.` : `${seatingTerm(event)} group cleared.`)
     } catch (e) { flash(e.message, true) }
     finally { setLoading(false) }
   }
@@ -9322,6 +9430,7 @@ export default function AdminPage() {
                 { id: 'guests', label: 'Guests', icon: '👥', count: guests.length },
                 { id: 'invite', label: 'Invites & RSVP', icon: '✉️' },
                 { id: 'communication', label: 'Guest Communication', icon: '💬' },
+                { id: 'billing', label: 'Billing', icon: '💳' },
               ]},
               ...(event.venue_access_enabled ? [{ label: 'Venue & access', items: [
                 { id: 'access', label: 'Entry areas', icon: '🎟️' },
@@ -9396,9 +9505,26 @@ export default function AdminPage() {
                   </span>
                 </label>
                 {event.post_event_thankyou_enabled && (
-                  <div className="ml-6 mt-2 flex flex-wrap items-center gap-x-6 gap-y-2 text-sm text-slate-600 dark:text-slate-300">
-                    <label className="flex items-center gap-2">
-                      Send
+                  <div className="ml-6 mt-2 space-y-2">
+                    <div className="flex flex-wrap items-center gap-x-6 gap-y-2 text-sm text-slate-600 dark:text-slate-300">
+                      <select
+                        value={event.post_event_thankyou_audience || 'admitted'}
+                        onChange={async (e) => {
+                          try { updateEvent(await api.toggleFeatures(event.id, { post_event_thankyou_audience: e.target.value })) }
+                          catch (err) { flash(err.message, true) }
+                        }}
+                        className="rounded border border-gray-300 dark:border-slate-600 dark:bg-slate-900 px-2 py-1 text-sm">
+                        <option value="admitted">Checked-in guests</option>
+                        <option value="confirmed">Confirmed guests</option>
+                        <option value="all">All guests</option>
+                      </select>
+                    </div>
+                    {guests.length > 0 && (
+                      <PostEventThankyouSendNow event={event} guests={guests}
+                        onSent={() => updateEvent({ ...event, post_event_thankyou_sent_at: new Date().toISOString() })} />
+                    )}
+                    <label className="flex items-center gap-2 text-xs text-gray-400 dark:text-slate-500">
+                      Or send it automatically
                       <input type="number" min={0} max={720}
                         value={event.post_event_thankyou_delay_hours ?? 4}
                         onChange={async (e) => {
@@ -9406,20 +9532,9 @@ export default function AdminPage() {
                           try { updateEvent(await api.toggleFeatures(event.id, { post_event_thankyou_delay_hours: hours })) }
                           catch (err) { flash(err.message, true) }
                         }}
-                        className="w-16 rounded border border-gray-300 dark:border-slate-600 dark:bg-slate-900 px-2 py-1 text-sm" />
-                      hours after the event ends, to
+                        className="w-16 rounded border border-gray-300 dark:border-slate-600 dark:bg-slate-900 px-2 py-1 text-xs" />
+                      hours after the event ends (skipped once you send it manually).
                     </label>
-                    <select
-                      value={event.post_event_thankyou_audience || 'admitted'}
-                      onChange={async (e) => {
-                        try { updateEvent(await api.toggleFeatures(event.id, { post_event_thankyou_audience: e.target.value })) }
-                        catch (err) { flash(err.message, true) }
-                      }}
-                      className="rounded border border-gray-300 dark:border-slate-600 dark:bg-slate-900 px-2 py-1 text-sm">
-                      <option value="admitted">Checked-in guests</option>
-                      <option value="confirmed">Confirmed guests</option>
-                      <option value="all">All guests</option>
-                    </select>
                   </div>
                 )}
                 {event.post_event_thankyou_enabled && guests.length > 0 && (
@@ -9509,6 +9624,7 @@ export default function AdminPage() {
               guest={editingGuest}
               eventId={selectedId}
               seatingEnabled={!!event?.seating_enabled}
+              seatingLabel={seatingTerm(event)}
               loading={loading}
               onSave={(data) => handleUpdateGuest(editingGuest.id, data)}
               onClose={() => setEditingGuest(null)}
@@ -9519,6 +9635,7 @@ export default function AdminPage() {
             <ViewGuestModal
               guest={viewingGuest}
               eventId={selectedId}
+              seatingLabel={seatingTerm(event)}
               onClose={() => setViewingGuest(null)}
             />
           )}
@@ -9701,7 +9818,9 @@ export default function AdminPage() {
 
           {activeTab === 'experience' && <ExperiencePanel event={event} onChanged={updateEvent} onFlash={flash} />}
 
-          {activeTab === 'communication' && <GuestCommunicationPanel event={event} />}
+          {activeTab === 'communication' && <GuestCommunicationPanel event={event} onNavigateBilling={() => setActiveTab('billing')} />}
+
+          {activeTab === 'billing' && <BillingPanel event={event} recommendedPlan={effectiveRecommendedPlan} />}
 
           {activeTab === 'invite' && <>
             {event.invite_mode === 'closed' && (() => {
@@ -9750,15 +9869,15 @@ export default function AdminPage() {
                 </div>
               )
             })()}
-            <BillingPanel event={event} recommendedPlan={effectiveRecommendedPlan} />
             <InvitePanel event={event} onChanged={updateEvent} />
             <ManualInvitePanel event={event} />
             <BroadcastPanel event={event} />
           </>}
 
           {activeTab === 'seating' && event.seating_enabled && <>
-            <SeatingPanel eventId={selectedId} />
-            <TableGroupsPanel eventId={selectedId} />
+            <SeatingLabelPanel event={event} onChanged={updateEvent} onFlash={flash} />
+            <SeatingPanel eventId={selectedId} seatingLabel={seatingTerm(event)} />
+            <TableGroupsPanel eventId={selectedId} seatingLabel={seatingTerm(event)} />
             <WalkInToggle event={event} onChanged={updateEvent} onFlash={flash} />
             <CheckoutToggle event={event} onChanged={updateEvent} onFlash={flash} />
           </>}
@@ -9879,7 +9998,7 @@ export default function AdminPage() {
                         onChange={(e) => { const v = e.target.value; e.target.value = ''; if (v) handleBulkAssignGroup(v === 'none' ? null : v) }}
                         disabled={loading}
                         className="text-xs border border-indigo-300 dark:border-indigo-700 rounded-lg px-2 py-1.5 bg-white dark:bg-slate-700 dark:text-slate-200">
-                        <option value="">Assign table group…</option>
+                        <option value="">Assign {seatingTerm(event, { lower: true })} group…</option>
                         {tableGroups.map((tg) => <option key={tg.id} value={tg.id}>{tg.name}</option>)}
                         <option value="none">— Clear group —</option>
                       </select>
@@ -9933,7 +10052,7 @@ export default function AdminPage() {
                   {event?.seating_enabled && tableGroups.length > 0 && (
                     <select value={groupFilter} onChange={(e) => { setGroupFilter(e.target.value); setPage(0) }}
                       className="text-xs border dark:border-slate-700 rounded-lg px-2 py-1.5 bg-white dark:bg-slate-700 dark:text-slate-200">
-                      <option value="">All table groups</option>
+                      <option value="">All {seatingTerm(event, { lower: true })} groups</option>
                       <option value="none">Unassigned</option>
                       {tableGroups.map((tg) => <option key={tg.id} value={tg.id}>{tg.name}</option>)}
                     </select>
@@ -10033,7 +10152,7 @@ export default function AdminPage() {
                         </th>}
                         <th className="px-4 py-3 text-left">Name</th>
                         <th className="px-4 py-3 text-left">Email</th>
-                        {event?.seating_enabled && <th className="px-4 py-3 text-left">Table Group</th>}
+                        {event?.seating_enabled && <th className="px-4 py-3 text-left">{seatingTerm(event)} Group</th>}
                         <th className="px-4 py-3 text-center">QR</th>
                         <th className="px-4 py-3 text-center">Invited</th>
                         <th className="px-4 py-3 text-center">Email</th>

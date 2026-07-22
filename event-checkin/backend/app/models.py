@@ -217,6 +217,12 @@ class Event(Base):
     # group may only be seated/checked-in at tables inside that group. Events
     # with no table groups are unaffected regardless of this flag.
     enforce_table_groups: Mapped[bool] = mapped_column(Boolean, default=True)
+    # Cosmetic-only override for the word "Table" across guest/staff-facing
+    # copy (pass, check-in, messages, Seating admin UI) — e.g. "Cabin" or
+    # "Room" for a retreat that allocates guests to sleeping cabins instead of
+    # banquet tables. NULL/blank = "Table" everywhere, unchanged. Does not
+    # affect the underlying SeatingTable/TableGroup data model at all.
+    seating_term: Mapped[str | None] = mapped_column(String(30), nullable=True)
     # Section-based scanning add-on: when True, each scanner device picks one
     # table group ("section", e.g. men's/women's entrance) per session. Walk-ins
     # and group-less manual check-ins at that device route to the active section

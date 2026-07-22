@@ -221,6 +221,7 @@ async def _invite_page_out(event: Event, db: AsyncSession) -> InvitePageOut:
         shipping=await _invite_shipping(event, db),
         registry_enabled=event.registry_enabled,
         registry_token=event.registry_token,
+        seating_term=event.seating_term,
     )
 
 

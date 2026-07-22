@@ -71,6 +71,13 @@ class Settings(BaseSettings):
     bird_whatsapp_approval_accepted_template: str = ""# Bird WhatsApp template NAME for approval accepted
     bird_whatsapp_approval_rejected_template: str = ""# Bird WhatsApp template NAME for approval rejected
     bird_whatsapp_admission_template: str = ""        # Bird WhatsApp template NAME for admission (e.g. event_admmision_utility)
+    # Link-based admission template (vars firstName/eventName/hubLink only — no
+    # table/seat/label baked into the approved copy). Preferred over
+    # bird_whatsapp_admission_template above once configured: any future wording
+    # change (seating label, extra fields, etc.) needs zero re-approval, since
+    # the actual content lives in the Guest Hub the link points to, not in
+    # Meta's fixed template text. Falls back to the inline template when unset.
+    bird_whatsapp_admission_link_template: str = ""
     bird_whatsapp_logistics_template: str = ""        # Bird WhatsApp template NAME for logistics notification
     bird_whatsapp_registry_template: str = ""         # Bird WhatsApp template NAME for registry message
     bird_whatsapp_announcement_template: str = ""     # Generic announcement template (vars firstName/eventName/message) for freeform broadcasts/escalations

@@ -48,6 +48,7 @@ SAMPLE_VALUES = {
     "stepTitle": "Souvenir pickup",
     "stepMessage": "Your convention gift bag has been collected.",
     "roomName": "Red Oak Ballroom",
+    "hubLink": "https://festio.events/r/sample-invite-token#guest-hub",
     "sessionTopic": "Opening Keynote",
     "sessionDate": "July 17, 2026",
     "sessionTime": "6:00 PM",
@@ -129,6 +130,21 @@ TEMPLATES: list[TemplateDef] = [
         "Hi {{firstName}}, you are checked in to {{eventName}}. "
         "Table: {{tableName}}. Seat: {{seatNumber}}. You are all set.",
         ("firstName", "eventName", "tableName", "seatNumber"),
+    ),
+    # Link-based alternative to the inline template above. No seating/room/seat
+    # wording baked into the approved copy — the actual details live in the
+    # guest's Guest Hub, so future wording changes (seating label, new fields,
+    # ...) never require re-submitting a template. Set
+    # BIRD_WHATSAPP_ADMISSION_LINK_TEMPLATE to this one's projectId:version to
+    # switch admission WhatsApp messages over to it (see services/messaging.py
+    # send_admission_whatsapp — falls back to festio_admission_confirmation
+    # above until this is configured).
+    TemplateDef(
+        "Check-in confirmation (link)",
+        "festio_admission_confirmation_link",
+        "Welcome {{firstName}}! You're checked in to {{eventName}}. "
+        "View your pass, program, and updates: {{hubLink}} Keep it handy.",
+        ("firstName", "eventName", "hubLink"),
     ),
     TemplateDef(
         "Logistics notification",
@@ -490,9 +506,15 @@ def main() -> int:
     failed = []
     for template in selected:
         existing = by_name.get(template.project_name.lower())
-        if existing and template_state(existing) == "active":
-            skipped.append((template.project_name, "active"))
-            print(f"SKIP {template.project_name}: active")
+        state = template_state(existing) if existing else None
+        if state in ("active", "pending"):
+            # Re-submitting a pending project deletes it and starts Meta review
+            # over from scratch (see clear_unapproved_channel_templates below) —
+            # never do that automatically. A deliberate resubmit (e.g. revising
+            # rejected copy) should remove/rename the entry here instead of
+            # relying on this loop to notice and reuse it.
+            skipped.append((template.project_name, state))
+            print(f"SKIP {template.project_name}: {state}")
             continue
         try:
             print(f"CREATE {template.project_name} -> {template.platform_name}")

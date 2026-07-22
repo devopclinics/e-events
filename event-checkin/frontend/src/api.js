@@ -548,6 +548,7 @@ export const api = {
   // Broadcast (admin)
   broadcast: (eventId, data) => req('POST', `/events/${eventId}/broadcast`, data),
   testSendPostEventThankyou: (eventId, guestId) => req('POST', `/events/${eventId}/post-event-thankyou/test-send`, { guest_id: guestId }),
+  sendNowPostEventThankyou: (eventId, force = false) => req('POST', `/events/${eventId}/post-event-thankyou/send-now`, { force }),
 
   // Guest Hub / event communication (messaging-service)
   guestHub: (eventId, token) =>

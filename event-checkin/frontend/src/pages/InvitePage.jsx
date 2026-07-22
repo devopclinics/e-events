@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback } from 'react'
 import { useParams } from 'react-router-dom'
 import { api } from '../api'
 import { parseUtc, fmtEventDateRange } from '../timeutil'
+import { seatingTerm } from '../seatingTerm'
 
 // Format a phone as an international number, defaulting to Nigeria (+234).
 // Already-international numbers (starting with +) are kept as-is.
@@ -1303,7 +1304,7 @@ function GuestHub({ event, accessToken, designTheme }) {
       ? { label: 'Ready for entry', icon: '✓' }
       : { label: 'Not checked in yet', icon: '◷' }
   const passCells = [
-    hub?.guest?.table_name && { l: 'Table', v: hub.guest.table_name, ic: '🪑' },
+    hub?.guest?.table_name && { l: seatingTerm(event), v: hub.guest.table_name, ic: '🪑' },
     hub?.guest?.seat_number && { l: 'Seat', v: hub.guest.seat_number, ic: '🎟️' },
     { l: 'Status', v: hub?.guest?.admitted ? 'Admitted' : 'Not yet', ic: hub?.guest?.admitted ? '🟢' : '⚪' },
     event?.venue_name && { l: 'Venue', v: event.venue_name, ic: '📍' },

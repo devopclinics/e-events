@@ -108,6 +108,45 @@ function OccupancyBar({ name, occupancy, capacity }) {
   )
 }
 
+function ProgressBar({ label, completed, total, sub }) {
+  const pct = total ? Math.min(100, Math.round((completed / total) * 100)) : 0
+  return (
+    <div>
+      <div className="flex items-center justify-between text-sm mb-1">
+        <span className="text-slate-700 dark:text-slate-200">{label}</span>
+        <span className="text-slate-500 dark:text-slate-400 tabular-nums">{completed}/{total}</span>
+      </div>
+      <div className="h-2 rounded-full bg-slate-100 dark:bg-slate-700 overflow-hidden">
+        <div className="h-full bg-teal-500" style={{ width: `${pct}%` }} />
+      </div>
+      {sub && <div className="text-[11px] text-slate-400 mt-0.5">{sub}</div>}
+    </div>
+  )
+}
+
+function SessionRow({ s }) {
+  const badge = {
+    in_progress: 'bg-green-50 text-green-700 dark:bg-green-900/30 dark:text-green-300',
+    upcoming: 'bg-slate-100 text-slate-500 dark:bg-slate-700 dark:text-slate-300',
+    ended: 'bg-slate-50 text-slate-400 dark:bg-slate-800 dark:text-slate-500',
+  }[s.state]
+  return (
+    <div className="flex items-center justify-between gap-3 py-2 border-b border-slate-50 dark:border-slate-700/60 last:border-0">
+      <div className="min-w-0">
+        <div className="flex items-center gap-2">
+          {s.state === 'in_progress' && <span className="w-2 h-2 rounded-full bg-green-500 shrink-0" />}
+          <span className="font-medium text-sm text-slate-800 dark:text-slate-100 truncate">{s.topic}</span>
+        </div>
+        <div className="text-xs text-slate-400 mt-0.5">{s.room || 'No room set'}{s.speaker ? ` · ${s.speaker}` : ''}</div>
+      </div>
+      <div className="flex items-center gap-2 shrink-0">
+        <span className={`rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide ${badge}`}>{s.state.replace('_', ' ')}</span>
+        <span className="text-sm font-semibold tabular-nums text-slate-700 dark:text-slate-200">{s.attended}{s.capacity ? `/${s.capacity}` : ''}</span>
+      </div>
+    </div>
+  )
+}
+
 function EmptyFeatureState({ tab }) {
   return (
     <div className="bg-white dark:bg-slate-800 dark:border dark:border-slate-700/60 rounded-xl shadow-sm p-8 text-center">
@@ -126,6 +165,8 @@ export default function ResultsPage() {
   const [data, setData] = useState(null)
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
+  const [program, setProgram] = useState(null)
+  const [experience, setExperience] = useState(null)
 
   useEffect(() => {
     api.listEvents().then((evs) => {
@@ -153,6 +194,16 @@ export default function ResultsPage() {
     const poll = setInterval(() => load(eventId, day), 20000)
     return () => clearInterval(poll)
   }, [eventId, day, load])
+
+  useEffect(() => {
+    if (!eventId || activeTab !== 'program') return
+    api.resultsProgram(eventId).then(setProgram).catch(() => setProgram(null))
+  }, [eventId, activeTab])
+
+  useEffect(() => {
+    if (!eventId || activeTab !== 'experience') return
+    api.resultsExperience(eventId).then(setExperience).catch(() => setExperience(null))
+  }, [eventId, activeTab])
 
   const event = events.find((e) => e.id === eventId)
   const a = data?.attendance
@@ -245,6 +296,48 @@ export default function ResultsPage() {
                 <AttentionPanel alerts={data.alerts} onNavigate={navigateTo} />
               </div>
 
+              {(event.menu_enabled || data.program?.in_progress_count > 0 || event.experience_enabled) && (
+                <div className="grid gap-6 lg:grid-cols-3">
+                  {event.menu_enabled && (
+                    <div className="bg-white dark:bg-slate-800 dark:border dark:border-slate-700/60 rounded-xl shadow-sm p-4">
+                      <h3 className="font-semibold text-sm dark:text-white mb-3">Meals</h3>
+                      <div className="text-3xl font-extrabold text-slate-900 dark:text-white">{data.meals.served_total}</div>
+                      <div className="text-xs text-slate-500 dark:text-slate-400 mt-1">served (total — not yet broken down by day/meal, see Meals tab)</div>
+                    </div>
+                  )}
+                  {event.experience_enabled && (
+                    <div className="bg-white dark:bg-slate-800 dark:border dark:border-slate-700/60 rounded-xl shadow-sm p-4">
+                      <h3 className="font-semibold text-sm dark:text-white mb-3">Program right now</h3>
+                      {data.program.in_progress_count === 0 ? (
+                        <p className="text-sm text-slate-400">No sessions in progress.</p>
+                      ) : (
+                        <div className="space-y-1">
+                          {data.program.in_progress.slice(0, 3).map((s) => <SessionRow key={s.step_id} s={s} />)}
+                        </div>
+                      )}
+                      <button onClick={() => setActiveTab('program')} className="mt-3 text-xs font-semibold text-teal-600 hover:underline">
+                        {data.program.in_progress_count} session{data.program.in_progress_count === 1 ? '' : 's'} in progress →
+                      </button>
+                    </div>
+                  )}
+                  {event.experience_enabled && (
+                    <div className="bg-white dark:bg-slate-800 dark:border dark:border-slate-700/60 rounded-xl shadow-sm p-4">
+                      <h3 className="font-semibold text-sm dark:text-white mb-3">Experience journey</h3>
+                      {data.experience.steps.length === 0 ? (
+                        <p className="text-sm text-slate-400">No Experience steps configured.</p>
+                      ) : (
+                        <div className="space-y-3">
+                          {data.experience.steps.map((s) => (
+                            <ProgressBar key={s.step_id} label={s.title} completed={s.completed} total={s.total} />
+                          ))}
+                        </div>
+                      )}
+                      <button onClick={() => setActiveTab('experience')} className="mt-3 text-xs font-semibold text-teal-600 hover:underline">View blocked guests →</button>
+                    </div>
+                  )}
+                </div>
+              )}
+
               {data.venue_occupancy?.length > 0 && (
                 <div className="bg-white dark:bg-slate-800 dark:border dark:border-slate-700/60 rounded-xl shadow-sm p-4">
                   <h3 className="font-semibold text-sm dark:text-white mb-3">Live venue occupancy</h3>
@@ -305,7 +398,49 @@ export default function ResultsPage() {
             </div>
           )}
 
-          {!['overview', 'attendance'].includes(activeTab) && <EmptyFeatureState tab={TABS.find((t) => t.id === activeTab)?.label} />}
+          {activeTab === 'program' && (
+            program === null ? <p className="text-sm text-slate-400">Loading…</p> :
+            !event.experience_enabled ? <EmptyFeatureState tab="Program" /> :
+            program.sessions.length === 0 ? (
+              <div className="bg-white dark:bg-slate-800 dark:border dark:border-slate-700/60 rounded-xl shadow-sm p-8 text-center">
+                <p className="text-sm text-slate-500 dark:text-slate-400">No session_attendance Experience steps configured for this event yet.</p>
+              </div>
+            ) : (
+              <div className="space-y-6">
+                <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+                  <MetricCard label="In progress" value={program.in_progress_count} accent="text-teal-600 dark:text-teal-400" />
+                  <MetricCard label="Upcoming" value={program.upcoming_count} />
+                  <MetricCard label="Total sessions" value={program.sessions.length} />
+                </div>
+                <div className="bg-white dark:bg-slate-800 dark:border dark:border-slate-700/60 rounded-xl shadow-sm p-4">
+                  <h3 className="font-semibold text-sm dark:text-white mb-2">All sessions</h3>
+                  <div>{program.sessions.map((s) => <SessionRow key={s.step_id} s={s} />)}</div>
+                </div>
+              </div>
+            )
+          )}
+
+          {activeTab === 'experience' && (
+            experience === null ? <p className="text-sm text-slate-400">Loading…</p> :
+            !event.experience_enabled ? <EmptyFeatureState tab="Experience" /> :
+            experience.steps.length === 0 ? (
+              <div className="bg-white dark:bg-slate-800 dark:border dark:border-slate-700/60 rounded-xl shadow-sm p-8 text-center">
+                <p className="text-sm text-slate-500 dark:text-slate-400">No Experience steps configured for this event yet.</p>
+              </div>
+            ) : (
+              <div className="bg-white dark:bg-slate-800 dark:border dark:border-slate-700/60 rounded-xl shadow-sm p-4">
+                <h3 className="font-semibold text-sm dark:text-white mb-3">Completion funnel</h3>
+                <div className="space-y-4">
+                  {experience.steps.map((s) => (
+                    <ProgressBar key={s.step_id} label={`${s.title}${s.required ? '' : ' (optional)'}`} completed={s.completed} total={s.total}
+                      sub={s.failed > 0 ? `${s.failed} failed` : undefined} />
+                  ))}
+                </div>
+              </div>
+            )
+          )}
+
+          {!['overview', 'attendance', 'program', 'experience'].includes(activeTab) && <EmptyFeatureState tab={TABS.find((t) => t.id === activeTab)?.label} />}
         </>
       )}
 

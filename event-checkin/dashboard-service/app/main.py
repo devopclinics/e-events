@@ -264,6 +264,145 @@ async def venue_occupancy(db: AsyncSession, event: Event) -> list[dict]:
     return [{"id": z.id, "name": z.name, "occupancy": await _zone_occupancy(db, z.id), "capacity": z.capacity} for z in zones]
 
 
+# ── program (session) analytics ───────────────────────────────────────────────
+# Mirrors backend/app/routers/experience.py::_session_config exactly — session
+# scheduling lives in ExperienceStep.config, not the generic starts_offset_seconds
+# field (that's used for the separate timed-agenda display, not session_attendance
+# steps). Kept in sync by hand since this is a read-only mirror, same as models.py.
+
+def _session_config(step: ExperienceStep) -> dict:
+    config = step.config or {}
+    raw = (
+        config.get("session") or config.get("session_details")
+        or config.get("schedule") or config.get("session_config")
+    )
+    if not isinstance(raw, dict) and isinstance(config.get("sessions"), list) and config["sessions"]:
+        raw = config["sessions"][0]
+    if not isinstance(raw, dict):
+        raw = {}
+    session = {
+        "topic": raw.get("topic") or raw.get("title") or raw.get("name") or step.title,
+        "date": raw.get("date") or raw.get("session_date") or "",
+        "start_time": raw.get("start_time") or raw.get("startTime") or raw.get("start") or "",
+        "end_time": raw.get("end_time") or raw.get("endTime") or raw.get("end") or "",
+        "room": raw.get("room") or raw.get("location") or raw.get("venue") or "",
+        "speaker": raw.get("speaker") or raw.get("host") or raw.get("presenter") or "",
+        "capacity": raw.get("capacity"),
+    }
+    return session
+
+
+def _parse_session_dt(session: dict, time_key: str) -> datetime | None:
+    d = str(session.get("date") or "").strip()
+    t = str(session.get(time_key) or "").strip()
+    if not d or not t:
+        return None
+    try:
+        return datetime.fromisoformat(f"{d}T{t}")
+    except ValueError:
+        return None
+
+
+async def _default_workflow(db: AsyncSession, event_id: str) -> ExperienceWorkflow | None:
+    return await db.scalar(select(ExperienceWorkflow).where(
+        ExperienceWorkflow.event_id == event_id, ExperienceWorkflow.is_default.is_(True)))
+
+
+async def program_sessions(db: AsyncSession, event: Event) -> list[dict]:
+    if not event.experience_enabled:
+        return []
+    wf = await _default_workflow(db, event.id)
+    if not wf:
+        return []
+    steps = (await db.execute(select(ExperienceStep).where(
+        ExperienceStep.workflow_id == wf.id, ExperienceStep.type == "session_attendance",
+        ExperienceStep.enabled.is_(True),
+    ).order_by(ExperienceStep.sort_order))).scalars().all()
+
+    now = datetime.utcnow()
+    out = []
+    for step in steps:
+        session = _session_config(step)
+        start = _parse_session_dt(session, "start_time")
+        end = _parse_session_dt(session, "end_time")
+        # "Registered" = every guest with a progress row for this step (workflow
+        # assignment creates one per eligible guest); "attended" = actually
+        # checked into the session. Approximate — see plan doc Track A/A3.
+        attended = await db.scalar(select(func.count()).select_from(GuestExperienceProgress).where(
+            GuestExperienceProgress.step_id == step.id,
+            GuestExperienceProgress.status.in_(["completed", "overridden"]),
+        )) or 0
+        registered = await db.scalar(select(func.count()).select_from(GuestExperienceProgress).where(
+            GuestExperienceProgress.step_id == step.id
+        )) or 0
+        state = "upcoming"
+        if start and end:
+            if start <= now <= end:
+                state = "in_progress"
+            elif now > end:
+                state = "ended"
+        out.append({
+            "step_id": step.id,
+            "topic": session.get("topic") or step.title,
+            "room": session.get("room") or None,
+            "speaker": session.get("speaker") or None,
+            "capacity": session.get("capacity"),
+            "start_at": start.isoformat() if start else None,
+            "end_at": end.isoformat() if end else None,
+            "state": state,
+            "registered": registered,
+            "attended": attended,
+            "no_show_rate": round((registered - attended) / registered * 100) if registered else 0,
+        })
+    return out
+
+
+@app.get("/api/results/events/{event_id}/analytics/program")
+async def get_program(event: Event = Depends(admin_event), db: AsyncSession = Depends(get_db)):
+    sessions = await program_sessions(db, event)
+    return {
+        "sessions": sessions,
+        "in_progress_count": sum(1 for s in sessions if s["state"] == "in_progress"),
+        "upcoming_count": sum(1 for s in sessions if s["state"] == "upcoming"),
+    }
+
+
+# ── experience completion funnel ──────────────────────────────────────────────
+
+async def experience_funnel(db: AsyncSession, event: Event) -> list[dict]:
+    if not event.experience_enabled:
+        return []
+    wf = await _default_workflow(db, event.id)
+    if not wf:
+        return []
+    steps = (await db.execute(select(ExperienceStep).where(
+        ExperienceStep.workflow_id == wf.id, ExperienceStep.enabled.is_(True),
+    ).order_by(ExperienceStep.sort_order))).scalars().all()
+
+    out = []
+    for step in steps:
+        total = await db.scalar(select(func.count()).select_from(GuestExperienceProgress).where(
+            GuestExperienceProgress.step_id == step.id
+        )) or 0
+        completed = await db.scalar(select(func.count()).select_from(GuestExperienceProgress).where(
+            GuestExperienceProgress.step_id == step.id,
+            GuestExperienceProgress.status.in_(["completed", "overridden"]),
+        )) or 0
+        failed = await db.scalar(select(func.count()).select_from(GuestExperienceProgress).where(
+            GuestExperienceProgress.step_id == step.id, GuestExperienceProgress.status == "failed",
+        )) or 0
+        out.append({
+            "step_id": step.id, "title": step.title, "type": step.type, "required": step.required,
+            "total": total, "completed": completed, "failed": failed,
+        })
+    return out
+
+
+@app.get("/api/results/events/{event_id}/analytics/experience")
+async def get_experience(event: Event = Depends(admin_event), db: AsyncSession = Depends(get_db)):
+    return {"steps": await experience_funnel(db, event)}
+
+
 # ── operational alerts ────────────────────────────────────────────────────────
 
 async def _consent_step(db: AsyncSession, event_id: str) -> ExperienceStep | None:
@@ -372,6 +511,8 @@ async def command_center(
 ):
     scope = resolve_scope(event, day, None, None, venue_id)
     attendance = await attendance_stats(db, event, scope)
+    sessions = await program_sessions(db, event)
+    funnel = await experience_funnel(db, event)
     return {
         "scope": attendance["scope"],
         "attendance": {k: v for k, v in attendance.items() if k != "scope"},
@@ -382,4 +523,11 @@ async def command_center(
         "meals": {"served_total": await db.scalar(
             select(func.count()).select_from(Guest).where(Guest.event_id == event.id, Guest.meal_served.is_(True))
         ) or 0},
+        # Overview-card-sized summaries; full detail lives behind /analytics/program
+        # and /analytics/experience for the dedicated tabs.
+        "program": {
+            "in_progress": [s for s in sessions if s["state"] == "in_progress"],
+            "in_progress_count": sum(1 for s in sessions if s["state"] == "in_progress"),
+        },
+        "experience": {"steps": funnel[:6]},
     }

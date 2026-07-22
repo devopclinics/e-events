@@ -547,6 +547,8 @@ export const api = {
     const qs = params.toString()
     return req('GET', `/results/events/${eventId}/analytics/attendance${qs ? `?${qs}` : ''}`)
   },
+  resultsProgram: (eventId) => req('GET', `/results/events/${eventId}/analytics/program`),
+  resultsExperience: (eventId) => req('GET', `/results/events/${eventId}/analytics/experience`),
 
   // Users
   listUsers: () => req('GET', '/auth/users'),

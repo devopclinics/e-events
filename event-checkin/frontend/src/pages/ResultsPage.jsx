@@ -689,7 +689,7 @@ export default function ResultsPage() {
                   <MetricCard icon="🟢" tint="bg-teal-50 dark:bg-teal-900/30" label="In progress" value={program.in_progress_count} accent="text-teal-600 dark:text-teal-400" />
                   <MetricCard icon="⏳" tint="bg-slate-100 dark:bg-slate-700" label="Upcoming" value={program.upcoming_count} />
                   <MetricCard icon="✓" tint="bg-slate-100 dark:bg-slate-700" label="Completed" value={program.ended_count} />
-                  <MetricCard icon="📋" tint="bg-sky-50 dark:bg-sky-900/30" label="Total sessions" value={program.sessions.length} />
+                  <MetricCard icon="📋" tint="bg-sky-50 dark:bg-sky-900/30" label="Program items" value={program.sessions.length} />
                 </div>
                 <div className="bg-white dark:bg-slate-800 dark:border dark:border-slate-700/60 rounded-xl shadow-sm p-4">
                   <div className="flex items-center justify-between gap-3 mb-3">

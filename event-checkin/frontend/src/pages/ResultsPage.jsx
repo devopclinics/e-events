@@ -382,6 +382,9 @@ export default function ResultsPage() {
 
   const event = events.find((e) => e.id === eventId)
   const a = data?.attendance
+  const arrivalGapLabel = venueId
+    ? 'Confirmed, not in zone'
+    : a?.arrival_gap_mode === 'expected' ? 'Not yet in' : 'Confirmed, not here'
   const days = data?.attendance_by_day || []
   const hasScopeFilter = Boolean(day || venueId)
 
@@ -511,7 +514,8 @@ export default function ResultsPage() {
               <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
                 <MetricCard icon="👥" tint="bg-teal-50 dark:bg-teal-900/30" label={venueId ? 'Expected (event-wide)' : 'Expected'} value={a.expected} />
                 <MetricCard icon="✅" tint="bg-green-50 dark:bg-green-900/30" label="Checked in" value={a.checked_in} />
-                <MetricCard icon="⏰" tint="bg-amber-50 dark:bg-amber-900/30" label={venueId ? 'Confirmed, not in zone' : 'Confirmed, not here'} value={a.confirmed_not_here} sub="excludes declined & pending" />
+                <MetricCard icon="⏰" tint="bg-amber-50 dark:bg-amber-900/30" label={arrivalGapLabel} value={a.confirmed_not_here}
+                  sub={a.arrival_gap_mode === 'confirmed' ? 'excludes declined & pending' : undefined} />
                 <MetricCard icon="❌" tint="bg-red-50 dark:bg-red-900/30" label="Declined" value={a.declined} accent="text-red-600 dark:text-red-400" />
                 <MetricCard icon="🚶" tint="bg-violet-50 dark:bg-violet-900/30" label="Walk-ins" value={a.walk_ins} />
                 <MetricCard icon="🚪" tint="bg-slate-100 dark:bg-slate-700" label="Checked out" value={a.checked_out} />
@@ -647,7 +651,7 @@ export default function ResultsPage() {
                 <MetricCard icon="🚪" tint="bg-slate-100 dark:bg-slate-700" label="Checked out" value={a.checked_out} />
               </div>
               <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-                <MetricCard icon="⏰" tint="bg-amber-50 dark:bg-amber-900/30" label={venueId ? 'Confirmed, not in zone' : 'Confirmed, not here'} value={a.confirmed_not_here} />
+                <MetricCard icon="⏰" tint="bg-amber-50 dark:bg-amber-900/30" label={arrivalGapLabel} value={a.confirmed_not_here} />
                 <MetricCard icon="❌" tint="bg-red-50 dark:bg-red-900/30" label="Declined" value={a.declined} accent="text-red-600 dark:text-red-400" />
                 <MetricCard icon="🚶" tint="bg-violet-50 dark:bg-violet-900/30" label="Walk-ins" value={a.walk_ins} />
               </div>

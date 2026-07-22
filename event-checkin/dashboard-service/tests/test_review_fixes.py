@@ -75,6 +75,32 @@ async def test_zone_filter_restricts_attendance_and_occupancy(ctx):
     assert "venue_occupancy" in payload["venue_scoped_sections"]
 
 
+async def test_legacy_admitted_guests_backfill_attendance_without_scan_events(ctx):
+    await _set_event(ctx, event_date=datetime(2026, 7, 1, 16), event_end_date=None)
+    admitted_at = datetime(2026, 7, 1, 18, 30)
+    async with ctx.session_factory() as s:
+        await ctx.add_guest(s, id="legacy-regular", admitted=True, admitted_at=admitted_at)
+        await ctx.add_guest(
+            s, id="legacy-walkin", admitted=True,
+            admitted_at=admitted_at + timedelta(minutes=5), is_walk_in=True,
+        )
+        await ctx.add_guest(s, id="not-here", admitted=False)
+        await s.commit()
+
+    payload = (await ctx.client.get(
+        f"/api/results/events/{ctx.event_id}/command-center"
+    )).json()
+    attendance = payload["attendance"]
+    assert attendance["checked_in"] == 2
+    assert attendance["first_time"] == 2
+    assert attendance["on_site"] == 2
+    assert attendance["walk_ins"] == 1
+    assert attendance["confirmed_not_here"] == 1
+    assert attendance["arrival_gap_mode"] == "confirmed"
+    assert sum(hour["first_arrival"] for hour in attendance["hourly"]) == 2
+    assert len(payload["recent_activity"]) == 2
+
+
 async def test_rsvp_funnel_distinguishes_guests_from_sent_invites(ctx):
     async with ctx.session_factory() as s:
         await ctx.add_guest(s, id="sent", invite_status="sent")

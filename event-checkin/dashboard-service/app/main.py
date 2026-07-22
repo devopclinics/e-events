@@ -179,6 +179,30 @@ async def _first_scan_map(db: AsyncSession, event_id: str, zone_id: str | None =
     return {gid: first_at for gid, first_at in rows}
 
 
+async def _legacy_admitted_map(
+    db: AsyncSession, event_id: str, start_at: datetime | None = None,
+    end_at: datetime | None = None,
+) -> dict[str, datetime]:
+    """Legacy check-in stored only on Guest, before scan_events existed.
+
+    Production contains valid admitted/admitted_at values for historical events
+    whose scan ledger is empty. Keep those events visible without inventing
+    return visits, exits, zones, or other detail that the legacy row cannot
+    represent.
+    """
+    where = [
+        Guest.event_id == event_id,
+        Guest.admitted.is_(True),
+        Guest.admitted_at.is_not(None),
+    ]
+    if start_at is not None:
+        where.append(Guest.admitted_at >= start_at)
+    if end_at is not None:
+        where.append(Guest.admitted_at < end_at)
+    rows = (await db.execute(select(Guest.id, Guest.admitted_at).where(*where))).all()
+    return {guest_id: admitted_at for guest_id, admitted_at in rows}
+
+
 async def _on_site_count(db: AsyncSession, event_id: str, cutoff: datetime, zone_id: str | None = None) -> int:
     """Guests whose latest accepted scan at/before `cutoff` is an entry —
     scoped to a single zone when `zone_id` is given (answers "who's
@@ -212,6 +236,19 @@ async def attendance_stats(db: AsyncSession, event: Event, scope: Scope) -> dict
     checked_in_ids = await _distinct_guest_ids(db, event.id, "in", scope.start_at, scope.end_at, zid)
     checked_out_ids = await _distinct_guest_ids(db, event.id, "out", scope.start_at, scope.end_at, zid)
     first_at = await _first_scan_map(db, event.id, zid)
+    has_scan_entries = bool(first_at)
+    legacy_admitted: dict[str, datetime] = {}
+    if not zid:
+        # Entire-event legacy Results counted Guest.admitted regardless of the
+        # event date configuration. Day scopes can only use admitted_at.
+        legacy_admitted = await _legacy_admitted_map(
+            db, event.id,
+            None if scope.day is None else scope.start_at,
+            None if scope.day is None else scope.end_at,
+        )
+        checked_in_ids.update(legacy_admitted)
+        for guest_id, admitted_at in legacy_admitted.items():
+            first_at.setdefault(guest_id, admitted_at)
     first_time_ids = {gid for gid in checked_in_ids if first_at.get(gid) and scope.start_at <= first_at[gid] < scope.end_at}
     returning_ids = checked_in_ids - first_time_ids
 
@@ -231,12 +268,20 @@ async def attendance_stats(db: AsyncSession, event: Event, scope: Scope) -> dict
         occupancy_mode = "live"
         occupancy_as_of = now
         on_site = await _on_site_count(db, event.id, now, zid)
+    # With no scan ledger, the only honest legacy approximation is admitted
+    # guests. Do not apply this to zones, where Guest has no location history.
+    if not zid and legacy_admitted and not has_scan_entries and occupancy_mode != "future":
+        on_site = len(legacy_admitted)
 
     declined = await db.scalar(select(func.count()).select_from(Guest).where(
         Guest.event_id == event.id, Guest.rsvp_status == "declined")) or 0
     confirmed_ids = set((await db.execute(select(Guest.id).where(
         Guest.event_id == event.id, Guest.rsvp_status == "confirmed"))).scalars().all())
-    confirmed_not_here = len(confirmed_ids - checked_in_ids)
+    arrival_gap_mode = "confirmed" if confirmed_ids else "expected"
+    confirmed_not_here = (
+        len(confirmed_ids - checked_in_ids)
+        if confirmed_ids else max(expected - len(checked_in_ids), 0)
+    )
     walk_in_ids = set((await db.execute(select(Guest.id).where(
         Guest.event_id == event.id, Guest.is_walk_in.is_(True)))).scalars().all())
     walk_ins = len(walk_in_ids & checked_in_ids)
@@ -253,6 +298,11 @@ async def attendance_stats(db: AsyncSession, event: Event, scope: Scope) -> dict
         .where(*hourly_where)
         .order_by(ScanEvent.scanned_at)
     )).all()
+    scanned_entry_ids = {gid for gid, direction, _ts in rows if direction == "in"}
+    for guest_id, admitted_at in legacy_admitted.items():
+        if guest_id not in scanned_entry_ids and scope.start_at <= admitted_at < scope.end_at:
+            rows.append((guest_id, "in", admitted_at))
+    rows.sort(key=lambda row: row[2])
     hourly: dict[str, dict[str, int]] = defaultdict(lambda: {"first_arrival": 0, "returning": 0, "exit": 0})
     for gid, direction, ts in rows:
         local = to_event_local(ts, tz)
@@ -274,6 +324,7 @@ async def attendance_stats(db: AsyncSession, event: Event, scope: Scope) -> dict
         "checked_out": len(checked_out_ids),
         "declined": declined,
         "confirmed_not_here": confirmed_not_here,
+        "arrival_gap_mode": arrival_gap_mode,
         "walk_ins": walk_ins,
         "hourly": [{"hour": h, **v} for h, v in sorted(hourly.items())],
     }
@@ -298,7 +349,12 @@ async def attendance_by_day(db: AsyncSession, event: Event) -> list[dict]:
             status = "past"
         else:
             status = "live"
-        checked_in = len(await _distinct_guest_ids(db, event.id, "in", start_at, end_at)) if status != "upcoming" else 0
+        if status == "upcoming":
+            checked_in = 0
+        else:
+            checked_ids = await _distinct_guest_ids(db, event.id, "in", start_at, end_at)
+            checked_ids.update(await _legacy_admitted_map(db, event.id, start_at, end_at))
+            checked_in = len(checked_ids)
         out.append({
             "day": d.isoformat(),
             "expected": expected,
@@ -656,6 +712,29 @@ async def recent_activity(db: AsyncSession, event: Event, scope: "Scope | None" 
         .order_by(ScanEvent.scanned_at.desc())
         .limit(limit)
     )).all()
+    # Historical production events may predate scan_events while still having
+    # authoritative Guest.admitted/admitted_at values used by legacy Results.
+    # Fall back only when the scan query is empty and never for a zone scope.
+    if not rows and not (scope and scope.venue_id):
+        guest_where = [
+            Guest.event_id == event.id,
+            Guest.admitted.is_(True),
+            Guest.admitted_at.is_not(None),
+        ]
+        if scope and scope.day:
+            guest_where += [Guest.admitted_at >= scope.start_at, Guest.admitted_at < scope.end_at]
+        legacy_rows = (await db.execute(
+            select(Guest.first_name, Guest.last_name, Guest.is_walk_in, Guest.admitted_at)
+            .where(*guest_where)
+            .order_by(Guest.admitted_at.desc())
+            .limit(limit)
+        )).all()
+        return [{
+            "guest_name": f"{first_name} {last_name}".strip(),
+            "action": "Walk-in added" if is_walk_in else "Guest checked in",
+            "location": None,
+            "at": admitted_at.isoformat() + "Z",
+        } for first_name, last_name, is_walk_in, admitted_at in legacy_rows]
     out = []
     for scan, first_name, last_name, is_walk_in, zone_name in rows:
         if scan.direction == "in" and is_walk_in:

@@ -301,20 +301,28 @@ async def build_alerts(db: AsyncSession, event: Event) -> list[dict]:
                 })
 
     if event.menu_enabled:
-        expected_ids = set((await db.execute(
-            select(Guest.id).where(Guest.event_id == event.id, Guest.rsvp_status == "confirmed")
+        # Only meaningful when at least one category actually takes a selection —
+        # an event with display-only (informational) categories only, e.g. one
+        # that skips RSVP and just shows the week's menu, has nothing to "miss".
+        selectable_cat_ids = set((await db.execute(
+            select(MenuCategory.id).where(MenuCategory.event_id == event.id, MenuCategory.display_only.is_(False))
         )).scalars().all())
+        # "Eligible" mirrors _expected_count: not declined, same definition used
+        # for the Overview "Expected" card — NOT rsvp_status == "confirmed", which
+        # is wrong for events that skip RSVP entirely (guests stay "invited" forever).
+        expected_ids = set((await db.execute(
+            select(Guest.id).where(Guest.event_id == event.id, Guest.rsvp_status != "declined")
+        )).scalars().all()) if selectable_cat_ids else set()
         chosen_ids = set((await db.execute(
             select(GuestMenuChoice.guest_id).distinct()
-            .join(MenuCategory, MenuCategory.id == GuestMenuChoice.category_id)
-            .where(MenuCategory.event_id == event.id, MenuCategory.display_only.is_(False))
-        )).scalars().all())
+            .where(GuestMenuChoice.category_id.in_(selectable_cat_ids))
+        )).scalars().all()) if selectable_cat_ids else set()
         missing = len(expected_ids - chosen_ids)
         if missing:
             alerts.append({
                 "id": "missing_meal_selections", "type": "missing_meal_selection", "severity": "warning",
                 "title": f"{missing} meal selections missing",
-                "description": "Confirmed guests with no menu choice yet.",
+                "description": "Invited guests (not declined) with no menu choice yet.",
                 "count": missing, "action_label": "Resolve",
                 "action_url": f"/admin?event={event.id}&tab=menu",
             })
@@ -322,18 +330,20 @@ async def build_alerts(db: AsyncSession, event: Event) -> list[dict]:
     if event.experience_enabled:
         consent_step = await _consent_step(db, event.id)
         if consent_step:
-            confirmed = await db.scalar(select(func.count()).select_from(Guest).where(
-                Guest.event_id == event.id, Guest.rsvp_status == "confirmed")) or 0
+            # Same "not declined" eligibility as the Overview "Expected" card —
+            # see the meal-selection alert above for why this isn't "confirmed".
+            eligible = await db.scalar(select(func.count()).select_from(Guest).where(
+                Guest.event_id == event.id, Guest.rsvp_status != "declined")) or 0
             signed = await db.scalar(select(func.count()).select_from(GuestExperienceProgress).where(
                 GuestExperienceProgress.step_id == consent_step.id,
                 GuestExperienceProgress.status.in_(["completed", "overridden"]),
             )) or 0
-            unsigned = max(confirmed - signed, 0)
+            unsigned = max(eligible - signed, 0)
             if unsigned:
                 alerts.append({
                     "id": "unsigned_consent", "type": "unsigned_consent", "severity": "warning",
                     "title": f"{unsigned} consent forms unsigned",
-                    "description": "Confirmed guests who haven't completed the consent step.",
+                    "description": "Invited guests (not declined) who haven't completed the consent step.",
                     "count": unsigned, "action_label": "Contact",
                     "action_url": f"/admin?event={event.id}&tab=experience",
                 })

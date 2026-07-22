@@ -13,6 +13,7 @@ async def _open_event(ev):
         e.rsvp_enabled = True
         e.invite_mode = "open"
         e.rsvp_require_approval = False
+        e.rsvp_email_required = False
         e.is_paid = True
         await s.execute(delete(Guest).where(Guest.event_id == ev))
         await s.commit()

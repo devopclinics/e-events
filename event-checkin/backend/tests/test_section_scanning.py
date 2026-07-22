@@ -15,6 +15,7 @@ async def _prep(event_id, *, section_mode=False, walk_in=True, manual=True):
     async with _Session() as s:
         ev = await s.get(Event, event_id)
         ev.is_paid = True
+        ev.plan_tier = "tier300"
         ev.status = "active"
         ev.seating_enabled = False
         ev.walk_in_enabled = walk_in

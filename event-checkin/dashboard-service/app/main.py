@@ -7,7 +7,7 @@ docs/MULTI-DAY-DASHBOARD-IMPLEMENTATION-PLAN.md, Track A, for the design.
 import logging
 from collections import defaultdict
 from dataclasses import dataclass
-from datetime import date, datetime, timedelta
+from datetime import UTC, date, datetime, timedelta
 
 from fastapi import Depends, FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
@@ -35,6 +35,11 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+
+def utc_now_naive() -> datetime:
+    """UTC now in the database's existing naive-UTC representation."""
+    return datetime.now(UTC).replace(tzinfo=None)
 
 
 @app.get("/health")
@@ -215,7 +220,7 @@ async def attendance_stats(db: AsyncSession, event: Event, scope: Scope) -> dict
     # "who's on-site on that future day"); a past scope gets occupancy AS OF
     # that period's close, not "now" — both explicitly labeled via
     # occupancy_mode/occupancy_as_of rather than one ambiguous number.
-    now = datetime.utcnow()
+    now = utc_now_naive()
     if scope.start_at > now:
         occupancy_mode, occupancy_as_of, on_site = "future", None, None
     elif scope.end_at <= now:
@@ -277,7 +282,7 @@ async def attendance_stats(db: AsyncSession, event: Event, scope: Scope) -> dict
 async def attendance_by_day(db: AsyncSession, event: Event) -> list[dict]:
     tz = event_tz(event)
     expected = await _expected_count(db, event.id)
-    now = datetime.utcnow()
+    now = utc_now_naive()
     out = []
     for d in _event_days(event):
         local_start = _local_midnight(d, tz)
@@ -450,7 +455,7 @@ async def program_sessions(db: AsyncSession, event: Event, day: str | None = Non
     )).all())
 
     tz = event_tz(event)
-    now = datetime.utcnow()
+    now = utc_now_naive()
     out = []
     for step in steps:
         session = _session_config(step)

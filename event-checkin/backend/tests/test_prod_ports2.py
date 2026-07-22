@@ -10,6 +10,7 @@ async def _paid_seating_active(event_id):
     async with _Session() as s:
         ev = await s.get(Event, event_id)
         ev.is_paid = True
+        ev.plan_tier = "tier300"
         ev.seating_enabled = True
         ev.status = "active"
         await s.execute(delete(Guest).where(Guest.event_id == event_id))

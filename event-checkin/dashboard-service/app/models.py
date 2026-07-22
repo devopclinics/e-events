@@ -7,12 +7,17 @@ hand; there is no shared migration between the two services (same pattern
 already used by messaging-service).
 """
 import uuid
-from datetime import datetime
+from datetime import UTC, datetime
 
 from sqlalchemy import String, Boolean, DateTime, ForeignKey, Integer, Text, JSON
 from sqlalchemy.orm import Mapped, mapped_column
 
 from .database import Base
+
+
+def utc_now_naive() -> datetime:
+    """UTC now in the database's existing naive-UTC representation."""
+    return datetime.now(UTC).replace(tzinfo=None)
 
 
 class Organization(Base):
@@ -120,7 +125,7 @@ class ScanEvent(Base):
     guest_id: Mapped[str] = mapped_column(String(36), ForeignKey("guests.id"))
     zone_id: Mapped[str | None] = mapped_column(String(36), ForeignKey("zones.id"), nullable=True)
     direction: Mapped[str] = mapped_column(String(4), default="in")
-    scanned_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    scanned_at: Mapped[datetime] = mapped_column(DateTime, default=utc_now_naive)
     denied: Mapped[bool] = mapped_column(Boolean, default=False)
     deny_reason: Mapped[str | None] = mapped_column(String(255), nullable=True)
 
@@ -134,7 +139,7 @@ class ExperienceWorkflow(Base):
     status: Mapped[str] = mapped_column(String(20), default="draft")
     version: Mapped[int] = mapped_column(Integer, default=1)
     is_default: Mapped[bool] = mapped_column(Boolean, default=True)
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utc_now_naive)
 
 
 class ExperienceStep(Base):
@@ -182,7 +187,7 @@ class GuestMenuChoice(Base):
     id: Mapped[str] = mapped_column(String(36), primary_key=True)
     guest_id: Mapped[str] = mapped_column(String(36), ForeignKey("guests.id"))
     category_id: Mapped[str] = mapped_column(String(36), ForeignKey("menu_categories.id"))
-    chosen_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    chosen_at: Mapped[datetime] = mapped_column(DateTime, default=utc_now_naive)
 
 
 class GuestMealFulfillment(Base):
@@ -192,7 +197,7 @@ class GuestMealFulfillment(Base):
     guest_id: Mapped[str] = mapped_column(String(36), ForeignKey("guests.id"))
     category_id: Mapped[str] = mapped_column(String(36), ForeignKey("menu_categories.id"))
     status: Mapped[str] = mapped_column(String(20), default="served")
-    served_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    served_at: Mapped[datetime] = mapped_column(DateTime, default=utc_now_naive)
 
 
 class SeatingTable(Base):
@@ -224,5 +229,5 @@ class EmailDeliveryEvent(Base):
     provider_event_id: Mapped[str | None] = mapped_column(String(255), nullable=True)
     provider_email_id: Mapped[str | None] = mapped_column(String(255), nullable=True)
     status: Mapped[str] = mapped_column(String(40))
-    occurred_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    occurred_at: Mapped[datetime] = mapped_column(DateTime, default=utc_now_naive)
     created_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)

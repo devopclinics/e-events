@@ -1,5 +1,5 @@
 """Regression coverage for the command-center review fixes."""
-from datetime import datetime, timedelta
+from datetime import UTC, datetime, timedelta
 from zoneinfo import ZoneInfo
 
 from app.auth import require_dashboard_access
@@ -20,7 +20,7 @@ async def _set_event(ctx, **values):
 
 
 async def test_current_day_is_live_not_upcoming(ctx):
-    now = datetime.utcnow()
+    now = datetime.now(UTC).replace(tzinfo=None)
     await _set_event(
         ctx,
         event_date=now.replace(hour=12, minute=0, second=0, microsecond=0),

@@ -343,6 +343,23 @@ textarea:focus {
   display: none !important;
 }
 
+/* Results command center: stronger hierarchy for dense operational screens. */
+.results-dashboard h3 {
+  font-size: 1rem;
+  line-height: 1.4;
+  font-weight: 750;
+  letter-spacing: -0.01em;
+  color: rgb(15 23 42);
+}
+
+.dark .results-dashboard h3 {
+  color: rgb(248 250 252);
+}
+
+.results-dashboard [role="tab"] {
+  font-weight: 700;
+}
+
 /* Stop / camera toggle button */
 #qr-reader__camera_selection {
   width: 100% !important;

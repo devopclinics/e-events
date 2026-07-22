@@ -15,6 +15,7 @@ from app.main import app
 from app.database import Base, get_db
 from app.auth import get_current_user
 from app.models import Organization, Membership, User, Event, Guest
+from app.config import settings
 
 _engine = create_async_engine(
     "sqlite+aiosqlite://",
@@ -58,6 +59,9 @@ class Ctx:
 
 @pytest_asyncio.fixture
 async def ctx():
+    # Unit/integration tests must not attempt to resolve Compose-only service
+    # hostnames when an invite happens to enqueue an email.
+    settings.design_service_url = ""
     async with _engine.begin() as conn:
         await conn.run_sync(Base.metadata.drop_all)
         await conn.run_sync(Base.metadata.create_all)

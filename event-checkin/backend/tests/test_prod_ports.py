@@ -11,6 +11,7 @@ async def _prep(event_id, *, seating=False, active=False, mms=False):
     async with _Session() as s:
         ev = await s.get(Event, event_id)
         ev.is_paid = True
+        ev.plan_tier = "tier300"
         ev.seating_enabled = seating
         if active:
             ev.status = "active"
@@ -100,6 +101,7 @@ async def test_invite_status_sent_and_failed(ctx):
 @pytest.mark.asyncio
 async def test_mms_toggle_superadmin_only(ctx):
     ev = ctx.ids["event_a"]
+    await _prep(ev)
     ctx.login(ctx.ids["user_a"])            # org owner, not platform superadmin
     assert (await ctx.client.patch(f"/api/admin/events/{ev}/mms", json={"active": True})).status_code == 403
 

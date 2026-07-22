@@ -28,7 +28,7 @@ async def _setup_event(event_id, **flags):
     """Put the seeded event into a paid + active state with the given feature
     flags, and clear the one seeded guest so counts start clean."""
     defaults = dict(
-        is_paid=True, status="active", seating_enabled=False, walk_in_enabled=False,
+        is_paid=True, plan_tier="tier300", status="active", seating_enabled=False, walk_in_enabled=False,
         manual_checkin_enabled=False, venue_access_enabled=False,
         section_mode_enabled=False, enforce_table_groups=True,
     )

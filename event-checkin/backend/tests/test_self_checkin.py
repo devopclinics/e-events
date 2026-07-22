@@ -10,6 +10,7 @@ async def _prep(event_id, *, enabled=True, code="RHOEDA25", active=True):
     async with _Session() as s:
         ev = await s.get(Event, event_id)
         ev.is_paid = True
+        ev.plan_tier = "tier300"
         ev.status = "active" if active else "draft"
         ev.self_checkin_enabled = enabled
         ev.event_code = code
@@ -33,6 +34,8 @@ async def test_admin_toggle_generates_code(ctx):
     ev = ctx.ids["event_a"]
     async with _Session() as s:
         event = await s.get(Event, ev)
+        event.is_paid = True
+        event.plan_tier = "tier300"
         event.event_code = None
         event.self_checkin_enabled = False
         await s.commit()

@@ -36,7 +36,7 @@ function MetricCard({ icon, tint, label, value, sub, accent }) {
         )}
         <div className="min-w-0">
           <div className={`text-2xl font-extrabold leading-tight tabular-nums ${accent || 'text-slate-900 dark:text-white'}`}>{value ?? '—'}</div>
-          <div className="text-xs text-slate-500 dark:text-slate-400 leading-tight">{label}</div>
+          <div className="text-sm font-semibold text-slate-600 dark:text-slate-300 leading-tight mt-0.5">{label}</div>
         </div>
       </div>
       {sub && <div className="text-[11px] text-slate-400 mt-2">{sub}</div>}
@@ -390,7 +390,7 @@ export default function ResultsPage() {
   }
 
   return (
-    <div className="space-y-6 max-w-6xl mx-auto">
+    <div className="results-dashboard space-y-6 max-w-6xl mx-auto">
       <div className="flex items-center gap-1.5 text-xs text-slate-400 dark:text-slate-500">
         <a href="/dashboard" className="hover:underline">Events</a>
         <span>/</span>
@@ -399,7 +399,7 @@ export default function ResultsPage() {
 
       <div className="flex items-start justify-between gap-3 flex-wrap">
         <div>
-          <h1 className="text-2xl font-bold dark:text-white">Event command center <span className="align-middle ml-1 rounded-full bg-teal-50 dark:bg-teal-900/30 text-teal-700 dark:text-teal-300 text-[10px] font-bold px-2 py-0.5 uppercase tracking-wide">Preview</span></h1>
+          <h1 className="text-3xl font-extrabold tracking-tight text-slate-900 dark:text-white">Event command center <span className="align-middle ml-1 rounded-full bg-teal-50 dark:bg-teal-900/30 text-teal-700 dark:text-teal-300 text-[10px] font-bold px-2 py-0.5 uppercase tracking-wide">Preview</span></h1>
           <p className="text-sm text-gray-500 dark:text-slate-400 mt-1">
             Multi-day attendance, meals, program, and Experience in one view. Read-only preview — the existing{' '}
             <a href="/dashboard" className="text-teal-600 hover:underline font-semibold">Results page</a> is unaffected.
@@ -429,7 +429,7 @@ export default function ResultsPage() {
       {event && (
         <div className="bg-gradient-to-br from-teal-600 to-cyan-700 text-white rounded-2xl px-6 py-5">
           <div className="flex items-center gap-2 flex-wrap">
-            <div className="text-xl font-bold">{event.name}</div>
+            <div className="text-2xl font-extrabold tracking-tight">{event.name}</div>
             {event.status === 'active' && (
               <span className="flex items-center gap-1 rounded-full bg-white/15 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide">
                 <span className="w-1.5 h-1.5 rounded-full bg-green-300 animate-pulse" /> Live
@@ -482,9 +482,9 @@ export default function ResultsPage() {
           )}
 
           {/* Tabs */}
-          <div className="flex gap-1 overflow-x-auto border-b border-slate-200 dark:border-slate-700">
+          <div role="tablist" aria-label="Dashboard sections" className="flex gap-1 overflow-x-auto border-b border-slate-200 dark:border-slate-700">
             {TABS.map((t) => (
-              <button key={t.id} onClick={() => setActiveTab(t.id)}
+              <button key={t.id} role="tab" aria-selected={activeTab === t.id} onClick={() => setActiveTab(t.id)}
                 className={`shrink-0 px-3 py-2 text-sm font-medium border-b-2 -mb-px ${activeTab === t.id ? 'border-teal-600 text-teal-700 dark:text-teal-300' : 'border-transparent text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200'}`}>
                 {t.label}
               </button>

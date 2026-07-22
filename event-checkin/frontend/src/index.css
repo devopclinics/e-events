@@ -360,6 +360,55 @@ textarea:focus {
   font-weight: 700;
 }
 
+@media print {
+  @page {
+    size: landscape;
+    margin: 10mm;
+  }
+
+  html,
+  body {
+    background: #fff !important;
+  }
+
+  .app-nav,
+  nav.fixed,
+  .results-print-hide {
+    display: none !important;
+  }
+
+  main {
+    width: 100% !important;
+    max-width: none !important;
+    padding: 0 !important;
+  }
+
+  .results-dashboard {
+    width: 100% !important;
+    max-width: none !important;
+  }
+
+  .results-dashboard,
+  .results-dashboard * {
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+
+  .results-dashboard .overflow-x-auto,
+  .results-dashboard .overflow-y-auto {
+    overflow: visible !important;
+  }
+
+  .results-dashboard .max-h-72 {
+    max-height: none !important;
+  }
+
+  .results-dashboard > div,
+  .results-dashboard [class*="rounded-xl"] {
+    break-inside: avoid;
+  }
+}
+
 /* Stop / camera toggle button */
 #qr-reader__camera_selection {
   width: 100% !important;

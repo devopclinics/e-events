@@ -35,8 +35,8 @@ function MetricCard({ icon, tint, label, value, sub, accent }) {
           </span>
         )}
         <div className="min-w-0">
+          <div className="text-sm font-bold text-slate-600 dark:text-slate-300 leading-snug mb-2">{label}</div>
           <div className={`text-2xl font-extrabold leading-tight tabular-nums ${accent || 'text-slate-900 dark:text-white'}`}>{value ?? '—'}</div>
-          <div className="text-sm font-semibold text-slate-600 dark:text-slate-300 leading-tight mt-0.5">{label}</div>
         </div>
       </div>
       {sub && <div className="text-[11px] text-slate-400 mt-2">{sub}</div>}
@@ -389,6 +389,17 @@ export default function ResultsPage() {
     if (url) window.location.href = url
   }
 
+  function exportPdf() {
+    const previousTitle = document.title
+    const scope = day ? ` - ${fmtDay(day)}` : ''
+    document.title = `${event?.name || 'Event'}${scope} - Dashboard report`
+    const restoreTitle = () => { document.title = previousTitle }
+    window.addEventListener('afterprint', restoreTitle, { once: true })
+    window.print()
+    // Some mobile browsers do not emit afterprint.
+    window.setTimeout(restoreTitle, 1000)
+  }
+
   return (
     <div className="results-dashboard space-y-6 max-w-6xl mx-auto">
       <div className="flex items-center gap-1.5 text-xs text-slate-400 dark:text-slate-500">
@@ -406,10 +417,14 @@ export default function ResultsPage() {
           </p>
         </div>
         {event && (
-          <div className="flex items-center gap-2">
+          <div className="results-print-hide flex items-center gap-2">
             <button onClick={() => api.downloadGuestList(eventId, 'csv')}
               className="rounded-lg border border-slate-300 dark:border-slate-600 px-3 py-2 text-sm font-semibold text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700">
-              ⬇ Export report
+              ⬇ Export CSV
+            </button>
+            <button onClick={exportPdf}
+              className="rounded-lg border border-slate-300 dark:border-slate-600 px-3 py-2 text-sm font-semibold text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700">
+              📄 Export PDF
             </button>
             <a href="/scanner" className="rounded-lg bg-teal-600 px-3 py-2 text-sm font-semibold text-white hover:bg-teal-700">
               📷 Open scanner

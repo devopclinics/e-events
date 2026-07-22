@@ -183,6 +183,16 @@ class GuestMenuChoice(Base):
     chosen_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
 
 
+class GuestMealFulfillment(Base):
+    __tablename__ = "guest_meal_fulfillment"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True)
+    guest_id: Mapped[str] = mapped_column(String(36), ForeignKey("guests.id"))
+    category_id: Mapped[str] = mapped_column(String(36), ForeignKey("menu_categories.id"))
+    status: Mapped[str] = mapped_column(String(20), default="served")
+    served_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+
+
 class SeatingTable(Base):
     __tablename__ = "seating_tables"
 

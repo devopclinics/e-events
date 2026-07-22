@@ -3344,6 +3344,54 @@ function MenuDashboard({ eventId }) {
     finally { setWorking(null) }
   }
 
+  // Per-category serving (Track B) — used once an event has 2+ selectable
+  // categories, where the single legacy button above can't say which one.
+  async function toggleCategoryServed(guestId, categoryId, currentlyServed) {
+    const key = `${guestId}:${categoryId}`
+    setWorking(key)
+    try {
+      if (currentlyServed) await api.unmarkCategoryServed(eventId, categoryId, guestId)
+      else await api.markCategoryServed(eventId, categoryId, guestId)
+      setData((d) => d && {
+        ...d,
+        guests: d.guests.map((g) => g.guest_id === guestId
+          ? { ...g, served_categories: { ...g.served_categories, [categoryId]: !currentlyServed } }
+          : g),
+      })
+      load()
+    } catch (e) { setErr(e.message) }
+    finally { setWorking(null) }
+  }
+
+  function renderServedButtons(g) {
+    const catIds = [...new Set([...Object.keys(g.single || {}), ...Object.keys(g.multi || {}), ...Object.keys(g.combo || {})])]
+    if (catIds.length === 0) return <span className="text-xs italic text-gray-400 dark:text-slate-500">No category</span>
+    const catName = (catId) => (g.single[catId] || g.multi[catId] || g.combo[catId])?.category_name || 'Category'
+    return (
+      <div className="flex flex-wrap gap-1 justify-end">
+        {catIds.map((catId) => {
+          const served = !!g.served_categories?.[catId]
+          const key = `${g.guest_id}:${catId}`
+          return (
+            <button
+              key={catId}
+              onClick={() => toggleCategoryServed(g.guest_id, catId, served)}
+              disabled={working === key || !g.admitted}
+              title={!g.admitted ? 'Guest not admitted yet' : (served ? 'Click to un-serve' : `Mark ${catName(catId)} served`)}
+              className={`px-2 py-1 rounded-full text-[11px] font-semibold transition-colors disabled:cursor-not-allowed disabled:opacity-40 ${
+                served
+                  ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300'
+                  : 'bg-amber-50 text-amber-700 hover:bg-amber-100 dark:bg-amber-900/20 dark:text-amber-300'
+              }`}
+            >
+              {catName(catId)} {working === key ? '…' : served ? '✓' : ''}
+            </button>
+          )
+        })}
+      </div>
+    )
+  }
+
   const sortedItems = (data?.item_totals || []).slice().sort((a, b) => b.count - a.count)
   const sortedCombos = (data?.combination_totals || []).slice().sort((a, b) => b.count - a.count)
 
@@ -3594,18 +3642,20 @@ function MenuDashboard({ eventId }) {
                                 Not arrived
                               </span>
                             )}
-                            <button
-                              onClick={() => markServed(g.guest_id)}
-                              disabled={g.meal_served || working === g.guest_id || !g.admitted}
-                              title={!g.admitted ? 'Guest not admitted yet' : ''}
-                              className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-colors disabled:cursor-not-allowed ${
-                                g.meal_served
-                                  ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300'
-                                  : 'bg-amber-500 hover:bg-amber-600 text-white disabled:opacity-40'
-                              }`}
-                            >
-                              {g.meal_served ? 'Served ✓' : working === g.guest_id ? '…' : 'Mark served'}
-                            </button>
+                            {data.multi_category_serving ? renderServedButtons(g) : (
+                              <button
+                                onClick={() => markServed(g.guest_id)}
+                                disabled={g.meal_served || working === g.guest_id || !g.admitted}
+                                title={!g.admitted ? 'Guest not admitted yet' : ''}
+                                className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-colors disabled:cursor-not-allowed ${
+                                  g.meal_served
+                                    ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300'
+                                    : 'bg-amber-500 hover:bg-amber-600 text-white disabled:opacity-40'
+                                }`}
+                              >
+                                {g.meal_served ? 'Served ✓' : working === g.guest_id ? '…' : 'Mark served'}
+                              </button>
+                            )}
                           </div>
                         </div>
                       ))}
@@ -3655,14 +3705,16 @@ function MenuDashboard({ eventId }) {
                           : <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-500 dark:bg-slate-700 dark:text-slate-400">Pending</span>}
                       </td>
                       <td className="px-4 py-2.5 text-center">
-                        <button
-                          onClick={() => markServed(g.guest_id)}
-                          disabled={g.meal_served || working === g.guest_id || !g.admitted}
-                          title={!g.admitted ? 'Guest not admitted yet' : ''}
-                          className="bg-amber-500 text-white px-3 py-1 rounded-lg text-xs font-semibold hover:bg-amber-600 disabled:opacity-40 disabled:cursor-not-allowed"
-                        >
-                          {g.meal_served ? 'Served' : working === g.guest_id ? '…' : 'Mark served'}
-                        </button>
+                        {data.multi_category_serving ? renderServedButtons(g) : (
+                          <button
+                            onClick={() => markServed(g.guest_id)}
+                            disabled={g.meal_served || working === g.guest_id || !g.admitted}
+                            title={!g.admitted ? 'Guest not admitted yet' : ''}
+                            className="bg-amber-500 text-white px-3 py-1 rounded-lg text-xs font-semibold hover:bg-amber-600 disabled:opacity-40 disabled:cursor-not-allowed"
+                          >
+                            {g.meal_served ? 'Served' : working === g.guest_id ? '…' : 'Mark served'}
+                          </button>
+                        )}
                       </td>
                     </tr>
                   ))}

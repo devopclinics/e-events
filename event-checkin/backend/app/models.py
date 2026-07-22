@@ -719,6 +719,31 @@ class GuestMenuChoice(Base):
     chosen_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
 
 
+class GuestMealFulfillment(Base):
+    """One row per guest per meal category actually served — fills the gap
+    `Guest.meal_served` can't: that single boolean can't say WHICH category
+    (breakfast/lunch/dinner, or which day) was served, so a guest with three
+    meal categories has exactly one served flag for all three, forever.
+
+    Kept alongside `Guest.meal_served` (dual-write): this table is the
+    source of truth for per-category reporting; the boolean stays in sync
+    as "at least one category served" for any code that still reads it."""
+    __tablename__ = "guest_meal_fulfillment"
+    __table_args__ = (
+        UniqueConstraint("guest_id", "category_id", name="uq_guest_meal_fulfillment"),
+        # meals_breakdown() counts served rows per category — matches this shape.
+        Index("ix_guest_meal_fulfillment_category_status", "category_id", "status"),
+    )
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+    guest_id: Mapped[str] = mapped_column(String(36), ForeignKey("guests.id"), index=True)
+    category_id: Mapped[str] = mapped_column(String(36), ForeignKey("menu_categories.id"), index=True)
+    status: Mapped[str] = mapped_column(String(20), default="served")  # served | skipped | denied
+    served_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    served_by_user_id: Mapped[str | None] = mapped_column(String(36), ForeignKey("users.id"), nullable=True)
+    override_reason: Mapped[str | None] = mapped_column(Text, nullable=True)
+
+
 class MenuCombination(Base):
     __tablename__ = "menu_combinations"
 
@@ -1245,6 +1270,15 @@ class ScanEvent(Base):
     the log the whole analytics layer reads. Separate from the legacy
     Guest.admitted boolean, which the old check-in flow still uses."""
     __tablename__ = "scan_events"
+    __table_args__ = (
+        # dashboard-service's day/range-scoped attendance queries filter on
+        # exactly this pair; a composite index matches the query shape better
+        # than the separate single-column indexes below.
+        Index("ix_scan_events_event_scanned_at", "event_id", "scanned_at"),
+        # First-scan-per-guest / on-site-as-of-cutoff queries group by
+        # (event_id, guest_id) then aggregate scanned_at.
+        Index("ix_scan_events_event_guest_scanned_at", "event_id", "guest_id", "scanned_at"),
+    )
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
     event_id: Mapped[str] = mapped_column(String(36), ForeignKey("events.id"), index=True)

@@ -406,6 +406,10 @@ export const api = {
   autoAssign: (eventId, clear = false) => req('POST', `/events/${eventId}/seating/auto-assign?clear=${clear}`),
   assignSeat: (eventId, guestId, body) => req('PATCH', `/events/${eventId}/guests/${guestId}/seat`, body),
   markMealServed: (eventId, guestId) => req('PATCH', `/events/${eventId}/guests/${guestId}/meal-served`),
+  markCategoryServed: (eventId, categoryId, guestId) =>
+    req('PATCH', `/events/${eventId}/menu-categories/${categoryId}/guests/${guestId}/served`),
+  unmarkCategoryServed: (eventId, categoryId, guestId) =>
+    req('DELETE', `/events/${eventId}/menu-categories/${categoryId}/guests/${guestId}/served`),
   updateMemberPermissions: (eventId, userId, body) => req('PATCH', `/events/${eventId}/members/${userId}/permissions`, body),
   setMemberSections: (eventId, userId, ids) =>
     req('PUT', `/events/${eventId}/members/${userId}/sections`, {
@@ -549,6 +553,9 @@ export const api = {
   },
   resultsProgram: (eventId) => req('GET', `/results/events/${eventId}/analytics/program`),
   resultsExperience: (eventId) => req('GET', `/results/events/${eventId}/analytics/experience`),
+  resultsMeals: (eventId) => req('GET', `/results/events/${eventId}/analytics/meals`),
+  resultsInvitations: (eventId) => req('GET', `/results/events/${eventId}/analytics/invitations`),
+  resultsOperations: (eventId) => req('GET', `/results/events/${eventId}/analytics/operations`),
 
   // Users
   listUsers: () => req('GET', '/auth/users'),

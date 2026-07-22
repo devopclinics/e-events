@@ -275,6 +275,9 @@ export default function ResultsPage() {
   const [loading, setLoading] = useState(false)
   const [program, setProgram] = useState(null)
   const [experience, setExperience] = useState(null)
+  const [meals, setMeals] = useState(null)
+  const [invitations, setInvitations] = useState(null)
+  const [operations, setOperations] = useState(null)
   const [connected, setConnected] = useState(false)
   const esRef = useRef(null)
 
@@ -335,6 +338,21 @@ export default function ResultsPage() {
   useEffect(() => {
     if (!eventId || activeTab !== 'experience') return
     api.resultsExperience(eventId).then(setExperience).catch(() => setExperience(null))
+  }, [eventId, activeTab])
+
+  useEffect(() => {
+    if (!eventId || activeTab !== 'meals') return
+    api.resultsMeals(eventId).then(setMeals).catch(() => setMeals(null))
+  }, [eventId, activeTab])
+
+  useEffect(() => {
+    if (!eventId || activeTab !== 'invitations') return
+    api.resultsInvitations(eventId).then(setInvitations).catch(() => setInvitations(null))
+  }, [eventId, activeTab])
+
+  useEffect(() => {
+    if (!eventId || activeTab !== 'operations') return
+    api.resultsOperations(eventId).then(setOperations).catch(() => setOperations(null))
   }, [eventId, activeTab])
 
   const event = events.find((e) => e.id === eventId)
@@ -470,8 +488,17 @@ export default function ResultsPage() {
                   {event.menu_enabled && (
                     <div className="bg-white dark:bg-slate-800 dark:border dark:border-slate-700/60 rounded-xl shadow-sm p-4">
                       <h3 className="font-semibold text-sm dark:text-white mb-3">Meals</h3>
-                      <div className="text-3xl font-extrabold text-slate-900 dark:text-white">{data.meals.served_total}</div>
-                      <div className="text-xs text-slate-500 dark:text-slate-400 mt-1">served (total — not yet broken down by day/meal, see Meals tab)</div>
+                      {data.meals.categories.length === 0 ? (
+                        <p className="text-sm text-slate-400">No selectable meal categories.</p>
+                      ) : (
+                        <>
+                          <div className="text-3xl font-extrabold text-slate-900 dark:text-white tabular-nums">
+                            {data.meals.served_total}<span className="text-base text-slate-400 font-semibold">/{data.meals.eligible_total}</span>
+                          </div>
+                          <div className="text-xs text-slate-500 dark:text-slate-400 mt-1">served across {data.meals.categories.length} categor{data.meals.categories.length === 1 ? 'y' : 'ies'}</div>
+                        </>
+                      )}
+                      <button onClick={() => setActiveTab('meals')} className="mt-3 text-xs font-semibold text-teal-600 hover:underline">Open meal service →</button>
                     </div>
                   )}
                   {event.experience_enabled && (
@@ -617,7 +644,104 @@ export default function ResultsPage() {
             )
           )}
 
-          {!['overview', 'attendance', 'program', 'experience'].includes(activeTab) && <EmptyFeatureState tab={TABS.find((t) => t.id === activeTab)?.label} />}
+          {activeTab === 'meals' && (
+            meals === null ? <p className="text-sm text-slate-400">Loading…</p> :
+            !event.menu_enabled ? <EmptyFeatureState tab="Meals" /> :
+            meals.categories.length === 0 ? (
+              <div className="bg-white dark:bg-slate-800 dark:border dark:border-slate-700/60 rounded-xl shadow-sm p-8 text-center">
+                <p className="text-sm text-slate-500 dark:text-slate-400">No selectable meal categories — this event's menu is display-only (informational), so there's nothing to serve.</p>
+              </div>
+            ) : (
+              <div className="space-y-6">
+                <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+                  <MetricCard icon="🍽️" tint="bg-teal-50 dark:bg-teal-900/30" label="Served" value={meals.served_total} accent="text-teal-600 dark:text-teal-400" />
+                  <MetricCard icon="👥" tint="bg-slate-100 dark:bg-slate-700" label="Eligible" value={meals.eligible_total} />
+                  <MetricCard icon="⏳" tint="bg-amber-50 dark:bg-amber-900/30" label="Remaining" value={meals.eligible_total - meals.served_total} />
+                </div>
+                <div className="bg-white dark:bg-slate-800 dark:border dark:border-slate-700/60 rounded-xl shadow-sm p-4">
+                  <h3 className="font-semibold text-sm dark:text-white mb-3">By category</h3>
+                  <div className="space-y-4">
+                    {meals.categories.map((c) => (
+                      <ProgressBar key={c.category_id} label={c.day_label ? `${c.name} — ${c.day_label}` : c.name}
+                        completed={c.served} total={c.eligible} sub={`${c.remaining} remaining`} />
+                    ))}
+                  </div>
+                  <p className="text-xs text-slate-400 mt-4">Mark guests served from the Menu panel's serving station in Event Setup — this tab is read-only.</p>
+                </div>
+              </div>
+            )
+          )}
+
+          {activeTab === 'invitations' && (
+            invitations === null ? <p className="text-sm text-slate-400">Loading…</p> : (
+              <div className="space-y-6">
+                <RsvpFunnel funnel={invitations.rsvp_funnel} />
+                <div className="grid gap-6 lg:grid-cols-2">
+                  <div className="bg-white dark:bg-slate-800 dark:border dark:border-slate-700/60 rounded-xl shadow-sm p-4">
+                    <h3 className="font-semibold text-sm dark:text-white mb-3">Invite delivery</h3>
+                    <div className="grid grid-cols-3 gap-3">
+                      <MetricCard icon="✅" tint="bg-green-50 dark:bg-green-900/30" label="Sent" value={invitations.delivery.sent} />
+                      <MetricCard icon="⚠️" tint="bg-amber-50 dark:bg-amber-900/30" label="Failed" value={invitations.delivery.failed} accent="text-amber-600 dark:text-amber-400" />
+                      <MetricCard icon="⏳" tint="bg-slate-100 dark:bg-slate-700" label="Not sent yet" value={invitations.delivery.unsent} />
+                    </div>
+                  </div>
+                  <CommHealthCard comm={invitations.communication} />
+                </div>
+              </div>
+            )
+          )}
+
+          {activeTab === 'operations' && (
+            operations === null ? <p className="text-sm text-slate-400">Loading…</p> : (
+              <div className="space-y-6">
+                <div className="grid gap-6 lg:grid-cols-2">
+                  <div className="bg-white dark:bg-slate-800 dark:border dark:border-slate-700/60 rounded-xl shadow-sm p-4">
+                    <h3 className="font-semibold text-sm dark:text-white mb-3">Meals served</h3>
+                    {operations.meals.categories.length === 0 ? (
+                      <p className="text-sm text-slate-400">Not applicable for this event.</p>
+                    ) : (
+                      <ProgressBar label="All categories" completed={operations.meals.served_total} total={operations.meals.eligible_total} />
+                    )}
+                  </div>
+                  <div className="bg-white dark:bg-slate-800 dark:border dark:border-slate-700/60 rounded-xl shadow-sm p-4">
+                    <h3 className="font-semibold text-sm dark:text-white mb-3">Consent signed</h3>
+                    {!operations.consent ? (
+                      <p className="text-sm text-slate-400">No consent step configured.</p>
+                    ) : (
+                      <ProgressBar label="Consent" completed={operations.consent.signed} total={operations.consent.eligible} />
+                    )}
+                  </div>
+                </div>
+                <div className="grid gap-6 lg:grid-cols-2">
+                  <div className="bg-white dark:bg-slate-800 dark:border dark:border-slate-700/60 rounded-xl shadow-sm p-4">
+                    <h3 className="font-semibold text-sm dark:text-white mb-3">Denied scans — {operations.denied_scans.total} total</h3>
+                    {operations.denied_scans.by_reason.length === 0 ? (
+                      <p className="text-sm text-slate-400">No denied scans.</p>
+                    ) : (
+                      <div className="space-y-2">
+                        {operations.denied_scans.by_reason.map((r) => (
+                          <div key={r.reason} className="flex items-center justify-between text-sm">
+                            <span className="text-slate-600 dark:text-slate-300">{r.reason}</span>
+                            <span className="font-semibold text-slate-800 dark:text-slate-100 tabular-nums">{r.count}</span>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                  {operations.venue_occupancy.length > 0 && (
+                    <div className="bg-white dark:bg-slate-800 dark:border dark:border-slate-700/60 rounded-xl shadow-sm p-4">
+                      <h3 className="font-semibold text-sm dark:text-white mb-3">Zone occupancy</h3>
+                      <div className="space-y-3">
+                        {operations.venue_occupancy.map((z) => <OccupancyBar key={z.id} {...z} />)}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </div>
+            )
+          )}
+
+          {!['overview', 'attendance', 'program', 'experience', 'meals', 'invitations', 'operations'].includes(activeTab) && <EmptyFeatureState tab={TABS.find((t) => t.id === activeTab)?.label} />}
         </>
       )}
 

@@ -3,7 +3,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func
 from sqlalchemy.exc import IntegrityError
 from ..database import get_db
-from ..models import Event, SeatingTable, Guest, EventUser, EventUserSection, User, TableGroup, TableGroupTable
+from ..models import Event, SeatingTable, Guest, EventUser, EventUserSection, User, TableGroup, TableGroupTable, MenuCategory, GuestMealFulfillment
 from ..schemas import (
     SeatingTableCreate, SeatingTableOut, SeatAssignRequest,
     TableGroupCreate, TableGroupOut, TableGroupTablesUpdate,
@@ -586,6 +586,21 @@ async def mark_meal_served(
     if not guest or guest.event_id != event_id:
         raise HTTPException(404, "Guest not found")
     guest.meal_served = True
+    # Dual-write into the per-category fulfillment table (Track B) only when
+    # there's exactly one selectable category — otherwise which one the
+    # organizer meant is ambiguous, and the frontend switches to per-category
+    # buttons instead of this single legacy one once there are 2+.
+    selectable = (await db.execute(
+        select(MenuCategory.id).where(MenuCategory.event_id == event_id, MenuCategory.display_only.is_(False))
+    )).scalars().all()
+    if len(selectable) == 1:
+        existing = await db.scalar(select(GuestMealFulfillment).where(
+            GuestMealFulfillment.guest_id == guest.id, GuestMealFulfillment.category_id == selectable[0]))
+        if not existing:
+            db.add(GuestMealFulfillment(
+                guest_id=guest.id, category_id=selectable[0],
+                status="served", served_by_user_id=current_user.id,
+            ))
     await sync_guest_progress(event_id, guest.id, db, source="staff", actor_user_id=current_user.id)
     await db.commit()
     return {"ok": True}

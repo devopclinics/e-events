@@ -6,6 +6,7 @@ from ..database import get_db
 from ..models import (
     Event, MenuCategory, MenuItem, GuestMenuChoice, Guest, User,
     EventUser, MenuCombination, MenuCombinationItem, SeatingTable,
+    GuestMealFulfillment,
 )
 from ..schemas import (
     MenuCategoryCreate, MenuCategoryOut, MenuItemCreate, MenuItemOut,
@@ -243,6 +244,65 @@ async def delete_combination(event_id: str, combo_id: str, db: AsyncSession = De
     await db.commit()
 
 
+# ── Per-category meal fulfillment (Track B — replaces the single global
+# Guest.meal_served boolean for events with more than one selectable
+# category, e.g. breakfast/lunch/dinner across a multi-day retreat) ─────────
+
+async def _category_or_404(event_id: str, category_id: str, db: AsyncSession) -> MenuCategory:
+    cat = await db.get(MenuCategory, category_id)
+    if not cat or cat.event_id != event_id:
+        raise HTTPException(404, "Menu category not found")
+    return cat
+
+
+@router.patch("/{event_id}/menu-categories/{category_id}/guests/{guest_id}/served")
+async def mark_category_served(
+    event_id: str, category_id: str, guest_id: str,
+    db: AsyncSession = Depends(get_db), current_user: User = Depends(require_paid_event_member),
+):
+    await _require_menu_access(event_id, db, current_user)
+    await _category_or_404(event_id, category_id, db)
+    guest = await db.get(Guest, guest_id)
+    if not guest or guest.event_id != event_id:
+        raise HTTPException(404, "Guest not found")
+
+    existing = await db.scalar(select(GuestMealFulfillment).where(
+        GuestMealFulfillment.guest_id == guest_id, GuestMealFulfillment.category_id == category_id))
+    if existing:
+        existing.status = "served"
+        existing.served_at = datetime.utcnow()
+        existing.served_by_user_id = current_user.id
+    else:
+        db.add(GuestMealFulfillment(
+            guest_id=guest_id, category_id=category_id,
+            status="served", served_by_user_id=current_user.id,
+        ))
+    guest.meal_served = True  # legacy dual-write: "at least one category served"
+    await db.commit()
+    return {"ok": True}
+
+
+@router.delete("/{event_id}/menu-categories/{category_id}/guests/{guest_id}/served", status_code=204)
+async def unmark_category_served(
+    event_id: str, category_id: str, guest_id: str,
+    db: AsyncSession = Depends(get_db), current_user: User = Depends(require_paid_event_member),
+):
+    await _require_menu_access(event_id, db, current_user)
+    await _category_or_404(event_id, category_id, db)
+    existing = await db.scalar(select(GuestMealFulfillment).where(
+        GuestMealFulfillment.guest_id == guest_id, GuestMealFulfillment.category_id == category_id))
+    if existing:
+        await db.delete(existing)
+        await db.flush()
+        remaining = await db.scalar(select(func.count()).select_from(GuestMealFulfillment).where(
+            GuestMealFulfillment.guest_id == guest_id, GuestMealFulfillment.status == "served"))
+        if not remaining:
+            guest = await db.get(Guest, guest_id)
+            if guest:
+                guest.meal_served = False
+        await db.commit()
+
+
 # ── Summary ───────────────────────────────────────────────────────────────────
 
 @router.get("/{event_id}/menu/summary")
@@ -310,6 +370,15 @@ async def menu_dashboard(event_id: str, db: AsyncSession = Depends(get_db), curr
     choices = (await db.execute(
         select(GuestMenuChoice).where(GuestMenuChoice.guest_id.in_([g.id for g in guests]) if guests else GuestMenuChoice.guest_id.is_(None))
     )).scalars().all()
+
+    fulfillment_rows = (await db.execute(
+        select(GuestMealFulfillment.guest_id, GuestMealFulfillment.category_id, GuestMealFulfillment.status)
+        .where(GuestMealFulfillment.guest_id.in_([g.id for g in guests]) if guests else GuestMealFulfillment.guest_id.is_(None))
+    )).all()
+    served_by_guest: dict[str, dict[str, bool]] = {}
+    for gid, cat_id, status in fulfillment_rows:
+        served_by_guest.setdefault(gid, {})[cat_id] = status == "served"
+    selectable_count = sum(1 for c in cats if not c.display_only)
 
     item_counts: dict[str, int] = {}
     combo_counts: dict[str, int] = {}
@@ -381,12 +450,14 @@ async def menu_dashboard(event_id: str, db: AsyncSession = Depends(get_db), curr
             single=single,
             multi=multi,
             combo=combo_g,
+            served_categories=served_by_guest.get(g.id, {}),
         ))
 
     return MenuDashboardOut(
         item_totals=item_totals,
         combination_totals=combination_totals,
         guests=dashboard_guests,
+        multi_category_serving=selectable_count >= 2,
     )
 
 

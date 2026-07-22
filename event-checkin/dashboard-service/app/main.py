@@ -19,8 +19,8 @@ from .config import settings
 from .database import get_db
 from .models import (
     EmailDeliveryEvent, Event, ExperienceStep, ExperienceWorkflow, Guest,
-    GuestExperienceProgress, GuestMenuChoice, MenuCategory, MessageCreditLedger,
-    ScanEvent, SeatingTable, User, Zone,
+    GuestExperienceProgress, GuestMealFulfillment, GuestMenuChoice, MenuCategory,
+    MessageCreditLedger, ScanEvent, SeatingTable, User, Zone,
 )
 from .timeutil import event_tz, to_event_local, to_utc_naive
 
@@ -522,6 +522,40 @@ async def recent_activity(db: AsyncSession, event: Event, limit: int = 15) -> li
     return out
 
 
+# ── meals (Track B — per-category fulfillment, replaces the coarse
+# Guest.meal_served total now that guest_meal_fulfillment exists) ────────────
+
+async def meals_breakdown(db: AsyncSession, event: Event) -> list[dict]:
+    if not event.menu_enabled:
+        return []
+    cats = (await db.execute(
+        select(MenuCategory).where(MenuCategory.event_id == event.id, MenuCategory.display_only.is_(False))
+        .order_by(MenuCategory.sort_order)
+    )).scalars().all()
+    out = []
+    for cat in cats:
+        eligible = await db.scalar(select(func.count(func.distinct(GuestMenuChoice.guest_id))).where(
+            GuestMenuChoice.category_id == cat.id)) or 0
+        served = await db.scalar(select(func.count()).select_from(GuestMealFulfillment).where(
+            GuestMealFulfillment.category_id == cat.id, GuestMealFulfillment.status == "served")) or 0
+        out.append({
+            "category_id": cat.id, "name": cat.name, "day_label": cat.day_label,
+            "eligible": eligible, "served": served, "remaining": max(eligible - served, 0),
+            "rate": round(served / eligible * 100) if eligible else 0,
+        })
+    return out
+
+
+@app.get("/api/results/events/{event_id}/analytics/meals")
+async def get_meals(event: Event = Depends(admin_event), db: AsyncSession = Depends(get_db)):
+    categories = await meals_breakdown(db, event)
+    return {
+        "categories": categories,
+        "eligible_total": sum(c["eligible"] for c in categories),
+        "served_total": sum(c["served"] for c in categories),
+    }
+
+
 # ── operational alerts ────────────────────────────────────────────────────────
 
 async def _consent_step(db: AsyncSession, event_id: str) -> ExperienceStep | None:
@@ -531,6 +565,70 @@ async def _consent_step(db: AsyncSession, event_id: str) -> ExperienceStep | Non
         return None
     return await db.scalar(select(ExperienceStep).where(
         ExperienceStep.workflow_id == wf.id, ExperienceStep.type == "consent", ExperienceStep.enabled.is_(True)))
+
+
+async def invite_delivery_status(db: AsyncSession, event: Event) -> dict:
+    sent = await db.scalar(select(func.count()).select_from(Guest).where(
+        Guest.event_id == event.id, Guest.invite_status == "sent")) or 0
+    failed = await db.scalar(select(func.count()).select_from(Guest).where(
+        Guest.event_id == event.id, Guest.invite_status == "failed")) or 0
+    unsent = await db.scalar(select(func.count()).select_from(Guest).where(
+        Guest.event_id == event.id, Guest.invite_status.is_(None))) or 0
+    return {"sent": sent, "failed": failed, "unsent": unsent}
+
+
+@app.get("/api/results/events/{event_id}/analytics/invitations")
+async def get_invitations(event: Event = Depends(admin_event), db: AsyncSession = Depends(get_db)):
+    return {
+        "rsvp_funnel": await rsvp_funnel(db, event),
+        "delivery": await invite_delivery_status(db, event),
+        "communication": await communication_health(db, event),
+    }
+
+
+# ── operations (denied scans, consent completion — the Operations tab) ───────
+
+async def consent_status(db: AsyncSession, event: Event) -> dict | None:
+    if not event.experience_enabled:
+        return None
+    consent_step = await _consent_step(db, event.id)
+    if not consent_step:
+        return None
+    eligible = await db.scalar(select(func.count()).select_from(Guest).where(
+        Guest.event_id == event.id, Guest.rsvp_status != "declined")) or 0
+    signed = await db.scalar(select(func.count()).select_from(GuestExperienceProgress).where(
+        GuestExperienceProgress.step_id == consent_step.id,
+        GuestExperienceProgress.status.in_(["completed", "overridden"]),
+    )) or 0
+    return {"eligible": eligible, "signed": signed, "rate": round(signed / eligible * 100) if eligible else 0}
+
+
+async def denied_scans_breakdown(db: AsyncSession, event: Event) -> dict:
+    total = await db.scalar(select(func.count()).select_from(ScanEvent).where(
+        ScanEvent.event_id == event.id, ScanEvent.denied.is_(True))) or 0
+    rows = (await db.execute(
+        select(ScanEvent.deny_reason, func.count()).where(
+            ScanEvent.event_id == event.id, ScanEvent.denied.is_(True),
+        ).group_by(ScanEvent.deny_reason)
+    )).all()
+    by_reason = sorted(
+        [{"reason": r or "Unknown", "count": c} for r, c in rows],
+        key=lambda x: -x["count"],
+    )
+    return {"total": total, "by_reason": by_reason}
+
+
+@app.get("/api/results/events/{event_id}/analytics/operations")
+async def get_operations(event: Event = Depends(admin_event), db: AsyncSession = Depends(get_db)):
+    meal_cats = await meals_breakdown(db, event)
+    return {
+        "meals": {"categories": meal_cats,
+                  "eligible_total": sum(c["eligible"] for c in meal_cats),
+                  "served_total": sum(c["served"] for c in meal_cats)},
+        "consent": await consent_status(db, event),
+        "denied_scans": await denied_scans_breakdown(db, event),
+        "venue_occupancy": await venue_occupancy(db, event),
+    }
 
 
 async def build_alerts(db: AsyncSession, event: Event) -> list[dict]:
@@ -674,16 +772,21 @@ async def command_center(
     attendance = await attendance_stats(db, event, scope)
     sessions = await program_sessions(db, event)
     funnel = await experience_funnel(db, event)
+    meal_cats = await meals_breakdown(db, event)
     return {
         "scope": attendance["scope"],
         "attendance": {k: v for k, v in attendance.items() if k != "scope"},
         "attendance_by_day": await attendance_by_day(db, event),
         "venue_occupancy": await venue_occupancy(db, event),
         "alerts": await build_alerts(db, event),
-        # Coarse until Track B (guest_meal_fulfillment) ships — see the plan doc.
-        "meals": {"served_total": await db.scalar(
-            select(func.count()).select_from(Guest).where(Guest.event_id == event.id, Guest.meal_served.is_(True))
-        ) or 0},
+        # Real per-category fulfillment now that Track B (guest_meal_fulfillment)
+        # has shipped; Overview gets the aggregate, the Meals tab gets the
+        # per-category/per-day breakdown via /analytics/meals.
+        "meals": {
+            "categories": meal_cats,
+            "eligible_total": sum(c["eligible"] for c in meal_cats),
+            "served_total": sum(c["served"] for c in meal_cats),
+        },
         # Overview-card-sized summaries; full detail lives behind /analytics/program
         # and /analytics/experience for the dedicated tabs.
         "program": {

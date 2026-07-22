@@ -160,6 +160,13 @@ SCHEMA_PATCHES: list[str] = [
     "CREATE UNIQUE INDEX IF NOT EXISTS uq_guest_table_seat ON guests "
     "(event_id, table_id, seat_number) "
     "WHERE table_id IS NOT NULL AND seat_number IS NOT NULL",
+
+    # ── dashboard-service (Results command center) composite indexes ──────────
+    # scan_events already existed pre-dashboard-service with only single-column
+    # indexes; the ORM's __table_args__ Index() only auto-creates on a fresh
+    # table, so existing installs need these added here.
+    "CREATE INDEX IF NOT EXISTS ix_scan_events_event_scanned_at ON scan_events (event_id, scanned_at)",
+    "CREATE INDEX IF NOT EXISTS ix_scan_events_event_guest_scanned_at ON scan_events (event_id, guest_id, scanned_at)",
 ]
 
 

@@ -1790,12 +1790,20 @@ class MenuDashboardGuest(BaseModel):
     single: dict[str, dict] = {}  # category_id → {item_name, category_name}
     multi: dict[str, dict] = {}  # category_id → {category_name, items: [item_name]}
     combo: dict[str, dict] = {}  # category_id → {category_name, combination_name, items: [item_name]}
+    # category_id → served (bool). Per-category fulfillment — see
+    # GuestMealFulfillment. Empty for events that predate this / haven't
+    # served anything yet; frontend falls back to the legacy `meal_served`
+    # single button when the event has 0-1 selectable categories.
+    served_categories: dict[str, bool] = {}
 
 
 class MenuDashboardOut(BaseModel):
     item_totals: list[MenuItemTotal]
     combination_totals: list[MenuCombinationTotal]
     guests: list[MenuDashboardGuest]
+    # True when staff should use the per-category served buttons instead of
+    # the single legacy "Mark served" button (2+ selectable categories).
+    multi_category_serving: bool = False
 
 
 # ── Invite page & RSVP ───────────────────────────────────────────────────────

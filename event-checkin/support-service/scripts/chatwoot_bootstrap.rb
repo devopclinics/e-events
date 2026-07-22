@@ -55,8 +55,10 @@ result = ActiveRecord::Base.transaction do
     au.role = :administrator
   end
 
-  inbox = account.inboxes.joins(:channel).find_by(
-    name: INBOX_NAME, "channels.type" => "Channel::WebWidget"
+  # `channel` is polymorphic; Rails 7.1 refuses eager-loading it via joins.
+  # Inbox stores the concrete type directly, so query that column instead.
+  inbox = account.inboxes.find_by(
+    name: INBOX_NAME, channel_type: "Channel::WebWidget"
   )
   if inbox.nil?
     widget = Channel::WebWidget.create!(

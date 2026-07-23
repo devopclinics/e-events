@@ -954,6 +954,34 @@ class EventGuestMessagingSettings(Base):
     guest_chat_enabled: Mapped[bool] = mapped_column(Boolean, default=False)
     guest_chat_posting_enabled: Mapped[bool] = mapped_column(Boolean, default=True)
     attending_only_chat: Mapped[bool] = mapped_column(Boolean, default=True)
+    # Staff-only operational push (e.g. denied-scan alerts) — off by default,
+    # separate from every guest-facing toggle above.
+    staff_operational_alerts_enabled: Mapped[bool] = mapped_column(Boolean, default=False)
+    # Quiet hours for non-urgent push, "HH:MM" in the event's own timezone
+    # (Event.timezone). Null on either end means quiet hours are off. Urgent
+    # pushes (staff operational alerts) bypass this by design.
+    quiet_hours_start: Mapped[str | None] = mapped_column(String(5), nullable=True)
+    quiet_hours_end: Mapped[str | None] = mapped_column(String(5), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+
+class PushPreference(Base):
+    """Per-actor, per-category push opt-out. Absence of a row means the
+    default (enabled) — this is an opt-out model, not opt-in, so a guest who
+    registers a device starts receiving push without an extra preferences
+    step, matching how Web Push already works today."""
+    __tablename__ = "push_preferences"
+    __table_args__ = (
+        UniqueConstraint("event_id", "actor_type", "actor_id", "category", name="uq_push_preference_actor_category"),
+    )
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+    event_id: Mapped[str] = mapped_column(String(36), ForeignKey("events.id"), index=True)
+    actor_type: Mapped[str] = mapped_column(String(20), index=True)
+    actor_id: Mapped[str] = mapped_column(String(36), index=True)
+    category: Mapped[str] = mapped_column(String(30))  # "announcement" | "chat" | "staff_ops"
+    enabled: Mapped[bool] = mapped_column(Boolean, default=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
@@ -1082,6 +1110,38 @@ class FcmDeviceToken(Base):
     revoked_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+
+class PushOutbox(Base):
+    """Durable, retryable push-send jobs — mirrors FestioMeOutbox's pattern
+    (transactional outbox + bounded tick worker) so a provider outage or a
+    messaging-service crash mid-send can't silently lose a queued push.
+    Self-contained: payload carries everything needed to deliver (title,
+    body, url, and channel-specific target info) so a job survives even if
+    the originating subscription/token row is later removed.
+    """
+    __tablename__ = "push_outbox"
+    __table_args__ = (
+        UniqueConstraint("idempotency_key", name="uq_push_outbox_idempotency"),
+        Index("ix_push_outbox_due", "status", "next_attempt_at"),
+    )
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+    event_id: Mapped[str] = mapped_column(String(36), ForeignKey("events.id"), index=True)
+    channel: Mapped[str] = mapped_column(String(20), index=True)  # "web_push" | "fcm"
+    target_id: Mapped[str] = mapped_column(String(36))  # GuestPushSubscription.id or FcmDeviceToken.id
+    guest_id: Mapped[str | None] = mapped_column(String(36), ForeignKey("guests.id"), nullable=True, index=True)
+    message_id: Mapped[str | None] = mapped_column(String(36), ForeignKey("event_messages.id"), nullable=True)
+    announcement_id: Mapped[str | None] = mapped_column(String(36), ForeignKey("event_announcements.id"), nullable=True)
+    idempotency_key: Mapped[str] = mapped_column(String(255))
+    payload: Mapped[dict] = mapped_column(JSON, default=dict)
+    status: Mapped[str] = mapped_column(String(20), default="pending", index=True)
+    attempts: Mapped[int] = mapped_column(Integer, default=0)
+    next_attempt_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    last_error: Mapped[str | None] = mapped_column(Text, nullable=True)
+    provider_message_id: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    delivered_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
 
 
 class EmailDeliveryEvent(Base):

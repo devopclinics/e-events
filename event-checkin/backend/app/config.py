@@ -21,6 +21,11 @@ class Settings(BaseSettings):
     festiome_internal_token: str = ""
     festiome_request_timeout_seconds: float = 3.0
 
+    # messaging-service internal call for staff operational push (e.g. a
+    # denied-scan alert) — same shared-secret pattern as FestioMe above.
+    messaging_service_url: str = "http://messaging-service:8001"
+    messaging_internal_token: str = ""
+
     # Firebase — paste the service account JSON as a single-line string
     firebase_credentials: str = ""
 

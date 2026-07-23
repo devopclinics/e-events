@@ -25,6 +25,7 @@ from ..timeutil import event_tz, local_hhmm
 from ..template_resolve import load_overrides, channel_text as template_channel_text, channel_text_or_default as template_channel_or_default, email_override as template_email_override, email_or_default as template_email_or_default
 from services.templates import build_context as build_template_context
 from ..services.experience import active_workflow, next_guest_steps, sync_guest_progress
+from ..services.messaging_client import notify_staff_push
 
 router = APIRouter()
 
@@ -1212,6 +1213,7 @@ async def perform_admission(guest, event, background_tasks, db) -> ScanResult:
 async def scan_qr_zone(
     qr_token: str,
     body: ScanZoneRequest,
+    background_tasks: BackgroundTasks,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_official),
 ):
@@ -1275,6 +1277,14 @@ async def scan_qr_zone(
             await assign_next_seat(guest, db)
         await sync_guest_progress(event.id, guest.id, db, source="staff", actor_user_id=current_user.id)
     await db.commit()
+
+    if denied:
+        background_tasks.add_task(
+            notify_staff_push,
+            event_id=event.id,
+            title="Denied entry",
+            body=f"{guest.first_name} {guest.last_name} was denied at {zone.name}: {deny_reason or 'not allowed'}",
+        )
 
     occ = await zone_occupancy(zone.id, db)
     journey_count = await db.scalar(

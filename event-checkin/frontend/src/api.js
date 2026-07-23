@@ -613,6 +613,27 @@ export const api = {
       method: 'DELETE', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ endpoint }),
     }).then((r) => (r.ok ? r.json() : r.json().then((e) => Promise.reject(new Error(e.detail || 'Push notifications could not be removed.'))))),
 
+  // FCM (native mobile push) token lifecycle — actor-agnostic on the backend
+  // (guest or staff). Pass guestToken for the Guest Hub context; omit it for
+  // a logged-in staff session, which attaches the Firebase bearer via req().
+  registerFcmToken: (eventId, { token, platform, previousToken, deviceMetadata } = {}, guestToken) => {
+    const body = { token, platform, previous_token: previousToken || undefined, device_metadata: deviceMetadata || undefined }
+    if (guestToken) {
+      return fetch(`${BASE}/messaging/events/${encodeURIComponent(eventId)}/push/fcm-token?token=${encodeURIComponent(guestToken)}`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body),
+      }).then((r) => (r.ok ? r.json() : r.json().then((e) => Promise.reject(new Error(e.detail || 'Push token could not be registered.')))))
+    }
+    return req('POST', `/messaging/events/${encodeURIComponent(eventId)}/push/fcm-token`, body)
+  },
+  unregisterFcmToken: (eventId, token, guestToken) => {
+    if (guestToken) {
+      return fetch(`${BASE}/messaging/events/${encodeURIComponent(eventId)}/push/fcm-token?token=${encodeURIComponent(guestToken)}`, {
+        method: 'DELETE', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ token }),
+      }).then((r) => (r.ok ? r.json() : r.json().then((e) => Promise.reject(new Error(e.detail || 'Push token could not be removed.')))))
+    }
+    return req('DELETE', `/messaging/events/${encodeURIComponent(eventId)}/push/fcm-token`, { token })
+  },
+
   // Guest-facing Experience journey (token auth, backend). Returns
   // { experience_enabled, steps, next_steps, consent, ... }.
   guestExperience: (eventId, token) =>

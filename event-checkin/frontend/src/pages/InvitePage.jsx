@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from 'react'
 import { useParams } from 'react-router-dom'
 import { api } from '../api'
+import { isNativePushSupported, registerNativePush, unregisterNativePush } from '../push/fcmPush'
 import { parseUtc, fmtEventDateRange } from '../timeutil'
 import { seatingTerm } from '../seatingTerm'
 
@@ -1089,7 +1090,17 @@ function GuestHub({ event, accessToken, designTheme }) {
   }, [installPrompt])
 
   const loadPush = useCallback(async () => {
-    if (!event?.id || !accessToken || !('serviceWorker' in navigator) || !('PushManager' in window) || !('Notification' in window)) return
+    if (!event?.id || !accessToken) return
+    // Native (Capacitor) app: FCM, not the browser VAPID flow below — there's
+    // no service worker/PushManager to check, and no upfront config fetch
+    // needed since registerNativePush() fails harmlessly if FCM is disabled
+    // server-side (matches _fcm_configured()'s gate).
+    if (isNativePushSupported()) {
+      setPushConfig({ enabled: true, native: true })
+      setPushState(window.localStorage.getItem(`festio.fcmToken.${event.id}`) ? 'enabled' : 'ready')
+      return
+    }
+    if (!('serviceWorker' in navigator) || !('PushManager' in window) || !('Notification' in window)) return
     try {
       const config = await api.guestPushConfig(event.id, accessToken)
       if (!config.enabled || !config.public_key) {
@@ -1123,10 +1134,15 @@ function GuestHub({ event, accessToken, designTheme }) {
   }
 
   async function enablePush() {
-    if (!pushConfig?.public_key || pushBusy) return
+    if (!pushConfig?.enabled || pushBusy) return
     setPushBusy(true)
     setPushError('')
     try {
+      if (pushConfig.native) {
+        await registerNativePush(event.id, accessToken)
+        setPushState(window.localStorage.getItem(`festio.fcmToken.${event.id}`) ? 'enabled' : 'blocked')
+        return
+      }
       const permission = await Notification.requestPermission()
       if (permission !== 'granted') {
         setPushState(permission === 'denied' ? 'blocked' : 'ready')
@@ -1149,6 +1165,11 @@ function GuestHub({ event, accessToken, designTheme }) {
     setPushBusy(true)
     setPushError('')
     try {
+      if (pushConfig?.native) {
+        await unregisterNativePush(event.id, accessToken)
+        setPushState('ready')
+        return
+      }
       const registration = await navigator.serviceWorker.ready
       const subscription = await registration.pushManager.getSubscription()
       if (subscription) {

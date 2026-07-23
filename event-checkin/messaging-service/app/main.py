@@ -48,6 +48,12 @@ class Settings(BaseSettings):
     web_push_vapid_public_key: str = ""
     web_push_vapid_private_key: str = ""
     web_push_vapid_subject: str = "mailto:events@festio.events"
+    # FCM (native mobile push) reuses the same firebase_credentials service
+    # account already initialized below for Firebase Auth — Admin SDK
+    # credentials cover both Auth and Cloud Messaging, so no separate
+    # FCM-specific credential is needed, just this kill switch. Defaults off;
+    # staging-only until Phase 1-7 of the FCM backlog are built and tested.
+    fcm_enabled: bool = False
 
     class Config:
         env_file = ".env"
@@ -297,6 +303,28 @@ class GuestPushSubscription(Base):
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
 
+class FcmDeviceToken(Base):
+    """A registered Firebase Cloud Messaging device token — actor-agnostic
+    (guest or staff), unlike GuestPushSubscription which is guest-only Web
+    Push. Mirrors backend/app/models.py::FcmDeviceToken; backend owns table
+    creation via db_migrate.py, this is the read/write mirror.
+    """
+    __tablename__ = "fcm_device_tokens"
+    __table_args__ = (UniqueConstraint("token", name="uq_fcm_device_token_token"),)
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+    event_id: Mapped[str] = mapped_column(String(36), ForeignKey("events.id"), index=True)
+    actor_type: Mapped[str] = mapped_column(String(20), index=True)
+    actor_id: Mapped[str] = mapped_column(String(36), index=True)
+    platform: Mapped[str] = mapped_column(String(20))
+    token: Mapped[str] = mapped_column(Text)
+    status: Mapped[str] = mapped_column(String(20), default="active", index=True)
+    device_metadata: Mapped[dict | None] = mapped_column(JSON)
+    revoked_at: Mapped[datetime | None] = mapped_column(DateTime)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+
 async def get_db():
     async with SessionLocal() as session:
         yield session
@@ -515,6 +543,14 @@ def _web_push_configured() -> bool:
         and settings.web_push_vapid_public_key
         and settings.web_push_vapid_private_key
     )
+
+
+def _fcm_configured() -> bool:
+    """FCM (native mobile push) is a separate kill switch from Web Push —
+    both can be on at once, one per client type. Reuses the same
+    _firebase_app already initialized for Firebase Auth (see startup below);
+    no separate FCM credential to configure or rotate."""
+    return bool(settings.fcm_enabled and settings.firebase_credentials)
 
 
 def _subscription_url_for(guest: Guest) -> str:

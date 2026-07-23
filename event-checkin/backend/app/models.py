@@ -1061,6 +1061,29 @@ class GuestPushSubscription(Base):
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
 
+class FcmDeviceToken(Base):
+    """A registered Firebase Cloud Messaging device token — actor-agnostic
+    (guest or staff), unlike GuestPushSubscription which is guest-only Web
+    Push. Kept alongside it rather than replacing it: FCM is for native
+    mobile (Capacitor Android/iOS); Web Push stays the browser path. See
+    docs/FCM-IMPLEMENTATION-BACKLOG-JIRA.csv, "Web push compatibility ADR."
+    """
+    __tablename__ = "fcm_device_tokens"
+    __table_args__ = (UniqueConstraint("token", name="uq_fcm_device_token_token"),)
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+    event_id: Mapped[str] = mapped_column(String(36), ForeignKey("events.id"), index=True)
+    actor_type: Mapped[str] = mapped_column(String(20), index=True)  # "guest" | "staff"
+    actor_id: Mapped[str] = mapped_column(String(36), index=True)  # guests.id or users.id per actor_type
+    platform: Mapped[str] = mapped_column(String(20))  # "android" | "ios" | "web"
+    token: Mapped[str] = mapped_column(Text)
+    status: Mapped[str] = mapped_column(String(20), default="active", index=True)  # active | revoked | invalid
+    device_metadata: Mapped[dict | None] = mapped_column(JSON, nullable=True)
+    revoked_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+
 class EmailDeliveryEvent(Base):
     __tablename__ = "email_delivery_events"
     __table_args__ = (

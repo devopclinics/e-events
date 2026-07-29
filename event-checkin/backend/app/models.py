@@ -731,6 +731,7 @@ class SeatingTable(Base):
     pos_y: Mapped[int | None] = mapped_column(Integer, nullable=True)
     shape: Mapped[str] = mapped_column(String(12), default="round")  # round | rect
     rotation: Mapped[int] = mapped_column(Integer, default=0)        # degrees
+    updated_at: Mapped[datetime | None] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=True)
 
     event: Mapped["Event"] = relationship("Event", back_populates="tables")
     guests: Mapped[list["Guest"]] = relationship("Guest", back_populates="table")

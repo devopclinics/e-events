@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
+import { useSearchParams } from 'react-router-dom'
 import RedesignShell, { Icon } from './redesign/RedesignShell'
 import { LoadingSkeleton } from './redesign/RedesignPrimitives'
 import { useCurrentEvent } from '../hooks/useCurrentEvent'
@@ -45,7 +46,10 @@ export default function EventResultsRedesignPage() {
   const [currentEventId, setCurrentEventId] = useCurrentEvent()
   const [events, setEvents] = useState([])
   const [eventId, setEventId] = useState(currentEventId || '')
-  const [activeTab, setActiveTab] = useState('overview')
+  const [searchParams, setSearchParams] = useSearchParams()
+  const requestedTab = searchParams.get('tab')
+  const [activeTab, setActiveTabState] = useState(TABS.some((t) => t.id === requestedTab) ? requestedTab : 'overview')
+  const setActiveTab = (id) => { setActiveTabState(id); setSearchParams((prev) => { const next = new URLSearchParams(prev); next.set('tab', id); return next }) }
   const [day, setDay] = useState('')
   const [venueId, setVenueId] = useState('')
   const [zones, setZones] = useState([])

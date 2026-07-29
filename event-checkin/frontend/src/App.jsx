@@ -399,6 +399,7 @@ function AppRoutes() {
       <Route path="/selfcheckin-redesign" element={<SelfCheckinRedesignPage />} />
       <Route path="/selfcheckin-redesign/:code" element={<SelfCheckinRedesignPage />} />
       <Route path="/floorplan-redesign" element={<FloorPlanRedesignPage />} />
+      <Route path="/floorplan-redesign/:eventId" element={<ProtectedRoute adminOnly><FloorPlanPage /></ProtectedRoute>} />
       <Route path="/setup-redesign" element={<ProtectedRoute><SetupRedesignPage /></ProtectedRoute>} />
       <Route path="/api-explorer-redesign" element={<ProtectedRoute><ApiExplorerRedesignPage /></ProtectedRoute>} />
       <Route path="/public-pages-redesign" element={<PublicPagesRedesignPage />} />

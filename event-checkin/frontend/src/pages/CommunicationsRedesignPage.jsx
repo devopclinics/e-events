@@ -3,91 +3,34 @@ import { useSearchParams } from 'react-router-dom'
 import RedesignShell, { Icon, Modal, ChannelPreviewFrame } from './redesign/RedesignShell'
 import { useCurrentEvent } from '../hooks/useCurrentEvent'
 import { useEventDetails } from '../hooks/useEventDetails'
+import { useGuests } from '../hooks/useGuests'
 import { api } from '../api'
+import { seatingTerm } from '../seatingTerm'
 import './CommunicationsRedesignPage.css'
 
-/* ── Guest Communication (FestioHub) mock data ──────────────────────── */
+/* ── Announcement audience options ─────────────────────────────────── */
 
-const HUB_FEATURES = [
-  { key: 'hub', label: 'FestioHub', desc: 'Turn on the guest-facing portal guests land on after they RSVP.', on: true },
-  { key: 'announcements', label: 'Event Updates', desc: 'Post announcements guests see inside their Hub feed.', on: true },
-  { key: 'messageHost', label: 'Message Host', desc: 'Let guests send the organizer a private message.', on: true },
-  { key: 'guestChat', label: 'Guest Chat', desc: 'Shared chat space where every guest can see the conversation.', on: false },
-  { key: 'guestPosting', label: 'Guest posting', desc: 'Allow guests to post into Guest Chat themselves, not just read it.', on: false },
+const AUDIENCE_OPTIONS = [
+  { label: 'All guests', value: 'all' },
+  { label: 'Confirmed guests', value: 'attending_only' },
+  { label: 'Declined only', value: 'declined_only' },
+  { label: 'Checked in', value: 'checked_in_only' },
+  { label: 'Not checked in', value: 'not_checked_in' },
 ]
 
-const ANNOUNCEMENTS = [
-  { title: 'Parking has moved to Lot C', audience: 'All guests', reach: 612, sentAt: 'Jul 24', body: 'We have moved overflow parking to Lot C, just north of the main entrance. Signs will be posted starting 6am.' },
-  { title: 'Dress code reminder', audience: 'Confirmed guests', reach: 564, sentAt: 'Jul 20', body: 'A quick reminder that this is a semi-formal event. We look forward to seeing you!' },
-  { title: 'Livestream link is now live', audience: 'All guests', reach: 612, sentAt: 'Jul 15', body: 'Can\'t make it in person? Watch the livestream at festio.app/live/womens-convention-2026.' },
-]
+const AUDIENCE_LABEL = Object.fromEntries(AUDIENCE_OPTIONS.map((o) => [o.value, o.label]))
 
-const AUDIENCES = ['All guests', 'Confirmed guests', 'Declined only', 'Checked in', 'Not checked in']
+function fmtRelTime(iso) {
+  if (!iso) return ''
+  const d = new Date(iso)
+  const diff = Date.now() - d
+  if (diff < 60000) return 'just now'
+  if (diff < 3600000) return `${Math.floor(diff / 60000)}m ago`
+  if (diff < 86400000) return `${Math.floor(diff / 3600000)}h ago`
+  return d.toLocaleDateString(undefined, { month: 'short', day: 'numeric' })
+}
 
-const INBOX_THREADS = [
-  {
-    name: 'Sara Guest0003', initials: 'SG', preview: 'Can I bring a wheelchair companion with me?', unread: true, time: '10m ago', rsvp: 'Confirmed',
-    messages: [
-      { from: 'guest', text: 'Can I bring a wheelchair companion with me? Just want to make sure the venue is accessible.', time: '10m ago' },
-    ],
-  },
-  {
-    name: 'Omar Guest0044', initials: 'OG', preview: 'Thank you for the update on parking!', unread: false, time: '2h ago', rsvp: 'Declined',
-    messages: [
-      { from: 'host', text: 'Overflow parking is now in Lot C, just north of the entrance.', time: '3h ago' },
-      { from: 'guest', text: 'Thank you for the update on parking!', time: '2h ago' },
-    ],
-  },
-  {
-    name: 'Fatima Guest0006', initials: 'FG', preview: 'Is the vegetarian meal option still available?', unread: true, time: 'Yesterday', rsvp: 'Pending',
-    messages: [
-      { from: 'guest', text: 'Is the vegetarian meal option still available? I forgot to select it on my RSVP.', time: 'Yesterday' },
-    ],
-  },
-]
-
-const MOD_MESSAGES = [
-  { name: 'Idris Guest0092', initials: 'IG', text: 'Anyone know a good hotel nearby? Also check out my shop at…', flag: 'Possible spam', hidden: false },
-  { name: 'Zaid Guest0007', initials: 'ZG', text: 'This event looks amazing, can’t wait to see everyone!', flag: null, hidden: true },
-]
-const MOD_VISIBLE_COUNT = 47
-
-/* ── Messages (broadcast + templates) mock data ─────────────────────── */
-
-const CHANNELS = [
-  { key: 'email', label: 'Email', rate: null, sent: 0, failed: 0 },
-  { key: 'sms', label: 'SMS', rate: 89, sent: 9, failed: 1 },
-  { key: 'whatsapp', label: 'WhatsApp', rate: null, sent: 0, failed: 0 },
-  { key: 'mms', label: 'MMS', rate: 100, sent: 1, failed: 0 },
-]
-
-const NEEDS_ATTENTION = [
-  { name: 'Aaliyah Guest0002', initials: 'AG', status: 'warn', label: 'Not sent', reason: 'No phone on file', action: 'Add contact' },
-  { name: 'Hamza Guest0025', initials: 'HG', status: 'warn', label: 'Not sent', reason: 'No phone on file', action: 'Add contact' },
-  { name: 'Zaid Guest0007', initials: 'ZG', status: 'fail', label: 'Failed', reason: 'Carrier rejected — no A2P registration', action: 'Retry' },
-  { name: 'Maryam Guest0009', initials: 'MG', status: 'warn', label: 'Not sent', reason: 'No phone on file', action: 'Add contact' },
-  { name: 'Sara Guest0003', initials: 'SG', status: 'warn', label: 'Not sent', reason: 'No phone on file', action: 'Add contact' },
-]
-
-const SEND_BATCHES = [
-  { when: 'Jul 26, 12:36 AM', sent: 1, failed: 0, open: true, guests: [{ name: 'Karim Guest0308', failed: false }] },
-  { when: 'Jul 21, 1:09 AM', sent: 1, failed: 1, guests: [{ name: 'Noor Guest0071', failed: false }, { name: 'Idris Guest0092', failed: true }] },
-  { when: 'Jul 20, 3:40 AM', sent: 2, failed: 1, guests: [{ name: 'Bilal Guest0106', failed: false }, { name: 'Omar Guest0044', failed: false }, { name: 'Fatima Guest0006', failed: true }] },
-]
-
-const TEMPLATES = [
-  { name: 'Invitation', channels: { email: 'custom', sms: 'default', whatsapp: 'default', mms: 'default' } },
-  { name: 'RSVP Reminder', channels: { email: 'custom', sms: 'custom', whatsapp: 'default', mms: 'default' } },
-  { name: 'Admission Confirmation', channels: { email: 'default', sms: 'default', whatsapp: 'default', mms: 'default' } },
-  { name: 'Post-Event Thank You', channels: { email: 'custom', sms: 'default', whatsapp: 'custom', mms: 'default' } },
-]
-
-const TEMPLATE_AUDIT = [
-  { who: 'Amina Yusuf', what: 'Edited Invitation → Email', when: 'Jul 24, 3:12 PM' },
-  { who: 'Karim Haddad', what: 'Reset RSVP Reminder → SMS to default', when: 'Jul 20, 11:02 AM' },
-]
-
-/* ── Features & Channels mock data ──────────────────────────────────── */
+/* ── Features & Channels config ────────────────────────────────────── */
 
 const ADDON_TOGGLES = [
   { key: 'venueAccess', label: 'Venue Access', desc: 'Zones, multi-zone scans, occupancy analytics.', on: true },
@@ -115,10 +58,10 @@ const CHANNEL_TOGGLE_ROWS = [
 
 /* ── shared bits ─────────────────────────────────────────────────────── */
 
-function Switch({ checked, onChange }) {
+function Switch({ checked, onChange, disabled = false }) {
   return (
-    <label className="rd-switch">
-      <input type="checkbox" checked={checked} onChange={onChange} />
+    <label className={`rd-switch${disabled ? ' rd-switch-disabled' : ''}`}>
+      <input type="checkbox" checked={checked} onChange={onChange} disabled={disabled} />
       <span className="track" /><span className="knob" />
     </label>
   )
@@ -126,50 +69,108 @@ function Switch({ checked, onChange }) {
 
 /* ── Guest Communication (hub) tab ──────────────────────────────────── */
 
-function HubTab({ notify }) {
-  const [features, setFeatures] = useState(() => Object.fromEntries(HUB_FEATURES.map((f) => [f.key, f.on])))
-  const [audience, setAudience] = useState(AUDIENCES[0])
-  const [editingTitle, setEditingTitle] = useState(null)
-  const [openThread, setOpenThread] = useState(INBOX_THREADS[0])
+function HubTab({ eventId, notify }) {
+  const [announcements, setAnnouncements] = useState([])
+  const [annLoading, setAnnLoading] = useState(false)
+  const [annTitle, setAnnTitle] = useState('')
+  const [annBody, setAnnBody] = useState('')
+  const [annAudience, setAnnAudience] = useState('all')
+  const [annSending, setAnnSending] = useState(false)
+  const [editingAnn, setEditingAnn] = useState(null)
+
+  const [threads, setThreads] = useState([])
+  const [threadsLoading, setThreadsLoading] = useState(false)
+  const [openThread, setOpenThread] = useState(null)
+  const [threadMessages, setThreadMessages] = useState([])
+  const [threadLoading, setThreadLoading] = useState(false)
   const [reply, setReply] = useState('')
+  const [replying, setReplying] = useState(false)
 
-  function toggleFeature(key, label) {
-    setFeatures((prev) => {
-      const next = { ...prev, [key]: !prev[key] }
-      notify(`${label} ${next[key] ? 'enabled' : 'disabled'}`)
-      return next
-    })
+  const [chatMessages, setChatMessages] = useState([])
+  const [chatLoading, setChatLoading] = useState(false)
+
+  async function loadAll() {
+    if (!eventId) return
+    setAnnLoading(true); setThreadsLoading(true); setChatLoading(true)
+    try {
+      const [anns, inbox, chat] = await Promise.all([
+        api.listAnnouncements(eventId),
+        api.messageInbox(eventId),
+        api.guestChatMessages(eventId),
+      ])
+      setAnnouncements(anns)
+      setThreads(inbox)
+      setChatMessages(chat)
+    } catch (e) {
+      notify(e.message || 'Guest communication data could not be loaded')
+    } finally {
+      setAnnLoading(false); setThreadsLoading(false); setChatLoading(false)
+    }
   }
 
-  function sendReply() {
-    if (!reply.trim()) return
-    notify(`Reply sent to ${openThread.name}`)
-    setReply('')
+  useEffect(() => { loadAll() }, [eventId])
+
+  async function loadThread(thread) {
+    setOpenThread(thread); setThreadMessages([]); setThreadLoading(true)
+    try {
+      const data = await api.messageThread(eventId, thread.thread_id)
+      setThreadMessages(data.messages || [])
+    } catch (e) { notify(e.message || 'Thread could not be loaded') }
+    finally { setThreadLoading(false) }
   }
+
+  async function sendAnnouncement() {
+    if (!annTitle.trim() || !annBody.trim()) return notify('Title and message are required')
+    setAnnSending(true)
+    try {
+      const result = await api.createAnnouncement(eventId, { title: annTitle.trim(), body: annBody.trim(), audience_type: annAudience, send_in_app: true })
+      setAnnouncements((prev) => [result, ...prev])
+      setAnnTitle(''); setAnnBody('')
+      notify(`Announcement sent · ${result.reached ?? 0} guests reached`)
+    } catch (e) { notify(e.message || 'Announcement could not be sent') }
+    finally { setAnnSending(false) }
+  }
+
+  async function saveAnnEdit(id) {
+    if (!editingAnn) return
+    try {
+      const updated = await api.updateAnnouncement(eventId, id, { title: editingAnn.title, body: editingAnn.body })
+      setAnnouncements((prev) => prev.map((a) => a.id === id ? { ...a, ...updated } : a))
+      setEditingAnn(null); notify('Announcement updated')
+    } catch (e) { notify(e.message || 'Update failed') }
+  }
+
+  async function sendReply() {
+    if (!reply.trim() || !openThread) return
+    setReplying(true)
+    try {
+      const msg = await api.replyMessageThread(eventId, openThread.thread_id, reply.trim())
+      setThreadMessages((prev) => [...prev, msg])
+      setReply('')
+    } catch (e) { notify(e.message || 'Reply could not be sent') }
+    finally { setReplying(false) }
+  }
+
+  async function moderateMessage(msg) {
+    const newStatus = msg.status === 'hidden' ? 'active' : 'hidden'
+    try {
+      const updated = await api.moderateGuestChatMessage(eventId, msg.id, newStatus)
+      setChatMessages((prev) => prev.map((m) => m.id === msg.id ? { ...m, ...updated } : m))
+      notify(newStatus === 'hidden' ? `Message hidden` : `Message restored`)
+    } catch (e) { notify(e.message || 'Moderation action failed') }
+  }
+
+  const flaggedChat = chatMessages.filter((m) => m.status === 'hidden')
+  const visibleChatCount = chatMessages.filter((m) => m.status === 'active').length
 
   return (
     <>
       <div className="cm-credit-row">
-        <button className="cm-credit-pill" onClick={() => notify('Opened Billing to top up credits')}>
-          <Icon name="card" size={12} /> 1,240 credits left
-        </button>
-        <button className="rr-link-btn" onClick={() => notify('Guest communication data refreshed')}>Refresh</button>
-      </div>
-
-      <div className="rr-grid3 cm-toggle-grid">
-        {HUB_FEATURES.map((f) => (
-          <div className="rr-panel cm-toggle-card" key={f.key}>
-            <div className="cm-toggle-top">
-              <strong>{f.label}</strong>
-              <Switch checked={!!features[f.key]} onChange={() => toggleFeature(f.key, f.label)} />
-            </div>
-            <p>{f.desc}</p>
-          </div>
-        ))}
+        <button className="rr-link-btn" onClick={loadAll}>Refresh</button>
       </div>
 
       <div className="rr-section-title">
-        <div><h2>Announcements</h2><p>Post an update to everyone’s Hub feed, or a filtered audience</p></div>
+        <div><h2>Announcements</h2><p>Post an update to everyone's Hub feed, or a filtered audience</p></div>
       </div>
 
       <div className="rd-wide-grid">
@@ -177,15 +178,15 @@ function HubTab({ notify }) {
           <div className="rd-panel-head"><h3>New announcement</h3><p>Guests see this the next time they open their Hub</p></div>
           <div className="rd-panel-body">
             <label className="rd-field-label">Title</label>
-            <input className="rd-field" placeholder="e.g. Parking has moved to Lot C" />
+            <input className="rd-field" value={annTitle} placeholder="e.g. Parking has moved to Lot C" onChange={(e) => setAnnTitle(e.target.value)} />
             <label className="rd-field-label">Message</label>
-            <textarea className="rr-textarea cm-textarea" rows={4} placeholder="Write the update guests will see…" />
+            <textarea className="rr-textarea cm-textarea" rows={4} value={annBody} placeholder="Write the update guests will see…" onChange={(e) => setAnnBody(e.target.value)} />
             <label className="rd-field-label">Audience</label>
-            <select className="rr-select" value={audience} onChange={(e) => setAudience(e.target.value)}>
-              {AUDIENCES.map((a) => <option key={a} value={a}>{a}</option>)}
+            <select className="rr-select" value={annAudience} onChange={(e) => setAnnAudience(e.target.value)}>
+              {AUDIENCE_OPTIONS.map((a) => <option key={a.value} value={a.value}>{a.label}</option>)}
             </select>
-            <button className="rr-btn primary cm-send-btn" onClick={() => notify(`Announcement sent to ${audience}`)}>
-              <Icon name="send" size={14} /> Send announcement
+            <button className="rr-btn primary cm-send-btn" disabled={annSending || !annTitle.trim() || !annBody.trim()} onClick={sendAnnouncement}>
+              <Icon name="send" size={14} /> {annSending ? 'Sending…' : 'Send announcement'}
             </button>
           </div>
         </div>
@@ -193,96 +194,99 @@ function HubTab({ notify }) {
         <div className="rd-panel">
           <div className="rd-panel-head"><h3>Past announcements</h3><p>Reach reflects guests who had the Hub open</p></div>
           <div className="rd-panel-body cm-announce-list">
-            {ANNOUNCEMENTS.map((a) => (
-              <div className="cm-announce-row" key={a.title}>
-                {editingTitle === a.title ? (
+            {annLoading && <div className="rd-rowlink">Loading…</div>}
+            {!annLoading && announcements.map((a) => (
+              <div className="cm-announce-row" key={a.id}>
+                {editingAnn?.id === a.id ? (
                   <div className="cm-announce-edit">
-                    <input className="rd-field" defaultValue={a.title} style={{ marginBottom: 8 }} />
-                    <textarea className="rr-textarea" rows={3} defaultValue={a.body} style={{ marginBottom: 8 }} />
+                    <input className="rd-field" value={editingAnn.title} style={{ marginBottom: 8 }} onChange={(e) => setEditingAnn({ ...editingAnn, title: e.target.value })} />
+                    <textarea className="rr-textarea" rows={3} value={editingAnn.body} style={{ marginBottom: 8 }} onChange={(e) => setEditingAnn({ ...editingAnn, body: e.target.value })} />
                     <div className="rd-row2">
-                      <button className="rr-btn secondary" style={{ flex: 1, justifyContent: 'center' }} onClick={() => setEditingTitle(null)}>Cancel</button>
-                      <button className="rr-btn primary" style={{ flex: 1, justifyContent: 'center' }} onClick={() => { notify(`"${a.title}" updated`); setEditingTitle(null) }}>Save changes</button>
+                      <button className="rr-btn secondary" style={{ flex: 1, justifyContent: 'center' }} onClick={() => setEditingAnn(null)}>Cancel</button>
+                      <button className="rr-btn primary" style={{ flex: 1, justifyContent: 'center' }} onClick={() => saveAnnEdit(a.id)}>Save changes</button>
                     </div>
                   </div>
                 ) : (
                   <>
                     <div>
                       <strong>{a.title}</strong>
-                      <span>{a.audience} · {a.sentAt}</span>
+                      <span>{AUDIENCE_LABEL[a.audience_type] || a.audience_type} · {fmtRelTime(a.sent_at || a.created_at)}</span>
                     </div>
                     <div className="cm-announce-right">
-                      <span className="cm-reach">{a.reach} reached</span>
-                      <button className="rr-link-btn" onClick={() => setEditingTitle(a.title)}>Edit</button>
+                      <button className="rr-link-btn" onClick={() => setEditingAnn({ id: a.id, title: a.title, body: a.body })}>Edit</button>
                     </div>
                   </>
                 )}
               </div>
             ))}
+            {!annLoading && !announcements.length && <div className="rd-rowlink">No announcements yet.</div>}
           </div>
         </div>
       </div>
 
       <div className="rr-section-title">
-        <div><h2>Guest inbox &amp; chat moderation</h2><p>Private messages to the host, and what’s happening in Guest Chat</p></div>
+        <div><h2>Guest inbox &amp; chat moderation</h2><p>Private messages to the host, and what's happening in Guest Chat</p></div>
       </div>
 
       <div className="rd-wide-grid">
         <div className="rd-panel">
           <div className="rd-panel-head"><h3>Guest inbox</h3><p>Private messages sent to the organizer</p></div>
-          <div className="cm-inbox-split">
-            <div className="cm-thread-list">
-              {INBOX_THREADS.map((t) => (
-                <button className={`cm-thread ${openThread.name === t.name ? 'active' : ''}`} key={t.name} onClick={() => setOpenThread(t)}>
-                  <span className="rd-who-dot">{t.initials}</span>
-                  <span className="cm-thread-body">
-                    <span className="cm-thread-top"><strong>{t.name}</strong><small>{t.time}</small></span>
-                    <span className="cm-thread-preview">{t.preview}</span>
-                    <span className="cm-thread-rsvp">{t.rsvp}</span>
-                  </span>
-                  {t.unread && <span className="cm-unread-dot" aria-label="Unread" />}
-                </button>
-              ))}
-            </div>
-            <div className="cm-thread-view">
-              <div className="cm-thread-view-head"><strong>{openThread.name}</strong><span className="rd-status-chip ok">{openThread.rsvp}</span></div>
-              <div className="cm-thread-messages">
-                {openThread.messages.map((m, i) => (
-                  <div key={i} className={`cm-msg ${m.from === 'host' ? 'host' : ''}`}>
-                    <p>{m.text}</p>
-                    <small>{m.time}</small>
-                  </div>
+          {threadsLoading ? <div className="rd-panel-body rd-rowlink">Loading…</div> : threads.length === 0 ? (
+            <div className="rd-panel-body rd-rowlink">No messages from guests yet.</div>
+          ) : (
+            <div className="cm-inbox-split">
+              <div className="cm-thread-list">
+                {threads.map((t) => (
+                  <button className={`cm-thread ${openThread?.thread_id === t.thread_id ? 'active' : ''}`} key={t.thread_id} onClick={() => loadThread(t)}>
+                    <span className="rd-who-dot">{(t.guest_name || '?')[0].toUpperCase()}</span>
+                    <span className="cm-thread-body">
+                      <span className="cm-thread-top"><strong>{t.guest_name}</strong><small>{fmtRelTime(t.last_message_at)}</small></span>
+                      <span className="cm-thread-preview">{t.last_message}</span>
+                      <span className="cm-thread-rsvp">{t.rsvp_status}</span>
+                    </span>
+                    {t.guest_message_count > 0 && <span className="cm-unread-dot" aria-label="Has messages" />}
+                  </button>
                 ))}
               </div>
-              <div className="cm-reply-row">
-                <input className="rr-input" style={{ marginBottom: 0 }} placeholder="Write a reply…" value={reply} onChange={(e) => setReply(e.target.value)} />
-                <button className="rr-btn primary" onClick={sendReply}>Send</button>
+              <div className="cm-thread-view">
+                {openThread ? (
+                  <>
+                    <div className="cm-thread-view-head"><strong>{openThread.guest_name}</strong><span className="rd-status-chip ok">{openThread.rsvp_status}</span></div>
+                    <div className="cm-thread-messages">
+                      {threadLoading && <div className="cm-msg"><p>Loading…</p></div>}
+                      {threadMessages.map((m) => (
+                        <div key={m.id} className={`cm-msg ${m.sender_type === 'organizer' ? 'host' : ''}`}>
+                          <p>{m.body}</p>
+                          <small>{fmtRelTime(m.created_at)}</small>
+                        </div>
+                      ))}
+                    </div>
+                    <div className="cm-reply-row">
+                      <input className="rr-input" style={{ marginBottom: 0 }} placeholder="Write a reply…" value={reply} onChange={(e) => setReply(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && !e.shiftKey && sendReply()} />
+                      <button className="rr-btn primary" disabled={replying || !reply.trim()} onClick={sendReply}>{replying ? '…' : 'Send'}</button>
+                    </div>
+                  </>
+                ) : <div className="rd-rowlink" style={{ padding: 16 }}>Select a conversation to read and reply.</div>}
               </div>
             </div>
-          </div>
+          )}
         </div>
 
         <div className="rd-panel">
-          <div className="rd-panel-head"><h3>Chat moderation</h3><p>{MOD_VISIBLE_COUNT} visible · flagged for review below</p></div>
+          <div className="rd-panel-head"><h3>Chat moderation</h3><p>{visibleChatCount} visible{flaggedChat.length ? ` · ${flaggedChat.length} hidden` : ''}</p></div>
           <div className="rd-panel-body cm-mod-list">
-            {MOD_MESSAGES.map((m) => (
-              <div className="cm-mod-row" key={m.name}>
-                <span className="rd-who-dot">{m.initials}</span>
+            {chatLoading && <div className="rd-rowlink">Loading…</div>}
+            {!chatLoading && flaggedChat.map((m) => (
+              <div className="cm-mod-row" key={m.id}>
+                <span className="rd-who-dot">{(m.sender_name || '?')[0].toUpperCase()}</span>
                 <div className="cm-mod-body">
-                  <div className="cm-mod-top">
-                    <strong>{m.name}</strong>
-                    {m.flag && <span className="rd-status-chip warn">{m.flag}</span>}
-                    {m.hidden && <span className="rd-status-chip fail">Hidden</span>}
-                  </div>
-                  <p>{m.text}</p>
+                  <div className="cm-mod-top"><strong>{m.sender_name}</strong><span className="rd-status-chip fail">Hidden</span></div>
+                  <p>{m.body}</p>
                 </div>
-                <button
-                  className="rr-btn secondary cm-mod-action"
-                  onClick={() => notify(m.hidden ? `Restored message from ${m.name}` : `Hid message from ${m.name}`)}
-                >
-                  {m.hidden ? 'Restore' : 'Hide'}
-                </button>
+                <button className="rr-btn secondary cm-mod-action" onClick={() => moderateMessage(m)}>Restore</button>
               </div>
             ))}
+            {!chatLoading && !flaggedChat.length && <div className="rd-rowlink">No hidden messages.</div>}
           </div>
         </div>
       </div>
@@ -290,10 +294,10 @@ function HubTab({ notify }) {
   )
 }
 
+
 /* ── Broadcast composer ──────────────────────────────────────────────── */
 
 const BROADCAST_TARGETS = ['Everyone', 'Confirmed guests only', 'Not yet responded', 'Checked in', 'No one else (typed recipients only)']
-const GUEST_PICKER = ['Karim Guest0308', 'Noor Guest0071', 'Idris Guest0092', 'Bilal Guest0106', 'Fatima Guest0006', 'Omar Guest0044']
 
 function gsmSegments(text) {
   const isGsm7 = /^[\x00-\x7F£€]*$/.test(text)
@@ -317,16 +321,11 @@ function BroadcastComposer({ notify, onClose, eventId }) {
   const [mmsUrl, setMmsUrl] = useState('')
   const [guestQuery, setGuestQuery] = useState('')
   const [pickedGuests, setPickedGuests] = useState([])
-  const [allGuests, setAllGuests] = useState([])
+  const { guests: allGuests } = useGuests(eventId)
   const [typedRecipients, setTypedRecipients] = useState([])
   const [typedName, setTypedName] = useState('')
   const [typedContact, setTypedContact] = useState('')
   const [costAck, setCostAck] = useState(false)
-
-  useEffect(() => {
-    if (!eventId) { setAllGuests([]); return }
-    api.listGuests(eventId).then(setAllGuests).catch(() => setAllGuests([]))
-  }, [eventId])
 
   const { segments, gsm7, perSegment } = gsmSegments(message)
   const overSegmentLimit = segments > 3
@@ -711,6 +710,17 @@ function SettingsTab({ notify, eventId, event, onEventChanged }) {
   const [routingBusy, setRoutingBusy] = useState(false)
   const [featureBusy, setFeatureBusy] = useState('')
 
+  // Check-in behavior — ported from AdminPage.jsx's CheckoutToggle/WalkInToggle.
+  const [checkoutEnabled, setCheckoutEnabled] = useState(false)
+  const [walkInEnabled, setWalkInEnabled] = useState(false)
+  const [walkInGroupId, setWalkInGroupId] = useState('')
+  const [defaultGuestGroupId, setDefaultGuestGroupId] = useState('')
+  const [sectionModeEnabled, setSectionModeEnabled] = useState(false)
+  const [tableGroups, setTableGroups] = useState([])
+  const [walkInBusy, setWalkInBusy] = useState(false)
+  const [seatingTermValue, setSeatingTermValue] = useState('')
+  const [seatingTermSaving, setSeatingTermSaving] = useState(false)
+
   useEffect(() => {
     if (!event) return
     const policy = event.channel_policy || {}
@@ -725,7 +735,85 @@ function SettingsTab({ notify, eventId, event, onEventChanged }) {
     setThankYou(!!event.post_event_thankyou_enabled)
     setThankYouAudience(({ admitted: 'Checked in', confirmed: 'Confirmed', all: 'All guests' })[event.post_event_thankyou_audience] || 'Checked in')
     setThankYouDelay(event.post_event_thankyou_delay_hours ?? 24)
+    setCheckoutEnabled(!!event.checkout_enabled)
+    setWalkInEnabled(!!event.walk_in_enabled)
+    setWalkInGroupId(event.walk_in_table_group_id || '')
+    setDefaultGuestGroupId(event.default_guest_table_group_id || '')
+    setSectionModeEnabled(!!event.section_mode_enabled)
+    setSeatingTermValue(event.seating_term || '')
   }, [event])
+
+  useEffect(() => {
+    if (!eventId) { setTableGroups([]); return }
+    api.listTableGroups(eventId).then(setTableGroups).catch(() => setTableGroups([]))
+  }, [eventId])
+
+  async function toggleCheckout() {
+    const next = !checkoutEnabled
+    setCheckoutEnabled(next)
+    saveFeature('checkout', { checkout_enabled: next }, () => setCheckoutEnabled(!next))
+    notify(`Check-out ${next ? 'enabled' : 'disabled'}`)
+  }
+
+  async function toggleWalkIn() {
+    if (walkInBusy) return
+    setWalkInBusy(true)
+    try {
+      const updated = await api.setWalkIn(eventId, !walkInEnabled)
+      setWalkInEnabled(!!updated.walk_in_enabled)
+      await onEventChanged?.()
+      notify(`Walk-in registration ${updated.walk_in_enabled ? 'enabled' : 'disabled'}`)
+    } catch (e) {
+      notify(e.message || 'Walk-in setting could not be saved', true)
+    } finally {
+      setWalkInBusy(false)
+    }
+  }
+
+  async function changeWalkInGroup(gid) {
+    setWalkInGroupId(gid)
+    try {
+      const updated = await api.setWalkInGroup(eventId, gid || null)
+      setWalkInGroupId(updated.walk_in_table_group_id || '')
+      await onEventChanged?.()
+    } catch (e) {
+      notify(e.message || 'Walk-in group could not be saved', true)
+    }
+  }
+
+  async function changeDefaultGuestGroup(gid) {
+    setDefaultGuestGroupId(gid)
+    try {
+      const updated = await api.setDefaultGuestGroup(eventId, gid || null)
+      setDefaultGuestGroupId(updated.default_guest_table_group_id || '')
+      await onEventChanged?.()
+      notify(gid ? 'Default group for unassigned guests saved' : 'Default group for unassigned guests cleared')
+    } catch (e) {
+      setDefaultGuestGroupId(event?.default_guest_table_group_id || '')
+      notify(e.message || 'Default guest group could not be saved', true)
+    }
+  }
+
+  async function toggleSectionMode() {
+    const next = !sectionModeEnabled
+    setSectionModeEnabled(next)
+    saveFeature('sectionMode', { section_mode_enabled: next }, () => setSectionModeEnabled(!next))
+    notify(`Section scanning ${next ? 'enabled' : 'disabled'}`)
+  }
+
+  async function saveSeatingTerm() {
+    if (!eventId || seatingTermSaving) return
+    setSeatingTermSaving(true)
+    try {
+      await api.toggleFeatures(eventId, { seating_term: seatingTermValue })
+      await onEventChanged?.()
+      notify(seatingTermValue ? `Now shown as "${seatingTermValue}" instead of "Table".` : 'Reset to "Table".')
+    } catch (e) {
+      notify(e.message || 'Could not save', true)
+    } finally {
+      setSeatingTermSaving(false)
+    }
+  }
 
   async function saveFeature(key, body, revert) {
     if (!eventId || featureBusy) return
@@ -906,6 +994,82 @@ function SettingsTab({ notify, eventId, event, onEventChanged }) {
           )}
         </div>
       </div>
+
+      <div className="rr-section-title">
+        <div><h2>Check-in behavior</h2><p>Walk-ins, section-based scanning, and check-out</p></div>
+      </div>
+
+      <div className="rr-panel cm-settings-card" style={{ marginBottom: 14 }}>
+        <strong>What should we call it?</strong>
+        <p>This event still uses ordinary Seating underneath — only the word "Table" changes, everywhere a guest or staff member sees it (pass, check-in, messages). Leave blank for the default.</p>
+        <div className="rd-row2" style={{ maxWidth: 320 }}>
+          <input className="rr-input" value={seatingTermValue} onChange={(e) => setSeatingTermValue(e.target.value)} placeholder="Table" maxLength={30} />
+          <button className="rr-btn primary" disabled={seatingTermSaving || seatingTermValue === (event?.seating_term || '')} onClick={saveSeatingTerm}>
+            {seatingTermSaving ? 'Saving…' : 'Save'}
+          </button>
+        </div>
+      </div>
+
+      <div className="rr-grid2">
+        <div className="rr-panel cm-toggle-card cm-settings-card">
+          <div className="cm-toggle-top">
+            <strong>Guest check-out</strong>
+            <Switch checked={checkoutEnabled} onChange={toggleCheckout} />
+          </div>
+          <p>Record when guests leave. Adds a Check-out mode to the Scanner; the exit time shows in FestioHub{event?.experience_enabled ? ' and as a check-out step in the experience' : ''}.</p>
+        </div>
+
+        <div className="rr-panel cm-toggle-card cm-settings-card">
+          <div className="cm-toggle-top">
+            <strong>Walk-in guests</strong>
+            <Switch checked={walkInEnabled} onChange={toggleWalkIn} />
+          </div>
+          <p>Let staff register guests who arrive without an invite (Scanner: Manual / Walk-in tab).</p>
+          {walkInEnabled && !sectionModeEnabled && (
+            <div style={{ marginTop: 8 }}>
+              <label className="rd-field-label">Auto-assign walk-ins to {seatingTerm(event, { lower: true })} group</label>
+              <select className="rr-select gr-inline-select" value={walkInGroupId} onChange={(e) => changeWalkInGroup(e.target.value)}>
+                <option value="">— none (seat anywhere) —</option>
+                {tableGroups.map((g) => <option key={g.id} value={g.id}>{g.name}</option>)}
+              </select>
+            </div>
+          )}
+        </div>
+
+        <div className="rr-panel cm-toggle-card cm-settings-card">
+          <div className="cm-toggle-top">
+            <strong>Invited guests without an assignment</strong>
+          </div>
+          <p>At check-in, route known guests who have no table or group into this group. Tables fill in order before the next table is used.</p>
+          <div style={{ marginTop: 8 }}>
+            <label className="rd-field-label">Default {seatingTerm(event, { lower: true })} group</label>
+            <select className="rr-select gr-inline-select" value={defaultGuestGroupId} onChange={(e) => changeDefaultGuestGroup(e.target.value)}>
+              <option value="">— none (seat anywhere) —</option>
+              {tableGroups.map((g) => <option key={g.id} value={g.id}>{g.name}</option>)}
+            </select>
+          </div>
+        </div>
+
+        {tableGroups.length > 0 && (
+          <div className="rr-panel cm-toggle-card cm-settings-card">
+            <div className="cm-toggle-top">
+              <strong>Section scanning</strong>
+              <Switch
+                checked={sectionModeEnabled}
+                onChange={toggleSectionMode}
+                disabled={!sectionModeEnabled && !!event?.venue_access_enabled}
+              />
+            </div>
+            <p>Assign each staff member a section (table group) on the Event Team page. Walk-ins and ungrouped manual check-ins they handle are seated in their section.</p>
+            {!sectionModeEnabled && event?.venue_access_enabled && (
+              <p className="rd-hint" style={{ color: 'var(--danger)' }}>Entry rules is on for this event. Turn it off first — Entry rules and Section scanning can't run on the same event.</p>
+            )}
+            {sectionModeEnabled && (
+              <p className="rd-hint">Each staffer's assigned section replaces the single walk-in group while this is on.</p>
+            )}
+          </div>
+        )}
+      </div>
     </>
   )
 }
@@ -988,10 +1152,7 @@ export default function CommunicationsRedesignPage() {
         </div>
       )}
 
-      {tab === 'hub' && <div className="rr-panel rd-panel-body">
-        <h3>Guest inbox migration in progress</h3>
-        <p>The redesign inbox prototype is not connected to live announcements or replies, so its mutation controls are hidden during Stage C. Use the legacy Guest Communication page for supported inbox operations.</p>
-      </div>}
+      {tab === 'hub' && <HubTab eventId={eventId} notify={notify} />}
       {tab === 'messages' && <MessagesTab eventId={eventId} notify={notify} onPreview={(tpl, ch) => { setPreviewTemplate(tpl); setPreviewChannel(ch || 'email') }} />}
       {tab === 'settings' && <SettingsTab eventId={eventId} event={event} notify={notify} onEventChanged={loadEvent} />}
 

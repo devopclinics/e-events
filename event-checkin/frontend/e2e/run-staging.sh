@@ -51,6 +51,21 @@ request = urllib.request.Request(
 with urllib.request.urlopen(request, timeout=30):
     pass
 
+second_email = f"redesign-e2e-2nd-{secrets.token_hex(5)}@festio.events"
+second_password = "".join(secrets.choice(alphabet) for _ in range(28))
+second_record = firebase_auth.create_user(email=second_email, password=second_password, display_name="Redesign E2E (staff)")
+
+second_payload = json.dumps({"email": second_email, "password": second_password, "returnSecureToken": True}).encode()
+second_request = urllib.request.Request(url, data=second_payload, headers={"Content-Type": "application/json"})
+with urllib.request.urlopen(second_request, timeout=30) as response:
+    second_token = json.load(response)["idToken"]
+second_me_request = urllib.request.Request(
+    "http://localhost:8000/api/auth/me",
+    headers={"Authorization": "Bearer " + second_token},
+)
+with urllib.request.urlopen(second_me_request, timeout=30):
+    pass
+
 async def grant():
     async with AsyncSessionLocal() as db:
         org = await db.scalar(select(Organization).where(Organization.slug == "internal-redesign-qa"))
@@ -59,6 +74,12 @@ async def grant():
         event = await db.scalar(select(Event).where(Event.org_id == org.id))
         user = await db.scalar(select(User).where(User.firebase_uid == record.uid))
         db.add(Membership(org_id=org.id, user_id=user.id, role="owner"))
+        # Second identity joins the same org as a plain "staff" member (not
+        # owner/admin) so the team permissions-matrix test can verify
+        # EventUser-level can_manage_guests actually gates guest mutations,
+        # independent of org role.
+        second_user = await db.scalar(select(User).where(User.firebase_uid == second_record.uid))
+        db.add(Membership(org_id=org.id, user_id=second_user.id, role="staff"))
         await db.commit()
         print(email)
         print(password)
@@ -67,18 +88,23 @@ async def grant():
         print(user.id)
         print(org.id)
         print(org.redesign_cohort)
+        print(second_email)
+        print(second_password)
+        print(second_record.uid)
+        print(second_user.id)
 
 asyncio.run(grant())
 PY
 )
 
-if [[ ${#qa[@]} -ne 7 ]]; then
+if [[ ${#qa[@]} -ne 11 ]]; then
   echo "Temporary QA identity bootstrap failed" >&2
   exit 2
 fi
 
 cleanup() {
-  docker compose exec -T -e QA_FIREBASE_UID="${qa[3]}" -e QA_USER_ID="${qa[4]}" backend python - <<'PY' >/dev/null
+  docker compose exec -T -e QA_FIREBASE_UID="${qa[3]}" -e QA_USER_ID="${qa[4]}" \
+    -e QA_SECOND_FIREBASE_UID="${qa[9]}" -e QA_SECOND_USER_ID="${qa[10]}" backend python - <<'PY' >/dev/null
 import asyncio
 import os
 
@@ -87,23 +113,25 @@ from sqlalchemy import delete, select
 
 from app.auth import _ensure_firebase
 from app.database import AsyncSessionLocal
-from app.models import ApiKey, Membership, Organization, User
+from app.models import ApiKey, EventUser, Membership, Organization, User
 
 _ensure_firebase()
-try:
-    firebase_auth.delete_user(os.environ["QA_FIREBASE_UID"])
-except Exception:
-    pass
+for uid_env in ("QA_FIREBASE_UID", "QA_SECOND_FIREBASE_UID"):
+    try:
+        firebase_auth.delete_user(os.environ[uid_env])
+    except Exception:
+        pass
 
-async def remove():
+async def remove_user(user_id):
     async with AsyncSessionLocal() as db:
-        user = await db.get(User, os.environ["QA_USER_ID"])
+        user = await db.get(User, user_id)
         if not user:
             return
         org_ids = list((await db.execute(
             select(Membership.org_id).where(Membership.user_id == user.id)
         )).scalars())
         await db.execute(delete(ApiKey).where(ApiKey.created_by_user_id == user.id))
+        await db.execute(delete(EventUser).where(EventUser.user_id == user.id))
         await db.execute(delete(Membership).where(Membership.user_id == user.id))
         await db.delete(user)
         for org_id in org_ids:
@@ -111,6 +139,10 @@ async def remove():
             if org and org.slug.startswith("org-"):
                 await db.delete(org)
         await db.commit()
+
+async def remove():
+    await remove_user(os.environ["QA_USER_ID"])
+    await remove_user(os.environ["QA_SECOND_USER_ID"])
 
 asyncio.run(remove())
 PY
@@ -123,6 +155,8 @@ export E2E_PASSWORD="${qa[1]}"
 export E2E_EVENT_ID="${qa[2]}"
 export E2E_REDESIGN_ORG_ID="${qa[5]}"
 export E2E_REDESIGN_ORG_COHORT="${qa[6]}"
+export E2E_SECOND_EMAIL="${qa[7]}"
+export E2E_SECOND_PASSWORD="${qa[8]}"
 export PATH="${node_dir}:${PATH}"
 
 cd "$frontend_dir"

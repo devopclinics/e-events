@@ -373,7 +373,8 @@ export const api = {
   // Seating
   listTables: (eventId) => req('GET', `/events/${eventId}/tables`),
   createTable: (eventId, data) => req('POST', `/events/${eventId}/tables`, data),
-  updateTable: (eventId, tableId, data) => req('PUT', `/events/${eventId}/tables/${tableId}`, data),
+  updateTable: (eventId, tableId, data, ifUnmodifiedSince) =>
+    req('PUT', `/events/${eventId}/tables/${tableId}${ifUnmodifiedSince ? `?if_unmodified_since=${encodeURIComponent(ifUnmodifiedSince)}` : ''}`, data),
   deleteTable: (eventId, tableId) => req('DELETE', `/events/${eventId}/tables/${tableId}`),
 
   // Floor-plan designer (admin, logged-in)

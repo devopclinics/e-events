@@ -1,9 +1,10 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { useSearchParams } from 'react-router-dom'
+import { useNavigate, useSearchParams } from 'react-router-dom'
 import RedesignShell, { Icon, Modal, ConfirmDialog, ChannelPreviewFrame } from './redesign/RedesignShell'
 import { LoadingSkeleton, EmptyState, ErrorRetryState } from './redesign/RedesignPrimitives'
 import { useCurrentEvent } from '../hooks/useCurrentEvent'
 import { useEventDetails } from '../hooks/useEventDetails'
+import { useGuests } from '../hooks/useGuests'
 import { api } from '../api'
 import './GuestsRedesignPage.css'
 
@@ -309,7 +310,7 @@ function GuestsTab({ notify, onView, onEdit, onRemove, onApproveRsvp, onRejectRs
           <Icon name="search" size={14} />
           <input placeholder="Search guests by name…" value={query} onChange={(e) => setQuery(e.target.value)} />
         </div>
-        <button className="rr-btn secondary" onClick={() => notify('Guest filters saved as view')}>
+        <button className="rr-btn secondary" onClick={() => notify('Saved filter views are not available yet')}>
           <Icon name="settings" size={13} /> Save view
         </button>
       </div>
@@ -487,7 +488,13 @@ function GuestsTab({ notify, onView, onEdit, onRemove, onApproveRsvp, onRejectRs
 
 const QUESTION_TYPES = ['Yes / No', 'Short answer', 'Multiple choice']
 const PRESET_QUESTIONS = ['— Choose a preset —', 'Dietary restrictions', 'Plus-one?', 'Song request', 'Transportation needed?']
-const INVITE_THEMES = ['Botanical Gold', 'Modern Mono', 'Midnight Celebration', 'Community Classic']
+const INVITE_THEMES = [
+  { id: 'default', label: 'Teal (Default)' },
+  { id: 'gold', label: 'Gold' },
+  { id: 'rose', label: 'Rose' },
+  { id: 'midnight', label: 'Midnight' },
+  { id: 'forest', label: 'Forest' },
+]
 const CATEGORY_LIMITS = [
   { category: 'Family', max: 4, submitterTable: 'Same as submitter', invitedTable: 'Family — Bride' },
   { category: 'Friends', max: 2, submitterTable: 'Same as submitter', invitedTable: 'Friends — Bride' },
@@ -589,11 +596,12 @@ function ManualInvitePanel({ notify }) {
 }
 
 function InviteTab({ notify, onSendInvites, onPreviewInvite, eventId, event, guests, rsvpQuestions, onQuestionsChanged, onEventChanged }) {
+  const navigate = useNavigate()
   const [rsvpEnabled, setRsvpEnabled] = useState(true)
   const [mode, setMode] = useState('open')
   const [approval, setApproval] = useState(false)
   const [linkCopied, setLinkCopied] = useState(false)
-  const [theme, setTheme] = useState(INVITE_THEMES[0])
+  const [theme, setTheme] = useState(INVITE_THEMES[0].id)
   const [sameEmail, setSameEmail] = useState(false)
   const [multiInvitee, setMultiInvitee] = useState(true)
   const [maxInvitees, setMaxInvitees] = useState(4)
@@ -606,7 +614,31 @@ function InviteTab({ notify, onSendInvites, onPreviewInvite, eventId, event, gue
   const [capacity, setCapacity] = useState('')
   const [inviteMessage, setInviteMessage] = useState('')
   const [saving, setSaving] = useState(false)
+  const [coverBusy, setCoverBusy] = useState(false)
+  const coverFileRef = useRef(null)
   const publicLink = event?.rsvp_token ? `${window.location.origin}/rsvp/${event.rsvp_token}` : 'Generate an RSVP link to begin'
+
+  async function uploadCover(file) {
+    if (!file || !eventId) return
+    setCoverBusy(true)
+    try {
+      await api.uploadCoverImage(eventId, file)
+      await onEventChanged()
+      notify('Cover image uploaded')
+    } catch (e) { notify(e.message || 'Cover image could not be uploaded', true) }
+    finally { setCoverBusy(false); if (coverFileRef.current) coverFileRef.current.value = '' }
+  }
+
+  async function removeCover() {
+    if (!eventId) return
+    setCoverBusy(true)
+    try {
+      await api.deleteCoverImage(eventId)
+      await onEventChanged()
+      notify('Cover image removed')
+    } catch (e) { notify(e.message || 'Cover image could not be removed', true) }
+    finally { setCoverBusy(false) }
+  }
 
   const rsvpCounts = useMemo(() => {
     const total = guests?.length || 0
@@ -623,7 +655,7 @@ function InviteTab({ notify, onSendInvites, onPreviewInvite, eventId, event, gue
     setRsvpEnabled(!!event.rsvp_enabled)
     setMode(event.invite_mode || 'open')
     setApproval(!!event.rsvp_require_approval)
-    setTheme(event.invite_theme || INVITE_THEMES[0])
+    setTheme(event.invite_theme || INVITE_THEMES[0].id)
     setSameEmail(!!event.rsvp_allow_duplicate_emails)
     setMultiInvitee(!!event.rsvp_multi_invitee_enabled)
     setMaxInvitees(event.rsvp_multi_invitee_limit ?? 4)
@@ -651,6 +683,7 @@ function InviteTab({ notify, onSendInvites, onPreviewInvite, eventId, event, gue
       await api.updateInviteSettings(eventId, {
         rsvp_enabled: rsvpEnabled,
         invite_mode: mode,
+        invite_theme: theme,
         rsvp_require_approval: approval,
         rsvp_allow_duplicate_emails: sameEmail,
         rsvp_multi_invitee_enabled: multiInvitee,
@@ -741,8 +774,8 @@ function InviteTab({ notify, onSendInvites, onPreviewInvite, eventId, event, gue
             <a className="rd-hint gr-preview-link" href="#" onClick={(e) => { e.preventDefault(); notify('Invite page preview opened') }}>Preview invite page ↗</a>
 
             <label className="rd-field-label" style={{ marginTop: 14 }}>Invite page theme</label>
-            <select className="rr-select" value={theme} onChange={(e) => { setTheme(e.target.value); notify(`Invite theme set to ${e.target.value}`) }}>
-              {INVITE_THEMES.map((t) => <option key={t}>{t}</option>)}
+            <select className="rr-select" value={theme} onChange={(e) => { setTheme(e.target.value); notify(`Invite theme set to ${INVITE_THEMES.find((t) => t.id === e.target.value)?.label} — click Save RSVP settings to apply`) }}>
+              {INVITE_THEMES.map((t) => <option key={t.id} value={t.id}>{t.label}</option>)}
             </select>
             <button className="rr-btn secondary" style={{ marginTop: 8 }} onClick={() => onPreviewInvite ? onPreviewInvite() : notify('Invite email preview opened')}>
               <Icon name="eye" size={13} /> Preview invitation email
@@ -750,9 +783,10 @@ function InviteTab({ notify, onSendInvites, onPreviewInvite, eventId, event, gue
 
             <label className="rd-field-label" style={{ marginTop: 4 }}>Cover image</label>
             <div className="gr-cover-row">
-              <div className="gr-cover-preview"><Icon name="image" size={18} /></div>
-              <button className="rr-btn secondary" onClick={() => notify('Cover image uploaded')}>Upload</button>
-              <button className="rr-link-btn gr-danger-link" onClick={() => notify('Cover image removed')}>Remove</button>
+              <div className="gr-cover-preview">{event?.invite_cover_image ? <img src={event.invite_cover_image} alt="Cover" style={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: 'inherit' }} /> : <Icon name="image" size={18} />}</div>
+              <input ref={coverFileRef} type="file" accept="image/jpeg,image/png,image/webp,image/gif" hidden onChange={(e) => uploadCover(e.target.files?.[0])} />
+              <button className="rr-btn secondary" disabled={coverBusy} onClick={() => coverFileRef.current?.click()}>{coverBusy ? 'Working…' : 'Upload'}</button>
+              {event?.invite_cover_image && <button className="rr-link-btn gr-danger-link" disabled={coverBusy} onClick={removeCover}>Remove</button>}
             </div>
 
             <div className="rd-toggle-row" style={{ marginTop: 16 }}>
@@ -812,7 +846,7 @@ function InviteTab({ notify, onSendInvites, onPreviewInvite, eventId, event, gue
             <div className="rd-mini-bar" style={{ height: 8, marginTop: 4 }}>
               <i style={{ width: `${rsvpCounts.total ? Math.round((rsvpCounts.confirmed / rsvpCounts.total) * 100) : 0}%` }} />
             </div>
-            <button className="rr-link-btn" style={{ marginTop: 12 }} onClick={() => notify('Full RSVP report opened')}>
+            <button className="rr-link-btn" style={{ marginTop: 12 }} onClick={() => navigate('/event-results-redesign?tab=invitations')}>
               View full RSVP report <Icon name="arrow" size={13} />
             </button>
 
@@ -928,12 +962,11 @@ export default function GuestsRedesignPage() {
   const [toast, setToast] = useState(null)
   const [eventId] = useCurrentEvent()
   const { event, refresh: loadEvent, error: eventError } = useEventDetails(eventId)
-  const [guests, setGuests] = useState([])
+  const { guests: rawGuests, loading: guestsLoading, error: guestsError, refresh: loadGuests } = useGuests(eventId)
+  const guests = useMemo(() => rawGuests.map(adaptGuest), [rawGuests])
   const [households, setHouseholds] = useState([])
   const [rsvpQuestions, setRsvpQuestions] = useState([])
-  const [guestsLoading, setGuestsLoading] = useState(true)
   const [householdsLoading, setHouseholdsLoading] = useState(true)
-  const [guestsError, setGuestsError] = useState('')
   const [householdTarget, setHouseholdTarget] = useState(null)
   const [householdDeleteTarget, setHouseholdDeleteTarget] = useState(null)
   const [householdForm, setHouseholdForm] = useState({ name: '', description: '' })
@@ -976,19 +1009,6 @@ export default function GuestsRedesignPage() {
     window.setTimeout(() => setToast(null), 2600)
   }
 
-  async function loadGuests() {
-    if (!eventId) { setGuests([]); setGuestsLoading(false); return }
-    setGuestsLoading(true)
-    setGuestsError('')
-    try {
-      setGuests((await api.listGuests(eventId)).map(adaptGuest))
-    } catch (e) {
-      setGuestsError(e.message || 'Guests could not be loaded')
-    } finally {
-      setGuestsLoading(false)
-    }
-  }
-
   async function loadHouseholds() {
     if (!eventId) { setHouseholds([]); setHouseholdsLoading(false); return }
     setHouseholdsLoading(true)
@@ -1007,7 +1027,6 @@ export default function GuestsRedesignPage() {
   }
 
   useEffect(() => {
-    loadGuests()
     loadHouseholds()
     loadQuestions().catch((e) => notify(e.message || 'RSVP questions could not be loaded', true))
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -1480,7 +1499,7 @@ export default function GuestsRedesignPage() {
                 </tbody>
               </table>
               <div className="rd-row2">
-                <button className="rr-btn secondary" onClick={() => notify('Error log downloaded')}>Download error log</button>
+                <button className="rr-btn secondary" onClick={() => notify('A downloadable per-row error log is not available yet — see the counts above')}>Download error log</button>
                 <button className="rr-btn primary" onClick={() => { setImportOpen(false); notify(`${importResult.imported} guests imported`) }}>Done</button>
               </div>
             </div>

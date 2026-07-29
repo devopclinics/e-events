@@ -35,12 +35,7 @@ const STATUS_LABEL = { open: 'Open', in_progress: 'In progress', done: 'Done' }
 const BOARD_COLUMNS = ['open', 'in_progress', 'done']
 const BOARD_TITLE = { open: 'Open', in_progress: 'In Progress', done: 'Done' }
 
-// simulated-only detail data (subtasks/attachments/activity aren't wired to
-// the real API in this pass — real task ids won't match these mock keys,
-// so every real task just shows the empty state for these sections).
-const TASK_ATTACHMENTS = {}
-const TASK_SUBTASKS = {}
-const TASK_ACTIVITY = {}
+
 
 function fmtDate(due) {
   if (!due) return null

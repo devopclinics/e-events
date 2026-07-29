@@ -974,6 +974,7 @@ class SeatingTableOut(BaseModel):
     pos_y: Optional[int] = None
     shape: str = "round"
     rotation: int = 0
+    updated_at: Optional[datetime] = None
 
 
 # ── Floor plan (venue layout designer) ───────────────────────────────────────

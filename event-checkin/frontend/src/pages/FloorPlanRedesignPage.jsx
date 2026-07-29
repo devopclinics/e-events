@@ -10,7 +10,7 @@ import './FloorPlanRedesignPage.css'
 // a second mock canvas that can silently diverge.
 export default function FloorPlanRedesignPage() {
   const [eventId] = useCurrentEvent()
-  if (eventId) return <Navigate to={`/floor-plan/${encodeURIComponent(eventId)}`} replace />
+  if (eventId) return <Navigate to={`/floorplan-redesign/${encodeURIComponent(eventId)}`} replace />
   return <RedesignShell topActive="setup" withEventSidebar eventActive="seating">
     <div className="fp-page">
       <div className="fp-header"><div><h2>Floor Plan Editor</h2><p className="fp-subtitle">Select an event before opening its floor plan.</p></div></div>

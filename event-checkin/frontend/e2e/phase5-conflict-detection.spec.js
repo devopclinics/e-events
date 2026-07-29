@@ -163,4 +163,41 @@ test.describe('Phase 5 conflict detection — isolated staging fixture', () => {
       await page.request.delete(`/api/events/${eventId}/members/${me.id}`, { headers: { Authorization: authorization } })
     }
   })
+
+  test('seating table update rejects a stale if_unmodified_since and accepts the current one', async ({ page }) => {
+    const eventId = requiredEnv('E2E_EVENT_ID')
+    let authorization = ''
+    page.on('request', (request) => {
+      if (request.url().includes('/api/') && request.headers().authorization) authorization = request.headers().authorization
+    })
+    await signIn(page)
+    expect(authorization).toMatch(/^Bearer /)
+
+    const created = await (await page.request.post(`/api/events/${eventId}/tables`, {
+      headers: { Authorization: authorization },
+      data: { name: 'Phase5 Conflict Table', capacity: 4 },
+    })).json()
+
+    try {
+      const stale = await page.request.put(`/api/events/${eventId}/tables/${created.id}?if_unmodified_since=2020-01-01T00:00:00`, {
+        headers: { Authorization: authorization },
+        data: { name: 'Should be rejected', capacity: 4 },
+      })
+      expect(stale.status()).toBe(409)
+      expect((await stale.json()).detail).toMatch(/another operator/i)
+
+      const fresh = await page.request.get(`/api/events/${eventId}/tables`, { headers: { Authorization: authorization } })
+      const current = (await fresh.json()).find((t) => t.id === created.id)
+      expect(current.name).toBe('Phase5 Conflict Table') // the rejected write never applied
+
+      const accepted = await page.request.put(`/api/events/${eventId}/tables/${created.id}?if_unmodified_since=${encodeURIComponent(current.updated_at)}`, {
+        headers: { Authorization: authorization },
+        data: { name: 'Applied with the current version', capacity: 4 },
+      })
+      expect(accepted.ok()).toBeTruthy()
+      expect((await accepted.json()).name).toBe('Applied with the current version')
+    } finally {
+      await page.request.delete(`/api/events/${eventId}/tables/${created.id}`, { headers: { Authorization: authorization } })
+    }
+  })
 })

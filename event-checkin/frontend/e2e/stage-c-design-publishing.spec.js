@@ -59,4 +59,35 @@ test.describe('Stage C Design Studio publishing', () => {
     await expect(page.getByText('Rollback is unavailable', { exact: false })).toBeVisible()
     expect(publishes).toBe(1)
   })
+
+  test('page sections save the real per-section page_config contract, not a flat modules map', async ({ page }) => {
+    let savedBody = null
+    await page.route('**/api/events/*/design', async (route) => {
+      if (route.request().method() === 'PUT') savedBody = await route.request().postDataJSON()
+      await route.fulfill({ json: {
+        event_id: 'qa-event', selected_template_id: 'qa-one',
+        theme_config: {}, wording_config: {}, asset_config: {},
+        page_config: savedBody?.page_config || {},
+        is_published: false, updated_at: new Date().toISOString(),
+      } })
+    })
+    await page.route('**/api/events/*/design/outputs', (route) => route.fulfill({ json: { outputs: [] } }))
+
+    await page.goto('/design-studio-redesign')
+    await expect(page.getByRole('heading', { name: 'Design Studio' })).toBeVisible()
+    await page.getByRole('button', { name: 'Event Page' }).click()
+
+    await page.locator('.rd-toggle-row', { hasText: 'Welcome label' }).locator('label.rd-switch').click()
+    await page.getByPlaceholder('Label, e.g. Organized by').fill('Hosted by')
+    await page.getByPlaceholder('CTA label, e.g. Learn more').fill('Learn more')
+    await page.getByPlaceholder('CTA URL').fill('https://example.org')
+    await page.getByRole('button', { name: 'Save page settings' }).click()
+    await expect(page.getByText('Page settings saved', { exact: false })).toBeVisible()
+
+    expect(savedBody.page_config.modules).toBeUndefined()
+    expect(savedBody.page_config.hero.showWelcomeLabel).toBe(false)
+    expect(savedBody.page_config.organizer.label).toBe('Hosted by')
+    expect(savedBody.page_config.about.ctaLabel).toBe('Learn more')
+    expect(savedBody.page_config.about.ctaUrl).toBe('https://example.org')
+  })
 })

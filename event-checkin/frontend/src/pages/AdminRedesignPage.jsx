@@ -37,6 +37,14 @@ function deriveJourneySteps(event, stats) {
   }
 }
 
+const STEP_ROUTE = {
+  'Import your guests': '/guests-redesign',
+  'Turn on the RSVP form': '/guests-redesign?tab=invite',
+  'Send invitations': '/guests-redesign?tab=invite',
+  'Enable check-in with an Event Pass': '/billing-redesign?tab=billing',
+  'Turn on your event extras': '/addons-redesign',
+}
+
 const STATUS_OPTIONS = ['Draft', 'Active', 'Ended']
 const STATUS_HELP = {
   Draft: 'Only you can see this event. Guests can\'t RSVP or receive invites yet.',
@@ -84,6 +92,14 @@ export default function AdminRedesignPage() {
   const [statusWorking, setStatusWorking] = useState(false)
   const [statusError, setStatusError] = useState('')
   const [checklistOpen, setChecklistOpen] = useState(true)
+  const [qrBusy, setQrBusy] = useState(false)
+  const [importBusy, setImportBusy] = useState(false)
+  const importFileRef = useRef(null)
+  const [sourceUrl, setSourceUrl] = useState('')
+  const [sourceInterval, setSourceInterval] = useState(60)
+  const [sourceSaveBusy, setSourceSaveBusy] = useState(false)
+  const [syncBusy, setSyncBusy] = useState(false)
+  const [syncResult, setSyncResult] = useState('')
   const [checklistDismissed, setChecklistDismissed] = useState(false)
   const [manageOpen, setManageOpen] = useState(false)
   const [editOpen, setEditOpen] = useState(false)
@@ -130,6 +146,11 @@ export default function AdminRedesignPage() {
     if (event?.status) setStatus(event.status.charAt(0).toUpperCase() + event.status.slice(1))
   }, [event?.status])
 
+  useEffect(() => {
+    setSourceUrl(event?.source_url || '')
+    setSourceInterval(event?.source_sync_interval_seconds || 60)
+  }, [event?.id, event?.source_url, event?.source_sync_interval_seconds])
+
   function notify(message, isError = false) {
     setToast(message)
     window.setTimeout(() => setToast(''), 2600)
@@ -162,6 +183,50 @@ export default function AdminRedesignPage() {
     } finally {
       setStatusWorking(false)
     }
+  }
+
+  async function handleImportFile(file) {
+    if (!file || !event?.id) return
+    setImportBusy(true)
+    try {
+      const result = await api.uploadGuests(event.id, file)
+      setGuests(await api.listGuests(event.id))
+      notify(`${result.added ?? result.imported ?? 0} guest${(result.added ?? result.imported) === 1 ? '' : 's'} imported`)
+    } catch (e) { notify(e.message || 'Import failed', true) }
+    finally { setImportBusy(false); if (importFileRef.current) importFileRef.current.value = '' }
+  }
+
+  async function saveSource(nextUrl, nextInterval) {
+    if (!event?.id) return
+    setSourceSaveBusy(true)
+    try {
+      const updated = await api.updateSource(event.id, { source_url: nextUrl, source_sync_interval_seconds: Number(nextInterval) || 60 })
+      setEvent(updated)
+      notify(nextUrl ? 'Spreadsheet link saved' : 'Spreadsheet link cleared')
+    } catch (e) { notify(e.message || 'Spreadsheet link could not be saved', true) }
+    finally { setSourceSaveBusy(false) }
+  }
+
+  async function toggleSourceSync(enabled) {
+    if (!event?.id) return
+    try {
+      const updated = await api.updateSource(event.id, { source_sync_enabled: enabled })
+      setEvent(updated)
+      notify(enabled ? 'Sync turned on' : 'Sync paused — the spreadsheet will not be polled')
+    } catch (e) { notify(e.message || 'Sync could not be updated', true) }
+  }
+
+  async function syncSourceNow() {
+    if (!event?.id) return
+    setSyncBusy(true)
+    try {
+      const result = await api.syncNow(event.id)
+      setGuests(await api.listGuests(event.id))
+      await refreshEvent()
+      setSyncResult(`+${result.added} new`)
+      notify(`Synced: ${result.added} added, ${result.skipped} skipped`)
+    } catch (e) { notify(e.message || 'Sync failed', true) }
+    finally { setSyncBusy(false) }
   }
 
   const currentStep = journeySteps.find((s) => !s.done)
@@ -226,7 +291,7 @@ export default function AdminRedesignPage() {
 
       {event && event.message_credits < 100 && (
         <div className="rr-credit-warning">
-          <Icon name="info" size={14}/> Message credits are low — <b>{event.message_credits} left</b>. Sends may pause once you run out. <button onClick={() => notify('Opened Billing to top up credits')}>Top up in Billing <Icon name="arrow" size={12}/></button>
+          <Icon name="info" size={14}/> Message credits are low — <b>{event.message_credits} left</b>. Sends may pause once you run out. <button onClick={() => navigate('/billing-redesign?tab=billing')}>Top up in Billing <Icon name="arrow" size={12}/></button>
         </div>
       )}
 
@@ -258,7 +323,7 @@ export default function AdminRedesignPage() {
                 <span className="rr-eyebrow">✨ Next best step</span>
                 <h3>{currentStep.label}</h3>
                 {currentStep.hint && <p>{currentStep.hint}</p>}
-                <button className="rr-btn primary" onClick={() => notify(`${currentStep.label} — opened`)}>Continue <Icon name="arrow" size={14}/></button>
+                <button className="rr-btn primary" onClick={() => STEP_ROUTE[currentStep.label] ? navigate(STEP_ROUTE[currentStep.label]) : notify(`${currentStep.label} — opened`)}>Continue <Icon name="arrow" size={14}/></button>
               </div>
               <JourneyIllustration/>
             </div>
@@ -289,7 +354,7 @@ export default function AdminRedesignPage() {
           <div className="rr-health-head"><h2>Setup progress</h2><Icon name="info" size={13}/></div>
           <HealthRing pct={healthPct}/>
           <p>{healthPct === 100 ? <strong>Your event is fully set up.</strong> : <><strong>{journeySteps.length - journeySteps.filter((s) => s.done).length} step(s) remaining.</strong> Finish these to get your event fully ready.</>}</p>
-          <button className="rr-link-btn" onClick={() => notify('Health checklist opened')}>View health checklist <Icon name="arrow" size={13}/></button>
+          <button className="rr-link-btn" onClick={() => setChecklistOpen(true)}>View health checklist <Icon name="arrow" size={13}/></button>
         </div>
       </div>
 
@@ -312,15 +377,23 @@ export default function AdminRedesignPage() {
           <div className="rr-quick-big">{stats ? stats.total : '—'}<small>Total guests</small></div>
           <div className="rr-quick-sub teal">{stats ? `${stats.admitted} admitted (${stats.total ? Math.round((stats.admitted / stats.total) * 100) : 0}%)` : ''}</div>
           <div className="rr-quick-actions-row">
-            <button onClick={() => notify('Guests tab opened')}>Manage guests <Icon name="arrow" size={13}/></button>
-            <button onClick={() => notify(`Generating QR codes for ${stats ? stats.total - stats.qr : 0} guests without one`)}>Generate QR codes</button>
+            <button onClick={() => navigate('/guests-redesign')}>Manage guests <Icon name="arrow" size={13}/></button>
+            <button disabled={qrBusy || !event?.id} onClick={async () => {
+              setQrBusy(true)
+              try {
+                const result = await api.generateQR(event.id)
+                setGuests(await api.listGuests(event.id))
+                notify(`${result.generated} QR code${result.generated === 1 ? '' : 's'} generated`)
+              } catch (e) { notify(e.message || 'QR codes could not be generated', true) }
+              finally { setQrBusy(false) }
+            }}>{qrBusy ? 'Generating…' : 'Generate QR codes'}</button>
           </div>
         </div>
         <div className="rr-panel rr-quick highlight">
           <div className="rr-quick-head"><span className="rr-quick-icon amber"><Icon name="send" size={16}/></span><h3>Invitations</h3></div>
           <div className="rr-quick-big">{stats ? stats.invited : '—'}<small>Invitation{stats?.invited === 1 ? '' : 's'} sent</small></div>
           <div className="rr-quick-sub amber">{stats ? `${stats.total - stats.invited} Not sent yet` : ''}</div>
-          <button onClick={() => notify('Invite composer opened')}>Send more invites <Icon name="arrow" size={13}/></button>
+          <button onClick={() => navigate('/guests-redesign?tab=invite')}>Send more invites <Icon name="arrow" size={13}/></button>
         </div>
         <div className="rr-panel rr-quick">
           <div className="rr-quick-head"><span className="rr-quick-icon teal"><Icon name="ticket" size={16}/></span><h3>Check-in ready</h3></div>
@@ -329,13 +402,13 @@ export default function AdminRedesignPage() {
             <div className={event?.is_paid ? 'ok' : 'warn'}><Icon name={event?.is_paid ? 'check' : 'info'} size={12}/> {event?.is_paid ? 'Event Pass ready' : 'No Event Pass yet'}</div>
             <div className={event?.rsvp_enabled ? 'ok' : 'warn'}><Icon name={event?.rsvp_enabled ? 'check' : 'info'} size={12}/> {event?.rsvp_enabled ? 'RSVP form enabled' : 'RSVP form not enabled'}</div>
           </div>
-          <button onClick={() => notify('Check-in setup opened')}>Review setup <Icon name="arrow" size={13}/></button>
+          <button onClick={() => navigate(!event?.is_paid ? '/billing-redesign?tab=billing' : !event?.rsvp_enabled ? '/guests-redesign?tab=invite' : '/scanner-redesign')}>Review setup <Icon name="arrow" size={13}/></button>
         </div>
         <div className="rr-panel rr-quick">
           <div className="rr-quick-head"><span className="rr-quick-icon teal"><Icon name="team" size={16}/></span><h3>Team tasks</h3></div>
           <div className="rr-quick-big">{tasksRemaining ?? '—'}<small>Tasks remaining</small></div>
           <div className="rr-quick-sub amber">{tasksOverdue ? `${tasksOverdue} Overdue` : ''}</div>
-          <button onClick={() => notify('Tasks opened')}>View tasks <Icon name="arrow" size={13}/></button>
+          <button onClick={() => navigate('/team-redesign?tab=tasks')}>View tasks <Icon name="arrow" size={13}/></button>
         </div>
       </div>
 
@@ -379,9 +452,10 @@ export default function AdminRedesignPage() {
             </summary>
             <div className="rd-path-body">
               <div className="rd-path-body-inner">
+                <input ref={importFileRef} type="file" accept=".csv,.xlsx,.xls" hidden onChange={(e) => handleImportFile(e.target.files?.[0])}/>
                 <div className="rd-row2" style={{ marginBottom: 9 }}>
-                  <button className="rr-btn secondary" style={{ flex: 1, justifyContent: 'center', height: 34 }} onClick={() => notify('File picker opened')}>Choose file</button>
-                  <button className="rr-btn secondary" style={{ justifyContent: 'center', height: 34 }} onClick={() => notify('Template downloaded')}>Get template</button>
+                  <button className="rr-btn secondary" disabled={importBusy || !event?.id} style={{ flex: 1, justifyContent: 'center', height: 34 }} onClick={() => importFileRef.current?.click()}>{importBusy ? 'Importing…' : 'Choose file'}</button>
+                  <button className="rr-btn secondary" style={{ justifyContent: 'center', height: 34 }} onClick={() => api.downloadGuestTemplate(event.id, 'xlsx').catch((e) => notify(e.message || 'Template download failed', true))}>Get template</button>
                 </div>
                 <div className="rd-format-row"><span className="rd-fmt">.CSV</span><span className="rd-fmt">.XLSX</span><span className="rd-fmt">.XLS</span></div>
                 <div className="rd-hint" style={{ marginTop: 8 }}>Needs first_name, last_name — email and phone optional.</div>
@@ -389,34 +463,40 @@ export default function AdminRedesignPage() {
             </div>
           </details>
 
-          <details className="rd-path" open>
+          <details className="rd-path" open={!!event?.source_url}>
             <summary>
               <span className="rd-path-icon"><Icon name="cloud" size={14}/></span>
               <span style={{ flex: 1 }}>
                 <span className="rd-path-title">Live spreadsheet sync</span>
                 <div className="rd-path-sub">Checks the link and adds new guests automatically</div>
               </span>
-              <span className="rd-path-badge">On · every 60s</span>
+              <span className="rd-path-badge">{event?.source_url ? (event?.source_sync_enabled !== false ? `On · every ${event.source_sync_interval_seconds || 60}s` : 'Paused') : 'Not connected'}</span>
             </summary>
             <div className="rd-path-body">
               <div className="rd-path-body-inner">
                 <label className="rd-field-label">Share link</label>
-                <input className="rd-field" defaultValue="https://docs.google.com/spreadsheets/d/1kX9…/edit" readOnly/>
+                <input className="rd-field" value={sourceUrl} onChange={(e) => setSourceUrl(e.target.value)} placeholder="https://docs.google.com/spreadsheets/d/…"/>
                 <div className="rd-format-row" style={{ margin: '-2px 0 11px' }}>
                   <span className="rd-fmt">Google Sheets</span><span className="rd-fmt">OneDrive</span><span className="rd-fmt">SharePoint</span><span className="rd-fmt">Dropbox</span>
                 </div>
                 <div className="rd-toggle-row">
                   <span style={{ fontSize: 12, fontWeight: 600 }}>Sync on</span>
-                  <label className="rd-switch"><input type="checkbox" defaultChecked/><span className="track"/><span className="knob"/></label>
+                  <label className="rd-switch"><input type="checkbox" checked={event?.source_sync_enabled !== false} onChange={(e) => toggleSourceSync(e.target.checked)}/><span className="track"/><span className="knob"/></label>
                 </div>
                 <div className="rd-row2">
-                  <button className="rr-btn secondary" style={{ flex: 1, justifyContent: 'center', height: 34 }} onClick={() => notify('Syncing now')}>Sync now</button>
-                  <button className="rr-btn secondary" style={{ justifyContent: 'center', height: 34 }} onClick={() => notify('Link cleared')}>Clear link</button>
+                  <button className="rr-btn secondary" style={{ flex: 1, justifyContent: 'center', height: 34 }}
+                    disabled={sourceUrl.trim() === (event?.source_url || '') && Number(sourceInterval) === (event?.source_sync_interval_seconds || 60)}
+                    onClick={() => saveSource(sourceUrl.trim(), sourceInterval)}>{sourceSaveBusy ? 'Saving…' : 'Save link'}</button>
+                  <button className="rr-btn secondary" style={{ justifyContent: 'center', height: 34 }} disabled={syncBusy || !event?.source_url || event?.source_sync_enabled === false} onClick={syncSourceNow}>{syncBusy ? 'Syncing…' : 'Sync now'}</button>
+                  {event?.source_url && <button className="rr-btn secondary" style={{ justifyContent: 'center', height: 34 }} onClick={() => { setSourceUrl(''); saveSource('', sourceInterval) }}>Clear link</button>}
                 </div>
-                <div className="rd-synclog">
-                  <span>Last synced <b style={{ color: 'var(--ink)' }}>2 min ago</b></span>
-                  <span style={{ color: 'var(--success)' }}>+0 new</span>
-                </div>
+                {event?.source_url && (
+                  <div className="rd-synclog">
+                    <span>Last synced <b style={{ color: 'var(--ink)' }}>{event.source_last_sync_at ? new Date(event.source_last_sync_at).toLocaleString() : 'never'}</b></span>
+                    {syncResult && <span style={{ color: 'var(--success)' }}>{syncResult}</span>}
+                  </div>
+                )}
+                {event?.source_last_error && <div className="rd-hint" style={{ color: 'var(--danger)' }}>{event.source_last_error}</div>}
               </div>
             </div>
           </details>

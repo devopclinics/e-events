@@ -160,3 +160,27 @@
 }
 .ad-seat.empty { cursor: pointer; }
 .ad-seat.empty:hover { border-color: var(--rr-accent); background: #f0f7ff; }
+
+/* ── Per-seat assignment chart ───────────────────────────────────────── */
+.ad-chart-section { padding-top: 4px; border-top: 1px solid var(--line-soft); margin-top: 6px; }
+.ad-chart-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 12px; margin-top: 14px; }
+.ad-chart-card { padding: 0; overflow: hidden; }
+.ad-chart-card-head { display: flex; justify-content: space-between; align-items: center; padding: 10px 12px; background: var(--surface-2); font-size: 12px; font-weight: 700; color: var(--ink); }
+.ad-chart-card-head small { font-weight: 500; color: var(--faint); }
+.ad-chart-seats { max-height: 220px; overflow-y: auto; display: flex; flex-direction: column; }
+.ad-chart-seat { display: flex; align-items: center; gap: 8px; padding: 7px 12px; border: 0; border-top: 1px solid var(--line-soft); background: none; width: 100%; text-align: left; font-size: 12px; cursor: pointer; color: var(--ink); }
+.ad-chart-seat:first-child { border-top: 0; }
+.ad-chart-seat.empty { color: var(--teal); font-style: italic; }
+.ad-chart-seat.filled:hover { background: color-mix(in srgb, var(--danger) 8%, transparent); }
+.ad-chart-seat.empty:hover { background: color-mix(in srgb, var(--teal) 8%, transparent); }
+.ad-chart-seat-num { width: 20px; flex: none; font-family: ui-monospace, monospace; font-size: 10px; color: var(--faint); }
+.ad-chart-seat-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ad-chart-seat-empty { flex: 1; }
+.ad-chart-tag { font-size: 9px; font-weight: 700; text-transform: uppercase; padding: 2px 6px; border-radius: 100px; background: var(--surface-3); color: var(--muted); }
+.ad-chart-tag.ok { background: color-mix(in srgb, var(--success) 15%, transparent); color: var(--success); }
+.ad-chart-tag.warn { background: color-mix(in srgb, var(--warn, #b45309) 15%, transparent); color: var(--warn, #b45309); }
+.ad-chart-picker { display: flex; flex-direction: column; gap: 4px; max-height: 280px; overflow-y: auto; }
+.ad-chart-picker-row { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 8px 10px; border: 1px solid var(--line-soft); border-radius: 8px; background: none; text-align: left; cursor: pointer; }
+.ad-chart-picker-row:hover { border-color: var(--teal); }
+.ad-chart-picker-name { display: flex; flex-direction: column; gap: 1px; font-size: 12px; color: var(--ink); }
+.ad-chart-picker-name small { font-size: 10px; color: var(--faint); font-weight: 400; }

@@ -1,5 +1,11 @@
 import { test, expect } from '@playwright/test'
-import { expectQaEventLoaded, openGuestActions, signIn } from './helpers.js'
+import { expectQaEventLoaded, fieldNear, openGuestActions, signIn } from './helpers.js'
+
+// Minimal valid 1x1 PNG, matches the fixture used to live-verify uploadCoverImage this session.
+const ONE_PX_PNG = Buffer.from(
+  'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=',
+  'base64',
+)
 
 test.describe.configure({ mode: 'serial' })
 
@@ -241,6 +247,72 @@ test.describe('Stage B guest households and RSVP configuration — isolated stag
         data: { rsvp_require_approval: false, rsvp_enabled: originallyEnabled },
       })
       expect(revert.ok()).toBeTruthy()
+    }
+  })
+
+  test('invite theme selection actually persists through the save contract', async ({ page }) => {
+    await openGuests(page)
+    await page.getByRole('button', { name: 'Invites & RSVP', exact: true }).click()
+    const withRsvpCard = page.locator('.gr-mode-card').filter({ hasText: 'With RSVP' })
+    const originallyEnabled = await withRsvpCard.locator('input').isChecked()
+    if (!originallyEnabled) await withRsvpCard.click()
+    const themeSelect = fieldNear(page, 'Invite page theme')
+    await expect(themeSelect).toBeVisible()
+    const original = await themeSelect.inputValue()
+    const next = original === 'gold' ? 'rose' : 'gold'
+
+    try {
+      await themeSelect.selectOption(next)
+      await page.getByRole('button', { name: 'Save RSVP settings', exact: true }).click()
+      await expect(page.getByText('RSVP settings saved', { exact: true })).toBeVisible()
+
+      await page.reload()
+      await expectQaEventLoaded(page)
+      await page.getByRole('button', { name: 'Invites & RSVP', exact: true }).click()
+      // Regression check for the bug found this session: the select used to update
+      // local UI state and show a toast without ever including invite_theme in the
+      // save payload, so the choice silently never reached the server.
+      await expect(fieldNear(page, 'Invite page theme')).toHaveValue(next)
+    } finally {
+      await fieldNear(page, 'Invite page theme').selectOption(original)
+      await page.getByRole('button', { name: 'Save RSVP settings', exact: true }).click()
+      await expect(page.getByText('RSVP settings saved', { exact: true })).toBeVisible()
+      if (!originallyEnabled) {
+        await page.getByRole('button', { name: 'Invites & RSVP', exact: true }).click()
+        await page.locator('.gr-mode-card').filter({ hasText: 'Skip RSVP' }).click()
+      }
+    }
+  })
+
+  test('cover image upload and removal use the real event contract', async ({ page }) => {
+    await openGuests(page)
+    await page.getByRole('button', { name: 'Invites & RSVP', exact: true }).click()
+    const withRsvpCard = page.locator('.gr-mode-card').filter({ hasText: 'With RSVP' })
+    const originallyEnabled = await withRsvpCard.locator('input').isChecked()
+    if (!originallyEnabled) await withRsvpCard.click()
+
+    try {
+      await page.locator('input[type="file"]').setInputFiles({
+        name: 'e2e-cover.png', mimeType: 'image/png', buffer: ONE_PX_PNG,
+      })
+      const uploadResponse = page.waitForResponse((response) =>
+        /\/upload-cover$/.test(response.url()) && response.request().method() === 'POST'
+      )
+      await uploadResponse
+      const preview = page.locator('.gr-cover-preview img')
+      await expect(preview).toBeVisible()
+      await expect(preview).toHaveAttribute('src', /.+/)
+
+      const removeResponse = page.waitForResponse((response) =>
+        /\/upload-cover$/.test(response.url()) && response.request().method() === 'DELETE'
+      )
+      await page.getByRole('button', { name: 'Remove', exact: true }).click()
+      await removeResponse
+      await expect(page.locator('.gr-cover-preview img')).toHaveCount(0)
+    } finally {
+      if (!originallyEnabled) {
+        await page.locator('.gr-mode-card').filter({ hasText: 'Skip RSVP' }).click()
+      }
     }
   })
 })

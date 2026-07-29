@@ -8,11 +8,7 @@ export function requiredEnv(name) {
   return value
 }
 
-export async function signIn(page) {
-  const email = requiredEnv('E2E_EMAIL')
-  const password = requiredEnv('E2E_PASSWORD')
-  const eventId = requiredEnv('E2E_EVENT_ID')
-
+export async function signInAs(page, email, password, eventId) {
   await page.goto('/login')
   await page.getByLabel('Email').fill(email)
   await page.getByLabel('Password').fill(password)
@@ -31,6 +27,10 @@ export async function signIn(page) {
     localStorage.setItem('eq.currentEventId', id)
     localStorage.setItem('preferredView', 'admin')
   }, eventId)
+}
+
+export async function signIn(page) {
+  await signInAs(page, requiredEnv('E2E_EMAIL'), requiredEnv('E2E_PASSWORD'), requiredEnv('E2E_EVENT_ID'))
 }
 
 export async function expectQaEventLoaded(page) {

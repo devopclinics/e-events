@@ -1,10 +1,10 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import RedesignShell, { Icon, Modal } from './redesign/RedesignShell'
 import { useCurrentEvent } from '../hooks/useCurrentEvent'
 import { api } from '../api'
 import './DesignStudioRedesignPage.css'
 
-const TABS = ['Templates', 'Event Page', 'Publish']
+const TABS = ['Templates', 'Flyer', 'Event Page', 'Festio Pass', 'Email Preview', 'Publish']
 
 const TEMPLATE_CATEGORIES = ['All', 'Wedding', 'Community', 'Conference', 'Celebration']
 const TEMPLATE_STYLES = ['All styles', 'Warm', 'Minimal', 'Dark', 'Playful']
@@ -16,47 +16,93 @@ const TEMPLATES = [
   { name: 'Community Classic', category: 'Community', style: 'Warm', tier: 'free', tone: 'Friendly, accessible', selected: false, surfaces: ['Event Page', 'Flyer'] },
 ]
 
-const FLYER_TEMPLATES = ['Classic Poster', 'Photo Banner', 'Minimal Card', 'Bold Type']
-
+// Real design-service contract (confirmed against DesignStudioPage.jsx, the
+// already-shipped legacy page these records are shared live with — getting
+// these keys wrong would write malformed data into real event-design rows).
 const WORDING_FIELDS = [
-  { key: 'headline', label: 'Headline', value: "Women's Convention 2026" },
-  { key: 'subheadline', label: 'Subheadline', value: 'A day of connection, learning, and community' },
-  { key: 'dateLine', label: 'Date line', value: 'Saturday, July 11, 2026' },
-  { key: 'venueLine', label: 'Venue line', value: 'Masjid Mumineen · Doors at 9:00 AM' },
-  { key: 'ctaLabel', label: 'RSVP button label', value: 'Reserve your seat' },
-  { key: 'footerNote', label: 'Footer note', value: 'Free admission · Limited seating' },
+  ['inviteLabel', 'Invite label', "You're invited"],
+  ['eventTitle', 'Event title', ''],
+  ['eventSubtitle', 'Subtitle', ''],
+  ['hostName', 'Host name', ''],
+  ['hostWebsite', 'Host website', ''],
+  ['date', 'Date', ''],
+  ['time', 'Time', ''],
+  ['venue', 'Venue', ''],
+  ['address', 'Address', ''],
+  ['rsvpBy', 'RSVP by', ''],
+  ['rsvpNote', 'RSVP note', ''],
+  ['phone', 'Phone', ''],
+  ['email', 'Email', ''],
+  ['dressCode', 'Dress code', ''],
+  ['admissionNote', 'Admission note', 'Present this pass at the door for entry.'],
+  ['parkingNote', 'Parking note', ''],
+  ['customMessage', 'Custom message', ''],
+  ['aboutWebsite', 'About / website', ''],
+  ['footerMessage', 'Footer message', ''],
+  ['footerNote', 'Footer note', ''],
+]
+const DEFAULT_WORDING = Object.fromEntries(WORDING_FIELDS.map(([key, , fallback]) => [key, fallback]))
+
+const COLOR_FIELDS = [
+  { key: 'primary', label: 'Primary' },
+  { key: 'accent', label: 'Accent' },
+  { key: 'background', label: 'Background' },
+  { key: 'surface', label: 'Surface' },
+  { key: 'text', label: 'Text' },
+]
+const DEFAULT_COLORS = { primary: '#0f766e', accent: '#b6672f', background: '#faf6ee', surface: '#ffffff', text: '#211a13' }
+
+const FONT_OPTIONS = [
+  { id: 'modern-sans', label: 'Modern Sans' },
+  { id: 'classic-serif', label: 'Classic Serif' },
+  { id: 'elegant-serif', label: 'Elegant Serif' },
+  { id: 'display-rounded', label: 'Display Rounded' },
+  { id: 'bold-sans', label: 'Bold Sans' },
 ]
 
-const FLYER_COLORS = [
-  { key: 'primary', label: 'Primary', value: '#b6672f' },
-  { key: 'secondary', label: 'Secondary', value: '#2c2318' },
-  { key: 'accent', label: 'Accent', value: '#4a8a63' },
-  { key: 'background', label: 'Background', value: '#faf6ee' },
-  { key: 'text', label: 'Text', value: '#211a13' },
+const FLYER_TEXT_SCALES = [
+  { value: 0.9, label: 'Small' },
+  { value: 1, label: 'Medium' },
+  { value: 1.15, label: 'Large' },
+  { value: 1.3, label: 'X-Large' },
+  { value: 1.45, label: 'XX-Large' },
 ]
 
-const FONT_PAIRINGS = ['Playfair + Inter', 'Space Grotesk + Inter', 'Fraunces + Karla', 'Poppins + Poppins']
+const FLYER_SIZES = [
+  { id: 'square', label: 'Square (social)' },
+  { id: 'story', label: 'Story (9:16)' },
+  { id: 'portrait', label: 'Portrait' },
+  { id: 'a5', label: 'A5 (print)' },
+  { id: 'a4', label: 'A4 (print)' },
+]
+
+const QR_POSITIONS = [
+  { id: 'bottom-right', label: 'Bottom right' },
+  { id: 'bottom-left', label: 'Bottom left' },
+  { id: 'center-bottom', label: 'Bottom center' },
+]
+
+const DEFAULT_IMAGE_POSITION = { x: 50, y: 50, zoom: 115, rotate: 0, zoneScale: 100, boxX: 0, boxY: 0 }
+const DEFAULT_FLYER_SETTINGS = { size: 'portrait', qr: true, rsvpLink: true, qrPosition: 'bottom-right' }
+const DEFAULT_PASS_OPTIONS = { showTable: true, showSeat: true, showHubButton: true }
 
 const CROP_SLIDERS = [
-  { key: 'x', label: 'Horizontal position', value: 50 },
-  { key: 'y', label: 'Vertical position', value: 40 },
-  { key: 'zoom', label: 'Zoom', value: 110 },
-  { key: 'rotate', label: 'Rotate', value: 0 },
+  { key: 'x', label: 'Horizontal position', min: 0, max: 100 },
+  { key: 'y', label: 'Vertical position', min: 0, max: 100 },
+  { key: 'zoom', label: 'Zoom', min: 100, max: 180 },
+  { key: 'rotate', label: 'Rotate', min: -180, max: 180 },
 ]
 
-const RECENT_FILES = [
-  { name: 'flyer-v3.png', size: '1.2 MB', when: '2 hours ago' },
-  { name: 'flyer-v2.pdf', size: '840 KB', when: 'Yesterday' },
-]
-
-const PAGE_MODULES = [
-  { key: 'hero', label: 'Hero banner', visible: true, requires: null },
-  { key: 'organizer', label: 'Organizer info', visible: true, requires: null },
-  { key: 'details', label: 'Event details', visible: true, requires: null },
-  { key: 'about', label: 'About / custom CTA', visible: true, requires: null },
-  { key: 'seating', label: 'Seating preview', visible: false, requires: 'Seating add-on' },
-  { key: 'feed', label: 'FestioHub live feed', visible: true, requires: 'FestioHub enabled' },
-]
+// Matches the real `page_config` contract read by the guest-facing InvitePage
+// (see legacy DesignStudioPage.jsx's DEFAULT_PUBLIC_PAGE / publicPageSettings()).
+// There is no "seating preview" or "FestioHub live feed" section in that contract —
+// those never had a real effect and are not offered here.
+const DEFAULT_PAGE_SECTIONS = {
+  hero: { showWelcomeLabel: true, showTitle: true, showHost: true },
+  organizer: { show: true, label: 'Organized by' },
+  details: { showVenue: true, showHotel: true, showHost: true, showAdmission: true },
+  about: { show: true, ctaLabel: '', ctaUrl: '' },
+}
 
 const EMAIL_TYPES = ['Invitation', 'RSVP confirmation', 'Festio Pass email', 'Reminder', 'Broadcast', 'Check-in confirmation']
 
@@ -85,13 +131,27 @@ export default function DesignStudioRedesignPage() {
   const [toast, setToast] = useState('')
   const [passHasPass, setPassHasPass] = useState(true)
   const [emailType, setEmailType] = useState(EMAIL_TYPES[0])
-  const [modules, setModules] = useState(PAGE_MODULES)
+  const [pageSections, setPageSections] = useState(DEFAULT_PAGE_SECTIONS)
   const [mobilePreview, setMobilePreview] = useState(false)
   const [publishState, setPublishState] = useState('idle') // idle | confirm | publishing | success | error
   const [publishError, setPublishError] = useState('')
   const [design, setDesign] = useState(null)
   const [outputs, setOutputs] = useState([])
   const [designBusy, setDesignBusy] = useState(false)
+
+  // Flyer / Festio Pass — real design-service fields, hydrated from `design`
+  // in loadDesignStudio() below and saved back via saveFlyerSettings()/renderFlyer().
+  const [wording, setWording] = useState(DEFAULT_WORDING)
+  const [colors, setColors] = useState(DEFAULT_COLORS)
+  const [fontPairing, setFontPairing] = useState(FONT_OPTIONS[0].id)
+  const [flyerTextScale, setFlyerTextScale] = useState(1)
+  const [flyerSettings, setFlyerSettings] = useState(DEFAULT_FLYER_SETTINGS)
+  const [imagePosition, setImagePosition] = useState(DEFAULT_IMAGE_POSITION)
+  const [passOptions, setPassOptions] = useState(DEFAULT_PASS_OPTIONS)
+  const [selectedFlyerTplId, setSelectedFlyerTplId] = useState('')
+  const [coverBusy, setCoverBusy] = useState(false)
+  const [renderBusy, setRenderBusy] = useState(false)
+  const coverFileRef = useRef(null)
 
   async function loadDesignStudio() {
     if (!eventId) return
@@ -116,12 +176,20 @@ export default function DesignStudioRedesignPage() {
       setDesign(saved)
       setOutputs(rendered.outputs || rendered || [])
       setPreviewTpl(items.find((item) => item.selected) || items[0] || null)
-      if (saved.page_config?.modules) {
-        setModules((current) => current.map((module) => ({
-          ...module,
-          visible: saved.page_config.modules[module.key] ?? module.visible,
-        })))
-      }
+      setPageSections({
+        hero: { ...DEFAULT_PAGE_SECTIONS.hero, ...(saved.page_config?.hero || {}) },
+        organizer: { ...DEFAULT_PAGE_SECTIONS.organizer, ...(saved.page_config?.organizer || {}) },
+        details: { ...DEFAULT_PAGE_SECTIONS.details, ...(saved.page_config?.details || {}) },
+        about: { ...DEFAULT_PAGE_SECTIONS.about, ...(saved.page_config?.about || {}) },
+      })
+      setWording({ ...DEFAULT_WORDING, ...(saved.wording_config || {}) })
+      setColors({ ...DEFAULT_COLORS, ...(saved.theme_config?.colors || {}) })
+      setFontPairing(saved.theme_config?.fontPairing || FONT_OPTIONS[0].id)
+      setPassOptions({ ...DEFAULT_PASS_OPTIONS, ...(saved.theme_config?.passOptions || {}) })
+      setFlyerTextScale(saved.asset_config?.flyer_text_scale ?? 1)
+      setFlyerSettings({ ...DEFAULT_FLYER_SETTINGS, ...(saved.asset_config?.flyer_settings || {}) })
+      setImagePosition({ ...DEFAULT_IMAGE_POSITION, ...(saved.asset_config?.image_position || {}) })
+      setSelectedFlyerTplId(saved.selected_flyer_template_id || '')
     } catch (e) {
       notify(e.message || 'Design Studio could not be loaded')
     } finally {
@@ -169,10 +237,7 @@ export default function DesignStudioRedesignPage() {
         theme_config: design?.theme_config || {},
         wording_config: design?.wording_config || {},
         asset_config: design?.asset_config || {},
-        page_config: {
-          ...(design?.page_config || {}),
-          modules: Object.fromEntries(modules.map((module) => [module.key, module.visible])),
-        },
+        page_config: pageSections,
       })
       setDesign(saved)
       notify('Page settings saved')
@@ -180,6 +245,100 @@ export default function DesignStudioRedesignPage() {
       notify(e.message || 'Page settings could not be saved')
     } finally {
       setDesignBusy(false)
+    }
+  }
+
+  async function saveFlyerAndPassSettings() {
+    if (!eventId || designBusy) return
+    setDesignBusy(true)
+    try {
+      const saved = await api.saveEventDesign(eventId, {
+        selected_template_id: design?.selected_template_id || null,
+        selected_flyer_template_id: selectedFlyerTplId || null,
+        theme_config: { ...(design?.theme_config || {}), colors, fontPairing, passOptions },
+        wording_config: wording,
+        asset_config: { ...(design?.asset_config || {}), flyer_text_scale: flyerTextScale, flyer_settings: flyerSettings, image_position: imagePosition },
+        page_config: design?.page_config || {},
+      })
+      setDesign(saved)
+      notify('Design settings saved')
+    } catch (e) {
+      notify(e.message || 'Design settings could not be saved')
+    } finally {
+      setDesignBusy(false)
+    }
+  }
+
+  async function selectFlyerTemplate(templateId) {
+    setSelectedFlyerTplId(templateId)
+    if (!eventId) return
+    try {
+      const saved = await api.saveEventDesign(eventId, {
+        selected_template_id: design?.selected_template_id || null,
+        selected_flyer_template_id: templateId,
+        theme_config: design?.theme_config || {},
+        wording_config: design?.wording_config || {},
+        asset_config: design?.asset_config || {},
+        page_config: design?.page_config || {},
+      })
+      setDesign(saved)
+      notify('Flyer template saved')
+    } catch (e) { notify(e.message || 'Flyer template could not be saved') }
+  }
+
+  async function uploadFlyerPhoto(file) {
+    if (!file || !eventId) return
+    setCoverBusy(true)
+    try {
+      const meta = await api.uploadDesignAsset(eventId, file)
+      const saved = await api.saveEventDesign(eventId, {
+        asset_config: { ...(design?.asset_config || {}), cover_image_url: meta.public_url },
+      })
+      setDesign(saved)
+      notify('Photo uploaded')
+    } catch (e) { notify(e.message || 'Photo could not be uploaded') }
+    finally { setCoverBusy(false); if (coverFileRef.current) coverFileRef.current.value = '' }
+  }
+
+  // Mirrors DesignStudioPage.jsx's renderFlyer() exactly: save the current
+  // wording/photo-position first, render server-side, and — only when the
+  // organizer explicitly asks — promote the rendered output to the event's
+  // real RSVP cover image (never automatic, so a hand-uploaded cover photo
+  // is never silently replaced by a generated flyer).
+  async function renderFlyer(fmt, useAsCover) {
+    if (!eventId || renderBusy) return
+    setRenderBusy(true)
+    try {
+      await api.saveEventDesign(eventId, {
+        wording_config: wording,
+        asset_config: { ...(design?.asset_config || {}), image_position: imagePosition, flyer_text_scale: flyerTextScale },
+      })
+      const result = await api.renderFlyer(eventId, {
+        size: flyerSettings.size,
+        format: fmt || (['a5', 'a4'].includes(flyerSettings.size) ? 'pdf' : 'png'),
+        template_id: selectedFlyerTplId || undefined,
+        colors,
+        wording,
+        cover_image_url: design?.asset_config?.cover_image_url || undefined,
+        image_position: imagePosition,
+        text_scale: flyerTextScale,
+        qr_enabled: flyerSettings.qr,
+        qr_position: flyerSettings.qrPosition,
+        qr_data: flyerSettings.qr && flyerSettings.rsvpLink ? `https://festio.events/invite/${eventId}` : null,
+      })
+      if (useAsCover && result?.outputUrl) {
+        const saved = await api.saveEventDesign(eventId, {
+          asset_config: { ...(design?.asset_config || {}), image_position: imagePosition, cover_image_url: result.outputUrl, flyer_image_url: result.outputUrl },
+        })
+        setDesign(saved)
+        await api.updateInviteSettings(eventId, { invite_cover_image: result.outputUrl })
+      }
+      api.designOutputs(eventId).then((r) => setOutputs(r.outputs || [])).catch(() => {})
+      notify(useAsCover ? 'Flyer rendered, downloaded, and applied as the RSVP cover' : 'Flyer rendered and downloaded')
+    } catch (e) {
+      notify(e.message || 'Render failed')
+    } finally {
+      setRenderBusy(false)
     }
   }
 
@@ -198,19 +357,8 @@ export default function DesignStudioRedesignPage() {
     }
   }
 
-  function toggleModule(key) {
-    setModules((prev) => prev.map((m) => (m.key === key ? { ...m, visible: !m.visible } : m)))
-  }
-
-  function moveModule(key, dir) {
-    setModules((prev) => {
-      const idx = prev.findIndex((m) => m.key === key)
-      const next = [...prev]
-      const swapWith = idx + dir
-      if (swapWith < 0 || swapWith >= next.length) return prev
-      ;[next[idx], next[swapWith]] = [next[swapWith], next[idx]]
-      return next
-    })
+  function setPageSection(section, key, value) {
+    setPageSections((prev) => ({ ...prev, [section]: { ...prev[section], [key]: value } }))
   }
 
   const activeTemplate = templates.find((t) => t.selected)
@@ -302,19 +450,20 @@ export default function DesignStudioRedesignPage() {
             <div className="rd-panel">
               <div className="rd-panel-head"><h3>Flyer template</h3></div>
               <div className="rd-panel-body ds-flyer-tpl-row">
-                {FLYER_TEMPLATES.map((f) => (
-                  <button key={f} className="ds-flyer-tpl-chip" onClick={() => notify(`${f} flyer layout selected`)}>{f}</button>
+                {templates.filter((t) => (t.surfaces || []).includes('Flyer')).map((t) => (
+                  <button key={t.id} className={`ds-flyer-tpl-chip ${selectedFlyerTplId === t.id ? 'active' : ''}`} onClick={() => selectFlyerTemplate(t.id)}>{t.name}</button>
                 ))}
+                {!templates.some((t) => (t.surfaces || []).includes('Flyer')) && <p className="rd-rowlink">No flyer-capable templates in the catalog yet.</p>}
               </div>
             </div>
 
             <div className="rd-panel">
               <div className="rd-panel-head"><h3>Wording</h3></div>
               <div className="rd-panel-body">
-                {WORDING_FIELDS.map((f) => (
-                  <div key={f.key} style={{ marginBottom: 9 }}>
-                    <label className="rd-field-label">{f.label}</label>
-                    <input className="rd-field" style={{ marginBottom: 0 }} defaultValue={f.value} onChange={() => notify(`${f.label} updated`)} />
+                {WORDING_FIELDS.map(([key, label]) => (
+                  <div key={key} style={{ marginBottom: 9 }}>
+                    <label className="rd-field-label">{label}</label>
+                    <input className="rd-field" style={{ marginBottom: 0 }} value={wording[key] || ''} onChange={(e) => setWording((w) => ({ ...w, [key]: e.target.value }))} />
                   </div>
                 ))}
               </div>
@@ -324,75 +473,91 @@ export default function DesignStudioRedesignPage() {
               <div className="rd-panel-head"><h3>Colors &amp; type</h3></div>
               <div className="rd-panel-body">
                 <div className="ds-color-row">
-                  {FLYER_COLORS.map((c) => (
+                  {COLOR_FIELDS.map((c) => (
                     <label key={c.key} className="ds-color-swatch-label">
-                      <input type="color" defaultValue={c.value} onChange={() => notify(`${c.label} color updated`)} />
+                      <input type="color" value={colors[c.key] || '#000000'} onChange={(e) => setColors((v) => ({ ...v, [c.key]: e.target.value }))} />
                       <span>{c.label}</span>
                     </label>
                   ))}
                 </div>
                 <label className="rd-field-label" style={{ marginTop: 10 }}>Font pairing</label>
-                <select className="rr-select" onChange={(e) => notify(`Font pairing set to ${e.target.value}`)}>
-                  {FONT_PAIRINGS.map((f) => <option key={f}>{f}</option>)}
+                <select className="rr-select" value={fontPairing} onChange={(e) => setFontPairing(e.target.value)}>
+                  {FONT_OPTIONS.map((f) => <option key={f.id} value={f.id}>{f.label}</option>)}
                 </select>
                 <label className="rd-field-label" style={{ marginTop: 8 }}>Flyer text size</label>
-                <select className="rr-select"><option>Small</option><option>Medium</option><option>Large</option></select>
+                <select className="rr-select" value={flyerTextScale} onChange={(e) => setFlyerTextScale(Number(e.target.value))}>
+                  {FLYER_TEXT_SCALES.map((s) => <option key={s.value} value={s.value}>{s.label}</option>)}
+                </select>
               </div>
             </div>
 
             <div className="rd-panel">
               <div className="rd-panel-head"><h3>QR &amp; RSVP link</h3></div>
               <div className="rd-panel-body">
-                <div className="rd-toggle-row"><span style={{ fontSize: 12, fontWeight: 600 }}>Show QR code</span>
-                  <label className="rd-switch"><input type="checkbox" defaultChecked /><span className="track" /><span className="knob" /></label>
+                <label className="rd-field-label">Flyer size</label>
+                <select className="rr-select" value={flyerSettings.size} onChange={(e) => setFlyerSettings((v) => ({ ...v, size: e.target.value }))}>
+                  {FLYER_SIZES.map((s) => <option key={s.id} value={s.id}>{s.label}</option>)}
+                </select>
+                <div className="rd-toggle-row" style={{ marginTop: 8 }}><span style={{ fontSize: 12, fontWeight: 600 }}>Show QR code</span>
+                  <label className="rd-switch"><input type="checkbox" checked={flyerSettings.qr} onChange={(e) => setFlyerSettings((v) => ({ ...v, qr: e.target.checked }))} /><span className="track" /><span className="knob" /></label>
                 </div>
                 <div className="rd-toggle-row"><span style={{ fontSize: 12, fontWeight: 600 }}>Show RSVP link text</span>
-                  <label className="rd-switch"><input type="checkbox" defaultChecked /><span className="track" /><span className="knob" /></label>
+                  <label className="rd-switch"><input type="checkbox" checked={flyerSettings.rsvpLink} onChange={(e) => setFlyerSettings((v) => ({ ...v, rsvpLink: e.target.checked }))} /><span className="track" /><span className="knob" /></label>
                 </div>
                 <label className="rd-field-label" style={{ marginTop: 6 }}>QR placement</label>
-                <select className="rr-select"><option>Bottom right</option><option>Bottom center</option><option>Top right</option></select>
+                <select className="rr-select" value={flyerSettings.qrPosition} onChange={(e) => setFlyerSettings((v) => ({ ...v, qrPosition: e.target.value }))}>
+                  {QR_POSITIONS.map((p) => <option key={p.id} value={p.id}>{p.label}</option>)}
+                </select>
               </div>
             </div>
 
             <div className="rd-panel">
               <div className="rd-panel-head"><h3>Photo</h3><p>Upload and position your cover photo</p></div>
               <div className="rd-panel-body">
-                <button className="rr-btn secondary" onClick={() => notify('Photo uploaded')}><Icon name="upload" size={13} /> Upload photo</button>
+                <input ref={coverFileRef} type="file" accept="image/jpeg,image/png,image/webp,image/gif" hidden onChange={(e) => uploadFlyerPhoto(e.target.files?.[0])} />
+                <button className="rr-btn secondary" disabled={coverBusy} onClick={() => coverFileRef.current?.click()}><Icon name="upload" size={13} /> {coverBusy ? 'Uploading…' : 'Upload photo'}</button>
                 {CROP_SLIDERS.map((s) => (
                   <div key={s.key} style={{ marginTop: 10 }}>
                     <label className="rd-field-label">{s.label}</label>
-                    <input type="range" min="0" max="150" defaultValue={s.value} className="ds-slider" onChange={() => notify(`${s.label} adjusted`)} />
+                    <input type="range" min={s.min} max={s.max} value={imagePosition[s.key]} className="ds-slider" onChange={(e) => setImagePosition((v) => ({ ...v, [s.key]: Number(e.target.value) }))} />
                   </div>
                 ))}
               </div>
             </div>
+
+            <button className="rr-btn primary" disabled={designBusy} style={{ width: '100%', justifyContent: 'center' }} onClick={saveFlyerAndPassSettings}>{designBusy ? 'Saving…' : 'Save flyer settings'}</button>
           </div>
 
           <div className="ds-flyer-col">
             <div className="rd-panel">
               <div className="rd-panel-head"><h3>Preview</h3></div>
               <div className="rd-panel-body">
-                <div className="ds-flyer-preview">
-                  <Icon name="image" size={26} />
-                  <span>Flyer preview</span>
+                <div className="ds-flyer-preview" style={design?.asset_config?.cover_image_url ? {
+                  backgroundImage: `url(${design.asset_config.cover_image_url})`,
+                  backgroundPosition: `${imagePosition.x}% ${imagePosition.y}%`,
+                  backgroundSize: `${imagePosition.zoom}% auto`,
+                  transform: `rotate(${imagePosition.rotate}deg)`,
+                } : undefined}>
+                  {!design?.asset_config?.cover_image_url && <><Icon name="image" size={26} /><span>Upload a photo to preview</span></>}
                 </div>
                 <div className="rd-row2" style={{ marginTop: 10 }}>
-                  <button className="rr-btn secondary" style={{ flex: 1, justifyContent: 'center' }} onClick={() => notify('Downloaded flyer as PNG')}>Download PNG</button>
-                  <button className="rr-btn secondary" style={{ flex: 1, justifyContent: 'center' }} onClick={() => notify('Downloaded flyer as PDF')}>Download PDF</button>
+                  <button className="rr-btn secondary" disabled={renderBusy} style={{ flex: 1, justifyContent: 'center' }} onClick={() => renderFlyer('png', false)}>{renderBusy ? 'Rendering…' : 'Download PNG'}</button>
+                  <button className="rr-btn secondary" disabled={renderBusy} style={{ flex: 1, justifyContent: 'center' }} onClick={() => renderFlyer('pdf', false)}>{renderBusy ? 'Rendering…' : 'Download PDF'}</button>
                 </div>
-                <button className="rr-btn primary" style={{ width: '100%', justifyContent: 'center', marginTop: 8 }} onClick={() => notify('Flyer set as event cover image')}>Download &amp; use as cover</button>
+                <button className="rr-btn primary" disabled={renderBusy} style={{ width: '100%', justifyContent: 'center', marginTop: 8 }} onClick={() => renderFlyer(null, true)}>{renderBusy ? 'Rendering…' : 'Render & use as cover'}</button>
               </div>
             </div>
 
             <div className="rd-panel">
               <div className="rd-panel-head"><h3>Recent rendered files</h3></div>
               <div className="rd-panel-body">
-                {RECENT_FILES.map((f) => (
-                  <div className="ds-recent-row" key={f.name}>
-                    <Icon name="file" size={13} /><span>{f.name}</span><span className="rd-rowlink">{f.size} · {f.when}</span>
-                    <button className="rr-link-btn" onClick={() => notify(`Downloaded ${f.name}`)}>Download</button>
+                {outputs.map((f) => (
+                  <div className="ds-recent-row" key={f.filename}>
+                    <Icon name="file" size={13} /><span>{f.filename}</span><span className="rd-rowlink">{(f.format || '').toUpperCase()}</span>
+                    <a className="rr-link-btn" href={f.url} target="_blank" rel="noreferrer">Download</a>
                   </div>
                 ))}
+                {!outputs.length && <p className="rd-rowlink">No files rendered yet.</p>}
               </div>
             </div>
           </div>
@@ -402,22 +567,30 @@ export default function DesignStudioRedesignPage() {
       {tab === 'Event Page' && (
         <div className="rd-wide-grid">
           <div className="rd-panel">
-            <div className="rd-panel-head"><h3>Page sections</h3><p>Reorder, toggle, and gate modules by add-on</p></div>
+            <div className="rd-panel-head"><h3>Page sections</h3><p>What shows on the live guest-facing event page</p></div>
             <div className="rd-panel-body">
-              {modules.map((m, i) => (
-                <div className="ds-module-row" key={m.key}>
-                  <span className="ds-module-drag"><Icon name="more" size={13} /></span>
-                  <div className="ds-module-updown">
-                    <button onClick={() => moveModule(m.key, -1)} disabled={i === 0}>▲</button>
-                    <button onClick={() => moveModule(m.key, 1)} disabled={i === modules.length - 1}>▼</button>
-                  </div>
-                  <span className="ds-module-label">{m.label}{m.requires && <small> — requires {m.requires}</small>}</span>
-                  <label className="rd-switch"><input type="checkbox" checked={m.visible} onChange={() => toggleModule(m.key)} disabled={!!m.requires && m.key === 'seating'} /><span className="track" /><span className="knob" /></label>
-                </div>
-              ))}
+              <label className="rd-field-label">Hero</label>
+              <div className="rd-toggle-row"><span style={{ fontSize: 12, fontWeight: 600 }}>Welcome label</span><label className="rd-switch"><input type="checkbox" checked={pageSections.hero.showWelcomeLabel} onChange={(e) => setPageSection('hero', 'showWelcomeLabel', e.target.checked)} /><span className="track" /><span className="knob" /></label></div>
+              <div className="rd-toggle-row"><span style={{ fontSize: 12, fontWeight: 600 }}>Event title</span><label className="rd-switch"><input type="checkbox" checked={pageSections.hero.showTitle} onChange={(e) => setPageSection('hero', 'showTitle', e.target.checked)} /><span className="track" /><span className="knob" /></label></div>
+              <div className="rd-toggle-row"><span style={{ fontSize: 12, fontWeight: 600 }}>Host name</span><label className="rd-switch"><input type="checkbox" checked={pageSections.hero.showHost} onChange={(e) => setPageSection('hero', 'showHost', e.target.checked)} /><span className="track" /><span className="knob" /></label></div>
+
+              <label className="rd-field-label" style={{ marginTop: 12 }}>Organizer</label>
+              <div className="rd-toggle-row"><span style={{ fontSize: 12, fontWeight: 600 }}>Show organizer line</span><label className="rd-switch"><input type="checkbox" checked={pageSections.organizer.show} onChange={(e) => setPageSection('organizer', 'show', e.target.checked)} /><span className="track" /><span className="knob" /></label></div>
+              <input className="rd-field" placeholder="Label, e.g. Organized by" value={pageSections.organizer.label} onChange={(e) => setPageSection('organizer', 'label', e.target.value)} />
+
+              <label className="rd-field-label" style={{ marginTop: 12 }}>Event details</label>
+              <div className="rd-toggle-row"><span style={{ fontSize: 12, fontWeight: 600 }}>Venue</span><label className="rd-switch"><input type="checkbox" checked={pageSections.details.showVenue} onChange={(e) => setPageSection('details', 'showVenue', e.target.checked)} /><span className="track" /><span className="knob" /></label></div>
+              <div className="rd-toggle-row"><span style={{ fontSize: 12, fontWeight: 600 }}>Hotel info</span><label className="rd-switch"><input type="checkbox" checked={pageSections.details.showHotel} onChange={(e) => setPageSection('details', 'showHotel', e.target.checked)} /><span className="track" /><span className="knob" /></label></div>
+              <div className="rd-toggle-row"><span style={{ fontSize: 12, fontWeight: 600 }}>Host</span><label className="rd-switch"><input type="checkbox" checked={pageSections.details.showHost} onChange={(e) => setPageSection('details', 'showHost', e.target.checked)} /><span className="track" /><span className="knob" /></label></div>
+              <div className="rd-toggle-row"><span style={{ fontSize: 12, fontWeight: 600 }}>Admission note</span><label className="rd-switch"><input type="checkbox" checked={pageSections.details.showAdmission} onChange={(e) => setPageSection('details', 'showAdmission', e.target.checked)} /><span className="track" /><span className="knob" /></label></div>
+
               <label className="rd-field-label" style={{ marginTop: 12 }}>About / custom CTA</label>
-              <input className="rd-field" placeholder="CTA label, e.g. Learn more" defaultValue="Learn more about our mission" />
-              <input className="rd-field" placeholder="CTA URL" defaultValue="https://ourorg.example.com" />
+              <div className="rd-toggle-row"><span style={{ fontSize: 12, fontWeight: 600 }}>Show About section</span><label className="rd-switch"><input type="checkbox" checked={pageSections.about.show} onChange={(e) => setPageSection('about', 'show', e.target.checked)} /><span className="track" /><span className="knob" /></label></div>
+              <input className="rd-field" placeholder="CTA label, e.g. Learn more" value={pageSections.about.ctaLabel} onChange={(e) => setPageSection('about', 'ctaLabel', e.target.value)} />
+              <input className="rd-field" placeholder="CTA URL" value={pageSections.about.ctaUrl} onChange={(e) => setPageSection('about', 'ctaUrl', e.target.value)} />
+
+              <div className="rd-hint" style={{ marginTop: 10 }}>Seating preview and FestioHub live feed are not part of the live guest page yet — no controls here affect them.</div>
+
               <div className="rd-row2" style={{ marginTop: 8 }}>
                 <button className="rr-btn secondary" disabled title="Reset is not wired in the redesign yet" style={{ flex: 1, justifyContent: 'center' }}>Reset safe default</button>
                 <button className="rr-btn primary" disabled={designBusy} style={{ flex: 1, justifyContent: 'center' }} onClick={savePageSettings}>{designBusy ? 'Saving…' : 'Save page settings'}</button>
@@ -453,29 +626,32 @@ export default function DesignStudioRedesignPage() {
             <div className="rd-panel-head"><h3>Pass wording</h3></div>
             <div className="rd-panel-body">
               <label className="rd-field-label">Admission wording</label>
-              <textarea className="rr-textarea" rows={2} defaultValue="Present this pass at the door for entry." />
+              <textarea className="rr-textarea" rows={2} value={wording.admissionNote || ''} onChange={(e) => setWording((w) => ({ ...w, admissionNote: e.target.value }))} />
               <label className="rd-field-label" style={{ marginTop: 8 }}>Footer note</label>
-              <input className="rd-field" defaultValue="Questions? Reply to this email." />
+              <input className="rd-field" value={wording.footerNote || ''} onChange={(e) => setWording((w) => ({ ...w, footerNote: e.target.value }))} />
               <label className="rd-field-label">FestioHub intro</label>
-              <textarea className="rr-textarea" rows={2} defaultValue="Welcome! Tap below to see updates, your table, and more." />
+              <textarea className="rr-textarea" rows={2} defaultValue="Welcome! Tap below to see updates, your table, and more." disabled title="Not part of the saved design contract yet" />
+              <div className="rd-hint">FestioHub intro text isn't part of the saved design record yet — the other fields on this tab are.</div>
               <div className="rd-toggle-row" style={{ marginTop: 10 }}>
                 <span style={{ fontSize: 12, fontWeight: 600 }}>Show table/seat</span>
-                <label className="rd-switch"><input type="checkbox" defaultChecked /><span className="track" /><span className="knob" /></label>
+                <label className="rd-switch"><input type="checkbox" checked={passOptions.showTable && passOptions.showSeat} onChange={(e) => setPassOptions((v) => ({ ...v, showTable: e.target.checked, showSeat: e.target.checked }))} /><span className="track" /><span className="knob" /></label>
               </div>
               <div className="rd-toggle-row">
                 <span style={{ fontSize: 12, fontWeight: 600 }}>Show FestioHub button</span>
-                <label className="rd-switch"><input type="checkbox" checked={passHasPass} onChange={(e) => setPassHasPass(e.target.checked)} /><span className="track" /><span className="knob" /></label>
+                <label className="rd-switch"><input type="checkbox" checked={passOptions.showHubButton} onChange={(e) => setPassOptions((v) => ({ ...v, showHubButton: e.target.checked }))} /><span className="track" /><span className="knob" /></label>
               </div>
+              <button className="rr-btn primary" disabled={designBusy} style={{ width: '100%', justifyContent: 'center', marginTop: 12 }} onClick={saveFlyerAndPassSettings}>{designBusy ? 'Saving…' : 'Save pass settings'}</button>
             </div>
           </div>
           <div className="rd-panel">
-            <div className="rd-panel-head"><h3>Preview</h3></div>
+            <div className="rd-panel-head"><h3>Preview</h3><p>Illustrative — not a live-rendered pass</p></div>
             <div className="rd-panel-body">
               <div className="ds-pass-preview">
                 <div className="ds-pass-top"><span>FESTIO PASS</span><Icon name="ticket" size={16} /></div>
-                <strong>Women's Convention 2026</strong>
-                <span>Aaliyah Guest0002{passHasPass && ' · Table 3, Seat 4'}</span>
+                <strong>{wording.eventTitle || 'Your event'}</strong>
+                <span>Sample Guest{(passOptions.showTable || passOptions.showSeat) && ' · Table 3, Seat 4'}</span>
                 <div className="ds-pass-qr"><Icon name="grid" size={30} /></div>
+                {wording.admissionNote && <p className="rd-rowlink" style={{ marginTop: 6 }}>{wording.admissionNote}</p>}
               </div>
               <button className="rr-btn secondary" disabled title="Pass regeneration remains on the legacy Design Studio during rollout" style={{ width: '100%', justifyContent: 'center', marginTop: 12 }}>Regenerate pass design</button>
             </div>
@@ -485,16 +661,16 @@ export default function DesignStudioRedesignPage() {
 
       {tab === 'Email Preview' && (
         <div className="rd-panel" style={{ maxWidth: 620 }}>
-          <div className="rd-panel-head"><h3>Email preview</h3><p>Rendered with your selected template</p></div>
+          <div className="rd-panel-head"><h3>Email preview</h3><p>Illustrative layout using your saved wording and colors — not a live-rendered template per type</p></div>
           <div className="rd-panel-body">
             <div className="rd-seg" style={{ marginBottom: 14, flexWrap: 'wrap' }}>
               {EMAIL_TYPES.map((t) => <button key={t} className={emailType === t ? 'on' : ''} onClick={() => setEmailType(t)}>{t}</button>)}
             </div>
-            <div className="ds-email-preview">
-              <div className="ds-email-banner"><Icon name="mail" size={20} /></div>
-              <strong>{emailType === 'Invitation' ? "You're invited: Women's Convention 2026" : emailType === 'RSVP confirmation' ? "You're confirmed!" : emailType === 'Festio Pass email' ? 'Your Festio Pass is ready' : emailType === 'Reminder' ? "Don't forget — Women's Convention 2026" : emailType === 'Broadcast' ? 'An update from your organizer' : 'You\'re checked in!'}</strong>
-              <p>Join us Jul 11, 2026 at Masjid Mumineen.</p>
-              <button className="rr-btn primary" style={{ pointerEvents: 'none' }}>{emailType === 'RSVP confirmation' || emailType === 'Check-in confirmation' ? 'View details' : 'RSVP now'}</button>
+            <div className="ds-email-preview" style={{ background: colors.background, color: colors.text }}>
+              <div className="ds-email-banner" style={{ background: colors.primary }}><Icon name="mail" size={20} /></div>
+              <strong>{emailType === 'Invitation' ? `${wording.inviteLabel || "You're invited"}: ${wording.eventTitle || 'your event'}` : emailType === 'RSVP confirmation' ? "You're confirmed!" : emailType === 'Festio Pass email' ? 'Your Festio Pass is ready' : emailType === 'Reminder' ? `Don't forget — ${wording.eventTitle || 'your event'}` : emailType === 'Broadcast' ? 'An update from your organizer' : "You're checked in!"}</strong>
+              <p>{[wording.date, wording.venue].filter(Boolean).join(' at ') || 'Date and venue not set yet'}</p>
+              <button className="rr-btn primary" style={{ pointerEvents: 'none', background: colors.primary }}>{emailType === 'RSVP confirmation' || emailType === 'Check-in confirmation' ? 'View details' : 'RSVP now'}</button>
             </div>
           </div>
         </div>
@@ -549,11 +725,11 @@ export default function DesignStudioRedesignPage() {
             <div className="rd-panel-head"><h3>{activeTemplate?.name}</h3><p>{activeTemplate?.category} · {activeTemplate?.style}</p></div>
             <div className="rd-panel-body">
               <div className="ds-color-row" style={{ marginBottom: 12 }}>
-                {FLYER_COLORS.map((c) => <Swatch key={c.key} hex={c.value} />)}
+                {COLOR_FIELDS.map((f) => <Swatch key={f.key} hex={colors[f.key]} />)}
               </div>
               <div className="ds-page-preview" style={{ marginBottom: 10 }}>
                 <div className="ds-page-hero"><Icon name="calendar" size={18} /></div>
-                <h3 style={{ fontSize: 13 }}>Women's Convention 2026</h3>
+                <h3 style={{ fontSize: 13 }}>{wording.eventTitle || 'Your event'}</h3>
               </div>
               <div className="ds-pass-preview" style={{ padding: 12 }}>
                 <div className="ds-pass-top"><span>FESTIO PASS</span></div>

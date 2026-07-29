@@ -18,9 +18,6 @@ const WORKFLOW_TEMPLATES = [
 const SUBTABS = ['Setup', 'Workflow', 'Guests', 'Consent', 'Feedback', 'Messages', 'Analytics']
 const STATUS_FILTERS = ['All', 'Live', 'Draft', 'Archived']
 
-// Kept from the original mock — not currently wired to any UI element, left
-// as-is rather than pruned since it's unrelated to this pass's scope.
-const ticketTypes = ['General Admission', 'VIP', 'Speaker', 'Guest', 'Staff']
 
 const STEP_TYPES = [
   ['custom', 'Custom'], ['check_in', 'Check-in'], ['consent', 'Consent'], ['seating_assignment', 'Seating assignment'],

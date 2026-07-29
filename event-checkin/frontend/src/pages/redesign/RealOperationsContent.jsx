@@ -1,10 +1,75 @@
 import { useCallback, useEffect, useState } from 'react'
 import { api } from '../../api'
 import { EmptyState, ErrorRetryState, LoadingSkeleton } from './RedesignPrimitives'
-import { Icon, ConfirmDialog } from './RedesignShell'
+import { Icon, ConfirmDialog, Modal } from './RedesignShell'
 
 const clean = (value, fallback = '') => value == null ? fallback : String(value)
 const rows = (value) => Array.isArray(value) ? value.filter(Boolean) : []
+
+function ReserveSeatModal({ slot, guests, busy, query, onQuery, onPick, onAddVvip, onClose }) {
+  const [mode, setMode] = useState('search') // 'search' | 'vvip'
+  const [vvip, setVvip] = useState({ first_name: '', last_name: '', email: '', phone: '' })
+  const q = (query || '').trim().toLowerCase()
+  const matches = guests.filter((g) => {
+    if (!q) return true
+    return (`${g.first_name} ${g.last_name} ${g.email}`).toLowerCase().includes(q)
+  })
+
+  function submitVvip(e) {
+    e.preventDefault()
+    if (!vvip.first_name.trim() || !vvip.last_name.trim()) return
+    onAddVvip({
+      first_name: vvip.first_name.trim(),
+      last_name: vvip.last_name.trim(),
+      email: vvip.email.trim(),
+      phone: vvip.phone.trim() || null,
+      is_vip: true,
+    })
+  }
+
+  return (
+    <Modal title={`Reserve ${slot.tableName} · Seat ${slot.seat}`} onClose={onClose} width={440}>
+      <div className="rr-tabs" style={{ marginBottom: 10 }}>
+        <button className={mode === 'search' ? 'active' : ''} onClick={() => setMode('search')}>From guest list</button>
+        <button className={mode === 'vvip' ? 'active' : ''} onClick={() => setMode('vvip')}>+ Add VVIP</button>
+      </div>
+
+      {mode === 'search' && (
+        <>
+          <input className="rr-input" autoFocus value={query} onChange={(e) => onQuery(e.target.value)} placeholder="Search by name or email…" style={{ marginBottom: 10 }} />
+          <div className="ad-chart-picker">
+            {matches.length === 0 && (
+              <p className="rd-rowlink">No guests match. Use <button className="rr-link-btn" onClick={() => setMode('vvip')}>+ Add VVIP</button> instead.</p>
+            )}
+            {matches.map((g) => (
+              <button key={g.id} className="ad-chart-picker-row" disabled={busy} onClick={() => onPick(g.id)}>
+                <span className="ad-chart-picker-name">{g.first_name} {g.last_name}<small>{g.email || 'no email'}</small></span>
+                {g.table_id != null
+                  ? <span className="ad-chart-tag warn">move from seat {g.seat_number ?? '–'}</span>
+                  : g.admitted ? <span className="ad-chart-tag ok">arrived</span> : null}
+              </button>
+            ))}
+          </div>
+        </>
+      )}
+
+      {mode === 'vvip' && (
+        <form onSubmit={submitVvip}>
+          <p className="rd-hint" style={{ marginBottom: 8 }}>Add someone who isn't on the imported guest list. Email is optional — no invite will be sent.</p>
+          <div className="rd-row2">
+            <input className="rr-input" autoFocus required value={vvip.first_name} onChange={(e) => setVvip((v) => ({ ...v, first_name: e.target.value }))} placeholder="First name *" />
+            <input className="rr-input" required value={vvip.last_name} onChange={(e) => setVvip((v) => ({ ...v, last_name: e.target.value }))} placeholder="Last name *" />
+          </div>
+          <input className="rr-input" type="email" value={vvip.email} onChange={(e) => setVvip((v) => ({ ...v, email: e.target.value }))} placeholder="Email (optional)" style={{ marginTop: 8 }} />
+          <input className="rr-input" value={vvip.phone} onChange={(e) => setVvip((v) => ({ ...v, phone: e.target.value }))} placeholder="Phone E.164 (optional, e.g. +447911123456)" style={{ marginTop: 8 }} />
+          <button type="submit" className="rr-btn primary" disabled={busy || !vvip.first_name.trim() || !vvip.last_name.trim()} style={{ width: '100%', justifyContent: 'center', marginTop: 12 }}>
+            {busy ? 'Saving…' : `Reserve ${slot.tableName} · Seat ${slot.seat}`}
+          </button>
+        </form>
+      )}
+    </Modal>
+  )
+}
 
 export function RealSeatingContent({ eventId, event, notify, onFloorLayout }) {
   const [tables, setTables] = useState([])
@@ -15,6 +80,15 @@ export function RealSeatingContent({ eventId, event, notify, onFloorLayout }) {
   const [loading, setLoading] = useState(true)
   const [working, setWorking] = useState(false)
   const [error, setError] = useState('')
+
+  // Per-seat assignment chart — ported from AdminPage.jsx's SeatingPanel.
+  const [chart, setChart] = useState(null)
+  const [showChart, setShowChart] = useState(false)
+  const [chartBusy, setChartBusy] = useState(false)
+  const [assignSlot, setAssignSlot] = useState(null) // {tableId, tableName, seat}
+  const [allGuests, setAllGuests] = useState([])
+  const [guestQuery, setGuestQuery] = useState('')
+  const [pendingUnassign, setPendingUnassign] = useState(null) // {guestId, name}
 
   const load = useCallback(async () => {
     if (!eventId) return
@@ -41,12 +115,20 @@ export function RealSeatingContent({ eventId, event, notify, onFloorLayout }) {
         category: clean(form.category).trim() || null,
         sort_order: Number(form.sort_order) || 0,
       }
-      if (form.id) await api.updateTable(eventId, form.id, payload)
+      if (form.id) await api.updateTable(eventId, form.id, payload, form.updated_at)
       else await api.createTable(eventId, payload)
       await load()
       setForm(null)
       notify(`${event?.seating_term || 'Table'} saved`)
-    } catch (e2) { setError(e2.message || 'Could not save table') }
+    } catch (e2) {
+      if (e2.status === 409) {
+        setForm(null)
+        await load()
+        notify('Changed by another operator — refreshed with the latest version. Please redo your edit.', true)
+      } else {
+        setError(e2.message || 'Could not save table')
+      }
+    }
     finally { setWorking(false) }
   }
 
@@ -59,6 +141,59 @@ export function RealSeatingContent({ eventId, event, notify, onFloorLayout }) {
       notify(`${clean(target.name, 'Table')} deleted`)
     } catch (e) { setError(e.message || 'Could not delete table') }
     finally { setWorking(false) }
+  }
+
+  async function loadChart() {
+    setChartBusy(true)
+    try {
+      const [chartData, guestData] = await Promise.all([api.getSeatingChart(eventId), api.listGuests(eventId)])
+      setChart(chartData)
+      setAllGuests(guestData)
+      setShowChart(true)
+    } catch (e) { setError(e.message || 'Could not load the seating chart') }
+    finally { setChartBusy(false) }
+  }
+
+  async function refreshChart() {
+    const [chartData, guestData, tableData] = await Promise.all([api.getSeatingChart(eventId), api.listGuests(eventId), api.listTables(eventId)])
+    setChart(chartData); setAllGuests(guestData); setTables(rows(tableData))
+  }
+
+  async function reserveSeat(guestId) {
+    if (!assignSlot) return
+    setChartBusy(true)
+    try {
+      await api.assignSeat(eventId, guestId, { table_id: assignSlot.tableId, seat_number: String(assignSlot.seat) })
+      setAssignSlot(null); setGuestQuery('')
+      await refreshChart()
+      notify('Seat assigned')
+    } catch (e) { notify(e.message || 'Could not assign seat', true) }
+    finally { setChartBusy(false) }
+  }
+
+  async function addVvipAndReserve(vvip) {
+    if (!assignSlot) return
+    setChartBusy(true)
+    try {
+      const created = await api.addGuest(eventId, vvip)
+      await api.assignSeat(eventId, created.id, { table_id: assignSlot.tableId, seat_number: String(assignSlot.seat) })
+      setAssignSlot(null); setGuestQuery('')
+      await refreshChart()
+      notify(`${created.first_name} ${created.last_name} added & seated`)
+    } catch (e) { notify(e.message || 'Could not add and seat this guest', true) }
+    finally { setChartBusy(false) }
+  }
+
+  async function unassignSeat() {
+    const target = pendingUnassign
+    setPendingUnassign(null)
+    setChartBusy(true)
+    try {
+      await api.assignSeat(eventId, target.guestId, { table_id: null, seat_number: null })
+      await refreshChart()
+      notify('Guest unassigned from seat')
+    } catch (e) { notify(e.message || 'Could not unassign this seat', true) }
+    finally { setChartBusy(false) }
   }
 
   async function saveGroup(e) {
@@ -152,6 +287,66 @@ export function RealSeatingContent({ eventId, event, notify, onFloorLayout }) {
           <input className="rr-input" aria-label="Sort order" type="number" value={form.sort_order ?? 0} onChange={(e) => setForm({ ...form, sort_order: e.target.value })}/></div>
         <div className="ad-actions"><button type="button" className="rr-btn secondary" onClick={() => setForm(null)}>Cancel</button><button className="rr-btn primary" disabled={working}>{working ? 'Saving…' : 'Save'}</button></div>
       </form>}
+
+      {!!tables.length && (
+        <div className="ad-chart-section">
+          <button className="rr-link-btn" onClick={showChart ? () => setShowChart(false) : loadChart} disabled={chartBusy}>
+            {showChart ? '▲ Hide Seating Chart' : '▼ Show Seating Chart'}
+          </button>
+          {showChart && chart && (
+            <div className="ad-chart-grid">
+              {chart.map((t) => (
+                <div className="rr-panel ad-chart-card" key={t.id}>
+                  <div className="ad-chart-card-head">
+                    <span>{t.name}{t.category && <small> · {t.category}</small>}</span>
+                    <span className="rd-rowlink">{t.seats.filter((s) => s.guest_id).length}/{t.capacity}</span>
+                  </div>
+                  <div className="ad-chart-seats">
+                    {t.seats.map((s) => (
+                      <button
+                        key={s.seat}
+                        type="button"
+                        disabled={chartBusy}
+                        className={`ad-chart-seat ${s.guest_id ? 'filled' : 'empty'}`}
+                        onClick={() => s.guest_id
+                          ? setPendingUnassign({ guestId: s.guest_id, name: s.name })
+                          : setAssignSlot({ tableId: t.id, tableName: t.name, seat: s.seat })}
+                        title={s.guest_id ? 'Click to unassign' : 'Click to reserve for a guest'}
+                      >
+                        <span className="ad-chart-seat-num">{s.seat}</span>
+                        {s.guest_id ? (
+                          <>
+                            <span className="ad-chart-seat-name">{s.name}</span>
+                            {s.is_vip && <span className="ad-chart-tag">VIP</span>}
+                            {s.admitted && <Icon name="check" size={11} />}
+                          </>
+                        ) : <span className="ad-chart-seat-empty">+ reserve</span>}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+
+      {assignSlot && (
+        <ReserveSeatModal
+          slot={assignSlot}
+          guests={allGuests}
+          busy={chartBusy}
+          query={guestQuery}
+          onQuery={setGuestQuery}
+          onPick={reserveSeat}
+          onAddVvip={addVvipAndReserve}
+          onClose={() => { setAssignSlot(null); setGuestQuery('') }}
+        />
+      )}
+      {pendingUnassign && (
+        <ConfirmDialog title="Unassign seat" message={`Remove ${clean(pendingUnassign.name, 'this guest')} from their seat?`} confirmLabel="Unassign" onConfirm={unassignSeat} onCancel={() => setPendingUnassign(null)} />
+      )}
+
       <div className="rr-section-title"><div><h2>Table Groups</h2><p>Group tables and restrict grouped guests to the correct seating area.</p></div>
         <button className="rr-btn primary" disabled={working} onClick={() => setGroupForm({ name: '', tag: '', description: '', sort_order: groups.length, table_ids: [] })}><Icon name="plus" size={14}/> Table Group</button></div>
       {!groups.length ? <EmptyState icon="users" title="No table groups" body="Create a group such as VIP, Family, or Staff." /> :

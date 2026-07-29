@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test'
-import { expectQaEventLoaded, signIn } from './helpers.js'
+import { expectQaEventLoaded, requiredEnv, signIn } from './helpers.js'
 
 test.describe.configure({ mode: 'serial' })
 const suffix = `${Date.now()}-${Math.random().toString(16).slice(2, 8)}`
@@ -37,6 +37,71 @@ test.describe('Stage C operations — isolated staging fixture', () => {
           await page.locator('.rr-modal').getByRole('button', { name: 'Delete', exact: true }).click().catch(() => {})
         }
       }
+    }
+  })
+
+  test('seating chart assigns and unassigns guests to specific seats, including a new VVIP', async ({ page }) => {
+    const eventId = requiredEnv('E2E_EVENT_ID')
+    const tableName = `E2E Chart Table ${suffix}`
+    const guestName = `E2E Chart Guest ${suffix}`
+    const vvipLastName = `VVIP ${suffix}`
+    let authorization = ''
+    page.on('request', (request) => {
+      if (request.url().includes('/api/') && request.headers().authorization) authorization = request.headers().authorization
+    })
+
+    await page.goto('/addons-redesign?tab=seating')
+    await expectQaEventLoaded(page)
+    const locked = page.getByRole('button', { name: 'Upgrade to enable', exact: true })
+    test.skip(await locked.isVisible(), 'The isolated QA event must have seating enabled')
+    expect(authorization).toMatch(/^Bearer /)
+
+    const table = await (await page.request.post(`/api/events/${eventId}/tables`, {
+      headers: { Authorization: authorization }, data: { name: tableName, capacity: 2 },
+    })).json()
+    const [firstName, ...rest] = guestName.split(' ')
+    const guest = await (await page.request.post(`/api/events/${eventId}/guests`, {
+      headers: { Authorization: authorization }, data: { first_name: firstName, last_name: rest.join(' ') },
+    })).json()
+    let vvipGuestId = null
+
+    try {
+      await page.reload()
+      await expectQaEventLoaded(page)
+      await page.getByRole('button', { name: 'Show Seating Chart', exact: false }).click()
+      const card = page.locator('.ad-chart-card').filter({ hasText: tableName })
+      await expect(card).toBeVisible()
+      const toast = page.locator('.rd-toast')
+
+      // Reserve a seat for the existing synthetic guest via the search picker.
+      await card.locator('.ad-chart-seat.empty').first().click()
+      await page.getByPlaceholder('Search by name or email…').fill(guestName)
+      await page.getByRole('button', { name: guestName, exact: false }).click()
+      await expect(toast).toContainText('Seat assigned')
+      await expect(card.locator('.ad-chart-seat.filled').filter({ hasText: guestName })).toBeVisible()
+
+      // Unassign requires confirmation.
+      await card.locator('.ad-chart-seat.filled').filter({ hasText: guestName }).click()
+      await page.locator('.rr-modal').getByRole('button', { name: 'Unassign', exact: true }).click()
+      await expect(toast).toContainText('Guest unassigned from seat')
+      await expect(card.locator('.ad-chart-seat.filled')).toHaveCount(0)
+
+      // "+ Add VVIP" creates a brand-new guest and seats them in one action.
+      await card.locator('.ad-chart-seat.empty').first().click()
+      await page.getByRole('button', { name: '+ Add VVIP', exact: true }).click()
+      await page.getByPlaceholder('First name *').fill('E2E')
+      await page.getByPlaceholder('Last name *').fill(vvipLastName)
+      await page.getByRole('button', { name: /Reserve .* Seat/ }).click()
+      await expect(toast).toContainText('added & seated')
+      await expect(card.locator('.ad-chart-seat.filled').filter({ hasText: vvipLastName })).toBeVisible()
+
+      const allGuests = await (await page.request.get(`/api/events/${eventId}/guests`, { headers: { Authorization: authorization } })).json()
+      vvipGuestId = allGuests.find((g) => g.last_name === vvipLastName)?.id
+      expect(vvipGuestId, 'the VVIP guest must have been created by the modal').toBeTruthy()
+    } finally {
+      if (vvipGuestId) await page.request.delete(`/api/events/${eventId}/guests/${vvipGuestId}`, { headers: { Authorization: authorization } }).catch(() => {})
+      await page.request.delete(`/api/events/${eventId}/guests/${guest.id}`, { headers: { Authorization: authorization } }).catch(() => {})
+      await page.request.delete(`/api/events/${eventId}/tables/${table.id}`, { headers: { Authorization: authorization } }).catch(() => {})
     }
   })
 
@@ -138,7 +203,7 @@ test.describe('Stage C operations — isolated staging fixture', () => {
 
   test('floor-plan redesign entry opens the production editor for the selected event', async ({ page }) => {
     await page.goto('/floorplan-redesign')
-    await expect(page).toHaveURL(/\/floor-plan\/[^/]+$/)
+    await expect(page).toHaveURL(/\/floorplan-redesign\/[^/]+$/)
     expect(new URL(page.url()).pathname).not.toBe('/floorplan-redesign')
     await expect(page.getByText(/Floor plan/i).first()).toBeVisible()
   })

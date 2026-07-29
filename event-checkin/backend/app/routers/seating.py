@@ -26,7 +26,8 @@ async def group_table_ids(group_id: str, db: AsyncSession) -> set[str]:
 async def _table_out(table: SeatingTable, db: AsyncSession) -> SeatingTableOut:
     count = await db.scalar(select(func.count(Guest.id)).where(Guest.table_id == table.id)) or 0
     return SeatingTableOut(id=table.id, event_id=table.event_id, name=table.name, capacity=table.capacity,
-                           category=table.category, sort_order=table.sort_order or 0, assigned_count=count)
+                           category=table.category, sort_order=table.sort_order or 0, assigned_count=count,
+                           updated_at=table.updated_at)
 
 
 def _clean_table_name(name: str) -> str:
@@ -224,10 +225,18 @@ async def create_table(event_id: str, data: SeatingTableCreate, db: AsyncSession
 
 
 @router.put("/{event_id}/tables/{table_id}", response_model=SeatingTableOut)
-async def update_table(event_id: str, table_id: str, data: SeatingTableCreate, db: AsyncSession = Depends(get_db), _: User = Depends(require_paid_event_admin)):
+async def update_table(
+    event_id: str, table_id: str, data: SeatingTableCreate,
+    if_unmodified_since: datetime | None = None,
+    db: AsyncSession = Depends(get_db), _: User = Depends(require_paid_event_admin),
+):
     table = await db.get(SeatingTable, table_id)
     if not table or table.event_id != event_id:
         raise HTTPException(404, "Table not found")
+    # Optional optimistic-concurrency guard, same pattern as task/event/guest/
+    # permission updates: omitted by callers that don't track it (legacy UI).
+    if if_unmodified_since is not None and table.updated_at and table.updated_at != if_unmodified_since:
+        raise HTTPException(409, "This table was changed by another operator. Refresh and try again.")
     table.name = await _ensure_unique_table_name(event_id, data.name, db, exclude_id=table_id)
     table.capacity = data.capacity
     table.category = data.category

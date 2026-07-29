@@ -307,6 +307,10 @@ class Event(Base):
     # String (no FK) to avoid an extra Event↔TableGroup mapper relationship.
     walk_in_enabled: Mapped[bool] = mapped_column(Boolean, default=False)
     walk_in_table_group_id: Mapped[str | None] = mapped_column(String(36), nullable=True)
+    # Existing invited guests who reach check-in without a table or group can
+    # be routed into a configured default group. This is intentionally separate
+    # from walk_in_table_group_id: they are known guests, not door walk-ins.
+    default_guest_table_group_id: Mapped[str | None] = mapped_column(String(36), nullable=True)
     # Table Groups add-on: when True (default), a guest with an assigned table
     # group may only be seated/checked-in at tables inside that group. Events
     # with no table groups are unaffected regardless of this flag.

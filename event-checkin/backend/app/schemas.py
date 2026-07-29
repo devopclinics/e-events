@@ -187,6 +187,7 @@ class EventOut(BaseModel):
     post_event_thankyou_sent_at: Optional[datetime] = None
     walk_in_enabled: bool = False
     walk_in_table_group_id: Optional[str] = None
+    default_guest_table_group_id: Optional[str] = None
     enforce_table_groups: bool = True
     seating_term: Optional[str] = None
     section_mode_enabled: bool = False

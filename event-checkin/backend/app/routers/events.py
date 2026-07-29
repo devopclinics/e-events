@@ -890,6 +890,28 @@ async def set_walk_in_group(event_id: str, body: dict, db: AsyncSession = Depend
     return event
 
 
+@router.patch("/{event_id}/default-guest-group", response_model=EventOut)
+async def set_default_guest_group(
+    event_id: str,
+    body: dict,
+    db: AsyncSession = Depends(get_db),
+    _: User = Depends(require_event_admin),
+):
+    """Route known guests with no table/group into this group at check-in."""
+    event = await db.get(Event, event_id)
+    if not event:
+        raise HTTPException(404, "Event not found")
+    gid = body.get("table_group_id") or None
+    if gid:
+        grp = await db.get(TableGroup, gid)
+        if not grp or grp.event_id != event_id:
+            raise HTTPException(404, "Table group not found for this event")
+    event.default_guest_table_group_id = gid
+    await db.commit()
+    await db.refresh(event)
+    return event
+
+
 @router.patch("/{event_id}/self-checkin", response_model=EventOut)
 async def toggle_self_checkin(
     event_id: str,

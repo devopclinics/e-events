@@ -1034,6 +1034,18 @@ async def perform_admission(guest, event, background_tasks, db) -> ScanResult:
     # Keyed on seat_number (not table_id) so pre-assigned-table guests still get a seat.
     defer_seating_to_experience = await _experience_defers_seating(event, db)
     if event and event.seating_enabled and not guest.seat_number and not defer_seating_to_experience:
+        # Known invited guests can use an event-level fallback group. Explicit
+        # table/group assignments always win, as does a section chosen by the
+        # manual check-in path before it reaches this shared admission function.
+        if (
+            not guest.is_walk_in
+            and not guest.table_id
+            and not guest.assigned_table_group_id
+            and event.default_guest_table_group_id
+        ):
+            default_group = await db.get(TableGroup, event.default_guest_table_group_id)
+            if default_group and default_group.event_id == event.id:
+                guest.assigned_table_group_id = default_group.id
         seat_error = await assign_next_seat(guest, db)
         # Table Groups: a grouped guest who couldn't be seated within their group
         # (group full / has no tables) is turned away with a clear message rather

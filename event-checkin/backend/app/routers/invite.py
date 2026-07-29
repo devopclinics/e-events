@@ -18,7 +18,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..config import settings
 from ..database import get_db
-from ..models import Event, Guest, RSVPAnswer, RSVPQuestion, SeatingTable, Shipment, GuestShipment, TableGroup, TicketType
+from ..models import Event, Guest, RSVPAnswer, RSVPQuestion, SeatingTable, Shipment, GuestShipment, TableGroup, TableGroupTable, TicketType
 from ..schemas import (
     InviteGuestPrefill, InvitePageOut, InviteTokenPageOut,
     InviteShippingOut, InviteShipmentNeed, ShippingAddressUpdate,
@@ -350,6 +350,42 @@ async def _table_in_bucket(event_id: str, bucket: str | None, db: AsyncSession) 
     return tables[0].id
 
 
+async def _group_for_bucket(event_id: str, bucket: str | None, db: AsyncSession) -> str | None:
+    """Resolve a category seating bucket to its table group.
+
+    Category rules describe table categories because that predates table
+    groups. New RSVPs should retain only the owning group, allowing check-in to
+    fill the group's first table before advancing to the next.
+    """
+    key = _type_key(bucket)
+    if not key:
+        return None
+
+    # Prefer an exact group-name match.
+    exact = await db.scalar(
+        select(TableGroup)
+        .where(TableGroup.event_id == event_id, func.lower(TableGroup.name) == key)
+        .limit(1)
+    )
+    if exact:
+        return exact.id
+
+    # Otherwise resolve through any table in the group carrying that category
+    # (e.g. "Haflah Parents2" belongs to the "Haflah Parents" group).
+    group = await db.scalar(
+        select(TableGroup)
+        .join(TableGroupTable, TableGroupTable.table_group_id == TableGroup.id)
+        .join(SeatingTable, SeatingTable.id == TableGroupTable.table_id)
+        .where(
+            TableGroup.event_id == event_id,
+            func.lower(SeatingTable.category) == key,
+        )
+        .order_by(TableGroup.sort_order, TableGroup.name)
+        .limit(1)
+    )
+    return group.id if group else None
+
+
 async def _default_group_for_invitee(event_id: str, guest_type: str | None, db: AsyncSession) -> str | None:
     key = _type_key(guest_type)
     wanted = "FAMILY"
@@ -527,7 +563,11 @@ async def _submit_multi_invitee_rsvp(
     # Category → table seating: the submitter's selected invitation category maps
     # to a submitter table bucket and an invitee table bucket (SeatingTable.category).
     seating_entry = _category_seating_entry(event, matched_limit_rule, data.answers)
-    submitter_table_id = await _table_in_bucket(event.id, (seating_entry or {}).get("submitter"), db)
+    submitter_bucket_group_id = await _group_for_bucket(
+        event.id, (seating_entry or {}).get("submitter"), db
+    )
+    if submitter_bucket_group_id:
+        submitter_group_id = submitter_bucket_group_id
     created: list[Guest] = []
 
     submitter_guest = Guest(
@@ -545,7 +585,7 @@ async def _submit_multi_invitee_rsvp(
         rsvp_responded_at=now,
         waitlisted_at=now if is_waitlisted else None,
         assigned_table_group_id=submitter_group_id,
-        table_id=submitter_table_id,
+        table_id=None,
         ticket_type_id=submitter_ticket_type_id,
         is_vip=submitter_is_vip,
         rsvp_guest_type=submitter_guest_type,
@@ -563,7 +603,11 @@ async def _submit_multi_invitee_rsvp(
         ticket_type_id = await _ticket_type_for_invitee(event.id, guest_type, db)
         is_vip = any(term in _type_key(guest_type) for term in ("vip", "dignitary", "honour", "honor", "chairman"))
         # Invited guests go to the invitee bucket of the SUBMITTER's category.
-        invitee_table_id = await _table_in_bucket(event.id, (seating_entry or {}).get("invitee"), db)
+        invitee_bucket_group_id = await _group_for_bucket(
+            event.id, (seating_entry or {}).get("invitee"), db
+        )
+        if invitee_bucket_group_id:
+            group_id = invitee_bucket_group_id
         guest = Guest(
             event_id=event.id,
             first_name=first,
@@ -579,7 +623,7 @@ async def _submit_multi_invitee_rsvp(
             rsvp_responded_at=now,
             waitlisted_at=now if is_waitlisted else None,
             assigned_table_group_id=group_id,
-            table_id=invitee_table_id,
+            table_id=None,
             ticket_type_id=ticket_type_id,
             is_vip=is_vip,
             rsvp_submitter_guest_id=submitter_guest.id,

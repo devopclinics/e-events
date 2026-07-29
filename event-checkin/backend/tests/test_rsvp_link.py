@@ -2,7 +2,7 @@ from sqlalchemy import delete, select
 
 import pytest
 
-from app.models import Event, Guest, RSVPQuestion, SeatingTable, TableGroup, TicketType
+from app.models import Event, Guest, RSVPQuestion, SeatingTable, TableGroup, TableGroupTable, TicketType
 from conftest import _Session
 
 
@@ -284,9 +284,9 @@ async def test_multi_invitee_rsvp_can_allow_duplicate_emails(ctx):
 
 
 @pytest.mark.asyncio
-async def test_multi_invitee_rsvp_maps_category_to_submitter_and_invitee_tables(ctx):
-    """The submitter's SELECTED invitation category maps to a submitter table
-    bucket and a separate invited-guests table bucket (SeatingTable.category)."""
+async def test_multi_invitee_rsvp_maps_category_to_submitter_and_invitee_groups(ctx):
+    """Category rules retain groups, not specific tables, so check-in fills one
+    table before advancing to the next within the correct bucket."""
     ev = ctx.ids["event_a"]
     async with _Session() as s:
         event = await s.get(Event, ev)
@@ -311,9 +311,19 @@ async def test_multi_invitee_rsvp_maps_category_to_submitter_and_invitee_tables(
         t_sub = SeatingTable(event_id=ev, name="Hafla Parents 1", capacity=10, category="Hafla Parents")
         t_g1 = SeatingTable(event_id=ev, name="Graduands Guests 1", capacity=1, category="Graduands Guests", sort_order=1)
         t_g2 = SeatingTable(event_id=ev, name="Graduands Guests 2", capacity=10, category="Graduands Guests", sort_order=2)
-        s.add_all([q, t_sub, t_g1, t_g2])
+        submitter_group = TableGroup(event_id=ev, name="Hafla Parents", tag="hafla-parents")
+        invitee_group = TableGroup(event_id=ev, name="Graduands Guests", tag="graduands-guests")
+        s.add_all([q, t_sub, t_g1, t_g2, submitter_group, invitee_group])
+        await s.flush()
+        s.add_all([
+            TableGroupTable(table_group_id=submitter_group.id, table_id=t_sub.id),
+            TableGroupTable(table_group_id=invitee_group.id, table_id=t_g1.id),
+            TableGroupTable(table_group_id=invitee_group.id, table_id=t_g2.id),
+        ])
         await s.commit()
-        question_id, sub_id, g1_id, g2_id = q.id, t_sub.id, t_g1.id, t_g2.id
+        question_id = q.id
+        submitter_group_id = submitter_group.id
+        invitee_group_id = invitee_group.id
 
     response = await ctx.client.post(
         "/api/invite/link/cat-seating-token/rsvp",
@@ -331,11 +341,12 @@ async def test_multi_invitee_rsvp_maps_category_to_submitter_and_invitee_tables(
     async with _Session() as s:
         guests = (await s.execute(select(Guest).where(Guest.event_id == ev))).scalars().all()
         by_name = {f"{g.first_name} {g.last_name}".strip(): g for g in guests}
-        # Submitter → submitter bucket table.
-        assert by_name["Hafla Parent"].table_id == sub_id
-        # First invitee fills the capacity-1 bucket table, second overflows to the next.
-        assert by_name["Guest One"].table_id == g1_id
-        assert by_name["Guest Two"].table_id == g2_id
+        assert by_name["Hafla Parent"].table_id is None
+        assert by_name["Hafla Parent"].assigned_table_group_id == submitter_group_id
+        assert by_name["Guest One"].table_id is None
+        assert by_name["Guest Two"].table_id is None
+        assert by_name["Guest One"].assigned_table_group_id == invitee_group_id
+        assert by_name["Guest Two"].assigned_table_group_id == invitee_group_id
 
 
 @pytest.mark.asyncio

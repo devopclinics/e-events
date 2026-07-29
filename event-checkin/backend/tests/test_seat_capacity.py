@@ -10,6 +10,7 @@ All paths funnel through perform_admission -> assign_next_seat -> _seat_state,
 which counts every guest physically on the table. These tests lock that in.
 """
 import pytest
+from datetime import datetime
 from sqlalchemy import delete, func, select
 
 from conftest import _Session
@@ -78,6 +79,96 @@ async def test_walk_ins_fill_then_block(ctx):
     assert (await w("W2")).json()["status"] == "admitted"
     assert _blocked((await w("W3")).json())
     assert await _seated(t) == 2
+
+
+@pytest.mark.asyncio
+async def test_known_ungrouped_guests_use_default_group_and_fill_tables_in_order(ctx):
+    ev = ctx.ids["event_a"]
+    await _setup_event(
+        ev, seating_enabled=True, manual_checkin_enabled=True,
+        enforce_table_groups=True,
+    )
+    ctx.login(ctx.ids["superadmin"])
+    first = await _table(ctx, ev, "First", 2)
+    second = await _table(ctx, ev, "Second", 2)
+    group = await _group(ctx, ev, "Default invited guests", [first, second])
+    async with _Session() as s:
+        (await s.get(Event, ev)).default_guest_table_group_id = group
+        await s.commit()
+
+    guest_ids = []
+    for name in ("One", "Two", "Three"):
+        guest_id, _ = await _guest(ctx, ev, name)
+        guest_ids.append(guest_id)
+
+    for guest_id in guest_ids:
+        result = await ctx.client.post(f"/api/events/{ev}/guests/{guest_id}/checkin")
+        assert result.status_code == 200
+        assert result.json()["status"] == "admitted"
+
+    async with _Session() as s:
+        guests = [await s.get(Guest, guest_id) for guest_id in guest_ids]
+        assert [g.assigned_table_group_id for g in guests] == [group, group, group]
+        assert [g.table_id for g in guests] == [first, first, second]
+        assert [g.seat_number for g in guests] == ["1", "2", "1"]
+
+
+@pytest.mark.asyncio
+async def test_default_group_never_overrides_existing_guest_assignment(ctx):
+    ev = ctx.ids["event_a"]
+    await _setup_event(
+        ev, seating_enabled=True, manual_checkin_enabled=True,
+        enforce_table_groups=True,
+    )
+    ctx.login(ctx.ids["superadmin"])
+    default_table = await _table(ctx, ev, "Default", 2)
+    explicit_table = await _table(ctx, ev, "Explicit", 2)
+    default_group = await _group(ctx, ev, "Default group", [default_table])
+    explicit_group = await _group(ctx, ev, "Explicit group", [explicit_table])
+    async with _Session() as s:
+        (await s.get(Event, ev)).default_guest_table_group_id = default_group
+        await s.commit()
+    guest_id, _ = await _guest(ctx, ev, "Explicit", group=explicit_group)
+
+    result = await ctx.client.post(f"/api/events/{ev}/guests/{guest_id}/checkin")
+    assert result.status_code == 200
+    async with _Session() as s:
+        guest = await s.get(Guest, guest_id)
+        assert guest.assigned_table_group_id == explicit_group
+        assert guest.table_id == explicit_table
+
+
+@pytest.mark.asyncio
+async def test_default_guest_group_setting_validates_event_ownership(ctx):
+    ev = ctx.ids["event_a"]
+    ctx.login(ctx.ids["superadmin"])
+    table = await _table(ctx, ev, "Default", 2)
+    group = await _group(ctx, ev, "Default group", [table])
+
+    saved = await ctx.client.patch(
+        f"/api/events/{ev}/default-guest-group",
+        json={"table_group_id": group},
+    )
+    assert saved.status_code == 200
+    assert saved.json()["default_guest_table_group_id"] == group
+
+    async with _Session() as s:
+        other = Event(
+            org_id=ctx.ids["org_b"],
+            name="Other event",
+            couples_name="Other",
+            event_date=datetime(2026, 10, 1),
+            checkin_base_url="http://x",
+        )
+        s.add(other)
+        await s.commit()
+        other_id = other.id
+
+    rejected = await ctx.client.patch(
+        f"/api/events/{other_id}/default-guest-group",
+        json={"table_group_id": group},
+    )
+    assert rejected.status_code == 404
 
 
 @pytest.mark.asyncio

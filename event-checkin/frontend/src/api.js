@@ -595,6 +595,10 @@ export const api = {
     req('PATCH', `/events/${eventId}/walk-in-group`, {
       table_group_id: tableGroupId,
     }),
+  setDefaultGuestGroup: (eventId, tableGroupId) =>
+    req('PATCH', `/events/${eventId}/default-guest-group`, {
+      table_group_id: tableGroupId,
+    }),
   registerWalkIn: (eventId, data) => req('POST', `/events/${eventId}/guests/walk-in`, data),
   adminSetManualCheckin: (eventId, active) => req('PATCH', `/admin/events/${eventId}/manual-checkin`, { active }),
   adminSetMms: (eventId, active) => req('PATCH', `/admin/events/${eventId}/mms`, { active }),

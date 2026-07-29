@@ -136,6 +136,46 @@ function CommHealthCard({ comm, showEntireEventBadge }) {
   )
 }
 
+const BROADCAST_TARGET_LABELS = {
+  all: 'All guests', admitted: 'Checked in', not_admitted: 'Not yet checked in',
+  confirmed: 'RSVP: Attending', declined: 'RSVP: Declined', no_reply: 'RSVP: No reply', none: 'Specific recipients',
+}
+const CHANNEL_ICONS = { email: '✉️', sms: '📱', whatsapp: '🟢', mms: '🖼️' }
+
+function BroadcastHistoryCard({ broadcasts }) {
+  if (broadcasts === null) return null
+  return (
+    <div className="bg-white dark:bg-slate-800 dark:border dark:border-slate-700/60 rounded-xl shadow-sm p-4">
+      <h3 className="font-semibold text-sm dark:text-white mb-3">Broadcast history</h3>
+      {broadcasts.length === 0 ? (
+        <p className="text-sm text-slate-400">No broadcasts sent yet.</p>
+      ) : (
+        <div className="space-y-3">
+          {broadcasts.map((b) => (
+            <details key={b.id} className="border border-slate-100 dark:border-slate-700 rounded-lg p-3">
+              <summary className="cursor-pointer flex flex-wrap items-center justify-between gap-2 text-sm">
+                <span className="text-slate-500 dark:text-slate-400 text-xs">{new Date(b.created_at).toLocaleString()}</span>
+                <span className="font-medium text-slate-700 dark:text-slate-200 truncate max-w-xs">{b.message}</span>
+                <span className="text-xs text-slate-400 dark:text-slate-500">{BROADCAST_TARGET_LABELS[b.target] || b.target}</span>
+                <span className="flex gap-2 text-xs">
+                  {b.channels.map((c) => (
+                    <span key={c}>{CHANNEL_ICONS[c] || c} {b.channel_counts?.[c]?.queued ?? 0}</span>
+                  ))}
+                </span>
+              </summary>
+              <div className="mt-2 pt-2 border-t border-slate-100 dark:border-slate-700 text-sm text-slate-700 dark:text-slate-200 whitespace-pre-wrap">{b.message}</div>
+              <div className="mt-2 text-xs text-slate-500 dark:text-slate-400">
+                Queued {b.queued} · Skipped (no contact) {b.skipped_no_contact} · Skipped (no consent) {b.skipped_no_consent}
+                {b.skipped_no_credits ? ` · Skipped (out of credits) ${b.skipped_no_credits}` : ''}
+              </div>
+            </details>
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
+
 function RecentActivity({ items }) {
   if (!items) return null
   return (
@@ -378,6 +418,7 @@ export default function ResultsPage() {
   const [experience, setExperience] = useState(null)
   const [meals, setMeals] = useState(null)
   const [invitations, setInvitations] = useState(null)
+  const [broadcasts, setBroadcasts] = useState(null)
   const [operations, setOperations] = useState(null)
   const [connected, setConnected] = useState(false)
   const [blockedStepId, setBlockedStepId] = useState(null)
@@ -458,7 +499,11 @@ export default function ResultsPage() {
       if (tab === 'program') setProgram(await api.resultsProgram(id, d || undefined))
       else if (tab === 'experience') setExperience(await api.resultsExperience(id))
       else if (tab === 'meals') setMeals(await api.resultsMeals(id))
-      else if (tab === 'invitations') setInvitations(await api.resultsInvitations(id))
+      else if (tab === 'invitations') {
+        const [inv, bc] = await Promise.all([api.resultsInvitations(id), api.resultsBroadcasts(id)])
+        setInvitations(inv)
+        setBroadcasts(bc)
+      }
       else if (tab === 'operations') setOperations(await api.resultsOperations(id))
     } catch { /* leave prior data visible rather than blanking on a transient error */ }
   }, [])
@@ -531,6 +576,7 @@ export default function ResultsPage() {
   useEffect(() => {
     if (!eventId || activeTab !== 'invitations') return
     setInvitations(null)
+    setBroadcasts(null)
     refetchTab('invitations', eventId, day)
   }, [eventId, activeTab, refetchTab])
 
@@ -1000,6 +1046,7 @@ export default function ResultsPage() {
                   </div>
                   <CommHealthCard comm={invitations.communication} showEntireEventBadge={hasScopeFilter} />
                 </div>
+                <BroadcastHistoryCard broadcasts={broadcasts} />
               </div>
             )
           )}

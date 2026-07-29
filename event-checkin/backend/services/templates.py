@@ -255,6 +255,27 @@ TEMPLATE_DEFS: dict[str, dict] = {
         sms_body="Hi {{guest_first_name}}, thanks for letting us know you can't make {{event_name}}. We'll miss you!",
         whatsapp_body="Hi {{guest_first_name}}, thanks for letting us know you can't make {{event_name}}. We'll miss you!",
     ),
+    # ── Capacity waitlist ────────────────────────────────────────────────────────
+    "waitlisted": _t(
+        "Added to waitlist", ["email", "sms"], group="Waitlist",
+        subject="You're on the waitlist — {{event_name}}",
+        email_body=(
+            "<p>Hi <strong>{{guest_first_name}}</strong>,</p>"
+            "<p>{{event_name}} is at capacity right now, so we've added you to the "
+            "waitlist. We'll email you the moment a spot opens up.</p>"
+        ),
+        sms_body="Hi {{guest_first_name}}, {{event_name}} is full right now — you're on the waitlist and we'll text you if a spot opens up.",
+    ),
+    "waitlist_promoted": _t(
+        "Promoted from waitlist", ["email", "sms"], group="Waitlist",
+        subject="A spot opened up — {{event_name}}",
+        email_body=(
+            "<p>Hi <strong>{{guest_first_name}}</strong>,</p>"
+            "<p>Good news — a spot opened up at <strong>{{event_name}}</strong> and "
+            "it's yours. Your Festio Pass is on its way in a separate email.</p>"
+        ),
+        sms_body="Good news {{guest_first_name}}! A spot opened up for {{event_name}} — check your email for your pass.",
+    ),
     # ── Approval workflow ───────────────────────────────────────────────────────
     "approval_pending": _t(
         "Approval pending", ["email", "sms", "whatsapp"], group="Approval",
@@ -403,7 +424,7 @@ TEMPLATE_DEFS: dict[str, dict] = {
         note="Optional email template for session attendance completion if session email sending is enabled later.",
     ),
     "broadcast": _t(
-        "Event update / broadcast", ["email", "sms", "whatsapp"], group="Day-of",
+        "Event update / broadcast", ["email", "sms", "whatsapp", "mms"], group="Day-of",
         subject="Update — {{event_name}}",
         email_body=(
             "<h2>{{event_name}}</h2>"
@@ -412,8 +433,17 @@ TEMPLATE_DEFS: dict[str, dict] = {
         ),
         sms_body="Hi {{guest_first_name}}! {{message}}",
         whatsapp_body="Hi {{guest_first_name}}! {{message}}",
-        placeholders=PLACEHOLDERS + ["message"],
-        note="{{message}} is the free-text update typed when sending the broadcast.",
+        mms_body="Hi {{guest_first_name}}! {{message}}",
+        # Broadcast only ever has an Event + Guest context (no ticket/table/
+        # seating/experience data) — restrict to what actually resolves.
+        # Anything else from the global PLACEHOLDERS list would silently
+        # render blank.
+        placeholders=[
+            "message", "guest_first_name", "guest_last_name", "guest_full_name",
+            "event_name", "event_date", "event_time", "organizer_name",
+            "venue_name", "venue_address", "seating_term", "festiome_link",
+        ],
+        note="{{message}} is the free-text update typed when sending the broadcast. MMS also attaches the image URL supplied when sending.",
     ),
     "post_event_thankyou": _t(
         "Post-event thank-you & feedback", ["email", "sms", "whatsapp"], group="Day-of",

@@ -11,16 +11,18 @@ from sqlalchemy import select, desc, func, text, delete, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..database import get_db
-from ..models import (Organization, Event, User, Membership, PricingPlan, AffiliateStore, TrialRequest,
-                      MessageCreditLedger,
+from ..models import (Organization, Event, User, Membership, PricingPlan, OrgPlan, AffiliateStore, TrialRequest,
+                      MessageCreditLedger, MessagingCreditRate,
                       Guest, ScanEvent, GuestTagLink, GuestShipment, GuestMenuChoice, RSVPAnswer,
                       SeatingTable, TableGroup, TableGroupTable)
-from ..schemas import (GrantRequest, OperatorInvite, PlanUpsert, UserOut,
+from ..schemas import (GrantRequest, OperatorInvite, PlanUpsert, OrgPlanUpsert, CreditRateUpsert, UserOut,
                        AffiliateStoreIn, AffiliateStoreOut, TrialRequestOut, TrialResolve,
-                       AccountOrgOut, AccountMemberOut, ActiveToggle, MemberRole, EventResetRequest)
+                       AccountOrgOut, AccountMemberOut, ActiveToggle, MemberRole, EventResetRequest,
+                       RedesignCohortUpdate)
 from ..auth import require_superadmin, set_firebase_disabled, delete_firebase_user
 from ..billing import get_plan, apply_purchase
-from ..entitlements import assert_feature_allowed, grant_message_credits
+from .. import entitlements
+from ..entitlements import assert_feature_allowed, grant_message_credits, channel_weight, DEFAULT_CHANNEL_WEIGHTS, DEFAULT_EMAIL_CREDITS_PER_EMAIL
 from services.email_service import send_simple_email
 from services.readiness_report import build_readiness, render_readiness_html
 
@@ -437,6 +439,7 @@ async def list_accounts(_: User = Depends(require_superadmin), db: AsyncSession 
         ))
     return [AccountOrgOut(
         id=o.id, name=o.name, slug=o.slug, is_active=o.is_active,
+        redesign_cohort=o.redesign_cohort,
         created_at=o.created_at, event_count=int(counts.get(o.id, 0)),
         members=members_by_org.get(o.id, []),
     ) for o in orgs]
@@ -457,6 +460,25 @@ async def set_org_active(org_id: str, body: ActiveToggle,
     await db.refresh(org)
     cnt = await db.scalar(select(func.count(Event.id)).where(Event.org_id == org_id)) or 0
     return AccountOrgOut(id=org.id, name=org.name, slug=org.slug, is_active=org.is_active,
+                         redesign_cohort=org.redesign_cohort,
+                         created_at=org.created_at, event_count=int(cnt), members=[])
+
+
+@router.patch("/orgs/{org_id}/redesign-cohort", response_model=AccountOrgOut)
+async def set_org_redesign_cohort(org_id: str, body: RedesignCohortUpdate,
+                                  _: User = Depends(require_superadmin), db: AsyncSession = Depends(get_db)):
+    """Instant, reversible redesign-rollout control for one tenant. Rollback is
+    calling this again with 'legacy_only' — no redeploy, no DB rollback. Every
+    operator in the org sees the same UI (cohort is per-org, not per-user)."""
+    org = await db.get(Organization, org_id)
+    if not org:
+        raise HTTPException(404, "Organization not found")
+    org.redesign_cohort = body.redesign_cohort
+    await db.commit()
+    await db.refresh(org)
+    cnt = await db.scalar(select(func.count(Event.id)).where(Event.org_id == org_id)) or 0
+    return AccountOrgOut(id=org.id, name=org.name, slug=org.slug, is_active=org.is_active,
+                         redesign_cohort=org.redesign_cohort,
                          created_at=org.created_at, event_count=int(cnt), members=[])
 
 
@@ -619,6 +641,158 @@ async def delete_plan(key: str, _: User = Depends(require_superadmin), db: Async
     await db.commit()
 
 
+# ── Messaging credit weights (global + per-org override) ────────────────────
+# What each channel costs per send, in credits — see team-docs/index.html §2c
+# for the cost-ratio standard behind these. Replaces the old env-var-only
+# MESSAGE_CREDIT_WEIGHTS (required a redeploy to change). Read at send time
+# from entitlements.py's in-memory cache, not the DB directly — every write
+# here must reload that cache or the change won't take effect until the next
+# process restart. NOTE: the cache is per-process; on a multi-replica prod
+# deploy a save here only takes effect immediately on the replica that
+# handled the request, other replicas pick it up on their next restart. Fine
+# for the current single-replica staging setup; flagged as a follow-up for
+# multi-replica prod (would need a pub/sub invalidation broadcast, same
+# pattern as the existing SSE fan-out).
+_CREDIT_RATE_CHANNELS = ["sms", "whatsapp", "mms", "rcs", "email"]
+
+
+def _credit_rate_default(channel: str) -> float:
+    return DEFAULT_EMAIL_CREDITS_PER_EMAIL if channel == "email" else DEFAULT_CHANNEL_WEIGHTS.get(channel, 1)
+
+
+@router.get("/credit-rates/global")
+async def list_global_credit_rates(_: User = Depends(require_superadmin), db: AsyncSession = Depends(get_db)):
+    rows = {r.channel: r for r in (await db.execute(
+        select(MessagingCreditRate).where(MessagingCreditRate.org_id.is_(None))
+    )).scalars().all()}
+    return [
+        {
+            "channel": ch,
+            "credits_per_unit": rows[ch].credits_per_unit if ch in rows else _credit_rate_default(ch),
+            "is_override": ch in rows,
+        }
+        for ch in _CREDIT_RATE_CHANNELS
+    ]
+
+
+@router.put("/credit-rates/global/{channel}")
+async def upsert_global_credit_rate(
+    channel: str, body: CreditRateUpsert,
+    _: User = Depends(require_superadmin), db: AsyncSession = Depends(get_db),
+):
+    if channel not in _CREDIT_RATE_CHANNELS:
+        raise HTTPException(400, f"Unknown channel {channel!r}")
+    if body.credits_per_unit <= 0:
+        raise HTTPException(400, "credits_per_unit must be positive")
+    row = (await db.execute(
+        select(MessagingCreditRate).where(MessagingCreditRate.org_id.is_(None), MessagingCreditRate.channel == channel)
+    )).scalar_one_or_none()
+    if not row:
+        row = MessagingCreditRate(org_id=None, channel=channel)
+        db.add(row)
+    row.credits_per_unit = body.credits_per_unit
+    await db.commit()
+    await entitlements.reload_credit_rate_cache(db)
+    return {"ok": True}
+
+
+@router.get("/credit-rates/org/{org_id}")
+async def list_org_credit_rates(org_id: str, _: User = Depends(require_superadmin), db: AsyncSession = Depends(get_db)):
+    if not await db.get(Organization, org_id):
+        raise HTTPException(404, "Organization not found")
+    rows = {r.channel: r for r in (await db.execute(
+        select(MessagingCreditRate).where(MessagingCreditRate.org_id == org_id)
+    )).scalars().all()}
+    global_rows = {r.channel: r.credits_per_unit for r in (await db.execute(
+        select(MessagingCreditRate).where(MessagingCreditRate.org_id.is_(None))
+    )).scalars().all()}
+    return [
+        {
+            "channel": ch,
+            "credits_per_unit": rows[ch].credits_per_unit if ch in rows else None,
+            "effective_rate": rows[ch].credits_per_unit if ch in rows else global_rows.get(ch, _credit_rate_default(ch)),
+            "is_override": ch in rows,
+        }
+        for ch in _CREDIT_RATE_CHANNELS
+    ]
+
+
+@router.put("/credit-rates/org/{org_id}/{channel}")
+async def upsert_org_credit_rate(
+    org_id: str, channel: str, body: CreditRateUpsert,
+    _: User = Depends(require_superadmin), db: AsyncSession = Depends(get_db),
+):
+    if channel not in _CREDIT_RATE_CHANNELS:
+        raise HTTPException(400, f"Unknown channel {channel!r}")
+    if body.credits_per_unit <= 0:
+        raise HTTPException(400, "credits_per_unit must be positive")
+    if not await db.get(Organization, org_id):
+        raise HTTPException(404, "Organization not found")
+    row = (await db.execute(
+        select(MessagingCreditRate).where(MessagingCreditRate.org_id == org_id, MessagingCreditRate.channel == channel)
+    )).scalar_one_or_none()
+    if not row:
+        row = MessagingCreditRate(org_id=org_id, channel=channel)
+        db.add(row)
+    row.credits_per_unit = body.credits_per_unit
+    await db.commit()
+    await entitlements.reload_credit_rate_cache(db)
+    return {"ok": True}
+
+
+@router.delete("/credit-rates/org/{org_id}/{channel}", status_code=204)
+async def delete_org_credit_rate(
+    org_id: str, channel: str,
+    _: User = Depends(require_superadmin), db: AsyncSession = Depends(get_db),
+):
+    row = (await db.execute(
+        select(MessagingCreditRate).where(MessagingCreditRate.org_id == org_id, MessagingCreditRate.channel == channel)
+    )).scalar_one_or_none()
+    if not row:
+        raise HTTPException(404, "No override set for this org/channel")
+    await db.delete(row)
+    await db.commit()
+    await entitlements.reload_credit_rate_cache(db)
+
+
+# ── Org-level subscription plans (gate org-wide paid features, e.g. read-write
+# API access) — separate catalog from the per-event PricingPlan above.
+
+@router.get("/org-plans")
+async def list_org_plans(_: User = Depends(require_superadmin), db: AsyncSession = Depends(get_db)):
+    rows = (await db.execute(select(OrgPlan).order_by(OrgPlan.sort_order))).scalars().all()
+    return [
+        {"key": p.key, "label": p.label, "usd_monthly": p.usd_monthly, "ngn_monthly": p.ngn_monthly,
+         "features": p.features, "active": p.active, "sort_order": p.sort_order}
+        for p in rows
+    ]
+
+
+@router.put("/org-plans/{key}")
+async def upsert_org_plan(key: str, body: OrgPlanUpsert, _: User = Depends(require_superadmin), db: AsyncSession = Depends(get_db)):
+    plan = await db.get(OrgPlan, key)
+    if not plan:
+        plan = OrgPlan(key=key)
+        db.add(plan)
+    plan.label = body.label
+    plan.usd_monthly = body.usd_monthly
+    plan.ngn_monthly = body.ngn_monthly
+    plan.features = body.features
+    plan.active = body.active
+    plan.sort_order = body.sort_order
+    await db.commit()
+    return {"ok": True}
+
+
+@router.delete("/org-plans/{key}", status_code=204)
+async def delete_org_plan(key: str, _: User = Depends(require_superadmin), db: AsyncSession = Depends(get_db)):
+    plan = await db.get(OrgPlan, key)
+    if not plan:
+        raise HTTPException(404, "Plan not found")
+    await db.delete(plan)
+    await db.commit()
+
+
 # ── Affiliate stores (registry Buy-link tags) ─────────────────────────────────
 
 def _store_out(s: AffiliateStore) -> AffiliateStoreOut:
@@ -750,6 +924,39 @@ async def credit_ledger_report(
             for row, event_name, org_name in recent_rows
         ],
     }
+
+
+@router.get("/usage-report")
+async def usage_report(
+    _: User = Depends(require_superadmin),
+    db: AsyncSession = Depends(get_db),
+):
+    """Messaging usage per org per channel, across every send type (broadcasts,
+    invites, reminders, confirmations, ...) — not just credit-metered sends,
+    since broadcast email is logged at zero cost too (see events.py:
+    record_free_send)."""
+    rows = (await db.execute(
+        select(
+            MessageCreditLedger.org_id,
+            Organization.name,
+            MessageCreditLedger.channel,
+            func.count(MessageCreditLedger.id),
+            func.coalesce(func.sum(MessageCreditLedger.credits), 0),
+            func.coalesce(func.sum(MessageCreditLedger.provider_cost_cents), 0),
+        )
+        .join(Organization, Organization.id == MessageCreditLedger.org_id)
+        .where(MessageCreditLedger.action == "spend")
+        .group_by(MessageCreditLedger.org_id, Organization.name, MessageCreditLedger.channel)
+        .order_by(Organization.name, MessageCreditLedger.channel)
+    )).all()
+    orgs: dict[str, dict] = {}
+    for org_id, org_name, channel, count, credits, cost in rows:
+        org = orgs.setdefault(org_id, {"org_id": org_id, "org_name": org_name, "channels": {}, "total_sends": 0, "total_credits": 0, "total_cost_cents": 0})
+        org["channels"][channel or "unknown"] = {"sends": int(count or 0), "credits": int(credits or 0), "provider_cost_cents": int(cost or 0)}
+        org["total_sends"] += int(count or 0)
+        org["total_credits"] += int(credits or 0)
+        org["total_cost_cents"] += int(cost or 0)
+    return {"orgs": sorted(orgs.values(), key=lambda o: o["total_sends"], reverse=True)}
 
 
 # ── Trial-credit requests ────────────────────────────────────────────────────

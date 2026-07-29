@@ -271,6 +271,19 @@ export const CONTENT = {
         warn: 'Treat Message Host and direct messages as private. Never paste private message text into an announcement or shared group while troubleshooting.',
       },
       {
+        id: 'org-tasks', icon: '✅', title: 'Tasks: run your to-do list as a team',
+        intro: 'A per-event Kanban board for coordination work that isn\'t guest data — "confirm florist," "print name badges," "brief the door staff." Any team member on the event can see and work the board, not just owners/admins.',
+        steps: [
+          'Open the event\'s Tasks tab (or My Tasks in the top nav to see every task assigned to you across all events at once).',
+          'Add a task: title, optional notes, an assignee from your team, and an optional due date.',
+          'Drag a card between Open, In progress, and Done to update its status — or change status from the task\'s detail panel.',
+          'Open a task to see its full detail panel: a comment thread for back-and-forth with whoever\'s working it, subtasks for breaking a bigger task into steps, and file attachments.',
+          'Attach files or images to a task from either side — the person who created it or the person it\'s assigned to. Useful for reference photos, signed vendor contracts, floor-plan PDFs, anything the task needs.',
+          'Every status change, reassignment, and attachment is logged in the task\'s activity feed alongside the comments, so there\'s one place to see the full history.',
+        ],
+        tip: 'Use My Tasks if you\'re staff working across several events — it pulls together everything assigned to you in one list instead of checking each event\'s board separately.',
+      },
+      {
         id: 'org-team', icon: '🧑‍🤝‍🧑', title: 'Add your team',
         img: '/media/help2-team.png',
         steps: [
@@ -333,6 +346,21 @@ export const CONTENT = {
         tip: 'Check your credit balance before any bulk send. The Event Pass area shows your current balance and usage history.',
       },
       {
+        id: 'org-calendars', icon: '🗓️', title: 'Event Calendars: curated listing pages',
+        intro: 'A Calendar is a single page that lists several of your events together — public (one shared link, anyone can view) or private (a personalized link per contact, with pre-filled RSVP and status tracking). This is organisation-wide, not per-event — find it under Org Settings → Calendars.',
+        steps: [
+          'Go to Org Settings → Calendars → "+ New calendar". Give it a title, choose Public or Private, and click Create.',
+          'Click the calendar to expand it. Add an optional description (shown under the title), upload a logo and set its display width, and toggle "Hide past events" (on by default — turn it off to show a full/archival listing instead of just what\'s upcoming).',
+          'Curate events: under "Events on this calendar," pick an event from the dropdown and click Add — it\'s saved immediately, no separate save step. Drag the ⠿ handle (or use the ↑/↓ buttons) to reorder; click Remove to take one off.',
+          'Registering from a calendar sends the visitor to that event\'s own normal RSVP page — same questions, capacity limits, and confirmation email as any other RSVP. The calendar is a curated doorway, not a second registration system, so whatever you\'ve configured per-event (open/invite-only, custom questions) applies exactly as normal.',
+          'Public calendars: copy the Public link and share it anywhere, or copy the Embed snippet to drop the calendar into another website as an iframe.',
+          'Private calendars: build a Contact List first (Org Settings → Contact Lists — add contacts one at a time or upload a CSV), then attach one or more lists to the calendar from its contact-list picker. Every contact gets their own personalized access token automatically, including anyone added to an already-attached list later.',
+          'Click "Send calendar link to all contacts" to email each contact their personal link. Opening it pre-fills their name/email on any event they register for, and shows their RSVP status (accepted/declined/waitlisted) on events they\'ve already responded to instead of a blank form.',
+          'View and per-event click counts are shown on the calendar detail view, so you can see how much traffic the calendar itself and each listed event are getting.',
+        ],
+        tip: 'Use a private calendar plus a Contact List when the same group of people should see several of your events at once (e.g. a recurring series or a multi-part programme) without you sending separate individual invites for each one.',
+      },
+      {
         id: 'org-export', icon: '⬇️', title: 'Export & post-event',
         steps: [
           'Guests tab: review RSVP status, check-in time, seat, order choices, and any custom question answers.',
@@ -360,6 +388,7 @@ export const CONTENT = {
           'Can\'t see Seating / Entry areas tabs: these features must be turned on in Team &amp; settings → Features, and require an Event Pass.',
           'Staff can\'t see the event in Check-in: they must be added in Team tab AND assigned to this specific event.',
           'RSVP deadline passed but guests are still submitting: the deadline blocks new RSVPs from the public invite page. You can still add or approve guests manually from Event Setup.',
+          'A Calendar shows fewer events than you curated onto it: check "Hide past events" in that calendar\'s settings — it\'s on by default, so anything with a past event date is filtered from the public/private view even though it still shows in your admin curation list.',
         ],
       },
     ],

@@ -1,0 +1,135 @@
+/* Page-specific rules for the Experience (guest-journey workflow builder) mockup.
+   Shared chrome/tokens/panel primitives live in ./redesign/RedesignShell.css. */
+
+/* ── extra status pill variants ───────────────────────────────────────── */
+.rr-pill.draft { background: var(--warning-soft); color: var(--warning); }
+.rr-pill.draft i { width: 6px; height: 6px; border-radius: 50%; background: var(--warning); }
+.rr-pill.archived { background: var(--surface-3); color: var(--faint); }
+.rr-pill.archived i { width: 6px; height: 6px; border-radius: 50%; background: var(--faint); }
+
+/* ── workflow selector cards ──────────────────────────────────────────── */
+.ex-workflow-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; }
+.ex-wf-card { padding: 16px 18px; display: flex; flex-direction: column; gap: 8px; }
+.ex-wf-card.is-selected { border-color: var(--teal); box-shadow: 0 0 0 1px var(--teal), var(--shadow); }
+.ex-wf-top { display: flex; align-items: flex-start; justify-content: space-between; gap: 8px; }
+.ex-wf-top h3 { font-size: 13.5px; margin: 0; color: var(--ink); }
+.ex-wf-meta { display: flex; align-items: center; gap: 6px; font-size: 10.5px; color: var(--muted); flex-wrap: wrap; }
+.ex-wf-updated { font-size: 10px; color: var(--faint); }
+.ex-wf-actions { display: flex; gap: 8px; margin-top: 4px; }
+.ex-wf-actions .rr-btn { flex: 1; justify-content: center; height: 32px; font-size: 10.5px; padding: 0 8px; }
+
+/* ── workflow step builder ────────────────────────────────────────────── */
+.ex-step-list { display: flex; flex-direction: column; gap: 6px; }
+.ex-step-row { display: flex; align-items: center; gap: 12px; padding: 10px 12px; border: 1px solid var(--line-soft);
+  border-radius: 10px; background: var(--surface-2); }
+.ex-step-handle { color: var(--faint); cursor: grab; font-size: 13px; line-height: 1; flex: none; }
+.ex-step-num { width: 20px; height: 20px; border-radius: 50%; background: var(--surface-3); color: var(--muted);
+  font-size: 9.5px; font-weight: 700; display: grid; place-items: center; flex: none; }
+.ex-step-icon { width: 30px; height: 30px; border-radius: 8px; background: var(--teal-soft); color: var(--teal);
+  display: grid; place-items: center; flex: none; }
+.ex-step-info { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.ex-step-info strong { font-size: 12px; color: var(--ink); }
+.ex-step-info span { font-size: 10.5px; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ex-step-actions { display: flex; gap: 4px; flex: none; }
+.ex-step-actions button { border: 0; background: none; color: var(--faint); padding: 6px; border-radius: 6px; cursor: pointer; display: grid; place-items: center; }
+.ex-step-actions button:hover { background: var(--surface-3); color: var(--ink); }
+.ex-icon-up { transform: rotate(-90deg); }
+.ex-icon-down { transform: rotate(90deg); }
+
+/* ── setup tab ─────────────────────────────────────────────────────────── */
+.ex-checkbox-grid { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 6px; }
+.ex-checkbox { display: flex; align-items: center; gap: 7px; font-size: 11px; color: var(--ink); background: var(--surface-2);
+  border: 1px solid var(--line-soft); border-radius: 8px; padding: 6px 10px; cursor: pointer; }
+
+/* ── guests progress ──────────────────────────────────────────────────── */
+.ex-progress-cell { display: flex; flex-direction: column; gap: 4px; min-width: 120px; }
+.ex-progress-cell span { font-size: 9.5px; color: var(--faint); }
+
+/* ── consent tab ───────────────────────────────────────────────────────── */
+.ex-clause { padding: 10px 12px; border: 1px solid var(--line-soft); border-radius: 9px; background: var(--surface-2); margin-bottom: 8px; }
+.ex-clause strong { font-size: 11.5px; color: var(--ink); display: block; margin-bottom: 3px; }
+.ex-clause p { font-size: 10.5px; color: var(--muted); margin: 0; line-height: 1.5; }
+
+/* ── feedback tab ──────────────────────────────────────────────────────── */
+.ex-question-list { display: flex; flex-direction: column; gap: 8px; }
+.ex-question { display: flex; align-items: center; gap: 10px; font-size: 12px; color: var(--ink); padding: 9px 11px;
+  border: 1px solid var(--line-soft); border-radius: 9px; background: var(--surface-2); }
+.ex-question span { width: 20px; height: 20px; border-radius: 50%; background: var(--surface-3); color: var(--muted);
+  font-size: 9.5px; font-weight: 700; display: grid; place-items: center; flex: none; }
+.ex-avg-rating { display: flex; align-items: baseline; gap: 8px; margin-bottom: 16px; }
+.ex-avg-rating strong { font-size: 26px; color: var(--ink); }
+.ex-avg-rating span { font-size: 11px; color: var(--muted); }
+.ex-bar-breakdown { display: flex; flex-direction: column; gap: 8px; }
+.ex-bar-row { display: flex; align-items: center; gap: 9px; }
+.ex-bar-label { font-size: 10.5px; color: var(--muted); width: 26px; flex: none; }
+.ex-bar-row .rd-mini-bar { flex: 1; margin-top: 0; }
+.ex-bar-pct { font-size: 10px; color: var(--faint); width: 32px; text-align: right; flex: none; }
+
+/* ── analytics: funnel + audit ─────────────────────────────────────────── */
+.ex-funnel { display: flex; flex-direction: column; gap: 12px; }
+.ex-funnel-row { display: grid; grid-template-columns: 150px 1fr 44px; align-items: center; gap: 10px; }
+.ex-funnel-label { font-size: 11px; color: var(--ink); font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ex-funnel-track { height: 16px; border-radius: 5px; background: var(--surface-3); overflow: hidden; }
+.ex-funnel-track > i { display: block; height: 100%; background: var(--teal); border-radius: 5px; }
+.ex-funnel-count { font-size: 11px; color: var(--muted); font-weight: 700; text-align: right; }
+
+.ex-audit-list { display: flex; flex-direction: column; gap: 10px; }
+.ex-audit-row { display: flex; align-items: flex-start; gap: 9px; font-size: 11px; color: var(--ink); }
+.ex-audit-row svg { color: var(--faint); margin-top: 2px; flex: none; }
+.ex-audit-row span { flex: 1; }
+.ex-audit-row small { font-size: 9.5px; color: var(--faint); flex: none; white-space: nowrap; }
+
+/* ── module gate + workflow toolbar ────────────────────────────────────── */
+.ex-module-gate { padding: 14px 18px; margin-bottom: 14px; display: flex; flex-direction: column; gap: 4px; }
+.ex-wf-toolbar { margin-bottom: 12px; }
+.ex-version-badge { font-size: 9px; font-weight: 700; color: var(--faint); background: var(--surface-3); padding: 1px 6px; border-radius: 100px; margin-left: 4px; }
+
+/* ── quick-start templates (Setup tab) ─────────────────────────────────── */
+.ex-template-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px; }
+.ex-template-card { border: 1px solid var(--line); background: var(--surface); border-radius: 9px; padding: 10px 12px;
+  display: flex; flex-direction: column; gap: 3px; cursor: pointer; text-align: left; }
+.ex-template-card:hover { border-color: var(--teal); }
+.ex-template-card strong { font-size: 11.5px; color: var(--ink); }
+.ex-template-card span { font-size: 10px; color: var(--muted); }
+
+/* ── step type-specific config panel ───────────────────────────────────── */
+.ex-step-config { margin-top: 12px; padding: 12px 14px; border: 1px dashed var(--line); border-radius: 10px; background: var(--surface-2); }
+.ex-step-config > strong { font-size: 11.5px; color: var(--ink); display: block; margin-bottom: 4px; }
+
+/* ── guest detail / overrides ──────────────────────────────────────────── */
+.ex-row-active { background: var(--teal-soft); }
+.ex-override-row { display: flex; flex-wrap: wrap; gap: 6px; }
+.ex-override-btn { border: 1px solid var(--line); background: var(--surface); color: var(--ink); font-size: 10.5px;
+  font-weight: 600; padding: 6px 11px; border-radius: 100px; cursor: pointer; }
+.ex-override-btn:hover { border-color: var(--teal); color: var(--teal); }
+
+/* ── consent: panel head row, guest preview ────────────────────────────── */
+.ex-panel-head-row { display: flex; align-items: flex-start; justify-content: space-between; gap: 10px; }
+.ex-guest-preview { border: 1px solid var(--line-soft); border-radius: 9px; padding: 12px; background: var(--surface-2); }
+.ex-guest-preview strong { font-size: 11.5px; color: var(--ink); display: block; margin-bottom: 6px; }
+.ex-guest-preview p { font-size: 10.5px; color: var(--muted); margin: 4px 0; }
+
+/* ── feedback: response search list ────────────────────────────────────── */
+.ex-response-list { max-height: 140px; overflow-y: auto; margin-top: 8px; }
+.ex-response-row { font-size: 11px; color: var(--ink); padding: 6px 0; border-bottom: 1px solid var(--line-soft); display: flex; justify-content: space-between; }
+.ex-response-row:last-child { border-bottom: 0; }
+
+/* ── messages: default/custom badge (local copy, no cross-page CSS reuse) */
+.cm-badge { display: inline-flex; align-items: center; font-size: 9px; font-weight: 700; padding: 2px 8px;
+  border-radius: 100px; letter-spacing: .01em; margin-left: 6px; }
+.cm-badge.custom { background: var(--teal-soft); color: var(--teal); }
+.cm-badge.default { background: var(--surface-3); color: var(--faint); }
+
+/* ── analytics stat tiles (local copy) ─────────────────────────────────── */
+.er-stat { padding: 14px 16px; display: flex; flex-direction: column; gap: 4px; }
+.er-stat span { font-size: 9.5px; font-weight: 700; color: var(--muted); text-transform: uppercase; letter-spacing: .03em; }
+.er-stat strong { font-size: 20px; color: var(--ink); }
+.er-stat.teal strong { color: var(--success); }
+.er-stat.amber strong { color: var(--warning); }
+
+/* ── responsive ────────────────────────────────────────────────────────── */
+@media (max-width: 1100px) {
+  .ex-workflow-grid { grid-template-columns: 1fr; }
+  .ex-funnel-row { grid-template-columns: 110px 1fr 40px; }
+  .ex-template-grid { grid-template-columns: 1fr; }
+}

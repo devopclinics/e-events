@@ -26,6 +26,7 @@ from ..models import (
     Guest,
     GuestExperienceProgress,
     GuestMenuChoice,
+    Household,
     MessageCreditLedger,
     GuestShipment,
     GuestTag,
@@ -40,12 +41,13 @@ from ..models import (
     EventUser,
     EventUserSection,
 )
-from ..schemas import GuestOut, GuestCreate, GuestUpdate, BulkAssignGroupRequest, ScanResult, WalkInRegister
+from ..schemas import GuestOut, GuestCreate, GuestUpdate, BulkAssignGroupRequest, ScanResult, WalkInRegister, HouseholdOut, HouseholdCreate, BulkAssignHouseholdRequest
 from ..auth import require_guest_manage_access, require_guest_view_access, require_official
 from ..entitlements import assert_within_guest_cap, guest_limit, can_use_paid_channels, last_credit_ledger_id, take_message_credit
 from ..channels import channels_for_flow
 from services.qr_service import generate_qr_bytes
-from services.email_service import send_invite_email, send_manual_invite_email, send_simple_email
+from services.email_service import send_invite_email, send_manual_invite_email, send_simple_email, build_calendar_attachment
+from services.outbound_safety import recipient_allowed
 from ..template_resolve import load_overrides, channel_text as template_channel_text, email_override as template_email_override, channel_text_or_default as template_channel_or_default, email_or_default as template_email_or_default
 from services.templates import TEMPLATE_DEFS, build_context as build_template_context
 from .scanner import checkin_guard, perform_admission, queue_admission_email, queue_consent_copy_email
@@ -53,6 +55,7 @@ from services import messaging
 from services.credit_ledger import send_with_credit_ledger
 from ..services.experience import next_guest_steps, sync_guest_progress
 from ..services.festiome_outbox import queue_guest_remove, queue_guest_sync
+from ..services.webhook_outbox import queue_webhook_event
 
 router = APIRouter()
 
@@ -99,14 +102,7 @@ _BROWSER_UA = (
 )
 
 
-def _xlsx_to_csv_text(raw: bytes) -> str:
-    """Convert xlsx binary to CSV-like text."""
-    import openpyxl
-    wb = openpyxl.load_workbook(io.BytesIO(raw), read_only=True, data_only=True)
-    ws = wb.active
-    rows = list(ws.iter_rows(values_only=True))
-    if not rows:
-        raise HTTPException(400, "Excel file is empty")
+def _rows_to_csv_text(rows: list) -> str:
     out = io.StringIO()
     writer = csv.writer(out)
     for row in rows:
@@ -114,12 +110,44 @@ def _xlsx_to_csv_text(raw: bytes) -> str:
     return out.getvalue()
 
 
+def _xlsx_to_csv_text(raw: bytes) -> str:
+    """Convert xlsx binary to CSV-like text. Guests are usually on the active
+    sheet, but if that one's empty (a common export quirk — e.g. the active
+    sheet is a summary/instructions tab) fall back to the first sheet that
+    actually has rows, instead of silently importing nothing."""
+    import openpyxl
+    wb = openpyxl.load_workbook(io.BytesIO(raw), read_only=True, data_only=True)
+    rows = list(wb.active.iter_rows(values_only=True))
+    if not rows:
+        for ws in wb.worksheets:
+            if ws is wb.active:
+                continue
+            rows = list(ws.iter_rows(values_only=True))
+            if rows:
+                break
+    if not rows:
+        raise HTTPException(400, "Excel file is empty")
+    return _rows_to_csv_text(rows)
+
+
+def _xls_to_csv_text(raw: bytes) -> str:
+    """Convert legacy .xls (pre-2007 binary Excel) to CSV-like text."""
+    import xlrd
+    wb = xlrd.open_workbook(file_contents=raw)
+    sheets = [wb.sheet_by_index(i) for i in range(wb.nsheets)]
+    sheet = next((s for s in sheets if s.nrows > 0), None)
+    if sheet is None:
+        raise HTTPException(400, "Excel file is empty")
+    rows = [sheet.row_values(i) for i in range(sheet.nrows)]
+    return _rows_to_csv_text(rows)
+
+
 def _decode_csv_bytes(raw: bytes, filename: str = "") -> str:
     name_lower = filename.lower()
     if name_lower.endswith(".xlsx") or raw[:4] == b"PK\x03\x04":
         return _xlsx_to_csv_text(raw)
     if name_lower.endswith(".xls") or raw[:8] == b"\xd0\xcf\x11\xe0\xa1\xb1\x1a\xe1":
-        raise HTTPException(400, "Old .xls format is not supported — save as .xlsx or export as CSV")
+        return _xls_to_csv_text(raw)
     for enc in ("utf-8-sig", "utf-8", "latin-1", "cp1252"):
         try:
             return raw.decode(enc)
@@ -153,16 +181,27 @@ def _google_sheets_xlsx_url(url: str) -> str | None:
 
 
 def _normalize_excel_url(url: str) -> str:
-    """For OneDrive / SharePoint URLs, ensure ?download=1 is set so the
-    redirect chain serves the raw file instead of the web viewer."""
+    """For OneDrive / SharePoint / Dropbox URLs, rewrite the share link so it
+    serves the raw file directly instead of an HTML viewer page — everything
+    else is fetched as-is (see the text/html rejection in _fetch_sheet_csv for
+    the practical signal that a link needs this)."""
     parsed = urlparse(url)
     host = parsed.netloc.lower()
-    if not any(h in host for h in ("1drv.ms", "onedrive.live.com", "sharepoint.com")):
-        return url
-    if "download=1" in url:
-        return url
-    sep = "&" if parsed.query else "?"
-    return f"{url}{sep}download=1"
+    if any(h in host for h in ("1drv.ms", "onedrive.live.com", "sharepoint.com")):
+        if "download=1" in url:
+            return url
+        sep = "&" if parsed.query else "?"
+        return f"{url}{sep}download=1"
+    if "dropbox.com" in host:
+        # Dropbox share links default to dl=0 (viewer page); dl=1 forces a
+        # direct download of the raw file.
+        if "dl=1" in url:
+            return url
+        if "dl=0" in url:
+            return url.replace("dl=0", "dl=1")
+        sep = "&" if parsed.query else "?"
+        return f"{url}{sep}dl=1"
+    return url
 
 
 async def _fetch_sheet_csv(url: str) -> tuple[bytes, str]:
@@ -914,6 +953,7 @@ def _dispatch_invite(background_tasks: BackgroundTasks, event: Event, guest: Gue
             event.venue_name, event.venue_address, event.admission_note,
             event.invite_cover_image,
             event_timezone=event.timezone,
+            event_end_date=event.event_end_date,
         )
         dispatched = True
 
@@ -968,6 +1008,17 @@ def _dispatch_invite(background_tasks: BackgroundTasks, event: Event, guest: Gue
         dispatched = True
 
     return dispatched
+
+
+def _invite_recipients_allowed(event: Event, guest: Guest, *, reminder: bool = False) -> bool:
+    """Preflight recipient safety before invite state or credits are mutated."""
+    flow = "reminder" if reminder else "invite"
+    chosen = channels_for_flow(event, guest, flow, paid_ok=can_use_paid_channels(event))
+    for channel in chosen:
+        recipient = guest.email if channel == "email" else guest.phone
+        if recipient and not recipient_allowed(channel, recipient):
+            return False
+    return True
 
 
 def _dispatch_rsvp_invite(background_tasks: BackgroundTasks, event: Event, guest: Guest,
@@ -1122,6 +1173,7 @@ def dispatch_approval_accepted(background_tasks: BackgroundTasks, event: Event, 
                 event.admission_note,
                 event.invite_cover_image,
                 event_timezone=event.timezone,
+                event_end_date=event.event_end_date,
             )
             sent = True
 
@@ -1158,7 +1210,12 @@ def dispatch_simple_notice(background_tasks: BackgroundTasks, event: Event, gues
     if "email" in chosen:
         subj, body = template_email_or_default(overrides, key, ctx)
         if body:
-            background_tasks.add_task(send_simple_email, guest.email, subj or event.name, body, event.id, None, guest.id, key)
+            attachments = None
+            if key == "rsvp_confirmation":
+                guest_name = f"{guest.first_name or ''} {guest.last_name or ''}".strip()
+                attachment = build_calendar_attachment(event, guest_name, guest.email, uid_suffix=guest.id)
+                attachments = [attachment] if attachment else None
+            background_tasks.add_task(send_simple_email, guest.email, subj or event.name, body, event.id, attachments, guest.id, key)
             sent = True
     if "sms" in chosen and take_message_credit(event, "sms"):
         sms = template_channel_or_default(overrides, key, "sms", ctx)
@@ -1204,6 +1261,45 @@ def dispatch_simple_notice(background_tasks: BackgroundTasks, event: Event, gues
             )
             sent = True
     return sent
+
+
+async def _promote_from_waitlist(
+    background_tasks: BackgroundTasks, event: Event, db: AsyncSession, guest: Guest | None = None,
+) -> Guest | None:
+    """Promote a guest off the capacity waitlist — the longest-waiting one by
+    default, or a specific `guest` for staff-initiated manual promotion. Called
+    whenever a confirmed/pending guest frees a spot (self-decline, staff reject,
+    delete) so the queue actually drains. Caller commits; does not commit itself."""
+    if guest is None:
+        if event.rsvp_capacity is None:
+            return None
+        guest = (await db.execute(
+            select(Guest)
+            .where(Guest.event_id == event.id, Guest.rsvp_status == "waitlisted")
+            .order_by(Guest.waitlisted_at.asc())
+            .limit(1)
+        )).scalar_one_or_none()
+    if not guest or guest.rsvp_status != "waitlisted":
+        return None
+
+    guest.waitlisted_at = None
+    overrides = await load_overrides(event.id, db)
+    needs_approval = event.rsvp_require_approval
+    guest.rsvp_status = "pending" if needs_approval else "confirmed"
+    guest.rsvp_responded_at = guest.rsvp_responded_at or datetime.utcnow()
+    if needs_approval:
+        if event.notify_rsvp_responses:
+            dispatch_simple_notice(background_tasks, event, guest, "approval_pending", overrides)
+    else:
+        now = datetime.utcnow()
+        guest.qr_generated_at = guest.qr_generated_at or now
+        guest.invite_sent_at = now
+        if event.notify_rsvp_responses:
+            dispatch_simple_notice(background_tasks, event, guest, "waitlist_promoted", overrides)
+        ok = _dispatch_invite(background_tasks, event, guest, overrides)
+        guest.invite_status = "sent" if ok else "failed"
+    queue_guest_sync(db, guest, event=event)
+    return guest
 
 
 async def _dispatch_experience_next_steps(
@@ -1345,6 +1441,12 @@ async def add_guest(event_id: str, data: GuestCreate, db: AsyncSession = Depends
     db.add(guest)
     await db.commit()
     await db.refresh(guest)
+    if await queue_webhook_event(db, org_id=event.org_id, event_type="guest.created", payload={
+        "guest_id": guest.id, "event_id": event.id,
+        "first_name": guest.first_name, "last_name": guest.last_name,
+        "email": guest.email, "rsvp_status": guest.rsvp_status,
+    }):
+        await db.commit()
     return guest
 
 
@@ -1359,8 +1461,12 @@ async def list_guests(event_id: str, db: AsyncSession = Depends(get_db), _: User
     names = dict((await db.execute(
         select(TableGroup.id, TableGroup.name).where(TableGroup.event_id == event_id)
     )).all())
+    household_names = dict((await db.execute(
+        select(Household.id, Household.name).where(Household.event_id == event_id)
+    )).all())
     for g in guests:
         g.table_group_name = names.get(g.assigned_table_group_id)
+        g.household_name = household_names.get(g.household_id)
     await _attach_message_status(guests, event_id, db)
     return guests
 
@@ -1413,11 +1519,128 @@ async def bulk_assign_table_group(
     return {"ok": True, "updated": updated, "table_group_id": body.table_group_id}
 
 
+async def _household_out(household: Household, db: AsyncSession) -> dict:
+    count = await db.scalar(select(func.count()).where(Guest.household_id == household.id)) or 0
+    return {
+        "id": household.id, "event_id": household.event_id, "name": household.name,
+        "description": household.description, "sort_order": household.sort_order,
+        "default_table_group_id": household.default_table_group_id,
+        "default_table_id": household.default_table_id,
+        "member_count": int(count),
+    }
+
+
+async def _validate_household_seating_defaults(event_id: str, data: HouseholdCreate, db: AsyncSession) -> None:
+    if data.default_table_group_id is not None:
+        grp = await db.get(TableGroup, data.default_table_group_id)
+        if not grp or grp.event_id != event_id:
+            raise HTTPException(404, "Default table group not found for this event")
+    if data.default_table_id is not None:
+        table = await db.get(SeatingTable, data.default_table_id)
+        if not table or table.event_id != event_id:
+            raise HTTPException(404, "Default table not found for this event")
+
+
+@router.get("/{event_id}/households", response_model=list[HouseholdOut])
+async def list_households(event_id: str, db: AsyncSession = Depends(get_db), _: User = Depends(require_guest_view_access)):
+    households = (await db.execute(
+        select(Household).where(Household.event_id == event_id).order_by(Household.sort_order, Household.name)
+    )).scalars().all()
+    return [await _household_out(h, db) for h in households]
+
+
+@router.post("/{event_id}/households", response_model=HouseholdOut, status_code=201)
+async def create_household(event_id: str, data: HouseholdCreate, db: AsyncSession = Depends(get_db), _: User = Depends(require_guest_manage_access)):
+    if not await db.get(Event, event_id):
+        raise HTTPException(404, "Event not found")
+    name = data.name.strip()
+    if not name:
+        raise HTTPException(400, "name is required")
+    await _validate_household_seating_defaults(event_id, data, db)
+    household = Household(
+        event_id=event_id, name=name, description=data.description, sort_order=data.sort_order or 0,
+        default_table_group_id=data.default_table_group_id, default_table_id=data.default_table_id,
+    )
+    db.add(household)
+    await db.commit()
+    await db.refresh(household)
+    return await _household_out(household, db)
+
+
+@router.put("/{event_id}/households/{household_id}", response_model=HouseholdOut)
+async def update_household(event_id: str, household_id: str, data: HouseholdCreate, db: AsyncSession = Depends(get_db), _: User = Depends(require_guest_manage_access)):
+    household = await db.get(Household, household_id)
+    if not household or household.event_id != event_id:
+        raise HTTPException(404, "Household not found")
+    name = data.name.strip()
+    if not name:
+        raise HTTPException(400, "name is required")
+    await _validate_household_seating_defaults(event_id, data, db)
+    household.name = name
+    household.description = data.description
+    if data.sort_order is not None:
+        household.sort_order = data.sort_order
+    household.default_table_group_id = data.default_table_group_id
+    household.default_table_id = data.default_table_id
+    await db.commit()
+    await db.refresh(household)
+    return await _household_out(household, db)
+
+
+@router.delete("/{event_id}/households/{household_id}", status_code=204)
+async def delete_household(event_id: str, household_id: str, db: AsyncSession = Depends(get_db), _: User = Depends(require_guest_manage_access)):
+    household = await db.get(Household, household_id)
+    if not household or household.event_id != event_id:
+        raise HTTPException(404, "Household not found")
+    assigned = await db.scalar(select(func.count()).where(Guest.household_id == household_id)) or 0
+    if assigned:
+        raise HTTPException(409, f"{assigned} guest(s) belong to this household — reassign them first, then delete.")
+    await db.delete(household)
+    await db.commit()
+
+
+@router.post("/{event_id}/guests/bulk-assign-household")
+async def bulk_assign_household(
+    event_id: str,
+    body: BulkAssignHouseholdRequest,
+    db: AsyncSession = Depends(get_db),
+    _: User = Depends(require_guest_manage_access),
+):
+    """Assign (or clear, when household_id is null) a household for one or many
+    guests — regardless of how each guest was added (manual, CSV, self-RSVP)."""
+    if not await db.get(Event, event_id):
+        raise HTTPException(404, "Event not found")
+    household = None
+    if body.household_id is not None:
+        household = await db.get(Household, body.household_id)
+        if not household or household.event_id != event_id:
+            raise HTTPException(404, "Household not found for this event")
+    updated = 0
+    for gid in body.guest_ids:
+        guest = await db.get(Guest, gid)
+        if not guest or guest.event_id != event_id:
+            continue
+        guest.household_id = body.household_id
+        # A household's default table/group is a one-time seating suggestion
+        # applied at assignment time — not a live link, so it never overwrites
+        # seating the guest already has, and clearing the household later
+        # doesn't touch it either.
+        if household and not guest.table_id and not guest.assigned_table_group_id:
+            if household.default_table_group_id:
+                guest.assigned_table_group_id = household.default_table_group_id
+            if household.default_table_id:
+                guest.table_id = household.default_table_id
+        updated += 1
+    await db.commit()
+    return {"ok": True, "updated": updated, "household_id": body.household_id}
+
+
 @router.patch("/{event_id}/guests/{guest_id}", response_model=GuestOut)
 async def update_guest(
     event_id: str,
     guest_id: str,
     data: GuestUpdate,
+    if_unmodified_since: datetime | None = None,
     db: AsyncSession = Depends(get_db),
     _: User = Depends(require_guest_manage_access),
 ):
@@ -1428,6 +1651,14 @@ async def update_guest(
     event = await db.get(Event, event_id)
     if not event:
         raise HTTPException(404, "Event not found")
+    # Optional optimistic-concurrency guard: the redesign UI sends back the
+    # updated_at it last saw, so a stale edit (someone else already changed
+    # this guest — including a real-time RSVP response or check-in landing
+    # between when this modal opened and when it was saved) is rejected
+    # instead of silently overwritten. Omitted by callers that don't track
+    # it (legacy UI), so this is additive.
+    if if_unmodified_since is not None and guest.updated_at and guest.updated_at != if_unmodified_since:
+        raise HTTPException(409, "This guest was changed by another operator. Refresh and try again.")
     if data.first_name is not None:
         guest.first_name = data.first_name.strip()
     if data.last_name is not None:
@@ -1723,11 +1954,16 @@ async def my_sections(
     }
 
 
-@router.delete("/{event_id}/guests/{guest_id}", status_code=204)
-async def delete_guest(event_id: str, guest_id: str, db: AsyncSession = Depends(get_db), _: User = Depends(require_guest_manage_access)):
+async def delete_guest_cascade(event_id: str, guest_id: str, background_tasks: BackgroundTasks, db: AsyncSession) -> bool:
+    """Shared cascade-delete body used by both the internal admin endpoint
+    below and the public API's write endpoint (public_api.py) — one ~10-table
+    cleanup block instead of two copies to keep in sync. Returns False (no-op)
+    if the guest doesn't exist in this event; caller decides how to respond."""
     guest = await db.get(Guest, guest_id)
     if not guest or guest.event_id != event_id:
-        raise HTTPException(404, "Guest not found")
+        return False
+    event = await db.get(Event, event_id)
+    was_active = guest.rsvp_status not in ("declined", "waitlisted")
     await db.execute(
         Guest.__table__.update()
         .where(Guest.event_id == event_id, Guest.partner_guest_id == guest_id)
@@ -1760,7 +1996,16 @@ async def delete_guest(event_id: str, guest_id: str, db: AsyncSession = Depends(
     )
     queue_guest_remove(db, event_id=event_id, guest_id=guest_id)
     await db.delete(guest)
+    if event and was_active:
+        await _promote_from_waitlist(background_tasks, event, db)
     await db.commit()
+    return True
+
+
+@router.delete("/{event_id}/guests/{guest_id}", status_code=204)
+async def delete_guest(event_id: str, guest_id: str, background_tasks: BackgroundTasks, db: AsyncSession = Depends(get_db), _: User = Depends(require_guest_manage_access)):
+    if not await delete_guest_cascade(event_id, guest_id, background_tasks, db):
+        raise HTTPException(404, "Guest not found")
 
 
 @router.post("/{event_id}/guests/generate-qr")
@@ -1836,6 +2081,19 @@ async def send_invites_batch(
 
     guests = (await db.execute(q)).scalars().all()
 
+    for guest in guests:
+        reminder = (
+            event.invite_mode == "closed"
+            and force
+            and bool(guest.invite_sent_at)
+            and guest.rsvp_status == "invited"
+        )
+        if not _invite_recipients_allowed(event, guest, reminder=reminder):
+            raise HTTPException(
+                403,
+                "One or more recipients are blocked by the environment outbound-safety policy",
+            )
+
     queued = 0
     now = datetime.utcnow()
     overrides = await load_overrides(event_id, db)
@@ -1868,6 +2126,8 @@ async def resend_invite(event_id: str, guest_id: str, background_tasks: Backgrou
     # Open mode emails a ticket (needs a QR); closed mode emails an RSVP link (no QR yet).
     if event.invite_mode != "closed" and not guest.qr_generated_at:
         raise HTTPException(400, "Generate QR codes first before sending invites")
+    if not _invite_recipients_allowed(event, guest):
+        raise HTTPException(403, "Recipient blocked by the environment outbound-safety policy")
 
     ok = _dispatch_invite(background_tasks, event, guest, await load_overrides(event_id, db))
     guest.invite_sent_at = datetime.utcnow()
@@ -1965,8 +2225,49 @@ async def reject_rsvp(event_id: str, guest_id: str, background_tasks: Background
         dispatch_simple_notice(background_tasks, event, guest, "approval_rejected",
                                await load_overrides(event_id, db))
     queue_guest_sync(db, guest, event=event)
+    if event:
+        await _promote_from_waitlist(background_tasks, event, db)
     await db.commit()
     return {"ok": True, "rsvp_status": "declined"}
+
+
+@router.get("/{event_id}/waitlist")
+async def list_waitlist(event_id: str, db: AsyncSession = Depends(get_db), _: User = Depends(require_guest_view_access)):
+    """Guests currently queued on the capacity waitlist, oldest first — the
+    order they'd be auto-promoted in as spots free up."""
+    guests = (await db.execute(
+        select(Guest)
+        .where(Guest.event_id == event_id, Guest.rsvp_status == "waitlisted")
+        .order_by(Guest.waitlisted_at.asc())
+    )).scalars().all()
+    return [
+        {
+            "id": g.id,
+            "first_name": g.first_name,
+            "last_name": g.last_name,
+            "email": g.email,
+            "phone": g.phone,
+            "waitlisted_at": g.waitlisted_at,
+        }
+        for g in guests
+    ]
+
+
+@router.post("/{event_id}/guests/{guest_id}/promote")
+async def promote_from_waitlist(event_id: str, guest_id: str, background_tasks: BackgroundTasks, db: AsyncSession = Depends(get_db), _: User = Depends(require_guest_manage_access)):
+    """Manually promote a specific waitlisted guest — lets staff pick who goes
+    next instead of strict first-in-first-out."""
+    event = await db.get(Event, event_id)
+    if not event:
+        raise HTTPException(404, "Event not found")
+    guest = await db.get(Guest, guest_id)
+    if not guest or guest.event_id != event_id:
+        raise HTTPException(404, "Guest not found")
+    if guest.rsvp_status != "waitlisted":
+        raise HTTPException(409, "Guest is not on the waitlist")
+    promoted = await _promote_from_waitlist(background_tasks, event, db, guest=guest)
+    await db.commit()
+    return {"ok": True, "rsvp_status": promoted.rsvp_status if promoted else guest.rsvp_status}
 
 
 @router.post("/{event_id}/guests/{guest_id}/invite-token")

@@ -26,6 +26,43 @@ Admin                 Guest                        Official
 
 ---
 
+## Recent changes (2026-07)
+
+Shipped to **staging** (`staging.festio.events`), pending feature-by-feature
+review before promotion to prod. Full write-up (data model, gotchas, two
+bugs found and fixed): the KT doc in Media Library (superadmin → Media, or
+`frontend/src/docs/KT-2026-07-calendars-and-fixes.md`).
+
+- **Event Calendars** (backend-2.2.80/81) — org-level curated event-listing
+  pages, public (one shared link) or private (a personalized link per
+  contact via a new Contact List feature). Registering from a calendar
+  reuses each event's own existing RSVP flow. Includes view/click
+  analytics, an iframe embed snippet for public calendars, drag-and-drop
+  event reordering, and CSV import for contact lists. Admin UI: Org
+  Settings → Calendars / Contact Lists. In-app Help: Organizer → "Event
+  Calendars: curated listing pages".
+- **Tasks & My Tasks** — a per-event Kanban board (Open/In progress/Done)
+  for team coordination work that isn't guest data, with assignment, due
+  dates, a comment thread, subtasks, and a cross-event "My Tasks" view for
+  staff working several events. Newly documented this pass (previously
+  undocumented in Help/marketing despite already existing); **file
+  attachments** on tasks (backend-2.2.80) are the one genuinely new
+  capability — creator and assignee can both attach files/images to any
+  task.
+- **Fix — SignalHouse (SMS) delivery-status reconciliation**
+  (backend-2.2.82) — outbound sends now capture the correct, per-message
+  stable identifier instead of a 10DLC campaign/brand-level id that was
+  constant across unrelated messages. Also fixed staging's SMS status
+  callback URL, which was pointing at prod's domain.
+- **Fix — multi-org resolution bug** (backend-2.2.83) — accounts that own
+  more than one organisation (common for anyone with an account predating
+  2026-06-07, which auto-enrolled everyone into a shared legacy org) could
+  have org-scoped panels (API keys, webhooks, subscription, referrals,
+  Calendars) silently operate on the wrong org with no indication in the
+  UI. Fixed across all five affected routers.
+
+---
+
 ## Quick Start (Docker Compose)
 
 ### 1. Clone and configure

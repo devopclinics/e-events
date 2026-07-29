@@ -18,6 +18,7 @@ from ..auth import require_event_admin
 from services import templates as tpl
 from services.email_service import send_simple_email, render_simple_email_preview
 from services import messaging
+from services.outbound_safety import recipient_allowed
 
 router = APIRouter()
 
@@ -229,6 +230,8 @@ async def test_send_template(event_id: str, key: str, data: TemplateTestSendRequ
         raise HTTPException(400, f"This template does not use the {data.channel} channel")
     if not (data.to or "").strip():
         raise HTTPException(400, "A destination address/number is required")
+    if not recipient_allowed(data.channel, data.to):
+        raise HTTPException(403, "Recipient blocked by the environment outbound-safety policy")
     event = await db.get(Event, event_id)
     if not event:
         raise HTTPException(404, "Event not found")

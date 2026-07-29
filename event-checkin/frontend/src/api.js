@@ -214,7 +214,8 @@ export const api = {
   createEvent: (data) => req('POST', '/events', data),
   updateEvent: (id, data) => req('PUT', `/events/${id}`, data),
   deleteEvent: (id) => req('DELETE', `/events/${id}`),
-  changeStatus: (id, status) => req('PATCH', `/events/${id}/status`, { status }),
+  changeStatus: (id, status, ifUnmodifiedSince) =>
+    req('PATCH', `/events/${id}/status`, ifUnmodifiedSince ? { status, if_unmodified_since: ifUnmodifiedSince } : { status }),
   updateSource: (id, data) => req('PUT', `/events/${id}/source`, data),
   syncNow: (id) => req('POST', `/events/${id}/sync-now`),
 
@@ -302,7 +303,8 @@ export const api = {
       guest_ids: guestIds,
       force,
     }),
-  updateGuest: (eventId, guestId, data) => req('PATCH', `/events/${eventId}/guests/${guestId}`, data),
+  updateGuest: (eventId, guestId, data, ifUnmodifiedSince) =>
+    req('PATCH', `/events/${eventId}/guests/${guestId}${ifUnmodifiedSince ? `?if_unmodified_since=${encodeURIComponent(ifUnmodifiedSince)}` : ''}`, data),
   guestRsvpAnswers: (eventId, guestId) => req('GET', `/events/${eventId}/guests/${guestId}/rsvp-answers`),
   deleteGuest: (eventId, guestId) => req('DELETE', `/events/${eventId}/guests/${guestId}`),
   resendInvite: (eventId, guestId) => req('POST', `/events/${eventId}/guests/${guestId}/resend-invite`),
@@ -410,7 +412,8 @@ export const api = {
     req('PATCH', `/events/${eventId}/menu-categories/${categoryId}/guests/${guestId}/served`),
   unmarkCategoryServed: (eventId, categoryId, guestId) =>
     req('DELETE', `/events/${eventId}/menu-categories/${categoryId}/guests/${guestId}/served`),
-  updateMemberPermissions: (eventId, userId, body) => req('PATCH', `/events/${eventId}/members/${userId}/permissions`, body),
+  updateMemberPermissions: (eventId, userId, body, ifUnmodifiedSince) =>
+    req('PATCH', `/events/${eventId}/members/${userId}/permissions`, ifUnmodifiedSince ? { ...body, if_unmodified_since: ifUnmodifiedSince } : body),
   setMemberSections: (eventId, userId, ids) =>
     req('PUT', `/events/${eventId}/members/${userId}/sections`, {
       table_group_ids: ids,
@@ -430,6 +433,135 @@ export const api = {
       guest_ids: guestIds,
       table_group_id: tableGroupId,
     }),
+
+  // Households (family grouping — independent of seating table groups)
+  listHouseholds: (eventId) => req('GET', `/events/${eventId}/households`),
+  createHousehold: (eventId, data) => req('POST', `/events/${eventId}/households`, data),
+  updateHousehold: (eventId, id, data) => req('PUT', `/events/${eventId}/households/${id}`, data),
+  deleteHousehold: (eventId, id) => req('DELETE', `/events/${eventId}/households/${id}`),
+  bulkAssignHousehold: (eventId, guestIds, householdId) =>
+    req('POST', `/events/${eventId}/guests/bulk-assign-household`, {
+      guest_ids: guestIds,
+      household_id: householdId,
+    }),
+
+  // Tasks (per-event to-do management)
+  listTasks: (eventId) => req('GET', `/events/${eventId}/tasks`),
+  createTask: (eventId, data) => req('POST', `/events/${eventId}/tasks`, data),
+  updateTask: (eventId, id, data, ifUnmodifiedSince) =>
+    req('PUT', `/events/${eventId}/tasks/${id}${ifUnmodifiedSince ? `?if_unmodified_since=${encodeURIComponent(ifUnmodifiedSince)}` : ''}`, data),
+  startTask: (eventId, id) => req('POST', `/events/${eventId}/tasks/${id}/start`),
+  completeTask: (eventId, id) => req('POST', `/events/${eventId}/tasks/${id}/complete`),
+  reopenTask: (eventId, id) => req('POST', `/events/${eventId}/tasks/${id}/reopen`),
+  deleteTask: (eventId, id) => req('DELETE', `/events/${eventId}/tasks/${id}`),
+  listMyTasks: (assignment = 'mine') => req('GET', `/tasks/mine?assignment=${encodeURIComponent(assignment)}`),
+  listTaskActivity: (eventId, id) => req('GET', `/events/${eventId}/tasks/${id}/activity`),
+  addTaskComment: (eventId, id, body) => req('POST', `/events/${eventId}/tasks/${id}/comments`, { body }),
+  listSubtasks: (eventId, taskId) => req('GET', `/events/${eventId}/tasks/${taskId}/subtasks`),
+  createSubtask: (eventId, taskId, title) => req('POST', `/events/${eventId}/tasks/${taskId}/subtasks`, { title }),
+  updateSubtask: (eventId, taskId, id, data) => req('PATCH', `/events/${eventId}/tasks/${taskId}/subtasks/${id}`, data),
+  deleteSubtask: (eventId, taskId, id) => req('DELETE', `/events/${eventId}/tasks/${taskId}/subtasks/${id}`),
+  listTaskAttachments: (eventId, taskId) => req('GET', `/events/${eventId}/tasks/${taskId}/attachments`),
+  uploadTaskAttachment: async (eventId, taskId, file) => {
+    const token = await getToken()
+    const fd = new FormData()
+    fd.append('file', file)
+    const res = await fetch(`${BASE}/events/${eventId}/tasks/${taskId}/attachments`, {
+      method: 'POST',
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
+      body: fd,
+    })
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({ detail: res.statusText }))
+      throw new Error(err.detail || res.statusText)
+    }
+    return res.json()
+  },
+  deleteTaskAttachment: (eventId, taskId, id) => req('DELETE', `/events/${eventId}/tasks/${taskId}/attachments/${id}`),
+
+  // Public API keys (org-scoped)
+  listApiKeys: () => req('GET', '/organizations/me/api-keys'),
+  createApiKey: (name, scope = 'read_only') => req('POST', '/organizations/me/api-keys', { name, scope }),
+  revokeApiKey: (id) => req('DELETE', `/organizations/me/api-keys/${id}`),
+  listApiKeyRequests: (id) => req('GET', `/organizations/me/api-keys/${id}/requests`),
+  getPublicApiSchema: () => req('GET', '/organizations/me/public-api-schema'),
+
+  // Outbound webhooks (org-scoped)
+  listWebhooks: () => req('GET', '/organizations/me/webhooks'),
+  createWebhook: (url, eventTypes) => req('POST', '/organizations/me/webhooks', { url, event_types: eventTypes }),
+  deleteWebhook: (id) => req('DELETE', `/organizations/me/webhooks/${id}`),
+  listWebhookDeliveries: (id) => req('GET', `/organizations/me/webhooks/${id}/deliveries`),
+
+  // Org-level recurring subscription (gates read-write API access, org-scoped)
+  getOrgSubscription: () => req('GET', '/organizations/me/subscription'),
+  listSubscriptionPlans: () => req('GET', '/organizations/me/subscription/plans'),
+  createOrgSubscriptionCheckout: (planKey) => req('POST', '/organizations/me/subscription/checkout', { plan_key: planKey }),
+  cancelOrgSubscription: () => req('POST', '/organizations/me/subscription/cancel'),
+
+  // Org plan catalog (superadmin console)
+  adminListOrgPlans: () => req('GET', '/admin/org-plans'),
+  adminSaveOrgPlan: (key, body) => req('PUT', `/admin/org-plans/${key}`, body),
+  adminDeleteOrgPlan: (key) => req('DELETE', `/admin/org-plans/${key}`),
+
+  // Contact lists (org-scoped audience for private calendars)
+  listContactLists: () => req('GET', '/organizations/me/contact-lists'),
+  createContactList: (name) => req('POST', '/organizations/me/contact-lists', { name }),
+  deleteContactList: (id) => req('DELETE', `/organizations/me/contact-lists/${id}`),
+  listContacts: (listId) => req('GET', `/organizations/me/contact-lists/${listId}/contacts`),
+  addContact: (listId, data) => req('POST', `/organizations/me/contact-lists/${listId}/contacts`, data),
+  pasteContacts: (listId, text) => req('POST', `/organizations/me/contact-lists/${listId}/contacts/paste`, { text }),
+  importContactsCsv: async (listId, file) => {
+    const token = await getToken()
+    const fd = new FormData()
+    fd.append('file', file)
+    const res = await fetch(`${BASE}/organizations/me/contact-lists/${listId}/contacts/csv`, {
+      method: 'POST',
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
+      body: fd,
+    })
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({ detail: res.statusText }))
+      throw new Error(err.detail || res.statusText)
+    }
+    return res.json()
+  },
+  deleteContact: (listId, contactId) => req('DELETE', `/organizations/me/contact-lists/${listId}/contacts/${contactId}`),
+
+  // Event Calendars
+  listCalendars: () => req('GET', '/organizations/me/calendars'),
+  createCalendar: (data) => req('POST', '/organizations/me/calendars', data),
+  getCalendar: (id) => req('GET', `/organizations/me/calendars/${id}`),
+  updateCalendar: (id, data) => req('PUT', `/organizations/me/calendars/${id}`, data),
+  deleteCalendar: (id) => req('DELETE', `/organizations/me/calendars/${id}`),
+  addCalendarEvent: (id, eventId) => req('POST', `/organizations/me/calendars/${id}/events/${eventId}`),
+  removeCalendarEvent: (id, eventId) => req('DELETE', `/organizations/me/calendars/${id}/events/${eventId}`),
+  reorderCalendarEvents: (id, eventIds) => req('POST', `/organizations/me/calendars/${id}/events/reorder`, { event_ids: eventIds }),
+  setCalendarContactLists: (id, contactListIds) => req('PUT', `/organizations/me/calendars/${id}/contact-lists`, { contact_list_ids: contactListIds }),
+  sendCalendarLinks: (id) => req('POST', `/organizations/me/calendars/${id}/send`),
+  uploadCalendarLogo: async (id, file) => {
+    const token = await getToken()
+    const fd = new FormData()
+    fd.append('file', file)
+    const res = await fetch(`${BASE}/organizations/me/calendars/${id}/upload-logo`, {
+      method: 'POST',
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
+      body: fd,
+    })
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({ detail: res.statusText }))
+      throw new Error(err.detail || res.statusText)
+    }
+    return res.json()
+  },
+  deleteCalendarLogo: (id) => req('DELETE', `/organizations/me/calendars/${id}/upload-logo`),
+  // Public — no auth header needed, same as inviteUrl-style helpers.
+  resolveCalendar: (token) => fetch(`${BASE}/calendars/${token}`).then(async (res) => {
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({ detail: res.statusText }))
+      throw new Error(err.detail || res.statusText)
+    }
+    return res.json()
+  }),
 
   // Menu (admin)
   listMenuCategories: (eventId) => req('GET', `/events/${eventId}/menu-categories`),
@@ -557,6 +689,7 @@ export const api = {
   resultsExperience: (eventId) => req('GET', `/results/events/${eventId}/analytics/experience`),
   resultsMeals: (eventId) => req('GET', `/results/events/${eventId}/analytics/meals`),
   resultsInvitations: (eventId) => req('GET', `/results/events/${eventId}/analytics/invitations`),
+  resultsBroadcasts: (eventId) => req('GET', `/results/events/${eventId}/analytics/broadcasts`),
   resultsOperations: (eventId) => req('GET', `/results/events/${eventId}/analytics/operations`),
   resultsAlertGuests: (eventId, alertId) => req('GET', `/results/events/${eventId}/alerts/${encodeURIComponent(alertId)}/guests`),
   resultsExperienceStepGuests: (eventId, stepId) => req('GET', `/results/events/${eventId}/analytics/experience/steps/${encodeURIComponent(stepId)}/guests`),
@@ -763,6 +896,7 @@ export const api = {
   // Superadmin console
   adminOverview: () => req('GET', '/admin/overview'),
   adminAccountsSummary: () => req('GET', '/admin/accounts/summary'),
+  adminUsageReport: () => req('GET', '/admin/usage-report'),
   adminListTrials: () => req('GET', '/admin/trial-requests'),
   adminResolveTrial: (id, body) => req('POST', `/admin/trial-requests/${id}/resolve`, body),
   // QA checklist submissions (from public/media/festio-qa-checklist.html)
@@ -804,12 +938,17 @@ export const api = {
   adminListPlans: () => req('GET', '/admin/plans'),
   adminSavePlan: (key, body) => req('PUT', `/admin/plans/${key}`, body),
   adminDeletePlan: (key) => req('DELETE', `/admin/plans/${key}`),
+  adminListGlobalCreditRates: () => req('GET', '/admin/credit-rates/global'),
+  adminSaveGlobalCreditRate: (channel, credits_per_unit) => req('PUT', `/admin/credit-rates/global/${channel}`, { credits_per_unit }),
+  adminListOrgCreditRates: (orgId) => req('GET', `/admin/credit-rates/org/${orgId}`),
+  adminSaveOrgCreditRate: (orgId, channel, credits_per_unit) => req('PUT', `/admin/credit-rates/org/${orgId}/${channel}`, { credits_per_unit }),
+  adminDeleteOrgCreditRate: (orgId, channel) => req('DELETE', `/admin/credit-rates/org/${orgId}/${channel}`),
   adminListAffiliateStores: () => req('GET', '/admin/affiliate-stores'),
   adminCreateAffiliateStore: (body) => req('POST', '/admin/affiliate-stores', body),
   adminUpdateAffiliateStore: (id, body) => req('PUT', `/admin/affiliate-stores/${id}`, body),
   adminDeleteAffiliateStore: (id) => req('DELETE', `/admin/affiliate-stores/${id}`),
   // Manual invites (admin)
-  sendInvites: (eventId, data) => req('POST', `/events/${eventId}/send-invites`, data),
+  sendManualInvites: (eventId, data) => req('POST', `/events/${eventId}/send-invites`, data),
   // Cover image (admin)
   uploadCoverImage: async (eventId, file) => {
     const token = await getToken()

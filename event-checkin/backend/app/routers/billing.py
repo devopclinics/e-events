@@ -7,7 +7,7 @@ import json
 import logging
 
 from fastapi import APIRouter, Depends, HTTPException, Request
-from sqlalchemy import desc, select
+from sqlalchemy import desc, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..database import get_db
@@ -19,6 +19,7 @@ from ..billing import (
 )
 from ..config import settings
 from services import payments
+from . import org_billing
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -73,8 +74,21 @@ async def credit_ledger(event_id: str, limit: int = 50, user: User = Depends(get
         .order_by(desc(MessageCreditLedger.created_at))
         .limit(min(max(limit, 1), 200))
     )).scalars().all()
+    summary_rows = (await db.execute(
+        select(
+            MessageCreditLedger.channel,
+            func.count(MessageCreditLedger.id),
+            func.coalesce(func.sum(MessageCreditLedger.credits), 0),
+        )
+        .where(MessageCreditLedger.event_id == event.id, MessageCreditLedger.action == "spend")
+        .group_by(MessageCreditLedger.channel)
+    )).all()
     return {
         "balance": event.message_credits,
+        "summary": [
+            {"channel": channel, "sends": int(count or 0), "credits": int(credits or 0)}
+            for channel, count, credits in summary_rows
+        ],
         "rows": [
             {
                 "id": r.id,
@@ -196,10 +210,16 @@ async def stripe_webhook(request: Request, db: AsyncSession = Depends(get_db)):
     if not payments.stripe_verify(payload, request.headers.get("stripe-signature")):
         raise HTTPException(400, "Invalid signature")
     evt = json.loads(payload)
-    if evt.get("type") == "checkout.session.completed":
+    etype = evt.get("type")
+    if etype == "checkout.session.completed":
         obj = evt["data"]["object"]
-        meta = obj.get("metadata") or {}
-        await _fulfill(db, "stripe", obj.get("id"), meta.get("event_id"), meta.get("tier_key"))
+        if obj.get("mode") == "subscription":
+            await org_billing.handle_stripe_subscription_checkout(db, obj)
+        else:
+            meta = obj.get("metadata") or {}
+            await _fulfill(db, "stripe", obj.get("id"), meta.get("event_id"), meta.get("tier_key"))
+    elif etype in ("customer.subscription.updated", "customer.subscription.deleted", "invoice.payment_failed"):
+        await org_billing.handle_stripe_subscription_event(db, etype, evt["data"]["object"])
     return {"received": True}
 
 
@@ -209,8 +229,14 @@ async def paystack_webhook(request: Request, db: AsyncSession = Depends(get_db))
     if not payments.paystack_verify(payload, request.headers.get("x-paystack-signature")):
         raise HTTPException(400, "Invalid signature")
     evt = json.loads(payload)
-    if evt.get("event") == "charge.success":
-        data = evt.get("data") or {}
-        meta = data.get("metadata") or {}
-        await _fulfill(db, "paystack", data.get("reference"), meta.get("event_id"), meta.get("tier_key"))
+    etype = evt.get("event")
+    data = evt.get("data") or {}
+    if etype == "charge.success":
+        if data.get("plan"):
+            await org_billing.handle_paystack_subscription_renewal(db, data)
+        else:
+            meta = data.get("metadata") or {}
+            await _fulfill(db, "paystack", data.get("reference"), meta.get("event_id"), meta.get("tier_key"))
+    elif etype in ("subscription.create", "subscription.disable"):
+        await org_billing.handle_paystack_subscription_event(db, etype, data)
     return {"received": True}

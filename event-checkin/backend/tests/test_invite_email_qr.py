@@ -1,6 +1,7 @@
 """Regression guard: the invite email always attaches the QR image, and the
 template subject/intro overrides never remove it."""
-from datetime import datetime
+from datetime import datetime, timedelta, timezone
+from types import SimpleNamespace
 
 import pytest
 
@@ -120,3 +121,83 @@ async def test_invite_email_renders_event_metadata_blocks(monkeypatch):
     assert "Add to Calendar" in html
     assert "Get Directions" in html
     assert "Venue: The Electron Place - 655 Faiwt wa, jaty, tx" in text
+
+
+def _ics_part(msg):
+    for part in msg.walk():
+        if part.get_content_type() == "text/calendar":
+            return part
+    return None
+
+
+@pytest.mark.asyncio
+async def test_invite_email_attaches_ics_calendar_file(monkeypatch):
+    """Beyond the Google Calendar link, a real .ics attachment must be present
+    so Outlook/Apple Calendar users get a working one-click add too (Gatsby
+    parity item from the gap backlog)."""
+    sent = _capture(monkeypatch)
+    await email_service.send_invite_email(
+        {"first_name": "Ada", "last_name": "Lovelace", "email": "ada@x.com",
+         "qr_token": "tok-ics", "event_id": "evt-1", "guest_id": "guest-1"},
+        "Spring Gala", "The Hosts", "https://events.example",
+        datetime(2026, 9, 1, 18, 0),
+        event_end_date=datetime(2026, 9, 1, 21, 0),
+        venue_name="The Grand Hall",
+    )
+    msg = sent["msg"]
+    ics = _ics_part(msg)
+    assert ics is not None
+    assert ics.get_filename() == "invite.ics"
+    body = ics.get_payload(decode=True).decode()
+    assert "BEGIN:VCALENDAR" in body
+    assert "SUMMARY:Spring Gala" in body
+    assert "LOCATION:The Grand Hall" in body
+    assert "DTSTART:20260901T180000Z" in body
+    assert "DTEND:20260901T210000Z" in body
+    assert "UID:event-evt-1-guest-1@festio.events" in body
+
+
+@pytest.mark.asyncio
+async def test_invite_email_ics_falls_back_to_3hr_window_without_end_date(monkeypatch):
+    sent = _capture(monkeypatch)
+    await email_service.send_invite_email(
+        {"first_name": "Ada", "last_name": "Lovelace", "email": "ada@x.com", "qr_token": "tok-noend"},
+        "Spring Gala", "The Hosts", "https://events.example", datetime(2026, 9, 1, 18, 0),
+    )
+    body = _ics_part(sent["msg"]).get_payload(decode=True).decode()
+    assert "DTSTART:20260901T180000Z" in body
+    assert "DTEND:20260901T210000Z" in body
+
+
+def test_build_calendar_attachment_none_without_event_date():
+    event = SimpleNamespace(event_date=None, event_end_date=None, name="X",
+                             venue_name=None, venue_address=None, id="evt-2")
+    assert email_service.build_calendar_attachment(event, "Ada Lovelace", "ada@x.com") is None
+
+
+@pytest.mark.asyncio
+async def test_invite_email_ics_organizer_strips_display_name(monkeypatch):
+    """settings.email_from is typically 'Festio <events@festio.events>' — the
+    ORGANIZER mailto: URI must contain only the bare address or it's invalid ICS."""
+    monkeypatch.setattr(email_service.settings, "email_from", "Festio <events@festio.events>")
+    sent = _capture(monkeypatch)
+    await email_service.send_invite_email(
+        {"first_name": "Ada", "last_name": "Lovelace", "email": "ada@x.com", "qr_token": "tok-org"},
+        "Spring Gala", "The Hosts", "https://events.example", datetime(2026, 9, 1, 18, 0),
+    )
+    body = _ics_part(sent["msg"]).get_payload(decode=True).decode()
+    assert "ORGANIZER;CN=Festio:mailto:events@festio.events" in body
+    assert "<events@festio.events>" not in body
+
+
+def test_build_calendar_attachment_returns_ics_tuple():
+    event = SimpleNamespace(
+        event_date=datetime(2026, 9, 1, 18, 0), event_end_date=None,
+        name="Spring Gala", venue_name="The Grand Hall", venue_address=None, id="evt-3",
+    )
+    result = email_service.build_calendar_attachment(event, "Ada Lovelace", "ada@x.com", uid_suffix="guest-9")
+    assert result is not None
+    filename, content, mimetype = result
+    assert filename == "invite.ics"
+    assert mimetype == "text/calendar"
+    assert "UID:event-evt-3-guest-9@festio.events" in content.decode()

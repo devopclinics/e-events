@@ -5,7 +5,12 @@
   "scripts": {
     "dev": "vite",
     "build": "vite build",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "test:e2e": "playwright test",
+    "test:e2e:staging": "E2E_BASE_URL=https://staging.festio.events playwright test",
+    "test:e2e:staging:isolated": "./e2e/run-staging.sh",
+    "generate:api-types": "node scripts/generate-api-types.mjs",
+    "check:api-contract": "./scripts/check-api-contract-drift.sh"
   },
   "dependencies": {
     "@capacitor-firebase/authentication": "^7.0.0",
@@ -22,6 +27,7 @@
   "devDependencies": {
     "@capacitor/android": "^7.0.0",
     "@capacitor/cli": "^7.0.0",
+    "@playwright/test": "^1.62.0",
     "@vitejs/plugin-react": "^4.2.1",
     "autoprefixer": "^10.4.17",
     "postcss": "^8.4.35",

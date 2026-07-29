@@ -238,18 +238,27 @@ async def update_table(event_id: str, table_id: str, data: SeatingTableCreate, d
     return await _table_out(table, db)
 
 
-@router.delete("/{event_id}/tables/{table_id}", status_code=204)
-async def delete_table(event_id: str, table_id: str, db: AsyncSession = Depends(get_db), _: User = Depends(require_paid_event_admin)):
+async def delete_table_cascade(event_id: str, table_id: str, db: AsyncSession) -> bool:
+    """Shared cascade-delete body used by both the internal admin endpoint
+    below and the public API's write endpoint (public_api.py). No occupancy
+    block — guests on this table are detached (table_id/seat_number cleared),
+    not blocked. Returns False if the table doesn't exist in this event."""
     table = await db.get(SeatingTable, table_id)
     if not table or table.event_id != event_id:
-        raise HTTPException(404, "Table not found")
-    # Clear assignments
+        return False
     guests = (await db.execute(select(Guest).where(Guest.table_id == table_id))).scalars().all()
     for g in guests:
         g.table_id = None
         g.seat_number = None
     await db.delete(table)
     await db.commit()
+    return True
+
+
+@router.delete("/{event_id}/tables/{table_id}", status_code=204)
+async def delete_table(event_id: str, table_id: str, db: AsyncSession = Depends(get_db), _: User = Depends(require_paid_event_admin)):
+    if not await delete_table_cascade(event_id, table_id, db):
+        raise HTTPException(404, "Table not found")
 
 
 # ── Table Groups ──────────────────────────────────────────────────────────────
@@ -383,11 +392,14 @@ async def set_table_group_tables(event_id: str, group_id: str, data: TableGroupT
     return await _group_out(group, db)
 
 
-@router.delete("/{event_id}/table-groups/{group_id}", status_code=204)
-async def delete_table_group(event_id: str, group_id: str, db: AsyncSession = Depends(get_db), _: User = Depends(require_paid_event_admin)):
+async def delete_table_group_cascade(event_id: str, group_id: str, db: AsyncSession) -> bool:
+    """Shared cascade-delete body used by both the internal admin endpoint
+    below and the public API's write endpoint. Unlike tables, a group blocks
+    (409) while any guest is still assigned — caller must reassign first.
+    Returns False if the group doesn't exist in this event."""
     group = await db.get(TableGroup, group_id)
     if not group or group.event_id != event_id:
-        raise HTTPException(404, "Table group not found")
+        return False
     assigned = await db.scalar(select(func.count(Guest.id)).where(Guest.assigned_table_group_id == group_id)) or 0
     if assigned:
         raise HTTPException(
@@ -400,6 +412,13 @@ async def delete_table_group(event_id: str, group_id: str, db: AsyncSession = De
     await db.execute(EventUserSection.__table__.delete().where(EventUserSection.table_group_id == group_id))
     await db.delete(group)
     await db.commit()
+    return True
+
+
+@router.delete("/{event_id}/table-groups/{group_id}", status_code=204)
+async def delete_table_group(event_id: str, group_id: str, db: AsyncSession = Depends(get_db), _: User = Depends(require_paid_event_admin)):
+    if not await delete_table_group_cascade(event_id, group_id, db):
+        raise HTTPException(404, "Table group not found")
 
 
 # ── Seating chart ─────────────────────────────────────────────────────────────
@@ -630,6 +649,14 @@ async def update_member_permissions(
     eu = await db.scalar(select(EventUser).where(EventUser.event_id == event_id, EventUser.user_id == user_id))
     if not eu:
         raise HTTPException(404, "Member not found")
+    # Optional optimistic-concurrency guard: two admins opening this member's
+    # row at once shouldn't have the second save silently overwrite the
+    # first's permission change. Omitted by callers that don't track it.
+    if_unmodified_since = body.get("if_unmodified_since")
+    if if_unmodified_since:
+        expected = datetime.fromisoformat(str(if_unmodified_since).replace("Z", "+00:00")).replace(tzinfo=None)
+        if eu.updated_at and eu.updated_at != expected:
+            raise HTTPException(409, "This member's permissions were changed by another operator. Refresh and try again.")
     if "can_reassign_seats" in body:
         eu.can_reassign_seats = bool(body["can_reassign_seats"])
     if "can_manage_menu" in body:

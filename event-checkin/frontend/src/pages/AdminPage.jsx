@@ -5,6 +5,8 @@ import { utcToLocalInput, zonedWallTimeToUtcISOString, utcToZonedInput, parseUtc
 import { seatingTerm } from '../seatingTerm'
 import { useAuth } from '../context/AuthContext'
 import { useCurrentEvent } from '../hooks/useCurrentEvent'
+import TaskDetailPanel from '../components/TaskDetailPanel'
+import TaskBoard from '../components/TaskBoard'
 
 // ── helpers ──────────────────────────────────────────────────────────────────
 
@@ -1196,6 +1198,369 @@ function TableGroupsPanel({ eventId, seatingLabel = 'Table' }) {
             </button>
           </div>
         </form>
+      )}
+    </div>
+  )
+}
+
+// ── Households (family grouping) ────────────────────────────────────────────
+// Independent of TableGroups (seating): groups guests by family/household
+// regardless of how each guest was added (manual, CSV import, or self-RSVP).
+
+function HouseholdsPanel({ eventId, households, onChanged, tableGroups = [], seatingEnabled = false, seatingLabel = 'Table' }) {
+  const [form, setForm] = useState(null)   // {id?, name, description, sort_order, default_table_group_id, default_table_id}
+  const [loading, setLoading] = useState(false)
+  const [err, setErr] = useState('')
+  const [tables, setTables] = useState([])
+
+  const fieldCls = 'border border-gray-300 dark:border-slate-700 rounded-lg px-3 py-2 text-sm bg-white dark:bg-slate-700 text-gray-900 dark:text-white'
+
+  useEffect(() => {
+    if (!seatingEnabled) return
+    api.listTables(eventId).then(setTables).catch(() => setTables([]))
+  }, [eventId, seatingEnabled])
+
+  const groupName = (id) => tableGroups.find((g) => g.id === id)?.name
+  const tableName = (id) => tables.find((t) => t.id === id)?.name
+
+  async function save(e) {
+    e.preventDefault()
+    setLoading(true); setErr('')
+    try {
+      const payload = {
+        name: form.name.trim(),
+        description: form.description?.trim() || null,
+        sort_order: form.sort_order === '' || form.sort_order == null ? 0 : Number(form.sort_order),
+        default_table_group_id: form.default_table_group_id || null,
+        default_table_id: form.default_table_id || null,
+      }
+      if (form.id) await api.updateHousehold(eventId, form.id, payload)
+      else await api.createHousehold(eventId, payload)
+      setForm(null)
+      await onChanged()
+    } catch (e) { setErr(e.message) }
+    finally { setLoading(false) }
+  }
+
+  async function remove(id) {
+    if (!confirm('Delete this household?')) return
+    setLoading(true); setErr('')
+    try {
+      await api.deleteHousehold(eventId, id)
+      await onChanged()
+    } catch (e) { setErr(e.message) }   // 409 surfaces the "reassign first" message
+    finally { setLoading(false) }
+  }
+
+  return (
+    <div className="bg-white dark:bg-slate-800 dark:border dark:border-slate-700/60 rounded-xl shadow p-6 space-y-4 mt-6">
+      <div className="flex items-center justify-between flex-wrap gap-2">
+        <div>
+          <h2 className="font-semibold text-base dark:text-white">Households</h2>
+          <p className="text-xs text-gray-400 dark:text-slate-500 mt-1">
+            Group guests by family/household — separate from seating. Works for any guest, however they were added.
+          </p>
+        </div>
+        <button onClick={() => setForm({ name: '', description: '', sort_order: households.length, default_table_group_id: '', default_table_id: '' })} disabled={loading}
+          className="bg-indigo-600 text-white px-3 py-1.5 rounded-lg text-xs font-semibold hover:bg-indigo-700">
+          + Household
+        </button>
+      </div>
+
+      {err && <p className="text-sm text-red-500">{err}</p>}
+
+      {households.length === 0 && !form ? (
+        <p className="text-sm text-gray-400 dark:text-slate-500">No households yet.</p>
+      ) : (
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          {households.map((h) => (
+            <div key={h.id} className="border dark:border-slate-700 rounded-lg p-3">
+              <div className="flex justify-between items-start gap-2">
+                <div className="font-semibold text-sm dark:text-white">
+                  {h.name} <span className="text-[11px] font-normal text-gray-400">· order {h.sort_order ?? 0}</span>
+                </div>
+                <div className="flex gap-3 shrink-0">
+                  <button onClick={() => setForm({ id: h.id, name: h.name, description: h.description || '', sort_order: h.sort_order ?? 0, default_table_group_id: h.default_table_group_id || '', default_table_id: h.default_table_id || '' })}
+                    className="text-xs text-indigo-600 hover:underline">Edit</button>
+                  <button onClick={() => remove(h.id)} disabled={loading}
+                    className="text-xs text-red-400 hover:text-red-600 disabled:opacity-40">Delete</button>
+                </div>
+              </div>
+              {h.description && <p className="text-xs text-gray-500 dark:text-slate-400 mt-1">{h.description}</p>}
+              <div className="mt-2 text-xs dark:text-slate-300">👤 {h.member_count} member{h.member_count === 1 ? '' : 's'}</div>
+              {(h.default_table_group_id || h.default_table_id) && (
+                <div className="mt-1 text-xs text-gray-500 dark:text-slate-400">
+                  Default seating: {[groupName(h.default_table_group_id), tableName(h.default_table_id)].filter(Boolean).join(' · ') || '—'}
+                </div>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
+
+      {form && (
+        <form onSubmit={save} className="bg-gray-50 dark:bg-slate-700 rounded-lg p-3 border dark:border-slate-600 space-y-3">
+          <div className="flex flex-wrap gap-2">
+            <div>
+              <label className="block text-xs font-semibold text-gray-600 dark:text-slate-300 mb-1">Household name</label>
+              <input value={form.name} onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))} required
+                className={fieldCls} placeholder="The Smith Family" />
+            </div>
+            <div>
+              <label className="block text-xs font-semibold text-gray-600 dark:text-slate-300 mb-1">Order</label>
+              <input type="number" min="0" value={form.sort_order ?? 0}
+                onChange={(e) => setForm((f) => ({ ...f, sort_order: e.target.value }))}
+                className={`${fieldCls} w-20`} title="Lower numbers come first" />
+            </div>
+            <div className="flex-1 min-w-[12rem]">
+              <label className="block text-xs font-semibold text-gray-600 dark:text-slate-300 mb-1">Description</label>
+              <input value={form.description} onChange={(e) => setForm((f) => ({ ...f, description: e.target.value }))}
+                className={`${fieldCls} w-full`} placeholder="Optional" />
+            </div>
+          </div>
+          {seatingEnabled && (
+            <div className="flex flex-wrap gap-2">
+              <div>
+                <label className="block text-xs font-semibold text-gray-600 dark:text-slate-300 mb-1">Default {seatingLabel.toLowerCase()} group</label>
+                <select value={form.default_table_group_id} onChange={(e) => setForm((f) => ({ ...f, default_table_group_id: e.target.value }))}
+                  className={fieldCls}>
+                  <option value="">None</option>
+                  {tableGroups.map((g) => <option key={g.id} value={g.id}>{g.name}</option>)}
+                </select>
+              </div>
+              <div>
+                <label className="block text-xs font-semibold text-gray-600 dark:text-slate-300 mb-1">Default {seatingLabel.toLowerCase()}</label>
+                <select value={form.default_table_id} onChange={(e) => setForm((f) => ({ ...f, default_table_id: e.target.value }))}
+                  className={fieldCls}>
+                  <option value="">None</option>
+                  {tables.map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}
+                </select>
+              </div>
+              <p className="basis-full text-[11px] text-gray-400 dark:text-slate-500 -mt-1">
+                Assigning a guest to this household auto-fills these — a one-time default, still editable per guest afterward.
+              </p>
+            </div>
+          )}
+          <div className="flex gap-2">
+            <button type="submit" disabled={loading}
+              className="bg-indigo-600 text-white px-4 py-2 rounded-lg text-sm font-semibold hover:bg-indigo-700 disabled:opacity-50">
+              {form.id ? 'Save' : 'Create'}
+            </button>
+            <button type="button" onClick={() => setForm(null)}
+              className="px-4 py-2 border border-gray-300 dark:border-slate-600 rounded-lg text-sm dark:text-slate-300 hover:bg-gray-100 dark:hover:bg-slate-600">
+              Cancel
+            </button>
+          </div>
+        </form>
+      )}
+    </div>
+  )
+}
+
+// ── Tasks (per-event to-do management) ──────────────────────────────────────
+// Visible/editable by any staff member on the event (not gated to guest
+// managers) — this is team coordination, mirrors the Household/TableGroup
+// panel shape.
+
+function TasksPanel({ eventId, onFlash }) {
+  const [tasks, setTasks] = useState([])
+  const [members, setMembers] = useState([])
+  const [form, setForm] = useState(null)   // {id?, title, notes, assignee_user_id, due_date}
+  const [loading, setLoading] = useState(false)
+  const [err, setErr] = useState('')
+  const [showDone, setShowDone] = useState(false)
+  const [view, setView] = useState('list')   // 'list' | 'board'
+  const [selectedTask, setSelectedTask] = useState(null)
+
+  const fieldCls = 'border border-gray-300 dark:border-slate-700 rounded-lg px-3 py-2 text-sm bg-white dark:bg-slate-700 text-gray-900 dark:text-white'
+
+  async function reload() {
+    try {
+      const [t, m] = await Promise.all([api.listTasks(eventId), api.listMembers(eventId)])
+      setTasks(t); setMembers(m)
+    } catch (e) { setErr(e.message) }
+  }
+  useEffect(() => { reload() }, [eventId])
+
+  // Keep the open detail panel's task fresh whenever the list reloads (status
+  // change, new comment, etc.) instead of showing a stale snapshot.
+  useEffect(() => {
+    if (!selectedTask) return
+    const fresh = tasks.find((t) => t.id === selectedTask.id)
+    if (fresh) setSelectedTask(fresh)
+  }, [tasks])
+
+  async function save(e) {
+    e.preventDefault()
+    setLoading(true); setErr('')
+    try {
+      const payload = {
+        title: form.title.trim(),
+        notes: form.notes?.trim() || null,
+        assignee_user_id: form.assignee_user_id || null,
+        due_date: form.due_date || null,
+      }
+      if (form.id) await api.updateTask(eventId, form.id, payload)
+      else await api.createTask(eventId, payload)
+      setForm(null)
+      await reload()
+    } catch (e) { setErr(e.message) }
+    finally { setLoading(false) }
+  }
+
+  async function setStatus(task, status) {
+    if (status === task.status) return
+    setLoading(true)
+    try {
+      if (status === 'done') await api.completeTask(eventId, task.id)
+      else if (status === 'in_progress') await api.startTask(eventId, task.id)
+      else await api.reopenTask(eventId, task.id)
+      await reload()
+    } catch (e) { onFlash?.(e.message, true) }
+    finally { setLoading(false) }
+  }
+
+  async function remove(id) {
+    if (!confirm('Delete this task?')) return
+    setLoading(true)
+    try { await api.deleteTask(eventId, id); await reload() }
+    catch (e) { onFlash?.(e.message, true) }
+    finally { setLoading(false) }
+  }
+
+  const visibleTasks = showDone ? tasks : tasks.filter((t) => t.status !== 'done')
+  const openCount = tasks.filter((t) => t.status !== 'done').length
+  const overdueCount = tasks.filter((t) => t.overdue).length
+  const hasDone = tasks.some((t) => t.status === 'done')
+
+  return (
+    <div className="bg-white dark:bg-slate-800 dark:border dark:border-slate-700/60 rounded-xl shadow p-6 space-y-4">
+      <div className="flex items-center justify-between flex-wrap gap-2">
+        <div>
+          <h2 className="font-semibold text-base dark:text-white">Tasks</h2>
+          <p className="text-xs text-gray-400 dark:text-slate-500 mt-1">
+            {openCount} open task{openCount === 1 ? '' : 's'}{overdueCount > 0 ? ` · ${overdueCount} overdue` : ''}
+          </p>
+        </div>
+        <div className="flex items-center gap-2">
+          <div className="flex rounded-lg border border-gray-300 dark:border-slate-600 overflow-hidden text-xs font-semibold">
+            <button onClick={() => setView('list')}
+              className={`px-2.5 py-1.5 ${view === 'list' ? 'bg-indigo-600 text-white' : 'bg-white dark:bg-slate-700 text-gray-600 dark:text-slate-300'}`}>
+              List
+            </button>
+            <button onClick={() => setView('board')}
+              className={`px-2.5 py-1.5 ${view === 'board' ? 'bg-indigo-600 text-white' : 'bg-white dark:bg-slate-700 text-gray-600 dark:text-slate-300'}`}>
+              Board
+            </button>
+          </div>
+          <button onClick={() => setForm({ title: '', notes: '', assignee_user_id: '', due_date: '' })} disabled={loading}
+            className="bg-indigo-600 text-white px-3 py-1.5 rounded-lg text-xs font-semibold hover:bg-indigo-700">
+            + Task
+          </button>
+        </div>
+      </div>
+
+      {err && <p className="text-sm text-red-500">{err}</p>}
+
+      {form && (
+        <form onSubmit={save} className="bg-gray-50 dark:bg-slate-700 rounded-lg p-3 border dark:border-slate-600 space-y-3">
+          <div className="flex flex-wrap gap-2">
+            <div className="flex-1 min-w-[14rem]">
+              <label className="block text-xs font-semibold text-gray-600 dark:text-slate-300 mb-1">Title</label>
+              <input value={form.title} onChange={(e) => setForm((f) => ({ ...f, title: e.target.value }))} required
+                className={`${fieldCls} w-full`} placeholder="Confirm florist" />
+            </div>
+            <div>
+              <label className="block text-xs font-semibold text-gray-600 dark:text-slate-300 mb-1">Assignee</label>
+              <select value={form.assignee_user_id} onChange={(e) => setForm((f) => ({ ...f, assignee_user_id: e.target.value }))}
+                className={fieldCls}>
+                <option value="">Unassigned</option>
+                {members.map((m) => <option key={m.user.id} value={m.user.id}>{m.user.name}</option>)}
+              </select>
+            </div>
+            <div>
+              <label className="block text-xs font-semibold text-gray-600 dark:text-slate-300 mb-1">Due date</label>
+              <input type="date" value={form.due_date} onChange={(e) => setForm((f) => ({ ...f, due_date: e.target.value }))}
+                className={fieldCls} />
+            </div>
+          </div>
+          <div>
+            <label className="block text-xs font-semibold text-gray-600 dark:text-slate-300 mb-1">Notes</label>
+            <input value={form.notes} onChange={(e) => setForm((f) => ({ ...f, notes: e.target.value }))}
+              className={`${fieldCls} w-full`} placeholder="Optional" />
+          </div>
+          <div className="flex gap-2">
+            <button type="submit" disabled={loading}
+              className="bg-indigo-600 text-white px-4 py-2 rounded-lg text-sm font-semibold hover:bg-indigo-700 disabled:opacity-50">
+              {form.id ? 'Save' : 'Create'}
+            </button>
+            <button type="button" onClick={() => setForm(null)}
+              className="px-4 py-2 border border-gray-300 dark:border-slate-600 rounded-lg text-sm dark:text-slate-300 hover:bg-gray-100 dark:hover:bg-slate-600">
+              Cancel
+            </button>
+          </div>
+        </form>
+      )}
+
+      {hasDone && (
+        <label className="flex items-center gap-2 text-xs text-gray-500 dark:text-slate-400">
+          <input type="checkbox" checked={showDone} onChange={(e) => setShowDone(e.target.checked)} />
+          Show completed
+        </label>
+      )}
+
+      {view === 'board' ? (
+        <TaskBoard tasks={tasks} onStatusChange={setStatus} onOpenDetail={setSelectedTask} />
+      ) : visibleTasks.length === 0 ? (
+        <p className="text-sm text-gray-400 dark:text-slate-500">No {showDone ? '' : 'open '}tasks yet.</p>
+      ) : (
+        <div className="divide-y divide-gray-100 dark:divide-slate-700">
+          {visibleTasks.map((t) => (
+            <div key={t.id} className="py-3 flex items-start gap-3">
+              <select value={t.status} onChange={(e) => setStatus(t, e.target.value)} disabled={loading}
+                aria-label={`Status for ${t.title}`}
+                className={`mt-0.5 text-[11px] rounded-md px-1.5 py-1 border cursor-pointer ${
+                  t.status === 'done'
+                    ? 'bg-green-50 dark:bg-green-900/30 text-green-700 dark:text-green-300 border-green-200 dark:border-green-800'
+                    : t.status === 'in_progress'
+                      ? 'bg-amber-50 dark:bg-amber-900/30 text-amber-700 dark:text-amber-300 border-amber-200 dark:border-amber-800'
+                      : 'bg-gray-50 dark:bg-slate-700 text-gray-600 dark:text-slate-300 border-gray-300 dark:border-slate-600'
+                }`}>
+                <option value="open">Open</option>
+                <option value="in_progress">In progress</option>
+                <option value="done">Done</option>
+              </select>
+              <div className="flex-1 min-w-0 cursor-pointer" onClick={() => setSelectedTask(t)}>
+                <div className={`text-sm font-semibold hover:underline ${t.status === 'done' ? 'line-through text-gray-400 dark:text-slate-500' : 'dark:text-white'}`}>
+                  {t.title}
+                </div>
+                {t.notes && <p className="text-xs text-gray-500 dark:text-slate-400 mt-0.5">{t.notes}</p>}
+                <div className="mt-1 flex flex-wrap items-center gap-2 text-[11px]">
+                  {t.assignee_name && (
+                    <span className="bg-indigo-50 dark:bg-indigo-900/30 text-indigo-700 dark:text-indigo-300 px-1.5 py-0.5 rounded">{t.assignee_name}</span>
+                  )}
+                  {t.due_date && (
+                    <span className={t.overdue ? 'text-red-600 font-semibold' : 'text-gray-500 dark:text-slate-400'}>
+                      {t.overdue ? '⚠ Overdue ' : 'Due '}{new Date(t.due_date).toLocaleDateString()}
+                    </span>
+                  )}
+                </div>
+              </div>
+              <div className="flex gap-3 shrink-0">
+                <button onClick={() => setForm({
+                  id: t.id, title: t.title, notes: t.notes || '', assignee_user_id: t.assignee_user_id || '',
+                  due_date: t.due_date ? t.due_date.slice(0, 10) : '',
+                })} className="text-xs text-indigo-600 hover:underline">Edit</button>
+                <button onClick={() => remove(t.id)} disabled={loading}
+                  className="text-xs text-red-400 hover:text-red-600 disabled:opacity-40">Delete</button>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {selectedTask && (
+        <TaskDetailPanel task={selectedTask} onClose={() => setSelectedTask(null)} onStatusChange={setStatus} />
       )}
     </div>
   )
@@ -4337,7 +4702,7 @@ function ManualInvitePanel({ event }) {
     if (!confirm(`Send invites to ${recipients.length} recipient(s)?`)) return
     setLoading(true); setResult(null); setErr('')
     try {
-      const res = await api.sendInvites(event.id, { recipients, channels })
+      const res = await api.sendManualInvites(event.id, { recipients, channels })
       setResult(res)
       setRecipients([])
     } catch (e) { setErr(e.message) }
@@ -4531,6 +4896,23 @@ function CreditLedger({ eventId }) {
         <div className="text-sm font-semibold text-slate-800 dark:text-slate-100">Credit ledger</div>
         <div className="text-xs font-bold text-slate-500 dark:text-slate-400">{data.balance?.toLocaleString()} credits available</div>
       </div>
+      {(() => {
+        const byChannel = Object.fromEntries((data.summary || []).map((s) => [s.channel, s]))
+        const allChannels = ['email', 'sms', 'whatsapp', 'mms']
+        return (
+          <div className="mt-3 flex flex-wrap gap-2">
+            {allChannels.map((c) => {
+              const s = byChannel[c]
+              return (
+                <div key={c} className="rounded-lg border border-slate-200 dark:border-slate-700 px-3 py-1.5 text-xs">
+                  <span className="font-semibold uppercase text-slate-600 dark:text-slate-300">{c}</span>
+                  <span className="text-slate-500 dark:text-slate-400"> · {s?.sends || 0} sent · {s?.credits || 0} credits</span>
+                </div>
+              )
+            })}
+          </div>
+        )
+      })()}
       {rows.length === 0 ? (
         <p className="mt-2 text-xs text-slate-500 dark:text-slate-400">No credit activity yet.</p>
       ) : (
@@ -4541,7 +4923,6 @@ function CreditLedger({ eventId }) {
                 <th className="py-1 pr-3">When</th>
                 <th className="py-1 pr-3">Action</th>
                 <th className="py-1 pr-3">Channel</th>
-                <th className="py-1 pr-3">Provider</th>
                 <th className="py-1 pr-3 text-right">Delta</th>
                 <th className="py-1 text-right">Balance</th>
               </tr>
@@ -4552,7 +4933,6 @@ function CreditLedger({ eventId }) {
                   <td className="py-1.5 pr-3 whitespace-nowrap">{r.created_at ? new Date(r.created_at).toLocaleString([], { dateStyle: 'short', timeStyle: 'short' }) : '-'}</td>
                   <td className="py-1.5 pr-3">{r.reason || r.action}</td>
                   <td className="py-1.5 pr-3 uppercase">{r.channel || '-'}</td>
-                  <td className="py-1.5 pr-3">{r.provider || '-'}</td>
                   <td className={`py-1.5 pr-3 text-right font-bold ${r.delta >= 0 ? 'text-emerald-600' : 'text-slate-700 dark:text-slate-200'}`}>
                     {r.delta > 0 ? '+' : ''}{r.delta}
                   </td>
@@ -5071,13 +5451,58 @@ function MessageTemplatesPanel({
 
 // ── Broadcast panel ───────────────────────────────────────────────────────────
 
-function BroadcastPanel({ event }) {
+// GSM-7 charset — any character outside this forces UCS-2 (Unicode) SMS
+// encoding, which roughly halves how much text fits per segment.
+const GSM7_CHARS = "@£$¥èéùìòÇ\nØø\rÅåΔ_ΦΓΛΩΠΨΣΘΞ\x1bÆæßÉ !\"#¤%&'()*+,-./0123456789:;<=>?¡ABCDEFGHIJKLMNOPQRSTUVWXYZÄÖÑÜ§¿abcdefghijklmnopqrstuvwxyzäöñüà{}\\[~]|€^"
+
+// Mirrors backend/services/messaging.py's _EMOJI_RE — the backend strips
+// these from SMS (not MMS) before sending, so estimate against the same
+// stripped text or the segment count here would overstate the real cost.
+function stripEmoji(text) {
+  return text.replace(/[\u{1F300}-\u{1FAFF}\u{2600}-\u{27BF}\u{1F1E6}-\u{1F1FF}\u{2B00}-\u{2BFF}\u{1F900}-\u{1F9FF}\u{FE0F}\u{200D}]/gu, '')
+    .replace(/[ \t]{2,}/g, ' ')
+}
+
+function smsSegmentInfo(rawText) {
+  const text = stripEmoji(rawText)
+  const hadEmoji = text.length !== rawText.length
+  const chars = text.length
+  if (chars === 0) return { chars: 0, segments: 0, gsm7: true, hadEmoji }
+  const gsm7 = [...text].every((c) => GSM7_CHARS.includes(c))
+  const singleCap = gsm7 ? 160 : 70
+  const multiCap = gsm7 ? 153 : 67
+  const segments = chars <= singleCap ? 1 : Math.ceil(chars / multiCap)
+  return { chars, segments, gsm7, hadEmoji }
+}
+
+function BroadcastPanel({ event, guests = [] }) {
   const [msg, setMsg] = useState('')
   const [target, setTarget] = useState('all')
   const [channels, setChannels] = useState(['sms'])
   const [loading, setLoading] = useState(false)
   const [result, setResult] = useState(null)
   const [err, setErr] = useState('')
+
+  // Search-and-pick specific guests (overrides the "Send to" segment below).
+  const [guestQuery, setGuestQuery] = useState('')
+  const [selectedGuests, setSelectedGuests] = useState([]) // [{id, label}]
+
+  // Typed-in recipients who aren't on the guest list at all.
+  const [extraRecipients, setExtraRecipients] = useState([]) // [{name, email?, phone?}]
+  const [nameInput, setNameInput] = useState('')
+  const [contactInput, setContactInput] = useState('')
+
+  const [mmsMediaUrl, setMmsMediaUrl] = useState('')
+
+  // Above this many SMS segments, sending is blocked until the organizer
+  // explicitly acknowledges the extra cost — the donation-appeal broadcast
+  // that went out at 10 segments/recipient with no warning is what this guards.
+  const SMS_SEGMENT_HARD_LIMIT = 3
+  const [smsCostAck, setSmsCostAck] = useState(false)
+  const smsInfo = channels.includes('sms') && msg.trim() ? smsSegmentInfo(msg) : null
+  const smsNeedsAck = !!smsInfo && smsInfo.segments > SMS_SEGMENT_HARD_LIMIT
+
+  useEffect(() => { setSmsCostAck(false) }, [msg, channels.includes('sms')])
 
   function toggleChannel(ch) {
     setChannels((p) => p.includes(ch) ? p.filter((c) => c !== ch) : [...p, ch])
@@ -5090,17 +5515,84 @@ function BroadcastPanel({ event }) {
     confirmed: 'guests attending (RSVP yes)',
     declined: 'guests who declined',
     no_reply: 'guests with no RSVP reply',
+    none: 'no one else',
+  }
+
+  const selectedIds = new Set(selectedGuests.map((g) => g.id))
+  const guestMatches = (() => {
+    const term = guestQuery.trim().toLowerCase()
+    if (term.length < 2) return []
+    return guests
+      .filter((g) => !selectedIds.has(g.id))
+      .filter((g) => {
+        const name = `${g.first_name || ''} ${g.last_name || ''}`.toLowerCase()
+        return name.includes(term) || (g.email || '').toLowerCase().includes(term) || (g.phone || '').includes(term)
+      })
+      .slice(0, 8)
+  })()
+
+  function addGuest(g) {
+    const label = `${g.first_name || ''} ${g.last_name || ''}`.trim() || g.email || g.phone || 'Guest'
+    setSelectedGuests((p) => [...p, { id: g.id, label }])
+    setGuestQuery('')
+  }
+
+  function removeGuest(id) {
+    setSelectedGuests((p) => p.filter((g) => g.id !== id))
+  }
+
+  function addRecipient() {
+    const name = nameInput.trim()
+    const contact = contactInput.trim()
+    if (!name || !contact) { setErr('Name and contact are both required to add a recipient'); return }
+    setErr('')
+    const isEmail = contact.includes('@')
+    setExtraRecipients((p) => [...p, { name, ...(isEmail ? { email: contact } : { phone: contact }) }])
+    setNameInput('')
+    setContactInput('')
+  }
+
+  function removeRecipient(idx) {
+    setExtraRecipients((p) => p.filter((_, i) => i !== idx))
+  }
+
+  function audienceSummary() {
+    const base = selectedGuests.length > 0
+      ? `${selectedGuests.length} selected guest(s)`
+      : TARGET_LABELS[target] || 'selected guests'
+    const extra = extraRecipients.length > 0 ? ` + ${extraRecipients.length} typed-in recipient(s)` : ''
+    return `${base}${extra}`
   }
 
   async function send() {
     if (!msg.trim()) return
     if (channels.length === 0) { setErr('Select at least one channel'); return }
-    if (!confirm(`Send broadcast to ${TARGET_LABELS[target] || 'selected guests'}?`)) return
+    if (channels.includes('mms') && !/^https:\/\//i.test(mmsMediaUrl.trim())) {
+      setErr('MMS needs an image URL starting with https://')
+      return
+    }
+    if (smsNeedsAck && !smsCostAck) {
+      setErr(`Check the SMS cost box below before sending — this message is ${smsInfo.segments} segments per recipient.`)
+      return
+    }
+    const costNote = smsInfo && smsInfo.segments > 1
+      ? ` This is ${smsInfo.segments} SMS segments per recipient — ${smsInfo.segments}x the cost of a normal one-segment text.`
+      : ''
+    if (!confirm(`Send broadcast to ${audienceSummary()}?${costNote}`)) return
     setLoading(true); setResult(null); setErr('')
     try {
-      const res = await api.broadcast(event.id, { message: msg.trim(), target, channels })
+      const res = await api.broadcast(event.id, {
+        message: msg.trim(),
+        target,
+        channels,
+        guest_ids: selectedGuests.map((g) => g.id),
+        extra_recipients: extraRecipients,
+        mms_media_url: channels.includes('mms') ? mmsMediaUrl.trim() : undefined,
+      })
       setResult(res)
       setMsg('')
+      setSelectedGuests([])
+      setExtraRecipients([])
     } catch (e) { setErr(e.message) }
     finally { setLoading(false) }
   }
@@ -5121,11 +5613,109 @@ function BroadcastPanel({ event }) {
         placeholder="e.g. Doors open at 7pm. Parking on Main St."
         className={`w-full ${inputCls}`}
       />
+      <p className="text-[11px] text-slate-400 dark:text-slate-500 -mt-2">
+        Email supports **bold**, * bullet lines, and [text](url) links — links and plain URLs are also auto-detected. SMS/WhatsApp/MMS always send as plain text.
+      </p>
+      {smsInfo && (() => {
+        const cls = smsInfo.segments <= 1 ? 'text-slate-400 dark:text-slate-500'
+          : smsInfo.segments <= SMS_SEGMENT_HARD_LIMIT ? 'text-amber-600 dark:text-amber-400'
+          : 'text-red-600 dark:text-red-400'
+        return (
+          <>
+            <p className={`text-[11px] -mt-2 ${cls}`}>
+              {smsInfo.chars} character{smsInfo.chars === 1 ? '' : 's'} — {smsInfo.segments} SMS segment{smsInfo.segments === 1 ? '' : 's'} per recipient
+              {smsInfo.hadEmoji && ' (emoji are automatically removed from the SMS text — they still show in MMS/email/WhatsApp)'}
+              {!smsInfo.hadEmoji && !smsInfo.gsm7 && ' (a special character forces Unicode encoding, ~67 chars/segment instead of ~153)'}
+              {smsInfo.segments > 1 && ` — that's ${smsInfo.segments}x the cost of a normal one-segment text, billed separately per recipient.`}
+            </p>
+            {smsNeedsAck && (
+              <label className="flex items-start gap-2 -mt-1 text-xs text-red-700 dark:text-red-400 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg px-3 py-2 cursor-pointer">
+                <input type="checkbox" checked={smsCostAck} onChange={(e) => setSmsCostAck(e.target.checked)} className="mt-0.5 w-4 h-4 accent-red-600" />
+                <span>I understand this message will send as {smsInfo.segments} SMS segments per recipient — {smsInfo.segments}x the usual SMS cost — and want to send it anyway. Consider shortening the message instead.</span>
+              </label>
+            )}
+          </>
+        )
+      })()}
+
+      {/* Search-and-pick specific guests */}
+      <div>
+        <label className="block text-xs font-semibold text-slate-500 dark:text-slate-400 mb-1">Search guest list — {guests.length} guest{guests.length === 1 ? '' : 's'} loaded (optional — picks specific guests instead of the segment below)</label>
+        <div className="relative">
+          <input
+            value={guestQuery}
+            onChange={(e) => setGuestQuery(e.target.value)}
+            placeholder="Search by name, email or phone…"
+            className={`w-full ${inputCls}`}
+          />
+          {guestQuery.trim().length >= 2 && (
+            <div className="absolute z-10 mt-1 w-full bg-white dark:bg-slate-700 border border-gray-200 dark:border-slate-600 rounded-lg shadow-lg max-h-56 overflow-auto">
+              {guestMatches.length > 0 ? guestMatches.map((g) => (
+                <button
+                  key={g.id}
+                  onClick={() => addGuest(g)}
+                  className="w-full text-left px-3 py-2 text-sm hover:bg-teal-50 dark:hover:bg-slate-600 text-slate-700 dark:text-slate-200"
+                >
+                  <span className="font-medium">{g.first_name} {g.last_name}</span>
+                  <span className="text-slate-400 dark:text-slate-400 ml-2 text-xs">{g.email || g.phone}</span>
+                </button>
+              )) : (
+                <div className="px-3 py-2 text-sm text-slate-400 dark:text-slate-500">No matching guests found.</div>
+              )}
+            </div>
+          )}
+        </div>
+        {selectedGuests.length > 0 && (
+          <div className="flex flex-wrap gap-2 mt-2">
+            {selectedGuests.map((g) => (
+              <span key={g.id} className="inline-flex items-center gap-1.5 bg-teal-50 dark:bg-teal-900/30 text-teal-800 dark:text-teal-200 border border-teal-200 dark:border-teal-700 rounded-full px-3 py-1 text-xs font-medium">
+                {g.label}
+                <button onClick={() => removeGuest(g.id)} className="ml-1 text-teal-400 hover:text-red-500">✕</button>
+              </span>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {/* Typed-in recipients not on the guest list */}
+      <div>
+        <label className="block text-xs font-semibold text-slate-500 dark:text-slate-400 mb-1">Or send to an email / phone directly (not on the guest list)</label>
+        <div className="flex gap-2 flex-wrap">
+          <input
+            value={nameInput}
+            onChange={(e) => setNameInput(e.target.value)}
+            onKeyDown={(e) => e.key === 'Enter' && addRecipient()}
+            placeholder="Name (required)"
+            className={`${inputCls} w-36`}
+          />
+          <input
+            value={contactInput}
+            onChange={(e) => setContactInput(e.target.value)}
+            onKeyDown={(e) => e.key === 'Enter' && addRecipient()}
+            placeholder="Email or phone"
+            className={`${inputCls} flex-1 min-w-[180px]`}
+          />
+          <button onClick={addRecipient} disabled={!nameInput.trim() || !contactInput.trim()} className="bg-teal-600 hover:bg-teal-700 text-white px-4 py-2 rounded-lg text-sm font-semibold disabled:opacity-50">
+            + Add
+          </button>
+        </div>
+        {extraRecipients.length > 0 && (
+          <div className="flex flex-wrap gap-2 mt-2">
+            {extraRecipients.map((r, i) => (
+              <span key={i} className="inline-flex items-center gap-1.5 bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-200 border border-slate-200 dark:border-slate-600 rounded-full px-3 py-1 text-xs font-medium">
+                {r.name ? `${r.name} — ` : ''}{r.email || r.phone}
+                <button onClick={() => removeRecipient(i)} className="ml-1 text-slate-400 hover:text-red-500">✕</button>
+              </span>
+            ))}
+          </div>
+        )}
+      </div>
 
       <div className="flex flex-wrap gap-4 items-center">
         <div>
           <label className="block text-xs font-semibold text-slate-500 dark:text-slate-400 mb-1">Send to</label>
-          <select value={target} onChange={(e) => setTarget(e.target.value)} className={inputCls}>
+          <select value={target} onChange={(e) => setTarget(e.target.value)} disabled={selectedGuests.length > 0} className={`${inputCls} disabled:opacity-50`}>
+            <option value="none">No one else — just the recipients above</option>
             <option value="all">All guests</option>
             <option value="confirmed">RSVP: Attending</option>
             <option value="declined">RSVP: Declined</option>
@@ -5133,11 +5723,14 @@ function BroadcastPanel({ event }) {
             <option value="admitted">Checked in</option>
             <option value="not_admitted">Not yet checked in</option>
           </select>
+          {selectedGuests.length > 0 && (
+            <p className="text-[11px] text-slate-400 dark:text-slate-500 mt-1">Ignored — sending to {selectedGuests.length} selected guest(s) instead.</p>
+          )}
         </div>
         <div>
           <label className="block text-xs font-semibold text-slate-500 dark:text-slate-400 mb-1">Channels</label>
           <div className="flex gap-3">
-            {['email', 'sms', 'whatsapp'].map((ch) => (
+            {['email', 'sms', 'whatsapp', 'mms'].map((ch) => (
               <label key={ch} className="flex items-center gap-1.5 text-sm cursor-pointer select-none text-slate-700 dark:text-slate-300">
                 <input type="checkbox" checked={channels.includes(ch)} onChange={() => toggleChannel(ch)} className="w-4 h-4 accent-teal-600" />
                 {ch.toUpperCase()}
@@ -5147,6 +5740,22 @@ function BroadcastPanel({ event }) {
         </div>
       </div>
 
+      {channels.includes('mms') && (
+        <div>
+          <label className="block text-xs font-semibold text-slate-500 dark:text-slate-400 mb-1">MMS image URL (attached to the text, must be https://)</label>
+          <input
+            value={mmsMediaUrl}
+            onChange={(e) => setMmsMediaUrl(e.target.value)}
+            placeholder="https://…/image.jpg"
+            className={`w-full ${inputCls}`}
+          />
+        </div>
+      )}
+
+      <p className="text-xs font-medium text-amber-600 dark:text-amber-400">
+        Will send to: {audienceSummary()}
+      </p>
+
       {err && <div className="text-xs text-red-600 dark:text-red-400">{err}</div>}
       {result && (
         <div className="text-xs text-green-700 dark:text-green-400 bg-green-50 dark:bg-green-900/30 border border-green-200 dark:border-green-800 rounded-lg px-3 py-2">
@@ -5155,7 +5764,7 @@ function BroadcastPanel({ event }) {
         </div>
       )}
 
-      <button onClick={send} disabled={loading || !msg.trim()}
+      <button onClick={send} disabled={loading || !msg.trim() || (smsNeedsAck && !smsCostAck)}
         className="bg-teal-600 hover:bg-teal-700 text-white px-4 py-2 rounded-lg text-sm font-semibold disabled:opacity-50">
         {loading ? 'Sending…' : '📤 Send Broadcast'}
       </button>
@@ -7800,7 +8409,7 @@ function SourceSyncPanel({ event, onSave, onSyncNow, onToggleSync, loading }) {
         <div>
           <h2 className="font-semibold text-base dark:text-white">Guest spreadsheet sync</h2>
           <p className="text-xs text-gray-500 dark:text-slate-400 mt-1">
-            Paste a Google Sheets or OneDrive share link. While the event is <strong>Active</strong>,
+            Paste a Google Sheets, OneDrive/SharePoint, or Dropbox share link. While the event is <strong>Active</strong>,
             Festio checks it every {event.source_sync_interval_seconds || 60} seconds and adds new guests.
             Existing guests stay untouched.
           </p>
@@ -8519,25 +9128,41 @@ function MessageDeliveryCard({ guests, onJump }) {
       )}
 
       {notSent.length > 0 && (
-        <div>
-          <div className="text-[11px] font-semibold uppercase text-gray-400 dark:text-slate-500 mb-2">Not sent yet</div>
-          <div className="flex flex-wrap gap-1">
-            {notSent.map((g) => (
+        <details className="group">
+          <summary className="text-[11px] font-semibold uppercase text-gray-400 dark:text-slate-500 mb-2 cursor-pointer select-none flex items-center gap-1">
+            <span className="inline-block transition-transform group-open:rotate-90">▶</span>
+            Not sent yet ({notSent.length})
+          </summary>
+          <div className="flex flex-wrap gap-1 mt-1">
+            {notSent.slice(0, 150).map((g) => (
               <span key={g.id} className="text-[11px] px-1.5 py-0.5 rounded bg-amber-100 dark:bg-amber-900/40 text-amber-700 dark:text-amber-300">{g.first_name} {g.last_name}</span>
             ))}
+            {notSent.length > 150 && (
+              <button onClick={() => onJump({ invited: 'unsent' })} className="text-[11px] px-1.5 py-0.5 rounded bg-slate-100 dark:bg-slate-700 text-slate-500 dark:text-slate-400 underline">
+                +{notSent.length - 150} more — view in Guests tab
+              </button>
+            )}
           </div>
-        </div>
+        </details>
       )}
 
       {failed.length > 0 && (
-        <div>
-          <div className="text-[11px] font-semibold uppercase text-gray-400 dark:text-slate-500 mb-2">Failed (no reachable channel)</div>
-          <div className="flex flex-wrap gap-1">
-            {failed.map((g) => (
+        <details className="group">
+          <summary className="text-[11px] font-semibold uppercase text-gray-400 dark:text-slate-500 mb-2 cursor-pointer select-none flex items-center gap-1">
+            <span className="inline-block transition-transform group-open:rotate-90">▶</span>
+            Failed (no reachable channel) ({failed.length})
+          </summary>
+          <div className="flex flex-wrap gap-1 mt-1">
+            {failed.slice(0, 150).map((g) => (
               <span key={g.id} className="text-[11px] px-1.5 py-0.5 rounded bg-red-100 dark:bg-red-900/40 text-red-700 dark:text-red-300">{g.first_name} {g.last_name}</span>
             ))}
+            {failed.length > 150 && (
+              <button onClick={() => onJump({ invited: 'failed' })} className="text-[11px] px-1.5 py-0.5 rounded bg-slate-100 dark:bg-slate-700 text-slate-500 dark:text-slate-400 underline">
+                +{failed.length - 150} more — view in Guests tab
+              </button>
+            )}
           </div>
-        </div>
+        </details>
       )}
     </div>
   )
@@ -8975,7 +9600,7 @@ function ExportMenu({ event, onExport, filteredIds, filteredCount, totalCount })
 // page on a tab that renders nothing.
 const VALID_ADMIN_TABS = new Set([
   'overview', 'guests', 'invite', 'communication', 'billing', 'access', 'rules',
-  'seating', 'menu', 'logistics', 'registry', 'team', 'experience', 'messages', 'features',
+  'seating', 'menu', 'logistics', 'registry', 'team', 'experience', 'messages', 'features', 'tasks',
 ])
 
 export default function AdminPage() {
@@ -9003,6 +9628,8 @@ export default function AdminPage() {
   const initialTabAppliedRef = useRef(false)
   const [tableGroups, setTableGroups] = useState([])
   const [groupFilter, setGroupFilter] = useState('')   // '' = all, 'none' = unassigned
+  const [households, setHouseholds] = useState([])
+  const [householdFilter, setHouseholdFilter] = useState('')   // '' = all, 'none' = unassigned
   const [guestSearch, setGuestSearch] = useState('')
   const [guestFilter, setGuestFilter] = useState({ invited: 'all', admitted: 'all', qr: 'all', relationship: 'all', submitter: 'all' })
   const [showReset, setShowReset] = useState(false)
@@ -9019,6 +9646,7 @@ export default function AdminPage() {
   const canManageGuests = canManageEvent || !!event?.my_can_manage_guests
   const canViewGuests = canManageGuests || !!event?.my_can_view_guests
   const guestOnlyAccess = canViewGuests && !canManageEvent
+  const redesignAccessible = !!event?.my_redesign_accessible
 
   useEffect(() => { api.listEvents().then((evs) => {
     setEvents(evs)
@@ -9057,14 +9685,16 @@ export default function AdminPage() {
     setPage(0)
     setSelectedGuests(new Set())
     setGroupFilter('')
+    setHouseholdFilter('')
     // A tab deep link (?tab=) should survive the very first selectedId
     // application (the URL-driven one above) but a later, genuine event
     // switch should still land back on the overview tab like before.
     if (initialTabAppliedRef.current) setActiveTab('overview')
     initialTabAppliedRef.current = true
-    if (!selectedId) { setGuests([]); setTableGroups([]); return }
+    if (!selectedId) { setGuests([]); setTableGroups([]); setHouseholds([]); return }
     api.listGuests(selectedId).then(setGuests).catch(console.error)
     api.listTableGroups(selectedId).then(setTableGroups).catch(() => setTableGroups([]))
+    api.listHouseholds(selectedId).then(setHouseholds).catch(() => setHouseholds([]))
   }, [selectedId])
 
   // Officials enter this surface only for capabilities explicitly granted on
@@ -9132,6 +9762,10 @@ export default function AdminPage() {
     catch (err) { flash(err.message, true) }
   }
 
+  async function reloadHouseholds() {
+    try { setHouseholds(await api.listHouseholds(selectedId)) } catch { setHouseholds([]) }
+  }
+
   async function handleBulkAssignGroup(groupId) {
     const ids = [...selectedGuests]
     if (ids.length === 0) return
@@ -9141,6 +9775,19 @@ export default function AdminPage() {
       const [gs, tg] = await Promise.all([api.listGuests(selectedId), api.listTableGroups(selectedId)])
       setGuests(gs); setTableGroups(tg); setSelectedGuests(new Set())
       flash(groupId ? `${seatingTerm(event)} group assigned.` : `${seatingTerm(event)} group cleared.`)
+    } catch (e) { flash(e.message, true) }
+    finally { setLoading(false) }
+  }
+
+  async function handleBulkAssignHousehold(householdId) {
+    const ids = [...selectedGuests]
+    if (ids.length === 0) return
+    setLoading(true)
+    try {
+      await api.bulkAssignHousehold(selectedId, ids, householdId || null)
+      const [gs, hh] = await Promise.all([api.listGuests(selectedId), api.listHouseholds(selectedId)])
+      setGuests(gs); setHouseholds(hh); setSelectedGuests(new Set())
+      flash(householdId ? 'Household assigned.' : 'Household cleared.')
     } catch (e) { flash(e.message, true) }
     finally { setLoading(false) }
   }
@@ -9428,12 +10075,20 @@ export default function AdminPage() {
       )}
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-bold dark:text-white">{guestOnlyAccess ? 'Event Guests' : 'Event Setup'}</h1>
-        {!guestOnlyAccess && user?.role === 'admin' && (
-          <button onClick={() => navigate('/setup')}
-            className="bg-indigo-600 text-white px-4 py-2 rounded-lg text-sm font-semibold hover:bg-indigo-700">
-            New Event
-          </button>
-        )}
+        <div className="flex items-center gap-3">
+          {redesignAccessible && (
+            <button onClick={() => navigate('/admin-redesign')}
+              className="text-sm text-indigo-600 dark:text-indigo-400 hover:underline whitespace-nowrap">
+              Preview new design →
+            </button>
+          )}
+          {!guestOnlyAccess && user?.role === 'admin' && (
+            <button onClick={() => navigate('/setup')}
+              className="bg-indigo-600 text-white px-4 py-2 rounded-lg text-sm font-semibold hover:bg-indigo-700">
+              New Event
+            </button>
+          )}
+        </div>
       </div>
 
       {!event && <TrialBanner events={events} user={user} onCreateDraft={() => navigate('/setup')} />}
@@ -9519,6 +10174,7 @@ export default function AdminPage() {
               ]}] : []),
               { label: 'Team & settings', items: [
                 { id: 'team', label: 'Team', icon: '🧑‍🤝‍🧑' },
+                { id: 'tasks', label: 'Tasks', icon: '✅' },
                 { id: 'experience', label: 'Experience', icon: '🧭' },
                 { id: 'messages', label: 'Messages', icon: '✏️' },
                 { id: 'features', label: 'Features & messaging', icon: '⚙️' },
@@ -9756,6 +10412,9 @@ export default function AdminPage() {
               <h2 className="font-semibold text-base dark:text-white">Import guests</h2>
               <p className="text-xs text-gray-500 dark:text-slate-400 mt-1">
                 Start with a spreadsheet template, upload a file, or connect a shared sheet.
+                Syncing from your own database or CRM instead? Use the{' '}
+                <a href="/api-docs" target="_blank" rel="noreferrer" className="text-teal-600 dark:text-teal-400 underline">Public API</a>
+                {' '}to push guests directly — no spreadsheet needed (create a key in Org Settings → API Keys).
               </p>
             </div>
 
@@ -9798,7 +10457,7 @@ export default function AdminPage() {
                   type="url"
                   value={sheetUrl}
                   onChange={(e) => setSheetUrl(e.target.value)}
-                  placeholder="Paste Google Sheets or Excel Online share link…"
+                  placeholder="Paste Google Sheets, OneDrive/Excel, or Dropbox share link…"
                   className="flex-1 border border-gray-300 dark:border-slate-700 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-white dark:bg-slate-800 text-gray-900 dark:text-white"
                 />
                 <button onClick={handleImportUrl} disabled={loading || !sheetUrl.trim()}
@@ -9811,7 +10470,7 @@ export default function AdminPage() {
             )}
             {showUrlInput && (
               <p className="text-xs text-gray-400 dark:text-slate-500">
-                Google Sheets: share with "Anyone with link can view". OneDrive/Excel: use Share → Copy link with "Anyone with the link can view", not the browser address bar URL.
+                Google Sheets: share with "Anyone with link can view". OneDrive/Excel: use Share → Copy link with "Anyone with the link can view", not the browser address bar URL. Dropbox: any shared file link works. Excel files can be .xlsx or the older .xls format.
                 The sheet must include <strong>first_name, last_name, email, phone</strong>. Extra columns are ignored unless an add-on uses them.
               </p>
             )}
@@ -9890,6 +10549,7 @@ export default function AdminPage() {
           </>}{/* end overview tab */}
 
           {activeTab === 'team' && <TeamPanel eventId={selectedId} />}
+          {activeTab === 'tasks' && <TasksPanel eventId={selectedId} onFlash={flash} />}
 
           {activeTab === 'experience' && <ExperiencePanel event={event} onChanged={updateEvent} onFlash={flash} />}
 
@@ -9946,7 +10606,6 @@ export default function AdminPage() {
             })()}
             <InvitePanel event={event} onChanged={updateEvent} />
             <ManualInvitePanel event={event} />
-            <BroadcastPanel event={event} />
           </>}
 
           {activeTab === 'seating' && event.seating_enabled && <>
@@ -9957,7 +10616,10 @@ export default function AdminPage() {
             <CheckoutToggle event={event} onChanged={updateEvent} onFlash={flash} />
           </>}
 
-          {activeTab === 'messages' && <MessageTemplatesPanel eventId={selectedId} event={event} />}
+          {activeTab === 'messages' && <>
+            <BroadcastPanel event={event} guests={guests} />
+            <MessageTemplatesPanel eventId={selectedId} event={event} />
+          </>}
 
           {activeTab === 'menu' && event.menu_enabled && <>
             <MenuPanel eventId={selectedId} />
@@ -9978,6 +10640,11 @@ export default function AdminPage() {
 
           {activeTab === 'rules' && event.venue_access_enabled && (
             <AccessRulesPanel eventId={selectedId} />
+          )}
+
+          {activeTab === 'guests' && canManageGuests && (
+            <HouseholdsPanel eventId={selectedId} households={households} onChanged={reloadHouseholds}
+              tableGroups={tableGroups} seatingEnabled={!!event?.seating_enabled} seatingLabel={seatingTerm(event)} />
           )}
 
           {/* Guest list */}
@@ -10009,7 +10676,10 @@ export default function AdminPage() {
             const byGroup = groupFilter === '' ? guests
               : groupFilter === 'none' ? guests.filter((g) => !g.assigned_table_group_id)
               : guests.filter((g) => g.assigned_table_group_id === groupFilter)
-            const filteredGuests = byGroup.filter((g) => {
+            const byHousehold = householdFilter === '' ? byGroup
+              : householdFilter === 'none' ? byGroup.filter((g) => !g.household_id)
+              : byGroup.filter((g) => g.household_id === householdFilter)
+            const filteredGuests = byHousehold.filter((g) => {
               const search = textKey(guestSearch).replace(/\s+/g, ' ')
               const guestName = textKey(`${g.first_name || ''} ${g.last_name || ''}`).replace(/\s+/g, ' ')
               const reverseName = textKey(`${g.last_name || ''} ${g.first_name || ''}`).replace(/\s+/g, ' ')
@@ -10031,7 +10701,7 @@ export default function AdminPage() {
               }
               return true
             })
-            const anyFilter = Boolean(guestSearch.trim()) || guestFilter.invited !== 'all' || guestFilter.admitted !== 'all' || guestFilter.qr !== 'all' || guestFilter.relationship !== 'all' || guestFilter.submitter !== 'all'
+            const anyFilter = Boolean(guestSearch.trim()) || guestFilter.invited !== 'all' || guestFilter.admitted !== 'all' || guestFilter.qr !== 'all' || guestFilter.relationship !== 'all' || guestFilter.submitter !== 'all' || householdFilter !== ''
             const setGF = (patch) => { setGuestFilter((f) => ({ ...f, ...patch })); setPage(0) }
             const totalPages = Math.ceil(filteredGuests.length / PAGE_SIZE)
             const pageGuests = filteredGuests.slice(page * PAGE_SIZE, (page + 1) * PAGE_SIZE)
@@ -10078,6 +10748,17 @@ export default function AdminPage() {
                         <option value="none">— Clear group —</option>
                       </select>
                     )}
+                    {households.length > 0 && (
+                      <select
+                        defaultValue=""
+                        onChange={(e) => { const v = e.target.value; e.target.value = ''; if (v) handleBulkAssignHousehold(v === 'none' ? null : v) }}
+                        disabled={loading}
+                        className="text-xs border border-indigo-300 dark:border-indigo-700 rounded-lg px-2 py-1.5 bg-white dark:bg-slate-700 dark:text-slate-200">
+                        <option value="">Assign household…</option>
+                        {households.map((h) => <option key={h.id} value={h.id}>{h.name}</option>)}
+                        <option value="none">— Clear household —</option>
+                      </select>
+                    )}
                     <button
                       onClick={() => setSelectedGuests(new Set())}
                       className="text-xs text-gray-600 dark:text-slate-300 hover:underline ml-auto">
@@ -10112,7 +10793,7 @@ export default function AdminPage() {
                     }
                     return null
                   })()}
-                  <h2 className="font-semibold text-sm sm:text-base dark:text-white">Guest List ({filteredGuests.length}{groupFilter || guestSearch.trim() ? ` of ${guests.length}` : ''})</h2>
+                  <h2 className="font-semibold text-sm sm:text-base dark:text-white">Guest List ({filteredGuests.length}{groupFilter || householdFilter || guestSearch.trim() ? ` of ${guests.length}` : ''})</h2>
                   <div className="relative min-w-[13rem] flex-1 sm:max-w-xs">
                     <span className="pointer-events-none absolute inset-y-0 left-3 flex items-center text-slate-400" aria-hidden="true">⌕</span>
                     <input
@@ -10130,6 +10811,14 @@ export default function AdminPage() {
                       <option value="">All {seatingTerm(event, { lower: true })} groups</option>
                       <option value="none">Unassigned</option>
                       {tableGroups.map((tg) => <option key={tg.id} value={tg.id}>{tg.name}</option>)}
+                    </select>
+                  )}
+                  {households.length > 0 && (
+                    <select value={householdFilter} onChange={(e) => { setHouseholdFilter(e.target.value); setPage(0) }}
+                      className="text-xs border dark:border-slate-700 rounded-lg px-2 py-1.5 bg-white dark:bg-slate-700 dark:text-slate-200">
+                      <option value="">All households</option>
+                      <option value="none">Unassigned</option>
+                      {households.map((h) => <option key={h.id} value={h.id}>{h.name}</option>)}
                     </select>
                   )}
                   <select value={guestFilter.relationship} onChange={(e) => setGF({ relationship: e.target.value })}
@@ -10253,6 +10942,9 @@ export default function AdminPage() {
                           </td>}
                           <td className="px-4 py-3 font-medium dark:text-slate-100">
                             <span className="inline-flex items-center gap-2">{g.first_name} {g.last_name}{g.is_vip && <VipBadge />}</span>
+                            {g.household_name && (
+                              <div className="mt-1 inline-block text-[11px] bg-amber-50 dark:bg-amber-900/30 text-amber-700 dark:text-amber-300 px-1.5 py-0.5 rounded">{g.household_name}</div>
+                            )}
                             {(g.rsvp_submitter_guest_id || g.rsvp_submitter_name || g.rsvp_guest_type) && (
                               <div className="mt-1 space-y-0.5 text-[11px] leading-tight text-slate-500 dark:text-slate-400">
                                 {g.rsvp_guest_type && <div>Type: {g.rsvp_guest_type}</div>}
@@ -10355,6 +11047,9 @@ export default function AdminPage() {
                             <div className="text-xs text-gray-500 dark:text-slate-400 break-all">{g.email}</div>
                             {event?.seating_enabled && g.table_group_name && (
                               <div className="mt-1 inline-block text-[11px] bg-indigo-50 dark:bg-indigo-900/30 text-indigo-700 dark:text-indigo-300 px-1.5 py-0.5 rounded">{g.table_group_name}</div>
+                            )}
+                            {g.household_name && (
+                              <div className="mt-1 inline-block text-[11px] bg-amber-50 dark:bg-amber-900/30 text-amber-700 dark:text-amber-300 px-1.5 py-0.5 rounded ml-1">{g.household_name}</div>
                             )}
                           </div>
                         </div>

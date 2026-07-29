@@ -68,6 +68,7 @@ from services.templates import build_context as build_template_context
 from ..template_resolve import email_or_default as template_email_or_default, load_overrides
 from ..services.festiome_outbox import queue_announcement
 from ..services.program import feedback_availability, program_state
+from ..services.webhook_outbox import queue_webhook_event
 
 router = APIRouter()
 
@@ -1222,23 +1223,15 @@ async def update_step(
     return step
 
 
-@router.delete("/{event_id}/experience/workflows/{workflow_id}/steps/{step_id}", status_code=204)
-async def delete_step(
-    event_id: str,
-    workflow_id: str,
-    step_id: str,
-    db: AsyncSession = Depends(get_db),
-    _: User = Depends(require_event_admin),
-):
-    event = await db.get(Event, event_id)
-    if not event:
-        raise HTTPException(404, "Event not found")
-    _assert_experience_plan(event)
-    workflow = await _load_scoped_workflow(event_id, workflow_id, db)
-    _ensure_draft(workflow)
+async def delete_step_cascade(event_id: str, workflow: ExperienceWorkflow, step_id: str, db: AsyncSession) -> bool:
+    """Shared cascade-delete body used by both the internal admin endpoint
+    below and the public API's write endpoint. Scrubs the deleted step's
+    id/key out of any other step's dependency config, then removes its
+    progress/audit rows. Caller has already loaded `workflow` (with .steps)
+    and confirmed it's a draft. Returns False if the step isn't in it."""
     step = await db.get(ExperienceStep, step_id)
     if not step or step.workflow_id != workflow.id:
-        raise HTTPException(404, "Step not found")
+        return False
     deleted_refs = {step.id, step.key}
     for other in workflow.steps:
         if other.id == step.id:
@@ -1270,6 +1263,25 @@ async def delete_step(
     )
     await db.delete(step)
     await db.commit()
+    return True
+
+
+@router.delete("/{event_id}/experience/workflows/{workflow_id}/steps/{step_id}", status_code=204)
+async def delete_step(
+    event_id: str,
+    workflow_id: str,
+    step_id: str,
+    db: AsyncSession = Depends(get_db),
+    _: User = Depends(require_event_admin),
+):
+    event = await db.get(Event, event_id)
+    if not event:
+        raise HTTPException(404, "Event not found")
+    _assert_experience_plan(event)
+    workflow = await _load_scoped_workflow(event_id, workflow_id, db)
+    _ensure_draft(workflow)
+    if not await delete_step_cascade(event_id, workflow, step_id, db):
+        raise HTTPException(404, "Step not found")
 
 
 @router.post("/{event_id}/experience/workflows/{workflow_id}/steps/reorder", response_model=ExperienceWorkflowOut)
@@ -1329,6 +1341,9 @@ async def publish(
         kind="experience",
         source_ref=f"workflow-published:{workflow.id}:v{workflow.version}",
     )
+    await queue_webhook_event(db, org_id=event.org_id, event_type="experience.workflow_published", payload={
+        "workflow_id": workflow.id, "event_id": event.id, "name": workflow.name, "version": workflow.version,
+    })
     await db.commit()
     return published
 
@@ -1727,6 +1742,9 @@ async def sign_my_consent(
             source="guest",
             payload={"form_id": form.id, "form_version": form.version},
         ))
+    await queue_webhook_event(db, org_id=event.org_id, event_type="experience.consent_signed", payload={
+        "guest_id": guest.id, "event_id": event_id, "form_id": form.id, "signer_name": signature.signer_name,
+    })  # queued row is committed below alongside the rest of this signing transaction
     await db.commit()
     await db.refresh(signature)
     return signature
@@ -1962,6 +1980,11 @@ async def submit_my_feedback(
         event_id=event_id, workflow_id=workflow.id, step_id=step.id, guest_id=guest.id,
         event_type="feedback_updated" if was_existing else "feedback_submitted", source="guest", payload={"anonymous": bool(feedback.get("anonymous"))},
     ))
+    if not was_existing:
+        event = await db.get(Event, event_id)
+        await queue_webhook_event(db, org_id=event.org_id, event_type="experience.feedback_submitted", payload={
+            "guest_id": guest.id, "event_id": event_id, "step_id": step.id, "submission_id": submission.id,
+        })
     await db.commit()
     await db.refresh(submission)
     return {"id": submission.id, "step_id": step.id, "submitted_at": submission.submitted_at}
@@ -2131,17 +2154,19 @@ async def feedback_reminder_preview(
     return _feedback_reminder_preview(event, guests, [c.strip().lower() for c in channels.split(",")])
 
 
-@router.post("/{event_id}/experience/feedback/{step_id}/reminders")
-async def send_feedback_reminders(
-    event_id: str, step_id: str, data: dict, background_tasks: BackgroundTasks,
-    db: AsyncSession = Depends(get_db), _: User = Depends(require_event_admin),
-):
-    event, step, guests = await _feedback_nonresponders(event_id, step_id, db)
-    channels = [str(c).lower() for c in (data.get("channels") or ["email"]) if str(c).lower() in {"email", "sms", "whatsapp"}]
+async def send_feedback_reminders_cascade(
+    event: Event, step: ExperienceStep, guests: list[Guest], channels_raw: list,
+    subject_raw: str | None, message_raw: str | None, background_tasks: BackgroundTasks, db: AsyncSession,
+) -> dict:
+    """Shared body used by both the internal admin endpoint below and the
+    public API's write endpoint — real sends (spends message credits via
+    take_message_credit, queues background_tasks), so both callers share the
+    exact same accounting rather than risking drift between two copies."""
+    channels = [str(c).lower() for c in (channels_raw or ["email"]) if str(c).lower() in {"email", "sms", "whatsapp"}]
     if not channels:
         raise HTTPException(422, "Choose at least one reminder channel")
-    subject = str(data.get("subject") or f"Share your feedback about {event.name}")[:200]
-    message = str(data.get("message") or f"Please take a moment to share your feedback about {event.name}.").strip()[:1500]
+    subject = str(subject_raw or f"Share your feedback about {event.name}")[:200]
+    message = str(message_raw or f"Please take a moment to share your feedback about {event.name}.").strip()[:1500]
     queued = {"email": 0, "sms": 0, "whatsapp": 0}
     paid = can_use_paid_channels(event)
     for guest in guests:
@@ -2163,12 +2188,23 @@ async def send_feedback_reminders(
                     phone=guest.phone, first_name=guest.first_name, message=personalized)
                 queued["whatsapp"] += 1
     db.add(ExperienceEvent(
-        event_id=event_id, workflow_id=step.workflow_id, step_id=step.id,
+        event_id=event.id, workflow_id=step.workflow_id, step_id=step.id,
         event_type="feedback_reminders_queued", source="admin",
         payload={"channels": channels, "queued": queued, "nonresponders": len(guests)},
     ))
     await db.commit()
     return {"nonresponders": len(guests), "queued": queued, "credits_remaining": event.message_credits or 0}
+
+
+@router.post("/{event_id}/experience/feedback/{step_id}/reminders")
+async def send_feedback_reminders(
+    event_id: str, step_id: str, data: dict, background_tasks: BackgroundTasks,
+    db: AsyncSession = Depends(get_db), _: User = Depends(require_event_admin),
+):
+    event, step, guests = await _feedback_nonresponders(event_id, step_id, db)
+    return await send_feedback_reminders_cascade(
+        event, step, guests, data.get("channels"), data.get("subject"), data.get("message"), background_tasks, db,
+    )
 
 
 @router.post("/{event_id}/experience/feedback/prepare-draft")

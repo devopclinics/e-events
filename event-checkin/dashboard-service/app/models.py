@@ -250,3 +250,19 @@ class EmailDeliveryEvent(Base):
     status: Mapped[str] = mapped_column(String(40))
     occurred_at: Mapped[datetime] = mapped_column(DateTime, default=utc_now_naive)
     created_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+
+
+class BroadcastLog(Base):
+    __tablename__ = "broadcast_logs"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True)
+    event_id: Mapped[str] = mapped_column(String(36), ForeignKey("events.id"))
+    message: Mapped[str] = mapped_column(Text)
+    target: Mapped[str] = mapped_column(String(30))
+    channels: Mapped[list] = mapped_column(JSON)
+    channel_counts: Mapped[dict] = mapped_column(JSON)
+    queued: Mapped[int] = mapped_column(Integer)
+    skipped_no_contact: Mapped[int] = mapped_column(Integer)
+    skipped_no_consent: Mapped[int] = mapped_column(Integer)
+    skipped_no_credits: Mapped[int] = mapped_column(Integer)
+    created_at: Mapped[datetime] = mapped_column(DateTime)

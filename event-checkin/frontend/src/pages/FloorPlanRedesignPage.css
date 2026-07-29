@@ -1,0 +1,66 @@
+.fp-page { display: flex; flex-direction: column; gap: 16px; padding: 0 0 32px; }
+
+.fp-gate-banner { display: flex; align-items: center; gap: 12px; padding: 14px 18px; background: #fef3c7; border: 1.5px solid #d97706; border-radius: 12px; color: #92400e; }
+.fp-gate-banner strong { font-weight: 700; }
+.fp-gate-banner > div { flex: 1; font-size: 0.88rem; }
+.dark .fp-gate-banner { background: #78350f; border-color: #d97706; color: #fcd34d; }
+
+.fp-header { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+.fp-header h2 { margin: 0 0 2px; font-size: 1.4rem; font-weight: 700; color: var(--rr-text); }
+.fp-subtitle { margin: 0; font-size: 0.85rem; color: var(--rr-sub); }
+.fp-header-actions { display: flex; gap: 8px; }
+
+.fp-tabs { display: flex; gap: 4px; border-bottom: 2px solid var(--rr-border); }
+.fp-tab { border: none; background: none; padding: 8px 16px; font-size: 0.88rem; font-weight: 500; color: var(--rr-sub); cursor: pointer; border-bottom: 3px solid transparent; margin-bottom: -2px; transition: color 0.15s; }
+.fp-tab:hover { color: var(--rr-text); }
+.fp-tab.active { color: var(--rr-accent); border-bottom-color: var(--rr-accent); font-weight: 600; }
+
+.fp-workspace { display: flex; gap: 16px; align-items: flex-start; flex-wrap: wrap; }
+
+/* Decor palette */
+.fp-palette { background: var(--rr-surface); border: 1px solid var(--rr-border); border-radius: 12px; padding: 14px; display: flex; flex-direction: column; gap: 6px; min-width: 140px; }
+.fp-palette strong { font-size: 0.78rem; text-transform: uppercase; letter-spacing: 0.05em; color: var(--rr-sub); }
+.fp-palette-item { border: 1.5px solid var(--rr-border); background: var(--rr-bg); color: var(--rr-text); border-radius: 8px; padding: 7px 10px; font-size: 0.82rem; cursor: pointer; display: flex; align-items: center; gap: 7px; text-align: left; transition: all 0.15s; }
+.fp-palette-item:hover { border-color: var(--rr-accent); background: var(--rr-surface); }
+
+/* Canvas */
+.fp-canvas-wrap { flex: 1; min-width: 300px; display: flex; flex-direction: column; gap: 10px; }
+.fp-canvas { width: 100%; max-width: 540px; border: 2px solid var(--rr-border); border-radius: 14px; background: var(--rr-bg); display: block; cursor: crosshair; }
+
+.fp-sel-toolbar { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; padding: 10px 14px; background: var(--rr-surface); border: 1px solid var(--rr-border); border-radius: 10px; }
+.fp-sel-toolbar strong { font-size: 0.9rem; color: var(--rr-text); }
+.fp-sel-info { font-size: 0.82rem; color: var(--rr-sub); flex: 1; }
+
+/* Settings */
+.fp-settings { display: flex; flex-direction: column; gap: 14px; }
+.fp-bg-upload { }
+.fp-bg-dropzone { border: 2px dashed var(--rr-border); border-radius: 12px; padding: 28px; text-align: center; display: flex; flex-direction: column; align-items: center; gap: 6px; color: var(--rr-sub); }
+.fp-bg-dropzone p { margin: 0; font-size: 0.88rem; }
+.fp-bg-dropzone small { font-size: 0.78rem; }
+.fp-range { width: 100%; margin-top: 4px; }
+
+.fp-share-row { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 10px 0; border-bottom: 1px solid var(--rr-border); }
+.fp-share-row:last-child { border-bottom: none; }
+.fp-share-row strong { display: block; font-size: 0.88rem; color: var(--rr-text); }
+.fp-share-row small { font-size: 0.78rem; color: var(--rr-sub); word-break: break-all; }
+
+@media (max-width: 760px) {
+  .fp-page { gap: 12px; }
+  .fp-header-actions { width: 100%; }
+  .fp-header-actions .rr-btn { flex: 1; justify-content: center; }
+  .fp-tabs { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+  .fp-tab { flex: 0 0 auto; min-height: 44px; }
+  .fp-workspace { display: grid; grid-template-columns: 1fr; }
+  .fp-palette { min-width: 0; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .fp-palette strong { grid-column: 1 / -1; }
+  .fp-palette-item { min-height: 44px; }
+  .fp-canvas-wrap { min-width: 0; width: 100%; overflow-x: auto; }
+  .fp-canvas { min-width: 520px; }
+  .fp-sel-toolbar { position: sticky; bottom: 8px; z-index: 4; }
+  .fp-share-row { align-items: flex-start; flex-direction: column; }
+}
+
+@media (max-width: 420px) {
+  .fp-palette { grid-template-columns: 1fr; }
+  .fp-header-actions { flex-direction: column; }
+}

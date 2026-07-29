@@ -1,0 +1,166 @@
+/* Standalone public shell — no RedesignShell chrome */
+.pp-public-shell {
+  min-height: 100vh;
+  background: #f9fafb;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  display: flex;
+  flex-direction: column;
+}
+
+.pp-topbar {
+  background: #fff;
+  border-bottom: 1px solid #e5e7eb;
+  display: flex;
+  align-items: center;
+  gap: 24px;
+  padding: 0 24px;
+  position: sticky;
+  top: 0;
+  z-index: 10;
+}
+
+.pp-brand {
+  font-weight: 800;
+  font-size: 1.1rem;
+  color: #0d9488;
+  padding: 14px 0;
+  flex-shrink: 0;
+}
+
+.pp-tabs {
+  display: flex;
+  gap: 0;
+  border-bottom: none;
+}
+
+.pp-tab {
+  border: none;
+  background: none;
+  padding: 14px 16px;
+  font-size: 0.88rem;
+  font-weight: 500;
+  color: #6b7280;
+  cursor: pointer;
+  border-bottom: 3px solid transparent;
+  transition: color 0.15s, border-color 0.15s;
+}
+
+.pp-tab:hover { color: #111827; }
+.pp-tab.active { color: #0d9488; border-bottom-color: #0d9488; font-weight: 700; }
+
+.pp-main { flex: 1; max-width: 900px; margin: 0 auto; width: 100%; padding: 24px 16px 40px; }
+.pp-tab-content { display: flex; flex-direction: column; gap: 4px; }
+
+.pp-tab-header { margin-bottom: 16px; }
+.pp-tab-header h2 { margin: 0 0 4px; font-size: 1.4rem; font-weight: 800; color: #111827; }
+.pp-tab-header p { margin: 0; font-size: 0.88rem; color: #6b7280; }
+.pp-toggle-label { display: flex; align-items: center; gap: 8px; font-size: 0.85rem; color: #374151; margin-top: 8px; cursor: pointer; }
+
+/* Vendor */
+.pp-filters { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 12px; }
+.pp-filter-btn { border: 1.5px solid #d1d5db; background: #fff; color: #6b7280; border-radius: 16px; padding: 4px 12px; font-size: 0.78rem; font-weight: 500; cursor: pointer; transition: all 0.15s; }
+.pp-filter-btn:hover { border-color: #0d9488; color: #0d9488; }
+.pp-filter-btn.active { border-color: #0d9488; background: #0d9488; color: #fff; }
+
+.pp-table-wrap { overflow-x: auto; background: #fff; border: 1px solid #e5e7eb; border-radius: 12px; }
+.pp-table { width: 100%; border-collapse: collapse; font-size: 0.88rem; }
+.pp-table th { text-align: left; padding: 10px 14px; border-bottom: 2px solid #e5e7eb; color: #6b7280; font-size: 0.78rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em; }
+.pp-table td { padding: 12px 14px; border-bottom: 1px solid #f3f4f6; color: #111827; vertical-align: middle; }
+.pp-table tr:last-child td { border-bottom: none; }
+.pp-notes { font-size: 0.82rem; color: #6b7280; }
+
+.pp-phase-badge { font-size: 0.75rem; font-weight: 700; padding: 3px 9px; border-radius: 12px; }
+.pp-phase-planning { background: #f3f4f6; color: #374151; }
+.pp-phase-confirmed { background: #dbeafe; color: #1e40af; }
+.pp-phase-in-transit { background: #fef3c7; color: #92400e; }
+.pp-phase-delivered { background: #d1fae5; color: #065f46; }
+.pp-phase-issue { background: #fee2e2; color: #991b1b; }
+
+.pp-btn-download { margin-top: 14px; padding: 10px 20px; background: #f3f4f6; border: 1.5px solid #d1d5db; border-radius: 10px; font-size: 0.88rem; font-weight: 600; color: #374151; cursor: pointer; transition: all 0.15s; }
+.pp-btn-download:hover { background: #e5e7eb; }
+
+/* Registry */
+.pp-registry-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 12px; }
+.pp-registry-card { background: #fff; border: 1.5px solid #e5e7eb; border-radius: 14px; padding: 16px; display: flex; flex-direction: column; gap: 8px; }
+.pp-registry-card.claimed { opacity: 0.65; }
+.pp-registry-type { font-size: 0.78rem; font-weight: 600; color: #6b7280; }
+.pp-registry-name { font-size: 0.95rem; font-weight: 700; color: #111827; }
+.pp-registry-progress-wrap { height: 6px; background: #e5e7eb; border-radius: 3px; overflow: hidden; }
+.pp-registry-progress { height: 100%; background: #0d9488; border-radius: 3px; }
+.pp-registry-amounts { font-size: 0.78rem; color: #6b7280; }
+.pp-registry-link { font-size: 0.85rem; color: #0d9488; text-decoration: underline; }
+.pp-claimed-badge { display: flex; align-items: center; gap: 5px; font-size: 0.82rem; font-weight: 600; color: #059669; }
+
+.pp-btn-primary {
+  padding: 9px 16px;
+  background: #0d9488;
+  color: #fff;
+  border: none;
+  border-radius: 9px;
+  font-size: 0.85rem;
+  font-weight: 700;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+.pp-btn-primary:hover { background: #0f766e; }
+.pp-btn-primary:disabled { background: #d1d5db; color: #9ca3af; cursor: not-allowed; }
+
+.pp-disclaimer { font-size: 0.78rem; color: #9ca3af; margin: 4px 0 0; }
+.pp-disclaimer-footer { margin-top: 12px; }
+
+/* Claim modal */
+.pp-modal-backdrop {
+  position: fixed; inset: 0; background: rgba(0,0,0,0.4);
+  display: flex; align-items: center; justify-content: center; z-index: 200; padding: 20px;
+}
+.pp-modal {
+  background: #fff; border-radius: 18px; padding: 24px; width: 100%; max-width: 380px;
+  display: flex; flex-direction: column; gap: 10px; box-shadow: 0 8px 48px rgba(0,0,0,0.15);
+}
+.pp-modal-head { display: flex; align-items: center; justify-content: space-between; }
+.pp-modal-head strong { font-size: 0.95rem; font-weight: 700; color: #111827; }
+.pp-modal-head button { background: none; border: none; font-size: 1.2rem; cursor: pointer; color: #6b7280; }
+.pp-modal-label { font-size: 0.82rem; font-weight: 600; color: #374151; }
+.pp-modal-input { border: 1.5px solid #d1d5db; border-radius: 9px; padding: 10px 14px; font-size: 0.9rem; color: #111827; width: 100%; box-sizing: border-box; }
+.pp-modal-success { text-align: center; padding: 8px 0; display: flex; flex-direction: column; align-items: center; gap: 8px; }
+.pp-success-icon { font-size: 2.5rem; }
+.pp-modal-success strong { font-size: 1rem; font-weight: 700; color: #111827; }
+.pp-modal-success p { font-size: 0.88rem; color: #6b7280; margin: 0; }
+
+.pp-btn-outline { padding: 6px 14px; background: #fff; color: #0d9488; border: 1.5px solid #0d9488; border-radius: 8px; font-size: 0.82rem; font-weight: 600; cursor: pointer; transition: all 0.15s; }
+.pp-btn-outline:hover { background: #f0fdf4; }
+
+/* Calendar */
+.pp-cal-list { display: flex; flex-direction: column; gap: 12px; }
+.pp-cal-card { background: #fff; border: 1.5px solid #e5e7eb; border-radius: 14px; padding: 18px; display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; flex-wrap: wrap; }
+.pp-cal-card-left { flex: 1; display: flex; flex-direction: column; gap: 6px; }
+.pp-cal-name { font-size: 1rem; font-weight: 700; color: #111827; }
+.pp-cal-greeting { font-size: 0.85rem; color: #0f766e; background: #f0fdf4; padding: 8px 12px; border-radius: 8px; border-left: 3px solid #0d9488; }
+.pp-cal-meta { display: flex; flex-direction: column; gap: 3px; font-size: 0.82rem; color: #6b7280; }
+.pp-cal-card-right { display: flex; flex-direction: column; align-items: flex-end; gap: 8px; flex-shrink: 0; }
+
+.pp-rsvp-badge { font-size: 0.8rem; font-weight: 700; padding: 4px 10px; border-radius: 12px; }
+.pp-rsvp-attending { background: #d1fae5; color: #065f46; }
+.pp-rsvp-pending { background: #fef3c7; color: #92400e; }
+.pp-rsvp-declined { background: #fee2e2; color: #991b1b; }
+
+.pp-mockflag { text-align: center; font-size: 0.75rem; color: #9ca3af; padding: 12px; }
+
+@media (max-width: 760px) {
+  .pp-public-shell { min-width: 0; }
+  .pp-topbar { padding-inline: 12px; gap: 10px; overflow: hidden; }
+  .pp-main { padding: 14px 12px 36px; box-sizing: border-box; }
+  .pp-tabs { overflow-x: auto; flex-wrap: nowrap; -webkit-overflow-scrolling: touch; }
+  .pp-tabs button { flex: 0 0 auto; min-height: 44px; }
+  .pp-table-wrap { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+  .pp-table { min-width: 640px; }
+  .pp-registry-grid { grid-template-columns: 1fr; }
+  .pp-registry-card { padding: 18px; }
+  .pp-btn-primary, .pp-btn-outline, .pp-btn-download { min-height: 44px; }
+  .pp-cal-card { display: block; }
+  .pp-cal-card-right { margin-top: 14px; align-items: stretch; }
+  .pp-cal-card-right .pp-btn-outline { width: 100%; }
+  .pp-modal-backdrop { align-items: flex-end; padding: 0; }
+  .pp-modal { max-width: none; border-radius: 18px 18px 0 0; padding: 22px 16px max(22px, env(safe-area-inset-bottom)); max-height: 90dvh; overflow-y: auto; }
+  .pp-modal-input { min-height: 48px; font-size: 16px; }
+}

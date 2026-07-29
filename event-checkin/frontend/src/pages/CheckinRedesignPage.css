@@ -1,0 +1,91 @@
+/* Page-specific rules for the "Check-in & Access" (Venue Access add-on) mockup.
+   Shared chrome/tokens/panel primitives live in ./redesign/RedesignShell.css. */
+
+/* ── disabled add-on empty state ────────────────────────────────────── */
+.ci-empty { padding: 46px 32px; display: flex; flex-direction: column; align-items: center; text-align: center; gap: 6px; max-width: 560px; margin: 10px auto 0; }
+.ci-empty-icon { width: 52px; height: 52px; border-radius: 14px; background: var(--surface-3); color: var(--faint);
+  display: grid; place-items: center; margin-bottom: 6px; }
+.ci-empty h2 { font-size: 16px; margin: 0; color: var(--ink); }
+.ci-empty p { font-size: 12px; color: var(--muted); margin: 2px 0 10px; line-height: 1.55; }
+
+/* ── zones view ──────────────────────────────────────────────────────── */
+.ci-zone-card { padding: 16px 17px; display: flex; flex-direction: column; gap: 12px; }
+.ci-zone-top { display: flex; align-items: flex-start; justify-content: space-between; gap: 8px; }
+.ci-zone-top h3 { font-size: 13.5px; margin: 0; color: var(--ink); }
+.ci-dir-pill { font-size: 9px; font-weight: 700; letter-spacing: .02em; padding: 3px 8px; border-radius: 100px;
+  background: var(--surface-3); color: var(--muted); flex: none; white-space: nowrap; }
+.ci-dir-pill.ci-dir-both { background: var(--teal-soft); color: var(--teal); }
+.ci-dir-pill.ci-dir-in { background: var(--success-soft); color: var(--success); }
+.ci-dir-pill.ci-dir-out { background: var(--warning-soft); color: var(--warning); }
+.ci-zone-occ { margin: 10px 0; }
+.ci-zone-occ-label { display: flex; justify-content: space-between; font-size: 11px; color: var(--muted); margin-bottom: 6px; }
+.ci-zone-occ-label span:first-child { font-weight: 700; color: var(--ink); }
+.ci-zone-pct { font-weight: 700; }
+.ci-zone-bar { height: 7px; }
+.ci-zone-foot { display: flex; align-items: center; justify-content: space-between; font-size: 10.5px; color: var(--faint); }
+
+/* ── ticket types view ───────────────────────────────────────────────── */
+.ci-tickets-table { margin-top: 2px; }
+.ci-ticket-name { display: flex; align-items: center; gap: 8px; font-weight: 600; }
+.ci-swatch { width: 11px; height: 11px; border-radius: 4px; flex: none; }
+.ci-assigned-pct { color: var(--faint); font-size: 10px; }
+.ci-zone-chips { display: flex; flex-wrap: wrap; gap: 5px; }
+
+/* ── analytics view ──────────────────────────────────────────────────── */
+.ci-bignum { padding: 18px 20px; display: flex; flex-direction: column; gap: 6px; }
+.ci-bignum-label { display: flex; align-items: center; gap: 6px; font-size: 11px; font-weight: 700; color: var(--muted); }
+.ci-bignum-value { font-size: 30px; font-weight: 700; color: var(--ink); letter-spacing: -.02em; }
+.ci-bignum-value.ci-bignum-danger { color: var(--danger); }
+.ci-bignum-sub { font-size: 10.5px; color: var(--faint); }
+
+.ci-peak-panel { margin-top: 14px; }
+.ci-peakchart { display: flex; align-items: flex-end; gap: 10px; height: 150px; padding-top: 8px; }
+.ci-peakbar-col { flex: 1; display: flex; flex-direction: column; align-items: center; gap: 8px; height: 100%; }
+.ci-peakbar-track { flex: 1; width: 100%; max-width: 34px; display: flex; align-items: flex-end; background: var(--surface-2);
+  border-radius: 6px; overflow: hidden; }
+.ci-peakbar { width: 100%; min-height: 3px; background: var(--teal); border-radius: 6px 6px 0 0; }
+.ci-peaklabel { font-size: 9.5px; color: var(--faint); font-weight: 600; }
+
+.ci-flowlist { display: flex; flex-direction: column; }
+.ci-flowrow { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 9px 0;
+  border-bottom: 1px solid var(--line-soft); font-size: 11.5px; }
+.ci-flowrow:last-child { border-bottom: 0; }
+.ci-flow-path { display: flex; align-items: center; gap: 6px; color: var(--ink); font-weight: 600; }
+.ci-flow-count { color: var(--muted); font-size: 11px; flex: none; }
+
+.ci-journey { display: flex; flex-direction: column; }
+.ci-journey-item { display: flex; gap: 11px; padding: 10px 0; border-bottom: 1px solid var(--line-soft); }
+.ci-journey-item:last-child { border-bottom: 0; }
+.ci-journey-dot { width: 9px; height: 9px; border-radius: 50%; margin-top: 4px; flex: none; background: var(--success); }
+.ci-journey-dot.fail { background: var(--danger); }
+.ci-journey-body { flex: 1; min-width: 0; }
+.ci-journey-top { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.ci-journey-top strong { font-size: 12px; color: var(--ink); }
+.ci-journey-meta { display: flex; align-items: center; gap: 6px; font-size: 10.5px; color: var(--faint); margin-top: 3px; }
+
+/* ── entry rules view ────────────────────────────────────────────────── */
+.ci-rules-list .rd-path + .rd-path { margin-top: 9px; }
+.ci-rule-detail { font-size: 11.5px; color: var(--muted); line-height: 1.55; margin: 0 0 12px; }
+.ci-matrix th, .ci-matrix td { text-align: center; }
+.ci-matrix th:first-child, .ci-matrix td:first-child { text-align: left; }
+.ci-tag-toggle { border: 1px solid var(--line); background: var(--surface); color: var(--muted); font-size: 9.5px;
+  font-weight: 650; padding: 4px 9px; border-radius: 100px; cursor: pointer; }
+.ci-tag-toggle.on { background: var(--teal-soft); border-color: transparent; color: var(--teal); }
+
+/* ── add-zone / add-ticket-type forms ──────────────────────────────────── */
+.ci-form-panel { margin-bottom: 16px; }
+.ci-zone-checklist { display: flex; flex-wrap: wrap; gap: 10px; font-size: 11px; color: var(--muted); margin-bottom: 4px; }
+.ci-zone-checklist label { display: flex; align-items: center; gap: 5px; }
+.ci-zone-desc { font-size: 10.5px; color: var(--faint); margin: -6px 0 0; line-height: 1.4; }
+
+/* ── guest journey guest picker + deny reason ─────────────────────────── */
+.ci-journey-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 10px; }
+.ci-deny-reason { font-size: 10px; color: var(--danger); margin-top: 4px; }
+
+/* ── responsive ──────────────────────────────────────────────────────── */
+@media (max-width: 1100px) {
+  .ci-peakchart { height: 120px; }
+}
+@media (max-width: 760px) {
+  .ci-zone-top { flex-wrap: wrap; }
+}

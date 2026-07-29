@@ -1,0 +1,517 @@
+import { useEffect, useState } from 'react'
+import RedesignShell, { Icon } from './redesign/RedesignShell'
+import { ErrorRetryState, LoadingSkeleton } from './redesign/RedesignPrimitives'
+import { useCurrentEvent } from '../hooks/useCurrentEvent'
+import { api } from '../api'
+import './SetupRedesignPage.css'
+
+const EVENT_TYPES = ['Conference', 'Gala / Award', 'Wedding', 'Birthday', 'Concert', 'Festival', 'Workshop', 'Other']
+const TIMEZONES = ['Africa/Lagos', 'Africa/Nairobi', 'Europe/London', 'America/New_York', 'Asia/Dubai']
+const CURRENCIES = ['NGN — Nigerian Naira', 'USD — US Dollar', 'GBP — British Pound', 'EUR — Euro', 'KES — Kenyan Shilling']
+
+const CHANNELS = [
+  { id: 'email', label: 'Email' },
+  { id: 'sms', label: 'SMS' },
+  { id: 'whatsapp', label: 'WhatsApp' },
+  { id: 'mms', label: 'MMS' },
+]
+
+const FEATURES = [
+  { id: 'rsvp', label: 'RSVP form', desc: 'Let guests confirm attendance' },
+  { id: 'seating', label: 'Seating', desc: 'Assign tables and seats' },
+  { id: 'orders', label: 'Food orders / Menu', desc: 'Capture meal choices' },
+  { id: 'logistics', label: 'Deliveries / Packing list', desc: 'Vendor shipment tracking' },
+  { id: 'registry', label: 'Gift registry', desc: 'Accept gifts and contributions' },
+  { id: 'festiome', label: 'FestioMe guest app', desc: 'Guest-side experience hub' },
+  { id: 'experience', label: 'Experience program', desc: 'Session-based event content' },
+  { id: 'selfcheckin', label: 'Self check-in kiosk', desc: 'Guests check themselves in' },
+]
+
+const PLAN_RECS = {
+  0: { name: 'Starter', price: '$0/mo', note: 'Best for personal events' },
+  1: { name: 'Pro', price: '$49/mo', note: 'Best for professional events' },
+  2: { name: 'Pro', price: '$49/mo', note: 'Best for professional events' },
+  3: { name: 'Business', price: '$149/mo', note: 'Best for multi-feature events' },
+}
+
+const GUIDED_STEPS = [
+  {
+    id: 'team', label: 'Invite your team',
+    desc: 'Add co-hosts, event managers, and scanners.',
+    fields: [
+      { label: 'Team member email', placeholder: 'colleague@email.com', type: 'email' },
+      { label: 'Role', type: 'select', options: ['Event manager', 'Scanner', 'Viewer'] },
+    ],
+  },
+  {
+    id: 'messaging', label: 'Set up messaging',
+    desc: 'Connect your SMS / WhatsApp provider to send invites.',
+    fields: [
+      { label: 'Provider', type: 'select', options: ['Bird (MessageBird)', 'Twilio', 'None — use email only'] },
+      { label: 'Sender name', placeholder: 'DevOps Clinics' },
+    ],
+  },
+  {
+    id: 'rsvp', label: 'Create RSVP questions',
+    desc: 'Collect custom answers from your guests on the RSVP form.',
+    fields: [
+      { label: 'Question', placeholder: 'e.g. Dietary preference?' },
+      { label: 'Type', type: 'select', options: ['Short text', 'Multiple choice', 'Yes / No'] },
+    ],
+  },
+  {
+    id: 'multiinvitee', label: 'Multi-invitee',
+    desc: 'Let each guest bring additional guests (plus-ones).',
+    fields: [
+      { label: 'Max additional guests per invite', type: 'select', options: ['0 (disabled)', '1', '2', '3', '4', '5'] },
+    ],
+  },
+  {
+    id: 'tables', label: 'Set up tables',
+    desc: 'Create table groups and assign seats.',
+    fields: [
+      { label: 'Number of tables', placeholder: '10', type: 'number' },
+      { label: 'Seats per table', placeholder: '8', type: 'number' },
+    ],
+  },
+  {
+    id: 'menu', label: 'Add menu items',
+    desc: 'Enter food / drink options for your guests to choose.',
+    fields: [
+      { label: 'Item name', placeholder: 'Jollof rice' },
+      { label: 'Category', type: 'select', options: ['Main course', 'Starter', 'Dessert', 'Drink', 'Other'] },
+    ],
+  },
+  {
+    id: 'registry', label: 'Set up gift registry',
+    desc: 'Add monetary contributions or physical gift items.',
+    fields: [
+      { label: 'Item name', placeholder: 'Kitchen appliance' },
+      { label: 'Target amount (optional)', placeholder: '₦50,000', type: 'number' },
+    ],
+  },
+  {
+    id: 'logistics', label: 'Configure deliveries',
+    desc: 'Add packing list categories for vendor shipments.',
+    fields: [
+      { label: 'Category', placeholder: 'Décor' },
+      { label: 'Expected delivery date', type: 'date' },
+    ],
+  },
+  {
+    id: 'festiome', label: 'FestioMe guest app',
+    desc: 'Enable the personalised in-app event experience for your guests.',
+    fields: [
+      { label: 'Welcome message', placeholder: 'Welcome to the Women\'s Convention 2026!' },
+    ],
+  },
+  {
+    id: 'experience', label: 'Experience program',
+    desc: 'Set up sessions, speakers, and the event agenda.',
+    fields: [
+      { label: 'Session title', placeholder: 'Opening Keynote' },
+      { label: 'Session start time', type: 'time' },
+    ],
+  },
+  {
+    id: 'review', label: 'Review & go live',
+    desc: 'Check your setup summary and activate the event.',
+    fields: [],
+  },
+]
+
+function WizardPhase({ onComplete, notify }) {
+  const [form, setForm] = useState({
+    name: '', type: 'Conference', host: '', date: '', timezone: 'Africa/Lagos',
+    multiDay: false, endDate: '', baseUrl: '', venue: '', venueAddress: '',
+    guestCount: '', currency: 'NGN — Nigerian Naira',
+    channels: new Set(['email']), features: new Set(['rsvp']),
+  })
+  const enabledFeatureCount = form.features.size
+  const rec = PLAN_RECS[Math.min(3, Math.floor(enabledFeatureCount / 2))]
+
+  function toggleSet(key, val) {
+    setForm((prev) => {
+      const next = new Set(prev[key])
+      if (next.has(val)) next.delete(val)
+      else next.add(val)
+      return { ...prev, [key]: next }
+    })
+  }
+
+  return (
+    <div className="su-wizard">
+      <div className="su-wizard-form">
+        <h2>Create your event</h2>
+        <p className="su-section-label">Event details</p>
+        <div className="su-field-row">
+          <div>
+            <label className="rd-field-label">Event name *</label>
+            <input className="rd-field" value={form.name} placeholder="Women's Convention 2026" onChange={(e) => setForm({ ...form, name: e.target.value })} />
+          </div>
+          <div>
+            <label className="rd-field-label">Type</label>
+            <select className="rd-field" value={form.type} onChange={(e) => setForm({ ...form, type: e.target.value })}>
+              {EVENT_TYPES.map((t) => <option key={t}>{t}</option>)}
+            </select>
+          </div>
+        </div>
+        <div className="su-field-row">
+          <div>
+            <label className="rd-field-label">Host / Organiser</label>
+            <input className="rd-field" value={form.host} placeholder="DevOps Clinics" onChange={(e) => setForm({ ...form, host: e.target.value })} />
+          </div>
+          <div>
+            <label className="rd-field-label">Estimated guest count</label>
+            <input className="rd-field" type="number" value={form.guestCount} placeholder="500" onChange={(e) => setForm({ ...form, guestCount: e.target.value })} />
+          </div>
+        </div>
+        <div className="su-field-row">
+          <div>
+            <label className="rd-field-label">Date *</label>
+            <input className="rd-field" type="date" value={form.date} onChange={(e) => setForm({ ...form, date: e.target.value })} />
+          </div>
+          <div>
+            <label className="rd-field-label">Timezone *</label>
+            <select className="rd-field" value={form.timezone} onChange={(e) => setForm({ ...form, timezone: e.target.value })}>
+              {TIMEZONES.map((t) => <option key={t}>{t}</option>)}
+            </select>
+          </div>
+        </div>
+        <label className="gr-required-check su-multiday-check">
+          <input type="checkbox" checked={form.multiDay} onChange={(e) => setForm({ ...form, multiDay: e.target.checked })} />
+          Multi-day event
+        </label>
+        {form.multiDay && (
+          <div className="su-field-row">
+            <div>
+              <label className="rd-field-label">End date</label>
+              <input className="rd-field" type="date" value={form.endDate} onChange={(e) => setForm({ ...form, endDate: e.target.value })} />
+            </div>
+          </div>
+        )}
+        <p className="su-section-label">Location</p>
+        <div className="su-field-row">
+          <div>
+            <label className="rd-field-label">Venue</label>
+            <input className="rd-field" value={form.venue} placeholder="Eko Convention Centre" onChange={(e) => setForm({ ...form, venue: e.target.value })} />
+          </div>
+          <div>
+            <label className="rd-field-label">Venue address</label>
+            <input className="rd-field" value={form.venueAddress} placeholder="Plot 1415, Adetokunbo Ademola, VI" onChange={(e) => setForm({ ...form, venueAddress: e.target.value })} />
+          </div>
+        </div>
+        <p className="su-section-label">Finance</p>
+        <div className="su-field-row">
+          <div>
+            <label className="rd-field-label">Currency</label>
+            <select className="rd-field" value={form.currency} onChange={(e) => setForm({ ...form, currency: e.target.value })}>
+              {CURRENCIES.map((c) => <option key={c}>{c}</option>)}
+            </select>
+          </div>
+          <div>
+            <label className="rd-field-label">App base URL</label>
+            <input className="rd-field" value={form.baseUrl} placeholder="wc2026" onChange={(e) => setForm({ ...form, baseUrl: e.target.value })} />
+          </div>
+        </div>
+        <p className="su-section-label">Communication channels</p>
+        <div className="su-toggle-grid">
+          {CHANNELS.map((ch) => (
+            <label key={ch.id} className="su-toggle-item">
+              <input type="checkbox" checked={form.channels.has(ch.id)} onChange={() => toggleSet('channels', ch.id)} />
+              {ch.label}
+            </label>
+          ))}
+        </div>
+        <p className="su-section-label">Features to enable</p>
+        <div className="su-feature-grid">
+          {FEATURES.map((f) => (
+            <label key={f.id} className={`su-feature-item${form.features.has(f.id) ? ' checked' : ''}`}>
+              <input type="checkbox" checked={form.features.has(f.id)} onChange={() => toggleSet('features', f.id)} />
+              <div>
+                <strong>{f.label}</strong>
+                <small>{f.desc}</small>
+              </div>
+            </label>
+          ))}
+        </div>
+        <button
+          className="rr-btn primary su-create-btn"
+          disabled={!form.name || !form.date}
+          onClick={async () => {
+            try {
+              const event = await api.createEvent({
+                name: form.name.trim(),
+                couples_name: form.host.trim(),
+                event_type: form.type,
+                event_date: `${form.date}T12:00:00`,
+                event_end_date: form.multiDay && form.endDate ? `${form.endDate}T12:00:00` : null,
+                timezone: form.timezone,
+                checkin_base_url: form.baseUrl.trim() || window.location.origin,
+                venue_name: form.venue.trim() || null,
+                venue_address: form.venueAddress.trim() || null,
+                notify_sms: form.channels.has('sms'),
+                notify_whatsapp: form.channels.has('whatsapp'),
+                rsvp_capacity: form.guestCount ? Number(form.guestCount) : null,
+              })
+              await api.toggleFeatures(event.id, {
+                seating_enabled: form.features.has('seating'),
+                menu_enabled: form.features.has('orders'),
+                logistics_enabled: form.features.has('logistics'),
+                registry_enabled: form.features.has('registry'),
+                festiome_addon_enabled: form.features.has('festiome'),
+                experience_enabled: form.features.has('experience'),
+              })
+              await api.updateInviteSettings(event.id, { rsvp_enabled: form.features.has('rsvp') })
+              notify(`Event “${event.name}” created`)
+              onComplete(event)
+            } catch (error) {
+              notify(error.message || 'Event could not be created', true)
+            }
+          }}
+        >
+          Create event &amp; continue setup →
+        </button>
+      </div>
+      {/* Recommended plan sidebar */}
+      <div className="su-plan-sidebar">
+        <div className="su-plan-card">
+          <div className="su-plan-label">Recommended plan</div>
+          <div className="su-plan-name">{rec.name}</div>
+          <div className="su-plan-price">{rec.price}</div>
+          <div className="su-plan-note">{rec.note}</div>
+          <div className="su-plan-features">
+            <p>Based on your selections:</p>
+            <ul>
+              {Array.from(form.features).map((id) => {
+                const f = FEATURES.find((x) => x.id === id)
+                return f ? <li key={id}>{f.label}</li> : null
+              })}
+              {form.features.size === 0 && <li style={{ color: 'var(--rr-sub)', fontStyle: 'italic' }}>No add-ons selected</li>}
+            </ul>
+          </div>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+function GuidedSetupPhase({ eventId, notify }) {
+  const [states, setStates] = useState(() =>
+    Object.fromEntries(GUIDED_STEPS.map((s) => [s.id, 'pending']))
+  )
+  const [open, setOpen] = useState('team')
+  const [fieldVals, setFieldVals] = useState({})
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState('')
+  const [busy, setBusy] = useState('')
+
+  async function loadProgress() {
+    if (!eventId) {
+      setLoading(false)
+      return
+    }
+    setLoading(true)
+    setError('')
+    try {
+      const result = await api.getSetupProgress(eventId)
+      setStates((prev) => ({ ...prev, ...(result.steps || {}) }))
+    } catch (e) {
+      setError(e.message || 'Setup progress could not be loaded')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  useEffect(() => { loadProgress() }, [eventId])
+
+  function setStepState(id, state) {
+    setStates((prev) => ({ ...prev, [id]: state }))
+  }
+
+  async function saveStepConfiguration(stepId) {
+    const value = (index) => fieldVals[`${stepId}-${index}`] || ''
+    if (stepId === 'team') {
+      if (!value(0)) throw new Error('Enter a team member email')
+      await api.inviteOrgMember(eventId, { email: value(0), role: value(1) === 'Event manager' ? 'admin' : 'staff' })
+    } else if (stepId === 'rsvp') {
+      if (!value(0)) throw new Error('Enter an RSVP question')
+      const type = value(1) === 'Yes / No' ? 'boolean' : value(1) === 'Multiple choice' ? 'select' : 'text'
+      await api.createRSVPQuestion(eventId, { question: value(0), question_type: type, is_required: false, sort_order: 0 })
+    } else if (stepId === 'multiinvitee') {
+      const limit = Number.parseInt(value(0), 10) || 0
+      await api.updateInviteSettings(eventId, { rsvp_multi_invitee_enabled: limit > 0, rsvp_multi_invitee_limit: Math.max(1, limit || 1) })
+    } else if (stepId === 'tables') {
+      const count = Number.parseInt(value(0), 10)
+      const capacity = Number.parseInt(value(1), 10)
+      if (!count || !capacity) throw new Error('Enter the number of tables and seats per table')
+      await api.bulkCreateTables(eventId, [{ group_name: 'Main tables', category: 'main', table_count: count, table_capacity: capacity }])
+    } else if (stepId === 'menu') {
+      if (!value(0)) throw new Error('Enter a menu item name')
+      const category = await api.createMenuCategory(eventId, { name: value(1) || 'Other', selection_type: 'single', is_required: false, sort_order: 0 })
+      await api.addMenuItem(eventId, category.id, { name: value(0), description: '' })
+    } else if (stepId === 'registry') {
+      if (!value(0)) throw new Error('Enter a registry item name')
+      await api.createRegistryItem(eventId, { kind: value(1) ? 'fund' : 'item', title: value(0), amount_minor: value(1) ? Math.round(Number(value(1)) * 100) : null })
+    } else if (stepId === 'logistics') {
+      if (!value(0)) throw new Error('Enter a delivery category')
+      await api.createShipment(eventId, { name: value(0), phase: 'pre', notes: value(1) ? `Expected delivery: ${value(1)}` : null })
+    } else if (stepId === 'festiome') {
+      await api.toggleFeatures(eventId, { festiome_addon_enabled: true })
+    } else if (stepId === 'experience') {
+      await api.toggleFeatures(eventId, { experience_enabled: true })
+    } else if (stepId === 'review') {
+      await api.changeStatus(eventId, 'active')
+    }
+  }
+
+  async function handleSave(stepId) {
+    if (!eventId || busy) return
+    setBusy(stepId)
+    try {
+      await saveStepConfiguration(stepId)
+      await api.setSetupProgress(eventId, stepId, 'completed')
+      setStepState(stepId, 'completed')
+      notify(`${GUIDED_STEPS.find((s) => s.id === stepId)?.label || 'Step'} saved`)
+      const idx = GUIDED_STEPS.findIndex((s) => s.id === stepId)
+      const next = GUIDED_STEPS[idx + 1]
+      if (next) setOpen(next.id)
+    } catch (e) {
+      notify(e.message || 'Setup step could not be saved', true)
+    } finally {
+      setBusy('')
+    }
+  }
+
+  async function handleSkip(stepId) {
+    if (!eventId || busy) return
+    setBusy(stepId)
+    try {
+      await api.setSetupProgress(eventId, stepId, 'skipped')
+      setStepState(stepId, 'skipped')
+      const idx = GUIDED_STEPS.findIndex((s) => s.id === stepId)
+      const next = GUIDED_STEPS[idx + 1]
+      if (next) setOpen(next.id)
+    } catch (e) {
+      notify(e.message || 'Setup step could not be skipped', true)
+    } finally {
+      setBusy('')
+    }
+  }
+
+  const completedCount = Object.values(states).filter((v) => v === 'completed').length
+
+  if (!eventId) return <div className="rr-panel"><div className="rd-panel-body">Create or select an event before starting guided setup.</div></div>
+  if (loading) return <div className="rr-panel"><div className="rd-panel-body"><LoadingSkeleton rows={6} /></div></div>
+  if (error) return <div className="rr-panel"><div className="rd-panel-body"><ErrorRetryState message={error} onRetry={loadProgress} /></div></div>
+
+  return (
+    <div className="su-guided">
+      <div className="su-guided-header">
+        <div>
+          <h2>Guided setup</h2>
+          <p className="su-subtitle">{completedCount} of {GUIDED_STEPS.length} steps complete</p>
+        </div>
+        <div className="su-progress-bar-wrap">
+          <div className="su-progress-bar" style={{ width: `${(completedCount / GUIDED_STEPS.length) * 100}%` }} />
+        </div>
+      </div>
+      <div className="su-steps">
+        {GUIDED_STEPS.map((step, i) => {
+          const state = states[step.id]
+          const isOpen = open === step.id
+          return (
+            <div key={step.id} className={`su-step${isOpen ? ' open' : ''}${state === 'completed' ? ' done' : ''}${state === 'skipped' ? ' skipped' : ''}`}>
+              <button className="su-step-head" onClick={() => setOpen(isOpen ? null : step.id)}>
+                <span className="su-step-num">
+                  {state === 'completed' ? <Icon name="check" size={14} /> : state === 'skipped' ? '–' : i + 1}
+                </span>
+                <span className="su-step-label">{step.label}</span>
+                <div className="su-step-badges">
+                  {state === 'completed' && <span className="su-badge done">Completed</span>}
+                  {state === 'skipped' && <span className="su-badge skipped">Skipped</span>}
+                </div>
+                <Icon name="chevrondown" size={16} className={`su-step-chevron${isOpen ? ' rotated' : ''}`} />
+              </button>
+              {isOpen && (
+                <div className="su-step-body">
+                  <p className="su-step-desc">{step.desc}</p>
+                  {step.id === 'review' ? (
+                    <div className="su-review">
+                      <div className="su-review-grid">
+                        {GUIDED_STEPS.filter((s) => s.id !== 'review').map((s) => (
+                          <div key={s.id} className="su-review-row">
+                            <span className={`su-review-icon ${states[s.id] === 'completed' ? 'done' : states[s.id] === 'skipped' ? 'skipped' : 'pending'}`}>
+                              {states[s.id] === 'completed' ? '✅' : states[s.id] === 'skipped' ? '⏭' : '⏳'}
+                            </span>
+                            <strong>{s.label}</strong>
+                            <span className="su-review-status">{states[s.id] === 'completed' ? 'Done' : states[s.id] === 'skipped' ? 'Skipped' : 'Pending'}</span>
+                          </div>
+                        ))}
+                      </div>
+                      <button className="rr-btn primary" style={{ marginTop: 16 }} onClick={() => handleSave('review')}>
+                        {busy === 'review' ? 'Activating…' : 'Go live'}
+                      </button>
+                    </div>
+                  ) : (
+                    <>
+                      {step.fields.map((f, fi) => (
+                        <div key={fi}>
+                          <label className="rd-field-label">{f.label}</label>
+                          {f.type === 'select' ? (
+                            <select className="rd-field" value={fieldVals[`${step.id}-${fi}`] || ''} onChange={(e) => setFieldVals((p) => ({ ...p, [`${step.id}-${fi}`]: e.target.value }))}>
+                              <option value="">Select…</option>
+                              {(f.options || []).map((o) => <option key={o}>{o}</option>)}
+                            </select>
+                          ) : (
+                            <input className="rd-field" type={f.type || 'text'} placeholder={f.placeholder || ''} value={fieldVals[`${step.id}-${fi}`] || ''} onChange={(e) => setFieldVals((p) => ({ ...p, [`${step.id}-${fi}`]: e.target.value }))} />
+                          )}
+                        </div>
+                      ))}
+                      <div className="su-step-actions">
+                        <button className="rr-btn primary" disabled={!!busy} onClick={() => handleSave(step.id)}>{busy === step.id ? 'Saving…' : 'Save & continue'}</button>
+                        <button className="rr-btn secondary" disabled={!!busy} onClick={() => handleSkip(step.id)}>Skip</button>
+                      </div>
+                    </>
+                  )}
+                </div>
+              )}
+            </div>
+          )
+        })}
+      </div>
+    </div>
+  )
+}
+
+export default function SetupRedesignPage() {
+  const [phase, setPhase] = useState('wizard')
+  const [eventId, setCurrentEvent] = useCurrentEvent()
+  const [toast, setToast] = useState(null)
+
+  function notify(message, error = false) {
+    setToast({ message, error })
+    window.setTimeout(() => setToast(null), 3000)
+  }
+
+  return (
+    <RedesignShell topActive="setup">
+      <div className="su-page">
+        {/* Phase indicator */}
+        <div className="su-phase-bar">
+          <button className={`su-phase-btn${phase === 'wizard' ? ' active' : ''}`} onClick={() => setPhase('wizard')}>
+            <span className="su-phase-num">1</span> Create event
+          </button>
+          <div className="su-phase-divider" />
+          <button className={`su-phase-btn${phase === 'guided' ? ' active' : ''}`} onClick={() => setPhase('guided')}>
+            <span className="su-phase-num">2</span> Guided setup
+          </button>
+        </div>
+
+        {phase === 'wizard' && <WizardPhase notify={notify} onComplete={(event) => { setCurrentEvent(event.id); setPhase('guided') }} />}
+        {phase === 'guided' && <GuidedSetupPhase eventId={eventId} notify={notify} />}
+      </div>
+      {toast && <div className="rd-toast" style={toast.error ? { background: 'var(--danger)' } : undefined}><Icon name={toast.error ? 'info' : 'check'} />{toast.message}</div>}
+    </RedesignShell>
+  )
+}

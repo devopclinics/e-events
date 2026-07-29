@@ -1,0 +1,73 @@
+version: "3.5"
+
+# Self-hosted Penpot instance for the Festio team to design/prototype in,
+# separate from the event-checkin app stack. Runs on its own compose
+# project so it can be started/stopped independently.
+#
+# Usage:
+#   cd platform-tutor/penpot
+#   docker compose up -d
+#
+# Then open http://staging.festio.events:4003 (or http://<host>:4003).
+
+services:
+  penpot-frontend:
+    image: "penpotapp/frontend:latest"
+    restart: always
+    ports:
+      - "4003:8080"
+    volumes:
+      - penpot_assets:/opt/data/assets
+    depends_on:
+      - penpot-backend
+      - penpot-exporter
+    environment:
+      - PENPOT_FLAGS=enable-registration disable-email-verification enable-login-with-password
+
+  penpot-backend:
+    image: "penpotapp/backend:latest"
+    restart: always
+    volumes:
+      - penpot_assets:/opt/data/assets
+    depends_on:
+      - penpot-postgres
+      - penpot-redis
+    environment:
+      - PENPOT_FLAGS=enable-registration disable-email-verification enable-login-with-password
+      - PENPOT_PUBLIC_URI=${PENPOT_PUBLIC_URI:-http://localhost:4003}
+      - PENPOT_SECRET_KEY=${PENPOT_SECRET_KEY}
+      - PENPOT_DATABASE_URI=postgresql://penpot-postgres/penpot
+      - PENPOT_DATABASE_USERNAME=penpot
+      - PENPOT_DATABASE_PASSWORD=${PENPOT_DB_PASSWORD}
+      - PENPOT_REDIS_URI=redis://penpot-redis/0
+      - PENPOT_ASSETS_STORAGE_BACKEND=assets-fs
+      - PENPOT_STORAGE_ASSETS_FS_DIRECTORY=/opt/data/assets
+      - PENPOT_TELEMETRY_ENABLED=false
+
+  penpot-exporter:
+    image: "penpotapp/exporter:latest"
+    restart: always
+    environment:
+      - PENPOT_PUBLIC_URI=http://penpot-frontend:8080
+      - PENPOT_REDIS_URI=redis://penpot-redis/0
+      - PENPOT_SECRET_KEY=${PENPOT_SECRET_KEY}
+
+  penpot-postgres:
+    image: "postgres:15-alpine"
+    restart: always
+    stop_signal: SIGINT
+    volumes:
+      - penpot_postgres:/var/lib/postgresql/data
+    environment:
+      - POSTGRES_INITDB_ARGS=--data-checksums
+      - POSTGRES_DB=penpot
+      - POSTGRES_USER=penpot
+      - POSTGRES_PASSWORD=${PENPOT_DB_PASSWORD}
+
+  penpot-redis:
+    image: redis:7.2-alpine
+    restart: always
+
+volumes:
+  penpot_postgres:
+  penpot_assets:

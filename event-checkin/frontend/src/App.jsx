@@ -1,37 +1,67 @@
-import { useState, useEffect } from 'react'
+import { Component, lazy, Suspense, useState, useEffect } from 'react'
 import { Routes, Route, NavLink, useNavigate, Navigate } from 'react-router-dom'
 import { api } from './api'
 import { useCurrentEvent } from './hooks/useCurrentEvent'
 import { AuthProvider, useAuth } from './context/AuthContext'
 import { ThemeProvider, useTheme } from './context/ThemeContext'
 import ProtectedRoute from './components/ProtectedRoute'
-import AdminPage from './pages/AdminPage'
-import ScannerPage from './pages/ScannerPage'
-import DashboardPage from './pages/DashboardPage'
-import ResultsPage from './pages/ResultsPage'
-import ScanAutoPage from './pages/ScanAutoPage'
-import LoginPage from './pages/LoginPage'
-import RegisterPage from './pages/RegisterPage'
-import LandingPage from './pages/LandingPage'
-import InvitePage from './pages/InvitePage'
-import VendorPage from './pages/VendorPage'
-import RegistryPage from './pages/RegistryPage'
-import FloorPlanPage from './pages/FloorPlanPage'
-import PricingPage from './pages/PricingPage'
-import SetupWizardPage from './pages/SetupWizardPage'
-import GuidedSetupPage from './pages/GuidedSetupPage'
-import RefundPolicyPage from './pages/RefundPolicyPage'
-import PrivacyPage from './pages/PrivacyPage'
-import TermsPage from './pages/TermsPage'
-import SmsPolicyPage from './pages/SmsPolicyPage'
-import DesignStudioPage from './pages/DesignStudioPage'
-import ConsolePage from './pages/ConsolePage'
-import KitchenPage from './pages/KitchenPage'
-import HelpPage from './pages/HelpPage'
-import MediaPage from './pages/MediaPage'
-import SelfCheckinPage from './pages/SelfCheckinPage'
-import FestioMePage from './pages/FestioMePage'
 import SupportWidget from './components/SupportWidget'
+import RedesignGate from './pages/redesign/RedesignGate'
+
+// Route pages are intentionally lazy: declaring both legacy and redesign routes
+// must not make users download both implementations at startup.
+const AdminPage = lazy(() => import('./pages/AdminPage'))
+const ScannerPage = lazy(() => import('./pages/ScannerPage'))
+const DashboardPage = lazy(() => import('./pages/DashboardPage'))
+const ResultsPage = lazy(() => import('./pages/ResultsPage'))
+const ScanAutoPage = lazy(() => import('./pages/ScanAutoPage'))
+const LoginPage = lazy(() => import('./pages/LoginPage'))
+const RegisterPage = lazy(() => import('./pages/RegisterPage'))
+const LandingPage = lazy(() => import('./pages/LandingPage'))
+const InvitePage = lazy(() => import('./pages/InvitePage'))
+const VendorPage = lazy(() => import('./pages/VendorPage'))
+const RegistryPage = lazy(() => import('./pages/RegistryPage'))
+const CalendarPage = lazy(() => import('./pages/CalendarPage'))
+const FloorPlanPage = lazy(() => import('./pages/FloorPlanPage'))
+const PricingPage = lazy(() => import('./pages/PricingPage'))
+const SetupWizardPage = lazy(() => import('./pages/SetupWizardPage'))
+const GuidedSetupPage = lazy(() => import('./pages/GuidedSetupPage'))
+const RefundPolicyPage = lazy(() => import('./pages/RefundPolicyPage'))
+const PrivacyPage = lazy(() => import('./pages/PrivacyPage'))
+const TermsPage = lazy(() => import('./pages/TermsPage'))
+const SmsPolicyPage = lazy(() => import('./pages/SmsPolicyPage'))
+const DesignStudioPage = lazy(() => import('./pages/DesignStudioPage'))
+const ConsolePage = lazy(() => import('./pages/ConsolePage'))
+const KitchenPage = lazy(() => import('./pages/KitchenPage'))
+const HelpPage = lazy(() => import('./pages/HelpPage'))
+const MediaPage = lazy(() => import('./pages/MediaPage'))
+const SelfCheckinPage = lazy(() => import('./pages/SelfCheckinPage'))
+const FestioMePage = lazy(() => import('./pages/FestioMePage'))
+const MyTasksPage = lazy(() => import('./pages/MyTasksPage'))
+const OrgSettingsPage = lazy(() => import('./pages/OrgSettingsPage'))
+const ApiDocsPage = lazy(() => import('./pages/ApiDocsPage'))
+const ApiExplorerPage = lazy(() => import('./pages/ApiExplorerPage'))
+
+const AdminRedesignPage = lazy(() => import('./pages/AdminRedesignPage'))
+const GuestsRedesignPage = lazy(() => import('./pages/GuestsRedesignPage'))
+const CommunicationsRedesignPage = lazy(() => import('./pages/CommunicationsRedesignPage'))
+const BillingRedesignPage = lazy(() => import('./pages/BillingRedesignPage'))
+const AddonsRedesignPage = lazy(() => import('./pages/AddonsRedesignPage'))
+const TeamRedesignPage = lazy(() => import('./pages/TeamRedesignPage'))
+const ExperienceRedesignPage = lazy(() => import('./pages/ExperienceRedesignPage'))
+const CheckinRedesignPage = lazy(() => import('./pages/CheckinRedesignPage'))
+const SuperadminRedesignPage = lazy(() => import('./pages/SuperadminRedesignPage'))
+const DesignStudioRedesignPage = lazy(() => import('./pages/DesignStudioRedesignPage'))
+const EventResultsRedesignPage = lazy(() => import('./pages/EventResultsRedesignPage'))
+const FestioMeRedesignPage = lazy(() => import('./pages/FestioMeRedesignPage'))
+const HelpRedesignPage = lazy(() => import('./pages/HelpRedesignPage'))
+const ScannerRedesignPage = lazy(() => import('./pages/ScannerRedesignPage'))
+const KitchenRedesignPage = lazy(() => import('./pages/KitchenRedesignPage'))
+const SelfCheckinRedesignPage = lazy(() => import('./pages/SelfCheckinRedesignPage'))
+const FloorPlanRedesignPage = lazy(() => import('./pages/FloorPlanRedesignPage'))
+const SetupRedesignPage = lazy(() => import('./pages/SetupRedesignPage'))
+const ApiExplorerRedesignPage = lazy(() => import('./pages/ApiExplorerRedesignPage'))
+const PublicPagesRedesignPage = lazy(() => import('./pages/PublicPagesRedesignPage'))
 
 // ── Preferred-view helpers ────────────────────────────────────────────────────
 
@@ -95,6 +125,8 @@ function Nav({ hasMenu, eventName, canUseDesignStudio, hasFestioMe, canManageCur
       : []),
     ...(user?.role === 'admin' && canUseDesignStudio ? [{ to: '/design-studio', label: 'Design Studio' }] : []),
     { to: '/dashboard', label: 'Results' },
+    { to: '/my-tasks', label: 'My Tasks' },
+    ...(user?.role === 'admin' ? [{ to: '/org-settings', label: 'Org Settings' }] : []),
     ...(hasFestioMe ? [{ to: '/festiome', label: 'FestioMe' }] : []),
     { to: '/scanner', label: 'Check-in' },
     ...(hasMenu ? [{ to: '/kitchen', label: 'Orders' }] : []),
@@ -273,9 +305,45 @@ function AuthedLayout({ children }) {
 
 // ── Routes ────────────────────────────────────────────────────────────────────
 
+function RouteLoading() {
+  return (
+    <div role="status" aria-live="polite" className="min-h-[45vh] grid place-items-center px-4 text-sm text-slate-500 dark:text-slate-400">
+      Loading page…
+    </div>
+  )
+}
+
+class RouteChunkBoundary extends Component {
+  constructor(props) {
+    super(props)
+    this.state = { error: null }
+  }
+
+  static getDerivedStateFromError(error) {
+    return { error }
+  }
+
+  render() {
+    if (!this.state.error) return this.props.children
+    return (
+      <div role="alert" className="min-h-[45vh] grid place-items-center px-4">
+        <div className="max-w-md rounded-xl border border-amber-200 bg-white p-5 text-center shadow-sm dark:border-amber-900 dark:bg-slate-800">
+          <h1 className="font-bold text-slate-900 dark:text-white">This page could not be loaded</h1>
+          <p className="mt-2 text-sm text-slate-500 dark:text-slate-400">The application may have been updated while this tab was open.</p>
+          <button className="mt-4 rounded-lg bg-teal-600 px-4 py-2 text-sm font-semibold text-white" onClick={() => window.location.reload()}>
+            Reload page
+          </button>
+        </div>
+      </div>
+    )
+  }
+}
+
 function AppRoutes() {
   return (
-    <Routes>
+    <RouteChunkBoundary>
+      <Suspense fallback={<RouteLoading />}>
+      <Routes>
       <Route path="/login" element={<LoginPage />} />
       <Route path="/register" element={<RegisterPage />} />
       <Route path="/scan/:token" element={<ScanAutoPage />} />
@@ -292,6 +360,9 @@ function AppRoutes() {
       <Route path="/vendor/:token" element={<VendorPage />} />
       {/* Public gift registry — no auth required (unguessable token) */}
       <Route path="/registry/:token" element={<RegistryPage />} />
+      {/* Public/private Event Calendar — no auth required; the backend
+          resolves either a public share_token or a private per-contact token */}
+      <Route path="/calendar/:token" element={<CalendarPage />} />
       {/* Client floor-plan share link — view or edit token, no auth required */}
       <Route path="/floor/:token" element={<FloorPlanPage />} />
       {/* Public marketing pages — no auth required */}
@@ -300,10 +371,37 @@ function AppRoutes() {
       <Route path="/privacy" element={<PrivacyPage />} />
       <Route path="/terms" element={<TermsPage />} />
       <Route path="/sms-policy" element={<SmsPolicyPage />} />
+      {/* Public API reference — readable before you have a key, no account needed */}
+      <Route path="/api-docs" element={<ApiDocsPage />} />
       {/* Unlisted public help — shareable with prospects, no account needed */}
 
       {/* Landing page: public marketing page — logged-in users keep their session */}
       <Route path="/" element={<LandingPage />} />
+
+      {/* Admin redesign routes must not mount until Firebase has restored the
+          session; otherwise their initial API reads receive 401 and bounce a
+          valid user back through /login to the legacy admin. */}
+      <Route path="/admin-redesign" element={<ProtectedRoute><AdminRedesignPage /></ProtectedRoute>} />
+      <Route path="/guests-redesign" element={<ProtectedRoute><GuestsRedesignPage /></ProtectedRoute>} />
+      <Route path="/communications-redesign" element={<ProtectedRoute><CommunicationsRedesignPage /></ProtectedRoute>} />
+      <Route path="/billing-redesign" element={<ProtectedRoute><BillingRedesignPage /></ProtectedRoute>} />
+      <Route path="/addons-redesign" element={<ProtectedRoute><AddonsRedesignPage /></ProtectedRoute>} />
+      <Route path="/team-redesign" element={<ProtectedRoute><TeamRedesignPage /></ProtectedRoute>} />
+      <Route path="/experience-redesign" element={<ProtectedRoute><ExperienceRedesignPage /></ProtectedRoute>} />
+      <Route path="/checkin-redesign" element={<ProtectedRoute><CheckinRedesignPage /></ProtectedRoute>} />
+      <Route path="/superadmin-redesign" element={<ProtectedRoute><SuperadminRedesignPage /></ProtectedRoute>} />
+      <Route path="/design-studio-redesign" element={<ProtectedRoute><DesignStudioRedesignPage /></ProtectedRoute>} />
+      <Route path="/event-results-redesign" element={<ProtectedRoute><EventResultsRedesignPage /></ProtectedRoute>} />
+      <Route path="/festiome-redesign" element={<ProtectedRoute><FestioMeRedesignPage /></ProtectedRoute>} />
+      <Route path="/help-redesign" element={<ProtectedRoute><HelpRedesignPage /></ProtectedRoute>} />
+      <Route path="/scanner-redesign" element={<ProtectedRoute><ScannerRedesignPage /></ProtectedRoute>} />
+      <Route path="/kitchen-redesign" element={<ProtectedRoute><KitchenRedesignPage /></ProtectedRoute>} />
+      <Route path="/selfcheckin-redesign" element={<SelfCheckinRedesignPage />} />
+      <Route path="/selfcheckin-redesign/:code" element={<SelfCheckinRedesignPage />} />
+      <Route path="/floorplan-redesign" element={<FloorPlanRedesignPage />} />
+      <Route path="/setup-redesign" element={<ProtectedRoute><SetupRedesignPage /></ProtectedRoute>} />
+      <Route path="/api-explorer-redesign" element={<ProtectedRoute><ApiExplorerRedesignPage /></ProtectedRoute>} />
+      <Route path="/public-pages-redesign" element={<PublicPagesRedesignPage />} />
 
       {/* Authenticated app with Nav */}
       <Route
@@ -311,25 +409,33 @@ function AppRoutes() {
         element={
           <AuthedLayout>
             <Routes>
-              <Route path="/admin" element={<ProtectedRoute><AdminPage /></ProtectedRoute>} />
-              <Route path="/setup" element={<ProtectedRoute setupOnly><SetupWizardPage /></ProtectedRoute>} />
-              <Route path="/setup/guided" element={<ProtectedRoute setupOnly><GuidedSetupPage /></ProtectedRoute>} />
-              <Route path="/design-studio" element={<ProtectedRoute adminOnly paidOnly><DesignStudioPage /></ProtectedRoute>} />
-              <Route path="/floor-plan/:eventId" element={<ProtectedRoute adminOnly><FloorPlanPage /></ProtectedRoute>} />
-              <Route path="/dashboard" element={<ProtectedRoute><DashboardPage /></ProtectedRoute>} />
-              <Route path="/results" element={<ProtectedRoute><ResultsPage /></ProtectedRoute>} />
-              <Route path="/festiome" element={<ProtectedRoute><FestioMePage /></ProtectedRoute>} />
-              <Route path="/scanner" element={<ProtectedRoute><ScannerPage /></ProtectedRoute>} />
-              <Route path="/kitchen" element={<ProtectedRoute><KitchenPage /></ProtectedRoute>} />
+              {/* RedesignGate silently redirects redesign_default/legacy_retired orgs
+                  to the redesign route. Superadmins are never redirected so they can
+                  test both UIs. All original legacy routes remain untouched. */}
+              <Route path="/admin" element={<ProtectedRoute><RedesignGate redesignRoute="/admin-redesign"><AdminPage /></RedesignGate></ProtectedRoute>} />
+              <Route path="/setup" element={<ProtectedRoute setupOnly><RedesignGate redesignRoute="/setup-redesign"><SetupWizardPage /></RedesignGate></ProtectedRoute>} />
+              <Route path="/setup/guided" element={<ProtectedRoute setupOnly><RedesignGate redesignRoute="/setup-redesign"><GuidedSetupPage /></RedesignGate></ProtectedRoute>} />
+              <Route path="/design-studio" element={<ProtectedRoute adminOnly paidOnly><RedesignGate redesignRoute="/design-studio-redesign"><DesignStudioPage /></RedesignGate></ProtectedRoute>} />
+              <Route path="/floor-plan/:eventId" element={<ProtectedRoute adminOnly><RedesignGate redesignRoute="/floorplan-redesign"><FloorPlanPage /></RedesignGate></ProtectedRoute>} />
+              <Route path="/dashboard" element={<ProtectedRoute><RedesignGate redesignRoute="/event-results-redesign"><DashboardPage /></RedesignGate></ProtectedRoute>} />
+              <Route path="/results" element={<ProtectedRoute><RedesignGate redesignRoute="/event-results-redesign"><ResultsPage /></RedesignGate></ProtectedRoute>} />
+              <Route path="/my-tasks" element={<ProtectedRoute><RedesignGate redesignRoute="/team-redesign"><MyTasksPage /></RedesignGate></ProtectedRoute>} />
+              <Route path="/org-settings" element={<ProtectedRoute><RedesignGate redesignRoute="/billing-redesign"><OrgSettingsPage /></RedesignGate></ProtectedRoute>} />
+              <Route path="/api-explorer" element={<ProtectedRoute><RedesignGate redesignRoute="/api-explorer-redesign"><ApiExplorerPage /></RedesignGate></ProtectedRoute>} />
+              <Route path="/festiome" element={<ProtectedRoute><RedesignGate redesignRoute="/festiome-redesign"><FestioMePage /></RedesignGate></ProtectedRoute>} />
+              <Route path="/scanner" element={<ProtectedRoute><RedesignGate redesignRoute="/scanner-redesign"><ScannerPage /></RedesignGate></ProtectedRoute>} />
+              <Route path="/kitchen" element={<ProtectedRoute><RedesignGate redesignRoute="/kitchen-redesign"><KitchenPage /></RedesignGate></ProtectedRoute>} />
               <Route path="/console" element={<ProtectedRoute><ConsolePage /></ProtectedRoute>} />
               <Route path="/media-library" element={<ProtectedRoute><MediaPage /></ProtectedRoute>} />
-              <Route path="/help" element={<ProtectedRoute paidOnly><HelpPage /></ProtectedRoute>} />
+              <Route path="/help" element={<ProtectedRoute paidOnly><RedesignGate redesignRoute="/help-redesign"><HelpPage /></RedesignGate></ProtectedRoute>} />
               <Route path="*" element={<Navigate to="/" replace />} />
             </Routes>
           </AuthedLayout>
         }
       />
-    </Routes>
+      </Routes>
+      </Suspense>
+    </RouteChunkBoundary>
   )
 }
 

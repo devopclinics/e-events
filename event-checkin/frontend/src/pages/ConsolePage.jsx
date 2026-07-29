@@ -6,11 +6,13 @@ import { useAuth } from '../context/AuthContext'
 const TABS = [
   { id: 'overview', label: 'Overview' },
   { id: 'accounts', label: 'Accounts' },
+  { id: 'usage', label: 'Usage' },
   { id: 'trials', label: 'Trial requests' },
   { id: 'qa', label: 'QA checklist' },
   { id: 'support', label: 'Support chat' },
   { id: 'referrals', label: 'Referrals' },
   { id: 'pricing', label: 'Pricing' },
+  { id: 'org-plans', label: 'Org Plans' },
   { id: 'affiliates', label: 'Affiliate stores' },
   { id: 'operators', label: 'Operators' },
 ]
@@ -92,6 +94,65 @@ function AccountsSummaryTable() {
             ))}
             {filtered.length === 0 && (
               <tr><td colSpan={8} className="px-3 py-6 text-center text-slate-400">No matching organizations.</td></tr>
+            )}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  )
+}
+
+// ── Usage: messaging usage per org, per channel (email/SMS/WhatsApp/MMS) ────
+const USAGE_CHANNELS = ['email', 'sms', 'whatsapp', 'mms']
+
+function UsageTab() {
+  const [data, setData] = useState(null)
+  const [err, setErr] = useState('')
+  const [q, setQ] = useState('')
+
+  useEffect(() => { api.adminUsageReport().then(setData).catch((e) => setErr(e.message)) }, [])
+
+  if (err) return <div className="text-sm text-red-500">{err}</div>
+  if (!data) return <div className="text-sm text-slate-500">Loading…</div>
+
+  const needle = q.trim().toLowerCase()
+  const orgs = needle ? data.orgs.filter((o) => o.org_name.toLowerCase().includes(needle)) : data.orgs
+
+  return (
+    <div className="bg-white dark:bg-slate-800 rounded-xl shadow border dark:border-slate-700 overflow-hidden">
+      <div className="flex items-center justify-between gap-3 p-4 border-b dark:border-slate-700 flex-wrap">
+        <div>
+          <h2 className="font-semibold dark:text-white">Messaging usage by organization</h2>
+          <p className="text-xs text-slate-400">All send types (broadcasts, invites, reminders, confirmations, ...) — {orgs.length} of {data.orgs.length} organization(s)</p>
+        </div>
+        <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search org…"
+          className="border dark:border-slate-600 rounded px-2 py-1.5 text-sm bg-white dark:bg-slate-700 dark:text-white w-56" />
+      </div>
+      <div className="overflow-x-auto">
+        <table className="w-full text-sm">
+          <thead className="bg-slate-50 dark:bg-slate-900/50 text-left text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">
+            <tr>
+              <th className="px-3 py-2">Organization</th>
+              {USAGE_CHANNELS.map((c) => <th key={c} className="px-3 py-2">{c.toUpperCase()}</th>)}
+              <th className="px-3 py-2">Total sends</th>
+              <th className="px-3 py-2">Credits spent</th>
+              <th className="px-3 py-2">Provider cost</th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-gray-100 dark:divide-slate-700">
+            {orgs.map((o) => (
+              <tr key={o.org_id}>
+                <td className="px-3 py-2 font-medium dark:text-slate-100">{o.org_name}</td>
+                {USAGE_CHANNELS.map((c) => (
+                  <td key={c} className="px-3 py-2 text-slate-600 dark:text-slate-300">{o.channels[c]?.sends ?? 0}</td>
+                ))}
+                <td className="px-3 py-2 dark:text-slate-200">{o.total_sends}</td>
+                <td className="px-3 py-2 dark:text-slate-200">{o.total_credits}</td>
+                <td className="px-3 py-2 text-slate-500 dark:text-slate-400">${(o.total_cost_cents / 100).toFixed(2)}</td>
+              </tr>
+            ))}
+            {orgs.length === 0 && (
+              <tr><td colSpan={USAGE_CHANNELS.length + 4} className="px-3 py-6 text-center text-slate-400">No matching organizations.</td></tr>
             )}
           </tbody>
         </table>
@@ -311,7 +372,10 @@ function AccountsTab({ me }) {
               <span className="text-xs text-slate-400 font-normal">· {o.event_count} event(s) · {o.members.length} member(s)</span>
             </div>
             <div className="flex gap-2">
-              <button onClick={() => run(() => api.adminSetOrgActive(o.id, !o.is_active), o.is_active ? 'Org suspended.' : 'Org reactivated.')}
+              <button onClick={() => {
+                if (o.is_active && !window.confirm(`Suspend ${o.name}? Members will lose access until it is reactivated.`)) return
+                run(() => api.adminSetOrgActive(o.id, !o.is_active), o.is_active ? 'Org suspended.' : 'Org reactivated.')
+              }}
                 className="text-xs font-semibold px-3 py-1.5 rounded border border-amber-300 dark:border-amber-700 text-amber-700 dark:text-amber-300 hover:bg-amber-50 dark:hover:bg-amber-900/30">
                 {o.is_active ? 'Suspend' : 'Reactivate'}
               </button>
@@ -334,11 +398,17 @@ function AccountsTab({ me }) {
                   className="border dark:border-slate-600 rounded px-2 py-1 text-xs bg-white dark:bg-slate-700 dark:text-white">
                   {['owner', 'admin', 'staff'].map((r) => <option key={r} value={r}>{r}</option>)}
                 </select>
-                <button onClick={() => run(() => api.adminRemoveMember(o.id, m.user_id), 'Removed from org.')}
+                <button onClick={() => {
+                  if (!window.confirm(`Remove ${m.email} from ${o.name}?`)) return
+                  run(() => api.adminRemoveMember(o.id, m.user_id), 'Removed from org.')
+                }}
                   className="text-xs text-slate-500 hover:text-slate-800 dark:hover:text-white">Remove</button>
                 {m.user_id !== me.id && (
                   <>
-                    <button onClick={() => run(() => api.adminSetUserActive(m.user_id, !m.is_active), 'Updated.')}
+                    <button onClick={() => {
+                      if (m.is_active && !window.confirm(`Suspend ${m.email}? They will be unable to sign in.`)) return
+                      run(() => api.adminSetUserActive(m.user_id, !m.is_active), 'Updated.')
+                    }}
                       className="text-xs text-amber-600 dark:text-amber-400 hover:underline">
                       {m.is_active ? 'Suspend user' : 'Reactivate'}
                     </button>
@@ -575,6 +645,147 @@ function QaChecklistTab() {
 }
 
 // ── Pricing: edit plans ─────────────────────────────────────────────────────
+// Channel weight editor shared by the global-default and per-org-override
+// panels below. `rows` = [{channel, credits_per_unit, is_override, effective_rate?}].
+// `onSave(channel, value)` / `onClear(channel)` (onClear omitted for the
+// global panel — there's nothing to "clear" back to, it IS the default).
+function CreditRateTable({ rows, onSave, onClear, msg }) {
+  const [drafts, setDrafts] = useState({})
+  function draftFor(row) { return drafts[row.channel] ?? row.credits_per_unit ?? '' }
+  return (
+    <div className="space-y-2">
+      {msg && <div className="text-sm text-teal-600">{msg}</div>}
+      <div className="overflow-x-auto">
+        <table className="w-full text-xs">
+          <thead className="text-left text-slate-500 dark:text-slate-400">
+            <tr>
+              <th className="p-2">channel</th>
+              <th>credits per unit</th>
+              {onClear && <th>effective rate</th>}
+              <th></th>
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map((row) => (
+              <tr key={row.channel} className="border-t dark:border-slate-700">
+                <td className="p-2 font-mono dark:text-slate-200">{row.channel}</td>
+                <td>
+                  <input
+                    value={draftFor(row)}
+                    placeholder={onClear ? '(inherits global)' : ''}
+                    onChange={(e) => setDrafts((prev) => ({ ...prev, [row.channel]: e.target.value }))}
+                    className="w-24 border dark:border-slate-600 rounded px-1 bg-white dark:bg-slate-700 dark:text-white"
+                  />
+                </td>
+                {onClear && (
+                  <td className="text-slate-500 dark:text-slate-400 tabular-nums">
+                    {row.effective_rate}{row.is_override ? '' : ' (global)'}
+                  </td>
+                )}
+                <td className="space-x-1 whitespace-nowrap">
+                  <button
+                    onClick={() => onSave(row.channel, Number(draftFor(row)))}
+                    disabled={!draftFor(row) || Number(draftFor(row)) <= 0}
+                    className="bg-teal-600 text-white px-2 py-1 rounded font-semibold hover:bg-teal-700 disabled:opacity-40"
+                  >
+                    Save
+                  </button>
+                  {onClear && row.is_override && (
+                    <button onClick={() => onClear(row.channel)} className="text-red-500 hover:text-red-700 px-1">Clear</button>
+                  )}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  )
+}
+
+// Global default credit weight per messaging channel — what every org pays
+// unless it has its own override (see OrgCreditRatesPanel below). Replaces
+// the old MESSAGE_CREDIT_WEIGHTS env var, which needed a redeploy to change.
+function GlobalCreditRatesPanel() {
+  const [rows, setRows] = useState(null)
+  const [msg, setMsg] = useState('')
+  function load() { api.adminListGlobalCreditRates().then(setRows).catch((e) => setMsg(e.message)) }
+  useEffect(() => { load() }, [])
+
+  async function save(channel, value) {
+    setMsg('')
+    try {
+      await api.adminSaveGlobalCreditRate(channel, value)
+      setMsg(`Saved ${channel}.`); setTimeout(() => setMsg(''), 2500)
+      load()
+    } catch (e) { setMsg(e.message) }
+  }
+
+  if (!rows) return <div className="text-sm text-slate-500">Loading…</div>
+  return (
+    <div className="space-y-2">
+      <p className="text-xs text-slate-500 dark:text-slate-400">
+        Credits charged per send, by channel — applies to every org unless overridden below. Can be a
+        fraction (e.g. 0.1 = 10 emails per credit) or 1+ (e.g. 3 = 3 credits per MMS). See team-docs §2c
+        for how these were derived.
+      </p>
+      <CreditRateTable rows={rows} onSave={save} msg={msg} />
+    </div>
+  )
+}
+
+// Per-org negotiated credit rate override — for deals struck outside the
+// standard pricing. Only channels with an explicit override row differ from
+// the global default; everything else falls through automatically.
+function OrgCreditRatesPanel() {
+  const [orgs, setOrgs] = useState(null)
+  const [orgId, setOrgId] = useState('')
+  const [rows, setRows] = useState(null)
+  const [msg, setMsg] = useState('')
+
+  useEffect(() => { api.adminListAccounts().then(setOrgs).catch(() => {}) }, [])
+  useEffect(() => {
+    if (!orgId) { setRows(null); return }
+    api.adminListOrgCreditRates(orgId).then(setRows).catch((e) => setMsg(e.message))
+  }, [orgId])
+
+  async function save(channel, value) {
+    setMsg('')
+    try {
+      await api.adminSaveOrgCreditRate(orgId, channel, value)
+      setMsg(`Saved ${channel} override.`); setTimeout(() => setMsg(''), 2500)
+      api.adminListOrgCreditRates(orgId).then(setRows)
+    } catch (e) { setMsg(e.message) }
+  }
+
+  async function clear(channel) {
+    setMsg('')
+    try {
+      await api.adminDeleteOrgCreditRate(orgId, channel)
+      setMsg(`Cleared ${channel} override — back to global default.`); setTimeout(() => setMsg(''), 2500)
+      api.adminListOrgCreditRates(orgId).then(setRows)
+    } catch (e) { setMsg(e.message) }
+  }
+
+  return (
+    <div className="space-y-2">
+      <p className="text-xs text-slate-500 dark:text-slate-400">
+        Negotiated per-org pricing. Pick an org, then set only the channels its deal actually changes —
+        everything else keeps inheriting the global default above.
+      </p>
+      <select
+        value={orgId}
+        onChange={(e) => setOrgId(e.target.value)}
+        className="w-full sm:w-72 border dark:border-slate-600 rounded px-2 py-1 text-sm bg-white dark:bg-slate-700 dark:text-white"
+      >
+        <option value="">Select an organisation…</option>
+        {(orgs || []).map((o) => <option key={o.id} value={o.id}>{o.name}</option>)}
+      </select>
+      {orgId && (rows ? <CreditRateTable rows={rows} onSave={save} onClear={clear} msg={msg} /> : <div className="text-sm text-slate-500">Loading…</div>)}
+    </div>
+  )
+}
+
 function PricingTab() {
   const [plans, setPlans] = useState(null)
   const [msg, setMsg] = useState('')
@@ -596,26 +807,120 @@ function PricingTab() {
 
   if (!plans) return <div className="text-sm text-slate-500">Loading…</div>
   return (
+    <div className="space-y-8">
+      <div className="space-y-2">
+        {msg && <div className="text-sm text-teal-600">{msg}</div>}
+        <p className="text-xs text-slate-500 dark:text-slate-400">Prices are in the smallest unit — USD cents, NGN kobo. Changes reflect on the live pricing page and checkout.</p>
+        <div className="overflow-x-auto">
+          <table className="w-full text-xs">
+            <thead className="text-left text-slate-500 dark:text-slate-400">
+              <tr><th className="p-2">key</th><th>kind</th><th>label</th><th>cap</th><th>credits</th><th>usd¢</th><th>ngn(kobo)</th><th>active</th><th></th></tr>
+            </thead>
+            <tbody>
+              {plans.map((p, i) => (
+                <tr key={p.key} className="border-t dark:border-slate-700">
+                  <td className="p-2 font-mono dark:text-slate-200">{p.key}</td>
+                  <td>{p.kind}</td>
+                  <td><input value={p.label} onChange={(e) => edit(i, 'label', e.target.value)} className="w-32 border dark:border-slate-600 rounded px-1 bg-white dark:bg-slate-700 dark:text-white" /></td>
+                  <td><input value={p.guest_cap ?? ''} onChange={(e) => edit(i, 'guest_cap', e.target.value)} className="w-14 border dark:border-slate-600 rounded px-1 bg-white dark:bg-slate-700 dark:text-white" /></td>
+                  <td><input value={p.credits} onChange={(e) => edit(i, 'credits', e.target.value)} className="w-16 border dark:border-slate-600 rounded px-1 bg-white dark:bg-slate-700 dark:text-white" /></td>
+                  <td><input value={p.usd} onChange={(e) => edit(i, 'usd', e.target.value)} className="w-20 border dark:border-slate-600 rounded px-1 bg-white dark:bg-slate-700 dark:text-white" /></td>
+                  <td><input value={p.ngn} onChange={(e) => edit(i, 'ngn', e.target.value)} className="w-24 border dark:border-slate-600 rounded px-1 bg-white dark:bg-slate-700 dark:text-white" /></td>
+                  <td><input type="checkbox" checked={!!p.active} onChange={(e) => edit(i, 'active', e.target.checked)} /></td>
+                  <td><button onClick={() => save(p)} className="bg-teal-600 text-white px-2 py-1 rounded font-semibold hover:bg-teal-700">Save</button></td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <div className="space-y-2 border-t dark:border-slate-700 pt-6">
+        <h3 className="text-sm font-bold text-slate-800 dark:text-slate-100">Messaging credit weights — global default</h3>
+        <GlobalCreditRatesPanel />
+      </div>
+
+      <div className="space-y-2 border-t dark:border-slate-700 pt-6">
+        <h3 className="text-sm font-bold text-slate-800 dark:text-slate-100">Messaging credit weights — per-org override</h3>
+        <OrgCreditRatesPanel />
+      </div>
+    </div>
+  )
+}
+
+// ── Org Plans: org-level recurring subscription catalog (gates org-wide paid
+// features, e.g. read-write API access) — separate from the per-event Pricing
+// tab above. Mirrors its shape; adds a "+ Add plan" button since there's no
+// other way to create the first row through the UI.
+function OrgPlansTab() {
+  const [plans, setPlans] = useState(null)
+  const [msg, setMsg] = useState('')
+  function load() { api.adminListOrgPlans().then(setPlans).catch((e) => setMsg(e.message)) }
+  useEffect(() => { load() }, [])
+
+  async function save(p) {
+    setMsg('')
+    try {
+      await api.adminSaveOrgPlan(p.key, {
+        label: p.label, usd_monthly: Number(p.usd_monthly), ngn_monthly: Number(p.ngn_monthly),
+        features: typeof p.features === 'string'
+          ? p.features.split(',').map((f) => f.trim()).filter(Boolean)
+          : p.features,
+        active: !!p.active, sort_order: Number(p.sort_order),
+      })
+      setMsg(`Saved ${p.key}.`); setTimeout(() => setMsg(''), 2500)
+      load()
+    } catch (e) { setMsg(e.message) }
+  }
+
+  async function remove(key) {
+    if (!confirm(`Delete plan "${key}"? Orgs currently on it keep their status, but it won't be offered again.`)) return
+    setMsg('')
+    try { await api.adminDeleteOrgPlan(key); load() } catch (e) { setMsg(e.message) }
+  }
+
+  function edit(i, k, v) { setPlans((prev) => prev.map((p, idx) => idx === i ? { ...p, [k]: v } : p)) }
+
+  function addPlan() {
+    const key = prompt('New plan key (e.g. api_access):')
+    if (!key || !key.trim()) return
+    setPlans((prev) => [...(prev || []), {
+      key: key.trim(), label: 'New plan', usd_monthly: 0, ngn_monthly: 0,
+      features: [], active: true, sort_order: (prev?.length || 0) + 1,
+    }])
+  }
+
+  if (!plans) return <div className="text-sm text-slate-500">Loading…</div>
+  return (
     <div className="space-y-2">
       {msg && <div className="text-sm text-teal-600">{msg}</div>}
-      <p className="text-xs text-slate-500 dark:text-slate-400">Prices are in the smallest unit — USD cents, NGN kobo. Changes reflect on the live pricing page and checkout.</p>
+      <div className="flex items-center justify-between">
+        <p className="text-xs text-slate-500 dark:text-slate-400">
+          Monthly recurring plans. Prices are in the smallest unit — USD cents, NGN kobo.
+          Features is a comma-separated list (e.g. <code>api_write</code>) checked by feature gates.
+        </p>
+        <button onClick={addPlan} className="bg-teal-600 text-white px-2 py-1 rounded text-xs font-semibold hover:bg-teal-700 shrink-0">
+          + Add plan
+        </button>
+      </div>
       <div className="overflow-x-auto">
         <table className="w-full text-xs">
           <thead className="text-left text-slate-500 dark:text-slate-400">
-            <tr><th className="p-2">key</th><th>kind</th><th>label</th><th>cap</th><th>credits</th><th>usd¢</th><th>ngn(kobo)</th><th>active</th><th></th></tr>
+            <tr><th className="p-2">key</th><th>label</th><th>usd¢/mo</th><th>ngn(kobo)/mo</th><th>features</th><th>active</th><th></th></tr>
           </thead>
           <tbody>
             {plans.map((p, i) => (
               <tr key={p.key} className="border-t dark:border-slate-700">
                 <td className="p-2 font-mono dark:text-slate-200">{p.key}</td>
-                <td>{p.kind}</td>
                 <td><input value={p.label} onChange={(e) => edit(i, 'label', e.target.value)} className="w-32 border dark:border-slate-600 rounded px-1 bg-white dark:bg-slate-700 dark:text-white" /></td>
-                <td><input value={p.guest_cap ?? ''} onChange={(e) => edit(i, 'guest_cap', e.target.value)} className="w-14 border dark:border-slate-600 rounded px-1 bg-white dark:bg-slate-700 dark:text-white" /></td>
-                <td><input value={p.credits} onChange={(e) => edit(i, 'credits', e.target.value)} className="w-16 border dark:border-slate-600 rounded px-1 bg-white dark:bg-slate-700 dark:text-white" /></td>
-                <td><input value={p.usd} onChange={(e) => edit(i, 'usd', e.target.value)} className="w-20 border dark:border-slate-600 rounded px-1 bg-white dark:bg-slate-700 dark:text-white" /></td>
-                <td><input value={p.ngn} onChange={(e) => edit(i, 'ngn', e.target.value)} className="w-24 border dark:border-slate-600 rounded px-1 bg-white dark:bg-slate-700 dark:text-white" /></td>
+                <td><input value={p.usd_monthly} onChange={(e) => edit(i, 'usd_monthly', e.target.value)} className="w-20 border dark:border-slate-600 rounded px-1 bg-white dark:bg-slate-700 dark:text-white" /></td>
+                <td><input value={p.ngn_monthly} onChange={(e) => edit(i, 'ngn_monthly', e.target.value)} className="w-24 border dark:border-slate-600 rounded px-1 bg-white dark:bg-slate-700 dark:text-white" /></td>
+                <td><input value={Array.isArray(p.features) ? p.features.join(', ') : p.features} onChange={(e) => edit(i, 'features', e.target.value)} className="w-36 border dark:border-slate-600 rounded px-1 bg-white dark:bg-slate-700 dark:text-white" /></td>
                 <td><input type="checkbox" checked={!!p.active} onChange={(e) => edit(i, 'active', e.target.checked)} /></td>
-                <td><button onClick={() => save(p)} className="bg-teal-600 text-white px-2 py-1 rounded font-semibold hover:bg-teal-700">Save</button></td>
+                <td className="space-x-1 whitespace-nowrap">
+                  <button onClick={() => save(p)} className="bg-teal-600 text-white px-2 py-1 rounded font-semibold hover:bg-teal-700">Save</button>
+                  <button onClick={() => remove(p.key)} className="text-red-500 hover:text-red-700 px-1">Delete</button>
+                </td>
               </tr>
             ))}
           </tbody>
@@ -879,11 +1184,13 @@ export default function ConsolePage() {
       </div>
       {tab === 'overview' && <OverviewTab />}
       {tab === 'accounts' && <AccountsTab me={user} />}
+      {tab === 'usage' && <UsageTab />}
       {tab === 'trials' && <TrialsTab />}
       {tab === 'qa' && <QaChecklistTab />}
       {tab === 'support' && <SupportChatTab />}
       {tab === 'referrals' && <ReferralsTab />}
       {tab === 'pricing' && <PricingTab />}
+      {tab === 'org-plans' && <OrgPlansTab />}
       {tab === 'affiliates' && <AffiliateStoresTab />}
       {tab === 'operators' && <OperatorsTab me={user} />}
     </div>

@@ -195,6 +195,7 @@ class EventOut(BaseModel):
     checkout_enabled: bool = False
     event_code: Optional[str] = None
     created_at: datetime
+    updated_at: Optional[datetime] = None
     source_url: Optional[str] = None
     source_sync_interval_seconds: int = 60
     source_sync_enabled: bool = True
@@ -235,6 +236,10 @@ class EventOut(BaseModel):
     my_can_manage_event: bool = False
     my_can_view_guests: bool = False
     my_can_manage_guests: bool = False
+    my_redesign_accessible: bool = False
+    # Actual cohort level for the requesting user's organisation.
+    # Frontend uses this to decide whether to auto-redirect to the redesign UI.
+    my_redesign_cohort: str = "legacy_only"
 
 
 class EventMemberOut(BaseModel):
@@ -251,6 +256,7 @@ class EventMemberOut(BaseModel):
     # Allowed sections (table group ids) for section-based scanning.
     # Empty = unrestricted ("All sections").
     section_group_ids: list[str] = []
+    updated_at: Optional[datetime] = None
 
 
 class AssignUserRequest(BaseModel):
@@ -472,6 +478,7 @@ class AccountOrgOut(BaseModel):
     name: str
     slug: str
     is_active: bool
+    redesign_cohort: str = "legacy_only"
     created_at: datetime
     event_count: int
     members: list[AccountMemberOut] = []
@@ -479,6 +486,16 @@ class AccountOrgOut(BaseModel):
 
 class ActiveToggle(BaseModel):
     active: bool
+
+
+RedesignCohort = Literal[
+    "legacy_only", "redesign_opt_in", "redesign_internal",
+    "redesign_cohort", "redesign_default", "legacy_retired",
+]
+
+
+class RedesignCohortUpdate(BaseModel):
+    redesign_cohort: RedesignCohort
 
 
 # ── Experience workflow engine ───────────────────────────────────────────────
@@ -900,6 +917,40 @@ class PlanUpsert(BaseModel):
     sort_order: int = 0
 
 
+class OrgPlanUpsert(BaseModel):
+    label: str
+    usd_monthly: int = 0
+    ngn_monthly: int = 0
+    features: list[str] = []
+    active: bool = True
+    sort_order: int = 0
+
+
+class CreditRateUpsert(BaseModel):
+    credits_per_unit: float
+
+
+class OrgPlanOut(BaseModel):
+    key: str
+    label: str
+    usd_monthly: int
+    ngn_monthly: int
+    features: list[str]
+    active: bool
+    sort_order: int
+
+
+class OrgSubscriptionCheckoutRequest(BaseModel):
+    plan_key: str
+
+
+class OrgSubscriptionOut(BaseModel):
+    plan: str
+    status: Optional[str] = None
+    provider: Optional[str] = None
+    current_period_end: Optional[datetime] = None
+
+
 # ── Seating ───────────────────────────────────────────────────────────────────
 
 class SeatingTableCreate(BaseModel):
@@ -1028,6 +1079,100 @@ class TableGroupTablesUpdate(BaseModel):
 class BulkAssignGroupRequest(BaseModel):
     guest_ids: list[str]
     table_group_id: Optional[str] = None  # None clears the assignment
+
+
+class HouseholdCreate(BaseModel):
+    name: str
+    description: Optional[str] = None
+    sort_order: Optional[int] = None
+    # Optional seating default applied to guests when assigned to this household.
+    default_table_group_id: Optional[str] = None
+    default_table_id: Optional[str] = None
+
+
+class HouseholdOut(BaseModel):
+    id: str
+    event_id: str
+    name: str
+    description: Optional[str] = None
+    sort_order: int = 0
+    default_table_group_id: Optional[str] = None
+    default_table_id: Optional[str] = None
+    member_count: int = 0
+
+
+class BulkAssignHouseholdRequest(BaseModel):
+    guest_ids: list[str]
+    household_id: Optional[str] = None  # None clears the assignment
+
+
+class TaskCreate(BaseModel):
+    title: str
+    notes: Optional[str] = None
+    assignee_user_id: Optional[str] = None
+    due_date: Optional[datetime] = None
+    sort_order: Optional[int] = None
+
+
+class TaskOut(BaseModel):
+    id: str
+    event_id: str
+    title: str
+    notes: Optional[str] = None
+    assignee_user_id: Optional[str] = None
+    assignee_name: Optional[str] = None
+    due_date: Optional[datetime] = None
+    status: str = "open"
+    overdue: bool = False
+    sort_order: int = 0
+    completed_at: Optional[datetime] = None
+    created_at: datetime
+    updated_at: datetime
+
+
+class MyTaskOut(TaskOut):
+    event_name: str
+
+
+class TaskCommentCreate(BaseModel):
+    body: str
+
+
+class TaskActivityOut(BaseModel):
+    id: str
+    kind: str
+    body: str
+    user_name: Optional[str] = None
+    created_at: datetime
+
+
+class SubtaskCreate(BaseModel):
+    title: str
+
+
+class SubtaskUpdate(BaseModel):
+    title: Optional[str] = None
+    status: Optional[str] = None  # open | in_progress | done
+
+
+class SubtaskOut(BaseModel):
+    id: str
+    task_id: str
+    title: str
+    status: str = "open"
+    sort_order: int = 0
+    created_at: datetime
+
+
+class TaskAttachmentOut(BaseModel):
+    id: str
+    task_id: str
+    filename: str
+    url: str
+    content_type: str
+    size_bytes: int
+    uploaded_by_name: Optional[str] = None
+    created_at: datetime
 
 
 class WalkInRegister(BaseModel):
@@ -1569,6 +1714,8 @@ class GuestOut(BaseModel):
     seat_number: Optional[str] = None
     assigned_table_group_id: Optional[str] = None
     table_group_name: Optional[str] = None
+    household_id: Optional[str] = None
+    household_name: Optional[str] = None
     meal_served: bool = False
     is_vip: bool = False
     is_walk_in: bool = False
@@ -1581,6 +1728,7 @@ class GuestOut(BaseModel):
     rsvp_submitter_phone: Optional[str] = None
     rsvp_relationship: Optional[str] = None
     rsvp_guest_type: Optional[str] = None
+    updated_at: Optional[datetime] = None
     rsvp_notes: Optional[str] = None
 
 
@@ -2001,6 +2149,16 @@ class RSVPTokenSubmit(BaseModel):
 
 # ── Broadcast ────────────────────────────────────────────────────────────────
 
+class BroadcastExtraRecipient(BaseModel):
+    """A one-off recipient who isn't on the guest list (e.g. a vendor or
+    plus-one found by typing an email/phone directly into the broadcast panel).
+    Name is required — without it, {{guest_first_name}} has nothing real to
+    render (see events.py broadcast_message)."""
+    name: str = Field(min_length=1)
+    email: Optional[EmailStr] = None
+    phone: Optional[str] = None
+
+
 class BroadcastRequest(BaseModel):
     message: str
     # which guests to target:
@@ -2010,10 +2168,19 @@ class BroadcastRequest(BaseModel):
     #   confirmed    — RSVP'd attending
     #   declined     — RSVP'd no
     #   no_reply     — invited but no RSVP response yet
+    #   none         — no guest segment at all (used when only sending to
+    #                  guest_ids and/or extra_recipients)
     target: Literal[
-        "all", "admitted", "not_admitted", "confirmed", "declined", "no_reply"
+        "all", "admitted", "not_admitted", "confirmed", "declined", "no_reply", "none"
     ] = "all"
-    channels: list[Literal["email", "sms", "whatsapp"]] = ["sms"]
+    # When non-empty, restricts the send to exactly these guest ids (picked via
+    # search) instead of the `target` segment.
+    guest_ids: list[str] = []
+    # Typed-in recipients who aren't on the guest list at all.
+    extra_recipients: list[BroadcastExtraRecipient] = []
+    channels: list[Literal["email", "sms", "whatsapp", "mms"]] = ["sms"]
+    # Image to attach when "mms" is selected — required, HTTPS only.
+    mms_media_url: Optional[str] = None
 
 
 class CheckoutRequest(BaseModel):
@@ -2037,6 +2204,7 @@ class BroadcastResult(BaseModel):
     skipped_no_contact: int
     skipped_no_consent: int
     skipped_no_credits: int = 0
+    broadcast_log_id: Optional[str] = None
 
 
 # ── Manual invite ─────────────────────────────────────────────────────────────
@@ -2056,6 +2224,421 @@ class ManualInviteResult(BaseModel):
     sent: int
     skipped: int
     errors: list[str] = []
+
+
+# ── Public API: API keys & webhooks ─────────────────────────────────────────
+
+class ApiKeyCreate(BaseModel):
+    name: str
+    scope: Literal["read_only", "read_write"] = "read_only"
+
+
+class ApiKeyOut(BaseModel):
+    id: str
+    name: str
+    key_prefix: str
+    scope: str
+    created_at: datetime
+    last_used_at: Optional[datetime] = None
+    revoked_at: Optional[datetime] = None
+
+
+class ApiKeyCreated(ApiKeyOut):
+    key: str   # full key — present only in the create response, never again
+
+
+class WebhookEndpointCreate(BaseModel):
+    url: str
+    event_types: list[str]
+
+
+class WebhookEndpointOut(BaseModel):
+    id: str
+    url: str
+    event_types: list[str]
+    is_active: bool
+    created_at: datetime
+
+
+class WebhookEndpointCreated(WebhookEndpointOut):
+    secret: str   # full secret — present only in the create response, never again
+
+
+class WebhookDeliveryOut(BaseModel):
+    id: str
+    event_type: str
+    status: str
+    attempt_count: int
+    last_error: Optional[str] = None
+    created_at: datetime
+    delivered_at: Optional[datetime] = None
+
+
+# Deliberately small, curated shapes for the public API — NOT the full
+# internal EventOut/GuestOut, which carry many UI/internal-only fields a
+# third-party integration has no business seeing.
+class PublicEventOut(BaseModel):
+    # venue_name/venue_address deliberately excluded — many events use a
+    # private home address, and this is handed to any third-party integration
+    # holding an API key, not just invited guests. An integration that
+    # genuinely needs the venue can be given it directly by the org.
+    id: str
+    name: str
+    event_date: datetime
+    event_end_date: Optional[datetime] = None
+    timezone: Optional[str] = None
+    status: str
+
+
+class PublicGuestCreate(BaseModel):
+    first_name: str
+    last_name: str
+    email: Optional[str] = ""
+    phone: Optional[str] = None
+    is_vip: bool = False
+
+
+class PublicGuestUpdate(BaseModel):
+    first_name: Optional[str] = None
+    last_name: Optional[str] = None
+    email: Optional[str] = None
+    phone: Optional[str] = None
+    is_vip: Optional[bool] = None
+    sms_consent: Optional[bool] = None
+    whatsapp_consent: Optional[bool] = None
+
+
+class PublicGuestOut(BaseModel):
+    id: str
+    first_name: str
+    last_name: str
+    email: Optional[str] = None
+    phone: Optional[str] = None
+    rsvp_status: str
+    admitted: bool
+    admitted_at: Optional[datetime] = None
+
+
+# ── Public API v2: tables, table groups, Experience ──────────────────────────
+# Curated projections (not the internal admin schemas reused verbatim) — same
+# reasoning as PublicEventOut excluding venue address. Notably exclude
+# floor-plan-only fields (pos_x/pos_y/shape/rotation) since those belong to the
+# floor-plan designer, not organizer data an integration would set.
+
+class PublicSeatingTableCreate(BaseModel):
+    name: str
+    capacity: int
+    category: Optional[str] = None
+    sort_order: Optional[int] = None
+
+
+class PublicSeatingTableUpdate(BaseModel):
+    name: Optional[str] = None
+    capacity: Optional[int] = None
+    category: Optional[str] = None
+    sort_order: Optional[int] = None
+
+
+class PublicSeatingTableOut(BaseModel):
+    id: str
+    event_id: str
+    name: str
+    capacity: int
+    category: Optional[str] = None
+    sort_order: int = 0
+    assigned_count: int = 0
+
+
+class PublicTableGroupCreate(BaseModel):
+    name: str
+    tag: Optional[str] = None
+    description: Optional[str] = None
+    sort_order: Optional[int] = None
+    table_ids: Optional[list[str]] = None
+
+
+class PublicTableGroupUpdate(BaseModel):
+    name: Optional[str] = None
+    tag: Optional[str] = None
+    description: Optional[str] = None
+    sort_order: Optional[int] = None
+    table_ids: Optional[list[str]] = None
+
+
+class PublicTableGroupOut(BaseModel):
+    id: str
+    event_id: str
+    name: str
+    tag: str
+    description: Optional[str] = None
+    sort_order: int = 0
+    table_ids: list[str] = []
+    assigned_guest_count: int = 0
+    total_seats: int = 0
+    remaining_seats: int = 0
+    over_capacity: bool = False
+
+
+class PublicTableGroupTablesUpdate(BaseModel):
+    table_ids: list[str] = []
+
+
+class PublicExperienceStepIn(BaseModel):
+    key: str
+    type: ExperienceStepType
+    title: str
+    description: Optional[str] = None
+    sort_order: int = 0
+    required: bool = True
+    enabled: bool = True
+    starts_offset_seconds: Optional[int] = Field(default=None, ge=0)
+    duration_seconds: Optional[int] = Field(default=None, gt=0)
+    conditions: Optional[dict] = None
+    config: Optional[dict] = None
+
+    @field_validator("key", "title", mode="after")
+    @classmethod
+    def clean_required_text(cls, v):
+        cleaned = " ".join((v or "").split())
+        if not cleaned:
+            raise ValueError("value is required")
+        return cleaned
+
+    @field_validator("conditions", "config", mode="after")
+    @classmethod
+    def validate_json_shape(cls, v):
+        _validate_experience_json(v)
+        return v
+
+
+class PublicExperienceStepUpdate(BaseModel):
+    key: Optional[str] = None
+    type: Optional[ExperienceStepType] = None
+    title: Optional[str] = None
+    description: Optional[str] = None
+    sort_order: Optional[int] = None
+    required: Optional[bool] = None
+    enabled: Optional[bool] = None
+    starts_offset_seconds: Optional[int] = Field(default=None, ge=0)
+    duration_seconds: Optional[int] = Field(default=None, gt=0)
+    conditions: Optional[dict] = None
+    config: Optional[dict] = None
+
+    @field_validator("key", "title", mode="after")
+    @classmethod
+    def clean_optional_text(cls, v):
+        if v is None:
+            return v
+        cleaned = " ".join(v.split())
+        if not cleaned:
+            raise ValueError("value cannot be blank")
+        return cleaned
+
+    @field_validator("conditions", "config", mode="after")
+    @classmethod
+    def validate_json_shape(cls, v):
+        _validate_experience_json(v)
+        return v
+
+
+class PublicExperienceStepOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: str
+    workflow_id: str
+    key: str
+    type: str
+    title: str
+    description: Optional[str] = None
+    sort_order: int
+    required: bool
+    enabled: bool
+    starts_offset_seconds: Optional[int] = None
+    duration_seconds: Optional[int] = None
+    is_segment: bool = False
+    conditions: Optional[dict] = None
+    config: Optional[dict] = None
+    created_at: datetime
+    updated_at: datetime
+
+
+class PublicExperienceWorkflowCreate(BaseModel):
+    name: str = "Default Experience"
+    steps: list[PublicExperienceStepIn] = Field(default_factory=list)
+
+    @field_validator("name", mode="after")
+    @classmethod
+    def clean_name(cls, v):
+        cleaned = " ".join((v or "").split())
+        if not cleaned:
+            raise ValueError("Workflow name is required")
+        return cleaned
+
+
+class PublicExperienceWorkflowOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: str
+    event_id: str
+    name: str
+    status: str
+    version: int
+    is_default: bool
+    created_at: datetime
+    updated_at: datetime
+    steps: list[PublicExperienceStepOut] = []
+
+
+class PublicStepsBulkCreate(BaseModel):
+    steps: list[PublicExperienceStepIn] = Field(min_length=1, max_length=100)
+
+
+class PublicExperienceStepReorder(BaseModel):
+    step_ids: list[str] = Field(default_factory=list)
+
+
+class PublicConsentFormUpsert(BaseModel):
+    title: str = "Event consent"
+    body: str
+    require_signature: bool = True
+
+    @field_validator("title", "body", mode="after")
+    @classmethod
+    def clean_consent_text(cls, v):
+        cleaned = (v or "").strip()
+        if not cleaned:
+            raise ValueError("value is required")
+        return cleaned
+
+
+class PublicConsentFormOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: str
+    event_id: str
+    title: str
+    body: str
+    version: int
+    is_active: bool
+    require_signature: bool
+    created_at: datetime
+    updated_at: datetime
+
+
+class PublicConsentSignatureOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: str
+    guest_id: str
+    signer_name: str
+    signed_at: datetime
+
+
+class PublicFeedbackReminderRequest(BaseModel):
+    channels: list[str] = Field(default_factory=lambda: ["email"])
+    subject: Optional[str] = None
+    message: Optional[str] = None
+
+
+# ── Event Calendars ───────────────────────────────────────────────────────────
+
+class ContactListCreate(BaseModel):
+    name: str
+
+
+class ContactListOut(BaseModel):
+    id: str
+    name: str
+    contact_count: int = 0
+    created_at: datetime
+
+
+class ContactCreate(BaseModel):
+    first_name: str
+    last_name: Optional[str] = None
+    email: EmailStr
+
+
+class ContactPaste(BaseModel):
+    text: str   # one "Name,email@x.com" (or "First Last,email") per line
+
+
+class ContactOut(BaseModel):
+    id: str
+    first_name: str
+    last_name: Optional[str] = None
+    email: str
+    created_at: datetime
+
+
+class CalendarCreate(BaseModel):
+    title: str
+    description: Optional[str] = None
+    visibility: Literal["public", "private"] = "public"
+    hide_past_events: bool = True
+
+
+class CalendarUpdate(BaseModel):
+    title: Optional[str] = None
+    description: Optional[str] = None
+    visibility: Optional[Literal["public", "private"]] = None
+    hide_past_events: Optional[bool] = None
+    logo_width: Optional[int] = None
+
+
+class CalendarOut(BaseModel):
+    id: str
+    title: str
+    description: Optional[str] = None
+    logo_url: Optional[str] = None
+    logo_width: Optional[int] = None
+    visibility: str
+    hide_past_events: bool
+    share_token: Optional[str] = None
+    event_ids: list[str] = []
+    event_click_counts: dict[str, int] = {}
+    contact_list_ids: list[str] = []
+    view_count: int = 0
+    created_at: datetime
+    updated_at: datetime
+
+
+class CalendarContactListsUpdate(BaseModel):
+    contact_list_ids: list[str] = []
+
+
+class CalendarEventReorder(BaseModel):
+    event_ids: list[str]
+
+
+class PublicCalendarEventOut(BaseModel):
+    # venue_name/venue_address deliberately excluded — same reasoning as
+    # PublicEventOut (public_api.py): many events use a private home address,
+    # and a calendar page is even more exposed than an API response (browsable,
+    # shareable, potentially search-indexed).
+    id: str
+    name: str
+    event_date: datetime
+    invite_cover_image: Optional[str] = None
+    invite_message: Optional[str] = None
+    rsvp_status: Optional[str] = None
+    admitted: Optional[bool] = None
+    register_url: str
+
+
+class PublicCalendarContactOut(BaseModel):
+    first_name: str
+    email: str
+
+
+class PublicCalendarOut(BaseModel):
+    mode: Literal["public", "private"]
+    title: str
+    description: Optional[str] = None
+    logo_url: Optional[str] = None
+    logo_width: Optional[int] = None
+    contact: Optional[PublicCalendarContactOut] = None
+    events: list[PublicCalendarEventOut] = []
 
 
 # Resolve forward refs declared before their targets (MenuCategoryOut).

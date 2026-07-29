@@ -18,6 +18,7 @@ from ..channels import channels_for_flow
 from services.email_service import send_admission_email, send_simple_email
 from services import messaging
 from services.credit_ledger import send_with_credit_ledger
+from ..services.webhook_outbox import queue_webhook_event
 from services.qr_service import generate_qr_bytes, generate_qr_for_url
 from . import broadcast
 from .seating import assign_next_seat
@@ -1094,6 +1095,13 @@ async def perform_admission(guest, event, background_tasks, db) -> ScanResult:
                     f"{guest.last_name} again.",
         )
     await db.refresh(guest)
+
+    if await queue_webhook_event(db, org_id=event.org_id, event_type="guest.checked_in", payload={
+        "guest_id": guest.id, "event_id": event.id,
+        "first_name": guest.first_name, "last_name": guest.last_name,
+        "admitted_at": guest.admitted_at.isoformat() if guest.admitted_at else None,
+    }):
+        await db.commit()
 
     # Look up menu choices for this guest as "Category: Item" pairs.
     menu_lines: list[tuple[str, str]] = []

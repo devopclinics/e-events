@@ -40,6 +40,13 @@ class Settings(BaseSettings):
     smtp_tls: bool = True
     email_from: str = "Festio <events@festio.events>"
     demo_recipient_emails: str = "events@festio.events"
+    # Provider-boundary safety gate for staging/E2E. Disabled by default so
+    # production behavior is unchanged. When enabled, every email/SMS/MMS/
+    # WhatsApp recipient must exactly match the corresponding comma-separated
+    # allowlist; an empty allowlist blocks the entire channel.
+    outbound_recipient_safety_enabled: bool = False
+    outbound_allowed_emails: str = ""
+    outbound_allowed_phones: str = ""
     # If set, email is sent via the Resend HTTP API instead of SMTP.
     resend_api_key: str = ""
     # Resend webhook signing secret (whsec_...). Empty means acknowledge only.

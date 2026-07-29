@@ -6,11 +6,17 @@ are smallest currency unit (USD cents, NGN kobo).
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from .models import Event, PricingPlan
+from .models import Event, Organization, PricingPlan
 from .entitlements import feature_capabilities, grant_message_credits, plan_label
 
 # Which currency each region pays in (and thus which provider is used).
 REGION_CURRENCY = {"US": "USD", "NG": "NGN"}
+
+
+def org_has_active_subscription(org: Organization) -> bool:
+    """Org-level recurring subscription gate (separate from per-event
+    is_paid). Used to gate org-wide paid features like read-write API keys."""
+    return org.subscription_status == "active"
 
 PLAN_DESCRIPTIONS = {
     "tier50": "For intimate private events that need messaging, QR check-in, basic seating, menu, registry, logistics, and Design Studio publishing.",

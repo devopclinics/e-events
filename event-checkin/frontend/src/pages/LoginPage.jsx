@@ -3,6 +3,8 @@ import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import { signInWithEmailAndPassword } from 'firebase/auth'
 import { auth } from '../firebase'
 import { googleSignIn } from '../auth/googleSignIn'
+import { oidcSignIn } from '../auth/oidcSignIn'
+import { oidcProvider, oidcProviderLabel } from '../firebase'
 import { useAuth } from '../context/AuthContext'
 import { getPreferredView, setPreferredView } from '../App'
 
@@ -103,6 +105,22 @@ export default function LoginPage() {
     }
   }
 
+  async function signInWithSso() {
+    setLoading(true); setError('')
+    try {
+      const cred = await oidcSignIn()
+      const token = await cred.user.getIdToken()
+      const res = await fetch('/api/auth/me', { headers: { Authorization: `Bearer ${token}` } })
+      if (!res.ok) throw new Error(`Profile sync failed (${res.status})`)
+      const dbUser = await res.json()
+      afterSignIn(dbUser.role)
+    } catch (err) {
+      if (err.code !== 'auth/popup-closed-by-user') setError(friendlyError(err))
+    } finally {
+      setLoading(false)
+    }
+  }
+
   function handlePick(view) {
     setPreferredView(view)
     navigate(view === 'setup' ? '/setup' : view === 'admin' ? '/admin' : `/${view}`, { replace: true })
@@ -133,6 +151,14 @@ export default function LoginPage() {
           </svg>
           Continue with Google
         </button>
+
+        {oidcProvider && (
+          <button onClick={signInWithSso} disabled={loading}
+            className="mt-3 flex items-center justify-center gap-3 w-full border border-gray-300 dark:border-slate-700 rounded-lg px-4 py-2.5 text-sm font-medium text-gray-700 dark:text-slate-200 hover:bg-gray-50 dark:hover:bg-slate-700 disabled:opacity-50 transition-colors">
+            <span className="grid h-[18px] w-[18px] place-items-center rounded-full bg-slate-700 dark:bg-slate-500 text-white text-[10px] font-bold">S</span>
+            Continue with {oidcProviderLabel}
+          </button>
+        )}
 
         <div className="flex items-center my-5">
           <div className="flex-1 h-px bg-gray-200 dark:bg-slate-700" />

@@ -449,7 +449,19 @@ function SmsConsentCheckbox({ checked, onChange, disabled = false }) {
 
 function RSVPForm({ event, theme, onConfirmed }) {
   const t = THEMES[theme] || THEMES.default
-  const [form, setForm] = useState({ first_name: '', last_name: '', email: '', phone: '' })
+  // Pre-fill from ?first_name=&last_name=&email= when present — used by a
+  // private Calendar link for a contact who hasn't registered for this event
+  // yet (see CalendarPage.jsx). Absent on ordinary traffic, so this is a
+  // no-op for the existing open-RSVP flow.
+  const [form, setForm] = useState(() => {
+    const params = new URLSearchParams(window.location.search)
+    return {
+      first_name: params.get('first_name') || '',
+      last_name: params.get('last_name') || '',
+      email: params.get('email') || '',
+      phone: '',
+    }
+  })
   const [smsConsent, setSmsConsent] = useState(false)
   const [choice, setChoice] = useState('')
   const [answers, setAnswers] = useState({})
@@ -852,6 +864,18 @@ function PendingView({ confirm }) {
       <div className="mt-2 text-sm leading-relaxed text-slate-600">{confirm.message}</div>
       <div className="mt-4 text-sm font-semibold text-amber-800">
         You'll receive your ticket by email once the host confirms your spot.
+      </div>
+    </div>
+  )
+}
+
+function WaitlistedView({ confirm }) {
+  return (
+    <div className="rounded-3xl border border-amber-200 bg-amber-50 p-5">
+      <div className="text-2xl font-extrabold text-slate-950">Thanks, {confirm.first_name}.</div>
+      <div className="mt-2 text-sm leading-relaxed text-slate-600">{confirm.message}</div>
+      <div className="mt-4 text-sm font-semibold text-amber-800">
+        You're on the waitlist — we'll email you the moment a spot opens up.
       </div>
     </div>
   )
@@ -2067,7 +2091,9 @@ export default function InvitePage() {
       ? <DeclinedView confirm={confirmed} />
       : confirmed.rsvp_status === 'pending'
         ? <PendingView confirm={confirmed} />
-        : <ConfirmView confirm={confirmed} event={event} />
+        : confirmed.rsvp_status === 'waitlisted'
+          ? <WaitlistedView confirm={confirmed} />
+          : <ConfirmView confirm={confirmed} event={event} />
   } else if (tokenMode && !event.rsvp_enabled) {
     rsvpPanel = null
   } else if (tokenMode) {
@@ -2109,12 +2135,6 @@ export default function InvitePage() {
         {deadline ? `RSVP closed on ${deadline}. Contact the host if you still need to respond.` : 'RSVP has closed for this event.'}
       </div>
     )
-  } else if (atCapacity) {
-    rsvpPanel = (
-      <div className="rounded-3xl border border-red-200 bg-red-50 p-5 text-center text-sm font-bold text-red-700">
-        This event is at capacity.
-      </div>
-    )
   } else if (prior) {
     rsvpPanel = (
       <div className="rounded-3xl border border-teal-200 bg-teal-50 p-5 text-center">
@@ -2124,9 +2144,11 @@ export default function InvitePage() {
             ? 'You let the host know you cannot make it.'
             : prior.rsvp_status === 'pending'
               ? 'Your RSVP is awaiting host approval.'
-              : prior.qr_token
-                ? 'You are on the guest list. Your FestioHub is available below.'
-                : 'You are on the guest list. Your ticket was sent to you.'}
+              : prior.rsvp_status === 'waitlisted'
+                ? "You're on the waitlist — we'll email you if a spot opens up."
+                : prior.qr_token
+                  ? 'You are on the guest list. Your FestioHub is available below.'
+                  : 'You are on the guest list. Your ticket was sent to you.'}
         </div>
         <div className="mt-4 text-sm font-semibold text-slate-500">Need to change it? Contact the host.</div>
         <button
@@ -2138,7 +2160,16 @@ export default function InvitePage() {
       </div>
     )
   } else {
-    rsvpPanel = <RSVPForm event={event} theme={theme} onConfirmed={handleConfirmed} />
+    rsvpPanel = (
+      <div className="space-y-4">
+        {atCapacity && (
+          <div className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-center text-sm font-semibold text-amber-800">
+            This event is at capacity — RSVPs below join the waitlist and we'll notify you if a spot opens up.
+          </div>
+        )}
+        <RSVPForm event={event} theme={theme} onConfirmed={handleConfirmed} />
+      </div>
+    )
   }
 
   return (

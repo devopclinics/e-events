@@ -108,15 +108,7 @@ function LogoMark({ size = 'h-9 w-9', text = 'text-sm' }) {
   )
 }
 
-const accentGradients = [
-  'from-teal-500 to-emerald-500',
-  'from-violet-500 to-fuchsia-500',
-  'from-amber-500 to-orange-500',
-  'from-sky-500 to-blue-500',
-  'from-rose-500 to-pink-500',
-  'from-indigo-500 to-violet-500',
-  'from-emerald-500 to-lime-500',
-]
+const ACCENT_GRADIENT = 'from-teal-500 to-emerald-500'
 
 const trustChips = [
   'RSVP', 'Seating', 'QR Passes', 'Check-In',
@@ -167,6 +159,16 @@ const pillars = [
     title: 'Meals, Gifts & Logistics',
     copy: 'Menu selections, kitchen views, table totals, registry, shipments, vendors, and exports.',
     items: ['Guest menu orders', 'Gift list/registry', 'Deliveries and vendor exports'],
+  },
+  {
+    title: 'Event Calendars',
+    copy: 'One curated page listing several of your events — public with a shared link, or private with a personalized link per contact that pre-fills RSVPs and tracks status.',
+    items: ['Public or private listing pages', 'Reusable contact lists (CSV import)', 'Embeddable on your own site'],
+  },
+  {
+    title: 'Tasks & My Tasks',
+    copy: 'A Kanban board for the coordination work that is not guest data — assign it, due-date it, discuss it, attach files, and check it off as a team.',
+    items: ['Open / In progress / Done board', 'Comments, subtasks & file attachments', '"My Tasks" view across every event'],
   },
 ]
 
@@ -244,6 +246,26 @@ const eventTypes = [
   ['Community & religious events', 'Handle large guest lists, RSVPs, self check-in, volunteers, seating sections, and announcements.'],
   ['Corporate events', 'Control registrations, access, teams, check-in records, messaging, and event reporting with operational clarity.'],
   ['Private parties', 'Create a polished invite, collect RSVPs, send QR passes, message guests, and avoid door confusion.'],
+  ['Investor & relationship events', 'Curated invite-only rooms — LP dinners, executive briefings, and portfolio forums — with discreet approvals, VIP handling, and clean post-event attendance records.'],
+]
+
+const faqs = [
+  {
+    q: 'Is this only for luxury or invite-only events?',
+    a: 'It is strongest for relationship-driven invite-only events such as galas, VIP dinners, and private forums, but it works just as well for open RSVP events like conferences and community gatherings.',
+  },
+  {
+    q: 'Can we start simple and expand later?',
+    a: 'Yes. Most organizers begin with RSVP and invitations, then turn on deeper operations like seating, access zones, orders, and logistics as the event needs them.',
+  },
+  {
+    q: 'How does this compare to using separate tools?',
+    a: 'Separate spreadsheets, QR apps, and messaging tools create handoff risk. Festio keeps invite, guest record, check-in, and operations on one connected record so decisions stay consistent under pressure.',
+  },
+  {
+    q: 'What does implementation look like?',
+    a: 'Most teams map one flagship event first, configure guest and invite settings, then standardize the same workflow across recurring or future events.',
+  },
 ]
 
 const comparisonRows = [
@@ -264,7 +286,7 @@ function HeroVisual() {
   ]
   return (
     <div className="relative" aria-label="Festio organizer dashboard, QR pass, seating, messaging, and orders preview">
-      <div className="absolute -inset-6 rounded-[2rem] bg-gradient-to-tr from-teal-400/40 via-amber-300/20 to-violet-400/35 blur-3xl" aria-hidden="true" />
+      <div className="absolute -inset-6 rounded-[2rem] bg-gradient-to-tr from-teal-400/40 via-emerald-300/20 to-teal-400/30 blur-3xl" aria-hidden="true" />
       <div className="relative rounded-[1.75rem] border border-white/15 bg-white/[0.07] p-4 shadow-2xl shadow-slate-950/40 backdrop-blur-xl">
         <div className="rounded-2xl bg-slate-950 p-4 text-white">
           <div className="flex items-center justify-between gap-3 border-b border-white/10 pb-3">
@@ -369,7 +391,7 @@ function DesignStudioVisual() {
   ]
   return (
     <div className="relative" aria-label="Festio Design Studio preview showing template families, flyer editor, and guest surfaces">
-      <div className="absolute -inset-6 rounded-[2rem] bg-gradient-to-tr from-teal-300/25 via-amber-200/20 to-rose-300/25 blur-3xl" aria-hidden="true" />
+      <div className="absolute -inset-6 rounded-[2rem] bg-gradient-to-tr from-teal-300/25 via-emerald-200/20 to-teal-300/20 blur-3xl" aria-hidden="true" />
       <div className="relative overflow-hidden rounded-[1.75rem] border border-white/55 bg-white/90 p-4 shadow-2xl shadow-slate-950/15 backdrop-blur dark:border-white/10 dark:bg-slate-900/90">
         <div className="grid gap-4 lg:grid-cols-[0.92fr_1.08fr]">
           <div className="rounded-2xl bg-slate-950 p-4 text-white">
@@ -805,6 +827,7 @@ export default function LandingPage() {
             <a href="#addons" className="text-sm font-bold text-slate-300 transition hover:text-white">Add-ons</a>
             <a href="#guest-journey" className="text-sm font-bold text-slate-300 transition hover:text-white">Guest Journey</a>
             <a href="#event-types" className="text-sm font-bold text-slate-300 transition hover:text-white">Event Types</a>
+            <a href="#faq" className="text-sm font-bold text-slate-300 transition hover:text-white">FAQ</a>
             <Link to="/pricing" className="text-sm font-bold text-slate-300 transition hover:text-white">Pricing</Link>
             <a href="#demo" className="text-sm font-bold text-slate-300 transition hover:text-white">Demo</a>
           </nav>
@@ -829,8 +852,8 @@ export default function LandingPage() {
         <section id="top" className="relative overflow-hidden bg-slate-950 text-white">
           <div className="pointer-events-none absolute inset-0" aria-hidden="true">
             <div className="absolute -top-40 right-[-10%] h-[36rem] w-[36rem] rounded-full bg-teal-500/25 blur-[130px]" />
-            <div className="absolute left-[-12%] top-1/3 h-[30rem] w-[30rem] rounded-full bg-violet-500/20 blur-[130px]" />
-            <div className="absolute bottom-[-25%] left-1/3 h-[32rem] w-[32rem] rounded-full bg-amber-400/10 blur-[130px]" />
+            <div className="absolute left-[-12%] top-1/3 h-[30rem] w-[30rem] rounded-full bg-teal-400/15 blur-[130px]" />
+            <div className="absolute bottom-[-25%] left-1/3 h-[32rem] w-[32rem] rounded-full bg-emerald-400/10 blur-[130px]" />
             <div className="absolute inset-0 bg-[linear-gradient(rgba(255,255,255,.05)_1px,transparent_1px),linear-gradient(90deg,rgba(255,255,255,.05)_1px,transparent_1px)] bg-[size:60px_60px] [mask-image:radial-gradient(ellipse_65%_60%_at_50%_35%,#000_30%,transparent_100%)]" />
           </div>
           <div className="relative mx-auto grid max-w-7xl items-center gap-12 px-4 py-16 sm:px-6 sm:py-20 lg:grid-cols-[1.02fr_0.98fr] lg:py-28">
@@ -867,7 +890,7 @@ export default function LandingPage() {
           </div>
         </section>
 
-        <section id="problem" className="border-y border-slate-200 bg-gradient-to-b from-rose-50/70 via-white to-white py-20 dark:border-white/10 dark:bg-slate-900/35 dark:from-rose-400/[0.06] dark:via-transparent dark:to-transparent">
+        <section id="problem" className="border-y border-slate-200 bg-gradient-to-b from-teal-50/70 via-white to-white py-20 dark:border-white/10 dark:bg-slate-900/35 dark:from-teal-400/[0.06] dark:via-transparent dark:to-transparent">
           <div className="mx-auto max-w-7xl px-4 sm:px-6">
             <Reveal>
               <SectionHeader
@@ -905,7 +928,7 @@ export default function LandingPage() {
               {pillars.map((pillar, index) => (
                 <Reveal key={pillar.title} delay={(index % 4) * 70}>
                   <article className={`h-full rounded-2xl border border-slate-200 bg-white p-6 shadow-sm transition hover:-translate-y-1 hover:border-teal-300/70 hover:shadow-xl dark:border-white/10 dark:bg-slate-900 dark:hover:border-teal-300/40 ${index === 0 || index === 6 ? 'xl:col-span-2' : ''}`}>
-                    <ValueIcon label={`0${index + 1}`} gradient={accentGradients[index % accentGradients.length]} />
+                    <ValueIcon label={`0${index + 1}`} gradient={ACCENT_GRADIENT} />
                     <h3 className="mt-5 text-xl font-black text-slate-950 dark:text-white">{pillar.title}</h3>
                     <p className="mt-3 text-sm leading-6 text-slate-600 dark:text-slate-300">{pillar.copy}</p>
                     <PointList points={pillar.items} compact />
@@ -916,7 +939,7 @@ export default function LandingPage() {
           </div>
         </section>
 
-        <section id="design-studio" className="border-y border-slate-200 bg-gradient-to-br from-teal-50/80 via-white to-amber-50/70 py-20 dark:border-white/10 dark:bg-slate-900/35 dark:from-teal-400/[0.06] dark:via-transparent dark:to-amber-400/[0.05]">
+        <section id="design-studio" className="border-y border-slate-200 bg-gradient-to-br from-teal-50/80 via-white to-teal-50/30 py-20 dark:border-white/10 dark:bg-slate-900/35 dark:from-teal-400/[0.06] dark:via-transparent dark:to-teal-400/[0.03]">
           <div className="mx-auto grid max-w-7xl items-center gap-12 px-4 sm:px-6 lg:grid-cols-[0.9fr_1.1fr]">
             <Reveal>
               <SectionHeader
@@ -943,7 +966,7 @@ export default function LandingPage() {
           </div>
         </section>
 
-        <section id="addons" className="border-y border-slate-200 bg-gradient-to-b from-violet-50/70 via-white to-white py-20 dark:border-white/10 dark:bg-slate-900/35 dark:from-violet-400/[0.06] dark:via-transparent dark:to-transparent">
+        <section id="addons" className="border-y border-slate-200 bg-gradient-to-b from-teal-50/70 via-white to-white py-20 dark:border-white/10 dark:bg-slate-900/35 dark:from-teal-400/[0.06] dark:via-transparent dark:to-transparent">
           <div className="mx-auto max-w-7xl px-4 sm:px-6">
             <Reveal>
               <SectionHeader
@@ -983,7 +1006,7 @@ export default function LandingPage() {
               {journey.map(([title, copy], index) => (
                 <Reveal key={title} delay={(index % 4) * 70}>
                   <article className="relative h-full rounded-2xl border border-white/10 bg-white/[0.06] p-5 transition hover:border-teal-300/40 hover:bg-white/[0.09]">
-                    <div className={`mb-5 grid h-10 w-10 place-items-center rounded-full bg-gradient-to-br text-sm font-black text-white ${accentGradients[index % accentGradients.length]}`}>{index + 1}</div>
+                    <div className={`mb-5 grid h-10 w-10 place-items-center rounded-full bg-gradient-to-br text-sm font-black text-white ${ACCENT_GRADIENT}`}>{index + 1}</div>
                     <h3 className="text-lg font-black">{title}</h3>
                     <p className="mt-3 text-sm leading-6 text-slate-300">{copy}</p>
                   </article>
@@ -997,7 +1020,7 @@ export default function LandingPage() {
 
         <div>
           {detailSections.map((section, index) => (
-            <section key={section.id} id={section.id} className={`scroll-mt-20 py-20 ${index % 2 ? `bg-gradient-to-b via-white to-white dark:bg-slate-900/35 dark:via-transparent dark:to-transparent ${['from-teal-50/70 dark:from-teal-400/[0.05]', 'from-violet-50/60 dark:from-violet-400/[0.05]', 'from-amber-50/60 dark:from-amber-400/[0.05]', 'from-sky-50/60 dark:from-sky-400/[0.05]', 'from-rose-50/50 dark:from-rose-400/[0.05]', 'from-emerald-50/60 dark:from-emerald-400/[0.05]'][Math.floor(index / 2) % 6]}` : ''}`}>
+            <section key={section.id} id={section.id} className={`scroll-mt-20 py-20 ${index % 2 ? 'bg-gradient-to-b from-teal-50/70 via-white to-white dark:bg-slate-900/35 dark:from-teal-400/[0.05] dark:via-transparent dark:to-transparent' : ''}`}>
               <div className="mx-auto grid max-w-7xl items-center gap-10 px-4 sm:px-6 lg:grid-cols-2">
                 <Reveal className={index % 2 ? 'lg:order-2' : ''}>
                   <SectionHeader eyebrow={section.eyebrow} title={section.title} copy={section.copy} />
@@ -1012,7 +1035,7 @@ export default function LandingPage() {
                 <Reveal delay={120} className={index % 2 ? 'lg:order-1' : ''}>
                   {section.screenshot ? (
                     <div className="relative">
-                      <div className="absolute -inset-4 rounded-[1.75rem] bg-gradient-to-tr from-teal-400/25 via-transparent to-violet-400/20 blur-2xl" aria-hidden="true" />
+                      <div className="absolute -inset-4 rounded-[1.75rem] bg-gradient-to-tr from-teal-400/25 via-transparent to-emerald-400/20 blur-2xl" aria-hidden="true" />
                       <img
                         src={section.screenshot}
                         alt={section.alt}
@@ -1029,7 +1052,7 @@ export default function LandingPage() {
           ))}
         </div>
 
-        <section id="event-types" className="border-y border-slate-200 bg-gradient-to-b from-sky-50/70 via-white to-white py-20 dark:border-white/10 dark:bg-slate-900/35 dark:from-sky-400/[0.06] dark:via-transparent dark:to-transparent">
+        <section id="event-types" className="border-y border-slate-200 bg-gradient-to-b from-teal-50/70 via-white to-white py-20 dark:border-white/10 dark:bg-slate-900/35 dark:from-teal-400/[0.06] dark:via-transparent dark:to-transparent">
           <div className="mx-auto max-w-7xl px-4 sm:px-6">
             <Reveal>
               <SectionHeader
@@ -1117,10 +1140,28 @@ export default function LandingPage() {
           </div>
         </section>
 
+        <section id="faq" className="scroll-mt-20 py-20">
+          <div className="mx-auto max-w-4xl px-4 sm:px-6">
+            <Reveal>
+              <SectionHeader center eyebrow="FAQ" title="Questions organizers ask before switching." />
+            </Reveal>
+            <div className="mt-12 grid gap-4 sm:grid-cols-2">
+              {faqs.map((item) => (
+                <Reveal key={item.q}>
+                  <div className="h-full rounded-2xl border border-slate-200 bg-white p-5 shadow-sm dark:border-white/10 dark:bg-slate-950">
+                    <h3 className="text-sm font-black text-slate-950 dark:text-white">{item.q}</h3>
+                    <p className="mt-2 text-sm leading-6 text-slate-600 dark:text-slate-300">{item.a}</p>
+                  </div>
+                </Reveal>
+              ))}
+            </div>
+          </div>
+        </section>
+
         <section className="py-20">
           <div className="mx-auto max-w-5xl px-4 sm:px-6">
             <Reveal>
-              <div className="overflow-hidden rounded-[2rem] border border-slate-200 bg-gradient-to-br from-white via-teal-50/60 to-amber-50/50 p-8 shadow-xl shadow-slate-950/10 dark:border-white/10 dark:bg-slate-900 dark:from-slate-900 dark:via-slate-900 dark:to-slate-900 sm:p-12">
+              <div className="overflow-hidden rounded-[2rem] border border-slate-200 bg-gradient-to-br from-white via-teal-50/60 to-teal-50/30 p-8 shadow-xl shadow-slate-950/10 dark:border-white/10 dark:bg-slate-900 dark:from-slate-900 dark:via-slate-900 dark:to-slate-900 sm:p-12">
                 <div className="grid gap-8 lg:grid-cols-[1.3fr_0.7fr] lg:items-center">
                   <div>
                     <p className="text-sm font-black uppercase tracking-[0.2em] text-teal-700 dark:text-teal-300">Pricing</p>
@@ -1146,8 +1187,8 @@ export default function LandingPage() {
           <div className="relative mx-auto max-w-6xl overflow-hidden rounded-[2.5rem] bg-slate-950 px-6 py-16 text-center text-white shadow-2xl shadow-slate-950/25 sm:px-12 sm:py-20">
             <div className="pointer-events-none absolute inset-0" aria-hidden="true">
               <div className="absolute -top-24 left-1/4 h-72 w-72 rounded-full bg-teal-500/30 blur-[100px]" />
-              <div className="absolute -bottom-24 right-1/4 h-72 w-72 rounded-full bg-violet-500/25 blur-[100px]" />
-              <div className="absolute -right-16 top-0 h-56 w-56 rounded-full bg-amber-400/15 blur-[90px]" />
+              <div className="absolute -bottom-24 right-1/4 h-72 w-72 rounded-full bg-emerald-500/20 blur-[100px]" />
+              <div className="absolute -right-16 top-0 h-56 w-56 rounded-full bg-teal-400/15 blur-[90px]" />
               <div className="absolute inset-0 bg-[linear-gradient(rgba(255,255,255,.04)_1px,transparent_1px),linear-gradient(90deg,rgba(255,255,255,.04)_1px,transparent_1px)] bg-[size:52px_52px] [mask-image:radial-gradient(ellipse_70%_70%_at_50%_50%,#000_25%,transparent_100%)]" />
             </div>
             <Reveal className="relative">
@@ -1167,7 +1208,7 @@ export default function LandingPage() {
         </section>
       </main>
 
-      <div className="h-px bg-gradient-to-r from-teal-400 via-violet-400 to-amber-300" aria-hidden="true" />
+      <div className="h-px bg-gradient-to-r from-teal-400 via-emerald-400 to-teal-300" aria-hidden="true" />
       <footer className="bg-white py-10 dark:bg-slate-950">
         <div className="mx-auto flex max-w-7xl flex-col gap-5 px-4 sm:px-6 lg:flex-row lg:items-center lg:justify-between">
           <div className="flex items-center gap-2">
@@ -1181,6 +1222,7 @@ export default function LandingPage() {
             <a href="#features" className="hover:text-teal-700 dark:hover:text-teal-300">Features</a>
             <a href="#design-studio" className="hover:text-teal-700 dark:hover:text-teal-300">Design Studio</a>
             <a href="#guest-journey" className="hover:text-teal-700 dark:hover:text-teal-300">Guest Journey</a>
+            <a href="#faq" className="hover:text-teal-700 dark:hover:text-teal-300">FAQ</a>
             <Link to="/pricing" className="hover:text-teal-700 dark:hover:text-teal-300">Pricing</Link>
             <Link to="/sms-policy" className="hover:text-teal-700 dark:hover:text-teal-300">SMS Terms</Link>
             <Link to="/privacy" className="hover:text-teal-700 dark:hover:text-teal-300">Privacy</Link>

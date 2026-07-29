@@ -1,0 +1,155 @@
+/* Full-screen kiosk layout — no RedesignShell chrome */
+.ki-kiosk {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  background: #f0fdf4;
+  padding: 24px;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+}
+
+.ki-card {
+  background: #fff;
+  border-radius: 24px;
+  box-shadow: 0 8px 48px rgba(0, 0, 0, 0.12);
+  padding: 48px 40px;
+  width: 100%;
+  max-width: 440px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0;
+}
+
+.ki-logo {
+  width: 56px;
+  height: 56px;
+  border-radius: 16px;
+  background: #0d9488;
+  color: #fff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.5rem;
+  font-weight: 800;
+  margin-bottom: 16px;
+}
+
+/* Search step */
+.ki-search-step { width: 100%; text-align: center; }
+.ki-title { font-size: 2rem; font-weight: 800; color: #111827; margin: 0 0 6px; }
+.ki-subtitle { font-size: 1rem; color: #6b7280; margin: 0 0 24px; }
+
+.ki-form { display: flex; flex-direction: column; gap: 12px; }
+.ki-input {
+  width: 100%;
+  padding: 16px 20px;
+  font-size: 1.1rem;
+  border: 2px solid #d1d5db;
+  border-radius: 14px;
+  outline: none;
+  transition: border-color 0.2s;
+  box-sizing: border-box;
+  color: #111827;
+}
+.ki-input:focus { border-color: #0d9488; }
+.ki-or { font-size: 0.88rem; color: #9ca3af; text-align: center; }
+
+.ki-btn {
+  padding: 16px 24px;
+  font-size: 1.05rem;
+  font-weight: 700;
+  border: none;
+  border-radius: 14px;
+  background: #0d9488;
+  color: #fff;
+  cursor: pointer;
+  transition: background 0.2s;
+  width: 100%;
+}
+.ki-btn:hover { background: #0f766e; }
+.ki-btn:disabled { background: #d1d5db; color: #9ca3af; cursor: not-allowed; }
+
+/* Results */
+.ki-results { margin-top: 20px; width: 100%; display: flex; flex-direction: column; gap: 8px; }
+.ki-results-label { font-size: 0.9rem; font-weight: 600; color: #374151; margin: 0 0 4px; text-align: left; }
+.ki-result-row {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 14px 16px;
+  background: #f9fafb;
+  border: 2px solid #e5e7eb;
+  border-radius: 14px;
+  cursor: pointer;
+  text-align: left;
+  transition: border-color 0.2s, background 0.2s;
+}
+.ki-result-row:hover { border-color: #0d9488; background: #f0fdf4; }
+.ki-result-avatar { width: 44px; height: 44px; border-radius: 50%; background: #0d9488; color: #fff; display: flex; align-items: center; justify-content: center; font-size: 1.2rem; font-weight: 700; flex-shrink: 0; }
+.ki-result-info { flex: 1; }
+.ki-result-info strong { display: block; font-size: 1rem; font-weight: 700; color: #111827; }
+.ki-result-info small { font-size: 0.85rem; color: #6b7280; }
+.ki-result-arrow { font-size: 1.2rem; color: #9ca3af; }
+.ki-not-me { background: none; border: none; color: #6b7280; font-size: 0.88rem; cursor: pointer; padding: 8px 0; text-decoration: underline; }
+
+/* Confirm step */
+.ki-confirm-step { width: 100%; text-align: center; }
+.ki-confirm-prompt { font-size: 1.3rem; font-weight: 700; color: #111827; margin: 0 0 20px; }
+.ki-confirm-card {
+  background: #f9fafb;
+  border: 2px solid #d1d5db;
+  border-radius: 18px;
+  padding: 24px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 24px;
+}
+.ki-confirm-avatar { width: 64px; height: 64px; border-radius: 50%; background: #0d9488; color: #fff; display: flex; align-items: center; justify-content: center; font-size: 1.8rem; font-weight: 700; margin-bottom: 4px; }
+.ki-confirm-name { font-size: 1.2rem; font-weight: 800; color: #111827; }
+.ki-confirm-phone { font-size: 0.9rem; color: #6b7280; }
+.ki-confirm-actions { display: flex; flex-direction: column; gap: 10px; width: 100%; }
+.ki-btn-yes { background: #0d9488; }
+.ki-btn-no { background: #f3f4f6; color: #374151; }
+.ki-btn-no:hover { background: #e5e7eb; }
+
+/* Outcome step */
+.ki-outcome-step { width: 100%; text-align: center; display: flex; flex-direction: column; align-items: center; gap: 10px; }
+.ki-outcome-icon { font-size: 4rem; }
+.ki-outcome-title { font-size: 1.8rem; font-weight: 800; margin: 0; }
+.ki-outcome-sub { font-size: 1rem; margin: 0; max-width: 320px; }
+.ki-outcome-seat { font-size: 1rem; padding: 10px 20px; border-radius: 12px; margin: 8px 0; font-weight: 500; }
+.ki-btn-restart { background: #374151; margin-top: 16px; }
+.ki-btn-restart:hover { background: #1f2937; }
+
+.ki-tone-green .ki-outcome-title { color: #065f46; }
+.ki-tone-green .ki-outcome-sub { color: #047857; }
+.ki-tone-green .ki-outcome-seat { background: #d1fae5; color: #065f46; }
+.ki-tone-amber .ki-outcome-title { color: #92400e; }
+.ki-tone-amber .ki-outcome-sub { color: #b45309; }
+.ki-tone-blue .ki-outcome-title { color: #1e40af; }
+.ki-tone-blue .ki-outcome-sub { color: #1d4ed8; }
+.ki-tone-red .ki-outcome-title { color: #991b1b; }
+.ki-tone-red .ki-outcome-sub { color: #b91c1c; }
+
+.ki-mockflag { margin-top: 20px; font-size: 0.75rem; color: #9ca3af; text-align: center; }
+
+@media (max-width: 600px) {
+  .ki-kiosk { min-height: 100dvh; padding: 16px 12px; align-items: stretch; }
+  .ki-card { width: 100%; max-width: none; border-radius: 18px; padding: 22px 16px; margin: auto 0; box-sizing: border-box; }
+  .ki-title { font-size: clamp(1.8rem, 9vw, 2.5rem); }
+  .ki-subtitle { font-size: 0.95rem; }
+  .ki-form input, .ki-input { min-height: 50px; font-size: 16px; }
+  .ki-btn { min-height: 52px; }
+  .ki-result-row { min-height: 72px; padding: 12px; }
+  .ki-result-info { min-width: 0; }
+  .ki-result-info strong, .ki-result-info small { overflow-wrap: anywhere; }
+  .ki-confirm-card { padding: 20px 14px; }
+  .ki-outcome-icon { font-size: 3.25rem; }
+  .ki-outcome-title { font-size: 1.55rem; }
+}

@@ -1,0 +1,79 @@
+.ae-page { display: flex; flex-direction: column; gap: 16px; padding: 0 0 32px; }
+
+.ae-header { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+.ae-header h2 { margin: 0 0 2px; font-size: 1.4rem; font-weight: 700; color: var(--rr-text); }
+.ae-subtitle { margin: 0; font-size: 0.85rem; color: var(--rr-sub); }
+.ae-header-actions { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.ae-state-switcher { display: flex; align-items: center; gap: 6px; font-size: 0.8rem; color: var(--rr-sub); flex-wrap: wrap; }
+.ae-state-btn { border: 1.5px solid var(--rr-border); background: var(--rr-surface); color: var(--rr-sub); border-radius: 16px; padding: 3px 10px; font-size: 0.75rem; font-weight: 500; cursor: pointer; transition: all 0.15s; }
+.ae-state-btn:hover { border-color: var(--rr-accent); color: var(--rr-accent); }
+.ae-state-btn.active { border-color: var(--rr-accent); background: var(--rr-accent); color: #fff; }
+
+/* Gate / error states */
+.ae-gate { text-align: center; padding: 60px 24px; display: flex; flex-direction: column; align-items: center; gap: 12px; }
+.ae-gate-icon { color: var(--rr-sub); opacity: 0.5; }
+.ae-gate h3 { font-size: 1.1rem; font-weight: 700; color: var(--rr-text); margin: 0; }
+.ae-gate p { font-size: 0.88rem; color: var(--rr-sub); margin: 0; max-width: 300px; }
+.ae-error .ae-gate-icon { color: #dc2626; opacity: 0.7; }
+
+/* Explorer layout */
+.ae-explorer { display: flex; gap: 16px; align-items: flex-start; }
+.ae-sidebar { width: 260px; flex-shrink: 0; display: flex; flex-direction: column; gap: 8px; }
+@media (max-width: 700px) { .ae-explorer { flex-direction: column; } .ae-sidebar { width: 100%; } }
+
+.ae-cat-filters { display: flex; flex-wrap: wrap; gap: 4px; }
+.ae-cat-btn { border: 1.5px solid var(--rr-border); background: var(--rr-surface); color: var(--rr-sub); border-radius: 16px; padding: 3px 10px; font-size: 0.75rem; font-weight: 500; cursor: pointer; transition: all 0.15s; }
+.ae-cat-btn:hover { border-color: var(--rr-accent); color: var(--rr-accent); }
+.ae-cat-btn.active { border-color: var(--rr-accent); background: var(--rr-accent); color: #fff; }
+
+.ae-endpoint-list { display: flex; flex-direction: column; gap: 3px; }
+.ae-endpoint-row { display: flex; align-items: flex-start; gap: 8px; padding: 10px 12px; border: 1.5px solid var(--rr-border); border-radius: 10px; background: var(--rr-surface); cursor: pointer; text-align: left; transition: all 0.15s; }
+.ae-endpoint-row:hover { border-color: var(--rr-accent); }
+.ae-endpoint-row.active { border-color: var(--rr-accent); background: #f0fdf4; }
+.dark .ae-endpoint-row.active { background: #064e3b20; }
+.ae-endpoint-row-info { flex: 1; min-width: 0; }
+.ae-endpoint-summary { display: block; font-size: 0.85rem; font-weight: 600; color: var(--rr-text); }
+.ae-endpoint-path { font-size: 0.72rem; color: var(--rr-sub); word-break: break-all; }
+
+/* Method badges */
+.ae-method { font-size: 0.7rem; font-weight: 800; padding: 2px 6px; border-radius: 5px; flex-shrink: 0; text-transform: uppercase; letter-spacing: 0.04em; }
+.ae-method-blue { background: #dbeafe; color: #1e40af; }
+.ae-method-green { background: #d1fae5; color: #065f46; }
+.ae-method-amber { background: #fef3c7; color: #92400e; }
+.ae-method-red { background: #fee2e2; color: #991b1b; }
+.dark .ae-method-blue { background: #1e3a8a; color: #93c5fd; }
+.dark .ae-method-green { background: #064e3b; color: #6ee7b7; }
+.dark .ae-method-amber { background: #78350f; color: #fcd34d; }
+.dark .ae-method-red { background: #7f1d1d; color: #fca5a5; }
+
+/* Endpoint detail panel */
+.ae-detail { flex: 1; min-width: 0; }
+.ae-detail-empty { padding: 40px; text-align: center; color: var(--rr-sub); font-size: 0.9rem; }
+.ae-endpoint-panel { display: flex; flex-direction: column; gap: 14px; }
+.ae-endpoint-meta { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.ae-path { font-size: 0.95rem; font-family: monospace; color: var(--rr-text); word-break: break-all; }
+.ae-summary-text { margin: 0; font-size: 0.85rem; color: var(--rr-sub); }
+
+.ae-params-section { display: flex; flex-direction: column; gap: 8px; }
+.ae-section-head { font-size: 0.78rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; color: var(--rr-sub); }
+.ae-params-table { width: 100%; border-collapse: collapse; font-size: 0.82rem; overflow-x: auto; display: block; }
+.ae-params-table th { text-align: left; padding: 6px 10px; border-bottom: 2px solid var(--rr-border); color: var(--rr-sub); font-size: 0.75rem; text-transform: uppercase; }
+.ae-params-table td { padding: 8px 10px; border-bottom: 1px solid var(--rr-border); color: var(--rr-text); vertical-align: middle; }
+.ae-params-table code { font-family: monospace; font-size: 0.82rem; background: var(--rr-bg); padding: 1px 5px; border-radius: 4px; color: var(--rr-text); }
+.ae-in-badge { font-size: 0.72rem; padding: 1px 6px; background: var(--rr-bg); border: 1px solid var(--rr-border); border-radius: 8px; color: var(--rr-sub); }
+.ae-required-dot { color: #dc2626; font-size: 0.9rem; }
+.ae-param-input { border: 1px solid var(--rr-border); border-radius: 6px; padding: 4px 8px; font-size: 0.82rem; background: var(--rr-surface); color: var(--rr-text); width: 100%; box-sizing: border-box; min-width: 90px; }
+.ae-param-desc { color: var(--rr-sub); font-size: 0.78rem; }
+
+.ae-auth-section { display: flex; align-items: center; gap: 8px; padding: 8px 12px; background: var(--rr-bg); border: 1px solid var(--rr-border); border-radius: 8px; }
+.ae-apikey-display { font-family: monospace; font-size: 0.82rem; color: var(--rr-sub); }
+.ae-try-btn { align-self: flex-start; }
+
+/* Response */
+.ae-response { border: 1.5px solid var(--rr-border); border-radius: 10px; overflow: hidden; }
+.ae-response-head { display: flex; align-items: center; gap: 10px; padding: 8px 14px; background: var(--rr-surface); border-bottom: 1px solid var(--rr-border); }
+.ae-status-badge { font-size: 0.78rem; font-weight: 700; padding: 2px 8px; border-radius: 10px; }
+.ae-status-200 { background: #d1fae5; color: #065f46; }
+.dark .ae-status-200 { background: #064e3b; color: #6ee7b7; }
+.ae-content-type { font-size: 0.75rem; color: var(--rr-sub); font-family: monospace; }
+.ae-response-body { margin: 0; padding: 14px; font-size: 0.8rem; font-family: monospace; color: var(--rr-text); background: var(--rr-bg); overflow-x: auto; max-height: 300px; overflow-y: auto; white-space: pre; }

@@ -86,3 +86,23 @@ def rate_limit(*, limit: int, window: int, scope: str, key: str = "event_code"):
             )
 
     return _dep
+
+
+def api_key_rate_limit(*, limit: int, window: int, scope: str = "public_api"):
+    """Same fixed-window limiter, but keyed by the authenticated API key's id
+    (request.state.api_key_id) rather than a path parameter or IP — declare
+    `_: ApiKey = Depends(require_api_key)` before this dependency on any route
+    that uses it, so the id is already set by the time this runs."""
+    async def _dep(request: Request) -> None:
+        if not _ENABLED:
+            return
+        ident = getattr(request.state, "api_key_id", None) or "unknown"
+        window_index = int(time.time()) // window
+        bucket = f"rl:{scope}:{ident}:{window_index}"
+        if not await _hit(bucket, limit, window):
+            raise HTTPException(
+                status_code=429,
+                detail="Too many requests. Please slow down and try again in a moment.",
+            )
+
+    return _dep

@@ -6,6 +6,7 @@ Postgres, Firebase, or app lifespan (migrations/poller) is involved.
 import asyncio
 from datetime import datetime
 
+import pytest
 import pytest_asyncio
 from httpx import AsyncClient, ASGITransport
 from sqlalchemy.ext.asyncio import create_async_engine, async_sessionmaker
@@ -16,6 +17,52 @@ from app.database import Base, get_db
 from app.auth import get_current_user
 from app.models import Organization, Membership, User, Event, Guest
 from app.config import settings
+
+
+# backend/.env carries REAL provider credentials (this checkout IS the staging
+# deploy — see OPERATIONS.md). Settings loads them unconditionally, and
+# services/email_service.py + services/messaging.py prefer whichever provider
+# has a non-empty key, so any unmocked send in a test would hit the real
+# account. Confirmed live during development: an unmocked test send got a real
+# 200 from https://api.resend.com/emails. This autouse fixture makes every
+# outbound-message provider structurally unreachable by default — a test that
+# genuinely wants to exercise a provider must explicitly monkeypatch it back.
+@pytest.fixture(autouse=True)
+def _no_real_outbound_messages(monkeypatch):
+    for field in (
+        "resend_api_key", "bird_email_api_base", "bird_access_key", "bird_workspace_id",
+        "smtp_host", "twilio_account_sid", "twilio_auth_token", "signalhouse_api_key",
+    ):
+        monkeypatch.setattr(settings, field, "")
+
+
+# entitlements._rate_cache is module-level global state (see entitlements.py's
+# channel_weight) populated by the Console credit-rate admin endpoints. Any
+# test that saves a rate would otherwise leak it into every later test in the
+# same process — reset it before and after each test.
+@pytest.fixture(autouse=True)
+def _reset_credit_rate_cache():
+    from app import entitlements
+    entitlements._rate_cache.clear()
+    yield
+    entitlements._rate_cache.clear()
+
+
+# Outbox-style modules (festiome_outbox, webhook_outbox, and main.py's public-API
+# audit middleware) import AsyncSessionLocal directly rather than via the
+# get_db dependency, so app.dependency_overrides[get_db] never touches them —
+# without this, any test that runs one of those code paths tries a real
+# connection to the Compose Postgres host ("db"), which doesn't resolve outside
+# the container and fails with a DNS error. `from x import y` binds `y` in the
+# importing module's namespace at import time, so app.database.AsyncSessionLocal
+# must be patched separately in each module that already imported it.
+@pytest.fixture(autouse=True)
+def _outbox_modules_use_test_db(monkeypatch):
+    from app import main as main_module
+    from app.services import festiome_outbox, webhook_outbox
+    from services import shortlinks
+    for module in (main_module, festiome_outbox, webhook_outbox, shortlinks):
+        monkeypatch.setattr(module, "AsyncSessionLocal", _Session)
 
 _engine = create_async_engine(
     "sqlite+aiosqlite://",

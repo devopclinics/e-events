@@ -12,22 +12,35 @@ in routers iterates enabled channels per event and dispatches in parallel.
 """
 import asyncio
 import logging
+import re
 from datetime import datetime
 
 import httpx
 
 from app.config import settings
 from app.timeutil import local_hhmm, to_event_local
+from services.shortlinks import shorten_url
+from services.outbound_safety import recipient_allowed
 
 logger = logging.getLogger(__name__)
 
 _BIRD_BASE = "https://api.bird.com"
 _SMS_FOOTER = "Reply HELP for help, STOP to opt out. Message and data rates may apply."
 
+# Any of these force SMS out of GSM-7 into UCS-2 encoding, which roughly
+# halves how much text fits per segment (~153 -> ~67 chars) — a single emoji
+# can silently multiply an SMS's cost several times over. MMS has no such
+# per-segment penalty, so emoji are only stripped here (not from MMS bodies).
+_EMOJI_RE = re.compile(
+    "[\U0001F300-\U0001FAFF\U00002600-\U000027BF\U0001F1E6-\U0001F1FF"
+    "\U00002B00-\U00002BFF\U0001F900-\U0001F9FF\U0000FE0F\U0000200D]+"
+)
+
 
 def _brand_sms(body: str) -> str:
     """Keep carrier-reviewed SMS bodies branded and compliance-copy aligned."""
-    text = body.strip()
+    text = _EMOJI_RE.sub("", body)
+    text = re.sub(r"[ \t]{2,}", " ", text).strip()
     if not text.startswith("Festio:"):
         text = f"Festio: {text}"
     upper = text.upper()
@@ -48,14 +61,15 @@ async def send_invite_sms(*, phone: str, first_name: str, event_name: str, ticke
         return
     _local = to_event_local(event_date, event_timezone)
     date_str = _local.strftime("%b %d, %Y") if _local else ""
-    body = f"Hi {first_name}! You're invited to {event_name}" + (f" on {date_str}" if date_str else "") + f". Your ticket: {ticket_url}"
+    short_url = await shorten_url(ticket_url)
+    body = f"Hi {first_name}! {event_name}" + (f", {date_str}" if date_str else "") + f". Ticket: {short_url}"
     return await _send_sms(phone, _brand_sms(body))
 
 
 async def send_admission_sms(*, phone: str, first_name: str, event_name: str, admitted_at, table_name: str | None, seat_number: str | None, event_timezone: str | None = None, seating_term: str = "Table") -> dict | None:
     if not _channel_ready("sms", phone):
         return
-    parts = [f"Welcome {first_name}!", f"You're checked in to {event_name}."]
+    parts = [f"Welcome {first_name}!", f"Checked in: {event_name}."]
     if admitted_at:
         parts.append(f"Time: {local_hhmm(admitted_at, event_timezone)}.")
     if table_name:
@@ -263,7 +277,8 @@ async def send_manual_invite_sms(*, phone: str, name: str, event_name: str, invi
     """Send a personal invite link via SMS to someone who hasn't RSVP'd yet."""
     if not _channel_ready("sms", phone):
         return
-    body = f"Hi {name}! You're invited to {event_name}. RSVP here: {invite_url}"
+    short_url = await shorten_url(invite_url)
+    body = f"Hi {name}! {event_name}. RSVP: {short_url}"
     return await _send_sms(phone, _brand_sms(body))
 
 
@@ -304,6 +319,8 @@ async def send_mms(*, phone: str, body: str, media_url: str) -> dict | None:
     ClickSend is preferred when configured (prod), else the active provider's MMS
     path. Never raises — logs and returns on failure."""
     if not phone or not str(phone).strip() or not media_url:
+        return
+    if not recipient_allowed("mms", phone):
         return
     # ClickSend takes precedence when credentials exist (prod's MMS provider).
     if settings.clicksend_username and settings.clicksend_api_key:
@@ -397,9 +414,24 @@ def _signalhouse_result(data: dict, *, default_status: str = "queued") -> dict:
     return {
         "provider": "signalhouse",
         "provider_message_id": (
+            # first._id is the TOP-LEVEL message document's own Mongo _id —
+            # confirmed via a real live /message/sms call (2026-07-25) to be
+            # present and stable; it is NOT the same field as
+            # statusHistory[-1]._id (a separate, transient subdocument id
+            # that changes on every status transition — a new entry is
+            # appended each time, so an _id captured from *that* array at
+            # send time would never match what a later webhook reports).
+            # groupId/subgroupId are demoted below first._id: a real test
+            # (two live sends, different recipients, ~90 min apart) proved
+            # groupId is constant across unrelated messages on this account
+            # (it's a 10DLC campaign/brand-level id, not per-message), so
+            # using it for exact-match webhook reconciliation would attribute
+            # one guest's delivery status to a different guest's ledger row —
+            # worse than the silent no-op it would otherwise cause.
             first.get("messageId") or first.get("message_id") or first.get("id")
-            or first.get("_id") or last.get("_id")
+            or first.get("_id")
             or first.get("groupId") or first.get("subgroupId")
+            or last.get("_id")
             or root.get("batchId") or root.get("batch_id")
         ),
         "status": first.get("status") or last.get("status")
@@ -462,6 +494,8 @@ def _channel_ready(channel: str, phone: str | None) -> bool:
     """Return False (silently) when there's no point trying — no provider,
     no phone, or no creds for the chosen provider."""
     if not phone or not str(phone).strip():
+        return False
+    if not recipient_allowed(channel, phone):
         return False
     provider = _wa_provider() if channel == "whatsapp" else (settings.messaging_provider or "").lower()
     if provider == "bird":

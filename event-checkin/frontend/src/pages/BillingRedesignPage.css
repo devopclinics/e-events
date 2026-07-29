@@ -1,0 +1,122 @@
+/* Page-specific rules for the Billing & Org Settings mockup.
+   Shared chrome/tokens/panel primitives live in ./redesign/RedesignShell.css. */
+
+/* ── current plan card ──────────────────────────────────────────────── */
+.bl-plan-card { padding: 20px 22px; margin-bottom: 6px; }
+.bl-plan-head { display: flex; align-items: center; gap: 14px; }
+.bl-plan-badge { width: 40px; height: 40px; border-radius: 10px; background: var(--teal-soft); color: var(--teal);
+  display: grid; place-items: center; flex: none; }
+.bl-plan-headtext { flex: 1; min-width: 0; }
+.bl-plan-tier { font-size: 15px; font-weight: 700; color: var(--ink); }
+.bl-plan-sub { font-size: 11px; color: var(--muted); margin-top: 2px; }
+.bl-plan-stats { display: flex; gap: 32px; margin-top: 18px; padding-top: 16px; border-top: 1px solid var(--line-soft); }
+.bl-plan-stat { display: flex; flex-direction: column; gap: 3px; }
+.bl-plan-stat strong { font-size: 19px; color: var(--ink); }
+.bl-plan-stat span { font-size: 10.5px; color: var(--muted); }
+
+/* ── credit ledger ───────────────────────────────────────────────────── */
+.bl-delta-pos { color: var(--success); font-weight: 700; }
+.bl-delta-neg { color: var(--danger); font-weight: 700; }
+
+/* ── add-on entitlement catalog ──────────────────────────────────────── */
+.bl-ent-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 12px; }
+.bl-ent-card { padding: 14px 15px; display: flex; flex-direction: column; gap: 9px; align-items: flex-start; }
+.bl-ent-icon { width: 30px; height: 30px; border-radius: 8px; background: var(--surface-2); color: var(--muted);
+  display: grid; place-items: center; }
+.bl-ent-label { font-size: 12px; font-weight: 700; color: var(--ink); }
+.rd-status-chip.bl-chip-neutral { background: var(--surface-3); color: var(--faint); }
+
+/* ── org settings: stacked full-width panels ─────────────────────────── */
+.bl-org-stack { display: flex; flex-direction: column; gap: 16px; max-width: 860px; }
+.bl-panel-head-row { display: flex; align-items: flex-start; justify-content: space-between; gap: 14px; }
+.bl-panel-head-row h3 { display: flex; align-items: center; gap: 7px; }
+.bl-panel-head-row > button { flex: none; }
+
+.bl-list { display: flex; flex-direction: column; }
+.bl-list-row { display: flex; align-items: center; gap: 16px; padding: 12px 0; border-bottom: 1px solid var(--line-soft); }
+.bl-list-row:last-child { border-bottom: 0; }
+.bl-list-main { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 4px; }
+.bl-list-main strong { font-size: 12px; color: var(--ink); font-weight: 700; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.bl-mono { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 10.5px; color: var(--muted);
+  display: inline-flex; align-items: center; gap: 6px; }
+.bl-webhook-events { font-size: 10.5px; color: var(--faint); }
+.bl-list-meta { display: flex; align-items: center; gap: 14px; font-size: 10.5px; color: var(--muted); flex: none; }
+.bl-list-actions { display: flex; align-items: center; gap: 12px; flex: none; }
+.bl-icon-btn { border: 0; background: var(--surface-2); color: var(--muted); border-radius: 6px; padding: 3px 5px;
+  cursor: pointer; display: inline-flex; align-items: center; }
+.bl-icon-btn:hover { color: var(--teal); background: var(--teal-soft); }
+.bl-link { border: 0; background: none; padding: 0; color: var(--teal); font-size: 10.5px; font-weight: 600;
+  cursor: pointer; display: inline-flex; align-items: center; gap: 4px; text-align: left; }
+.bl-link:hover { text-decoration: underline; }
+
+.bl-sub-row { display: flex; gap: 32px; flex-wrap: wrap; }
+.bl-sub-stat { display: flex; flex-direction: column; gap: 3px; }
+.bl-sub-stat span { font-size: 10.5px; color: var(--muted); }
+.bl-sub-stat strong { font-size: 14px; color: var(--ink); }
+
+/* ── tier / credit-pack cards ──────────────────────────────────────────── */
+.bl-tier-card { padding: 18px 18px 20px; display: flex; flex-direction: column; gap: 6px; position: relative; }
+.bl-tier-card.recommended { border-color: var(--teal); }
+.bl-tier-badge { position: absolute; top: -10px; left: 16px; font-size: 9px; font-weight: 800; background: var(--teal);
+  color: var(--teal-ink); padding: 3px 10px; border-radius: 100px; }
+.bl-tier-card > strong { font-size: 13.5px; color: var(--ink); }
+.bl-tier-price { font-size: 24px; font-weight: 700; color: var(--ink); }
+.bl-tier-price small { font-size: 11px; font-weight: 600; color: var(--muted); }
+.bl-tier-meta { font-size: 10.5px; color: var(--muted); margin-bottom: 4px; }
+.bl-tier-list { list-style: none; padding: 0; margin: 0 0 12px; display: flex; flex-direction: column; gap: 6px; }
+.bl-tier-list li { display: flex; align-items: center; gap: 6px; font-size: 11px; color: var(--ink); }
+.bl-tier-list li svg { color: var(--success); flex: none; }
+
+.bl-pack-card { padding: 16px 17px; display: flex; flex-direction: column; gap: 8px; }
+.bl-pack-card > strong { font-size: 13px; color: var(--ink); }
+.bl-pack-card > span { font-size: 20px; font-weight: 700; color: var(--teal); }
+
+/* ── add-on catalog grouped by area ────────────────────────────────────── */
+.bl-catalog-group { margin-bottom: 16px; }
+.bl-catalog-group-title { font-size: 10px; font-weight: 800; color: var(--faint); text-transform: uppercase;
+  letter-spacing: .05em; margin-bottom: 8px; }
+.bl-ent-card { cursor: default; border: 1px solid var(--line); text-align: left; font-family: inherit; width: 100%; }
+.bl-ent-card.rr-locked { cursor: pointer; }
+
+/* ── upgrade gate modal ────────────────────────────────────────────────── */
+.bl-modal-backdrop { position: fixed; inset: 0; background: rgba(20,15,8,.45); z-index: 60; display: grid; place-items: center; padding: 20px; }
+.bl-modal { width: min(460px, 100%); max-height: 86vh; overflow-y: auto; }
+.bl-modal-recommended { background: var(--teal-soft); border-radius: 10px; padding: 14px; margin-bottom: 14px; font-size: 12px; color: var(--ink); }
+.bl-modal-recommended strong { font-size: 13px; }
+.bl-modal-recommended button { display: block; width: 100%; justify-content: center; margin-top: 10px; }
+.bl-modal-other { display: flex; flex-direction: column; gap: 8px; }
+.bl-modal-tier-row { display: flex; align-items: center; justify-content: space-between; font-size: 12px; color: var(--ink);
+  padding: 8px 0; border-bottom: 1px solid var(--line-soft); }
+.bl-modal-tier-row:last-child { border-bottom: 0; }
+
+/* ── API keys quickstart + reveal banner ───────────────────────────────── */
+.bl-quickstart { margin-top: 14px; padding-top: 14px; border-top: 1px solid var(--line-soft); display: flex;
+  flex-direction: column; gap: 6px; font-size: 10.5px; }
+.bl-quickstart span { font-family: ui-monospace, monospace; color: var(--muted); background: var(--surface-2);
+  padding: 6px 9px; border-radius: 6px; overflow-x: auto; white-space: nowrap; }
+.bl-quickstart a { color: var(--teal); font-weight: 600; text-decoration: none; }
+.bl-reveal-banner { padding: 12px 16px; background: var(--success-soft); display: flex; align-items: center;
+  gap: 14px; flex-wrap: wrap; margin-bottom: 4px; }
+.bl-reveal-banner strong { color: var(--success); }
+.bl-reveal-banner .bl-mono { background: var(--surface); padding: 4px 8px; border-radius: 6px; }
+
+/* ── webhook event checks + secret + delivery log ─────────────────────── */
+.bl-webhook-checks { display: flex; flex-wrap: wrap; gap: 12px; font-size: 11px; color: var(--muted); margin-bottom: 4px; }
+.bl-webhook-checks label { display: flex; align-items: center; gap: 5px; }
+.bl-list-row-wrap { flex-wrap: wrap; }
+.bl-webhook-secret { width: 100%; margin-top: 6px; padding: 6px 9px; background: var(--surface-2); border-radius: 6px; }
+
+/* ── contact lists / calendars expandable detail ──────────────────────── */
+.bl-list-row-block { border-bottom: 1px solid var(--line-soft); padding-bottom: 4px; }
+.bl-list-row-block:last-child { border-bottom: 0; }
+.bl-list-row-block .bl-list-row { border-bottom: 0; }
+.bl-list-expand { padding: 0 0 14px; }
+.bl-cal-audience { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin: 10px 0; flex-wrap: wrap; }
+
+/* ── responsive ──────────────────────────────────────────────────────── */
+@media (max-width: 700px) {
+  .bl-plan-head { flex-wrap: wrap; }
+  .bl-plan-stats { gap: 20px; flex-wrap: wrap; }
+  .bl-list-row { flex-wrap: wrap; gap: 8px; }
+  .bl-list-meta, .bl-list-actions { flex: none; }
+}

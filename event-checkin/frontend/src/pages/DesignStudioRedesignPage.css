@@ -1,0 +1,106 @@
+/* Page-specific rules for the Design Studio redesign mockup. */
+
+/* ── templates tab ─────────────────────────────────────────────────────── */
+.ds-stat-row { display: flex; gap: 32px; margin-bottom: 14px; }
+.ds-stat-row > div { display: flex; flex-direction: column; gap: 2px; }
+.ds-stat-row strong { font-size: 20px; color: var(--ink); }
+.ds-stat-row span { font-size: 10.5px; color: var(--muted); }
+.ds-filter-row { display: flex; gap: 8px; margin-bottom: 14px; flex-wrap: wrap; }
+
+.ds-templates-layout { display: grid; grid-template-columns: 1fr 240px; gap: 14px; align-items: start; }
+.ds-template-card { padding: 16px 15px; display: flex; flex-direction: column; align-items: center; text-align: center; gap: 6px; cursor: pointer; }
+.ds-template-card.selected { border-color: var(--teal); }
+.ds-template-swatch { width: 48px; height: 48px; border-radius: 12px; background: var(--teal-soft); color: var(--teal);
+  display: grid; place-items: center; margin-bottom: 2px; }
+.ds-template-badges { display: flex; align-items: center; gap: 6px; }
+.ds-tier-badge { font-size: 8.5px; font-weight: 800; padding: 2px 8px; border-radius: 100px; background: var(--surface-3); color: var(--muted); }
+.ds-tier-badge.premium { background: var(--warning-soft); color: var(--warning); }
+.ds-template-card strong { font-size: 12.5px; color: var(--ink); }
+.ds-template-card span { font-size: 10.5px; color: var(--muted); }
+.ds-surface-chips { display: flex; flex-wrap: wrap; gap: 4px; justify-content: center; margin: 6px 0; }
+.ds-side-preview { position: sticky; top: 78px; }
+.ds-layout-row { display: flex; align-items: center; gap: 8px; font-size: 11.5px; color: var(--ink); padding: 8px 0; border-bottom: 1px solid var(--line-soft); }
+.ds-layout-row:last-child { border-bottom: 0; }
+
+/* ── flyer tab ─────────────────────────────────────────────────────────── */
+.ds-flyer-layout { display: grid; grid-template-columns: 1.2fr 1fr; gap: 14px; align-items: start; }
+.ds-flyer-col { display: flex; flex-direction: column; gap: 14px; }
+.ds-flyer-tpl-row { display: flex; flex-wrap: wrap; gap: 8px; }
+.ds-flyer-tpl-chip { border: 1px solid var(--line); background: var(--surface); color: var(--ink); font-size: 11px;
+  font-weight: 600; padding: 8px 12px; border-radius: 8px; cursor: pointer; }
+.ds-flyer-tpl-chip:hover { border-color: var(--teal); color: var(--teal); }
+.ds-color-row { display: flex; flex-wrap: wrap; gap: 14px; }
+.ds-color-swatch-label { display: flex; flex-direction: column; align-items: center; gap: 5px; font-size: 9.5px; color: var(--muted); }
+.ds-color-swatch-label input[type='color'] { width: 32px; height: 32px; border: 1px solid var(--line); border-radius: 8px; padding: 0; cursor: pointer; }
+.ds-swatch-dot { display: inline-block; width: 20px; height: 20px; border-radius: 50%; border: 1px solid var(--line); margin-right: 4px; }
+.ds-slider { width: 100%; accent-color: var(--teal); }
+
+.ds-flyer-preview, .ds-page-preview { display: flex; flex-direction: column; align-items: center; text-align: center;
+  gap: 8px; padding: 30px 16px; background: var(--surface-2); border: 1px dashed var(--line); border-radius: 12px; color: var(--faint); }
+.ds-page-preview.mobile { max-width: 280px; margin: 0 auto; }
+.ds-page-preview h3 { margin: 4px 0 0; color: var(--ink); font-size: 15px; }
+.ds-page-preview p { margin: 0 0 8px; font-size: 11px; color: var(--muted); }
+.ds-page-hero { width: 100%; height: 70px; border-radius: 10px; background: var(--teal-soft); color: var(--teal);
+  display: grid; place-items: center; }
+.ds-feed-sample { width: 100%; margin-top: 10px; display: flex; flex-direction: column; gap: 6px; }
+.ds-feed-item { display: flex; align-items: center; gap: 6px; font-size: 10px; color: var(--muted); background: var(--surface);
+  border-radius: 7px; padding: 6px 9px; }
+
+.ds-recent-row { display: flex; align-items: center; gap: 8px; font-size: 11px; color: var(--ink); padding: 8px 0; border-bottom: 1px solid var(--line-soft); }
+.ds-recent-row:last-child { border-bottom: 0; }
+.ds-recent-row span:nth-child(2) { flex: 1; }
+
+/* ── event page tab ────────────────────────────────────────────────────── */
+.ds-module-row { display: flex; align-items: center; gap: 10px; padding: 9px 0; border-bottom: 1px solid var(--line-soft); }
+.ds-module-row:last-child { border-bottom: 0; }
+.ds-module-drag { color: var(--faint); cursor: grab; }
+.ds-module-updown { display: flex; flex-direction: column; gap: 0; }
+.ds-module-updown button { border: 0; background: none; color: var(--faint); font-size: 9px; line-height: 1.2; cursor: pointer; padding: 0 2px; }
+.ds-module-updown button:disabled { opacity: .3; cursor: not-allowed; }
+.ds-module-label { flex: 1; font-size: 12px; color: var(--ink); font-weight: 600; }
+.ds-module-label small { display: block; font-size: 9.5px; color: var(--faint); font-weight: 500; }
+.ds-preview-head { display: flex; align-items: center; justify-content: space-between; }
+
+/* ── publish tab ───────────────────────────────────────────────────────── */
+.ds-checklist { display: flex; flex-direction: column; gap: 8px; }
+.ds-check-row { display: flex; align-items: center; gap: 10px; font-size: 12px; color: var(--muted); }
+.ds-check-row.done { color: var(--ink); }
+.ds-check-dot { width: 18px; height: 18px; border-radius: 50%; border: 1.5px solid var(--line); display: grid;
+  place-items: center; flex: none; color: var(--success); }
+.ds-check-row.done .ds-check-dot { background: var(--success-soft); border-color: var(--success-soft); }
+.ds-publish-status { font-size: 11px; color: var(--muted); margin-top: 12px; display: flex; align-items: center; gap: 8px; }
+.ds-gate-hint { font-size: 10.5px; color: var(--faint); margin-top: 10px; text-align: center; }
+.ds-gate-hint a { color: var(--teal); text-decoration: none; font-weight: 600; }
+
+/* ── festio pass / email preview (unchanged from earlier pass) ───────────── */
+.ds-pass-preview { border-radius: 14px; background: linear-gradient(160deg, var(--teal-dark), var(--teal)); color: #fff;
+  padding: 18px; display: flex; flex-direction: column; gap: 4px; }
+.ds-pass-top { display: flex; align-items: center; justify-content: space-between; font-size: 9px; font-weight: 800;
+  letter-spacing: .08em; opacity: .85; margin-bottom: 8px; }
+.ds-pass-preview strong { font-size: 14px; }
+.ds-pass-preview span { font-size: 11px; opacity: .85; }
+.ds-pass-qr { margin-top: 12px; width: 56px; height: 56px; border-radius: 8px; background: rgba(255,255,255,.15);
+  display: grid; place-items: center; }
+
+.ds-email-preview { border: 1px solid var(--line); border-radius: 12px; overflow: hidden; }
+.ds-email-banner { height: 80px; background: var(--teal-soft); color: var(--teal); display: grid; place-items: center; }
+.ds-email-preview strong { display: block; padding: 14px 16px 4px; font-size: 13px; color: var(--ink); }
+.ds-email-preview p { padding: 0 16px; font-size: 11.5px; color: var(--muted); margin: 0 0 14px; }
+.ds-email-preview button { margin: 0 16px 16px; }
+
+@media (max-width: 1100px) {
+  .rr-grid4 { grid-template-columns: 1fr 1fr; }
+  .ds-templates-layout, .ds-flyer-layout { grid-template-columns: 1fr; }
+  .ds-side-preview { position: static; }
+}
+
+.rd-banner-ok {
+  background: #eafaf1; border: 1px solid #a9dfbf; color: #1e8449;
+  border-radius: 6px; padding: 8px 12px; font-size: 0.83rem;
+  display: flex; align-items: center; gap: 6px;
+}
+.rd-banner-err {
+  background: #fdf3f3; border: 1px solid #f1a9a0; color: #c0392b;
+  border-radius: 6px; padding: 8px 12px; font-size: 0.83rem;
+  display: flex; align-items: center; gap: 6px;
+}

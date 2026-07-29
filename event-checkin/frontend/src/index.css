@@ -445,3 +445,452 @@ textarea:focus {
 .dark .dark-card {
   border: 1px solid #1e293b;
 }
+
+/* ── Event Journey design system ─────────────────────────────────────────────
+   Shared authenticated shell and surfaces inspired by the guided organizer
+   workspace. This intentionally sits last so legacy utility-heavy screens
+   inherit the new visual language without losing their existing behavior. */
+@media (max-width: 0px) {
+@media (min-width: 640px) {
+  .app-nav {
+    position: fixed !important;
+    inset: 0 auto 0 0;
+    width: 244px;
+    height: 100vh;
+    background:
+      linear-gradient(90deg, #004d48 0 70px, #fff 70px 100%) !important;
+    border: 0;
+    border-right: 1px solid #e8e6de;
+    box-shadow: 8px 0 30px rgba(33, 55, 50, 0.035);
+    backdrop-filter: none;
+  }
+
+  .app-nav-inner {
+    height: 100% !important;
+    max-width: none !important;
+    padding: 22px 12px 20px 82px !important;
+    display: flex !important;
+    flex-direction: column;
+    align-items: stretch !important;
+    gap: 10px !important;
+  }
+
+  .app-nav-inner > a:first-child {
+    position: fixed;
+    top: 27px;
+    left: 16px;
+    margin: 0 !important;
+    color: transparent !important;
+    font-size: 0 !important;
+  }
+
+  .app-nav-inner > a:first-child span {
+    width: 39px !important;
+    height: 39px !important;
+    border-radius: 11px !important;
+    background: linear-gradient(145deg, #0ca99a, #04786e) !important;
+    box-shadow: 0 8px 20px rgba(0, 0, 0, .18);
+    font-size: 17px !important;
+  }
+
+  .app-nav-links {
+    order: 2;
+    width: 100%;
+    flex-direction: column;
+    align-items: stretch !important;
+    gap: 5px !important;
+    margin-top: 38px;
+  }
+
+  .app-nav-links::before {
+    content: "WORKSPACE";
+    padding: 0 10px 7px;
+    color: #8b9794;
+    font-size: 9px;
+    font-weight: 700;
+    letter-spacing: .12em;
+  }
+
+  .app-nav-links a {
+    padding: 10px 11px !important;
+    border-radius: 8px !important;
+    color: #4f625e !important;
+    font-size: 11px !important;
+    font-weight: 600;
+  }
+
+  .app-nav-links a:hover {
+    background: #f0f5f2 !important;
+    color: #006a60 !important;
+  }
+
+  .app-nav-links a.bg-teal-50 {
+    background: #e7f0eb !important;
+    color: #075b53 !important;
+  }
+
+  .app-nav-inner > a[title="Current event — manage"] {
+    order: 1;
+    display: flex !important;
+    max-width: none !important;
+    width: 100%;
+    margin: 0 !important;
+    padding: 11px !important;
+    border-radius: 9px !important;
+    background: #f5f4ef !important;
+    color: #28443f !important;
+  }
+
+  .app-nav-actions {
+    order: 3;
+    margin: auto 0 0 !important;
+    padding-top: 14px;
+    border-top: 1px solid #eceae2;
+    align-items: center;
+  }
+
+  .app-nav-actions .text-right {
+    text-align: left !important;
+    min-width: 0;
+  }
+
+  .app-nav-actions .text-right > div:first-child {
+    max-width: 92px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-size: 10px;
+  }
+
+  .app-nav-actions > button:last-of-type {
+    font-size: 0 !important;
+    width: 30px;
+  }
+
+  .app-nav-actions > button:last-of-type::after {
+    content: "↪";
+    font-size: 16px;
+  }
+
+  .app-main {
+    margin-left: 244px !important;
+    max-width: calc(100% - 244px) !important;
+    padding: 36px clamp(26px, 4vw, 64px) 72px !important;
+  }
+}
+
+.app-main h1,
+.app-main h2,
+.app-main h3 {
+  letter-spacing: -.02em;
+}
+
+.app-main h1,
+.admin-page__heading h1,
+.event-journey h3,
+.event-journey h4 {
+  font-family: "Fraunces", Georgia, serif;
+}
+
+.app-main [class~="bg-white"][class*="rounded-xl"],
+.app-main [class~="bg-white"][class*="rounded-2xl"] {
+  border: 1px solid var(--app-border);
+  box-shadow: 0 9px 28px rgba(39, 61, 55, .055) !important;
+}
+
+.app-main button[class*="bg-teal-600"],
+.app-main button[class*="bg-indigo-600"] {
+  background: linear-gradient(135deg, #006a60, #00534d) !important;
+  box-shadow: 0 5px 13px rgba(0, 82, 75, .15);
+}
+
+.admin-page {
+  max-width: 1320px;
+  margin: 0 auto;
+}
+
+.admin-page__heading {
+  min-height: 58px;
+}
+
+.admin-page__heading h1 {
+  margin-top: 2px;
+  color: #123332;
+  font-size: clamp(1.6rem, 2.3vw, 2.25rem);
+}
+
+.admin-page__heading p {
+  margin-top: 4px;
+  color: #788581;
+  font-size: 11px;
+}
+
+.admin-page__kicker {
+  color: #087a6f;
+  font-size: 9px;
+  font-weight: 800;
+  letter-spacing: .14em;
+  text-transform: uppercase;
+}
+
+.event-journey {
+  position: relative;
+  overflow: hidden;
+  padding: 24px 28px 18px;
+  border: 1px solid #dfe8e1;
+  border-radius: 16px;
+  background:
+    radial-gradient(circle at 85% 35%, rgba(217, 235, 220, .7), transparent 23%),
+    linear-gradient(135deg, #fbfdf9, #f1f7f2);
+  box-shadow: 0 10px 30px rgba(36, 71, 58, .06);
+}
+
+.event-journey::after {
+  content: "";
+  position: absolute;
+  top: -45px;
+  right: 15%;
+  width: 145px;
+  height: 145px;
+  border: 1px solid rgba(171, 193, 172, .25);
+  border-radius: 53% 47% 65% 35%;
+  transform: rotate(25deg);
+  pointer-events: none;
+}
+
+.event-journey__top {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+}
+
+.event-journey__eyebrow {
+  color: #183b38;
+  font-family: "Fraunces", Georgia, serif;
+  font-size: 16px;
+  font-weight: 700;
+}
+
+.event-journey__top h3 {
+  margin-top: 4px;
+  color: #687873;
+  font-family: "DM Sans", sans-serif;
+  font-size: 10px;
+  font-weight: 500;
+}
+
+.event-journey__top > button {
+  border: 0;
+  background: none;
+  color: #84918d;
+  font-size: 10px;
+}
+
+.event-journey__progress {
+  position: relative;
+  height: 26px;
+  margin: 12px 4px 6px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.event-journey__progress::before,
+.event-journey__progress > span {
+  content: "";
+  position: absolute;
+  left: 9px;
+  right: 9px;
+  top: 12px;
+  height: 3px;
+  border-radius: 4px;
+  background: #dce6df;
+}
+
+.event-journey__progress > span {
+  right: auto;
+  background: #08756b;
+  transition: width .35s ease;
+}
+
+.event-journey__progress i {
+  position: relative;
+  z-index: 1;
+  width: 18px;
+  height: 18px;
+  border: 1px solid #b5c6c0;
+  border-radius: 50%;
+  background: #f5f8f5;
+  color: #82908c;
+  display: grid;
+  place-items: center;
+  font-size: 8px;
+  font-style: normal;
+  font-weight: 800;
+}
+
+.event-journey__progress i.done,
+.event-journey__progress i.current {
+  border-color: #08756b;
+  background: #08756b;
+  color: white;
+}
+
+.event-journey__next {
+  position: relative;
+  z-index: 1;
+  min-height: 145px;
+  display: grid;
+  grid-template-columns: 1fr 190px;
+  align-items: center;
+  padding: 8px 20px 8px 14px;
+}
+
+.event-journey__next > div:first-child > span {
+  color: #dc6a27;
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.event-journey__next h4 {
+  margin: 8px 0 5px;
+  color: #133331;
+  font-size: 20px;
+}
+
+.event-journey__next p {
+  max-width: 490px;
+  color: #697975;
+  font-size: 10px;
+}
+
+.event-journey__next button {
+  margin-top: 14px;
+  padding: 9px 14px;
+  border: 0;
+  border-radius: 7px;
+  background: linear-gradient(135deg, #006a60, #004e49);
+  color: white;
+  font-size: 10px;
+  font-weight: 700;
+  box-shadow: 0 6px 15px rgba(0, 80, 72, .15);
+}
+
+.event-journey__next button b {
+  margin-left: 10px;
+}
+
+.event-journey__art {
+  position: relative;
+  width: 116px;
+  height: 78px;
+  justify-self: center;
+  border-radius: 6px 6px 13px 13px;
+  background: linear-gradient(145deg, #f9e0ad, #eec981);
+  box-shadow: 0 12px 22px rgba(174, 125, 53, .14);
+  transform: rotate(-1deg);
+}
+
+.event-journey__art::before,
+.event-journey__art::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  clip-path: polygon(0 0, 50% 60%, 100% 0);
+  background: #fff3d8;
+}
+
+.event-journey__art::after {
+  clip-path: polygon(0 100%, 50% 38%, 100% 100%);
+  background: #f5d697;
+}
+
+.event-journey__art i {
+  position: absolute;
+  z-index: 2;
+  left: 45px;
+  top: 22px;
+  width: 28px;
+  height: 28px;
+  display: grid;
+  place-items: center;
+  border-radius: 7px;
+  background: #81b49b;
+  color: #fff;
+  font-style: normal;
+  font-weight: 800;
+}
+
+.event-journey__steps {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  border-top: 1px solid rgba(115, 142, 131, .25);
+  padding-top: 14px;
+}
+
+.event-journey__steps button {
+  border: 0;
+  background: transparent;
+  color: #667570;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  font-size: 8px;
+  line-height: 1.25;
+}
+
+.event-journey__steps i {
+  width: 22px;
+  height: 22px;
+  display: grid;
+  place-items: center;
+  border: 1px solid #abc0ba;
+  border-radius: 50%;
+  color: #50736c;
+  font-style: normal;
+  font-weight: 800;
+}
+
+.event-journey__steps .done i {
+  border-color: #06675f;
+  background: #06675f;
+  color: #fff;
+}
+
+.event-journey__steps .current {
+  color: #b85120;
+  font-weight: 700;
+}
+
+.event-journey__optional {
+  display: block;
+  margin: 13px auto 0;
+  border: 0;
+  background: transparent;
+  color: #67807a;
+  font-size: 9px;
+  font-weight: 600;
+}
+
+@media (max-width: 760px) {
+  .event-journey {
+    padding: 20px 16px 15px;
+  }
+
+  .event-journey__next {
+    grid-template-columns: 1fr;
+    padding: 12px 4px 18px;
+  }
+
+  .event-journey__art {
+    display: none;
+  }
+
+  .event-journey__steps span {
+    display: none;
+  }
+}
+}

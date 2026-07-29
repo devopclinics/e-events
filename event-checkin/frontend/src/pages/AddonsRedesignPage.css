@@ -1,0 +1,162 @@
+/* Page-specific rules for the Add-ons catalog mockup (Seating / Orders /
+   Deliveries / Gift list). Shared chrome/tokens/panel primitives live in
+   ./redesign/RedesignShell.css — this file only adds what that doesn't cover.
+   All new classes are prefixed ad- to avoid collisions with sibling pages. */
+
+/* ── module header (shown for both locked and unlocked states) ───────── */
+.ad-module-head { display: flex; align-items: flex-start; gap: 12px; margin-bottom: 16px; flex-wrap: wrap; }
+.ad-module-icon { width: 36px; height: 36px; border-radius: 10px; background: var(--teal-soft); color: var(--teal);
+  display: grid; place-items: center; flex: none; }
+.ad-module-head-text { flex: 1; min-width: 200px; }
+.ad-module-head-text h2 { font-size: 16px; margin: 2px 0 4px; color: var(--ink); }
+.ad-module-head-text p { font-size: 11.5px; color: var(--muted); margin: 0; max-width: 56ch; }
+
+/* ── locked state ──────────────────────────────────────────────────────── */
+.ad-locked-panel { padding: 20px 22px 24px; }
+.ad-locked-pitch { font-size: 12px; color: var(--muted); margin: 4px 0 0; max-width: 52ch; line-height: 1.55; }
+
+/* ── shared toolbar above list/table content ──────────────────────────── */
+.ad-toolbar { display: flex; gap: 9px; margin: 18px 0 14px; flex-wrap: wrap; }
+
+/* ── seating tab ───────────────────────────────────────────────────────── */
+.ad-cat-chip { font-size: 9.5px; font-weight: 700; padding: 3px 9px; border-radius: 100px;
+  background: var(--surface-3); color: var(--muted); }
+.ad-ratio-badge { display: inline-flex; font-size: 10.5px; font-weight: 700; padding: 3px 9px; border-radius: 100px; }
+.ad-ratio-badge.full { background: var(--success-soft); color: var(--success); }
+.ad-ratio-badge.partial { background: var(--warning-soft); color: var(--warning); }
+.ad-actions { display: flex; align-items: center; gap: 12px; white-space: nowrap; }
+.ad-chev { transition: transform .15s ease; }
+.ad-chev.open { transform: rotate(90deg); }
+@media (prefers-reduced-motion: reduce) { .ad-chev { transition: none; } }
+
+.ad-seatgrid-wrap { padding: 14px 4px 6px; }
+.ad-seatgrid-label { font-size: 10.5px; font-weight: 700; color: var(--muted); margin-bottom: 10px; }
+.ad-seatgrid { display: grid; grid-template-columns: repeat(auto-fill, minmax(72px, 1fr)); gap: 8px; max-width: 620px; }
+.ad-seat { border: 1px solid var(--line); border-radius: 8px; padding: 8px 6px; text-align: center;
+  background: var(--surface-2); display: flex; flex-direction: column; gap: 3px; }
+.ad-seat.filled { background: var(--teal-soft); border-color: transparent; }
+.ad-seat-num { font-size: 9px; font-weight: 800; color: var(--faint); }
+.ad-seat.filled .ad-seat-num { color: var(--teal); }
+.ad-seat-name { font-size: 10px; font-weight: 600; color: var(--ink); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ad-seat.empty .ad-seat-name { color: var(--faint); font-weight: 500; }
+
+/* ── seating tab: term / groups / toggles ─────────────────────────────── */
+.ad-term-card { margin-bottom: 18px; }
+.ad-term-copy { font-size: 11.5px; color: var(--muted); line-height: 1.55; margin: 0 0 12px; max-width: 68ch; }
+
+.ad-group-card { padding: 15px 16px 16px; display: flex; flex-direction: column; gap: 6px; }
+.ad-group-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 10px; }
+.ad-group-head strong { font-size: 13px; color: var(--ink); }
+.ad-group-order { font-size: 9.5px; color: var(--faint); margin-left: 8px; font-weight: 600; }
+.ad-group-slug { font-size: 10px; color: var(--teal); font-family: ui-monospace, monospace; }
+.ad-group-tables { font-size: 11px; color: var(--muted); }
+.ad-group-stat { display: flex; align-items: center; gap: 5px; font-size: 11px; font-weight: 600; color: var(--success); margin-top: 4px; }
+.ad-group-stat span { color: var(--muted); font-weight: 500; }
+.ad-group-stat.over { color: var(--danger); }
+.ad-group-stat.over span { color: var(--danger); }
+.ad-warning { display: flex; align-items: center; gap: 6px; font-size: 10.5px; color: var(--danger); background: var(--danger-soft);
+  border-radius: 8px; padding: 7px 10px; margin-top: 6px; line-height: 1.4; }
+
+.ad-toggle-card { padding: 16px 17px; display: flex; flex-direction: column; gap: 8px; }
+.ad-toggle-card strong { font-size: 12.5px; color: var(--ink); }
+.ad-toggle-card p { font-size: 10.5px; color: var(--muted); line-height: 1.5; margin: 0; flex: 1; }
+.ad-toggle-btn { align-self: flex-start; }
+.ad-toggle-btn.on { background: var(--teal-soft); border-color: transparent; color: var(--teal); font-weight: 700; }
+.ad-toggle-btn:disabled { opacity: .5; cursor: not-allowed; }
+
+/* ── orders tab ────────────────────────────────────────────────────────── */
+.ad-selection-badge { font-size: 9px; font-weight: 700; letter-spacing: .02em; padding: 3px 8px; border-radius: 100px;
+  background: var(--surface-3); color: var(--muted); }
+.ad-num-cell { text-align: right; font-weight: 700; }
+.ad-seg-spaced { margin-bottom: 11px; }
+.ad-inline-select { margin-bottom: 0; width: auto; flex: none; }
+
+.ad-order-cats { display: flex; flex-direction: column; gap: 12px; margin-bottom: 4px; }
+.ad-cat-panel { padding: 15px 16px 16px; }
+.ad-cat-panel-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap;
+  padding-bottom: 10px; margin-bottom: 8px; border-bottom: 1px solid var(--line-soft); }
+.ad-cat-panel-head strong { font-size: 13px; color: var(--ink); margin-right: 8px; }
+.ad-cat-item { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; padding: 8px 0;
+  border-bottom: 1px solid var(--line-soft); }
+.ad-cat-item:last-child { border-bottom: 0; padding-bottom: 0; }
+.ad-cat-item strong { display: block; font-size: 12px; color: var(--ink); }
+.ad-cat-item span { display: block; font-size: 10.5px; color: var(--muted); margin-top: 2px; max-width: 56ch; }
+
+.ad-guest-toolbar { display: flex; align-items: center; gap: 9px; padding: 12px 14px; margin: 6px 0 12px; flex-wrap: wrap; }
+.ad-guestgroup { padding: 14px 16px 12px; margin-bottom: 12px; }
+.ad-guestgroup-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap;
+  padding-bottom: 10px; margin-bottom: 8px; border-bottom: 1px solid var(--line-soft); }
+.ad-guestgroup-head strong { font-size: 13px; color: var(--ink); margin-right: 8px; }
+.ad-guestgroup-head span { font-size: 10.5px; color: var(--muted); }
+.ad-top-selection { font-size: 9.5px; font-weight: 700; background: var(--warning-soft); color: var(--warning);
+  padding: 3px 9px; border-radius: 100px; white-space: nowrap; }
+.ad-guestgroup-row { display: flex; align-items: center; gap: 14px; padding: 7px 0; font-size: 11.5px; color: var(--ink); }
+.ad-seat-tag { font-size: 8.5px; font-weight: 800; color: var(--faint); letter-spacing: .03em; width: 46px; flex: none; }
+.ad-seat-tag b { color: var(--ink); font-size: 11px; margin-left: 3px; }
+.ad-guestgroup-name { flex: 1; min-width: 0; font-weight: 600; }
+
+/* ── logistics tab ─────────────────────────────────────────────────────── */
+.rd-status-chip.info { background: var(--teal-soft); color: var(--teal); }
+.ad-pack-total { font-size: 22px; font-weight: 700; color: var(--ink); display: flex; align-items: baseline; gap: 6px; margin-bottom: 12px; }
+.ad-pack-total small { font-size: 10.5px; font-weight: 600; color: var(--muted); }
+.ad-pack-rows { display: flex; flex-direction: column; gap: 10px; }
+.ad-pack-row { display: grid; grid-template-columns: 22px 1fr 30px; align-items: center; gap: 9px; }
+.ad-pack-size { font-size: 10.5px; font-weight: 700; color: var(--muted); }
+.ad-pack-count { font-size: 10.5px; font-weight: 700; color: var(--ink); text-align: right; }
+.ad-pack-send { margin-top: 12px; }
+
+/* ── registry tab ──────────────────────────────────────────────────────── */
+.ad-registry-list { display: flex; flex-direction: column; gap: 14px; }
+.ad-registry-item { border-bottom: 1px solid var(--line-soft); padding-bottom: 12px; }
+.ad-registry-item:last-child { border-bottom: 0; padding-bottom: 0; }
+.ad-registry-item-top { display: flex; justify-content: space-between; align-items: center; font-size: 12px;
+  font-weight: 600; color: var(--ink); margin-bottom: 6px; }
+.ad-registry-price { font-size: 11px; font-weight: 700; color: var(--muted); }
+.ad-registry-progress { font-size: 10px; color: var(--faint); margin-top: 5px; }
+.ad-fund-label { font-size: 12px; font-weight: 700; color: var(--ink); margin-bottom: 4px; }
+.ad-fund-amount { font-size: 20px; font-weight: 700; color: var(--ink); display: flex; align-items: baseline; gap: 6px; margin-bottom: 8px; }
+.ad-fund-amount small { font-size: 10.5px; font-weight: 600; color: var(--muted); }
+.ad-fund-bar { height: 8px; margin-bottom: 16px; }
+.ad-claims-head { font-size: 10.5px; font-weight: 700; color: var(--muted); text-transform: uppercase; letter-spacing: .04em;
+  margin: 4px 0 8px; }
+.ad-kind-badge { font-size: 8.5px; font-weight: 800; padding: 2px 7px; border-radius: 100px; margin-right: 6px;
+  background: var(--surface-3); color: var(--muted); vertical-align: middle; }
+.ad-kind-badge.fund { background: var(--success-soft); color: var(--success); }
+.ad-kind-badge.link { background: var(--teal-soft); color: var(--teal); }
+.ad-item-thumb { display: inline-grid; place-items: center; width: 20px; height: 20px; border-radius: 5px;
+  background: var(--surface-2); color: var(--faint); margin-right: 6px; vertical-align: middle; }
+.ad-registry-hidden { opacity: .55; }
+.ad-claim-msg { color: var(--faint); font-style: italic; }
+
+/* ── logistics: shipment detail + vendor card ─────────────────────────── */
+.ad-ship-detail { padding: 12px 4px 6px; }
+.ad-vendor-row { display: flex; justify-content: space-between; font-size: 11px; color: var(--muted); padding: 4px 0; }
+.ad-vendor-row b { color: var(--ink); font-weight: 600; }
+.ad-vendor-sent { font-size: 10px; color: var(--faint); margin-top: 10px; }
+
+/* ── responsive ────────────────────────────────────────────────────────── */
+@media (max-width: 760px) {
+  .ad-seatgrid { grid-template-columns: repeat(auto-fill, minmax(62px, 1fr)); }
+  .ad-actions { flex-wrap: wrap; gap: 8px; }
+}
+
+/* ── Seat picker ──────────────────────────────────────────────────────── */
+.ad-seat-picker-list { display: flex; flex-direction: column; gap: 6px; max-height: 260px; overflow-y: auto; }
+.ad-seat-picker-row {
+  display: flex; align-items: center; gap: 10px;
+  border: 1px solid var(--rr-border); border-radius: 6px;
+  padding: 10px 12px; cursor: pointer; background: #fff;
+  text-align: left; width: 100%; transition: border-color 0.15s;
+}
+.ad-seat-picker-row:hover { border-color: var(--rr-accent); }
+.ad-seat-picker-row > div { flex: 1; display: flex; flex-direction: column; gap: 2px; }
+.ad-seat-picker-row strong { font-size: 0.86rem; }
+.ad-seat-picker-row small { font-size: 0.76rem; color: var(--rr-sub); }
+.ad-seat-picker-initials {
+  width: 30px; height: 30px; border-radius: 50%;
+  background: var(--rr-accent); color: #fff;
+  font-size: 0.76rem; font-weight: 700; flex-shrink: 0;
+  display: flex; align-items: center; justify-content: center;
+}
+.ad-seat.empty { cursor: pointer; }
+.ad-seat.empty:hover { border-color: var(--rr-accent); background: #f0f7ff; }

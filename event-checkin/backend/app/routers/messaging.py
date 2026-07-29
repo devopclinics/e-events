@@ -107,9 +107,21 @@ def _signalhouse_extract_status_and_message_id(data: dict) -> tuple[str | None, 
     status = status or first.get("status") or last.get("status")
     message_id = (
         message_id
-        or first.get("messageId") or first.get("message_id") or first.get("id") or first.get("_id")
-        or last.get("messageId") or last.get("message_id") or last.get("id") or last.get("_id")
+        or first.get("messageId") or first.get("message_id") or first.get("id")
+        # first._id is the top-level message document's own Mongo _id — the
+        # correct stable identifier for the live insertedMessages shape
+        # (confirmed via a real Signal House send+response, 2026-07-25).
+        # Deliberately checked BEFORE groupId/subgroupId: a real test proved
+        # groupId is constant across unrelated messages on this account
+        # (10DLC campaign/brand-level id, not per-message), so an exact-match
+        # webhook lookup keyed on it would attribute one guest's delivery
+        # status to a different guest's ledger row. last.get("_id") (the
+        # statusHistory subdocument id) is the weakest fallback — it changes
+        # on every status transition, so an id captured from it at any one
+        # point in time won't reliably match a different point in time.
+        or first.get("_id")
         or first.get("groupId") or first.get("subgroupId")
+        or last.get("messageId") or last.get("message_id") or last.get("id") or last.get("_id")
         or data.get("batchId") or data.get("batch_id")
     )
 

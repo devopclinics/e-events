@@ -1,13 +1,15 @@
 from datetime import datetime
+import html as _html
 import logging
 import os
+import re
 import secrets
 import uuid as _uuid
 from fastapi import APIRouter, BackgroundTasks, Depends, File, HTTPException, UploadFile
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import delete, select, update
 from ..database import get_db
-from ..models import Event, EventUser, EventUserSection, FestioMeOutbox, Guest, Membership, Organization, Payment, RSVPQuestion, TableGroup, User
+from ..models import BroadcastLog, Event, EventUser, EventUserSection, FestioMeOutbox, Guest, Membership, Organization, Payment, RSVPQuestion, TableGroup, User
 from ..schemas import (
     EventCreate, EventUpdate, EventOut, EventMemberOut, AssignUserRequest,
     OrgMemberInvite, OrgMemberOut, MemberRoleUpdate, UserOut, EventSourceUpdate,
@@ -18,12 +20,13 @@ from ..schemas import (
 from ..schemas import ActiveToggle
 from ..auth import require_admin, require_event_admin, get_current_user, _org_role
 from ..config import settings
-from ..entitlements import assert_feature_allowed, can_use_paid_channels, grant_message_credits, last_credit_ledger_id, take_message_credit
+from ..entitlements import assert_feature_allowed, can_use_paid_channels, grant_message_credits, last_credit_ledger_id, record_free_send, take_message_credit
 from .guests import import_from_source_url, import_warning_summary, _normalize_phone
 from services import messaging
 from services.credit_ledger import send_with_credit_ledger
 from services.email_service import send_manual_invite_email, send_broadcast_email, send_simple_email
-from ..template_resolve import load_overrides, channel_text, email_override
+from services.outbound_safety import recipient_allowed
+from ..template_resolve import load_overrides, channel_text, channel_text_or_default, email_override
 from services.templates import build_context as build_template_context
 from .. import storage
 from ..services.festiome_outbox import queue_announcement
@@ -48,6 +51,69 @@ LEGACY_PUBLIC_BASE_URLS = {
     "https://festio.events", "http://festio.events",
     "https://staging.festio.events", "http://staging.festio.events",
 }
+
+
+_MD_LINK_RE = re.compile(r'\[([^\[\]]+)\]\((\S+?)\)')
+_MD_BOLD_RE = re.compile(r'\*\*([^\n*]+)\*\*')
+_BARE_URL_RE = re.compile(r'https?://\S+')
+
+
+def _broadcast_message_html(message: str) -> str:
+    """Minimal Markdown -> HTML for the free-text broadcast message: **bold**,
+    [text](url) links, bare URLs, and `* `/`- ` bullet lines. Escapes the raw
+    text first so no literal HTML/script can be injected — every tag in the
+    output is one we generate here. SMS/WhatsApp/MMS keep the plain-text
+    original (those channels can't render HTML anyway)."""
+    escaped = _html.escape(message)
+
+    # Markdown links first, stashed behind placeholders so the bare-URL pass
+    # below doesn't re-wrap a URL that's already inside an href we just built.
+    links: list[str] = []
+
+    def _stash_link(m: re.Match) -> str:
+        text, url = m.group(1), m.group(2)
+        if not url.startswith(("http://", "https://", "mailto:")):
+            return m.group(0)
+        links.append(f'<a href="{url}">{text}</a>')
+        return f"\x00LINK{len(links) - 1}\x00"
+
+    escaped = _MD_LINK_RE.sub(_stash_link, escaped)
+    escaped = _BARE_URL_RE.sub(lambda m: f'<a href="{m.group(0)}">{m.group(0)}</a>', escaped)
+    escaped = _MD_BOLD_RE.sub(r"<strong>\1</strong>", escaped)
+    for i, anchor in enumerate(links):
+        escaped = escaped.replace(f"\x00LINK{i}\x00", anchor)
+
+    # Block-level: blank-line-separated paragraphs, with `* `/`- ` lines
+    # collected into a <ul>.
+    html_parts: list[str] = []
+    para_lines: list[str] = []
+    list_items: list[str] = []
+
+    def flush_para():
+        if para_lines:
+            html_parts.append("<p>" + "<br>".join(para_lines) + "</p>")
+            para_lines.clear()
+
+    def flush_list():
+        if list_items:
+            html_parts.append("<ul>" + "".join(f"<li>{it}</li>" for it in list_items) + "</ul>")
+            list_items.clear()
+
+    for line in escaped.split("\n"):
+        stripped = line.strip()
+        if stripped.startswith("* ") or stripped.startswith("- "):
+            flush_para()
+            list_items.append(stripped[2:].strip())
+        elif stripped == "":
+            flush_para()
+            flush_list()
+        else:
+            flush_list()
+            para_lines.append(line)
+    flush_para()
+    flush_list()
+
+    return "".join(html_parts)
 
 
 def _gen_code(n: int = 8) -> str:
@@ -116,12 +182,19 @@ async def _event_out_for_user(event: Event, user: User, db: AsyncSession) -> Eve
         can_manage = False
         can_manage_guests = bool(eu and eu.can_manage_guests)
         can_view_guests = bool(eu and (eu.can_view_guests or eu.can_manage_guests))
+    org = await db.get(Organization, event.org_id)
+    redesign_accessible = user.is_platform_superadmin or (
+        org is not None and org.redesign_cohort != "legacy_only"
+    )
+    org_cohort = org.redesign_cohort if org is not None else "legacy_only"
     return EventOut.model_validate(event).model_copy(update={
         "my_access_role": access_role,
         "my_access_level": access_level,
         "my_can_manage_event": can_manage,
         "my_can_view_guests": can_view_guests,
         "my_can_manage_guests": can_manage_guests,
+        "my_redesign_accessible": redesign_accessible,
+        "my_redesign_cohort": org_cohort,
     })
 
 
@@ -351,6 +424,18 @@ async def change_status(
     if not event:
         raise HTTPException(404, "Event not found")
 
+    # Optional optimistic-concurrency guard: the redesign UI sends back the
+    # updated_at it last saw, so a second operator's stale status change
+    # (e.g. clicking "Activate" on a screen left open while someone else
+    # already moved the event to "ended") is rejected instead of silently
+    # applied over a lifecycle transition someone else already made.
+    # Omitted by callers that don't track it, so this is additive.
+    if_unmodified_since = body.get("if_unmodified_since")
+    if if_unmodified_since:
+        expected = datetime.fromisoformat(if_unmodified_since.replace("Z", "+00:00")).replace(tzinfo=None)
+        if event.updated_at and event.updated_at != expected:
+            raise HTTPException(409, "This event was changed by another operator. Refresh and try again.")
+
     allowed = STATUS_TRANSITIONS.get(event.status, set())
     if new_status not in allowed:
         raise HTTPException(400, f"Cannot move from '{event.status}' to '{new_status}'")
@@ -396,6 +481,7 @@ async def list_members(
             event_role=eu.event_role,
             access_level=eu.access_level,
             section_group_ids=sections_by_eu.get(eu.id, []),
+            updated_at=eu.updated_at,
         )
         for eu, u in rows
     ]
@@ -445,6 +531,7 @@ async def assign_member(
         can_manage_guests=eu.can_manage_guests,
         event_role=eu.event_role,
         access_level=eu.access_level,
+        updated_at=eu.updated_at,
     )
 
 
@@ -983,9 +1070,9 @@ async def broadcast_message(
     data: BroadcastRequest,
     background_tasks: BackgroundTasks,
     db: AsyncSession = Depends(get_db),
-    _: User = Depends(require_event_admin),
+    admin_user: User = Depends(require_event_admin),
 ):
-    """Send a free-text message to a subset of guests via SMS and/or WhatsApp."""
+    """Send a free-text message to a subset of guests via SMS, WhatsApp and/or MMS."""
     event = await db.get(Event, event_id)
     if not event:
         raise HTTPException(404, "Event not found")
@@ -993,104 +1080,193 @@ async def broadcast_message(
     if not data.message.strip():
         raise HTTPException(400, "message cannot be empty")
 
-    # Entitlement gate: SMS/WhatsApp require a paid event; email is always allowed.
+    # Entitlement gate: SMS/WhatsApp/MMS require a paid event; email is always allowed.
     channels = list(data.channels)
     if not can_use_paid_channels(event):
-        dropped = [c for c in channels if c in ("sms", "whatsapp")]
+        dropped = [c for c in channels if c in ("sms", "whatsapp", "mms")]
         channels = [c for c in channels if c == "email"]
         if not channels:
             raise HTTPException(
                 402,
-                "Sending SMS/WhatsApp requires an Event Pass. Upgrade this event, "
+                "Sending SMS/WhatsApp/MMS requires an Event Pass. Upgrade this event, "
                 "or broadcast by email.",
             )
         data = data.model_copy(update={"channels": channels})
         _ = dropped  # (silently dropped paid channels; email still sent)
 
-    q = select(Guest).where(Guest.event_id == event_id)
-    if data.target == "admitted":
-        q = q.where(Guest.admitted == True)  # noqa: E712
-    elif data.target == "not_admitted":
-        q = q.where(Guest.admitted == False)  # noqa: E712
-    elif data.target in ("confirmed", "declined", "no_reply"):
-        status = {"confirmed": "confirmed", "declined": "declined", "no_reply": "invited"}[data.target]
-        q = q.where(Guest.rsvp_status == status)
+    # MMS needs its own tier flag, a configured provider, and an image to attach.
+    if "mms" in channels:
+        if not (event.notify_mms and messaging.mms_ready()):
+            channels = [c for c in channels if c != "mms"]
+            data = data.model_copy(update={"channels": channels})
+        elif not data.mms_media_url or not data.mms_media_url.lower().startswith("https://"):
+            raise HTTPException(400, "MMS requires an mms_media_url using HTTPS")
 
-    guests = (await db.execute(q)).scalars().all()
+    if data.target == "none" and not data.guest_ids:
+        # Only the typed-in / specifically-selected recipients — no guest segment.
+        guests = []
+    else:
+        q = select(Guest).where(Guest.event_id == event_id)
+        if data.guest_ids:
+            q = q.where(Guest.id.in_(data.guest_ids))
+        elif data.target == "admitted":
+            q = q.where(Guest.admitted == True)  # noqa: E712
+        elif data.target == "not_admitted":
+            q = q.where(Guest.admitted == False)  # noqa: E712
+        elif data.target in ("confirmed", "declined", "no_reply"):
+            status = {"confirmed": "confirmed", "declined": "declined", "no_reply": "invited"}[data.target]
+            q = q.where(Guest.rsvp_status == status)
+        guests = (await db.execute(q)).scalars().all()
+
+    if not guests and not data.extra_recipients:
+        raise HTTPException(400, "No recipients matched")
 
     want_email = "email" in data.channels
-    want_phone = "sms" in data.channels or "whatsapp" in data.channels
+    want_phone = "sms" in data.channels or "whatsapp" in data.channels or "mms" in data.channels
+
+    # Staging/E2E recipient safety must reject the request before background
+    # tasks, usage logs, or message credits are created. Provider-boundary
+    # checks remain as defense in depth for every other outbound path.
+    recipients_to_check: list[tuple[str, str]] = []
+    for guest in guests:
+        if want_email and guest.email:
+            recipients_to_check.append(("email", guest.email))
+        if guest.phone:
+            recipients_to_check.extend(
+                (channel, guest.phone)
+                for channel in data.channels
+                if channel in ("sms", "whatsapp", "mms")
+            )
+    for recipient in data.extra_recipients:
+        if want_email and recipient.email:
+            recipients_to_check.append(("email", str(recipient.email)))
+        if recipient.phone:
+            recipients_to_check.extend(
+                (channel, recipient.phone)
+                for channel in data.channels
+                if channel in ("sms", "whatsapp", "mms")
+            )
+    if any(not recipient_allowed(channel, value) for channel, value in recipients_to_check):
+        raise HTTPException(403, "One or more recipients are blocked by the environment outbound-safety policy")
 
     # Customizable-template overrides for the broadcast message (if any). When a
     # channel has no override we fall through to the default send_broadcast_* path.
     overrides = await load_overrides(event_id, db)
 
+    # Plain text as typed — safe for SMS/WhatsApp/MMS, which render literal
+    # newlines fine. Email needs its own context below: HTML collapses bare
+    # newlines/whitespace, so paragraph breaks are lost unless converted first.
     def _ctx(guest):
         return build_template_context(event, guest, extras={"message": data.message})
 
+    email_message = _broadcast_message_html(data.message)
+
+    def _email_ctx(guest):
+        return build_template_context(event, guest, extras={"message": email_message})
+
     queued = skipped_no_contact = skipped_no_consent = skipped_no_credits = 0
+    # Per-channel breakdown for BroadcastLog/usage reporting — the aggregate
+    # counters above stay exactly as before (same semantics, same values).
+    channel_counts = {ch: {"queued": 0, "skipped_no_contact": 0, "skipped_no_consent": 0, "skipped_no_credits": 0}
+                       for ch in ("email", "sms", "whatsapp", "mms")}
 
     email_blocked = "email" in (event.blocked_messaging_channels or [])
     for guest in guests:
         sent_any = False
         credit_blocked = False
 
-        if want_email and guest.email and not email_blocked:
-            subj, body = email_override(overrides, "broadcast", _ctx(guest))
-            if body is not None:
-                background_tasks.add_task(
-                    send_simple_email, guest.email,
-                    subj or f"Update — {event.name}", body, event.id, None, guest.id, "broadcast",
-                )
-            else:
-                background_tasks.add_task(
-                    send_broadcast_email,
-                    email=guest.email,
-                    guest_id=guest.id,
-                    first_name=guest.first_name,
-                    message=data.message,
-                    event_name=event.name,
-                    event_id=event.id,
-                )
-            sent_any = True
-
-        if guest.phone:
-            if "sms" in data.channels and guest.sms_consent:
-                if take_message_credit(event, "sms", reason="broadcast", guest_id=guest.id):
-                    sms_text = channel_text(overrides, "broadcast", "sms", _ctx(guest))
-                    if sms_text is not None:
-                        background_tasks.add_task(send_with_credit_ledger, last_credit_ledger_id(event), messaging.send_custom_sms, phone=guest.phone, body=sms_text)
-                    else:
-                        background_tasks.add_task(
-                            send_with_credit_ledger,
-                            last_credit_ledger_id(event),
-                            messaging.send_broadcast_sms,
-                            phone=guest.phone,
-                            first_name=guest.first_name,
-                            message=data.message,
-                        )
-                    sent_any = True
+        if want_email:
+            if guest.email and not email_blocked:
+                subj, body = email_override(overrides, "broadcast", _email_ctx(guest))
+                if body is not None:
+                    background_tasks.add_task(
+                        send_simple_email, guest.email,
+                        subj or f"Update — {event.name}", body, event.id, None, guest.id, "broadcast",
+                    )
                 else:
-                    credit_blocked = True
-            if "whatsapp" in data.channels and guest.whatsapp_consent:
-                if take_message_credit(event, "whatsapp", reason="broadcast", guest_id=guest.id):
-                    wa_text = channel_text(overrides, "broadcast", "whatsapp", _ctx(guest))
-                    # Freeform content can only initiate WhatsApp via an approved
-                    # generic announcement template; falls back to free text
-                    # (session-only) when that template isn't configured.
+                    background_tasks.add_task(
+                        send_broadcast_email,
+                        email=guest.email,
+                        guest_id=guest.id,
+                        first_name=guest.first_name,
+                        message=data.message,
+                        event_name=event.name,
+                        event_id=event.id,
+                    )
+                # Broadcast email isn't credit-metered — log it at zero cost so
+                # it still shows up in usage reports.
+                record_free_send(event, "email", reason="broadcast", guest_id=guest.id)
+                channel_counts["email"]["queued"] += 1
+                sent_any = True
+            else:
+                channel_counts["email"]["skipped_no_contact"] += 1
+
+        if "sms" in data.channels:
+            if not guest.phone:
+                channel_counts["sms"]["skipped_no_contact"] += 1
+            elif not guest.sms_consent:
+                channel_counts["sms"]["skipped_no_consent"] += 1
+            elif take_message_credit(event, "sms", reason="broadcast", guest_id=guest.id):
+                sms_text = channel_text(overrides, "broadcast", "sms", _ctx(guest))
+                if sms_text is not None:
+                    background_tasks.add_task(send_with_credit_ledger, last_credit_ledger_id(event), messaging.send_custom_sms, phone=guest.phone, body=sms_text)
+                else:
                     background_tasks.add_task(
                         send_with_credit_ledger,
                         last_credit_ledger_id(event),
-                        messaging.send_announcement_whatsapp,
+                        messaging.send_broadcast_sms,
                         phone=guest.phone,
                         first_name=guest.first_name,
-                        event_name=event.name,
-                        message=wa_text if wa_text is not None else data.message,
-                        ticket_url=f"{event.checkin_base_url.rstrip('/')}/scan/{guest.qr_token}",
+                        message=data.message,
                     )
-                    sent_any = True
-                else:
-                    credit_blocked = True
+                channel_counts["sms"]["queued"] += 1
+                sent_any = True
+            else:
+                channel_counts["sms"]["skipped_no_credits"] += 1
+                credit_blocked = True
+
+        if "whatsapp" in data.channels:
+            if not guest.phone:
+                channel_counts["whatsapp"]["skipped_no_contact"] += 1
+            elif not guest.whatsapp_consent:
+                channel_counts["whatsapp"]["skipped_no_consent"] += 1
+            elif take_message_credit(event, "whatsapp", reason="broadcast", guest_id=guest.id):
+                wa_text = channel_text(overrides, "broadcast", "whatsapp", _ctx(guest))
+                # Freeform content can only initiate WhatsApp via an approved
+                # generic announcement template; falls back to free text
+                # (session-only) when that template isn't configured.
+                background_tasks.add_task(
+                    send_with_credit_ledger,
+                    last_credit_ledger_id(event),
+                    messaging.send_announcement_whatsapp,
+                    phone=guest.phone,
+                    first_name=guest.first_name,
+                    event_name=event.name,
+                    message=wa_text if wa_text is not None else data.message,
+                    ticket_url=f"{event.checkin_base_url.rstrip('/')}/scan/{guest.qr_token}",
+                )
+                channel_counts["whatsapp"]["queued"] += 1
+                sent_any = True
+            else:
+                channel_counts["whatsapp"]["skipped_no_credits"] += 1
+                credit_blocked = True
+
+        if "mms" in data.channels:
+            if not guest.phone:
+                channel_counts["mms"]["skipped_no_contact"] += 1
+            elif not guest.sms_consent:
+                channel_counts["mms"]["skipped_no_consent"] += 1
+            elif take_message_credit(event, "mms", reason="broadcast", guest_id=guest.id):
+                mms_text = channel_text_or_default(overrides, "broadcast", "mms", _ctx(guest))
+                background_tasks.add_task(
+                    send_with_credit_ledger, last_credit_ledger_id(event), messaging.send_mms,
+                    phone=guest.phone, body=mms_text or data.message, media_url=data.mms_media_url,
+                )
+                channel_counts["mms"]["queued"] += 1
+                sent_any = True
+            else:
+                channel_counts["mms"]["skipped_no_credits"] += 1
+                credit_blocked = True
 
         if sent_any:
             queued += 1
@@ -1103,12 +1279,116 @@ async def broadcast_message(
             # No email and/or no phone for the channels selected.
             skipped_no_contact += 1
 
-    await db.commit()  # persist message-credit decrements
+    # Typed-in recipients who aren't on the guest list — same template/overrides,
+    # no consent flags to check since the organizer entered them directly here.
+    for r in data.extra_recipients:
+        name = r.name.strip()
+        ctx = build_template_context(event, None, extras={"message": data.message, "guest_first_name": name})
+        email_ctx = build_template_context(event, None, extras={"message": email_message, "guest_first_name": name})
+        sent_any = False
+        credit_blocked = False
+        phone = _normalize_phone(r.phone.strip()) if r.phone else None
+
+        if want_email:
+            if r.email and not email_blocked:
+                subj, body = email_override(overrides, "broadcast", email_ctx)
+                if body is not None:
+                    background_tasks.add_task(
+                        send_simple_email, str(r.email),
+                        subj or f"Update — {event.name}", body, event.id, None, None, "broadcast",
+                    )
+                else:
+                    background_tasks.add_task(
+                        send_broadcast_email,
+                        email=str(r.email), guest_id=None,
+                        first_name=name, message=data.message, event_name=event.name, event_id=event.id,
+                    )
+                record_free_send(event, "email", reason="broadcast")
+                channel_counts["email"]["queued"] += 1
+                sent_any = True
+            else:
+                channel_counts["email"]["skipped_no_contact"] += 1
+
+        if "sms" in data.channels:
+            if not phone:
+                channel_counts["sms"]["skipped_no_contact"] += 1
+            elif take_message_credit(event, "sms", reason="broadcast"):
+                sms_text = channel_text(overrides, "broadcast", "sms", ctx)
+                if sms_text is not None:
+                    background_tasks.add_task(send_with_credit_ledger, last_credit_ledger_id(event), messaging.send_custom_sms, phone=phone, body=sms_text)
+                else:
+                    background_tasks.add_task(
+                        send_with_credit_ledger, last_credit_ledger_id(event), messaging.send_broadcast_sms,
+                        phone=phone, first_name=name, message=data.message,
+                    )
+                channel_counts["sms"]["queued"] += 1
+                sent_any = True
+            else:
+                channel_counts["sms"]["skipped_no_credits"] += 1
+                credit_blocked = True
+
+        if "whatsapp" in data.channels:
+            if not phone:
+                channel_counts["whatsapp"]["skipped_no_contact"] += 1
+            elif take_message_credit(event, "whatsapp", reason="broadcast"):
+                wa_text = channel_text(overrides, "broadcast", "whatsapp", ctx)
+                background_tasks.add_task(
+                    send_with_credit_ledger, last_credit_ledger_id(event), messaging.send_announcement_whatsapp,
+                    phone=phone, first_name=name, event_name=event.name,
+                    message=wa_text if wa_text is not None else data.message,
+                    ticket_url="",
+                )
+                channel_counts["whatsapp"]["queued"] += 1
+                sent_any = True
+            else:
+                channel_counts["whatsapp"]["skipped_no_credits"] += 1
+                credit_blocked = True
+
+        if "mms" in data.channels:
+            if not phone:
+                channel_counts["mms"]["skipped_no_contact"] += 1
+            elif take_message_credit(event, "mms", reason="broadcast"):
+                mms_text = channel_text_or_default(overrides, "broadcast", "mms", ctx)
+                background_tasks.add_task(
+                    send_with_credit_ledger, last_credit_ledger_id(event), messaging.send_mms,
+                    phone=phone, body=mms_text or data.message, media_url=data.mms_media_url,
+                )
+                channel_counts["mms"]["queued"] += 1
+                sent_any = True
+            else:
+                channel_counts["mms"]["skipped_no_credits"] += 1
+                credit_blocked = True
+
+        if sent_any:
+            queued += 1
+        elif credit_blocked:
+            skipped_no_credits += 1
+        else:
+            skipped_no_contact += 1
+
+    log = BroadcastLog(
+        id=str(_uuid.uuid4()),
+        org_id=event.org_id,
+        event_id=event.id,
+        sent_by_user_id=admin_user.id,
+        message=data.message,
+        target=data.target,
+        channels=data.channels,
+        channel_counts=channel_counts,
+        queued=queued,
+        skipped_no_contact=skipped_no_contact,
+        skipped_no_consent=skipped_no_consent,
+        skipped_no_credits=skipped_no_credits,
+        mms_media_url=data.mms_media_url,
+    )
+    db.add(log)
+    await db.commit()  # persist message-credit decrements + broadcast log
     return BroadcastResult(
         queued=queued,
         skipped_no_contact=skipped_no_contact,
         skipped_no_consent=skipped_no_consent,
         skipped_no_credits=skipped_no_credits,
+        broadcast_log_id=log.id,
     )
 
 

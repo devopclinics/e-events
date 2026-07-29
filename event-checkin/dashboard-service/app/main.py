@@ -18,7 +18,7 @@ from .auth import current_user, require_dashboard_access
 from .config import settings
 from .database import get_db
 from .models import (
-    EmailDeliveryEvent, Event, ExperienceStep, ExperienceWorkflow, Guest,
+    BroadcastLog, EmailDeliveryEvent, Event, ExperienceStep, ExperienceWorkflow, Guest,
     GuestExperienceProgress, GuestMealService, GuestMenuChoice, MealService, MenuCategory,
     MessageCreditLedger, ScanEvent, SeatingTable, User, Zone,
 )
@@ -881,6 +881,29 @@ async def get_invitations(event: Event = Depends(admin_event), db: AsyncSession 
         "delivery": await invite_delivery_status(db, event),
         "communication": await communication_health(db, event),
     }
+
+
+@app.get("/api/results/events/{event_id}/analytics/broadcasts")
+async def get_broadcasts(event: Event = Depends(admin_event), db: AsyncSession = Depends(get_db)):
+    rows = (await db.execute(
+        select(BroadcastLog).where(BroadcastLog.event_id == event.id)
+        .order_by(BroadcastLog.created_at.desc()).limit(100)
+    )).scalars().all()
+    return [
+        {
+            "id": r.id,
+            "message": r.message,
+            "target": r.target,
+            "channels": r.channels,
+            "channel_counts": r.channel_counts,
+            "queued": r.queued,
+            "skipped_no_contact": r.skipped_no_contact,
+            "skipped_no_consent": r.skipped_no_consent,
+            "skipped_no_credits": r.skipped_no_credits,
+            "created_at": r.created_at.isoformat(),
+        }
+        for r in rows
+    ]
 
 
 # ── operations (denied scans, consent completion — the Operations tab) ───────

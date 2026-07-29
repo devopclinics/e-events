@@ -10,6 +10,8 @@ frontend/.env
 **/.env
 **/*.env.local
 proxy-htpasswd-team-docs
+frontend/playwright-report/
+frontend/test-results/
 
 # Python cache
 **/__pycache__/

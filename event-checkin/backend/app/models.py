@@ -1,6 +1,6 @@
 import uuid
 from datetime import datetime
-from sqlalchemy import String, Boolean, DateTime, ForeignKey, Integer, Text, UniqueConstraint, Index, text, JSON
+from sqlalchemy import String, Boolean, DateTime, ForeignKey, Integer, Float, Text, UniqueConstraint, Index, text, JSON
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from .database import Base
 
@@ -20,6 +20,23 @@ class Organization(Base):
     # Operator can suspend a tenant: members lose access to its events (login
     # still works for other orgs they belong to). Superadmins bypass.
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
+    # UI-redesign rollout cohort for this org (per-ORGANIZATION, not per-user, so
+    # every operator in the org sees consistent UI). Independent of is_active.
+    # One of: legacy_only | redesign_opt_in | redesign_internal | redesign_cohort
+    # | redesign_default | legacy_retired. Platform superadmins can always reach
+    # the redesign regardless of this value (see User.is_platform_superadmin).
+    redesign_cohort: Mapped[str] = mapped_column(String(20), default="legacy_only")
+    # Org-level recurring subscription (separate axis from the per-event one-time
+    # Event.is_paid/plan_tier purchases) — gates org-wide paid features like
+    # read-write API access. `plan` above doubles as the current subscription's
+    # OrgPlan.key once one is active; "free" means no active subscription.
+    subscription_status: Mapped[str | None] = mapped_column(String(20), nullable=True)  # active | past_due | canceled | None
+    subscription_provider: Mapped[str | None] = mapped_column(String(20), nullable=True)  # stripe | paystack
+    stripe_customer_id: Mapped[str | None] = mapped_column(String(120), nullable=True)
+    stripe_subscription_id: Mapped[str | None] = mapped_column(String(120), nullable=True)
+    paystack_subscription_code: Mapped[str | None] = mapped_column(String(120), nullable=True)
+    paystack_email_token: Mapped[str | None] = mapped_column(String(120), nullable=True)
+    current_period_end: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     # Pending trial grant from an approved TrialRequest when the org had no event
     # yet. Consumed (applied + cleared) by the next event the org creates.
     trial_tier: Mapped[str | None] = mapped_column(String(50), nullable=True)
@@ -42,6 +59,79 @@ class Membership(Base):
     user_id: Mapped[str] = mapped_column(String(36), ForeignKey("users.id"), index=True)
     role: Mapped[str] = mapped_column(String(20), default="staff")  # "owner" | "admin" | "staff"
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+
+
+class ApiKey(Base):
+    """A programmatic-access credential for an org's public API integrations.
+    Only the SHA-256 hash is stored; the full key is shown to the org once,
+    at creation, and never again — mirrors how most API-key systems work
+    (Stripe, GitHub, etc.), so a leaked database dump can't be used to
+    impersonate a customer's integrations."""
+    __tablename__ = "api_keys"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+    org_id: Mapped[str] = mapped_column(String(36), ForeignKey("organizations.id"), index=True)
+    name: Mapped[str] = mapped_column(String(120))
+    # First few characters of the real key (e.g. "fk_live_a1b2"), shown in the
+    # UI so an org can tell keys apart without ever re-displaying the full value.
+    key_prefix: Mapped[str] = mapped_column(String(20))
+    key_hash: Mapped[str] = mapped_column(String(64), unique=True, index=True)
+    created_by_user_id: Mapped[str | None] = mapped_column(String(36), ForeignKey("users.id"), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    last_used_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    revoked_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    # "read_only" | "read_write" — write access requires the org to have an
+    # active OrgPlan subscription with the "api_write" feature at creation time.
+    scope: Mapped[str] = mapped_column(String(20), default="read_only")
+
+
+class ApiKeyRequestLog(Base):
+    """Audit trail for public-API calls — one row per request, so an org can
+    see exactly what their integration did and operators can investigate abuse."""
+    __tablename__ = "api_key_request_logs"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+    api_key_id: Mapped[str] = mapped_column(String(36), ForeignKey("api_keys.id"), index=True)
+    method: Mapped[str] = mapped_column(String(10))
+    path: Mapped[str] = mapped_column(String(255))
+    status_code: Mapped[int] = mapped_column(Integer)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, index=True)
+
+
+class WebhookEndpoint(Base):
+    """An org-configured outbound webhook subscription. `secret` signs every
+    delivery (HMAC-SHA256 over the raw JSON body) so the receiver can verify
+    a payload actually came from Festio."""
+    __tablename__ = "webhook_endpoints"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+    org_id: Mapped[str] = mapped_column(String(36), ForeignKey("organizations.id"), index=True)
+    url: Mapped[str] = mapped_column(String(500))
+    secret: Mapped[str] = mapped_column(String(64))
+    event_types: Mapped[list] = mapped_column(JSON, default=list)  # e.g. ["guest.checked_in", "rsvp.confirmed"]
+    is_active: Mapped[bool] = mapped_column(Boolean, default=True)
+    created_by_user_id: Mapped[str | None] = mapped_column(String(36), ForeignKey("users.id"), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+
+
+class WebhookDelivery(Base):
+    """One outbox row per (endpoint, event) pair — mirrors FestioMeOutbox's
+    shape (services/festiome_outbox.py): claimed with SKIP LOCKED, retried
+    with exponential backoff, capped at MAX_ATTEMPTS. A separate table rather
+    than generalizing the FestioMe outbox, since that one's dispatch is
+    hardcoded to FestioMe-specific commands."""
+    __tablename__ = "webhook_deliveries"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+    endpoint_id: Mapped[str] = mapped_column(String(36), ForeignKey("webhook_endpoints.id"), index=True)
+    event_type: Mapped[str] = mapped_column(String(60))
+    payload: Mapped[str] = mapped_column(Text)  # JSON-encoded string
+    status: Mapped[str] = mapped_column(String(20), default="pending")  # pending | delivered | failed
+    attempt_count: Mapped[int] = mapped_column(Integer, default=0)
+    next_attempt_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, index=True)
+    last_error: Mapped[str | None] = mapped_column(Text, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    delivered_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
 
 
 class User(Base):
@@ -86,6 +176,10 @@ class EventUser(Base):
     # For event_role=manager: "edit" can change event setup; "view" can only
     # open setup/results/check-in/orders without mutating event configuration.
     access_level: Mapped[str] = mapped_column(String(20), default="edit")
+    # Backing field for optimistic-concurrency checks on permission edits (see
+    # update_member_permissions / if_unmodified_since) — two admins editing the
+    # same member's access at once shouldn't silently clobber each other.
+    updated_at: Mapped[datetime | None] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=True)
 
     event: Mapped["Event"] = relationship("Event", back_populates="members")
     user: Mapped["User"] = relationship("User")
@@ -244,6 +338,12 @@ class Event(Base):
     # nullable so existing events backfill lazily when self check-in is enabled.
     event_code: Mapped[str | None] = mapped_column(String(16), unique=True, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    # Backing field for optimistic-concurrency checks (see change_status /
+    # if_unmodified_since) so two operators editing lifecycle-critical fields
+    # can't silently clobber each other. Nullable so existing rows don't need
+    # a backfill; a row with NULL here just can't be conflict-checked yet
+    # (treated as "no known prior state" by callers, same as omitting the guard).
+    updated_at: Mapped[datetime | None] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=True)
 
     # Live guest-list sync from a Google Sheets / OneDrive / Excel Online URL.
     # Polled every source_sync_interval_seconds while the event is "active".
@@ -321,12 +421,24 @@ class Event(Base):
     paid_channels: Mapped[bool] = mapped_column(Boolean, default=False)
     # Prepaid SMS/WhatsApp credits remaining (metering wired in Phase 3 billing).
     message_credits: Mapped[int] = mapped_column(Integer, default=0)
-    # Email metering: emails count too. The first EMAIL_FREE_QUOTA (25) guest
-    # emails per event are free; after that each email costs 0.5 credit. Credits
-    # are integers, so a "half" is accumulated in email_half_pending and 1 full
-    # credit is deducted on every second chargeable email.
+    # Email metering: the first EMAIL_FREE_QUOTA (25) guest emails per event
+    # are free; beyond that, email draws from the same fractional credit-bank
+    # mechanism as every other channel (see credit_bank below).
     emails_sent: Mapped[int] = mapped_column(Integer, default=0)
+    # Deprecated: superseded by credit_bank["email"] (see entitlements.py's
+    # _spend_channel_credit). Kept only so old rows don't break; no longer
+    # read or written.
     email_half_pending: Mapped[int] = mapped_column(Integer, default=0)
+    # Per-channel fractional credit ledger, e.g. {"sms": 0.5, "email": 0.3}.
+    # A channel's credits_per_unit rate (MessagingCreditRate, admin-editable)
+    # can be any positive float — below 1 (many sends per credit, like email)
+    # or above 1 (multiple credits per send, like MMS). Since message_credits
+    # itself stays a whole-number balance, _spend_channel_credit banks
+    # whatever a whole-credit charge overpays (or, for sub-1 rates, whatever
+    # a single unit still owes) here, so the average cost per send converges
+    # exactly on the configured rate without ever needing fractional credits
+    # in the balance itself.
+    credit_bank: Mapped[dict | None] = mapped_column(JSON, nullable=True, default=dict)
 
     credit_ledger: Mapped[list["MessageCreditLedger"]] = relationship("MessageCreditLedger", back_populates="event", cascade="all, delete-orphan")
     members: Mapped[list["EventUser"]] = relationship("EventUser", back_populates="event", cascade="all, delete-orphan")
@@ -500,6 +612,25 @@ class PricingPlan(Base):
     sort_order: Mapped[int] = mapped_column(Integer, default=0)
 
 
+class OrgPlan(Base):
+    """Editable catalogue of org-level recurring subscription plans (superadmin-
+    managed) — a separate axis from PricingPlan above, which prices one-time
+    per-event purchases. These are monthly recurring plans that unlock org-wide
+    paid features (e.g. read-write Public API access) via `features`."""
+    __tablename__ = "org_plans"
+
+    key: Mapped[str] = mapped_column(String(40), primary_key=True)  # e.g. "api_access"
+    label: Mapped[str] = mapped_column(String(120))
+    usd_monthly: Mapped[int] = mapped_column(Integer, default=0)  # cents
+    ngn_monthly: Mapped[int] = mapped_column(Integer, default=0)  # kobo
+    features: Mapped[list] = mapped_column(JSON, default=list)    # e.g. ["api_write"]
+    active: Mapped[bool] = mapped_column(Boolean, default=True)
+    sort_order: Mapped[int] = mapped_column(Integer, default=0)
+    # Cached Paystack Plan code (Paystack plans are created once, lazily, on
+    # first checkout for a given OrgPlan — see org_billing.py).
+    paystack_plan_code: Mapped[str | None] = mapped_column(String(120), nullable=True)
+
+
 class Payment(Base):
     """One Event Pass purchase. `reference` is the provider's id (Stripe session
     or Paystack reference) and is unique → webhook retries are idempotent."""
@@ -666,6 +797,92 @@ class TableGroupTable(Base):
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
     table_group_id: Mapped[str] = mapped_column(String(36), ForeignKey("table_groups.id"), index=True)
     table_id: Mapped[str] = mapped_column(String(36), ForeignKey("seating_tables.id"), index=True)
+
+
+class Household(Base):
+    """A named group of guests belonging to the same family/household — distinct
+    from TableGroup (seating). Lets invites/RSVPs/messaging be reasoned about at
+    the household level (e.g. 'the Smith family') regardless of how each guest
+    was added (manual, CSV import, or self-service RSVP)."""
+    __tablename__ = "households"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+    event_id: Mapped[str] = mapped_column(String(36), ForeignKey("events.id"), index=True)
+    name: Mapped[str] = mapped_column(String(120))
+    description: Mapped[str | None] = mapped_column(Text, nullable=True)
+    sort_order: Mapped[int] = mapped_column(Integer, default=0)
+    # Optional seating default: assigning a guest to this household auto-applies
+    # these onto the guest (still editable per guest afterward — a one-time
+    # default, not a live link).
+    default_table_group_id: Mapped[str | None] = mapped_column(String(36), ForeignKey("table_groups.id"), nullable=True)
+    default_table_id: Mapped[str | None] = mapped_column(String(36), ForeignKey("seating_tables.id"), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+
+class Task(Base):
+    """A per-event to-do item (e.g. 'confirm florist', 'print name badges').
+    Visible/editable by any staff member on the event, not just guest managers —
+    this is team coordination, not guest data."""
+    __tablename__ = "tasks"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+    event_id: Mapped[str] = mapped_column(String(36), ForeignKey("events.id"), index=True)
+    title: Mapped[str] = mapped_column(String(255))
+    notes: Mapped[str | None] = mapped_column(Text, nullable=True)
+    assignee_user_id: Mapped[str | None] = mapped_column(String(36), ForeignKey("users.id"), nullable=True)
+    due_date: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    status: Mapped[str] = mapped_column(String(20), default="open")  # open | in_progress | done
+    sort_order: Mapped[int] = mapped_column(Integer, default=0)
+    completed_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+
+class TaskActivity(Base):
+    """One entry in a task's activity feed — either a staff-written comment
+    (kind='comment') or an automatic system entry (kind='system', e.g. status
+    changes, reassignment, creation). Single table so the UI renders one
+    unified, chronological thread instead of stitching two sources together."""
+    __tablename__ = "task_activities"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+    task_id: Mapped[str] = mapped_column(String(36), ForeignKey("tasks.id"), index=True)
+    user_id: Mapped[str | None] = mapped_column(String(36), ForeignKey("users.id"), nullable=True)
+    kind: Mapped[str] = mapped_column(String(20), default="comment")  # comment | system
+    body: Mapped[str] = mapped_column(Text)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+
+
+class Subtask(Base):
+    """A lightweight checklist item under a Task — title + status, nothing
+    else (no assignee/due date): this is a checklist, not a nested set of
+    full tasks, but shares the same open/in_progress/done vocabulary as Task
+    so the two feel consistent."""
+    __tablename__ = "subtasks"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+    task_id: Mapped[str] = mapped_column(String(36), ForeignKey("tasks.id"), index=True)
+    title: Mapped[str] = mapped_column(String(255))
+    status: Mapped[str] = mapped_column(String(20), default="open")  # open | in_progress | done
+    sort_order: Mapped[int] = mapped_column(Integer, default=0)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+
+
+class TaskAttachment(Base):
+    """A file/image attached to a Task — a contract, a reference photo, a
+    spreadsheet. Uploadable by any staff member on the event (same bar as
+    comments/subtasks; Task has no created_by_user_id to gate more narrowly)."""
+    __tablename__ = "task_attachments"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+    task_id: Mapped[str] = mapped_column(String(36), ForeignKey("tasks.id"), index=True)
+    filename: Mapped[str] = mapped_column(String(255))
+    url: Mapped[str] = mapped_column(String(500))
+    content_type: Mapped[str] = mapped_column(String(100))
+    size_bytes: Mapped[int] = mapped_column(Integer)
+    uploaded_by_user_id: Mapped[str | None] = mapped_column(String(36), ForeignKey("users.id"), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
 
 
 class MenuCategory(Base):
@@ -861,9 +1078,14 @@ class Guest(Base):
     # Per-guest RSVP invite-link token (closed mode). Generated when the invite
     # is sent; distinct from qr_token (the post-confirmation ticket credential).
     invite_token: Mapped[str | None] = mapped_column(String(36), nullable=True)
-    # RSVP response state: "invited" (no response yet) | "confirmed" | "declined".
+    # RSVP response state: "invited" (no response yet) | "confirmed" | "declined" |
+    # "pending" (awaiting host approval) | "waitlisted" (capacity full at RSVP time).
     rsvp_status: Mapped[str] = mapped_column(String(20), default="invited")
     rsvp_responded_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    # Set only while rsvp_status == "waitlisted"; the timestamp doubles as the
+    # queue order (earliest first) so no separate position column needs
+    # renumbering as guests are promoted or leave the queue.
+    waitlisted_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     admitted: Mapped[bool] = mapped_column(Boolean, default=False)
     admitted_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     admit_notified: Mapped[bool] = mapped_column(Boolean, default=False)
@@ -877,6 +1099,9 @@ class Guest(Base):
     # Table Groups: optional restriction to a group of tables. Nullable — guests
     # without a group follow the default seating behavior.
     assigned_table_group_id: Mapped[str | None] = mapped_column(String(36), ForeignKey("table_groups.id"), nullable=True)
+    # Family/household grouping — independent of seating (assigned_table_group_id).
+    # One household per guest, nullable for guests not grouped.
+    household_id: Mapped[str | None] = mapped_column(String(36), ForeignKey("households.id"), nullable=True)
     # Couple/party — mutual link to another guest in the same event.
     # When the first partner is seated and the second hasn't arrived, the
     # adjacent seat is reserved via `held_seat` so other FCFS arrivals skip it.
@@ -912,6 +1137,12 @@ class Guest(Base):
     # Venue-access add-on: optional ticket type (GA/VIP/…). Nullable; ignored by
     # the legacy check-in flow.
     ticket_type_id: Mapped[str | None] = mapped_column(String(36), ForeignKey("ticket_types.id"), nullable=True)
+    # Backing field for optimistic-concurrency checks on guest edits (see
+    # update_guest / if_unmodified_since) — this is the highest-traffic,
+    # most-shared table in the app (edits, RSVP approve/reject, seat
+    # assignment, check-in all touch it), so silent-overwrite risk here is
+    # the most likely to actually bite two operators working the same event.
+    updated_at: Mapped[datetime | None] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=True)
 
     event: Mapped["Event"] = relationship("Event", back_populates="guests")
     table: Mapped["SeatingTable | None"] = relationship("SeatingTable", back_populates="guests")
@@ -1067,6 +1298,29 @@ class EventMessageDeliveryLog(Base):
     error_message: Mapped[str | None] = mapped_column(Text, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+
+class BroadcastLog(Base):
+    """One row per broadcast send (Messages tab) — the free-text message,
+    audience, channels, and per-channel outcome counts. Broadcasts were
+    previously ephemeral: the message text and "this went to N people"
+    grouping vanished the moment the send finished."""
+    __tablename__ = "broadcast_logs"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+    org_id: Mapped[str] = mapped_column(String(36), ForeignKey("organizations.id"), index=True)
+    event_id: Mapped[str] = mapped_column(String(36), ForeignKey("events.id"), index=True)
+    sent_by_user_id: Mapped[str | None] = mapped_column(String(36), ForeignKey("users.id"), nullable=True, index=True)
+    message: Mapped[str] = mapped_column(Text)
+    target: Mapped[str] = mapped_column(String(30))
+    channels: Mapped[list] = mapped_column(JSON)
+    channel_counts: Mapped[dict] = mapped_column(JSON)
+    queued: Mapped[int] = mapped_column(Integer, default=0)
+    skipped_no_contact: Mapped[int] = mapped_column(Integer, default=0)
+    skipped_no_consent: Mapped[int] = mapped_column(Integer, default=0)
+    skipped_no_credits: Mapped[int] = mapped_column(Integer, default=0)
+    mms_media_url: Mapped[str | None] = mapped_column(String(2048), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, index=True)
 
 
 class GuestPushSubscription(Base):
@@ -1503,3 +1757,156 @@ class PlatformSettings(Base):
     id: Mapped[str] = mapped_column(String(20), primary_key=True, default=lambda: "singleton")
     support_chat_enabled: Mapped[bool] = mapped_column(Boolean, default=False)
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+
+# ── Event Calendars: curated cross-event public/private listing pages ───────
+# (Gatsby-parity feature.) Contact/ContactList are a new, standalone org-level
+# audience concept — Guest (above) is hard-scoped to one event and has no
+# cross-event equivalent, so private calendars need their own recipient model.
+
+class ContactList(Base):
+    """A named, reusable group of Contacts an organizer manages directly —
+    the audience source for private calendars (and any future feature that
+    needs a persistent cross-event mailing list)."""
+    __tablename__ = "contact_lists"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+    org_id: Mapped[str] = mapped_column(String(36), ForeignKey("organizations.id"), index=True)
+    name: Mapped[str] = mapped_column(String(120))
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+
+
+class Contact(Base):
+    """One person an org can reach outside of any specific event — unlike
+    Guest, which only exists inside the event it RSVP'd to. A Contact can
+    belong to multiple ContactLists and be the audience for multiple
+    calendars."""
+    __tablename__ = "contacts"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+    org_id: Mapped[str] = mapped_column(String(36), ForeignKey("organizations.id"), index=True)
+    first_name: Mapped[str] = mapped_column(String(120))
+    last_name: Mapped[str | None] = mapped_column(String(120), nullable=True)
+    email: Mapped[str] = mapped_column(String(255))
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+
+    __table_args__ = (UniqueConstraint("org_id", "email", name="uq_contact_org_email"),)
+
+
+class ContactListMember(Base):
+    __tablename__ = "contact_list_members"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+    contact_list_id: Mapped[str] = mapped_column(String(36), ForeignKey("contact_lists.id"), index=True)
+    contact_id: Mapped[str] = mapped_column(String(36), ForeignKey("contacts.id"), index=True)
+
+    __table_args__ = (UniqueConstraint("contact_list_id", "contact_id", name="uq_list_member"),)
+
+
+class Calendar(Base):
+    """A curated, cross-event listing page. Public calendars share one
+    `share_token`-based URL with anyone; private calendars have no shared URL
+    at all — only per-contact CalendarAccess links exist (see below)."""
+    __tablename__ = "calendars"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+    org_id: Mapped[str] = mapped_column(String(36), ForeignKey("organizations.id"), index=True)
+    title: Mapped[str] = mapped_column(String(255))
+    description: Mapped[str | None] = mapped_column(Text, nullable=True)
+    logo_url: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    logo_width: Mapped[int | None] = mapped_column(Integer, nullable=True)  # px
+    visibility: Mapped[str] = mapped_column(String(10), default="public")   # public | private
+    hide_past_events: Mapped[bool] = mapped_column(Boolean, default=True)
+    # No column-level default — application code (calendars.py) always sets
+    # this explicitly (a fresh UUID for public, None for private) since
+    # SQLAlchemy's Python-side `default` can fire even when the caller passes
+    # an explicit None, which broke "private calendars have no share_token."
+    share_token: Mapped[str | None] = mapped_column(String(36), unique=True, nullable=True)
+    # Incremented on every successful resolve (public or private) — no dedup
+    # by visitor/session, matching Gatsby's own stated simplicity ("no
+    # filtering, searching" — this is a simple summary counter, not
+    # per-session analytics).
+    view_count: Mapped[int] = mapped_column(Integer, default=0)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+
+class CalendarEvent(Base):
+    """Curation is manual — creating an event never auto-adds it here.
+    click_count is incremented by the /go/ tracking redirect (calendars.py) —
+    "how many times each event was viewed" per Gatsby's analytics summary."""
+    __tablename__ = "calendar_events"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+    calendar_id: Mapped[str] = mapped_column(String(36), ForeignKey("calendars.id"), index=True)
+    event_id: Mapped[str] = mapped_column(String(36), ForeignKey("events.id"), index=True)
+    sort_order: Mapped[int] = mapped_column(Integer, default=0)
+    click_count: Mapped[int] = mapped_column(Integer, default=0)
+
+    __table_args__ = (UniqueConstraint("calendar_id", "event_id", name="uq_calendar_event"),)
+
+
+class CalendarContactList(Base):
+    """Which ContactLists feed a private calendar's audience. A calendar can
+    be tied to more than one list."""
+    __tablename__ = "calendar_contact_lists"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+    calendar_id: Mapped[str] = mapped_column(String(36), ForeignKey("calendars.id"), index=True)
+    contact_list_id: Mapped[str] = mapped_column(String(36), ForeignKey("contact_lists.id"), index=True)
+
+    __table_args__ = (UniqueConstraint("calendar_id", "contact_list_id", name="uq_calendar_list"),)
+
+
+class CalendarAccess(Base):
+    """One personalized link per (calendar, contact) — private calendars
+    only. The token alone identifies both the calendar and the contact,
+    mirroring Guest.invite_token's mint-once/lookup-by-token convention.
+    No RSVP-status column here on purpose: a contact's status per event is
+    resolved live from the existing Guest table (event_id + email match)
+    rather than duplicating state that's already tracked there."""
+    __tablename__ = "calendar_access"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+    calendar_id: Mapped[str] = mapped_column(String(36), ForeignKey("calendars.id"), index=True)
+    contact_id: Mapped[str] = mapped_column(String(36), ForeignKey("contacts.id"), index=True)
+    token: Mapped[str] = mapped_column(String(36), unique=True, index=True, default=lambda: str(uuid.uuid4()))
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+
+    __table_args__ = (UniqueConstraint("calendar_id", "contact_id", name="uq_calendar_contact_access"),)
+
+
+class MessagingCreditRate(Base):
+    """Superadmin-editable credit weight per messaging channel — replaces the
+    old env-var-only MESSAGE_CREDIT_WEIGHTS (required a redeploy to change)
+    with a live, Console-editable setting (see entitlements.py's
+    channel_weight()). org_id NULL is the global default; a row with org_id
+    set overrides the global default for that one organisation only
+    (negotiated per-org pricing). credits_per_unit may be any positive float:
+    below 1 for a channel that should cost less than a single credit per
+    send (e.g. email), at or above 1 for one that costs a full credit or
+    more (e.g. MMS) — _spend_channel_credit in entitlements.py handles both
+    with one algorithm, no separate "N per credit" vs "N credits per unit"
+    special-casing."""
+    __tablename__ = "messaging_credit_rates"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+    org_id: Mapped[str | None] = mapped_column(String(36), ForeignKey("organizations.id"), nullable=True, index=True)
+    channel: Mapped[str] = mapped_column(String(20))  # sms | whatsapp | mms | rcs | email
+    credits_per_unit: Mapped[float] = mapped_column(Float)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    __table_args__ = (UniqueConstraint("org_id", "channel", name="uq_credit_rate_org_channel"),)
+
+
+class ShortLink(Base):
+    """Short redirect for SMS bodies: swaps a ~70-char ticket/RSVP URL (UUID
+    tokens) for a ~15-char /api/s/{code} link so SMS has a fighting chance of
+    staying under the 160-char GSM-7 single-segment limit alongside the fixed
+    ~82-char brand prefix + compliance footer (see services/messaging.py's
+    _brand_sms). Not used for email/WhatsApp, which have no such constraint."""
+    __tablename__ = "short_links"
+
+    code: Mapped[str] = mapped_column(String(12), primary_key=True)
+    target_url: Mapped[str] = mapped_column(String(1000))
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)

@@ -6,7 +6,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from .database import engine
 from .config import settings
-from .routers import events, guests, scanner, dashboard, seating, menu, logistics, registry, access, trials, demo, classify, messaging, meta_whatsapp, resend_webhooks, templates as templates_router, self_checkin, experience
+from .routers import events, guests, scanner, dashboard, seating, menu, logistics, registry, access, trials, demo, classify, messaging, meta_whatsapp, resend_webhooks, templates as templates_router, self_checkin, experience, tasks
 from .routers import auth as auth_router
 from .routers import invite as invite_router
 from .routers import billing as billing_router
@@ -18,10 +18,18 @@ from .routers import festiome as festiome_router
 from .routers import qa_checklist as qa_checklist_router
 from .routers import platform_settings as platform_settings_router
 from .routers import referrals as referrals_router
-from . import sync_poller, db_migrate
-from .services import festiome_outbox
+from .routers import api_keys as api_keys_router
+from .routers import public_api as public_api_router
+from .routers import webhooks as webhooks_router
+from .routers import org_billing as org_billing_router
+from .routers import calendars as calendars_router
+from .routers import shortlinks as shortlinks_router
+from . import sync_poller, db_migrate, entitlements
+from .services import festiome_outbox, webhook_outbox
 from . import routers
 from . import storage
+from .database import AsyncSessionLocal
+from .models import ApiKeyRequestLog
 
 # Override with UPLOADS_DIR for local/test runs; defaults to the in-container path.
 UPLOADS_DIR = os.environ.get("UPLOADS_DIR", "/app/uploads")
@@ -34,6 +42,12 @@ async def lifespan(app: FastAPI):
     # preferred — it fails fast before swapping production.
     await db_migrate.apply(engine)
 
+    # Load the Console-editable messaging credit weights (global + per-org
+    # overrides) into entitlements.py's in-memory cache so take_message_credit/
+    # take_email_credit see them without an async db call on every send.
+    async with AsyncSessionLocal() as db:
+        await entitlements.reload_credit_rate_cache(db)
+
     # Run the guest-list sync poller inside the web process for single-host
     # deploys (default). When scaling out, set RUN_IN_APP_POLLER=false on the
     # web pods and run exactly one dedicated poller (`python -m app.sync_poller`)
@@ -45,6 +59,9 @@ async def lifespan(app: FastAPI):
     # stop when the single source-list poller is moved to a dedicated process.
     run_festiome_outbox = os.environ.get("RUN_IN_APP_FESTIOME_OUTBOX", "true").lower() not in ("false", "0", "no")
     festiome_task = asyncio.create_task(festiome_outbox.run()) if run_festiome_outbox else None
+    # Same SKIP LOCKED-safe multi-replica pattern as the FestioMe outbox, own switch.
+    run_webhook_outbox = os.environ.get("RUN_IN_APP_WEBHOOK_OUTBOX", "true").lower() not in ("false", "0", "no")
+    webhook_task = asyncio.create_task(webhook_outbox.run()) if run_webhook_outbox else None
 
     # Start the Redis SSE fan-in subscriber (no-op unless REDIS_URL is set) so
     # dashboard events published by any replica reach the connections on this one.
@@ -63,6 +80,12 @@ async def lifespan(app: FastAPI):
             festiome_task.cancel()
             try:
                 await festiome_task
+            except asyncio.CancelledError:
+                pass
+        if webhook_task is not None:
+            webhook_task.cancel()
+            try:
+                await webhook_task
             except asyncio.CancelledError:
                 pass
 
@@ -93,10 +116,32 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+
+@app.middleware("http")
+async def _audit_public_api_requests(request, call_next):
+    """Logs every /api/public/v1 call (method, path, status) keyed by the
+    API key that made it — the audit trail the public-API backlog ticket
+    asked for. Runs AFTER the route (and its require_api_key dependency), so
+    request.state.api_key_id is already set by the time we get here; skipped
+    entirely for the unauthenticated /docs endpoint (no key id to log against)."""
+    response = await call_next(request)
+    if request.url.path.startswith("/api/public/v1"):
+        api_key_id = getattr(request.state, "api_key_id", None)
+        if api_key_id:
+            async with AsyncSessionLocal() as db:
+                db.add(ApiKeyRequestLog(
+                    api_key_id=api_key_id, method=request.method,
+                    path=request.url.path, status_code=response.status_code,
+                ))
+                await db.commit()
+    return response
+
 app.include_router(auth_router.router, prefix="/api/auth",   tags=["auth"])
 app.include_router(events.router,      prefix="/api/events", tags=["events"])
 app.include_router(experience.router,  prefix="/api/events", tags=["experience"])
 app.include_router(guests.router,      prefix="/api/events", tags=["guests"])
+app.include_router(tasks.router,       prefix="/api/events", tags=["tasks"])
+app.include_router(tasks.mine_router,  prefix="/api",        tags=["tasks"])
 app.include_router(seating.router,     prefix="/api/events", tags=["seating"])
 app.include_router(menu.router,        prefix="/api/events", tags=["menu"])
 app.include_router(logistics.router,   prefix="/api/events", tags=["logistics"])
@@ -125,6 +170,13 @@ app.include_router(qa_checklist_router.router, prefix="/api/qa-checklist", tags=
 app.include_router(platform_settings_router.router, prefix="/api/platform-settings", tags=["platform-settings"])
 app.include_router(referrals_router.router, prefix="/api/organizations/me", tags=["referrals"])
 app.include_router(referrals_router.admin_router, prefix="/api/organizations", tags=["referrals"])
+app.include_router(api_keys_router.router, prefix="/api/organizations/me", tags=["public-api"])
+app.include_router(webhooks_router.router, prefix="/api/organizations/me", tags=["webhooks-outbound"])
+app.include_router(public_api_router.router, prefix="/api/public/v1", tags=["public-api"])
+app.include_router(org_billing_router.router, prefix="/api/organizations/me", tags=["org-billing"])
+app.include_router(calendars_router.router, prefix="/api/organizations/me", tags=["calendars"])
+app.include_router(calendars_router.public_router, prefix="/api/calendars", tags=["calendars-public"])
+app.include_router(shortlinks_router.router, prefix="/api/s", tags=["shortlinks"])
 
 # Serve uploaded files (cover images, etc.). When S3 is configured, stream from
 # the bucket so any replica can serve any file; otherwise serve from local disk.

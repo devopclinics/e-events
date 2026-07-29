@@ -1,0 +1,44 @@
+import { test, expect } from '@playwright/test'
+import { expectQaEventLoaded, signIn } from './helpers.js'
+
+test.describe('Phase 8 route-level code splitting', () => {
+  test('public entry does not eagerly download legacy or redesign admin pages', async ({ page }) => {
+    const scripts = []
+    page.on('response', (response) => {
+      if (response.request().resourceType() === 'script') scripts.push(new URL(response.url()).pathname)
+    })
+    await page.goto('/')
+    await expect(page.getByRole('heading', { name: /Run every guest moment/i })).toBeVisible()
+    expect(scripts.some((path) => /AdminPage-|AdminRedesignPage-/.test(path))).toBe(false)
+  })
+
+  test('redesign route downloads its page without downloading legacy AdminPage', async ({ page }) => {
+    await signIn(page)
+    const scripts = []
+    page.on('response', (response) => {
+      if (response.request().resourceType() === 'script') scripts.push(new URL(response.url()).pathname)
+    })
+    await page.goto('/admin-redesign')
+    await expectQaEventLoaded(page)
+    expect(scripts.some((path) => /AdminRedesignPage-/.test(path))).toBe(true)
+    expect(scripts.some((path) => /\/AdminPage-/.test(path))).toBe(false)
+  })
+
+  test('shows an accessible loading fallback while a route chunk is pending', async ({ page }) => {
+    await page.route('**/assets/PricingPage-*.js', async (route) => {
+      await new Promise((resolve) => setTimeout(resolve, 800))
+      await route.continue()
+    })
+    const navigation = page.goto('/pricing')
+    await expect(page.getByRole('status')).toContainText('Loading page')
+    await navigation
+    await expect(page.getByRole('heading', { name: /pricing/i }).first()).toBeVisible()
+  })
+
+  test('offers reload recovery when a route chunk fails', async ({ page }) => {
+    await page.route('**/assets/PricingPage-*.js', (route) => route.abort('failed'))
+    await page.goto('/pricing')
+    await expect(page.getByRole('alert')).toContainText('This page could not be loaded')
+    await expect(page.getByRole('button', { name: 'Reload page' })).toBeVisible()
+  })
+})

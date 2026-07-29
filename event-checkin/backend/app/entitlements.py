@@ -4,6 +4,7 @@ The database stores pricing as editable rows, but the product packaging is code
 metadata for now so existing deployments do not need a schema migration just to
 change feature gates.
 """
+import math
 import os
 import uuid
 from fastapi import HTTPException
@@ -157,24 +158,48 @@ def can_use_paid_channels(event: Event) -> bool:
     return bool(event.is_paid and event.paid_channels)
 
 
-DEFAULT_CHANNEL_WEIGHTS = {"sms": 1, "whatsapp": 1, "mms": 3, "rcs": 2}
+# Hardcoded absolute fallback — only used if MessagingCreditRate has no
+# global default row (e.g. a fresh DB before the Console pricing page's
+# channel-weight panel has ever been saved). See team-docs/index.html §2c
+# for how these were derived (cost-ratio to a corrected SMS anchor).
+DEFAULT_CHANNEL_WEIGHTS = {"sms": 2, "whatsapp": 1.5, "mms": 3, "rcs": 2}
+DEFAULT_EMAIL_CREDITS_PER_EMAIL = 0.1  # 10 emails per credit
+
+# In-memory cache of admin-configured rates: {(org_id_or_None, channel): rate}.
+# org_id=None holds the global default. Populated at app startup and
+# refreshed by the Console pricing endpoints after every save (see
+# reload_credit_rate_cache) — this keeps take_message_credit/take_email_credit
+# plain synchronous functions that only touch the in-memory Event object,
+# instead of threading an async db session through every call site across
+# guests.py/invite.py/events.py/festiome.py/registry.py.
+_rate_cache: dict[tuple[str | None, str], float] = {}
 
 
-def channel_weight(channel: str | None) -> int:
-    """Weighted credits per outbound message by channel.
+async def reload_credit_rate_cache(db) -> None:
+    """Repopulate the in-memory channel-rate cache from MessagingCreditRate.
+    Call at app startup and after any Console pricing save."""
+    from sqlalchemy import select
+    from .models import MessagingCreditRate
+    rows = (await db.execute(select(MessagingCreditRate))).scalars().all()
+    _rate_cache.clear()
+    for row in rows:
+        _rate_cache[(row.org_id, row.channel)] = row.credits_per_unit
 
-    Override with MESSAGE_CREDIT_WEIGHTS='sms=1,whatsapp=1,mms=3,rcs=2'.
-    """
-    weights = dict(DEFAULT_CHANNEL_WEIGHTS)
-    for part in (os.getenv("MESSAGE_CREDIT_WEIGHTS") or "").split(","):
-        if "=" not in part:
-            continue
-        key, value = part.split("=", 1)
-        try:
-            weights[key.strip().lower()] = max(1, int(value.strip()))
-        except ValueError:
-            continue
-    return weights.get((channel or "sms").lower(), 1)
+
+def channel_weight(channel: str | None, *, org_id: str | None = None) -> float:
+    """Credits charged per outbound message for this channel: org-level
+    negotiated override, then the admin-configured global default (Console
+    pricing page), then a hardcoded fallback. May be below 1 (many sends per
+    credit, e.g. email) or at/above 1 (multiple credits per send, e.g. MMS) —
+    _spend_channel_credit handles both with one algorithm."""
+    ch = (channel or "sms").lower()
+    if org_id is not None and (org_id, ch) in _rate_cache:
+        return _rate_cache[(org_id, ch)]
+    if (None, ch) in _rate_cache:
+        return _rate_cache[(None, ch)]
+    if ch == "email":
+        return DEFAULT_EMAIL_CREDITS_PER_EMAIL
+    return DEFAULT_CHANNEL_WEIGHTS.get(ch, 1)
 
 
 def provider_for_channel(channel: str | None) -> str | None:
@@ -218,6 +243,7 @@ def _ledger_row(
     credits: int,
     delta: int,
     balance_after: int,
+    unit_weight: int = 1,
     guest_id: str | None = None,
     payment_id: str | None = None,
     provider: str | None = None,
@@ -236,7 +262,7 @@ def _ledger_row(
         provider=provider or provider_for_channel(channel),
         provider_message_id=provider_message_id,
         units=1,
-        unit_weight=channel_weight(channel),
+        unit_weight=unit_weight,
         credits=credits,
         delta=delta,
         balance_after=balance_after,
@@ -251,6 +277,15 @@ def _add_ledger(event: Event, row: MessageCreditLedger) -> None:
         session.add(row)
     else:
         event.credit_ledger.append(row)
+
+
+def record_free_send(event: Event, channel: str, *, reason: str, guest_id: str | None = None) -> None:
+    """Log a zero-cost send (e.g. broadcast email, which isn't credit-metered)
+    for usage reporting, without touching event.message_credits."""
+    _add_ledger(event, _ledger_row(
+        event, action="spend", status="posted", channel=channel, reason=reason,
+        credits=0, delta=0, balance_after=event.message_credits, guest_id=guest_id,
+    ))
 
 
 def grant_message_credits(event: Event, credits: int, *, reason: str = "grant", payment_id: str | None = None) -> None:
@@ -271,37 +306,56 @@ def grant_message_credits(event: Event, credits: int, *, reason: str = "grant", 
     ))
 
 
-def take_message_credit(
+def _spend_channel_credit(
     event: Event,
-    channel: str = "sms",
+    channel: str,
+    rate: float,
     *,
-    reason: str = "message",
+    reason: str,
     guest_id: str | None = None,
     provider: str | None = None,
     provider_message_id: str | None = None,
 ) -> bool:
-    """Reserve and post weighted credits for an outbound message.
+    """Shared fractional credit-charging algorithm for every channel (SMS,
+    WhatsApp, MMS, RCS, email). `rate` is that channel's configured
+    credits-per-unit (see channel_weight) and may be any positive float.
 
-    The balance remains on `events.message_credits`; this appends a matching
-    ledger row. Existing callers can still use the old boolean API.
-    """
-    # Platform-superadmin hard block (console-only) wins over everything — no
-    # paid send on a blocked channel, regardless of credits or notify_* flags.
-    if channel in (event.blocked_messaging_channels or []):
+    The balance itself only ever moves in whole credits — this tracks each
+    channel's running over/under-payment in event.credit_bank so the
+    *average* cost per send converges exactly on `rate`, whether it's below 1
+    (a send gets covered by a fraction of a previously-paid credit, the way
+    email's old email_half_pending flag worked, generalized to any ratio) or
+    at/above 1 (a send may pre-pay part of the next one, e.g. a 1.5-credit
+    rate charges 2/1/2/1/... alternating, averaging exactly 1.5).
+
+    Returns False (nothing charged, nothing counted) when a whole-credit
+    charge is due and the balance can't cover it."""
+    if rate <= 0:
+        return True
+    bank = dict(event.credit_bank or {})
+    banked = bank.get(channel, 0.0)
+    need = rate - banked
+    if need <= 1e-9:
+        # Fully covered by a previous overpayment on this channel.
+        bank[channel] = -need
+        event.credit_bank = bank
+        return True
+    charge = math.ceil(need - 1e-9)
+    if (event.message_credits or 0) < charge:
         return False
-    credits = channel_weight(channel)
-    if (event.message_credits or 0) < credits:
-        return False
-    event.message_credits -= credits
+    event.message_credits -= charge
+    bank[channel] = charge - need
+    event.credit_bank = bank
     row = _ledger_row(
         event,
         action="spend",
         status="posted",
         channel=channel,
         reason=reason,
-        credits=credits,
-        delta=-credits,
+        credits=charge,
+        delta=-charge,
         balance_after=event.message_credits,
+        unit_weight=charge,
         guest_id=guest_id,
         provider=provider,
         provider_message_id=provider_message_id,
@@ -313,6 +367,30 @@ def take_message_credit(
     return True
 
 
+def take_message_credit(
+    event: Event,
+    channel: str = "sms",
+    *,
+    reason: str = "message",
+    guest_id: str | None = None,
+    provider: str | None = None,
+    provider_message_id: str | None = None,
+) -> bool:
+    """Reserve and post weighted credits for an outbound message (see
+    _spend_channel_credit). The balance remains on `events.message_credits`;
+    this appends a matching ledger row. Existing callers can still use the
+    old boolean API."""
+    # Platform-superadmin hard block (console-only) wins over everything — no
+    # paid send on a blocked channel, regardless of credits or notify_* flags.
+    if channel in (event.blocked_messaging_channels or []):
+        return False
+    rate = channel_weight(channel, org_id=event.org_id)
+    return _spend_channel_credit(
+        event, channel, rate, reason=reason, guest_id=guest_id,
+        provider=provider, provider_message_id=provider_message_id,
+    )
+
+
 def last_credit_ledger_id(event: Event) -> str | None:
     return getattr(event, "_last_credit_ledger_id", None)
 
@@ -322,9 +400,9 @@ EMAIL_FREE_QUOTA = max(0, int(os.getenv("EMAIL_FREE_QUOTA", "25")))
 
 
 def take_email_credit(event: Event, *, guest_id: str | None = None, reason: str = "email") -> bool:
-    """Meter a guest email: free up to EMAIL_FREE_QUOTA per event, then 0.5
-    credit each. Credits are integers, so halves accumulate in
-    email_half_pending and 1 credit posts on every second chargeable email.
+    """Meter a guest email: free up to EMAIL_FREE_QUOTA per event, then the
+    configured email rate (see channel_weight) via the same fractional
+    credit-bank mechanism as every other channel (_spend_channel_credit).
 
     Returns False (send must be skipped) when the event is past the free quota
     and has no credit to cover the email; the attempt is not counted."""
@@ -334,33 +412,10 @@ def take_email_credit(event: Event, *, guest_id: str | None = None, reason: str 
     if sent <= EMAIL_FREE_QUOTA:
         event.emails_sent = sent
         return True
-    # Beyond the free quota an email needs cover: either a half already paid
-    # for (pending) or at least 1 credit in the balance.
-    if not (event.email_half_pending or 0) and (event.message_credits or 0) < 1:
+    rate = channel_weight("email", org_id=event.org_id)
+    if not _spend_channel_credit(event, "email", rate, reason=reason, guest_id=guest_id):
         return False
     event.emails_sent = sent
-    if event.email_half_pending:
-        # Second half of an already-paid credit.
-        event.email_half_pending = 0
-        return True
-    # First half: deduct the full credit now, remember the prepaid half.
-    event.message_credits -= 1
-    event.email_half_pending = 1
-    row = _ledger_row(
-        event,
-        action="spend",
-        status="posted",
-        channel="email",
-        reason=f"{reason}_x2",
-        credits=1,
-        delta=-1,
-        balance_after=event.message_credits,
-        guest_id=guest_id,
-    )
-    if not row.id:
-        row.id = str(uuid.uuid4())
-    _add_ledger(event, row)
-    event._last_credit_ledger_id = row.id
     return True
 
 

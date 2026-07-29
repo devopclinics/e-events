@@ -1,5 +1,8 @@
 import asyncio
+import hashlib
 import json
+import secrets
+from datetime import datetime
 import firebase_admin
 from firebase_admin import credentials, auth as firebase_auth
 from fastapi import Depends, HTTPException, Request
@@ -10,7 +13,7 @@ from sqlalchemy import select
 import uuid
 
 from .database import get_db
-from .models import User, Organization, Membership, Event, EventUser
+from .models import User, Organization, Membership, Event, EventUser, ApiKey
 from .config import settings
 
 
@@ -396,3 +399,48 @@ async def require_paid_event_member(
     if not event.is_paid:
         raise HTTPException(402, _PAID_REQUIRED)
     return user
+
+
+# ── Public API key auth (programmatic access, no Firebase token) ────────────
+
+API_KEY_HEADER = "X-API-Key"
+_API_KEY_PREFIX = "fk_live_"
+
+
+def hash_api_key(raw_key: str) -> str:
+    return hashlib.sha256(raw_key.encode()).hexdigest()
+
+
+def generate_api_key() -> tuple[str, str, str]:
+    """Returns (full_key, key_prefix, key_hash). The full key is returned to
+    the caller exactly once (at creation) — only the hash is persisted."""
+    full_key = _API_KEY_PREFIX + secrets.token_urlsafe(32)
+    return full_key, full_key[:16], hash_api_key(full_key)
+
+
+async def require_api_key(request: Request, db: AsyncSession = Depends(get_db)) -> ApiKey:
+    """Authenticates a public-API request via the X-API-Key header — a
+    separate credential type from the Firebase bearer tokens the rest of the
+    app uses, so a leaked API key can never be used to sign into the product
+    itself, and vice versa. Stashes the key + org id on request.state so a
+    rate-limit dependency declared after this one can bucket by key."""
+    raw = request.headers.get(API_KEY_HEADER)
+    if not raw:
+        raise HTTPException(401, f"Missing {API_KEY_HEADER} header")
+    api_key = await db.scalar(select(ApiKey).where(ApiKey.key_hash == hash_api_key(raw)))
+    if not api_key or api_key.revoked_at is not None:
+        raise HTTPException(401, "Invalid or revoked API key")
+    api_key.last_used_at = datetime.utcnow()
+    await db.commit()
+    request.state.api_key_id = api_key.id
+    request.state.api_key_org_id = api_key.org_id
+    return api_key
+
+
+async def require_read_write_api_key(api_key: ApiKey = Depends(require_api_key)) -> ApiKey:
+    """Same auth as require_api_key, but the key must additionally carry
+    read_write scope — used on the public API's guest write endpoints, which
+    a plain (read-only) key must not be able to reach."""
+    if api_key.scope != "read_write":
+        raise HTTPException(403, "This API key is read-only. Create a read-write key to use this endpoint.")
+    return api_key

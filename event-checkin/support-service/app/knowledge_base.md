@@ -253,6 +253,19 @@ Tip: Before launch, use clearly different test text in Event Updates, Guest Chat
 
 Warning: Treat Message Host and direct messages as private. Never paste private message text into an announcement or shared group while troubleshooting.
 
+### Tasks: run your to-do list as a team
+
+A per-event Kanban board for coordination work that isn't guest data — "confirm florist," "print name badges," "brief the door staff." Any team member on the event can see and work the board, not just owners/admins.
+
+1. Open the event's Tasks tab (or My Tasks in the top nav to see every task assigned to you across all events at once).
+2. Add a task: title, optional notes, an assignee from your team, and an optional due date.
+3. Drag a card between Open, In progress, and Done to update its status — or change status from the task's detail panel.
+4. Open a task to see its full detail panel: a comment thread for back-and-forth with whoever's working it, subtasks for breaking a bigger task into steps, and file attachments.
+5. Attach files or images to a task from either side — the person who created it or the person it's assigned to. Useful for reference photos, signed vendor contracts, floor-plan PDFs, anything the task needs.
+6. Every status change, reassignment, and attachment is logged in the task's activity feed alongside the comments, so there's one place to see the full history.
+
+Tip: Use My Tasks if you're staff working across several events — it pulls together everything assigned to you in one list instead of checking each event's board separately.
+
 ### Add your team
 
 1. Team tab → "Add a teammate" → enter their email address and choose a role.
@@ -308,6 +321,21 @@ Tip: Put Results on a tablet at the organiser desk so you can monitor arrivals i
 
 Tip: Check your credit balance before any bulk send. The Event Pass area shows your current balance and usage history.
 
+### Event Calendars: curated listing pages
+
+A Calendar is a single page that lists several of your events together — public (one shared link, anyone can view) or private (a personalized link per contact, with pre-filled RSVP and status tracking). This is organisation-wide, not per-event — find it under Org Settings → Calendars.
+
+1. Go to Org Settings → Calendars → "+ New calendar". Give it a title, choose Public or Private, and click Create.
+2. Click the calendar to expand it. Add an optional description (shown under the title), upload a logo and set its display width, and toggle "Hide past events" (on by default — turn it off to show a full/archival listing instead of just what's upcoming).
+3. Curate events: under "Events on this calendar," pick an event from the dropdown and click Add — it's saved immediately, no separate save step. Drag the ⠿ handle (or use the ↑/↓ buttons) to reorder; click Remove to take one off.
+4. Registering from a calendar sends the visitor to that event's own normal RSVP page — same questions, capacity limits, and confirmation email as any other RSVP. The calendar is a curated doorway, not a second registration system, so whatever you've configured per-event (open/invite-only, custom questions) applies exactly as normal.
+5. Public calendars: copy the Public link and share it anywhere, or copy the Embed snippet to drop the calendar into another website as an iframe.
+6. Private calendars: build a Contact List first (Org Settings → Contact Lists — add contacts one at a time or upload a CSV), then attach one or more lists to the calendar from its contact-list picker. Every contact gets their own personalized access token automatically, including anyone added to an already-attached list later.
+7. Click "Send calendar link to all contacts" to email each contact their personal link. Opening it pre-fills their name/email on any event they register for, and shows their RSVP status (accepted/declined/waitlisted) on events they've already responded to instead of a blank form.
+8. View and per-event click counts are shown on the calendar detail view, so you can see how much traffic the calendar itself and each listed event are getting.
+
+Tip: Use a private calendar plus a Contact List when the same group of people should see several of your events at once (e.g. a recurring series or a multi-part programme) without you sending separate individual invites for each one.
+
 ### Export & post-event
 
 1. Guests tab: review RSVP status, check-in time, seat, order choices, and any custom question answers.
@@ -334,6 +362,7 @@ Common issues and how to fix them.
 11. Can't see Seating / Entry areas tabs: these features must be turned on in Team &amp; settings → Features, and require an Event Pass.
 12. Staff can't see the event in Check-in: they must be added in Team tab AND assigned to this specific event.
 13. RSVP deadline passed but guests are still submitting: the deadline blocks new RSVPs from the public invite page. You can still add or approve guests manually from Event Setup.
+14. A Calendar shows fewer events than you curated onto it: check "Hide past events" in that calendar's settings — it's on by default, so anything with a past event date is filtered from the public/private view even though it still shows in your admin curation list.
 
 ## Staff / Check-in
 

@@ -1,8 +1,10 @@
+import re
 from datetime import datetime
 
 import pytest
 
 from services import messaging
+from services.shortlinks import resolve_short_url
 
 
 def _capture_sms(monkeypatch):
@@ -18,7 +20,7 @@ def _capture_sms(monkeypatch):
 
 
 @pytest.mark.asyncio
-async def test_invite_sms_is_branded_and_has_opt_out(monkeypatch):
+async def test_invite_sms_is_branded_has_opt_out_and_shortens_the_url(monkeypatch):
     sent = _capture_sms(monkeypatch)
 
     await messaging.send_invite_sms(
@@ -29,12 +31,40 @@ async def test_invite_sms_is_branded_and_has_opt_out(monkeypatch):
         event_date=datetime(2026, 8, 12, 18, 0),
     )
 
-    assert sent == [(
-        "+15551234567",
-        "Festio: Hi Amara! You're invited to Johnson Wedding on Aug 12, 2026. "
-        "Your ticket: https://festio.events/scan/abc123 Reply HELP for help, STOP to opt out. "
-        "Message and data rates may apply.",
-    )]
+    assert len(sent) == 1
+    phone, body = sent[0]
+    assert phone == "+15551234567"
+    assert body.startswith("Festio: Hi Amara! Johnson Wedding, Aug 12, 2026. Ticket: ")
+    assert body.endswith("Reply HELP for help, STOP to opt out. Message and data rates may apply.")
+    # The original long ticket_url must not appear verbatim — it should have
+    # been swapped for a short /api/s/{code} redirect (see services/shortlinks.py),
+    # which is what keeps this template's length in check.
+    assert "festio.events/scan/abc123" not in body
+    m = re.search(r"https://festio\.events/api/s/(\w+)", body)
+    assert m, body
+    assert await resolve_short_url(m.group(1)) == "https://festio.events/scan/abc123"
+
+
+@pytest.mark.asyncio
+async def test_manual_invite_sms_is_branded_has_opt_out_and_shortens_the_url(monkeypatch):
+    sent = _capture_sms(monkeypatch)
+
+    await messaging.send_manual_invite_sms(
+        phone="+15551234567",
+        name="Amara",
+        event_name="Johnson Wedding",
+        invite_url="https://festio.events/r/xyz789",
+    )
+
+    assert len(sent) == 1
+    phone, body = sent[0]
+    assert phone == "+15551234567"
+    assert body.startswith("Festio: Hi Amara! Johnson Wedding. RSVP: ")
+    assert body.endswith("Reply HELP for help, STOP to opt out. Message and data rates may apply.")
+    assert "festio.events/r/xyz789" not in body
+    m = re.search(r"https://festio\.events/api/s/(\w+)", body)
+    assert m, body
+    assert await resolve_short_url(m.group(1)) == "https://festio.events/r/xyz789"
 
 
 @pytest.mark.asyncio
@@ -52,7 +82,7 @@ async def test_admission_sms_names_event_and_has_opt_out(monkeypatch):
 
     assert sent == [(
         "+15551234567",
-        "Festio: Welcome Amara! You're checked in to Johnson Wedding. "
+        "Festio: Welcome Amara! Checked in: Johnson Wedding. "
         "Table: VIP-2 seat 4. Reply HELP for help, STOP to opt out. Message and data rates may apply.",
     )]
 

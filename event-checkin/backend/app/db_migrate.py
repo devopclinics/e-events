@@ -50,6 +50,17 @@ def _guarded_drop_not_null(table: str, column: str) -> str:
     )
 
 
+def _guarded_drop_column(table: str, column: str) -> str:
+    """DROP COLUMN only while it still exists — idempotent across re-runs."""
+    return (
+        "DO $$ BEGIN "
+        "IF EXISTS (SELECT 1 FROM information_schema.columns "
+        f"WHERE table_name = '{table}' AND column_name = '{column}') THEN "
+        f"ALTER TABLE {table} DROP COLUMN {column}; "
+        "END IF; END $$"
+    )
+
+
 SCHEMA_PATCHES: list[str] = [
     # Guarded: only touches the table while the constraint still exists.
     "DO $$ BEGIN "
@@ -188,6 +199,19 @@ SCHEMA_PATCHES: list[str] = [
     "FROM guest_meal_fulfillment gmf "
     "JOIN meal_services ms ON ms.category_id = gmf.category_id "
     "WHERE NOT EXISTS (SELECT 1 FROM guest_meal_services gms WHERE gms.service_id = ms.id AND gms.guest_id = gmf.guest_id)",
+
+    # Subtask.done (bool) was replaced by Subtask.status (open/in_progress/done)
+    # when 3-state status was added. The auto-patcher only ADDS columns, so the
+    # orphaned `done` (NOT NULL, no server default) was left behind and broke
+    # every subtask insert (the ORM no longer sets it) — drop it explicitly.
+    _guarded_drop_column("subtasks", "done"),
+
+    # Org-level recurring subscription plans (gates read-write Public API access
+    # and future org-wide paid features). Seed one placeholder plan — price is
+    # editable via the superadmin console afterward, not a fixed business call.
+    "INSERT INTO org_plans (key, label, usd_monthly, ngn_monthly, features, active, sort_order) "
+    "SELECT 'api_access', 'API Access', 2900, 3500000, '[\"api_write\"]'::json, TRUE, 1 "
+    "WHERE NOT EXISTS (SELECT 1 FROM org_plans WHERE key = 'api_access')",
 ]
 
 

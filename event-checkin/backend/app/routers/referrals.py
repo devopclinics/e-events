@@ -3,7 +3,7 @@ new orgs that sign up through that link get durably attributed to it. Reward
 mechanics (credits, discounts) are applied manually by operators for now —
 this only tracks attribution and surfaces it to the referring org."""
 from fastapi import APIRouter, Depends, HTTPException
-from sqlalchemy import select
+from sqlalchemy import case, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..config import settings
@@ -11,6 +11,7 @@ from ..database import get_db
 from ..models import Event, Membership, Organization, User
 from ..schemas import ReferralClaim, ReferralInfoOut, ReferredOrgOut
 from ..auth import get_current_user, require_superadmin
+from .admin import DEFAULT_ORG_ID
 
 router = APIRouter()
 # Separate router: mounted at /api/organizations (not /api/organizations/me),
@@ -53,12 +54,14 @@ async def all_referrals(db: AsyncSession = Depends(get_db), _: User = Depends(re
 
 async def _primary_owned_org(user: User, db: AsyncSession) -> Organization | None:
     """The org this user owns that they were originally provisioned with —
-    first by creation date, if they own more than one."""
+    first by creation date, if they own more than one. Prefers a real,
+    deliberately-created org over the legacy shared DEFAULT_ORG_ID ("vsgs") —
+    see api_keys.py's _owned_org docstring for the full explanation."""
     org_id = await db.scalar(
         select(Membership.org_id)
         .join(Organization, Organization.id == Membership.org_id)
         .where(Membership.user_id == user.id, Membership.role == "owner")
-        .order_by(Organization.created_at.asc())
+        .order_by(case((Organization.id == DEFAULT_ORG_ID, 1), else_=0), Organization.created_at.asc())
         .limit(1)
     )
     return await db.get(Organization, org_id) if org_id else None

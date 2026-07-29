@@ -1,0 +1,463 @@
+<title>Festio × NCNMO Platform — Partnership Proposal</title>
+<style>
+  :root {
+    --ink: #1c2b2a;
+    --muted: #55625f;
+    --paper: #f5f6f2;
+    --card: #ffffff;
+    --line: #e2ded2;
+    --teal: #0f766e;
+    --teal-soft: #e4f2f0;
+    --gold: #a8791f;
+    --gold-soft: #f7edd8;
+    --maroon: #6b2737;
+    --maroon-soft: #f5e9ec;
+    --green: #1a7f4e;
+    --amber: #92620a;
+  }
+  :root[data-theme="dark"] {
+    --ink: #eef0ec;
+    --muted: #aab3ae;
+    --paper: #12181a;
+    --card: #1a2222;
+    --line: #2b3634;
+    --teal: #3fd6c7;
+    --teal-soft: #163330;
+    --gold: #e0b155;
+    --gold-soft: #2e2716;
+    --maroon: #e08a9c;
+    --maroon-soft: #2e1c21;
+    --green: #4ade80;
+    --amber: #f0b249;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --ink: #eef0ec;
+      --muted: #aab3ae;
+      --paper: #12181a;
+      --card: #1a2222;
+      --line: #2b3634;
+      --teal: #3fd6c7;
+      --teal-soft: #163330;
+      --gold: #e0b155;
+      --gold-soft: #2e2716;
+      --maroon: #e08a9c;
+      --maroon-soft: #2e1c21;
+      --green: #4ade80;
+      --amber: #f0b249;
+    }
+  }
+
+  * { box-sizing: border-box; }
+  body { margin: 0; }
+  .doc {
+    background: var(--paper);
+    color: var(--ink);
+    font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    line-height: 1.7;
+  }
+  .serif { font-family: "Iowan Old Style", "Palatino Linotype", Georgia, "Times New Roman", serif; }
+  .wrap { max-width: 720px; margin: 0 auto; padding: 0 1.5rem; }
+
+  .star-rule {
+    height: 20px; margin: 0 auto; max-width: 720px;
+    background-image: conic-gradient(from 45deg at 50% 50%, var(--gold) 0 25%, transparent 0 50%, var(--gold) 0 75%, transparent 0);
+    background-size: 20px 20px; background-repeat: repeat-x; opacity: 0.5;
+  }
+
+  /* ── cover — plain, warm, no emoji ─────────────────────────────────────── */
+  .cover { padding: 4rem 1.5rem 2.5rem; text-align: center; }
+  .cover .brandline { text-transform: uppercase; letter-spacing: 0.2em; font-size: 0.7rem; font-weight: 700; color: var(--teal); margin-bottom: 1.5rem; }
+  .cover h1 { font-size: clamp(2rem, 5vw, 2.9rem); margin: 0 0 1rem; font-weight: 400; text-wrap: balance; letter-spacing: -0.01em; }
+  .cover .tagline { font-size: 1.1rem; color: var(--muted); max-width: 46ch; margin: 0 auto; text-wrap: pretty; }
+  .cover .when-where {
+    margin-top: 1.75rem; font-size: 0.95rem; color: var(--ink); font-weight: 600;
+  }
+  .cover .when-where span.sep { color: var(--line); margin: 0 0.6rem; font-weight: 400; }
+
+  section { padding: 3rem 0; }
+  section + section { border-top: 1px solid var(--line); }
+  .eyebrow { text-transform: uppercase; letter-spacing: 0.15em; font-size: 0.7rem; font-weight: 700; color: var(--gold); margin: 0 0 0.6rem; }
+  h2 { font-size: 1.6rem; margin: 0 0 1rem; font-weight: 400; text-wrap: balance; }
+  h3 { font-size: 1.05rem; margin: 0 0 0.4rem; font-weight: 700; font-family: inherit; }
+  p { margin: 0 0 1.1rem; }
+  p.lede { font-size: 1.05rem; color: var(--muted); max-width: 60ch; }
+  .muted { color: var(--muted); }
+  a { color: var(--teal); }
+
+  /* ── a personal note ───────────────────────────────────────────────────── */
+  .note {
+    font-size: 1.05rem; max-width: 60ch;
+  }
+  .note strong { color: var(--maroon); }
+
+  /* ── infographic stat strips ───────────────────────────────────────────── */
+  .stat-strip { display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: 1px; background: var(--line); border: 1px solid var(--line); border-radius: 14px; overflow: hidden; margin-top: 1.5rem; }
+  .stat-tile { background: var(--card); padding: 1.1rem 1rem; text-align: center; }
+  .stat-tile .sv { font-size: 1.3rem; font-weight: 800; color: var(--teal); font-variant-numeric: tabular-nums; }
+  .stat-tile .sl { font-size: 0.72rem; color: var(--muted); margin-top: 0.25rem; line-height: 1.3; }
+
+  .hero-stat { display: flex; align-items: center; justify-content: center; flex-wrap: wrap; gap: 0.75rem; margin-top: 1.75rem; }
+  .hs-item { background: var(--card); border: 1px solid var(--line); border-radius: 16px; padding: 1.25rem 1.5rem; text-align: center; min-width: 140px; }
+  .hs-item .hs-n { font-size: 1.9rem; font-weight: 800; color: var(--ink); font-variant-numeric: tabular-nums; }
+  .hs-item .hs-l { font-size: 0.78rem; color: var(--muted); margin-top: 0.3rem; }
+  .hs-item.cap { background: var(--maroon); border-color: var(--maroon); }
+  .hs-item.cap .hs-n, .hs-item.cap .hs-l { color: var(--paper); }
+  .hs-plus { font-size: 1.4rem; color: var(--muted); font-weight: 300; }
+  @media (max-width: 620px) { .hs-plus { display: none; } }
+
+  /* ── live-look dashboard mockups, in the product's OWN dark UI, not the
+     document's editorial palette — these are meant to read as framed
+     screenshots, faithfully matching what the real dashboard looks like. ── */
+  .mock-frame {
+    background: #0b0e14; color: #d7dbe3; border-radius: 14px; padding: 1.1rem;
+    margin-top: 1.25rem; border: 1px solid #232936; font-family: ui-sans-serif, system-ui, sans-serif;
+    box-shadow: 0 4px 18px rgba(0,0,0,0.18);
+  }
+  .mock-chrome { display: flex; align-items: center; justify-content: space-between; margin-bottom: 0.9rem; }
+  .mock-chrome .dots { display: flex; gap: 5px; }
+  .mock-chrome .dot { width: 8px; height: 8px; border-radius: 50%; background: #2b3340; }
+  .mock-chrome .label { font-size: 0.72rem; color: #6b7280; letter-spacing: 0.02em; }
+  .redact {
+    display: inline-block; filter: blur(5px); user-select: none; color: #d7dbe3;
+  }
+  .mock-tabs { display: flex; gap: 1rem; font-size: 0.78rem; color: #8b93a3; margin-bottom: 0.9rem; border-bottom: 1px solid #1c2230; padding-bottom: 0.6rem; flex-wrap: wrap; }
+  .mock-tabs .active { color: #35d1bf; font-weight: 700; }
+  .mock-stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(90px, 1fr)); gap: 8px; margin-bottom: 0.9rem; }
+  .mock-stat { background: #12161f; border: 1px solid #1c2230; border-radius: 10px; padding: 0.7rem 0.8rem; }
+  .mock-stat .n { font-size: 1.3rem; font-weight: 800; font-variant-numeric: tabular-nums; }
+  .mock-stat .l { font-size: 0.68rem; color: #8b93a3; margin-top: 0.1rem; }
+  .mock-stat.ok .n { color: #4ade80; }
+  .mock-stat.warn .n { color: #f0b249; }
+  .mock-attn {
+    background: #2e2412; border: 1px solid #4a3616; border-radius: 10px; padding: 0.6rem 0.8rem;
+    font-size: 0.78rem; color: #f0b249; margin-bottom: 0.5rem; display: flex; justify-content: space-between; gap: 0.5rem;
+  }
+  .mock-bars { display: flex; gap: 3px; align-items: flex-end; height: 70px; margin: 0.6rem 0; }
+  .mock-bars .bar { flex: 1; background: #35d1bf; border-radius: 2px 2px 0 0; opacity: 0.9; }
+  .mock-funnel-row { margin-bottom: 0.7rem; }
+  .mock-funnel-row .fl { display: flex; justify-content: space-between; font-size: 0.78rem; margin-bottom: 0.3rem; }
+  .mock-funnel-row .fl .opt { color: #8b93a3; font-size: 0.72rem; }
+  .mock-track { height: 6px; background: #1c2230; border-radius: 4px; overflow: hidden; }
+  .mock-track .fill { height: 100%; background: #35d1bf; border-radius: 4px; }
+  .mock-session { display: grid; grid-template-columns: 48px 1fr; gap: 0.7rem; align-items: baseline; padding: 0.45rem 0; border-bottom: 1px solid #1c2230; }
+  .mock-session:last-child { border-bottom: none; }
+  .mock-session .ms-t { font-size: 0.68rem; color: #35d1bf; font-weight: 700; text-transform: uppercase; }
+  .mock-session .ms-name { font-size: 0.85rem; font-weight: 700; grid-column: 2; }
+  .mock-session .ms-r { font-size: 0.72rem; color: #8b93a3; grid-column: 2; margin-top: 0.1rem; }
+  .mock-group-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 8px; }
+  .mock-group { background: #12161f; border: 1px solid #1c2230; border-radius: 10px; padding: 0.65rem 0.8rem; }
+  .mock-group .gn { font-weight: 700; font-size: 0.82rem; }
+  .mock-group .gd { font-size: 0.7rem; color: #8b93a3; margin-top: 0.2rem; }
+  .mock-hub {
+    background: linear-gradient(160deg, #3d1530, #2a0f22); border-radius: 12px; padding: 1rem 1.1rem;
+  }
+  .mock-hub .ht { font-weight: 800; font-size: 1rem; margin-bottom: 0.6rem; }
+  .mock-hub .hcard { background: rgba(255,255,255,0.06); border-radius: 10px; padding: 0.55rem 0.75rem; margin-bottom: 0.5rem; font-size: 0.76rem; }
+  .mock-hub .qr-wrap { background: #fff; border-radius: 12px; padding: 1rem; text-align: center; margin: 0.6rem 0; }
+  .mock-hub .qr {
+    width: 100px; height: 100px; margin: 0 auto; background:
+      repeating-conic-gradient(#111 0% 25%, #fff 0% 50%) 0 0/14px 14px,
+      repeating-conic-gradient(#111 0% 25%, #fff 0% 50%) 7px 7px/14px 14px;
+  }
+  .mock-hub .status-row { display: flex; gap: 0.5rem; margin-top: 0.5rem; }
+  .mock-hub .status-chip { flex: 1; background: rgba(255,255,255,0.06); border-radius: 8px; padding: 0.5rem 0.6rem; font-size: 0.72rem; }
+  .mock-hub .status-chip b { display: block; font-size: 0.85rem; }
+  .mock-caption { margin-top: 0.6rem; font-size: 0.82rem; color: var(--muted); }
+  .tour-label { font-size: 0.78rem; font-weight: 700; color: var(--gold); text-transform: uppercase; letter-spacing: 0.06em; margin: 1.75rem 0 0; }
+  .tour-label:first-child { margin-top: 0; }
+
+  /* ── capability tiles — infographic, minimal prose ────────────────────── */
+  .cap-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 1rem; margin-top: 1.5rem; }
+  .cap-tile { background: var(--card); border: 1px solid var(--line); border-radius: 14px; padding: 1.1rem 1.25rem; position: relative; overflow: hidden; }
+  .cap-tile::before { content: ""; position: absolute; top: 0; left: 0; width: 4px; height: 100%; background: var(--gold); }
+  .cap-tile h3 { color: var(--maroon); font-size: 0.98rem; margin-bottom: 0.3rem; }
+  .cap-tile p { font-size: 0.86rem; color: var(--muted); margin: 0; }
+  .cap-tile.wide { grid-column: 1 / -1; }
+  .cap-mark { display: none; }
+
+  /* ── day-by-day ────────────────────────────────────────────────────────── */
+  .day-row { display: grid; grid-template-columns: 78px 1fr; gap: 1.1rem; padding: 1rem 0; align-items: start; }
+  .day-row + .day-row { border-top: 1px dashed var(--line); }
+  .day-badge { text-align: center; background: var(--teal); color: var(--paper); border-radius: 10px; padding: 0.45rem 0.35rem; font-weight: 700; font-size: 0.8rem; line-height: 1.3; }
+  .day-badge .n { display: block; font-size: 1.25rem; font-variant-numeric: tabular-nums; }
+  .day-row h3 { margin-bottom: 0.2rem; font-size: 1rem; }
+  .day-row p { margin: 0; font-size: 0.92rem; color: var(--muted); }
+
+  /* ── value — bar-chart infographic, not a spreadsheet ─────────────────── */
+  .value-chart { margin-top: 1.75rem; display: grid; gap: 1.1rem; }
+  .vbar-row { display: grid; grid-template-columns: 150px 1fr; align-items: center; gap: 1rem; }
+  .vbar-label { font-size: 0.85rem; font-weight: 700; }
+  .vbar-label span { display: block; font-size: 0.7rem; font-weight: 400; color: var(--muted); }
+  .vbar-track { background: var(--line); border-radius: 10px; height: 2.75rem; position: relative; overflow: hidden; }
+  .vbar-fill { height: 100%; border-radius: 10px; display: flex; align-items: center; justify-content: flex-end; padding-right: 0.9rem; }
+  .vbar-fill span { color: var(--paper); font-weight: 800; font-variant-numeric: tabular-nums; font-size: 0.95rem; }
+  .vbar-fill.typical { background: linear-gradient(90deg, var(--gold), var(--amber)); }
+  .vbar-fill.capped { background: linear-gradient(90deg, var(--maroon), #4a1c28); }
+  .savings-badge {
+    margin-top: 1.25rem; background: var(--teal-soft); color: var(--teal); border-radius: 12px;
+    padding: 0.9rem 1.15rem; font-size: 0.92rem; font-weight: 600; text-align: center;
+  }
+  @media (max-width: 560px) { .vbar-row { grid-template-columns: 1fr; } }
+
+  /* ── partner asks ──────────────────────────────────────────────────────── */
+  .ask-list { list-style: none; margin: 1.5rem 0 0; padding: 0; display: grid; gap: 0.85rem; }
+  .ask-list li { display: flex; gap: 0.9rem; background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 0.95rem 1.15rem; align-items: flex-start; }
+  .ask-num { flex-shrink: 0; width: 1.8rem; height: 1.8rem; border-radius: 50%; background: var(--teal-soft); color: var(--teal); font-weight: 700; display: grid; place-items: center; font-size: 0.82rem; }
+
+  /* ── next steps / closing ─────────────────────────────────────────────── */
+  .steps { counter-reset: step; margin-top: 1.5rem; }
+  .step { display: flex; gap: 1rem; margin-bottom: 1.1rem; }
+  .step::before { counter-increment: step; content: counter(step); flex-shrink: 0; width: 1.9rem; height: 1.9rem; border-radius: 50%; background: var(--maroon); color: var(--paper); display: grid; place-items: center; font-weight: 700; font-size: 0.86rem; }
+  .signature { margin-top: 2.25rem; padding-top: 1.5rem; border-top: 1px solid var(--line); }
+  .signature .name { font-weight: 700; }
+  .signature .role { color: var(--muted); font-size: 0.9rem; }
+  footer { text-align: center; padding: 2.25rem 1.5rem 3rem; color: var(--muted); font-size: 0.82rem; }
+
+  @media (max-width: 560px) {
+    .day-row { grid-template-columns: 52px 1fr; }
+    .cover { padding: 2.75rem 1.25rem 2rem; }
+    .cover .when-where span.sep { display: block; margin: 0.15rem 0; }
+  }
+</style>
+
+<div class="doc">
+
+<div class="cover">
+  <p class="brandline">A note from Festio</p>
+  <h1 class="serif">Let's run Platform 2026 together</h1>
+  <p class="tagline">A proposal for the National Council of Nigerian Muslim Organizations — for the week your community waits all year for.</p>
+  <p class="when-where">December 24–28, 2026<span class="sep">·</span>Indianapolis, Indiana<span class="sep">·</span>Westin + Indiana Convention Center</p>
+</div>
+<div class="star-rule"></div>
+
+<div class="wrap">
+
+<section id="understanding">
+  <p class="eyebrow">Why we're writing</p>
+  <h2 class="serif">Platform, at a glance</h2>
+  <div class="stat-strip">
+    <div class="stat-tile"><div class="sv">1976</div><div class="sl">NCNMO founded</div></div>
+    <div class="stat-tile"><div class="sv">3 → national</div><div class="sl">Chapters then, nationwide now</div></div>
+    <div class="stat-tile"><div class="sv">5</div><div class="sl">Days, multi-track</div></div>
+    <div class="stat-tile"><div class="sv">~2,000</div><div class="sl">Guests expected</div></div>
+    <div class="stat-tile"><div class="sv">Dec 24–28</div><div class="sl">Indianapolis, IN</div></div>
+  </div>
+  <p class="note" style="margin-top:1.25rem;">Platform is NCNMO's flagship week. We want to help run it — not sell software to it.</p>
+</section>
+
+<section id="offer">
+  <p class="eyebrow">The proposal</p>
+  <h2 class="serif">One number. A hard ceiling. Nothing hidden.</h2>
+  <div class="hero-stat">
+    <div class="hs-item"><div class="hs-n">$0</div><div class="hs-l">Software fee</div></div>
+    <div class="hs-plus">+</div>
+    <div class="hs-item"><div class="hs-n">$0</div><div class="hs-l">Support fee</div></div>
+    <div class="hs-plus">+</div>
+    <div class="hs-item cap"><div class="hs-n">$3,000</div><div class="hs-l">Hard cap, total — messaging only</div></div>
+  </div>
+  <p class="note" style="margin-top:1.25rem;">Busier week than planned? More reminders, more updates? That overage is ours to absorb — not NCNMO's budget.</p>
+</section>
+
+<section id="dashboard">
+  <p class="eyebrow">What your team would actually see</p>
+  <h2 class="serif">Not a mockup — a real, live event on Festio right now</h2>
+  <p class="lede">We already run a multi-day Islamic community gathering on this exact platform. Out of respect for that organizer's privacy, we've blurred the event's name — everything else below is real, live data, today.</p>
+
+  <p class="tour-label">Overview — the whole event, at a glance</p>
+  <div class="mock-frame">
+    <div class="mock-chrome"><span class="redact">████████████████</span><span class="label">Overview</span></div>
+    <div class="mock-stats">
+      <div class="mock-stat"><div class="n">611</div><div class="l">Expected</div></div>
+      <div class="mock-stat ok"><div class="n">564</div><div class="l">Checked in</div></div>
+      <div class="mock-stat warn"><div class="n">47</div><div class="l">Not yet in</div></div>
+      <div class="mock-stat"><div class="n">0</div><div class="l">Declined</div></div>
+      <div class="mock-stat"><div class="n">18</div><div class="l">Walk-ins</div></div>
+    </div>
+    <div class="mock-attn"><span>⚠ 223 invitations failed — review contact details</span><span>View</span></div>
+    <div class="mock-attn"><span>⚠ 233 guests have no contact info on file</span><span>View</span></div>
+  </div>
+  <p class="mock-caption">This is the first thing a coordinator sees each morning — who's in, who isn't, and exactly what needs attention before it becomes a problem at the door.</p>
+
+  <p class="tour-label">Attendance — by the hour, all day</p>
+  <div class="mock-frame">
+    <div class="mock-chrome"><span class="label">Attendance</span><span class="label">92% of expected arrivals</span></div>
+    <div class="mock-bars">
+      <div class="bar" style="height:4%"></div><div class="bar" style="height:6%"></div><div class="bar" style="height:22%"></div>
+      <div class="bar" style="height:26%"></div><div class="bar" style="height:24%"></div><div class="bar" style="height:38%"></div>
+      <div class="bar" style="height:88%"></div><div class="bar" style="height:92%"></div><div class="bar" style="height:64%"></div>
+      <div class="bar" style="height:48%"></div><div class="bar" style="height:34%"></div><div class="bar" style="height:32%"></div>
+      <div class="bar" style="height:28%"></div><div class="bar" style="height:8%"></div><div class="bar" style="height:6%"></div><div class="bar" style="height:58%"></div>
+    </div>
+    <div class="mock-stats">
+      <div class="mock-stat"><div class="n">611</div><div class="l">Expected</div></div>
+      <div class="mock-stat ok"><div class="n">564</div><div class="l">Checked in</div></div>
+      <div class="mock-stat"><div class="n">564</div><div class="l">Occupancy at day close</div></div>
+    </div>
+  </div>
+  <p class="mock-caption">Arrivals build through the afternoon and spike again in the evening — exactly the pattern a multi-session day produces. No guessing when to have extra check-in staff on hand.</p>
+
+  <p class="tour-label">Program — every track, every room, every day</p>
+  <div class="mock-frame">
+    <div class="mock-chrome"><span class="label">Program · 3 days</span><span class="label">9 sessions tracked</span></div>
+    <div class="mock-session"><div class="ms-t">Day 1</div><div class="ms-name">Friday Arrival &amp; Badge Pickup</div><div class="ms-r">Red Oak Ballroom Foyer · 4:00–6:30 PM</div></div>
+    <div class="mock-session"><div class="ms-t">Day 2</div><div class="ms-name">Keynote: Legacy Building</div><div class="ms-r">Red Oak Ballroom · 9:00–10:15 AM</div></div>
+    <div class="mock-session"><div class="ms-t">Day 2</div><div class="ms-name">Signature Luncheon</div><div class="ms-r">Luncheon Hall · 12:15–1:30 PM</div></div>
+    <div class="mock-session"><div class="ms-t">Day 2</div><div class="ms-name">Sisterhood Connect</div><div class="ms-r">Sisterhood Connect Lounge · 2:00–3:15 PM</div></div>
+    <div class="mock-session"><div class="ms-t">Day 2</div><div class="ms-name">Wellness Section</div><div class="ms-r">Wellness Room · 3:45–4:45 PM</div></div>
+    <div class="mock-session"><div class="ms-t">Day 3</div><div class="ms-name">Closing Reflections &amp; Du'a</div><div class="ms-r">Red Oak Ballroom · 11:15 AM–12:00 PM</div></div>
+  </div>
+  <p class="mock-caption">Different rooms, different tracks, different days — each session gets its own attendance count, live, without one big undifferentiated number standing in for the whole program.</p>
+
+  <p class="tour-label">Experience journey — every step, in order</p>
+  <div class="mock-frame">
+    <div class="mock-chrome"><span class="label">Completion funnel</span></div>
+    <div class="mock-funnel-row"><div class="fl"><span>Main convention check-in</span><span>564/611</span></div><div class="mock-track"><div class="fill" style="width:92%"></div></div></div>
+    <div class="mock-funnel-row"><div class="fl"><span>Welcome pack collected</span><span>409/611</span></div><div class="mock-track"><div class="fill" style="width:67%"></div></div></div>
+    <div class="mock-funnel-row"><div class="fl"><span>Day 2 check-in</span><span>288/611</span></div><div class="mock-track"><div class="fill" style="width:47%"></div></div></div>
+    <div class="mock-funnel-row"><div class="fl"><span>Jumu'ah prayer at venue ballroom <span class="opt">(optional)</span></span><span>28/611</span></div><div class="mock-track"><div class="fill" style="width:5%"></div></div></div>
+    <div class="mock-funnel-row"><div class="fl"><span>Recitation from the Holy Qur'an <span class="opt">(optional)</span></span><span>1/611</span></div><div class="mock-track"><div class="fill" style="width:1%"></div></div></div>
+    <div class="mock-funnel-row"><div class="fl"><span>Asr prayer <span class="opt">(optional)</span></span><span>1/611</span></div><div class="mock-track"><div class="fill" style="width:1%"></div></div></div>
+  </div>
+  <p class="mock-caption">Every stage a guest moves through — check-in, welcome pack, prayer times, sessions — tracked as its own step, not folded into one generic "attendance" number.</p>
+
+  <p class="tour-label">Priority seating — set before the room fills</p>
+  <div class="mock-frame">
+    <div class="mock-chrome"><span class="label">Table groups</span><span class="label">Tagged guests can only be seated within their group</span></div>
+    <div class="mock-group-grid">
+      <div class="mock-group"><div class="gn">Sheikh &amp; Directors</div><div class="gd">3 assigned · 7 of 10 seats free</div></div>
+      <div class="mock-group"><div class="gn">Guest of Honour</div><div class="gd">0 assigned · 10 of 10 seats free</div></div>
+      <div class="mock-group"><div class="gn">Esteemed Parents</div><div class="gd">3 assigned · 107 of 110 seats free</div></div>
+      <div class="mock-group"><div class="gn">Staff &amp; Students</div><div class="gd">32 assigned · 48 of 80 seats free</div></div>
+    </div>
+  </div>
+  <p class="mock-caption">This is the parenting-workshop cap, the sponsor table, the family that flew in — decided ahead of time, enforced automatically, never sorted out in a doorway.</p>
+
+  <p class="tour-label">FestioHub — what the guest sees on their own phone</p>
+  <div class="mock-frame">
+    <div class="mock-hub">
+      <div class="ht">FestioHub</div>
+      <div class="hcard">Your event updates, QR pass, and messages — one place, no app-store download.</div>
+      <div class="qr-wrap"><div class="qr"></div></div>
+      <div class="status-row">
+        <div class="status-chip">Status<b>Admitted</b></div>
+        <div class="status-chip">Venue<b>Red Oak Ballroom</b></div>
+      </div>
+      <div class="hcard" style="margin-top:0.6rem;">After entry · <span class="redact">██████████</span> Feedback</div>
+    </div>
+  </div>
+  <p class="mock-caption">A guest opens this once, adds it to their home screen, and it's their pass, their schedule, and their messages from your team — for all five days.</p>
+</section>
+
+<section id="capabilities">
+  <p class="eyebrow">Every program, every meal, every seat</p>
+  <h2 class="serif">Without slowing anything down</h2>
+
+  <div class="cap-grid">
+    <div class="cap-tile">
+      <div class="cap-mark"></div>
+      <h3>Check-in that remembers</h3>
+      <p>One scan, day one. Every entrance and session after — already known.</p>
+    </div>
+    <div class="cap-tile">
+      <div class="cap-mark"></div>
+      <h3>Every session, its own count</h3>
+      <p>Parallel tracks, different rooms, five days — each session tracked on its own, live.</p>
+    </div>
+    <div class="cap-tile">
+      <div class="cap-mark"></div>
+      <h3>Meals, tracked to the plate</h3>
+      <p>Every service logged — who, when. Un-serving keeps the history, never deletes it.</p>
+    </div>
+    <div class="cap-tile">
+      <div class="cap-mark"></div>
+      <h3>Priority seating, set in advance</h3>
+      <p>Scholars, sponsors, out-of-town family — seated by rule, not sorted at the door.</p>
+    </div>
+    <div class="cap-tile">
+      <div class="cap-mark"></div>
+      <h3>Requests, seen with time to plan</h3>
+      <p>Dietary needs and seating asks arrive before the event — not mid-service.</p>
+    </div>
+    <div class="cap-tile">
+      <div class="cap-mark"></div>
+      <h3>Messages in your own voice</h3>
+      <p>Guest Communication: every confirmation and reminder written like Platform wrote it.</p>
+    </div>
+    <div class="cap-tile">
+      <div class="cap-mark"></div>
+      <h3>A community, not just a guest list</h3>
+      <p>FestioMe gives Platform its own group space — as open or private as you choose.</p>
+    </div>
+    <div class="cap-tile wide">
+      <div class="cap-mark"></div>
+      <h3>Anything else — we'll build it</h3>
+      <p>A 50-person workshop cap, a Qur'an competition roster, a rule unique to Platform. We shape the platform around your event, not the other way around.</p>
+    </div>
+  </div>
+</section>
+
+<section id="schedule">
+  <p class="eyebrow">The five days</p>
+  <h2 class="serif">One system, carrying the whole week</h2>
+  <div class="day-rows">
+    <div class="day-row"><div class="day-badge">Dec<span class="n">24</span></div><div><h3>Arrival &amp; Check-in</h3><p>Doors open, first scans of the week, families settling in.</p></div></div>
+    <div class="day-row"><div class="day-badge">Dec<span class="n">25</span></div><div><h3>Lectures &amp; Youth Programming</h3><p>Parallel tracks for adults, professionals, and youth — each with its own attendance record.</p></div></div>
+    <div class="day-row"><div class="day-badge">Dec<span class="n">26</span></div><div><h3>Workshops &amp; Qur'an Competition</h3><p>Capacity-managed rooms alongside the Qur'an competition track.</p></div></div>
+    <div class="day-row"><div class="day-badge">Dec<span class="n">27</span></div><div><h3>Networking, Social Events &amp; Gala</h3><p>Priority seating and order management keep the night moving without a hitch.</p></div></div>
+    <div class="day-row"><div class="day-badge">Dec<span class="n">28</span></div><div><h3>Closing &amp; Departure</h3><p>Final sessions, farewells, and a full record ready for next year's planning.</p></div></div>
+  </div>
+</section>
+
+<section id="value">
+  <p class="eyebrow">The value, plainly</p>
+  <h2 class="serif">Well past our standard tiers — capped anyway</h2>
+  <div class="value-chart">
+    <div class="vbar-row">
+      <div class="vbar-label">Typical value<span>software · support · messaging</span></div>
+      <div class="vbar-track"><div class="vbar-fill typical" style="width:100%"><span>$4.5k–$6k</span></div></div>
+    </div>
+    <div class="vbar-row">
+      <div class="vbar-label">Platform 2026 pays<span>hard ceiling, guaranteed</span></div>
+      <div class="vbar-track"><div class="vbar-fill capped" style="width:52%"><span>$3,000</span></div></div>
+    </div>
+  </div>
+  <div class="savings-badge">Up to $3,000 saved — and it's a ceiling, not an estimate. Lighter usage costs less; it never costs more.</div>
+</section>
+
+<section id="ask">
+  <p class="eyebrow">What we're asking for</p>
+  <h2 class="serif">A real partnership runs both ways</h2>
+  <p class="lede">We're not asking NCNMO to pay for what Platform deserves — we're asking for the kind of relationship that makes this worth doing for us too.</p>
+  <ul class="ask-list">
+    <li><span class="ask-num">1</span><div><h3>Be our reference partner.</h3><p class="muted" style="margin:0;">Permission to name NCNMO and Platform in our own materials — with your approval on anything before it's published.</p></div></li>
+    <li><span class="ask-num">2</span><div><h3>Tell us honestly how it went.</h3><p class="muted" style="margin:0;">A short conversation after Platform 2026, in your words, that we can turn into a case study.</p></div></li>
+    <li><span class="ask-num">3</span><div><h3>An introduction, if it feels right.</h3><p class="muted" style="margin:0;">NCNMO also runs ICARE, YASR, ASPIRE, and its Medical Mission — an introduction to whoever organizes those is welcome, never required.</p></div></li>
+    <li><span class="ask-num">4</span><div><h3>Your committee's feedback, direct to our team.</h3><p class="muted" style="margin:0;">What a five-day faith-community gathering actually needs — nobody teaches us that better than the people running one.</p></div></li>
+  </ul>
+</section>
+
+<section id="next">
+  <p class="eyebrow">Next steps</p>
+  <h2 class="serif">Getting Platform 2026 set up</h2>
+  <div class="steps">
+    <div class="step"><div><h3>A short call with your organizing committee</h3><p class="muted">30 minutes — tracks, capacity limits, and what day one should feel like at the Westin.</p></div></div>
+    <div class="step"><div><h3>We build it, on-brand, for your review</h3><p class="muted">Tracks, sessions, and registration pages configured before you see a single line of it live.</p></div></div>
+    <div class="step"><div><h3>A dry run before December 24th</h3><p class="muted">A rehearsal with your check-in team, so day one is calm, not chaotic.</p></div></div>
+    <div class="step"><div><h3>Five days, live — with us right there</h3><p class="muted">Support throughout Platform 2026, included, not billed.</p></div></div>
+  </div>
+  <div class="signature">
+    <p>We'd be honored to be part of Platform's next chapter.</p>
+    <p class="name">The Festio Team</p>
+    <p class="role">events@festio.events · festio.events</p>
+  </div>
+</section>
+
+</div>
+
+<footer>
+  Prepared for the National Council of Nigerian Muslim Organizations — Platform 2026, Indianapolis, IN.
+  <br>Event and organizational details referenced from ncnmo.org, current as of this proposal's preparation. Dashboard figures are real, live data from an active Festio event.
+</footer>
+
+</div>

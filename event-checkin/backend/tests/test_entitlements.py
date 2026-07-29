@@ -48,8 +48,9 @@ def test_feature_gate_raises_402_for_insufficient_tier():
 
 
 def test_credit_metering_decrements_then_blocks():
-    e = _event(is_paid=True, paid_channels=True, message_credits=2)
-    assert take_message_credit(e) is True and e.message_credits == 1
+    # Default SMS weight is 2 credits/send (see DEFAULT_CHANNEL_WEIGHTS).
+    e = _event(is_paid=True, paid_channels=True, message_credits=4)
+    assert take_message_credit(e) is True and e.message_credits == 2
     assert take_message_credit(e) is True and e.message_credits == 0
     assert take_message_credit(e) is False and e.message_credits == 0  # blocked at zero
 
@@ -177,34 +178,41 @@ async def test_broadcast_out_of_credits_reported(ctx):
     assert r.json()["skipped_no_credits"] >= 1
 
 
-def test_take_email_credit_quota_and_halves():
-    """First EMAIL_FREE_QUOTA emails free; then 0.5 each (1 credit per 2);
-    blocked when past quota with no balance."""
-    from app.entitlements import take_email_credit, EMAIL_FREE_QUOTA
+def test_take_email_credit_quota_and_fractional_credit_bank():
+    """First EMAIL_FREE_QUOTA emails free; then the configured email rate
+    (default 10 emails/credit) via the shared fractional credit-bank
+    mechanism (_spend_channel_credit, generalized from the old email-only
+    email_half_pending flag); blocked when past quota with no balance."""
+    from app.entitlements import take_email_credit, EMAIL_FREE_QUOTA, DEFAULT_EMAIL_CREDITS_PER_EMAIL
     from app.models import Event
 
     ev = Event(name="x", couples_name="", event_date=None, timezone="UTC",
                checkin_base_url="http://t", org_id="o")
     ev.message_credits = 2
     ev.emails_sent = 0
-    ev.email_half_pending = 0
 
     # Free quota consumes no credits.
     for _ in range(EMAIL_FREE_QUOTA):
         assert take_email_credit(ev) is True
     assert ev.message_credits == 2 and ev.emails_sent == EMAIL_FREE_QUOTA
 
-    # Email 26: first half — deducts a full credit, remembers the half.
+    per_credit = round(1 / DEFAULT_EMAIL_CREDITS_PER_EMAIL)  # 10 emails/credit by default
+    # First credit's worth: 1 email charges it up front, the next (per_credit-1) are free.
     assert take_email_credit(ev) is True
-    assert ev.message_credits == 1 and ev.email_half_pending == 1
-    # Email 27: second half — no new deduction.
+    assert ev.message_credits == 1
+    for _ in range(per_credit - 1):
+        assert take_email_credit(ev) is True
+    assert ev.message_credits == 1
+    assert ev.emails_sent == EMAIL_FREE_QUOTA + per_credit
+
+    # Second credit's worth, same shape, draining the balance to 0.
     assert take_email_credit(ev) is True
-    assert ev.message_credits == 1 and ev.email_half_pending == 0
-    # Emails 28+29 consume the last credit.
-    assert take_email_credit(ev) is True
-    assert take_email_credit(ev) is True
-    assert ev.message_credits == 0 and ev.email_half_pending == 0
-    # Email 30: past quota, no credits → blocked and not counted.
+    assert ev.message_credits == 0
+    for _ in range(per_credit - 1):
+        assert take_email_credit(ev) is True
+    assert ev.message_credits == 0
+
+    # Past quota, no credits left → blocked and not counted.
     before = ev.emails_sent
     assert take_email_credit(ev) is False
     assert ev.emails_sent == before
@@ -215,3 +223,31 @@ def test_take_email_credit_quota_and_halves():
     ev2.emails_sent = 0
     ev2.blocked_messaging_channels = ["email"]
     assert take_email_credit(ev2) is False
+
+
+def test_spend_channel_credit_handles_weight_above_one_fractionally(monkeypatch):
+    """A 1.5-credit-per-send channel should alternate 2,1,2,1,... credits per
+    send, averaging exactly 1.5 over time — not round every send up to 2."""
+    from app import entitlements
+    from app.entitlements import take_message_credit
+    monkeypatch.setitem(entitlements._rate_cache, (None, "whatsapp"), 1.5)
+
+    e = _event(is_paid=True, paid_channels=True, message_credits=10, org_id="o")
+    charges = []
+    for _ in range(4):
+        before = e.message_credits
+        assert take_message_credit(e, "whatsapp") is True
+        charges.append(before - e.message_credits)
+    assert charges == [2, 1, 2, 1]
+    assert e.message_credits == 10 - sum(charges)
+
+
+def test_channel_weight_prefers_org_override_over_global_default(monkeypatch):
+    from app import entitlements
+    from app.entitlements import channel_weight
+    monkeypatch.setitem(entitlements._rate_cache, (None, "sms"), 2)
+    monkeypatch.setitem(entitlements._rate_cache, ("org-x", "sms"), 0.5)
+
+    assert channel_weight("sms", org_id="org-x") == 0.5  # org override wins
+    assert channel_weight("sms", org_id="org-y") == 2     # falls back to global default
+    assert channel_weight("sms") == 2                     # no org context at all

@@ -1,0 +1,104 @@
+import { test, expect } from '@playwright/test'
+import { expectQaEventLoaded, requiredEnv, signIn } from './helpers.js'
+
+test.describe.configure({ mode: 'serial' })
+
+test.describe('Stage C billing — provider-safe hosted handoff', () => {
+  test('submits the exact live catalog tier key and leaves Festio for hosted checkout', async ({ page }) => {
+    const eventId = requiredEnv('E2E_EVENT_ID')
+    await signIn(page)
+
+    const tiersReady = page.waitForResponse((response) =>
+      response.url().includes(`/api/billing/tiers/${eventId}`) && response.status() === 200
+    )
+    await page.goto('/billing-redesign')
+    await expectQaEventLoaded(page)
+    const billing = await (await tiersReady).json()
+    expect(billing.tiers?.length, 'isolated QA billing catalog must contain an active Event Pass tier').toBeGreaterThan(0)
+    expect(['stripe', 'paystack']).toContain(billing.provider)
+
+    const selectedTier = billing.tiers[0]
+    const hostedOrigin = billing.provider === 'stripe' ? 'https://checkout.stripe.com' : 'https://checkout.paystack.com'
+    const hostedUrl = `${hostedOrigin}/e2e-safe-handoff?provider=${billing.provider}`
+    let submittedBody
+    await page.route('**/api/billing/checkout', async (route) => {
+      submittedBody = route.request().postDataJSON()
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          provider: billing.provider,
+          url: hostedUrl,
+        }),
+      })
+    })
+    await page.route(`${hostedOrigin}/**`, async (route) => {
+      await route.fulfill({ status: 200, contentType: 'text/html', body: '<title>Provider-safe E2E handoff</title><h1>Hosted checkout</h1>' })
+    })
+
+    const buyButton = page.locator(`button[data-plan-key="${selectedTier.key}"]`).filter({ hasText: /Buy Event Pass|Buy this pass again/ })
+    await expect(buyButton).toBeVisible()
+    if (!billing.configured) {
+      await expect(buyButton).toBeDisabled()
+      test.skip(true, `${billing.provider} is not configured on isolated staging; hosted checkout is correctly unavailable.`)
+    }
+    await buyButton.click()
+
+    const modalSubmit = page.getByTestId('hosted-checkout-submit')
+    await expect(modalSubmit).toHaveAttribute('data-plan-key', selectedTier.key)
+    await expect(page.getByText(/Card details are entered only on the provider's hosted page/i)).toBeVisible()
+
+    await Promise.all([
+      page.waitForURL(new RegExp(`${hostedOrigin.replaceAll('.', '\\.')}\\/e2e-safe-handoff\\?`)),
+      modalSubmit.click(),
+    ])
+
+    expect(submittedBody).toEqual({ event_id: eventId, tier: selectedTier.key })
+    await expect(page).toHaveURL(new RegExp(`provider=${billing.provider}`))
+  })
+
+  test('credit pack purchase uses the same provider-safe hosted handoff as an Event Pass', async ({ page }) => {
+    const eventId = requiredEnv('E2E_EVENT_ID')
+    await signIn(page)
+
+    const tiersReady = page.waitForResponse((response) =>
+      response.url().includes(`/api/billing/tiers/${eventId}`) && response.status() === 200
+    )
+    await page.goto('/billing-redesign')
+    await expectQaEventLoaded(page)
+    const billing = await (await tiersReady).json()
+    test.skip(!billing.is_paid, 'Credit packs require the isolated QA event to already have an active Event Pass')
+    expect(billing.packs?.length, 'isolated QA billing catalog must contain an active credit pack').toBeGreaterThan(0)
+
+    const selectedPack = billing.packs[0]
+    const hostedOrigin = billing.provider === 'stripe' ? 'https://checkout.stripe.com' : 'https://checkout.paystack.com'
+    const hostedUrl = `${hostedOrigin}/e2e-safe-handoff?provider=${billing.provider}&kind=credits`
+    let submittedBody
+    await page.route('**/api/billing/checkout', async (route) => {
+      submittedBody = route.request().postDataJSON()
+      await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ provider: billing.provider, url: hostedUrl }) })
+    })
+    await page.route(`${hostedOrigin}/**`, async (route) => {
+      await route.fulfill({ status: 200, contentType: 'text/html', body: '<title>Provider-safe E2E handoff</title><h1>Hosted checkout</h1>' })
+    })
+
+    const buyButton = page.locator(`button[data-plan-key="${selectedPack.key}"]`).filter({ hasText: 'Buy credits' })
+    await expect(buyButton).toBeVisible()
+    if (!billing.configured) {
+      await expect(buyButton).toBeDisabled()
+      test.skip(true, `${billing.provider} is not configured on isolated staging; hosted checkout is correctly unavailable.`)
+    }
+    await buyButton.click()
+
+    const modalSubmit = page.getByTestId('hosted-checkout-submit')
+    await expect(modalSubmit).toHaveAttribute('data-plan-key', selectedPack.key)
+
+    await Promise.all([
+      page.waitForURL(new RegExp(`${hostedOrigin.replaceAll('.', '\\.')}\\/e2e-safe-handoff\\?`)),
+      modalSubmit.click(),
+    ])
+
+    expect(submittedBody).toEqual({ event_id: eventId, tier: selectedPack.key })
+    await expect(page).toHaveURL(new RegExp(`provider=${billing.provider}`))
+  })
+})

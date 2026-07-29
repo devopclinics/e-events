@@ -1,0 +1,131 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+repo_dir=$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)
+frontend_dir="${repo_dir}/frontend"
+base_url=${E2E_BASE_URL:-https://staging.festio.events}
+node_dir=/home/dev/.vscode-remote-containers/bin/1b50d58d73426c9171299ec4037d01365d995b78
+
+if [[ "$base_url" != "https://staging.festio.events" ]]; then
+  echo "Refusing temporary-identity run outside staging: ${base_url}" >&2
+  exit 2
+fi
+
+firebase_api_key=$(sed -n 's/^VITE_FIREBASE_API_KEY=//p' "${frontend_dir}/.env" | head -1)
+if [[ -z "$firebase_api_key" ]]; then
+  echo "VITE_FIREBASE_API_KEY is missing from frontend/.env" >&2
+  exit 2
+fi
+
+cd "$repo_dir"
+mapfile -t qa < <(docker compose exec -T -e QA_FIREBASE_API_KEY="$firebase_api_key" backend python - <<'PY'
+import asyncio
+import json
+import os
+import secrets
+import string
+import urllib.request
+
+from firebase_admin import auth as firebase_auth
+from sqlalchemy import select
+
+from app.auth import _ensure_firebase
+from app.database import AsyncSessionLocal
+from app.models import Event, Membership, Organization, User
+
+email = f"redesign-e2e-{secrets.token_hex(5)}@festio.events"
+alphabet = string.ascii_letters + string.digits + "!@#%"
+password = "".join(secrets.choice(alphabet) for _ in range(28))
+_ensure_firebase()
+record = firebase_auth.create_user(email=email, password=password, display_name="Redesign E2E")
+
+payload = json.dumps({"email": email, "password": password, "returnSecureToken": True}).encode()
+url = "https://identitytoolkit.googleapis.com/v1/accounts:signInWithPassword?key=" + os.environ["QA_FIREBASE_API_KEY"]
+request = urllib.request.Request(url, data=payload, headers={"Content-Type": "application/json"})
+with urllib.request.urlopen(request, timeout=30) as response:
+    token = json.load(response)["idToken"]
+request = urllib.request.Request(
+    "http://localhost:8000/api/auth/me",
+    headers={"Authorization": "Bearer " + token},
+)
+with urllib.request.urlopen(request, timeout=30):
+    pass
+
+async def grant():
+    async with AsyncSessionLocal() as db:
+        org = await db.scalar(select(Organization).where(Organization.slug == "internal-redesign-qa"))
+        if not org or org.redesign_cohort == "legacy_only":
+            raise RuntimeError("isolated QA organization is missing or not redesign-enabled")
+        event = await db.scalar(select(Event).where(Event.org_id == org.id))
+        user = await db.scalar(select(User).where(User.firebase_uid == record.uid))
+        db.add(Membership(org_id=org.id, user_id=user.id, role="owner"))
+        await db.commit()
+        print(email)
+        print(password)
+        print(event.id)
+        print(record.uid)
+        print(user.id)
+        print(org.id)
+        print(org.redesign_cohort)
+
+asyncio.run(grant())
+PY
+)
+
+if [[ ${#qa[@]} -ne 7 ]]; then
+  echo "Temporary QA identity bootstrap failed" >&2
+  exit 2
+fi
+
+cleanup() {
+  docker compose exec -T -e QA_FIREBASE_UID="${qa[3]}" -e QA_USER_ID="${qa[4]}" backend python - <<'PY' >/dev/null
+import asyncio
+import os
+
+from firebase_admin import auth as firebase_auth
+from sqlalchemy import delete, select
+
+from app.auth import _ensure_firebase
+from app.database import AsyncSessionLocal
+from app.models import ApiKey, Membership, Organization, User
+
+_ensure_firebase()
+try:
+    firebase_auth.delete_user(os.environ["QA_FIREBASE_UID"])
+except Exception:
+    pass
+
+async def remove():
+    async with AsyncSessionLocal() as db:
+        user = await db.get(User, os.environ["QA_USER_ID"])
+        if not user:
+            return
+        org_ids = list((await db.execute(
+            select(Membership.org_id).where(Membership.user_id == user.id)
+        )).scalars())
+        await db.execute(delete(ApiKey).where(ApiKey.created_by_user_id == user.id))
+        await db.execute(delete(Membership).where(Membership.user_id == user.id))
+        await db.delete(user)
+        for org_id in org_ids:
+            org = await db.get(Organization, org_id)
+            if org and org.slug.startswith("org-"):
+                await db.delete(org)
+        await db.commit()
+
+asyncio.run(remove())
+PY
+}
+trap cleanup EXIT
+
+export E2E_BASE_URL="$base_url"
+export E2E_EMAIL="${qa[0]}"
+export E2E_PASSWORD="${qa[1]}"
+export E2E_EVENT_ID="${qa[2]}"
+export E2E_REDESIGN_ORG_ID="${qa[5]}"
+export E2E_REDESIGN_ORG_COHORT="${qa[6]}"
+export PATH="${node_dir}:${PATH}"
+
+cd "$frontend_dir"
+exec_status=0
+./node_modules/.bin/playwright test "$@" || exec_status=$?
+exit "$exec_status"

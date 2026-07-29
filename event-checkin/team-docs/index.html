@@ -179,8 +179,10 @@
     <li><a href="#tiers">1. Event Passes</a></li>
     <li><a href="#messaging">2. Messaging — internal pricing</a></li>
     <li><a href="#messaging-ux">2b. What the customer sees</a></li>
+    <li><a href="#credit-standard">2c. Platform credit usage standard</a></li>
     <li><a href="#bundles">3. Message bundles</a></li>
     <li><a href="#addons">4. Add-ons</a></li>
+    <li><a href="#addon-billing">4b. Add-on billing architecture</a></li>
     <li><a href="#staffing">5. Staffing &amp; support services</a></li>
     <li><a href="#margins">6. Margin check vs. real provider cost</a></li>
     <li><a href="#open">7. Open decisions</a></li>
@@ -243,6 +245,51 @@
 <p class="note">Internally the system can still use one fungible "credit" as its unit of account (an implementation detail, see §8) — the customer never sees per-channel math.</p>
 </section>
 
+<section id="credit-standard">
+<h2 data-n="2c">Platform credit usage standard</h2>
+<p class="lede">The methodology for how many credits any channel costs, and how a mixed-channel event gets metered against one balance. Written up 2026-07-25 after the SMS segment-cost audit in §6 exposed that the current anchor (SMS = 1 credit) is itself understated — read the sequencing note below before treating any number here as final.</p>
+
+<h3 class="sub">The pool is fungible — there is no per-channel budget</h3>
+<p class="lede">An event has exactly one balance, <code>event.message_credits</code>. Every channel just debits it at that channel's own weight, in whatever mix the organizer actually sends. There is no separate "SMS budget" and "MMS budget" — 100 credits can become 100 SMS, or 33 MMS, or any combination that adds up to ≤100 credits spent. This is already how <code>take_message_credit()</code>/<code>take_email_credit()</code> work in code today; the open question is only what each channel's weight should be and why.</p>
+
+<h3 class="sub">The standard: cost-ratio to a fixed SMS anchor</h3>
+<p class="lede">SMS is the fixed baseline. Every other channel's weight = <code>ceil(real cost of that channel ÷ real cost of SMS)</code>, rounded to a practical credit value (or, where the ratio is far below 1, expressed as "N units per credit" the way Email already is). Reviewed whenever a provider's real rate changes — this is a formula, not a fixed table, even though the table below is today's snapshot of it.</p>
+
+<p class="note warn-note"><strong>Sequencing dependency, now applied:</strong> §6 found a full SMS send usually costs ~2 real segments (~$0.047), not the ~$0.0235 a 1-segment anchor assumes. The weights below apply that correction — SMS moves to <strong>2 credits</strong>, the anchor a full send actually costs. WhatsApp's raw cost ratio against that corrected anchor still comes out under 1 (≈0.23–0.36x), but it's priced at <strong>1.5 credits</strong> here as a deliberate business call, not a raw formula output — same pattern already used for MMS (3 credits vs. its raw 2.1x ratio): the formula sets a defensible floor, judgment sets the actual number above it.</p>
+
+<div class="table-scroll">
+<table>
+<thead><tr><th>Channel</th><th class="num">Real cost</th><th class="num">÷ SMS anchor ($0.047)</th><th class="num">Set weight</th><th class="num">Live today</th></tr></thead>
+<tbody>
+<tr><td>SMS</td><td class="num">$0.047 (2 segments)</td><td class="num">1.0x</td><td class="num"><strong>2 credits</strong> (anchor)</td><td class="num">1 credit</td></tr>
+<tr><td>WhatsApp</td><td class="num">$0.011–0.017</td><td class="num">0.23–0.36x</td><td class="num"><strong>1.5 credits</strong> (business call, above the raw ratio)</td><td class="num">1 credit</td></tr>
+<tr><td>MMS</td><td class="num">$0.05</td><td class="num">1.06x</td><td class="num"><strong>3 credits</strong> (kept above the raw ratio as a deliberate margin buffer)</td><td class="num">3 credits</td></tr>
+<tr><td>Email</td><td class="num">$0.0004</td><td class="num">0.009x</td><td class="num"><strong>10 emails / credit</strong> (true parity is ~118/credit against this corrected anchor; 10 is a deliberate under-discount, see §7)</td><td class="num">2 emails / credit</td></tr>
+<tr><td>RCS</td><td class="num">unpriced</td><td class="num">n/a</td><td class="num flag">not chargeable — no live SignalHouse price yet</td><td class="num flag">2 credits (should be n/a until priced)</td></tr>
+</tbody>
+</table>
+</div>
+<p class="note">Console requirement (see §8): these weights need to be superadmin-editable per channel, not hardcoded/env-var — see the two new build items logged there.</p>
+
+<h3 class="sub">Worked example — mixing channels against one balance</h3>
+<p class="lede">A Starter-tier event (100 credits) that sends 50 SMS + 10 MMS + 200 emails + 30 WhatsApp messages across the event:</p>
+<p class="note">Cost = (50 × 2) + (10 × 3) + (200 ÷ 10) + (30 × 1.5) = 100 + 30 + 20 + 45 = <strong>195 credits</strong> — nearly double the 100-credit allotment. The event needs a 95-credit top-up, or to trim volume. Same per-send reserve/decline logic <code>take_message_credit</code> already applies today, channel by channel, as each send happens — nothing new needs building for mixed usage, only the weights (and the console to set them) need to exist.</p>
+
+<h3 class="sub">If spent entirely on one channel (illustrates the exchange rate, not a real usage pattern)</h3>
+<div class="table-scroll">
+<table>
+<thead><tr><th>Tier</th><th class="num">Credits</th><th class="num">All SMS</th><th class="num">All WhatsApp</th><th class="num">All MMS</th><th class="num">All Email (planned 10:1)</th><th class="num">All Email (live 2:1)</th></tr></thead>
+<tbody>
+<tr><td>Starter</td><td class="num">100</td><td class="num">50</td><td class="num">66</td><td class="num">33</td><td class="num">1,000</td><td class="num">200</td></tr>
+<tr><td>Standard</td><td class="num">300</td><td class="num">150</td><td class="num">200</td><td class="num">100</td><td class="num">3,000</td><td class="num">600</td></tr>
+<tr><td>Pro</td><td class="num">700</td><td class="num">350</td><td class="num">466</td><td class="num">233</td><td class="num">7,000</td><td class="num">1,400</td></tr>
+<tr><td>Scale</td><td class="num">2,000</td><td class="num">1,000</td><td class="num">1,333</td><td class="num">667</td><td class="num">20,000</td><td class="num">4,000</td></tr>
+</tbody>
+</table>
+</div>
+<p class="note">For reference, an earlier illustrative pass floated 300 SMS / 150 MMS / 600 Email / 200 WhatsApp for Starter — that shape doesn't match the weights above either (Starter now nets 50 all-SMS, not 300), since it was an example of the "OR" mental model, not literal target numbers. The mental model it illustrated — one shared pool, exclusive channel choice trades off against the others — is exactly right; only the specific figures needed replacing with the cost-grounded weights.</p>
+</section>
+
 <section id="bundles">
 <h2 data-n="3">Message bundles</h2>
 <p class="lede">Customer-facing label is just <strong>"buy credits"</strong> — no channel name, no per-message rate shown. Internally each price point still maps to a real per-channel rate (§2), it's just never surfaced. Flat per-unit price at every size — no volume discount below the $0.50-equivalent floor.</p>
@@ -292,6 +339,36 @@
 </div>
 </section>
 
+<section id="addon-billing">
+<h2 data-n="4b">Add-on billing architecture</h2>
+<p class="note warn-note"><strong>Scope note:</strong> the Pricing Plans sheet (external, linked from the Media Library) is a <strong>planning draft describing the target packaging we're designing</strong> — it is not, and isn't meant to be, a description of what's live today. Nothing below should be read as "the plan is wrong because the code doesn't match it." Current code state only matters here for one reason: whatever the plan ultimately decides is a paid add-on, <em>something</em> has to exist to actually charge for it — and today, nothing does.</p>
+<p class="lede">Code audit (2026-07-26): <strong>no add-on price is wired to real billing.</strong> Every paid feature is gated purely by <code>plan_tier</code> rank (<code>FEATURE_MIN_PLAN</code> in <code>entitlements.py</code>) — an all-or-nothing switch tied to the Event Pass tier. <code>PricingPlan.kind</code> only supports <code>"tier"</code> and <code>"pack"</code>; <code>apply_purchase()</code> only knows how to flip an event to a tier or grant credits. Even "Seat Arrangement — $1.25 per guest," the one line in §4 that reads like a real per-unit price, has zero backing code — <code>seating_enabled</code> is a flat tier-gate exactly like everything else. Whatever the final plan says is an add-on, this is the gap between it and a sellable reality.</p>
+
+<h3 class="sub">Internal consistency: Pricing Plans sheet vs. §4</h3>
+<p class="lede">Cross-checking the Pricing Plans sheet's per-tier "Included" columns against this section found three items double-booked — listed as bundled-in on one sheet and separately priced on this one. Both can't be true in the same plan. Resolved 2026-07-26 (confirmed by the plan's owner): all three stay <strong>bundled</strong> — their §4 rows were removed as add-on line items.</p>
+<ul>
+<li><strong>Festio Hub</strong> and <strong>Festio Pass</strong> — Pricing Plans marks both "Included" in every tier (N/A only at Free). No longer listed separately in §4.</li>
+<li><strong>Design Studio</strong> — Pricing Plans marks it included at every tier (1 design at Free). No longer listed separately in §4.</li>
+</ul>
+<p class="note">Seating, Orders (menu), Deliveries (logistics), Registry, and FestioMe were <em>not</em> part of this conflict — the "Service charges" subsection above already has a <span class="ok">✓ resolved</span> decision to carve those four out as flat per-event fees, consistent with treating them as add-ons rather than bundled. Left as-is.</p>
+
+<h3 class="sub">Proposed architecture — extends the credit-rate console pattern already shipped</h3>
+<p class="lede">Same shape as the Console's messaging-credit-weight panel (§2c): a superadmin-editable rate table plus a live in-memory cache, now generalized to per-add-on pricing instead of per-message-channel pricing.</p>
+<div class="table-scroll">
+<table>
+<thead><tr><th>Piece</th><th>What it does</th></tr></thead>
+<tbody>
+<tr><td><code>kind = "addon"</code> on <code>PricingPlan</code> (or a new <code>AddonPlan</code> table if the fields diverge too much once designed in full)</td><td>Adds a <code>billing_mode</code> field: <code>flat_per_event</code> | <code>per_guest</code> | <code>credit_multiplier</code> — covers every pricing shape seen across §4 (flat $50/event, $1.25/guest, and a credit-based option for consistency with the messaging system).</td></tr>
+<tr><td>New <code>EventAddon</code> table: <code>(event_id, addon_key, activated_at, payment_id)</code></td><td>Tracks per-add-on entitlement state the same way <code>plan_tier</code>/<code>message_credits</code> already track tier/messaging state — but per add-on, not one global rank.</td></tr>
+<tr><td><code>assert_feature_allowed</code> / <code>event_allows</code> gets a second check path</td><td>Today it only asks "does this event's tier rank clear the feature's minimum?" Needs an OR: "...or has this event separately purchased this add-on?" — so a lower tier can unlock one feature standalone instead of upgrading the whole tier.</td></tr>
+<tr><td>Console: new "Add-ons" tab, parallel to the existing Pricing tab</td><td>Admin-editable price + billing mode per add-on. Same UI pattern as the credit-rate panels already built (global default now; a per-org negotiated override could follow the same pattern later if needed).</td></tr>
+<tr><td>Checkout: extends the existing Stripe/Paystack flow (<code>services/payments.py</code>)</td><td>One more purchasable line-item type alongside the Event Pass tier and credit packs; <code>apply_purchase()</code> gets an <code>addon</code> branch.</td></tr>
+</tbody>
+</table>
+</div>
+<p class="note warn-note">Sized closer to §8's existing "Tier-independent feature add-ons... Large... New entitlements concept" build item than the credit-rate work — that only needed a new rate table and a cache. This needs a new entitlement-checking path, a new checkout line-item type, and per-add-on Console config touching real payment flows. Not started; this is the design for when it is — flag when ready to scope an actual build pass.</p>
+</section>
+
 <section id="staffing">
 <h2 data-n="5">Staffing &amp; support services</h2>
 <p class="lede">Priced at cost ÷ (1 − 60% target margin). All three figures land exactly on a 60% margin.</p>
@@ -324,6 +401,21 @@
 </table>
 </div>
 <p class="note">All priced channels clear the 70% target margin with wide headroom.</p>
+
+<h3 class="sub">⚠ SMS segment-count correction (found 2026-07-25)</h3>
+<p class="lede">The $0.0235 SMS cost above assumes <strong>one</strong> GSM-7 segment (≤160 chars). Direct inspection of <code>backend/services/messaging.py</code> found that every outbound SMS this app sends gets ~82 chars of fixed overhead added automatically — an 8-char <code>"Festio: "</code> brand prefix plus a 74-char <code>"Reply HELP for help, STOP to opt out. Message and data rates may apply."</code> compliance footer (<code>_brand_sms()</code>) — on top of a ~70-char ticket/RSVP URL (UUID tokens). Result: the invite and RSVP-link SMS templates run 216–253 chars <strong>every time</strong>, and the admission SMS is 160–200 chars depending on whether table/seat info is included. That's <strong>2 segments, not 1</strong>, for nearly every SMS this app actually sends. Confirmed separately: <code>take_message_credit()</code> / <code>channel_weight()</code> in <code>entitlements.py</code> charge a flat 1 credit per SMS regardless of length — the credit system has no concept of segment count at all, so this isn't reflected anywhere in what we charge customers today.</p>
+<p class="note warn-note">Real cost per logical SMS send is therefore ≈<strong>$0.047</strong> (2 × $0.0235), not $0.0235. Against the draft $0.50/SMS plan above, that only softens margin to <strong>90.6%</strong> — still healthy. But against <strong>live, already-charging-customers-today</strong> pay-as-you-go top-up pricing (<code>pricing_plans</code> table: 100 credits/$6, 500/$25, 2,000/$80 → $0.06 / $0.05 / $0.04 per credit), the picture is much worse:</p>
+<div class="table-scroll">
+<table>
+<thead><tr><th>Top-up pack</th><th class="num">Revenue / credit</th><th class="num">Real cost / SMS (2 seg.)</th><th class="num">Margin</th></tr></thead>
+<tbody>
+<tr><td>100 credits ($6)</td><td class="num">$0.060</td><td class="num">$0.047</td><td class="num ok">21.7%</td></tr>
+<tr><td>500 credits ($25)</td><td class="num">$0.050</td><td class="num">$0.047</td><td class="num warn">6.0%</td></tr>
+<tr><td>2,000 credits ($80)</td><td class="num">$0.040</td><td class="num">$0.047</td><td class="num flag">−17.5% (loss)</td></tr>
+</tbody>
+</table>
+</div>
+<p class="note flag-note">The largest, best-value-looking top-up pack is currently sold at a loss on any 2-segment SMS — which, per the template audit above, is most SMS this app sends. This also means every Event Pass tier's bundled credit allotment is under-costed by roughly the same ~2x factor, though that can't be isolated to a per-credit number since tier credits are bundled into one flat price. Needs a decision: shorten the templates (drop the compliance footer's optional trailing clause, use a shorter link — e.g. a token redirect service — to claw back under 160 chars), charge 2 credits for SMS as a blanket policy, or accept the compressed/negative margin on top-ups as a low-priority cost center subsidized by tier revenue.</p>
 </section>
 
 <section id="open">
@@ -339,6 +431,7 @@
 <li><span class="ok">✓ Resolved</span> — <strong>NGN pricing is a straight FX conversion</strong> of the finalized USD figures, decided once USD is locked in.</li>
 <li><strong>Custom domain annual renewal.</strong> <span class="rec">Recommend: $49/year.</span></li>
 <li><strong>"From $149" items base scope.</strong> <span class="rec">Recommend: define a concrete floor for each</span> — e.g. sender setup covers registration + 3 templates, $25/template after; import covers one clean file up to 2,000 records.</li>
+<li><strong>SMS billed as 1 credit but usually costs 2 segments (see §6 correction, found 2026-07-25).</strong> <span class="rec">Recommend: shorten the SMS templates back under 160 chars first (cheapest fix, no pricing change needed)</span> — if that's not enough, revisit whether SMS should cost 2 credits by default.</li>
 <li><strong>Top-up amounts.</strong> <span class="rec">Recommend: keep $50 / $250 / $1,000 as-is.</span></li>
 <li><strong>Pre-send cost estimate.</strong> <span class="rec">Recommend: show both</span> dollar amount and recipient count.</li>
 <li><span class="ok">✓ Resolved</span> — <strong>Deliveries/Gift/FestioMe/Guest Communication</strong> are now flat per-event service charges ($50/$50/$50/$10 — see §4), no longer included free at Starter+.</li>
@@ -357,6 +450,8 @@
 <tr><td>WhatsApp utility vs. marketing category pricing</td><td class="size-m">Medium</td><td>Thread template category through to the credit-charging call site; extend weight lookup to key on <code>(channel, category)</code>.</td></tr>
 <tr><td>Guest-capacity add-on blocks</td><td class="size-m">Medium</td><td>New <code>pricing_plans</code> kind (<code>guest_block</code>) + one new branch in <code>apply_purchase()</code>.</td></tr>
 <tr><td>Tier-independent feature add-ons (Advanced Access, Premium Design, white-label, etc.)</td><td class="size-l">Large</td><td>New entitlements concept — today every feature gate is pure tier-rank. Needs a purchased-add-on flag independent of <code>plan_tier</code>.</td></tr>
+<tr><td>Per-channel credit weight console editor (§2c)</td><td class="size-m">Medium</td><td><code>channel_weight()</code> in <code>entitlements.py</code> only reads <code>MESSAGE_CREDIT_WEIGHTS</code> from an env var today — requires a redeploy to change. Needs a DB-backed settings row (same pattern as the already-superadmin-editable <code>pricing_plans</code> table) plus a Console UI page to edit SMS/WhatsApp/MMS/RCS weights and the email credits-per-email ratio without a deploy.</td></tr>
+<tr><td>Per-org negotiated credit pricing override</td><td class="size-m">Medium</td><td>No per-org override concept exists anywhere in the credit system today — weights and pack prices are global. Needs an optional <code>Organization</code>-scoped override table (channel weights and/or pack $ price) that <code>channel_weight()</code>/checkout check before falling back to the global default, plus a Console UI to set/clear it per org for negotiated deals.</td></tr>
 <tr><td>Staff day-rate booking</td><td class="size-l">Out of scope for now</td><td>No booking/invoicing flow exists. Manual quote → Stripe custom invoice.</td></tr>
 </tbody>
 </table>

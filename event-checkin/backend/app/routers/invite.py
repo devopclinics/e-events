@@ -31,6 +31,7 @@ from ..template_resolve import load_overrides
 from .guests import _normalize_phone
 from ..entitlements import assert_within_guest_cap, can_use_paid_channels, last_credit_ledger_id, take_message_credit
 from ..services.festiome_outbox import queue_guest_sync
+from ..services.webhook_outbox import queue_webhook_event
 
 logger = logging.getLogger(__name__)
 
@@ -59,9 +60,18 @@ async def _get_public_event_by_rsvp_token(rsvp_token: str, db: AsyncSession) -> 
     return event
 
 
+# Statuses that hold (or may still be granted) a real spot against capacity.
+# "declined" freed their spot; "waitlisted" never held one — both are excluded
+# so a decline/removal actually reopens capacity for promotion/new RSVPs.
+_ACTIVE_RSVP_STATUSES = ("invited", "confirmed", "pending")
+
+
 async def _rsvp_count(event_id: str, db: AsyncSession) -> int:
     return await db.scalar(
-        select(func.count()).where(Guest.event_id == event_id)
+        select(func.count()).where(
+            Guest.event_id == event_id,
+            Guest.rsvp_status.in_(_ACTIVE_RSVP_STATUSES),
+        )
     ) or 0
 
 
@@ -256,6 +266,7 @@ def _send_rsvp_invite(
             event.invite_cover_image,
             hub_url=hub_url,
             event_timezone=event.timezone,
+            event_end_date=event.event_end_date,
         )
 
     if paid_channels and event.notify_sms and guest.phone and guest.sms_consent and take_message_credit(event, "sms"):
@@ -432,8 +443,10 @@ async def _submit_multi_invitee_rsvp(
 
     count = await _rsvp_count(event.id, db)
     total_new_guests = 1 + len(raw_invitees)
-    if event.rsvp_capacity is not None and count + total_new_guests > event.rsvp_capacity:
-        raise HTTPException(409, "Sorry — this event does not have enough remaining spots for all invitees.")
+    # If the whole party doesn't fit in the remaining capacity, waitlist the
+    # entire submission together rather than splitting the party across
+    # confirmed/waitlisted status.
+    is_waitlisted = event.rsvp_capacity is not None and count + total_new_guests > event.rsvp_capacity
     assert_within_guest_cap(event, count, adding=total_new_guests)
 
     submitter_email = data.email.lower().strip() if data.email else None
@@ -500,6 +513,12 @@ async def _submit_multi_invitee_rsvp(
 
     needs_approval = event.rsvp_require_approval
     now = datetime.utcnow()
+    if is_waitlisted:
+        new_guest_status = "waitlisted"
+    elif needs_approval:
+        new_guest_status = "pending"
+    else:
+        new_guest_status = "confirmed"
     submitter_name = f"{data.first_name.strip()} {data.last_name.strip()}".strip()
     submitter_guest_type = (matched_limit_rule or "Main invited guest").strip()
     submitter_group_id = await _default_group_for_invitee(event.id, submitter_guest_type, db)
@@ -520,10 +539,11 @@ async def _submit_multi_invitee_rsvp(
         sms_consent=bool(data.sms_consent and submitter_phone),
         whatsapp_consent=bool(data.whatsapp_consent and submitter_phone),
         invite_token=str(uuid.uuid4()),
-        qr_generated_at=None if needs_approval else now,
-        invite_sent_at=None if needs_approval else now,
-        rsvp_status="pending" if needs_approval else "confirmed",
+        qr_generated_at=now if new_guest_status == "confirmed" else None,
+        invite_sent_at=now if new_guest_status == "confirmed" else None,
+        rsvp_status=new_guest_status,
         rsvp_responded_at=now,
+        waitlisted_at=now if is_waitlisted else None,
         assigned_table_group_id=submitter_group_id,
         table_id=submitter_table_id,
         ticket_type_id=submitter_ticket_type_id,
@@ -553,10 +573,11 @@ async def _submit_multi_invitee_rsvp(
             sms_consent=False,
             whatsapp_consent=False,
             invite_token=str(uuid.uuid4()),
-            qr_generated_at=None if needs_approval else now,
-            invite_sent_at=None if needs_approval else now,
-            rsvp_status="pending" if needs_approval else "confirmed",
+            qr_generated_at=now if new_guest_status == "confirmed" else None,
+            invite_sent_at=now if new_guest_status == "confirmed" else None,
+            rsvp_status=new_guest_status,
             rsvp_responded_at=now,
+            waitlisted_at=now if is_waitlisted else None,
             assigned_table_group_id=group_id,
             table_id=invitee_table_id,
             ticket_type_id=ticket_type_id,
@@ -583,6 +604,22 @@ async def _submit_multi_invitee_rsvp(
         if raw_invitees
         else submitter_guest.first_name
     )
+    if is_waitlisted:
+        if event.notify_rsvp_responses:
+            from .guests import dispatch_simple_notice
+            for guest in created:
+                dispatch_simple_notice(background_tasks, event, guest, "waitlisted", overrides)
+            await db.commit()
+        return RSVPConfirm(
+            id=created[0].id,
+            qr_token=created[0].qr_token,
+            invite_token=created[0].invite_token,
+            first_name=submitter_guest.first_name,
+            last_name=submitter_guest.last_name,
+            rsvp_status="waitlisted",
+            message=f"This event doesn't have enough remaining spots for {guest_count_text} — you've been added to the waitlist together.",
+        )
+
     if needs_approval:
         if event.notify_rsvp_responses:
             from .guests import dispatch_simple_notice
@@ -661,10 +698,10 @@ async def submit_rsvp(
     if event.rsvp_multi_invitee_enabled:
         return await _submit_multi_invitee_rsvp(event, data, background_tasks, db)
 
-    # Capacity guard (host-set RSVP cap and plan entitlement cap)
+    # Capacity guard (host-set RSVP cap and plan entitlement cap). Once the cap
+    # is reached, new RSVPs are queued on the waitlist instead of rejected.
     count = await _rsvp_count(event_id, db)
-    if event.rsvp_capacity is not None and count >= event.rsvp_capacity:
-        raise HTTPException(409, "Sorry — this event is at capacity")
+    is_waitlisted = event.rsvp_capacity is not None and count >= event.rsvp_capacity
     assert_within_guest_cap(event, count)
 
     await _require_questions_answered(event_id, data.answers, db)
@@ -707,8 +744,17 @@ async def submit_rsvp(
 
     # When the event requires approval, self-registrations land as "pending":
     # no ticket is issued until a planner approves. Otherwise confirm instantly.
+    # Waitlisted takes priority over both — no ticket, no approval queue, just
+    # a queued spot promoted later (see _promote_from_waitlist in guests.py).
     needs_approval = event.rsvp_require_approval
     now = datetime.utcnow()
+
+    if is_waitlisted:
+        rsvp_status = "waitlisted"
+    elif needs_approval:
+        rsvp_status = "pending"
+    else:
+        rsvp_status = "confirmed"
 
     guest = Guest(
         event_id=event_id,
@@ -722,12 +768,13 @@ async def submit_rsvp(
         # link (/r/{invite_token}) works on any device — not just the browser
         # that RSVP'd. Bulk-invited guests already get one when invited.
         invite_token=str(uuid.uuid4()),
-        qr_generated_at=None if needs_approval else now,
+        qr_generated_at=now if rsvp_status == "confirmed" else None,
         # invite_sent_at marks that we've delivered their ticket — set it here for
         # instant confirmations so self-registrations count as "invited" in stats.
-        invite_sent_at=None if needs_approval else now,
-        rsvp_status="pending" if needs_approval else "confirmed",
+        invite_sent_at=now if rsvp_status == "confirmed" else None,
+        rsvp_status=rsvp_status,
         rsvp_responded_at=now,
+        waitlisted_at=now if is_waitlisted else None,
     )
     db.add(guest)
     await db.flush()
@@ -738,6 +785,31 @@ async def submit_rsvp(
     queue_guest_sync(db, guest, event=event)
     await db.commit()
     await db.refresh(guest)
+
+    if await queue_webhook_event(db, org_id=event.org_id, event_type="guest.created", payload={
+        "guest_id": guest.id, "event_id": event.id,
+        "first_name": guest.first_name, "last_name": guest.last_name,
+        "email": guest.email, "rsvp_status": guest.rsvp_status,
+    }):
+        await db.commit()
+
+    if is_waitlisted:
+        if event.notify_rsvp_responses:
+            from .guests import dispatch_simple_notice
+            dispatch_simple_notice(
+                background_tasks, event, guest,
+                "waitlisted", await load_overrides(event.id, db),
+            )
+            await db.commit()
+        return RSVPConfirm(
+            id=guest.id,
+            qr_token=guest.qr_token,
+            invite_token=guest.invite_token,
+            first_name=guest.first_name,
+            last_name=guest.last_name,
+            rsvp_status="waitlisted",
+            message="This event is at capacity — you've been added to the waitlist. We'll email you if a spot opens up.",
+        )
 
     if needs_approval:
         if event.notify_rsvp_responses:
@@ -765,6 +837,10 @@ async def submit_rsvp(
             "rsvp_confirmation", await load_overrides(event.id, db),
         )
     _send_rsvp_invite(background_tasks, event, guest, await load_overrides(event.id, db))
+    await queue_webhook_event(db, org_id=event.org_id, event_type="rsvp.confirmed", payload={
+        "guest_id": guest.id, "event_id": event.id,
+        "first_name": guest.first_name, "last_name": guest.last_name,
+    })
     await db.commit()  # persist any message-credit decrements
     return RSVPConfirm(
         id=guest.id,
@@ -881,6 +957,10 @@ async def submit_invite_token_rsvp(
             )
         # Issue the ticket now that they've confirmed.
         _send_rsvp_invite(background_tasks, event, guest, await load_overrides(event.id, db))
+        await queue_webhook_event(db, org_id=event.org_id, event_type="rsvp.confirmed", payload={
+            "guest_id": guest.id, "event_id": event.id,
+            "first_name": guest.first_name, "last_name": guest.last_name,
+        })
         await db.commit()  # persist any message-credit decrements
         message = "You're confirmed! Check your email for your ticket."
     else:
@@ -889,6 +969,8 @@ async def submit_invite_token_rsvp(
         if event.notify_rsvp_responses:
             from .guests import dispatch_simple_notice
             dispatch_simple_notice(background_tasks, event, guest, "rsvp_decline", await load_overrides(event.id, db))
+        from .guests import _promote_from_waitlist
+        await _promote_from_waitlist(background_tasks, event, db)
         await db.commit()
         await db.refresh(guest)
         message = "Thanks for letting us know — we'll miss you!"

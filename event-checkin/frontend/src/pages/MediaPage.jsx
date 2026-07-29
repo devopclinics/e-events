@@ -1,9 +1,16 @@
+import { useEffect, useState } from 'react'
 import { Navigate } from 'react-router-dom'
+import { api } from '../api'
 import { useAuth } from '../context/AuthContext'
 import GUIDE_CONTENT_SOURCE from '../guideContent.mjs?raw'
 import { KNOWLEDGE_BASE_MD, QA_RELEASE_RUNBOOK_MD } from '../generated/internalMediaDocs.mjs'
+import { COMPETITOR_PRICING_REVIEW_MD } from '../generated/competitorPricingReview.mjs'
+import KT_CALENDARS_AND_FIXES_MD from '../docs/KT-2026-07-calendars-and-fixes.md?raw'
 
-const INTERNAL_DOCS = [
+const REVIEW_TASK_TITLE = 'Competitor Pricing Strategy Review (Media Library)'
+const REVIEW_TASK_NOTES = 'Shared comment thread for reviewing COMPETITOR-PRICING-STRATEGY-REVIEW-2026-07.md from the Media Library.'
+
+export const INTERNAL_DOCS = [
   {
     title: 'Customer Help Source',
     description: 'Canonical structured content powering the customer-facing Help guide. Update this source, then regenerate the support knowledge base.',
@@ -25,9 +32,23 @@ const INTERNAL_DOCS = [
     type: 'MD',
     content: QA_RELEASE_RUNBOOK_MD,
   },
+  {
+    title: 'Competitor Pricing Strategy Review (2026-07)',
+    description: 'Full strategy draft including competitor pricing snapshots, confidence notes, and recommended Festio pricing posture.',
+    filename: 'COMPETITOR-PRICING-STRATEGY-REVIEW-2026-07.md',
+    type: 'MD',
+    content: COMPETITOR_PRICING_REVIEW_MD,
+  },
+  {
+    title: 'KT: Event Calendars, Task Attachments & Two Production Bugs (2026-07)',
+    description: 'Engineering knowledge transfer for backend-2.2.80–2.2.83: Event Calendars + Contact Lists, Task attachments, the SignalHouse messageId fix (and the regression that preceded it), and the multi-org DEFAULT_ORG_ID resolution bug/fix. Staging only — read before the prod review pass.',
+    filename: 'KT-2026-07-calendars-and-fixes.md',
+    type: 'MD',
+    content: KT_CALENDARS_AND_FIXES_MD,
+  },
 ]
 
-const PDFS = [
+export const PDFS = [
   {
     title: 'Festio Introductory Guide',
     description: 'Short product introduction covering setup, invites, RSVP, check-in, results, and paid operations.',
@@ -51,7 +72,14 @@ const PDFS = [
   },
 ]
 
-const HTML_ASSETS = [
+export const HTML_ASSETS = [
+  {
+    title: 'Competitor Pricing Strategy Review (2026-07)',
+    description: 'Formatted HTML review page for the full competitor pricing strategy document. Preserves all content with readable headings, lists, and tables for team review.',
+    href: '/media/competitor-pricing-strategy-review-2026-07.html',
+    filename: 'competitor-pricing-strategy-review-2026-07.html',
+    type: 'HTML',
+  },
   {
     title: 'Getting Started Tour',
     description: 'Interactive browser-based tour for prospects and new organizers. Refreshed 2026-07-15: fixed leftover "EQ" logo marks, corrected the "email is always free" claim (email metering shipped), removed the dead-end Full Guide link (Help is paid-only now), and added 2 new steps for invitation categories/auto-seating and FestioHub.',
@@ -71,6 +99,13 @@ const HTML_ASSETS = [
     description: "Organizer-facing proposal deck for using Festio Experience at Masjid Mumineen Women's Convention 2026.",
     href: '/media/womens-convention-experience-proposal.html',
     filename: 'womens-convention-experience-proposal.html',
+    type: 'HTML',
+  },
+  {
+    title: 'NCNMO Platform 2026 Partnership Proposal',
+    description: "Partnership proposal for the National Council of Nigerian Muslim Organizations' Platform 2026 (multi-day, multi-track, ~2,000 guests): $0 software/support with a $3,000 hard cost cap, real dashboard screenshots (reference event name blurred), and program/multi-session tracking.",
+    href: '/media/ncnmo-platform-partnership-proposal.html',
+    filename: 'ncnmo-platform-partnership-proposal.html',
     type: 'HTML',
   },
   {
@@ -108,7 +143,7 @@ const HTML_ASSETS = [
 // categories & auto-seating, multi-day display-only menus, FestioHub).
 // SAME filenames as guideContent.mjs (Help guide) reuse this exact set, so
 // keeping this list current keeps the in-app guide current too.
-const SCREENSHOTS = [
+export const SCREENSHOTS = [
   ['Event setup', '/media/help2-event-setup.png'],
   ['Guests', '/media/help2-guests.png'],
   ['Invites and RSVP', '/media/help2-invites-rsvp.png'],
@@ -235,6 +270,181 @@ function InternalDocCard({ asset }) {
   )
 }
 
+function MediaReviewComments() {
+  const [reviewEvents, setReviewEvents] = useState([])
+  const [reviewEventId, setReviewEventId] = useState('')
+  const [reviewTask, setReviewTask] = useState(null)
+  const [reviewActivity, setReviewActivity] = useState([])
+  const [reviewComment, setReviewComment] = useState('')
+  const [bootLoading, setBootLoading] = useState(true)
+  const [threadLoading, setThreadLoading] = useState(false)
+  const [posting, setPosting] = useState(false)
+  const [reviewErr, setReviewErr] = useState('')
+
+  useEffect(() => {
+    let cancelled = false
+    async function loadEvents() {
+      setBootLoading(true)
+      setReviewErr('')
+      try {
+        const events = await api.listEvents()
+        if (cancelled) return
+        const sorted = [...events].sort((a, b) => String(a.name || '').localeCompare(String(b.name || '')))
+        setReviewEvents(sorted)
+        if (!sorted.length) {
+          setReviewEventId('')
+          return
+        }
+        const eventFromQuery = new URLSearchParams(window.location.search).get('event')
+        const seeded = sorted.find((event) => event.id === eventFromQuery)
+          || sorted.find((event) => event.status === 'active')
+          || sorted[0]
+        setReviewEventId((prev) => prev || seeded.id)
+      } catch (e) {
+        if (!cancelled) setReviewErr(e.message || 'Failed to load events')
+      } finally {
+        if (!cancelled) setBootLoading(false)
+      }
+    }
+    loadEvents()
+    return () => { cancelled = true }
+  }, [])
+
+  async function loadReviewThread(eventId) {
+    if (!eventId) {
+      setReviewTask(null)
+      setReviewActivity([])
+      return
+    }
+    setThreadLoading(true)
+    setReviewErr('')
+    try {
+      const tasks = await api.listTasks(eventId)
+      let task = tasks.find((item) => item.title === REVIEW_TASK_TITLE)
+      if (!task) {
+        task = await api.createTask(eventId, {
+          title: REVIEW_TASK_TITLE,
+          notes: REVIEW_TASK_NOTES,
+        })
+      }
+      const activity = await api.listTaskActivity(eventId, task.id)
+      setReviewTask(task)
+      setReviewActivity(activity)
+    } catch (e) {
+      setReviewErr(e.message || 'Failed to load review thread')
+      setReviewTask(null)
+      setReviewActivity([])
+    } finally {
+      setThreadLoading(false)
+    }
+  }
+
+  useEffect(() => {
+    loadReviewThread(reviewEventId)
+  }, [reviewEventId])
+
+  async function postReviewComment(event) {
+    event.preventDefault()
+    const body = reviewComment.trim()
+    if (!body || !reviewTask || !reviewEventId) return
+    setPosting(true)
+    setReviewErr('')
+    try {
+      await api.addTaskComment(reviewEventId, reviewTask.id, body)
+      setReviewComment('')
+      const activity = await api.listTaskActivity(reviewEventId, reviewTask.id)
+      setReviewActivity(activity)
+    } catch (e) {
+      setReviewErr(e.message || 'Failed to post comment')
+    } finally {
+      setPosting(false)
+    }
+  }
+
+  return (
+    <section>
+      <h2 className="text-sm font-bold uppercase tracking-wide text-slate-500 dark:text-slate-400 mb-3">Competitor pricing review comments</h2>
+      <div className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl p-4 shadow-sm">
+        <p className="text-sm text-slate-600 dark:text-slate-300">
+          Team discussion thread for the internal doc <span className="font-semibold">COMPETITOR-PRICING-STRATEGY-REVIEW-2026-07.md</span>.
+        </p>
+
+        <div className="mt-3">
+          <label htmlFor="review-event" className="block text-xs font-semibold text-slate-500 dark:text-slate-400 mb-1">
+            Event context (shared task thread)
+          </label>
+          <select
+            id="review-event"
+            value={reviewEventId}
+            onChange={(event) => setReviewEventId(event.target.value)}
+            className="w-full md:w-[28rem] rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-700 px-3 py-2 text-sm text-slate-900 dark:text-white"
+            disabled={bootLoading || !reviewEvents.length}
+          >
+            {!reviewEvents.length ? (
+              <option value="">No events available</option>
+            ) : reviewEvents.map((event) => (
+              <option key={event.id} value={event.id}>{event.name}</option>
+            ))}
+          </select>
+        </div>
+
+        {reviewErr && <p className="mt-3 text-sm text-red-500">{reviewErr}</p>}
+
+        <div className="mt-4 rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900/40 p-3">
+          {threadLoading ? (
+            <p className="text-sm text-slate-500 dark:text-slate-400">Loading comments...</p>
+          ) : reviewActivity.length === 0 ? (
+            <p className="text-sm text-slate-500 dark:text-slate-400">No comments yet. Add the first review note.</p>
+          ) : (
+            <div className="space-y-3 max-h-72 overflow-y-auto pr-1">
+              {reviewActivity.map((item) => (
+                <div key={item.id}>
+                  {item.kind === 'comment' ? (
+                    <div className="text-sm">
+                      <div className="text-slate-900 dark:text-white font-semibold">
+                        {item.user_name || 'Team member'}
+                        <span className="ml-2 text-xs font-normal text-slate-500 dark:text-slate-400">
+                          {new Date(item.created_at).toLocaleString()}
+                        </span>
+                      </div>
+                      <p className="mt-1 whitespace-pre-wrap text-slate-700 dark:text-slate-200">{item.body}</p>
+                    </div>
+                  ) : (
+                    <p className="text-xs italic text-slate-500 dark:text-slate-400">
+                      {item.user_name ? `${item.user_name} - ` : ''}{item.body}
+                    </p>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+
+        <form onSubmit={postReviewComment} className="mt-3 space-y-2">
+          <label htmlFor="review-comment" className="block text-xs font-semibold text-slate-500 dark:text-slate-400">
+            Add review comment
+          </label>
+          <textarea
+            id="review-comment"
+            value={reviewComment}
+            onChange={(event) => setReviewComment(event.target.value)}
+            rows={3}
+            placeholder="Share pricing assumptions, risks, edits, or approval notes..."
+            className="w-full rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-700 px-3 py-2 text-sm text-slate-900 dark:text-white"
+          />
+          <button
+            type="submit"
+            disabled={posting || !reviewComment.trim() || !reviewTask || !reviewEventId}
+            className="inline-flex items-center gap-1.5 rounded-lg bg-teal-600 px-3 py-2 text-sm font-semibold text-white hover:bg-teal-700 disabled:opacity-50"
+          >
+            {posting ? 'Posting...' : 'Post comment'}
+          </button>
+        </form>
+      </div>
+    </section>
+  )
+}
+
 export default function MediaPage() {
   const { user } = useAuth()
   if (user === undefined) return null
@@ -251,6 +461,11 @@ export default function MediaPage() {
           Screenshots, the Introductory Guide, the Getting Started tour, and the pitch deck last refreshed
           2026-07-15 against live 2.0.69. Only the one-pager still needs a redesign pass — see its card.
         </p>
+        <p className="mt-1 text-xs text-amber-600 dark:text-amber-400">
+          ⚠ Not yet reflected in the screenshots/tour/pitch deck below: Event Calendars, Contact Lists, or
+          Task attachments (shipped 2026-07-25, staging only) — see the new KT doc for what's not yet in
+          the sales/marketing assets.
+        </p>
       </div>
 
       <section>
@@ -259,6 +474,8 @@ export default function MediaPage() {
           {INTERNAL_DOCS.map((asset) => <InternalDocCard key={asset.filename} asset={asset} />)}
         </div>
       </section>
+
+      <MediaReviewComments />
 
       <section>
         <h2 className="text-sm font-bold uppercase tracking-wide text-slate-500 dark:text-slate-400 mb-3">PDF downloads</h2>

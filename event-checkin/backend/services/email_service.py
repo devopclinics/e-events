@@ -3,7 +3,7 @@ import html as _html
 import logging
 import re
 from datetime import datetime, timedelta, timezone
-from email.utils import getaddresses
+from email.utils import getaddresses, parseaddr
 from email.mime.application import MIMEApplication
 from email.mime.image import MIMEImage
 from email.mime.multipart import MIMEMultipart
@@ -17,9 +17,10 @@ import httpx
 
 from app.config import settings
 from app.database import AsyncSessionLocal
-from app.models import EmailDeliveryEvent
+from app.models import EmailDeliveryEvent, Event
 from app.timeutil import local_hhmm, to_event_local
 from services.qr_service import generate_qr_bytes
+from services.outbound_safety import recipient_allowed
 
 logger = logging.getLogger(__name__)
 
@@ -355,6 +356,15 @@ async def _send(msg: MIMEMultipart):
     if not (msg["To"] or "").strip():
         logger.info("Skipping email — recipient has no email address (likely a VVIP walk-in)")
         return
+    if not recipient_allowed("email", msg["To"]):
+        await _record_email_delivery(
+            msg,
+            provider="internal",
+            event_type="email.blocked",
+            status="blocked_recipient_safety",
+            payload={"source": "staging_recipient_guard"},
+        )
+        return
     if not await _charge_email_credit(msg):
         logger.warning("Email to %s blocked — event past free email quota with no credits", msg["To"])
         await _record_email_delivery(
@@ -688,6 +698,85 @@ def _calendar_link(event_name: str, event_date: datetime | None, venue: str) -> 
     return "https://calendar.google.com/calendar/render?" + urlencode(params)
 
 
+def _ics_escape(value: str) -> str:
+    return (
+        str(value or "")
+        .replace("\\", "\\\\")
+        .replace(";", "\\;")
+        .replace(",", "\\,")
+        .replace("\n", "\\n")
+    )
+
+
+def _build_ics_bytes(
+    *,
+    event_name: str,
+    start: datetime,
+    end: datetime | None,
+    venue_text: str,
+    uid: str,
+    organizer_email: str,
+    attendee_name: str,
+    attendee_email: str,
+) -> bytes:
+    """VCALENDAR/.ics blob for an event invite. `start`/`end` are the naive-UTC
+    datetimes as stored on Event (see app/timeutil.py); `end` falls back to a
+    3-hour placeholder — same assumption _calendar_link's Google Calendar link
+    already makes — since most single-day events don't record an explicit end."""
+    start = start if start.tzinfo else start.replace(tzinfo=timezone.utc)
+    end = (end if end.tzinfo else end.replace(tzinfo=timezone.utc)) if end else start + timedelta(hours=3)
+    # organizer_email may be a "Name <addr>" header value (e.g. settings.email_from);
+    # the ORGANIZER mailto: URI needs the bare address only.
+    organizer_email = parseaddr(organizer_email)[1] or organizer_email
+    lines = [
+        "BEGIN:VCALENDAR",
+        "VERSION:2.0",
+        "PRODID:-//Festio//Event Invite//EN",
+        "CALSCALE:GREGORIAN",
+        "METHOD:REQUEST",
+        "BEGIN:VEVENT",
+        f"UID:{uid}",
+        f"DTSTAMP:{datetime.now(timezone.utc).strftime('%Y%m%dT%H%M%SZ')}",
+        f"DTSTART:{start.astimezone(timezone.utc).strftime('%Y%m%dT%H%M%SZ')}",
+        f"DTEND:{end.astimezone(timezone.utc).strftime('%Y%m%dT%H%M%SZ')}",
+        f"SUMMARY:{_ics_escape(event_name)}",
+    ]
+    if venue_text:
+        lines.append(f"LOCATION:{_ics_escape(venue_text)}")
+    lines.append(f"ORGANIZER;CN=Festio:mailto:{organizer_email}")
+    lines.append(
+        f"ATTENDEE;CN={_ics_escape(attendee_name)};ROLE=REQ-PARTICIPANT;"
+        f"PARTSTAT=NEEDS-ACTION;RSVP=TRUE:mailto:{attendee_email}"
+    )
+    lines.extend(["END:VEVENT", "END:VCALENDAR", ""])
+    return "\r\n".join(lines).encode("utf-8")
+
+
+def build_calendar_attachment(
+    event: Event, guest_name: str, guest_email: str, uid_suffix: str = "guest",
+) -> tuple[str, bytes, str] | None:
+    """(filename, bytes, mimetype) .ics attachment tuple for this event/guest, or
+    None if there's no date or recipient to anchor a calendar entry to. Shared by
+    the invite email and the RSVP-confirmation email so both offer a real
+    calendar attachment, not just the Google Calendar link."""
+    if not event.event_date or not guest_email:
+        return None
+    venue_text = " - ".join(
+        p for p in [(event.venue_name or "").strip(), (event.venue_address or "").strip()] if p
+    )
+    ics = _build_ics_bytes(
+        event_name=event.name or "Event",
+        start=event.event_date,
+        end=event.event_end_date,
+        venue_text=venue_text,
+        uid=f"event-{event.id}-{uid_suffix}@festio.events",
+        organizer_email=settings.email_from or "events@festio.events",
+        attendee_name=guest_name,
+        attendee_email=guest_email,
+    )
+    return ("invite.ics", ics, "text/calendar")
+
+
 def _ticket_plain_text(ctx: dict) -> str:
     parts = [
         f"You're invited to {ctx['event_name']}",
@@ -750,6 +839,7 @@ async def send_invite_email(
     support_email: str | None = None,
     hub_url: str | None = None,
     event_timezone: str | None = None,
+    event_end_date: datetime | None = None,
 ):
     """Render the ticket-QR invite from the message template (event override or
     the code default in TEMPLATE_DEFS) — all wording lives in the template. The
@@ -865,6 +955,21 @@ async def send_invite_email(
     img_part.add_header("Content-ID", "<qrcode>")
     img_part.add_header("Content-Disposition", "inline", filename="invite-qr.png")
     msg.attach(img_part)
+
+    if event_date and guest_data.get("email"):
+        ics_bytes = _build_ics_bytes(
+            event_name=event_name or "Event",
+            start=event_date,
+            end=event_end_date,
+            venue_text=venue_text if venue_name or venue_address else "",
+            uid=f"event-{guest_data.get('event_id') or 'event'}-{guest_data.get('guest_id') or guest_data.get('qr_token') or 'guest'}@festio.events",
+            organizer_email=settings.email_from or "events@festio.events",
+            attendee_name=ctx["guest_full_name"] or guest_data["email"],
+            attendee_email=guest_data["email"],
+        )
+        ics_part = MIMEText(ics_bytes.decode("utf-8"), "calendar", "utf-8")
+        ics_part.add_header("Content-Disposition", "attachment", filename="invite.ics")
+        msg.attach(ics_part)
 
     await _send(msg)
 

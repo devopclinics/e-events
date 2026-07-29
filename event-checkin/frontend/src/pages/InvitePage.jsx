@@ -1616,7 +1616,7 @@ function GuestHub({ event, accessToken, designTheme }) {
           )
         })()}
 
-        {tabActive('activity') && journey?.menu_selectable && hub?.guest?.qr_token && (
+        {tabActive('pass') && journey?.menu_selectable && hub?.guest?.qr_token && (
           <div className="mt-6 rounded-2xl border p-5" style={{ background: tone.panel, borderColor: tone.border }}>
             <div className="flex items-start gap-3">
               <span className="grid h-11 w-11 shrink-0 place-items-center rounded-xl text-xl" style={{ background: tone.chip }} aria-hidden="true">🍽️</span>

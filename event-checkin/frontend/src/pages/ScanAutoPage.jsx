@@ -775,6 +775,14 @@ export default function ScanAutoPage() {
     return () => { cancelled = true }
   }, [data?.guest?.event_id])
 
+  useEffect(() => {
+    if (!data || window.location.hash !== '#orders') return
+    const frame = window.requestAnimationFrame(() => {
+      document.getElementById('orders')?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+    })
+    return () => window.cancelAnimationFrame(frame)
+  }, [data])
+
   if (loading) {
     return (
       <div className="app-shell min-h-screen flex items-center justify-center">
@@ -985,16 +993,20 @@ export default function ScanAutoPage() {
           />
 
           {/* Menu selection */}
-          {menu_locked ? (
-            <MenuLockedCard />
-          ) : menu_categories && menu_categories.length > 0 ? (
-            <MenuSelection
-              token={token}
-              categories={menu_categories}
-              initialChoices={guest_choices || {}}
-              mealServed={guest?.meal_served}
-            />
-          ) : null}
+          {(menu_locked || (menu_categories && menu_categories.length > 0)) && (
+            <div id="orders" className="scroll-mt-6">
+              {menu_locked ? (
+                <MenuLockedCard />
+              ) : (
+                <MenuSelection
+                  token={token}
+                  categories={menu_categories}
+                  initialChoices={guest_choices || {}}
+                  mealServed={guest?.meal_served}
+                />
+              )}
+            </div>
+          )}
         </div>
       </div>
 

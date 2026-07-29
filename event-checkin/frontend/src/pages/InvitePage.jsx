@@ -1616,6 +1616,31 @@ function GuestHub({ event, accessToken, designTheme }) {
           )
         })()}
 
+        {tabActive('activity') && journey?.menu_selectable && hub?.guest?.qr_token && (
+          <div className="mt-6 rounded-2xl border p-5" style={{ background: tone.panel, borderColor: tone.border }}>
+            <div className="flex items-start gap-3">
+              <span className="grid h-11 w-11 shrink-0 place-items-center rounded-xl text-xl" style={{ background: tone.chip }} aria-hidden="true">🍽️</span>
+              <div>
+                <h3 className="text-lg font-extrabold">Your order</h3>
+                <p className="mt-1 text-sm leading-6" style={{ color: tone.muted }}>
+                  {journey.menu_locked
+                    ? 'Order selection opens after you check in.'
+                    : journey.menu_has_choices
+                      ? 'Your order is selected. You can review or update it on your Festio Pass.'
+                      : 'Choose your food order on your Festio Pass.'}
+                </p>
+              </div>
+            </div>
+            <a
+              href={`/scan/${encodeURIComponent(hub.guest.qr_token)}#orders`}
+              className="mt-4 inline-flex min-h-11 w-full items-center justify-center rounded-xl px-4 py-2 text-sm font-extrabold text-slate-950"
+              style={{ background: tone.accent }}
+            >
+              {journey.menu_locked ? 'View order details' : journey.menu_has_choices ? 'View or change order' : 'Choose your order'}
+            </a>
+          </div>
+        )}
+
         {tabActive('activity') && !!journey?.menu_categories?.length && (() => {
           const cats = journey.menu_categories
           const days = [...new Set(cats.filter((c) => c.day_label).map((c) => c.day_label))]

@@ -861,9 +861,14 @@ class GuestJourneyOut(BaseModel):
     next_steps: list[GuestJourneyStepOut] = Field(default_factory=list)
     consent: Optional[GuestConsentStateOut] = None
     program: Optional[GuestProgramOut] = None
-    # Informational (display-only) food menu for the Hub. Selectable menus stay
-    # on the Festio Pass only; forward ref resolved by model_rebuild at EOF.
+    # Informational food categories render directly in the Hub. Selectable
+    # categories stay on Festio Pass, while these flags let the Hub provide a
+    # status-aware deep link to that existing selection flow.
     menu_categories: list["MenuCategoryOut"] = Field(default_factory=list)
+    menu_enabled: bool = False
+    menu_selectable: bool = False
+    menu_locked: bool = False
+    menu_has_choices: bool = False
     completed_count: int = 0
     total_count: int = 0
 

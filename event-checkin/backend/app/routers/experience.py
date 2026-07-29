@@ -1608,25 +1608,40 @@ async def my_experience(
             form=ConsentFormOut.model_validate(consent_form),
         )
 
-    async def _hub_menu():
-        """Display-only menus surface on the Hub too (informational — selections
-        stay on the Festio Pass). Selectable menus return empty here."""
+    async def _hub_menu_state():
+        """Return inline informational categories plus selectable-menu status.
+
+        Selection remains on Festio Pass; the Hub uses this state to link guests
+        there without duplicating menu validation or fulfillment behaviour.
+        """
         if not event.menu_enabled:
-            return []
+            return {
+                "menu_categories": [], "menu_enabled": False,
+                "menu_selectable": False, "menu_locked": False,
+                "menu_has_choices": False,
+            }
         from .scanner import _load_menu  # deferred: avoids import cycle
-        cats, _ = await _load_menu(event.id, guest.id, db)
-        if cats and all(c.display_only for c in cats):
-            return cats
-        return []
+        cats, choices = await _load_menu(event.id, guest.id, db)
+        selectable = any(not c.display_only for c in cats)
+        has_choices = any(bool(values) for values in choices.values())
+        return {
+            "menu_categories": [c for c in cats if c.display_only],
+            "menu_enabled": True,
+            "menu_selectable": selectable,
+            "menu_locked": bool(selectable and not guest.admitted),
+            "menu_has_choices": has_choices,
+        }
+
+    menu_state = await _hub_menu_state()
 
     if not event.experience_enabled:
         return GuestJourneyOut(experience_enabled=False, guest=guest_out, consent=consent_state,
-                               menu_categories=await _hub_menu())
+                               **menu_state)
 
     workflow = await active_workflow(event_id, db)
     if not workflow:
         return GuestJourneyOut(experience_enabled=True, guest=guest_out, consent=consent_state,
-                               menu_categories=await _hub_menu())
+                               **menu_state)
 
     # next_guest_steps() syncs progress off the guest's current state (admitted,
     # seat, meal choice, consent signature) before returning the pending set.
@@ -1680,7 +1695,7 @@ async def my_experience(
         next_steps=next_out,
         consent=consent_state,
         program=GuestProgramOut(**(await program_state(event, loaded, db))),
-        menu_categories=await _hub_menu(),
+        **menu_state,
         completed_count=completed,
         total_count=len(steps_out),
     )

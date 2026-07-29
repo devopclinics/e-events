@@ -15,6 +15,9 @@ from app.models import (
     ExperienceStep,
     ExperienceWorkflow,
     Guest,
+    GuestMenuChoice,
+    MenuCategory,
+    MenuItem,
 )
 
 TOKEN = "guest-token-abc"
@@ -225,6 +228,71 @@ async def test_disabled_experience_returns_flag_false(ctx):
     assert body["steps"] == []
     # guest is still resolved and consent (event-level) still surfaced
     assert body["guest"]["name"] == "G One"
+
+
+@pytest.mark.asyncio
+async def test_selectable_menu_exposes_pass_link_state_without_inline_categories(ctx):
+    guest_id, _ = await _setup(ctx, experience=False, with_consent=False)
+    async with _Session() as s:
+        ev = await s.get(Event, ctx.ids["event_a"])
+        ev.menu_enabled = True
+        guest = await s.get(Guest, guest_id)
+        guest.admitted = False
+        category = MenuCategory(
+            event_id=ev.id, name="Main meal", display_only=False,
+            selection_type="single", is_required=True,
+        )
+        s.add(category)
+        await s.flush()
+        item = MenuItem(event_id=ev.id, category_id=category.id, name="Jollof rice")
+        s.add(item)
+        await s.commit()
+        category_id, item_id = category.id, item.id
+
+    url = f"/api/events/{ctx.ids['event_a']}/experience/me?token={TOKEN}"
+    before = (await ctx.client.get(url)).json()
+    assert before["menu_enabled"] is True
+    assert before["menu_selectable"] is True
+    assert before["menu_locked"] is True
+    assert before["menu_has_choices"] is False
+    assert before["menu_categories"] == []
+
+    async with _Session() as s:
+        guest = await s.get(Guest, guest_id)
+        guest.admitted = True
+        s.add(GuestMenuChoice(
+            guest_id=guest_id, category_id=category_id, menu_item_id=item_id,
+        ))
+        await s.commit()
+
+    after = (await ctx.client.get(url)).json()
+    assert after["menu_locked"] is False
+    assert after["menu_has_choices"] is True
+
+
+@pytest.mark.asyncio
+async def test_display_only_menu_remains_inline_without_pass_selection(ctx):
+    await _setup(ctx, experience=False, with_consent=False)
+    async with _Session() as s:
+        ev = await s.get(Event, ctx.ids["event_a"])
+        ev.menu_enabled = True
+        category = MenuCategory(
+            event_id=ev.id, name="Dinner menu", display_only=True,
+            selection_type="single",
+        )
+        s.add(category)
+        await s.flush()
+        s.add(MenuItem(event_id=ev.id, category_id=category.id, name="Rice and chicken"))
+        await s.commit()
+
+    body = (await ctx.client.get(
+        f"/api/events/{ctx.ids['event_a']}/experience/me?token={TOKEN}"
+    )).json()
+    assert body["menu_enabled"] is True
+    assert body["menu_selectable"] is False
+    assert body["menu_locked"] is False
+    assert body["menu_has_choices"] is False
+    assert [category["name"] for category in body["menu_categories"]] == ["Dinner menu"]
 
 
 @pytest.mark.asyncio

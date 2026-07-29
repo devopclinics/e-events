@@ -418,13 +418,13 @@ function AppRoutes() {
               <Route path="/setup/guided" element={<ProtectedRoute setupOnly><RedesignGate redesignRoute="/setup-redesign"><GuidedSetupPage /></RedesignGate></ProtectedRoute>} />
               <Route path="/design-studio" element={<ProtectedRoute adminOnly paidOnly><RedesignGate redesignRoute="/design-studio-redesign"><DesignStudioPage /></RedesignGate></ProtectedRoute>} />
               <Route path="/floor-plan/:eventId" element={<ProtectedRoute adminOnly><RedesignGate redesignRoute="/floorplan-redesign"><FloorPlanPage /></RedesignGate></ProtectedRoute>} />
-              <Route path="/dashboard" element={<ProtectedRoute><RedesignGate redesignRoute="/event-results-redesign"><DashboardPage /></RedesignGate></ProtectedRoute>} />
-              <Route path="/results" element={<ProtectedRoute><RedesignGate redesignRoute="/event-results-redesign"><ResultsPage /></RedesignGate></ProtectedRoute>} />
+              <Route path="/dashboard" element={<ProtectedRoute><DashboardPage /></ProtectedRoute>} />
+              <Route path="/results" element={<ProtectedRoute><ResultsPage /></ProtectedRoute>} />
               <Route path="/my-tasks" element={<ProtectedRoute><RedesignGate redesignRoute="/team-redesign"><MyTasksPage /></RedesignGate></ProtectedRoute>} />
               <Route path="/org-settings" element={<ProtectedRoute><RedesignGate redesignRoute="/billing-redesign"><OrgSettingsPage /></RedesignGate></ProtectedRoute>} />
               <Route path="/api-explorer" element={<ProtectedRoute><RedesignGate redesignRoute="/api-explorer-redesign"><ApiExplorerPage /></RedesignGate></ProtectedRoute>} />
               <Route path="/festiome" element={<ProtectedRoute><RedesignGate redesignRoute="/festiome-redesign"><FestioMePage /></RedesignGate></ProtectedRoute>} />
-              <Route path="/scanner" element={<ProtectedRoute><RedesignGate redesignRoute="/scanner-redesign"><ScannerPage /></RedesignGate></ProtectedRoute>} />
+              <Route path="/scanner" element={<ProtectedRoute><ScannerPage /></ProtectedRoute>} />
               <Route path="/kitchen" element={<ProtectedRoute><RedesignGate redesignRoute="/kitchen-redesign"><KitchenPage /></RedesignGate></ProtectedRoute>} />
               <Route path="/console" element={<ProtectedRoute><ConsolePage /></ProtectedRoute>} />
               <Route path="/media-library" element={<ProtectedRoute><MediaPage /></ProtectedRoute>} />

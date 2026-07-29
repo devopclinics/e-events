@@ -162,7 +162,7 @@ const TOP_LINKS = [
     id: 'festiome', label: 'FestioMe', to: '/festiome-redesign', icon: 'chat',
     gate: ({ event }) => !!event?.festiome_addon_enabled,
   },
-  { id: 'checkin', label: 'Check-in', to: '/scanner-redesign', icon: 'ticket' },
+  { id: 'checkin', label: 'Check-in', to: '/scanner', icon: 'ticket' },
   {
     id: 'orders', label: 'Orders', to: '/kitchen-redesign', icon: 'card',
     gate: ({ event }) => !!event?.menu_enabled,
@@ -186,7 +186,7 @@ const SIDEBAR_NAV = [
   ['calendar', 'Start here', '/admin-redesign', 'overview'],
   ['users', 'Guests', '/guests-redesign?tab=guests', 'guests'],
   ['send', 'Invites & RSVP', '/guests-redesign?tab=invite', 'invite'],
-  ['ticket', 'Check-in', '/scanner-redesign', 'access', null, 'venueAccess'],
+  ['ticket', 'Check-in', '/scanner', 'access', null, 'venueAccess'],
   ['message', 'Guest Communication', '/communications-redesign?tab=hub', 'communication'],
   ['card', 'Billing', '/billing-redesign?tab=billing', 'billing'],
   ['grp', 'Add-ons'],

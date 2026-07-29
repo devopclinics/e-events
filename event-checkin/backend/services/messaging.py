@@ -6,6 +6,10 @@
   - 'signalhouse' → Signal House REST API (US SMS/MMS)
   - ''       → no-op (logs and returns)
 
+Nigerian (+234) numbers are routed through xwireless.net when
+`XWIRELESS_API_KEY` and `XWIRELESS_CLIENT_ID` are set, regardless of
+`MESSAGING_PROVIDER`. All other numbers follow the standard provider switch.
+
 Each function is async and never raises — failures are logged so a misconfigured
 provider can't take down the invite/admission background tasks. The fan-out
 in routers iterates enabled channels per event and dispatches in parallel.
@@ -63,7 +67,8 @@ async def send_invite_sms(*, phone: str, first_name: str, event_name: str, ticke
     date_str = _local.strftime("%b %d, %Y") if _local else ""
     short_url = await shorten_url(ticket_url)
     body = f"Hi {first_name}! {event_name}" + (f", {date_str}" if date_str else "") + f". Ticket: {short_url}"
-    return await _send_sms(phone, _brand_sms(body))
+    branded = _brand_sms_ng(body) if _is_nigeria_number(phone) else _brand_sms(body)
+    return await _send_sms(phone, branded)
 
 
 async def send_admission_sms(*, phone: str, first_name: str, event_name: str, admitted_at, table_name: str | None, seat_number: str | None, event_timezone: str | None = None, seating_term: str = "Table") -> dict | None:
@@ -75,7 +80,8 @@ async def send_admission_sms(*, phone: str, first_name: str, event_name: str, ad
     if table_name:
         seat_bit = f" seat {seat_number}" if seat_number else ""
         parts.append(f"{seating_term}: {table_name}{seat_bit}.")
-    return await _send_sms(phone, _brand_sms(" ".join(parts)))
+    branded = _brand_sms_ng(" ".join(parts)) if _is_nigeria_number(phone) else _brand_sms(" ".join(parts))
+    return await _send_sms(phone, branded)
 
 
 async def send_invite_whatsapp(*, phone: str, first_name: str, event_name: str, ticket_url: str, event_date: datetime, event_timezone: str | None = None) -> dict | None:
@@ -237,7 +243,8 @@ async def send_broadcast_sms(*, phone: str, first_name: str, message: str) -> di
     if not _channel_ready("sms", phone):
         return
     body = f"Hi {first_name}! {message}"
-    return await _send_sms(phone, _brand_sms(body))
+    branded = _brand_sms_ng(body) if _is_nigeria_number(phone) else _brand_sms(body)
+    return await _send_sms(phone, branded)
 
 
 async def send_announcement_whatsapp(*, phone: str, first_name: str, event_name: str, message: str, ticket_url: str = "") -> dict | None:
@@ -568,7 +575,76 @@ def _twilio_send_sync(from_addr: str, to_addr: str, **kwargs) -> dict | None:
 
 # ── internal: dispatchers ─────────────────────────────────────────────────────
 
+# ── xwireless — Nigeria (+234) SMS overlay ───────────────────────────────────
+
+def _is_nigeria_number(phone: str) -> bool:
+    """Return True for Nigerian E.164 (+234...) or bare (234...) numbers."""
+    if not phone:
+        return False
+    clean = re.sub(r"[\s\-\(\)]", "", phone)
+    return clean.startswith("+234") or (clean.startswith("234") and len(clean) >= 13)
+
+
+def _brand_sms_ng(body: str) -> str:
+    """Branding for Nigerian SMS — strips emojis and adds 'Festio:' prefix.
+
+    US 10DLC compliance copy (HELP/STOP/rates) is NOT appended because it is a
+    US carrier regulation and would waste characters on Nigerian messages.
+    """
+    text = _EMOJI_RE.sub("", body)
+    text = re.sub(r"[ \t]{2,}", " ", text).strip()
+    if not text.startswith("Festio:"):
+        text = f"Festio: {text}"
+    return text
+
+
+async def _send_sms_xwireless(phone: str, body: str) -> dict | None:
+    """Send SMS via xwireless.net. Used exclusively for Nigerian (+234) numbers."""
+    # Strip leading '+' — xwireless expects international format without it
+    mobile = phone.lstrip("+")
+    try:
+        async with httpx.AsyncClient(timeout=20) as client:
+            resp = await client.post(
+                f"{settings.xwireless_base_url.rstrip('/')}/api/v2/SendSMS",
+                json={
+                    "apiKey": settings.xwireless_api_key,
+                    "clientId": settings.xwireless_client_id,
+                    "senderId": settings.xwireless_sender_id or "FESTIO",
+                    "mobileNumbers": mobile,
+                    "message": body,
+                    "is_Unicode": False,
+                    "is_Flash": False,
+                    "dataCoding": 0,
+                },
+            )
+            resp.raise_for_status()
+            data = resp.json()
+            # API v2 returns StringResponseModel:
+            # {"errorCode": 0, "errorDescription": "...", "data": "<message id>"}.
+            # Accept legacy casing too so a provider-side serializer change does
+            # not turn a successful submission into a false failure.
+            error_code = data.get("errorCode", data.get("ErrorCode", -1))
+            msg_id = data.get("data", data.get("Data"))
+            if error_code == 0:
+                logger.info("xwireless SMS queued to %s (id=%s)", phone, msg_id)
+                return {
+                    "provider": "xwireless",
+                    "status": "queued",
+                    "provider_message_id": str(msg_id) if msg_id else None,
+                }
+            desc = data.get("errorDescription", data.get("ErrorDescription"))
+            logger.warning("xwireless SMS error %s: %s (to=%s)", error_code, desc, phone)
+            return {"provider": "xwireless", "status": "failed", "error": desc}
+    except Exception:
+        logger.exception("xwireless SMS request failed (to=%s)", phone)
+        return {"provider": "xwireless", "status": "failed"}
+
+
 async def _send_sms(phone: str, body: str) -> dict | None:
+    # Nigeria overlay: +234 numbers always go through xwireless when configured.
+    if _is_nigeria_number(phone) and settings.xwireless_api_key and settings.xwireless_client_id:
+        return await _send_sms_xwireless(phone, body)
+
     provider = (settings.messaging_provider or "").lower()
     if provider == "bird":
         return await _bird_post(settings.bird_sms_channel_id, {

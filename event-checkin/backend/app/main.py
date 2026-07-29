@@ -24,6 +24,7 @@ from .routers import webhooks as webhooks_router
 from .routers import org_billing as org_billing_router
 from .routers import calendars as calendars_router
 from .routers import shortlinks as shortlinks_router
+from .routers import xwireless_webhooks as xwireless_webhooks_router
 from . import sync_poller, db_migrate, entitlements
 from .services import festiome_outbox, webhook_outbox
 from . import routers
@@ -160,6 +161,7 @@ app.include_router(admin_router.router, prefix="/api/admin", tags=["admin"])
 app.include_router(messaging.router, prefix="/api/messaging", tags=["messaging"])
 app.include_router(meta_whatsapp.router, prefix="/api/webhooks", tags=["webhooks"])
 app.include_router(resend_webhooks.router, prefix="/api/webhooks", tags=["webhooks"])
+app.include_router(xwireless_webhooks_router.router, prefix="/api/webhooks", tags=["webhooks"])
 app.include_router(templates_router.router, prefix="/api/events", tags=["templates"])
 app.include_router(self_checkin.router, prefix="/api/e", tags=["self-checkin"])
 app.include_router(design_proxy_router.router, prefix="/api/events", tags=["design"])

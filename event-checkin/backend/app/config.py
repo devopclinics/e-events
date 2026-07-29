@@ -57,6 +57,7 @@ class Settings(BaseSettings):
     bird_email_channel_id: str = ""
 
     # Messaging provider switch: 'bird' | 'twilio' | 'signalhouse' | '' (off)
+    # Nigerian (+234) numbers are always routed via xwireless when xwireless_api_key is set.
     messaging_provider: str = ""
     # Optional per-channel override for WhatsApp (e.g. SMS via ClickSend but
     # WhatsApp via Bird). Falls back to messaging_provider when empty.
@@ -104,6 +105,15 @@ class Settings(BaseSettings):
     signalhouse_from_number: str = ""
     signalhouse_api_base: str = "https://v2.signalhouse.io"
     signalhouse_status_callback_url: str = ""
+
+    # xwireless.net — Nigeria (+234) SMS overlay.
+    # When xwireless_api_key is set, any SMS to a +234 number is routed through
+    # xwireless regardless of MESSAGING_PROVIDER. Non-Nigeria traffic is
+    # unaffected. Credentials are rotated in the xwireless portal.
+    xwireless_api_key: str = ""
+    xwireless_client_id: str = ""          # Called 'ClientId' in the xwireless API
+    xwireless_sender_id: str = "FESTIO"   # Approved sender ID in the portal
+    xwireless_base_url: str = "https://secure.xwireless.net"
 
     meta_whatsapp_webhook_verify_token: str = "festio-whatsapp-webhook"
 

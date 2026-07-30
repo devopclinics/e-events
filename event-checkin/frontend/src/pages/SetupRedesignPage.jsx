@@ -7,13 +7,13 @@ import './SetupRedesignPage.css'
 
 const EVENT_TYPES = ['Conference', 'Gala / Award', 'Wedding', 'Birthday', 'Concert', 'Festival', 'Workshop', 'Other']
 const TIMEZONES = ['Africa/Lagos', 'Africa/Nairobi', 'Europe/London', 'America/New_York', 'Asia/Dubai']
-const CURRENCIES = ['NGN — Nigerian Naira', 'USD — US Dollar', 'GBP — British Pound', 'EUR — Euro', 'KES — Kenyan Shilling']
+// The billing API currently supports Paystack/NGN and Stripe/USD.
+const CURRENCIES = ['NGN — Nigerian Naira', 'USD — US Dollar']
 
 const CHANNELS = [
   { id: 'email', label: 'Email' },
   { id: 'sms', label: 'SMS' },
   { id: 'whatsapp', label: 'WhatsApp' },
-  { id: 'mms', label: 'MMS' },
 ]
 
 const FEATURES = [
@@ -27,13 +27,6 @@ const FEATURES = [
   { id: 'selfcheckin', label: 'Self check-in kiosk', desc: 'Guests check themselves in' },
 ]
 
-const PLAN_RECS = {
-  0: { name: 'Starter', price: '$0/mo', note: 'Best for personal events' },
-  1: { name: 'Pro', price: '$49/mo', note: 'Best for professional events' },
-  2: { name: 'Pro', price: '$49/mo', note: 'Best for professional events' },
-  3: { name: 'Business', price: '$149/mo', note: 'Best for multi-feature events' },
-}
-
 const GUIDED_STEPS = [
   {
     id: 'team', label: 'Invite your team',
@@ -45,10 +38,9 @@ const GUIDED_STEPS = [
   },
   {
     id: 'messaging', label: 'Set up messaging',
-    desc: 'Connect your SMS / WhatsApp provider to send invites.',
+    desc: 'Choose the channels this event may use. Provider credentials remain controlled by platform settings.',
     fields: [
-      { label: 'Provider', type: 'select', options: ['Bird (MessageBird)', 'Twilio', 'None — use email only'] },
-      { label: 'Sender name', placeholder: 'DevOps Clinics' },
+      { label: 'Delivery channels', type: 'select', options: ['Email only', 'Email + SMS', 'Email + WhatsApp', 'Email + SMS + WhatsApp'] },
     ],
   },
   {
@@ -100,18 +92,13 @@ const GUIDED_STEPS = [
   },
   {
     id: 'festiome', label: 'FestioMe guest app',
-    desc: 'Enable the personalised in-app event experience for your guests.',
-    fields: [
-      { label: 'Welcome message', placeholder: 'Welcome to the Women\'s Convention 2026!' },
-    ],
+    desc: 'Enable the personalised in-app event experience for your guests. Welcome wording can then be edited in Design Studio.',
+    fields: [],
   },
   {
     id: 'experience', label: 'Experience program',
-    desc: 'Set up sessions, speakers, and the event agenda.',
-    fields: [
-      { label: 'Session title', placeholder: 'Opening Keynote' },
-      { label: 'Session start time', type: 'time' },
-    ],
+    desc: 'Enable Experience, then build its workflow and program from the Experience page.',
+    fields: [],
   },
   {
     id: 'review', label: 'Review & go live',
@@ -128,8 +115,6 @@ function WizardPhase({ onComplete, notify }) {
     channels: new Set(['email']), features: new Set(['rsvp']),
   })
   const enabledFeatureCount = form.features.size
-  const rec = PLAN_RECS[Math.min(3, Math.floor(enabledFeatureCount / 2))]
-
   function toggleSet(key, val) {
     setForm((prev) => {
       const next = new Set(prev[key])
@@ -239,8 +224,9 @@ function WizardPhase({ onComplete, notify }) {
           className="rr-btn primary su-create-btn"
           disabled={!form.name || !form.date}
           onClick={async () => {
+            let event = null
             try {
-              const event = await api.createEvent({
+              event = await api.createEvent({
                 name: form.name.trim(),
                 couples_name: form.host.trim(),
                 event_type: form.type,
@@ -254,32 +240,48 @@ function WizardPhase({ onComplete, notify }) {
                 notify_whatsapp: form.channels.has('whatsapp'),
                 rsvp_capacity: form.guestCount ? Number(form.guestCount) : null,
               })
-              await api.toggleFeatures(event.id, {
-                seating_enabled: form.features.has('seating'),
-                menu_enabled: form.features.has('orders'),
-                logistics_enabled: form.features.has('logistics'),
-                registry_enabled: form.features.has('registry'),
-                festiome_addon_enabled: form.features.has('festiome'),
-                experience_enabled: form.features.has('experience'),
-              })
-              await api.updateInviteSettings(event.id, { rsvp_enabled: form.features.has('rsvp') })
-              notify(`Event “${event.name}” created`)
+              const optionalResults = await Promise.allSettled([
+                api.toggleFeatures(event.id, {
+                  seating_enabled: form.features.has('seating'),
+                  menu_enabled: form.features.has('orders'),
+                  logistics_enabled: form.features.has('logistics'),
+                  registry_enabled: form.features.has('registry'),
+                  festiome_addon_enabled: form.features.has('festiome'),
+                  experience_enabled: form.features.has('experience'),
+                  notify_email: form.channels.has('email'),
+                }),
+                api.updateInviteSettings(event.id, { rsvp_enabled: form.features.has('rsvp') }),
+                api.setBillingCurrency(event.id, form.currency.slice(0, 3)),
+                api.setSelfCheckin(event.id, form.features.has('selfcheckin')),
+              ])
+              const failedSettings = optionalResults.filter((result) => result.status === 'rejected').length
+              notify(
+                failedSettings
+                  ? `Event “${event.name}” was created, but ${failedSettings} optional setting${failedSettings === 1 ? '' : 's'} could not be enabled. Review Guided setup.`
+                  : `Event “${event.name}” created`,
+                failedSettings > 0,
+              )
               onComplete(event)
             } catch (error) {
-              notify(error.message || 'Event could not be created', true)
+              notify(
+                event
+                  ? `Event “${event.name}” was created. Continue in Guided setup to finish configuration.`
+                  : error.message || 'Event could not be created',
+                true,
+              )
+              if (event) onComplete(event)
             }
           }}
         >
           Create event &amp; continue setup →
         </button>
       </div>
-      {/* Recommended plan sidebar */}
+      {/* Selection summary: pricing and entitlements are server-derived after creation. */}
       <div className="su-plan-sidebar">
         <div className="su-plan-card">
-          <div className="su-plan-label">Recommended plan</div>
-          <div className="su-plan-name">{rec.name}</div>
-          <div className="su-plan-price">{rec.price}</div>
-          <div className="su-plan-note">{rec.note}</div>
+          <div className="su-plan-label">Selected setup</div>
+          <div className="su-plan-name">{enabledFeatureCount} feature{enabledFeatureCount === 1 ? '' : 's'}</div>
+          <div className="su-plan-note">Festio will enforce your organization’s live plan and entitlements when these settings are saved.</div>
           <div className="su-plan-features">
             <p>Based on your selections:</p>
             <ul>
@@ -333,7 +335,21 @@ function GuidedSetupPhase({ eventId, notify }) {
     const value = (index) => fieldVals[`${stepId}-${index}`] || ''
     if (stepId === 'team') {
       if (!value(0)) throw new Error('Enter a team member email')
-      await api.inviteOrgMember(eventId, { email: value(0), role: value(1) === 'Event manager' ? 'admin' : 'staff' })
+      const selectedRole = value(1) || 'Viewer'
+      const orgMember = await api.inviteOrgMember(eventId, { email: value(0), role: selectedRole === 'Event manager' ? 'admin' : 'staff' })
+      await api.assignMember(eventId, orgMember.user.id)
+      if (selectedRole === 'Event manager') {
+        await api.updateMemberPermissions(eventId, orgMember.user.id, { event_role: 'manager', access_level: 'edit' })
+      } else {
+        await api.updateMemberPermissions(eventId, orgMember.user.id, { event_role: 'staff', access_level: selectedRole === 'Viewer' ? 'view' : 'edit' })
+      }
+    } else if (stepId === 'messaging') {
+      const selected = value(0) || 'Email only'
+      await api.toggleFeatures(eventId, {
+        notify_email: true,
+        notify_sms: selected.includes('SMS'),
+        notify_whatsapp: selected.includes('WhatsApp'),
+      })
     } else if (stepId === 'rsvp') {
       if (!value(0)) throw new Error('Enter an RSVP question')
       const type = value(1) === 'Yes / No' ? 'boolean' : value(1) === 'Multiple choice' ? 'select' : 'text'

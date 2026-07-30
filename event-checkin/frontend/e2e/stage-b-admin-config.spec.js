@@ -9,10 +9,15 @@ async function openAdmin(page) {
 
 async function ensureSourceSyncOpen(page) {
   const urlField = fieldNear(page, 'Share link')
-  if (!(await urlField.isVisible())) {
-    await page.getByText('Live spreadsheet sync', { exact: true }).click()
-  }
-  await expect(urlField).toBeVisible()
+  // The panel is a native <details>, whose open/closed state React only
+  // partially controls — a single click-if-closed check can occasionally miss
+  // a timing window, so retry the whole sequence rather than assert once.
+  await expect(async () => {
+    if (!(await urlField.isVisible())) {
+      await page.getByText('Live spreadsheet sync', { exact: true }).click()
+    }
+    expect(await urlField.isVisible()).toBe(true)
+  }).toPass({ timeout: 10000 })
   return urlField
 }
 
@@ -25,6 +30,11 @@ test.describe('Stage B admin config — isolated staging fixture', () => {
   })
 
   test('spreadsheet source link saves, persists, and a bad sync surfaces the real error', async ({ page }) => {
+    // The real sync-now failure depends on an actual DNS/connect timeout
+    // against a synthetic unreachable URL, whose timing varies with real
+    // network conditions — give this one more headroom than the 30s default
+    // rather than treat that external variance as a fixed 20s budget item.
+    test.setTimeout(60000)
     await openAdmin(page)
     const toast = page.locator('.rd-toast')
     const urlField = await ensureSourceSyncOpen(page)

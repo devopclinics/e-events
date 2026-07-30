@@ -19,6 +19,7 @@ export default function FestioMeRedesignPage() {
   const [members, setMembers] = useState([])
   const [reports, setReports] = useState([])
   const [joinRequests, setJoinRequests] = useState([])
+  const [hostInbox, setHostInbox] = useState([])
   const [status, setStatus] = useState(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
@@ -62,10 +63,11 @@ export default function FestioMeRedesignPage() {
   useEffect(() => {
     if (!eventId) { setLoading(false); return }
     setLoading(true)
-    Promise.all([api.eventFestioMeStatus(eventId), api.festiomeManageGroups(eventId)])
-      .then(([nextStatus, listed]) => {
+    Promise.all([api.eventFestioMeStatus(eventId), api.festiomeManageGroups(eventId), api.messageInbox(eventId).catch(() => [])])
+      .then(([nextStatus, listed, inbox]) => {
         setStatus(nextStatus)
         setGroups(listed)
+        setHostInbox(inbox)
         setActiveGroup(listed[0]?.id || '')
         setError('')
       })
@@ -164,7 +166,7 @@ export default function FestioMeRedesignPage() {
       <div className="rr-pagehead">
         <div>
           <div className="rr-title-row"><h1>FestioMe</h1></div>
-          <div className="rr-meta">Community chat for Women's Convention 2026</div>
+          <div className="rr-meta">Community chat for {status?.name || 'the selected event'}</div>
         </div>
       </div>
 
@@ -206,8 +208,20 @@ export default function FestioMeRedesignPage() {
 
       {homeSection === 'Messages' && (
         <div className="rd-panel">
-          <div className="rd-panel-head"><h3>Private messages</h3></div>
-          <div className="rd-panel-body"><p className="rd-rowlink">The existing API can open a direct-message channel for a selected member, but it does not provide an admin inbox listing. Mock conversations have been removed.</p></div>
+          <div className="rd-panel-head"><h3>Guest Questions Inbox</h3><p>Private guest conversations from FestioHub</p></div>
+          <div className="rd-panel-body">
+            {hostInbox.map((thread) => (
+              <a key={thread.thread_id} className="fm-profile-row" href="/communications-redesign?tab=hub">
+                <span className="fm-dm-avatar">{(thread.guest_name || '?')[0].toUpperCase()}</span>
+                <div>
+                  <strong>{thread.guest_name || 'Guest question'}</strong>
+                  <span className="rd-rowlink">{thread.last_message || 'Open the organizer inbox to read and reply'}</span>
+                </div>
+              </a>
+            ))}
+            {!hostInbox.length && <p className="rd-rowlink">No private guest questions yet.</p>}
+            <a className="rr-link-btn" href="/communications-redesign?tab=hub" style={{ marginTop: 10 }}>Open organizer inbox to reply <Icon name="arrow" size={12} /></a>
+          </div>
         </div>
       )}
 

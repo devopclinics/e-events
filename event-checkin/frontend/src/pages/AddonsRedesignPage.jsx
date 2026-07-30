@@ -1,10 +1,10 @@
 import { Fragment, useEffect, useState } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import RedesignShell, { Icon, Modal, ConfirmDialog } from './redesign/RedesignShell'
-import { useMockEntitlements } from './redesign/mockEntitlements'
 import { EmptyState, ErrorRetryState, LoadingSkeleton } from './redesign/RedesignPrimitives'
 import { useCurrentEvent } from '../hooks/useCurrentEvent'
 import { useEventDetails } from '../hooks/useEventDetails'
+import { useEntitlements } from '../hooks/useEventResources'
 import { api } from '../api'
 import { RealOrdersContent, RealSeatingContent } from './redesign/RealOperationsContent'
 import './AddonsRedesignPage.css'
@@ -258,20 +258,14 @@ function RealRegistryContent({ eventId, notify }) {
 export default function AddonsRedesignPage() {
   const [searchParams, setSearchParams] = useSearchParams()
   const navigate = useNavigate()
-  const { flags } = useMockEntitlements()
   const [eventId] = useCurrentEvent()
-  const { event } = useEventDetails(eventId)
+  const { event, loading: eventLoading } = useEventDetails(eventId)
+  const { flags: realFlags } = useEntitlements(event, eventLoading)
   const [toast, setToast] = useState(null)
 
   const tabParam = searchParams.get('tab')
   const tab = TABS.some((t) => t.id === tabParam) ? tabParam : 'seating'
   const meta = TAB_META[tab]
-  const realFlags = event ? {
-    seating: !!event.seating_enabled,
-    orders: !!event.menu_enabled,
-    logistics: !!event.logistics_enabled,
-    registry: !!event.registry_enabled,
-  } : flags
   const unlocked = !!realFlags[tab]
   const enabledCount = TABS.filter((t) => realFlags[t.id]).length
 
@@ -299,7 +293,9 @@ export default function AddonsRedesignPage() {
         ))}
       </div>
 
-      {!unlocked ? (
+      {eventLoading ? (
+        <div className="rr-panel"><div className="rd-panel-body"><LoadingSkeleton rows={5} /></div></div>
+      ) : !unlocked ? (
         <LockedPanel meta={meta} notify={notify} />
       ) : (
         <>

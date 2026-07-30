@@ -72,7 +72,7 @@ test.describe('RedesignGate — cohort-based routing', () => {
       await expect(banner).toContainText('New interface')
       const escapeLink = banner.getByRole('link', { name: /Switch to legacy UI/i })
       await expect(escapeLink).toBeVisible()
-      expect(await escapeLink.getAttribute('href')).toBe('/admin')
+      expect(await escapeLink.getAttribute('href')).toBe('/admin?ui=legacy')
     } else {
       // Opt-in cohorts get the debug banner.
       const debugBanner = page.locator('.rd-mockflag:not(.rd-mockflag-default)')
@@ -142,6 +142,10 @@ test.describe('RedesignGate — non-superadmin redirect @nonsuperadmin', () => {
     await page.waitForLoadState('networkidle')
     await expect(page).toHaveURL(/\/admin-redesign/)
     await page.locator('.rd-mockflag-default').getByRole('link', { name: /Switch to legacy UI/i }).click()
+    await page.waitForLoadState('networkidle')
+    await expect(page).toHaveURL(/\/admin\?ui=legacy$/)
+    await expectQaEventLoaded(page)
+    await page.goto('/admin')
     await page.waitForLoadState('networkidle')
     await expect(page).toHaveURL(/\/admin$/)
     await expectQaEventLoaded(page)

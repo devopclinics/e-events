@@ -1,8 +1,10 @@
 import { useEffect, useState } from 'react'
-import { Navigate } from 'react-router-dom'
+import { Navigate, useLocation } from 'react-router-dom'
 import { api } from '../../api'
 import { useAuth } from '../../context/AuthContext'
 import { useCurrentEvent } from '../../hooks/useCurrentEvent'
+import { getUiPreference, preferenceFromSearch, setUiPreference } from './uiPreference'
+import { logFeatureFlagCohort } from './redesignTelemetry'
 
 // ── RedesignGate ──────────────────────────────────────────────────────────────
 // Wraps a legacy route element. If the user's organisation is on the
@@ -22,9 +24,20 @@ const AUTO_REDIRECT_COHORTS = new Set(['redesign_default', 'legacy_retired'])
 
 export default function RedesignGate({ redesignRoute, children }) {
   const { user } = useAuth()
+  const location = useLocation()
   const [currentEventId] = useCurrentEvent()
+  const requestedPreference = preferenceFromSearch(location.search)
+  const [uiPreference, setLocalUiPreference] = useState(
+    () => requestedPreference || getUiPreference(),
+  )
   // null = still loading, string = resolved cohort
   const [cohort, setCohort] = useState(null)
+
+  useEffect(() => {
+    if (!requestedPreference) return
+    setUiPreference(requestedPreference)
+    setLocalUiPreference(requestedPreference)
+  }, [requestedPreference])
 
   useEffect(() => {
     let cancelled = false
@@ -37,13 +50,21 @@ export default function RedesignGate({ redesignRoute, children }) {
       .then((evs) => {
         if (cancelled) return
         const ev = evs.find((e) => e.id === currentEventId)
-        setCohort(ev?.my_redesign_cohort ?? 'legacy_only')
+        const resolved = ev?.my_redesign_cohort ?? 'legacy_only'
+        setCohort(resolved)
+        logFeatureFlagCohort({ orgId: ev?.organization_id, eventId: currentEventId, cohort: resolved })
       })
       .catch(() => {
         if (!cancelled) setCohort('legacy_only')
       })
     return () => { cancelled = true }
   }, [user, currentEventId])
+
+  // An explicit legacy choice always wins over cohort defaults. This is the
+  // operational rollback path exposed by the redesign shell.
+  if (uiPreference === 'legacy' || requestedPreference === 'legacy') {
+    return children
+  }
 
   // Still resolving — show a minimal inline loader rather than mounting the
   // legacy page (avoids a visible flash before redirect).

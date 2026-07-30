@@ -5,7 +5,7 @@ import { useAuth } from '../../context/AuthContext'
 import { useCurrentEvent } from '../../hooks/useCurrentEvent'
 import { api } from '../../api'
 import { RedesignShellBoundary, RedesignRouteBoundary } from './RedesignErrorBoundaries'
-import { logRenderError } from './redesignTelemetry'
+import { logFallbackToLegacy, logRenderError } from './redesignTelemetry'
 import './RedesignShell.css'
 
 // ── shared dialog primitives, used across every redesign page ──────────
@@ -70,7 +70,7 @@ export function ConfirmDialog({ title = 'Are you sure?', message, danger = true,
       )}
       <div className="rd-row2" style={{ marginTop: 12 }}>
         <button className="rr-btn secondary" style={{ flex: 1, justifyContent: 'center' }} onClick={onCancel}>Cancel</button>
-        <button className={`rr-btn ${danger ? 'danger' : 'primary'}`} style={{ flex: 1, justifyContent: 'center' }} disabled={!canConfirm} onClick={onConfirm}>{confirmLabel}</button>
+        <button className={`rr-btn ${danger ? 'danger' : 'primary'}`} style={{ flex: 1, justifyContent: 'center' }} disabled={!canConfirm} onClick={() => onConfirm([...checked])}>{confirmLabel}</button>
       </div>
     </Modal>
   )
@@ -347,20 +347,20 @@ export default function RedesignShell({ topActive, withEventSidebar = false, eve
 function RedesignStatusBanner({ cohort, location }) {
   const AUTO_REDIRECT = cohort === 'redesign_default' || cohort === 'legacy_retired'
   const legacyPath = REDESIGN_TO_LEGACY[location.pathname] || '/admin'
+  const legacyHref = `${legacyPath}?ui=legacy`
 
   return (
     <div className={`rd-mockflag ${AUTO_REDIRECT ? 'rd-mockflag-default' : ''}`}>
       {AUTO_REDIRECT ? (
         <>
           <b>New interface</b> — your organisation is on the redesign preview.{' '}
-          <a href={legacyPath} className="rr-link-btn" style={{ fontWeight: 600 }}>
+          <a href={legacyHref} className="rr-link-btn" style={{ fontWeight: 600 }} onClick={() => logFallbackToLegacy({ route: location.pathname, module: 'shell', reason: 'user_escape_hatch' })}>
             Switch to legacy UI →
           </a>
         </>
       ) : (
         <>
-          <b>Redesign preview</b> — shell reflects your real account and event;
-          page content below may still include design-exploration mock data.
+          <b>Redesign preview</b> — connected to your real account and selected event.
           Route: {location.pathname}{location.search}
         </>
       )}

@@ -68,6 +68,10 @@
 .dark .sc-result-card.sc-tone-red { background: #7f1d1d; border-color: #dc2626; color: #fca5a5; }
 .dark .sc-result-card.sc-tone-blue { background: #1e3a8a; border-color: #2563eb; color: #93c5fd; }
 .sc-result-icon { flex-shrink: 0; opacity: 0.8; }
+.sc-camera-live { width: min(100%, 360px); display: flex; flex-direction: column; align-items: stretch; gap: 8px; }
+.sc-camera-reader { width: 100%; overflow: hidden; border-radius: 8px; }
+.sc-camera-live .rr-btn { justify-content: center; }
+.sc-camera-error { margin: 0; padding: 8px; border-radius: 6px; background: #fef2f2; color: #b91c1c; font-size: 0.76rem; white-space: pre-line; }
 .sc-result-info strong { display: block; font-size: 1rem; font-weight: 700; }
 .sc-result-info p { margin: 2px 0 0; font-size: 0.85rem; opacity: 0.85; }
 .sc-result-guest { margin-top: 6px; font-size: 0.82rem; font-weight: 600; }

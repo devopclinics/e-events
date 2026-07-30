@@ -84,12 +84,6 @@ export default function HelpRedesignPage() {
   }, [roleKeys]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const [query, setQuery] = useState('')
-  const [toast, setToast] = useState('')
-
-  function notify(msg) {
-    setToast(msg)
-    window.setTimeout(() => setToast(''), 2600)
-  }
 
   const data = CONTENT[role] || CONTENT.guest
   const categories = useMemo(() => {
@@ -140,7 +134,7 @@ export default function HelpRedesignPage() {
             <strong>Getting Started — Interactive Tour</strong>
             <p>A guided walkthrough of setting up your first event, step by step.</p>
           </div>
-          <button className="rr-btn primary" onClick={() => notify('Interactive tour opened in a new tab')}>Start tour <Icon name="arrow" size={13} /></button>
+          <a className="rr-btn primary" href="/media/getting-started.html" target="_blank" rel="noreferrer">Start tour <Icon name="arrow" size={13} /></a>
         </div>
       )}
 
@@ -148,7 +142,7 @@ export default function HelpRedesignPage() {
         <aside className="hp-toc">
           <div className="hp-toc-head">On this page</div>
           {categories.map((c) => (
-            <a key={c.cat} href={`#${c.cat}`} onClick={(e) => { e.preventDefault(); notify(`Jumped to ${c.cat}`) }}>
+            <a key={c.cat} href={`#${c.cat}`}>
               <Icon name={c.icon} size={13} /> {c.cat}
             </a>
           ))}
@@ -166,12 +160,10 @@ export default function HelpRedesignPage() {
       </div>
 
       <div className="hp-footer">
-        <a href="/pricing" onClick={(e) => { e.preventDefault(); notify('Pricing page opened') }}>See pricing</a>
+        <a href="/pricing">See pricing</a>
         <span className="rr-dot">·</span>
-        <a href="#" onClick={(e) => { e.preventDefault(); notify('Support contact opened') }}>Contact support</a>
+        <a href="mailto:info@festio.events">Contact support</a>
       </div>
-
-      {toast && <div className="rd-toast"><Icon name="check" />{toast}</div>}
     </RedesignShell>
   )
 }

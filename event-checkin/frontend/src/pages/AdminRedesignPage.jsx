@@ -5,14 +5,15 @@ import { LoadingSkeleton } from './redesign/RedesignPrimitives'
 import { useCurrentEvent } from '../hooks/useCurrentEvent'
 import { useEventDetails } from '../hooks/useEventDetails'
 import { api } from '../api'
+import { useAuth } from '../context/AuthContext'
 import './AdminRedesignPage.css'
 
 const RESET_OPTIONS = [
   { key: 'guests', label: 'Guests', hint: 'Removes all guest records' },
   { key: 'checkins', label: 'Check-ins', hint: 'Marks all guests as not arrived' },
-  { key: 'seats', label: 'Seat assignments', hint: 'Unassigns all seats' },
-  { key: 'tagtags', label: 'Table-group tags', hint: 'Removes per-guest group overrides' },
-  { key: 'tablegroups', label: 'Table groups', hint: 'Deletes all table group definitions' },
+  { key: 'seat_assignments', label: 'Seat assignments', hint: 'Unassigns all seats' },
+  { key: 'group_assignments', label: 'Table-group tags', hint: 'Removes per-guest group overrides' },
+  { key: 'table_groups', label: 'Table groups', hint: 'Deletes all table group definitions' },
   { key: 'tables', label: 'Tables', hint: 'Removes all table and seat definitions' },
 ]
 
@@ -105,17 +106,19 @@ export default function AdminRedesignPage() {
   const [editOpen, setEditOpen] = useState(false)
   const [resetOpen, setResetOpen] = useState(false)
   const [deleteOpen, setDeleteOpen] = useState(false)
+  const [eventMutationBusy, setEventMutationBusy] = useState(false)
   const [eventForm, setEventForm] = useState({
-    name: "Women's Convention 2026",
-    type: 'Conference', host: 'DevOps Clinics',
-    date: '2026-07-11', timezone: 'Africa/Lagos',
-    multiDay: false, endDate: '', baseUrl: 'wc2026',
-    venue: 'Masjid Mumineen', venueAddress: 'Lagos, Nigeria',
+    name: '',
+    type: 'Conference', host: '',
+    date: '', timezone: 'Africa/Lagos',
+    multiDay: false, endDate: '', baseUrl: '',
+    venue: '', venueAddress: '',
     admissionNote: '', description: '',
   })
   const manageRef = useRef(null)
 
-  const [currentEventId] = useCurrentEvent()
+  const [currentEventId, setCurrentEventId] = useCurrentEvent()
+  const { user } = useAuth()
   const { event, setEvent, refresh: refreshEvent } = useEventDetails(currentEventId)
   const [guests, setGuests] = useState(null)
   const [tasks, setTasks] = useState(null)
@@ -155,6 +158,53 @@ export default function AdminRedesignPage() {
     setToast(message)
     window.setTimeout(() => setToast(''), 2600)
     if (isError) console.error(message)
+  }
+
+  function openEditEvent() {
+    if (!event) return
+    setEventForm({
+      name: event.name || '',
+      type: event.event_type || 'Other',
+      host: event.couples_name || '',
+      date: String(event.event_date || '').slice(0, 16),
+      timezone: event.timezone || 'Africa/Lagos',
+      multiDay: !!event.event_end_date,
+      endDate: String(event.event_end_date || '').slice(0, 16),
+      baseUrl: event.checkin_base_url || '',
+      venue: event.venue_name || '',
+      venueAddress: event.venue_address || '',
+      admissionNote: event.admission_note || '',
+      description: event.description || '',
+    })
+    setManageOpen(false)
+    setEditOpen(true)
+  }
+
+  async function saveEventDetails() {
+    if (!event?.id || eventMutationBusy) return
+    setEventMutationBusy(true)
+    try {
+      const updated = await api.updateEvent(event.id, {
+        name: eventForm.name.trim(),
+        event_type: eventForm.type,
+        couples_name: eventForm.host.trim(),
+        event_date: eventForm.date,
+        event_end_date: eventForm.multiDay && eventForm.endDate ? eventForm.endDate : null,
+        timezone: eventForm.timezone,
+        checkin_base_url: eventForm.baseUrl.trim(),
+        venue_name: eventForm.venue.trim() || null,
+        venue_address: eventForm.venueAddress.trim() || null,
+        admission_note: eventForm.admissionNote.trim() || null,
+        description: eventForm.description.trim() || null,
+      })
+      setEvent(updated)
+      setEditOpen(false)
+      notify('Event details saved')
+    } catch (error) {
+      notify(error.message || 'Event details could not be saved', true)
+    } finally {
+      setEventMutationBusy(false)
+    }
   }
 
   async function confirmStatusChange() {
@@ -269,9 +319,9 @@ export default function AdminRedesignPage() {
             <button className="rr-btn primary" onClick={() => setManageOpen((v) => !v)}>Manage event <Icon name="chevrondown" size={14}/></button>
             {manageOpen && (
               <div className="rr-manage-menu" onMouseLeave={() => setManageOpen(false)}>
-                <button onClick={() => { setManageOpen(false); setEditOpen(true) }}><Icon name="settings" size={13}/> Edit event details</button>
+                <button onClick={openEditEvent}><Icon name="settings" size={13}/> Edit event details</button>
                 <button onClick={() => { setManageOpen(false); setStatusOpen(true) }}><Icon name="check" size={13}/> Change status</button>
-                <button onClick={() => { setManageOpen(false); setResetOpen(true) }} className="danger"><Icon name="arrow" size={13}/> Reset event data</button>
+                {user?.is_platform_superadmin && <button onClick={() => { setManageOpen(false); setResetOpen(true) }} className="danger"><Icon name="arrow" size={13}/> Reset event data</button>}
                 <button onClick={() => { setManageOpen(false); setDeleteOpen(true) }} className="danger"><Icon name="more" size={13}/> Delete event</button>
               </div>
             )}
@@ -540,11 +590,11 @@ export default function AdminRedesignPage() {
               <div><label className="rd-field-label">App base URL</label><input className="rd-field" value={eventForm.baseUrl} onChange={(e) => setEventForm({ ...eventForm, baseUrl: e.target.value })} /></div>
             </div>
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
-              <div><label className="rd-field-label">Date *</label><input className="rd-field" type="date" value={eventForm.date} onChange={(e) => setEventForm({ ...eventForm, date: e.target.value })} /></div>
-              <div><label className="rd-field-label">Timezone</label><select className="rd-field" value={eventForm.timezone} onChange={(e) => setEventForm({ ...eventForm, timezone: e.target.value })}>{TIMEZONES_SHORT.map((t) => <option key={t}>{t}</option>)}</select></div>
+              <div><label className="rd-field-label">Date &amp; time *</label><input className="rd-field" type="datetime-local" value={eventForm.date} onChange={(e) => setEventForm({ ...eventForm, date: e.target.value })} /></div>
+              <div><label className="rd-field-label">Timezone</label><select className="rd-field" value={eventForm.timezone} onChange={(e) => setEventForm({ ...eventForm, timezone: e.target.value })}>{[...new Set([...TIMEZONES_SHORT, eventForm.timezone])].map((t) => <option key={t}>{t}</option>)}</select></div>
             </div>
             <label className="gr-required-check"><input type="checkbox" checked={eventForm.multiDay} onChange={(e) => setEventForm({ ...eventForm, multiDay: e.target.checked })} /> Multi-day event</label>
-            {eventForm.multiDay && <div><label className="rd-field-label">End date</label><input className="rd-field" type="date" value={eventForm.endDate} onChange={(e) => setEventForm({ ...eventForm, endDate: e.target.value })} /></div>}
+            {eventForm.multiDay && <div><label className="rd-field-label">End date &amp; time</label><input className="rd-field" type="datetime-local" value={eventForm.endDate} onChange={(e) => setEventForm({ ...eventForm, endDate: e.target.value })} /></div>}
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
               <div><label className="rd-field-label">Venue</label><input className="rd-field" value={eventForm.venue} onChange={(e) => setEventForm({ ...eventForm, venue: e.target.value })} /></div>
               <div><label className="rd-field-label">Venue address</label><input className="rd-field" value={eventForm.venueAddress} onChange={(e) => setEventForm({ ...eventForm, venueAddress: e.target.value })} /></div>
@@ -553,7 +603,7 @@ export default function AdminRedesignPage() {
             <div><label className="rd-field-label">Description</label><textarea className="rd-field" rows="3" value={eventForm.description} onChange={(e) => setEventForm({ ...eventForm, description: e.target.value })} /></div>
             <div className="rd-row2" style={{ marginTop: 4 }}>
               <button className="rr-btn secondary" style={{ flex: 1, justifyContent: 'center' }} onClick={() => setEditOpen(false)}>Cancel</button>
-              <button className="rr-btn primary" style={{ flex: 1, justifyContent: 'center' }} onClick={() => { setEditOpen(false); notify('Event details saved') }}>Save changes</button>
+              <button className="rr-btn primary" disabled={eventMutationBusy || !eventForm.name.trim() || !eventForm.date || !eventForm.timezone} style={{ flex: 1, justifyContent: 'center' }} onClick={saveEventDetails}>{eventMutationBusy ? 'Saving…' : 'Save changes'}</button>
             </div>
           </div>
         </Modal>
@@ -568,7 +618,17 @@ export default function AdminRedesignPage() {
           confirmLabel="Reset selected"
           requireTypedWord="RESET"
           checklist={RESET_OPTIONS.map((o) => ({ key: o.key, label: o.label, hint: o.hint }))}
-          onConfirm={() => { setResetOpen(false); notify('Event data reset') }}
+          onConfirm={async (selected) => {
+            setEventMutationBusy(true)
+            try {
+              const flags = Object.fromEntries(selected.map((key) => [key, true]))
+              const result = await api.adminResetEvent(event.id, flags)
+              setResetOpen(false)
+              await Promise.all([refreshEvent(), api.listGuests(event.id).then(setGuests), api.listTasks(event.id).then(setTasks)])
+              notify(`Event data reset${result?.cleared ? `: ${Object.keys(result.cleared).join(', ') || 'nothing to clear'}` : ''}`)
+            } catch (error) { notify(error.message || 'Event data could not be reset', true) }
+            finally { setEventMutationBusy(false) }
+          }}
           onCancel={() => setResetOpen(false)}
         />
       )}
@@ -580,7 +640,17 @@ export default function AdminRedesignPage() {
           message="This will permanently delete the event and all its data. This cannot be undone."
           danger
           confirmLabel="Delete event"
-          onConfirm={() => { setDeleteOpen(false); notify('Event deleted') }}
+          requireTypedWord="DELETE"
+          onConfirm={async () => {
+            setEventMutationBusy(true)
+            try {
+              await api.deleteEvent(event.id)
+              setDeleteOpen(false)
+              setCurrentEventId('')
+              navigate('/admin-redesign')
+            } catch (error) { notify(error.message || 'Event could not be deleted', true) }
+            finally { setEventMutationBusy(false) }
+          }}
           onCancel={() => setDeleteOpen(false)}
         />
       )}

@@ -9,10 +9,10 @@ import { api } from '../api'
 import './GuestsRedesignPage.css'
 
 const STAT_TILES = [
-  { key: 'total', label: 'Total Guests', value: 612, caption: 'Imported + self-registered', icon: 'users', tone: 'teal' },
-  { key: 'qr', label: 'QR Generated', value: 480, caption: '132 waiting on contact info', icon: 'ticket', tone: 'teal' },
-  { key: 'invited', label: 'Invites Sent', value: 1, caption: '611 not sent yet', icon: 'send', tone: 'amber' },
-  { key: 'admitted', label: 'Admitted', value: 564, caption: '92% of total guests', icon: 'check', tone: 'success' },
+  { key: 'total', label: 'Total Guests', icon: 'users', tone: 'teal' },
+  { key: 'qr', label: 'QR Generated', icon: 'ticket', tone: 'teal' },
+  { key: 'invited', label: 'Invites Sent', icon: 'send', tone: 'amber' },
+  { key: 'admitted', label: 'Admitted', icon: 'check', tone: 'success' },
 ]
 
 const FILTER_CHIPS = [
@@ -23,11 +23,6 @@ const FILTER_CHIPS = [
   { key: 'notadmitted', label: 'Not admitted' },
   { key: 'noqr', label: 'No QR' },
 ]
-
-const ROLE_OPTIONS = ['All roles', 'Main invited', 'Additional', 'Parent/Guardian', 'Teacher/Staff', 'VIP/Dignitary']
-const HOUSEHOLD_OPTIONS = ['All households', 'The Rahman Family', 'The Osei Family', 'Unassigned']
-const TABLE_GROUP_OPTIONS = ['All table groups', 'Family — Bride', 'Family — Groom', 'Friends — Bride', 'Friends — Groom', 'Colleagues']
-const SUBMITTER_OPTIONS = ['All submitters', 'Self-submitted', 'Guest of Karim Guest0308', 'Guest of Noor Guest0071']
 
 // Real guests/households/RSVP questions are fetched in the page component
 // and threaded down as props — see GuestsRedesignPage() below.
@@ -85,23 +80,6 @@ const QUESTION_TYPE_LABEL = { boolean: 'Yes / No', select: 'Multiple choice', te
 function adaptQuestion(q) {
   return { id: q.id, raw: q, q: q.question, type: QUESTION_TYPE_LABEL[q.question_type] || 'Short answer', required: q.is_required }
 }
-
-// ── Import wizard ─────────────────────────────────────────────────────────────
-const DETECTED_COLUMNS = [
-  { csv: 'Full Name', mapped: 'Full name' },
-  { csv: 'Email Address', mapped: 'Email' },
-  { csv: 'Mobile No.', mapped: 'Phone' },
-  { csv: 'Table #', mapped: 'Table group' },
-  { csv: 'VIP Flag', mapped: 'VIP' },
-  { csv: 'Notes', mapped: 'Skip / ignore' },
-]
-const FESTIO_FIELD_OPTIONS = ['First name', 'Last name', 'Full name', 'Email', 'Phone', 'Table group', 'VIP', 'Skip / ignore']
-const VALIDATION_ROWS = [
-  { row: 4, name: 'Ibrahim Musa', field: 'Email Address', issue: 'Email format invalid', severity: 'error' },
-  { row: 12, name: 'Salma Yusuf', field: 'Email Address', issue: 'Duplicate — already in guest list', severity: 'error' },
-  { row: 31, name: '(empty)', field: 'Full Name', issue: 'Name is empty', severity: 'warn' },
-  { row: 47, name: 'Rashid Al-Amin', field: 'Mobile No.', issue: 'Not in E.164 format — will skip SMS', severity: 'warn' },
-]
 
 // ── Invite send audience breakdown ───────────────────────────────────────────
 const SEND_AUDIENCE = [
@@ -211,7 +189,7 @@ function ExportMenu({ notify, filteredCount, totalCount, eventId, filteredIds })
   )
 }
 
-function GuestsTab({ notify, onView, onEdit, onRemove, onApproveRsvp, onRejectRsvp, onApproveAll, onSendSelected, eventId, guests, guestsLoading, guestsError, onRetryGuests, households, householdsLoading, onAddHousehold, onEditHousehold, onDeleteHousehold, onBulkAssignHousehold, rsvpQuestions, stats }) {
+function GuestsTab({ notify, onView, onEdit, onRemove, onApproveRsvp, onRejectRsvp, onApproveAll, onSendSelected, eventId, guests, guestsLoading, guestsError, onRetryGuests, households, householdsLoading, tableGroups, onAddHousehold, onEditHousehold, onDeleteHousehold, onBulkAssignHousehold, onBulkAssignTableGroup, rsvpQuestions, stats }) {
   const [query, setQuery] = useState('')
   const [activeChips, setActiveChips] = useState(() => new Set())
   const [selected, setSelected] = useState(() => new Set())
@@ -310,9 +288,6 @@ function GuestsTab({ notify, onView, onEdit, onRemove, onApproveRsvp, onRejectRs
           <Icon name="search" size={14} />
           <input placeholder="Search guests by name…" value={query} onChange={(e) => setQuery(e.target.value)} />
         </div>
-        <button className="rr-btn secondary" onClick={() => notify('Saved filter views are not available yet')}>
-          <Icon name="settings" size={13} /> Save view
-        </button>
       </div>
 
       <div className="gr-select-row">
@@ -349,10 +324,17 @@ function GuestsTab({ notify, onView, onEdit, onRemove, onApproveRsvp, onRejectRs
             <button className="rr-btn secondary" onClick={() => onSendSelected?.([...selected])}>
               <Icon name="send" size={13} /> Send invite
             </button>
-            <button className="rr-btn secondary" onClick={() => notify('Table-group assignment remains on the legacy seating interface during Stage B', true)}>
-              <Icon name="chair" size={13} /> Assign table group
-            </button>
-            <select className="rr-select gr-inline-select" defaultValue="" onChange={async (e) => {
+            <select className="rr-select gr-inline-select" aria-label="Assign table group" defaultValue="" onChange={async (e) => {
+              if (!e.target.value) return
+              await onBulkAssignTableGroup([...selected], e.target.value === 'none' ? null : e.target.value)
+              setSelected(new Set())
+              e.target.value = ''
+            }}>
+              <option value="">Assign table group…</option>
+              <option value="none">Clear table group</option>
+              {tableGroups.map((group) => <option key={group.id} value={group.id}>{group.name}</option>)}
+            </select>
+            <select className="rr-select gr-inline-select" aria-label="Assign household" defaultValue="" onChange={async (e) => {
               if (!e.target.value) return
               await onBulkAssignHousehold([...selected], e.target.value === 'none' ? null : e.target.value)
               setSelected(new Set())
@@ -438,7 +420,7 @@ function GuestsTab({ notify, onView, onEdit, onRemove, onApproveRsvp, onRejectRs
             <span>
               Showing {filtered.length} of {guests.length} guests
               {fullPageSelected && (
-                <button className="rr-link-btn" style={{ marginLeft: 8 }} onClick={() => notify(`All ${guests.length} guests selected`)}>Select all {guests.length} guests</button>
+                <button className="rr-link-btn" style={{ marginLeft: 8 }} onClick={() => setSelected(new Set(guests.map((guest) => guest.id)))}>Select all {guests.length} guests</button>
               )}
             </span>
             <div className="gr-footer-actions">
@@ -595,7 +577,7 @@ function ManualInvitePanel({ notify }) {
   )
 }
 
-function InviteTab({ notify, onSendInvites, onPreviewInvite, eventId, event, guests, rsvpQuestions, onQuestionsChanged, onEventChanged }) {
+function InviteTab({ notify, onSendInvites, onSendGuests, onPreviewInvite, eventId, event, guests, rsvpQuestions, onQuestionsChanged, onEventChanged }) {
   const navigate = useNavigate()
   const [rsvpEnabled, setRsvpEnabled] = useState(true)
   const [mode, setMode] = useState('open')
@@ -649,6 +631,14 @@ function InviteTab({ notify, onSendInvites, onPreviewInvite, eventId, event, gue
     const notInvited = guests?.filter((g) => g.invited === '—').length || 0
     return { total, confirmed, declined, pendingApproval, awaitingReply, notInvited }
   }, [guests])
+  const reminderGuestIds = useMemo(
+    () => guests.filter((g) => g.raw.invite_sent_at && !['confirmed', 'declined'].includes(String(g.raw.rsvp_status || '').toLowerCase())).map((g) => g.id),
+    [guests],
+  )
+  const invitedGuestIds = useMemo(
+    () => guests.filter((g) => g.raw.invite_sent_at).map((g) => g.id),
+    [guests],
+  )
 
   useEffect(() => {
     if (!event) return
@@ -718,21 +708,21 @@ function InviteTab({ notify, onSendInvites, onPreviewInvite, eventId, event, gue
           </span>
           <span className="gr-quick-count">{rsvpCounts.notInvited}</span>
         </button>
-        <button className="rr-panel gr-quick-card" onClick={() => notify('Reminder sending is available on the legacy interface during rollout')}>
+        <button className="rr-panel gr-quick-card" disabled={!reminderGuestIds.length} onClick={() => onSendGuests(reminderGuestIds)}>
           <span className="gr-quick-icon teal"><Icon name="bell" size={16} /></span>
           <span className="gr-quick-text">
             <strong>Remind guests with no reply</strong>
-            <small>{rsvpCounts.awaitingReply} guest{rsvpCounts.awaitingReply === 1 ? '' : 's'} haven't responded</small>
+            <small>{reminderGuestIds.length} guest{reminderGuestIds.length === 1 ? '' : 's'} haven't responded</small>
           </span>
-          <span className="gr-quick-count">{rsvpCounts.awaitingReply}</span>
+          <span className="gr-quick-count">{reminderGuestIds.length}</span>
         </button>
-        <button className="rr-panel gr-quick-card" onClick={() => notify('Bulk resend is available on the legacy interface during rollout')}>
+        <button className="rr-panel gr-quick-card" disabled={!invitedGuestIds.length} onClick={() => onSendGuests(invitedGuestIds)}>
           <span className="gr-quick-icon teal"><Icon name="upload" size={16} /></span>
           <span className="gr-quick-text">
             <strong>Resend to all</strong>
             <small>Re-send the invite to everyone</small>
           </span>
-          <span className="gr-quick-count">{rsvpCounts.total}</span>
+          <span className="gr-quick-count">{invitedGuestIds.length}</span>
         </button>
       </div>
 
@@ -771,7 +761,9 @@ function InviteTab({ notify, onSendInvites, onPreviewInvite, eventId, event, gue
                 } catch (e) { notify(e.message || 'RSVP link could not be generated', true) }
               }}>{event?.rsvp_token ? 'Regenerate' : 'Generate'}</button>
             </div>
-            <a className="rd-hint gr-preview-link" href="#" onClick={(e) => { e.preventDefault(); notify('Invite page preview opened') }}>Preview invite page ↗</a>
+            {publicLink
+              ? <a className="rd-hint gr-preview-link" href={publicLink} target="_blank" rel="noreferrer">Preview invite page ↗</a>
+              : <span className="rd-hint">Generate the public RSVP link to preview the invite page.</span>}
 
             <label className="rd-field-label" style={{ marginTop: 14 }}>Invite page theme</label>
             <select className="rr-select" value={theme} onChange={(e) => { setTheme(e.target.value); notify(`Invite theme set to ${INVITE_THEMES.find((t) => t.id === e.target.value)?.label} — click Save RSVP settings to apply`) }}>
@@ -965,12 +957,14 @@ export default function GuestsRedesignPage() {
   const { guests: rawGuests, loading: guestsLoading, error: guestsError, refresh: loadGuests } = useGuests(eventId)
   const guests = useMemo(() => rawGuests.map(adaptGuest), [rawGuests])
   const [households, setHouseholds] = useState([])
+  const [tableGroups, setTableGroups] = useState([])
+  const [tables, setTables] = useState([])
   const [rsvpQuestions, setRsvpQuestions] = useState([])
   const [householdsLoading, setHouseholdsLoading] = useState(true)
   const [householdTarget, setHouseholdTarget] = useState(null)
   const [householdDeleteTarget, setHouseholdDeleteTarget] = useState(null)
   const [householdForm, setHouseholdForm] = useState({ name: '', description: '' })
-  const [editForm, setEditForm] = useState({ first_name: '', last_name: '', email: '', phone: '', is_vip: false })
+  const [editForm, setEditForm] = useState({ first_name: '', last_name: '', email: '', phone: '', is_vip: false, table_id: '', seat_number: '', messaging_consent: false })
   const [mutationBusy, setMutationBusy] = useState(false)
   const tab = searchParams.get('tab') === 'invite' ? 'invite' : 'guests'
   const [addOpen, setAddOpen] = useState(false)
@@ -978,13 +972,8 @@ export default function GuestsRedesignPage() {
   const [viewTarget, setViewTarget] = useState(null)
   const [removeTarget, setRemoveTarget] = useState(null)
   const [addForm, setAddForm] = useState({ first: '', last: '', email: '', phone: '', vip: false, sendInvite: false })
-  const TABLE_OPTIONS = ['Unassigned', 'Table 1', 'Table 2', 'Table 3', 'Table 4', 'Table 5']
-  const SEAT_OPTIONS = ['Unassigned', 'Seat 1', 'Seat 2', 'Seat 3', 'Seat 4']
-
   const [importOpen, setImportOpen] = useState(false)
   const [importStep, setImportStep] = useState('upload') // upload | mapping | validating | result
-  const [importMapping, setImportMapping] = useState(Object.fromEntries(DETECTED_COLUMNS.map((c) => [c.csv, c.mapped])))
-  const [importErrorMode, setImportErrorMode] = useState('skip') // skip | fix | abort
   const [importProgress, setImportProgress] = useState(0)
   const [importResult, setImportResult] = useState(null)
   const [importFile, setImportFile] = useState(null)
@@ -1026,8 +1015,20 @@ export default function GuestsRedesignPage() {
     setRsvpQuestions((await api.listRSVPQuestions(eventId)).map(adaptQuestion))
   }
 
+  async function loadTableGroups() {
+    if (!eventId) { setTableGroups([]); setTables([]); return }
+    try {
+      const [nextGroups, nextTables] = await Promise.all([api.listTableGroups(eventId), api.listTables(eventId)])
+      setTableGroups(nextGroups)
+      setTables(nextTables)
+    } catch (e) {
+      notify(e.message || 'Table groups could not be loaded', true)
+    }
+  }
+
   useEffect(() => {
     loadHouseholds()
+    loadTableGroups()
     loadQuestions().catch((e) => notify(e.message || 'RSVP questions could not be loaded', true))
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [eventId])
@@ -1045,6 +1046,9 @@ export default function GuestsRedesignPage() {
       email: editTarget.raw.email || '',
       phone: editTarget.raw.phone || '',
       is_vip: !!editTarget.raw.is_vip,
+      table_id: editTarget.raw.table_id || '',
+      seat_number: editTarget.raw.seat_number || '',
+      messaging_consent: !!editTarget.raw.sms_consent && !!editTarget.raw.whatsapp_consent,
     })
   }, [editTarget])
 
@@ -1072,13 +1076,31 @@ export default function GuestsRedesignPage() {
     try {
       const result = await api.uploadGuests(eventId, importFile)
       setImportProgress(100)
-      setImportResult({ imported: result.added || result.imported || 0, warnings: result.warnings?.length || 0, errors: result.errors?.length || result.skipped || 0 })
+      setImportResult({
+        imported: result.added || result.imported || 0,
+        warnings: result.warnings?.length || 0,
+        errors: result.errors?.length || result.skipped || 0,
+        details: { warnings: result.warnings || [], errors: result.errors || [], skipped: result.skipped || 0 },
+      })
       setImportStep('result')
       await loadGuests()
     } catch (e) {
       setImportStep('upload')
       notify(e.message || 'Guest import failed', true)
     }
+  }
+
+  function downloadImportLog() {
+    if (!importResult) return
+    const blob = new Blob([JSON.stringify(importResult.details, null, 2)], { type: 'application/json' })
+    const url = URL.createObjectURL(blob)
+    const anchor = document.createElement('a')
+    anchor.href = url
+    anchor.download = `guest-import-${eventId}-results.json`
+    document.body.appendChild(anchor)
+    anchor.click()
+    anchor.remove()
+    URL.revokeObjectURL(url)
   }
 
   async function startSend(count) {
@@ -1116,11 +1138,14 @@ export default function GuestsRedesignPage() {
       </div>
 
       {tab === 'guests'
-        ? <GuestsTab notify={notify} onView={setViewTarget} onEdit={setEditTarget} onRemove={setRemoveTarget} onApproveRsvp={setApproveTarget} onRejectRsvp={setRejectTarget} onApproveAll={(n) => setApproveAllCount(n)} onSendSelected={(ids) => { setSendGuestIds(ids); setSendResult(null); setSendCount(ids.length); setSendStep('audience') }} eventId={eventId} guests={guests} guestsLoading={guestsLoading} guestsError={guestsError} onRetryGuests={loadGuests} households={households} householdsLoading={householdsLoading} onAddHousehold={() => { setHouseholdTarget('new'); setHouseholdForm({ name: '', description: '' }) }} onEditHousehold={(h) => { setHouseholdTarget(h); setHouseholdForm({ name: h.raw.name, description: h.raw.description || '' }) }} onDeleteHousehold={setHouseholdDeleteTarget} onBulkAssignHousehold={async (guestIds, householdId) => {
+        ? <GuestsTab notify={notify} onView={setViewTarget} onEdit={setEditTarget} onRemove={setRemoveTarget} onApproveRsvp={setApproveTarget} onRejectRsvp={setRejectTarget} onApproveAll={(n) => setApproveAllCount(n)} onSendSelected={(ids) => { setSendGuestIds(ids); setSendResult(null); setSendCount(ids.length); setSendStep('audience') }} eventId={eventId} guests={guests} guestsLoading={guestsLoading} guestsError={guestsError} onRetryGuests={loadGuests} households={households} householdsLoading={householdsLoading} tableGroups={tableGroups} onAddHousehold={() => { setHouseholdTarget('new'); setHouseholdForm({ name: '', description: '' }) }} onEditHousehold={(h) => { setHouseholdTarget(h); setHouseholdForm({ name: h.raw.name, description: h.raw.description || '' }) }} onDeleteHousehold={setHouseholdDeleteTarget} onBulkAssignHousehold={async (guestIds, householdId) => {
           try { await api.bulkAssignHousehold(eventId, guestIds, householdId); await Promise.all([loadGuests(), loadHouseholds()]); notify('Household assignment updated') }
           catch (e) { notify(e.message || 'Household assignment could not be updated', true) }
+        }} onBulkAssignTableGroup={async (guestIds, tableGroupId) => {
+          try { await api.bulkAssignTableGroup(eventId, guestIds, tableGroupId); await loadGuests(); notify('Table-group assignment updated') }
+          catch (e) { notify(e.message || 'Table-group assignment could not be updated', true) }
         }} rsvpQuestions={rsvpQuestions} stats={stats} />
-        : <InviteTab notify={notify} eventId={eventId} event={event} guests={guests} rsvpQuestions={rsvpQuestions} onQuestionsChanged={loadQuestions} onEventChanged={loadEvent} onSendInvites={(count) => { setSendGuestIds([]); setSendResult(null); setSendCount(count); setSendStep('audience') }} onPreviewInvite={() => { setInvitePreviewCh('email'); setInvitePreviewOpen(true) }} />}
+        : <InviteTab notify={notify} eventId={eventId} event={event} guests={guests} rsvpQuestions={rsvpQuestions} onQuestionsChanged={loadQuestions} onEventChanged={loadEvent} onSendInvites={(count) => { setSendGuestIds([]); setSendResult(null); setSendCount(count); setSendStep('audience') }} onSendGuests={(ids) => { setSendGuestIds(ids); setSendResult(null); setSendCount(ids.length); setSendStep('audience') }} onPreviewInvite={() => { setInvitePreviewCh('email'); setInvitePreviewOpen(true) }} />}
 
       {toast && <div className="rd-toast" style={toast.error ? { background: 'var(--danger)' } : undefined}><Icon name={toast.error ? 'info' : 'check'} />{toast.message}</div>}
 
@@ -1147,10 +1172,21 @@ export default function GuestsRedesignPage() {
                     phone: addForm.phone.trim() || null,
                     is_vip: addForm.vip,
                   })
+                  const shouldSendInvite = addForm.sendInvite
                   setAddOpen(false)
                   setAddForm({ first: '', last: '', email: '', phone: '', vip: false, sendInvite: false })
                   await loadGuests()
-                  notify(`${created.first_name} ${created.last_name || ''} added`)
+                  if (shouldSendInvite) {
+                    try {
+                      await api.sendInvitesBatch(eventId, [created.id], true)
+                      await loadGuests()
+                      notify(`${created.first_name} ${created.last_name || ''} added and invite queued`)
+                    } catch (sendError) {
+                      notify(`${created.first_name} was added, but the invite was not queued: ${sendError.message}`, true)
+                    }
+                  } else {
+                    notify(`${created.first_name} ${created.last_name || ''} added`)
+                  }
                 } catch (e) { notify(e.message || 'Guest could not be added', true) } finally { setMutationBusy(false) }
               }}>{mutationBusy ? 'Adding…' : 'Add guest'}</button>
             </div>
@@ -1168,11 +1204,11 @@ export default function GuestsRedesignPage() {
             <div><label className="rd-field-label">Email</label><input className="rd-field" value={editForm.email} onChange={(e) => setEditForm((v) => ({ ...v, email: e.target.value }))} /></div>
             <div><label className="rd-field-label">Phone (E.164)</label><input className="rd-field" value={editForm.phone} onChange={(e) => setEditForm((v) => ({ ...v, phone: e.target.value }))} /></div>
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
-              <div><label className="rd-field-label">Table</label><select className="rd-field">{TABLE_OPTIONS.map((t) => <option key={t}>{t}</option>)}</select></div>
-              <div><label className="rd-field-label">Seat</label><select className="rd-field">{SEAT_OPTIONS.map((s) => <option key={s}>{s}</option>)}</select></div>
+              <div><label className="rd-field-label">Table</label><select className="rd-field" value={editForm.table_id} onChange={(e) => setEditForm((v) => ({ ...v, table_id: e.target.value, seat_number: e.target.value ? v.seat_number : '' }))}><option value="">Unassigned</option>{tables.map((table) => <option key={table.id} value={table.id}>{table.name}</option>)}</select></div>
+              <div><label className="rd-field-label">Seat</label><input className="rd-field" disabled={!editForm.table_id} value={editForm.seat_number} onChange={(e) => setEditForm((v) => ({ ...v, seat_number: e.target.value }))} placeholder="e.g. 4" /></div>
             </div>
             <label className="gr-required-check"><input type="checkbox" checked={editForm.is_vip} onChange={(e) => setEditForm((v) => ({ ...v, is_vip: e.target.checked }))} /> VIP</label>
-            <label className="gr-required-check"><input type="checkbox" /> SMS/WhatsApp opt-in confirmed</label>
+            <label className="gr-required-check"><input type="checkbox" checked={editForm.messaging_consent} onChange={(e) => setEditForm((v) => ({ ...v, messaging_consent: e.target.checked }))} /> SMS/WhatsApp opt-in confirmed</label>
             {rsvpQuestions.length > 0 && (
               <div className="gr-rsvp-answers">
                 <strong className="rd-field-label">RSVP answers (read-only)</strong>
@@ -1196,6 +1232,10 @@ export default function GuestsRedesignPage() {
                     email: editForm.email.trim() || null,
                     phone: editForm.phone.trim() || null,
                     is_vip: editForm.is_vip,
+                    table_id: editForm.table_id,
+                    seat_number: editForm.seat_number.trim(),
+                    sms_consent: editForm.messaging_consent,
+                    whatsapp_consent: editForm.messaging_consent,
                   }, editTarget.raw.updated_at)
                   const name = `${editForm.first_name} ${editForm.last_name}`.trim()
                   setEditTarget(null)
@@ -1333,7 +1373,7 @@ export default function GuestsRedesignPage() {
           message={`Approve ${approveAllCount} pending RSVPs now? Protected environments reject recipients outside the server allowlist.`}
           confirmLabel={mutationBusy ? 'Approving…' : `Approve all ${approveAllCount}`}
           onConfirm={async () => {
-            const pending = guests.filter((guest) => guest.rsvp === 'Pending approval')
+            const pending = guests.filter((guest) => guest.pendingApproval)
             if (!pending.length) { setApproveAllCount(null); return }
             setMutationBusy(true)
             try {
@@ -1403,7 +1443,7 @@ export default function GuestsRedesignPage() {
               <button key={ch} className={`rr-btn${invitePreviewCh === ch ? ' primary' : ' secondary'}`} style={{ fontSize: '0.78rem', padding: '4px 10px' }} onClick={() => setInvitePreviewCh(ch)}>{ch.toUpperCase()}</button>
             ))}
           </div>
-          <ChannelPreviewFrame channel={invitePreviewCh} body={`Hi {{first_name}},\n\nYou're invited to Women's Convention 2026!\n\nDate: Saturday, July 19, 2026\nVenue: Eko Convention Centre, Lagos\n\nRSVP here: https://festio.app/rsvp/womens-convention-2026\n\nSee you there!\n— DevOps Clinics`} />
+          <ChannelPreviewFrame channel={invitePreviewCh} body={`Hi {{first_name}},\n\nYou're invited to ${event?.name || 'this event'}!\n\nDate: ${event?.event_date ? new Date(event.event_date).toLocaleString() : 'To be announced'}\nVenue: ${event?.venue_name || 'To be announced'}\n\nRSVP here: ${event ? api.inviteUrl(event) : 'Invite link will appear here'}\n\n${event?.invite_message || 'We hope to see you there!'}`} />
         </Modal>
       )}
 
@@ -1431,25 +1471,8 @@ export default function GuestsRedesignPage() {
           )}
           {importStep === 'mapping' && (
             <div>
-              <p style={{ fontSize: '0.85rem', marginBottom: 12 }}>We detected <strong>6 columns</strong> in your file. Map each to a Festio field or skip it.</p>
-              <table className="rr-table gr-import-map-table">
-                <thead><tr><th>Your column</th><th>→ Festio field</th><th>Sample</th></tr></thead>
-                <tbody>
-                  {DETECTED_COLUMNS.map((col) => (
-                    <tr key={col.csv}>
-                      <td><code>{col.csv}</code></td>
-                      <td>
-                        <select className="rr-select gr-inline-select" value={importMapping[col.csv]} onChange={(e) => setImportMapping((m) => ({ ...m, [col.csv]: e.target.value }))}>
-                          {FESTIO_FIELD_OPTIONS.map((f) => <option key={f}>{f}</option>)}
-                        </select>
-                      </td>
-                      <td className="rd-rowlink" style={{ fontSize: '0.78rem' }}>
-                        {col.csv === 'Full Name' ? 'Karim Hassan' : col.csv === 'Email Address' ? 'k.hassan@ex.com' : col.csv === 'Mobile No.' ? '+234 801…' : col.csv === 'Table #' ? 'Table 3' : col.csv === 'VIP Flag' ? 'Yes' : '—'}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+              <p style={{ fontSize: '0.85rem', marginBottom: 12 }}>Festio will validate the selected file and import recognized guest, contact, access, household, and seating columns. Unknown columns are ignored and real server results are shown after import.</p>
+              <div className="rr-panel" style={{ padding: 12 }}><strong>{importFile?.name}</strong></div>
               <div className="rd-row2" style={{ marginTop: 14 }}>
                 <button className="rr-btn secondary" onClick={() => setImportStep('upload')}>Back</button>
                 <button className="rr-btn primary" onClick={startImport}>Validate &amp; import</button>
@@ -1458,31 +1481,8 @@ export default function GuestsRedesignPage() {
           )}
           {importStep === 'validating' && (
             <div>
-              <p style={{ fontSize: '0.85rem', marginBottom: 12 }}>Checking <strong>612 rows</strong> for errors…</p>
+              <p style={{ fontSize: '0.85rem', marginBottom: 12 }}>Validating and importing the selected file…</p>
               <div className="gr-send-bar-wrap"><div className="gr-send-bar" style={{ width: `${importProgress}%` }} /></div>
-              <table className="rr-table" style={{ marginTop: 16 }}>
-                <thead><tr><th>Row</th><th>Name</th><th>Field</th><th>Issue</th></tr></thead>
-                <tbody>
-                  {VALIDATION_ROWS.map((r) => (
-                    <tr key={r.row}>
-                      <td>{r.row}</td>
-                      <td>{r.name}</td>
-                      <td><code style={{ fontSize: '0.78rem' }}>{r.field}</code></td>
-                      <td><span className={`rd-status-chip ${r.severity === 'error' ? 'err' : 'warn'}`}>{r.issue}</span></td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-              <div style={{ marginTop: 12 }}>
-                <label className="rd-field-label">On error rows:</label>
-                <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginTop: 6 }}>
-                  {[['skip', 'Skip row'], ['fix', 'Import with warning'], ['abort', 'Stop import']].map(([val, label]) => (
-                    <label key={val} className="gr-required-check">
-                      <input type="radio" name="importErr" checked={importErrorMode === val} onChange={() => setImportErrorMode(val)} /> {label}
-                    </label>
-                  ))}
-                </div>
-              </div>
             </div>
           )}
           {importStep === 'result' && importResult && (
@@ -1499,7 +1499,7 @@ export default function GuestsRedesignPage() {
                 </tbody>
               </table>
               <div className="rd-row2">
-                <button className="rr-btn secondary" onClick={() => notify('A downloadable per-row error log is not available yet — see the counts above')}>Download error log</button>
+                <button className="rr-btn secondary" onClick={downloadImportLog}>Download result log</button>
                 <button className="rr-btn primary" onClick={() => { setImportOpen(false); notify(`${importResult.imported} guests imported`) }}>Done</button>
               </div>
             </div>

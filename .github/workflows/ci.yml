@@ -21,3 +21,31 @@ jobs:
         run: pip install -r requirements.txt -r requirements-dev.txt
       - name: Run tests (tenant isolation, etc.)
         run: python -m pytest -q
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+      - name: Verify OpenAPI snapshot and generated frontend types
+        working-directory: event-checkin
+        env:
+          CONTRACT_EXPORT_MODE: local
+          PYTHON_BIN: python
+        run: frontend/scripts/check-api-contract-drift.sh
+
+  frontend-build:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: event-checkin/frontend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+          cache-dependency-path: event-checkin/frontend/package-lock.json
+      - name: Install dependencies
+        run: npm ci
+      - name: Build production frontend
+        run: npm run build
+      - name: Validate Playwright suite discovery
+        run: npx playwright test --list

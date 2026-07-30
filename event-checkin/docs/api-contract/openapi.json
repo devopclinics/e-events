@@ -2312,6 +2312,17 @@
             "title": "Created At",
             "type": "string"
           },
+          "default_guest_table_group_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Default Guest Table Group Id"
+          },
           "description": {
             "anyOf": [
               {
@@ -2554,6 +2565,11 @@
             "default": false,
             "title": "My Redesign Accessible",
             "type": "boolean"
+          },
+          "my_redesign_cohort": {
+            "default": "legacy_only",
+            "title": "My Redesign Cohort",
+            "type": "string"
           },
           "name": {
             "title": "Name",
@@ -5057,6 +5073,26 @@
             },
             "title": "Menu Categories",
             "type": "array"
+          },
+          "menu_enabled": {
+            "default": false,
+            "title": "Menu Enabled",
+            "type": "boolean"
+          },
+          "menu_has_choices": {
+            "default": false,
+            "title": "Menu Has Choices",
+            "type": "boolean"
+          },
+          "menu_locked": {
+            "default": false,
+            "title": "Menu Locked",
+            "type": "boolean"
+          },
+          "menu_selectable": {
+            "default": false,
+            "title": "Menu Selectable",
+            "type": "boolean"
           },
           "next_steps": {
             "items": {
@@ -10761,6 +10797,182 @@
         "title": "RedesignCohortUpdate",
         "type": "object"
       },
+      "RedesignTelemetryEvent": {
+        "additionalProperties": false,
+        "properties": {
+          "action": {
+            "anyOf": [
+              {
+                "maxLength": 80,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Action"
+          },
+          "duration_ms": {
+            "anyOf": [
+              {
+                "maximum": 3600000.0,
+                "minimum": 0.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Duration Ms"
+          },
+          "endpoint": {
+            "anyOf": [
+              {
+                "maxLength": 240,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Endpoint"
+          },
+          "event_id": {
+            "anyOf": [
+              {
+                "maxLength": 80,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Event Id"
+          },
+          "event_type": {
+            "enum": [
+              "render_error",
+              "api_error",
+              "validation_error",
+              "mutation_duration",
+              "abandoned_workflow",
+              "feature_flag_cohort",
+              "sse_or_poll_mode",
+              "edit_conflict",
+              "fallback_to_legacy"
+            ],
+            "title": "Event Type",
+            "type": "string"
+          },
+          "feature_flag_cohort": {
+            "anyOf": [
+              {
+                "maxLength": 40,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Feature Flag Cohort"
+          },
+          "mode": {
+            "anyOf": [
+              {
+                "maxLength": 40,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Mode"
+          },
+          "module": {
+            "anyOf": [
+              {
+                "maxLength": 80,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Module"
+          },
+          "org_id": {
+            "anyOf": [
+              {
+                "maxLength": 80,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Org Id"
+          },
+          "reason": {
+            "anyOf": [
+              {
+                "maxLength": 120,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reason"
+          },
+          "release_version": {
+            "anyOf": [
+              {
+                "maxLength": 40,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Release Version"
+          },
+          "route": {
+            "maxLength": 240,
+            "title": "Route",
+            "type": "string"
+          },
+          "status": {
+            "anyOf": [
+              {
+                "maximum": 599.0,
+                "minimum": 100.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Status"
+          },
+          "success": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Success"
+          }
+        },
+        "required": [
+          "event_type",
+          "route"
+        ],
+        "title": "RedesignTelemetryEvent",
+        "type": "object"
+      },
       "ReferralClaim": {
         "properties": {
           "code": {
@@ -11848,6 +12060,18 @@
             "default": 0,
             "title": "Sort Order",
             "type": "integer"
+          },
+          "updated_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Updated At"
           }
         },
         "required": [
@@ -13971,6 +14195,18 @@
       },
       "WalkInRegister": {
         "properties": {
+          "email": {
+            "anyOf": [
+              {
+                "format": "email",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Email"
+          },
           "first_name": {
             "title": "First Name",
             "type": "string"
@@ -17536,6 +17772,66 @@
         "summary": "Get Dashboard",
         "tags": [
           "dashboard"
+        ]
+      }
+    },
+    "/api/events/{event_id}/default-guest-group": {
+      "patch": {
+        "description": "Route known guests with no table/group into this group at check-in.",
+        "operationId": "set_default_guest_group_api_events__event_id__default_guest_group_patch",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "event_id",
+            "required": true,
+            "schema": {
+              "title": "Event Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "additionalProperties": true,
+                "title": "Body",
+                "type": "object"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EventOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Set Default Guest Group",
+        "tags": [
+          "events"
         ]
       }
     },
@@ -27179,6 +27475,23 @@
               "title": "Table Id",
               "type": "string"
             }
+          },
+          {
+            "in": "query",
+            "name": "if_unmodified_since",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "date-time",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "If Unmodified Since"
+            }
           }
         ],
         "requestBody": {
@@ -34596,6 +34909,50 @@
         ]
       }
     },
+    "/api/telemetry/redesign": {
+      "post": {
+        "operationId": "record_redesign_telemetry_api_telemetry_redesign_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RedesignTelemetryEvent"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Record Redesign Telemetry",
+        "tags": [
+          "telemetry"
+        ]
+      }
+    },
     "/api/trial-requests": {
       "post": {
         "operationId": "submit_trial_request_api_trial_requests_post",
@@ -34890,6 +35247,164 @@
           }
         },
         "summary": "Receive Meta Whatsapp Webhook",
+        "tags": [
+          "webhooks"
+        ]
+      }
+    },
+    "/api/webhooks/xwireless": {
+      "get": {
+        "description": "Receive xwireless DLR (delivery report) callbacks.",
+        "operationId": "xwireless_dlr_api_webhooks_xwireless_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "msgid",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Msgid"
+            }
+          },
+          {
+            "in": "query",
+            "name": "status",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Status"
+            }
+          },
+          {
+            "in": "query",
+            "name": "mobile",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Mobile"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Xwireless Dlr",
+        "tags": [
+          "webhooks"
+        ]
+      },
+      "post": {
+        "description": "Receive xwireless DLR (delivery report) callbacks.",
+        "operationId": "xwireless_dlr_api_webhooks_xwireless_post",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "msgid",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Msgid"
+            }
+          },
+          {
+            "in": "query",
+            "name": "status",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Status"
+            }
+          },
+          {
+            "in": "query",
+            "name": "mobile",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Mobile"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Xwireless Dlr",
         "tags": [
           "webhooks"
         ]

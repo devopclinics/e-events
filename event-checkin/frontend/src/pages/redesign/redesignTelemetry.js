@@ -1,15 +1,7 @@
 // Phase 1 observability scaffolding for the admin-UI redesign, per
 // FESTIO_ADMIN_REDESIGN_WIRING_PROMPT.md ("Add observability context").
-// There is no real telemetry backend yet — logRedesignEvent is the single
-// choke point to swap in a real sink (e.g. fetch('/api/telemetry/redesign'))
-// once one exists; every helper below routes through it.
-
 import { useCallback } from 'react'
-
-// Only log in dev builds so this stays side-effect-light in production
-// consoles; swap the guard for a sampling/always-on strategy once a real
-// backend sink exists.
-const DEV_ONLY = true
+import { api } from '../../api'
 
 export function logRedesignEvent(eventType, payload = {}) {
   const {
@@ -26,22 +18,23 @@ export function logRedesignEvent(eventType, payload = {}) {
   } = payload
 
   const mergedPayload = {
-    ui: 'redesign',
     route,
     module,
-    eventId,
-    orgId,
-    userRole,
-    releaseVersion,
-    featureFlagCohort,
-    ...rest,
+    event_id: eventId,
+    org_id: orgId,
+    release_version: releaseVersion || import.meta.env.VITE_APP_VERSION,
+    feature_flag_cohort: featureFlagCohort || rest.cohort,
+    endpoint: rest.endpoint,
+    status: Number.isInteger(rest.status) ? rest.status : undefined,
+    action: rest.action || rest.workflow,
+    duration_ms: Number.isFinite(rest.durationMs) ? Math.round(rest.durationMs) : undefined,
+    success: typeof rest.success === 'boolean' ? rest.success : undefined,
+    reason: rest.reason,
+    mode: rest.mode,
   }
 
-  if (!DEV_ONLY || import.meta.env.DEV) {
-    // One-line swap point for a real backend call, e.g.:
-    // fetch('/api/telemetry/redesign', { method: 'POST', body: JSON.stringify({ eventType, ...mergedPayload }) })
-    console.debug('[redesign-telemetry]', eventType, mergedPayload)
-  }
+  api.logRedesignTelemetry({ event_type: eventType, ...mergedPayload }).catch(() => {})
+  if (import.meta.env.DEV) console.debug('[redesign-telemetry]', eventType, mergedPayload)
 
   return mergedPayload
 }

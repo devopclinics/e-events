@@ -447,6 +447,7 @@ export interface EventOut {
   checkout_enabled?: boolean
   couples_name: string
   created_at: string
+  default_guest_table_group_id?: (string) | null
   description: (string) | null
   enforce_table_groups?: boolean
   event_code?: (string) | null
@@ -480,7 +481,6 @@ export interface EventOut {
   my_can_manage_guests?: boolean
   my_can_view_guests?: boolean
   my_redesign_accessible?: boolean
-  /** Actual cohort level for this user's org. Used by RedesignGate for auto-redirect. */
   my_redesign_cohort?: string
   name: string
   notify_email?: boolean
@@ -875,6 +875,10 @@ export interface GuestJourneyOut {
   experience_enabled?: boolean
   guest?: (GuestJourneyGuestOut) | null
   menu_categories?: (MenuCategoryOut)[]
+  menu_enabled?: boolean
+  menu_has_choices?: boolean
+  menu_locked?: boolean
+  menu_selectable?: boolean
   next_steps?: (GuestJourneyStepOut)[]
   program?: (GuestProgramOut) | null
   steps?: (GuestJourneyStepOut)[]
@@ -1720,6 +1724,23 @@ export interface RedesignCohortUpdate {
   redesign_cohort: 'legacy_only' | 'redesign_opt_in' | 'redesign_internal' | 'redesign_cohort' | 'redesign_default' | 'legacy_retired'
 }
 
+export interface RedesignTelemetryEvent {
+  action?: (string) | null
+  duration_ms?: (number) | null
+  endpoint?: (string) | null
+  event_id?: (string) | null
+  event_type: 'render_error' | 'api_error' | 'validation_error' | 'mutation_duration' | 'abandoned_workflow' | 'feature_flag_cohort' | 'sse_or_poll_mode' | 'edit_conflict' | 'fallback_to_legacy'
+  feature_flag_cohort?: (string) | null
+  mode?: (string) | null
+  module?: (string) | null
+  org_id?: (string) | null
+  reason?: (string) | null
+  release_version?: (string) | null
+  route: string
+  status?: (number) | null
+  success?: (boolean) | null
+}
+
 export interface ReferralClaim {
   code: string
 }
@@ -1961,6 +1982,7 @@ export interface SeatingTableOut {
   rotation?: number
   shape?: string
   sort_order?: number
+  updated_at?: (string) | null
 }
 
 export interface SelfCheckinGuest {
@@ -2285,6 +2307,7 @@ export interface VendorPageOut {
 }
 
 export interface WalkInRegister {
+  email?: (string) | null
   first_name: string
   last_name?: (string) | null
   phone?: (string) | null

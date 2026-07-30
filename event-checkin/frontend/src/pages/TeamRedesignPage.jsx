@@ -14,10 +14,8 @@ import './TeamRedesignPage.css'
 // never shows success before the server actually confirms it, and never
 // silently clobbers a concurrent change. Per-member permission toggles
 // (role/access-level/guest-access/permission chips/scanner sections),
-// org-role changes, and the invite-teammate flow are still visual-only
-// (call notify() rather than an API) — that surface wasn't in scope for
-// this pass. The task detail panel's subtasks/attachments/activity thread
-// are also still a simulated prototype, unchanged from earlier work.
+// org-role changes, invite-teammate actions, subtasks, attachments, and task
+// activity also use the existing server contracts.
 
 const ROLE_LABEL = { staff: 'Staff', manager: 'Event owner/admin' }
 const EVENT_ROLE_OPTIONS = ['staff', 'manager']
@@ -485,9 +483,17 @@ function TeamTab({ eventId, notify, onRequestDelete }) {
             )}
             <p className="tm-invite-note"><Icon name="info" size={11} /> Use one account per staff member — sharing logins breaks activity history and audit logs.</p>
             <div className="tm-help-links">
-              <a href="/help" onClick={(e) => { e.preventDefault(); notify('How-to guide opened') }}>How to create staff accounts →</a>
-              <a href="/login" target="_blank" rel="noreferrer" onClick={(e) => { e.preventDefault(); notify('Staff sign-in page opened') }}>Open staff sign-in →</a>
-              <a href="#" onClick={(e) => { e.preventDefault(); notify('Staff setup guide link copied') }}>Share staff setup guide →</a>
+              <a href="/help-redesign?role=organizer">How to create staff accounts →</a>
+              <a href="/login" target="_blank" rel="noreferrer">Open staff sign-in →</a>
+              <button className="rr-link-btn" onClick={async () => {
+                const guideUrl = `${window.location.origin}/help-redesign?role=organizer`
+                try {
+                  await navigator.clipboard.writeText(guideUrl)
+                  notify('Staff setup guide link copied')
+                } catch {
+                  notify(`Copy this staff guide link: ${guideUrl}`)
+                }
+              }}>Share staff setup guide →</button>
             </div>
           </div>
         </div>

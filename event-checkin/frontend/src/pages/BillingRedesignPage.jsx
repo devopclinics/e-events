@@ -12,16 +12,6 @@ const WEBHOOK_EVENT_TYPES = [
   'experience.workflow_published', 'experience.consent_signed', 'experience.feedback_submitted',
 ]
 
-const CONTACT_LISTS = [
-  { name: 'VIP guests — all events', count: 214, contacts: [{ name: 'Zaid Guest0007', email: 'zaid@example.com' }, { name: 'Karim Guest0308', email: 'karim@example.com' }] },
-  { name: 'Vendor contacts', count: 38, contacts: [{ name: 'KRM\'s Kitchen', email: 'orders@krmskitchen.com' }] },
-]
-
-const CALENDARS = [
-  { name: 'Community Events 2026', events: 12, link: 'festio.app/c/community-events-2026', visibility: 'Public', hidePast: true, views: 812 },
-  { name: "Women's Convention Series", events: 4, link: 'festio.app/c/womens-convention', visibility: 'Private', hidePast: false, views: 214 },
-]
-
 function TabsStrip({ tab, goTab }) {
   return (
     <div className="rr-tabs">
@@ -411,9 +401,6 @@ function OrgTab({ notify, eventId }) {
   const [deliveries, setDeliveries] = useState(null)
   const [deliveriesErr, setDeliveriesErr] = useState('')
 
-  const [expandedList, setExpandedList] = useState(null)
-  const [expandedCalendar, setExpandedCalendar] = useState(null)
-
   async function loadWebhooks() {
     setWebhooksErr('')
     try { setWebhooks(await api.listWebhooks()) }
@@ -733,100 +720,6 @@ function OrgTab({ notify, eventId }) {
       </div>
 
       <OrgCollections notify={notify} />
-      {false && <>
-      <div className="rr-panel">
-        <div className="rd-panel-head bl-panel-head-row">
-          <div><h3><Icon name="file" size={14} /> Contact Lists</h3><p>Saved audiences you can reuse across events</p></div>
-          <button className="rr-btn secondary" onClick={() => notify('New contact list form opened')}><Icon name="plus" size={14} /> New list</button>
-        </div>
-        <div className="rd-panel-body">
-          <div className="bl-list">
-            {CONTACT_LISTS.map((l) => (
-              <div className="bl-list-row-block" key={l.name}>
-                <div className="bl-list-row">
-                  <div className="bl-list-main"><strong>{l.name}</strong></div>
-                  <div className="bl-list-meta"><span>{l.count} contacts</span></div>
-                  <div className="bl-list-actions">
-                    <button className="rr-link-btn" onClick={() => setExpandedList(expandedList === l.name ? null : l.name)}>{expandedList === l.name ? 'Hide' : 'View'}</button>
-                  </div>
-                </div>
-                {expandedList === l.name && (
-                  <div className="bl-list-expand">
-                    <table className="rr-table">
-                      <thead><tr><th>Name</th><th>Email</th><th /></tr></thead>
-                      <tbody>
-                        {l.contacts.map((c) => (
-                          <tr key={c.name}><td>{c.name}</td><td className="rd-rowlink">{c.email}</td>
-                            <td className="rd-rowlink"><button className="rr-link-btn gr-danger-link" onClick={() => notify(`${c.name} removed from ${l.name}`)}>Remove</button></td></tr>
-                        ))}
-                      </tbody>
-                    </table>
-                    <div className="rd-row2" style={{ marginTop: 8 }}>
-                      <input className="rd-field" placeholder="Add: name, email" style={{ marginBottom: 0 }} />
-                      <button className="rr-btn secondary" onClick={() => notify('Contact added')}>Add</button>
-                    </div>
-                    <div className="rd-row2" style={{ marginTop: 8 }}>
-                      <textarea className="rr-textarea" rows={2} placeholder="Paste multiple contacts, one per line…" style={{ flex: 1 }} />
-                      <button className="rr-btn secondary" onClick={() => notify('Bulk contacts added')}>Add all</button>
-                    </div>
-                    <button className="rr-link-btn" style={{ marginTop: 6 }} onClick={() => notify('CSV upload opened')}>Upload CSV</button>
-                  </div>
-                )}
-              </div>
-            ))}
-          </div>
-        </div>
-      </div>
-
-      <div className="rr-panel">
-        <div className="rd-panel-head bl-panel-head-row">
-          <div><h3><Icon name="calendar" size={14} /> Calendars</h3><p>Published, curated event-listing pages</p></div>
-          <button className="rr-btn secondary" onClick={() => notify('New calendar form opened')}><Icon name="plus" size={14} /> New calendar</button>
-        </div>
-        <div className="rd-panel-body">
-          <div className="bl-list">
-            {CALENDARS.map((c) => (
-              <div className="bl-list-row-block" key={c.name}>
-                <div className="bl-list-row">
-                  <div className="bl-list-main">
-                    <strong>{c.name}</strong>
-                    <button className="bl-link" onClick={() => notify(`Opened public link for "${c.name}"`)}>
-                      {c.link} <Icon name="external" size={11} />
-                    </button>
-                  </div>
-                  <div className="bl-list-meta"><span>{c.events} events</span><span>{c.views} views</span></div>
-                  <div className="bl-list-actions">
-                    <button className="rr-link-btn" onClick={() => setExpandedCalendar(expandedCalendar === c.name ? null : c.name)}>{expandedCalendar === c.name ? 'Hide' : 'Manage'}</button>
-                  </div>
-                </div>
-                {expandedCalendar === c.name && (
-                  <div className="bl-list-expand">
-                    <label className="rd-field-label">Description</label>
-                    <textarea className="rr-textarea" rows={2} defaultValue="A rolling calendar of our upcoming community events." />
-                    <div className="rd-toggle-row">
-                      <span style={{ fontSize: 12, fontWeight: 600 }}>Hide past events</span>
-                      <label className="rd-switch"><input type="checkbox" defaultChecked={c.hidePast} /><span className="track" /><span className="knob" /></label>
-                    </div>
-                    <div className="rd-row2" style={{ marginTop: 8 }}>
-                      <button className="rr-btn secondary" style={{ flex: 1, justifyContent: 'center' }} onClick={() => notify('Logo uploaded')}>Upload logo</button>
-                      <button className="rr-btn secondary" style={{ flex: 1, justifyContent: 'center' }} onClick={() => notify('Embed code copied')}>Copy embed code</button>
-                    </div>
-                    <div className="bl-cal-audience">
-                      <span className="rd-field-label">Visibility: {c.visibility}</span>
-                      {c.visibility === 'Private' && (
-                        <button className="rr-link-btn" onClick={() => notify('Calendar link sent to all contacts in the audience list')}>Send calendar link to all contacts</button>
-                      )}
-                    </div>
-                    <button className="rr-link-btn" onClick={() => notify('Event curation panel opened — add, remove, reorder events')}>Curate events <Icon name="arrow" size={12} /></button>
-                  </div>
-                )}
-              </div>
-            ))}
-          </div>
-        </div>
-      </div>
-
-      </>}
 
       {revokeKeyTarget && (
         <ConfirmDialog

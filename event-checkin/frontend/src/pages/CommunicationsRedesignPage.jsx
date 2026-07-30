@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import RedesignShell, { Icon, Modal, ChannelPreviewFrame } from './redesign/RedesignShell'
 import { useCurrentEvent } from '../hooks/useCurrentEvent'
@@ -451,6 +451,7 @@ function MessagesTab({ notify, onPreview, eventId }) {
   const [templateAudit, setTemplateAudit] = useState([])
   const [templateError, setTemplateError] = useState('')
   const [templateBusy, setTemplateBusy] = useState('')
+  const [templateEditor, setTemplateEditor] = useState(null)
   const [communication, setCommunication] = useState(null)
   const [broadcasts, setBroadcasts] = useState([])
   const [attentionGuests, setAttentionGuests] = useState([])
@@ -492,6 +493,38 @@ function MessagesTab({ notify, onPreview, eventId }) {
       setAttentionGuests(guests.filter((g) => g.invite_status === 'failed' || !g.invite_sent_at))
     } catch (e) {
       notify(e.message || 'Delivery data could not be loaded', true)
+    }
+  }
+
+  function openTemplateEditor(template) {
+    setTemplateEditor({
+      template,
+      subject: template.effective?.subject || '',
+      email_body: template.effective?.email_body || '',
+      sms_body: template.effective?.sms_body || '',
+      whatsapp_body: template.effective?.whatsapp_body || '',
+      mms_body: template.effective?.mms_body || '',
+    })
+  }
+
+  async function saveTemplateEditor() {
+    if (!templateEditor || templateBusy) return
+    setTemplateBusy(templateEditor.template.key)
+    try {
+      await api.saveTemplate(eventId, templateEditor.template.key, {
+        subject: templateEditor.subject || null,
+        email_body: templateEditor.email_body || null,
+        sms_body: templateEditor.sms_body || null,
+        whatsapp_body: templateEditor.whatsapp_body || null,
+        mms_body: templateEditor.mms_body || null,
+      })
+      setTemplateEditor(null)
+      await loadTemplates()
+      notify('Message template saved')
+    } catch (error) {
+      notify(error.message || 'Message template could not be saved', true)
+    } finally {
+      setTemplateBusy('')
     }
   }
 
@@ -611,7 +644,6 @@ function MessagesTab({ notify, onPreview, eventId }) {
 
       <div className="rr-section-title">
         <div><h2>Templates</h2><p>Each channel falls back to the default template unless it has its own override</p></div>
-        <button onClick={() => notify('New template opened')}><Icon name="plus" size={14} /> New template</button>
       </div>
 
       <div className="rr-panel">
@@ -640,7 +672,7 @@ function MessagesTab({ notify, onPreview, eventId }) {
                   </td>
                 ))}
                 <td className="rd-rowlink cm-tpl-actions">
-                  <button className="cm-linklike" onClick={() => notify('Template editing remains in the legacy editor while its rich-text controls are migrated.')}>Edit</button>
+                  <button className="cm-linklike" onClick={() => openTemplateEditor(t)}>Edit</button>
                   <button className="cm-linklike" onClick={async () => {
                     try {
                       const preview = await api.previewTemplate(eventId, t.key, {})
@@ -682,6 +714,27 @@ function MessagesTab({ notify, onPreview, eventId }) {
           {!templateAudit.length && <div className="cm-audit-row">No template changes recorded.</div>}
         </div>
       </div>
+      {templateEditor && (
+        <Modal title={`Edit: ${templateEditor.template.label}`} onClose={() => setTemplateEditor(null)} width={680}>
+          <p className="rd-hint">Available placeholders: {(templateEditor.template.placeholders || []).map((value) => `{{${value}}}`).join(', ') || 'none'}</p>
+          {templateEditor.template.channels.includes('email') && <>
+            <label className="rd-field-label">Email subject</label>
+            <input className="rd-field" value={templateEditor.subject} onChange={(event) => setTemplateEditor((value) => ({ ...value, subject: event.target.value }))} />
+            <label className="rd-field-label">Email HTML</label>
+            <textarea className="rr-textarea" rows={7} value={templateEditor.email_body} onChange={(event) => setTemplateEditor((value) => ({ ...value, email_body: event.target.value }))} />
+          </>}
+          {['sms', 'whatsapp', 'mms'].filter((channel) => templateEditor.template.channels.includes(channel)).map((channel) => (
+            <div key={channel}>
+              <label className="rd-field-label">{channel.toUpperCase()} body</label>
+              <textarea className="rr-textarea" rows={4} value={templateEditor[`${channel}_body`]} onChange={(event) => setTemplateEditor((value) => ({ ...value, [`${channel}_body`]: event.target.value }))} />
+            </div>
+          ))}
+          <div className="rd-row2" style={{ marginTop: 12 }}>
+            <button className="rr-btn secondary" onClick={() => setTemplateEditor(null)}>Cancel</button>
+            <button className="rr-btn primary" disabled={templateBusy === templateEditor.template.key} onClick={saveTemplateEditor}>{templateBusy ? 'Saving…' : 'Save template'}</button>
+          </div>
+        </Modal>
+      )}
     </>
   )
 }
@@ -698,6 +751,7 @@ const CHANNEL_FEATURE_KEY = { email: 'notify_email', sms: 'notify_sms', whatsapp
 const THANKYOU_AUDIENCE_KEY = { 'Checked in': 'admitted', 'Confirmed': 'confirmed', 'All guests': 'all' }
 
 function SettingsTab({ notify, eventId, event, onEventChanged }) {
+  const { guests } = useGuests(eventId)
   const [addons, setAddons] = useState(() => Object.fromEntries(ADDON_TOGGLES.map((a) => [a.key, a.on])))
   const [channelToggles, setChannelToggles] = useState(() => Object.fromEntries(CHANNEL_TOGGLE_ROWS.map((c) => [c.key, c.on])))
   const [routing, setRouting] = useState(() =>
@@ -720,9 +774,20 @@ function SettingsTab({ notify, eventId, event, onEventChanged }) {
   const [walkInBusy, setWalkInBusy] = useState(false)
   const [seatingTermValue, setSeatingTermValue] = useState('')
   const [seatingTermSaving, setSeatingTermSaving] = useState(false)
+  const [channelTestBusy, setChannelTestBusy] = useState('')
+  const [thankYouBusy, setThankYouBusy] = useState('')
+  const [thankYouTestGuestId, setThankYouTestGuestId] = useState('')
 
+  // Hydrate local editable state only on first load of a given event, not on
+  // every refresh of the `event` object (e.g. onEventChanged() after saving an
+  // unrelated toggle) — otherwise a slow-to-arrive refresh can silently wipe
+  // out whatever the organizer is mid-typing in another field on this tab.
+  // Each toggle already applies its own confirmed value locally right after
+  // its own save, so re-running this wholesale on every refresh isn't needed.
+  const hydratedEventIdRef = useRef(null)
   useEffect(() => {
-    if (!event) return
+    if (!event || hydratedEventIdRef.current === event.id) return
+    hydratedEventIdRef.current = event.id
     const policy = event.channel_policy || {}
     setRouting(Object.fromEntries(ROUTING_ROWS.map((row) => {
       const configured = policy[ROUTE_API_KEY[row.key]]
@@ -815,6 +880,60 @@ function SettingsTab({ notify, eventId, event, onEventChanged }) {
     }
   }
 
+  async function sendChannelTest(channel) {
+    if (!eventId || channelTestBusy || channel === 'email') return
+    const phone = window.prompt(`Send a test ${channel.toUpperCase()} to which number?\nUse full E.164 format, for example +2348103273233.`)
+    if (!phone?.trim()) return
+    setChannelTestBusy(channel)
+    try {
+      const result = await api.sendTestMessage(eventId, channel, phone.trim())
+      notify(`Test ${channel.toUpperCase()} accepted for ${result.to}`)
+    } catch (e) {
+      notify(e.message || `Test ${channel.toUpperCase()} could not be sent`, true)
+    } finally {
+      setChannelTestBusy('')
+    }
+  }
+
+  async function sendThankYouTest() {
+    if (!thankYouTestGuestId || thankYouBusy) return
+    setThankYouBusy('test')
+    try {
+      const result = await api.testSendPostEventThankyou(eventId, thankYouTestGuestId)
+      notify(`Thank-you test sent on ${result.channels_sent} channel${result.channels_sent === 1 ? '' : 's'}`)
+    } catch (e) {
+      notify(e.message || 'Thank-you test could not be sent', true)
+    } finally {
+      setThankYouBusy('')
+    }
+  }
+
+  async function sendThankYouNow() {
+    if (thankYouBusy) return
+    const alreadySent = !!event?.post_event_thankyou_sent_at
+    const audience = guests.filter((guest) => {
+      if (event?.post_event_thankyou_audience === 'confirmed') return guest.rsvp_status === 'confirmed'
+      if (event?.post_event_thankyou_audience === 'all') return true
+      return !!guest.admitted
+    })
+    if (!audience.length) {
+      notify('No guests match the configured thank-you audience', true)
+      return
+    }
+    const resend = alreadySent ? ' again' : ''
+    if (!window.confirm(`Send the post-event thank-you${resend} to ${audience.length} guest${audience.length === 1 ? '' : 's'} now? This cannot be undone.`)) return
+    setThankYouBusy('now')
+    try {
+      const result = await api.sendNowPostEventThankyou(eventId, alreadySent)
+      await onEventChanged?.()
+      notify(`${result.messages_sent} thank-you message${result.messages_sent === 1 ? '' : 's'} sent`)
+    } catch (e) {
+      notify(e.message || 'Thank-you messages could not be sent', true)
+    } finally {
+      setThankYouBusy('')
+    }
+  }
+
   async function saveFeature(key, body, revert) {
     if (!eventId || featureBusy) return
     setFeatureBusy(key)
@@ -885,7 +1004,9 @@ function SettingsTab({ notify, eventId, event, onEventChanged }) {
               <strong>{c.label}</strong>
               <Switch checked={!!channelToggles[c.key]} onChange={() => toggleChannel(c.key, c.label)} />
             </div>
-            <button className="rr-link-btn" onClick={() => notify(`Test ${c.label} sent to your own contact info`)}>Send test <Icon name="arrow" size={11} /></button>
+            {c.key === 'email'
+              ? <span className="rd-hint">Email delivery uses the configured event sender.</span>
+              : <button className="rr-link-btn" disabled={!!channelTestBusy} onClick={() => sendChannelTest(c.key)}>{channelTestBusy === c.key ? 'Sending…' : 'Send test'} <Icon name="arrow" size={11} /></button>}
           </div>
         ))}
       </div>
@@ -986,9 +1107,17 @@ function SettingsTab({ notify, eventId, event, onEventChanged }) {
                 setThankYouDelay(hours)
                 saveFeature('thankYouDelay', { post_event_thankyou_delay_hours: hours }, () => {})
               }} style={{ maxWidth: 110 }} />
+              <label className="rd-field-label" style={{ marginTop: 8 }}>Test recipient</label>
+              <select className="rr-select" value={thankYouTestGuestId} onChange={(e) => setThankYouTestGuestId(e.target.value)}>
+                <option value="">Choose a guest…</option>
+                {guests.map((guest) => {
+                  const name = [guest.first_name, guest.last_name].filter(Boolean).join(' ') || guest.email || guest.phone || guest.id
+                  return <option key={guest.id} value={guest.id}>{name}</option>
+                })}
+              </select>
               <div className="rd-row2" style={{ marginTop: 8 }}>
-                <button className="rr-btn secondary" style={{ flex: 1, justifyContent: 'center' }} onClick={() => notify('Test send is available on the legacy interface during rollout')}>Test send</button>
-                <button className="rr-btn primary" style={{ flex: 1, justifyContent: 'center' }} onClick={() => notify('Manual send-now is available on the legacy interface during rollout')}>Send now</button>
+                <button className="rr-btn secondary" disabled={!thankYouTestGuestId || !!thankYouBusy} style={{ flex: 1, justifyContent: 'center' }} onClick={sendThankYouTest}>{thankYouBusy === 'test' ? 'Sending…' : 'Test send'}</button>
+                <button className="rr-btn primary" disabled={!!thankYouBusy} style={{ flex: 1, justifyContent: 'center' }} onClick={sendThankYouNow}>{thankYouBusy === 'now' ? 'Sending…' : event?.post_event_thankyou_sent_at ? 'Send again' : 'Send now'}</button>
               </div>
             </div>
           )}
@@ -1003,8 +1132,8 @@ function SettingsTab({ notify, eventId, event, onEventChanged }) {
         <strong>What should we call it?</strong>
         <p>This event still uses ordinary Seating underneath — only the word "Table" changes, everywhere a guest or staff member sees it (pass, check-in, messages). Leave blank for the default.</p>
         <div className="rd-row2" style={{ maxWidth: 320 }}>
-          <input className="rr-input" value={seatingTermValue} onChange={(e) => setSeatingTermValue(e.target.value)} placeholder="Table" maxLength={30} />
-          <button className="rr-btn primary" disabled={seatingTermSaving || seatingTermValue === (event?.seating_term || '')} onClick={saveSeatingTerm}>
+          <input className="rr-input" disabled={!event} value={seatingTermValue} onChange={(e) => setSeatingTermValue(e.target.value)} placeholder="Table" maxLength={30} />
+          <button className="rr-btn primary" disabled={!event || seatingTermSaving || seatingTermValue === (event.seating_term || '')} onClick={saveSeatingTerm}>
             {seatingTermSaving ? 'Saving…' : 'Save'}
           </button>
         </div>

@@ -492,14 +492,15 @@ function ManualCheckin({ eventId, onResult, manualEnabled, walkInEnabled, sectio
   const [busy, setBusy] = useState(false)
   const [err, setErr] = useState('')
   const [walkIn, setWalkIn] = useState(false)
-  const [wf, setWf] = useState({ first_name: '', last_name: '', phone: '' })
+  const [wf, setWf] = useState({ first_name: '', last_name: '', email: '', phone: '' })
 
   async function doRegisterWalkIn(e) {
     e.preventDefault()
     setBusy(true); setErr('')
     try {
       onResult(await api.registerWalkIn(eventId, {
-        first_name: wf.first_name.trim(), last_name: wf.last_name.trim(), phone: wf.phone.trim() || null,
+        first_name: wf.first_name.trim(), last_name: wf.last_name.trim(),
+        email: wf.email.trim() || null, phone: wf.phone.trim() || null,
         table_group_id: sectionMode ? (sectionId || null) : null,
       }))
     } catch (e) { setErr(e.message); setBusy(false) }
@@ -581,8 +582,11 @@ function ManualCheckin({ eventId, onResult, manualEnabled, walkInEnabled, sectio
           <input value={wf.last_name} onChange={(e) => setWf((f) => ({ ...f, last_name: e.target.value }))}
             placeholder="Last name" className={inputCls} />
         </div>
-        <input value={wf.phone} onChange={(e) => setWf((f) => ({ ...f, phone: e.target.value }))}
+        <input type="email" value={wf.email} onChange={(e) => setWf((f) => ({ ...f, email: e.target.value }))}
+          placeholder="Email (optional)" className={inputCls} />
+        <input type="tel" value={wf.phone} onChange={(e) => setWf((f) => ({ ...f, phone: e.target.value }))}
           placeholder="Phone (optional)" className={inputCls} />
+        <p className="text-xs text-gray-500 dark:text-slate-400">Contact details are saved to the guest record.</p>
         {err && <p className="text-sm text-red-500">{err}</p>}
         <div className="flex gap-2">
           <button type="submit" disabled={busy || !wf.first_name.trim()}

@@ -369,7 +369,13 @@ async def update_event(
         raise HTTPException(404, "Event not found")
     previous_date = event.event_date
     previous_venue = event.venue_name
-    payload = data.model_dump(exclude_none=True)
+    # Preserve explicit nulls for nullable fields so the editor can clear a
+    # previously saved end date, venue, hotel, note, or description.  Omitted
+    # fields remain unchanged.
+    payload = data.model_dump(exclude_unset=True)
+    for required_field in ("name", "event_date", "timezone", "checkin_base_url"):
+        if payload.get(required_field) is None:
+            payload.pop(required_field, None)
     if "checkin_base_url" in payload:
         payload["checkin_base_url"] = _normalize_public_base_url(payload.get("checkin_base_url"))
     for field, value in payload.items():

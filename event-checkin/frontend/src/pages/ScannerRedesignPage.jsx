@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { api } from '../api'
 import { useCurrentEvent } from '../hooks/useCurrentEvent'
 import { useEventDetails } from '../hooks/useEventDetails'
+import QrCameraScanner from '../components/QrCameraScanner'
 import RedesignShell, { Icon } from './redesign/RedesignShell'
 import './ScannerRedesignPage.css'
 
@@ -53,9 +54,8 @@ function TokenScanner({ event, zones, gates, mode, onResult }) {
   const [direction, setDirection] = useState('in')
   const accessMode = !!event?.venue_access_enabled
 
-  async function submit(e) {
-    e.preventDefault()
-    const value = token.trim().split('/').filter(Boolean).pop()
+  async function recordScan(rawValue) {
+    const value = rawValue.trim().split('/').filter(Boolean).pop()
     if (!value || busy) return
     setBusy(true); setError(''); onResult(null)
     try {
@@ -81,14 +81,19 @@ function TokenScanner({ event, zones, gates, mode, onResult }) {
     }
   }
 
+  async function submit(e) {
+    e.preventDefault()
+    await recordScan(token)
+  }
+
   return (
     <form className="sc-camera-wrap" onSubmit={submit}>
       <div className="sc-camera-frame">
         <div className="sc-camera-corners"><span/><span/><span/><span/></div>
         <div className="sc-camera-placeholder">
-          <Icon name="search" size={40} className="sc-camera-icon"/>
           <p>{mode === 'checkout' ? 'Check-out scan' : 'Scan guest pass'}</p>
-          <small>Paste a pass URL or token. Camera capture can continue on the legacy scanner during rollout.</small>
+          <QrCameraScanner onScan={recordScan} disabled={busy || (accessMode && !gateId && !zoneId && mode !== 'checkout')} />
+          <small>You can also paste a pass URL or token below.</small>
         </div>
       </div>
       {accessMode && mode !== 'checkout' && (
@@ -121,7 +126,7 @@ function ManualMode({ event, sections, onResult }) {
   const [busyId, setBusyId] = useState('')
   const [error, setError] = useState('')
   const [walkin, setWalkin] = useState(false)
-  const [form, setForm] = useState({ first_name: '', last_name: '', phone: '' })
+  const [form, setForm] = useState({ first_name: '', last_name: '', email: '', phone: '' })
   const [sectionId, setSectionId] = useState(sections.length === 1 ? sections[0].id : '')
 
   useEffect(() => {
@@ -149,8 +154,13 @@ function ManualMode({ event, sections, onResult }) {
     e.preventDefault()
     setBusyId('walkin'); setError('')
     try {
-      const response = await api.registerWalkIn(event.id, { ...form, phone: form.phone.trim() || null, table_group_id: event.section_mode_enabled ? sectionId || null : null })
-      onResult(response); setWalkin(false); setForm({ first_name: '', last_name: '', phone: '' })
+      const response = await api.registerWalkIn(event.id, {
+        ...form,
+        email: form.email.trim() || null,
+        phone: form.phone.trim() || null,
+        table_group_id: event.section_mode_enabled ? sectionId || null : null,
+      })
+      onResult(response); setWalkin(false); setForm({ first_name: '', last_name: '', email: '', phone: '' })
     } catch (err) { setError(err.message); onResult({ status: 'invalid', message: err.message }) }
     finally { setBusyId('') }
   }
@@ -180,7 +190,9 @@ function ManualMode({ event, sections, onResult }) {
         <div className="sc-walkin-head"><button type="button" className="rr-btn secondary" onClick={() => setWalkin(false)}>← Back</button><strong>Register walk-in guest</strong></div>
         <label className="rd-field-label">First name *</label><input className="rd-field" required value={form.first_name} onChange={(e) => setForm({ ...form, first_name: e.target.value })}/>
         <label className="rd-field-label">Last name</label><input className="rd-field" value={form.last_name} onChange={(e) => setForm({ ...form, last_name: e.target.value })}/>
-        <label className="rd-field-label">Phone</label><input className="rd-field" value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })}/>
+        <label className="rd-field-label">Email</label><input className="rd-field" type="email" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })}/>
+        <label className="rd-field-label">Phone</label><input className="rd-field" type="tel" value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })}/>
+        <p className="sc-empty">Contact details are optional and saved to the guest record.</p>
         <button className="rr-btn primary" disabled={!form.first_name.trim() || busyId === 'walkin'}>{busyId === 'walkin' ? 'Registering…' : 'Register & check in'}</button>
       </form>}
       {error && <p className="sc-empty">{error}</p>}

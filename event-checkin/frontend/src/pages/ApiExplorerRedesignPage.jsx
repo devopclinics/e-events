@@ -93,8 +93,55 @@ const METHOD_COLORS = {
   DELETE: 'red',
 }
 
-function EndpointPanel({ endpoint, apiKey }) {
+function EndpointPanel({ endpoint, apiKey, rawApiKey, onRawApiKeyChange }) {
   const [paramVals, setParamVals] = useState({})
+  const [requestBody, setRequestBody] = useState('{}')
+  const [response, setResponse] = useState(null)
+  const [executing, setExecuting] = useState(false)
+
+  async function execute() {
+    if (!rawApiKey.trim() || executing) return
+    let path = endpoint.path
+    const query = new URLSearchParams()
+    for (const param of endpoint.params) {
+      const value = paramVals[param.name]
+      if (!value) continue
+      if (param.in === 'path') path = path.replace(`{${param.name}}`, encodeURIComponent(value))
+      if (param.in === 'query') query.set(param.name, value)
+    }
+    if (endpoint.params.some((param) => param.required && !paramVals[param.name])) {
+      setResponse({ ok: false, status: 'Validation', body: 'Fill every required parameter before executing.' })
+      return
+    }
+    let body
+    if (!['GET', 'DELETE'].includes(endpoint.method)) {
+      try { body = JSON.stringify(JSON.parse(requestBody || '{}')) }
+      catch {
+        setResponse({ ok: false, status: 'Validation', body: 'Request body must be valid JSON.' })
+        return
+      }
+    }
+    setExecuting(true)
+    setResponse(null)
+    try {
+      const result = await fetch(`${path}${query.size ? `?${query}` : ''}`, {
+        method: endpoint.method,
+        headers: {
+          Authorization: `Bearer ${rawApiKey.trim()}`,
+          ...(body ? { 'Content-Type': 'application/json' } : {}),
+        },
+        ...(body ? { body } : {}),
+      })
+      const text = await result.text()
+      let formatted = text
+      try { formatted = JSON.stringify(JSON.parse(text), null, 2) } catch { /* plain-text response */ }
+      setResponse({ ok: result.ok, status: `${result.status} ${result.statusText}`, body: formatted || '(empty response)' })
+    } catch (error) {
+      setResponse({ ok: false, status: 'Network error', body: error.message })
+    } finally {
+      setExecuting(false)
+    }
+  }
 
   return (
     <div className="ae-endpoint-panel">
@@ -134,14 +181,37 @@ function EndpointPanel({ endpoint, apiKey }) {
 
       <div className="ae-auth-section">
         <Icon name="lock" size={13} />
-        <code className="ae-apikey-display">
-          Authorization: Bearer {apiKey || 'no active API key — create one in Organization Settings'}
-        </code>
+        <div style={{ flex: 1 }}>
+          <code className="ae-apikey-display">Active key: {apiKey || 'none — create one in Organization Settings'}</code>
+          <input
+            className="ae-param-input"
+            type="password"
+            autoComplete="off"
+            aria-label="API key for this browser session"
+            placeholder="Paste the full API key (kept in memory only)"
+            value={rawApiKey}
+            onChange={(event) => onRawApiKeyChange(event.target.value)}
+            style={{ width: '100%', marginTop: 8 }}
+          />
+        </div>
       </div>
 
-      <button className="rr-btn primary ae-try-btn" disabled title="Raw API keys are shown only once when created and are never stored in the browser.">
-        Execute with your external API client
+      {!['GET', 'DELETE'].includes(endpoint.method) && (
+        <div className="ae-params-section">
+          <strong className="ae-section-head">JSON request body</strong>
+          <textarea className="rd-field" rows={7} value={requestBody} onChange={(event) => setRequestBody(event.target.value)} spellCheck={false} />
+        </div>
+      )}
+
+      <button className="rr-btn primary ae-try-btn" disabled={!rawApiKey.trim() || executing} onClick={execute}>
+        {executing ? 'Executing…' : 'Execute request'}
       </button>
+      {response && (
+        <div className="ae-params-section" role="status">
+          <strong className="ae-section-head" style={{ color: response.ok ? 'var(--success)' : 'var(--danger)' }}>{response.status}</strong>
+          <pre className="ae-apikey-display" style={{ whiteSpace: 'pre-wrap', overflowWrap: 'anywhere' }}>{response.body}</pre>
+        </div>
+      )}
     </div>
   )
 }
@@ -157,6 +227,7 @@ export default function ApiExplorerRedesignPage() {
   const [selectedEndpoint, setSelectedEndpoint] = useState(null)
   const [catFilter, setCatFilter] = useState('All')
   const [apiKeys, setApiKeys] = useState([])
+  const [rawApiKey, setRawApiKey] = useState('')
 
   useEffect(() => {
     let cancelled = false
@@ -267,7 +338,7 @@ export default function ApiExplorerRedesignPage() {
             {/* Right: details panel */}
             <div className="ae-detail">
               {selectedEndpoint
-                ? <EndpointPanel key={selectedEndpoint.id} endpoint={selectedEndpoint} apiKey={apiKeyDisplay} />
+                ? <EndpointPanel key={selectedEndpoint.id} endpoint={selectedEndpoint} apiKey={apiKeyDisplay} rawApiKey={rawApiKey} onRawApiKeyChange={setRawApiKey} />
                 : <div className="ae-detail-empty">Select an endpoint to explore</div>
               }
             </div>

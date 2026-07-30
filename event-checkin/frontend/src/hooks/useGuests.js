@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { api } from '../api'
+import { validateGuestList } from '../adapters/contractValidation'
 
 // Phase 4 (shared hooks): api.listGuests(eventId) was duplicated across several
 // redesign pages, each with its own loading/error/race-condition handling.
@@ -19,7 +20,7 @@ export function useGuests(eventId) {
     setLoading(true)
     setError('')
     try {
-      const data = await api.listGuests(eventId)
+      const data = validateGuestList(await api.listGuests(eventId))
       if (requestIdRef.current !== requestId) return
       setGuests(data)
     } catch (e) {

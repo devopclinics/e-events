@@ -1886,6 +1886,7 @@ async def register_walk_in(
     phone = _normalize_phone(body.phone.strip()) if (body.phone or "").strip() else None
     guest = Guest(
         event_id=event_id, first_name=first, last_name=(body.last_name or "").strip(),
+        email=str(body.email).strip().lower() if body.email else None,
         phone=phone, qr_generated_at=datetime.utcnow(),
         assigned_table_group_id=group_id,
         is_walk_in=True,

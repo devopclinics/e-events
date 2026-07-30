@@ -62,7 +62,15 @@ async def test_walk_in_register(ctx):
     assert (await ctx.client.patch(f"/api/events/{ev}/walk-in", json={"active": True})).status_code == 200
     assert (await ctx.client.patch(f"/api/events/{ev}/walk-in-group", json={"table_group_id": grp["id"]})).status_code == 200
 
-    r = await ctx.client.post(f"/api/events/{ev}/guests/walk-in", json={"first_name": "Wendy", "last_name": "Walker"})
+    r = await ctx.client.post(
+        f"/api/events/{ev}/guests/walk-in",
+        json={
+            "first_name": "Wendy",
+            "last_name": "Walker",
+            "email": "WENDY.WALKER@example.com",
+            "phone": "+1 312 555 0198",
+        },
+    )
     assert r.status_code == 200
     body = r.json()
     assert body["status"] == "admitted"
@@ -72,3 +80,5 @@ async def test_walk_in_register(ctx):
         g = await s.scalar(select(Guest).where(Guest.event_id == ev, Guest.first_name == "Wendy"))
     assert g.admitted is True
     assert g.assigned_table_group_id == grp["id"]  # auto-tagged to walk-in group
+    assert g.email == "wendy.walker@example.com"
+    assert g.phone == "+13125550198"

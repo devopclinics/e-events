@@ -329,6 +329,7 @@ export const api = {
   toggleFeatures: (eventId, body) => req('PATCH', `/events/${eventId}/features`, body),
   setChannelPolicy: (eventId, policy) => req('PUT', `/events/${eventId}/channel-policy`, policy),
   sendTestMessage: (eventId, channel, phone) => req('POST', `/events/${eventId}/messaging/test`, { channel, phone }),
+  logRedesignTelemetry: (data) => req('POST', '/telemetry/redesign', data),
 
   // Experience workflows (admin)
   listExperienceWorkflows: (eventId) => req('GET', `/events/${eventId}/experience/workflows`),

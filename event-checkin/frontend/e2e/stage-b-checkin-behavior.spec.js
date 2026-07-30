@@ -49,7 +49,11 @@ test.describe('Check-in behavior settings — isolated staging fixture', () => {
         await expect(toast).toContainText('Walk-in registration enabled')
       }
       await expect(walkInCard.locator('select')).toBeVisible()
+      await expect(walkInCard.locator('select option', { hasText: groupName })).toHaveCount(1)
+      const groupPatch = page.waitForResponse((r) => r.url().includes('/walk-in-group') && r.request().method() === 'PATCH')
       await walkInCard.locator('select').selectOption({ label: groupName })
+      const patchResult = await (await groupPatch).json()
+      expect(patchResult.walk_in_table_group_id, `PATCH /walk-in-group response: ${JSON.stringify(patchResult)}`).toBe(group.id)
 
       const afterWalkIn = await (await page.request.get('/api/events', { headers: { Authorization: authorization } })).json()
       const eventNow = afterWalkIn.find((e) => e.id === eventId)
@@ -93,6 +97,7 @@ test.describe('Check-in behavior settings — isolated staging fixture', () => {
       const card = page.locator('.rr-panel').filter({ has: page.getByText('What should we call it?', { exact: true }) })
       await expect(card).toBeVisible()
       await card.locator('input').fill(term)
+      await expect(card.locator('input'), 'the input must actually hold the new value before Save can be clicked').toHaveValue(term)
       await card.getByRole('button', { name: 'Save', exact: true }).click()
       await expect(page.locator('.rd-toast')).toContainText(`Now shown as "${term}"`)
 

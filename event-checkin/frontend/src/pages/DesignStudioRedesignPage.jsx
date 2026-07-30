@@ -120,6 +120,11 @@ function Swatch({ hex }) {
   return <span className="ds-swatch-dot" style={{ background: hex }} />
 }
 
+function humanizeKey(value) {
+  if (!value) return '—'
+  return String(value).replace(/[-_]+/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase())
+}
+
 export default function DesignStudioRedesignPage() {
   const [eventId] = useCurrentEvent()
   const [tab, setTab] = useState('Templates')
@@ -227,7 +232,7 @@ export default function DesignStudioRedesignPage() {
     }
   }
 
-  async function savePageSettings() {
+  async function savePageSettings(nextSections = pageSections) {
     if (!eventId || designBusy) return
     setDesignBusy(true)
     try {
@@ -237,7 +242,7 @@ export default function DesignStudioRedesignPage() {
         theme_config: design?.theme_config || {},
         wording_config: design?.wording_config || {},
         asset_config: design?.asset_config || {},
-        page_config: pageSections,
+        page_config: nextSections,
       })
       setDesign(saved)
       notify('Page settings saved')
@@ -245,6 +250,44 @@ export default function DesignStudioRedesignPage() {
       notify(e.message || 'Page settings could not be saved')
     } finally {
       setDesignBusy(false)
+    }
+  }
+
+  async function resetPageSettings() {
+    const next = {
+      hero: { ...DEFAULT_PAGE_SECTIONS.hero },
+      organizer: { ...DEFAULT_PAGE_SECTIONS.organizer },
+      details: { ...DEFAULT_PAGE_SECTIONS.details },
+      about: { ...DEFAULT_PAGE_SECTIONS.about },
+    }
+    setPageSections(next)
+    await savePageSettings(next)
+  }
+
+  function openDraftPreview() {
+    if (!eventId || !activeTemplate) {
+      notify('Select a supported design first')
+      return
+    }
+    const theme = {
+      event_id: eventId,
+      template_id: activeTemplate.id,
+      is_default: false,
+      colors,
+      font_pairing: fontPairing,
+      button_style: design?.theme_config?.buttonStyle || activeTemplate.buttonStyle,
+      layout: activeTemplate.layout,
+      cover_image_url: design?.asset_config?.cover_image_url || '',
+      flyer_image_url: design?.asset_config?.flyer_image_url || '',
+      wording,
+      pass_options: passOptions,
+      page_config: pageSections,
+    }
+    try {
+      sessionStorage.setItem(`festio:design-preview:${eventId}`, JSON.stringify({ event_id: eventId, theme, saved_at: Date.now() }))
+      window.open(`/invite/${eventId}?studio-preview=1`, '_blank', 'noopener')
+    } catch {
+      notify('Could not open the draft preview. Allow pop-ups and try again.')
     }
   }
 
@@ -413,7 +456,16 @@ export default function DesignStudioRedesignPage() {
             <div className="rr-grid3">
               {filteredTemplates.map((t) => (
                 <div className={`rr-panel ds-template-card ${t.selected ? 'selected' : ''}`} key={t.name} onClick={() => setPreviewTpl(t)}>
-                  <div className="ds-template-swatch"><Icon name="palette" size={22} /></div>
+                  {t.thumbnailUrl ? (
+                    <div className="ds-template-swatch ds-template-swatch-image" style={{ backgroundImage: `url(${t.thumbnailUrl})` }} />
+                  ) : (
+                    <div
+                      className="ds-template-swatch"
+                      style={t.defaultColors ? { background: `linear-gradient(145deg, ${t.defaultColors.background}, ${t.defaultColors.surface})`, color: t.defaultColors.accent || t.defaultColors.primary } : undefined}
+                    >
+                      <Icon name="palette" size={22} />
+                    </div>
+                  )}
                   <div className="ds-template-badges">
                     <span className={`ds-tier-badge ${t.tier}`}>{t.tier === 'premium' ? 'Premium' : 'Free'}</span>
                     {t.selected && <span className="rr-pill live"><i /> Active</span>}
@@ -430,15 +482,39 @@ export default function DesignStudioRedesignPage() {
             </div>
 
             <div className="rd-panel ds-side-preview">
-              <div className="rd-panel-head"><h3>{previewTpl?.name || 'Choose a template'}</h3><p>Layout by surface</p></div>
-              <div className="rd-panel-body">
-                {(previewTpl?.surfaces || []).map((s) => (
-                  <div className="ds-layout-row" key={s}>
-                    <Icon name={s === 'Flyer' ? 'image' : s === 'Pass' ? 'ticket' : s === 'Email' ? 'mail' : 'calendar'} size={13} />
-                    <span>{s}</span><span className="rd-rowlink">layout ready</span>
+              <div className="rd-panel-head"><h3>Preview</h3><p>{previewTpl?.name || 'Choose a template'}</p></div>
+              {previewTpl ? (
+                <div className="rd-panel-body">
+                  <div
+                    className="ds-template-hero"
+                    style={{ background: `linear-gradient(145deg, ${previewTpl.defaultColors?.background || '#e2e8f0'}, ${previewTpl.defaultColors?.surface || '#f8fafc'})` }}
+                  >
+                    {previewTpl.thumbnailUrl && <img src={previewTpl.thumbnailUrl} alt="" className="ds-template-hero-image" loading="lazy" />}
+                    <div className="ds-template-hero-caption">
+                      <strong style={{ color: previewTpl.thumbnailUrl ? '#fff' : (previewTpl.defaultColors?.primary || '#0f172a') }}>{previewTpl.name}</strong>
+                      <span style={{ color: previewTpl.thumbnailUrl ? '#fff' : (previewTpl.defaultColors?.accent || '#14b8a6') }}>{previewTpl.style}</span>
+                    </div>
                   </div>
-                ))}
-              </div>
+                  {previewTpl.defaultColors && (
+                    <div className="ds-color-row" style={{ marginTop: 10 }}>
+                      {['primary', 'accent', 'background', 'surface', 'text'].map((k) => <Swatch key={k} hex={previewTpl.defaultColors[k]} />)}
+                    </div>
+                  )}
+                  <div className="ds-layout-grid">
+                    <div><strong>Event page</strong><span>{humanizeKey(previewTpl.layout?.eventPage)}</span></div>
+                    <div><strong>Flyer</strong><span>{humanizeKey(previewTpl.layout?.flyer)}</span></div>
+                    <div><strong>Festio Pass</strong><span>{humanizeKey(previewTpl.layout?.pass)}</span></div>
+                    <div><strong>Email</strong><span>{humanizeKey(previewTpl.layout?.email)}</span></div>
+                  </div>
+                  {!previewTpl.selected && (
+                    <button disabled={designBusy} className="rr-btn primary" style={{ width: '100%', justifyContent: 'center', marginTop: 12 }} onClick={() => selectTemplate(previewTpl)}>
+                      {designBusy ? 'Saving…' : 'Use this family'}
+                    </button>
+                  )}
+                </div>
+              ) : (
+                <div className="rd-panel-body"><p className="rd-rowlink">Preview a card to see its surfaces, colors, and layout rules.</p></div>
+              )}
             </div>
           </div>
         </>
@@ -592,10 +668,10 @@ export default function DesignStudioRedesignPage() {
               <div className="rd-hint" style={{ marginTop: 10 }}>Seating preview and FestioHub live feed are not part of the live guest page yet — no controls here affect them.</div>
 
               <div className="rd-row2" style={{ marginTop: 8 }}>
-                <button className="rr-btn secondary" disabled title="Reset is not wired in the redesign yet" style={{ flex: 1, justifyContent: 'center' }}>Reset safe default</button>
-                <button className="rr-btn primary" disabled={designBusy} style={{ flex: 1, justifyContent: 'center' }} onClick={savePageSettings}>{designBusy ? 'Saving…' : 'Save page settings'}</button>
+                <button className="rr-btn secondary" disabled={designBusy} style={{ flex: 1, justifyContent: 'center' }} onClick={resetPageSettings}>Reset safe default</button>
+                <button className="rr-btn primary" disabled={designBusy} style={{ flex: 1, justifyContent: 'center' }} onClick={() => savePageSettings()}>{designBusy ? 'Saving…' : 'Save page settings'}</button>
               </div>
-              <button className="rr-link-btn" disabled title="Draft preview remains on the legacy Design Studio during rollout" style={{ marginTop: 8 }}>Open true draft preview <Icon name="external" size={12} /></button>
+              <button className="rr-link-btn" onClick={openDraftPreview} style={{ marginTop: 8 }}>Open true draft preview <Icon name="external" size={12} /></button>
             </div>
           </div>
 
@@ -607,12 +683,12 @@ export default function DesignStudioRedesignPage() {
             <div className="rd-panel-body">
               <div className={`ds-page-preview ${mobilePreview ? 'mobile' : ''}`}>
                 <div className="ds-page-hero"><Icon name="calendar" size={20} /></div>
-                <h3>Women's Convention 2026</h3>
-                <p>Jul 11, 2026 · Masjid Mumineen</p>
+                <h3>{wording.eventTitle || 'Your event'}</h3>
+                <p>{[wording.date, wording.venue].filter(Boolean).join(' · ') || 'Add the event date and venue'}</p>
                 <button className="rr-btn primary" style={{ pointerEvents: 'none' }}>View live page</button>
                 <div className="ds-feed-sample">
                   <div className="ds-feed-item"><Icon name="check" size={11} /> Event status set to Active</div>
-                  <div className="ds-feed-item"><Icon name="upload" size={11} /> 612 guests imported</div>
+                  <div className="ds-feed-item"><Icon name="palette" size={11} /> Draft design preview</div>
                 </div>
               </div>
             </div>
@@ -630,8 +706,7 @@ export default function DesignStudioRedesignPage() {
               <label className="rd-field-label" style={{ marginTop: 8 }}>Footer note</label>
               <input className="rd-field" value={wording.footerNote || ''} onChange={(e) => setWording((w) => ({ ...w, footerNote: e.target.value }))} />
               <label className="rd-field-label">FestioHub intro</label>
-              <textarea className="rr-textarea" rows={2} defaultValue="Welcome! Tap below to see updates, your table, and more." disabled title="Not part of the saved design contract yet" />
-              <div className="rd-hint">FestioHub intro text isn't part of the saved design record yet — the other fields on this tab are.</div>
+              <textarea className="rr-textarea" rows={2} value={wording.customMessage || ''} placeholder="Welcome! Tap below to see updates, your table, and more." onChange={(e) => setWording((value) => ({ ...value, customMessage: e.target.value }))} />
               <div className="rd-toggle-row" style={{ marginTop: 10 }}>
                 <span style={{ fontSize: 12, fontWeight: 600 }}>Show table/seat</span>
                 <label className="rd-switch"><input type="checkbox" checked={passOptions.showTable && passOptions.showSeat} onChange={(e) => setPassOptions((v) => ({ ...v, showTable: e.target.checked, showSeat: e.target.checked }))} /><span className="track" /><span className="knob" /></label>
@@ -653,7 +728,7 @@ export default function DesignStudioRedesignPage() {
                 <div className="ds-pass-qr"><Icon name="grid" size={30} /></div>
                 {wording.admissionNote && <p className="rd-rowlink" style={{ marginTop: 6 }}>{wording.admissionNote}</p>}
               </div>
-              <button className="rr-btn secondary" disabled title="Pass regeneration remains on the legacy Design Studio during rollout" style={{ width: '100%', justifyContent: 'center', marginTop: 12 }}>Regenerate pass design</button>
+              <div className="rd-hint" style={{ marginTop: 12 }}>Pass styling applies to live guest passes after the design is published; QR tokens are intentionally unchanged.</div>
             </div>
           </div>
         </div>

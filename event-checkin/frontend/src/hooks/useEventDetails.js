@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { api } from '../api'
+import { validateEventList } from '../adapters/contractValidation'
 
 // Phase 4 (shared hooks): the current event's full record (entitlement flags,
 // RSVP/channel settings, lifecycle status, etc. — not just its id from
@@ -26,7 +27,7 @@ export function useEventDetails(eventId) {
     setLoading(true)
     setError('')
     try {
-      const events = await api.listEvents()
+      const events = validateEventList(await api.listEvents())
       if (requestIdRef.current !== requestId) return
       setEvent(events.find((item) => item.id === eventId) || null)
     } catch (e) {

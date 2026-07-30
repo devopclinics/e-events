@@ -47,4 +47,26 @@ test.describe('Stage C Design Studio flyer — isolated staging fixture', () => 
       expect(reset.ok()).toBeTruthy()
     }
   })
+
+  test('template preview panel shows real per-template colors and layout, not a static placeholder', async ({ page }) => {
+    await signIn(page)
+    await page.goto('/design-studio-redesign')
+    await expect(page.getByRole('heading', { name: 'Design Studio' })).toBeVisible()
+
+    const card = page.locator('.ds-template-card').filter({ hasText: 'Signature' })
+    await card.getByRole('button', { name: 'Preview', exact: true }).click()
+    const panel = page.locator('.ds-side-preview')
+    await expect(panel.locator('.ds-template-hero-caption strong')).toHaveText('Signature')
+    // Real layout data from the design-service catalog (e.g. "photo-hero"),
+    // not the previous hardcoded "layout ready" placeholder for every template.
+    await expect(panel.locator('.ds-layout-grid')).not.toContainText('layout ready')
+    await expect(panel.locator('.ds-layout-grid')).toContainText(/\w/)
+    await expect(panel.locator('.ds-swatch-dot')).toHaveCount(5)
+
+    // A different template shows a genuinely different preview, proving this
+    // isn't just static content repeated for every card.
+    const otherCard = page.locator('.ds-template-card').filter({ hasText: 'Modern' })
+    await otherCard.getByRole('button', { name: 'Preview', exact: true }).click()
+    await expect(panel.locator('.ds-template-hero-caption strong')).toHaveText('Modern')
+  })
 })

@@ -72,12 +72,12 @@ test.describe('Stage B guest households and RSVP configuration — isolated stag
       await page.getByPlaceholder('Search guests by name…').fill(guestName)
       const guestRow = page.locator('.gr-guest-table tbody tr').filter({ hasText: guestName })
       await guestRow.locator('input[type="checkbox"]').check()
-      await page.locator('.gr-bulkbar select').selectOption({ label: editedHouseholdName })
+      await page.getByLabel('Assign household').selectOption({ label: editedHouseholdName })
       await expect(page.getByText('Household assignment updated', { exact: true })).toBeVisible()
       await expect(guestRow.getByText(editedHouseholdName, { exact: true })).toBeVisible()
 
       await guestRow.locator('input[type="checkbox"]').check()
-      await page.locator('.gr-bulkbar select').selectOption('none')
+      await page.getByLabel('Assign household').selectOption('none')
       await expect(page.getByText('Household assignment updated', { exact: true })).toBeVisible()
       await expect(guestRow.getByText(editedHouseholdName, { exact: true })).toHaveCount(0)
 

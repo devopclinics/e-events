@@ -1,6 +1,8 @@
 import { useEffect, useState } from 'react'
 import { api } from '../api'
 import { useCurrentEvent } from '../hooks/useCurrentEvent'
+import { useEventDetails } from '../hooks/useEventDetails'
+import { useVenueAccess } from '../hooks/useEventResources'
 import RedesignShell, { Icon, ConfirmDialog } from './redesign/RedesignShell'
 import './CheckinRedesignPage.css'
 
@@ -26,17 +28,18 @@ function dirClass(direction) {
 
 export default function CheckinRedesignPage() {
   const [eventId] = useCurrentEvent()
-  const [event, setEvent] = useState(null)
+  const { event } = useEventDetails(eventId)
   const [toast, setToast] = useState('')
   const [view, setView] = useState('zones')
   const [addZoneOpen, setAddZoneOpen] = useState(false)
   const [addTicketOpen, setAddTicketOpen] = useState(false)
+  const [editingZoneId, setEditingZoneId] = useState(null)
+  const [editingTicketId, setEditingTicketId] = useState(null)
   const [ticketAllZones, setTicketAllZones] = useState(false)
   const [deleteTarget, setDeleteTarget] = useState(null)
-  const [zones, setZones] = useState([])
-  const [ticketTypes, setTicketTypes] = useState([])
-  const [loading, setLoading] = useState(false)
-  const [loadError, setLoadError] = useState('')
+  const { data: access, loading, error: loadError, refresh: loadAccess } = useVenueAccess(eventId)
+  const zones = access.zones
+  const ticketTypes = access.ticketTypes
   const [zoneForm, setZoneForm] = useState({ name: '', capacity: '', description: '', direction_mode: 'both' })
   const [ticketForm, setTicketForm] = useState({ name: '', capacity: '', allowed_zone_ids: [] })
 
@@ -60,17 +63,6 @@ export default function CheckinRedesignPage() {
   const [journey, setJourney] = useState([])
   const [rulesLoading, setRulesLoading] = useState(false)
   const [analyticsLoading, setAnalyticsLoading] = useState(false)
-
-  async function loadAccess() {
-    if (!eventId) { setZones([]); setTicketTypes([]); return }
-    setLoading(true); setLoadError('')
-    try {
-      const [events, nextZones, nextTickets] = await Promise.all([api.listEvents(), api.listZones(eventId), api.listTicketTypes(eventId)])
-      setEvent(events.find((item) => item.id === eventId) || null)
-      setZones(nextZones); setTicketTypes(nextTickets)
-    } catch (error) { setLoadError(error.message || 'Unable to load access settings') }
-    finally { setLoading(false) }
-  }
 
   async function loadTagsAndGates() {
     if (!eventId) { setTags([]); setGates([]); setRsvpQuestions([]); return }
@@ -110,7 +102,7 @@ export default function CheckinRedesignPage() {
     finally { setAnalyticsLoading(false) }
   }
 
-  useEffect(() => { loadAccess(); loadTagsAndGates(); loadGuestsList() }, [eventId]) // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { loadTagsAndGates(); loadGuestsList() }, [eventId]) // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => { if (view === 'rules') loadRulesTab() }, [view, zones]) // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => { if (view === 'analytics') loadAnalyticsTab() }, [view, eventId]) // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => {
@@ -124,29 +116,71 @@ export default function CheckinRedesignPage() {
 
   async function createZone() {
     try {
-      await api.createZone(eventId, {
+      const payload = {
         name: zoneForm.name.trim(),
         description: zoneForm.description.trim() || null,
         capacity: zoneForm.capacity === '' ? null : Number(zoneForm.capacity),
         direction_mode: zoneForm.direction_mode,
-      })
+      }
+      if (editingZoneId) await api.updateZone(eventId, editingZoneId, payload)
+      else await api.createZone(eventId, payload)
       await loadAccess()
       setZoneForm({ name: '', capacity: '', description: '', direction_mode: 'both' })
-      setAddZoneOpen(false); notify('Zone created')
-    } catch (error) { notify(error.message || 'Zone could not be created') }
+      setEditingZoneId(null)
+      setAddZoneOpen(false); notify(editingZoneId ? 'Zone updated' : 'Zone created')
+    } catch (error) { notify(error.message || `Zone could not be ${editingZoneId ? 'updated' : 'created'}`) }
   }
 
   async function createTicket() {
     try {
-      await api.createTicketType(eventId, {
+      const payload = {
         name: ticketForm.name.trim(),
         capacity: ticketForm.capacity === '' ? null : Number(ticketForm.capacity),
         allowed_zone_ids: ticketAllZones ? null : ticketForm.allowed_zone_ids,
-      })
+      }
+      if (editingTicketId) await api.updateTicketType(eventId, editingTicketId, payload)
+      else await api.createTicketType(eventId, payload)
       await loadAccess()
       setTicketForm({ name: '', capacity: '', allowed_zone_ids: [] })
-      setAddTicketOpen(false); notify('Ticket type created')
-    } catch (error) { notify(error.message || 'Ticket type could not be created') }
+      setEditingTicketId(null)
+      setAddTicketOpen(false); notify(editingTicketId ? 'Ticket type updated' : 'Ticket type created')
+    } catch (error) { notify(error.message || `Ticket type could not be ${editingTicketId ? 'updated' : 'created'}`) }
+  }
+
+  function openZoneEditor(zone) {
+    setEditingZoneId(zone.id)
+    setZoneForm({
+      name: zone.name || '',
+      capacity: zone.capacity ?? '',
+      description: zone.description || '',
+      direction_mode: zone.direction_mode || 'both',
+    })
+    setAddZoneOpen(true)
+  }
+
+  function closeZoneEditor() {
+    setEditingZoneId(null)
+    setZoneForm({ name: '', capacity: '', description: '', direction_mode: 'both' })
+    setAddZoneOpen(false)
+  }
+
+  function openTicketEditor(ticket) {
+    const allowedZoneIds = ticket.allowed_zone_ids || []
+    setEditingTicketId(ticket.id)
+    setTicketAllZones(allowedZoneIds.length === 0)
+    setTicketForm({
+      name: ticket.name || '',
+      capacity: ticket.capacity ?? '',
+      allowed_zone_ids: allowedZoneIds,
+    })
+    setAddTicketOpen(true)
+  }
+
+  function closeTicketEditor() {
+    setEditingTicketId(null)
+    setTicketAllZones(false)
+    setTicketForm({ name: '', capacity: '', allowed_zone_ids: [] })
+    setAddTicketOpen(false)
   }
 
   function notify(message) {
@@ -236,7 +270,7 @@ export default function CheckinRedesignPage() {
         </div>
         <div className="rr-head-actions">
           <button className="rr-btn secondary" onClick={() => { window.location.href = '/scanner-redesign' }}><Icon name="eye" size={15}/> Open live scanner</button>
-          <button className="rr-btn primary" onClick={() => setAddZoneOpen((v) => !v)}><Icon name="plus" size={14}/> Add zone</button>
+          <button className="rr-btn primary" onClick={() => addZoneOpen ? closeZoneEditor() : setAddZoneOpen(true)}><Icon name="plus" size={14}/> Add zone</button>
         </div>
       </div>
 
@@ -262,7 +296,7 @@ export default function CheckinRedesignPage() {
             <>
               {addZoneOpen && (
                 <div className="rr-panel ci-form-panel">
-                  <div className="rd-panel-head"><h3>Add zone</h3></div>
+                  <div className="rd-panel-head"><h3>{editingZoneId ? 'Edit zone' : 'Add zone'}</h3></div>
                   <div className="rd-panel-body">
                     <div className="rd-row2">
                       <div style={{ flex: 1 }}><label className="rd-field-label">Name</label><input className="rd-field" placeholder="e.g. Terrace" value={zoneForm.name} onChange={(e) => setZoneForm({ ...zoneForm, name: e.target.value })}/></div>
@@ -275,8 +309,8 @@ export default function CheckinRedesignPage() {
                       <option value="both">In &amp; Out</option><option value="entry">In-only</option><option value="exit">Out-only</option>
                     </select>
                     <div className="rd-row2" style={{ marginTop: 10 }}>
-                      <button className="rr-btn secondary" style={{ flex: 1, justifyContent: 'center' }} onClick={() => setAddZoneOpen(false)}>Cancel</button>
-                      <button className="rr-btn primary" disabled={!eventId || !zoneForm.name.trim()} style={{ flex: 1, justifyContent: 'center' }} onClick={createZone}>Create zone</button>
+                      <button className="rr-btn secondary" style={{ flex: 1, justifyContent: 'center' }} onClick={closeZoneEditor}>Cancel</button>
+                      <button className="rr-btn primary" disabled={!eventId || !zoneForm.name.trim()} style={{ flex: 1, justifyContent: 'center' }} onClick={createZone}>{editingZoneId ? 'Save changes' : 'Create zone'}</button>
                     </div>
                   </div>
                 </div>
@@ -303,7 +337,7 @@ export default function CheckinRedesignPage() {
                       <div className="ci-zone-foot">
                         <span>Capacity {z.capacity}</span>
                         <div className="gr-actions">
-                          <button className="rr-link-btn" disabled title="Zone editing remains on the legacy access page during rollout">Edit</button>
+                          <button className="rr-link-btn" onClick={() => openZoneEditor(z)}>Edit</button>
                           <button className="rr-link-btn gr-danger-link" onClick={() => setDeleteTarget({ id: z.id, name: z.name, type: 'zone' })}>Delete</button>
                         </div>
                       </div>
@@ -338,8 +372,8 @@ export default function CheckinRedesignPage() {
                       </div>
                     )}
                     <div className="rd-row2" style={{ marginTop: 10 }}>
-                      <button className="rr-btn secondary" style={{ flex: 1, justifyContent: 'center' }} onClick={() => setAddTicketOpen(false)}>Cancel</button>
-                      <button className="rr-btn primary" disabled={!eventId || !ticketForm.name.trim()} style={{ flex: 1, justifyContent: 'center' }} onClick={createTicket}>Create ticket type</button>
+                      <button className="rr-btn secondary" style={{ flex: 1, justifyContent: 'center' }} onClick={closeTicketEditor}>Cancel</button>
+                      <button className="rr-btn primary" disabled={!eventId || !ticketForm.name.trim()} style={{ flex: 1, justifyContent: 'center' }} onClick={createTicket}>{editingTicketId ? 'Save changes' : 'Create ticket type'}</button>
                     </div>
                   </div>
                 )}
@@ -358,7 +392,7 @@ export default function CheckinRedesignPage() {
                           <td>{t.assigned_count} <span className="ci-assigned-pct">({pct}%)</span></td>
                           <td><div className="ci-zone-chips">{!t.allowed_zone_ids?.length ? <span className="rd-chip">All zones</span> : allowedNames.map((z) => <span className="rd-chip" key={z}>{z}</span>)}</div></td>
                           <td className="rd-rowlink gr-actions">
-                            <button className="rr-link-btn" disabled title="Ticket editing remains on the legacy access page during rollout">Edit</button>
+                            <button className="rr-link-btn" onClick={() => openTicketEditor(t)}>Edit</button>
                             <button className="rr-link-btn gr-danger-link" onClick={() => setDeleteTarget({ id: t.id, name: t.name, type: 'ticket type' })}>Delete</button>
                           </td>
                         </tr>
@@ -368,7 +402,7 @@ export default function CheckinRedesignPage() {
                 </table>
                 <div className="rd-attn-footer">
                   <span>{ticketTypes.length} ticket types · {ticketTypes.reduce((s, t) => s + Number(t.assigned_count || 0), 0)} assigned</span>
-                  <button className="rr-btn secondary" style={{ height: 30, fontSize: 10.5, padding: '0 10px' }} onClick={() => setAddTicketOpen((v) => !v)}><Icon name="plus" size={12}/> Add ticket type</button>
+                  <button className="rr-btn secondary" style={{ height: 30, fontSize: 10.5, padding: '0 10px' }} onClick={() => addTicketOpen ? closeTicketEditor() : setAddTicketOpen(true)}><Icon name="plus" size={12}/> Add ticket type</button>
                 </div>
               </div>
             </div>

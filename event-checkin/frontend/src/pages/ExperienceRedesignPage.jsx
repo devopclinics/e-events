@@ -976,7 +976,6 @@ export default function ExperienceRedesignPage() {
                 </tbody>
               </table>
             )}
-            <button className="rr-link-btn" style={{ marginTop: 14 }} onClick={() => notify('Experience trigger keys are fixed by the platform — there is no add-new-trigger endpoint yet.')}><Icon name="plus" size={13}/> Add trigger</button>
             <div className="rr-section-title" style={{ margin: '16px 0 8px' }}><div><h2 style={{ fontSize: 12 }}>Recent changes</h2></div></div>
             {realTemplateAudit === null ? <LoadingSkeleton rows={3} variant="list" /> : realTemplateAudit.length === 0 ? <p className="rd-rowlink">No template changes yet.</p> : (
               realTemplateAudit.slice(0, 10).map((a, i) => <div key={i} className="ex-audit-row"><Icon name="clock" size={12}/><strong>{a.changed_by_email || 'Unknown'}</strong><span>{a.action} {a.template_key}</span><small>{a.changed_at ? new Date(a.changed_at).toLocaleString() : ''}</small></div>)

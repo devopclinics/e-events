@@ -1185,6 +1185,7 @@ class TaskAttachmentOut(BaseModel):
 class WalkInRegister(BaseModel):
     first_name: str
     last_name: Optional[str] = ""
+    email: Optional[EmailStr] = None
     phone: Optional[str] = None
     # Section-based scanning: the scanner device's active section (table group).
     # Used in place of the event's walk_in_table_group_id when section mode is on.

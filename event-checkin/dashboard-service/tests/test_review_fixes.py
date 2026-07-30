@@ -113,6 +113,29 @@ async def test_rsvp_funnel_distinguishes_guests_from_sent_invites(ctx):
     assert payload["invited"] == 1
 
 
+async def test_rsvp_funnel_counts_admissions_and_deduplicates_scans(ctx):
+    checked_at = datetime(2026, 8, 2, 16, 30)
+    async with ctx.session_factory() as s:
+        await ctx.add_guest(
+            s, id="legacy-admission", admitted=True, admitted_at=checked_at,
+        )
+        await ctx.add_guest(
+            s, id="admitted-and-scanned", admitted=True, admitted_at=checked_at,
+        )
+        await ctx.add_scan(s, "admitted-and-scanned", "in", checked_at)
+        await ctx.add_guest(s, id="scan-only", admitted=False)
+        await ctx.add_scan(s, "scan-only", "in", checked_at)
+        await ctx.add_guest(s, id="denied-scan", admitted=False)
+        await ctx.add_scan(s, "denied-scan", "in", checked_at, denied=True)
+        await ctx.add_guest(s, id="not-here", admitted=False)
+        await s.commit()
+
+    funnel = (await ctx.client.get(
+        f"/api/results/events/{ctx.event_id}/analytics/invitations"
+    )).json()["rsvp_funnel"]
+    assert funnel["checked_in"] == 3
+
+
 async def test_email_reached_requires_confirmed_delivery(ctx):
     async with ctx.session_factory() as s:
         s.add_all([

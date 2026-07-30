@@ -642,8 +642,20 @@ async def rsvp_funnel(db: AsyncSession, event: Event) -> dict:
         Guest.event_id == event.id, Guest.rsvp_status == "declined")) or 0
     pending = await db.scalar(select(func.count()).select_from(Guest).where(
         Guest.event_id == event.id, Guest.rsvp_status == "pending")) or 0
-    checked_in = await db.scalar(select(func.count(func.distinct(ScanEvent.guest_id))).where(
-        ScanEvent.event_id == event.id, ScanEvent.direction == "in", ScanEvent.denied.is_(False))) or 0
+    # Manual and legacy scanner admissions predate scan_events and are recorded
+    # directly on guests. Count both sources, while UNION keeps guests present
+    # in both sources from being counted twice.
+    accepted_scan_ids = select(ScanEvent.guest_id.label("guest_id")).where(
+        ScanEvent.event_id == event.id,
+        ScanEvent.direction == "in",
+        ScanEvent.denied.is_(False),
+    )
+    admitted_guest_ids = select(Guest.id.label("guest_id")).where(
+        Guest.event_id == event.id,
+        Guest.admitted.is_(True),
+    )
+    checked_in_ids = accepted_scan_ids.union(admitted_guest_ids).subquery()
+    checked_in = await db.scalar(select(func.count()).select_from(checked_in_ids)) or 0
     return {
         "guests": guests,
         "invited": invited,

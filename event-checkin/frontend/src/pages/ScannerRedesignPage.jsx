@@ -130,7 +130,7 @@ function ManualMode({ event, sections, onResult }) {
   const [sectionId, setSectionId] = useState(sections.length === 1 ? sections[0].id : '')
 
   useEffect(() => {
-    if (!event?.id || !event.manual_checkin_enabled || query.trim().length < 2) { setResults([]); return }
+    if (!event?.id || (!event.manual_checkin_enabled && !event.checkout_enabled) || query.trim().length < 2) { setResults([]); return }
     let active = true
     const timer = window.setTimeout(() => {
       api.searchGuests(event.id, query.trim())
@@ -138,14 +138,26 @@ function ManualMode({ event, sections, onResult }) {
         .catch((err) => { if (active) setError(err.message) })
     }, 250)
     return () => { active = false; window.clearTimeout(timer) }
-  }, [event?.id, event?.manual_checkin_enabled, query])
+  }, [event?.id, event?.manual_checkin_enabled, event?.checkout_enabled, query])
 
   async function checkin(guest) {
-    setBusyId(guest.id); setError('')
+    setBusyId(`${guest.id}:checkin`); setError('')
     try {
       const response = await api.manualCheckin(event.id, guest.id, event.section_mode_enabled ? sectionId || null : null)
       onResult(response)
       setResults((items) => items.map((item) => item.id === guest.id ? { ...item, admitted: true } : item))
+    } catch (err) { setError(err.message); onResult({ status: 'invalid', message: err.message }) }
+    finally { setBusyId('') }
+  }
+
+  async function checkout(guest) {
+    setBusyId(`${guest.id}:checkout`); setError('')
+    try {
+      const response = await api.manualCheckout(event.id, guest.id)
+      onResult(response)
+      if (response.status === 'checked_out' || response.status === 'already_checked_out') {
+        setResults((items) => items.map((item) => item.id === guest.id ? { ...item, checked_out: true } : item))
+      }
     } catch (err) { setError(err.message); onResult({ status: 'invalid', message: err.message }) }
     finally { setBusyId('') }
   }
@@ -165,7 +177,9 @@ function ManualMode({ event, sections, onResult }) {
     finally { setBusyId('') }
   }
 
-  if (!event?.manual_checkin_enabled && !event?.walk_in_enabled) return <div className="sc-empty">Manual check-in and walk-ins are disabled for this event.</div>
+  if (!event?.manual_checkin_enabled && !event?.walk_in_enabled && !event?.checkout_enabled) {
+    return <div className="sc-empty">Manual check-in, check-out, and walk-ins are disabled for this event.</div>
+  }
   return (
     <div className="sc-manual">
       {event.section_mode_enabled && sections.length > 0 && (
@@ -183,7 +197,19 @@ function ManualMode({ event, sections, onResult }) {
           {results.map((guest) => <div key={guest.id} className="sc-guest-row">
             <div className="sc-guest-avatar">{guest.full_name?.[0] || '?'}</div>
             <div className="sc-guest-info"><strong>{guest.full_name}</strong><small>{guest.phone_masked || 'No phone'}{guest.table_name ? ` · ${guest.table_name}` : ''}</small></div>
-            <button className="rr-btn primary" disabled={busyId === guest.id} onClick={() => checkin(guest)}>{busyId === guest.id ? 'Recording…' : guest.admitted ? 'Review' : 'Check in'}</button>
+            <div className="sc-guest-actions">
+              {event.manual_checkin_enabled && (
+                <button className="rr-btn primary" disabled={!!busyId} onClick={() => checkin(guest)}>
+                  {busyId === `${guest.id}:checkin` ? 'Recording…' : guest.admitted ? 'Review' : 'Check in'}
+                </button>
+              )}
+              {event.checkout_enabled && guest.admitted && (
+                <button className="rr-btn secondary" disabled={!!busyId || guest.checked_out} onClick={() => checkout(guest)}>
+                  {busyId === `${guest.id}:checkout` ? 'Recording…' : guest.checked_out ? 'Checked out' : 'Check out'}
+                </button>
+              )}
+              {!event.manual_checkin_enabled && !guest.admitted && <span className="sc-guest-state">Not checked in</span>}
+            </div>
           </div>)}
         </div>
       </> : <form className="sc-walkin-form" onSubmit={register}>

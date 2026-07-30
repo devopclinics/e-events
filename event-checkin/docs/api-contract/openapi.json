@@ -21939,7 +21939,7 @@
     },
     "/api/events/{event_id}/guests/search": {
       "get": {
-        "description": "Manual check-in search: partial, case-insensitive match across first name,\nlast name (incl. full name) and phone, all at once. Gated to events with\nmanual check-in on and to staff assigned to the event.",
+        "description": "Manual attendance search across name and phone.\n\nIt is available when manual check-in or guest checkout is enabled, and is\nalways restricted to staff assigned to the event.",
         "operationId": "search_guests_api_events__event_id__guests_search_get",
         "parameters": [
           {
@@ -22847,6 +22847,63 @@
           }
         ],
         "summary": "Manual Checkin",
+        "tags": [
+          "guests"
+        ]
+      }
+    },
+    "/api/events/{event_id}/guests/{guest_id}/checkout": {
+      "post": {
+        "description": "Record a guest's exit by selecting them in manual attendance search.",
+        "operationId": "manual_checkout_api_events__event_id__guests__guest_id__checkout_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "event_id",
+            "required": true,
+            "schema": {
+              "title": "Event Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "guest_id",
+            "required": true,
+            "schema": {
+              "title": "Guest Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ScanResult"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Manual Checkout",
         "tags": [
           "guests"
         ]

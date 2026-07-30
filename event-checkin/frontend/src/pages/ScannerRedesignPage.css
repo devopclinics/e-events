@@ -88,6 +88,8 @@
 .sc-guest-info { flex: 1; }
 .sc-guest-info strong { display: block; font-size: 0.9rem; color: var(--rr-text); }
 .sc-guest-info small { font-size: 0.78rem; color: var(--rr-sub); }
+.sc-guest-actions { display: flex; align-items: center; justify-content: flex-end; gap: 6px; flex-wrap: wrap; }
+.sc-guest-state { color: var(--rr-sub); font-size: 0.76rem; font-weight: 600; }
 .sc-empty { text-align: center; color: var(--rr-sub); font-size: 0.88rem; padding: 24px; }
 
 /* Walk-in form */

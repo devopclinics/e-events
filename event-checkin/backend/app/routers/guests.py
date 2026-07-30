@@ -50,7 +50,7 @@ from services.email_service import send_invite_email, send_manual_invite_email, 
 from services.outbound_safety import recipient_allowed
 from ..template_resolve import load_overrides, channel_text as template_channel_text, email_override as template_email_override, channel_text_or_default as template_channel_or_default, email_or_default as template_email_or_default
 from services.templates import TEMPLATE_DEFS, build_context as build_template_context
-from .scanner import checkin_guard, perform_admission, queue_admission_email, queue_consent_copy_email
+from .scanner import checkin_guard, perform_admission, perform_checkout, queue_admission_email, queue_consent_copy_email
 from services import messaging
 from services.credit_ledger import send_with_credit_ledger
 from ..services.experience import next_guest_steps, sync_guest_progress
@@ -1769,14 +1769,16 @@ async def search_guests(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_official),
 ):
-    """Manual check-in search: partial, case-insensitive match across first name,
-    last name (incl. full name) and phone, all at once. Gated to events with
-    manual check-in on and to staff assigned to the event."""
+    """Manual attendance search across name and phone.
+
+    It is available when manual check-in or guest checkout is enabled, and is
+    always restricted to staff assigned to the event.
+    """
     event = await db.get(Event, event_id)
     if not event:
         raise HTTPException(404, "Event not found")
-    if not event.manual_checkin_enabled:
-        raise HTTPException(403, "Manual check-in is not enabled for this event")
+    if not (event.manual_checkin_enabled or event.checkout_enabled):
+        raise HTTPException(403, "Manual check-in and check-out are not enabled for this event")
     blocked = await checkin_guard(event, current_user, db)
     if blocked:
         raise HTTPException(403, blocked.message)
@@ -1804,6 +1806,22 @@ async def search_guests(
             select(SeatingTable.id, SeatingTable.name).where(SeatingTable.id.in_(table_ids))
         )).all())
 
+    latest_directions: dict[str, str] = {}
+    guest_ids = [g.id for g in rows]
+    if guest_ids:
+        normal_scans = (await db.execute(
+            select(ScanEvent.guest_id, ScanEvent.direction)
+            .where(
+                ScanEvent.event_id == event_id,
+                ScanEvent.guest_id.in_(guest_ids),
+                ScanEvent.zone_id.is_(None),
+                ScanEvent.denied.is_(False),
+            )
+            .order_by(ScanEvent.scanned_at.desc())
+        )).all()
+        for guest_id, direction in normal_scans:
+            latest_directions.setdefault(guest_id, direction)
+
     return [{
         "id": g.id,
         "first_name": g.first_name,
@@ -1815,6 +1833,7 @@ async def search_guests(
         "is_vip": g.is_vip,
         "admitted": g.admitted,
         "admitted_at": g.admitted_at.isoformat() if g.admitted_at else None,
+        "checked_out": latest_directions.get(g.id) == "out",
         "rsvp_status": g.rsvp_status,
     } for g in rows]
 
@@ -1927,6 +1946,23 @@ async def manual_checkin(
         if sec:
             guest.assigned_table_group_id = sec
     return await perform_admission(guest, event, background_tasks, db)
+
+
+@router.post("/{event_id}/guests/{guest_id}/checkout", response_model=ScanResult)
+async def manual_checkout(
+    event_id: str,
+    guest_id: str,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_official),
+):
+    """Record a guest's exit by selecting them in manual attendance search."""
+    event = await db.get(Event, event_id)
+    if not event:
+        raise HTTPException(404, "Event not found")
+    guest = await db.get(Guest, guest_id)
+    if not guest or guest.event_id != event_id:
+        return ScanResult(status="invalid", message="Guest not found for this event.")
+    return await perform_checkout(guest, event, current_user, db)
 
 
 @router.get("/{event_id}/my-sections")

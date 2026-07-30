@@ -14,6 +14,7 @@ async def _admitted_guest(ctx, ev):
         event.is_paid = True
         event.status = "active"
         event.checkout_enabled = False
+        event.manual_checkin_enabled = False
         await s.commit()
     g = (await ctx.client.post(
         f"/api/events/{ev}/guests",
@@ -52,3 +53,33 @@ async def test_checkout_gated_by_flag(ctx):
             select(ScanEvent).where(ScanEvent.guest_id.is_not(None), ScanEvent.direction == "out")
         )).scalars().all()
         assert any(o.direction == "out" for o in outs)
+
+
+@pytest.mark.asyncio
+async def test_manual_search_can_checkout_guest_without_manual_checkin(ctx):
+    ev = ctx.ids["event_a"]
+    ctx.login(ctx.ids["user_a"])
+    guest_id, _ = await _admitted_guest(ctx, ev)
+
+    enabled = await ctx.client.patch(
+        f"/api/events/{ev}/features",
+        json={"checkout_enabled": True},
+    )
+    assert enabled.status_code == 200
+    assert enabled.json()["checkout_enabled"] is True
+    assert enabled.json()["manual_checkin_enabled"] is False
+
+    search = await ctx.client.get(f"/api/events/{ev}/guests/search?q=lovelace")
+    assert search.status_code == 200
+    assert search.json()[0]["id"] == guest_id
+    assert search.json()[0]["checked_out"] is False
+
+    checkout = await ctx.client.post(f"/api/events/{ev}/guests/{guest_id}/checkout")
+    assert checkout.status_code == 200
+    assert checkout.json()["status"] == "checked_out"
+
+    repeated = await ctx.client.post(f"/api/events/{ev}/guests/{guest_id}/checkout")
+    assert repeated.json()["status"] == "already_checked_out"
+
+    refreshed = await ctx.client.get(f"/api/events/{ev}/guests/search?q=lovelace")
+    assert refreshed.json()[0]["checked_out"] is True

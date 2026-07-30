@@ -589,6 +589,8 @@ export const api = {
   searchGuests: (eventId, q) => req('GET', `/events/${eventId}/guests/search?q=${encodeURIComponent(q)}`),
   manualCheckin: (eventId, guestId, tableGroupId) =>
     req('POST', `/events/${eventId}/guests/${guestId}/checkin${tableGroupId ? `?table_group_id=${encodeURIComponent(tableGroupId)}` : ''}`),
+  manualCheckout: (eventId, guestId) =>
+    req('POST', `/events/${eventId}/guests/${guestId}/checkout`),
   // Section-based scanning: sections (table groups) the signed-in staffer may check into.
   myEventSections: (eventId) => req('GET', `/events/${eventId}/my-sections`),
   // Walk-in

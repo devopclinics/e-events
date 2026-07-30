@@ -930,6 +930,16 @@ async def scan_qr_checkout(
     event = await db.get(Event, guest.event_id)
     if not event:
         return ScanResult(status="invalid", message="Event not found for this ticket.")
+    return await perform_checkout(guest, event, current_user, db)
+
+
+async def perform_checkout(
+    guest: Guest,
+    event: Event,
+    current_user: User,
+    db: AsyncSession,
+) -> ScanResult:
+    """Record a guest exit for QR and manual checkout through one flow."""
     if not event.checkout_enabled:
         return ScanResult(
             status="checkout_disabled",

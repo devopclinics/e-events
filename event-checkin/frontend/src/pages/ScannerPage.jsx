@@ -484,7 +484,7 @@ function extractScanPayload(raw) {
   return { token: extractToken(value), action: null }
 }
 
-function ManualCheckin({ eventId, onResult, manualEnabled, walkInEnabled, sectionMode, sectionId, sectionPickable, timezone, seatingLabel = 'Table' }) {
+function ManualCheckin({ eventId, onResult, manualEnabled, checkoutEnabled, walkInEnabled, sectionMode, sectionId, sectionPickable, timezone, seatingLabel = 'Table' }) {
   const [q, setQ] = useState('')
   const [results, setResults] = useState([])
   const [searching, setSearching] = useState(false)
@@ -519,7 +519,7 @@ function ManualCheckin({ eventId, onResult, manualEnabled, walkInEnabled, sectio
   // Debounced search across name + phone.
   useEffect(() => {
     const term = q.trim()
-    if (!manualEnabled || term.length < 2) { setResults([]); setSearching(false); return }
+    if ((!manualEnabled && !checkoutEnabled) || term.length < 2) { setResults([]); setSearching(false); return }
     let active = true
     setSearching(true)
     const t = setTimeout(async () => {
@@ -530,12 +530,19 @@ function ManualCheckin({ eventId, onResult, manualEnabled, walkInEnabled, sectio
       finally { if (active) setSearching(false) }
     }, 250)
     return () => { active = false; clearTimeout(t) }
-  }, [q, eventId, manualEnabled])
+  }, [q, eventId, manualEnabled, checkoutEnabled])
 
   async function doCheckin(guest) {
     setBusy(true); setErr('')
     try {
       onResult(await api.manualCheckin(eventId, guest.id, sectionMode ? sectionId : null))
+    } catch (e) { setErr(e.message); setBusy(false) }
+  }
+
+  async function doCheckout(guest) {
+    setBusy(true); setErr('')
+    try {
+      onResult(await api.manualCheckout(eventId, guest.id))
     } catch (e) { setErr(e.message); setBusy(false) }
   }
 
@@ -545,7 +552,9 @@ function ManualCheckin({ eventId, onResult, manualEnabled, walkInEnabled, sectio
   if (confirm) {
     return (
       <div className="text-center space-y-4 py-2">
-        <p className="text-sm text-gray-500 dark:text-slate-400">{confirm.admitted ? 'Already checked in' : 'Check in'}</p>
+        <p className="text-sm text-gray-500 dark:text-slate-400">
+          {confirm.checked_out ? 'Already checked out' : confirm.admitted ? 'Checked in' : 'Not checked in'}
+        </p>
         <p className="text-2xl font-bold dark:text-white flex items-center justify-center gap-2">
           {confirm.full_name}
           {confirm.is_vip && <span className="text-[10px] bg-amber-100 text-amber-700 px-1.5 py-0.5 rounded-full align-middle">VIP</span>}
@@ -562,10 +571,18 @@ function ManualCheckin({ eventId, onResult, manualEnabled, walkInEnabled, sectio
             className="px-6 py-3 rounded-xl border border-gray-300 dark:border-slate-600 text-gray-700 dark:text-slate-200 font-semibold hover:bg-gray-100 dark:hover:bg-slate-700">
             Cancel
           </button>
-          <button onClick={() => doCheckin(confirm)} disabled={busy}
-            className="px-8 py-3 rounded-xl bg-green-600 hover:bg-green-700 text-white font-bold disabled:opacity-50">
-            {busy ? 'Loading…' : confirm.admitted ? 'Open journey' : 'Confirm'}
-          </button>
+          {manualEnabled && (
+            <button onClick={() => doCheckin(confirm)} disabled={busy}
+              className="px-8 py-3 rounded-xl bg-green-600 hover:bg-green-700 text-white font-bold disabled:opacity-50">
+              {busy ? 'Loading…' : confirm.admitted ? 'Open journey' : 'Confirm check-in'}
+            </button>
+          )}
+          {checkoutEnabled && confirm.admitted && (
+            <button onClick={() => doCheckout(confirm)} disabled={busy || confirm.checked_out}
+              className="px-8 py-3 rounded-xl bg-amber-500 hover:bg-amber-600 text-white font-bold disabled:opacity-50">
+              {busy ? 'Recording…' : confirm.checked_out ? 'Already checked out' : 'Confirm check-out'}
+            </button>
+          )}
         </div>
       </div>
     )
@@ -610,7 +627,7 @@ function ManualCheckin({ eventId, onResult, manualEnabled, walkInEnabled, sectio
         </div>
       )}
       <input value={q} onChange={(e) => setQ(e.target.value)} autoFocus
-        placeholder={manualEnabled ? 'Search name or phone…' : 'Walk-in guest name…'} className={inputCls} />
+        placeholder={manualEnabled || checkoutEnabled ? 'Search name or phone…' : 'Walk-in guest name…'} className={inputCls} />
       {walkInEnabled && (
         <button onClick={openWalkInForm}
           className="w-full bg-amber-50 dark:bg-amber-900/20 text-amber-700 dark:text-amber-300 border border-amber-300 dark:border-amber-800 rounded-lg py-2 text-sm font-semibold hover:bg-amber-100 dark:hover:bg-amber-900/40">
@@ -619,10 +636,10 @@ function ManualCheckin({ eventId, onResult, manualEnabled, walkInEnabled, sectio
       )}
       {searching && <p className="text-xs text-gray-400 dark:text-slate-500">Searching…</p>}
       {err && <p className="text-sm text-red-500">{err}</p>}
-      {manualEnabled && q.trim().length >= 2 && !searching && results.length === 0 && (
+      {(manualEnabled || checkoutEnabled) && q.trim().length >= 2 && !searching && results.length === 0 && (
         <p className="text-sm text-gray-400 dark:text-slate-500 text-center py-6">No guest found for "{q.trim()}".</p>
       )}
-      {!manualEnabled && q.trim().length >= 2 && (
+      {!manualEnabled && !checkoutEnabled && q.trim().length >= 2 && (
         <p className="text-sm text-gray-400 dark:text-slate-500 text-center py-6">Manual lookup is off. Register this person as a walk-in guest.</p>
       )}
       <div className="space-y-2">
@@ -725,6 +742,7 @@ export default function ScannerPage() {
   const selfCheckinEnabled = !!selectedEvent?.self_checkin_enabled
   const sectionMode = !!selectedEvent?.section_mode_enabled
   const normalCheckoutEnabled = !!selectedEvent?.checkout_enabled && !accessMode
+  const manualSearchEnabled = manualWalkInEnabled || normalCheckoutEnabled
   const selectedZone = zones.find((z) => z.id === zoneId)
   const selectedGate = gates.find((g) => g.id === gateId)
   const selectedSection = tableGroups.find((group) => group.id === sectionId)
@@ -1306,7 +1324,7 @@ export default function ScannerPage() {
                 {[
                   ['qr', 'Camera'],
                   ...(normalCheckoutEnabled ? [['checkout', 'Check-out']] : []),
-                  ...(manualWalkInEnabled ? [['manual', 'Manual search']] : []),
+                  ...(manualSearchEnabled ? [['manual', 'Manual search']] : []),
                   ...(selfCheckinEnabled ? [['eventqr', 'Event QR']] : []),
                 ].map(([m, label]) => (
                   <button key={m} onClick={() => setMode(m)}
@@ -1320,8 +1338,9 @@ export default function ScannerPage() {
             )}
             {selfCheckinEnabled && mode === 'eventqr' ? (
               <EventQrPanel event={selectedEvent} />
-            ) : manualWalkInEnabled && mode === 'manual' ? (
-              <ManualCheckin eventId={eventId} manualEnabled={manualEnabled} walkInEnabled={walkInEnabled || manualEnabled}
+            ) : manualSearchEnabled && mode === 'manual' ? (
+              <ManualCheckin eventId={eventId} manualEnabled={manualEnabled} checkoutEnabled={normalCheckoutEnabled}
+                walkInEnabled={walkInEnabled || manualEnabled}
                 sectionMode={sectionMode} sectionId={sectionId} sectionPickable={tableGroups.length > 1}
                 timezone={selectedEvent?.timezone} seatingLabel={seatingTerm(selectedEvent)}
                 onResult={(res) => setResult(res)} />

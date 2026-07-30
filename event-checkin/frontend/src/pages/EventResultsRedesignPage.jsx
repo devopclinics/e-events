@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
 import { useSearchParams } from 'react-router-dom'
-import RedesignShell, { Icon } from './redesign/RedesignShell'
+import RedesignShell, { Icon, Modal } from './redesign/RedesignShell'
 import { LoadingSkeleton } from './redesign/RedesignPrimitives'
 import { useCurrentEvent } from '../hooks/useCurrentEvent'
 import { api } from '../api'
@@ -173,6 +173,25 @@ function CapacityRow({ name, value, capacity, detail }) {
 }
 
 function ResultsHero({ event, events, eventId, connected, now, updatedAt, onEventChange }) {
+  const [eventMenuOpen, setEventMenuOpen] = useState(false)
+  const pickerRef = useRef(null)
+
+  useEffect(() => {
+    if (!eventMenuOpen) return undefined
+    function closeOnOutsideClick(e) {
+      if (!pickerRef.current?.contains(e.target)) setEventMenuOpen(false)
+    }
+    function closeOnEscape(e) {
+      if (e.key === 'Escape') setEventMenuOpen(false)
+    }
+    document.addEventListener('mousedown', closeOnOutsideClick)
+    window.addEventListener('keydown', closeOnEscape)
+    return () => {
+      document.removeEventListener('mousedown', closeOnOutsideClick)
+      window.removeEventListener('keydown', closeOnEscape)
+    }
+  }, [eventMenuOpen])
+
   return (
     <header className="er-ops-hero">
       <div className="er-ops-brandmark">F</div>
@@ -189,19 +208,110 @@ function ResultsHero({ event, events, eventId, connected, now, updatedAt, onEven
         </div>
       </div>
       <div className="er-ops-hero-controls">
-        <select aria-label="Event" value={eventId} onChange={(e) => onEventChange(e.target.value)}>
-          {events.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}
-        </select>
+        <div className="er-ops-event-picker" ref={pickerRef}>
+          <button
+            type="button"
+            className="er-ops-event-trigger"
+            aria-label="Choose event"
+            aria-haspopup="listbox"
+            aria-expanded={eventMenuOpen}
+            onClick={() => setEventMenuOpen((open) => !open)}
+          >
+            <span>{event?.name || 'Choose an event'}</span>
+            <Icon name="chevrondown" size={14} />
+          </button>
+          {eventMenuOpen && (
+            <div className="er-ops-event-menu" role="listbox" aria-label="Events">
+              {events.map((item) => (
+                <button
+                  type="button"
+                  role="option"
+                  aria-selected={item.id === eventId}
+                  className={item.id === eventId ? 'active' : ''}
+                  key={item.id}
+                  onClick={() => {
+                    onEventChange(item.id)
+                    setEventMenuOpen(false)
+                  }}
+                >
+                  <span>{item.name}</span>
+                  {item.id === eventId && <Icon name="check" size={13} />}
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
         <time>{now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })}</time>
       </div>
     </header>
   )
 }
 
+const GUEST_ALERT_TYPES = new Set([
+  'failed_invitations', 'no_contact_info', 'tables_over_capacity',
+  'missing_meal_selection', 'unsigned_consent', 'denied_scans', 'zone_capacity',
+])
+
+const ALERT_WORKSPACES = {
+  failed_invitations: '/guests-redesign?tab=invite',
+  no_contact_info: '/guests-redesign?tab=guests',
+  tables_over_capacity: '/floorplan-redesign',
+  missing_meal_selection: '/event-results-redesign?tab=meals',
+  unsigned_consent: '/event-results-redesign?tab=experience',
+  denied_scans: '/event-results-redesign?tab=attendance',
+  zone_capacity: '/event-results-redesign?tab=attendance',
+  low_credits: '/billing-redesign?tab=billing',
+}
+
+function AlertDetailModal({ eventId, state, onClose, onNavigate }) {
+  if (!state?.alert) return null
+  const { alert, loading, error, guests = [] } = state
+  const workspace = ALERT_WORKSPACES[alert.type] || alert.action_url
+  return (
+    <Modal title={alert.title} onClose={onClose} width={680}>
+      <div className="er-alert-detail">
+        <div className={`er-alert-detail-summary er-severity-${alert.severity}`}>
+          <span className="er-ops-alert-icon"><Icon name="info" size={16} /></span>
+          <div><strong>{alert.description}</strong><small>{alert.count} item{alert.count === 1 ? '' : 's'} need attention</small></div>
+        </div>
+
+        {loading ? <LoadingSkeleton rows={5} variant="list" /> : error ? (
+          <div className="er-ops-empty">{error}</div>
+        ) : guests.length ? (
+          <div className="er-alert-guest-list" aria-label={`Guests for ${alert.title}`}>
+            {guests.map((guest) => (
+              <button
+                type="button"
+                key={guest.id}
+                aria-label={`Open guest record for ${guest.name}`}
+                onClick={() => onNavigate(`/guests-redesign?tab=guests&guest=${encodeURIComponent(guest.id)}`)}
+              >
+                <span className="er-alert-guest-avatar">{guest.name.split(/\s+/).slice(0, 2).map((part) => part[0]).join('').toUpperCase()}</span>
+                <span><strong>{guest.name}</strong><small>{guest.context || guest.email || guest.phone || 'No contact information'}</small></span>
+                <Icon name="arrow" size={14} />
+              </button>
+            ))}
+          </div>
+        ) : <div className="er-ops-empty compact">No affected guest records remain.</div>}
+
+        <div className="er-alert-detail-actions">
+          <button type="button" className="rr-btn secondary" onClick={onClose}>Close</button>
+          {workspace && (
+            <button type="button" className="rr-btn primary" onClick={() => onNavigate(workspace)}>
+              Open workspace <Icon name="arrow" size={13} />
+            </button>
+          )}
+        </div>
+      </div>
+    </Modal>
+  )
+}
+
 function OverviewDashboard({
-  event, data, attendance, zones, venueId, hasScopeFilter,
+  event, eventId, data, attendance, zones, venueId, hasScopeFilter,
   arrivalGapLabel, autoRefresh, setAutoRefresh, setActiveTab,
 }) {
+  const [alertDetail, setAlertDetail] = useState(null)
   const hourly = attendance.hourly || []
   const firstArrivals = hourly.map((item) => Number(item.first_arrival || 0))
   const exits = hourly.map((item) => Number(item.exit || 0))
@@ -241,7 +351,22 @@ function OverviewDashboard({
     if (url) window.location.href = url
   }
 
+  async function openAlert(alert) {
+    if (!GUEST_ALERT_TYPES.has(alert.type)) {
+      navigate(ALERT_WORKSPACES[alert.type] || alert.action_url)
+      return
+    }
+    setAlertDetail({ alert, loading: true, error: '', guests: [] })
+    try {
+      const response = await api.resultsAlertGuests(eventId, alert.id)
+      setAlertDetail({ alert, loading: false, error: '', guests: response.guests || [] })
+    } catch (err) {
+      setAlertDetail({ alert, loading: false, error: err.message || 'Could not load the affected guests.', guests: [] })
+    }
+  }
+
   return (
+    <>
     <section className="er-ops-dashboard">
       <aside className="er-ops-rail">
         <div className="er-ops-rail-title"><i /><span>Live status</span></div>
@@ -327,7 +452,7 @@ function OverviewDashboard({
             </div>
             <div className="er-ops-alert-list">
               {alerts.length ? alerts.slice(0, 5).map((alert) => (
-                <button key={alert.id} className={`er-ops-alert er-severity-${alert.severity}`} onClick={() => navigate(alert.action_url)}>
+                <button key={alert.id} className={`er-ops-alert er-severity-${alert.severity}`} onClick={() => openAlert(alert)}>
                   <span className="er-ops-alert-icon"><Icon name={alertIcon[alert.type] || 'info'} size={15} /></span>
                   <span className="er-ops-alert-copy"><b>{alert.title}</b><small>{alert.description}</small></span>
                   <em>{alert.severity}</em>
@@ -430,6 +555,13 @@ function OverviewDashboard({
         </div>
       </div>
     </section>
+    <AlertDetailModal
+      eventId={eventId}
+      state={alertDetail}
+      onClose={() => setAlertDetail(null)}
+      onNavigate={navigate}
+    />
+    </>
   )
 }
 
@@ -564,6 +696,7 @@ export default function EventResultsRedesignPage() {
       {activeTab === 'overview' && a && (
         <OverviewDashboard
           event={event}
+          eventId={eventId}
           data={data}
           attendance={a}
           zones={zones}

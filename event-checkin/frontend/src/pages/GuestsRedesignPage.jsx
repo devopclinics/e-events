@@ -970,6 +970,7 @@ export default function GuestsRedesignPage() {
   const [addOpen, setAddOpen] = useState(false)
   const [editTarget, setEditTarget] = useState(null)
   const [viewTarget, setViewTarget] = useState(null)
+  const openedGuestRef = useRef('')
   const [removeTarget, setRemoveTarget] = useState(null)
   const [addForm, setAddForm] = useState({ first: '', last: '', email: '', phone: '', vip: false, sendInvite: false })
   const [importOpen, setImportOpen] = useState(false)
@@ -1051,6 +1052,26 @@ export default function GuestsRedesignPage() {
       messaging_consent: !!editTarget.raw.sms_consent && !!editTarget.raw.whatsapp_consent,
     })
   }, [editTarget])
+
+  useEffect(() => {
+    const guestId = searchParams.get('guest') || ''
+    if (!guestId || guestId === openedGuestRef.current || guestsLoading) return
+    const guest = guests.find((item) => item.id === guestId)
+    if (guest) {
+      openedGuestRef.current = guestId
+      setViewTarget(guest)
+    }
+  }, [guests, guestsLoading, searchParams])
+
+  function closeGuestView() {
+    setViewTarget(null)
+    openedGuestRef.current = ''
+    setSearchParams((previous) => {
+      const next = new URLSearchParams(previous)
+      next.delete('guest')
+      return next
+    }, { replace: true })
+  }
 
   const stats = useMemo(() => {
     const total = guests.length
@@ -1257,7 +1278,7 @@ export default function GuestsRedesignPage() {
       )}
 
       {viewTarget && (
-        <Modal title={`Guest: ${viewTarget.name}`} onClose={() => setViewTarget(null)} width={440}>
+        <Modal title={`Guest: ${viewTarget.name}`} onClose={closeGuestView} width={440}>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
             {[['Email', viewTarget.email], ['Phone', viewTarget.phone || '—'], ['RSVP', viewTarget.rsvp], ['Checked in', viewTarget.admitted ? 'Yes' : 'No'], ['Table group', viewTarget.group], ['Household', viewTarget.household], ['VIP', viewTarget.vip ? 'Yes' : 'No'], ['Role', viewTarget.role]].map(([k, v]) => (
               <div key={k} style={{ display: 'flex', gap: 10, fontSize: '0.88rem', padding: '6px 0', borderBottom: '1px solid var(--rr-border)' }}>

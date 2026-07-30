@@ -21,6 +21,10 @@
 .er-stat { padding: 14px 16px; display: flex; flex-direction: column; gap: 4px; }
 .er-stat span { font-size: 9.5px; font-weight: 700; color: var(--muted); text-transform: uppercase; letter-spacing: .03em; }
 .er-stat strong { font-size: 20px; color: var(--ink); }
+.er-stat.green strong { color: var(--success); }
+.er-stat.teal strong { color: var(--teal); }
+.er-stat.amber strong { color: var(--warning); }
+.er-stat.red strong { color: var(--danger); }
 
 /* ── segmented bars (RSVP / invite delivery) ──────────────────────────── */
 .er-segbar { display: flex; height: 10px; border-radius: 6px; overflow: hidden; background: var(--surface-3); margin-bottom: 10px; }

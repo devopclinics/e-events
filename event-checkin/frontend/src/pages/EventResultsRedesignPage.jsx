@@ -234,6 +234,24 @@ export default function EventResultsRedesignPage() {
             </div>
           </div>
 
+          {data.communication.email.breakdown?.tracked > 0 && (
+            <div className="rd-panel" style={{ marginTop: 14 }}>
+              <div className="rd-panel-head">
+                <h3>Email provider delivery</h3>
+                <p>{data.communication.email.breakdown.tracked} tracked emails</p>
+              </div>
+              <div className="rd-panel-body">
+                <div className="rr-grid4">
+                  <StatCard label="Delivered" value={data.communication.email.breakdown.delivered} tone="green" />
+                  <StatCard label="Opened / clicked" value={data.communication.email.breakdown.opened + data.communication.email.breakdown.clicked} tone="teal" />
+                  <StatCard label="Delayed" value={data.communication.email.breakdown.delayed} tone="amber" />
+                  <StatCard label="Bounced / failed" value={data.communication.email.breakdown.bounced + data.communication.email.breakdown.failed + data.communication.email.breakdown.complained + data.communication.email.breakdown.suppressed} tone="red" />
+                </div>
+                <p className="rd-rowlink" style={{ marginTop: 10 }}>This comes from Resend webhooks. It tracks actual provider outcomes after Festio sends an email.</p>
+              </div>
+            </div>
+          )}
+
           {(event?.menu_enabled || data.program?.in_progress_count > 0 || event?.experience_enabled) && (
             <div className="rd-wide-grid" style={{ marginTop: 14 }}>
               {event?.menu_enabled && (

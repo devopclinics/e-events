@@ -717,9 +717,27 @@ async def communication_health(db: AsyncSession, event: Event) -> dict:
     email_sent = len(latest_by_email)
     email_reached = sum(1 for s in latest_by_email.values() if s in reached_statuses)
 
+    # Same per-status breakdown as backend/app/routers/dashboard.py's
+    # DashboardEmailDelivery (legacy's "Email provider delivery" card) — the
+    # redesign's command-center only ever surfaced the reduced sent/reached/rate
+    # trio above, silently dropping the granular provider-outcome counts.
+    email_breakdown = {
+        "sent": 0, "delivered": 0, "opened": 0, "clicked": 0, "delayed": 0,
+        "bounced": 0, "failed": 0, "complained": 0, "suppressed": 0, "unknown": 0,
+    }
+    for status in latest_by_email.values():
+        s = status or "unknown"
+        if s == "delivery_delayed":
+            s = "delayed"
+        if s not in email_breakdown:
+            s = "unknown"
+        email_breakdown[s] += 1
+    email_breakdown["tracked"] = len(latest_by_email)
+
     return {
         "email": {"sent": email_sent, "reached": email_reached,
-                   "rate": round(email_reached / email_sent * 100) if email_sent else None},
+                   "rate": round(email_reached / email_sent * 100) if email_sent else None,
+                   "breakdown": email_breakdown},
         "sms": sms_rate,
         "whatsapp": whatsapp_rate,
         "credits_remaining": event.message_credits,

@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import RedesignShell, { Icon, Modal } from './redesign/RedesignShell'
 import { useCurrentEvent } from '../hooks/useCurrentEvent'
+import { useEventDetails } from '../hooks/useEventDetails'
 import { api } from '../api'
 import './DesignStudioRedesignPage.css'
 
@@ -127,6 +128,7 @@ function humanizeKey(value) {
 
 export default function DesignStudioRedesignPage() {
   const [eventId] = useCurrentEvent()
+  const { event } = useEventDetails(eventId)
   const [tab, setTab] = useState('Templates')
   const [templates, setTemplates] = useState([])
   const [tplCategory, setTplCategory] = useState('All')
@@ -420,11 +422,11 @@ export default function DesignStudioRedesignPage() {
   const publishDone = publishChecklist.filter((c) => c.done).length
 
   return (
-    <RedesignShell topActive="design" withEventSidebar={false}>
+    <RedesignShell topActive="design" withEventSidebar={false} eventScoped>
       <div className="rr-pagehead">
         <div>
           <div className="rr-title-row"><h1>Design Studio</h1></div>
-          <div className="rr-meta"><Icon name="calendar" size={13} /> Selected event <span className="rr-dot">·</span> Template: {activeTemplate?.name || 'None'}</div>
+          <div className="rr-meta"><Icon name="calendar" size={13} /> {event?.name || (eventId ? 'Loading…' : 'No event selected')} <span className="rr-dot">·</span> Template: {activeTemplate?.name || 'None'}</div>
         </div>
       </div>
 

@@ -252,7 +252,7 @@ export default function ScannerRedesignPage() {
 
   const stats = useMemo(() => ({ expected: event?.guest_count ?? '—', checkedIn: event?.admitted_count ?? '—' }), [event])
   return (
-    <RedesignShell topActive="checkin">
+    <RedesignShell topActive="checkin" eventScoped>
       <div className="sc-page">
         <div className="sc-header"><div className="sc-header-left"><h2>Scanner</h2><div className="sc-online-badge online"><span className="sc-online-dot"/> Online · server confirmed</div></div></div>
         {!eventId ? <div className="sc-empty">Select an event before scanning.</div> : (loadError || eventError) ? <div className="sc-empty">{loadError || eventError}</div> : !event ? <div className="sc-empty">Loading scanner configuration…</div> : <>

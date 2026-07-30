@@ -144,7 +144,7 @@ export default function FestioMeRedesignPage() {
   const activeChannel = groupChannels.find((c) => c.id === active) || groupChannels[0]
 
   return (
-    <RedesignShell topActive="festiome" withEventSidebar={false}>
+    <RedesignShell topActive="festiome" withEventSidebar={false} eventScoped>
       {loading && <div className="rd-hint">Loading FestioMe…</div>}
       {error && <div className="rd-banner-err"><Icon name="warning" /> {error}</div>}
       {!loading && status && !status.enabled && (

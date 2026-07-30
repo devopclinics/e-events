@@ -213,7 +213,7 @@ function ThemeToggle() {
   )
 }
 
-export default function RedesignShell({ topActive, withEventSidebar = false, eventActive, children }) {
+export default function RedesignShell({ topActive, withEventSidebar = false, eventScoped = withEventSidebar, eventActive, children }) {
   const location = useLocation()
   const { user } = useAuth()
   const [currentEventId, setCurrentEventId] = useCurrentEvent()
@@ -271,7 +271,7 @@ export default function RedesignShell({ topActive, withEventSidebar = false, eve
             ))}
           </nav>
 
-          {withEventSidebar && (
+          {eventScoped && (
             events.length > 0 ? (
               <label className="rr-topbar-event" title="Switch event">
                 <Icon name="calendar" size={12} />

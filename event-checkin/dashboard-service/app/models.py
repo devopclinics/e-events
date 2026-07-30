@@ -94,6 +94,9 @@ class Guest(Base):
     phone: Mapped[str | None] = mapped_column(String(50), nullable=True)
     invite_status: Mapped[str | None] = mapped_column(String(20), nullable=True)
     table_id: Mapped[str | None] = mapped_column(String(36), ForeignKey("seating_tables.id"), nullable=True)
+    assigned_table_group_id: Mapped[str | None] = mapped_column(
+        String(36), ForeignKey("table_groups.id"), nullable=True,
+    )
 
 
 class Zone(Base):
@@ -226,6 +229,25 @@ class SeatingTable(Base):
     event_id: Mapped[str] = mapped_column(String(36), ForeignKey("events.id"))
     name: Mapped[str] = mapped_column(String(100))
     capacity: Mapped[int] = mapped_column(Integer)
+
+
+class TableGroup(Base):
+    __tablename__ = "table_groups"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True)
+    event_id: Mapped[str] = mapped_column(String(36), ForeignKey("events.id"))
+    name: Mapped[str] = mapped_column(String(120))
+    tag: Mapped[str] = mapped_column(String(120))
+    description: Mapped[str | None] = mapped_column(Text, nullable=True)
+    sort_order: Mapped[int] = mapped_column(Integer, default=0)
+
+
+class TableGroupTable(Base):
+    __tablename__ = "table_group_tables"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True)
+    table_group_id: Mapped[str] = mapped_column(String(36), ForeignKey("table_groups.id"))
+    table_id: Mapped[str] = mapped_column(String(36), ForeignKey("seating_tables.id"))
 
 
 class MessageCreditLedger(Base):

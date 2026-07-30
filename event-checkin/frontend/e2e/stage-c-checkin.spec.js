@@ -1,4 +1,4 @@
-import { test, expect } from '@playwright/test'
+import { chromium, test, expect } from '@playwright/test'
 import { requiredEnv, signIn } from './helpers.js'
 
 test.describe.configure({ mode: 'serial' })
@@ -73,6 +73,15 @@ test.describe('Stage C check-in — isolated staging fixture', () => {
         else await zoneSelect.selectOption({ index: 1 })
       }
       await selectAccessTarget()
+      const startCamera = page.getByRole('button', { name: 'Start camera' })
+      await expect(startCamera).toBeVisible()
+      expect(await startCamera.evaluate((button) => {
+        const box = button.getBoundingClientRect()
+        return document.elementFromPoint(
+          box.left + box.width / 2,
+          box.top + box.height / 2,
+        ) === button
+      }), 'The decorative scanner frame must not intercept camera-button clicks.').toBe(true)
       await page.getByRole('textbox', { name: 'Pass token' }).fill(guest.qr_token)
       await page.getByRole('button', { name: 'Record scan' }).click()
       await expect(page.getByTestId('scan-result')).toContainText(event.venue_access_enabled ? /allowed|admitted|in ·/i : /admitted/i)
@@ -125,5 +134,30 @@ test.describe('Stage C check-in — isolated staging fixture', () => {
     await page.goto('/scanner-redesign')
     await page.getByRole('button', { name: 'Manual search' }).click()
     await expect(page.getByPlaceholder('Search by name or phone…')).toBeVisible()
+  })
+
+  test('camera control starts a browser media stream', async () => {
+    const browser = await chromium.launch({
+      headless: true,
+      args: ['--use-fake-device-for-media-stream', '--use-fake-ui-for-media-stream'],
+    })
+    const context = await browser.newContext({ permissions: ['camera'] })
+    const page = await context.newPage()
+    try {
+      await signIn(page)
+      await page.goto('/scanner-redesign')
+      const startCamera = page.getByRole('button', { name: 'Start camera' })
+      await expect(startCamera).toBeVisible()
+      if (!(await startCamera.isEnabled())) {
+        const accessTarget = page.locator('select[aria-label="Gate"], select[aria-label="Zone"]').first()
+        await expect(accessTarget).toBeVisible()
+        await accessTarget.selectOption({ index: 1 })
+      }
+      await expect(startCamera).toBeEnabled()
+      await startCamera.click()
+      await expect(page.locator('.sc-camera-reader video')).toBeVisible({ timeout: 20_000 })
+    } finally {
+      await browser.close()
+    }
   })
 })

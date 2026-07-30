@@ -136,6 +136,39 @@ async def test_rsvp_funnel_counts_admissions_and_deduplicates_scans(ctx):
     assert funnel["checked_in"] == 3
 
 
+async def test_command_center_reports_table_group_capacity(ctx):
+    from app.models import SeatingTable, TableGroup, TableGroupTable
+
+    async with ctx.session_factory() as s:
+        group = TableGroup(
+            id="parents", event_id=ctx.event_id, name="Esteemed Parents",
+            tag="PARENTS", sort_order=1,
+        )
+        table_a = SeatingTable(id="parents-a", event_id=ctx.event_id, name="P1", capacity=8)
+        table_b = SeatingTable(id="parents-b", event_id=ctx.event_id, name="P2", capacity=10)
+        s.add_all([
+            group,
+            table_a,
+            table_b,
+            TableGroupTable(id="link-a", table_group_id=group.id, table_id=table_a.id),
+            TableGroupTable(id="link-b", table_group_id=group.id, table_id=table_b.id),
+        ])
+        await ctx.add_guest(s, id="parent-in", assigned_table_group_id=group.id, admitted=True)
+        await ctx.add_guest(s, id="parent-not-here", assigned_table_group_id=group.id, admitted=False)
+        await s.commit()
+
+    payload = (await ctx.client.get(
+        f"/api/results/events/{ctx.event_id}/command-center"
+    )).json()
+    assert payload["table_group_capacity"] == [{
+        "id": "parents",
+        "name": "Esteemed Parents",
+        "capacity": 18,
+        "assigned": 2,
+        "checked_in": 1,
+    }]
+
+
 async def test_email_reached_requires_confirmed_delivery(ctx):
     async with ctx.session_factory() as s:
         s.add_all([
@@ -152,7 +185,9 @@ async def test_email_reached_requires_confirmed_delivery(ctx):
     email = (await ctx.client.get(
         f"/api/results/events/{ctx.event_id}/analytics/invitations"
     )).json()["communication"]["email"]
-    assert email == {"sent": 2, "reached": 1, "rate": 50}
+    assert {key: email[key] for key in ("sent", "reached", "rate")} == {
+        "sent": 2, "reached": 1, "rate": 50,
+    }
 
 
 async def test_only_published_workflow_drives_consent(ctx):

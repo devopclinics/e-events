@@ -20,7 +20,7 @@ from .database import get_db
 from .models import (
     BroadcastLog, EmailDeliveryEvent, Event, ExperienceStep, ExperienceWorkflow, Guest,
     GuestExperienceProgress, GuestMealService, GuestMenuChoice, MealService, MenuCategory,
-    MessageCreditLedger, ScanEvent, SeatingTable, User, Zone,
+    MessageCreditLedger, ScanEvent, SeatingTable, TableGroup, TableGroupTable, User, Zone,
 )
 from .timeutil import event_tz, to_event_local, to_utc_naive
 
@@ -804,6 +804,54 @@ async def recent_activity(db: AsyncSession, event: Event, scope: "Scope | None" 
     return out
 
 
+async def table_group_capacity(db: AsyncSession, event: Event) -> list[dict]:
+    """Read-only table-group readiness for the live Overview.
+
+    Capacity is the sum of seats on tables attached to the group. Assigned is
+    every guest routed to the group; checked_in is the admitted subset.
+    """
+    groups = (await db.execute(
+        select(TableGroup)
+        .where(TableGroup.event_id == event.id)
+        .order_by(TableGroup.sort_order, TableGroup.name)
+    )).scalars().all()
+    if not groups:
+        return []
+
+    group_ids = [group.id for group in groups]
+    capacities = dict((await db.execute(
+        select(TableGroupTable.table_group_id, func.coalesce(func.sum(SeatingTable.capacity), 0))
+        .join(SeatingTable, SeatingTable.id == TableGroupTable.table_id)
+        .where(TableGroupTable.table_group_id.in_(group_ids))
+        .group_by(TableGroupTable.table_group_id)
+    )).all())
+    assigned = dict((await db.execute(
+        select(Guest.assigned_table_group_id, func.count())
+        .where(Guest.event_id == event.id, Guest.assigned_table_group_id.in_(group_ids))
+        .group_by(Guest.assigned_table_group_id)
+    )).all())
+    checked_in = dict((await db.execute(
+        select(Guest.assigned_table_group_id, func.count())
+        .where(
+            Guest.event_id == event.id,
+            Guest.assigned_table_group_id.in_(group_ids),
+            Guest.admitted.is_(True),
+        )
+        .group_by(Guest.assigned_table_group_id)
+    )).all())
+
+    return [
+        {
+            "id": group.id,
+            "name": group.name,
+            "capacity": int(capacities.get(group.id, 0)),
+            "assigned": int(assigned.get(group.id, 0)),
+            "checked_in": int(checked_in.get(group.id, 0)),
+        }
+        for group in groups
+    ]
+
+
 # ── meals (Track B — per-category fulfillment, replaces the coarse
 # Guest.meal_served total now that guest_meal_fulfillment exists) ────────────
 
@@ -1274,7 +1322,9 @@ async def command_center(
         "program": {
             "in_progress": [s for s in sessions if s["state"] == "in_progress"],
             "in_progress_count": sum(1 for s in sessions if s["state"] == "in_progress"),
+            "up_next": next((s for s in sessions if s["state"] == "upcoming"), None),
         },
+        "table_group_capacity": await table_group_capacity(db, event),
         "experience": {"steps": funnel[:6]},
         "rsvp_funnel": await rsvp_funnel(db, event),
         "communication": await communication_health(db, event),

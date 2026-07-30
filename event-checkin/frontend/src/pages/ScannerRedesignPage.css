@@ -32,7 +32,7 @@
 /* Camera frame */
 .sc-camera-wrap { display: flex; flex-direction: column; gap: 14px; align-items: center; }
 .sc-camera-frame { width: 280px; height: 280px; position: relative; border-radius: 16px; overflow: hidden; background: #1a1a2e; display: flex; align-items: center; justify-content: center; }
-.sc-camera-corners { position: absolute; inset: 0; }
+.sc-camera-corners { position: absolute; inset: 0; pointer-events: none; }
 .sc-camera-corners span { position: absolute; width: 28px; height: 28px; border: 3px solid #14b8a6; }
 .sc-camera-corners span:nth-child(1) { top: 12px; left: 12px; border-right: none; border-bottom: none; border-radius: 4px 0 0 0; }
 .sc-camera-corners span:nth-child(2) { top: 12px; right: 12px; border-left: none; border-bottom: none; border-radius: 0 4px 0 0; }

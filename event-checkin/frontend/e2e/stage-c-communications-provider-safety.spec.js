@@ -87,11 +87,11 @@ test.describe('Stage C communications — provider-safe redesign controls', () =
       await fieldNear(page, 'Send to').selectOption({ label })
       if (expectedTarget === 'none') {
         await page.getByPlaceholder('Name (required)').fill('Synthetic Recipient')
-        await page.getByPlaceholder('Email or phone').fill('synthetic-recipient@example.invalid')
+        await page.getByPlaceholder('Email or phone', { exact: true }).fill('synthetic-recipient@example.invalid')
         await page.getByRole('button', { name: '+ Add' }).click()
       }
       await page.getByRole('button', { name: 'Send broadcast', exact: true }).click()
-      await expect(page.getByText(/Broadcast confirmed/)).toBeVisible()
+      await expect(page.getByRole('status')).toContainText('Broadcast confirmed')
       expect(seenTargets.at(-1)).toBe(expectedTarget)
     }
     expect(new Set(seenTargets).size).toBe(options.length)

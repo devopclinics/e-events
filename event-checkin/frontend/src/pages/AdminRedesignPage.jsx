@@ -459,8 +459,8 @@ export default function AdminRedesignPage() {
       <div className="rr-section-title">
         <div><h2>Messaging</h2><p>Invitation state from the current guest records</p></div>
         <div className="rr-head-actions">
-          <button onClick={() => navigate('/guests-redesign?tab=invites')}>Manage invitations <Icon name="arrow" size={13}/></button>
-          <button onClick={() => navigate('/communications-redesign?tab=broadcast')}>Open communications <Icon name="arrow" size={15}/></button>
+          <button onClick={() => navigate('/guests-redesign?tab=invite')}>Manage invitations <Icon name="arrow" size={13}/></button>
+          <button onClick={() => navigate('/communications-redesign?tab=messages')}>Open communications <Icon name="arrow" size={15}/></button>
         </div>
       </div>
 

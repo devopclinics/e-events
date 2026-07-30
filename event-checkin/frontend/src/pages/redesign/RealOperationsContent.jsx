@@ -373,6 +373,8 @@ export function RealOrdersContent({ eventId, notify }) {
   const [form, setForm] = useState(null)
   const [pendingCategoryDelete, setPendingCategoryDelete] = useState(null)
   const [itemForm, setItemForm] = useState(null)
+  const [comboForm, setComboForm] = useState(null)
+  const [pendingComboDelete, setPendingComboDelete] = useState(null)
   const [pendingItemDelete, setPendingItemDelete] = useState(null)
   const [loading, setLoading] = useState(true)
   const [working, setWorking] = useState(false)
@@ -430,6 +432,52 @@ export function RealOrdersContent({ eventId, notify }) {
     } catch (e) { setError(e.message || 'Could not delete order item') }
     finally { setWorking(false) }
   }
+
+  function openCombination(category, combination = null) {
+    const selected = new Map((combination?.items || []).map((item) => [item.menu_item_id, item.quantity || 1]))
+    setComboForm({
+      id: combination?.id || '',
+      categoryId: category.id,
+      name: combination?.name || '',
+      description: combination?.description || '',
+      sort_order: combination?.sort_order ?? (category.combinations || []).length,
+      items: Object.fromEntries((category.items || []).map((item) => [item.id, {
+        checked: selected.has(item.id),
+        quantity: selected.get(item.id) || 1,
+      }])),
+    })
+  }
+
+  async function saveCombination(e) {
+    e.preventDefault()
+    const items = Object.entries(comboForm.items)
+      .filter(([, value]) => value.checked)
+      .map(([menu_item_id, value]) => ({ menu_item_id, quantity: Math.max(1, Number(value.quantity) || 1) }))
+    if (!items.length) { setError('Pick at least one item for the combination'); return }
+    setWorking(true); setError('')
+    try {
+      const payload = {
+        name: clean(comboForm.name).trim(),
+        description: clean(comboForm.description).trim() || null,
+        sort_order: Number(comboForm.sort_order) || 0,
+        items,
+      }
+      if (comboForm.id) await api.updateCombination(eventId, comboForm.id, payload)
+      else await api.createCombination(eventId, comboForm.categoryId, payload)
+      await load(); setComboForm(null); notify('Combination saved')
+    } catch (error) { setError(error.message || 'Could not save combination') }
+    finally { setWorking(false) }
+  }
+
+  async function removeCombination() {
+    const combination = pendingComboDelete
+    setPendingComboDelete(null); setWorking(true); setError('')
+    try {
+      await api.deleteCombination(eventId, combination.id)
+      await load(); notify('Combination deleted')
+    } catch (error) { setError(error.message || 'Could not delete combination') }
+    finally { setWorking(false) }
+  }
   if (!eventId) return <EmptyState icon="card" title="Select an event" body="Choose an event before configuring orders." />
   if (loading) return <LoadingSkeleton rows={5} />
   return <>
@@ -439,7 +487,12 @@ export function RealOrdersContent({ eventId, notify }) {
       <div className="ad-order-cats">{categories.map((c) => <div className="rr-panel ad-cat-panel" key={c.id}><div className="ad-cat-panel-head"><div><strong>{clean(c.name, 'Unnamed')}</strong> <span className="ad-selection-badge">{clean(c.selection_type, c.display_only ? 'DISPLAY' : 'SINGLE').toUpperCase()}</span></div>
         <div className="ad-actions"><button className="rr-link-btn" onClick={() => setForm(c)}>Edit</button><button className="rr-link-btn" onClick={() => setPendingCategoryDelete(c)}>Delete</button><button className="rr-link-btn" onClick={() => setItemForm({ categoryId: c.id, name: '', description: '' })}>+ Item</button></div></div>
         {rows(c.items).map((it) => <div className="ad-cat-item" key={it.id}><div><strong>{clean(it.name, 'Unnamed item')}</strong><span>{clean(it.description)}</span></div>
-          <div className="ad-actions"><button className="rr-link-btn" onClick={() => setItemForm({ ...it, categoryId: c.id, description: clean(it.description) })}>Edit</button><button className="rr-link-btn" onClick={() => setPendingItemDelete(it)}>Delete</button></div></div>)}</div>)}</div>}
+          <div className="ad-actions"><button className="rr-link-btn" onClick={() => setItemForm({ ...it, categoryId: c.id, description: clean(it.description) })}>Edit</button><button className="rr-link-btn" onClick={() => setPendingItemDelete(it)}>Delete</button></div></div>)}
+        {c.selection_type === 'combo' && <div className="rd-panel-body">
+          <div className="ad-actions"><strong>Combinations</strong><button className="rr-link-btn" disabled={!c.items?.length} onClick={() => openCombination(c)}>+ Combination</button></div>
+          {(c.combinations || []).map((combination) => <div className="ad-cat-item" key={combination.id}><div><strong>{combination.name}</strong><span>{(combination.items || []).map((item) => `${c.items.find((candidate) => candidate.id === item.menu_item_id)?.name || 'Item'} × ${item.quantity}`).join(', ')}</span></div><div className="ad-actions"><button className="rr-link-btn" onClick={() => openCombination(c, combination)}>Edit</button><button className="rr-link-btn" onClick={() => setPendingComboDelete(combination)}>Delete</button></div></div>)}
+          {!c.combinations?.length && <div className="rd-hint">No combinations configured.</div>}
+        </div>}</div>)}</div>}
     <div className="rr-panel"><div className="rd-panel-head"><h3>Order summary</h3></div><div className="rd-panel-body"><table className="rr-table"><thead><tr><th>Category</th><th>Item</th><th>Count</th></tr></thead><tbody>
       {summary.flatMap((c) => rows(c.items).map((it) => <tr key={`${c.id}-${it.id}`}><td>{clean(c.category)}</td><td>{clean(it.name)}</td><td>{Number(it.count) || 0}</td></tr>))}
     </tbody></table>{!summary.length && <p>No selections yet.</p>}</div></div>
@@ -451,7 +504,18 @@ export function RealOrdersContent({ eventId, notify }) {
       <textarea className="rr-input" aria-label="Item description" value={itemForm.description || ''} onChange={(e) => setItemForm({ ...itemForm, description: e.target.value })} placeholder="Description"/>
       <div className="ad-actions"><button type="button" className="rr-btn secondary" onClick={() => setItemForm(null)}>Cancel</button><button className="rr-btn primary" disabled={working}>{working ? 'Saving…' : 'Save item'}</button></div>
     </form>}
+    {comboForm && <form className="rr-panel rd-panel-body" onSubmit={saveCombination}>
+      <div className="rd-row2"><input className="rr-input" required aria-label="Combination name" value={comboForm.name} onChange={(e) => setComboForm({ ...comboForm, name: e.target.value })} placeholder="Combination name"/><input className="rr-input" type="number" aria-label="Combination sort order" value={comboForm.sort_order} onChange={(e) => setComboForm({ ...comboForm, sort_order: e.target.value })}/></div>
+      <textarea className="rr-input" value={comboForm.description} onChange={(e) => setComboForm({ ...comboForm, description: e.target.value })} placeholder="Description"/>
+      <strong>Items</strong>
+      {(categories.find((category) => category.id === comboForm.categoryId)?.items || []).map((item) => {
+        const row = comboForm.items[item.id] || { checked: false, quantity: 1 }
+        return <div className="ad-cat-item" key={item.id}><label><input type="checkbox" checked={row.checked} onChange={(e) => setComboForm((current) => ({ ...current, items: { ...current.items, [item.id]: { ...row, checked: e.target.checked } } }))}/> {item.name}</label><input className="rr-input" style={{ maxWidth: 90 }} type="number" min="1" disabled={!row.checked} value={row.quantity} onChange={(e) => setComboForm((current) => ({ ...current, items: { ...current.items, [item.id]: { ...row, quantity: e.target.value } } }))}/></div>
+      })}
+      <div className="ad-actions"><button type="button" className="rr-btn secondary" onClick={() => setComboForm(null)}>Cancel</button><button className="rr-btn primary" disabled={working}>{working ? 'Saving…' : 'Save combination'}</button></div>
+    </form>}
     {pendingItemDelete && <ConfirmDialog title="Delete order item" message={`Delete "${clean(pendingItemDelete.name, 'this item')}"? Existing selections will be removed.`} confirmLabel="Delete" onConfirm={removeItem} onCancel={() => setPendingItemDelete(null)}/>}
+    {pendingComboDelete && <ConfirmDialog title="Delete combination" message={`Delete "${clean(pendingComboDelete.name, 'this combination')}"? Existing selections will be removed.`} confirmLabel="Delete" onConfirm={removeCombination} onCancel={() => setPendingComboDelete(null)}/>}
     {pendingCategoryDelete && <ConfirmDialog title="Delete order category" message={`Delete "${clean(pendingCategoryDelete.name, 'this category')}" and its items? Existing selections will be removed.`} confirmLabel="Delete" onConfirm={removeCategory} onCancel={() => setPendingCategoryDelete(null)}/>}
   </>
 }

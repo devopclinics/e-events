@@ -10,21 +10,28 @@ const text = (value, fallback = '') => value == null ? fallback : String(value)
 
 function selections(guest) {
   const out = []
-  Object.values(guest?.single || {}).forEach((s) => out.push({ name: text(s?.item_name), choices: [text(s?.category_name)].filter(Boolean) }))
-  Object.values(guest?.multi || {}).forEach((s) => out.push({ name: text(s?.category_name), choices: list(s?.items).map(String) }))
-  Object.values(guest?.combo || {}).forEach((s) => out.push({ name: text(s?.combination_name), choices: list(s?.items).map(String) }))
+  Object.entries(guest?.single || {}).forEach(([categoryId, s]) => out.push({ categoryId, name: text(s?.category_name, 'Category'), choices: [text(s?.item_name)].filter(Boolean) }))
+  Object.entries(guest?.multi || {}).forEach(([categoryId, s]) => out.push({ categoryId, name: text(s?.category_name, 'Category'), choices: list(s?.items).map(String) }))
+  Object.entries(guest?.combo || {}).forEach(([categoryId, s]) => out.push({ categoryId, name: text(s?.category_name, 'Category'), choices: [text(s?.combination_name), ...list(s?.items).map(String)].filter(Boolean) }))
   return out.filter((item) => item.name)
 }
 
-function OrderCard({ order, working, onServe }) {
+function OrderCard({ order, working, multiCategory, onServe, onToggleCategory }) {
   const served = !!order.meal_served
   return <div className={`kn-order-card kn-tone-${served ? 'gray' : 'amber'}`}>
     <div className="kn-order-head"><div className="kn-order-meta"><strong>{text(order.table_name, 'No table')} {order.seat_number ? `· Seat ${order.seat_number}` : ''}</strong><span className="kn-guest-name">{text(order.name, 'Unnamed guest')}</span></div>
       <span className={`kn-status-pill kn-tone-${served ? 'gray' : 'amber'}`}>{served ? 'Served' : 'Pending'}</span></div>
-    <div className="kn-items">{selections(order).map((item, index) => <div className="kn-item" key={`${item.name}-${index}`}><span className="kn-item-name">{item.name}</span><div className="kn-item-choices">{item.choices.map((choice) => <span className="kn-choice-pill" key={choice}>{choice}</span>)}</div></div>)}</div>
+    <div className="kn-items">{selections(order).map((item, index) => {
+      const categoryServed = !!order.served_categories?.[item.categoryId]
+      const categoryBusy = working === `${order.guest_id}:${item.categoryId}`
+      return <div className="kn-item" key={`${item.categoryId}-${index}`}><span className="kn-item-name">{item.name}</span><div className="kn-item-choices">{item.choices.map((choice) => <span className="kn-choice-pill" key={choice}>{choice}</span>)}</div>
+        {multiCategory && <button className={`kn-category-serve${categoryServed ? ' served' : ''}`} disabled={!!working || !order.admitted} title={!order.admitted ? 'Guest must be checked in before service' : undefined} onClick={() => onToggleCategory(order.guest_id, item.categoryId, categoryServed)}>{categoryBusy ? 'Saving…' : categoryServed ? 'Served ✓' : 'Mark served'}</button>}
+      </div>
+    })}</div>
     {!selections(order).length && <div className="kn-no-orders">No selection</div>}
-    {!served ? <button className="rr-btn primary kn-advance-btn" disabled={working} onClick={() => onServe(order.guest_id)}>{working ? 'Saving…' : 'Mark served'}</button> :
-      <div className="kn-served-badge"><Icon name="check" size={13}/> Served</div>}
+    {!multiCategory && (!served ? <button className="rr-btn primary kn-advance-btn" disabled={!!working} onClick={() => onServe(order.guest_id)}>{working ? 'Saving…' : 'Mark served'}</button> :
+      <div className="kn-served-badge"><Icon name="check" size={13}/> Served</div>)}
+    {multiCategory && served && <div className="kn-served-badge"><Icon name="check" size={13}/> All selections served</div>}
   </div>
 }
 
@@ -72,14 +79,25 @@ export default function KitchenRedesignPage() {
     finally { setWorking('') }
   }
 
+  async function toggleCategoryServed(guestId, categoryId, currentlyServed) {
+    const key = `${guestId}:${categoryId}`
+    setWorking(key); setError('')
+    try {
+      if (currentlyServed) await api.unmarkCategoryServed(eventId, categoryId, guestId)
+      else await api.markCategoryServed(eventId, categoryId, guestId)
+      await load()
+    } catch (e) { setError(e.message || 'Could not update category service') }
+    finally { setWorking('') }
+  }
+
   const guests = list(data?.guests)
   const tables = useMemo(() => [...new Set(guests.map((g) => g.table_name).filter(Boolean))].sort(), [guests])
   const filtered = guests.filter((g) => (status === 'all' || (status === 'served') === !!g.meal_served) && (table === 'all' || g.table_name === table))
   const tally = useMemo(() => {
     const counts = new Map()
-    guests.filter((g) => !g.meal_served).flatMap(selections).forEach((item) => counts.set(item.name, (counts.get(item.name) || 0) + 1))
+    guests.flatMap((guest) => selections(guest).filter((item) => data?.multi_category_serving ? !guest.served_categories?.[item.categoryId] : !guest.meal_served)).forEach((item) => counts.set(item.name, (counts.get(item.name) || 0) + 1))
     return [...counts.entries()].sort((a, b) => b[1] - a[1])
-  }, [guests])
+  }, [guests, data?.multi_category_serving])
   const grouped = tables.map((name) => {
     const group = guests.filter((g) => g.table_name === name)
     return { name, pending: group.filter((g) => !g.meal_served).length, served: group.filter((g) => g.meal_served).length, total: group.length }
@@ -95,7 +113,7 @@ export default function KitchenRedesignPage() {
       <div className="kn-summary"><div className="kn-summary-pill kn-tone-amber"><strong>{guests.length - served}</strong><small>Pending</small></div><div className="kn-summary-pill kn-tone-gray"><strong>{served}</strong><small>Served</small></div></div>
       <div className="kn-subtabs"><button className={`kn-subtab${tab === 'orders' ? ' active' : ''}`} onClick={() => setTab('orders')}>Order queue</button><button className={`kn-subtab${tab === 'tally' ? ' active' : ''}`} onClick={() => setTab('tally')}>Prep tally</button><button className={`kn-subtab${tab === 'tables' ? ' active' : ''}`} onClick={() => setTab('tables')}>By table</button></div>
       {tab === 'orders' && <><div className="kn-filters"><div className="kn-filter-group"><button className={`kn-filter-btn${table === 'all' ? ' active' : ''}`} onClick={() => setTable('all')}>All tables</button>{tables.map((name) => <button className={`kn-filter-btn${table === name ? ' active' : ''}`} onClick={() => setTable(name)} key={name}>{name}</button>)}</div><div className="kn-filter-group">{[['pending','Pending'],['served','Served'],['all','All']].map(([key,label]) => <button className={`kn-filter-btn${status === key ? ' active' : ''}`} onClick={() => setStatus(key)} key={key}>{label}</button>)}</div></div>
-        {!filtered.length ? <EmptyState icon="check" title="Nothing outstanding" body="No orders match the current filters."/> : <div className="kn-order-grid">{filtered.map((order) => <OrderCard key={order.guest_id} order={order} working={working === order.guest_id} onServe={markServed}/>)}</div>}</>}
+        {!filtered.length ? <EmptyState icon="check" title="Nothing outstanding" body="No orders match the current filters."/> : <div className="kn-order-grid">{filtered.map((order) => <OrderCard key={order.guest_id} order={order} working={working === order.guest_id || (working && working.startsWith(`${order.guest_id}:`)) ? working : ''} multiCategory={!!data?.multi_category_serving} onServe={markServed} onToggleCategory={toggleCategoryServed}/>)}</div>}</>}
       {tab === 'tally' && <div className="kn-tally-wrap"><p className="kn-tally-desc">Outstanding selections only.</p><div className="kn-tally-list">{tally.map(([name,count]) => <div className="kn-tally-row" key={name}><span className="kn-tally-name">{name}</span><strong className="kn-tally-count">×{count}</strong></div>)}</div>{!tally.length && <EmptyState icon="check" title="Nothing to prepare" body="All selected orders are served."/>}</div>}
       {tab === 'tables' && <div className="kn-tables-wrap"><table className="kn-table-breakdown"><thead><tr><th>Table</th><th>Pending</th><th>Served</th><th>Total</th></tr></thead><tbody>{grouped.map((row) => <tr key={row.name}><td><strong>{row.name}</strong></td><td>{row.pending}</td><td>{row.served}</td><td>{row.total}</td></tr>)}</tbody></table></div>}
     </>}

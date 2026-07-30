@@ -5,7 +5,11 @@ import { useCurrentEvent } from '../hooks/useCurrentEvent'
 import { api } from '../api'
 import './SetupRedesignPage.css'
 
-const EVENT_TYPES = ['Conference', 'Gala / Award', 'Wedding', 'Birthday', 'Concert', 'Festival', 'Workshop', 'Other']
+const EVENT_TYPES = [
+  'Wedding', 'Nikkah / Aqd', 'Graduation ceremony', 'Birthday party',
+  'Gala / banquet', 'Conference / seminar', 'Community / religious event',
+  'Corporate event', 'Concert / show', 'Private party', 'Other',
+]
 const TIMEZONES = ['Africa/Lagos', 'Africa/Nairobi', 'Europe/London', 'America/New_York', 'Asia/Dubai']
 // The billing API currently supports Paystack/NGN and Stripe/USD.
 const CURRENCIES = ['NGN — Nigerian Naira', 'USD — US Dollar']
@@ -20,6 +24,7 @@ const FEATURES = [
   { id: 'rsvp', label: 'RSVP form', desc: 'Let guests confirm attendance' },
   { id: 'seating', label: 'Seating', desc: 'Assign tables and seats' },
   { id: 'orders', label: 'Food orders / Menu', desc: 'Capture meal choices' },
+  { id: 'access', label: 'Venue access', desc: 'Configure zones, gates, and ticket access' },
   { id: 'logistics', label: 'Deliveries / Packing list', desc: 'Vendor shipment tracking' },
   { id: 'registry', label: 'Gift registry', desc: 'Accept gifts and contributions' },
   { id: 'festiome', label: 'FestioMe guest app', desc: 'Guest-side experience hub' },
@@ -109,11 +114,13 @@ const GUIDED_STEPS = [
 
 function WizardPhase({ onComplete, notify }) {
   const [form, setForm] = useState({
-    name: '', type: 'Conference', host: '', date: '', timezone: 'Africa/Lagos',
+    name: '', type: 'Conference / seminar', host: '', date: '', timezone: 'Africa/Lagos',
     multiDay: false, endDate: '', baseUrl: '', venue: '', venueAddress: '',
     guestCount: '', currency: 'NGN — Nigerian Naira',
     channels: new Set(['email']), features: new Set(['rsvp']),
   })
+  const [recommendation, setRecommendation] = useState(null)
+  const [recommendationLoading, setRecommendationLoading] = useState(false)
   const enabledFeatureCount = form.features.size
   function toggleSet(key, val) {
     setForm((prev) => {
@@ -122,6 +129,38 @@ function WizardPhase({ onComplete, notify }) {
       else next.add(val)
       return { ...prev, [key]: next }
     })
+  }
+
+  useEffect(() => {
+    let alive = true
+    setRecommendationLoading(true)
+    api.getSetupRecommendations(form.type)
+      .then((result) => { if (alive) setRecommendation(result) })
+      .catch(() => { if (alive) setRecommendation(null) })
+      .finally(() => { if (alive) setRecommendationLoading(false) })
+    return () => { alive = false }
+  }, [form.type])
+
+  function applyRecommendations() {
+    if (!recommendation) return
+    const featureMap = {
+      seating_enabled: 'seating',
+      menu_enabled: 'orders',
+      venue_access_enabled: 'access',
+      logistics_enabled: 'logistics',
+      registry_enabled: 'registry',
+      experience_enabled: 'experience',
+    }
+    const suggested = (recommendation.suggested_features || []).map((key) => featureMap[key]).filter(Boolean)
+    if (recommendation.registry_common === true) suggested.push('registry')
+    if (recommendation.festiome_common === 'true') suggested.push('festiome')
+    if (recommendation.program_common) suggested.push('experience')
+    setForm((current) => ({
+      ...current,
+      multiDay: recommendation.multi_day_common === 'default_on' ? true : current.multiDay,
+      features: new Set([...current.features, ...suggested]),
+    }))
+    notify(`Applied ${form.type} setup suggestions`)
   }
 
   return (
@@ -139,11 +178,12 @@ function WizardPhase({ onComplete, notify }) {
             <select className="rd-field" value={form.type} onChange={(e) => setForm({ ...form, type: e.target.value })}>
               {EVENT_TYPES.map((t) => <option key={t}>{t}</option>)}
             </select>
+            <button className="rr-link-btn" disabled={recommendationLoading || !recommendation} onClick={applyRecommendations}>{recommendationLoading ? 'Loading suggestions…' : `Apply ${form.type} suggestions`}</button>
           </div>
         </div>
         <div className="su-field-row">
           <div>
-            <label className="rd-field-label">Host / Organiser</label>
+            <label className="rd-field-label">{recommendation?.host_field_label || 'Host / Organiser'}</label>
             <input className="rd-field" value={form.host} placeholder="DevOps Clinics" onChange={(e) => setForm({ ...form, host: e.target.value })} />
           </div>
           <div>
@@ -246,6 +286,7 @@ function WizardPhase({ onComplete, notify }) {
                   menu_enabled: form.features.has('orders'),
                   logistics_enabled: form.features.has('logistics'),
                   registry_enabled: form.features.has('registry'),
+                  venue_access_enabled: form.features.has('access'),
                   festiome_addon_enabled: form.features.has('festiome'),
                   experience_enabled: form.features.has('experience'),
                   notify_email: form.channels.has('email'),
@@ -335,6 +376,8 @@ function GuidedSetupPhase({ eventId, notify }) {
     const value = (index) => fieldVals[`${stepId}-${index}`] || ''
     if (stepId === 'team') {
       if (!value(0)) throw new Error('Enter a team member email')
+      const account = await api.checkTeamEmail(value(0))
+      if (!account.exists && !window.confirm(`${value(0)} does not have a Festio account yet. Create and send the team invitation anyway?`)) return false
       const selectedRole = value(1) || 'Viewer'
       const orgMember = await api.inviteOrgMember(eventId, { email: value(0), role: selectedRole === 'Event manager' ? 'admin' : 'staff' })
       await api.assignMember(eventId, orgMember.user.id)
@@ -385,7 +428,8 @@ function GuidedSetupPhase({ eventId, notify }) {
     if (!eventId || busy) return
     setBusy(stepId)
     try {
-      await saveStepConfiguration(stepId)
+      const saved = await saveStepConfiguration(stepId)
+      if (saved === false) return
       await api.setSetupProgress(eventId, stepId, 'completed')
       setStepState(stepId, 'completed')
       notify(`${GUIDED_STEPS.find((s) => s.id === stepId)?.label || 'Step'} saved`)

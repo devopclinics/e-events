@@ -8,6 +8,26 @@ const HOME_SECTIONS = ['Feed', 'Guest Chat', 'Groups', 'Messages', 'Profile']
 
 const TYPE_ICON = { discussion: '#', announcement: '📣', staff: '🔒' }
 
+function listResponse(value) {
+  if (Array.isArray(value)) return value
+  return value?.items || value?.results || []
+}
+
+function adaptMessage(message, members = []) {
+  const reaction = (message.reactions || []).find((item) => item.emoji === '❤️')
+  const author = members.find((member) => member.id === message.author_member_id)
+  return {
+    ...message,
+    from: message.author_name || message.author?.display_name || 'Member',
+    text: message.body || '',
+    time: message.created_at ? new Date(message.created_at).toLocaleString() : '',
+    likes: reaction?.count || 0,
+    liked: !!reaction?.reacted_by_me,
+    mine: !!author?.is_me,
+    staff: ['owner', 'admin', 'moderator'].includes(author?.role),
+  }
+}
+
 export default function FestioMeRedesignPage() {
   const [eventId] = useCurrentEvent()
   const [homeSection, setHomeSection] = useState('Groups')
@@ -28,9 +48,10 @@ export default function FestioMeRedesignPage() {
   const [channelName, setChannelName] = useState('')
   const [channelKind, setChannelKind] = useState('discussion')
   const [channelPrivate, setChannelPrivate] = useState(false)
+  const [channelMemberIds, setChannelMemberIds] = useState([])
   const [editDraft, setEditDraft] = useState('')
   const [poll, setPoll] = useState({ question: '', first: '', second: '' })
-  const [preferences, setPreferences] = useState({ in_app: true, email: true, digest: false, muted: false })
+  const [preferences, setPreferences] = useState({ in_app: true, email: true, digest: 'daily', muted_channel_ids: [] })
   const [messageCursor, setMessageCursor] = useState('')
   const [attachments, setAttachments] = useState([])
   const [draft, setDraft] = useState('')
@@ -42,6 +63,11 @@ export default function FestioMeRedesignPage() {
   const [notifOpen, setNotifOpen] = useState(false)
   const [reportsOpen, setReportsOpen] = useState(false)
   const [manageMembersOpen, setManageMembersOpen] = useState(false)
+  const [channelRosterOpen, setChannelRosterOpen] = useState(false)
+  const [channelRoster, setChannelRoster] = useState([])
+  const [channelRosterBusy, setChannelRosterBusy] = useState('')
+  const [groupSettingsOpen, setGroupSettingsOpen] = useState(false)
+  const [groupSettings, setGroupSettings] = useState(null)
   const [editingId, setEditingId] = useState(null)
   const [toast, setToast] = useState('')
   const [confirmAction, setConfirmAction] = useState(null)
@@ -85,8 +111,8 @@ export default function FestioMeRedesignPage() {
     ]).then(([channelList, memberList, reportList, requestList]) => {
       setChannelsByGroup((current) => ({ ...current, [activeGroup]: channelList }))
       setMembers(memberList)
-      setReports(reportList)
-      setJoinRequests(requestList)
+      setReports(listResponse(reportList))
+      setJoinRequests(listResponse(requestList))
       setActive((current) => channelList.some((channel) => channel.id === current) ? current : channelList[0]?.id || '')
     }).catch((e) => setError(e.message || 'FestioMe group details could not be loaded'))
   }, [eventId, activeGroup, status?.enabled])
@@ -96,18 +122,13 @@ export default function FestioMeRedesignPage() {
     api.festiomeMessages(active)
       .then((result) => {
         setMessageCursor(result?.next_cursor || '')
-        setMessages((result.items || result.messages || result || []).map((message) => ({
-        ...message,
-        from: message.author?.display_name || message.author_name || message.from || 'Member',
-        text: message.body || message.text || '',
-        time: message.created_at ? new Date(message.created_at).toLocaleString() : '',
-        likes: message.reaction_count || message.likes || 0,
-        liked: !!message.viewer_reacted,
-        mine: !!message.is_mine,
-        })))
+        const listed = result.items || result.messages || result || []
+        setMessages(listed.map((message) => adaptMessage(message, members)))
+        const newest = listed[0]
+        if (newest?.id) api.festiomeRead(active, newest.id).catch(() => {})
       })
       .catch((e) => setError(e.message || 'Channel messages could not be loaded'))
-  }, [active])
+  }, [active, members])
 
   async function toggleLike(id) {
     const message = messages.find((item) => item.id === id)
@@ -124,6 +145,28 @@ export default function FestioMeRedesignPage() {
     return list
   }
 
+  async function openChannelRoster() {
+    if (!activeChannel?.is_private || activeChannel.is_dm) return
+    try {
+      setChannelRoster(await api.festiomeChannelMembers(activeChannel.id))
+      setChannelRosterOpen(true)
+    } catch (e) { setError(e.message || 'Private-channel members could not be loaded') }
+  }
+
+  async function toggleChannelMember(member) {
+    if (!activeChannel || channelRosterBusy || member.is_me) return
+    const enrolled = channelRoster.some((item) => item.id === member.id)
+    setChannelRosterBusy(member.id)
+    try {
+      if (enrolled) await api.festiomeRemoveChannelMember(activeChannel.id, member.id)
+      else await api.festiomeAddChannelMembers(activeChannel.id, [member.id])
+      setChannelRoster(await api.festiomeChannelMembers(activeChannel.id))
+      await refreshChannels()
+      notify(`${member.display_name} ${enrolled ? 'removed from' : 'added to'} #${activeChannel.name}`)
+    } catch (e) { setError(e.message || 'Channel access could not be updated') }
+    finally { setChannelRosterBusy('') }
+  }
+
   async function sendMessage() {
     if (!draft.trim() && !attachments.length) return
     try {
@@ -131,17 +174,14 @@ export default function FestioMeRedesignPage() {
       setDraft('')
       setAttachments([])
       const result = await api.festiomeMessages(active)
-      setMessages((result.items || result.messages || result || []).map((message) => ({
-        ...message, from: message.author?.display_name || message.author_name || 'Member',
-        text: message.body || '', time: message.created_at ? new Date(message.created_at).toLocaleString() : '',
-        likes: message.reaction_count || 0, liked: !!message.viewer_reacted, mine: !!message.is_mine,
-      })))
+      setMessages((result.items || result.messages || result || []).map((message) => adaptMessage(message, members)))
       notify('Message posted')
     } catch (e) { setError(e.message || 'Message could not be posted') }
   }
 
   const groupChannels = channelsByGroup[activeGroup] || []
   const activeChannel = groupChannels.find((c) => c.id === active) || groupChannels[0]
+  const canTransferOwnership = members.some((member) => member.is_me && member.role === 'owner')
 
   return (
     <RedesignShell topActive="festiome" withEventSidebar={false} eventScoped>
@@ -197,7 +237,7 @@ export default function FestioMeRedesignPage() {
         <div className="rd-panel" style={{ maxWidth: 420 }}>
           <div className="rd-panel-head"><h3>Your profile</h3></div>
           <div className="rd-panel-body">
-            <div className="fm-profile-row"><span className="fm-dm-avatar">D</span><div><strong>Event administrator</strong><span className="rd-rowlink">{groups.length} managed groups</span></div></div>
+            <div className="fm-profile-row"><span className="fm-dm-avatar">{(members.find((member) => member.is_me)?.display_name || '?')[0].toUpperCase()}</span><div><strong>{members.find((member) => member.is_me)?.display_name || 'Event administrator'}</strong><span className="rd-rowlink">{groups.length} managed groups</span></div></div>
             <button className="rr-btn secondary" style={{ width: '100%', justifyContent: 'center', marginTop: 12 }} onClick={async () => {
               try { setPreferences(await api.festiomeNotificationPreferences(activeGroup)); setNotifOpen(true) }
               catch (e) { setError(e.message || 'Notification preferences could not be loaded') }
@@ -242,12 +282,12 @@ export default function FestioMeRedesignPage() {
               <label className="rd-field-label">Group name</label>
               <input className="rd-field" placeholder="e.g. Photography Team" value={groupName} onChange={(e) => setGroupName(e.target.value)} />
               <label className="rd-field-label">Join policy</label>
-              <select className="rr-select" value={groupJoinPolicy} onChange={(e) => setGroupJoinPolicy(e.target.value)}><option value="open">Open</option><option value="request">Requires approval</option><option value="invite">Invite only</option></select>
+              <select className="rr-select" value={groupJoinPolicy} onChange={(e) => setGroupJoinPolicy(e.target.value)}><option value="open">Open</option><option value="request">Requires approval</option><option value="closed">Invite only</option></select>
               <div className="rd-row2" style={{ marginTop: 8 }}>
                 <button className="rr-btn secondary" style={{ flex: 1, justifyContent: 'center' }} onClick={() => setCreateGroupOpen(false)}>Cancel</button>
                 <button className="rr-btn primary" disabled={!groupName.trim()} style={{ flex: 1, justifyContent: 'center' }} onClick={async () => {
                   try {
-                    const created = await api.festiomeManageCreateGroup(eventId, { name: groupName.trim(), description: '', join_policy: groupJoinPolicy, visibility: 'private', rules: '' })
+                    const created = await api.festiomeManageCreateGroup(eventId, { name: groupName.trim(), description: '', join_policy: groupJoinPolicy, visibility: 'listed', rules: '' })
                     await loadGroups(created.id)
                     setGroupName('')
                     setCreateGroupOpen(false)
@@ -287,12 +327,16 @@ export default function FestioMeRedesignPage() {
                     <option value="discussion">Discussion</option><option value="announcement">Announcement</option><option value="staff">Staff</option>
                   </select>
                   <label className="gr-required-check" style={{ marginBottom: 6 }}><input type="checkbox" checked={channelPrivate} onChange={(e) => setChannelPrivate(e.target.checked)} /> Private (choose members)</label>
+                  {channelPrivate && <div className="fm-channel-member-picker">
+                    {members.map((member) => <label className="gr-required-check" key={member.id}><input type="checkbox" checked={channelMemberIds.includes(member.id)} onChange={(event) => setChannelMemberIds((current) => event.target.checked ? [...current, member.id] : current.filter((id) => id !== member.id))}/> {member.display_name || member.name}</label>)}
+                  </div>}
                   <button className="rr-btn primary" disabled={!channelName.trim()} style={{ width: '100%', justifyContent: 'center' }} onClick={async () => {
                     try {
-                      const created = await api.festiomeCreateChannel(activeGroup, { name: channelName.trim(), kind: channelKind, is_private: channelPrivate })
+                      const created = await api.festiomeCreateChannel(activeGroup, { name: channelName.trim(), kind: channelKind, is_private: channelPrivate, member_ids: channelPrivate ? channelMemberIds : [] })
                       await refreshChannels()
                       setActive(created.id)
                       setChannelName('')
+                      setChannelMemberIds([])
                       setCreateChannelOpen(false)
                       notify('Channel created')
                     } catch (e) { setError(e.message || 'Channel could not be created') }
@@ -300,22 +344,23 @@ export default function FestioMeRedesignPage() {
                 </div>
               )}
               {groupChannels.map((c) => (
-                <button key={c.id} className={`fm-channel ${active === c.id ? 'active' : ''}`} onClick={() => setActive(c.id)}>
-                  <span className="fm-channel-icon">{TYPE_ICON[c.type]}</span>
+                <button key={c.id} className={`fm-channel ${active === c.id ? 'active' : ''}`} onClick={() => { setActive(c.id); setChannelRosterOpen(false) }}>
+                  <span className="fm-channel-icon">{TYPE_ICON[c.kind] || '#'}</span>
                   <span>{c.name}</span>
-                  {c.private && <Icon name="lock" size={10} />}
-                  {c.unread > 0 && <b>{c.unread}</b>}
+                  {c.is_private && <Icon name="lock" size={10} />}
+                  {c.unread_count > 0 && <b>{c.unread_count}</b>}
                 </button>
               ))}
             </aside>
 
             <div className="rr-panel fm-thread">
               <div className="fm-thread-head">
-                <span>{TYPE_ICON[activeChannel?.type]} {activeChannel?.name}</span>
+                <span>{TYPE_ICON[activeChannel?.kind] || '#'} {activeChannel?.name}</span>
                 <div className="gr-actions">
                   <button className="rr-link-btn" onClick={() => setSearchOpen((v) => !v)}><Icon name="search" size={12} /> Search</button>
                   <span className="fm-connection"><i /> Live</span>
                   <button className="rr-link-btn" onClick={() => setManageMembersOpen((v) => !v)}>Members</button>
+                  {activeChannel?.is_private && !activeChannel?.is_dm && <button className="rr-link-btn" onClick={openChannelRoster}>Channel access</button>}
                   <span className="rd-rowlink">Channel settings are read-only (no update-channel contract).</span>
                 </div>
               </div>
@@ -332,24 +377,53 @@ export default function FestioMeRedesignPage() {
                   {members.map((m) => (
                     <div className="fm-manage-row" key={m.id}>
                       <span className="fm-dm-avatar">{(m.display_name || m.name || '?')[0]}</span><span>{m.display_name || m.name}</span>
-                      <select className="rr-select gr-inline-select" defaultValue={m.role} onChange={async (e) => {
+                      <select className="rr-select gr-inline-select" value={m.role} disabled={m.role === 'owner'} onChange={async (e) => {
                         try { await api.festiomeUpdateMember(activeGroup, m.id, { role: e.target.value }); setMembers(await api.festiomeMembers(activeGroup)); notify('Member role updated') }
                         catch (err) { setError(err.message || 'Member role could not be updated') }
                       }}>
-                        <option value="member">Member</option><option value="moderator">Moderator</option><option value="owner">Owner</option>
+                        {m.role === 'owner' && <option value="owner">Owner</option>}
+                        <option value="admin">Admin</option><option value="moderator">Moderator</option><option value="member">Member</option><option value="readonly">Read only</option>
                       </select>
-                      <button className="rr-link-btn gr-danger-link" onClick={() => setConfirmAction({
+                      {!m.is_me && <button className="rr-link-btn" onClick={async () => {
+                        try {
+                          const channel = await api.festiomeOpenDirectMessage(activeGroup, m.id)
+                          await refreshChannels()
+                          setActive(channel.id)
+                          setManageMembersOpen(false)
+                        } catch (e) { setError(e.message || 'Direct message could not be opened') }
+                      }}>Message</button>}
+                      {canTransferOwnership && !m.is_me && <button className="rr-link-btn" onClick={() => setConfirmAction({
+                        title: 'Transfer group ownership',
+                        message: `Make ${m.display_name || m.name} the owner of this group? Your role will become administrator.`,
+                        label: 'Transfer ownership',
+                        action: async () => { await api.festiomeTransferOwner(activeGroup, m.id); setMembers(await api.festiomeMembers(activeGroup)); notify('Group ownership transferred') },
+                      })}>Make owner</button>}
+                      {m.role !== 'owner' && <button className="rr-link-btn gr-danger-link" onClick={() => setConfirmAction({
                         title: 'Remove member', message: `Remove ${m.display_name || m.name} from this group?`, label: 'Remove',
                         action: async () => { await api.festiomeRemoveMember(activeGroup, m.id); setMembers(await api.festiomeMembers(activeGroup)); notify('Member removed') },
-                      })}>Remove</button>
+                      })}>Remove</button>}
                     </div>
                   ))}
+                </div>
+              )}
+              {channelRosterOpen && (
+                <div className="fm-manage-members">
+                  <div className="fm-rail-head">Private channel access</div>
+                  {members.map((member) => {
+                    const enrolled = channelRoster.some((item) => item.id === member.id)
+                    return <label className="fm-manage-row" key={member.id}>
+                      <input type="checkbox" checked={enrolled} disabled={member.is_me || !!channelRosterBusy} onChange={() => toggleChannelMember(member)} />
+                      <span>{member.display_name}</span>
+                      <small>{member.is_me ? 'Your access' : member.role}</small>
+                    </label>
+                  })}
+                  <button className="rr-link-btn" onClick={() => setChannelRosterOpen(false)}>Close channel access</button>
                 </div>
               )}
               {messageCursor && <button className="rr-link-btn fm-load-older" onClick={async () => {
                 try {
                   const result = await api.festiomeMessages(active, messageCursor)
-                  const older = (result.items || result.messages || []).map((message) => ({ ...message, from: message.author?.display_name || message.author_name || 'Member', text: message.body || '', time: message.created_at ? new Date(message.created_at).toLocaleString() : '', likes: message.reaction_count || 0, liked: !!message.viewer_reacted, mine: !!message.is_mine }))
+                  const older = (result.items || result.messages || []).map((message) => adaptMessage(message, members))
                   setMessages((current) => [...older, ...current])
                   setMessageCursor(result.next_cursor || '')
                 } catch (e) { setError(e.message || 'Older messages could not be loaded') }
@@ -371,6 +445,46 @@ export default function FestioMeRedesignPage() {
                           }}>Save</button>
                         </div>
                       ) : <p>{m.text}</p>}
+                      {!!m.attachments?.length && (
+                        <div className="fm-message-files">
+                          {m.attachments.map((file) => (
+                            <button
+                              type="button"
+                              className="fm-message-file"
+                              key={file.id || file.url}
+                              onClick={() => api.festiomeDownloadAttachment(file.url, file.filename).catch((e) => setError(e.message || 'Attachment could not be downloaded'))}
+                            >
+                              <Icon name="download" size={13} />
+                              <span>{file.filename || 'Attachment'}</span>
+                              <small>{file.size_bytes > 0 ? `${Math.ceil(file.size_bytes / 1024)} KB` : ''}</small>
+                            </button>
+                          ))}
+                        </div>
+                      )}
+                      {m.poll && (
+                        <div className="fm-message-poll">
+                          <strong>{m.poll.question}</strong>
+                          {m.poll.options?.map((option) => (
+                            <button
+                              type="button"
+                              className={option.voted_by_me ? 'selected' : ''}
+                              key={option.id}
+                              onClick={async () => {
+                                try {
+                                  await api.festiomeVotePoll(m.poll.id, option.id)
+                                  const result = await api.festiomeMessages(active)
+                                  setMessageCursor(result?.next_cursor || '')
+                                  setMessages(listResponse(result).map((message) => adaptMessage(message, members)))
+                                  notify('Vote recorded')
+                                } catch (e) { setError(e.message || 'Vote could not be recorded') }
+                              }}
+                            >
+                              <span>{option.label || option.text}</span>
+                              <small>{option.votes || 0}</small>
+                            </button>
+                          ))}
+                        </div>
+                      )}
                       <div className="fm-msg-actions">
                         <button className={`fm-like-btn ${m.liked ? 'liked' : ''}`} onClick={() => toggleLike(m.id)}>👍 {m.likes > 0 ? m.likes : ''}</button>
                         {m.mine ? (
@@ -412,7 +526,6 @@ export default function FestioMeRedesignPage() {
                   <input className="rd-field" placeholder="Option 1" value={poll.first} onChange={(e) => setPoll((v) => ({ ...v, first: e.target.value }))} style={{ marginBottom: 6 }} />
                   <input className="rd-field" placeholder="Option 2" value={poll.second} onChange={(e) => setPoll((v) => ({ ...v, second: e.target.value }))} style={{ marginBottom: 6 }} />
                   <div className="rd-row2">
-                    <label className="gr-required-check"><input type="checkbox" /> Schedule for later</label>
                     <button className="rr-btn primary" disabled={!poll.question.trim() || !poll.first.trim() || !poll.second.trim()} onClick={async () => {
                       try { await api.festiomeCreatePoll(active, { question: poll.question.trim(), options: [poll.first.trim(), poll.second.trim()] }); setPoll({ question: '', first: '', second: '' }); setPollOpen(false); notify('Poll posted') }
                       catch (e) { setError(e.message || 'Poll could not be posted') }
@@ -440,6 +553,26 @@ export default function FestioMeRedesignPage() {
               }}>
                 Rename group
               </button>
+              <button className="rr-btn secondary" style={{ width: '100%', justifyContent: 'center', marginTop: 8 }} onClick={() => {
+                const group = groups.find((item) => item.id === activeGroup)
+                setGroupSettings({
+                  description: group?.description || '',
+                  join_policy: group?.join_policy || 'request',
+                  visibility: group?.visibility || 'listed',
+                  rules: group?.rules || '',
+                })
+                setGroupSettingsOpen(true)
+              }}>Group settings</button>
+              <button className="rr-btn secondary" style={{ width: '100%', justifyContent: 'center', marginTop: 8 }} onClick={async () => {
+                const email = window.prompt('Email address to invite')
+                if (!email?.trim()) return
+                try {
+                  const invitation = await api.festiomeInvite(activeGroup, { email: email.trim(), role: 'member' })
+                  const url = `${window.location.origin}/festiome?invite=${encodeURIComponent(invitation.token)}`
+                  await navigator.clipboard.writeText(url)
+                  notify('Member invitation created and link copied')
+                } catch (e) { setError(e.message || 'Member invitation could not be created') }
+              }}>Invite member</button>
               <button className="rr-link-btn" style={{ marginTop: 8 }} onClick={() => setReportsOpen((v) => !v)}>Moderation reports ({reports.length})</button>
               <span className="rd-rowlink" style={{ marginTop: 6 }}>Event administrators cannot leave managed event groups.</span>
 
@@ -450,10 +583,10 @@ export default function FestioMeRedesignPage() {
                       <p>"{r.message?.body || r.text || r.message || ''}"</p>
                       <span className="rd-rowlink">{r.reason} · {r.status}</span>
                       <div className="gr-actions" style={{ marginTop: 6 }}>
-                        <button className="rr-link-btn" onClick={async () => { await api.festiomeUpdateReport(activeGroup, r.id, { status: 'resolved' }); setReports(await api.festiomeReports(activeGroup)); notify('Report resolved') }}>Dismiss</button>
+                        <button className="rr-link-btn" onClick={async () => { await api.festiomeUpdateReport(activeGroup, r.id, { status: 'dismissed' }); setReports(listResponse(await api.festiomeReports(activeGroup))); notify('Report dismissed') }}>Dismiss</button>
                         <button className="rr-link-btn gr-danger-link" disabled={!r.message_id && !r.message?.id} onClick={() => setConfirmAction({
                           title: 'Remove message', message: 'Remove this reported message from the channel?', label: 'Remove',
-                          action: async () => { await api.festiomeDeleteMessage(r.message_id || r.message.id); await api.festiomeUpdateReport(activeGroup, r.id, { status: 'resolved' }); setReports(await api.festiomeReports(activeGroup)); notify('Reported message removed') },
+                          action: async () => { await api.festiomeDeleteMessage(r.message_id || r.message.id); await api.festiomeUpdateReport(activeGroup, r.id, { status: 'resolved' }); setReports(listResponse(await api.festiomeReports(activeGroup))); notify('Reported message removed') },
                         })}>Remove message</button>
                       </div>
                     </div>
@@ -470,13 +603,66 @@ export default function FestioMeRedesignPage() {
           <div className="rr-panel fm-modal" onClick={(e) => e.stopPropagation()}>
             <div className="rd-panel-head"><h3>Notification preferences</h3></div>
             <div className="rd-panel-body">
-              {[['in_app', 'In-app notifications'], ['email', 'Email notifications'], ['digest', 'Daily digest instead of real-time'], ['muted', 'Mute this group']].map(([key, label]) => (
+              {[['in_app', 'In-app notifications'], ['email', 'Email notifications']].map(([key, label]) => (
                 <label key={key} className="gr-required-check" style={{ marginBottom: 8 }}><input type="checkbox" checked={!!preferences[key]} onChange={(e) => setPreferences((value) => ({ ...value, [key]: e.target.checked }))} /> {label}</label>
               ))}
+              <label className="rd-field-label">Digest frequency</label>
+              <select className="rd-field" value={preferences.digest || 'daily'} onChange={(event) => setPreferences((value) => ({ ...value, digest: event.target.value }))}><option value="immediate">Immediate</option><option value="daily">Daily digest</option><option value="weekly">Weekly digest</option><option value="none">No digest</option></select>
+              <label className="gr-required-check" style={{ marginBottom: 8 }}><input type="checkbox" checked={groupChannels.length > 0 && groupChannels.every((channel) => preferences.muted_channel_ids?.includes(channel.id))} onChange={(event) => setPreferences((value) => ({ ...value, muted_channel_ids: event.target.checked ? groupChannels.map((channel) => channel.id) : [] }))} /> Mute all channels in this group</label>
               <button className="rr-btn primary" style={{ width: '100%', justifyContent: 'center', marginTop: 12 }} onClick={async () => {
-                try { setPreferences(await api.festiomeSaveNotificationPreferences(activeGroup, preferences)); notify('Preferences saved'); setNotifOpen(false) }
+                try {
+                  setPreferences(await api.festiomeSaveNotificationPreferences(activeGroup, {
+                    in_app: !!preferences.in_app,
+                    email: !!preferences.email,
+                    digest: preferences.digest || 'daily',
+                    muted_channel_ids: preferences.muted_channel_ids || [],
+                  }))
+                  notify('Preferences saved'); setNotifOpen(false)
+                }
                 catch (e) { setError(e.message || 'Preferences could not be saved') }
               }}>Save</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {groupSettingsOpen && groupSettings && (
+        <div className="fm-modal-backdrop" onClick={() => setGroupSettingsOpen(false)}>
+          <div className="rr-panel fm-modal" onClick={(e) => e.stopPropagation()}>
+            <div className="rd-panel-head"><h3>Group settings</h3></div>
+            <div className="rd-panel-body">
+              <label className="rd-field-label">Description</label>
+              <textarea className="rr-textarea" value={groupSettings.description} onChange={(event) => setGroupSettings((value) => ({ ...value, description: event.target.value }))}/>
+              <div className="rd-row2">
+                <div><label className="rd-field-label">Join policy</label><select className="rd-field" value={groupSettings.join_policy} onChange={(event) => setGroupSettings((value) => ({ ...value, join_policy: event.target.value }))}><option value="open">Open</option><option value="request">Requires approval</option><option value="closed">Invite only</option></select></div>
+                <div><label className="rd-field-label">Visibility</label><select className="rd-field" value={groupSettings.visibility} onChange={(event) => setGroupSettings((value) => ({ ...value, visibility: event.target.value }))}><option value="listed">Listed</option><option value="unlisted">Unlisted</option></select></div>
+              </div>
+              <label className="rd-field-label">Community rules</label>
+              <textarea className="rr-textarea" value={groupSettings.rules} onChange={(event) => setGroupSettings((value) => ({ ...value, rules: event.target.value }))}/>
+              <div className="rd-row2">
+                <button className="rr-btn secondary" onClick={() => setGroupSettingsOpen(false)}>Cancel</button>
+                <button className="rr-btn primary" onClick={async () => {
+                  try {
+                    await api.festiomeManageUpdateGroup(eventId, activeGroup, groupSettings)
+                    await loadGroups(activeGroup)
+                    setGroupSettingsOpen(false)
+                    notify('Group settings saved')
+                  } catch (e) { setError(e.message || 'Group settings could not be saved') }
+                }}>Save settings</button>
+              </div>
+              <button className="rr-link-btn gr-danger-link" style={{ marginTop: 12 }} onClick={() => setConfirmAction({
+                title: 'Archive group',
+                message: `Archive ${groups.find((item) => item.id === activeGroup)?.name || 'this group'}? Members will no longer see it.`,
+                label: 'Archive',
+                action: async () => {
+                  await api.festiomeManageUpdateGroup(eventId, activeGroup, { archived: true })
+                  setGroupSettingsOpen(false)
+                  const listed = await api.festiomeManageGroups(eventId)
+                  setGroups(listed)
+                  setActiveGroup(listed[0]?.id || '')
+                  notify('Group archived')
+                },
+              })}>Archive group</button>
             </div>
           </div>
         </div>

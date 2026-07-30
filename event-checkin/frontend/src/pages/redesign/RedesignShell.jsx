@@ -115,6 +115,7 @@ export function Icon({ name, size = 18, className }) {
     trend: <><path d="m3 17 6-6 4 4 8-9"/><path d="M15 6h6v6"/></>,
     external: <><path d="M15 3h6v6M10 14 21 3"/><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/></>,
     upload: <><path d="M12 3v12"/><path d="m7 8 5-5 5 5"/><path d="M5 21h14"/></>,
+    download: <><path d="M12 3v12"/><path d="m7 10 5 5 5-5"/><path d="M5 21h14"/></>,
     cloud: <><path d="M17 8V6a4 4 0 0 0-4-4h-1a4 4 0 0 0-4 4v2"/><rect x="3" y="8" width="18" height="13" rx="2"/><path d="M8 12h8M8 16h5"/></>,
     api: <><path d="m18 16 4-4-4-4"/><path d="m6 8-4 4 4 4"/><path d="m14.5 4-5 16"/></>,
     whatsapp: <path d="M21 11.5a8.5 8.5 0 0 1-12.4 7.4L3 20l1.2-5.4A8.5 8.5 0 1 1 21 11.5Z"/>,

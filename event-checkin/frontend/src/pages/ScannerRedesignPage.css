@@ -75,6 +75,8 @@
 .sc-result-info strong { display: block; font-size: 1rem; font-weight: 700; }
 .sc-result-info p { margin: 2px 0 0; font-size: 0.85rem; opacity: 0.85; }
 .sc-result-guest { margin-top: 6px; font-size: 0.82rem; font-weight: 600; }
+.sc-experience-steps { display: grid; gap: 8px; margin-top: 14px; padding-top: 12px; border-top: 1px solid currentColor; }
+.sc-experience-step { display: flex; align-items: center; justify-content: space-between; gap: 10px; font-size: 0.8rem; }
 
 /* Manual search */
 .sc-manual { display: flex; flex-direction: column; gap: 12px; }

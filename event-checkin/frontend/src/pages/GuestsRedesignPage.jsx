@@ -35,8 +35,9 @@ function adaptGuest(g) {
   const name = [g.first_name, g.last_name].filter(Boolean).join(' ') || g.email || g.phone || 'Unnamed guest'
   const initials = (g.first_name?.[0] || '') + (g.last_name?.[0] || '') || name.slice(0, 2).toUpperCase()
   function channelState(sentAt, status) {
-    if (status === 'failed') return 'fail'
-    if (sentAt) return 'ok'
+    const normalized = String(status || '').toLowerCase()
+    if (['failed', 'rejected', 'undelivered', 'expired'].includes(normalized)) return 'fail'
+    if (sentAt || ['sent', 'submitted', 'delivered', 'read', 'queued'].includes(normalized)) return 'ok'
     return 'dash'
   }
   return {
@@ -54,10 +55,10 @@ function adaptGuest(g) {
     qr: !!g.qr_generated_at,
     invited: g.invite_sent_at ? new Date(g.invite_sent_at).toLocaleDateString(undefined, { month: 'short', day: 'numeric' }) : '—',
     channels: {
-      email: channelState(g.invite_sent_at, g.invite_status),
-      sms: channelState(g.invite_sent_at, g.invite_status),
-      whatsapp: 'dash',
-      mms: 'dash',
+      email: channelState(g.email_delivery_at, g.email_delivery_status),
+      sms: channelState(g.sms_delivery_at, g.sms_delivery_status),
+      whatsapp: channelState(g.whatsapp_delivery_at, g.whatsapp_delivery_status),
+      mms: channelState(g.mms_delivery_at, g.mms_delivery_status),
     },
     rsvp: g.rsvp_status ? g.rsvp_status.charAt(0).toUpperCase() + g.rsvp_status.slice(1) : 'Pending',
     admitted: !!g.admitted,
@@ -120,11 +121,22 @@ function StatTile({ s }) {
   )
 }
 
-function RowMenu({ g, notify, onView, onEdit, onRemove }) {
+function RowMenu({ g, eventId, notify, onView, onEdit, onRemove, onSendInvite }) {
   const [open, setOpen] = useState(false)
   const actions = [
     ['View', () => onView(g)],
     ['Edit', () => onEdit(g)],
+    ['Open QR', () => window.open(api.guestQrUrl(eventId, g.id), '_blank', 'noopener,noreferrer')],
+    ['Copy invite link', async () => {
+      try {
+        const { invite_url: inviteUrl } = await api.ensureInviteToken(eventId, g.id)
+        await navigator.clipboard.writeText(inviteUrl)
+        notify(`Invite link copied for ${g.name}`)
+      } catch (error) {
+        notify(error.message || 'Invite link could not be generated', true)
+      }
+    }],
+    ['Send invite', () => onSendInvite(g.id)],
     ['Remove', () => onRemove(g)],
   ]
   return (
@@ -269,9 +281,9 @@ function GuestsTab({ notify, onView, onEdit, onRemove, onApproveRsvp, onRejectRs
                   <small className="rd-rowlink">{g.email || '—'} · {g.group}</small>
                 </div>
                 <div className="gr-approval-answers">
-                  {rsvpQuestions.slice(0, 2).map((rq) => (
-                    <span key={rq.q} className="gr-approval-answer-pill" title={rq.q}>—</span>
-                  ))}
+                  {rsvpQuestions.length > 0 && (
+                    <button className="rr-link-btn" onClick={() => onView(g)}>View answers</button>
+                  )}
                 </div>
                 <div className="gr-approval-btns">
                   <button className="rr-btn primary" style={{ fontSize: '0.78rem', padding: '4px 12px' }} onClick={() => onApproveRsvp && onApproveRsvp(g)}>Approve</button>
@@ -408,7 +420,7 @@ function GuestsTab({ notify, onView, onEdit, onRemove, onApproveRsvp, onRejectRs
                       ? <span className="rd-status-chip ok"><Icon name="check" size={11} /> Admitted</span>
                       : <span className="rd-status-chip warn">Not yet</span>}
                   </td>
-                  <td className="rd-rowlink"><RowMenu g={g} notify={notify} onView={onView} onEdit={onEdit} onRemove={onRemove} /></td>
+                  <td className="rd-rowlink"><RowMenu g={g} eventId={eventId} notify={notify} onView={onView} onEdit={onEdit} onRemove={onRemove} onSendInvite={(guestId) => onSendSelected?.([guestId])} /></td>
                 </tr>
               ))}
               {filtered.length === 0 && (
@@ -477,18 +489,17 @@ const INVITE_THEMES = [
   { id: 'midnight', label: 'Midnight' },
   { id: 'forest', label: 'Forest' },
 ]
-const CATEGORY_LIMITS = [
-  { category: 'Family', max: 4, submitterTable: 'Same as submitter', invitedTable: 'Family — Bride' },
-  { category: 'Friends', max: 2, submitterTable: 'Same as submitter', invitedTable: 'Friends — Bride' },
-  { category: 'Colleagues', max: 1, submitterTable: 'Same as submitter', invitedTable: 'Colleagues' },
-]
-
-function QuestionForm({ notify, onDone, onSave }) {
-  const [type, setType] = useState(QUESTION_TYPES[0])
+function QuestionForm({ notify, onDone, onSave, question = null }) {
+  const [type, setType] = useState(question?.type || QUESTION_TYPES[0])
   const [preset, setPreset] = useState(PRESET_QUESTIONS[0])
-  const [text, setText] = useState('')
-  const [options, setOptions] = useState('')
-  const [required, setRequired] = useState(false)
+  const [text, setText] = useState(question?.q || '')
+  const [options, setOptions] = useState(() => {
+    const value = question?.raw?.options
+    if (Array.isArray(value)) return value.join('\n')
+    if (!value) return ''
+    try { return JSON.parse(value).join('\n') } catch { return String(value) }
+  })
+  const [required, setRequired] = useState(!!question?.required)
 
   return (
     <div className="gr-question-form">
@@ -518,17 +529,19 @@ function QuestionForm({ notify, onDone, onSave }) {
       <div className="rd-row2" style={{ marginTop: 8 }}>
         <button className="rr-btn secondary" style={{ flex: 1, justifyContent: 'center' }} onClick={onDone}>Cancel</button>
         <button className="rr-btn primary" style={{ flex: 1, justifyContent: 'center' }} onClick={async () => {
-          const question = (text || (preset !== PRESET_QUESTIONS[0] ? preset : '')).trim()
-          if (!question) return
+          const questionText = (text || (preset !== PRESET_QUESTIONS[0] ? preset : '')).trim()
+          if (!questionText) return
           try {
             await onSave({
-              question,
+              question: questionText,
               question_type: type === 'Yes / No' ? 'boolean' : type === 'Multiple choice' ? 'select' : 'text',
-              options: type === 'Multiple choice' ? options : null,
+              options: type === 'Multiple choice'
+                ? JSON.stringify(options.split('\n').map((value) => value.trim()).filter(Boolean))
+                : null,
               is_required: required,
               sort_order: 0,
             })
-            notify(`Question added: "${question}"`)
+            notify(`Question ${question ? 'updated' : 'added'}: "${questionText}"`)
             onDone()
           } catch (e) {
             notify(e.message || 'Question could not be saved', true)
@@ -539,8 +552,10 @@ function QuestionForm({ notify, onDone, onSave }) {
   )
 }
 
-function ManualInvitePanel({ notify }) {
+function ManualInvitePanel({ eventId, notify }) {
   const [rows, setRows] = useState([{ name: '', contact: '', email: true, sms: false, whatsapp: false }])
+  const [sending, setSending] = useState(false)
+  const [result, setResult] = useState(null)
 
   function updateRow(i, patch) {
     setRows((prev) => prev.map((r, idx) => (idx === i ? { ...r, ...patch } : r)))
@@ -550,9 +565,34 @@ function ManualInvitePanel({ notify }) {
     setRows((prev) => [...prev, { name: '', contact: '', email: true, sms: false, whatsapp: false }])
   }
 
-  function send() {
-    const named = rows.filter((r) => r.name.trim())
-    notify(named.length ? 'Outbound invitation sends remain on the legacy interface during Stage B' : 'Add at least one name before sending', !!named.length)
+  async function send() {
+    const valid = rows.filter((r) => r.name.trim() && r.contact.trim() && ['email', 'sms', 'whatsapp'].some((channel) => r[channel]))
+    if (!valid.length) return notify('Add a name, contact, and at least one channel', true)
+    if (!window.confirm(`Send invitations to ${valid.length} recipient${valid.length === 1 ? '' : 's'}?`)) return
+    const batches = new Map()
+    for (const row of valid) {
+      const channels = ['email', 'sms', 'whatsapp'].filter((channel) => row[channel])
+      const key = channels.join(',')
+      const contact = row.contact.trim()
+      const recipient = { name: row.name.trim(), ...(contact.includes('@') ? { email: contact } : { phone: contact }) }
+      const batch = batches.get(key) || { channels, recipients: [] }
+      batch.recipients.push(recipient)
+      batches.set(key, batch)
+    }
+    setSending(true); setResult(null)
+    try {
+      const responses = await Promise.all([...batches.values()].map((batch) => api.sendManualInvites(eventId, batch)))
+      const sent = responses.reduce((sum, response) => sum + Number(response.sent || 0), 0)
+      const skipped = responses.reduce((sum, response) => sum + Number(response.skipped || 0), 0)
+      const errors = responses.flatMap((response) => response.errors || [])
+      setResult({ sent, skipped, errors })
+      if (sent) setRows([{ name: '', contact: '', email: true, sms: false, whatsapp: false }])
+      notify(`${sent} manual invitation${sent === 1 ? '' : 's'} sent${skipped ? ` · ${skipped} skipped` : ''}`, errors.length > 0)
+    } catch (e) {
+      notify(e.message || 'Manual invitations could not be sent', true)
+    } finally {
+      setSending(false)
+    }
   }
 
   return (
@@ -571,13 +611,19 @@ function ManualInvitePanel({ notify }) {
           </div>
         ))}
         <button className="rr-link-btn" onClick={addRow}><Icon name="plus" size={12} /> Add another</button>
-        <button className="rr-btn primary" style={{ width: '100%', justifyContent: 'center', marginTop: 12 }} onClick={send}>Send invitations</button>
+        {result && (
+          <div className="rd-hint" role="status">
+            Sent: {result.sent} · Skipped: {result.skipped}
+            {result.errors.length > 0 && <div className="rp-field-error">{result.errors.join(', ')}</div>}
+          </div>
+        )}
+        <button disabled={sending} className="rr-btn primary" style={{ width: '100%', justifyContent: 'center', marginTop: 12 }} onClick={send}>{sending ? 'Sending…' : 'Send invitations'}</button>
       </div>
     </div>
   )
 }
 
-function InviteTab({ notify, onSendInvites, onSendGuests, onPreviewInvite, eventId, event, guests, rsvpQuestions, onQuestionsChanged, onEventChanged }) {
+function InviteTab({ notify, onSendInvites, onSendGuests, onPreviewInvite, eventId, event, guests, tableCategories, rsvpQuestions, onQuestionsChanged, onEventChanged }) {
   const navigate = useNavigate()
   const [rsvpEnabled, setRsvpEnabled] = useState(true)
   const [mode, setMode] = useState('open')
@@ -592,6 +638,10 @@ function InviteTab({ notify, onSendInvites, onSendGuests, onPreviewInvite, event
   const [additionalEmail, setAdditionalEmail] = useState('optional')
   const [additionalPhone, setAdditionalPhone] = useState('dontask')
   const [addingQuestion, setAddingQuestion] = useState(false)
+  const [editingQuestion, setEditingQuestion] = useState(null)
+  const [categoryLimits, setCategoryLimits] = useState({})
+  const [categorySeating, setCategorySeating] = useState({})
+  const [newCategory, setNewCategory] = useState('')
   const [deadline, setDeadline] = useState('')
   const [capacity, setCapacity] = useState('')
   const [inviteMessage, setInviteMessage] = useState('')
@@ -656,6 +706,8 @@ function InviteTab({ notify, onSendInvites, onSendGuests, onPreviewInvite, event
     setDeadline(event.rsvp_deadline ? String(event.rsvp_deadline).slice(0, 10) : '')
     setCapacity(event.rsvp_capacity ?? '')
     setInviteMessage(event.invite_message || '')
+    setCategoryLimits(event.rsvp_multi_invitee_limit_rules || {})
+    setCategorySeating(event.rsvp_category_seating_rules || {})
   }, [event])
 
   function copyLink() {
@@ -678,6 +730,8 @@ function InviteTab({ notify, onSendInvites, onSendGuests, onPreviewInvite, event
         rsvp_allow_duplicate_emails: sameEmail,
         rsvp_multi_invitee_enabled: multiInvitee,
         rsvp_multi_invitee_limit: Math.max(1, Number(maxInvitees) || 1),
+        rsvp_multi_invitee_limit_rules: Object.keys(categoryLimits).length ? categoryLimits : null,
+        rsvp_category_seating_rules: Object.keys(categorySeating).length ? categorySeating : null,
         rsvp_collect_email: submitterEmail !== 'dontask',
         rsvp_email_required: submitterEmail === 'required',
         rsvp_invitee_email_required: additionalEmail === 'required',
@@ -896,27 +950,47 @@ function InviteTab({ notify, onSendInvites, onSendGuests, onPreviewInvite, event
             <>
               <label className="rd-field-label" style={{ marginTop: 10 }}>Default max invitees per RSVP</label>
               <input className="rd-field" type="number" value={maxInvitees} onChange={(e) => setMaxInvitees(e.target.value)} style={{ maxWidth: 140 }} />
-              <label className="rd-field-label" style={{ marginTop: 10 }}>Category invitee limits &amp; table mapping</label>
-              <table className="rr-table">
-                <thead><tr><th>Category</th><th>Max invitees</th><th>Submitter table</th><th>Invited-guests table</th></tr></thead>
-                <tbody>
-                  {CATEGORY_LIMITS.map((c) => (
-                    <tr key={c.category}>
-                      <td>{c.category}</td>
-                      <td>{c.max}</td>
-                      <td className="rd-rowlink">{c.submitterTable}</td>
-                      <td className="rd-rowlink">{c.invitedTable}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+              <label className="rd-field-label" style={{ marginTop: 10 }}>Category invitee limits &amp; table-category mapping</label>
+              {Object.keys(categoryLimits).length > 0 ? (
+                <table className="rr-table">
+                  <thead><tr><th>Category</th><th>Max</th><th>Submitter group</th><th>Invited-guest group</th><th /></tr></thead>
+                  <tbody>
+                    {Object.entries(categoryLimits).map(([category, max]) => (
+                      <tr key={category}>
+                        <td>{category}</td>
+                        <td><input aria-label={`${category} maximum invitees`} className="rd-field" type="number" min="0" max="100" value={max} onChange={(e) => setCategoryLimits((prev) => ({ ...prev, [category]: Math.max(0, Math.min(100, Number(e.target.value) || 0)) }))} /></td>
+                        {['submitter', 'invitee'].map((kind) => (
+                          <td key={kind}>
+                            <select aria-label={`${category} ${kind} table category`} className="rr-select" value={categorySeating[category]?.[kind] || ''} onChange={(e) => setCategorySeating((prev) => ({ ...prev, [category]: { ...(prev[category] || {}), [kind]: e.target.value || null } }))}>
+                              <option value="">{kind === 'submitter' ? 'Same as assigned' : 'No automatic group'}</option>
+                              {tableCategories.map((categoryName) => <option key={categoryName} value={categoryName}>{categoryName}</option>)}
+                            </select>
+                          </td>
+                        ))}
+                        <td><button className="rr-link-btn gr-danger-link" onClick={() => {
+                          setCategoryLimits((prev) => Object.fromEntries(Object.entries(prev).filter(([key]) => key !== category)))
+                          setCategorySeating((prev) => Object.fromEntries(Object.entries(prev).filter(([key]) => key !== category)))
+                        }}>Remove</button></td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              ) : <div className="rd-hint">No category-specific rules. The default maximum applies to everyone.</div>}
+              <div className="rd-row2" style={{ marginTop: 8 }}>
+                <input className="rd-field" value={newCategory} placeholder="Category name" onChange={(e) => setNewCategory(e.target.value)} />
+                <button className="rr-btn secondary" disabled={!newCategory.trim()} onClick={() => {
+                  const category = newCategory.trim()
+                  setCategoryLimits((prev) => ({ ...prev, [category]: Math.max(1, Number(maxInvitees) || 1) }))
+                  setNewCategory('')
+                }}><Icon name="plus" size={12} /> Add category</button>
+              </div>
             </>
           )}
         </div>
       </div>
       )}
 
-      <ManualInvitePanel notify={notify} />
+      <ManualInvitePanel eventId={eventId} notify={notify} />
 
       <div className="rr-section-title">
         <div><h2>Custom RSVP questions</h2><p>Ask guests anything extra when they confirm</p></div>
@@ -926,6 +1000,7 @@ function InviteTab({ notify, onSendInvites, onSendGuests, onPreviewInvite, event
       <div className="rr-panel" style={{ maxWidth: 620 }}>
         <div className="rd-panel-body" style={{ paddingTop: 16 }}>
           {addingQuestion && <QuestionForm notify={notify} onDone={() => setAddingQuestion(false)} onSave={(data) => api.createRSVPQuestion(eventId, data).then(onQuestionsChanged)} />}
+          {editingQuestion && <QuestionForm question={editingQuestion} notify={notify} onDone={() => setEditingQuestion(null)} onSave={(data) => api.updateRSVPQuestion(eventId, editingQuestion.id, { ...data, sort_order: editingQuestion.raw.sort_order }).then(onQuestionsChanged)} />}
           {rsvpQuestions.map((rq, i) => (
             <div className="gr-question-row" key={rq.id || rq.q}>
               <div className="gr-question-text">
@@ -933,6 +1008,7 @@ function InviteTab({ notify, onSendInvites, onSendGuests, onPreviewInvite, event
                 <span>{rq.type}{rq.required ? ' · Required' : ''}</span>
               </div>
               <div className="gr-question-actions">
+                <button className="rr-link-btn" onClick={() => { setAddingQuestion(false); setEditingQuestion(rq) }}>Edit</button>
                 <button className="rr-link-btn gr-danger-link" onClick={async () => {
                   try {
                     await api.deleteRSVPQuestion(eventId, rq.id)
@@ -970,6 +1046,8 @@ export default function GuestsRedesignPage() {
   const [addOpen, setAddOpen] = useState(false)
   const [editTarget, setEditTarget] = useState(null)
   const [viewTarget, setViewTarget] = useState(null)
+  const [editAnswers, setEditAnswers] = useState(null)
+  const [viewAnswers, setViewAnswers] = useState(null)
   const openedGuestRef = useRef('')
   const [removeTarget, setRemoveTarget] = useState(null)
   const [addForm, setAddForm] = useState({ first: '', last: '', email: '', phone: '', vip: false, sendInvite: false })
@@ -1040,7 +1118,7 @@ export default function GuestsRedesignPage() {
   }, [eventError])
 
   useEffect(() => {
-    if (!editTarget) return
+    if (!editTarget) { setEditAnswers(null); return }
     setEditForm({
       first_name: editTarget.raw.first_name || '',
       last_name: editTarget.raw.last_name || '',
@@ -1051,7 +1129,23 @@ export default function GuestsRedesignPage() {
       seat_number: editTarget.raw.seat_number || '',
       messaging_consent: !!editTarget.raw.sms_consent && !!editTarget.raw.whatsapp_consent,
     })
-  }, [editTarget])
+    let alive = true
+    setEditAnswers(null)
+    api.guestRsvpAnswers(eventId, editTarget.id)
+      .then((answers) => { if (alive) setEditAnswers(answers) })
+      .catch(() => { if (alive) setEditAnswers([]) })
+    return () => { alive = false }
+  }, [editTarget, eventId])
+
+  useEffect(() => {
+    if (!viewTarget) { setViewAnswers(null); return }
+    let alive = true
+    setViewAnswers(null)
+    api.guestRsvpAnswers(eventId, viewTarget.id)
+      .then((answers) => { if (alive) setViewAnswers(answers) })
+      .catch(() => { if (alive) setViewAnswers([]) })
+    return () => { alive = false }
+  }, [viewTarget, eventId])
 
   useEffect(() => {
     const guestId = searchParams.get('guest') || ''
@@ -1166,7 +1260,7 @@ export default function GuestsRedesignPage() {
           try { await api.bulkAssignTableGroup(eventId, guestIds, tableGroupId); await loadGuests(); notify('Table-group assignment updated') }
           catch (e) { notify(e.message || 'Table-group assignment could not be updated', true) }
         }} rsvpQuestions={rsvpQuestions} stats={stats} />
-        : <InviteTab notify={notify} eventId={eventId} event={event} guests={guests} rsvpQuestions={rsvpQuestions} onQuestionsChanged={loadQuestions} onEventChanged={loadEvent} onSendInvites={(count) => { setSendGuestIds([]); setSendResult(null); setSendCount(count); setSendStep('audience') }} onSendGuests={(ids) => { setSendGuestIds(ids); setSendResult(null); setSendCount(ids.length); setSendStep('audience') }} onPreviewInvite={() => { setInvitePreviewCh('email'); setInvitePreviewOpen(true) }} />}
+        : <InviteTab notify={notify} eventId={eventId} event={event} guests={guests} tableCategories={[...new Set(tables.map((table) => String(table.category || '').trim()).filter(Boolean))]} rsvpQuestions={rsvpQuestions} onQuestionsChanged={loadQuestions} onEventChanged={loadEvent} onSendInvites={(count) => { setSendGuestIds([]); setSendResult(null); setSendCount(count); setSendStep('audience') }} onSendGuests={(ids) => { setSendGuestIds(ids); setSendResult(null); setSendCount(ids.length); setSendStep('audience') }} onPreviewInvite={() => { setInvitePreviewCh('email'); setInvitePreviewOpen(true) }} />}
 
       {toast && <div className="rd-toast" style={toast.error ? { background: 'var(--danger)' } : undefined}><Icon name={toast.error ? 'info' : 'check'} />{toast.message}</div>}
 
@@ -1233,9 +1327,13 @@ export default function GuestsRedesignPage() {
             {rsvpQuestions.length > 0 && (
               <div className="gr-rsvp-answers">
                 <strong className="rd-field-label">RSVP answers (read-only)</strong>
-                {rsvpQuestions.map((rq) => (
-                  <div key={rq.q} className="gr-rsvp-answer-row"><span className="gr-rsvp-q">{rq.q}</span><span className="gr-rsvp-a">Pending</span></div>
-                ))}
+                {editAnswers === null
+                  ? <div className="rd-hint">Loading answers…</div>
+                  : editAnswers.length === 0
+                    ? <div className="rd-hint">No custom questions answered.</div>
+                    : editAnswers.map((answer, index) => (
+                      <div key={`${answer.question}-${index}`} className="gr-rsvp-answer-row"><span className="gr-rsvp-q">{answer.question}</span><span className="gr-rsvp-a">{answer.answer || '—'}</span></div>
+                    ))}
               </div>
             )}
             <div className="rd-row2" style={{ marginTop: 4 }}>
@@ -1286,6 +1384,16 @@ export default function GuestsRedesignPage() {
                 <span style={{ color: 'var(--rr-text)', fontWeight: 500 }}>{v}</span>
               </div>
             ))}
+            <div style={{ paddingTop: 10 }}>
+              <strong className="rd-field-label">RSVP answers</strong>
+              {viewAnswers === null
+                ? <div className="rd-hint">Loading answers…</div>
+                : viewAnswers.length === 0
+                  ? <div className="rd-hint">No custom questions answered.</div>
+                  : viewAnswers.map((answer, index) => (
+                    <div key={`${answer.question}-${index}`} className="gr-rsvp-answer-row"><span className="gr-rsvp-q">{answer.question}</span><span className="gr-rsvp-a">{answer.answer || '—'}</span></div>
+                  ))}
+            </div>
           </div>
         </Modal>
       )}

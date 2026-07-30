@@ -182,7 +182,11 @@ function OrgCollections({ notify }) {
   const [expandedList, setExpandedList] = useState(null)
   const [listName, setListName] = useState('')
   const [contactForm, setContactForm] = useState({ first_name: '', last_name: '', email: '' })
+  const [pasteText, setPasteText] = useState('')
+  const [pasteOpen, setPasteOpen] = useState(false)
   const [calendarForm, setCalendarForm] = useState(null)
+  const [calendarManage, setCalendarManage] = useState(null)
+  const [orgEvents, setOrgEvents] = useState([])
   const [deleteTarget, setDeleteTarget] = useState(null)
 
   async function load() {
@@ -199,6 +203,26 @@ function OrgCollections({ notify }) {
       try { const next = await api.listContacts(id); setContacts((v) => ({ ...v, [id]: next })) }
       catch (e) { notify(e.message || 'Contacts could not be loaded', true) }
     }
+  }
+
+  async function refreshContacts(listId) {
+    const next = await api.listContacts(listId)
+    setContacts((value) => ({ ...value, [listId]: next }))
+    await load()
+  }
+
+  async function manageCalendar(calendarId) {
+    try {
+      const [calendar, events] = await Promise.all([api.getCalendar(calendarId), api.listEvents()])
+      setCalendarManage(calendar); setOrgEvents(events)
+    } catch (error) { notify(error.message || 'Calendar details could not be loaded', true) }
+  }
+
+  async function refreshManagedCalendar() {
+    if (!calendarManage) return
+    const next = await api.getCalendar(calendarManage.id)
+    setCalendarManage(next)
+    await load()
   }
 
   return <>
@@ -219,17 +243,103 @@ function OrgCollections({ notify }) {
               catch (e) { notify(e.message || 'Contact could not be removed', true) }
             }}>Remove</button></td></tr>)}</tbody></table>
             <div className="rd-row2" style={{ marginTop: 8 }}><input className="rd-field" placeholder="First name" value={contactForm.first_name} onChange={(e) => setContactForm((v) => ({ ...v, first_name: e.target.value }))} /><input className="rd-field" placeholder="Last name" value={contactForm.last_name} onChange={(e) => setContactForm((v) => ({ ...v, last_name: e.target.value }))} /><input className="rd-field" type="email" placeholder="Email" value={contactForm.email} onChange={(e) => setContactForm((v) => ({ ...v, email: e.target.value }))} /><button className="rr-btn secondary" disabled={!contactForm.first_name || !contactForm.email} onClick={async () => {
-              try { await api.addContact(list.id, contactForm); setContactForm({ first_name: '', last_name: '', email: '' }); const next = await api.listContacts(list.id); setContacts((v) => ({ ...v, [list.id]: next })); await load(); notify('Contact added') }
+              try { await api.addContact(list.id, contactForm); setContactForm({ first_name: '', last_name: '', email: '' }); await refreshContacts(list.id); notify('Contact added') }
               catch (e) { notify(e.message || 'Contact could not be added', true) }
             }}>Add</button></div>
+            <div className="rd-row2" style={{ marginTop: 8 }}>
+              <button className="rr-link-btn" onClick={() => setPasteOpen((value) => !value)}>{pasteOpen ? 'Hide paste box' : 'Paste multiple contacts'}</button>
+              <label className="rr-link-btn" style={{ cursor: 'pointer' }}>Upload CSV
+                <input hidden type="file" accept=".csv,.xlsx" onChange={async (event) => {
+                  const file = event.target.files?.[0]; event.target.value = ''
+                  if (!file) return
+                  try {
+                    const added = await api.importContactsCsv(list.id, file)
+                    await refreshContacts(list.id)
+                    notify(`Imported ${added.length} contact${added.length === 1 ? '' : 's'}`)
+                  } catch (error) { notify(error.message || 'Contact import failed', true) }
+                }}/>
+              </label>
+            </div>
+            {pasteOpen && <div style={{ marginTop: 8 }}><textarea className="rr-textarea" rows={4} value={pasteText} placeholder={'One per line: Name, email@example.com'} onChange={(event) => setPasteText(event.target.value)}/><button className="rr-btn secondary" disabled={!pasteText.trim()} onClick={async () => {
+              try {
+                await api.pasteContacts(list.id, pasteText)
+                setPasteText(''); setPasteOpen(false)
+                await refreshContacts(list.id)
+                notify('Pasted contacts added')
+              } catch (error) { notify(error.message || 'Pasted contacts could not be added', true) }
+            }}>Add pasted contacts</button></div>}
           </div>}
         </div>)}</div>}
       </div>
     </div>
     <div className="rr-panel">
       <div className="rd-panel-head bl-panel-head-row"><div><h3><Icon name="calendar" size={14} /> Calendars</h3><p>Published, curated event-listing pages</p></div><button className="rr-btn secondary" onClick={() => setCalendarForm({ title: '', description: '', visibility: 'public', hide_past_events: true })}><Icon name="plus" size={14} /> New calendar</button></div>
-      <div className="rd-panel-body">{calendars === null ? <LoadingSkeleton rows={3} /> : calendars.length === 0 ? <EmptyState icon="calendar" title="No calendars" message="Create a curated event calendar." /> : <div className="bl-list">{calendars.map((calendar) => <div className="bl-list-row" key={calendar.id}><div className="bl-list-main"><strong>{calendar.title}</strong><span>{calendar.visibility} · {calendar.event_ids.length} events · {calendar.view_count} views</span></div><div className="bl-list-actions">{calendar.share_token && <a className="rr-link-btn" href={`/calendar/${calendar.share_token}`} target="_blank" rel="noreferrer">Open</a>}<button className="rr-link-btn" onClick={() => setCalendarForm(calendar)}>Edit</button><button className="rr-link-btn gr-danger-link" onClick={() => setDeleteTarget({ type: 'calendar', item: calendar })}>Delete</button></div></div>)}</div>}</div>
+      <div className="rd-panel-body">{calendars === null ? <LoadingSkeleton rows={3} /> : calendars.length === 0 ? <EmptyState icon="calendar" title="No calendars" message="Create a curated event calendar." /> : <div className="bl-list">{calendars.map((calendar) => <div className="bl-list-row" key={calendar.id}><div className="bl-list-main"><strong>{calendar.title}</strong><span>{calendar.visibility} · {calendar.event_ids.length} events · {calendar.view_count} views</span></div><div className="bl-list-actions">{calendar.share_token && <a className="rr-link-btn" href={`/calendar/${calendar.share_token}`} target="_blank" rel="noreferrer">Open</a>}<button className="rr-link-btn" onClick={() => manageCalendar(calendar.id)}>Manage</button><button className="rr-link-btn" onClick={() => setCalendarForm(calendar)}>Edit</button><button className="rr-link-btn gr-danger-link" onClick={() => setDeleteTarget({ type: 'calendar', item: calendar })}>Delete</button></div></div>)}</div>}</div>
     </div>
+    {calendarManage && <Modal title={`Manage ${calendarManage.title}`} onClose={() => setCalendarManage(null)} width={680}>
+      <div className="rd-row2">
+        <div style={{ flex: 1 }}>
+          <label className="rd-field-label">Add event</label>
+          <select className="rd-field" defaultValue="" onChange={async (event) => {
+            const eventId = event.target.value; event.target.value = ''
+            if (!eventId) return
+            try { await api.addCalendarEvent(calendarManage.id, eventId); await refreshManagedCalendar() }
+            catch (error) { notify(error.message || 'Event could not be added', true) }
+          }}><option value="">Choose an event…</option>{orgEvents.filter((event) => !calendarManage.event_ids.includes(event.id)).map((event) => <option key={event.id} value={event.id}>{event.name}</option>)}</select>
+        </div>
+        <div style={{ flex: 1 }}>
+          <label className="rd-field-label">Calendar logo</label>
+          <label className="rr-btn secondary">Upload logo<input hidden type="file" accept="image/*" onChange={async (event) => {
+            const file = event.target.files?.[0]; event.target.value = ''
+            if (!file) return
+            try { await api.uploadCalendarLogo(calendarManage.id, file); await refreshManagedCalendar(); notify('Calendar logo uploaded') }
+            catch (error) { notify(error.message || 'Calendar logo could not be uploaded', true) }
+          }}/></label>
+          {calendarManage.logo_url && <button className="rr-link-btn gr-danger-link" onClick={async () => {
+            try { await api.deleteCalendarLogo(calendarManage.id); await refreshManagedCalendar(); notify('Calendar logo removed') }
+            catch (error) { notify(error.message || 'Calendar logo could not be removed', true) }
+          }}>Remove logo</button>}
+        </div>
+      </div>
+      <label className="rd-field-label">Curated events (display order)</label>
+      <div className="bl-list">{calendarManage.event_ids.map((eventId, index) => {
+        const event = orgEvents.find((item) => item.id === eventId)
+        return <div className="bl-list-row" key={eventId}><div className="bl-list-main"><strong>{event?.name || eventId}</strong></div><div className="bl-list-actions">
+          <button className="rr-link-btn" disabled={index === 0} onClick={async () => {
+            const ids = [...calendarManage.event_ids]; [ids[index - 1], ids[index]] = [ids[index], ids[index - 1]]
+            try { await api.reorderCalendarEvents(calendarManage.id, ids); await refreshManagedCalendar() }
+            catch (error) { notify(error.message || 'Calendar order could not be updated', true) }
+          }}>Up</button>
+          <button className="rr-link-btn" disabled={index === calendarManage.event_ids.length - 1} onClick={async () => {
+            const ids = [...calendarManage.event_ids]; [ids[index + 1], ids[index]] = [ids[index], ids[index + 1]]
+            try { await api.reorderCalendarEvents(calendarManage.id, ids); await refreshManagedCalendar() }
+            catch (error) { notify(error.message || 'Calendar order could not be updated', true) }
+          }}>Down</button>
+          <button className="rr-link-btn gr-danger-link" onClick={async () => {
+            try { await api.removeCalendarEvent(calendarManage.id, eventId); await refreshManagedCalendar() }
+            catch (error) { notify(error.message || 'Event could not be removed', true) }
+          }}>Remove</button>
+        </div></div>
+      })}</div>
+      <label className="rd-field-label" style={{ marginTop: 12 }}>Private-link audiences</label>
+      <div className="bl-webhook-checks">{(lists || []).map((list) => <label key={list.id}><input type="checkbox" checked={calendarManage.contact_list_ids.includes(list.id)} onChange={async () => {
+        const ids = calendarManage.contact_list_ids.includes(list.id) ? calendarManage.contact_list_ids.filter((id) => id !== list.id) : [...calendarManage.contact_list_ids, list.id]
+        try { await api.setCalendarContactLists(calendarManage.id, ids); await refreshManagedCalendar() }
+        catch (error) { notify(error.message || 'Calendar audience could not be updated', true) }
+      }}/> {list.name} ({list.contact_count})</label>)}</div>
+      <div className="rd-row2" style={{ marginTop: 14 }}>
+        {calendarManage.share_token && <button className="rr-btn secondary" onClick={() => navigator.clipboard.writeText(`${window.location.origin}/calendar/${calendarManage.share_token}`).then(() => notify('Calendar link copied'))}>Copy public link</button>}
+        {calendarManage.share_token && <button className="rr-btn secondary" onClick={() => {
+          const url = `${window.location.origin}/calendar/${calendarManage.share_token}`
+          navigator.clipboard.writeText(`<iframe src="${url}" title="${calendarManage.title}" width="100%" height="720" loading="lazy"></iframe>`).then(() => notify('Calendar embed code copied'))
+        }}>Copy embed code</button>}
+        <button className="rr-btn primary" disabled={!calendarManage.contact_list_ids.length} onClick={async () => {
+          if (!window.confirm('Send each selected contact their private calendar link?')) return
+          try { const result = await api.sendCalendarLinks(calendarManage.id); notify(`${result.queued} private calendar link${result.queued === 1 ? '' : 's'} queued`) }
+          catch (error) { notify(error.message || 'Calendar links could not be sent', true) }
+        }}>Send private links</button>
+      </div>
+    </Modal>}
     {calendarForm && <Modal title={calendarForm.id ? `Edit ${calendarForm.title}` : 'New calendar'} onClose={() => setCalendarForm(null)} width={480}>
       <label className="rd-field-label">Title *</label><input className="rd-field" value={calendarForm.title} onChange={(e) => setCalendarForm((v) => ({ ...v, title: e.target.value }))} />
       <label className="rd-field-label">Description</label><textarea className="rr-textarea" value={calendarForm.description || ''} onChange={(e) => setCalendarForm((v) => ({ ...v, description: e.target.value }))} />
@@ -742,9 +852,19 @@ export default function BillingRedesignPage() {
   const [checkout, setCheckout] = useState(null)
   const [checkoutBusy, setCheckoutBusy] = useState(false)
   const [checkoutError, setCheckoutError] = useState('')
+  const [orgIdentity, setOrgIdentity] = useState(null)
 
   const tabParam = searchParams.get('tab')
   const tab = tabParam === 'org' ? 'org' : 'billing'
+
+  useEffect(() => {
+    if (tab !== 'org') return
+    let alive = true
+    api.supportIdentify()
+      .then((identity) => { if (alive) setOrgIdentity(identity) })
+      .catch(() => { if (alive) setOrgIdentity(null) })
+    return () => { alive = false }
+  }, [tab])
 
   function notify(message) {
     setToast(message)
@@ -814,7 +934,7 @@ export default function BillingRedesignPage() {
         <div className="rr-pagehead">
           <div>
             <div className="rr-title-row"><h1><Icon name="settings" size={20} /> Org Settings</h1></div>
-            <div className="rr-meta"><Icon name="calendar" size={13} /> DevOps Clinics <span className="rr-dot">·</span> Growth plan</div>
+            <div className="rr-meta"><Icon name="calendar" size={13} /> {orgIdentity?.org_name || 'Your organization'}{orgIdentity?.plan && <><span className="rr-dot">·</span> {orgIdentity.plan}</>}</div>
           </div>
         </div>
 

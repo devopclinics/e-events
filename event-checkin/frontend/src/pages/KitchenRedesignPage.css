@@ -52,6 +52,9 @@
 .kn-item { display: flex; flex-direction: column; gap: 3px; }
 .kn-item-name { font-size: 0.88rem; font-weight: 600; color: var(--rr-text); }
 .kn-item-choices { display: flex; gap: 4px; flex-wrap: wrap; }
+.kn-category-serve { align-self: flex-start; border: 1px solid var(--rr-border); background: var(--rr-surface); color: var(--rr-sub); border-radius: 999px; padding: 4px 9px; font-size: .72rem; font-weight: 700; cursor: pointer; }
+.kn-category-serve.served { border-color: color-mix(in srgb, var(--success) 35%, transparent); background: color-mix(in srgb, var(--success) 12%, transparent); color: var(--success); }
+.kn-category-serve:disabled { cursor: not-allowed; opacity: .5; }
 .kn-choice-pill { font-size: 0.72rem; padding: 2px 7px; background: var(--rr-bg); border: 1px solid var(--rr-border); border-radius: 10px; color: var(--rr-sub); }
 
 .kn-advance-btn { width: 100%; justify-content: center; margin-top: auto; }

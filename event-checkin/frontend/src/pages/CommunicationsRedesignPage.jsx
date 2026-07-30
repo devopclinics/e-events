@@ -160,7 +160,7 @@ function HubTab({ eventId, notify }) {
     } catch (e) { notify(e.message || 'Moderation action failed') }
   }
 
-  const flaggedChat = chatMessages.filter((m) => m.status === 'hidden')
+  const hiddenChatCount = chatMessages.filter((m) => m.status === 'hidden').length
   const visibleChatCount = chatMessages.filter((m) => m.status === 'active').length
 
   return (
@@ -273,20 +273,20 @@ function HubTab({ eventId, notify }) {
         </div>
 
         <div className="rd-panel">
-          <div className="rd-panel-head"><h3>Chat moderation</h3><p>{visibleChatCount} visible{flaggedChat.length ? ` · ${flaggedChat.length} hidden` : ''}</p></div>
+          <div className="rd-panel-head"><h3>Chat moderation</h3><p>{visibleChatCount} visible{hiddenChatCount ? ` · ${hiddenChatCount} hidden` : ''}</p></div>
           <div className="rd-panel-body cm-mod-list">
             {chatLoading && <div className="rd-rowlink">Loading…</div>}
-            {!chatLoading && flaggedChat.map((m) => (
+            {!chatLoading && chatMessages.map((m) => (
               <div className="cm-mod-row" key={m.id}>
                 <span className="rd-who-dot">{(m.sender_name || '?')[0].toUpperCase()}</span>
                 <div className="cm-mod-body">
-                  <div className="cm-mod-top"><strong>{m.sender_name}</strong><span className="rd-status-chip fail">Hidden</span></div>
+                  <div className="cm-mod-top"><strong>{m.sender_name}</strong><span className={`rd-status-chip ${m.status === 'hidden' ? 'fail' : 'ok'}`}>{m.status === 'hidden' ? 'Hidden' : 'Visible'}</span></div>
                   <p>{m.body}</p>
                 </div>
-                <button className="rr-btn secondary cm-mod-action" onClick={() => moderateMessage(m)}>Restore</button>
+                <button className="rr-btn secondary cm-mod-action" onClick={() => moderateMessage(m)}>{m.status === 'hidden' ? 'Restore' : 'Hide'}</button>
               </div>
             ))}
-            {!chatLoading && !flaggedChat.length && <div className="rd-rowlink">No hidden messages.</div>}
+            {!chatLoading && !chatMessages.length && <div className="rd-rowlink">No chat messages.</div>}
           </div>
         </div>
       </div>
@@ -867,6 +867,8 @@ const THANKYOU_AUDIENCE_KEY = { 'Checked in': 'admitted', 'Confirmed': 'confirme
 
 function SettingsTab({ notify, eventId, event, onEventChanged }) {
   const { guests } = useGuests(eventId)
+  const [hubSettings, setHubSettings] = useState(null)
+  const [hubSettingsBusy, setHubSettingsBusy] = useState('')
   const [addons, setAddons] = useState(() => Object.fromEntries(ADDON_TOGGLES.map((a) => [a.key, a.on])))
   const [channelToggles, setChannelToggles] = useState(() => Object.fromEntries(CHANNEL_TOGGLE_ROWS.map((c) => [c.key, c.on])))
   const [routing, setRouting] = useState(() =>
@@ -927,6 +929,30 @@ function SettingsTab({ notify, eventId, event, onEventChanged }) {
     if (!eventId) { setTableGroups([]); return }
     api.listTableGroups(eventId).then(setTableGroups).catch(() => setTableGroups([]))
   }, [eventId])
+
+  useEffect(() => {
+    if (!eventId) { setHubSettings(null); return }
+    let alive = true
+    api.messagingSettings(eventId)
+      .then((settings) => { if (alive) setHubSettings(settings) })
+      .catch((error) => { if (alive) notify(error.message || 'FestioHub settings could not be loaded', true) })
+    return () => { alive = false }
+  }, [eventId])
+
+  async function toggleHubSetting(key, label) {
+    if (!hubSettings || hubSettingsBusy) return
+    const next = !hubSettings[key]
+    setHubSettingsBusy(key)
+    try {
+      const confirmed = await api.updateMessagingSettings(eventId, { [key]: next })
+      setHubSettings(confirmed)
+      notify(`${label} ${next ? 'enabled' : 'disabled'}`)
+    } catch (error) {
+      notify(error.message || `${label} could not be updated`, true)
+    } finally {
+      setHubSettingsBusy('')
+    }
+  }
 
   async function toggleCheckout() {
     const next = !checkoutEnabled
@@ -1109,6 +1135,27 @@ function SettingsTab({ notify, eventId, event, onEventChanged }) {
 
   return (
     <>
+      <div className="rr-section-title">
+        <div><h2>FestioHub features</h2><p>Control which communication surfaces guests can see and use</p></div>
+      </div>
+      <div className="rr-grid3 cm-toggle-grid">
+        {[
+          ['guest_hub_enabled', 'FestioHub', 'Show the post-RSVP guest hub.'],
+          ['announcements_enabled', 'Event updates', 'Show organizer announcements in the hub.'],
+          ['direct_host_messages_enabled', 'Message host', 'Allow private questions to the organizer.'],
+          ['guest_chat_enabled', 'Guest chat', 'Show shared guest-to-guest chat.'],
+          ['guest_chat_posting_enabled', 'Guest posting', 'Allow guests to publish messages in guest chat.'],
+        ].map(([key, label, description]) => (
+          <div className="rr-panel cm-toggle-card" key={key}>
+            <div className="cm-toggle-top">
+              <strong>{label}</strong>
+              <Switch checked={!!hubSettings?.[key]} disabled={!hubSettings || !!hubSettingsBusy} onChange={() => toggleHubSetting(key, label)} />
+            </div>
+            <p>{description}</p>
+          </div>
+        ))}
+      </div>
+
       <div className="rr-section-title">
         <div><h2>Messaging channels</h2><p>Turn a channel off entirely, or send a test to confirm it's wired up</p></div>
       </div>
@@ -1333,8 +1380,6 @@ export default function CommunicationsRedesignPage() {
   const [toast, setToast] = useState('')
   const [previewTemplate, setPreviewTemplate] = useState(null)
   const [previewChannel, setPreviewChannel] = useState('email')
-  const [creditBlocked, setCreditBlocked] = useState(false)
-  const [providerBlocked, setProviderBlocked] = useState(false)
 
   const rawTab = searchParams.get('tab')
   const tab = TABS.some((t) => t.key === rawTab) ? rawTab : 'hub'
@@ -1376,25 +1421,6 @@ export default function CommunicationsRedesignPage() {
           <button key={t.key} className={tab === t.key ? 'active' : ''} onClick={() => goTab(t.key)}>{t.label}</button>
         ))}
       </div>
-
-      {creditBlocked && (
-        <div className="cm-system-banner cm-banner-warn">
-          <Icon name="warning" size={14} />
-          <div>
-            <strong>Not enough SMS credits to send this broadcast.</strong> You have 42 credits remaining — this send needs 220. <a href="/billing-redesign" onClick={(e) => { e.preventDefault(); notify('Opened Billing') }} className="rr-link-btn">Top up in Billing →</a>
-          </div>
-          <button className="cm-banner-dismiss" onClick={() => setCreditBlocked(false)}>×</button>
-        </div>
-      )}
-      {providerBlocked && (
-        <div className="cm-system-banner cm-banner-error">
-          <Icon name="warning" size={14} />
-          <div>
-            <strong>SMS provider not configured.</strong> Outgoing SMS messages are paused until a valid provider API key is saved. <a href="/communications-redesign?tab=settings" onClick={(e) => { e.preventDefault(); goTab('settings') }} className="rr-link-btn">Go to Channel Settings →</a>
-          </div>
-          <button className="cm-banner-dismiss" onClick={() => setProviderBlocked(false)}>×</button>
-        </div>
-      )}
 
       {tab === 'hub' && <HubTab eventId={eventId} notify={notify} />}
       {tab === 'messages' && <MessagesTab eventId={eventId} notify={notify} onPreview={(tpl, ch) => { setPreviewTemplate(tpl); setPreviewChannel(ch || 'email') }} />}

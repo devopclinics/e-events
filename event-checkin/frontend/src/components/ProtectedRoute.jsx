@@ -10,7 +10,13 @@ const Spinner = () => (
   </div>
 )
 
-export default function ProtectedRoute({ children, adminOnly = false, setupOnly = false, paidOnly = false }) {
+export default function ProtectedRoute({
+  children,
+  adminOnly = false,
+  setupOnly = false,
+  paidOnly = false,
+  platformSuperadminOnly = false,
+}) {
   const { user, loading } = useAuth()
   const [currentEventId] = useCurrentEvent()
   // paidOnly: the route is a paid perk (Design Studio, Help) — allowed when the
@@ -30,6 +36,7 @@ export default function ProtectedRoute({ children, adminOnly = false, setupOnly 
   if (loading) return <Spinner />
 
   if (!user) return <Navigate to="/login" replace />
+  if (platformSuperadminOnly && !user.is_platform_superadmin) return <Navigate to="/admin" replace />
   if (adminOnly && user.role !== 'admin') return <Navigate to="/scanner" replace />
   if (setupOnly && !['admin', 'event_manager'].includes(user.role)) return <Navigate to="/scanner" replace />
   if (paidOnly) {

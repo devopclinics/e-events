@@ -389,18 +389,18 @@ function AppRoutes() {
       <Route path="/team-redesign" element={<ProtectedRoute><TeamRedesignPage /></ProtectedRoute>} />
       <Route path="/experience-redesign" element={<ProtectedRoute><ExperienceRedesignPage /></ProtectedRoute>} />
       <Route path="/checkin-redesign" element={<ProtectedRoute><CheckinRedesignPage /></ProtectedRoute>} />
-      <Route path="/superadmin-redesign" element={<ProtectedRoute><SuperadminRedesignPage /></ProtectedRoute>} />
-      <Route path="/design-studio-redesign" element={<ProtectedRoute><DesignStudioRedesignPage /></ProtectedRoute>} />
+      <Route path="/superadmin-redesign" element={<ProtectedRoute platformSuperadminOnly><SuperadminRedesignPage /></ProtectedRoute>} />
+      <Route path="/design-studio-redesign" element={<ProtectedRoute adminOnly paidOnly><DesignStudioRedesignPage /></ProtectedRoute>} />
       <Route path="/event-results-redesign" element={<ProtectedRoute><EventResultsRedesignPage /></ProtectedRoute>} />
       <Route path="/festiome-redesign" element={<ProtectedRoute><FestioMeRedesignPage /></ProtectedRoute>} />
-      <Route path="/help-redesign" element={<ProtectedRoute><HelpRedesignPage /></ProtectedRoute>} />
+      <Route path="/help-redesign" element={<ProtectedRoute paidOnly><HelpRedesignPage /></ProtectedRoute>} />
       <Route path="/scanner-redesign" element={<ProtectedRoute><ScannerRedesignPage /></ProtectedRoute>} />
       <Route path="/kitchen-redesign" element={<ProtectedRoute><KitchenRedesignPage /></ProtectedRoute>} />
       <Route path="/selfcheckin-redesign" element={<SelfCheckinRedesignPage />} />
       <Route path="/selfcheckin-redesign/:code" element={<SelfCheckinRedesignPage />} />
       <Route path="/floorplan-redesign" element={<FloorPlanRedesignPage />} />
       <Route path="/floorplan-redesign/:eventId" element={<ProtectedRoute adminOnly><FloorPlanPage /></ProtectedRoute>} />
-      <Route path="/setup-redesign" element={<ProtectedRoute><SetupRedesignPage /></ProtectedRoute>} />
+      <Route path="/setup-redesign" element={<ProtectedRoute setupOnly><SetupRedesignPage /></ProtectedRoute>} />
       <Route path="/api-explorer-redesign" element={<ProtectedRoute><ApiExplorerRedesignPage /></ProtectedRoute>} />
       <Route path="/public-pages-redesign" element={<PublicPagesRedesignPage />} />
 

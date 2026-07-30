@@ -96,19 +96,41 @@
 .cm-reply-row { display: flex; gap: 8px; }
 
 /* ── broadcast composer ────────────────────────────────────────────────── */
-.cm-composer { margin-bottom: 16px; }
+.cm-composer { margin-bottom: 18px; overflow: visible; }
+.cm-broadcast-head { display: flex; align-items: center; gap: 11px; }
+.cm-broadcast-icon { width: 34px; height: 34px; border-radius: 10px; background: var(--teal-soft); color: var(--teal);
+  display: grid; place-items: center; flex: none; }
+.cm-broadcast-message { min-height: 96px; resize: vertical; }
+.cm-broadcast-hint { margin: 4px 0 8px; }
+.cm-broadcast-search { margin-bottom: 6px; }
 .cm-sms-meter { font-size: 10.5px; color: var(--muted); display: flex; align-items: center; gap: 6px; margin: 6px 0; }
 .cm-sms-meter.over { color: var(--danger); font-weight: 600; }
 .cm-cost-ack { background: var(--danger-soft); color: var(--danger); padding: 8px 10px; border-radius: 8px; margin-bottom: 6px; }
 .cm-guest-matches { display: flex; flex-direction: column; border: 1px solid var(--line); border-radius: 8px; overflow: hidden; margin-bottom: 8px; }
 .cm-guest-matches button { border: 0; background: var(--surface); text-align: left; padding: 8px 10px; font-size: 11.5px;
-  color: var(--ink); cursor: pointer; border-bottom: 1px solid var(--line-soft); }
+  color: var(--ink); cursor: pointer; border-bottom: 1px solid var(--line-soft); display: flex; align-items: baseline; gap: 8px; }
+.cm-guest-matches button span { color: var(--muted); font-size: 10.5px; }
 .cm-guest-matches button:last-child { border-bottom: 0; }
 .cm-guest-matches button:hover { background: var(--surface-2); }
+.cm-guest-empty { padding: 9px 10px; color: var(--muted); font-size: 11px; }
 .cm-picked-chips { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 8px; }
 .cm-picked-chips .rd-chip button { border: 0; background: none; color: inherit; margin-left: 4px; cursor: pointer; padding: 0; }
 .cm-channel-checks { display: flex; gap: 14px; font-size: 11px; color: var(--ink); flex-wrap: wrap; }
 .cm-channel-checks label { display: flex; align-items: center; gap: 6px; }
+.cm-channel-checks input { accent-color: var(--teal); }
+.cm-direct-recipient { display: grid; grid-template-columns: minmax(140px, .7fr) minmax(220px, 1.5fr) auto; gap: 8px; align-items: start; }
+.cm-direct-recipient .rd-field { margin: 0; }
+.cm-broadcast-controls { display: grid; grid-template-columns: minmax(260px, 1fr) minmax(260px, 1fr); gap: 18px;
+  align-items: start; margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--line-soft); }
+.cm-broadcast-summary { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-top: 12px;
+  border-radius: 8px; background: var(--teal-soft); color: var(--teal); padding: 9px 11px; font-size: 10.5px; }
+.cm-broadcast-summary > span { display: flex; align-items: center; gap: 5px; }
+.cm-broadcast-feedback { border-radius: 8px; padding: 9px 11px; margin-top: 9px; font-size: 11px; font-weight: 600; }
+.cm-broadcast-feedback.error { background: var(--danger-soft); color: var(--danger); }
+.cm-broadcast-feedback.success { background: var(--teal-soft); color: var(--teal); }
+.cm-broadcast-actions { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-top: 12px; }
+.cm-broadcast-actions > span { color: var(--faint); font-size: 10.5px; }
+.cm-broadcast-actions .rr-btn { min-width: 156px; justify-content: center; }
 
 /* ── templates: extra actions + audit log ─────────────────────────────── */
 .cm-tpl-actions { display: flex; align-items: center; gap: 10px; justify-content: center; white-space: nowrap; }
@@ -131,6 +153,9 @@
   .cm-announce-right { align-items: flex-start; flex-direction: row; gap: 10px; }
   .cm-inbox-split { grid-template-columns: 1fr; }
   .cm-inbox-split .cm-thread-list { border-right: 0; border-bottom: 1px solid var(--line-soft); max-height: 200px; }
+  .cm-direct-recipient, .cm-broadcast-controls { grid-template-columns: 1fr; }
+  .cm-broadcast-summary, .cm-broadcast-actions { align-items: flex-start; flex-direction: column; }
+  .cm-broadcast-actions .rr-btn { width: 100%; }
 }
 
 /* ── System banners ───────────────────────────────────────────────────── */

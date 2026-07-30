@@ -297,27 +297,49 @@ function HubTab({ eventId, notify }) {
 
 /* ── Broadcast composer ──────────────────────────────────────────────── */
 
-const BROADCAST_TARGETS = ['Everyone', 'Confirmed guests only', 'Not yet responded', 'Checked in', 'No one else (typed recipients only)']
+const BROADCAST_TARGETS = [
+  { label: 'All guests', value: 'all' },
+  { label: 'RSVP: Attending', value: 'confirmed' },
+  { label: 'RSVP: Declined', value: 'declined' },
+  { label: 'RSVP: No reply', value: 'no_reply' },
+  { label: 'Checked in', value: 'admitted' },
+  { label: 'Not yet checked in', value: 'not_admitted' },
+  { label: 'No one else — just the recipients above', value: 'none' },
+]
 
-function gsmSegments(text) {
-  const isGsm7 = /^[\x00-\x7F£€]*$/.test(text)
-  const perSegment = isGsm7 ? 153 : 67
-  const len = text.length || 0
-  return { segments: Math.max(1, Math.ceil(len / perSegment) || (len === 0 ? 0 : 1)), gsm7: isGsm7, perSegment }
+const BROADCAST_TARGET_LABELS = Object.fromEntries(
+  BROADCAST_TARGETS.map(({ label, value }) => [value, label.toLowerCase()])
+)
+
+// Keep this calculation aligned with backend/services/messaging.py. SMS strips
+// emoji before sending; all remaining non-GSM-7 characters force UCS-2.
+const GSM7_CHARS = "@£$¥èéùìòÇ\nØø\rÅåΔ_ΦΓΛΩΠΨΣΘΞ\x1bÆæßÉ !\"#¤%&'()*+,-./0123456789:;<=>?¡ABCDEFGHIJKLMNOPQRSTUVWXYZÄÖÑÜ§¿abcdefghijklmnopqrstuvwxyzäöñüà{}\\[~]|€^"
+
+function stripSmsEmoji(text) {
+  return text.replace(/[\u{1F300}-\u{1FAFF}\u{2600}-\u{27BF}\u{1F1E6}-\u{1F1FF}\u{2B00}-\u{2BFF}\u{1F900}-\u{1F9FF}\u{FE0F}\u{200D}]/gu, '')
+    .replace(/[ \t]{2,}/g, ' ')
 }
 
-const BROADCAST_TARGET_MAP = {
-  'Everyone': 'all',
-  'Confirmed guests only': 'confirmed',
-  'Not yet responded': 'no_reply',
-  'Checked in': 'admitted',
-  'No one else (typed recipients only)': 'none',
+function smsSegmentInfo(rawText) {
+  const text = stripSmsEmoji(rawText)
+  const hadEmoji = text.length !== rawText.length
+  const chars = text.length
+  if (!chars) return { chars: 0, segments: 0, gsm7: true, hadEmoji }
+  const gsm7 = [...text].every((character) => GSM7_CHARS.includes(character))
+  const singleCapacity = gsm7 ? 160 : 70
+  const multipartCapacity = gsm7 ? 153 : 67
+  return {
+    chars,
+    segments: chars <= singleCapacity ? 1 : Math.ceil(chars / multipartCapacity),
+    gsm7,
+    hadEmoji,
+  }
 }
 
-function BroadcastComposer({ notify, onClose, eventId }) {
+function BroadcastComposer({ notify, onSent, eventId }) {
   const [message, setMessage] = useState('')
-  const [target, setTarget] = useState(BROADCAST_TARGETS[0])
-  const [channels, setChannels] = useState({ email: true, sms: true, whatsapp: false, mms: false })
+  const [target, setTarget] = useState('all')
+  const [channels, setChannels] = useState({ email: false, sms: true, whatsapp: false, mms: false })
   const [mmsUrl, setMmsUrl] = useState('')
   const [guestQuery, setGuestQuery] = useState('')
   const [pickedGuests, setPickedGuests] = useState([])
@@ -326,115 +348,208 @@ function BroadcastComposer({ notify, onClose, eventId }) {
   const [typedName, setTypedName] = useState('')
   const [typedContact, setTypedContact] = useState('')
   const [costAck, setCostAck] = useState(false)
+  const [sending, setSending] = useState(false)
+  const [error, setError] = useState('')
+  const [result, setResult] = useState(null)
 
-  const { segments, gsm7, perSegment } = gsmSegments(message)
-  const overSegmentLimit = segments > 3
+  const smsInfo = channels.sms && message.trim() ? smsSegmentInfo(message) : null
+  const overSegmentLimit = (smsInfo?.segments || 0) > 3
   const pickedIds = new Set(pickedGuests.map((g) => g.id))
-  const matches = guestQuery.trim()
+  const query = guestQuery.trim().toLowerCase()
+  const matches = query.length >= 2
     ? allGuests
         .filter((g) => !pickedIds.has(g.id))
-        .map((g) => ({ id: g.id, name: [g.first_name, g.last_name].filter(Boolean).join(' ') || g.email || g.phone || 'Unnamed guest' }))
-        .filter((g) => g.name.toLowerCase().includes(guestQuery.trim().toLowerCase()))
+        .filter((g) => {
+          const name = [g.first_name, g.last_name].filter(Boolean).join(' ').toLowerCase()
+          return name.includes(query)
+            || (g.email || '').toLowerCase().includes(query)
+            || (g.phone || '').toLowerCase().includes(query)
+        })
+        .map((g) => ({
+          id: g.id,
+          name: [g.first_name, g.last_name].filter(Boolean).join(' ') || g.email || g.phone || 'Unnamed guest',
+          contact: g.email || g.phone || 'No contact information',
+        }))
         .slice(0, 8)
     : []
+
+  useEffect(() => { setCostAck(false) }, [message, channels.sms])
 
   function toggleChannel(ch) {
     setChannels((prev) => ({ ...prev, [ch]: !prev[ch] }))
   }
 
   function addTypedRecipient() {
-    if (!typedName.trim() || !typedContact.trim()) return
+    if (!typedName.trim() || !typedContact.trim()) {
+      setError('Name and contact are both required to add a recipient')
+      return
+    }
+    setError('')
     setTypedRecipients((prev) => [...prev, { name: typedName.trim(), contact: typedContact.trim() }])
     setTypedName('')
     setTypedContact('')
   }
 
+  function audienceSummary() {
+    const audience = pickedGuests.length
+      ? `${pickedGuests.length} selected guest${pickedGuests.length === 1 ? '' : 's'}`
+      : BROADCAST_TARGET_LABELS[target]
+    return typedRecipients.length
+      ? `${audience} + ${typedRecipients.length} direct recipient${typedRecipients.length === 1 ? '' : 's'}`
+      : audience
+  }
+
   async function send() {
     if (overSegmentLimit && !costAck) {
-      notify(`This message is ${segments} SMS segments — check the cost-acknowledgment box before sending`)
+      setError(`Check the SMS cost box before sending — this message is ${smsInfo.segments} segments per recipient.`)
       return
     }
-    if (!message.trim() || !Object.values(channels).some(Boolean)) return notify('Enter a message and select at least one channel')
-    if (!window.confirm('Send this broadcast now? Protected environments accept only allowlisted recipients.')) return
+    if (!message.trim()) {
+      setError('Enter a message before sending')
+      return
+    }
+    if (!Object.values(channels).some(Boolean)) {
+      setError('Select at least one channel')
+      return
+    }
+    if (channels.mms && !/^https:\/\//i.test(mmsUrl.trim())) {
+      setError('MMS needs an image URL starting with https://')
+      return
+    }
+    if (target === 'none' && !pickedGuests.length && !typedRecipients.length) {
+      setError('Add at least one guest or direct recipient')
+      return
+    }
+    const costNote = smsInfo?.segments > 1
+      ? ` This uses ${smsInfo.segments} SMS credits per recipient.`
+      : ''
+    if (!window.confirm(`Send broadcast to ${audienceSummary()}?${costNote}`)) return
+    setSending(true)
+    setError('')
+    setResult(null)
     try {
       const result = await api.broadcast(eventId, {
         message: message.trim(),
-        target: pickedGuests.length ? 'none' : (BROADCAST_TARGET_MAP[target] || 'all'),
+        target: pickedGuests.length ? 'none' : target,
         guest_ids: pickedGuests.map((g) => g.id),
         channels: Object.entries(channels).filter(([, enabled]) => enabled).map(([channel]) => channel),
         extra_recipients: typedRecipients.map((recipient) => ({ name: recipient.name, ...(recipient.contact.includes('@') ? { email: recipient.contact } : { phone: recipient.contact }) })),
-        mms_media_url: channels.mms ? mmsUrl : null,
+        mms_media_url: channels.mms ? mmsUrl.trim() : null,
       })
+      setResult(result)
+      setMessage('')
+      setGuestQuery('')
+      setPickedGuests([])
+      setTypedRecipients([])
+      setMmsUrl('')
       notify(`Broadcast confirmed — queued: ${result.queued}, skipped (no contact): ${result.skipped_no_contact}, skipped (no consent): ${result.skipped_no_consent}, skipped (no credits): ${result.skipped_no_credits}`)
-      onClose()
-    } catch (e) { notify(e.message || 'Broadcast was not sent') }
+      await onSent?.()
+    } catch (e) {
+      const detail = e.message || 'Broadcast was not sent'
+      setError(detail)
+      notify(detail)
+    } finally {
+      setSending(false)
+    }
   }
 
   return (
     <div className="rr-panel cm-composer">
-      <div className="rd-panel-head"><h3>Send a broadcast</h3><p>A one-off message, outside your automated templates</p></div>
-      <div className="rd-panel-body">
-        <label className="rd-field-label">Message (supports **bold** and links)</label>
-        <textarea className="rr-textarea" rows={4} placeholder="Write your update…" value={message} onChange={(e) => setMessage(e.target.value)} />
-        <div className={`cm-sms-meter ${overSegmentLimit ? 'over' : ''}`}>
-          <Icon name="message" size={12} /> {segments} SMS segment{segments === 1 ? '' : 's'} ({gsm7 ? 'GSM-7' : 'Unicode/UCS-2'}, {perSegment} chars/segment){overSegmentLimit ? ' — this is expensive, review before sending' : ''}
+      <div className="rd-panel-head cm-broadcast-head">
+        <div className="cm-broadcast-icon"><Icon name="send" size={16} /></div>
+        <div>
+          <h3>Broadcast message</h3>
+          <p>Send a live event update to a guest segment, selected guests, or a direct contact</p>
         </div>
+      </div>
+      <div className="rd-panel-body">
+        <label className="rd-field-label">Message</label>
+        <textarea className="rr-textarea cm-broadcast-message" rows={4} placeholder="e.g. Doors open at 7pm. Parking is available on Main Street." value={message} onChange={(e) => setMessage(e.target.value)} />
+        <p className="rd-hint cm-broadcast-hint">Email supports **bold**, bullet lines and links. SMS, WhatsApp and MMS send plain text.</p>
+        {smsInfo && <div className={`cm-sms-meter ${overSegmentLimit ? 'over' : ''}`}>
+          <Icon name="message" size={12} />
+          {smsInfo.chars} character{smsInfo.chars === 1 ? '' : 's'} · {smsInfo.segments} SMS segment{smsInfo.segments === 1 ? '' : 's'} per recipient
+          {smsInfo.hadEmoji ? ' · emoji will be removed from SMS' : (!smsInfo.gsm7 ? ' · Unicode encoding' : '')}
+          {smsInfo.segments > 1 ? ` · ${smsInfo.segments}× SMS cost` : ''}
+        </div>}
         {overSegmentLimit && (
           <label className="gr-required-check cm-cost-ack">
             <input type="checkbox" checked={costAck} onChange={(e) => setCostAck(e.target.checked)} />
-            I understand this will use {segments} SMS credits per recipient and want to send anyway
+            I understand this will use {smsInfo.segments} SMS credits per recipient and want to send anyway
           </label>
         )}
 
-        <label className="rd-field-label" style={{ marginTop: 12 }}>Send to</label>
-        <select className="rr-select" value={target} onChange={(e) => setTarget(e.target.value)} disabled={pickedGuests.length > 0}>
-          {BROADCAST_TARGETS.map((t) => <option key={t}>{t}</option>)}
-        </select>
-
-        <label className="rd-field-label" style={{ marginTop: 10 }}>Send to specific guests instead</label>
-        {pickedGuests.length > 0 && <div className="rd-hint">Picking guests here overrides the audience above — only the guests picked below will receive this broadcast.</div>}
-        <div className="rd-search" style={{ marginBottom: 6 }}>
+        <label className="rd-field-label" style={{ marginTop: 12 }}>Search guest list — {allGuests.length} guest{allGuests.length === 1 ? '' : 's'} loaded</label>
+        <p className="rd-hint cm-broadcast-hint">Optional — selecting guests overrides the audience segment below.</p>
+        <div className="rd-search cm-broadcast-search">
           <Icon name="search" size={13} />
-          <input placeholder="Search guests to add…" value={guestQuery} onChange={(e) => setGuestQuery(e.target.value)} />
+          <input placeholder="Search by name, email or phone…" value={guestQuery} onChange={(e) => setGuestQuery(e.target.value)} />
         </div>
-        {matches.length > 0 && (
+        {query.length >= 2 && (
           <div className="cm-guest-matches">
-            {matches.map((g) => (
-              <button key={g.id} onClick={() => { setPickedGuests((prev) => [...prev, g]); setGuestQuery('') }}>{g.name}</button>
-            ))}
+            {matches.length ? matches.map((g) => (
+              <button type="button" key={g.id} onClick={() => { setPickedGuests((prev) => [...prev, g]); setGuestQuery('') }}>
+                <strong>{g.name}</strong><span>{g.contact}</span>
+              </button>
+            )) : <div className="cm-guest-empty">No matching guests found.</div>}
           </div>
         )}
         <div className="cm-picked-chips">
           {pickedGuests.map((g) => (
-            <span className="rd-chip" key={g.id}>{g.name} <button onClick={() => setPickedGuests((prev) => prev.filter((x) => x.id !== g.id))}>✕</button></span>
+            <span className="rd-chip" key={g.id}>{g.name} <button type="button" aria-label={`Remove ${g.name}`} onClick={() => setPickedGuests((prev) => prev.filter((x) => x.id !== g.id))}>✕</button></span>
           ))}
         </div>
 
-        <label className="rd-field-label" style={{ marginTop: 10 }}>Add people not on the guest list</label>
-        <div className="rd-row2">
-          <input className="rd-field" placeholder="Name" value={typedName} onChange={(e) => setTypedName(e.target.value)} />
-          <input className="rd-field" placeholder="Email or phone" value={typedContact} onChange={(e) => setTypedContact(e.target.value)} />
-          <button className="rr-btn secondary" onClick={addTypedRecipient}>Add</button>
+        <label className="rd-field-label" style={{ marginTop: 10 }}>Or send directly to someone not on the guest list</label>
+        <div className="cm-direct-recipient">
+          <input className="rd-field" placeholder="Name (required)" value={typedName} onChange={(e) => setTypedName(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && addTypedRecipient()} />
+          <input className="rd-field" placeholder="Email or phone" value={typedContact} onChange={(e) => setTypedContact(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && addTypedRecipient()} />
+          <button className="rr-btn secondary" disabled={!typedName.trim() || !typedContact.trim()} onClick={addTypedRecipient}>+ Add</button>
         </div>
         <div className="cm-picked-chips">
           {typedRecipients.map((r, i) => (
-            <span className="rd-chip" key={i}>{r.name} <button onClick={() => setTypedRecipients((prev) => prev.filter((_, idx) => idx !== i))}>✕</button></span>
+            <span className="rd-chip" key={`${r.contact}-${i}`}>{r.name} — {r.contact} <button type="button" aria-label={`Remove ${r.name}`} onClick={() => setTypedRecipients((prev) => prev.filter((_, idx) => idx !== i))}>✕</button></span>
           ))}
         </div>
 
-        <label className="rd-field-label" style={{ marginTop: 10 }}>Channels</label>
-        <div className="cm-channel-checks">
-          {['email', 'sms', 'whatsapp', 'mms'].map((ch) => (
-            <label key={ch}><input type="checkbox" checked={channels[ch]} onChange={() => toggleChannel(ch)} /> {ch.toUpperCase()}</label>
-          ))}
+        <div className="cm-broadcast-controls">
+          <div>
+            <label className="rd-field-label">Send to</label>
+            <select className="rr-select" value={target} onChange={(e) => setTarget(e.target.value)} disabled={pickedGuests.length > 0}>
+              {BROADCAST_TARGETS.map(({ label, value }) => <option key={value} value={value}>{label}</option>)}
+            </select>
+            {pickedGuests.length > 0 && <p className="rd-hint">Audience ignored — sending only to selected guests and direct recipients.</p>}
+          </div>
+          <div>
+            <label className="rd-field-label">Channels</label>
+            <div className="cm-channel-checks">
+              {['email', 'sms', 'whatsapp', 'mms'].map((ch) => (
+                <label key={ch}><input type="checkbox" checked={channels[ch]} onChange={() => toggleChannel(ch)} /> {ch.toUpperCase()}</label>
+              ))}
+            </div>
+          </div>
         </div>
         {channels.mms && (
           <input className="rd-field" placeholder="MMS image URL (https://…)" value={mmsUrl} onChange={(e) => setMmsUrl(e.target.value)} style={{ marginTop: 6 }} />
         )}
 
-        <div className="rd-row2" style={{ marginTop: 14 }}>
-          <button className="rr-btn secondary" style={{ flex: 1, justifyContent: 'center' }} onClick={onClose}>Cancel</button>
-          <button className="rr-btn primary" style={{ flex: 1, justifyContent: 'center' }} onClick={send}>Send broadcast</button>
+        <div className="cm-broadcast-summary">
+          <span><Icon name="users" size={14} /> Will send to: <strong>{audienceSummary()}</strong></span>
+          <span>{Object.entries(channels).filter(([, enabled]) => enabled).map(([channel]) => channel.toUpperCase()).join(' · ') || 'No channel selected'}</span>
+        </div>
+        {error && <div className="cm-broadcast-feedback error" role="alert">{error}</div>}
+        {result && (
+          <div className="cm-broadcast-feedback success" role="status">
+            Broadcast confirmed · {result.queued} queued · {result.skipped_no_contact || 0} no contact · {result.skipped_no_consent || 0} no consent
+            {result.skipped_no_credits ? ` · ${result.skipped_no_credits} out of credits` : ''}
+          </div>
+        )}
+
+        <div className="cm-broadcast-actions">
+          <span>Sending starts immediately after confirmation.</span>
+          <button className="rr-btn primary" disabled={sending || !message.trim() || (overSegmentLimit && !costAck)} onClick={send}>
+            <Icon name="send" size={14} /> {sending ? 'Sending…' : 'Send broadcast'}
+          </button>
         </div>
       </div>
     </div>
@@ -446,7 +561,6 @@ function BroadcastComposer({ notify, onClose, eventId }) {
 function MessagesTab({ notify, onPreview, eventId }) {
   const [attnQuery, setAttnQuery] = useState('')
   const [attnFilter, setAttnFilter] = useState('all')
-  const [composerOpen, setComposerOpen] = useState(false)
   const [templates, setTemplates] = useState([])
   const [templateAudit, setTemplateAudit] = useState([])
   const [templateError, setTemplateError] = useState('')
@@ -555,11 +669,14 @@ function MessagesTab({ notify, onPreview, eventId }) {
   return (
     <>
       <div className="rr-section-title">
-        <div><h2>Delivery by channel</h2><p>Live send rates across every channel this event uses</p></div>
-        <button onClick={() => setComposerOpen((v) => !v)}>Send a broadcast <Icon name="arrow" size={15} /></button>
+        <div><h2>Broadcast center</h2><p>Send one-off updates without leaving the communications workspace</p></div>
       </div>
 
-      {composerOpen && <BroadcastComposer eventId={eventId} notify={notify} onClose={() => setComposerOpen(false)} />}
+      <BroadcastComposer eventId={eventId} notify={notify} onSent={loadDeliveryData} />
+
+      <div className="rr-section-title">
+        <div><h2>Delivery by channel</h2><p>Live send rates across every channel this event uses</p></div>
+      </div>
 
       <div className="rd-wide-grid">
         <div className="rd-panel">
@@ -598,7 +715,7 @@ function MessagesTab({ notify, onPreview, eventId }) {
                     <td><div className="rd-who"><span className="dot">{g.initials}</span> {g.name}</div></td>
                     <td><span className={`rd-status-chip ${g.status}`}>{g.label}</span></td>
                     <td className="rd-rowlink">{g.reason}</td>
-                    <td className="rd-rowlink"><a className="cm-linklike" href="/guests-redesign">Open in Guests →</a></td>
+                    <td className="rd-rowlink"><a className="cm-linklike" href={`/guests-redesign?tab=guests&guest=${encodeURIComponent(g.guestId)}`}>Open in Guests →</a></td>
                   </tr>
                 ))}
                 {filteredAttention.length === 0 && (

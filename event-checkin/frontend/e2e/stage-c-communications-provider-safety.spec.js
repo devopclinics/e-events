@@ -50,13 +50,15 @@ test.describe('Stage C communications — provider-safe redesign controls', () =
     })
     page.on('dialog', (dialog) => dialog.accept())
 
-    await page.getByRole('button', { name: /Send a broadcast/ }).first().click()
-    await page.getByPlaceholder('Write your update…').fill('Synthetic Stage C broadcast')
+    const composer = page.locator('.cm-composer')
+    await expect(composer.getByRole('heading', { name: 'Broadcast message' })).toBeVisible()
+    await expect(composer.getByPlaceholder('Search by name, email or phone…')).toBeVisible()
+    await page.getByPlaceholder('e.g. Doors open at 7pm. Parking is available on Main Street.').fill('Synthetic Stage C broadcast')
     await page.getByRole('button', { name: 'Send broadcast', exact: true }).click()
     await expect(page.getByText('Broadcast confirmed — queued: 1', { exact: false })).toBeVisible()
     expect(body.message).toBe('Synthetic Stage C broadcast')
     expect(body.target).toBe('all')
-    expect(body.channels).toEqual(['email', 'sms'])
+    expect(body.channels).toEqual(['sms'])
   })
 
   // Regression: the "Send to" dropdown's option labels once didn't match the
@@ -73,15 +75,21 @@ test.describe('Stage C communications — provider-safe redesign controls', () =
     page.on('dialog', (dialog) => dialog.accept())
 
     const options = [
-      ['Confirmed guests only', 'confirmed'],
-      ['Not yet responded', 'no_reply'],
+      ['RSVP: Attending', 'confirmed'],
+      ['RSVP: Declined', 'declined'],
+      ['RSVP: No reply', 'no_reply'],
       ['Checked in', 'admitted'],
-      ['No one else (typed recipients only)', 'none'],
+      ['Not yet checked in', 'not_admitted'],
+      ['No one else — just the recipients above', 'none'],
     ]
     for (const [label, expectedTarget] of options) {
-      await page.getByRole('button', { name: /Send a broadcast/ }).first().click()
-      await page.getByPlaceholder('Write your update…').fill(`Synthetic target check: ${label}`)
+      await page.getByPlaceholder('e.g. Doors open at 7pm. Parking is available on Main Street.').fill(`Synthetic target check: ${label}`)
       await fieldNear(page, 'Send to').selectOption({ label })
+      if (expectedTarget === 'none') {
+        await page.getByPlaceholder('Name (required)').fill('Synthetic Recipient')
+        await page.getByPlaceholder('Email or phone').fill('synthetic-recipient@example.invalid')
+        await page.getByRole('button', { name: '+ Add' }).click()
+      }
       await page.getByRole('button', { name: 'Send broadcast', exact: true }).click()
       await expect(page.getByText(/Broadcast confirmed/)).toBeVisible()
       expect(seenTargets.at(-1)).toBe(expectedTarget)

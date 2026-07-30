@@ -1,0 +1,55 @@
+name: API contract drift
+
+# Phase 3 (API contract pipeline) completion gate: the pipeline itself
+# (backend/scripts/export_openapi.py, frontend/scripts/generate-api-types.mjs,
+# frontend/scripts/check-api-contract-drift.sh) already existed but was only
+# ever run by hand. This wires it into CI so an undocumented backend schema
+# change (Pydantic model edited without regenerating the committed OpenAPI
+# snapshot + generated TS types) fails the build instead of silently drifting.
+#
+# Runs with no database and no Docker — export_openapi.py only calls
+# app.openapi(), which introspects routes/schemas at import time and never
+# touches app.main's lifespan (where the only DB access happens), and every
+# Settings() field has a default, so a bare `pip install` is enough.
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "event-checkin/backend/app/**"
+      - "event-checkin/docs/api-contract/openapi.json"
+      - "event-checkin/frontend/src/types/api.d.ts"
+      - "event-checkin/frontend/scripts/**"
+      - "event-checkin/backend/scripts/export_openapi.py"
+  pull_request:
+    paths:
+      - "event-checkin/backend/app/**"
+      - "event-checkin/docs/api-contract/openapi.json"
+      - "event-checkin/frontend/src/types/api.d.ts"
+      - "event-checkin/frontend/scripts/**"
+      - "event-checkin/backend/scripts/export_openapi.py"
+
+jobs:
+  check-drift:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Install backend dependencies
+        working-directory: event-checkin/backend
+        run: pip install --no-cache-dir -r requirements.txt
+
+      - name: Check API contract drift
+        working-directory: event-checkin
+        env:
+          CONTRACT_EXPORT_MODE: local
+          PYTHON_BIN: python
+        run: bash frontend/scripts/check-api-contract-drift.sh

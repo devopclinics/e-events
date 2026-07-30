@@ -201,6 +201,49 @@ test.describe('Stage C operations — isolated staging fixture', () => {
     await expect(page.getByText('Ready', { exact: true })).toHaveCount(0)
   })
 
+  test('kitchen marks a guest served through the real fulfillment endpoint', async ({ page }) => {
+    const eventId = requiredEnv('E2E_EVENT_ID')
+    const lastName = `Kitchen Guest ${suffix}`
+    let authorization = ''
+    page.on('request', (request) => {
+      if (request.url().includes('/api/') && request.headers().authorization) authorization = request.headers().authorization
+    })
+
+    await page.goto('/kitchen-redesign')
+    await expect(page.getByRole('heading', { name: 'Kitchen Display' })).toBeVisible()
+    expect(authorization).toMatch(/^Bearer /)
+
+    const guest = await (await page.request.post(`/api/events/${eventId}/guests`, {
+      headers: { Authorization: authorization }, data: { first_name: 'E2E', last_name: lastName },
+    })).json()
+
+    try {
+      await page.reload()
+      await expect(page.getByRole('heading', { name: 'Kitchen Display' })).toBeVisible()
+      const card = page.locator('.kn-order-card').filter({ hasText: `E2E ${lastName}` })
+      await expect(card).toBeVisible()
+      await expect(card.getByText('Pending', { exact: true })).toBeVisible()
+
+      await card.getByRole('button', { name: 'Mark served', exact: true }).click()
+      // The "Pending" filter (default view) drops the card the instant it's
+      // served, so switch to "Served" to see its new state in the DOM.
+      await page.getByRole('button', { name: 'Served', exact: true }).click()
+      const servedCard = page.locator('.kn-order-card').filter({ hasText: `E2E ${lastName}` })
+      await expect(servedCard.locator('.kn-served-badge')).toBeVisible()
+      await expect(servedCard.getByRole('button', { name: 'Mark served', exact: true })).toHaveCount(0)
+
+      const guests = await (await page.request.get(`/api/events/${eventId}/guests`, {
+        headers: { Authorization: authorization },
+      })).json()
+      const updated = guests.find((g) => g.id === guest.id)
+      expect(updated?.meal_served).toBe(true)
+    } finally {
+      await page.request.delete(`/api/events/${eventId}/guests/${guest.id}`, {
+        headers: { Authorization: authorization },
+      }).catch(() => {})
+    }
+  })
+
   test('floor-plan redesign entry opens the production editor for the selected event', async ({ page }) => {
     await page.goto('/floorplan-redesign')
     await expect(page).toHaveURL(/\/floorplan-redesign\/[^/]+$/)

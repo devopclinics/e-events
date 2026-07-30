@@ -3,6 +3,7 @@ import RedesignShell, { Icon, Modal, ConfirmDialog, ChannelPreviewFrame } from '
 import { LoadingSkeleton, PermissionDeniedState } from './redesign/RedesignPrimitives'
 import { useCurrentEvent } from '../hooks/useCurrentEvent'
 import { useEventDetails } from '../hooks/useEventDetails'
+import { useGuests } from '../hooks/useGuests'
 import { api } from '../api'
 import './ExperienceRedesignPage.css'
 
@@ -91,7 +92,7 @@ export default function ExperienceRedesignPage() {
   const [confirmStepDelete, setConfirmStepDelete] = useState(null)
   const [sessionImportOpen, setSessionImportOpen] = useState(false)
   const [sessionImportText, setSessionImportText] = useState('')
-  const [realGuests, setRealGuests] = useState(null)
+  const { guests: realGuests, loading: guestsLoading } = useGuests(currentEventId)
   const [selectedGuestId, setSelectedGuestId] = useState('')
   const [guestJourney, setGuestJourney] = useState(null)
   const [consentForm, setConsentForm] = useState(null)
@@ -163,19 +164,6 @@ export default function ExperienceRedesignPage() {
     }
   }
 
-  async function loadGuests() {
-    if (!currentEventId) return
-    try {
-      const data = await api.listGuests(currentEventId)
-      setRealGuests(data)
-      const nextId = selectedGuestId && data.some((g) => g.id === selectedGuestId) ? selectedGuestId : (data[0]?.id || '')
-      setSelectedGuestId(nextId)
-      await loadGuestJourney(nextId)
-    } catch {
-      setRealGuests([])
-    }
-  }
-
   async function loadConsentForm() {
     if (!currentEventId) return
     try {
@@ -205,18 +193,27 @@ export default function ExperienceRedesignPage() {
       .catch((err) => { if (err.status === 403) setFeedbackDenied(true); else setFeedbackResults(null) })
     loadEvent()
     loadWorkflows()
-    loadGuests()
     loadConsentForm()
     loadTemplates()
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [currentEventId])
+
+  // Keeps the selected guest (and their journey) in sync whenever the shared
+  // guest list loads or changes, since useGuests owns the fetch itself now.
+  useEffect(() => {
+    if (guestsLoading) return
+    const nextId = selectedGuestId && realGuests.some((g) => g.id === selectedGuestId) ? selectedGuestId : (realGuests[0]?.id || '')
+    if (nextId !== selectedGuestId) setSelectedGuestId(nextId)
+    loadGuestJourney(nextId)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [realGuests, guestsLoading])
 
   // ── derived ───────────────────────────────────────────────────────────
   const selectedWorkflow = (workflows || []).find((w) => w.id === selectedId) || null
   const isDraftSelected = selectedWorkflow?.status === 'draft'
   const sortedSteps = (selectedWorkflow?.steps || []).slice().sort((a, b) => (a.sort_order || 0) - (b.sort_order || 0))
   const filteredWorkflows = (workflows || []).filter((w) => filterMatchesStatus(w.status, statusFilter))
-  const selectedGuest = (realGuests || []).find((g) => g.id === selectedGuestId) || null
+  const selectedGuest = realGuests.find((g) => g.id === selectedGuestId) || null
   const liveWorkflowSteps = dashboard?.workflow?.steps || selectedWorkflow?.steps || []
   const feedbackStep = liveWorkflowSteps.find((s) => s.type === 'feedback') || null
   const feedbackStepQuestions = feedbackStep?.config?.feedback?.questions || []
@@ -790,7 +787,7 @@ export default function ExperienceRedesignPage() {
           <div className="rd-panel">
             <div className="rd-panel-head"><h3>Guest progress</h3><p>Select a guest to view and override their journey</p></div>
             <div className="rd-panel-body">
-              {realGuests === null ? <LoadingSkeleton rows={5} variant="list" /> : realGuests.length === 0 ? <p className="rd-rowlink">No guests yet.</p> : (
+              {guestsLoading ? <LoadingSkeleton rows={5} variant="list" /> : realGuests.length === 0 ? <p className="rd-rowlink">No guests yet.</p> : (
                 <table className="rr-table">
                   <thead><tr><th>Guest</th><th>RSVP</th><th>Check-in</th><th/></tr></thead>
                   <tbody>

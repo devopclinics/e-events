@@ -113,7 +113,7 @@ from sqlalchemy import delete, select
 
 from app.auth import _ensure_firebase
 from app.database import AsyncSessionLocal
-from app.models import ApiKey, EventUser, Membership, Organization, User
+from app.models import ApiKey, EventUser, Membership, Organization, Task, TaskActivity, User
 
 _ensure_firebase()
 for uid_env in ("QA_FIREBASE_UID", "QA_SECOND_FIREBASE_UID"):
@@ -130,6 +130,16 @@ async def remove_user(user_id):
         org_ids = list((await db.execute(
             select(Membership.org_id).where(Membership.user_id == user.id)
         )).scalars())
+        # A failed test can leave behind rows (e.g. tasks/activities) that FK
+        # back to this throwaway user — clear those first so the delete below
+        # doesn't get blocked mid-teardown.
+        activity_task_ids = set((await db.execute(
+            select(TaskActivity.task_id).where(TaskActivity.user_id == user.id)
+        )).scalars())
+        await db.execute(delete(TaskActivity).where(TaskActivity.user_id == user.id))
+        for task_id in activity_task_ids:
+            await db.execute(delete(TaskActivity).where(TaskActivity.task_id == task_id))
+            await db.execute(delete(Task).where(Task.id == task_id))
         await db.execute(delete(ApiKey).where(ApiKey.created_by_user_id == user.id))
         await db.execute(delete(EventUser).where(EventUser.user_id == user.id))
         await db.execute(delete(Membership).where(Membership.user_id == user.id))
@@ -141,8 +151,13 @@ async def remove_user(user_id):
         await db.commit()
 
 async def remove():
-    await remove_user(os.environ["QA_USER_ID"])
-    await remove_user(os.environ["QA_SECOND_USER_ID"])
+    # Isolate each identity's teardown — one failing (e.g. an unexpected FK
+    # left by a failed test) must not skip cleanup of the other identity.
+    for user_id in (os.environ["QA_USER_ID"], os.environ["QA_SECOND_USER_ID"]):
+        try:
+            await remove_user(user_id)
+        except Exception as e:
+            print(f"cleanup: failed to remove {user_id}: {e}")
 
 asyncio.run(remove())
 PY

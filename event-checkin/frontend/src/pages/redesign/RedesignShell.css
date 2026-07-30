@@ -47,6 +47,10 @@
 .rr-topbar-event { margin-left: 10px; flex: none; display: flex; align-items: center; gap: 5px; font-size: 10.5px;
   font-weight: 700; color: var(--teal); background: var(--teal-soft); border-radius: 100px; padding: 5px 11px;
   text-decoration: none; max-width: 190px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.rr-topbar-event-select { background: transparent; border: none; color: inherit; font: inherit; font-weight: 700;
+  max-width: 165px; overflow: hidden; text-overflow: ellipsis; cursor: pointer; appearance: none; padding: 0; }
+.rr-topbar-event-select:focus { outline: none; }
+.rr-topbar-event-select option { color: var(--ink); background: var(--surface); font-weight: 500; }
 .rr-topbar-right { margin-left: auto; display: flex; align-items: center; gap: 8px; flex: none; }
 .rr-topbar-user { display: flex; align-items: center; gap: 8px; }
 .rr-topbar-user > div:first-child { display: flex; flex-direction: column; text-align: right; line-height: 1.25; }

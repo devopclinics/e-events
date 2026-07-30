@@ -216,18 +216,20 @@ function ThemeToggle() {
 export default function RedesignShell({ topActive, withEventSidebar = false, eventActive, children }) {
   const location = useLocation()
   const { user } = useAuth()
-  const [currentEventId] = useCurrentEvent()
-  const [event, setEvent] = useState(null)
+  const [currentEventId, setCurrentEventId] = useCurrentEvent()
+  const [events, setEvents] = useState([])
   const [menu, setMenu] = useState(false)
 
   useEffect(() => {
-    if (!user || !currentEventId) { setEvent(null); return }
+    if (!user) { setEvents([]); return }
     let cancelled = false
     api.listEvents()
-      .then((evs) => { if (!cancelled) setEvent(evs.find((e) => e.id === currentEventId) || null) })
-      .catch(() => { if (!cancelled) setEvent(null) })
+      .then((evs) => { if (!cancelled) setEvents(evs) })
+      .catch(() => { if (!cancelled) setEvents([]) })
     return () => { cancelled = true }
-  }, [user, currentEventId])
+  }, [user])
+
+  const event = events.find((e) => e.id === currentEventId) || null
 
   // Real per-event add-on entitlements — same fields the legacy sidebar
   // gates on (AdminPage.jsx). Falls back to all-hidden while no event is
@@ -270,9 +272,23 @@ export default function RedesignShell({ topActive, withEventSidebar = false, eve
           </nav>
 
           {withEventSidebar && (
-            <Link to="/admin-redesign" className="rr-topbar-event" title="Current event — manage">
-              <Icon name="calendar" size={12} /> <span>{eventName}</span>
-            </Link>
+            events.length > 0 ? (
+              <label className="rr-topbar-event" title="Switch event">
+                <Icon name="calendar" size={12} />
+                <select
+                  className="rr-topbar-event-select"
+                  value={currentEventId || ''}
+                  onChange={(e) => setCurrentEventId(e.target.value)}
+                >
+                  {!currentEventId && <option value="">Choose an event…</option>}
+                  {events.map((e) => <option key={e.id} value={e.id}>{e.name}</option>)}
+                </select>
+              </label>
+            ) : (
+              <span className="rr-topbar-event">
+                <Icon name="calendar" size={12} /> <span>{eventName}</span>
+              </span>
+            )
           )}
 
           <div className="rr-topbar-right">

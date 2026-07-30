@@ -4,6 +4,8 @@ import RedesignShell, { Icon, Modal, ConfirmDialog } from './redesign/RedesignSh
 import { LoadingSkeleton } from './redesign/RedesignPrimitives'
 import { useCurrentEvent } from '../hooks/useCurrentEvent'
 import { useEventDetails } from '../hooks/useEventDetails'
+import { useGuests } from '../hooks/useGuests'
+import { useTasks } from '../hooks/useEventResources'
 import { api } from '../api'
 import { useAuth } from '../context/AuthContext'
 import './AdminRedesignPage.css'
@@ -120,19 +122,11 @@ export default function AdminRedesignPage() {
   const [currentEventId, setCurrentEventId] = useCurrentEvent()
   const { user } = useAuth()
   const { event, setEvent, refresh: refreshEvent } = useEventDetails(currentEventId)
-  const [guests, setGuests] = useState(null)
-  const [tasks, setTasks] = useState(null)
-
-  useEffect(() => {
-    if (!currentEventId) { setGuests(null); setTasks(null); return }
-    let cancelled = false
-    api.listGuests(currentEventId).then((g) => { if (!cancelled) setGuests(g) }).catch(() => { if (!cancelled) setGuests([]) })
-    api.listTasks(currentEventId).then((t) => { if (!cancelled) setTasks(t) }).catch(() => { if (!cancelled) setTasks([]) })
-    return () => { cancelled = true }
-  }, [currentEventId])
+  const { guests, setGuests, loading: guestsLoading, refresh: refreshGuests } = useGuests(currentEventId)
+  const { data: tasks, setData: setTasks, loading: tasksLoading, refresh: refreshTasks } = useTasks(currentEventId)
 
   // Same formula as AdminPage.jsx:10048's `stats` object.
-  const stats = guests ? {
+  const stats = !guestsLoading ? {
     total: guests.length,
     qr: guests.filter((g) => g.qr_generated_at).length,
     invited: guests.filter((g) => g.invite_sent_at).length,
@@ -142,8 +136,8 @@ export default function AdminRedesignPage() {
 
   const { required: journeySteps, optional: optionalSteps } = deriveJourneySteps(event, stats)
   const healthPct = journeySteps.length ? Math.round((journeySteps.filter((s) => s.done).length / journeySteps.length) * 100) : 0
-  const tasksRemaining = tasks ? tasks.filter((t) => t.status !== 'done').length : null
-  const tasksOverdue = tasks ? tasks.filter((t) => t.status !== 'done' && t.overdue).length : null
+  const tasksRemaining = !tasksLoading ? tasks.filter((t) => t.status !== 'done').length : null
+  const tasksOverdue = !tasksLoading ? tasks.filter((t) => t.status !== 'done' && t.overdue).length : null
 
   useEffect(() => {
     if (event?.status) setStatus(event.status.charAt(0).toUpperCase() + event.status.slice(1))
@@ -240,7 +234,7 @@ export default function AdminRedesignPage() {
     setImportBusy(true)
     try {
       const result = await api.uploadGuests(event.id, file)
-      setGuests(await api.listGuests(event.id))
+      await refreshGuests()
       notify(`${result.added ?? result.imported ?? 0} guest${(result.added ?? result.imported) === 1 ? '' : 's'} imported`)
     } catch (e) { notify(e.message || 'Import failed', true) }
     finally { setImportBusy(false); if (importFileRef.current) importFileRef.current.value = '' }
@@ -271,7 +265,7 @@ export default function AdminRedesignPage() {
     setSyncBusy(true)
     try {
       const result = await api.syncNow(event.id)
-      setGuests(await api.listGuests(event.id))
+      await refreshGuests()
       await refreshEvent()
       setSyncResult(`+${result.added} new`)
       notify(`Synced: ${result.added} added, ${result.skipped} skipped`)
@@ -280,7 +274,7 @@ export default function AdminRedesignPage() {
   }
 
   const currentStep = journeySteps.find((s) => !s.done)
-  const messagingSummary = guests ? {
+  const messagingSummary = !guestsLoading ? {
     sent: guests.filter((guest) => !!guest.invite_sent_at).length,
     failed: guests.filter((guest) => guest.invite_status === 'failed').length,
     unsent: guests.filter((guest) => !guest.invite_sent_at).length,
@@ -432,7 +426,7 @@ export default function AdminRedesignPage() {
               setQrBusy(true)
               try {
                 const result = await api.generateQR(event.id)
-                setGuests(await api.listGuests(event.id))
+                await refreshGuests()
                 notify(`${result.generated} QR code${result.generated === 1 ? '' : 's'} generated`)
               } catch (e) { notify(e.message || 'QR codes could not be generated', true) }
               finally { setQrBusy(false) }
@@ -624,7 +618,7 @@ export default function AdminRedesignPage() {
               const flags = Object.fromEntries(selected.map((key) => [key, true]))
               const result = await api.adminResetEvent(event.id, flags)
               setResetOpen(false)
-              await Promise.all([refreshEvent(), api.listGuests(event.id).then(setGuests), api.listTasks(event.id).then(setTasks)])
+              await Promise.all([refreshEvent(), refreshGuests(), refreshTasks()])
               notify(`Event data reset${result?.cleared ? `: ${Object.keys(result.cleared).join(', ') || 'nothing to clear'}` : ''}`)
             } catch (error) { notify(error.message || 'Event data could not be reset', true) }
             finally { setEventMutationBusy(false) }

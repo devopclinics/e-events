@@ -3,6 +3,7 @@ import { useSearchParams } from 'react-router-dom'
 import RedesignShell, { Icon, Modal, ConfirmDialog } from './redesign/RedesignShell'
 import { LoadingSkeleton, ErrorRetryState, EmptyState } from './redesign/RedesignPrimitives'
 import { useCurrentEvent } from '../hooks/useCurrentEvent'
+import { useBilling } from '../hooks/useEventResources'
 import { api } from '../api'
 import './BillingRedesignPage.css'
 
@@ -27,33 +28,23 @@ function billingMoney(amount, currency) {
 }
 
 function BillingTab({ notify, eventId, onBuyPass, onBuyCredits }) {
-  const [billing, setBilling] = useState(null)
-  const [billingError, setBillingError] = useState('')
+  const { data: billing, loading: billingLoading, error: billingError, refresh: loadBilling } = useBilling(eventId)
   const [currencyBusy, setCurrencyBusy] = useState(false)
-
-  async function loadBilling() {
-    if (!eventId) { setBilling(null); return }
-    setBillingError('')
-    try {
-      const [info, ledger] = await Promise.all([api.getBillingTiers(eventId), api.getCreditLedger(eventId)])
-      setBilling({ ...info, ledger })
-    } catch (error) { setBillingError(error.message || 'Billing could not be loaded') }
-  }
-  useEffect(() => { loadBilling() }, [eventId])
+  const [currencyError, setCurrencyError] = useState('')
 
   async function changeCurrency(currency) {
-    setCurrencyBusy(true); setBillingError('')
+    setCurrencyBusy(true); setCurrencyError('')
     try {
       await api.setBillingCurrency(eventId, currency)
       await loadBilling()
       notify(`Billing currency changed to ${currency}`)
-    } catch (error) { setBillingError(error.message || 'Currency could not be changed') }
+    } catch (error) { setCurrencyError(error.message || 'Currency could not be changed') }
     finally { setCurrencyBusy(false) }
   }
 
   if (!eventId) return <EmptyState icon="card" title="No event selected" message="Choose an event before managing billing." />
-  if (billingError && !billing) return <ErrorRetryState message={billingError} onRetry={loadBilling} />
-  if (!billing) return <LoadingSkeleton rows={6} />
+  if (billingError) return <ErrorRetryState message={billingError} onRetry={loadBilling} />
+  if (billingLoading) return <LoadingSkeleton rows={6} />
 
   const tierRows = billing.tiers || []
   const packRows = billing.packs || []
@@ -78,7 +69,7 @@ function BillingTab({ notify, eventId, onBuyPass, onBuyCredits }) {
           <div className="bl-plan-stat"><strong>{billing.configured ? 'Ready' : 'Unavailable'}</strong><span>{billing.provider} checkout</span></div>
         </div>
       </div>
-      {billingError && <p className="rp-field-error">{billingError}</p>}
+      {currencyError && <p className="rp-field-error">{currencyError}</p>}
 
       <div className="rr-section-title">
         <div><h2>Plans</h2><p>Upgrade or downgrade — takes effect on your next billing cycle</p></div>

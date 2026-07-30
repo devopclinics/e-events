@@ -36,7 +36,8 @@ function useEventResource(eventId, loader, emptyValue, errorMessage) {
 
 const EMPTY_ACCESS = { zones: [], ticketTypes: [] }
 const EMPTY_SEATING = { tables: [], tableGroups: [] }
-const EMPTY_BILLING = { tiers: [], ledger: null }
+const EMPTY_TASKS = []
+const EMPTY_BILLING = { tiers: [], packs: [], ledger: null }
 const EMPTY_MESSAGING = { invitations: null, broadcasts: [] }
 
 const loadAccess = async (eventId) => {
@@ -48,8 +49,8 @@ const loadSeating = async (eventId) => {
   return { tables, tableGroups }
 }
 const loadBilling = async (eventId) => {
-  const [tiers, ledger] = await Promise.all([api.getBillingTiers(eventId), api.getCreditLedger(eventId)])
-  return { tiers, ledger }
+  const [info, ledger] = await Promise.all([api.getBillingTiers(eventId), api.getCreditLedger(eventId)])
+  return { ...info, ledger }
 }
 const loadMessaging = async (eventId) => {
   const [invitations, broadcasts] = await Promise.all([
@@ -68,7 +69,7 @@ export function useSeating(eventId) {
 }
 
 export function useTasks(eventId) {
-  return useEventResource(eventId, api.listTasks, [], 'Tasks could not be loaded')
+  return useEventResource(eventId, api.listTasks, EMPTY_TASKS, 'Tasks could not be loaded')
 }
 
 export function useBilling(eventId) {

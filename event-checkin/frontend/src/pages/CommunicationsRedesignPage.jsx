@@ -454,7 +454,8 @@ function MessagesTab({ notify, onPreview, eventId }) {
   const [templateEditor, setTemplateEditor] = useState(null)
   const [communication, setCommunication] = useState(null)
   const [broadcasts, setBroadcasts] = useState([])
-  const [attentionGuests, setAttentionGuests] = useState([])
+  const { guests } = useGuests(eventId)
+  const attentionGuests = guests.filter((g) => g.invite_status === 'failed' || !g.invite_sent_at)
 
   async function loadTemplates() {
     if (!eventId) {
@@ -479,18 +480,15 @@ function MessagesTab({ notify, onPreview, eventId }) {
     if (!eventId) {
       setCommunication(null)
       setBroadcasts([])
-      setAttentionGuests([])
       return
     }
     try {
-      const [inv, bc, guests] = await Promise.all([
+      const [inv, bc] = await Promise.all([
         api.resultsInvitations(eventId),
         api.resultsBroadcasts(eventId).catch(() => []),
-        api.listGuests(eventId),
       ])
       setCommunication(inv.communication)
       setBroadcasts(bc)
-      setAttentionGuests(guests.filter((g) => g.invite_status === 'failed' || !g.invite_sent_at))
     } catch (e) {
       notify(e.message || 'Delivery data could not be loaded', true)
     }

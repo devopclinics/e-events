@@ -4,6 +4,7 @@ import RedesignShell, { Icon, ConfirmDialog } from './redesign/RedesignShell'
 import { LoadingSkeleton, ErrorRetryState, EmptyState } from './redesign/RedesignPrimitives'
 import { useCurrentEvent } from '../hooks/useCurrentEvent'
 import { useEventDetails } from '../hooks/useEventDetails'
+import { useTasks } from '../hooks/useEventResources'
 import { api } from '../api'
 import './TeamRedesignPage.css'
 
@@ -553,8 +554,7 @@ function TeamTab({ eventId, notify, onRequestDelete }) {
 }
 
 function TasksTab({ eventId, notify, onRequestDelete }) {
-  const [tasks, setTasks] = useState(null)
-  const [tasksError, setTasksError] = useState('')
+  const { data: tasks, loading: tasksLoading, error: tasksError, refresh: refreshTasks } = useTasks(eventId)
   const [taskMembers, setTaskMembers] = useState([])
   const [view, setView] = useState('list')
   const [showCompleted, setShowCompleted] = useState(true)
@@ -566,16 +566,12 @@ function TasksTab({ eventId, notify, onRequestDelete }) {
 
   function loadTasks() {
     if (!eventId) return
-    setTasksError('')
-    return Promise.all([api.listTasks(eventId), api.listMembers(eventId)])
-      .then(([t, m]) => { setTasks(t); setTaskMembers(m) })
-      .catch((e) => { setTasksError(e.message); setTasks([]) })
+    return Promise.all([refreshTasks(), api.listMembers(eventId).then(setTaskMembers).catch(() => setTaskMembers([]))])
   }
 
   useEffect(() => {
-    if (!eventId) { setTasks(null); return }
-    setTasks(null)
-    loadTasks()
+    if (!eventId) { setTaskMembers([]); return }
+    api.listMembers(eventId).then(setTaskMembers).catch(() => setTaskMembers([]))
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [eventId])
 
@@ -718,7 +714,7 @@ function TasksTab({ eventId, notify, onRequestDelete }) {
         <div className="rd-panel-body">
           {!eventId ? (
             <EmptyState icon="calendar" title="No event selected" message="Choose an event from the top bar to manage its tasks." />
-          ) : tasks === null ? (
+          ) : tasksLoading ? (
             <LoadingSkeleton rows={5} variant="table" />
           ) : tasksError ? (
             <ErrorRetryState message={tasksError} onRetry={loadTasks} />

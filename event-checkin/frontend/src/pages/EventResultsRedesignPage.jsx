@@ -488,9 +488,9 @@ function OverviewDashboard({
           <article className="er-ops-panel er-ops-comm-card">
             <div className="er-ops-panel-head"><div><h2>Communications delivery</h2><p>Entire-event channel reach</p></div></div>
             <div className="er-ops-panel-body">
-              {['email', 'sms', 'whatsapp'].map((channel) => {
+              {['email', 'sms', 'whatsapp', 'mms'].filter((channel) => channel !== 'mms' || data.communication.mms?.sent > 0).map((channel) => {
                 const item = data.communication[channel] || {}
-                const label = channel === 'email' ? 'Email' : channel === 'sms' ? 'SMS' : 'WhatsApp'
+                const label = channel === 'email' ? 'Email' : channel === 'sms' ? 'SMS' : channel === 'mms' ? 'MMS' : 'WhatsApp'
                 return (
                   <div className="er-ops-channel" key={channel}>
                     <span><Icon name={channel === 'email' ? 'mail' : channel === 'whatsapp' ? 'whatsapp' : 'message'} size={14} />{label}</span>
@@ -504,6 +504,12 @@ function OverviewDashboard({
                   <span>{data.communication.email.breakdown.delivered} delivered</span>
                   <span>{data.communication.email.breakdown.opened + data.communication.email.breakdown.clicked} engaged</span>
                   <span>{data.communication.email.breakdown.bounced + data.communication.email.breakdown.failed} failed</span>
+                </div>
+              )}
+              {(data.communication.sms?.sent > 0 || data.communication.whatsapp?.sent > 0) && (
+                <div className="er-ops-email-outcomes">
+                  {data.communication.sms?.sent > 0 && <span>SMS: {data.communication.sms.delivered} delivered · {data.communication.sms.failed} failed</span>}
+                  {data.communication.whatsapp?.sent > 0 && <span>WhatsApp: {data.communication.whatsapp.delivered} delivered · {data.communication.whatsapp.failed} failed</span>}
                 </div>
               )}
               <div className="er-ops-card-foot"><span>Credits remaining</span><b>{data.communication.credits_remaining}</b></div>

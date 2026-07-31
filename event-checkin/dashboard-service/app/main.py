@@ -692,13 +692,23 @@ async def communication_health(db: AsyncSession, event: Event) -> dict:
         elif action == "refund":
             d["failed"].add(key)
 
+    # Same dedup-by-provider_message_id + failed-count logic as backend/app/
+    # routers/dashboard.py's message_delivery (legacy's "Messaging delivery"
+    # card) — the redesign only ever surfaced sent/delivered/rate here,
+    # silently dropping the failed count and the MMS channel entirely.
     def _rate(c):
         sent = len(msg_ids[c]["sent"])
+        failed = len(msg_ids[c]["failed"])
         delivered = len(msg_ids[c]["delivered"] - msg_ids[c]["failed"])
-        return {"sent": sent, "delivered": delivered, "rate": round(delivered / sent * 100) if sent else None}
+        return {"sent": sent, "delivered": delivered, "failed": failed,
+                "rate": round(delivered / sent * 100) if sent else None}
 
     sms_rate = _rate("sms")
     whatsapp_rate = _rate("whatsapp")
+    mms_rate = _rate("mms")
+    channel_rates = {"sms": sms_rate, "mms": mms_rate, "whatsapp": whatsapp_rate}
+    message_delivery = [{"channel": c, **channel_rates[c]} for c in ("sms", "mms", "whatsapp")
+                         if msg_ids[c]["sent"] or msg_ids[c]["failed"]]
 
     email_rows = (await db.execute(
         select(EmailDeliveryEvent.provider_email_id, EmailDeliveryEvent.provider_event_id,
@@ -740,6 +750,8 @@ async def communication_health(db: AsyncSession, event: Event) -> dict:
                    "breakdown": email_breakdown},
         "sms": sms_rate,
         "whatsapp": whatsapp_rate,
+        "mms": mms_rate,
+        "message_delivery": message_delivery,
         "credits_remaining": event.message_credits,
     }
 

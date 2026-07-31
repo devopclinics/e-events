@@ -9,11 +9,26 @@ import './ExperienceRedesignPage.css'
 
 const FAILED = Symbol('experience-action-failed')
 
+const STEP_PRESETS = [
+  { key: 'feedback_prompt', type: 'feedback', title: 'Feedback', description: 'Invite attendees to share feedback after the event.', required: false, config: { owner: 'guest', messages: { guest: 'Please take a moment to share your feedback.', complete: 'Thank you for sharing your feedback.' }, feedback: { audience: 'all', anonymous: false, questions: [{ id: 'overall_rating', type: 'rating', prompt: 'How would you rate your overall experience?', required: true }, { id: 'recommend', type: 'nps', prompt: 'How likely are you to recommend this event?', required: true }, { id: 'comments', type: 'text', prompt: 'What should we keep or improve?', required: false }] } } },
+  { key: 'rsvp_approved', type: 'custom', title: 'RSVP approved', description: 'Guest has confirmed attendance and passed host approval.', required: true, config: { owner: 'host', source: 'guest_rsvp', visible_to_staff: true } },
+  { key: 'main_check_in', type: 'check_in', title: 'Main entrance check-in', description: 'Admit the guest using their QR code or manual lookup.', required: true, config: { station: 'main_entrance', allow_manual_lookup: true, requires_event_pass: true } },
+  { key: 'consent', type: 'consent', title: 'Consent', description: 'Guest signs the event consent form from their Festio Pass.', required: true, config: { owner: 'guest', guest_action: 'sign_consent', visible_to_staff: true, messages: { guest: 'Please review and sign the consent form from your Festio Pass before collecting gifts or souvenirs.', staff: 'Ask the guest to open their Festio Pass and sign the consent form.', complete: 'Consent signed.' } } },
+  { key: 'seat_confirmed', type: 'seating_assignment', title: 'Seat confirmed', description: 'Confirm the guest table and seat before sending them into the dining area.', required: true, config: { show_table_name: true, show_seat_number: true } },
+  { key: 'meal_confirmed', type: 'meal_selection', title: 'Meal confirmed', description: 'Confirm catering has the guest meal choice or dietary note.', required: false, config: { allow_staff_note: true, fallback_choice: 'Confirm at table' } },
+  { key: 'welcome_pack', type: 'souvenir', title: 'Souvenir collected', description: 'Staff mark complete after consent is signed and the guest receives their souvenir, welcome pack, badge, or gift bag.', required: false, config: { station: 'gift_table', item: 'souvenir', prevent_duplicate_collection: true, depends_on: ['consent'], messages: { guest: 'Collect your souvenir after signing consent.', staff: 'Give the souvenir, welcome pack, badge, or gift bag, then mark this complete.', complete: 'Souvenir collected.' } } },
+  { key: 'vip_host_greeting', type: 'custom', title: 'Host greeting complete', description: 'Mark complete after the host or protocol team has greeted the guest.', required: false, conditions: { guest_tags_include: ['vip'] }, config: { owner: 'protocol_team', staff_prompt: 'Notify host before marking this complete.' } },
+  { key: 'badge_pickup', type: 'badge', title: 'Badge pickup', description: 'Confirm badge, wristband, or credential pickup.', required: false, config: { station: 'registration' } },
+  { key: 'session_attendance', type: 'session_attendance', title: 'Session attendance', description: 'Track guest attendance for a program segment or breakout.', required: false, config: { station: 'session_entry', session: { topic: 'Program session', date: '', start_time: '', end_time: '', room: '', speaker: '', capacity: null }, messages: { guest: 'Please proceed to the scheduled session and show your Festio Pass at the entrance.', staff: 'Confirm the guest is entering the correct session, then mark attendance complete.', complete: 'Session attendance recorded.' } } },
+  { key: 'departure_noted', type: 'checkout', title: 'Departure noted', description: 'Mark complete when valet, transport, or guest departure is handled.', required: false, config: { station: 'exit', allow_note: true } },
+]
+const STEP_PRESET_BY_KEY = Object.fromEntries(STEP_PRESETS.map((preset) => [preset.key, preset]))
+
 const WORKFLOW_TEMPLATES = [
-  { name: 'VIP Dinner', steps: 5 },
-  { name: 'Conference Registration', steps: 7 },
-  { name: 'Wedding Reception', steps: 6 },
-  { name: 'Simple Check-in', steps: 2 },
+  { id: 'vip_dinner', name: 'VIP Dinner Guest Journey', label: 'VIP dinner', description: 'RSVP approval, arrival, consent, seating, meal, souvenir, VIP greeting, and departure.', stepKeys: ['rsvp_approved', 'main_check_in', 'consent', 'seat_confirmed', 'meal_confirmed', 'welcome_pack', 'vip_host_greeting', 'departure_noted'] },
+  { id: 'conference_registration', name: 'Conference Registration Journey', label: 'Conference', description: 'Registration desk flow with badge pickup, check-in, session attendance, and checkout.', stepKeys: ['rsvp_approved', 'badge_pickup', 'main_check_in', 'session_attendance', 'departure_noted'] },
+  { id: 'wedding_reception', name: 'Wedding Reception Journey', label: 'Wedding reception', description: 'Guest admission, consent, table confirmation, meal handling, and gift pickup.', stepKeys: ['main_check_in', 'consent', 'seat_confirmed', 'meal_confirmed', 'welcome_pack'] },
+  { id: 'simple_checkin', name: 'Simple Check-in Journey', label: 'Simple check-in', description: 'A minimal operational workflow for events that only need arrival tracking.', stepKeys: ['main_check_in'] },
 ]
 
 const SUBTABS = ['Setup', 'Workflow', 'Guests', 'Consent', 'Feedback', 'Messages', 'Analytics']
@@ -34,15 +49,68 @@ const STEP_TYPE_ICON = {
 }
 function stepTypeIcon(type) { return STEP_TYPE_ICON[type] || 'file' }
 
+const FEEDBACK_QUESTION_TYPES = [
+  ['rating', 'Rating (1–5)'], ['nps', 'Recommendation (0–10)'], ['single_choice', 'Multiple choice'],
+  ['multi_choice', 'Choose multiple'], ['yes_no', 'Yes / No'], ['text', 'Written comments'],
+]
 const FEEDBACK_TYPE_LABELS = { rating: 'Rating', nps: 'NPS', single_choice: 'Single choice', multi_choice: 'Multi choice', yes_no: 'Yes/No', text: 'Text' }
 function feedbackTypeLabel(t) { return FEEDBACK_TYPE_LABELS[t] || t }
 
 function blankStepForm() {
   return {
-    id: null, key: '', type: 'custom', title: '', description: '', required: true, enabled: true,
+    id: null, key: '', type: 'custom', title: '', description: '', sort_order: 0, required: true, enabled: true, depends_on: '',
     guest_message: '', staff_prompt: '', completion_message: '',
-    session_topic: '', session_date: '', session_start_time: '', session_end_time: '', session_room: '', session_speaker: '', session_capacity: '',
-    feedback_audience: 'all', feedback_status: 'open',
+    session_topic: '', session_date: '', session_start_time: '', session_end_time: '', session_room: '', session_speaker: '', session_capacity: '', session_checkin_window_minutes: '',
+    room_assignment_mode: 'global', room_assignment_scope: '', room_assignment_room: '', room_assignment_table_group: '',
+    feedback_audience: 'all', feedback_session_step_id: '', feedback_anonymous: false, feedback_status: 'open',
+    feedback_opens_at: '', feedback_closes_at: '', feedback_allow_edit: true, feedback_questions: [],
+    program_is_segment: false, program_start_offset_seconds: '', program_duration_seconds: '', program_category: '',
+    program_announce_enabled: false, program_announce_title: '', program_announce_body: '',
+    program_feedback_step_key: '', program_feedback_window_seconds: '1800',
+    conditions: '', config: '',
+  }
+}
+
+function listValue(raw) {
+  if (!raw) return []
+  if (Array.isArray(raw)) return raw.map((value) => String(value).trim()).filter(Boolean)
+  return String(raw).split(',').map((value) => value.trim()).filter(Boolean)
+}
+function listText(raw) { return listValue(raw).join(', ') }
+function toggleListText(raw, value) {
+  const values = new Set(listValue(raw))
+  values.has(value) ? values.delete(value) : values.add(value)
+  return [...values].join(', ')
+}
+function parseJsonMaybe(raw, label) {
+  const text = String(raw || '').trim()
+  if (!text) return null
+  try { return JSON.parse(text) } catch { throw new Error(`${label} must be valid JSON`) }
+}
+function normalizeSessionConfig(config = {}) {
+  const raw = config.session || config.session_details || config.schedule || config.session_config
+  const first = Array.isArray(config.sessions) ? config.sessions[0] : null
+  const source = (raw && typeof raw === 'object' ? raw : null) || (first && typeof first === 'object' ? first : null) || {}
+  return {
+    topic: source.topic || source.title || source.name || '', date: source.date || source.session_date || '',
+    start_time: source.start_time || source.startTime || source.start || '', end_time: source.end_time || source.endTime || source.end || '',
+    room: source.room || source.location || source.venue || '', speaker: source.speaker || source.host || source.presenter || '',
+    capacity: source.capacity ?? '', checkin_window_minutes: source.checkin_window_minutes ?? source.checkInWindowMinutes ?? source.checkin_window ?? '',
+  }
+}
+function normalizeRoomAssignmentConfig(config = {}) {
+  const source = (config.room_assignment && typeof config.room_assignment === 'object')
+    ? config.room_assignment : (config.assignment && typeof config.assignment === 'object') ? config.assignment : config
+  const mode = source.mode || source.assignment_mode || (source.scoped || source.scope || source.assignment_scope ? 'scoped' : 'global')
+  return {
+    mode: String(mode || 'global').toLowerCase(), scope: source.assignment_scope || source.scope || '',
+    room: source.room || source.hall || source.location || '', table_group: source.table_group || source.table_group_name || source.group || '',
+  }
+}
+function stepPresetPayload(preset, sortOrder) {
+  return {
+    key: preset.key, type: preset.type, title: preset.title, description: preset.description, sort_order: sortOrder,
+    required: preset.required, enabled: true, conditions: preset.conditions || null, config: preset.config || null,
   }
 }
 
@@ -64,12 +132,152 @@ function filterMatchesStatus(status, filter) {
   return true
 }
 
+function StepField({ label, hint, children, wide = false }) {
+  return <label className={`ex-editor-field${wide ? ' wide' : ''}`}><span>{label}</span>{children}{hint && <small>{hint}</small>}</label>
+}
+
+function ExperienceStepEditor({ form, setForm, steps, busy, onClose, onSave }) {
+  const dependencyChoices = steps.filter((step) => step.id !== form.id && step.key !== form.key)
+  const sessionChoices = steps.filter((step) => step.type === 'session_attendance')
+  const feedbackChoices = steps.filter((step) => step.type === 'feedback' && step.id !== form.id)
+  const patch = (next) => setForm((current) => ({ ...current, ...next }))
+  const updateQuestion = (index, next) => setForm((current) => ({
+    ...current,
+    feedback_questions: current.feedback_questions.map((question, questionIndex) => questionIndex === index ? { ...question, ...next } : question),
+  }))
+  const moveQuestion = (index, direction) => setForm((current) => {
+    const questions = [...current.feedback_questions]
+    const target = index + direction
+    if (target < 0 || target >= questions.length) return current
+    ;[questions[index], questions[target]] = [questions[target], questions[index]]
+    return { ...current, feedback_questions: questions }
+  })
+
+  return (
+    <aside className="rr-panel ex-step-editor">
+      <div className="ex-step-editor-head">
+        <div><span className="ex-step-icon"><Icon name={stepTypeIcon(form.type)} size={14}/></span><div><h3>{form.id ? form.title || 'Edit step' : 'Add step'}</h3><p>Workflow step settings</p></div></div>
+        <button type="button" className="rr-link-btn" onClick={onClose}>Close ✕</button>
+      </div>
+      <div className="ex-step-editor-scroll">
+        <section className="ex-editor-section">
+          <div className="ex-editor-section-title"><strong>Identity &amp; order</strong><span>How this step is stored and shown</span></div>
+          <div className="ex-editor-grid">
+            <StepField label="Key"><input className="rr-input" aria-label="Step key" value={form.key} onChange={(event) => patch({ key: event.target.value })} placeholder="main_checkin"/></StepField>
+            <StepField label="Type"><select className="rr-select" aria-label="Step type" value={form.type} onChange={(event) => patch({ type: event.target.value })}>{STEP_TYPES.map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></StepField>
+            <StepField label="Title"><input className="rr-input" aria-label="Step title" value={form.title} onChange={(event) => patch({ title: event.target.value })}/></StepField>
+            <StepField label="Sort order"><input className="rr-input" aria-label="Sort order" type="number" value={form.sort_order} onChange={(event) => patch({ sort_order: event.target.value })}/></StepField>
+            <StepField label="Description" wide><textarea className="rr-textarea" rows={2} value={form.description} onChange={(event) => patch({ description: event.target.value })}/></StepField>
+          </div>
+          <div className="ex-editor-toggle-row">
+            <label><input type="checkbox" checked={form.required} onChange={(event) => patch({ required: event.target.checked })}/> Required</label>
+            <label><input type="checkbox" checked={form.enabled} onChange={(event) => patch({ enabled: event.target.checked })}/> Enabled</label>
+          </div>
+        </section>
+
+        <section className="ex-editor-section">
+          <div className="ex-editor-section-title"><strong>Step dependencies</strong><span>Require earlier steps before this becomes available</span></div>
+          <div className="ex-dependency-pills">
+            {!dependencyChoices.length && <small>No other steps are available yet.</small>}
+            {dependencyChoices.map((step) => {
+              const checked = listValue(form.depends_on).includes(step.key)
+              return <label className={checked ? 'on' : ''} key={step.id}><input type="checkbox" checked={checked} onChange={() => patch({ depends_on: toggleListText(form.depends_on, step.key) })}/>{step.title}</label>
+            })}
+          </div>
+        </section>
+
+        <section className="ex-editor-section">
+          <div className="ex-editor-section-title"><strong>Step messages</strong><span>Guest, scanner, and completion guidance</span></div>
+          <StepField label="Guest message"><textarea className="rr-textarea" rows={3} value={form.guest_message} onChange={(event) => patch({ guest_message: event.target.value })} placeholder="What guests should see"/></StepField>
+          <StepField label="Staff scanner prompt"><textarea className="rr-textarea" rows={3} value={form.staff_prompt} onChange={(event) => patch({ staff_prompt: event.target.value })} placeholder="What staff should do"/></StepField>
+          <StepField label="Completion message"><textarea className="rr-textarea" rows={3} value={form.completion_message} onChange={(event) => patch({ completion_message: event.target.value })} placeholder="What appears after completion"/></StepField>
+        </section>
+
+        <section className="ex-editor-section accent">
+          <div className="ex-editor-section-title with-control"><div><strong>Live Program timing</strong><span>Optional timed program segment</span></div><label><input type="checkbox" checked={form.program_is_segment} onChange={(event) => patch({ program_is_segment: event.target.checked })}/> Include</label></div>
+          {form.program_is_segment && <div className="ex-editor-grid">
+            <StepField label="Start offset (seconds)"><input className="rr-input" type="number" min="0" value={form.program_start_offset_seconds} onChange={(event) => patch({ program_start_offset_seconds: event.target.value })}/></StepField>
+            <StepField label="Duration (seconds)"><input className="rr-input" type="number" min="1" value={form.program_duration_seconds} onChange={(event) => patch({ program_duration_seconds: event.target.value })}/></StepField>
+            <StepField label="Category"><input className="rr-input" value={form.program_category} onChange={(event) => patch({ program_category: event.target.value })} placeholder="Main session"/></StepField>
+            <StepField label="Feedback after segment"><select className="rr-select" value={form.program_feedback_step_key} onChange={(event) => patch({ program_feedback_step_key: event.target.value })}><option value="">No feedback prompt</option>{feedbackChoices.map((step) => <option value={step.key} key={step.id}>{step.title}</option>)}</select></StepField>
+            {form.program_feedback_step_key && <StepField label="Feedback window (seconds)"><input className="rr-input" type="number" min="60" value={form.program_feedback_window_seconds} onChange={(event) => patch({ program_feedback_window_seconds: event.target.value })}/></StepField>}
+            <StepField label="Announcement" wide><label className="ex-inline-check"><input type="checkbox" checked={form.program_announce_enabled} onChange={(event) => patch({ program_announce_enabled: event.target.checked })}/> Announce when this segment starts</label></StepField>
+            {form.program_announce_enabled && <><StepField label="Announcement title" wide><input className="rr-input" value={form.program_announce_title} onChange={(event) => patch({ program_announce_title: event.target.value })}/></StepField><StepField label="Announcement message" wide><textarea className="rr-textarea" rows={2} value={form.program_announce_body} onChange={(event) => patch({ program_announce_body: event.target.value })}/></StepField></>}
+          </div>}
+        </section>
+
+        {form.type === 'session_attendance' && <section className="ex-editor-section">
+          <div className="ex-editor-section-title"><strong>Session details</strong><span>Schedule, location, capacity, and check-in window</span></div>
+          <div className="ex-editor-grid">
+            <StepField label="Topic" wide><input className="rr-input" value={form.session_topic} onChange={(event) => patch({ session_topic: event.target.value })}/></StepField>
+            <StepField label="Date"><input className="rr-input" type="date" value={form.session_date} onChange={(event) => patch({ session_date: event.target.value })}/></StepField>
+            <StepField label="Capacity"><input className="rr-input" type="number" min="0" value={form.session_capacity} onChange={(event) => patch({ session_capacity: event.target.value })}/></StepField>
+            <StepField label="Start time"><input className="rr-input" type="time" value={form.session_start_time} onChange={(event) => patch({ session_start_time: event.target.value })}/></StepField>
+            <StepField label="End time"><input className="rr-input" type="time" value={form.session_end_time} onChange={(event) => patch({ session_end_time: event.target.value })}/></StepField>
+            <StepField label="Room / location"><input className="rr-input" value={form.session_room} onChange={(event) => patch({ session_room: event.target.value })}/></StepField>
+            <StepField label="Check-in opens (minutes before)" hint="Leave blank for no time gate."><input className="rr-input" type="number" min="0" value={form.session_checkin_window_minutes} onChange={(event) => patch({ session_checkin_window_minutes: event.target.value })}/></StepField>
+            <StepField label="Speaker / host" wide><input className="rr-input" value={form.session_speaker} onChange={(event) => patch({ session_speaker: event.target.value })}/></StepField>
+          </div>
+        </section>}
+
+        {form.type === 'room_assignment' && <section className="ex-editor-section">
+          <div className="ex-editor-section-title"><strong>Room assignment</strong><span>Use scoped seating for separate halls or sessions</span></div>
+          <div className="ex-editor-grid">
+            <StepField label="Assignment mode"><select className="rr-select" value={form.room_assignment_mode} onChange={(event) => patch({ room_assignment_mode: event.target.value })}><option value="global">Main guest seat</option><option value="scoped">Separate seat for this step</option></select></StepField>
+            <StepField label="Assignment scope" hint="Required for scoped seating."><input className="rr-input" value={form.room_assignment_scope} onChange={(event) => patch({ room_assignment_scope: event.target.value })} placeholder="saturday_luncheon"/></StepField>
+            <StepField label="Room / hall"><input className="rr-input" value={form.room_assignment_room} onChange={(event) => patch({ room_assignment_room: event.target.value })}/></StepField>
+            <StepField label="Table group"><input className="rr-input" value={form.room_assignment_table_group} onChange={(event) => patch({ room_assignment_table_group: event.target.value })}/></StepField>
+          </div>
+        </section>}
+
+        {form.type === 'feedback' && <section className="ex-editor-section feedback">
+          <div className="ex-editor-section-title with-control"><div><strong>Feedback form</strong><span>Audience, availability, and questions</span></div><button type="button" className="rr-btn secondary" onClick={() => patch({ feedback_questions: [...form.feedback_questions, { id: `question_${form.feedback_questions.length + 1}`, type: 'rating', prompt: '', required: true, options: [] }] })}><Icon name="plus" size={11}/> Question</button></div>
+          <div className="ex-editor-grid">
+            <StepField label="Audience"><select className="rr-select" value={form.feedback_audience} onChange={(event) => patch({ feedback_audience: event.target.value })}><option value="all">All guests with a Festio Pass</option><option value="checked_in">Checked-in guests only</option><option value="session">Guests who attended a session</option></select></StepField>
+            <StepField label="Form status"><select className="rr-select" value={form.feedback_status} onChange={(event) => patch({ feedback_status: event.target.value })}><option value="open">Open</option><option value="closed">Closed</option></select></StepField>
+            {form.feedback_audience === 'session' && <StepField label="Attendance session" wide><select className="rr-select" value={form.feedback_session_step_id} onChange={(event) => patch({ feedback_session_step_id: event.target.value })}><option value="">Choose a session…</option>{sessionChoices.map((step) => <option key={step.id} value={step.id}>{step.title}</option>)}</select></StepField>}
+            <StepField label="Opens at"><input className="rr-input" type="datetime-local" value={form.feedback_opens_at} onChange={(event) => patch({ feedback_opens_at: event.target.value })}/></StepField>
+            <StepField label="Closes at"><input className="rr-input" type="datetime-local" value={form.feedback_closes_at} onChange={(event) => patch({ feedback_closes_at: event.target.value })}/></StepField>
+          </div>
+          <div className="ex-editor-toggle-row">
+            <label><input type="checkbox" checked={form.feedback_anonymous} onChange={(event) => patch({ feedback_anonymous: event.target.checked })}/> Hide guest names</label>
+            <label><input type="checkbox" checked={form.feedback_allow_edit} onChange={(event) => patch({ feedback_allow_edit: event.target.checked })}/> Allow response edits</label>
+          </div>
+          <div className="ex-feedback-questions">
+            {!form.feedback_questions.length && <p>Add at least one feedback question.</p>}
+            {form.feedback_questions.map((question, index) => <div className="ex-feedback-question" key={`${question.id}-${index}`}>
+              <div className="ex-feedback-question-head"><strong>Question {index + 1}</strong><div><button type="button" disabled={index === 0} onClick={() => moveQuestion(index, -1)}>↑</button><button type="button" disabled={index === form.feedback_questions.length - 1} onClick={() => moveQuestion(index, 1)}>↓</button><button type="button" className="danger" onClick={() => patch({ feedback_questions: form.feedback_questions.filter((_, questionIndex) => questionIndex !== index) })}>Remove</button></div></div>
+              <select className="rr-select" value={question.type || 'text'} onChange={(event) => updateQuestion(index, { type: event.target.value, options: ['single_choice', 'multi_choice'].includes(event.target.value) ? (question.options || []) : [] })}>{FEEDBACK_QUESTION_TYPES.map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select>
+              <input className="rr-input" value={question.prompt || ''} onChange={(event) => updateQuestion(index, { prompt: event.target.value })} placeholder="Question shown to guests"/>
+              {['single_choice', 'multi_choice'].includes(question.type) && <input className="rr-input" value={(question.options || []).join(', ')} onChange={(event) => updateQuestion(index, { options: event.target.value.split(',').map((value) => value.trim()).filter(Boolean) })} placeholder="Choices separated by commas"/>}
+              <input className="rr-input" value={question.help_text || ''} onChange={(event) => updateQuestion(index, { help_text: event.target.value })} placeholder="Optional help text"/>
+              {index > 0 && <div className="ex-editor-grid"><StepField label="Conditional question"><select className="rr-select" value={question.show_if?.question_id || ''} onChange={(event) => updateQuestion(index, { show_if: { ...(question.show_if || {}), question_id: event.target.value } })}><option value="">Always show</option>{form.feedback_questions.slice(0, index).map((candidate) => <option key={candidate.id} value={candidate.id}>{candidate.prompt || candidate.id}</option>)}</select></StepField>{question.show_if?.question_id && <StepField label="Answer equals"><input className="rr-input" value={question.show_if?.value || ''} onChange={(event) => updateQuestion(index, { show_if: { ...question.show_if, value: event.target.value } })}/></StepField>}</div>}
+              <label className="ex-inline-check"><input type="checkbox" checked={!!question.required} onChange={(event) => updateQuestion(index, { required: event.target.checked })}/> Required question</label>
+            </div>)}
+          </div>
+        </section>}
+
+        <section className="ex-editor-section advanced">
+          <div className="ex-editor-section-title"><strong>Advanced JSON</strong><span>Preserves custom legacy configuration</span></div>
+          <StepField label="Conditions JSON"><textarea className="rr-textarea mono" rows={5} value={form.conditions} onChange={(event) => patch({ conditions: event.target.value })} placeholder='{"ticket_type":"vip"}'/></StepField>
+          <StepField label="Config JSON"><textarea className="rr-textarea mono" rows={7} value={form.config} onChange={(event) => patch({ config: event.target.value })} placeholder='{"station":"north"}'/></StepField>
+        </section>
+      </div>
+      <div className="ex-step-editor-footer">
+        <button type="button" className="rr-btn secondary" onClick={onClose}>Cancel</button>
+        <button type="button" className="rr-btn primary" disabled={busy} onClick={onSave}>{busy ? 'Saving…' : form.id ? 'Save step' : 'Add step'}</button>
+      </div>
+    </aside>
+  )
+}
+
 export default function ExperienceRedesignPage() {
   const [toast, setToast] = useState(null) // { text, error }
   const [selectedId, setSelectedId] = useState('')
   const [statusFilter, setStatusFilter] = useState('All')
   const [activeTab, setActiveTab] = useState('Setup')
   const [feedbackSearch, setFeedbackSearch] = useState('')
+  const [feedbackAdmitted, setFeedbackAdmitted] = useState('')
   const [signatureGuest, setSignatureGuest] = useState(null)
   const [previewMessage, setPreviewMessage] = useState(null)
   const [actionKey, setActionKey] = useState('') // in-flight mutation marker, e.g. "wfId:publish"
@@ -78,6 +286,7 @@ export default function ExperienceRedesignPage() {
 
   // ── Stage A (already real, read-only) ───────────────────────────────────
   const [dashboard, setDashboard] = useState(null)
+  const [analytics, setAnalytics] = useState(null)
   const [experienceAudit, setExperienceAudit] = useState(null)
   const [realSignatures, setRealSignatures] = useState(null)
   const [feedbackResults, setFeedbackResults] = useState(null)
@@ -151,6 +360,7 @@ export default function ExperienceRedesignPage() {
   async function refreshDashboardAndAudit() {
     await Promise.all([
       api.getExperienceDashboard(currentEventId).then(setDashboard).catch(() => {}),
+      api.getExperienceAnalytics(currentEventId).then(setAnalytics).catch(() => {}),
       api.listExperienceAudit(currentEventId, 50).then(setExperienceAudit).catch(() => {}),
     ])
   }
@@ -186,6 +396,7 @@ export default function ExperienceRedesignPage() {
   useEffect(() => {
     if (!currentEventId) return
     api.getExperienceDashboard(currentEventId).then(setDashboard).catch(() => setDashboard(null))
+    api.getExperienceAnalytics(currentEventId).then(setAnalytics).catch(() => setAnalytics(null))
     api.listExperienceAudit(currentEventId, 50).then(setExperienceAudit).catch(() => setExperienceAudit([]))
     api.listConsentSignatures(currentEventId).then(setRealSignatures).catch(() => setRealSignatures([]))
     api.templateAudit(currentEventId).then(setRealTemplateAudit).catch(() => setRealTemplateAudit([]))
@@ -255,8 +466,9 @@ export default function ExperienceRedesignPage() {
     if (wf !== FAILED) { await Promise.all([loadWorkflows(wf.id), loadEvent()]); setActiveTab('Workflow') }
   }
   async function handleCreateFromTemplate(t) {
-    const wf = await runAction(`template-${t.name}`, () => api.createExperienceWorkflow(currentEventId, { name: t.name, steps: [] }),
-      `"${t.name}" draft created — add its ${t.steps} steps in the Workflow tab.`)
+    const steps = t.stepKeys.map((key, index) => stepPresetPayload(STEP_PRESET_BY_KEY[key], (index + 1) * 10))
+    const wf = await runAction(`template-${t.name}`, () => api.createExperienceWorkflow(currentEventId, { name: t.name, steps }),
+      `"${t.name}" created with ${steps.length} configured steps.`)
     if (wf !== FAILED) { await loadWorkflows(wf.id); setActiveTab('Workflow') }
   }
   async function handleExportProgress() {
@@ -299,19 +511,58 @@ export default function ExperienceRedesignPage() {
   }
 
   // ── Workflow tab: step CRUD + reorder + import ─────────────────────────
-  function openAddStep() { setStepForm(blankStepForm()) }
+  function openAddStep() {
+    setStepForm({ ...blankStepForm(), sort_order: ((selectedWorkflow?.steps?.length || 0) + 1) * 10 })
+  }
+  async function addPresetStep(preset) {
+    if (!selectedWorkflow || !isDraftSelected) return
+    const existing = new Set(sortedSteps.map((step) => step.key))
+    let payload = stepPresetPayload(preset, (sortedSteps.length + 1) * 10)
+    if (existing.has(payload.key)) {
+      const suffix = sortedSteps.length + 1
+      payload = { ...payload, key: `${payload.key}_${suffix}`, title: `${payload.title} ${suffix}` }
+    }
+    const saved = await runAction(`preset:${preset.key}`, () => api.createExperienceStep(currentEventId, selectedWorkflow.id, payload), `${payload.title} added.`)
+    if (saved !== FAILED) await Promise.all([loadWorkflows(selectedWorkflow.id), refreshDashboardAndAudit()])
+  }
   function openEditStep(step) {
     const config = step.config || {}
     const messages = config.messages || {}
-    const session = config.session || {}
+    const session = normalizeSessionConfig(config)
+    const assignment = normalizeRoomAssignmentConfig(config)
     setStepForm({
       id: step.id, key: step.key, type: step.type, title: step.title, description: step.description || '',
+      sort_order: step.sort_order || 0,
       required: !!step.required, enabled: !!step.enabled,
-      guest_message: messages.guest || '', staff_prompt: messages.staff || '', completion_message: messages.complete || '',
+      depends_on: listText(config.depends_on || config.depends_on_keys || config.prerequisites),
+      guest_message: messages.guest || config.guest_message || '',
+      staff_prompt: messages.staff || config.staff_prompt || '',
+      completion_message: messages.complete || config.completion_message || '',
       session_topic: session.topic || '', session_date: session.date || '', session_start_time: session.start_time || '',
       session_end_time: session.end_time || '', session_room: session.room || '', session_speaker: session.speaker || '',
-      session_capacity: session.capacity ?? '',
-      feedback_audience: config.feedback?.audience || 'all', feedback_status: config.feedback?.status || 'open',
+      session_capacity: session.capacity ?? '', session_checkin_window_minutes: session.checkin_window_minutes ?? '',
+      room_assignment_mode: assignment.mode === 'scoped' ? 'scoped' : 'global',
+      room_assignment_scope: assignment.scope || '', room_assignment_room: assignment.room || '',
+      room_assignment_table_group: assignment.table_group || '',
+      feedback_audience: config.feedback?.audience || 'all',
+      feedback_session_step_id: config.feedback?.session_step_id || '',
+      feedback_anonymous: !!config.feedback?.anonymous,
+      feedback_status: config.feedback?.status || 'open',
+      feedback_opens_at: config.feedback?.opens_at || '',
+      feedback_closes_at: config.feedback?.closes_at || '',
+      feedback_allow_edit: config.feedback?.allow_edit !== false,
+      feedback_questions: Array.isArray(config.feedback?.questions) ? config.feedback.questions : [],
+      program_is_segment: !!step.is_segment,
+      program_start_offset_seconds: step.starts_offset_seconds ?? '',
+      program_duration_seconds: step.duration_seconds ?? '',
+      program_category: config.program?.category || '',
+      program_announce_enabled: !!config.announce?.enabled,
+      program_announce_title: config.announce?.title || '',
+      program_announce_body: config.announce?.body || '',
+      program_feedback_step_key: config.feedback?.step_key || '',
+      program_feedback_window_seconds: config.feedback?.window_seconds ?? '1800',
+      conditions: step.conditions ? JSON.stringify(step.conditions, null, 2) : '',
+      config: step.config ? JSON.stringify(step.config, null, 2) : '',
     })
   }
   function goEditFeedbackStep() {
@@ -321,40 +572,132 @@ export default function ExperienceRedesignPage() {
   }
 
   function stepFormPayload() {
-    if (!stepForm.title.trim()) throw new Error('Step title is required')
-    if (!stepForm.id && !stepForm.key.trim()) throw new Error('Step key is required')
-    const config = {}
-    const messages = {}
-    if (stepForm.guest_message.trim()) messages.guest = stepForm.guest_message.trim()
-    if (stepForm.staff_prompt.trim()) messages.staff = stepForm.staff_prompt.trim()
-    if (stepForm.completion_message.trim()) messages.complete = stepForm.completion_message.trim()
+    if (!stepForm.key.trim() || !stepForm.title.trim()) throw new Error('Step key and title are required')
+    const config = parseJsonMaybe(stepForm.config, 'Config') || {}
+    const dependencies = listValue(stepForm.depends_on)
+    if (dependencies.length) config.depends_on = dependencies
+    else delete config.depends_on
+
+    const messages = { ...(config.messages || {}) }
+    const guestMessage = stepForm.guest_message.trim()
+    const staffPrompt = stepForm.staff_prompt.trim()
+    const completionMessage = stepForm.completion_message.trim()
+    if (guestMessage) messages.guest = guestMessage
+    else delete messages.guest
+    if (staffPrompt) messages.staff = staffPrompt
+    else delete messages.staff
+    if (completionMessage) messages.complete = completionMessage
+    else delete messages.complete
     if (Object.keys(messages).length) config.messages = messages
+    else delete config.messages
+
     if (stepForm.type === 'session_attendance') {
-      const session = {}
-      if (stepForm.session_topic.trim()) session.topic = stepForm.session_topic.trim()
-      if (stepForm.session_date.trim()) session.date = stepForm.session_date.trim()
-      if (stepForm.session_start_time.trim()) session.start_time = stepForm.session_start_time.trim()
-      if (stepForm.session_end_time.trim()) session.end_time = stepForm.session_end_time.trim()
-      if (stepForm.session_room.trim()) session.room = stepForm.session_room.trim()
-      if (stepForm.session_speaker.trim()) session.speaker = stepForm.session_speaker.trim()
-      if (stepForm.session_capacity !== '') session.capacity = Number(stepForm.session_capacity)
+      const jsonSession = normalizeSessionConfig(config)
+      const session = {
+        ...jsonSession,
+        topic: stepForm.session_topic.trim() || jsonSession.topic || '',
+        date: stepForm.session_date.trim() || jsonSession.date || '',
+        start_time: stepForm.session_start_time.trim() || jsonSession.start_time || '',
+        end_time: stepForm.session_end_time.trim() || jsonSession.end_time || '',
+        room: stepForm.session_room.trim() || jsonSession.room || '',
+        speaker: stepForm.session_speaker.trim() || jsonSession.speaker || '',
+        capacity: stepForm.session_capacity === '' ? (jsonSession.capacity ?? null) : Number(stepForm.session_capacity),
+        checkin_window_minutes: stepForm.session_checkin_window_minutes === '' ? (jsonSession.checkin_window_minutes ?? null) : Number(stepForm.session_checkin_window_minutes),
+      }
+      Object.keys(session).forEach((key) => {
+        if (session[key] === '' || session[key] === null || Number.isNaN(session[key])) delete session[key]
+      })
       if (Object.keys(session).length) config.session = session
-    }
+      else delete config.session
+      delete config.session_details
+      delete config.session_config
+      delete config.schedule
+      delete config.sessions
+    } else delete config.session
+
+    if (stepForm.type === 'room_assignment') {
+      const jsonAssignment = normalizeRoomAssignmentConfig(config)
+      const assignment = {
+        ...(config.room_assignment && typeof config.room_assignment === 'object' ? config.room_assignment : {}),
+        assignment_mode: stepForm.room_assignment_mode || jsonAssignment.mode || 'global',
+        scope: stepForm.room_assignment_scope.trim() || jsonAssignment.scope || stepForm.key.trim(),
+        room: stepForm.room_assignment_room.trim() || jsonAssignment.room || '',
+        table_group: stepForm.room_assignment_table_group.trim() || jsonAssignment.table_group || '',
+      }
+      if (assignment.assignment_mode !== 'scoped') {
+        delete assignment.scope
+        delete assignment.assignment_scope
+        delete assignment.scoped
+      } else assignment.scoped = true
+      Object.keys(assignment).forEach((key) => {
+        if (assignment[key] === '' || assignment[key] === null || Number.isNaN(assignment[key])) delete assignment[key]
+      })
+      config.room_assignment = assignment
+      delete config.assignment
+    } else delete config.room_assignment
+
     if (stepForm.type === 'feedback') {
-      const existingQuestions = stepForm.id ? (sortedSteps.find((s) => s.id === stepForm.id)?.config?.feedback?.questions || []) : []
-      config.feedback = { audience: stepForm.feedback_audience, status: stepForm.feedback_status, questions: existingQuestions }
+      if (!stepForm.feedback_questions.length) throw new Error('Add at least one feedback question')
+      config.owner = 'guest'
+      config.feedback = {
+        ...(config.feedback || {}),
+        audience: stepForm.feedback_audience || 'all',
+        ...(stepForm.feedback_audience === 'session' && stepForm.feedback_session_step_id ? { session_step_id: stepForm.feedback_session_step_id } : {}),
+        anonymous: !!stepForm.feedback_anonymous,
+        status: stepForm.feedback_status || 'open',
+        ...(stepForm.feedback_opens_at ? { opens_at: stepForm.feedback_opens_at } : {}),
+        ...(stepForm.feedback_closes_at ? { closes_at: stepForm.feedback_closes_at } : {}),
+        allow_edit: !!stepForm.feedback_allow_edit,
+        questions: stepForm.feedback_questions.map((question, index) => ({
+          id: question.id || `question_${index + 1}`,
+          type: question.type || 'text',
+          prompt: String(question.prompt || '').trim(),
+          required: !!question.required,
+          ...(['single_choice', 'multi_choice'].includes(question.type) ? { options: (question.options || []).filter(Boolean) } : {}),
+          ...(question.help_text ? { help_text: String(question.help_text).trim() } : {}),
+          ...(question.show_if?.question_id && question.show_if?.value !== '' ? { show_if: question.show_if } : {}),
+        })),
+      }
+      if (config.feedback.questions.some((question) => !question.prompt)) throw new Error('Every feedback question needs wording')
+    } else delete config.feedback
+
+    if (stepForm.program_is_segment) {
+      const start = Number(stepForm.program_start_offset_seconds)
+      const duration = Number(stepForm.program_duration_seconds)
+      if (!Number.isFinite(start) || start < 0 || !Number.isFinite(duration) || duration <= 0) {
+        throw new Error('Live Program segments need a valid start offset and duration')
+      }
+      config.program = { ...(config.program || {}), ...(stepForm.program_category.trim() ? { category: stepForm.program_category.trim() } : {}) }
+      config.announce = {
+        ...(config.announce || {}),
+        enabled: !!stepForm.program_announce_enabled,
+        ...(stepForm.program_announce_title.trim() ? { title: stepForm.program_announce_title.trim() } : {}),
+        ...(stepForm.program_announce_body.trim() ? { body: stepForm.program_announce_body.trim() } : {}),
+      }
+      if (stepForm.program_feedback_step_key) {
+        const feedbackWindow = Number(stepForm.program_feedback_window_seconds || 1800)
+        if (!Number.isFinite(feedbackWindow) || feedbackWindow < 60) throw new Error('Feedback window must be at least 60 seconds')
+        config.feedback = { step_key: stepForm.program_feedback_step_key, opens_on: 'segment_end', window_seconds: feedbackWindow }
+      }
+    } else {
+      delete config.program
+      delete config.announce
     }
-    const payload = {
-      key: stepForm.id ? stepForm.key : stepForm.key.trim(),
+
+    return {
+      key: stepForm.key.trim(),
       type: stepForm.type,
       title: stepForm.title.trim(),
       description: stepForm.description.trim() || null,
+      sort_order: Number(stepForm.sort_order || 0),
       required: !!stepForm.required,
       enabled: !!stepForm.enabled,
+      is_segment: !!stepForm.program_is_segment,
+      starts_offset_seconds: stepForm.program_is_segment ? Number(stepForm.program_start_offset_seconds) : null,
+      duration_seconds: stepForm.program_is_segment ? Number(stepForm.program_duration_seconds) : null,
+      conditions: parseJsonMaybe(stepForm.conditions, 'Conditions'),
       config: Object.keys(config).length ? config : null,
     }
-    if (!stepForm.id) payload.sort_order = ((selectedWorkflow?.steps?.length || 0) + 1) * 10
-    return payload
   }
 
   async function saveStepForm() {
@@ -471,8 +814,7 @@ export default function ExperienceRedesignPage() {
   }
 
   // ── Feedback tab: reminders + draft prep ─────────────────────────────
-  async function startRemindFlow() {
-    const form = feedbackResults?.forms?.[0]
+  async function startRemindFlow(form = feedbackResults?.forms?.[0]) {
     if (!form) return
     const channelText = window.prompt('Reminder channels (comma separated: email, sms, whatsapp)', 'email')
     if (!channelText) return
@@ -492,6 +834,13 @@ export default function ExperienceRedesignPage() {
   async function prepareDraft() {
     const result = await runAction('feedback:draft', () => api.prepareFeedbackDraft(currentEventId), 'Feedback draft prepared — review it in the Workflow tab, then publish when ready.')
     if (result !== FAILED) { await loadWorkflows(result.id); setActiveTab('Workflow') }
+  }
+  async function refreshFeedbackResults() {
+    const result = await runAction('feedback:filter', () => api.getFeedbackResults(currentEventId, {
+      search: feedbackSearch.trim() || undefined,
+      admitted: feedbackAdmitted || undefined,
+    }))
+    if (result !== FAILED) setFeedbackResults(result)
   }
 
   // ── Messages tab: template edit / preview / test-send / reset ───────────
@@ -645,7 +994,7 @@ export default function ExperienceRedesignPage() {
               <div className="ex-template-grid">
                 {WORKFLOW_TEMPLATES.map((t) => (
                   <button key={t.name} className="ex-template-card" disabled={actionKey === `template-${t.name}`} onClick={() => handleCreateFromTemplate(t)}>
-                    <strong>{t.name}</strong><span>{t.steps} steps · new draft</span>
+                    <strong>{t.label}</strong><span>{t.description}</span><small>{t.stepKeys.length} configured steps · new draft</small>
                   </button>
                 ))}
               </div>
@@ -675,107 +1024,51 @@ export default function ExperienceRedesignPage() {
                     {selectedWorkflow.status === 'archived' ? 'Archived workflows are read-only.' : 'Published workflows are the live runbook — read-only. Unpublish, or Clone to make changes.'}
                   </div>
                 )}
-                <div className="ex-step-list">
-                  {sortedSteps.map((s, i) => (
-                    <div className="ex-step-row" key={s.id}>
-                      <span className="ex-step-handle" title="Drag to reorder">⠿</span>
-                      <span className="ex-step-num">{i + 1}</span>
-                      <span className="ex-step-icon"><Icon name={stepTypeIcon(s.type)} size={14}/></span>
-                      <div className="ex-step-info">
-                        <strong>{s.title}</strong>
-                        <span>{s.description || s.type.replaceAll('_', ' ')}</span>
-                      </div>
-                      <div className="ex-step-actions">
-                        <button title="Move up" disabled={!isDraftSelected || i === 0 || actionKey === `step:${s.id}:move`} onClick={() => moveStep(s, -1)}><Icon name="arrow" size={13} className="ex-icon-up"/></button>
-                        <button title="Move down" disabled={!isDraftSelected || i === sortedSteps.length - 1 || actionKey === `step:${s.id}:move`} onClick={() => moveStep(s, 1)}><Icon name="arrow" size={13} className="ex-icon-down"/></button>
-                        <button title="Edit" disabled={!isDraftSelected} onClick={() => openEditStep(s)}><Icon name="settings" size={13}/></button>
-                        <button title="Delete" disabled={!isDraftSelected} onClick={() => requestDeleteStep(s)}><Icon name="more" size={13}/></button>
-                      </div>
+                <div className={`ex-builder-layout${stepForm ? ' has-editor' : ''}`}>
+                  <div className="ex-builder-main">
+                    <div className="ex-step-list">
+                      {sortedSteps.map((step, index) => (
+                        <div className={`ex-step-row${stepForm?.id === step.id ? ' active' : ''}`} key={step.id}>
+                          <span className="ex-step-handle" title="Use the arrows to reorder">⠿</span>
+                          <span className="ex-step-num">{index + 1}</span>
+                          <span className="ex-step-icon"><Icon name={stepTypeIcon(step.type)} size={14}/></span>
+                          <div className="ex-step-info">
+                            <strong>{step.title}</strong>
+                            <span>{step.description || step.type.replaceAll('_', ' ')}</span>
+                          </div>
+                          <div className="ex-step-actions">
+                            <button title="Move up" disabled={!isDraftSelected || index === 0 || actionKey === `step:${step.id}:move`} onClick={() => moveStep(step, -1)}><Icon name="arrow" size={13} className="ex-icon-up"/></button>
+                            <button title="Move down" disabled={!isDraftSelected || index === sortedSteps.length - 1 || actionKey === `step:${step.id}:move`} onClick={() => moveStep(step, 1)}><Icon name="arrow" size={13} className="ex-icon-down"/></button>
+                            <button title="Edit settings" aria-label={`Edit ${step.title}`} disabled={!isDraftSelected} onClick={() => openEditStep(step)}><Icon name="settings" size={13}/></button>
+                            <button title="Delete" aria-label={`Delete ${step.title}`} disabled={!isDraftSelected} onClick={() => requestDeleteStep(step)}><Icon name="more" size={13}/></button>
+                          </div>
+                        </div>
+                      ))}
+                      {sortedSteps.length === 0 && <p className="rd-rowlink">No steps yet.</p>}
                     </div>
-                  ))}
-                  {sortedSteps.length === 0 && <p className="rd-rowlink">No steps yet.</p>}
+
+                    {isDraftSelected && <div className="ex-step-tools">
+                      <div className="ex-step-tool-actions">
+                        <button className="rr-btn primary" onClick={openAddStep}><Icon name="plus" size={13}/> Custom step</button>
+                        <button className="rr-btn secondary" onClick={() => setSessionImportOpen(true)}><Icon name="upload" size={13}/> Import sessions</button>
+                      </div>
+                      <div className="ex-preset-panel">
+                        <strong>Step presets</strong>
+                        <span>Add a fully configured operational step.</span>
+                        <div>{STEP_PRESETS.map((preset) => <button type="button" key={preset.key} disabled={actionKey === `preset:${preset.key}`} onClick={() => addPresetStep(preset)}><Icon name={stepTypeIcon(preset.type)} size={11}/>{preset.title}</button>)}</div>
+                      </div>
+                    </div>}
+                  </div>
+
+                  {stepForm && <ExperienceStepEditor
+                    form={stepForm}
+                    setForm={setStepForm}
+                    steps={sortedSteps}
+                    busy={actionKey.startsWith('step:')}
+                    onClose={() => setStepForm(null)}
+                    onSave={saveStepForm}
+                  />}
                 </div>
-
-                {stepForm && (
-                  <div className="ex-step-config">
-                    <strong>{stepForm.id ? `${stepForm.title || 'Step'} — edit` : 'Add step'}</strong>
-                    <div className="rd-row2" style={{ marginTop: 8 }}>
-                      <div style={{ flex: 1 }}>
-                        <label className="rd-field-label">Key</label>
-                        <input className="rd-field" value={stepForm.key} disabled={!!stepForm.id}
-                          onChange={(e) => setStepForm((f) => ({ ...f, key: e.target.value }))} placeholder="main_checkin" />
-                      </div>
-                      <div style={{ flex: 1 }}>
-                        <label className="rd-field-label">Type</label>
-                        <select className="rr-select" value={stepForm.type} disabled={!!stepForm.id}
-                          onChange={(e) => setStepForm((f) => ({ ...f, type: e.target.value }))}>
-                          {STEP_TYPES.map(([v, l]) => <option key={v} value={v}>{l}</option>)}
-                        </select>
-                      </div>
-                    </div>
-                    <label className="rd-field-label">Title</label>
-                    <input className="rd-field" value={stepForm.title} onChange={(e) => setStepForm((f) => ({ ...f, title: e.target.value }))} />
-                    <label className="rd-field-label">Description</label>
-                    <input className="rd-field" value={stepForm.description} onChange={(e) => setStepForm((f) => ({ ...f, description: e.target.value }))} />
-                    <div className="rd-row2">
-                      <label className="gr-required-check"><input type="checkbox" checked={stepForm.required} onChange={(e) => setStepForm((f) => ({ ...f, required: e.target.checked }))}/> Required</label>
-                      <label className="gr-required-check"><input type="checkbox" checked={stepForm.enabled} onChange={(e) => setStepForm((f) => ({ ...f, enabled: e.target.checked }))}/> Enabled</label>
-                    </div>
-                    <label className="rd-field-label">Guest-facing message</label>
-                    <input className="rd-field" value={stepForm.guest_message} onChange={(e) => setStepForm((f) => ({ ...f, guest_message: e.target.value }))} />
-                    <label className="rd-field-label">Staff prompt</label>
-                    <input className="rd-field" value={stepForm.staff_prompt} onChange={(e) => setStepForm((f) => ({ ...f, staff_prompt: e.target.value }))} />
-                    <label className="rd-field-label">Completion message</label>
-                    <input className="rd-field" value={stepForm.completion_message} onChange={(e) => setStepForm((f) => ({ ...f, completion_message: e.target.value }))} />
-
-                    {stepForm.type === 'session_attendance' && (
-                      <>
-                        <div className="rd-row2" style={{ marginTop: 8 }}>
-                          <div style={{ flex: 1 }}><label className="rd-field-label">Topic</label><input className="rd-field" value={stepForm.session_topic} onChange={(e) => setStepForm((f) => ({ ...f, session_topic: e.target.value }))} /></div>
-                          <div style={{ flex: 1 }}><label className="rd-field-label">Room</label><input className="rd-field" value={stepForm.session_room} onChange={(e) => setStepForm((f) => ({ ...f, session_room: e.target.value }))} /></div>
-                        </div>
-                        <div className="rd-row2">
-                          <div style={{ flex: 1 }}><label className="rd-field-label">Date</label><input className="rd-field" value={stepForm.session_date} onChange={(e) => setStepForm((f) => ({ ...f, session_date: e.target.value }))} /></div>
-                          <div style={{ flex: 1 }}><label className="rd-field-label">Start time</label><input className="rd-field" value={stepForm.session_start_time} onChange={(e) => setStepForm((f) => ({ ...f, session_start_time: e.target.value }))} /></div>
-                          <div style={{ flex: 1 }}><label className="rd-field-label">End time</label><input className="rd-field" value={stepForm.session_end_time} onChange={(e) => setStepForm((f) => ({ ...f, session_end_time: e.target.value }))} /></div>
-                        </div>
-                        <div className="rd-row2">
-                          <div style={{ flex: 1 }}><label className="rd-field-label">Speaker</label><input className="rd-field" value={stepForm.session_speaker} onChange={(e) => setStepForm((f) => ({ ...f, session_speaker: e.target.value }))} /></div>
-                          <div style={{ flex: 1 }}><label className="rd-field-label">Capacity</label><input className="rd-field" type="number" value={stepForm.session_capacity} onChange={(e) => setStepForm((f) => ({ ...f, session_capacity: e.target.value }))} /></div>
-                        </div>
-                      </>
-                    )}
-                    {stepForm.type === 'feedback' && (
-                      <div className="rd-row2" style={{ marginTop: 8 }}>
-                        <div style={{ flex: 1 }}>
-                          <label className="rd-field-label">Audience</label>
-                          <select className="rr-select" value={stepForm.feedback_audience} onChange={(e) => setStepForm((f) => ({ ...f, feedback_audience: e.target.value }))}>
-                            <option value="all">All guests</option><option value="session">Session attendees</option>
-                          </select>
-                        </div>
-                        <div style={{ flex: 1 }}>
-                          <label className="rd-field-label">Status</label>
-                          <select className="rr-select" value={stepForm.feedback_status} onChange={(e) => setStepForm((f) => ({ ...f, feedback_status: e.target.value }))}>
-                            <option value="open">Open</option><option value="closed">Closed</option>
-                          </select>
-                        </div>
-                      </div>
-                    )}
-                    <div className="rd-row2" style={{ marginTop: 10 }}>
-                      <button className="rr-btn secondary" onClick={() => setStepForm(null)}>Cancel</button>
-                      <button className="rr-btn primary" disabled={actionKey.startsWith('step:')} onClick={saveStepForm}>
-                        {actionKey.startsWith('step:') ? 'Saving…' : 'Save step'}
-                      </button>
-                    </div>
-                  </div>
-                )}
-
-                {isDraftSelected && (
-                  <div className="rd-row2" style={{ marginTop: 14 }}>
-                    <button className="rr-link-btn" onClick={openAddStep}><Icon name="plus" size={13}/> Add step</button>
-                    <button className="rr-link-btn" onClick={() => setSessionImportOpen(true)}><Icon name="upload" size={13}/> Import sessions (JSON)</button>
-                  </div>
-                )}
               </>
             )}
           </div>
@@ -893,57 +1186,30 @@ export default function ExperienceRedesignPage() {
       )}
 
       {activeTab === 'Feedback' && (
-        <div className="rd-wide-grid">
-          <div className="rd-panel">
-            <div className="rd-panel-head"><h3>Feedback form</h3><p>Sent after the Checkout step</p></div>
+        <div className="ex-feedback-page">
+          <div className="rr-panel">
+            <div className="rd-panel-head ex-panel-head-row"><div><h3>Feedback configuration</h3><p>Questions submitted from FestioHub and Festio Pass</p></div><div className="rd-row2"><button className="rr-btn secondary" disabled={actionKey === 'feedback:draft'} onClick={prepareDraft}>{actionKey === 'feedback:draft' ? 'Preparing…' : 'Prepare feedback draft'}</button><button className="rr-btn primary" onClick={goEditFeedbackStep}>{feedbackStep ? 'Edit feedback step' : 'Add feedback step'}</button></div></div>
             <div className="rd-panel-body">
-              {feedbackStepQuestions.length === 0 ? (
-                <p className="rd-rowlink">No feedback step configured in the live workflow yet.</p>
-              ) : (
-                <div className="ex-question-list">
-                  {feedbackStepQuestions.map((q, i) => (
-                    <div className="ex-question" key={q.id || i}><span>{i + 1}</span>{q.prompt}<small className="rd-rowlink"> ({feedbackTypeLabel(q.type)})</small></div>
-                  ))}
-                </div>
-              )}
-              <button className="rr-link-btn" style={{ marginTop: 10 }} onClick={goEditFeedbackStep}>
-                <Icon name="plus" size={13}/> {feedbackStep ? 'Edit questions in Workflow tab' : 'Add a Feedback step in Workflow tab'}
-              </button>
+              {feedbackStepQuestions.length === 0 ? <p className="rd-rowlink">No feedback step is configured in the live workflow. Prepare a complete draft, or add one manually.</p> : <div className="ex-question-list">{feedbackStepQuestions.map((question, index) => <div className="ex-question" key={question.id || index}><span>{index + 1}</span><div><strong>{question.prompt}</strong><small>{feedbackTypeLabel(question.type)}{question.required ? ' · Required' : ''}</small></div></div>)}</div>}
             </div>
           </div>
-          <div className="rd-panel">
-            {feedbackDenied ? (
-              <div className="rd-panel-body"><PermissionDeniedState message="You need dashboard access to view feedback results." /></div>
-            ) : (
-              <>
-                <div className="rd-panel-head"><h3>Results</h3><p>{feedbackResults?.forms?.[0] ? `${feedbackResults.forms[0].response_count} of ${feedbackResults.forms[0].eligible_count} responses (${feedbackResults.forms[0].response_rate}%)` : ''}</p></div>
-                <div className="rd-panel-body">
-                  {feedbackResults === null ? <LoadingSkeleton rows={4} variant="list" /> : !feedbackResults.forms?.length ? (
-                    <p className="rd-rowlink">No feedback form is live yet.</p>
-                  ) : (
-                    <>
-                      <div className="rd-row2" style={{ marginTop: 0, marginBottom: 12 }}>
-                        <button className="rr-btn secondary" style={{ flex: 1, justifyContent: 'center' }} onClick={() => api.downloadFeedbackExport(currentEventId)}>Export CSV</button>
-                        <button className="rr-btn secondary" style={{ flex: 1, justifyContent: 'center' }} disabled={actionKey === 'feedback:draft'} onClick={prepareDraft}>
-                          {actionKey === 'feedback:draft' ? 'Preparing…' : 'Prepare feedback draft'}
-                        </button>
-                      </div>
-                      <div className="rd-search" style={{ marginTop: 0 }}>
-                        <Icon name="search" size={13}/>
-                        <input placeholder="Search guests…" value={feedbackSearch} onChange={(e) => setFeedbackSearch(e.target.value)} />
-                      </div>
-                      <div className="ex-response-list">
-                        {feedbackResults.forms[0].responses
-                          .filter((r) => !feedbackSearch.trim() || (r.guest_name || '').toLowerCase().includes(feedbackSearch.trim().toLowerCase()))
-                          .map((r) => <div key={r.id} className="ex-response-row">{r.guest_name || 'Anonymous'} <span className="rd-rowlink">{r.submitted_at ? new Date(r.submitted_at).toLocaleDateString() : ''}</span></div>)}
-                        {feedbackResults.forms[0].responses.length === 0 && <p className="rd-rowlink">No responses yet.</p>}
-                      </div>
-                      <button className="rr-link-btn" style={{ marginTop: 8 }} onClick={startRemindFlow}>Remind non-responders</button>
-                    </>
-                  )}
+
+          <div className="rr-panel">
+            {feedbackDenied ? <div className="rd-panel-body"><PermissionDeniedState message="You need dashboard access to view feedback results." /></div> : <>
+              <div className="rd-panel-head ex-panel-head-row"><div><h3>Feedback results</h3><p>All published feedback forms and response details</p></div><button className="rr-btn secondary" disabled={!feedbackResults?.forms?.some((form) => form.response_count)} onClick={() => api.downloadFeedbackExport(currentEventId)}>Export CSV</button></div>
+              <div className="rd-panel-body">
+                <div className="ex-feedback-filter">
+                  <div className="rd-search"><Icon name="search" size={13}/><input placeholder="Search guest name or email…" value={feedbackSearch} onChange={(event) => setFeedbackSearch(event.target.value)}/></div>
+                  <select className="rr-select" value={feedbackAdmitted} onChange={(event) => setFeedbackAdmitted(event.target.value)}><option value="">All guests</option><option value="true">Checked in</option><option value="false">Not checked in</option></select>
+                  <button className="rr-btn primary" disabled={actionKey === 'feedback:filter'} onClick={refreshFeedbackResults}>Apply filters</button>
                 </div>
-              </>
-            )}
+                {feedbackResults === null ? <LoadingSkeleton rows={4} variant="list"/> : !feedbackResults.forms?.length ? <p className="rd-rowlink">No feedback form is live yet.</p> : <div className="ex-feedback-results">{feedbackResults.forms.map((form) => <section className="ex-feedback-result" key={form.step_id}>
+                  <div className="ex-feedback-result-head"><div><h4>{form.title}</h4><span>{form.response_count} / {form.eligible_count} responses · {form.response_rate}%</span></div><button className="rr-btn secondary" disabled={!form.eligible_count} onClick={() => startRemindFlow(form)}>Remind non-responders</button></div>
+                  {!!form.aggregates?.length && <div className="ex-feedback-metrics">{form.aggregates.map((metric) => <div key={metric.question_id}><span>{metric.prompt}</span>{metric.type === 'rating' && <strong>{metric.average ?? '—'} <small>/ 5</small></strong>}{metric.type === 'nps' && <strong>{metric.nps ?? '—'} <small>NPS</small></strong>}{!['rating', 'nps'].includes(metric.type) && <strong>{metric.answered ?? metric.count ?? '—'} <small>answers</small></strong>}</div>)}</div>}
+                  <div className="ex-feedback-response-table"><table className="rr-table"><thead><tr><th>Guest</th><th>Submitted</th>{(form.questions || []).map((question) => <th key={question.id}>{question.prompt}</th>)}</tr></thead><tbody>{(form.responses || []).map((response) => <tr key={response.id}><td>{response.guest_name || 'Anonymous'}</td><td>{response.submitted_at ? new Date(response.submitted_at).toLocaleString() : '—'}</td>{(form.questions || []).map((question) => <td key={question.id}>{String(response.answers?.[question.id] ?? '—')}</td>)}</tr>)}{!form.responses?.length && <tr><td colSpan={(form.questions || []).length + 2} className="rd-rowlink">No responses yet.</td></tr>}</tbody></table></div>
+                </section>)}</div>}
+              </div>
+            </>}
           </div>
         </div>
       )}
@@ -1022,6 +1288,11 @@ export default function ExperienceRedesignPage() {
             <div className="rr-panel er-stat amber"><span>Lowest-completion step</span><strong>{dashboard.steps.length ? [...dashboard.steps].sort((a, b) => a.completion_rate - b.completion_rate)[0].title : '—'}</strong></div>
             <div className="rr-panel er-stat"><span>Blocked / failed</span><strong>{dashboard.steps.reduce((sum, s) => sum + (s.blocked || 0) + (s.failed || 0), 0)}</strong></div>
           </div>
+          {analytics?.workflow && <div className="rr-grid3" style={{ marginTop: 14 }}>
+            <div className="rr-panel er-stat teal"><span>Consent completion</span><strong>{analytics.consent?.rate ?? 0}%</strong><small>{analytics.consent?.signed ?? 0} of {analytics.consent?.total ?? 0} guests signed</small></div>
+            <div className="rr-panel er-stat amber"><span>Top bottleneck</span><strong>{analytics.bottlenecks?.[0]?.title || 'No bottlenecks'}</strong><small>{analytics.bottlenecks?.[0] ? `${analytics.bottlenecks[0].open} open · ${analytics.bottlenecks[0].completion_rate}% complete` : 'Journey is clear'}</small></div>
+            <div className="rr-panel er-stat"><span>Recent overrides</span><strong>{analytics.overrides?.length ?? 0}</strong><small>Manually overridden workflow steps</small></div>
+          </div>}
         </>
         )
       )}

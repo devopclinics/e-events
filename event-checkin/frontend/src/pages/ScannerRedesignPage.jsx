@@ -555,7 +555,9 @@ function LiveScannerCommandCenter({
           {recentResults.length ? recentResults.map((item) => {
             const itemGuest = item.guest || {}
             const itemName = item.guest_name || [itemGuest.first_name, itemGuest.last_name].filter(Boolean).join(' ') || 'Guest'
-            return <div className="sc-command-activity" key={item.sessionKey}><span>{itemName[0]}</span><div><strong>{itemName}</strong><small>{item.table_name || item.zone_name || item.message || 'Admission processed'}</small></div><time>{item.recordedAt}</time><b>{String(item.status || 'processed').replaceAll('_', ' ')}</b></div>
+            const nameParts = itemName.split(/\s+/).filter(Boolean)
+            const activityName = nameParts.length > 1 ? `${nameParts[0]} ${nameParts.at(-1)[0]}.` : itemName
+            return <div className="sc-command-activity" key={item.sessionKey} aria-label={`${itemName}, ${String(item.status || 'processed').replaceAll('_', ' ')}`}><span>{itemName[0]}</span><div><strong>{activityName}</strong><small>{item.table_name || item.zone_name || item.message || 'Admission processed'}</small></div><time>{item.recordedAt}</time><b>{String(item.status || 'processed').replaceAll('_', ' ')}</b></div>
           }) : <div className="sc-command-activity-empty">Completed scans from this station will appear here.</div>}
         </section>
         <section className="sc-command-panel">

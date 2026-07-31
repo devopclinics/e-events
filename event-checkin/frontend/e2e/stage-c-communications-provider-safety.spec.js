@@ -41,7 +41,12 @@ test.describe('Stage C communications — provider-safe redesign controls', () =
     await expect(page.getByText(/send confirmed/i)).toHaveCount(0)
   })
 
-  test('delivery and templates sections collapse while template search filters live', async ({ page }) => {
+  test('long message sections collapse independently while template search filters live', async ({ page }) => {
+    const broadcastButton = page.getByRole('button', { name: 'Collapse broadcast center' })
+    await expect(broadcastButton).toHaveAttribute('aria-expanded', 'true')
+    await broadcastButton.click()
+    await expect(page.locator('#broadcast-center-content')).toHaveCount(0)
+
     const deliveryButton = page.getByRole('button', { name: 'Expand delivery by channel' })
     await expect(deliveryButton).toHaveAttribute('aria-expanded', 'false')
     await deliveryButton.click()
@@ -55,6 +60,11 @@ test.describe('Stage C communications — provider-safe redesign controls', () =
     await expect(page.locator('.cm-template-card')).toContainText('Post-event thank-you')
     await templatesButton.click()
     await expect(page.locator('#message-templates-content')).toHaveCount(0)
+
+    const auditButton = page.getByRole('button', { name: 'Expand recent template changes' })
+    await expect(auditButton).toHaveAttribute('aria-expanded', 'false')
+    await auditButton.click()
+    await expect(page.locator('#recent-template-changes-content')).toBeVisible()
   })
 
   test('broadcast uses the existing contract and reports only confirmed server counts', async ({ page }) => {

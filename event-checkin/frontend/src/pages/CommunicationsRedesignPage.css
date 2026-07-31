@@ -156,6 +156,7 @@
 .cm-template-card .cm-tpl-actions { justify-content: flex-start; padding-top: 12px; border-top: 1px solid var(--rr-border); }
 @media (max-width: 900px) { .cm-template-grid { grid-template-columns: 1fr; } }
 .cm-audit-panel { margin-top: 14px; }
+.cm-audit-title { margin-top: 18px; }
 .cm-audit-row { font-size: 11px; color: var(--muted); padding: 7px 0; border-bottom: 1px solid var(--line-soft); }
 .cm-audit-row:last-child { border-bottom: 0; }
 .cm-audit-row strong { color: var(--ink); }

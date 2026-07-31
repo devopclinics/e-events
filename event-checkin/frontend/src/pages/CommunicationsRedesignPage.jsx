@@ -573,8 +573,10 @@ function MessagesTab({ notify, onPreview, eventId }) {
   const [templateEditor, setTemplateEditor] = useState(null)
   const [templateTest, setTemplateTest] = useState(null)
   const [templateQuery, setTemplateQuery] = useState('')
+  const [broadcastOpen, setBroadcastOpen] = useState(true)
   const [deliveryOpen, setDeliveryOpen] = useState(false)
   const [templatesOpen, setTemplatesOpen] = useState(true)
+  const [templateAuditOpen, setTemplateAuditOpen] = useState(false)
   const [orgMembers, setOrgMembers] = useState([])
   const [communication, setCommunication] = useState(null)
   const [broadcasts, setBroadcasts] = useState([])
@@ -762,11 +764,16 @@ function MessagesTab({ notify, onPreview, eventId }) {
 
   return (
     <>
-      <div className="rr-section-title">
+      <div className="rr-section-title cm-collapsible-title">
         <div><h2>Broadcast center</h2><p>Send one-off updates without leaving the communications workspace</p></div>
+        <button className="rr-btn secondary cm-collapse-btn" type="button" aria-label={`${broadcastOpen ? 'Collapse' : 'Expand'} broadcast center`} aria-expanded={broadcastOpen} aria-controls="broadcast-center-content" onClick={() => setBroadcastOpen((open) => !open)}>
+          {broadcastOpen ? 'Collapse' : 'Expand'} <span aria-hidden="true" className={broadcastOpen ? 'open' : ''}>⌄</span>
+        </button>
       </div>
 
-      <BroadcastComposer eventId={eventId} notify={notify} onSent={loadDeliveryData} />
+      {broadcastOpen && <div id="broadcast-center-content">
+        <BroadcastComposer eventId={eventId} notify={notify} onSent={loadDeliveryData} />
+      </div>}
 
       <div className="rr-section-title cm-collapsible-title">
         <div><h2>Delivery by channel</h2><p>Live send rates across every channel this event uses</p></div>
@@ -917,8 +924,19 @@ function MessagesTab({ notify, onPreview, eventId }) {
         {templates.length > 0 && !filteredTemplates.length && <div className="rr-panel rd-panel-body rd-rowlink cm-template-no-results">No templates match “{templateQuery}”.</div>}
       </div>
 
-      <div className="rd-panel cm-audit-panel">
-        <div className="rd-panel-head"><h3>Recent template changes</h3></div>
+      </div>}
+
+      <div className="rr-section-title cm-collapsible-title cm-audit-title">
+        <div><h2>Recent template changes</h2><p>Review who changed a template and when</p></div>
+        <div className="cm-section-actions">
+          <span className="cm-section-count">{templateAudit.length} {templateAudit.length === 1 ? 'change' : 'changes'}</span>
+          <button className="rr-btn secondary cm-collapse-btn" type="button" aria-label={`${templateAuditOpen ? 'Collapse' : 'Expand'} recent template changes`} aria-expanded={templateAuditOpen} aria-controls="recent-template-changes-content" onClick={() => setTemplateAuditOpen((open) => !open)}>
+            {templateAuditOpen ? 'Collapse' : 'Expand'} <span aria-hidden="true" className={templateAuditOpen ? 'open' : ''}>⌄</span>
+          </button>
+        </div>
+      </div>
+
+      {templateAuditOpen && <div className="rd-panel cm-audit-panel" id="recent-template-changes-content">
         <div className="rd-panel-body">
           {templateAudit.map((a, i) => (
             <div className="cm-audit-row" key={i}>
@@ -927,7 +945,6 @@ function MessagesTab({ notify, onPreview, eventId }) {
           ))}
           {!templateAudit.length && <div className="cm-audit-row">No template changes recorded.</div>}
         </div>
-      </div>
       </div>}
       {templateEditor && (
         <Modal title={`Edit: ${templateEditor.template.label}`} onClose={() => setTemplateEditor(null)} width={680}>

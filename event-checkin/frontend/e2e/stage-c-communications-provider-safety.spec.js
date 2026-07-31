@@ -16,9 +16,9 @@ test.describe('Stage C communications — provider-safe redesign controls', () =
       if (/\/(broadcast|test-send|send-invites)(?:\/|$)/.test(request.url())) outbound.push(request.url())
     })
 
-    const templateRow = page.locator('.cm-tpl-table tbody tr').filter({ hasNotText: 'No message templates available.' }).first()
-    await expect(templateRow).toBeVisible()
-    await templateRow.getByRole('button', { name: 'Preview' }).click()
+    const templateCard = page.locator('.cm-template-card').first()
+    await expect(templateCard).toBeVisible()
+    await templateCard.getByRole('button', { name: 'Preview' }).click()
     await expect(page.locator('.rr-modal')).toBeVisible()
     await expect(page.locator('.rr-modal')).not.toContainText('{{first_name}}')
     expect(outbound).toEqual([])

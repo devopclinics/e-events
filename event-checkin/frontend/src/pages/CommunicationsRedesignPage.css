@@ -133,6 +133,15 @@
 .cm-broadcast-actions .rr-btn { min-width: 156px; justify-content: center; }
 
 /* ── templates: extra actions + audit log ─────────────────────────────── */
+.cm-collapsible-title { align-items: center; }
+.cm-section-actions { display: flex; align-items: center; gap: 9px; }
+.cm-section-count { color: var(--faint); font-size: 10.5px; white-space: nowrap; }
+.cm-collapse-btn { min-width: 92px; justify-content: center; }
+.cm-collapse-btn span { display: inline-block; font-size: 16px; line-height: 10px; transition: transform .18s ease; transform: rotate(-90deg); }
+.cm-collapse-btn span.open { transform: rotate(0deg); }
+.cm-template-toolbar { display: flex; align-items: center; gap: 10px; margin-bottom: 12px; }
+.cm-template-toolbar .rd-search { flex: 1; }
+.cm-template-no-results { grid-column: 1 / -1; text-align: center; }
 .cm-tpl-actions { display: flex; align-items: center; gap: 10px; justify-content: center; white-space: nowrap; }
 .cm-template-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
 .cm-template-card { padding: 16px; min-width: 0; }
@@ -174,6 +183,10 @@
   .cm-toggle-grid { grid-template-columns: 1fr 1fr; }
 }
 @media (max-width: 760px) {
+  .cm-collapsible-title { align-items: flex-start; gap: 10px; }
+  .cm-section-actions { width: 100%; justify-content: space-between; }
+  .cm-template-toolbar { align-items: stretch; flex-direction: column; }
+  .cm-template-toolbar .cm-linklike { align-self: flex-start; }
   .cm-toggle-grid { grid-template-columns: 1fr; }
   .cm-announce-row { flex-direction: column; }
   .cm-announce-right { align-items: flex-start; flex-direction: row; gap: 10px; }

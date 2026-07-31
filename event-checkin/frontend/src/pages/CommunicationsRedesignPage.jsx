@@ -572,6 +572,9 @@ function MessagesTab({ notify, onPreview, eventId }) {
   const [templateBusy, setTemplateBusy] = useState('')
   const [templateEditor, setTemplateEditor] = useState(null)
   const [templateTest, setTemplateTest] = useState(null)
+  const [templateQuery, setTemplateQuery] = useState('')
+  const [deliveryOpen, setDeliveryOpen] = useState(false)
+  const [templatesOpen, setTemplatesOpen] = useState(true)
   const [orgMembers, setOrgMembers] = useState([])
   const [communication, setCommunication] = useState(null)
   const [broadcasts, setBroadcasts] = useState([])
@@ -744,6 +747,18 @@ function MessagesTab({ notify, onPreview, eventId }) {
       || option.name.toLowerCase().includes(testRecipientQuery)
       || option.contact.toLowerCase().includes(testRecipientQuery))
     .slice(0, 12)
+  const normalizedTemplateQuery = templateQuery.trim().toLowerCase()
+  const filteredTemplates = templates.filter((template) => {
+    if (!normalizedTemplateQuery) return true
+    const searchable = [
+      template.label,
+      template.key,
+      template.group,
+      template.source === 'event-customized' ? 'custom customized' : 'default',
+      ...(template.channels || []),
+    ].filter(Boolean).join(' ').toLowerCase()
+    return searchable.includes(normalizedTemplateQuery)
+  })
 
   return (
     <>
@@ -753,11 +768,14 @@ function MessagesTab({ notify, onPreview, eventId }) {
 
       <BroadcastComposer eventId={eventId} notify={notify} onSent={loadDeliveryData} />
 
-      <div className="rr-section-title">
+      <div className="rr-section-title cm-collapsible-title">
         <div><h2>Delivery by channel</h2><p>Live send rates across every channel this event uses</p></div>
+        <button className="rr-btn secondary cm-collapse-btn" type="button" aria-label={`${deliveryOpen ? 'Collapse' : 'Expand'} delivery by channel`} aria-expanded={deliveryOpen} aria-controls="delivery-by-channel-content" onClick={() => setDeliveryOpen((open) => !open)}>
+          {deliveryOpen ? 'Collapse' : 'Expand'} <span aria-hidden="true" className={deliveryOpen ? 'open' : ''}>⌄</span>
+        </button>
       </div>
 
-      <div className="rd-wide-grid">
+      {deliveryOpen && <div className="rd-wide-grid" id="delivery-by-channel-content">
         <div className="rd-panel">
           <div className="rd-panel-body">
             <div className="rd-channels">
@@ -834,14 +852,28 @@ function MessagesTab({ notify, onPreview, eventId }) {
             </div>
           </div>
         </div>
-      </div>
+      </div>}
 
-      <div className="rr-section-title">
+      <div className="rr-section-title cm-collapsible-title">
         <div><h2>Templates</h2><p>Each channel falls back to the default template unless it has its own override</p></div>
+        <div className="cm-section-actions">
+          <span className="cm-section-count">{filteredTemplates.length} of {templates.length}</span>
+          <button className="rr-btn secondary cm-collapse-btn" type="button" aria-label={`${templatesOpen ? 'Collapse' : 'Expand'} templates`} aria-expanded={templatesOpen} aria-controls="message-templates-content" onClick={() => setTemplatesOpen((open) => !open)}>
+            {templatesOpen ? 'Collapse' : 'Expand'} <span aria-hidden="true" className={templatesOpen ? 'open' : ''}>⌄</span>
+          </button>
+        </div>
       </div>
 
+      {templatesOpen && <div id="message-templates-content">
+      <div className="cm-template-toolbar">
+        <div className="rd-search">
+          <Icon name="search" size={14} />
+          <input aria-label="Search templates" placeholder="Search templates by name, channel or status…" value={templateQuery} onChange={(event) => setTemplateQuery(event.target.value)} />
+        </div>
+        {templateQuery && <button type="button" className="cm-linklike" onClick={() => setTemplateQuery('')}>Clear search</button>}
+      </div>
       <div className="cm-template-grid">
-        {templates.map((t) => (
+        {filteredTemplates.map((t) => (
           <article className="rr-panel cm-template-card" key={t.key}>
             <div className="cm-template-card-head">
               <div>
@@ -882,6 +914,7 @@ function MessagesTab({ notify, onPreview, eventId }) {
           </article>
         ))}
         {!templates.length && <div className="rr-panel rd-panel-body rd-rowlink">{templateError || 'No message templates available.'}</div>}
+        {templates.length > 0 && !filteredTemplates.length && <div className="rr-panel rd-panel-body rd-rowlink cm-template-no-results">No templates match “{templateQuery}”.</div>}
       </div>
 
       <div className="rd-panel cm-audit-panel">
@@ -895,6 +928,7 @@ function MessagesTab({ notify, onPreview, eventId }) {
           {!templateAudit.length && <div className="cm-audit-row">No template changes recorded.</div>}
         </div>
       </div>
+      </div>}
       {templateEditor && (
         <Modal title={`Edit: ${templateEditor.template.label}`} onClose={() => setTemplateEditor(null)} width={680}>
           <p className="rd-hint">Available placeholders: {(templateEditor.template.placeholders || []).map((value) => `{{${value}}}`).join(', ') || 'none'}</p>

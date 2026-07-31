@@ -41,6 +41,22 @@ test.describe('Stage C communications — provider-safe redesign controls', () =
     await expect(page.getByText(/send confirmed/i)).toHaveCount(0)
   })
 
+  test('delivery and templates sections collapse while template search filters live', async ({ page }) => {
+    const deliveryButton = page.getByRole('button', { name: 'Expand delivery by channel' })
+    await expect(deliveryButton).toHaveAttribute('aria-expanded', 'false')
+    await deliveryButton.click()
+    await expect(page.locator('#delivery-by-channel-content')).toBeVisible()
+
+    const templatesButton = page.getByRole('button', { name: 'Collapse templates' })
+    await expect(templatesButton).toHaveAttribute('aria-expanded', 'true')
+    const search = page.getByRole('textbox', { name: 'Search templates' })
+    await search.fill('post-event thank-you')
+    await expect(page.locator('.cm-template-card')).toHaveCount(1)
+    await expect(page.locator('.cm-template-card')).toContainText('Post-event thank-you')
+    await templatesButton.click()
+    await expect(page.locator('#message-templates-content')).toHaveCount(0)
+  })
+
   test('broadcast uses the existing contract and reports only confirmed server counts', async ({ page }) => {
     let body
     await page.route('**/api/events/*/broadcast', async (route) => {

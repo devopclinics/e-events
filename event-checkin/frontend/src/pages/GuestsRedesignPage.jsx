@@ -1035,12 +1035,13 @@ export default function GuestsRedesignPage() {
   const [households, setHouseholds] = useState([])
   const [tableGroups, setTableGroups] = useState([])
   const [tables, setTables] = useState([])
+  const [ticketTypes, setTicketTypes] = useState([])
   const [rsvpQuestions, setRsvpQuestions] = useState([])
   const [householdsLoading, setHouseholdsLoading] = useState(true)
   const [householdTarget, setHouseholdTarget] = useState(null)
   const [householdDeleteTarget, setHouseholdDeleteTarget] = useState(null)
   const [householdForm, setHouseholdForm] = useState({ name: '', description: '' })
-  const [editForm, setEditForm] = useState({ first_name: '', last_name: '', email: '', phone: '', is_vip: false, table_id: '', seat_number: '', messaging_consent: false })
+  const [editForm, setEditForm] = useState({ first_name: '', last_name: '', email: '', phone: '', is_vip: false, table_id: '', seat_number: '', ticket_type_id: '', messaging_consent: false })
   const [mutationBusy, setMutationBusy] = useState(false)
   const tab = searchParams.get('tab') === 'invite' ? 'invite' : 'guests'
   const [addOpen, setAddOpen] = useState(false)
@@ -1050,7 +1051,7 @@ export default function GuestsRedesignPage() {
   const [viewAnswers, setViewAnswers] = useState(null)
   const openedGuestRef = useRef('')
   const [removeTarget, setRemoveTarget] = useState(null)
-  const [addForm, setAddForm] = useState({ first: '', last: '', email: '', phone: '', vip: false, sendInvite: false })
+  const [addForm, setAddForm] = useState({ first: '', last: '', email: '', phone: '', vip: false, ticket_type_id: '', sendInvite: false })
   const [importOpen, setImportOpen] = useState(false)
   const [importStep, setImportStep] = useState('upload') // upload | mapping | validating | result
   const [importProgress, setImportProgress] = useState(0)
@@ -1095,11 +1096,16 @@ export default function GuestsRedesignPage() {
   }
 
   async function loadTableGroups() {
-    if (!eventId) { setTableGroups([]); setTables([]); return }
+    if (!eventId) { setTableGroups([]); setTables([]); setTicketTypes([]); return }
     try {
-      const [nextGroups, nextTables] = await Promise.all([api.listTableGroups(eventId), api.listTables(eventId)])
+      const [nextGroups, nextTables, nextTicketTypes] = await Promise.all([
+        api.listTableGroups(eventId),
+        api.listTables(eventId),
+        api.listTicketTypes(eventId).catch(() => []),
+      ])
       setTableGroups(nextGroups)
       setTables(nextTables)
+      setTicketTypes(nextTicketTypes)
     } catch (e) {
       notify(e.message || 'Table groups could not be loaded', true)
     }
@@ -1127,6 +1133,7 @@ export default function GuestsRedesignPage() {
       is_vip: !!editTarget.raw.is_vip,
       table_id: editTarget.raw.table_id || '',
       seat_number: editTarget.raw.seat_number || '',
+      ticket_type_id: editTarget.raw.ticket_type_id || '',
       messaging_consent: !!editTarget.raw.sms_consent && !!editTarget.raw.whatsapp_consent,
     })
     let alive = true
@@ -1273,6 +1280,7 @@ export default function GuestsRedesignPage() {
             </div>
             <div><label className="rd-field-label">Email</label><input className="rd-field" type="email" value={addForm.email} onChange={(e) => setAddForm({ ...addForm, email: e.target.value })} /></div>
             <div><label className="rd-field-label">Phone (E.164)</label><input className="rd-field" placeholder="+234..." value={addForm.phone} onChange={(e) => setAddForm({ ...addForm, phone: e.target.value })} /></div>
+            {event?.venue_access_enabled && <div><label className="rd-field-label">Check-in access</label><select className="rd-field" value={addForm.ticket_type_id} onChange={(e) => setAddForm({ ...addForm, ticket_type_id: e.target.value })}><option value="">No access type yet</option>{ticketTypes.map((type) => <option key={type.id} value={type.id}>{type.name}</option>)}</select><span className="rd-hint">Import templates and registration categories can assign this automatically; use this for manual guests.</span></div>}
             <label className="gr-required-check"><input type="checkbox" checked={addForm.vip} onChange={(e) => setAddForm({ ...addForm, vip: e.target.checked })} /> Mark as VIP</label>
             <label className="gr-required-check"><input type="checkbox" checked={addForm.sendInvite} onChange={(e) => setAddForm({ ...addForm, sendInvite: e.target.checked })} /> Send invite immediately</label>
             <div className="rd-row2" style={{ marginTop: 4 }}>
@@ -1287,9 +1295,10 @@ export default function GuestsRedesignPage() {
                     phone: addForm.phone.trim() || null,
                     is_vip: addForm.vip,
                   })
+                  if (addForm.ticket_type_id) await api.assignTicketType(eventId, created.id, addForm.ticket_type_id)
                   const shouldSendInvite = addForm.sendInvite
                   setAddOpen(false)
-                  setAddForm({ first: '', last: '', email: '', phone: '', vip: false, sendInvite: false })
+                  setAddForm({ first: '', last: '', email: '', phone: '', vip: false, ticket_type_id: '', sendInvite: false })
                   await loadGuests()
                   if (shouldSendInvite) {
                     try {
@@ -1316,6 +1325,7 @@ export default function GuestsRedesignPage() {
               <div><label className="rd-field-label">First name</label><input className="rd-field" value={editForm.first_name} onChange={(e) => setEditForm((v) => ({ ...v, first_name: e.target.value }))} /></div>
               <div><label className="rd-field-label">Last name</label><input className="rd-field" value={editForm.last_name} onChange={(e) => setEditForm((v) => ({ ...v, last_name: e.target.value }))} /></div>
             </div>
+            {event?.venue_access_enabled && <div><label className="rd-field-label">Check-in access</label><select className="rd-field" value={editForm.ticket_type_id} onChange={(e) => setEditForm((v) => ({ ...v, ticket_type_id: e.target.value }))}><option value="">No access type</option>{ticketTypes.map((type) => <option key={type.id} value={type.id}>{type.name}</option>)}</select></div>}
             <div><label className="rd-field-label">Email</label><input className="rd-field" value={editForm.email} onChange={(e) => setEditForm((v) => ({ ...v, email: e.target.value }))} /></div>
             <div><label className="rd-field-label">Phone (E.164)</label><input className="rd-field" value={editForm.phone} onChange={(e) => setEditForm((v) => ({ ...v, phone: e.target.value }))} /></div>
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
@@ -1356,6 +1366,9 @@ export default function GuestsRedesignPage() {
                     sms_consent: editForm.messaging_consent,
                     whatsapp_consent: editForm.messaging_consent,
                   }, editTarget.raw.updated_at)
+                  if ((editTarget.raw.ticket_type_id || '') !== editForm.ticket_type_id) {
+                    await api.assignTicketType(eventId, editTarget.id, editForm.ticket_type_id || null)
+                  }
                   const name = `${editForm.first_name} ${editForm.last_name}`.trim()
                   setEditTarget(null)
                   await loadGuests()

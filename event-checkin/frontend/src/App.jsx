@@ -62,6 +62,7 @@ const FloorPlanRedesignPage = lazy(() => import('./pages/FloorPlanRedesignPage')
 const SetupRedesignPage = lazy(() => import('./pages/SetupRedesignPage'))
 const ApiExplorerRedesignPage = lazy(() => import('./pages/ApiExplorerRedesignPage'))
 const PublicPagesRedesignPage = lazy(() => import('./pages/PublicPagesRedesignPage'))
+const LayoutOptionsPage = lazy(() => import('./pages/LayoutOptionsPage'))
 
 // ── Preferred-view helpers ────────────────────────────────────────────────────
 
@@ -410,6 +411,7 @@ function AppRoutes() {
       <Route path="/setup-redesign" element={<ProtectedRoute setupOnly><SetupRedesignPage /></ProtectedRoute>} />
       <Route path="/api-explorer-redesign" element={<ProtectedRoute><ApiExplorerRedesignPage /></ProtectedRoute>} />
       <Route path="/public-pages-redesign" element={<PublicPagesRedesignPage />} />
+      <Route path="/layout-options" element={<ProtectedRoute><LayoutOptionsPage /></ProtectedRoute>} />
 
       {/* Authenticated app with Nav */}
       <Route

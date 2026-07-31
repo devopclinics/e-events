@@ -210,6 +210,9 @@ class GroupUpdate(BaseModel):
 class MemberUpdate(BaseModel):
     role: Literal["admin", "moderator", "member", "readonly"]
 
+class ProfileUpdate(BaseModel):
+    display_name: str = Field(min_length=1, max_length=255)
+
 
 class OwnershipTransfer(BaseModel):
     member_id: str
@@ -330,6 +333,7 @@ class EventLinkOwner(BaseModel):
 class InternalSubGroupCreate(SubGroupCreate):
     """GuestHub organizer request with the organizer who should own the group."""
     owner: EventLinkOwner | None = None
+    staff_only: bool = False
 
 
 class EventLinkCreate(BaseModel):

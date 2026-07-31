@@ -83,12 +83,14 @@ const CHANNEL_FRAME_META = {
   mms: { label: 'MMS', icon: 'image' },
 }
 
-export function ChannelPreviewFrame({ channel = 'email', body }) {
+export function ChannelPreviewFrame({ channel = 'email', body, html = '' }) {
   const meta = CHANNEL_FRAME_META[channel] || CHANNEL_FRAME_META.email
   return (
     <div className={`rr-chan-frame rr-chan-frame-${channel}`}>
       <div className="rr-chan-frame-head"><Icon name={meta.icon} size={13} /> {meta.label} preview</div>
-      <div className={`rr-chan-frame-body rr-chan-frame-body-${channel}`}>{body}</div>
+      {channel === 'email' && html
+        ? <iframe className="rr-chan-frame-email-document" title="Rendered email preview" sandbox="" srcDoc={html} />
+        : <div className={`rr-chan-frame-body rr-chan-frame-body-${channel}`}>{body}</div>}
     </div>
   )
 }

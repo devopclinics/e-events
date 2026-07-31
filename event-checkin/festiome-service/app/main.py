@@ -31,7 +31,7 @@ from .models import (
 from .schemas import (
     AttachmentOut, ChannelCreate, ChannelMemberAdd, ChannelMemberOut, ChannelOut, DirectMessageCreate, EventGroupAdminOut, EventLinkCreate, EventLinkOut, GroupCreate, GroupDirectoryOut, GroupOut, GroupUpdate, InternalSubGroupCreate, InvitationCreate,
     InvitationOut, JoinGroupRequest, JoinGroupResult, JoinRequestDecision, JoinRequestOut, MemberOut, MessageCreate, MessageOut, MessagePage,
-    MemberUpdate, MessageUpdate, NotificationPreferenceIn, NotificationPreferenceOut, OwnershipTransfer, PollCreate, PollVoteCreate,
+    MemberUpdate, MessageUpdate, NotificationPreferenceIn, NotificationPreferenceOut, OwnershipTransfer, PollCreate, PollVoteCreate, ProfileUpdate,
     ReactionCreate, ReactionOut, ReadStateOut, ReadStateUpdate, ReportCreate, RulesAcceptResult, SubGroupCreate,
     RealtimeTicketOut, ReportOut, ReportPage, ReportUpdate,
 )
@@ -864,6 +864,23 @@ async def _create_subgroup(db: AsyncSession, primary: FestioMeGroup, body: SubGr
         owner = Member(group_id=group.id, identity_kind="service", identity_ref="guesthub",
                        display_name="Festio", role="owner", rules_accepted_version=group.rules_version)
     db.add(owner); await db.flush()
+    if getattr(body, "staff_only", False):
+        staff = (await db.execute(select(Member).where(
+            Member.group_id == primary.id,
+            Member.identity_kind == "user",
+            Member.removed_at.is_(None),
+        ))).scalars().all()
+        for source in staff:
+            if creator_identity and source.identity_ref == creator_identity.subject:
+                continue
+            db.add(Member(
+                group_id=group.id,
+                identity_kind=source.identity_kind,
+                identity_ref=source.identity_ref,
+                display_name=source.display_name,
+                role="moderator" if source.role in {"owner", "admin", "moderator"} else source.role,
+                rules_accepted_version=group.rules_version,
+            ))
     db.add(Channel(group_id=group.id, name="General", slug="general", kind="discussion", created_by_member_id=owner.id))
     _audit(db, group.id, owner, "group.subgroup_created", "group", group.id, name=group.name)
     await db.commit(); await db.refresh(group)
@@ -1662,6 +1679,28 @@ async def vote_poll(poll_id: str, body: PollVoteCreate, identity: Identity = Dep
     result = {"id": poll.id, "options": [{"id": o.id, "label": o.label, "votes": counts.get(o.id, 0), "voted_by_me": o.id in requested} for o in options]}
     await _publish(message.channel_id, "poll.voted", result)
     return result
+
+
+@app.patch("/v1/profile", response_model=MemberOut)
+async def update_my_profile(
+    body: ProfileUpdate,
+    group_id: str = Query(...),
+    identity: Identity = Depends(current_identity),
+    db: AsyncSession = Depends(get_db),
+):
+    """Update the caller's community name across all active memberships."""
+    current = await _member(db, group_id, identity)
+    memberships = (await db.execute(select(Member).where(
+        Member.identity_kind == identity.kind,
+        Member.identity_ref == identity.subject,
+        Member.removed_at.is_(None),
+    ))).scalars().all()
+    display_name = body.display_name.strip()
+    for membership in memberships:
+        membership.display_name = display_name
+    await db.commit()
+    await db.refresh(current)
+    return MemberOut.model_validate(current).model_copy(update={"is_me": True})
 
 
 @app.get("/v1/notification-preferences", response_model=NotificationPreferenceOut)

@@ -766,32 +766,27 @@ function MessagesTab({ notify, onPreview, eventId }) {
         <div><h2>Templates</h2><p>Each channel falls back to the default template unless it has its own override</p></div>
       </div>
 
-      <div className="rr-panel">
-        <table className="rr-table cm-tpl-table">
-          <thead>
-            <tr>
-              <th>Template</th>
-              <th>Email</th>
-              <th>SMS</th>
-              <th>WhatsApp</th>
-              <th>MMS</th>
-              <th />
-            </tr>
-          </thead>
-          <tbody>
-            {templates.map((t) => (
-              <tr key={t.key}>
-                <td><strong>{t.label}</strong></td>
-                {['email', 'sms', 'whatsapp', 'mms'].map((ch) => (
-                  <td key={ch}>
-                    {t.channels.includes(ch)
-                      ? <span className={`cm-badge ${t.source === 'event-customized' ? 'custom' : 'default'}`}>
-                          {t.source === 'event-customized' ? 'Custom' : 'Default'}
-                        </span>
-                      : <span>—</span>}
-                  </td>
-                ))}
-                <td className="rd-rowlink cm-tpl-actions">
+      <div className="cm-template-grid">
+        {templates.map((t) => (
+          <article className="rr-panel cm-template-card" key={t.key}>
+            <div className="cm-template-card-head">
+              <div>
+                <strong>{t.label}</strong>
+                <span>{t.source === 'event-customized' ? 'Customized for this event' : 'Using Festio default'}</span>
+              </div>
+              <span className={`cm-badge ${t.source === 'event-customized' ? 'custom' : 'default'}`}>
+                {t.source === 'event-customized' ? 'Custom' : 'Default'}
+              </span>
+            </div>
+            <div className="cm-template-channels">
+              {['email', 'sms', 'whatsapp', 'mms'].map((ch) => (
+                <span key={ch} className={t.channels.includes(ch) ? 'on' : 'off'}>
+                  <Icon name={ch === 'email' ? 'mail' : ch === 'whatsapp' ? 'whatsapp' : ch === 'mms' ? 'image' : 'message'} size={12}/>
+                  {ch.toUpperCase()}
+                </span>
+              ))}
+            </div>
+            <div className="cm-tpl-actions">
                   <button className="cm-linklike" onClick={() => openTemplateEditor(t)}>Edit</button>
                   <button className="cm-linklike" onClick={async () => {
                     try {
@@ -815,12 +810,10 @@ function MessagesTab({ notify, onPreview, eventId }) {
                       notify(`${t.label} reset to the platform default`)
                     } catch (e) { notify(e.message || 'Template could not be reset') } finally { setTemplateBusy('') }
                   }}>Reset</button>
-                </td>
-              </tr>
-            ))}
-            {!templates.length && <tr><td colSpan={6} className="rd-rowlink">{templateError || 'No message templates available.'}</td></tr>}
-          </tbody>
-        </table>
+            </div>
+          </article>
+        ))}
+        {!templates.length && <div className="rr-panel rd-panel-body rd-rowlink">{templateError || 'No message templates available.'}</div>}
       </div>
 
       <div className="rd-panel cm-audit-panel">
@@ -1444,12 +1437,13 @@ export default function CommunicationsRedesignPage() {
       {previewTemplate && (
         <Modal title={`Preview: ${previewTemplate.name}`} onClose={() => setPreviewTemplate(null)} width={500}>
           <div style={{ display: 'flex', gap: 8, marginBottom: 12 }}>
-            {['email', 'sms', 'whatsapp', 'mms'].filter((ch) => previewTemplate.channels[ch]).map((ch) => (
+            {['email', 'sms', 'whatsapp', 'mms'].filter((ch) => previewTemplate.channels?.includes(ch)).map((ch) => (
               <button key={ch} className={`rr-btn${previewChannel === ch ? ' primary' : ' secondary'}`} onClick={() => setPreviewChannel(ch)} style={{ fontSize: '0.78rem', padding: '4px 10px' }}>{ch.toUpperCase()}</button>
             ))}
           </div>
           <ChannelPreviewFrame
             channel={previewChannel}
+            html={previewChannel === 'email' ? previewTemplate.preview?.email_preview_html || '' : ''}
             body={previewTemplate.preview?.[`${previewChannel}_body`]
               || previewTemplate.effective?.[`${previewChannel}_body`]
               || `No ${previewChannel.toUpperCase()} body is configured for this template.`}

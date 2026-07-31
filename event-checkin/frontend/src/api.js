@@ -1055,6 +1055,7 @@ export const api = {
   festiomeReports: (id) => festiomeReq('GET', `/festiome/v1/groups/${id}/reports`),
   festiomeUpdateReport: (groupId, id, data) => festiomeReq('PATCH', `/festiome/v1/groups/${groupId}/reports/${id}`, data),
   festiomeNotificationPreferences: (groupId) => festiomeReq('GET', `/festiome/v1/notification-preferences?group_id=${encodeURIComponent(groupId)}`),
+  festiomeUpdateProfile: (groupId, data) => festiomeReq('PATCH', `/festiome/v1/profile?group_id=${encodeURIComponent(groupId)}`, data),
   festiomeSaveNotificationPreferences: (groupId, data) =>
     festiomeReq('PUT', `/festiome/v1/notification-preferences?group_id=${encodeURIComponent(groupId)}`, data),
   acceptFestioMeInvite: (token) => festiomeReq('POST', `/festiome/v1/invitations/${encodeURIComponent(token)}/accept`),

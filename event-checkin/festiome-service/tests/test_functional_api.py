@@ -89,3 +89,17 @@ async def test_polls_preferences_unread_and_cross_channel_reply_validation(api):
     prefs = await api.put("/v1/notification-preferences", params={"group_id": group["id"]}, json={"digest": "weekly", "muted_channel_ids": [second["id"]]})
     assert prefs.json()["digest"] == "weekly"
     assert "unread_count" in (await api.get(f"/v1/groups/{group['id']}/channels")).json()[0]
+
+
+@pytest.mark.asyncio
+async def test_member_can_edit_profile_name(api):
+    group = (await api.post("/v1/groups", json={"name": "Profiles"})).json()
+    updated = await api.patch(
+        "/v1/profile",
+        params={"group_id": group["id"]},
+        json={"display_name": "Ada Updated"},
+    )
+    assert updated.status_code == 200
+    assert updated.json()["display_name"] == "Ada Updated"
+    members = (await api.get(f"/v1/groups/{group['id']}/members")).json()
+    assert members[0]["display_name"] == "Ada Updated"

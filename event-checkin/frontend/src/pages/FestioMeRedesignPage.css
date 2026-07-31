@@ -135,3 +135,9 @@
   .fm-layout { grid-template-columns: 1fr; }
   .fm-rail { max-height: 200px; }
 }
+.fm-invite-results { display: grid; gap: 6px; max-height: 360px; overflow-y: auto; }
+.fm-invite-result { width: 100%; display: flex; align-items: center; gap: 10px; padding: 10px; border: 1px solid var(--line); border-radius: 10px; background: var(--surface); color: var(--ink); text-align: left; cursor: pointer; }
+.fm-invite-result:hover { border-color: var(--teal); background: var(--teal-soft); }
+.fm-invite-result > span:nth-child(2) { min-width: 0; flex: 1; display: grid; gap: 2px; }
+.fm-invite-result strong, .fm-invite-result small { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.fm-invite-result small { color: var(--muted); font-size: 10px; }

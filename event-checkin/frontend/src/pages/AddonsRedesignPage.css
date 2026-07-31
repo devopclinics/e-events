@@ -25,6 +25,13 @@
 .ad-ratio-badge.full { background: var(--success-soft); color: var(--success); }
 .ad-ratio-badge.partial { background: var(--warning-soft); color: var(--warning); }
 .ad-actions { display: flex; align-items: center; gap: 12px; white-space: nowrap; }
+.ad-table-row-editing td { background: color-mix(in srgb, var(--teal-soft) 65%, var(--surface)); }
+.ad-inline-editor-row td { padding: 0 !important; background: var(--surface-2); }
+.ad-inline-table-editor { padding: 14px 16px; border-left: 3px solid var(--teal); }
+.ad-inline-table-fields { display: grid; grid-template-columns: 1.5fr 1fr .65fr .65fr; gap: 10px; margin-bottom: 10px; }
+.ad-inline-table-fields label { display: grid; gap: 5px; }
+.ad-inline-table-fields label > span { font-size: 9px; font-weight: 800; color: var(--muted); text-transform: uppercase; letter-spacing: .06em; }
+@media (max-width: 850px) { .ad-inline-table-fields { grid-template-columns: 1fr 1fr; } }
 .ad-chev { transition: transform .15s ease; }
 .ad-chev.open { transform: rotate(90deg); }
 @media (prefers-reduced-motion: reduce) { .ad-chev { transition: none; } }

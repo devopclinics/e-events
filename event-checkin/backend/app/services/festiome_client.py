@@ -203,12 +203,13 @@ class FestioMeClient:
     async def create_subgroup(
         self, external_event_ref: str, *, name: str, description: str = "",
         join_policy: str = "request", visibility: str = "listed", rules: str = "",
+        staff_only: bool = False,
         owner_subject: str | None = None, owner_name: str = "",
         owner_email: str = "",
     ) -> dict[str, Any]:
         payload: dict[str, Any] = {
             "name": name, "description": description, "join_policy": join_policy,
-            "visibility": visibility, "rules": rules,
+            "visibility": visibility, "rules": rules, "staff_only": staff_only,
         }
         if owner_subject:
             payload["owner"] = {

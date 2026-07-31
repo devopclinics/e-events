@@ -110,6 +110,7 @@ class SubGroupCreate(BaseModel):
     join_policy: Literal["closed", "request", "open"] = "request"
     visibility: Literal["listed", "unlisted"] = "listed"
     rules: str = Field(default="", max_length=10000)
+    staff_only: bool = False
 
 
 class SubGroupUpdate(BaseModel):
@@ -430,9 +431,16 @@ async def create_festiome_group(
 ):
     event = await _gated_event(db, event_id, client)
     try:
+        if data.staff_only:
+            # Ensure every currently assigned EventUser exists in the primary
+            # roster before FestioMe copies that user-only roster into the
+            # private support subgroup.
+            await _push_event_staff(db, event, client)
         return await client.create_subgroup(
             event.id, name=data.name.strip(), description=data.description.strip(),
-            join_policy=data.join_policy, visibility=data.visibility, rules=data.rules.strip(),
+            join_policy="closed" if data.staff_only else data.join_policy,
+            visibility="unlisted" if data.staff_only else data.visibility,
+            rules=data.rules.strip(), staff_only=data.staff_only,
             owner_subject=user.firebase_uid or user.id, owner_name=user.name,
             owner_email=user.email,
         )

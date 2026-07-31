@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react'
+import { Fragment, useCallback, useEffect, useState } from 'react'
 import { api } from '../../api'
 import { EmptyState, ErrorRetryState, LoadingSkeleton } from './RedesignPrimitives'
 import { Icon, ConfirmDialog, Modal } from './RedesignShell'
@@ -68,6 +68,23 @@ function ReserveSeatModal({ slot, guests, busy, query, onQuery, onPick, onAddVvi
         </form>
       )}
     </Modal>
+  )
+}
+
+function TableEditor({ form, setForm, saveTable, working }) {
+  return (
+    <form className="ad-inline-table-editor" onSubmit={saveTable}>
+      <div className="ad-inline-table-fields">
+        <label><span>Table name</span><input className="rr-input" aria-label="Table name" required value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} placeholder="Table name"/></label>
+        <label><span>Category</span><input className="rr-input" aria-label="Category" value={form.category || ''} onChange={(e) => setForm({ ...form, category: e.target.value })} placeholder="Category"/></label>
+        <label><span>Capacity</span><input className="rr-input" aria-label="Capacity" required type="number" min="1" value={form.capacity} onChange={(e) => setForm({ ...form, capacity: e.target.value })}/></label>
+        <label><span>Table order</span><input className="rr-input" aria-label="Table order" type="number" value={form.sort_order ?? 0} onChange={(e) => setForm({ ...form, sort_order: e.target.value })}/></label>
+      </div>
+      <div className="ad-actions">
+        <button type="button" className="rr-btn secondary" onClick={() => setForm(null)}>Cancel</button>
+        <button className="rr-btn primary" disabled={working}>{working ? 'Saving…' : 'Save table'}</button>
+      </div>
+    </form>
   )
 }
 
@@ -274,19 +291,18 @@ export function RealSeatingContent({ eventId, event, notify, onFloorLayout }) {
       </div>
       {!tables.length ? <EmptyState icon="chair" title="No tables yet" body="Create the first table to start assigning guests." /> : (
         <div className="rr-panel"><table className="rr-table"><thead><tr><th>Order</th><th>Table</th><th>Category</th><th>Capacity</th><th>Assigned</th><th>Actions</th></tr></thead>
-          <tbody>{tables.map((t) => <tr key={t.id}>
-            <td>{Number(t.sort_order) || 0}</td><td>{clean(t.name, 'Unnamed table')}</td><td>{clean(t.category, '—')}</td>
-            <td>{Number(t.capacity) || 0}</td><td>{Number(t.assigned_count) || 0}/{Number(t.capacity) || 0}</td>
-            <td className="ad-actions"><button className="rr-link-btn" onClick={() => setForm({ ...t, category: clean(t.category) })}>Edit</button><button className="rr-link-btn" onClick={() => setPendingDelete(t)}>Delete</button></td>
-          </tr>)}</tbody></table></div>
+          <tbody>{tables.map((t) => <Fragment key={t.id}>
+            <tr className={form?.id === t.id ? 'ad-table-row-editing' : ''}>
+              <td>{Number(t.sort_order) || 0}</td><td>{clean(t.name, 'Unnamed table')}</td><td>{clean(t.category, '—')}</td>
+              <td>{Number(t.capacity) || 0}</td><td>{Number(t.assigned_count) || 0}/{Number(t.capacity) || 0}</td>
+              <td className="ad-actions"><button className="rr-link-btn" onClick={() => setForm({ ...t, category: clean(t.category) })}>Edit</button><button className="rr-link-btn" onClick={() => setPendingDelete(t)}>Delete</button></td>
+            </tr>
+            {form?.id === t.id && <tr className="ad-inline-editor-row"><td colSpan={6}>
+              <TableEditor form={form} setForm={setForm} saveTable={saveTable} working={working} />
+            </td></tr>}
+          </Fragment>)}</tbody></table></div>
       )}
-      {form && <form className="rr-panel rd-panel-body" onSubmit={saveTable}>
-        <div className="rd-row2"><input className="rr-input" aria-label="Table name" required value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} placeholder="Table name"/>
-          <input className="rr-input" aria-label="Capacity" required type="number" min="1" value={form.capacity} onChange={(e) => setForm({ ...form, capacity: e.target.value })}/></div>
-        <div className="rd-row2"><input className="rr-input" aria-label="Category" value={form.category || ''} onChange={(e) => setForm({ ...form, category: e.target.value })} placeholder="Category"/>
-          <input className="rr-input" aria-label="Sort order" type="number" value={form.sort_order ?? 0} onChange={(e) => setForm({ ...form, sort_order: e.target.value })}/></div>
-        <div className="ad-actions"><button type="button" className="rr-btn secondary" onClick={() => setForm(null)}>Cancel</button><button className="rr-btn primary" disabled={working}>{working ? 'Saving…' : 'Save'}</button></div>
-      </form>}
+      {form && !form.id && <div className="rr-panel rd-panel-body"><TableEditor form={form} setForm={setForm} saveTable={saveTable} working={working} /></div>}
 
       {!!tables.length && (
         <div className="ad-chart-section">

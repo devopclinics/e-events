@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import RedesignShell, { Icon, ConfirmDialog } from './redesign/RedesignShell'
+import RedesignShell, { Icon, ConfirmDialog, Modal } from './redesign/RedesignShell'
 import { useCurrentEvent } from '../hooks/useCurrentEvent'
 import { api } from '../api'
 import './FestioMeRedesignPage.css'
@@ -45,6 +45,7 @@ export default function FestioMeRedesignPage() {
   const [error, setError] = useState('')
   const [groupName, setGroupName] = useState('')
   const [groupJoinPolicy, setGroupJoinPolicy] = useState('open')
+  const [staffOnlyGroup, setStaffOnlyGroup] = useState(false)
   const [channelName, setChannelName] = useState('')
   const [channelKind, setChannelKind] = useState('discussion')
   const [channelPrivate, setChannelPrivate] = useState(false)
@@ -71,6 +72,10 @@ export default function FestioMeRedesignPage() {
   const [editingId, setEditingId] = useState(null)
   const [toast, setToast] = useState('')
   const [confirmAction, setConfirmAction] = useState(null)
+  const [inviteOpen, setInviteOpen] = useState(false)
+  const [inviteQuery, setInviteQuery] = useState('')
+  const [teamCandidates, setTeamCandidates] = useState([])
+  const [profileName, setProfileName] = useState('')
 
   function notify(msg) {
     setToast(msg)
@@ -91,11 +96,12 @@ export default function FestioMeRedesignPage() {
   useEffect(() => {
     if (!eventId) { setLoading(false); return }
     setLoading(true)
-    Promise.all([api.eventFestioMeStatus(eventId), api.festiomeManageGroups(eventId), api.messageInbox(eventId).catch(() => [])])
-      .then(([nextStatus, listed, inbox]) => {
+    Promise.all([api.eventFestioMeStatus(eventId), api.festiomeManageGroups(eventId), api.messageInbox(eventId).catch(() => []), api.listMembers(eventId).catch(() => [])])
+      .then(([nextStatus, listed, inbox, eventMembers]) => {
         setStatus(nextStatus)
         setGroups(listed)
         setHostInbox(inbox)
+        setTeamCandidates(eventMembers.map((item) => item.user).filter(Boolean))
         setActiveGroup(listed[0]?.id || '')
         setError('')
       })
@@ -193,6 +199,25 @@ export default function FestioMeRedesignPage() {
   const activeGroupRecord = groups.find((group) => group.id === activeGroup)
   const isPrimaryGroup = !!activeGroupRecord?.is_primary
   const canTransferOwnership = members.some((member) => member.is_me && member.role === 'owner')
+  const me = members.find((member) => member.is_me)
+
+  useEffect(() => {
+    if (me?.display_name) setProfileName(me.display_name)
+  }, [me?.display_name])
+
+  async function createInvitation(email) {
+    if (!email?.trim() || !activeGroup) return
+    try {
+      const invitation = await api.festiomeInvite(activeGroup, { email: email.trim(), role: 'member' })
+      const url = `${window.location.origin}/festiome?invite=${encodeURIComponent(invitation.token)}`
+      let copied = false
+      try { await navigator.clipboard?.writeText(url); copied = true } catch { /* optional */ }
+      setInviteOpen(false)
+      setInviteQuery('')
+      notify(copied ? `Invitation for ${email.trim()} created and link copied` : `Invitation for ${email.trim()} created`)
+      if (!copied) window.prompt('Copy invitation link', url)
+    } catch (e) { setError(e.message || 'Member invitation could not be created') }
+  }
 
   return (
     <RedesignShell topActive="festiome" withEventSidebar={false} eventScoped>
@@ -248,7 +273,16 @@ export default function FestioMeRedesignPage() {
         <div className="rd-panel" style={{ maxWidth: 420 }}>
           <div className="rd-panel-head"><h3>Your profile</h3></div>
           <div className="rd-panel-body">
-            <div className="fm-profile-row"><span className="fm-dm-avatar">{(members.find((member) => member.is_me)?.display_name || '?')[0].toUpperCase()}</span><div><strong>{members.find((member) => member.is_me)?.display_name || 'Event administrator'}</strong><span className="rd-rowlink">{groups.length} managed groups</span></div></div>
+            <div className="fm-profile-row"><span className="fm-dm-avatar">{(me?.display_name || '?')[0].toUpperCase()}</span><div><strong>{me?.display_name || 'Event administrator'}</strong><span className="rd-rowlink">{groups.length} managed groups</span></div></div>
+            <label className="rd-field-label" style={{ marginTop: 14 }}>Display name</label>
+            <input className="rd-field" value={profileName} onChange={(event) => setProfileName(event.target.value)} placeholder="Your community display name" />
+            <button className="rr-btn primary" disabled={!activeGroup || !profileName.trim() || profileName.trim() === me?.display_name} style={{ width: '100%', justifyContent: 'center', marginTop: 8 }} onClick={async () => {
+              try {
+                await api.festiomeUpdateProfile(activeGroup, { display_name: profileName.trim() })
+                setMembers(await api.festiomeMembers(activeGroup))
+                notify('Profile updated')
+              } catch (e) { setError(e.message || 'Profile could not be updated') }
+            }}>Save profile</button>
             <button className="rr-btn secondary" style={{ width: '100%', justifyContent: 'center', marginTop: 12 }} onClick={async () => {
               if (!activeGroup) { setError('Select a group first.'); return }
               try { setPreferences(await api.festiomeNotificationPreferences(activeGroup)); setNotifOpen(true) }
@@ -294,14 +328,17 @@ export default function FestioMeRedesignPage() {
               <label className="rd-field-label">Group name</label>
               <input className="rd-field" placeholder="e.g. Photography Team" value={groupName} onChange={(e) => setGroupName(e.target.value)} />
               <label className="rd-field-label">Join policy</label>
-              <select className="rr-select" value={groupJoinPolicy} onChange={(e) => setGroupJoinPolicy(e.target.value)}><option value="open">Open</option><option value="request">Requires approval</option><option value="closed">Invite only</option></select>
+              <select className="rr-select" disabled={staffOnlyGroup} value={staffOnlyGroup ? 'closed' : groupJoinPolicy} onChange={(e) => setGroupJoinPolicy(e.target.value)}><option value="open">Open</option><option value="request">Requires approval</option><option value="closed">Invite only</option></select>
+              <label className="gr-required-check" style={{ marginTop: 10 }}><input type="checkbox" checked={staffOnlyGroup} onChange={(e) => setStaffOnlyGroup(e.target.checked)} /> Event-team support group</label>
+              {staffOnlyGroup && <p className="rd-hint">Private and unlisted. Current event-team members are added automatically; guests cannot discover it.</p>}
               <div className="rd-row2" style={{ marginTop: 8 }}>
                 <button className="rr-btn secondary" style={{ flex: 1, justifyContent: 'center' }} onClick={() => setCreateGroupOpen(false)}>Cancel</button>
                 <button className="rr-btn primary" disabled={!groupName.trim()} style={{ flex: 1, justifyContent: 'center' }} onClick={async () => {
                   try {
-                    const created = await api.festiomeManageCreateGroup(eventId, { name: groupName.trim(), description: '', join_policy: groupJoinPolicy, visibility: 'listed', rules: '' })
+                    const created = await api.festiomeManageCreateGroup(eventId, { name: groupName.trim(), description: '', join_policy: staffOnlyGroup ? 'closed' : groupJoinPolicy, visibility: staffOnlyGroup ? 'unlisted' : 'listed', staff_only: staffOnlyGroup, rules: '' })
                     await loadGroups(created.id)
                     setGroupName('')
+                    setStaffOnlyGroup(false)
                     setCreateGroupOpen(false)
                     notify('Group created')
                   } catch (e) { setError(e.message || 'Group could not be created') }
@@ -577,22 +614,7 @@ export default function FestioMeRedesignPage() {
                 })
                 setGroupSettingsOpen(true)
               }}>Group settings</button>}
-              <button className="rr-btn secondary" disabled={!activeGroup} style={{ width: '100%', justifyContent: 'center', marginTop: 8 }} onClick={async () => {
-                const email = window.prompt('Email address to invite')
-                if (!email?.trim()) return
-                try {
-                  if (!activeGroup) throw new Error('Select a group before inviting a member.')
-                  const invitation = await api.festiomeInvite(activeGroup, { email: email.trim(), role: 'member' })
-                  const url = `${window.location.origin}/festiome?invite=${encodeURIComponent(invitation.token)}`
-                  let copied = false
-                  try {
-                    await navigator.clipboard?.writeText(url)
-                    copied = true
-                  } catch { /* The invitation itself succeeded; clipboard permission is optional. */ }
-                  notify(copied ? 'Member invitation created and link copied' : 'Member invitation created')
-                  if (!copied) window.prompt('Copy invitation link', url)
-                } catch (e) { setError(e.message || 'Member invitation could not be created') }
-              }}>Invite member</button>
+              <button className="rr-btn secondary" disabled={!activeGroup} style={{ width: '100%', justifyContent: 'center', marginTop: 8 }} onClick={() => setInviteOpen(true)}>Invite member</button>
               <button className="rr-link-btn" style={{ marginTop: 8 }} onClick={() => setReportsOpen((v) => !v)}>Moderation reports ({reports.length})</button>
               <span className="rd-rowlink" style={{ marginTop: 6 }}>Event administrators cannot leave managed event groups.</span>
 
@@ -644,6 +666,26 @@ export default function FestioMeRedesignPage() {
             </div>
           </div>
         </div>
+      )}
+
+      {inviteOpen && (
+        <Modal title="Invite a member" onClose={() => { setInviteOpen(false); setInviteQuery('') }} width={480}>
+          <label className="rd-field-label">Search event team or enter an email</label>
+          <div className="rd-search" style={{ marginBottom: 10 }}><Icon name="search" size={13}/><input autoFocus value={inviteQuery} onChange={(event) => setInviteQuery(event.target.value)} placeholder="Name or email…" /></div>
+          <div className="fm-invite-results">
+            {teamCandidates.filter((candidate) => {
+              const query = inviteQuery.trim().toLowerCase()
+              return !query || `${candidate.name || ''} ${candidate.email || ''}`.toLowerCase().includes(query)
+            }).filter((candidate) => !members.some((member) => member.display_name === candidate.name)).slice(0, 8).map((candidate) => (
+              <button key={candidate.id} className="fm-invite-result" onClick={() => createInvitation(candidate.email)}>
+                <span className="fm-dm-avatar">{(candidate.name || candidate.email || '?')[0].toUpperCase()}</span>
+                <span><strong>{candidate.name || candidate.email}</strong><small>{candidate.email}</small></span>
+                <Icon name="plus" size={13}/>
+              </button>
+            ))}
+            {inviteQuery.includes('@') && <button className="fm-invite-result" onClick={() => createInvitation(inviteQuery)}><Icon name="mail" size={14}/><span><strong>Invite {inviteQuery.trim()}</strong><small>Send invitation to this address</small></span><Icon name="arrow" size={13}/></button>}
+          </div>
+        </Modal>
       )}
 
       {groupSettingsOpen && groupSettings && (

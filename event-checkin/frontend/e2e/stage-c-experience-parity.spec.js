@@ -100,8 +100,8 @@ test('Experience redesign exposes legacy step settings and preserves untouched c
     await editor.getByRole('button', { name: 'Close ✕', exact: true }).click()
 
     await page.getByRole('button', { name: 'Edit Feedback', exact: true }).click()
-    await expect(editor.getByLabel('Audience', { exact: true })).toHaveValue('session')
-    await expect(editor.getByDisplayValue('How was it?')).toBeVisible()
+    await expect(editor.locator('.ex-editor-section.feedback select').first()).toHaveValue('session')
+    await expect(editor.locator('input[value="How was it?"]')).toBeVisible()
 
     const workflowsResponse = await page.request.get(`/api/events/${eventId}/experience/workflows`, { headers })
     expect(workflowsResponse.ok()).toBeTruthy()

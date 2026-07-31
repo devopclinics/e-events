@@ -259,6 +259,7 @@ class MessageCreditLedger(Base):
     status: Mapped[str | None] = mapped_column(String(30), nullable=True)
     channel: Mapped[str | None] = mapped_column(String(30), nullable=True)
     provider_message_id: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    reason: Mapped[str | None] = mapped_column(String(120), nullable=True)
     delta: Mapped[int] = mapped_column(Integer)
 
 
@@ -269,6 +270,7 @@ class EmailDeliveryEvent(Base):
     event_id: Mapped[str | None] = mapped_column(String(36), ForeignKey("events.id"), nullable=True)
     provider_event_id: Mapped[str | None] = mapped_column(String(255), nullable=True)
     provider_email_id: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    message_kind: Mapped[str | None] = mapped_column(String(80), nullable=True)
     status: Mapped[str] = mapped_column(String(40))
     occurred_at: Mapped[datetime] = mapped_column(DateTime, default=utc_now_naive)
     created_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)

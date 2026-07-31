@@ -512,9 +512,28 @@ function OverviewDashboard({
                   {data.communication.whatsapp?.sent > 0 && <span>WhatsApp: {data.communication.whatsapp.delivered} delivered · {data.communication.whatsapp.failed} failed</span>}
                 </div>
               )}
+              {(() => {
+                const bc = data.communication.broadcast || {}
+                const active = ['email', 'sms', 'whatsapp', 'mms'].filter((ch) => bc[ch]?.sent > 0)
+                if (!active.length) return null
+                return (
+                  <>
+                    <div className="er-ops-card-foot" style={{ marginTop: 10 }}><span>Broadcast delivery</span><b>Sent via Messages tab</b></div>
+                    <div className="er-ops-email-outcomes">
+                      {active.map((ch) => {
+                        const item = bc[ch]
+                        const label = ch === 'email' ? 'Email' : ch === 'sms' ? 'SMS' : ch === 'mms' ? 'MMS' : 'WhatsApp'
+                        const delivered = ch === 'email' ? item.reached : item.delivered
+                        return <span key={ch}>{label}: {delivered} delivered{ch !== 'email' ? ` · ${item.failed} failed` : ''} ({item.sent} sent)</span>
+                      })}
+                    </div>
+                  </>
+                )
+              })()}
               <div className="er-ops-card-foot"><span>Credits remaining</span><b>{data.communication.credits_remaining}</b></div>
               <div className="er-ops-quick-actions">
                 <a href="/scanner-redesign"><Icon name="ticket" size={14} />Open scanner<Icon name="arrow" size={12} /></a>
+                {event?.experience_enabled && <a href="/experience-redesign"><Icon name="layers" size={14} />Open Experience<Icon name="arrow" size={12} /></a>}
                 <a href="/communications-redesign"><Icon name="send" size={14} />Broadcast update<Icon name="arrow" size={12} /></a>
                 <a href="/floorplan-redesign"><Icon name="grid" size={14} />View floor plan<Icon name="arrow" size={12} /></a>
                 <button onClick={() => window.print()}><Icon name="upload" size={14} />Export report<Icon name="arrow" size={12} /></button>

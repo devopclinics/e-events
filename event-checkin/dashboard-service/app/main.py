@@ -672,60 +672,82 @@ async def rsvp_funnel(db: AsyncSession, event: Event) -> dict:
 async def communication_health(db: AsyncSession, event: Event) -> dict:
     msg_rows = (await db.execute(
         select(MessageCreditLedger.id, MessageCreditLedger.channel, MessageCreditLedger.action,
-               MessageCreditLedger.status, MessageCreditLedger.provider_message_id)
+               MessageCreditLedger.status, MessageCreditLedger.provider_message_id, MessageCreditLedger.reason)
         .where(MessageCreditLedger.event_id == event.id, MessageCreditLedger.channel.in_(("sms", "mms", "whatsapp")))
     )).all()
     failed_statuses = {"failed", "undelivered", "error", "rejected"}
-    msg_ids = {c: {"sent": set(), "delivered": set(), "failed": set()} for c in ("sms", "mms", "whatsapp")}
-    for row_id, c, action, status, provider_message_id in msg_rows:
+    channels = ("sms", "mms", "whatsapp")
+    msg_ids = {c: {"sent": set(), "delivered": set(), "failed": set()} for c in channels}
+    # Every broadcast-originated ledger row is tagged reason="broadcast" (see
+    # routers/events.py's broadcast_message) — a parallel counter set lets us
+    # report broadcast-only delivery without a second query, distinct from
+    # the all-sends (invitations + reminders + broadcasts) aggregate below.
+    bc_ids = {c: {"sent": set(), "delivered": set(), "failed": set()} for c in channels}
+    for row_id, c, action, status, provider_message_id, reason in msg_rows:
         d = msg_ids.get(c)
         if d is None:
             continue
         key = provider_message_id or f"ledger:{row_id}"
+        bd = bc_ids[c] if (reason or "") == "broadcast" else None
         if action == "spend":
             d["sent"].add(key)
+            if bd is not None:
+                bd["sent"].add(key)
             st = (status or "").lower()
             if "deliver" in st:
                 d["delivered"].add(key)
+                if bd is not None:
+                    bd["delivered"].add(key)
             elif st in failed_statuses:
                 d["failed"].add(key)
+                if bd is not None:
+                    bd["failed"].add(key)
         elif action == "refund":
             d["failed"].add(key)
+            if bd is not None:
+                bd["failed"].add(key)
 
     # Same dedup-by-provider_message_id + failed-count logic as backend/app/
     # routers/dashboard.py's message_delivery (legacy's "Messaging delivery"
     # card) — the redesign only ever surfaced sent/delivered/rate here,
     # silently dropping the failed count and the MMS channel entirely.
-    def _rate(c):
-        sent = len(msg_ids[c]["sent"])
-        failed = len(msg_ids[c]["failed"])
-        delivered = len(msg_ids[c]["delivered"] - msg_ids[c]["failed"])
+    def _rate(ids, c):
+        sent = len(ids[c]["sent"])
+        failed = len(ids[c]["failed"])
+        delivered = len(ids[c]["delivered"] - ids[c]["failed"])
         return {"sent": sent, "delivered": delivered, "failed": failed,
                 "rate": round(delivered / sent * 100) if sent else None}
 
-    sms_rate = _rate("sms")
-    whatsapp_rate = _rate("whatsapp")
-    mms_rate = _rate("mms")
-    channel_rates = {"sms": sms_rate, "mms": mms_rate, "whatsapp": whatsapp_rate}
-    message_delivery = [{"channel": c, **channel_rates[c]} for c in ("sms", "mms", "whatsapp")
+    channel_rates = {c: _rate(msg_ids, c) for c in channels}
+    message_delivery = [{"channel": c, **channel_rates[c]} for c in channels
                          if msg_ids[c]["sent"] or msg_ids[c]["failed"]]
+    broadcast_channel_rates = {c: _rate(bc_ids, c) for c in channels}
 
     email_rows = (await db.execute(
         select(EmailDeliveryEvent.provider_email_id, EmailDeliveryEvent.provider_event_id,
-               EmailDeliveryEvent.id, EmailDeliveryEvent.status, EmailDeliveryEvent.occurred_at)
+               EmailDeliveryEvent.id, EmailDeliveryEvent.status, EmailDeliveryEvent.occurred_at,
+               EmailDeliveryEvent.message_kind)
         .where(EmailDeliveryEvent.event_id == event.id)
         .order_by(EmailDeliveryEvent.occurred_at.desc())
     )).all()
     latest_by_email = {}
-    for provider_email_id, provider_event_id, row_id, status, _occurred in email_rows:
+    latest_kind_by_email = {}
+    for provider_email_id, provider_event_id, row_id, status, _occurred, message_kind in email_rows:
         key = provider_email_id or provider_event_id or row_id
         latest_by_email.setdefault(key, status)
+        latest_kind_by_email.setdefault(key, message_kind)
     # Only count confirmed-delivered outcomes as "reached" — "sent"/"delayed"/
     # an unrecognized provider status is still in flight, not confirmed
     # reached, so it must not count toward the rate as if it had arrived.
     reached_statuses = {"delivered", "opened", "clicked"}
     email_sent = len(latest_by_email)
     email_reached = sum(1 for s in latest_by_email.values() if s in reached_statuses)
+    # Broadcast-originated emails are tagged message_kind="broadcast" or
+    # "broadcast_<type>" (see send_broadcast_email / the typed-message branch
+    # in routers/events.py's broadcast_message).
+    bc_email_keys = [k for k, kind in latest_kind_by_email.items() if (kind or "").startswith("broadcast")]
+    bc_email_sent = len(bc_email_keys)
+    bc_email_reached = sum(1 for k in bc_email_keys if latest_by_email[k] in reached_statuses)
 
     # Same per-status breakdown as backend/app/routers/dashboard.py's
     # DashboardEmailDelivery (legacy's "Email provider delivery" card) — the
@@ -744,13 +766,22 @@ async def communication_health(db: AsyncSession, event: Event) -> dict:
         email_breakdown[s] += 1
     email_breakdown["tracked"] = len(latest_by_email)
 
+    broadcast = {
+        "email": {"sent": bc_email_sent, "reached": bc_email_reached,
+                   "rate": round(bc_email_reached / bc_email_sent * 100) if bc_email_sent else None},
+        "sms": broadcast_channel_rates["sms"],
+        "whatsapp": broadcast_channel_rates["whatsapp"],
+        "mms": broadcast_channel_rates["mms"],
+    }
+
     return {
         "email": {"sent": email_sent, "reached": email_reached,
                    "rate": round(email_reached / email_sent * 100) if email_sent else None,
                    "breakdown": email_breakdown},
-        "sms": sms_rate,
-        "whatsapp": whatsapp_rate,
-        "mms": mms_rate,
+        "broadcast": broadcast,
+        "sms": channel_rates["sms"],
+        "whatsapp": channel_rates["whatsapp"],
+        "mms": channel_rates["mms"],
         "message_delivery": message_delivery,
         "credits_remaining": event.message_credits,
     }

@@ -524,9 +524,9 @@ function LiveScannerCommandCenter({
         <article className="accent"><span>Pending sync</span><strong>{pendingSync}</strong><small>{online ? 'Queued station actions' : 'Will sync when online'}</small></article>
       </div>
 
-      <div className="sc-command-tabs" role="tablist" aria-label="Scanner modes">
+      <div className="sc-command-tabs" aria-label="Scanner modes">
         {MODES.map((item) => (
-          <button key={item.id} type="button" role="tab" aria-selected={mode === item.id} aria-label={item.label} className={mode === item.id ? 'active' : ''} onClick={() => { setMode(item.id); onResult(null) }}>
+          <button key={item.id} type="button" aria-pressed={mode === item.id} aria-label={item.label} className={mode === item.id ? 'active' : ''} onClick={() => { setMode(item.id); onResult(null) }}>
             <Icon name={item.id === 'manual' ? 'search' : item.id === 'checkout' ? 'external' : 'ticket'} size={14}/>
             {item.id === 'camera' ? 'Scan' : item.label}
           </button>

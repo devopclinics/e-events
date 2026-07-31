@@ -17,6 +17,26 @@
 /* ── credit ledger ───────────────────────────────────────────────────── */
 .bl-delta-pos { color: var(--success); font-weight: 700; }
 .bl-delta-neg { color: var(--danger); font-weight: 700; }
+.bl-channel-button { appearance: none; width: 100%; font-family: inherit; text-align: left; cursor: pointer;
+  border: 1px solid var(--line); transition: border-color .15s ease, transform .15s ease, box-shadow .15s ease; }
+.bl-channel-button:hover, .bl-channel-button.active { border-color: var(--teal); box-shadow: 0 8px 20px rgba(18,91,88,.08); transform: translateY(-1px); }
+.bl-channel-button .top { justify-content: space-between; }
+.bl-ledger-panel { margin-top: 18px; overflow: hidden; }
+.bl-ledger-toggle { width: 100%; border: 0; background: transparent; padding: 16px 18px; display: flex; align-items: center;
+  gap: 12px; text-align: left; font-family: inherit; cursor: pointer; color: var(--ink); }
+.bl-ledger-toggle > span:nth-child(2) { flex: 1; display: flex; flex-direction: column; gap: 3px; }
+.bl-ledger-toggle strong { font-size: 13px; }
+.bl-ledger-toggle small { color: var(--muted); font-size: 10.5px; font-weight: 500; }
+.bl-ledger-icon { width: 34px; height: 34px; border-radius: 9px; background: var(--teal-soft); color: var(--teal);
+  display: grid; place-items: center; flex: none; }
+.bl-ledger-toggle-label { color: var(--teal); font-size: 11px; font-weight: 700; display: inline-flex; align-items: center; gap: 5px; }
+.bl-ledger-panel.open .bl-ledger-toggle-label svg { transform: rotate(90deg); }
+.bl-ledger-body { border-top: 1px solid var(--line-soft); padding-top: 14px; }
+.bl-ledger-filters { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; margin-bottom: 12px; }
+.bl-ledger-filters button { border: 1px solid var(--line); background: var(--surface); color: var(--muted); border-radius: 999px;
+  font: 700 10px/1 inherit; padding: 7px 11px; cursor: pointer; }
+.bl-ledger-filters button.active { color: var(--teal); border-color: var(--teal); background: var(--teal-soft); }
+.bl-table-scroll { overflow-x: auto; }
 
 /* ── add-on entitlement catalog ──────────────────────────────────────── */
 .bl-ent-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 12px; }
@@ -75,8 +95,17 @@
 .bl-catalog-group { margin-bottom: 16px; }
 .bl-catalog-group-title { font-size: 10px; font-weight: 800; color: var(--faint); text-transform: uppercase;
   letter-spacing: .05em; margin-bottom: 8px; }
-.bl-ent-card { cursor: default; border: 1px solid var(--line); text-align: left; font-family: inherit; width: 100%; }
-.bl-ent-card.rr-locked { cursor: pointer; }
+.bl-ent-card { cursor: pointer; border: 1px solid var(--line); text-align: left; font-family: inherit; width: 100%;
+  transition: border-color .15s ease, transform .15s ease, box-shadow .15s ease; }
+.bl-ent-card:hover, .bl-ent-card:focus-visible { border-color: var(--teal); transform: translateY(-2px); box-shadow: 0 10px 24px rgba(18,91,88,.09); outline: none; }
+.bl-ent-action { margin-top: auto; color: var(--teal); font-size: 10.5px; font-weight: 700; display: inline-flex; align-items: center; gap: 5px; }
+.bl-capability-detail { display: flex; flex-direction: column; gap: 15px; }
+.bl-capability-detail > p { margin: 0; color: var(--muted); font-size: 12px; line-height: 1.65; }
+.bl-capability-hero { width: 48px; height: 48px; border-radius: 13px; background: var(--teal-soft); color: var(--teal); display: grid; place-items: center; }
+.bl-capability-facts { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.bl-capability-facts > div { padding: 12px; border-radius: 9px; background: var(--surface-2); display: flex; flex-direction: column; gap: 3px; }
+.bl-capability-facts span { color: var(--muted); font-size: 10px; }
+.bl-capability-facts strong { color: var(--ink); font-size: 12px; }
 
 /* ── upgrade gate modal ────────────────────────────────────────────────── */
 .bl-modal-backdrop { position: fixed; inset: 0; background: rgba(20,15,8,.45); z-index: 60; display: grid; place-items: center; padding: 20px; }
@@ -119,4 +148,6 @@
   .bl-plan-stats { gap: 20px; flex-wrap: wrap; }
   .bl-list-row { flex-wrap: wrap; gap: 8px; }
   .bl-list-meta, .bl-list-actions { flex: none; }
+  .bl-ledger-toggle-label { font-size: 0; }
+  .bl-capability-facts { grid-template-columns: 1fr; }
 }

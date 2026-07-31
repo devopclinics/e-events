@@ -82,6 +82,14 @@ function adaptQuestion(q) {
   return { id: q.id, raw: q, q: q.question, type: QUESTION_TYPE_LABEL[q.question_type] || 'Short answer', required: q.is_required }
 }
 
+function utcToLocalInput(value) {
+  if (!value) return ''
+  const date = new Date(value)
+  if (Number.isNaN(date.getTime())) return ''
+  const local = new Date(date.getTime() - date.getTimezoneOffset() * 60000)
+  return local.toISOString().slice(0, 16)
+}
+
 // ── Invite send audience breakdown ───────────────────────────────────────────
 const SEND_AUDIENCE = [
   { label: 'Email', count: 480, credits: 0, icon: 'mail' },
@@ -647,8 +655,10 @@ function InviteTab({ notify, onSendInvites, onSendGuests, onPreviewInvite, event
   const [inviteMessage, setInviteMessage] = useState('')
   const [saving, setSaving] = useState(false)
   const [coverBusy, setCoverBusy] = useState(false)
+  const [regenerateLink, setRegenerateLink] = useState(false)
   const coverFileRef = useRef(null)
-  const publicLink = event?.rsvp_token ? `${window.location.origin}/rsvp/${event.rsvp_token}` : 'Generate an RSVP link to begin'
+  const hasPublicLink = !!event?.rsvp_token
+  const publicLink = hasPublicLink ? `${window.location.origin}/rsvp/${event.rsvp_token}` : ''
 
   async function uploadCover(file) {
     if (!file || !eventId) return
@@ -703,7 +713,7 @@ function InviteTab({ notify, onSendInvites, onSendGuests, onPreviewInvite, event
     setSubmitterPhone(!event.rsvp_collect_phone ? 'dontask' : event.rsvp_phone_required ? 'required' : 'optional')
     setAdditionalEmail(event.rsvp_invitee_email_required ? 'required' : 'optional')
     setAdditionalPhone(!event.rsvp_collect_phone ? 'dontask' : event.rsvp_invitee_phone_required ? 'required' : 'optional')
-    setDeadline(event.rsvp_deadline ? String(event.rsvp_deadline).slice(0, 10) : '')
+    setDeadline(utcToLocalInput(event.rsvp_deadline))
     setCapacity(event.rsvp_capacity ?? '')
     setInviteMessage(event.invite_message || '')
     setCategoryLimits(event.rsvp_multi_invitee_limit_rules || {})
@@ -724,22 +734,22 @@ function InviteTab({ notify, onSendInvites, onSendGuests, onPreviewInvite, event
     try {
       await api.updateInviteSettings(eventId, {
         rsvp_enabled: rsvpEnabled,
-        invite_mode: mode,
+        invite_mode: rsvpEnabled ? mode : 'open',
         invite_theme: theme,
-        rsvp_require_approval: approval,
+        rsvp_require_approval: rsvpEnabled && mode === 'open' ? approval : false,
         rsvp_allow_duplicate_emails: sameEmail,
         rsvp_multi_invitee_enabled: multiInvitee,
-        rsvp_multi_invitee_limit: Math.max(1, Number(maxInvitees) || 1),
+        rsvp_multi_invitee_limit: Math.max(1, Math.min(100, Number(maxInvitees) || 1)),
         rsvp_multi_invitee_limit_rules: Object.keys(categoryLimits).length ? categoryLimits : null,
         rsvp_category_seating_rules: Object.keys(categorySeating).length ? categorySeating : null,
         rsvp_collect_email: submitterEmail !== 'dontask',
         rsvp_email_required: submitterEmail === 'required',
-        rsvp_invitee_email_required: additionalEmail === 'required',
-        rsvp_collect_phone: submitterPhone !== 'dontask' || additionalPhone !== 'dontask',
+        rsvp_invitee_email_required: submitterEmail !== 'dontask' && additionalEmail === 'required',
+        rsvp_collect_phone: submitterPhone !== 'dontask',
         rsvp_phone_required: submitterPhone === 'required',
-        rsvp_invitee_phone_required: additionalPhone === 'required',
-        rsvp_deadline: deadline ? `${deadline}T23:59:59` : null,
-        rsvp_capacity: capacity === '' ? null : Number(capacity),
+        rsvp_invitee_phone_required: submitterPhone !== 'dontask' && additionalPhone === 'required',
+        rsvp_deadline: deadline ? new Date(deadline).toISOString() : null,
+        rsvp_capacity: capacity === '' ? null : Math.max(0, Number(capacity) || 0),
         invite_message: inviteMessage || null,
       })
       await onEventChanged()
@@ -787,40 +797,36 @@ function InviteTab({ notify, onSendInvites, onSendGuests, onPreviewInvite, event
             <strong>With RSVP</strong><span>Guests confirm or decline through a form</span>
           </label>
           <label className={`gr-mode-card ${!rsvpEnabled ? 'active' : ''}`}>
-            <input type="radio" checked={!rsvpEnabled} onChange={() => { setRsvpEnabled(false); notify('Switched to "Skip RSVP" — all guests are treated as attending') }} />
+            <input type="radio" checked={!rsvpEnabled} onChange={() => { setRsvpEnabled(false); setMode('open'); setApproval(false); notify('Switched to "Skip RSVP" — all guests are treated as attending') }} />
             <strong>Skip RSVP</strong><span>Everyone is treated as attending — no form at all</span>
           </label>
         </div>
       </div>
 
-      {rsvpEnabled && (
       <div className="rd-wide-grid">
         <div className="rr-panel">
           <div className="rd-panel-head">
-            <h3>Public RSVP link</h3>
-            <p>Share this link anywhere — social bio, email signature, printed invite</p>
+            <h3>Invitation page</h3>
+            <p>{rsvpEnabled ? 'Share the RSVP page anywhere or send each guest their personal invitation' : 'Customize the invitation page guests see before opening their pass'}</p>
           </div>
           <div className="rd-panel-body">
             <label className="rd-field-label">Public link</label>
             <div className="gr-link-row">
-              <input className="rd-field" style={{ marginBottom: 0 }} value={publicLink} readOnly />
-              <button className="rr-btn secondary" onClick={copyLink}>
+              <input className="rd-field" style={{ marginBottom: 0 }} value={publicLink || 'Generate an invitation link to begin'} readOnly />
+              <button className="rr-btn secondary" disabled={!hasPublicLink} onClick={copyLink}>
                 <Icon name={linkCopied ? 'check' : 'external'} size={13} /> {linkCopied ? 'Copied' : 'Copy'}
               </button>
-              <button className="rr-btn secondary" onClick={async () => {
-                try {
-                  await api.generateRSVPLink(eventId, !!event?.rsvp_token)
-                  await onEventChanged()
-                  notify(event?.rsvp_token ? 'RSVP link regenerated' : 'RSVP link generated')
-                } catch (e) { notify(e.message || 'RSVP link could not be generated', true) }
-              }}>{event?.rsvp_token ? 'Regenerate' : 'Generate'}</button>
+              <button className="rr-btn secondary" onClick={() => {
+                if (hasPublicLink) setRegenerateLink(true)
+                else api.generateRSVPLink(eventId, false).then(onEventChanged).then(() => notify('Invitation link generated')).catch((e) => notify(e.message || 'Invitation link could not be generated', true))
+              }}>{hasPublicLink ? 'Regenerate' : 'Generate'}</button>
             </div>
-            {publicLink
+            {hasPublicLink
               ? <a className="rd-hint gr-preview-link" href={publicLink} target="_blank" rel="noreferrer">Preview invite page ↗</a>
-              : <span className="rd-hint">Generate the public RSVP link to preview the invite page.</span>}
+              : <span className="rd-hint">Generate the invitation link to preview the page.</span>}
 
             <label className="rd-field-label" style={{ marginTop: 14 }}>Invite page theme</label>
-            <select className="rr-select" value={theme} onChange={(e) => { setTheme(e.target.value); notify(`Invite theme set to ${INVITE_THEMES.find((t) => t.id === e.target.value)?.label} — click Save RSVP settings to apply`) }}>
+            <select className="rr-select" value={theme} onChange={(e) => { setTheme(e.target.value); notify(`Invite theme set to ${INVITE_THEMES.find((t) => t.id === e.target.value)?.label} — save invitation settings to apply`) }}>
               {INVITE_THEMES.map((t) => <option key={t.id} value={t.id}>{t.label}</option>)}
             </select>
             <button className="rr-btn secondary" style={{ marginTop: 8 }} onClick={() => onPreviewInvite ? onPreviewInvite() : notify('Invite email preview opened')}>
@@ -835,45 +841,47 @@ function InviteTab({ notify, onSendInvites, onSendGuests, onPreviewInvite, event
               {event?.invite_cover_image && <button className="rr-link-btn gr-danger-link" disabled={coverBusy} onClick={removeCover}>Remove</button>}
             </div>
 
-            <div className="rd-toggle-row" style={{ marginTop: 16 }}>
+            {rsvpEnabled && <><div className="rd-toggle-row" style={{ marginTop: 16 }}>
               <span style={{ fontSize: 12, fontWeight: 600 }}>
                 {mode === 'open' ? 'Open — anyone with the link can RSVP' : 'Closed — only guests with a personal link can RSVP'}
               </span>
               <label className="rd-switch">
-                <input type="checkbox" checked={mode === 'closed'} onChange={(e) => { const m = e.target.checked ? 'closed' : 'open'; setMode(m); notify(`Who-can-RSVP set to ${m === 'closed' ? 'Closed' : 'Open'}`) }} />
+                <input type="checkbox" checked={mode === 'closed'} onChange={(e) => { const m = e.target.checked ? 'closed' : 'open'; setMode(m); if (m === 'closed') setApproval(false); notify(`Who-can-RSVP set to ${m === 'closed' ? 'Closed' : 'Open'}`) }} />
                 <span className="track" /><span className="knob" />
               </label>
             </div>
             {mode === 'closed' && <div className="rd-hint">Guests will only be able to RSVP from the personal link in their invite — the public link above won't accept new responses.</div>}
 
-            <div className="rd-toggle-row" style={{ marginTop: 12 }}>
+            {mode === 'open' && <div className="rd-toggle-row" style={{ marginTop: 12 }}>
               <span style={{ fontSize: 12, fontWeight: 600 }}>Review RSVPs before confirming (approval required)</span>
               <label className="rd-switch">
                 <input type="checkbox" checked={approval} onChange={(e) => { setApproval(e.target.checked); notify(`Approval required ${e.target.checked ? 'enabled' : 'disabled'}`) }} />
                 <span className="track" /><span className="knob" />
               </label>
-            </div>
+            </div>}
 
             <div className="rd-row2" style={{ marginTop: 12 }}>
               <div style={{ flex: 1 }}>
                 <label className="rd-field-label">RSVP deadline</label>
-                <input className="rd-field" type="date" value={deadline} onChange={(e) => setDeadline(e.target.value)} />
+                <input className="rd-field" type="datetime-local" value={deadline} onChange={(e) => setDeadline(e.target.value)} />
               </div>
               <div style={{ flex: 1 }}>
                 <label className="rd-field-label">Capacity limit</label>
-                <input className="rd-field" type="number" value={capacity} onChange={(e) => setCapacity(e.target.value)} />
+                <input className="rd-field" type="number" min="0" value={capacity} onChange={(e) => setCapacity(e.target.value)} />
               </div>
             </div>
             <div className="rd-hint">Leave capacity blank for unlimited RSVPs.</div>
 
+            </>}
+
             <label className="rd-field-label" style={{ marginTop: 14 }}>Message for guests</label>
             <textarea className="rr-textarea" rows={3} value={inviteMessage} placeholder="A short note shown on the RSVP page…" onChange={(e) => setInviteMessage(e.target.value)} />
 
-            <label className="gr-required-check" style={{ marginTop: 10 }}>
+            {rsvpEnabled && <label className="gr-required-check" style={{ marginTop: 10 }}>
               <input type="checkbox" checked={sameEmail} onChange={(e) => { setSameEmail(e.target.checked); notify(`Allow same email on multiple guests: ${e.target.checked ? 'on' : 'off'}`) }} />
               Allow the same email address on multiple RSVP guests
-            </label>
-            <button className="rr-btn primary" disabled={saving} style={{ marginTop: 14 }} onClick={saveSettings}>{saving ? 'Saving…' : 'Save RSVP settings'}</button>
+            </label>}
+            <button className="rr-btn primary" disabled={saving} style={{ marginTop: 14 }} onClick={saveSettings}>{saving ? 'Saving…' : 'Save invitation settings'}</button>
           </div>
         </div>
 
@@ -896,7 +904,7 @@ function InviteTab({ notify, onSendInvites, onSendGuests, onPreviewInvite, event
               View full RSVP report <Icon name="arrow" size={13} />
             </button>
 
-            <div className="rr-section-title" style={{ margin: '18px 0 8px' }}>
+            {rsvpEnabled && <><div className="rr-section-title" style={{ margin: '18px 0 8px' }}>
               <div><h2 style={{ fontSize: 12 }}>RSVP form fields</h2></div>
             </div>
             <table className="rr-table gr-field-table">
@@ -910,8 +918,8 @@ function InviteTab({ notify, onSendInvites, onSendGuests, onPreviewInvite, event
                     </select>
                   </td>
                   <td>
-                    <select className="rr-select gr-inline-select" value={additionalEmail} onChange={(e) => setAdditionalEmail(e.target.value)}>
-                      <option value="optional">Optional</option><option value="required">Required</option>
+                    <select className="rr-select gr-inline-select" disabled={submitterEmail === 'dontask'} value={submitterEmail === 'dontask' ? 'dontask' : additionalEmail} onChange={(e) => setAdditionalEmail(e.target.value)}>
+                      <option value="dontask">Don't ask</option><option value="optional">Optional</option><option value="required">Required</option>
                     </select>
                   </td>
                 </tr>
@@ -923,17 +931,16 @@ function InviteTab({ notify, onSendInvites, onSendGuests, onPreviewInvite, event
                     </select>
                   </td>
                   <td>
-                    <select className="rr-select gr-inline-select" value={additionalPhone} onChange={(e) => setAdditionalPhone(e.target.value)}>
+                    <select className="rr-select gr-inline-select" disabled={submitterPhone === 'dontask'} value={submitterPhone === 'dontask' ? 'dontask' : additionalPhone} onChange={(e) => setAdditionalPhone(e.target.value)}>
                       <option value="dontask">Don't ask</option><option value="optional">Optional</option><option value="required">Required</option>
                     </select>
                   </td>
                 </tr>
               </tbody>
-            </table>
+            </table></>}
           </div>
         </div>
       </div>
-      )}
 
       {rsvpEnabled && (
       <div className="rr-panel gr-multi-invitee">
@@ -949,7 +956,7 @@ function InviteTab({ notify, onSendInvites, onSendGuests, onPreviewInvite, event
           {multiInvitee && (
             <>
               <label className="rd-field-label" style={{ marginTop: 10 }}>Default max invitees per RSVP</label>
-              <input className="rd-field" type="number" value={maxInvitees} onChange={(e) => setMaxInvitees(e.target.value)} style={{ maxWidth: 140 }} />
+              <input className="rd-field" type="number" min="1" max="100" value={maxInvitees} onChange={(e) => setMaxInvitees(e.target.value)} style={{ maxWidth: 140 }} />
               <label className="rd-field-label" style={{ marginTop: 10 }}>Category invitee limits &amp; table-category mapping</label>
               {Object.keys(categoryLimits).length > 0 ? (
                 <table className="rr-table">
@@ -999,7 +1006,7 @@ function InviteTab({ notify, onSendInvites, onSendGuests, onPreviewInvite, event
 
       <div className="rr-panel" style={{ maxWidth: 620 }}>
         <div className="rd-panel-body" style={{ paddingTop: 16 }}>
-          {addingQuestion && <QuestionForm notify={notify} onDone={() => setAddingQuestion(false)} onSave={(data) => api.createRSVPQuestion(eventId, data).then(onQuestionsChanged)} />}
+          {addingQuestion && <QuestionForm notify={notify} onDone={() => setAddingQuestion(false)} onSave={(data) => api.createRSVPQuestion(eventId, { ...data, sort_order: rsvpQuestions.length }).then(onQuestionsChanged)} />}
           {editingQuestion && <QuestionForm question={editingQuestion} notify={notify} onDone={() => setEditingQuestion(null)} onSave={(data) => api.updateRSVPQuestion(eventId, editingQuestion.id, { ...data, sort_order: editingQuestion.raw.sort_order }).then(onQuestionsChanged)} />}
           {rsvpQuestions.map((rq, i) => (
             <div className="gr-question-row" key={rq.id || rq.q}>
@@ -1021,6 +1028,20 @@ function InviteTab({ notify, onSendInvites, onSendGuests, onPreviewInvite, event
           ))}
         </div>
       </div>
+      {regenerateLink && <ConfirmDialog
+        title="Regenerate invitation link?"
+        message="The current public link will stop working immediately. Invitations already sent with personal links are not changed."
+        confirmLabel="Regenerate link"
+        onCancel={() => setRegenerateLink(false)}
+        onConfirm={async () => {
+          try {
+            await api.generateRSVPLink(eventId, true)
+            setRegenerateLink(false)
+            await onEventChanged()
+            notify('Invitation link regenerated')
+          } catch (e) { setRegenerateLink(false); notify(e.message || 'Invitation link could not be regenerated', true) }
+        }}
+      />}
     </>
   )
 }

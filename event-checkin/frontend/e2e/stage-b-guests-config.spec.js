@@ -116,9 +116,9 @@ test.describe('Stage B guest households and RSVP configuration — isolated stag
     const withRsvp = withRsvpCard.locator('input')
     const originallyEnabled = await withRsvp.isChecked()
     if (!originallyEnabled) await withRsvpCard.click()
-    await expect(page.getByRole('heading', { name: 'Public RSVP link' })).toBeVisible()
+    await expect(page.getByRole('heading', { name: 'Invitation page' })).toBeVisible()
 
-    const settingsPanel = page.locator('.rr-panel').filter({ has: page.getByRole('heading', { name: 'Public RSVP link' }) })
+    const settingsPanel = page.locator('.rr-panel').filter({ has: page.getByRole('heading', { name: 'Invitation page' }) })
     const capacity = settingsPanel.locator('input[type="number"]')
     const message = settingsPanel.locator('textarea')
     const originalCapacity = await capacity.inputValue()
@@ -128,13 +128,13 @@ test.describe('Stage B guest households and RSVP configuration — isolated stag
     try {
       await capacity.fill(syntheticCapacity)
       await message.fill(syntheticMessage)
-      await page.getByRole('button', { name: 'Save RSVP settings', exact: true }).click()
+      await page.getByRole('button', { name: 'Save invitation settings', exact: true }).click()
       await expect(page.getByText('RSVP settings saved', { exact: true })).toBeVisible()
 
       await page.reload()
       await expectQaEventLoaded(page)
       await page.getByRole('button', { name: 'Invites & RSVP', exact: true }).click()
-      const reloadedSettingsPanel = page.locator('.rr-panel').filter({ has: page.getByRole('heading', { name: 'Public RSVP link' }) })
+      const reloadedSettingsPanel = page.locator('.rr-panel').filter({ has: page.getByRole('heading', { name: 'Invitation page' }) })
       await expect(reloadedSettingsPanel.locator('input[type="number"]')).toHaveValue(syntheticCapacity)
       await expect(reloadedSettingsPanel.locator('textarea')).toHaveValue(syntheticMessage)
 
@@ -158,10 +158,10 @@ test.describe('Stage B guest households and RSVP configuration — isolated stag
         const row = page.locator('.gr-question-row').filter({ hasText: question })
         if (await row.count()) await row.getByRole('button', { name: 'Delete', exact: true }).click()
       }
-      const restorePanel = page.locator('.rr-panel').filter({ has: page.getByRole('heading', { name: 'Public RSVP link' }) })
+      const restorePanel = page.locator('.rr-panel').filter({ has: page.getByRole('heading', { name: 'Invitation page' }) })
       await restorePanel.locator('input[type="number"]').fill(originalCapacity)
       await restorePanel.locator('textarea').fill(originalMessage)
-      await page.getByRole('button', { name: 'Save RSVP settings', exact: true }).click()
+      await page.getByRole('button', { name: 'Save invitation settings', exact: true }).click()
       await expect(page.getByText('RSVP settings saved', { exact: true })).toBeVisible()
       if (!originallyEnabled) {
         // Turning RSVP off hides the save button, so the original disabled state
@@ -194,7 +194,7 @@ test.describe('Stage B guest households and RSVP configuration — isolated stag
     const withRsvpCard = page.locator('.gr-mode-card').filter({ hasText: 'With RSVP' })
     const originallyEnabled = await withRsvpCard.locator('input').isChecked()
     if (!originallyEnabled) await withRsvpCard.click()
-    await expect(page.getByRole('heading', { name: 'Public RSVP link' })).toBeVisible()
+    await expect(page.getByRole('heading', { name: 'Invitation page' })).toBeVisible()
 
     // "Require host approval" isn't reachable through this build's UI yet, so
     // flip it directly through the same real contract the (currently-mock)
@@ -263,7 +263,7 @@ test.describe('Stage B guest households and RSVP configuration — isolated stag
 
     try {
       await themeSelect.selectOption(next)
-      await page.getByRole('button', { name: 'Save RSVP settings', exact: true }).click()
+      await page.getByRole('button', { name: 'Save invitation settings', exact: true }).click()
       await expect(page.getByText('RSVP settings saved', { exact: true })).toBeVisible()
 
       await page.reload()
@@ -275,7 +275,7 @@ test.describe('Stage B guest households and RSVP configuration — isolated stag
       await expect(fieldNear(page, 'Invite page theme')).toHaveValue(next)
     } finally {
       await fieldNear(page, 'Invite page theme').selectOption(original)
-      await page.getByRole('button', { name: 'Save RSVP settings', exact: true }).click()
+      await page.getByRole('button', { name: 'Save invitation settings', exact: true }).click()
       await expect(page.getByText('RSVP settings saved', { exact: true })).toBeVisible()
       if (!originallyEnabled) {
         await page.getByRole('button', { name: 'Invites & RSVP', exact: true }).click()

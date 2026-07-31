@@ -4,6 +4,33 @@ import { expectQaEventLoaded, requiredEnv, signIn } from './helpers.js'
 test.describe.configure({ mode: 'serial' })
 
 test.describe('Stage C billing — provider-safe hosted handoff', () => {
+  test('ledger and capability catalog are interactive', async ({ page }) => {
+    const eventId = requiredEnv('E2E_EVENT_ID')
+    await signIn(page)
+
+    const tiersReady = page.waitForResponse((response) =>
+      response.url().includes(`/api/billing/tiers/${eventId}`) && response.status() === 200
+    )
+    await page.goto('/billing-redesign?tab=billing')
+    await expectQaEventLoaded(page)
+    const billing = await (await tiersReady).json()
+
+    const ledgerToggle = page.getByRole('button', { name: /Credit ledger/ })
+    await expect(ledgerToggle).toHaveAttribute('aria-expanded', 'false')
+    await ledgerToggle.click()
+    await expect(ledgerToggle).toHaveAttribute('aria-expanded', 'true')
+    await expect(page.getByRole('button', { name: 'All activity', exact: true })).toBeVisible()
+    await page.getByRole('button', { name: /SMS.*View ledger/i }).click()
+    await expect(page.getByRole('button', { name: 'SMS', exact: true })).toHaveClass(/active/)
+
+    const operationsCapability = billing.catalog?.addons?.operations?.[0]
+    expect(operationsCapability, 'billing catalog must expose operations capabilities').toBeTruthy()
+    await page.getByRole('button', { name: new RegExp(String(operationsCapability).replace(/[.*+?^${}()|[\]\\]/g, '\\$&')) }).click()
+    await expect(page.locator('.rr-modal')).toContainText(String(operationsCapability))
+    await page.getByRole('button', { name: 'Open event operations', exact: true }).click()
+    await expect(page).toHaveURL(/\/addons-redesign$/)
+  })
+
   test('submits the exact live catalog tier key and leaves Festio for hosted checkout', async ({ page }) => {
     const eventId = requiredEnv('E2E_EVENT_ID')
     await signIn(page)

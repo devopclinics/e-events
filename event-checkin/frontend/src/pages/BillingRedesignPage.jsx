@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { useSearchParams } from 'react-router-dom'
+import { useNavigate, useSearchParams } from 'react-router-dom'
 import RedesignShell, { Icon, Modal, ConfirmDialog } from './redesign/RedesignShell'
 import { LoadingSkeleton, ErrorRetryState, EmptyState } from './redesign/RedesignPrimitives'
 import { useCurrentEvent } from '../hooks/useCurrentEvent'
@@ -27,10 +27,26 @@ function billingMoney(amount, currency) {
   catch { return `${currency} ${(Number(amount || 0) / 100).toFixed(2)}` }
 }
 
+const CATALOG_DESTINATIONS = {
+  design_studio: { label: 'Open Design Studio', route: '/design-studio-redesign', icon: 'image' },
+  experience: { label: 'Open Experience', route: '/experience-redesign', icon: 'layers' },
+  messaging: { label: 'Open messaging', route: '/communications-redesign?tab=settings', icon: 'message' },
+  operations: { label: 'Open event operations', route: '/addons-redesign', icon: 'grid' },
+  enterprise: { label: 'Contact support', route: '/help-redesign', icon: 'team' },
+}
+
+function catalogLabel(entry) {
+  return typeof entry === 'string' ? entry : entry?.label || 'Capability'
+}
+
 function BillingTab({ notify, eventId, onBuyPass, onBuyCredits }) {
+  const navigate = useNavigate()
   const { data: billing, loading: billingLoading, error: billingError, refresh: loadBilling } = useBilling(eventId)
   const [currencyBusy, setCurrencyBusy] = useState(false)
   const [currencyError, setCurrencyError] = useState('')
+  const [ledgerOpen, setLedgerOpen] = useState(false)
+  const [ledgerFilter, setLedgerFilter] = useState('all')
+  const [catalogSelection, setCatalogSelection] = useState(null)
 
   async function changeCurrency(currency) {
     setCurrencyBusy(true); setCurrencyError('')
@@ -50,13 +66,52 @@ function BillingTab({ notify, eventId, onBuyPass, onBuyCredits }) {
   const packRows = billing.packs || []
   const ledgerRows = billing.ledger?.rows || []
   const channelSummary = new Map((billing.ledger?.summary || []).map((row) => [row.channel, row]))
+  const activeTier = tierRows.find((tier) => tier.key === billing.plan_tier)
+  const filteredLedgerRows = ledgerFilter === 'all'
+    ? ledgerRows
+    : ledgerRows.filter((row) => String(row.channel || '').toLowerCase() === ledgerFilter)
+
+  function openLedger(channel = 'all') {
+    setLedgerFilter(channel)
+    setLedgerOpen(true)
+  }
+
+  function matchingCreditPack(entry) {
+    const label = catalogLabel(entry)
+    const credits = Number(label.match(/[\d,]+/)?.[0]?.replaceAll(',', '') || entry?.credits || 0)
+    const amount = billing.currency === 'NGN' ? entry?.ngn : entry?.usd
+    return packRows.find((pack) => credits && Number(pack.credits) === credits)
+      || packRows.find((pack) => amount != null && Number(pack.amount) === Number(amount))
+      || null
+  }
+
+  function openCatalogItem(group, entry) {
+    const destination = CATALOG_DESTINATIONS[group]
+    setCatalogSelection({
+      group,
+      entry,
+      label: catalogLabel(entry),
+      destination,
+      pack: group === 'message_credits' ? matchingCreditPack(entry) : null,
+    })
+  }
+
+  function runCatalogAction() {
+    if (!catalogSelection) return
+    if (catalogSelection.pack) {
+      onBuyCredits(catalogSelection.pack)
+      setCatalogSelection(null)
+      return
+    }
+    if (catalogSelection.destination?.route) navigate(catalogSelection.destination.route)
+  }
 
   return (
     <>
       <div className="rr-panel bl-plan-card">
         <div className="bl-plan-head">
           <div className="bl-plan-badge"><Icon name="card" size={16} /></div>
-          <div className="bl-plan-headtext"><div className="bl-plan-tier">{billing.is_paid ? billing.plan_tier : 'No active Event Pass'}</div>
+          <div className="bl-plan-headtext"><div className="bl-plan-tier">{billing.is_paid ? (activeTier?.name || activeTier?.label || billing.plan_tier) : 'No active Event Pass'}</div>
             <div className="bl-plan-sub">{billing.provider?.toUpperCase()} hosted checkout</div></div>
           <div className="rd-seg">
             <button disabled={currencyBusy} className={billing.currency === 'USD' ? 'on' : ''} onClick={() => changeCurrency('USD')}>USD (Stripe)</button>
@@ -72,7 +127,7 @@ function BillingTab({ notify, eventId, onBuyPass, onBuyCredits }) {
       {currencyError && <p className="rp-field-error">{currencyError}</p>}
 
       <div className="rr-section-title">
-        <div><h2>Plans</h2><p>Upgrade or downgrade — takes effect on your next billing cycle</p></div>
+        <div><h2>Event Passes</h2><p>One-time access for this event; benefits apply after successful payment</p></div>
       </div>
       <div className="rr-grid3">
         {tierRows.length === 0 ? <EmptyState icon="card" title="No Event Passes available" message="The billing catalogue has no active event tiers for this currency." /> : tierRows.map((t) => (
@@ -112,29 +167,35 @@ function BillingTab({ notify, eventId, onBuyPass, onBuyCredits }) {
           <div className="rd-channels">
             {['email', 'sms', 'whatsapp', 'mms'].map((key) => {
               const c = channelSummary.get(key) || { channel: key, sends: 0, credits: 0 }
-              return <div className="rd-chan" key={key}>
+              return <button className={`rd-chan bl-channel-button ${ledgerFilter === key && ledgerOpen ? 'active' : ''}`} key={key} onClick={() => openLedger(key)}>
                 <div className="top">
                   <span className="name">{key.toUpperCase()}</span>
+                  <Icon name="arrow" size={12} />
                 </div>
                 <div className="rate">{c.credits}<small>credits</small></div>
-                <div className="foot"><span>{c.sends} sends</span></div>
-              </div>
+                <div className="foot"><span>{c.sends} sends · View ledger</span></div>
+              </button>
             })}
           </div>
         </div>
       </div>
 
-      <div className="rr-section-title">
-        <div><h2>Credit ledger</h2><p>Recent spend and top-ups — {Number(billing.ledger?.balance ?? billing.message_credits ?? 0).toLocaleString()} credits available</p></div>
-      </div>
-      <div className="rr-panel">
-        <div className="rd-panel-body">
-          <table className="rr-table">
+      <div className={`rr-panel bl-ledger-panel ${ledgerOpen ? 'open' : ''}`}>
+        <button className="bl-ledger-toggle" aria-expanded={ledgerOpen} onClick={() => setLedgerOpen((value) => !value)}>
+          <span className="bl-ledger-icon"><Icon name="file" size={16} /></span>
+          <span><strong>Credit ledger</strong><small>Recent spend and top-ups · {Number(billing.ledger?.balance ?? billing.message_credits ?? 0).toLocaleString()} credits available · {ledgerRows.length} entries</small></span>
+          <span className="bl-ledger-toggle-label">{ledgerOpen ? 'Collapse' : 'View activity'} <Icon name="arrow" size={12} /></span>
+        </button>
+        {ledgerOpen && <div className="rd-panel-body bl-ledger-body">
+          <div className="bl-ledger-filters">
+            {['all', 'email', 'sms', 'whatsapp', 'mms'].map((key) => <button key={key} className={ledgerFilter === key ? 'active' : ''} onClick={() => setLedgerFilter(key)}>{key === 'all' ? 'All activity' : key.toUpperCase()}</button>)}
+          </div>
+          <div className="bl-table-scroll"><table className="rr-table">
             <thead>
               <tr><th>Date</th><th>Reason</th><th>Channel</th><th>Delta</th><th>Balance after</th></tr>
             </thead>
             <tbody>
-              {ledgerRows.length === 0 ? <tr><td colSpan="5">No credit activity has been recorded for this event.</td></tr> : ledgerRows.map((l) => (
+              {filteredLedgerRows.length === 0 ? <tr><td colSpan="5">No {ledgerFilter === 'all' ? '' : `${ledgerFilter.toUpperCase()} `}credit activity has been recorded for this event.</td></tr> : filteredLedgerRows.map((l) => (
                 <tr key={l.id}>
                   <td>{l.created_at ? new Date(l.created_at).toLocaleString() : '—'}</td>
                   <td>{l.reason || l.action}</td>
@@ -146,8 +207,8 @@ function BillingTab({ notify, eventId, onBuyPass, onBuyCredits }) {
                 </tr>
               ))}
             </tbody>
-          </table>
-        </div>
+          </table></div>
+        </div>}
       </div>
 
       <div className="rr-section-title">
@@ -158,19 +219,42 @@ function BillingTab({ notify, eventId, onBuyPass, onBuyCredits }) {
           <div className="bl-catalog-group-title">{group.replaceAll('_', ' ')}</div>
           <div className="bl-ent-grid">
             {(Array.isArray(items) ? items : []).map((entry, index) => (
-              <div className="rr-panel bl-ent-card" key={typeof entry === 'string' ? entry : `${entry.label}-${index}`}>
-                <div className="bl-ent-icon"><Icon name="check" size={16}/></div>
+              <button type="button" className="rr-panel bl-ent-card" key={typeof entry === 'string' ? entry : `${entry.label}-${index}`} onClick={() => openCatalogItem(group, entry)}>
+                <div className="bl-ent-icon"><Icon name={CATALOG_DESTINATIONS[group]?.icon || 'check'} size={16}/></div>
                 <div className="bl-ent-label">{typeof entry === 'string' ? entry : entry.label}</div>
                 {typeof entry === 'object' && entry.usd != null && entry.ngn != null && (
                   <span className="rd-status-chip bl-chip-neutral">
                     {billingMoney(billing.currency === 'NGN' ? entry.ngn : entry.usd, billing.currency)}
                   </span>
                 )}
-              </div>
+                <span className="bl-ent-action">View details <Icon name="arrow" size={11} /></span>
+              </button>
             ))}
           </div>
         </div>
       ))}
+      {catalogSelection && <Modal title={catalogSelection.label} onClose={() => setCatalogSelection(null)} width={460}>
+        <div className="bl-capability-detail">
+          <div className="bl-capability-hero"><Icon name={catalogSelection.destination?.icon || 'check'} size={22} /></div>
+          <p>
+            {catalogSelection.group === 'message_credits'
+              ? catalogSelection.pack ? 'Add this credit pack to the selected event through secure hosted checkout.' : 'This catalog price is informational; no matching active credit pack is available in the selected currency.'
+              : catalogSelection.group === 'enterprise'
+                ? 'This capability is configured with the Festio support team for your organization.'
+                : 'Open the live event workspace to configure or use this capability. Access depends on the active Event Pass and enabled add-ons.'}
+          </p>
+          <div className="bl-capability-facts">
+            <div><span>Event Pass</span><strong>{billing.is_paid ? (activeTier?.name || activeTier?.label || billing.plan_tier) : 'Not active'}</strong></div>
+            <div><span>Selected event</span><strong>{eventId ? 'Ready' : 'Choose an event'}</strong></div>
+          </div>
+          <div className="rd-row2">
+            <button className="rr-btn secondary" onClick={() => setCatalogSelection(null)}>Close</button>
+            <button className="rr-btn primary" disabled={catalogSelection.group === 'message_credits' && !catalogSelection.pack} onClick={runCatalogAction}>
+              {catalogSelection.pack ? 'Buy credits' : catalogSelection.destination?.label || 'Open'}
+            </button>
+          </div>
+        </div>
+      </Modal>}
     </>
   )
 }

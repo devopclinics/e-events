@@ -1,4 +1,4 @@
-import { Fragment, useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { api } from '../../api'
 import { EmptyState, ErrorRetryState, LoadingSkeleton } from './RedesignPrimitives'
 import { Icon, ConfirmDialog, Modal } from './RedesignShell'
@@ -82,7 +82,7 @@ function TableEditor({ form, setForm, saveTable, working }) {
       </div>
       <div className="ad-actions">
         <button type="button" className="rr-btn secondary" onClick={() => setForm(null)}>Cancel</button>
-        <button className="rr-btn primary" disabled={working}>{working ? 'Saving…' : 'Save table'}</button>
+        <button className="rr-btn primary" disabled={working}>{working ? 'Saving…' : form.id ? 'Save changes' : 'Create table'}</button>
       </div>
     </form>
   )
@@ -97,6 +97,8 @@ export function RealSeatingContent({ eventId, event, notify, onFloorLayout }) {
   const [loading, setLoading] = useState(true)
   const [working, setWorking] = useState(false)
   const [error, setError] = useState('')
+  const [tableQuery, setTableQuery] = useState('')
+  const [tableCategory, setTableCategory] = useState('all')
 
   // Per-seat assignment chart — ported from AdminPage.jsx's SeatingPanel.
   const [chart, setChart] = useState(null)
@@ -274,8 +276,23 @@ export function RealSeatingContent({ eventId, event, notify, onFloorLayout }) {
     finally { setWorking(false) }
   }
 
-  if (!eventId) return <EmptyState icon="chair" title="Select an event" body="Choose an event before configuring seating." />
+  if (!eventId) return <EmptyState icon="chair" title="Select an event" message="Choose an event before configuring seating." />
   if (loading) return <LoadingSkeleton rows={5} />
+
+  const categories = [...new Set(tables.map((table) => clean(table.category, 'Uncategorized') || 'Uncategorized'))]
+    .sort((a, b) => a.localeCompare(b))
+  const matchingTables = tables.filter((table) => {
+    const category = clean(table.category, 'Uncategorized') || 'Uncategorized'
+    const query = tableQuery.trim().toLowerCase()
+    return (tableCategory === 'all' || category === tableCategory)
+      && (!query || `${table.name || ''} ${category} ${table.sort_order ?? ''}`.toLowerCase().includes(query))
+  })
+  const commandGroups = categories
+    .map((category) => ({ category, tables: matchingTables.filter((table) => (clean(table.category, 'Uncategorized') || 'Uncategorized') === category) }))
+    .filter((group) => group.tables.length)
+  const totalSeats = tables.reduce((sum, table) => sum + (Number(table.capacity) || 0), 0)
+  const totalAssigned = tables.reduce((sum, table) => sum + (Number(table.assigned_count) || 0), 0)
+  const fullTables = tables.filter((table) => Number(table.capacity) > 0 && Number(table.assigned_count) >= Number(table.capacity)).length
 
   return (
     <>
@@ -289,20 +306,54 @@ export function RealSeatingContent({ eventId, event, notify, onFloorLayout }) {
           <button className="rr-btn primary" disabled={working} onClick={() => setForm({ name: '', capacity: 10, category: '', sort_order: tables.length })}><Icon name="plus" size={14}/> Table</button>
         </div>
       </div>
-      {!tables.length ? <EmptyState icon="chair" title="No tables yet" body="Create the first table to start assigning guests." /> : (
-        <div className="rr-panel"><table className="rr-table"><thead><tr><th>Order</th><th>Table</th><th>Category</th><th>Capacity</th><th>Assigned</th><th>Actions</th></tr></thead>
-          <tbody>{tables.map((t) => <Fragment key={t.id}>
-            <tr className={form?.id === t.id ? 'ad-table-row-editing' : ''}>
-              <td>{Number(t.sort_order) || 0}</td><td>{clean(t.name, 'Unnamed table')}</td><td>{clean(t.category, '—')}</td>
-              <td>{Number(t.capacity) || 0}</td><td>{Number(t.assigned_count) || 0}/{Number(t.capacity) || 0}</td>
-              <td className="ad-actions"><button className="rr-link-btn" onClick={() => setForm({ ...t, category: clean(t.category) })}>Edit</button><button className="rr-link-btn" onClick={() => setPendingDelete(t)}>Delete</button></td>
-            </tr>
-            {form?.id === t.id && <tr className="ad-inline-editor-row"><td colSpan={6}>
-              <TableEditor form={form} setForm={setForm} saveTable={saveTable} working={working} />
-            </td></tr>}
-          </Fragment>)}</tbody></table></div>
+      {form && !form.id && <div className="rr-panel rd-panel-body ad-new-table-panel"><div className="rd-panel-head"><h3>Create table</h3><p>Add it to the correct category and table order.</p></div><TableEditor form={form} setForm={setForm} saveTable={saveTable} working={working} /></div>}
+      {!tables.length ? <EmptyState icon="chair" title="No tables yet" message="Create the first table to start assigning guests." /> : (
+        <>
+          <div className="ad-command-summary">
+            <div><strong>{tables.length}</strong><span>Tables</span></div>
+            <div><strong>{totalAssigned}/{totalSeats}</strong><span>Seats assigned</span></div>
+            <div><strong>{fullTables}</strong><span>Tables full</span></div>
+            <div><strong>{Math.max(0, totalSeats - totalAssigned)}</strong><span>Seats available</span></div>
+          </div>
+          <div className="rr-panel ad-command-toolbar">
+            <div className="rd-search"><Icon name="search" size={13}/><input value={tableQuery} onChange={(event) => setTableQuery(event.target.value)} placeholder="Search tables, category, or order…"/></div>
+            <div className="ad-command-filters">
+              <button className={tableCategory === 'all' ? 'on' : ''} onClick={() => setTableCategory('all')}>All <b>{tables.length}</b></button>
+              {categories.map((category) => <button key={category} className={tableCategory === category ? 'on' : ''} onClick={() => setTableCategory(category)}>{category} <b>{tables.filter((table) => (clean(table.category, 'Uncategorized') || 'Uncategorized') === category).length}</b></button>)}
+            </div>
+          </div>
+          <div className="ad-command-groups">
+            {commandGroups.map((group) => (
+              <section className="ad-command-group" key={group.category}>
+                <div className="ad-command-group-head"><div><h3>{group.category}</h3><span>{group.tables.length} table{group.tables.length === 1 ? '' : 's'}</span></div><span>{group.tables.reduce((sum, table) => sum + (Number(table.assigned_count) || 0), 0)}/{group.tables.reduce((sum, table) => sum + (Number(table.capacity) || 0), 0)} assigned</span></div>
+                <div className="ad-table-command-grid">
+                  {group.tables.map((table) => {
+                    const capacity = Number(table.capacity) || 0
+                    const assigned = Number(table.assigned_count) || 0
+                    const percent = capacity ? Math.min(100, Math.round((assigned / capacity) * 100)) : 0
+                    const status = capacity && assigned >= capacity ? 'full' : assigned ? 'partial' : 'empty'
+                    return <article className={`rr-panel ad-table-command-card ${form?.id === table.id ? 'editing' : ''}`} key={table.id}>
+                      <div className="ad-table-command-head">
+                        <span className="ad-table-order">#{Number(table.sort_order) || 0}</span>
+                        <span className={`ad-table-state ${status}`}>{status === 'full' ? 'Full' : status === 'partial' ? 'Filling' : 'Empty'}</span>
+                      </div>
+                      <h4>{clean(table.name, 'Unnamed table')}</h4>
+                      <div className="ad-table-occupancy"><strong>{assigned}<small> / {capacity} guests</small></strong><span>{percent}%</span></div>
+                      <div className="ad-table-progress"><i style={{ width: `${percent}%` }}/></div>
+                      <div className="ad-table-command-actions">
+                        <button className="rr-btn secondary" onClick={() => setForm(form?.id === table.id ? null : { ...table, category: clean(table.category) })}>{form?.id === table.id ? 'Close' : 'Edit table'}</button>
+                        <button className="rr-link-btn gr-danger-link" onClick={() => setPendingDelete(table)}>Delete</button>
+                      </div>
+                      {form?.id === table.id && <TableEditor form={form} setForm={setForm} saveTable={saveTable} working={working} />}
+                    </article>
+                  })}
+                </div>
+              </section>
+            ))}
+            {!commandGroups.length && <EmptyState icon="search" title="No tables match" message="Clear the search or choose another category." />}
+          </div>
+        </>
       )}
-      {form && !form.id && <div className="rr-panel rd-panel-body"><TableEditor form={form} setForm={setForm} saveTable={saveTable} working={working} /></div>}
 
       {!!tables.length && (
         <div className="ad-chart-section">

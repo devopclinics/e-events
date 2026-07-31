@@ -261,6 +261,11 @@ function TeamTab({ eventId, notify, onRequestDelete }) {
   const [inviteEmail, setInviteEmail] = useState('')
   const [inviteRole, setInviteRole] = useState('staff')
   const [confirmInvite, setConfirmInvite] = useState(null)
+  const [memberSearch, setMemberSearch] = useState('')
+  const [roleFilter, setRoleFilter] = useState('all')
+  const [editingMemberId, setEditingMemberId] = useState('')
+  const [invitePanelOpen, setInvitePanelOpen] = useState(false)
+  const [orgDirectoryOpen, setOrgDirectoryOpen] = useState(false)
 
   function loadMembers() {
     if (!eventId) return
@@ -362,193 +367,124 @@ function TeamTab({ eventId, notify, onRequestDelete }) {
     } catch (e) { notify(e.message || 'Scanner sections could not be updated', true) }
   }
 
+  const filteredMembers = (members || []).filter((member) => {
+    const query = memberSearch.trim().toLowerCase()
+    const role = member.event_role || 'staff'
+    return (roleFilter === 'all' || role === roleFilter)
+      && (!query || `${member.user.name || ''} ${member.user.email || ''}`.toLowerCase().includes(query))
+  })
+  const editingMember = (members || []).find((member) => member.id === editingMemberId)
+  const managerCount = (members || []).filter((member) => (member.event_role || 'staff') === 'manager').length
+  const guestManagers = (members || []).filter((member) => guestAccessOf(member) === 'manage').length
+  const scopedMembers = (members || []).filter((member) => (member.section_group_ids || []).length > 0).length
+
   return (
-    <div className="rr-grid2">
-      <div className="rd-panel">
-        <div className="rd-panel-head"><h3>Team members</h3><p>Roles and access control who can do what on this event</p></div>
-        <div className="rd-panel-body">
-          {!eventId ? (
-            <EmptyState icon="calendar" title="No event selected" message="Choose an event from the top bar to manage its team." />
-          ) : members === null ? (
-            <LoadingSkeleton rows={4} variant="table" />
-          ) : membersError ? (
-            <ErrorRetryState message={membersError} onRetry={loadMembers} />
-          ) : members.length === 0 ? (
-            <EmptyState icon="team" title="No members yet" message="Assign a teammate from your organization to get started." />
-          ) : (
-            <table className="rr-table">
-              <thead>
-                <tr><th>Member</th><th>Role</th><th>Access level</th><th>Guest access</th><th>Permissions</th><th>Scanner sections</th><th /></tr>
-              </thead>
-              <tbody>
-                {members.map((m) => {
-                  const eventRole = m.event_role || 'staff'
-                  const showExtras = eventRole !== 'staff'
-                  const sections = m.section_group_ids || []
-                  return (
-                    <tr key={m.id}>
-                      <td>
-                        <div className="rd-who"><span className="dot">{initialsOf(m.user.name)}</span>
-                          <div><div>{m.user.name}</div><small className="tm-email">{m.user.email}</small></div>
-                        </div>
-                      </td>
-                      <td>
-                        <select className="rr-select gr-inline-select" value={eventRole}
-                          onChange={(e) => updatePermissions(m, { event_role: e.target.value }, `${m.user.name} role set to ${ROLE_LABEL[e.target.value]}`)}>
-                          {EVENT_ROLE_OPTIONS.map((r) => <option key={r} value={r}>{ROLE_LABEL[r]}</option>)}
-                        </select>
-                      </td>
-                      <td>
-                        {eventRole === 'manager' ? (
-                          <select className="rr-select gr-inline-select" value={m.access_level || 'edit'}
-                            onChange={(e) => updatePermissions(m, { access_level: e.target.value }, `${m.user.name} access updated`)}>
-                            {ACCESS_LEVEL_OPTIONS.map((a) => <option key={a} value={a}>{a === 'edit' ? 'Edit' : 'View-only'}</option>)}
-                          </select>
-                        ) : <span className="rd-rowlink">—</span>}
-                      </td>
-                      <td>
-                        <select className="rr-select gr-inline-select" value={guestAccessOf(m)}
-                          onChange={(e) => updatePermissions(m, e.target.value === 'manage' ? { can_view_guests: true, can_manage_guests: true } : e.target.value === 'view' ? { can_view_guests: true, can_manage_guests: false } : { can_view_guests: false, can_manage_guests: false }, `${m.user.name} guest access updated`)}>
-                          {GUEST_ACCESS_OPTIONS.map((g) => <option key={g} value={g}>{g === 'none' ? 'None' : g === 'view' ? 'View' : 'Manage'}</option>)}
-                        </select>
-                      </td>
-                      <td>
-                        {!showExtras ? <span className="rd-rowlink">—</span> : (
-                          <div className="tm-perm-row">
-                            {PERMS.map((p) => {
-                              const on = permOn(m, p.key)
-                              return (
-                                <button
-                                  type="button"
-                                  key={p.key}
-                                  className={`tm-perm-chip ${on ? 'on' : ''}`}
-                                  title={`${p.label}: ${on ? 'enabled' : 'disabled'}`}
-                                  onClick={() => updatePermissions(m, { [p.key === 'seats' ? 'can_reassign_seats' : p.key === 'menu' ? 'can_manage_menu' : 'can_view_dashboard']: !on }, `${p.label} ${on ? 'revoked' : 'granted'} for ${m.user.name}`)}
-                                >
-                                  <Icon name={p.icon} size={11} />{p.label}
-                                </button>
-                              )
-                            })}
-                          </div>
-                        )}
-                      </td>
-                      <td>
-                        {groups.length === 0 ? <span className="rd-rowlink">—</span> : (
-                          <div className="tm-perm-row">
-                            <button type="button" className={`tm-perm-chip ${sections.length === 0 ? 'on' : ''}`}
-                              onClick={() => updateSections(m, [])}>All</button>
-                            {groups.map((g) => (
-                              <button type="button" key={g.id} className={`tm-perm-chip ${sections.includes(g.id) ? 'on' : ''}`}
-                                onClick={() => updateSections(m, sections.includes(g.id) ? sections.filter((id) => id !== g.id) : [...sections, g.id])}>{g.name}</button>
-                            ))}
-                          </div>
-                        )}
-                      </td>
-                      <td>
-                        <button type="button" className="rr-link-btn gr-danger-link" onClick={() => requestRemove(m)}>Remove</button>
-                      </td>
-                    </tr>
-                  )
-                })}
-              </tbody>
-            </table>
-          )}
-        </div>
-      </div>
+    <div className="tm-directory-page">
+      {!eventId ? (
+        <EmptyState icon="calendar" title="No event selected" message="Choose an event from the top bar to manage its team." />
+      ) : members === null ? (
+        <LoadingSkeleton rows={4} variant="table" />
+      ) : membersError ? (
+        <ErrorRetryState message={membersError} onRetry={loadMembers} />
+      ) : (
+        <>
+          <div className="tm-directory-summary">
+            <div><Icon name="team" size={15}/><strong>{members.length}</strong><span>Event team</span></div>
+            <div><Icon name="shield" size={15}/><strong>{managerCount}</strong><span>Administrators</span></div>
+            <div><Icon name="users" size={15}/><strong>{guestManagers}</strong><span>Guest managers</span></div>
+            <div><Icon name="grid" size={15}/><strong>{scopedMembers}</strong><span>Section scoped</span></div>
+          </div>
 
-      <div className="tm-side-col">
-        <div className="rd-panel">
-          <div className="rd-panel-head"><h3>Invite teammate</h3><p>Add another person to help run this event</p></div>
-          <div className="rd-panel-body">
-            {confirmInvite ? (
-              <div className="tm-noaccount-confirm">
-                <p><b>{confirmInvite.email}</b> doesn't have a Festio account yet. Send the invite anyway? They'll be prompted to create one.</p>
-                <div className="rd-row2">
-                  <button className="rr-btn secondary" style={{ flex: 1, justifyContent: 'center' }} onClick={() => setConfirmInvite(null)}>Cancel</button>
-                  <button className="rr-btn primary" style={{ flex: 1, justifyContent: 'center' }} onClick={confirmInviteAnyway}>Invite anyway</button>
-                </div>
-              </div>
-            ) : (
-              <>
-                <label className="rd-field-label">Email address</label>
-                <input className="rd-field" type="email" placeholder="name@example.com" value={inviteEmail} onChange={(e) => setInviteEmail(e.target.value)} />
-                <label className="rd-field-label">Role</label>
-                <select className="rr-select" value={inviteRole} onChange={(e) => setInviteRole(e.target.value)}>
-                  <option value="staff">Staff</option>
-                  <option value="admin">Admin</option>
-                </select>
-                <button className="rr-btn primary" style={{ width: '100%', justifyContent: 'center', marginTop: 4 }} onClick={sendInvite}>
-                  <Icon name="send" size={14} /> Send invite
-                </button>
-              </>
-            )}
-            <p className="tm-invite-note"><Icon name="info" size={11} /> Use one account per staff member — sharing logins breaks activity history and audit logs.</p>
-            <div className="tm-help-links">
-              <a href="/help-redesign?role=organizer">How to create staff accounts →</a>
-              <a href="/login" target="_blank" rel="noreferrer">Open staff sign-in →</a>
-              <button className="rr-link-btn" onClick={async () => {
-                const guideUrl = `${window.location.origin}/help-redesign?role=organizer`
-                try {
-                  await navigator.clipboard.writeText(guideUrl)
-                  notify('Staff setup guide link copied')
-                } catch {
-                  notify(`Copy this staff guide link: ${guideUrl}`)
-                }
-              }}>Share staff setup guide →</button>
+          <div className="rr-panel tm-directory-toolbar">
+            <div className="rd-search"><Icon name="search" size={13}/><input value={memberSearch} onChange={(event) => setMemberSearch(event.target.value)} placeholder="Search team by name or email…"/></div>
+            <div className="rd-seg">
+              <button className={roleFilter === 'all' ? 'on' : ''} onClick={() => setRoleFilter('all')}>All</button>
+              <button className={roleFilter === 'manager' ? 'on' : ''} onClick={() => setRoleFilter('manager')}>Admins</button>
+              <button className={roleFilter === 'staff' ? 'on' : ''} onClick={() => setRoleFilter('staff')}>Staff</button>
             </div>
+            <button className="rr-btn primary" onClick={() => setInvitePanelOpen((value) => !value)}><Icon name="plus" size={13}/> Add teammate</button>
           </div>
-        </div>
 
-        <div className="rd-panel">
-          <div className="rd-panel-head"><h3>Assign existing org member</h3><p>Add someone from your organization without a new invite</p></div>
-          <div className="rd-panel-body">
-            {orgMembers === null ? (
-              <LoadingSkeleton rows={2} />
-            ) : unassigned.length === 0 ? (
-              <p className="rd-rowlink">Every organization member is already on this event.</p>
-            ) : (
-              <>
-                <select className="rr-select" value={assignUserId} onChange={(e) => { setAssignUserId(e.target.value); setAssignError('') }}>
-                  <option value="">— choose a teammate —</option>
-                  {unassigned.map((u) => <option key={u.id} value={u.id}>{u.name} · {u.email}</option>)}
-                </select>
-                {assignError && <p className="rp-field-error">{assignError}</p>}
-                <button className="rr-btn secondary" style={{ width: '100%', justifyContent: 'center', marginTop: 8 }}
-                  disabled={assigning || !assignUserId} onClick={assign}>
-                  {assigning ? 'Assigning…' : 'Assign to event'}
-                </button>
-              </>
-            )}
-          </div>
-        </div>
-
-        <div className="rd-panel">
-          <div className="rd-panel-head"><h3>Organization members &amp; roles</h3><p>Org-wide roles, independent of any one event</p></div>
-          <div className="rd-panel-body">
-            {orgMembers === null ? (
-              <LoadingSkeleton rows={3} />
-            ) : orgMembers.length === 0 ? (
-              <p className="rd-rowlink">No organization members yet.</p>
-            ) : orgMembers.map((m) => (
-              <div className="tm-org-row" key={m.user.id}>
-                <div className="rd-who"><span className="dot">{initialsOf(m.user.name)}</span><div><div>{m.user.name}</div><small className="tm-email">{m.user.email}</small></div></div>
-                <select className="rr-select gr-inline-select" value={orgRoles[m.user.id] ?? m.role}
-                  onChange={async (e) => {
-                    const role = e.target.value
-                    try {
-                      await api.setOrgMemberRole(eventId, m.user.id, role)
-                      setOrgRoles((p) => ({ ...p, [m.user.id]: role }))
-                      await loadOrgMembers()
-                      notify(`${m.user.name} org role set to ${role}`)
-                    } catch (error) { notify(error.message || 'Organization role could not be updated', true) }
-                  }}>
-                  {ORG_ROLE_OPTIONS.map((r) => <option key={r} value={r}>{r[0].toUpperCase() + r.slice(1)}</option>)}
-                </select>
+          {invitePanelOpen && <div className="tm-add-grid">
+            <div className="rd-panel">
+              <div className="rd-panel-head"><h3>Invite teammate</h3><p>Add a new person by email</p></div>
+              <div className="rd-panel-body">
+                {confirmInvite ? <div className="tm-noaccount-confirm"><p><b>{confirmInvite.email}</b> doesn't have a Festio account yet. Send the invite anyway? They'll be prompted to create one.</p><div className="rd-row2"><button className="rr-btn secondary" onClick={() => setConfirmInvite(null)}>Cancel</button><button className="rr-btn primary" onClick={confirmInviteAnyway}>Invite anyway</button></div></div> : <>
+                  <label className="rd-field-label">Email address</label><input className="rd-field" type="email" placeholder="name@example.com" value={inviteEmail} onChange={(e) => setInviteEmail(e.target.value)}/>
+                  <label className="rd-field-label">Role</label><select className="rr-select" value={inviteRole} onChange={(e) => setInviteRole(e.target.value)}><option value="staff">Staff</option><option value="manager">Event owner/admin</option></select>
+                  <button className="rr-btn primary" style={{ width: '100%', justifyContent: 'center', marginTop: 8 }} onClick={sendInvite}><Icon name="send" size={13}/> Send invite</button>
+                </>}
               </div>
-            ))}
+            </div>
+            <div className="rd-panel">
+              <div className="rd-panel-head"><h3>Assign organization member</h3><p>Use someone who already has an account</p></div>
+              <div className="rd-panel-body">
+                {orgMembers === null ? <LoadingSkeleton rows={2}/> : unassigned.length === 0 ? <p className="rd-rowlink">Every organization member is already on this event.</p> : <>
+                  <select className="rr-select" value={assignUserId} onChange={(e) => { setAssignUserId(e.target.value); setAssignError('') }}><option value="">Choose a teammate…</option>{unassigned.map((user) => <option key={user.id} value={user.id}>{user.name} · {user.email}</option>)}</select>
+                  {assignError && <p className="rp-field-error">{assignError}</p>}
+                  <button className="rr-btn secondary" style={{ width: '100%', justifyContent: 'center', marginTop: 8 }} disabled={assigning || !assignUserId} onClick={assign}>{assigning ? 'Assigning…' : 'Assign to event'}</button>
+                </>}
+                <p className="tm-invite-note"><Icon name="info" size={11}/> Use one account per staff member to preserve audit history.</p>
+              </div>
+            </div>
+          </div>}
+
+          {members.length === 0 ? <EmptyState icon="team" title="No members yet" message="Use Add teammate to build this event's team." /> : (
+            <div className={`tm-directory-layout ${editingMember ? 'has-editor' : ''}`}>
+              <div className="tm-member-grid">
+                {filteredMembers.map((member) => {
+                  const eventRole = member.event_role || 'staff'
+                  const guestAccess = guestAccessOf(member)
+                  const sections = member.section_group_ids || []
+                  const enabledPerms = PERMS.filter((permission) => permOn(member, permission.key))
+                  return <article className={`rr-panel tm-member-card ${editingMember?.id === member.id ? 'active' : ''}`} key={member.id}>
+                    <div className="tm-member-card-head">
+                      <span className="tm-member-avatar">{initialsOf(member.user.name)}</span>
+                      <div><h3>{member.user.name}</h3><span>{member.user.email}</span></div>
+                      <span className={`tm-role ${eventRole}`}>{eventRole === 'manager' ? 'Admin' : 'Staff'}</span>
+                    </div>
+                    <div className="tm-member-access">
+                      <span><Icon name="users" size={11}/> Guests: <b>{guestAccess === 'none' ? 'No access' : guestAccess === 'view' ? 'View' : 'Manage'}</b></span>
+                      <span><Icon name="grid" size={11}/> Scanner: <b>{sections.length ? `${sections.length} section${sections.length === 1 ? '' : 's'}` : 'All sections'}</b></span>
+                    </div>
+                    <div className="tm-member-capabilities">
+                      {enabledPerms.map((permission) => <span key={permission.key}><Icon name={permission.icon} size={10}/>{permission.label}</span>)}
+                      {!enabledPerms.length && <span className="muted">Standard staff access</span>}
+                    </div>
+                    <div className="tm-member-card-actions">
+                      <button className="rr-btn secondary" onClick={() => setEditingMemberId(editingMember?.id === member.id ? '' : member.id)}>{editingMember?.id === member.id ? 'Close settings' : 'Edit access'}</button>
+                      <button className="rr-link-btn gr-danger-link" onClick={() => requestRemove(member)}>Remove</button>
+                    </div>
+                  </article>
+                })}
+                {!filteredMembers.length && <div className="rr-panel rd-panel-body"><EmptyState icon="search" title="No teammates match" message="Clear the search or change the role filter." /></div>}
+              </div>
+
+              {editingMember && (() => {
+                const eventRole = editingMember.event_role || 'staff'
+                const sections = editingMember.section_group_ids || []
+                return <aside className="rr-panel tm-member-editor">
+                  <div className="tm-member-editor-head"><div><span className="tm-member-avatar">{initialsOf(editingMember.user.name)}</span><div><h3>{editingMember.user.name}</h3><p>Event access settings</p></div></div><button className="rr-link-btn" onClick={() => setEditingMemberId('')}>Close ✕</button></div>
+                  <div className="tm-member-editor-body">
+                    <label className="rd-field-label">Event role</label>
+                    <select className="rr-select" value={eventRole} onChange={(e) => updatePermissions(editingMember, { event_role: e.target.value }, `${editingMember.user.name} role set to ${ROLE_LABEL[e.target.value]}`)}>{EVENT_ROLE_OPTIONS.map((role) => <option key={role} value={role}>{ROLE_LABEL[role]}</option>)}</select>
+                    {eventRole === 'manager' && <><label className="rd-field-label">Administrative access</label><select className="rr-select" value={editingMember.access_level || 'edit'} onChange={(e) => updatePermissions(editingMember, { access_level: e.target.value }, `${editingMember.user.name} access updated`)}>{ACCESS_LEVEL_OPTIONS.map((access) => <option key={access} value={access}>{access === 'edit' ? 'Can edit' : 'View only'}</option>)}</select></>}
+                    <label className="rd-field-label">Guest list access</label>
+                    <select className="rr-select" value={guestAccessOf(editingMember)} onChange={(e) => updatePermissions(editingMember, e.target.value === 'manage' ? { can_view_guests: true, can_manage_guests: true } : e.target.value === 'view' ? { can_view_guests: true, can_manage_guests: false } : { can_view_guests: false, can_manage_guests: false }, `${editingMember.user.name} guest access updated`)}>{GUEST_ACCESS_OPTIONS.map((access) => <option key={access} value={access}>{access === 'none' ? 'No access' : access === 'view' ? 'View guests' : 'Manage guests'}</option>)}</select>
+                    {eventRole === 'manager' && <div className="tm-editor-section"><strong>Operational permissions</strong><div className="tm-editor-options">{PERMS.map((permission) => { const on = permOn(editingMember, permission.key); return <button key={permission.key} className={on ? 'on' : ''} onClick={() => updatePermissions(editingMember, { [permission.key === 'seats' ? 'can_reassign_seats' : permission.key === 'menu' ? 'can_manage_menu' : 'can_view_dashboard']: !on }, `${permission.label} ${on ? 'revoked' : 'granted'} for ${editingMember.user.name}`)}><Icon name={permission.icon} size={13}/><span>{permission.label}<small>{on ? 'Allowed' : 'Not allowed'}</small></span><i>{on ? '✓' : '+'}</i></button> })}</div></div>}
+                    {groups.length > 0 && <div className="tm-editor-section"><strong>Scanner sections</strong><p>Choose where this person can scan. All sections is the default.</p><div className="tm-perm-row"><button className={`tm-perm-chip ${sections.length === 0 ? 'on' : ''}`} onClick={() => updateSections(editingMember, [])}>All sections</button>{groups.map((group) => <button key={group.id} className={`tm-perm-chip ${sections.includes(group.id) ? 'on' : ''}`} onClick={() => updateSections(editingMember, sections.includes(group.id) ? sections.filter((id) => id !== group.id) : [...sections, group.id])}>{group.name}</button>)}</div></div>}
+                  </div>
+                </aside>
+              })()}
+            </div>
+          )}
+
+          <div className="rr-panel tm-org-directory">
+            <button className="tm-org-directory-toggle" onClick={() => setOrgDirectoryOpen((value) => !value)}><div><Icon name="team" size={15}/><span><strong>Organization directory</strong><small>Manage org-wide roles independently of this event</small></span></div><span>{orgMembers?.length || 0} members {orgDirectoryOpen ? '▲' : '▼'}</span></button>
+            {orgDirectoryOpen && <div className="tm-org-directory-grid">{orgMembers === null ? <LoadingSkeleton rows={3}/> : orgMembers.map((member) => <div className="tm-org-person" key={member.user.id}><div className="rd-who"><span className="dot">{initialsOf(member.user.name)}</span><div><div>{member.user.name}</div><small className="tm-email">{member.user.email}</small></div></div><select className="rr-select gr-inline-select" value={orgRoles[member.user.id] ?? member.role} onChange={async (event) => { const role = event.target.value; try { await api.setOrgMemberRole(eventId, member.user.id, role); setOrgRoles((current) => ({ ...current, [member.user.id]: role })); await loadOrgMembers(); notify(`${member.user.name} org role set to ${role}`) } catch (error) { notify(error.message || 'Organization role could not be updated', true) } }}>{ORG_ROLE_OPTIONS.map((role) => <option key={role} value={role}>{role[0].toUpperCase() + role.slice(1)}</option>)}</select></div>)}</div>}
           </div>
-        </div>
-      </div>
+        </>
+      )}
     </div>
   )
 }

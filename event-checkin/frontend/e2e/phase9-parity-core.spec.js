@@ -151,7 +151,7 @@ test.describe('Phase 9 legacy/redesign persisted-state parity', () => {
         response.request().method() === 'POST'
         && response.url().endsWith(`/api/events/${eventId}/tables`)
       )
-      await page.getByRole('button', { name: 'Save', exact: true }).click()
+      await page.getByRole('button', { name: 'Create table', exact: true }).click()
       const redesignTable = await (await redesignResponse).json()
       createdIds.push(redesignTable.id)
 

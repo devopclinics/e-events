@@ -9,6 +9,7 @@ test.describe('Stage C operations — isolated staging fixture', () => {
 
   test('seating uses confirmed table CRUD and floor-plan handoff', async ({ page }) => {
     const name = `E2E Table ${suffix}`
+    const editedName = `${name} Edited`
     await page.goto('/addons-redesign?tab=seating')
     await expectQaEventLoaded(page)
     const locked = page.getByRole('button', { name: 'Upgrade to enable', exact: true })
@@ -21,20 +22,31 @@ test.describe('Stage C operations — isolated staging fixture', () => {
       await page.getByLabel('Table name').fill(name)
       await page.getByLabel('Capacity').fill('4')
       await page.getByLabel('Category').fill('Synthetic QA')
-      await page.getByRole('button', { name: 'Save', exact: true }).click()
+      await page.getByRole('button', { name: 'Create table', exact: true }).click()
       await expect(page.getByText('Table saved', { exact: true })).toBeVisible()
       await expect(page.getByText(name, { exact: true })).toBeVisible()
 
-      const row = page.locator('table.rr-table tbody tr').filter({ hasText: name })
-      await row.getByRole('button', { name: 'Delete', exact: true }).click()
+      let card = page.locator('.ad-table-command-card').filter({ hasText: name })
+      await card.getByRole('button', { name: 'Edit table', exact: true }).click()
+      await card.getByLabel('Table name').fill(editedName)
+      await card.getByLabel('Table order').fill('7')
+      await card.getByRole('button', { name: 'Save changes', exact: true }).click()
+      await expect(page.getByText('Table saved', { exact: true })).toBeVisible()
+      card = page.locator('.ad-table-command-card').filter({ hasText: editedName })
+      await expect(card).toBeVisible()
+      await expect(card.locator('.ad-table-order')).toHaveText('#7')
+
+      await card.getByRole('button', { name: 'Delete', exact: true }).click()
       await page.locator('.rr-modal').getByRole('button', { name: 'Delete', exact: true }).click()
-      await expect(page.getByText(name, { exact: true })).toHaveCount(0)
+      await expect(page.getByText(editedName, { exact: true })).toHaveCount(0)
     } finally {
       if (!page.isClosed()) {
-        const row = page.locator('table.rr-table tbody tr').filter({ hasText: name })
-        if (await row.count()) {
-          await row.getByRole('button', { name: 'Delete', exact: true }).click().catch(() => {})
-          await page.locator('.rr-modal').getByRole('button', { name: 'Delete', exact: true }).click().catch(() => {})
+        for (const tableName of [editedName, name]) {
+          const card = page.locator('.ad-table-command-card').filter({ hasText: tableName })
+          if (await card.count()) {
+            await card.getByRole('button', { name: 'Delete', exact: true }).click().catch(() => {})
+            await page.locator('.rr-modal').getByRole('button', { name: 'Delete', exact: true }).click().catch(() => {})
+          }
         }
       }
     }

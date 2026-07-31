@@ -30,12 +30,11 @@ test.describe('Stage C communications — provider-safe redesign controls', () =
       sentBody = await route.request().postDataJSON()
       await route.fulfill({ status: 403, json: { detail: 'Recipient is not in the outbound safety allowlist' } })
     })
-    page.on('dialog', async (dialog) => {
-      if (dialog.type() === 'prompt') await dialog.accept('blocked-recipient@example.invalid')
-      else await dialog.accept()
-    })
-
-    await page.locator('.cm-tpl-table tbody tr').first().getByRole('button', { name: 'Test send' }).click()
+    await page.locator('.cm-template-card').first().getByRole('button', { name: 'Test send' }).click()
+    const modal = page.locator('.rr-modal')
+    await expect(modal.getByRole('listbox', { name: 'Test recipients' })).toBeVisible()
+    await modal.getByPlaceholder('name@example.com').fill('blocked-recipient@example.invalid')
+    await modal.getByRole('button', { name: /Send .* test/ }).click()
     await expect(page.getByText('Recipient is not in the outbound safety allowlist', { exact: false })).toBeVisible()
     expect(sentBody.to).toBe('blocked-recipient@example.invalid')
     expect(sentBody.channel).toBeTruthy()

@@ -571,6 +571,8 @@ function MessagesTab({ notify, onPreview, eventId }) {
   const [templateError, setTemplateError] = useState('')
   const [templateBusy, setTemplateBusy] = useState('')
   const [templateEditor, setTemplateEditor] = useState(null)
+  const [templateTest, setTemplateTest] = useState(null)
+  const [orgMembers, setOrgMembers] = useState([])
   const [communication, setCommunication] = useState(null)
   const [broadcasts, setBroadcasts] = useState([])
   const { guests } = useGuests(eventId)
@@ -580,15 +582,18 @@ function MessagesTab({ notify, onPreview, eventId }) {
     if (!eventId) {
       setTemplates([])
       setTemplateAudit([])
+      setOrgMembers([])
       return
     }
     try {
-      const [items, audit] = await Promise.all([
+      const [items, audit, members] = await Promise.all([
         api.listTemplates(eventId),
         api.templateAudit(eventId).catch(() => []),
+        api.listOrgMembers(eventId).catch(() => []),
       ])
       setTemplates(items)
       setTemplateAudit(audit)
+      setOrgMembers(members)
       setTemplateError('')
     } catch (e) {
       setTemplateError(e.message || 'Message templates could not be loaded')
@@ -645,6 +650,34 @@ function MessagesTab({ notify, onPreview, eventId }) {
     }
   }
 
+  function openTemplateTest(template) {
+    const channels = template.channels.filter((channel) => channel !== 'mms')
+    setTemplateTest({
+      template,
+      channel: channels[0] || '',
+      query: '',
+      to: '',
+      selectedLabel: '',
+      sending: false,
+    })
+  }
+
+  async function sendTemplateTest() {
+    if (!templateTest?.channel || !templateTest.to.trim() || templateTest.sending) return
+    setTemplateTest((current) => ({ ...current, sending: true }))
+    try {
+      await api.testSendTemplate(eventId, templateTest.template.key, {
+        channel: templateTest.channel,
+        to: templateTest.to.trim(),
+      })
+      notify(`Test ${templateTest.channel} sent to ${templateTest.to.trim()}`)
+      setTemplateTest(null)
+    } catch (error) {
+      notify(error.message || 'Test message was not sent', true)
+      setTemplateTest((current) => current ? { ...current, sending: false } : current)
+    }
+  }
+
   useEffect(() => { loadTemplates(); loadDeliveryData() }, [eventId])
 
   const CHANNEL_LABELS = { email: 'Email', sms: 'SMS', whatsapp: 'WhatsApp' }
@@ -670,6 +703,47 @@ function MessagesTab({ notify, onPreview, eventId }) {
       if (attnFilter === 'failed' && g.status !== 'fail') return false
       return g.name.toLowerCase().includes(attnQuery.trim().toLowerCase())
     })
+
+  const testRecipientOptions = (() => {
+    if (!templateTest) return []
+    const isEmail = templateTest.channel === 'email'
+    const options = []
+    if (isEmail) {
+      for (const member of orgMembers) {
+        const email = member.user?.email?.trim()
+        if (!email) continue
+        options.push({
+          id: `team-${member.user.id}`,
+          name: member.user.name || email,
+          contact: email,
+          source: `Team · ${member.role || 'member'}`,
+        })
+      }
+    }
+    for (const guest of guests) {
+      const contact = (isEmail ? guest.email : guest.phone)?.trim()
+      if (!contact) continue
+      options.push({
+        id: `guest-${guest.id}`,
+        name: [guest.first_name, guest.last_name].filter(Boolean).join(' ') || contact,
+        contact,
+        source: 'Guest',
+      })
+    }
+    const seen = new Set()
+    return options.filter((option) => {
+      const key = option.contact.toLowerCase()
+      if (seen.has(key)) return false
+      seen.add(key)
+      return true
+    })
+  })()
+  const testRecipientQuery = (templateTest?.query || '').trim().toLowerCase()
+  const visibleTestRecipients = testRecipientOptions
+    .filter((option) => !testRecipientQuery
+      || option.name.toLowerCase().includes(testRecipientQuery)
+      || option.contact.toLowerCase().includes(testRecipientQuery))
+    .slice(0, 12)
 
   return (
     <>
@@ -794,13 +868,7 @@ function MessagesTab({ notify, onPreview, eventId }) {
                       onPreview?.({ ...t, name: t.label, preview }, t.channels[0] || 'email')
                     } catch (e) { notify(e.message || 'Template preview could not be rendered') }
                   }}>Preview</button>
-                  <button className="cm-linklike" onClick={async () => {
-                    const channel = t.channels.find((item) => item !== 'mms') || t.channels[0]
-                    const to = window.prompt(`Send a ${channel.toUpperCase()} test to an allowlisted recipient:`)
-                    if (!to?.trim() || !window.confirm(`Send this test ${channel} message now?`)) return
-                    try { await api.testSendTemplate(eventId, t.key, { channel, to: to.trim() }); notify(`Test ${channel} send confirmed`) }
-                    catch (e) { notify(e.message || 'Test message was not sent') }
-                  }}>Test send</button>
+                  <button className="cm-linklike" onClick={() => openTemplateTest(t)}>Test send</button>
                   <button className="cm-linklike gr-danger-link" disabled={templateBusy === t.key || t.source !== 'event-customized'} onClick={async () => {
                     if (!window.confirm(`Reset “${t.label}” to the platform default?`)) return
                     setTemplateBusy(t.key)
@@ -845,6 +913,65 @@ function MessagesTab({ notify, onPreview, eventId }) {
           <div className="rd-row2" style={{ marginTop: 12 }}>
             <button className="rr-btn secondary" onClick={() => setTemplateEditor(null)}>Cancel</button>
             <button className="rr-btn primary" disabled={templateBusy === templateEditor.template.key} onClick={saveTemplateEditor}>{templateBusy ? 'Saving…' : 'Save template'}</button>
+          </div>
+        </Modal>
+      )}
+      {templateTest && (
+        <Modal title={`Test send: ${templateTest.template.label}`} onClose={() => setTemplateTest(null)} width={560}>
+          <p className="rd-hint cm-test-send-note">Choose a team member or guest below. This sends one real message only; it does not contact the event audience.</p>
+          <label className="rd-field-label">Channel</label>
+          <select
+            className="rr-select cm-test-channel"
+            value={templateTest.channel}
+            onChange={(event) => setTemplateTest((current) => ({ ...current, channel: event.target.value, query: '', to: '', selectedLabel: '' }))}
+          >
+            {templateTest.template.channels.filter((channel) => channel !== 'mms').map((channel) => (
+              <option key={channel} value={channel}>{channel.toUpperCase()}</option>
+            ))}
+          </select>
+
+          <label className="rd-field-label">Search names and {templateTest.channel === 'email' ? 'email addresses' : 'phone numbers'}</label>
+          <div className="rd-search cm-test-recipient-search">
+            <Icon name="search" size={14} />
+            <input
+              autoFocus
+              placeholder={templateTest.channel === 'email' ? 'Search team and guests by name or email…' : 'Search guests by name or phone…'}
+              value={templateTest.query}
+              onChange={(event) => setTemplateTest((current) => ({ ...current, query: event.target.value }))}
+            />
+          </div>
+          <div className="cm-test-recipient-list" role="listbox" aria-label="Test recipients">
+            {visibleTestRecipients.map((option) => (
+              <button
+                type="button"
+                role="option"
+                aria-selected={templateTest.to === option.contact}
+                className={templateTest.to === option.contact ? 'selected' : ''}
+                key={option.id}
+                onClick={() => setTemplateTest((current) => ({ ...current, to: option.contact, selectedLabel: option.name }))}
+              >
+                <span><strong>{option.name}</strong><small>{option.source}</small></span>
+                <span>{option.contact}</span>
+              </button>
+            ))}
+            {!visibleTestRecipients.length && <div className="cm-guest-empty">No matching recipient with a usable {templateTest.channel === 'email' ? 'email address' : 'phone number'}.</div>}
+          </div>
+
+          <label className="rd-field-label">Or enter a {templateTest.channel === 'email' ? 'direct email address' : 'direct phone number'}</label>
+          <input
+            className="rd-field"
+            type={templateTest.channel === 'email' ? 'email' : 'tel'}
+            placeholder={templateTest.channel === 'email' ? 'name@example.com' : '+234…'}
+            value={templateTest.to}
+            onChange={(event) => setTemplateTest((current) => ({ ...current, to: event.target.value, selectedLabel: '' }))}
+          />
+          {templateTest.selectedLabel && <p className="rd-hint cm-test-selected">Selected: <strong>{templateTest.selectedLabel}</strong> · {templateTest.to}</p>}
+
+          <div className="rd-row2 cm-test-actions">
+            <button className="rr-btn secondary" onClick={() => setTemplateTest(null)}>Cancel</button>
+            <button className="rr-btn primary" disabled={!templateTest.to.trim() || templateTest.sending} onClick={sendTemplateTest}>
+              {templateTest.sending ? 'Sending…' : `Send ${templateTest.channel.toUpperCase()} test`}
+            </button>
           </div>
         </Modal>
       )}

@@ -73,6 +73,13 @@ function CommHealthPanel({ comm }) {
             </div>
           )
         })}
+        {comm.email?.breakdown?.tracked > 0 && (
+          <p className="rd-rowlink" style={{ marginTop: 6 }}>
+            Email: {comm.email.breakdown.delivered} delivered · {comm.email.breakdown.opened + comm.email.breakdown.clicked} engaged · {comm.email.breakdown.bounced + comm.email.breakdown.failed} failed
+          </p>
+        )}
+        {comm.sms?.sent > 0 && <p className="rd-rowlink">SMS: {comm.sms.delivered} delivered · {comm.sms.failed} failed</p>}
+        {comm.whatsapp?.sent > 0 && <p className="rd-rowlink">WhatsApp: {comm.whatsapp.delivered} delivered · {comm.whatsapp.failed} failed</p>}
         <div className="er-provider-row" style={{ marginTop: 8 }}><span>Credits remaining</span><b>{comm.credits_remaining?.toLocaleString?.() ?? comm.credits_remaining}</b></div>
       </div>
     </div>

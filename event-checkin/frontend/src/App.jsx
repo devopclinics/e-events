@@ -275,13 +275,15 @@ function AuthedLayout({ children }) {
       setHasGuestDirectory(false)
       return
     }
-    api.listEvents().then((evs) => {
-      const current = evs.find((e) => e.id === currentEventId)
+    function applyCurrentEvent(current) {
       setEventName(current?.name || '')
       setCanUseDesignStudio(!!current?.is_paid)
-      setHasFestioMe(!!current?.festiome_addon_enabled)
+      setHasFestioMe(!!current?.festiome_addon_enabled && !(current?.blocked_comm_features || []).includes('festiome'))
       setCanManageCurrentEvent(!!current?.my_can_manage_event)
       setHasGuestDirectory(!!current?.my_can_view_guests)
+    }
+    api.listEvents().then((evs) => {
+      applyCurrentEvent(evs.find((e) => e.id === currentEventId))
     }).catch(() => {
       setEventName('')
       setCanUseDesignStudio(false)
@@ -289,6 +291,11 @@ function AuthedLayout({ children }) {
       setCanManageCurrentEvent(false)
       setHasGuestDirectory(false)
     })
+    function updateEvent({ detail }) {
+      if (detail?.id === currentEventId) applyCurrentEvent(detail)
+    }
+    window.addEventListener('festio:event-updated', updateEvent)
+    return () => window.removeEventListener('festio:event-updated', updateEvent)
   }, [user, currentEventId])
 
   return (

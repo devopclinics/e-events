@@ -326,7 +326,13 @@ export const api = {
   },
 
   // Features
-  toggleFeatures: (eventId, body) => req('PATCH', `/events/${eventId}/features`, body),
+  toggleFeatures: async (eventId, body) => {
+    const updated = await req('PATCH', `/events/${eventId}/features`, body)
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('festio:event-updated', { detail: updated }))
+    }
+    return updated
+  },
   setChannelPolicy: (eventId, policy) => req('PUT', `/events/${eventId}/channel-policy`, policy),
   sendTestMessage: (eventId, channel, phone) => req('POST', `/events/${eventId}/messaging/test`, { channel, phone }),
   logRedesignTelemetry: (data) => req('POST', '/telemetry/redesign', data),

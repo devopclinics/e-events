@@ -81,8 +81,10 @@ export default function FestioMeRedesignPage() {
     if (!eventId) return
     const listed = await api.festiomeManageGroups(eventId)
     setGroups(listed)
-    const nextId = preferredId || activeGroup || listed[0]?.id || ''
+    const requested = preferredId || activeGroup
+    const nextId = listed.some((group) => group.id === requested) ? requested : listed[0]?.id || ''
     setActiveGroup(nextId)
+    setError('')
     return nextId
   }
 
@@ -114,6 +116,7 @@ export default function FestioMeRedesignPage() {
       setReports(listResponse(reportList))
       setJoinRequests(listResponse(requestList))
       setActive((current) => channelList.some((channel) => channel.id === current) ? current : channelList[0]?.id || '')
+      setError('')
     }).catch((e) => setError(e.message || 'FestioMe group details could not be loaded'))
   }, [eventId, activeGroup, status?.enabled])
 
@@ -140,6 +143,7 @@ export default function FestioMeRedesignPage() {
   }
 
   async function refreshChannels(groupId = activeGroup) {
+    if (!groupId) return []
     const list = await api.festiomeChannels(groupId)
     setChannelsByGroup((current) => ({ ...current, [groupId]: list }))
     return list
@@ -169,18 +173,25 @@ export default function FestioMeRedesignPage() {
 
   async function sendMessage() {
     if (!draft.trim() && !attachments.length) return
+    if (!active) {
+      setError('Select a channel before sending a message.')
+      return
+    }
     try {
       await api.festiomeSend(active, { body: draft.trim() || `Shared ${attachments[0]?.filename || 'an attachment'}`, ...(attachments.length ? { attachments } : {}) })
       setDraft('')
       setAttachments([])
       const result = await api.festiomeMessages(active)
       setMessages((result.items || result.messages || result || []).map((message) => adaptMessage(message, members)))
+      setError('')
       notify('Message posted')
     } catch (e) { setError(e.message || 'Message could not be posted') }
   }
 
   const groupChannels = channelsByGroup[activeGroup] || []
   const activeChannel = groupChannels.find((c) => c.id === active) || groupChannels[0]
+  const activeGroupRecord = groups.find((group) => group.id === activeGroup)
+  const isPrimaryGroup = !!activeGroupRecord?.is_primary
   const canTransferOwnership = members.some((member) => member.is_me && member.role === 'owner')
 
   return (
@@ -239,6 +250,7 @@ export default function FestioMeRedesignPage() {
           <div className="rd-panel-body">
             <div className="fm-profile-row"><span className="fm-dm-avatar">{(members.find((member) => member.is_me)?.display_name || '?')[0].toUpperCase()}</span><div><strong>{members.find((member) => member.is_me)?.display_name || 'Event administrator'}</strong><span className="rd-rowlink">{groups.length} managed groups</span></div></div>
             <button className="rr-btn secondary" style={{ width: '100%', justifyContent: 'center', marginTop: 12 }} onClick={async () => {
+              if (!activeGroup) { setError('Select a group first.'); return }
               try { setPreferences(await api.festiomeNotificationPreferences(activeGroup)); setNotifOpen(true) }
               catch (e) { setError(e.message || 'Notification preferences could not be loaded') }
             }}>Notification preferences</button>
@@ -318,7 +330,7 @@ export default function FestioMeRedesignPage() {
             <aside className="rr-panel fm-rail">
               <div className="fm-rail-head-row">
                 <span className="fm-rail-head">Channels</span>
-                <button className="fm-add-btn" onClick={() => setCreateChannelOpen((v) => !v)} title="Create channel"><Icon name="plus" size={12} /></button>
+                <button className="fm-add-btn" disabled={!activeGroup} onClick={() => setCreateChannelOpen((v) => !v)} title={activeGroup ? 'Create channel' : 'Select a group first'}><Icon name="plus" size={12} /></button>
               </div>
               {createChannelOpen && (
                 <div className="fm-create-channel">
@@ -330,8 +342,9 @@ export default function FestioMeRedesignPage() {
                   {channelPrivate && <div className="fm-channel-member-picker">
                     {members.map((member) => <label className="gr-required-check" key={member.id}><input type="checkbox" checked={channelMemberIds.includes(member.id)} onChange={(event) => setChannelMemberIds((current) => event.target.checked ? [...current, member.id] : current.filter((id) => id !== member.id))}/> {member.display_name || member.name}</label>)}
                   </div>}
-                  <button className="rr-btn primary" disabled={!channelName.trim()} style={{ width: '100%', justifyContent: 'center' }} onClick={async () => {
+                  <button className="rr-btn primary" disabled={!activeGroup || !channelName.trim()} style={{ width: '100%', justifyContent: 'center' }} onClick={async () => {
                     try {
+                      if (!activeGroup) throw new Error('Select a group before creating a channel.')
                       const created = await api.festiomeCreateChannel(activeGroup, { name: channelName.trim(), kind: channelKind, is_private: channelPrivate, member_ids: channelPrivate ? channelMemberIds : [] })
                       await refreshChannels()
                       setActive(created.id)
@@ -351,6 +364,7 @@ export default function FestioMeRedesignPage() {
                   {c.unread_count > 0 && <b>{c.unread_count}</b>}
                 </button>
               ))}
+              {!activeGroup && <p className="rd-rowlink" style={{ padding: 10 }}>Create or select a group to add channels.</p>}
             </aside>
 
             <div className="rr-panel fm-thread">
@@ -507,17 +521,17 @@ export default function FestioMeRedesignPage() {
                 ))}
               </div>
               <div className="fm-composer">
-                <label className="fm-attach-btn" title="Attach file"><Icon name="upload" size={14} /><input type="file" hidden onChange={async (e) => {
+                <label className={`fm-attach-btn ${!active ? 'disabled' : ''}`} title={active ? 'Attach file' : 'Select a channel first'}><Icon name="upload" size={14} /><input type="file" hidden disabled={!active} onChange={async (e) => {
                   const file = e.target.files?.[0]
                   if (!file) return
                   try { const uploaded = await api.festiomeUpload(active, file); setAttachments((current) => [...current, uploaded]); notify('Attachment uploaded') }
                   catch (err) { setError(err.message || 'Attachment could not be uploaded') }
                   e.target.value = ''
                 }} /></label>
-                <input className="rr-input" style={{ marginBottom: 0 }} placeholder={`Message #${activeChannel?.name} — try @ to mention someone`}
+                <input className="rr-input" disabled={!active} style={{ marginBottom: 0 }} placeholder={activeChannel ? `Message #${activeChannel.name} — try @ to mention someone` : 'Select a channel to send a message'}
                   value={draft} onChange={(e) => setDraft(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && sendMessage()} />
-                <button className="rr-link-btn" onClick={() => setPollOpen((v) => !v)}>Poll</button>
-                <button className="rr-btn primary" onClick={sendMessage}>Send</button>
+                <button className="rr-link-btn" disabled={!active} onClick={() => setPollOpen((v) => !v)}>Poll</button>
+                <button className="rr-btn primary" disabled={!active || (!draft.trim() && !attachments.length)} onClick={sendMessage}>Send</button>
               </div>
               {attachments.map((file) => <span key={file.id || file.filename} className="rd-chip">{file.filename || 'Attachment'}</span>)}
               {pollOpen && (
@@ -544,7 +558,7 @@ export default function FestioMeRedesignPage() {
                   <small>{m.role}</small>
                 </div>
               ))}
-              <button className="rr-btn secondary" style={{ width: '100%', justifyContent: 'center', marginTop: 10 }} onClick={async () => {
+              {!isPrimaryGroup && <button className="rr-btn secondary" disabled={!activeGroup} style={{ width: '100%', justifyContent: 'center', marginTop: 10 }} onClick={async () => {
                 const current = groups.find((group) => group.id === activeGroup)
                 const name = window.prompt('Group name', current?.name || '')
                 if (!name?.trim()) return
@@ -552,8 +566,8 @@ export default function FestioMeRedesignPage() {
                 catch (e) { setError(e.message || 'Group could not be renamed') }
               }}>
                 Rename group
-              </button>
-              <button className="rr-btn secondary" style={{ width: '100%', justifyContent: 'center', marginTop: 8 }} onClick={() => {
+              </button>}
+              {!isPrimaryGroup && <button className="rr-btn secondary" disabled={!activeGroup} style={{ width: '100%', justifyContent: 'center', marginTop: 8 }} onClick={() => {
                 const group = groups.find((item) => item.id === activeGroup)
                 setGroupSettings({
                   description: group?.description || '',
@@ -562,15 +576,21 @@ export default function FestioMeRedesignPage() {
                   rules: group?.rules || '',
                 })
                 setGroupSettingsOpen(true)
-              }}>Group settings</button>
-              <button className="rr-btn secondary" style={{ width: '100%', justifyContent: 'center', marginTop: 8 }} onClick={async () => {
+              }}>Group settings</button>}
+              <button className="rr-btn secondary" disabled={!activeGroup} style={{ width: '100%', justifyContent: 'center', marginTop: 8 }} onClick={async () => {
                 const email = window.prompt('Email address to invite')
                 if (!email?.trim()) return
                 try {
+                  if (!activeGroup) throw new Error('Select a group before inviting a member.')
                   const invitation = await api.festiomeInvite(activeGroup, { email: email.trim(), role: 'member' })
                   const url = `${window.location.origin}/festiome?invite=${encodeURIComponent(invitation.token)}`
-                  await navigator.clipboard.writeText(url)
-                  notify('Member invitation created and link copied')
+                  let copied = false
+                  try {
+                    await navigator.clipboard?.writeText(url)
+                    copied = true
+                  } catch { /* The invitation itself succeeded; clipboard permission is optional. */ }
+                  notify(copied ? 'Member invitation created and link copied' : 'Member invitation created')
+                  if (!copied) window.prompt('Copy invitation link', url)
                 } catch (e) { setError(e.message || 'Member invitation could not be created') }
               }}>Invite member</button>
               <button className="rr-link-btn" style={{ marginTop: 8 }} onClick={() => setReportsOpen((v) => !v)}>Moderation reports ({reports.length})</button>

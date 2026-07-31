@@ -29,7 +29,7 @@ from .models import (
     ModerationReport, NotificationJob, NotificationPreference, PendingUpload, Poll, PollOption, PollVote, Reaction, Tenant,
 )
 from .schemas import (
-    AttachmentOut, ChannelCreate, ChannelMemberAdd, ChannelMemberOut, ChannelOut, DirectMessageCreate, EventGroupAdminOut, EventLinkCreate, EventLinkOut, GroupCreate, GroupDirectoryOut, GroupOut, GroupUpdate, InvitationCreate,
+    AttachmentOut, ChannelCreate, ChannelMemberAdd, ChannelMemberOut, ChannelOut, DirectMessageCreate, EventGroupAdminOut, EventLinkCreate, EventLinkOut, GroupCreate, GroupDirectoryOut, GroupOut, GroupUpdate, InternalSubGroupCreate, InvitationCreate,
     InvitationOut, JoinGroupRequest, JoinGroupResult, JoinRequestDecision, JoinRequestOut, MemberOut, MessageCreate, MessageOut, MessagePage,
     MemberUpdate, MessageUpdate, NotificationPreferenceIn, NotificationPreferenceOut, OwnershipTransfer, PollCreate, PollVoteCreate,
     ReactionCreate, ReactionOut, ReadStateOut, ReadStateUpdate, ReportCreate, RulesAcceptResult, SubGroupCreate,
@@ -527,6 +527,38 @@ async def upsert_event_user(
         # The provisioning contract must never demote the group owner.
         if member.role != "owner":
             member.role = desired_role
+    # Event organizers manage every event subgroup through their own FestioMe
+    # session. Propagate elevated roles so both existing service-created groups
+    # and future organizer tooling are directly accessible. Regular staff and
+    # guests remain scoped to the primary event group.
+    if desired_role in {"admin", "moderator"}:
+        subgroups = (await db.execute(select(FestioMeGroup).where(
+            FestioMeGroup.tenant_id == group.tenant_id,
+            FestioMeGroup.external_event_ref == group.external_event_ref,
+            FestioMeGroup.is_primary.is_(False),
+            FestioMeGroup.archived.is_(False),
+        ))).scalars().all()
+        for subgroup in subgroups:
+            subgroup_member = (await db.execute(select(Member).where(
+                Member.group_id == subgroup.id,
+                Member.identity_kind == "user",
+                Member.identity_ref == subject,
+            ))).scalar_one_or_none()
+            if not subgroup_member:
+                db.add(Member(
+                    group_id=subgroup.id,
+                    identity_kind="user",
+                    identity_ref=subject,
+                    display_name=display_name,
+                    role=desired_role,
+                    rules_accepted_version=subgroup.rules_version,
+                ))
+            else:
+                subgroup_member.display_name = display_name
+                subgroup_member.removed_at = None
+                if subgroup_member.role != "owner":
+                    subgroup_member.role = desired_role
+                subgroup_member.rules_accepted_version = subgroup.rules_version
     await db.commit()
     await db.refresh(member)
     return member
@@ -687,12 +719,15 @@ async def leave_group(group_id: str, identity: Identity = Depends(current_identi
 # discover and join per each group's join_policy.
 
 @app.post("/internal/v1/guesthub/event-links/{external_event_ref}/subgroups", response_model=GroupOut, status_code=201)
-async def create_event_subgroup_internal(external_event_ref: str, body: SubGroupCreate, _: None = Depends(internal_service), db: AsyncSession = Depends(get_db)):
-    """GuestHub-side organizer tooling creates a sub-group for an event. The new
-    group is owned by the Festio service identity so organizers manage it through
-    GuestHub rather than as a personal FestioMe login."""
+async def create_event_subgroup_internal(external_event_ref: str, body: InternalSubGroupCreate, _: None = Depends(internal_service), db: AsyncSession = Depends(get_db)):
+    """Create an event subgroup and make the initiating organizer its owner.
+
+    Older clients may omit ``owner``; the service identity fallback preserves
+    backwards compatibility for non-interactive integrations.
+    """
     primary = await _event_group(db, external_event_ref)
-    return await _create_subgroup(db, primary, body, creator_identity=None)
+    owner = Identity(body.owner.subject, body.owner.email, body.owner.name) if body.owner else None
+    return await _create_subgroup(db, primary, body, creator_identity=owner)
 
 
 async def _service_actor(db: AsyncSession, group: FestioMeGroup) -> Member:
@@ -718,14 +753,22 @@ async def _event_owned_group(db: AsyncSession, external_event_ref: str, group_id
     return group
 
 
-@app.get("/internal/v1/guesthub/event-links/{external_event_ref}/subgroups", response_model=list[EventGroupAdminOut])
-async def list_event_subgroups_internal(external_event_ref: str, _: None = Depends(internal_service), db: AsyncSession = Depends(get_db)):
-    primary = await _event_group(db, external_event_ref)
-    groups = (await db.execute(select(FestioMeGroup).where(
+async def _event_group_admin_rows(
+    db: AsyncSession,
+    primary: FestioMeGroup,
+    *,
+    include_primary: bool,
+) -> list[EventGroupAdminOut]:
+    filters = [
         FestioMeGroup.tenant_id == primary.tenant_id,
         FestioMeGroup.external_event_ref == primary.external_event_ref,
-        FestioMeGroup.is_primary.is_(False),
-    ).order_by(FestioMeGroup.created_at))).scalars().all()
+        FestioMeGroup.archived.is_(False),
+    ]
+    if not include_primary:
+        filters.append(FestioMeGroup.is_primary.is_(False))
+    groups = (await db.execute(select(FestioMeGroup).where(
+        *filters,
+    ).order_by(FestioMeGroup.is_primary.desc(), FestioMeGroup.created_at))).scalars().all()
     out: list[EventGroupAdminOut] = []
     for group in groups:
         member_count = (await db.execute(select(func.count(Member.id)).where(
@@ -735,6 +778,19 @@ async def list_event_subgroups_internal(external_event_ref: str, _: None = Depen
         out.append(EventGroupAdminOut.model_validate(group).model_copy(update={
             "member_count": member_count, "pending_request_count": pending}))
     return out
+
+
+@app.get("/internal/v1/guesthub/event-links/{external_event_ref}/groups", response_model=list[EventGroupAdminOut])
+async def list_event_groups_internal(external_event_ref: str, _: None = Depends(internal_service), db: AsyncSession = Depends(get_db)):
+    """List the primary General group and all event subgroups for organizer UI."""
+    primary = await _event_group(db, external_event_ref)
+    return await _event_group_admin_rows(db, primary, include_primary=True)
+
+
+@app.get("/internal/v1/guesthub/event-links/{external_event_ref}/subgroups", response_model=list[EventGroupAdminOut])
+async def list_event_subgroups_internal(external_event_ref: str, _: None = Depends(internal_service), db: AsyncSession = Depends(get_db)):
+    primary = await _event_group(db, external_event_ref)
+    return await _event_group_admin_rows(db, primary, include_primary=False)
 
 
 @app.patch("/internal/v1/guesthub/event-links/{external_event_ref}/subgroups/{group_id}", response_model=EventGroupAdminOut)

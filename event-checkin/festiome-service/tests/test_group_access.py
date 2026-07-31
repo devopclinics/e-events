@@ -219,6 +219,8 @@ async def test_internal_admin_manages_subgroups_and_requests(api):
 
     listed = (await api.get("/internal/v1/guesthub/event-links/evt-1/subgroups", headers=SVC)).json()
     assert [g["name"] for g in listed] == ["Shuttle"] and listed[0]["is_primary"] is False
+    all_groups = (await api.get("/internal/v1/guesthub/event-links/evt-1/groups", headers=SVC)).json()
+    assert [g["name"] for g in all_groups] == ["A Wedding", "Shuttle"]
 
     # A guest requests to join; the organizer sees and approves it via internal API.
     await api.post(f"/v1/groups/{grp['id']}/join", headers=guest("g1"), json={"message": "seat please"})
@@ -246,6 +248,43 @@ async def test_internal_admin_manages_subgroups_and_requests(api):
     cross = await api.patch(f"/internal/v1/guesthub/event-links/evt-1/subgroups/{other['id']}", headers=SVC,
                             json={"join_policy": "closed"})
     assert cross.status_code == 404
+
+
+@pytest.mark.asyncio
+async def test_internal_subgroup_owner_and_admin_provisioning_are_directly_usable(api):
+    """Organizer-created groups can immediately use member-authed APIs, while
+    provisioning repairs older service-owned subgroups for other organizers."""
+    await _event_with_guest(api)
+    created = await api.post(
+        "/internal/v1/guesthub/event-links/evt-1/subgroups",
+        headers=SVC,
+        json={
+            "name": "Parents",
+            "owner": {
+                "subject": "organizer-1",
+                "name": "Organizer One",
+                "email": "organizer@example.com",
+            },
+        },
+    )
+    assert created.status_code == 201
+    group_id = created.json()["id"]
+
+    organizer_headers = user("organizer-1")
+    channels = await api.get(f"/v1/groups/{group_id}/channels", headers=organizer_headers)
+    assert channels.status_code == 200
+    assert [row["name"] for row in channels.json()] == ["General"]
+
+    # A second event administrator is provisioned after the group exists and
+    # must be propagated into every active subgroup.
+    provisioned = await api.put(
+        "/internal/v1/guesthub/event-links/evt-1/users/organizer-2",
+        headers=SVC,
+        json={"name": "Organizer Two", "email": "two@example.com", "role": "admin"},
+    )
+    assert provisioned.status_code == 200
+    repaired = await api.get(f"/v1/groups/{group_id}/channels", headers=user("organizer-2"))
+    assert repaired.status_code == 200
 
 
 @pytest.mark.asyncio

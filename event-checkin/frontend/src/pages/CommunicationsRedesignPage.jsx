@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { useSearchParams } from 'react-router-dom'
+import { Link, useSearchParams } from 'react-router-dom'
 import RedesignShell, { Icon, Modal, ChannelPreviewFrame } from './redesign/RedesignShell'
 import { useCurrentEvent } from '../hooks/useCurrentEvent'
 import { useEventDetails } from '../hooks/useEventDetails'
@@ -33,13 +33,18 @@ function fmtRelTime(iso) {
 /* ── Features & Channels config ────────────────────────────────────── */
 
 const ADDON_TOGGLES = [
-  { key: 'venueAccess', label: 'Venue Access', desc: 'Zones, multi-zone scans, occupancy analytics.', on: true },
-  { key: 'seating', label: 'Seating', desc: 'Table groups and seat assignments.', on: true },
-  { key: 'partnerPairing', label: 'Partner pairing', desc: 'Link couples/partners so their RSVPs and seating stay in sync.', on: false },
-  { key: 'orders', label: 'Orders', desc: 'On-site food & merchandise ordering.', on: false },
-  { key: 'logistics', label: 'Logistics', desc: 'Ship merch and gifts to guests.', on: false },
-  { key: 'registry', label: 'Registry', desc: 'Mark-only gift registry — items & cash funds.', on: true },
-  { key: 'festiome', label: 'FestioMe', desc: 'Community chat space for this event\'s guests.', on: true },
+  { key: 'venueAccess', label: 'Venue Access', desc: 'Zones, multi-zone scans, occupancy analytics.', on: true, settings: [
+    ['Zones', '/checkin-redesign?tab=zones'], ['Ticket types', '/checkin-redesign?tab=tickets'],
+    ['Assignments', '/checkin-redesign?tab=assign'], ['Rules', '/checkin-redesign?tab=rules'],
+    ['Analytics', '/checkin-redesign?tab=analytics'],
+  ] },
+  { key: 'seating', label: 'Seating', desc: 'Table groups and seat assignments.', on: true, settings: [['Manage seating', '/addons-redesign?tab=seating']] },
+  { key: 'partnerPairing', label: 'Partner pairing', desc: 'Link couples/partners so their RSVPs and seating stay in sync.', on: false, settings: [['Manage pairing', '/addons-redesign?tab=seating']] },
+  { key: 'orders', label: 'Orders', desc: 'On-site food & merchandise ordering.', on: false, settings: [['Order settings', '/addons-redesign?tab=orders'], ['Kitchen', '/kitchen-redesign']] },
+  { key: 'logistics', label: 'Logistics', desc: 'Ship merch and gifts to guests.', on: false, settings: [['Delivery settings', '/addons-redesign?tab=logistics']] },
+  { key: 'registry', label: 'Registry', desc: 'Mark-only gift registry — items & cash funds.', on: true, settings: [['Gift-list settings', '/addons-redesign?tab=registry']] },
+  { key: 'experience', label: 'Experience', desc: 'Operational guest journeys, sessions, consent, and feedback.', on: false, settings: [['Experience settings', '/experience-redesign']] },
+  { key: 'festiome', label: 'FestioMe', desc: 'Community chat space for this event\'s guests.', on: true, settings: [['Open FestioMe', '/festiome-redesign']] },
 ]
 
 const ROUTING_ROWS = [
@@ -860,7 +865,8 @@ const ROUTE_API_KEY = { invites: 'invite', admission: 'admission', rsvp: 'remind
 
 const ADDON_FEATURE_KEY = {
   venueAccess: 'venue_access_enabled', seating: 'seating_enabled', partnerPairing: 'partner_pairing_enabled',
-  orders: 'menu_enabled', logistics: 'logistics_enabled', registry: 'registry_enabled', festiome: 'festiome_addon_enabled',
+  orders: 'menu_enabled', logistics: 'logistics_enabled', registry: 'registry_enabled',
+  experience: 'experience_enabled', festiome: 'festiome_addon_enabled',
 }
 const CHANNEL_FEATURE_KEY = { email: 'notify_email', sms: 'notify_sms', whatsapp: 'notify_whatsapp' }
 const THANKYOU_AUDIENCE_KEY = { 'Checked in': 'admitted', 'Confirmed': 'confirmed', 'All guests': 'all' }
@@ -1185,6 +1191,13 @@ function SettingsTab({ notify, eventId, event, onEventChanged }) {
               <Switch checked={!!addons[a.key]} onChange={() => toggleAddon(a.key, a.label)} />
             </div>
             <p>{a.desc}</p>
+            {!!addons[a.key] && (
+              <div className="gr-actions" aria-label={`${a.label} settings`}>
+                {a.settings?.map(([label, to]) => (
+                  <Link key={label} className="rr-link-btn" to={to}>{label} <Icon name="arrow" size={10} /></Link>
+                ))}
+              </div>
+            )}
           </div>
         ))}
       </div>

@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { useSearchParams } from 'react-router-dom'
 import { api } from '../api'
 import { useCurrentEvent } from '../hooks/useCurrentEvent'
 import { useEventDetails } from '../hooks/useEventDetails'
@@ -28,9 +29,11 @@ function dirClass(direction) {
 
 export default function CheckinRedesignPage() {
   const [eventId] = useCurrentEvent()
+  const [searchParams, setSearchParams] = useSearchParams()
   const { event } = useEventDetails(eventId)
   const [toast, setToast] = useState('')
-  const [view, setView] = useState('zones')
+  const requestedView = searchParams.get('tab')
+  const [view, setView] = useState(() => TABS.some((tab) => tab.id === requestedView) ? requestedView : 'zones')
   const [addZoneOpen, setAddZoneOpen] = useState(false)
   const [addTicketOpen, setAddTicketOpen] = useState(false)
   const [editingZoneId, setEditingZoneId] = useState(null)
@@ -63,6 +66,16 @@ export default function CheckinRedesignPage() {
   const [journey, setJourney] = useState([])
   const [rulesLoading, setRulesLoading] = useState(false)
   const [analyticsLoading, setAnalyticsLoading] = useState(false)
+
+  useEffect(() => {
+    const requested = searchParams.get('tab')
+    if (TABS.some((tab) => tab.id === requested) && requested !== view) setView(requested)
+  }, [searchParams, view])
+
+  function changeView(next) {
+    setView(next)
+    setSearchParams({ tab: next })
+  }
 
   async function loadTagsAndGates() {
     if (!eventId) { setTags([]); setGates([]); setRsvpQuestions([]); return }
@@ -288,7 +301,7 @@ export default function CheckinRedesignPage() {
           {loadError && <div className="rr-panel ci-empty"><p>{loadError}</p><button className="rr-btn secondary" onClick={loadAccess}>Retry</button></div>}
           <div className="rr-tabs">
             {TABS.map((t) => (
-              <button key={t.id} className={view === t.id ? 'active' : ''} onClick={() => setView(t.id)}>{t.label}</button>
+              <button key={t.id} className={view === t.id ? 'active' : ''} onClick={() => changeView(t.id)}>{t.label}</button>
             ))}
           </div>
 

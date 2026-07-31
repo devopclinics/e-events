@@ -189,14 +189,36 @@ class FestioMeClient:
             raise FestioMeUnavailable("FestioMe groups could not be listed")
         return response.json()
 
+    async def list_groups(self, external_event_ref: str) -> list[dict[str, Any]]:
+        """Organizer directory including the event's primary General group."""
+        response = await self._request(
+            "GET", f"/internal/v1/guesthub/event-links/{external_event_ref}/groups"
+        )
+        if response.status_code == 404:
+            return []
+        if response.status_code >= 400:
+            raise FestioMeUnavailable("FestioMe groups could not be listed")
+        return response.json()
+
     async def create_subgroup(
         self, external_event_ref: str, *, name: str, description: str = "",
         join_policy: str = "request", visibility: str = "listed", rules: str = "",
+        owner_subject: str | None = None, owner_name: str = "",
+        owner_email: str = "",
     ) -> dict[str, Any]:
+        payload: dict[str, Any] = {
+            "name": name, "description": description, "join_policy": join_policy,
+            "visibility": visibility, "rules": rules,
+        }
+        if owner_subject:
+            payload["owner"] = {
+                "subject": owner_subject,
+                "name": owner_name or owner_email or "Event organizer",
+                "email": owner_email,
+            }
         response = await self._request(
             "POST", f"/internal/v1/guesthub/event-links/{external_event_ref}/subgroups",
-            json={"name": name, "description": description, "join_policy": join_policy,
-                  "visibility": visibility, "rules": rules},
+            json=payload,
         )
         if response.status_code >= 400:
             raise FestioMeUnavailable("FestioMe group could not be created")

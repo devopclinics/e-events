@@ -400,12 +400,22 @@ async def _gated_event(db: AsyncSession, event_id: str, client: FestioMeClient) 
 async def list_festiome_groups(
     event_id: str,
     db: AsyncSession = Depends(get_db),
-    _: User = Depends(require_paid_event_admin),
+    user: User = Depends(require_paid_event_admin),
     client: FestioMeClient = Depends(get_festiome_client),
 ):
     event = await _gated_event(db, event_id, client)
     try:
-        return await client.list_subgroups(event.id)
+        # Repair membership for subgroups created before organizer ownership was
+        # carried across the internal contract, then return the primary General
+        # group alongside managed subgroups.
+        await client.upsert_user(
+            event.id,
+            subject=user.firebase_uid or user.id,
+            name=user.name,
+            email=user.email,
+            role="admin",
+        )
+        return await client.list_groups(event.id)
     except FestioMeUnavailable as exc:
         raise HTTPException(503, str(exc)) from exc
 
@@ -415,7 +425,7 @@ async def create_festiome_group(
     event_id: str,
     data: SubGroupCreate,
     db: AsyncSession = Depends(get_db),
-    _: User = Depends(require_paid_event_admin),
+    user: User = Depends(require_paid_event_admin),
     client: FestioMeClient = Depends(get_festiome_client),
 ):
     event = await _gated_event(db, event_id, client)
@@ -423,6 +433,8 @@ async def create_festiome_group(
         return await client.create_subgroup(
             event.id, name=data.name.strip(), description=data.description.strip(),
             join_policy=data.join_policy, visibility=data.visibility, rules=data.rules.strip(),
+            owner_subject=user.firebase_uid or user.id, owner_name=user.name,
+            owner_email=user.email,
         )
     except FestioMeUnavailable as exc:
         raise HTTPException(503, str(exc)) from exc

@@ -161,7 +161,7 @@ const TOP_LINKS = [
   },
   {
     id: 'festiome', label: 'FestioMe', to: '/festiome-redesign', icon: 'chat',
-    gate: ({ event }) => !!event?.festiome_addon_enabled,
+    gate: ({ event }) => !!event?.festiome_addon_enabled && !(event?.blocked_comm_features || []).includes('festiome'),
   },
   { id: 'checkin', label: 'Check-in', to: '/scanner', icon: 'ticket' },
   {
@@ -187,18 +187,19 @@ const SIDEBAR_NAV = [
   ['calendar', 'Start here', '/admin-redesign', 'overview'],
   ['users', 'Guests', '/guests-redesign?tab=guests', 'guests'],
   ['send', 'Invites & RSVP', '/guests-redesign?tab=invite', 'invite'],
-  ['ticket', 'Check-in', '/scanner', 'access', null, 'venueAccess'],
   ['message', 'Guest Communication', '/communications-redesign?tab=hub', 'communication'],
   ['card', 'Billing', '/billing-redesign?tab=billing', 'billing'],
-  ['grp', 'Add-ons'],
+  ['grp', 'Add-ons', null, null, null, 'anyAddon'],
+  ['ticket', 'Venue Access', '/checkin-redesign?tab=zones', 'access', null, 'venueAccess'],
   ['chair', 'Seating', '/addons-redesign?tab=seating', 'seating', null, 'seating'],
   ['card', 'Orders', '/kitchen-redesign', 'menu', null, 'orders'],
   ['upload', 'Deliveries', '/addons-redesign?tab=logistics', 'logistics', null, 'logistics'],
   ['image', 'Gift list', '/addons-redesign?tab=registry', 'registry', null, 'registry'],
+  ['chat', 'FestioMe', '/festiome-redesign', 'festiome', null, 'festiome'],
   ['grp', 'Team & Settings'],
   ['team', 'Team', '/team-redesign?tab=team', 'team'],
   ['file', 'Tasks', '/team-redesign?tab=tasks', 'tasks'],
-  ['barchart', 'Experience', '/experience-redesign', 'experience'],
+  ['barchart', 'Experience', '/experience-redesign', 'experience', null, 'experience'],
   ['message', 'Messages', '/communications-redesign?tab=messages', 'messages'],
   ['settings', 'Features & messaging', '/communications-redesign?tab=settings', 'features'],
 ]
@@ -230,6 +231,15 @@ export default function RedesignShell({ topActive, withEventSidebar = false, eve
     return () => { cancelled = true }
   }, [user])
 
+  useEffect(() => {
+    function updateEvent({ detail }) {
+      if (!detail?.id) return
+      setEvents((current) => current.map((item) => item.id === detail.id ? { ...item, ...detail } : item))
+    }
+    window.addEventListener('festio:event-updated', updateEvent)
+    return () => window.removeEventListener('festio:event-updated', updateEvent)
+  }, [])
+
   const event = events.find((e) => e.id === currentEventId) || null
 
   // Real per-event add-on entitlements — same fields the legacy sidebar
@@ -241,7 +251,10 @@ export default function RedesignShell({ topActive, withEventSidebar = false, eve
     orders: !!event?.menu_enabled,
     logistics: !!event?.logistics_enabled,
     registry: !!event?.registry_enabled,
+    festiome: !!event?.festiome_addon_enabled && !(event?.blocked_comm_features || []).includes('festiome'),
+    experience: !!event?.experience_enabled,
   }
+  flags.anyAddon = flags.venueAccess || flags.seating || flags.orders || flags.logistics || flags.registry || flags.festiome
 
   const eventName = event?.name || (currentEventId ? 'Loading…' : 'No event selected')
   const visibleTopLinks = TOP_LINKS.filter((l) => !l.gate || l.gate({ user, event }))
@@ -331,8 +344,8 @@ export default function RedesignShell({ topActive, withEventSidebar = false, eve
                   ))}
                 </div>
                 {SIDEBAR_NAV.map(([icon, label, to, id, count, gate], i) => {
-                  if (icon === 'grp') return <small key={label + i}>{label.toUpperCase()}</small>
                   if (gate && !flags[gate]) return null
+                  if (icon === 'grp') return <small key={label + i}>{label.toUpperCase()}</small>
                   return (
                     <Link key={label} to={to} className={eventActive === id ? 'active' : ''}>
                       <Icon name={icon} size={15} /><span>{label}</span>

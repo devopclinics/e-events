@@ -74,6 +74,11 @@ class FakeFestioMeClient:
             raise FestioMeUnavailable("offline")
         return self.subgroups
 
+    async def list_groups(self, external_event_ref: str):
+        if self.unavailable:
+            raise FestioMeUnavailable("offline")
+        return self.subgroups
+
     async def create_subgroup(self, external_event_ref: str, **payload):
         if self.unavailable:
             raise FestioMeUnavailable("offline")
@@ -228,9 +233,11 @@ async def test_organizer_manages_festiome_groups(ctx):
                                     json={"name": "VIP", "join_policy": "request"})
     assert created.status_code == 201
     group_id = created.json()["id"]
+    assert created.json()["owner_subject"]
 
     listed = await ctx.client.get(f"/api/events/{ev}/festiome/groups")
     assert [g["name"] for g in listed.json()] == ["VIP"]
+    assert any(u["event_id"] == ev and u["role"] == "admin" for u in fake.upserted_users)
 
     patched = await ctx.client.patch(f"/api/events/{ev}/festiome/groups/{group_id}",
                                      json={"join_policy": "open"})

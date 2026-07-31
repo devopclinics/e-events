@@ -327,6 +327,11 @@ class EventLinkOwner(BaseModel):
     email: str = Field(default="", max_length=320)
 
 
+class InternalSubGroupCreate(SubGroupCreate):
+    """GuestHub organizer request with the organizer who should own the group."""
+    owner: EventLinkOwner | None = None
+
+
 class EventLinkCreate(BaseModel):
     external_event_ref: str = Field(min_length=1, max_length=100)
     external_org_ref: str = Field(min_length=1, max_length=100)

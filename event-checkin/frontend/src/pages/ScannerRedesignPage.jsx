@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useState } from 'react'
 import { api } from '../api'
 import { useCurrentEvent } from '../hooks/useCurrentEvent'
 import { useEventDetails } from '../hooks/useEventDetails'
@@ -178,7 +178,7 @@ function TokenScanner({ event, zones, gates, sections, mode, offlineManifest, on
         </div>
       </div>
       {accessMode && mode !== 'checkout' && (
-        <div className="sc-search-row">
+        <div className="sc-search-row sc-access-row">
           {gates.length > 0 && (
             <select className="sc-selector" aria-label="Gate" value={gateId} onChange={(e) => { setGateId(e.target.value); if (e.target.value) setZoneId('') }}>
               <option value="">Select gate</option>
@@ -198,7 +198,7 @@ function TokenScanner({ event, zones, gates, sections, mode, offlineManifest, on
           {sections.map((section) => <option key={section.id} value={section.id}>{section.name}</option>)}
         </select>
       )}
-      <div className="sc-search-row">
+      <div className="sc-search-row sc-token-row">
         <input className="sc-search-input" aria-label="Pass token" value={token} onChange={(e) => setToken(e.target.value)} placeholder="Guest pass URL or QR token"/>
         <button className="rr-btn primary" disabled={!token.trim() || busy}>{busy ? 'Recording…' : mode === 'checkout' ? 'Check out' : 'Record scan'}</button>
       </div>
@@ -429,9 +429,152 @@ function ScannerCommandMockup({ event, online }) {
   )
 }
 
+function CommandResultPanel({ result, onStepComplete, stepBusy }) {
+  const tone = resultTone(result)
+  const guest = result?.guest || {}
+  const name = result?.guest_name || [guest.first_name, guest.last_name].filter(Boolean).join(' ')
+  const initials = name ? name.split(/\s+/).slice(0, 2).map((part) => part[0]).join('').toUpperCase() : '?'
+  const status = result ? (result.denied ? 'Denied' : (result.status || 'Result').replaceAll('_', ' ')) : ''
+  const nextSteps = result?.experience_next_steps || []
+
+  return (
+    <aside className="sc-command-panel sc-command-arrival" data-testid={result ? 'scan-result' : undefined} role={result ? 'status' : undefined}>
+      <div className="sc-command-panel-head">
+        <div><span>Latest scan</span><strong>Guest guidance</strong></div>
+        <span className={`sc-command-ready sc-command-ready-${tone || 'idle'}`}>{result ? status : 'Waiting'}</span>
+      </div>
+      {!result ? (
+        <div className="sc-command-result-empty">
+          <Icon name="ticket" size={30}/>
+          <strong>Ready for the next guest</strong>
+          <p>Scan a pass or use manual check-in. The admission decision and guest directions will appear here.</p>
+        </div>
+      ) : (
+        <>
+          <div className="sc-command-guest">
+            <span className="sc-command-avatar">{initials}</span>
+            <div><strong>{name || 'Unknown guest'}</strong><small>{result.message || 'The scan was processed.'}</small></div>
+            <span className={`sc-command-pass sc-command-pass-${tone}`}><Icon name={tone === 'green' ? 'check' : 'info'} size={14}/>{status}</span>
+          </div>
+          <div className="sc-command-guidance">
+            {(result.table_name || result.seat_number) && <div><Icon name="chair" size={16}/><span>Seating assignment<strong>{result.table_name ? `Table ${result.table_name}` : 'Table not assigned'}{result.seat_number ? ` · Seat ${result.seat_number}` : ''}</strong></span></div>}
+            {result.zone_name && <div><Icon name="external" size={16}/><span>Access decision<strong>{result.direction?.toUpperCase()} · {result.zone_name}</strong></span></div>}
+            {result.deny_reason && <div><Icon name="shield" size={16}/><span>Reason<strong>{result.deny_reason}</strong></span></div>}
+          </div>
+          {nextSteps.length > 0 && (
+            <div className="sc-command-next">
+              <span>Next required action</span>
+              {nextSteps.map(({ step }) => {
+                const completable = !['check_in', 'seating_assignment', 'meal_selection', 'consent'].includes(step.type)
+                return (
+                  <div className="sc-command-next-step" key={step.id}>
+                    <strong>{step.title}{step.required ? ' · Required' : ''}</strong>
+                    {completable && <button disabled={stepBusy} onClick={() => onStepComplete(step)}>{stepBusy ? 'Saving…' : step.type === 'session_attendance' ? 'Check in' : 'Complete'}</button>}
+                  </div>
+                )
+              })}
+            </div>
+          )}
+          {result.step_error && <p className="sc-command-result-error">{result.step_error}</p>}
+        </>
+      )}
+    </aside>
+  )
+}
+
+function LiveScannerCommandCenter({
+  event, online, mode, setMode, result, zones, gates, sections, offlineManifest,
+  queuedAdmissions, queuedActions, recentResults, stepBusy, onManifestChange,
+  onQueueChange, onRefreshManifest, onResult, onStepComplete,
+}) {
+  const expected = Number(event?.guest_count || 0)
+  const checkedIn = Number(event?.admitted_count || 0)
+  const remaining = Math.max(expected - checkedIn, 0)
+  const progress = expected ? Math.round((checkedIn / expected) * 100) : 0
+  const pendingSync = queuedAdmissions + queuedActions
+  const manifestCount = Number(offlineManifest?.guests?.length || 0)
+  const modeMeta = {
+    camera: ['Camera station', 'Ready to scan'],
+    checkout: ['Exit station', 'Ready to check out'],
+    manual: ['Guest lookup', 'Manual check-in'],
+    eventqr: ['Self check-in', 'Event QR'],
+  }[mode]
+
+  return (
+    <div className="sc-command sc-command-live">
+      <section className="sc-command-hero">
+        <div>
+          <span className="sc-command-kicker">Live check-in command center</span>
+          <h1>{event?.name || 'Selected event'}</h1>
+          <p>One focused workspace for arrivals, access decisions, seating guidance, and operator handoff.</p>
+        </div>
+        <div className="sc-command-health">
+          <span className={online ? 'online' : 'offline'}><i />{online ? 'Online' : 'Offline'}</span>
+          <span><Icon name="users" size={13}/> Scanner station</span>
+          <span><Icon name="clock" size={13}/>{pendingSync ? `${pendingSync} pending sync` : 'Fully synced'}</span>
+        </div>
+      </section>
+
+      {event?.status !== 'active' && <div className="sc-command-alert">Scanning is available only while this event is active.</div>}
+
+      <div className="sc-command-metrics">
+        <article><span>Expected</span><strong>{expected || '—'}</strong><small>Confirmed guest list</small></article>
+        <article className="success"><span>Checked in</span><strong>{checkedIn || '—'}</strong><small>{progress}% of expected</small></article>
+        <article><span>Remaining</span><strong>{expected ? remaining : '—'}</strong><small>Not yet arrived</small></article>
+        <article className="accent"><span>Pending sync</span><strong>{pendingSync}</strong><small>{online ? 'Queued station actions' : 'Will sync when online'}</small></article>
+      </div>
+
+      <div className="sc-command-tabs" role="tablist" aria-label="Scanner modes">
+        {MODES.map((item) => (
+          <button key={item.id} type="button" role="tab" aria-selected={mode === item.id} aria-label={item.label} className={mode === item.id ? 'active' : ''} onClick={() => { setMode(item.id); onResult(null) }}>
+            <Icon name={item.id === 'manual' ? 'search' : item.id === 'checkout' ? 'external' : 'ticket'} size={14}/>
+            {item.id === 'camera' ? 'Scan' : item.label}
+          </button>
+        ))}
+      </div>
+
+      <div className="sc-command-workspace">
+        <section className={`sc-command-panel sc-command-capture sc-command-mode-${mode}`}>
+          <div className="sc-command-panel-head">
+            <div><span>{modeMeta[0]}</span><strong>{modeMeta[1]}</strong></div>
+            <a href="/checkin-redesign"><Icon name="settings" size={13}/> Station settings</a>
+          </div>
+          <div className="sc-command-mode-body">
+            {(mode === 'camera' || mode === 'checkout') && <TokenScanner event={event} zones={zones} gates={gates} sections={sections} mode={mode} offlineManifest={offlineManifest} onManifestChange={onManifestChange} onQueueChange={onQueueChange} onRefreshManifest={onRefreshManifest} onResult={onResult}/>}
+            {mode === 'manual' && <ManualMode event={event} sections={sections} onResult={onResult}/>}
+            {mode === 'eventqr' && <EventQRMode event={event}/>}
+          </div>
+        </section>
+
+        <CommandResultPanel result={result} onStepComplete={onStepComplete} stepBusy={stepBusy}/>
+      </div>
+
+      <div className="sc-command-lower">
+        <section className="sc-command-panel">
+          <div className="sc-command-panel-head"><div><span>This station session</span><strong>Recent activity</strong></div><a href="/event-results-redesign?tab=attendance">View attendance</a></div>
+          {recentResults.length ? recentResults.map((item) => {
+            const itemGuest = item.guest || {}
+            const itemName = item.guest_name || [itemGuest.first_name, itemGuest.last_name].filter(Boolean).join(' ') || 'Guest'
+            return <div className="sc-command-activity" key={item.sessionKey}><span>{itemName[0]}</span><div><strong>{itemName}</strong><small>{item.table_name || item.zone_name || item.message || 'Admission processed'}</small></div><time>{item.recordedAt}</time><b>{String(item.status || 'processed').replaceAll('_', ' ')}</b></div>
+          }) : <div className="sc-command-activity-empty">Completed scans from this station will appear here.</div>}
+        </section>
+        <section className="sc-command-panel">
+          <div className="sc-command-panel-head"><div><span>Station health</span><strong>Operations</strong></div></div>
+          <div className="sc-command-ops">
+            <div><span>Network</span><strong className={online ? 'ok' : ''}>{online ? 'Online' : 'Offline queue active'}</strong></div>
+            <div><span>Offline manifest</span><strong>{manifestCount ? `${manifestCount} passes` : 'Not cached'}</strong></div>
+            <div><span>Pending sync</span><strong className={pendingSync ? '' : 'ok'}>{pendingSync} actions</strong></div>
+            <div><span>Duplicate protection</span><strong className="ok">On</strong></div>
+          </div>
+        </section>
+      </div>
+    </div>
+  )
+}
+
 export default function ScannerRedesignPage() {
   const [eventId] = useCurrentEvent()
-  const { event, error: eventError } = useEventDetails(eventId)
+  const { event, error: eventError, refresh: refreshEvent } = useEventDetails(eventId)
   const [mode, setMode] = useState('camera')
   const [result, setResult] = useState(null)
   const [zones, setZones] = useState([])
@@ -443,6 +586,7 @@ export default function ScannerRedesignPage() {
   const [queuedAdmissions, setQueuedAdmissions] = useState(() => offlineAdmissionCount())
   const [queuedActions, setQueuedActions] = useState(() => experienceQueueCount())
   const [stepBusy, setStepBusy] = useState(false)
+  const [recentResults, setRecentResults] = useState([])
 
   useEffect(() => {
     if (!event?.id) return
@@ -496,13 +640,25 @@ export default function ScannerRedesignPage() {
 
   async function handleResult(nextResult) {
     if (!nextResult) { setResult(null); return }
+    if (nextResult.guest?.id && !nextResult.denied && nextResult.status !== 'invalid') void refreshEvent()
     const resultEventId = nextResult.guest?.event_id || eventId
     if (resultEventId && nextResult.guest?.id && !nextResult.experience_next_steps) {
       const nextSteps = await api.getExperienceNextSteps(resultEventId, nextResult.guest.id).catch(() => [])
-      setResult({ ...nextResult, experience_next_steps: nextSteps })
+      const completeResult = { ...nextResult, experience_next_steps: nextSteps }
+      setResult(completeResult)
+      rememberResult(completeResult)
       return
     }
     setResult(nextResult)
+    rememberResult(nextResult)
+  }
+
+  function rememberResult(nextResult) {
+    const guest = nextResult?.guest || {}
+    const name = nextResult?.guest_name || [guest.first_name, guest.last_name].filter(Boolean).join(' ')
+    if (!name) return
+    const recordedAt = new Intl.DateTimeFormat(undefined, { hour: 'numeric', minute: '2-digit' }).format(new Date())
+    setRecentResults((items) => [{ ...nextResult, recordedAt, sessionKey: `${Date.now()}-${Math.random()}` }, ...items].slice(0, 5))
   }
 
   async function completeExperienceStep(step) {
@@ -539,7 +695,6 @@ export default function ScannerRedesignPage() {
     }
   }
 
-  const stats = useMemo(() => ({ expected: event?.guest_count ?? '—', checkedIn: event?.admitted_count ?? '—' }), [event])
   const commandMockup = new URLSearchParams(window.location.search).get('mockup') === 'command'
   if (commandMockup) {
     return <RedesignShell topActive="checkin" eventScoped><ScannerCommandMockup event={event} online={online}/></RedesignShell>
@@ -547,19 +702,28 @@ export default function ScannerRedesignPage() {
   return (
     <RedesignShell topActive="checkin" eventScoped>
       <div className="sc-page">
-        <div className="sc-header"><div className="sc-header-left"><h2>Scanner</h2><div className={`sc-online-badge ${online ? 'online' : 'offline'}`}><span className="sc-online-dot"/> {online ? 'Online · server confirmed' : 'Offline mode · scans queue locally'}</div></div></div>
-        {(queuedAdmissions > 0 || queuedActions > 0) && <div className="sc-empty" role="status">{queuedAdmissions > 0 ? `${queuedAdmissions} scan${queuedAdmissions === 1 ? '' : 's'} pending sync` : ''}{queuedAdmissions > 0 && queuedActions > 0 ? ' · ' : ''}{queuedActions > 0 ? `${queuedActions} Experience action${queuedActions === 1 ? '' : 's'} pending sync` : ''}</div>}
-        {!eventId ? <div className="sc-empty">Select an event before scanning.</div> : (loadError || eventError) ? <div className="sc-empty">{loadError || eventError}</div> : !event ? <div className="sc-empty">Loading scanner configuration…</div> : <>
-          {event?.status !== 'active' && event && <div className="sc-empty">Scanning is available only while this event is active.</div>}
-          <div className="sc-tabs">{MODES.map((item) => <button key={item.id} className={`sc-tab${mode === item.id ? ' active' : ''}`} onClick={() => { setMode(item.id); setResult(null) }}>{item.label}</button>)}</div>
-          <div className="sc-content">
-            {(mode === 'camera' || mode === 'checkout') && <TokenScanner event={event} zones={zones} gates={gates} sections={sections} mode={mode} offlineManifest={offlineManifest} onManifestChange={setOfflineManifest} onQueueChange={() => setQueuedAdmissions(offlineAdmissionCount())} onRefreshManifest={refreshOfflineManifest} onResult={handleResult}/>}
-            {mode === 'manual' && <ManualMode event={event} sections={sections} onResult={handleResult}/>}
-            {mode === 'eventqr' && <EventQRMode event={event}/>}
-            <ResultCard result={result} onStepComplete={completeExperienceStep} stepBusy={stepBusy}/>
-          </div>
-          <div className="sc-stats"><div className="sc-stat"><strong>{stats.expected}</strong><small>Expected</small></div><div className="sc-stat sc-tone-green"><strong>{stats.checkedIn}</strong><small>Checked in</small></div><div className="sc-stat"><strong>{event?.name || 'Loading…'}</strong><small>Event</small></div></div>
-        </>}
+        {!eventId ? <div className="sc-empty">Select an event before scanning.</div> : (loadError || eventError) ? <div className="sc-empty">{loadError || eventError}</div> : !event ? <div className="sc-empty">Loading scanner configuration…</div> : (
+          <LiveScannerCommandCenter
+            event={event}
+            online={online}
+            mode={mode}
+            setMode={setMode}
+            result={result}
+            zones={zones}
+            gates={gates}
+            sections={sections}
+            offlineManifest={offlineManifest}
+            queuedAdmissions={queuedAdmissions}
+            queuedActions={queuedActions}
+            recentResults={recentResults}
+            stepBusy={stepBusy}
+            onManifestChange={setOfflineManifest}
+            onQueueChange={() => setQueuedAdmissions(offlineAdmissionCount())}
+            onRefreshManifest={refreshOfflineManifest}
+            onResult={handleResult}
+            onStepComplete={completeExperienceStep}
+          />
+        )}
       </div>
     </RedesignShell>
   )

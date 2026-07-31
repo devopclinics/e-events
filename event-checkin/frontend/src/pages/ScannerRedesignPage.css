@@ -36,6 +36,7 @@
 .sc-command-panel-head span { color: var(--muted); font-size: 8px; font-weight: 700; text-transform: uppercase; letter-spacing: .04em; }
 .sc-command-panel-head strong { color: var(--ink); font-size: 11px; }
 .sc-command-panel-head button { border: 0; background: none; color: var(--teal); font-size: 8.5px; font-weight: 700; }
+.sc-command-panel-head > a { display: inline-flex; align-items: center; gap: 5px; min-height: 32px; color: var(--teal); font-size: 8.5px; font-weight: 700; text-decoration: none; }
 .sc-command-camera { position: relative; min-height: 315px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px; margin: 14px; border-radius: 14px; color: #b1b7ce; background: radial-gradient(circle at 50% 35%, #282a49 0, #17192f 58%, #111326 100%); }
 .sc-command-camera > svg { color: #4f5679; }
 .sc-command-camera > strong { color: #f6f0e8; font-size: 11px; }
@@ -85,6 +86,48 @@
 .sc-command-ops strong { color: var(--ink); }
 .sc-command-ops .ok { color: var(--success); }
 
+/* Approved command-center design connected to the working scanner. */
+.sc-command-live .sc-command-alert { padding: 10px 13px; border: 1px solid var(--warning); border-radius: 10px; background: var(--warning-soft); color: var(--warning); font-size: 11px; font-weight: 700; }
+.sc-command-mode-body { min-width: 0; }
+.sc-command-capture .sc-camera-wrap { align-items: stretch; gap: 0; }
+.sc-command-capture .sc-camera-frame { width: auto; height: auto; min-height: 315px; margin: 14px; border-radius: 14px; background: radial-gradient(circle at 50% 35%, #282a49 0, #17192f 58%, #111326 100%); }
+.sc-command-capture .sc-camera-corners { inset: 24px; z-index: 1; pointer-events: none; }
+.sc-command-capture .sc-camera-corners span { width: 36px; height: 36px; border-width: 3px; border-color: #22c9bd; }
+.sc-command-capture .sc-camera-corners span:nth-child(1) { top: 0; left: 0; }
+.sc-command-capture .sc-camera-corners span:nth-child(2) { top: 0; right: 0; }
+.sc-command-capture .sc-camera-corners span:nth-child(3) { bottom: 0; left: 0; }
+.sc-command-capture .sc-camera-corners span:nth-child(4) { right: 0; bottom: 0; }
+.sc-command-capture .sc-camera-placeholder { position: relative; z-index: 2; width: min(100% - 90px, 430px); display: flex; flex-direction: column; align-items: stretch; gap: 8px; color: #b1b7ce; }
+.sc-command-capture .sc-camera-placeholder > p { margin: 0; color: #f6f0e8; font-size: 12px; font-weight: 800; }
+.sc-command-capture .sc-camera-placeholder > small { color: #858da9; font-size: 9px; }
+.sc-command-capture .sc-camera-live { width: 100%; }
+.sc-command-capture .sc-camera-live > .rr-btn { min-height: 40px; border: 0; border-radius: 8px; background: var(--accent); color: white; font-size: 10px; font-weight: 800; }
+.sc-command-capture .sc-camera-reader { max-height: 260px; }
+.sc-command-capture .sc-camera-reader video { max-height: 260px; object-fit: cover; }
+.sc-command-capture .sc-access-row { margin: 0 14px 10px; }
+.sc-command-capture .sc-access-row .sc-selector,
+.sc-command-capture .sc-camera-wrap > .sc-selector { min-width: 0; min-height: 38px; flex: 1; border-color: var(--line); background: var(--surface-2); }
+.sc-command-capture .sc-camera-wrap > .sc-selector { width: calc(100% - 28px); margin: 0 14px 10px; }
+.sc-command-capture .sc-token-row { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: stretch; gap: 8px; margin: 0 14px 14px; }
+.sc-command-capture .sc-token-row .sc-search-input { min-width: 0; height: 40px; padding-left: 12px; border-color: var(--line); background: var(--surface-2); }
+.sc-command-capture .sc-token-row .rr-btn { min-width: 110px; justify-content: center; }
+.sc-command-mode-manual .sc-command-mode-body { padding: 14px; }
+.sc-command-mode-eventqr .sc-command-mode-body { min-height: 360px; display: grid; place-items: center; padding: 14px; }
+.sc-command-result-empty { min-height: 300px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px; padding: 30px; color: var(--faint); text-align: center; }
+.sc-command-result-empty strong { color: var(--ink); font-size: 13px; }
+.sc-command-result-empty p { max-width: 260px; margin: 0; color: var(--muted); font-size: 10px; line-height: 1.5; }
+.sc-command-ready-idle { background: var(--surface-2); color: var(--muted) !important; }
+.sc-command-ready-red { background: var(--danger-soft); color: var(--danger) !important; }
+.sc-command-ready-amber { background: var(--warning-soft); color: var(--warning) !important; }
+.sc-command-ready-blue { background: #e8f0fa; color: #326caa !important; }
+.sc-command-pass-red { background: var(--danger-soft); color: var(--danger); }
+.sc-command-pass-amber { background: var(--warning-soft); color: var(--warning); }
+.sc-command-pass-blue { background: #e8f0fa; color: #326caa; }
+.sc-command-next-step { display: grid; gap: 6px; }
+.sc-command-next-step + .sc-command-next-step { margin-top: 8px; padding-top: 8px; border-top: 1px solid color-mix(in srgb, var(--teal) 18%, transparent); }
+.sc-command-result-error { margin: 0 14px 14px; color: var(--danger); font-size: 10px; }
+.sc-command-activity-empty { min-height: 120px; display: grid; place-items: center; padding: 18px; color: var(--muted); font-size: 10px; text-align: center; }
+
 @media (max-width: 900px) {
   .sc-command-workspace, .sc-command-lower { grid-template-columns: 1fr; }
   .sc-command-metrics { grid-template-columns: 1fr 1fr; }
@@ -130,6 +173,27 @@
   .sc-command-reticle { inset: 16px; }
   .sc-command-reticle i { width: 30px; height: 30px; }
 
+  .sc-command-capture .sc-camera-frame { width: auto; min-height: 0; aspect-ratio: 1 / 1; max-height: 72vh; margin: 10px; border-radius: 12px; }
+  .sc-command-capture .sc-camera-corners { inset: 16px; }
+  .sc-command-capture .sc-camera-corners span { width: 30px; height: 30px; }
+  .sc-command-capture .sc-camera-placeholder { width: min(100% - 64px, 300px); gap: 10px; }
+  .sc-command-capture .sc-camera-placeholder > p { font-size: 14px; }
+  .sc-command-capture .sc-camera-placeholder > small { font-size: 11px; line-height: 1.35; }
+  .sc-command-capture .sc-camera-live > .rr-btn { min-height: 44px; font-size: 12px; }
+  .sc-command-capture .sc-camera-reader,
+  .sc-command-capture .sc-camera-reader video { max-height: min(54vw, 220px); }
+  .sc-command-capture .sc-access-row { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin: 0 10px 9px; }
+  .sc-command-capture .sc-access-row .sc-selector { width: 100%; min-height: 44px; font-size: 16px; }
+  .sc-command-capture .sc-camera-wrap > .sc-selector { width: calc(100% - 20px); min-height: 44px; margin: 0 10px 9px; font-size: 16px; }
+  .sc-command-capture .sc-token-row { grid-template-columns: 1fr; gap: 7px; margin: 0 10px 10px; }
+  .sc-command-capture .sc-token-row .sc-search-input { height: 46px; font-size: 16px; }
+  .sc-command-capture .sc-token-row .rr-btn { width: 100%; min-height: 44px; }
+  .sc-command-mode-manual .sc-command-mode-body { padding: 10px; }
+  .sc-command-mode-eventqr .sc-command-mode-body { min-height: 320px; padding: 10px; }
+  .sc-command-result-empty { min-height: 210px; padding: 22px; }
+  .sc-command-result-empty strong { font-size: 14px; }
+  .sc-command-result-empty p { font-size: 11px; }
+
   .sc-command-token { grid-template-columns: auto minmax(0, 1fr); gap: 6px; margin: 0 10px 9px; padding-left: 10px; border: 0; background: var(--surface-2); }
   .sc-command-token input { width: 100%; height: 44px; font-size: 16px; }
   .sc-command-token button { grid-column: 1 / -1; width: calc(100% + 10px); min-height: 44px; margin-left: -10px; border-radius: 8px; font-size: 12px; }
@@ -165,6 +229,8 @@
   .sc-command-station { grid-template-columns: 1fr; }
   .sc-command-station button { grid-column: auto; }
   .sc-command-camera { aspect-ratio: auto; min-height: 285px; }
+  .sc-command-capture .sc-camera-frame { aspect-ratio: auto; min-height: 285px; }
+  .sc-command-capture .sc-access-row { grid-template-columns: 1fr; }
   .sc-command-pass { margin-left: 0; }
 }
 

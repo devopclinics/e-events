@@ -61,6 +61,33 @@ const CHANNEL_TOGGLE_ROWS = [
   { key: 'whatsapp', label: 'WhatsApp', on: false },
 ]
 
+const BROADCAST_PURPOSES = {
+  general: {
+    label: 'General update',
+    description: 'A free-form announcement or operational update.',
+    subject: 'Event update',
+    message: '',
+  },
+  thank_you: {
+    label: 'Thank you',
+    description: 'Thank guests for attending or supporting the event.',
+    subject: 'Thank you for being part of our event',
+    message: 'Thank you for being part of this special event. We truly appreciate your presence and support.',
+  },
+  feedback: {
+    label: 'Feedback request',
+    description: 'Adds each guest’s personal feedback link automatically.',
+    subject: 'We would value your feedback',
+    message: 'Thank you for attending. Please take a moment to share your feedback—it will help us improve future events.',
+  },
+  experience_stage: {
+    label: 'Experience stage',
+    description: 'Send instructions for a selected live Experience step.',
+    subject: 'Your next event step',
+    message: '',
+  },
+}
+
 /* ── shared bits ─────────────────────────────────────────────────────── */
 
 function Switch({ checked, onChange, disabled = false }) {
@@ -342,9 +369,17 @@ function smsSegmentInfo(rawText) {
 }
 
 function BroadcastComposer({ notify, onSent, eventId }) {
-  const [message, setMessage] = useState('')
+  const [searchParams] = useSearchParams()
+  const requestedPurpose = searchParams.get('compose')
+  const initialPurpose = BROADCAST_PURPOSES[requestedPurpose] ? requestedPurpose : 'general'
+  const [purpose, setPurpose] = useState(initialPurpose)
+  const [sendMode, setSendMode] = useState(searchParams.get('mode') === 'test' ? 'test' : 'audience')
+  const [subject, setSubject] = useState(BROADCAST_PURPOSES[initialPurpose].subject)
+  const [message, setMessage] = useState(BROADCAST_PURPOSES[initialPurpose].message)
+  const [experienceSteps, setExperienceSteps] = useState([])
+  const [experienceStepId, setExperienceStepId] = useState('')
   const [target, setTarget] = useState('all')
-  const [channels, setChannels] = useState({ email: false, sms: true, whatsapp: false, mms: false })
+  const [channels, setChannels] = useState({ email: initialPurpose !== 'general', sms: initialPurpose === 'general', whatsapp: false, mms: false })
   const [mmsUrl, setMmsUrl] = useState('')
   const [guestQuery, setGuestQuery] = useState('')
   const [pickedGuests, setPickedGuests] = useState([])
@@ -356,6 +391,10 @@ function BroadcastComposer({ notify, onSent, eventId }) {
   const [sending, setSending] = useState(false)
   const [error, setError] = useState('')
   const [result, setResult] = useState(null)
+
+  const feedbackSteps = experienceSteps.filter((step) => step.enabled !== false && step.type === 'feedback')
+  const stageSteps = experienceSteps.filter((step) => step.enabled !== false && step.type !== 'feedback')
+  const contextualPurpose = purpose === 'feedback' || purpose === 'experience_stage'
 
   const smsInfo = channels.sms && message.trim() ? smsSegmentInfo(message) : null
   const overSegmentLimit = (smsInfo?.segments || 0) > 3
@@ -380,6 +419,64 @@ function BroadcastComposer({ notify, onSent, eventId }) {
 
   useEffect(() => { setCostAck(false) }, [message, channels.sms])
 
+  useEffect(() => {
+    let cancelled = false
+    api.listExperienceWorkflows(eventId).then((workflows) => {
+      if (cancelled) return
+      const live = workflows.find((workflow) => workflow.status === 'published')
+      const steps = (live?.steps || []).slice().sort((a, b) => (a.sort_order || 0) - (b.sort_order || 0))
+      setExperienceSteps(steps)
+      const choices = initialPurpose === 'feedback'
+        ? steps.filter((step) => step.enabled !== false && step.type === 'feedback')
+        : steps.filter((step) => step.enabled !== false && step.type !== 'feedback')
+      if (choices.length) {
+        setExperienceStepId(choices[0].id)
+        if (initialPurpose === 'experience_stage') {
+          const configMessage = choices[0].config?.messages?.guest || choices[0].config?.guest_message || choices[0].description || ''
+          setMessage(configMessage)
+          setSubject(`${choices[0].title} — event update`)
+        }
+      }
+    }).catch(() => setExperienceSteps([]))
+    return () => { cancelled = true }
+    // The URL purpose is intentionally applied only when the composer opens.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [eventId])
+
+  function applyPurpose(nextPurpose) {
+    const preset = BROADCAST_PURPOSES[nextPurpose]
+    setPurpose(nextPurpose)
+    setSubject(preset.subject)
+    setMessage(preset.message)
+    setChannels({ email: nextPurpose !== 'general', sms: nextPurpose === 'general', whatsapp: false, mms: false })
+    setPickedGuests([])
+    setTypedRecipients([])
+    setGuestQuery('')
+    setError('')
+    setResult(null)
+    if (nextPurpose === 'feedback') {
+      setExperienceStepId(feedbackSteps[0]?.id || '')
+    } else if (nextPurpose === 'experience_stage') {
+      const step = stageSteps[0]
+      setExperienceStepId(step?.id || '')
+      if (step) {
+        setSubject(`${step.title} — event update`)
+        setMessage(step.config?.messages?.guest || step.config?.guest_message || step.description || '')
+      }
+    } else {
+      setExperienceStepId('')
+    }
+  }
+
+  function applyExperienceStep(stepId) {
+    setExperienceStepId(stepId)
+    const step = experienceSteps.find((item) => item.id === stepId)
+    if (purpose === 'experience_stage' && step) {
+      setSubject(`${step.title} — event update`)
+      setMessage(step.config?.messages?.guest || step.config?.guest_message || step.description || '')
+    }
+  }
+
   function toggleChannel(ch) {
     setChannels((prev) => ({ ...prev, [ch]: !prev[ch] }))
   }
@@ -396,6 +493,10 @@ function BroadcastComposer({ notify, onSent, eventId }) {
   }
 
   function audienceSummary() {
+    if (sendMode === 'test') {
+      return pickedGuests.length === 1 ? `${pickedGuests[0].name} (one-person test)` : 'one selected guest'
+    }
+    if (purpose === 'feedback') return 'eligible guests who have not responded'
     const audience = pickedGuests.length
       ? `${pickedGuests.length} selected guest${pickedGuests.length === 1 ? '' : 's'}`
       : BROADCAST_TARGET_LABELS[target]
@@ -417,11 +518,19 @@ function BroadcastComposer({ notify, onSent, eventId }) {
       setError('Select at least one channel')
       return
     }
+    if (contextualPurpose && !experienceStepId) {
+      setError(purpose === 'feedback' ? 'Choose a live feedback form' : 'Choose an Experience stage')
+      return
+    }
+    if (sendMode === 'test' && pickedGuests.length !== 1) {
+      setError('Choose exactly one guest for the test send')
+      return
+    }
     if (channels.mms && !/^https:\/\//i.test(mmsUrl.trim())) {
       setError('MMS needs an image URL starting with https://')
       return
     }
-    if (target === 'none' && !pickedGuests.length && !typedRecipients.length) {
+    if (sendMode === 'audience' && target === 'none' && !pickedGuests.length && !typedRecipients.length) {
       setError('Add at least one guest or direct recipient')
       return
     }
@@ -435,19 +544,25 @@ function BroadcastComposer({ notify, onSent, eventId }) {
     try {
       const result = await api.broadcast(eventId, {
         message: message.trim(),
-        target: pickedGuests.length ? 'none' : target,
+        subject: subject.trim() || null,
+        message_type: purpose,
+        experience_step_id: contextualPurpose ? experienceStepId : null,
+        target: sendMode === 'test'
+          ? 'none'
+          : purpose === 'feedback'
+            ? 'feedback_nonresponders'
+            : pickedGuests.length ? 'none' : target,
         guest_ids: pickedGuests.map((g) => g.id),
         channels: Object.entries(channels).filter(([, enabled]) => enabled).map(([channel]) => channel),
-        extra_recipients: typedRecipients.map((recipient) => ({ name: recipient.name, ...(recipient.contact.includes('@') ? { email: recipient.contact } : { phone: recipient.contact }) })),
+        extra_recipients: sendMode === 'test' || contextualPurpose ? [] : typedRecipients.map((recipient) => ({ name: recipient.name, ...(recipient.contact.includes('@') ? { email: recipient.contact } : { phone: recipient.contact }) })),
         mms_media_url: channels.mms ? mmsUrl.trim() : null,
       })
       setResult(result)
-      setMessage('')
       setGuestQuery('')
       setPickedGuests([])
       setTypedRecipients([])
       setMmsUrl('')
-      notify(`Broadcast confirmed — queued: ${result.queued}, skipped (no contact): ${result.skipped_no_contact}, skipped (no consent): ${result.skipped_no_consent}, skipped (no credits): ${result.skipped_no_credits}`)
+      notify(`${sendMode === 'test' ? 'Test send' : BROADCAST_PURPOSES[purpose].label} confirmed — queued: ${result.queued}, skipped (no contact): ${result.skipped_no_contact}, skipped (no consent): ${result.skipped_no_consent}, skipped (no credits): ${result.skipped_no_credits}`)
       await onSent?.()
     } catch (e) {
       const detail = e.message || 'Broadcast was not sent'
@@ -468,6 +583,56 @@ function BroadcastComposer({ notify, onSent, eventId }) {
         </div>
       </div>
       <div className="rd-panel-body">
+        <div className="cm-purpose-grid">
+          <div>
+            <label className="rd-field-label">Message type</label>
+            <select className="rr-select" value={purpose} onChange={(event) => applyPurpose(event.target.value)}>
+              {Object.entries(BROADCAST_PURPOSES).map(([value, item]) => <option key={value} value={value}>{item.label}</option>)}
+            </select>
+            <p className="rd-hint cm-broadcast-hint">{BROADCAST_PURPOSES[purpose].description}</p>
+          </div>
+          <div>
+            <label className="rd-field-label">Send mode</label>
+            <select className="rr-select" value={sendMode} onChange={(event) => {
+              const mode = event.target.value
+              setSendMode(mode)
+              setPickedGuests([])
+              setTypedRecipients([])
+              setGuestQuery('')
+              setError('')
+            }}>
+              <option value="audience">Send to an audience</option>
+              <option value="test">Test with one guest</option>
+            </select>
+            <p className="rd-hint cm-broadcast-hint">{sendMode === 'test' ? 'Only the one guest you select will receive it.' : 'Use a guest segment or the feedback audience.'}</p>
+          </div>
+        </div>
+
+        {purpose === 'feedback' && (
+          <div className="cm-context-picker">
+            <label className="rd-field-label">Feedback form</label>
+            <select className="rr-select" value={experienceStepId} onChange={(event) => applyExperienceStep(event.target.value)}>
+              <option value="">Choose a live feedback form…</option>
+              {feedbackSteps.map((step) => <option key={step.id} value={step.id}>{step.title}</option>)}
+            </select>
+            {!feedbackSteps.length && <p className="cm-broadcast-feedback error">No feedback form is published in the live Experience workflow.</p>}
+          </div>
+        )}
+        {purpose === 'experience_stage' && (
+          <div className="cm-context-picker">
+            <label className="rd-field-label">Experience stage</label>
+            <select className="rr-select" value={experienceStepId} onChange={(event) => applyExperienceStep(event.target.value)}>
+              <option value="">Choose a live Experience stage…</option>
+              {stageSteps.map((step) => <option key={step.id} value={step.id}>{step.title}</option>)}
+            </select>
+            {!stageSteps.length && <p className="cm-broadcast-feedback error">No stages are published in the live Experience workflow.</p>}
+          </div>
+        )}
+
+        {channels.email && <>
+          <label className="rd-field-label">Email subject</label>
+          <input className="rd-field" value={subject} onChange={(event) => setSubject(event.target.value)} placeholder="Email subject"/>
+        </>}
         <label className="rd-field-label">Message</label>
         <textarea className="rr-textarea cm-broadcast-message" rows={4} placeholder="e.g. Doors open at 7pm. Parking is available on Main Street." value={message} onChange={(e) => setMessage(e.target.value)} />
         <p className="rd-hint cm-broadcast-hint">Email supports **bold**, bullet lines and links. SMS, WhatsApp and MMS send plain text.</p>
@@ -484,46 +649,54 @@ function BroadcastComposer({ notify, onSent, eventId }) {
           </label>
         )}
 
-        <label className="rd-field-label" style={{ marginTop: 12 }}>Search guest list — {allGuests.length} guest{allGuests.length === 1 ? '' : 's'} loaded</label>
-        <p className="rd-hint cm-broadcast-hint">Optional — selecting guests overrides the audience segment below.</p>
-        <div className="rd-search cm-broadcast-search">
-          <Icon name="search" size={13} />
-          <input placeholder="Search by name, email or phone…" value={guestQuery} onChange={(e) => setGuestQuery(e.target.value)} />
-        </div>
-        {query.length >= 2 && (
-          <div className="cm-guest-matches">
-            {matches.length ? matches.map((g) => (
-              <button type="button" key={g.id} onClick={() => { setPickedGuests((prev) => [...prev, g]); setGuestQuery('') }}>
-                <strong>{g.name}</strong><span>{g.contact}</span>
-              </button>
-            )) : <div className="cm-guest-empty">No matching guests found.</div>}
+        {(sendMode === 'test' || purpose !== 'feedback') ? <>
+          <label className="rd-field-label" style={{ marginTop: 12 }}>{sendMode === 'test' ? 'Choose one test guest' : 'Search guest list'} — {allGuests.length} guest{allGuests.length === 1 ? '' : 's'} loaded</label>
+          <p className="rd-hint cm-broadcast-hint">{sendMode === 'test' ? 'This guest receives the real message on the selected channels.' : 'Optional — selecting guests overrides the audience segment below.'}</p>
+          <div className="rd-search cm-broadcast-search">
+            <Icon name="search" size={13} />
+            <input placeholder="Search by name, email or phone…" value={guestQuery} onChange={(e) => setGuestQuery(e.target.value)} />
           </div>
-        )}
-        <div className="cm-picked-chips">
-          {pickedGuests.map((g) => (
-            <span className="rd-chip" key={g.id}>{g.name} <button type="button" aria-label={`Remove ${g.name}`} onClick={() => setPickedGuests((prev) => prev.filter((x) => x.id !== g.id))}>✕</button></span>
-          ))}
-        </div>
+          {query.length >= 2 && (
+            <div className="cm-guest-matches">
+              {matches.length ? matches.map((g) => (
+                <button type="button" key={g.id} onClick={() => { setPickedGuests((prev) => sendMode === 'test' ? [g] : [...prev, g]); setGuestQuery('') }}>
+                  <strong>{g.name}</strong><span>{g.contact}</span>
+                </button>
+              )) : <div className="cm-guest-empty">No matching guests found.</div>}
+            </div>
+          )}
+          <div className="cm-picked-chips">
+            {pickedGuests.map((g) => (
+              <span className="rd-chip" key={g.id}>{g.name} <button type="button" aria-label={`Remove ${g.name}`} onClick={() => setPickedGuests((prev) => prev.filter((x) => x.id !== g.id))}>✕</button></span>
+            ))}
+          </div>
+        </> : <div className="cm-fixed-audience cm-feedback-audience-note">Guests who already submitted this form are excluded automatically.</div>}
 
-        <label className="rd-field-label" style={{ marginTop: 10 }}>Or send directly to someone not on the guest list</label>
-        <div className="cm-direct-recipient">
-          <input className="rd-field" placeholder="Name (required)" value={typedName} onChange={(e) => setTypedName(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && addTypedRecipient()} />
-          <input className="rd-field" placeholder="Email or phone" value={typedContact} onChange={(e) => setTypedContact(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && addTypedRecipient()} />
-          <button className="rr-btn secondary" disabled={!typedName.trim() || !typedContact.trim()} onClick={addTypedRecipient}>+ Add</button>
-        </div>
-        <div className="cm-picked-chips">
-          {typedRecipients.map((r, i) => (
-            <span className="rd-chip" key={`${r.contact}-${i}`}>{r.name} — {r.contact} <button type="button" aria-label={`Remove ${r.name}`} onClick={() => setTypedRecipients((prev) => prev.filter((_, idx) => idx !== i))}>✕</button></span>
-          ))}
-        </div>
+        {sendMode === 'audience' && !contextualPurpose && <>
+          <label className="rd-field-label" style={{ marginTop: 10 }}>Or send directly to someone not on the guest list</label>
+          <div className="cm-direct-recipient">
+            <input className="rd-field" placeholder="Name (required)" value={typedName} onChange={(e) => setTypedName(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && addTypedRecipient()} />
+            <input className="rd-field" placeholder="Email or phone" value={typedContact} onChange={(e) => setTypedContact(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && addTypedRecipient()} />
+            <button className="rr-btn secondary" disabled={!typedName.trim() || !typedContact.trim()} onClick={addTypedRecipient}>+ Add</button>
+          </div>
+          <div className="cm-picked-chips">
+            {typedRecipients.map((r, i) => (
+              <span className="rd-chip" key={`${r.contact}-${i}`}>{r.name} — {r.contact} <button type="button" aria-label={`Remove ${r.name}`} onClick={() => setTypedRecipients((prev) => prev.filter((_, idx) => idx !== i))}>✕</button></span>
+            ))}
+          </div>
+        </>}
 
         <div className="cm-broadcast-controls">
           <div>
             <label className="rd-field-label">Send to</label>
-            <select className="rr-select" value={target} onChange={(e) => setTarget(e.target.value)} disabled={pickedGuests.length > 0}>
-              {BROADCAST_TARGETS.map(({ label, value }) => <option key={value} value={value}>{label}</option>)}
-            </select>
-            {pickedGuests.length > 0 && <p className="rd-hint">Audience ignored — sending only to selected guests and direct recipients.</p>}
+            {sendMode === 'test'
+              ? <div className="cm-fixed-audience">One selected guest</div>
+              : purpose === 'feedback'
+                ? <div className="cm-fixed-audience">Eligible guests who have not responded</div>
+                : <select className="rr-select" value={target} onChange={(e) => setTarget(e.target.value)} disabled={pickedGuests.length > 0}>
+                    {BROADCAST_TARGETS.map(({ label, value }) => <option key={value} value={value}>{label}</option>)}
+                  </select>}
+            {sendMode === 'audience' && purpose !== 'feedback' && pickedGuests.length > 0 && <p className="rd-hint">Audience ignored — sending only to selected guests and direct recipients.</p>}
           </div>
           <div>
             <label className="rd-field-label">Channels</label>
@@ -553,7 +726,7 @@ function BroadcastComposer({ notify, onSent, eventId }) {
         <div className="cm-broadcast-actions">
           <span>Sending starts immediately after confirmation.</span>
           <button className="rr-btn primary" disabled={sending || !message.trim() || (overSegmentLimit && !costAck)} onClick={send}>
-            <Icon name="send" size={14} /> {sending ? 'Sending…' : 'Send broadcast'}
+            <Icon name="send" size={14} /> {sending ? 'Sending…' : sendMode === 'test' ? 'Send one-person test' : `Send ${BROADCAST_PURPOSES[purpose].label.toLowerCase()}`}
           </button>
         </div>
       </div>

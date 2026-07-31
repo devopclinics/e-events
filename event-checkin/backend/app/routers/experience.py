@@ -2186,7 +2186,8 @@ async def send_feedback_reminders_cascade(
     paid = can_use_paid_channels(event)
     for guest in guests:
         token = guest.invite_token or guest.qr_token
-        link = f"{event.checkin_base_url.rstrip('/')}/r/{token}#feedback"
+        base = (event.checkin_base_url or "https://festio.events").rstrip("/")
+        link = f"{base}/r/{token}?focus=feedback#guest-hub"
         personalized = f"{message}\n{link}"
         if "email" in channels and event.notify_email and guest.email:
             body = f"<p>Hi {html.escape(guest.first_name)},</p><p>{html.escape(message)}</p><p><a href=\"{html.escape(link)}\">Open feedback</a></p>"

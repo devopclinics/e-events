@@ -2182,6 +2182,14 @@ class BroadcastExtraRecipient(BaseModel):
 
 class BroadcastRequest(BaseModel):
     message: str
+    # What the organizer is sending. Contextual message types let the backend
+    # add the correct per-guest Festio Pass link instead of asking organizers
+    # to copy/paste personal URLs into a free-text broadcast.
+    message_type: Literal["general", "thank_you", "feedback", "experience_stage"] = "general"
+    subject: Optional[str] = None
+    # Required for feedback / Experience-stage messages so the selected live
+    # form or workflow step is explicit and auditable.
+    experience_step_id: Optional[str] = None
     # which guests to target:
     #   all          — everyone on the guest list
     #   admitted     — checked in (admitted == True)
@@ -2192,7 +2200,8 @@ class BroadcastRequest(BaseModel):
     #   none         — no guest segment at all (used when only sending to
     #                  guest_ids and/or extra_recipients)
     target: Literal[
-        "all", "admitted", "not_admitted", "confirmed", "declined", "no_reply", "none"
+        "all", "admitted", "not_admitted", "confirmed", "declined", "no_reply",
+        "feedback_nonresponders", "none"
     ] = "all"
     # When non-empty, restricts the send to exactly these guest ids (picked via
     # search) instead of the `target` segment.

@@ -102,6 +102,10 @@
   display: grid; place-items: center; flex: none; }
 .cm-broadcast-message { min-height: 96px; resize: vertical; }
 .cm-broadcast-hint { margin: 4px 0 8px; }
+.cm-purpose-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 18px; }
+.cm-context-picker { margin: 4px 0 12px; padding: 12px; border: 1px solid var(--line-soft); border-radius: 10px; background: var(--surface-2); }
+.cm-context-picker .cm-broadcast-feedback { margin-bottom: 0; }
+.cm-fixed-audience { min-height: 38px; display: flex; align-items: center; padding: 0 11px; border: 1px solid var(--line); border-radius: 8px; background: var(--surface-2); color: var(--ink); font-size: 11.5px; font-weight: 600; }
 .cm-broadcast-search { margin-bottom: 6px; }
 .cm-sms-meter { font-size: 10.5px; color: var(--muted); display: flex; align-items: center; gap: 6px; margin: 6px 0; }
 .cm-sms-meter.over { color: var(--danger); font-weight: 600; }
@@ -194,7 +198,7 @@
   .cm-test-recipient-list button { align-items: flex-start; flex-direction: column; gap: 3px; }
   .cm-inbox-split { grid-template-columns: 1fr; }
   .cm-inbox-split .cm-thread-list { border-right: 0; border-bottom: 1px solid var(--line-soft); max-height: 200px; }
-  .cm-direct-recipient, .cm-broadcast-controls { grid-template-columns: 1fr; }
+  .cm-purpose-grid, .cm-direct-recipient, .cm-broadcast-controls { grid-template-columns: 1fr; }
   .cm-broadcast-summary, .cm-broadcast-actions { align-items: flex-start; flex-direction: column; }
   .cm-broadcast-actions .rr-btn { width: 100%; }
 }

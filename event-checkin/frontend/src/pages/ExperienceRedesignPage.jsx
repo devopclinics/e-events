@@ -1301,6 +1301,7 @@ export default function ExperienceRedesignPage() {
               <div><h3>Feedback configuration</h3><p>Questions submitted from FestioHub and Festio Pass</p></div>
               <div className="rd-row2 ex-feedback-head-actions">
                 <button className="rr-btn secondary" disabled={guestsLoading || !realGuests.length || !feedbackResults?.forms?.length} onClick={showFeedbackPreviewPicker}><Icon name="eye" size={13}/> Preview as guest</button>
+                <button className="rr-btn secondary" disabled={!feedbackStep} onClick={() => { window.location.href = '/communications-redesign?tab=messages&compose=feedback&mode=test' }}><Icon name="send" size={13}/> Send feedback</button>
                 <button className="rr-btn secondary" disabled={actionKey === 'feedback:draft'} onClick={prepareDraft}>{actionKey === 'feedback:draft' ? 'Preparing…' : 'Prepare feedback draft'}</button>
                 <button className="rr-btn primary" onClick={goEditFeedbackStep}>{feedbackStep ? 'Edit feedback step' : 'Add feedback step'}</button>
               </div>

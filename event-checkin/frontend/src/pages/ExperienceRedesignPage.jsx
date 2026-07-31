@@ -278,6 +278,9 @@ export default function ExperienceRedesignPage() {
   const [activeTab, setActiveTab] = useState('Setup')
   const [feedbackSearch, setFeedbackSearch] = useState('')
   const [feedbackAdmitted, setFeedbackAdmitted] = useState('')
+  const [feedbackPreviewOpen, setFeedbackPreviewOpen] = useState(false)
+  const [feedbackPreviewQuery, setFeedbackPreviewQuery] = useState('')
+  const [feedbackPreviewGuestId, setFeedbackPreviewGuestId] = useState('')
   const [signatureGuest, setSignatureGuest] = useState(null)
   const [previewMessage, setPreviewMessage] = useState(null)
   const [actionKey, setActionKey] = useState('') // in-flight mutation marker, e.g. "wfId:publish"
@@ -431,9 +434,57 @@ export default function ExperienceRedesignPage() {
   const selectedWorkflowSteps = selectedWorkflow?.steps || dashboard?.workflow?.steps || []
   const feedbackStep = selectedWorkflowSteps.find((s) => s.type === 'feedback') || null
   const feedbackStepQuestions = feedbackStep?.config?.feedback?.questions || []
+  const feedbackPreviewGuests = realGuests.filter((guest) => {
+    const query = feedbackPreviewQuery.trim().toLowerCase()
+    if (!query) return true
+    return `${guest.first_name || ''} ${guest.last_name || ''} ${guest.email || ''} ${guest.phone || ''}`.toLowerCase().includes(query)
+  })
+  const feedbackPreviewGuestAvailable = feedbackPreviewGuests.some((guest) => guest.id === feedbackPreviewGuestId)
 
   function guestLabel(g) { return g ? `${g.first_name || ''} ${g.last_name || ''}`.trim() : '' }
   function consentSignedFor(guestId) { return !!(realSignatures || []).find((s) => s.guest_id === guestId) }
+
+  function showFeedbackPreviewPicker() {
+    const preferredGuestId = selectedGuestId && realGuests.some((guest) => guest.id === selectedGuestId)
+      ? selectedGuestId
+      : (realGuests[0]?.id || '')
+    setFeedbackPreviewGuestId(preferredGuestId)
+    setFeedbackPreviewQuery('')
+    setFeedbackPreviewOpen(true)
+  }
+
+  async function openFeedbackGuestPreview() {
+    if (!feedbackPreviewGuestId || !feedbackPreviewGuestAvailable) {
+      notifyError('Choose a guest to preview the feedback form.')
+      return
+    }
+
+    // Open synchronously so browsers do not block the new tab while the invite
+    // token is being resolved by the API.
+    const previewWindow = window.open('about:blank', '_blank')
+    if (!previewWindow) {
+      notifyError('Your browser blocked the preview tab. Allow pop-ups for Festio and try again.')
+      return
+    }
+    previewWindow.document.title = 'Opening feedback preview…'
+    previewWindow.document.body.textContent = 'Opening feedback preview…'
+
+    setActionKey('feedback:preview')
+    try {
+      const { invite_url: inviteUrl } = await api.ensureInviteToken(currentEventId, feedbackPreviewGuestId)
+      const previewUrl = new URL(inviteUrl, window.location.origin)
+      previewUrl.searchParams.set('focus', 'feedback')
+      previewUrl.hash = 'guest-hub'
+      previewWindow.opener = null
+      previewWindow.location.replace(previewUrl.toString())
+      setFeedbackPreviewOpen(false)
+    } catch (error) {
+      previewWindow.close()
+      notifyError(error?.message || 'Feedback preview could not be opened.')
+    } finally {
+      setActionKey('')
+    }
+  }
 
   function currentGuestStep() {
     if (!guestJourney) return null
@@ -1246,7 +1297,14 @@ export default function ExperienceRedesignPage() {
       {activeTab === 'Feedback' && (
         <div className="ex-feedback-page">
           <div className="rr-panel">
-            <div className="rd-panel-head ex-panel-head-row"><div><h3>Feedback configuration</h3><p>Questions submitted from FestioHub and Festio Pass</p></div><div className="rd-row2"><button className="rr-btn secondary" disabled={actionKey === 'feedback:draft'} onClick={prepareDraft}>{actionKey === 'feedback:draft' ? 'Preparing…' : 'Prepare feedback draft'}</button><button className="rr-btn primary" onClick={goEditFeedbackStep}>{feedbackStep ? 'Edit feedback step' : 'Add feedback step'}</button></div></div>
+            <div className="rd-panel-head ex-panel-head-row">
+              <div><h3>Feedback configuration</h3><p>Questions submitted from FestioHub and Festio Pass</p></div>
+              <div className="rd-row2 ex-feedback-head-actions">
+                <button className="rr-btn secondary" disabled={guestsLoading || !realGuests.length || !feedbackResults?.forms?.length} onClick={showFeedbackPreviewPicker}><Icon name="eye" size={13}/> Preview as guest</button>
+                <button className="rr-btn secondary" disabled={actionKey === 'feedback:draft'} onClick={prepareDraft}>{actionKey === 'feedback:draft' ? 'Preparing…' : 'Prepare feedback draft'}</button>
+                <button className="rr-btn primary" onClick={goEditFeedbackStep}>{feedbackStep ? 'Edit feedback step' : 'Add feedback step'}</button>
+              </div>
+            </div>
             <div className="rd-panel-body">
               {feedbackStepQuestions.length === 0 ? <p className="rd-rowlink">No feedback step is configured in the live workflow. Prepare a complete draft, or add one manually.</p> : <div className="ex-question-list">{feedbackStepQuestions.map((question, index) => <div className="ex-question" key={question.id || index}><span>{index + 1}</span><div><strong>{question.prompt}</strong><small>{feedbackTypeLabel(question.type)}{question.required ? ' · Required' : ''}</small></div></div>)}</div>}
             </div>
@@ -1375,6 +1433,29 @@ export default function ExperienceRedesignPage() {
             <button className="rr-btn secondary" style={{ flex: 1, justifyContent: 'center' }} onClick={() => setSessionImportOpen(false)}>Cancel</button>
             <button className="rr-btn primary" style={{ flex: 1, justifyContent: 'center' }} disabled={actionKey === 'import-sessions'} onClick={handleImportSessions}>
               {actionKey === 'import-sessions' ? 'Importing…' : 'Import'}
+            </button>
+          </div>
+        </Modal>
+      )}
+
+      {feedbackPreviewOpen && (
+        <Modal title="Preview feedback as a guest" onClose={() => setFeedbackPreviewOpen(false)} width={520}>
+          <p className="ex-feedback-preview-note">Choose whose Festio Pass you want to preview. Opening the pass does not record a response; submitting the form will create or update that guest&apos;s real response.</p>
+          <div className="rd-search ex-feedback-preview-search">
+            <Icon name="search" size={13}/>
+            <input autoFocus value={feedbackPreviewQuery} onChange={(event) => setFeedbackPreviewQuery(event.target.value)} placeholder="Search guest name, email, or phone…"/>
+          </div>
+          <label className="rd-field-label" htmlFor="feedback-preview-guest">Guest</label>
+          <select id="feedback-preview-guest" className="rr-select ex-feedback-preview-select" size={Math.min(7, Math.max(2, feedbackPreviewGuests.length))} value={feedbackPreviewGuestId} onChange={(event) => setFeedbackPreviewGuestId(event.target.value)}>
+            {feedbackPreviewGuests.map((guest) => (
+              <option key={guest.id} value={guest.id}>{guestLabel(guest) || 'Unnamed guest'}{guest.email ? ` — ${guest.email}` : ''}</option>
+            ))}
+          </select>
+          {!feedbackPreviewGuests.length && <p className="rd-rowlink">No guests match your search.</p>}
+          <div className="rd-row2 ex-feedback-preview-actions">
+            <button className="rr-btn secondary" onClick={() => setFeedbackPreviewOpen(false)}>Cancel</button>
+            <button className="rr-btn primary" disabled={!feedbackPreviewGuestAvailable || actionKey === 'feedback:preview'} onClick={openFeedbackGuestPreview}>
+              <Icon name="eye" size={13}/>{actionKey === 'feedback:preview' ? 'Opening…' : 'Open live preview'}
             </button>
           </div>
         </Modal>

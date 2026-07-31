@@ -1452,20 +1452,33 @@ class RegistrySettingsOut(BaseModel):
 class RegistryClaimCreate(BaseModel):
     claimer_name: str
     claimer_email: Optional[EmailStr] = None
+    claimer_phone: Optional[str] = None
+    relationship: Optional[str] = None
+    action: Optional[Literal["reserved", "purchased", "contributed", "pledged", "used_external_registry"]] = None
     quantity: int = 1
     amount_minor: Optional[int] = None
+    reference: Optional[str] = None
     message: Optional[str] = None
+    thank_you_channel: Optional[Literal["email", "sms", "none"]] = None
 
 
 class RegistryClaimOut(BaseModel):
     id: str
     item_id: str
     item_title: str
+    item_kind: str
+    currency: str
     claimer_name: str
     claimer_email: Optional[str] = None
+    claimer_phone: Optional[str] = None
+    relationship: Optional[str] = None
+    action: str = "reserved"
     quantity: int
     amount_minor: Optional[int] = None
+    reference: Optional[str] = None
     message: Optional[str] = None
+    thank_you_channel: Optional[str] = None
+    thank_you_status: str = "not_requested"
     created_at: Optional[datetime] = None
 
 

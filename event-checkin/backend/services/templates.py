@@ -488,6 +488,22 @@ TEMPLATE_DEFS: dict[str, dict] = {
         whatsapp_body="Thank you for celebrating {{event_name}} with us. If you'd like to give a gift, our registry is at {{rsvp_link}}.",
         note="Shown on the public registry page / registry emails.",
     ),
+    "registry_thank_you": _t(
+        "Gift action thank-you", ["email", "sms"], group="Add-ons",
+        subject="Thank you for your gift — {{event_name}}",
+        email_body=(
+            "<p>Hi <strong>{{guest_first_name}}</strong>,</p>"
+            "<p>Thank you for {{registry_action}} <strong>{{registry_item}}</strong> "
+            "for {{event_name}}. Your kindness is sincerely appreciated.</p>"
+            "<p>{{registry_detail}}</p>"
+        ),
+        sms_body=(
+            "Hi {{guest_first_name}}, thank you for {{registry_action}} "
+            "{{registry_item}} for {{event_name}}. We truly appreciate you."
+        ),
+        placeholders=PLACEHOLDERS + ["registry_action", "registry_item", "registry_detail"],
+        note="Transactional acknowledgement sent after a guest records a gift-list action.",
+    ),
 }
 
 

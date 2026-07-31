@@ -119,6 +119,12 @@
 
 .fm-member { display: flex; align-items: center; gap: 8px; padding: 7px 8px; font-size: 11.5px; color: var(--ink); }
 .fm-member small { margin-left: auto; font-size: 9.5px; color: var(--faint); }
+.fm-member-section-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 5px 8px 9px; }
+.fm-member-section-head > div { min-width: 0; display: grid; gap: 2px; }
+.fm-member-section-head > div > span { color: var(--faint); font-size: 8px; font-weight: 800; letter-spacing: .07em; text-transform: uppercase; }
+.fm-member-section-head strong { overflow: hidden; color: var(--ink); font-size: 10px; text-overflow: ellipsis; white-space: nowrap; }
+.fm-member-section-head > span { flex: none; padding: 3px 6px; border-radius: 100px; background: var(--teal-soft); color: var(--teal); font-size: 7.5px; font-weight: 800; }
+.fm-member-divider { height: 1px; margin: 9px 8px 12px; background: var(--line-soft); }
 .fm-reports { margin-top: 10px; display: flex; flex-direction: column; gap: 10px; }
 .fm-report-row { padding: 9px; background: var(--danger-soft); border-radius: 8px; }
 .fm-report-row p { font-size: 11px; color: var(--ink); margin: 0 0 4px; font-style: italic; }

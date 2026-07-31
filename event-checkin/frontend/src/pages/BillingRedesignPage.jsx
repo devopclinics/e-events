@@ -648,6 +648,20 @@ function OrgTab({ notify, eventId }) {
 
   return (
     <div className="bl-org-stack">
+      <div className="bl-org-overview">
+        <div className="bl-org-summary">
+          <div><Icon name="users" size={17}/><strong>{orgMembers?.length ?? '—'}</strong><span>Organization members</span></div>
+          <div><Icon name="api" size={17}/><strong>{apiKeys?.filter((key) => !key.revoked_at).length ?? '—'}</strong><span>Active API keys</span></div>
+          <div><Icon name="bell" size={17}/><strong>{webhooks?.filter((hook) => hook.is_active).length ?? '—'}</strong><span>Active webhooks</span></div>
+          <div><Icon name="card" size={17}/><strong>{subscription?.status === 'active' ? 'Active' : 'Free'}</strong><span>Integration plan</span></div>
+        </div>
+        <div className="rr-panel bl-org-toolbar">
+          <div><strong>Organization settings</strong><span>People, integrations, billing, and shared resources</span></div>
+          <nav aria-label="Organization settings sections">
+            <a href="#org-team">Team</a><a href="#org-api">API</a><a href="#org-subscription">Plan</a><a href="#org-webhooks">Webhooks</a><a href="#org-collections">Collections</a>
+          </nav>
+        </div>
+      </div>
       {revealedKey && (
         <div className="rr-panel bl-reveal-banner">
           <div><strong>Your new API key</strong> — copy it now, it won't be shown again.</div>
@@ -664,7 +678,7 @@ function OrgTab({ notify, eventId }) {
         </div>
       )}
 
-      <div className="rr-panel">
+      <div className="rr-panel bl-org-section bl-org-team" id="org-team">
         <div className="rd-panel-head bl-panel-head-row">
           <div><h3><Icon name="team" size={14} /> Team members</h3><p>People with access across your organization's events</p></div>
         </div>
@@ -681,14 +695,15 @@ function OrgTab({ notify, eventId }) {
               {orgMembers.length === 0 ? (
                 <EmptyState icon="users" title="No teammates yet" message="Invite someone below to get started." />
               ) : (
-                <div className="bl-list">
+                <div className="bl-org-member-grid">
                   {orgMembers.map((m) => (
-                    <div className="bl-list-row" key={m.user.id}>
-                      <div className="bl-list-main">
-                        <strong>{m.user.name}</strong>
-                        <span className="bl-mono">{m.user.email}</span>
+                    <div className="bl-org-member-card" key={m.user.id}>
+                      <div className="bl-org-member-head">
+                        <span>{String(m.user.name || m.user.email || '?').split(/\s+/).map((part) => part[0]).join('').slice(0, 2).toUpperCase()}</span>
+                        <div><strong>{m.user.name}</strong><small>{m.user.email}</small></div>
                       </div>
-                      <div className="bl-list-actions">
+                      <div className="bl-org-member-role">
+                        <label>Organization role</label>
                         <select
                           value={m.role}
                           disabled={roleSubmittingFor === m.user.id}
@@ -734,7 +749,7 @@ function OrgTab({ notify, eventId }) {
         </div>
       </div>
 
-      <div className="rr-panel">
+      <div className="rr-panel bl-org-section bl-org-api" id="org-api">
         <div className="rd-panel-head bl-panel-head-row">
           <div><h3><Icon name="api" size={14} /> API Keys</h3><p>Used for Public API v2 access — tables, table-groups, Experience, and guest CRUD</p></div>
           <button className="rr-btn secondary" onClick={() => setNewKeyOpen((v) => !v)}><Icon name="plus" size={14} /> Create new key</button>
@@ -794,7 +809,7 @@ function OrgTab({ notify, eventId }) {
         </div>
       </div>
 
-      <div className="rr-panel">
+      <div className="rr-panel bl-org-section bl-org-subscription" id="org-subscription">
         <div className="rd-panel-head bl-panel-head-row">
           <div><h3><Icon name="card" size={14} /> Subscription</h3><p>Unlocks read-write API keys for this organization</p></div>
         </div>
@@ -824,7 +839,7 @@ function OrgTab({ notify, eventId }) {
         </div>
       </div>
 
-      <div className="rr-panel">
+      <div className="rr-panel bl-org-section bl-org-webhooks" id="org-webhooks">
         <div className="rd-panel-head bl-panel-head-row">
           <div><h3><Icon name="bell" size={14} /> Webhooks</h3><p>Outbound event notifications to your own endpoints</p></div>
           <button className="rr-btn secondary" onClick={() => setWebhookFormOpen((v) => !v)}><Icon name="plus" size={14} /> Add webhook</button>
@@ -904,7 +919,7 @@ function OrgTab({ notify, eventId }) {
         </div>
       </div>
 
-      <OrgCollections notify={notify} />
+      <div className="bl-org-wide" id="org-collections"><OrgCollections notify={notify} /></div>
 
       {revokeKeyTarget && (
         <ConfirmDialog

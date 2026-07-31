@@ -253,6 +253,7 @@ function RealLogisticsContent({ eventId, notify }) {
   const [editing, setEditing] = useState(null)
   const [form, setForm] = useState(blank)
   const [deleteTarget, setDeleteTarget] = useState(null)
+  const [selectedClaim, setSelectedClaim] = useState(null)
   const [activeShipment, setActiveShipment] = useState(null)
   const [busy, setBusy] = useState(false)
 
@@ -445,19 +446,40 @@ function RealRegistryContent({ eventId, notify }) {
           </div>
         ))}
       </div></div>
-      <div className="rr-panel"><div className="rd-panel-head"><h3>Recent claims</h3><p>{claims.length} claim{claims.length === 1 ? '' : 's'}</p></div><div className="rd-panel-body">
-        {claims.length === 0 ? <EmptyState icon="check" title="No claims yet" message="Claims appear here after guests reserve gifts." /> : <table className="rr-table"><thead><tr><th>Guest</th><th>Item</th><th>Quantity</th></tr></thead><tbody>{claims.map((claim) => <tr key={claim.id}><td>{claim.claimer_name}</td><td>{claim.item_title || '—'}</td><td>{claim.quantity || 1}</td></tr>)}</tbody></table>}
+      <div className="rr-panel"><div className="rd-panel-head"><h3>Gift activity ledger</h3><p>{claims.length} recorded action{claims.length === 1 ? '' : 's'}</p></div><div className="rd-panel-body">
+        {claims.length === 0 ? <EmptyState icon="check" title="No activity yet" message="Reservations, purchases, contributions, pledges, and external-registry gifts appear here." /> : <div className="ad-claim-ledger"><table className="rr-table"><thead><tr><th>Guest</th><th>Action</th><th>Gift / amount</th><th>Thank-you</th><th/></tr></thead><tbody>{claims.map((claim) => <tr key={claim.id}>
+          <td><strong>{claim.claimer_name}</strong><small>{claim.claimer_email || claim.claimer_phone || 'No contact'}</small></td>
+          <td><span className="rd-status-chip ok">{String(claim.action || 'reserved').replaceAll('_', ' ')}</span></td>
+          <td>{claim.item_title || '—'}{claim.amount_minor ? <small>{claim.currency} {(claim.amount_minor / 100).toLocaleString()}</small> : claim.quantity > 1 ? <small>Quantity {claim.quantity}</small> : null}</td>
+          <td><span className={`rd-status-chip ${claim.thank_you_status === 'queued' ? 'ok' : 'bl-chip-neutral'}`}>{String(claim.thank_you_status || 'not requested').replaceAll('_', ' ')}</span></td>
+          <td><button className="rr-link-btn" onClick={() => setSelectedClaim(claim)}>Details</button></td>
+        </tr>)}</tbody></table></div>}
       </div></div>
     </div>
     {editing && <Modal title={editing === 'new' ? 'Add registry item' : `Edit ${editing.title}`} onClose={() => setEditing(null)} width={500}>
       <label className="rd-field-label">Type</label><select className="rd-field" value={form.kind} onChange={(e) => setForm((v) => ({ ...v, kind: e.target.value }))}><option value="item">Physical item</option><option value="fund">Cash fund</option><option value="link">External link</option></select>
       <label className="rd-field-label">Title *</label><input className="rd-field" value={form.title} onChange={(e) => setForm((v) => ({ ...v, title: e.target.value }))} />
       <label className="rd-field-label">Description</label><textarea className="rr-textarea" value={form.description} onChange={(e) => setForm((v) => ({ ...v, description: e.target.value }))} />
-      {form.kind === 'link' && <><label className="rd-field-label">External URL</label><div className="rd-row2"><input className="rd-field" type="url" value={form.external_url} onChange={(e) => setForm((v) => ({ ...v, external_url: e.target.value }))} /><button type="button" className="rr-btn secondary" disabled={busy || !form.external_url} onClick={fetchLinkDetails}>Fetch details</button></div></>}
-      {form.kind === 'fund' && <div className="rd-row2"><div style={{ flex: 1 }}><label className="rd-field-label">Target amount</label><input className="rd-field" type="number" value={form.amount} onChange={(e) => setForm((v) => ({ ...v, amount: e.target.value }))} /></div><div style={{ flex: 1 }}><label className="rd-field-label">Currency</label><input className="rd-field" value={form.currency} onChange={(e) => setForm((v) => ({ ...v, currency: e.target.value.toUpperCase() }))} /></div></div>}
-      {form.kind === 'item' && <><label className="rd-field-label">Quantity wanted</label><input className="rd-field" type="number" min="1" value={form.quantity_wanted} onChange={(e) => setForm((v) => ({ ...v, quantity_wanted: e.target.value }))} /></>}
+      {form.kind !== 'fund' && <><label className="rd-field-label">{form.kind === 'link' ? 'External registry URL' : 'Purchase URL'}</label><div className="rd-row2"><input className="rd-field" type="url" value={form.external_url} onChange={(e) => setForm((v) => ({ ...v, external_url: e.target.value }))} /><button type="button" className="rr-btn secondary" disabled={busy || !form.external_url} onClick={fetchLinkDetails}>Fetch details</button></div></>}
+      {form.kind === 'fund' && <><div className="rd-row2"><div style={{ flex: 1 }}><label className="rd-field-label">Target amount</label><input className="rd-field" type="number" value={form.amount} onChange={(e) => setForm((v) => ({ ...v, amount: e.target.value }))} /></div><div style={{ flex: 1 }}><label className="rd-field-label">Currency</label><input className="rd-field" value={form.currency} onChange={(e) => setForm((v) => ({ ...v, currency: e.target.value.toUpperCase() }))} /></div></div><label className="rd-field-label">Payment instructions or payment link</label><textarea className="rr-textarea" rows={3} value={form.payment_instructions} onChange={(e) => setForm((v) => ({ ...v, payment_instructions: e.target.value }))} placeholder="Bank details, payment link, or instructions shown to guests"/></>}
+      {form.kind === 'item' && <><div className="rd-row2"><div style={{ flex: 1 }}><label className="rd-field-label">Quantity wanted</label><input className="rd-field" type="number" min="1" value={form.quantity_wanted} onChange={(e) => setForm((v) => ({ ...v, quantity_wanted: e.target.value }))} /></div><div style={{ flex: 1 }}><label className="rd-field-label">Estimated price</label><input className="rd-field" type="number" value={form.amount} onChange={(e) => setForm((v) => ({ ...v, amount: e.target.value }))} /></div></div></>}
       <label className="rd-field-label">Image URL</label><input className="rd-field" type="url" value={form.image_url} onChange={(e) => setForm((v) => ({ ...v, image_url: e.target.value }))} />
       <div className="rd-row2"><button className="rr-btn secondary" onClick={() => setEditing(null)}>Cancel</button><button className="rr-btn primary" disabled={busy || !form.title.trim()} onClick={save}>{busy ? 'Saving…' : 'Save item'}</button></div>
+    </Modal>}
+    {selectedClaim && <Modal title="Gift activity details" onClose={() => setSelectedClaim(null)} width={520}>
+      <div className="ad-claim-details">
+        <div><span>Guest</span><strong>{selectedClaim.claimer_name}</strong></div>
+        <div><span>Relationship</span><strong>{selectedClaim.relationship || 'Not provided'}</strong></div>
+        <div><span>Email</span><strong>{selectedClaim.claimer_email || 'Not provided'}</strong></div>
+        <div><span>Phone</span><strong>{selectedClaim.claimer_phone || 'Not provided'}</strong></div>
+        <div><span>Action</span><strong>{String(selectedClaim.action || 'reserved').replaceAll('_', ' ')}</strong></div>
+        <div><span>Gift</span><strong>{selectedClaim.item_title}</strong></div>
+        <div><span>Quantity / amount</span><strong>{selectedClaim.amount_minor ? `${selectedClaim.currency} ${(selectedClaim.amount_minor / 100).toLocaleString()}` : selectedClaim.quantity || 1}</strong></div>
+        <div><span>Reference</span><strong>{selectedClaim.reference || 'Not provided'}</strong></div>
+        <div><span>Thank-you</span><strong>{selectedClaim.thank_you_channel ? `${selectedClaim.thank_you_channel.toUpperCase()} · ${String(selectedClaim.thank_you_status).replaceAll('_', ' ')}` : 'Not requested'}</strong></div>
+        <div className="wide"><span>Guest note</span><strong>{selectedClaim.message || 'No note'}</strong></div>
+        <div className="wide"><span>Recorded</span><strong>{selectedClaim.created_at ? new Date(selectedClaim.created_at).toLocaleString() : '—'}</strong></div>
+      </div>
     </Modal>}
     {deleteTarget && <ConfirmDialog title="Delete registry item" message={`Delete “${deleteTarget.title}”?`} confirmLabel="Delete" onCancel={() => setDeleteTarget(null)} onConfirm={async () => {
       try { await api.deleteRegistryItem(eventId, deleteTarget.id); setDeleteTarget(null); await load(); notify('Registry item deleted') }

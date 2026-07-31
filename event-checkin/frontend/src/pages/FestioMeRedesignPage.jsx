@@ -156,7 +156,12 @@ export default function FestioMeRedesignPage() {
   }
 
   async function openChannelRoster() {
-    if (!activeChannel?.is_private || activeChannel.is_dm) return
+    if (!activeChannel || activeChannel.is_dm) return
+    if (!activeChannel.is_private) {
+      setChannelRoster(members)
+      setChannelRosterOpen(true)
+      return
+    }
     try {
       setChannelRoster(await api.festiomeChannelMembers(activeChannel.id))
       setChannelRosterOpen(true)
@@ -200,10 +205,25 @@ export default function FestioMeRedesignPage() {
   const isPrimaryGroup = !!activeGroupRecord?.is_primary
   const canTransferOwnership = members.some((member) => member.is_me && member.role === 'owner')
   const me = members.find((member) => member.is_me)
+  const visibleChannelMembers = activeChannel?.is_private ? channelRoster : members
 
   useEffect(() => {
     if (me?.display_name) setProfileName(me.display_name)
   }, [me?.display_name])
+
+  useEffect(() => {
+    if (!activeChannel || activeChannel.is_dm) {
+      setChannelRoster([])
+      return
+    }
+    if (!activeChannel.is_private) {
+      setChannelRoster(members)
+      return
+    }
+    api.festiomeChannelMembers(activeChannel.id)
+      .then(setChannelRoster)
+      .catch(() => setChannelRoster([]))
+  }, [activeChannel?.id, activeChannel?.is_private, activeChannel?.is_dm, members])
 
   async function createInvitation(email) {
     if (!email?.trim() || !activeGroup) return
@@ -410,8 +430,8 @@ export default function FestioMeRedesignPage() {
                 <div className="gr-actions">
                   <button className="rr-link-btn" onClick={() => setSearchOpen((v) => !v)}><Icon name="search" size={12} /> Search</button>
                   <span className="fm-connection"><i /> Live</span>
-                  <button className="rr-link-btn" onClick={() => setManageMembersOpen((v) => !v)}>Members</button>
-                  {activeChannel?.is_private && !activeChannel?.is_dm && <button className="rr-link-btn" onClick={openChannelRoster}>Channel access</button>}
+                  <button className="rr-link-btn" onClick={() => setManageMembersOpen((v) => !v)}>Manage group</button>
+                  {!activeChannel?.is_dm && <button className="rr-link-btn" onClick={openChannelRoster}>Channel members ({visibleChannelMembers.length})</button>}
                   <span className="rd-rowlink">Channel settings are read-only (no update-channel contract).</span>
                 </div>
               </div>
@@ -459,11 +479,11 @@ export default function FestioMeRedesignPage() {
               )}
               {channelRosterOpen && (
                 <div className="fm-manage-members">
-                  <div className="fm-rail-head">Private channel access</div>
+                  <div className="fm-rail-head">{activeChannel?.is_private ? 'Private channel access' : 'Channel members · open to the full group'}</div>
                   {members.map((member) => {
                     const enrolled = channelRoster.some((item) => item.id === member.id)
                     return <label className="fm-manage-row" key={member.id}>
-                      <input type="checkbox" checked={enrolled} disabled={member.is_me || !!channelRosterBusy} onChange={() => toggleChannelMember(member)} />
+                      <input type="checkbox" checked={enrolled} disabled={!activeChannel?.is_private || member.is_me || !!channelRosterBusy} onChange={() => toggleChannelMember(member)} />
                       <span>{member.display_name}</span>
                       <small>{member.is_me ? 'Your access' : member.role}</small>
                     </label>
@@ -587,9 +607,19 @@ export default function FestioMeRedesignPage() {
             </div>
 
             <aside className="rr-panel fm-members">
-              <div className="fm-rail-head">Members ({members.length})</div>
+              <div className="fm-member-section-head"><div><span>Channel members</span><strong>#{activeChannel?.name || 'channel'} · {visibleChannelMembers.length}</strong></div><span>{activeChannel?.is_private ? 'Private' : 'All group'}</span></div>
+              {visibleChannelMembers.map((m) => (
+                <div className="fm-member" key={`channel-${m.id}`}>
+                  <span className="fm-dm-avatar">{(m.display_name || m.name || '?')[0]}</span>
+                  <span>{m.display_name || m.name}</span>
+                  <small>{m.role}</small>
+                </div>
+              ))}
+              {!visibleChannelMembers.length && <p className="rd-rowlink" style={{ padding: '2px 8px 10px' }}>No members have access to this channel.</p>}
+              <div className="fm-member-divider"/>
+              <div className="fm-member-section-head"><div><span>Group directory</span><strong>{activeGroupRecord?.name || 'Group'} · {members.length}</strong></div></div>
               {members.map((m) => (
-                <div className="fm-member" key={m.id}>
+                <div className="fm-member" key={`group-${m.id}`}>
                   <span className="fm-dm-avatar">{(m.display_name || m.name || '?')[0]}</span>
                   <span>{m.display_name || m.name}</span>
                   <small>{m.role}</small>

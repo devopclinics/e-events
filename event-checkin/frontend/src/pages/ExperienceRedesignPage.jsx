@@ -425,8 +425,11 @@ export default function ExperienceRedesignPage() {
   const sortedSteps = (selectedWorkflow?.steps || []).slice().sort((a, b) => (a.sort_order || 0) - (b.sort_order || 0))
   const filteredWorkflows = (workflows || []).filter((w) => filterMatchesStatus(w.status, statusFilter))
   const selectedGuest = realGuests.find((g) => g.id === selectedGuestId) || null
-  const liveWorkflowSteps = dashboard?.workflow?.steps || selectedWorkflow?.steps || []
-  const feedbackStep = liveWorkflowSteps.find((s) => s.type === 'feedback') || null
+  // The editor follows the workflow the operator selected. Falling back to the
+  // live dashboard first made Feedback appear empty (and uneditable) whenever
+  // an event had a selected draft alongside a published workflow.
+  const selectedWorkflowSteps = selectedWorkflow?.steps || dashboard?.workflow?.steps || []
+  const feedbackStep = selectedWorkflowSteps.find((s) => s.type === 'feedback') || null
   const feedbackStepQuestions = feedbackStep?.config?.feedback?.questions || []
 
   function guestLabel(g) { return g ? `${g.first_name || ''} ${g.last_name || ''}`.trim() : '' }
@@ -567,8 +570,34 @@ export default function ExperienceRedesignPage() {
   }
   function goEditFeedbackStep() {
     setActiveTab('Workflow')
-    if (feedbackStep) openEditStep(feedbackStep)
-    else notify('No Feedback step in the live workflow yet — add one from the Workflow tab, or use "Prepare feedback draft".')
+    if (!selectedWorkflow) {
+      notifyError('Create or select an Experience workflow first.')
+      return
+    }
+    if (!isDraftSelected) {
+      notifyError('Published workflows are read-only. Prepare a feedback draft before editing.')
+      return
+    }
+    if (feedbackStep) {
+      openEditStep(feedbackStep)
+      return
+    }
+    const preset = STEP_PRESET_BY_KEY.feedback_prompt
+    const form = blankStepForm()
+    setStepForm({
+      ...form,
+      key: preset.key,
+      type: preset.type,
+      title: preset.title,
+      description: preset.description,
+      sort_order: (sortedSteps.length + 1) * 10,
+      required: preset.required,
+      guest_message: preset.config?.messages?.guest || '',
+      completion_message: preset.config?.messages?.complete || '',
+      feedback_audience: preset.config?.feedback?.audience || 'all',
+      feedback_questions: preset.config?.feedback?.questions || [],
+      config: JSON.stringify(preset.config || {}, null, 2),
+    })
   }
 
   function stepFormPayload() {
@@ -832,6 +861,30 @@ export default function ExperienceRedesignPage() {
     if (result !== FAILED) await api.getFeedbackResults(currentEventId).then(setFeedbackResults).catch(() => {})
   }
   async function prepareDraft() {
+    if (selectedWorkflow?.status === 'draft') {
+      if (feedbackStep) {
+        setActiveTab('Workflow')
+        openEditStep(feedbackStep)
+        notify('This draft already has a feedback step. Review it, then publish when ready.')
+        return
+      }
+      const preset = STEP_PRESET_BY_KEY.feedback_prompt
+      const saved = await runAction(
+        'feedback:draft',
+        () => api.createExperienceStep(
+          currentEventId,
+          selectedWorkflow.id,
+          stepPresetPayload(preset, (sortedSteps.length + 1) * 10),
+        ),
+        'Feedback step added to the selected draft.',
+      )
+      if (saved !== FAILED) {
+        await loadWorkflows(selectedWorkflow.id)
+        setActiveTab('Workflow')
+        openEditStep(saved)
+      }
+      return
+    }
     const result = await runAction('feedback:draft', () => api.prepareFeedbackDraft(currentEventId), 'Feedback draft prepared — review it in the Workflow tab, then publish when ready.')
     if (result !== FAILED) { await loadWorkflows(result.id); setActiveTab('Workflow') }
   }
@@ -881,7 +934,12 @@ export default function ExperienceRedesignPage() {
         sms_body: item.effective.sms_body, whatsapp_body: item.effective.whatsapp_body, mms_body: item.effective.mms_body,
       }
       const preview = await api.previewTemplate(currentEventId, item.key, draft)
-      setPreviewMessage({ step: item.label, channel: item.channels.includes('email') ? 'email' : item.channels[0], preview })
+      setPreviewMessage({
+        step: item.label,
+        channel: item.channels.includes('email') ? 'email' : item.channels[0],
+        channels: item.channels,
+        preview,
+      })
     } catch (e) { notifyError(e.message || 'Preview failed') }
   }
   async function testSendNow(item) {
@@ -1386,12 +1444,24 @@ export default function ExperienceRedesignPage() {
       )}
 
       {previewMessage && (
-        <Modal title={`Preview: ${previewMessage.step}`} onClose={() => setPreviewMessage(null)} width={480}>
-          <ChannelPreviewFrame channel={previewMessage.channel || 'email'} body={
-            previewMessage.channel === 'sms' ? (previewMessage.preview.sms_body || '')
-            : previewMessage.channel === 'whatsapp' ? (previewMessage.preview.whatsapp_body || '')
-            : `${previewMessage.preview.subject ? `Subject: ${previewMessage.preview.subject}\n\n` : ''}${previewMessage.preview.email_body || ''}`
-          } />
+        <Modal title={`Preview: ${previewMessage.step}`} onClose={() => setPreviewMessage(null)} width={500}>
+          <div style={{ display: 'flex', gap: 8, marginBottom: 12 }}>
+            {(previewMessage.channels || [previewMessage.channel]).map((channel) => (
+              <button
+                key={channel}
+                className={`rr-btn${previewMessage.channel === channel ? ' primary' : ' secondary'}`}
+                onClick={() => setPreviewMessage((current) => ({ ...current, channel }))}
+                style={{ fontSize: '0.78rem', padding: '4px 10px' }}
+              >
+                {channel.toUpperCase()}
+              </button>
+            ))}
+          </div>
+          <ChannelPreviewFrame
+            channel={previewMessage.channel || 'email'}
+            html={previewMessage.channel === 'email' ? previewMessage.preview.email_preview_html || previewMessage.preview.email_body || '' : ''}
+            body={previewMessage.preview[`${previewMessage.channel}_body`] || `No ${previewMessage.channel.toUpperCase()} body is configured for this template.`}
+          />
         </Modal>
       )}
     </RedesignShell>

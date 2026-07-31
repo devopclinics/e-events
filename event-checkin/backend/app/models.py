@@ -1531,9 +1531,18 @@ class RegistryClaim(Base):
     item_id: Mapped[str] = mapped_column(String(36), ForeignKey("registry_items.id"), index=True)
     claimer_name: Mapped[str] = mapped_column(String(255))
     claimer_email: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    claimer_phone: Mapped[str | None] = mapped_column(String(50), nullable=True)
+    relationship: Mapped[str | None] = mapped_column(String(120), nullable=True)
+    # Server-normalized action: reserved | purchased | contributed | pledged |
+    # used_external_registry. This makes the activity ledger meaningful across
+    # every registry item type instead of treating every interaction as a claim.
+    action: Mapped[str] = mapped_column(String(40), default="reserved")
     quantity: Mapped[int] = mapped_column(Integer, default=1)            # items
     amount_minor: Mapped[int | None] = mapped_column(Integer, nullable=True)  # funds
+    reference: Mapped[str | None] = mapped_column(String(255), nullable=True)
     message: Mapped[str | None] = mapped_column(Text, nullable=True)
+    thank_you_channel: Mapped[str | None] = mapped_column(String(20), nullable=True)
+    thank_you_status: Mapped[str] = mapped_column(String(30), default="not_requested")
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
 
 

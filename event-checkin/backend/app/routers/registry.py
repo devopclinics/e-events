@@ -13,6 +13,7 @@ import ipaddress
 import re
 import uuid
 from datetime import datetime
+from types import SimpleNamespace
 from urllib.parse import urlparse, urlencode, parse_qsl, urlunparse
 
 import httpx
@@ -296,9 +297,11 @@ async def list_claims(event_id: str, db: AsyncSession = Depends(get_db),
     )).all()
     return [
         RegistryClaimOut(
-            id=c.id, item_id=c.item_id, item_title=i.title,
+            id=c.id, item_id=c.item_id, item_title=i.title, item_kind=i.kind, currency=i.currency,
             claimer_name=c.claimer_name, claimer_email=c.claimer_email,
-            quantity=c.quantity, amount_minor=c.amount_minor, message=c.message,
+            claimer_phone=c.claimer_phone, relationship=c.relationship, action=c.action,
+            quantity=c.quantity, amount_minor=c.amount_minor, reference=c.reference, message=c.message,
+            thank_you_channel=c.thank_you_channel, thank_you_status=c.thank_you_status,
             created_at=c.created_at,
         )
         for c, i in rows
@@ -406,34 +409,97 @@ async def public_registry(token: str, db: AsyncSession = Depends(get_db)):
 
 @registry_router.post("/{token}/items/{item_id}/claim", response_model=RegistryItemOut, status_code=201)
 async def claim_item(token: str, item_id: str, data: RegistryClaimCreate,
+                     background_tasks: BackgroundTasks,
                      db: AsyncSession = Depends(get_db)):
     ev = await _event_by_token(token, db)
     item = await db.get(RegistryItem, item_id)
     if not item or item.event_id != ev.id or not item.is_active:
         raise HTTPException(404, "Registry item not found")
-    if item.kind == "link":
-        raise HTTPException(400, "External links can't be reserved")
     if not (data.claimer_name or "").strip():
         raise HTTPException(422, "Please enter your name")
 
+    common = {
+        "item_id": item.id,
+        "claimer_name": data.claimer_name.strip(),
+        "claimer_email": data.claimer_email,
+        "claimer_phone": (data.claimer_phone or "").strip() or None,
+        "relationship": (data.relationship or "").strip() or None,
+        "reference": (data.reference or "").strip() or None,
+        "message": (data.message or "").strip() or None,
+        "thank_you_channel": None if data.thank_you_channel in (None, "none") else data.thank_you_channel,
+    }
     if item.kind == "item":
         qty = max(int(data.quantity or 1), 1)
         reserved, _raised, _c = await _claim_totals(item.id, db)
         if reserved + qty > (item.quantity_wanted or 0):
             raise HTTPException(409, "Sorry — this gift has already been fully reserved")
-        db.add(RegistryClaim(
-            item_id=item.id, claimer_name=data.claimer_name.strip(),
-            claimer_email=data.claimer_email, quantity=qty, message=data.message,
-        ))
-    else:  # fund
+        action = data.action if data.action in {"reserved", "purchased"} else "reserved"
+        claim = RegistryClaim(**common, action=action, quantity=qty)
+    elif item.kind == "fund":
         if not data.amount_minor or data.amount_minor <= 0:
             raise HTTPException(422, "Please enter a contribution amount")
-        db.add(RegistryClaim(
-            item_id=item.id, claimer_name=data.claimer_name.strip(),
-            claimer_email=data.claimer_email, quantity=1,
-            amount_minor=data.amount_minor, message=data.message,
-        ))
+        action = data.action if data.action in {"contributed", "pledged"} else "contributed"
+        claim = RegistryClaim(**common, action=action, quantity=1, amount_minor=data.amount_minor)
+    else:
+        claim = RegistryClaim(**common, action="used_external_registry", quantity=1)
 
+    requested_channel = claim.thank_you_channel
+    overrides = await load_overrides(ev.id, db)
+    first_name = claim.claimer_name.split()[0] if claim.claimer_name else "there"
+    action_text = {
+        "reserved": "reserving",
+        "purchased": "purchasing",
+        "contributed": "contributing toward",
+        "pledged": "pledging toward",
+        "used_external_registry": "using the external registry for",
+    }.get(claim.action, "supporting")
+    detail = ""
+    if item.kind == "fund" and claim.amount_minor:
+        detail = f"Recorded amount: {item.currency} {claim.amount_minor / 100:,.2f}."
+    elif item.kind == "item":
+        detail = f"Recorded quantity: {claim.quantity}."
+    ctx = build_template_context(
+        ev,
+        SimpleNamespace(first_name=first_name, last_name=""),
+        extras={"registry_action": action_text, "registry_item": item.title, "registry_detail": detail},
+    )
+    claim.thank_you_status = "not_requested"
+    if requested_channel == "email":
+        if claim.claimer_email:
+            subject, body = email_or_default(overrides, "registry_thank_you", ctx)
+            if body:
+                background_tasks.add_task(
+                    send_simple_email,
+                    claim.claimer_email,
+                    subject or f"Thank you for your gift — {ev.name}",
+                    body,
+                    ev.id,
+                    None,
+                    None,
+                    "registry_thank_you",
+                )
+                claim.thank_you_status = "queued"
+        else:
+            claim.thank_you_status = "missing_contact"
+    elif requested_channel == "sms":
+        if claim.claimer_phone and ev.notify_sms and can_use_paid_channels(ev):
+            if take_message_credit(ev, "sms", reason="registry_thank_you"):
+                body = channel_text_or_default(overrides, "registry_thank_you", "sms", ctx)
+                if body:
+                    background_tasks.add_task(
+                        send_with_credit_ledger,
+                        last_credit_ledger_id(ev),
+                        messaging.send_custom_sms,
+                        phone=claim.claimer_phone,
+                        body=body,
+                    )
+                    claim.thank_you_status = "queued"
+            else:
+                claim.thank_you_status = "no_credits"
+        else:
+            claim.thank_you_status = "missing_contact"
+
+    db.add(claim)
     await db.commit()
     await db.refresh(item)
     return await _item_out(item, db)

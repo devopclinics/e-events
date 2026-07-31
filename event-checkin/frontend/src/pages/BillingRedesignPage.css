@@ -46,8 +46,34 @@
 .bl-ent-label { font-size: 12px; font-weight: 700; color: var(--ink); }
 .rd-status-chip.bl-chip-neutral { background: var(--surface-3); color: var(--faint); }
 
-/* ── org settings: stacked full-width panels ─────────────────────────── */
-.bl-org-stack { display: flex; flex-direction: column; gap: 16px; max-width: 860px; }
+/* ── org settings: directory-standard workspace ──────────────────────── */
+.bl-org-stack { display: grid; grid-template-columns: minmax(0, 1fr) minmax(320px, .72fr); gap: 14px; max-width: none; align-items: start; }
+.bl-org-overview, .bl-org-team, .bl-org-webhooks, .bl-org-wide, .bl-reveal-banner { grid-column: 1 / -1; }
+.bl-org-overview { display: grid; gap: 10px; }
+.bl-org-summary { display: grid; grid-template-columns: repeat(4, minmax(0,1fr)); gap: 10px; }
+.bl-org-summary > div { display: grid; grid-template-columns: 28px 1fr; grid-template-rows: auto auto; align-items: center; column-gap: 8px; padding: 12px 14px; border: 1px solid var(--line); border-radius: 11px; background: var(--surface); box-shadow: var(--shadow); }
+.bl-org-summary svg { grid-row: 1 / 3; width: 28px; height: 28px; padding: 7px; border-radius: 8px; background: var(--teal-soft); color: var(--teal); }
+.bl-org-summary strong { color: var(--ink); font-size: 15px; line-height: 1; }
+.bl-org-summary span { color: var(--muted); font-size: 8.5px; font-weight: 600; }
+.bl-org-toolbar { display: flex; align-items: center; justify-content: space-between; gap: 14px; padding: 11px 13px; }
+.bl-org-toolbar > div { display: grid; gap: 2px; }
+.bl-org-toolbar > div strong { color: var(--ink); font-size: 11px; }
+.bl-org-toolbar > div span { color: var(--muted); font-size: 8.5px; }
+.bl-org-toolbar nav { display: flex; align-items: center; gap: 4px; flex-wrap: wrap; }
+.bl-org-toolbar a { padding: 6px 9px; border-radius: 7px; color: var(--muted); font-size: 8.5px; font-weight: 700; text-decoration: none; }
+.bl-org-toolbar a:hover { background: var(--teal-soft); color: var(--teal); }
+.bl-org-section { scroll-margin-top: 76px; }
+.bl-org-member-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)); gap: 9px; }
+.bl-org-member-card { display: grid; gap: 11px; padding: 12px; border: 1px solid var(--line-soft); border-radius: 10px; background: var(--surface); }
+.bl-org-member-head { display: flex; align-items: center; gap: 9px; min-width: 0; }
+.bl-org-member-head > span { display: grid; place-items: center; width: 34px; height: 34px; flex: none; border-radius: 50%; background: linear-gradient(145deg, var(--teal), var(--teal-dark)); color: white; font-size: 9px; font-weight: 800; }
+.bl-org-member-head > div { min-width: 0; display: grid; gap: 2px; }
+.bl-org-member-head strong, .bl-org-member-head small { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.bl-org-member-head strong { color: var(--ink); font-size: 10.5px; }
+.bl-org-member-head small { color: var(--muted); font-size: 8.5px; }
+.bl-org-member-role { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding-top: 9px; border-top: 1px solid var(--line-soft); }
+.bl-org-member-role label { color: var(--muted); font-size: 8px; font-weight: 700; }
+.bl-org-member-role select { min-width: 105px; height: 30px; border: 1px solid var(--line); border-radius: 7px; padding: 0 7px; background: var(--surface-2); color: var(--ink); font-size: 8.5px; }
 .bl-panel-head-row { display: flex; align-items: flex-start; justify-content: space-between; gap: 14px; }
 .bl-panel-head-row h3 { display: flex; align-items: center; gap: 7px; }
 .bl-panel-head-row > button { flex: none; }
@@ -143,6 +169,10 @@
 .bl-cal-audience { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin: 10px 0; flex-wrap: wrap; }
 
 /* ── responsive ──────────────────────────────────────────────────────── */
+@media (max-width: 1000px) {
+  .bl-org-stack { grid-template-columns: 1fr; }
+  .bl-org-overview, .bl-org-team, .bl-org-webhooks, .bl-org-wide, .bl-reveal-banner { grid-column: auto; }
+}
 @media (max-width: 700px) {
   .bl-plan-head { flex-wrap: wrap; }
   .bl-plan-stats { gap: 20px; flex-wrap: wrap; }
@@ -150,4 +180,7 @@
   .bl-list-meta, .bl-list-actions { flex: none; }
   .bl-ledger-toggle-label { font-size: 0; }
   .bl-capability-facts { grid-template-columns: 1fr; }
+  .bl-org-summary { grid-template-columns: 1fr 1fr; }
+  .bl-org-toolbar { align-items: flex-start; flex-direction: column; }
+  .bl-org-member-grid { grid-template-columns: 1fr; }
 }

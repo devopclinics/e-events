@@ -55,12 +55,21 @@ export default function RegistryPage() {
         {done && <div className="mb-6 rounded-lg bg-emerald-50 border border-emerald-200 text-emerald-700 px-4 py-3 text-sm text-center">{done}</div>}
 
         {links.length > 0 && (
-          <div className="flex flex-wrap gap-2 justify-center mb-8">
+          <div className="grid sm:grid-cols-2 gap-3 mb-8">
             {links.map((l) => (
-              <a key={l.id} href={l.buy_url || l.external_url} target="_blank" rel="noreferrer"
-                className="bg-white border border-slate-300 rounded-full px-4 py-2 text-sm font-semibold hover:bg-slate-50">
-                🔗 {l.title}
-              </a>
+              <div key={l.id} className="bg-white border border-slate-200 rounded-xl p-4 shadow-sm">
+                <strong className="block text-sm">🔗 {l.title}</strong>
+                {l.description && <p className="mt-1 text-xs text-slate-500">{l.description}</p>}
+                <div className="flex gap-2 mt-3">
+                  <a href={l.buy_url || l.external_url} target="_blank" rel="noreferrer"
+                    className="flex-1 text-center border border-slate-300 rounded-lg px-3 py-2 text-xs font-semibold hover:bg-slate-50">
+                    Open registry
+                  </a>
+                  <button onClick={() => setClaimFor(l)} className="flex-1 bg-rose-500 text-white rounded-lg px-3 py-2 text-xs font-semibold">
+                    Record my gift
+                  </button>
+                </div>
+              </div>
             ))}
           </div>
         )}
@@ -141,7 +150,12 @@ export default function RegistryPage() {
 
 function ClaimModal({ token, item, onClose, onDone }) {
   const isFund = item.kind === 'fund'
-  const [form, setForm] = useState({ claimer_name: '', claimer_email: '', quantity: 1, amountMajor: '', message: '' })
+  const isLink = item.kind === 'link'
+  const [form, setForm] = useState({
+    claimer_name: '', claimer_email: '', claimer_phone: '', relationship: '',
+    action: isFund ? 'contributed' : isLink ? 'used_external_registry' : 'purchased',
+    quantity: 1, amountMajor: '', reference: '', message: '', thank_you_channel: 'email',
+  })
   const [busy, setBusy] = useState(false)
   const [err, setErr] = useState('')
   const inputCls = 'w-full rounded-lg border border-slate-300 px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-rose-300'
@@ -153,7 +167,12 @@ function ClaimModal({ token, item, onClose, onDone }) {
       const body = {
         claimer_name: form.claimer_name.trim(),
         claimer_email: form.claimer_email.trim() || undefined,
+        claimer_phone: form.claimer_phone.trim() || undefined,
+        relationship: form.relationship.trim() || undefined,
+        action: form.action,
+        reference: form.reference.trim() || undefined,
         message: form.message.trim() || undefined,
+        thank_you_channel: form.thank_you_channel,
       }
       if (isFund) {
         const minor = Math.round(parseFloat(form.amountMajor) * 100)
@@ -171,7 +190,7 @@ function ClaimModal({ token, item, onClose, onDone }) {
     <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4" onClick={onClose}>
       <form onClick={(e) => e.stopPropagation()} onSubmit={submit} className="bg-white rounded-xl shadow-xl w-full max-w-sm p-5 space-y-3">
         <div className="flex justify-between items-start">
-          <h3 className="font-bold">{isFund ? `Contribute to ${item.title}` : `Reserve: ${item.title}`}</h3>
+          <h3 className="font-bold">{isFund ? `Contribute to ${item.title}` : isLink ? `Record gift from ${item.title}` : `Record gift: ${item.title}`}</h3>
           <button type="button" onClick={onClose} className="text-slate-400 text-xl leading-none">×</button>
         </div>
 
@@ -183,24 +202,44 @@ function ClaimModal({ token, item, onClose, onDone }) {
         )}
 
         <input className={inputCls} required placeholder="Your name *" value={form.claimer_name} onChange={(e) => setForm((f) => ({ ...f, claimer_name: e.target.value }))} />
-        <input className={inputCls} type="email" placeholder="Email (optional)" value={form.claimer_email} onChange={(e) => setForm((f) => ({ ...f, claimer_email: e.target.value }))} />
+        <div className="grid grid-cols-2 gap-2">
+          <input className={inputCls} type="email" placeholder="Email" value={form.claimer_email} onChange={(e) => setForm((f) => ({ ...f, claimer_email: e.target.value }))} />
+          <input className={inputCls} type="tel" placeholder="Phone" value={form.claimer_phone} onChange={(e) => setForm((f) => ({ ...f, claimer_phone: e.target.value }))} />
+        </div>
+        <input className={inputCls} placeholder="Relationship to host (optional)" value={form.relationship} onChange={(e) => setForm((f) => ({ ...f, relationship: e.target.value }))} />
 
         {isFund ? (
-          <div className="flex items-center gap-2">
+          <><select className={inputCls} value={form.action} onChange={(e) => setForm((f) => ({ ...f, action: e.target.value }))}>
+            <option value="contributed">I sent this contribution</option>
+            <option value="pledged">I pledge to send it</option>
+          </select><div className="flex items-center gap-2">
             <span className="text-sm text-slate-500">{CURRENCY_SYMBOL[item.currency] || ''}</span>
             <input className={inputCls} type="number" step="0.01" required placeholder="Amount you're sending" value={form.amountMajor} onChange={(e) => setForm((f) => ({ ...f, amountMajor: e.target.value }))} />
-          </div>
+          </div></>
+        ) : isLink ? (
+          <input className={inputCls} placeholder="Gift or order reference (optional)" value={form.reference} onChange={(e) => setForm((f) => ({ ...f, reference: e.target.value }))} />
         ) : (
-          item.quantity_wanted > 1 && (
+          <><select className={inputCls} value={form.action} onChange={(e) => setForm((f) => ({ ...f, action: e.target.value }))}>
+            <option value="purchased">I purchased this gift</option>
+            <option value="reserved">I plan to bring this gift</option>
+          </select>{item.quantity_wanted > 1 && (
             <input className={inputCls} type="number" min="1" max={item.remaining ?? 1} placeholder="Quantity" value={form.quantity} onChange={(e) => setForm((f) => ({ ...f, quantity: e.target.value }))} />
-          )
+          )}<input className={inputCls} placeholder="Order / delivery reference (optional)" value={form.reference} onChange={(e) => setForm((f) => ({ ...f, reference: e.target.value }))} /></>
         )}
 
         <textarea className={inputCls} rows={2} placeholder="Add a note (optional)" value={form.message} onChange={(e) => setForm((f) => ({ ...f, message: e.target.value }))} />
+        <div>
+          <label className="block text-xs font-semibold text-slate-600 mb-1">Send my thank-you by</label>
+          <select className={inputCls} value={form.thank_you_channel} onChange={(e) => setForm((f) => ({ ...f, thank_you_channel: e.target.value }))}>
+            <option value="email">Email</option><option value="sms">SMS</option><option value="none">No message</option>
+          </select>
+          {form.thank_you_channel === 'email' && !form.claimer_email.trim() && <small className="text-amber-600">Enter an email address to receive it.</small>}
+          {form.thank_you_channel === 'sms' && !form.claimer_phone.trim() && <small className="text-amber-600">Enter a phone number to receive it.</small>}
+        </div>
 
         {err && <p className="text-sm text-red-600">{err}</p>}
         <button disabled={busy} className="w-full bg-rose-500 text-white rounded-lg py-2.5 text-sm font-bold hover:bg-rose-600 disabled:opacity-50">
-          {busy ? 'Saving…' : isFund ? "I've sent / pledge this" : "Mark as reserved"}
+          {busy ? 'Saving…' : 'Record my action'}
         </button>
         <p className="text-[11px] text-slate-400 text-center">Festio doesn't process payments — you give directly.</p>
       </form>

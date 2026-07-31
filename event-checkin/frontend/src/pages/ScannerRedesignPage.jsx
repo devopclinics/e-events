@@ -321,6 +321,114 @@ function EventQRMode({ event }) {
   </div></div>
 }
 
+function ScannerCommandMockup({ event, online }) {
+  const expected = Number(event?.guest_count || 0)
+  const checkedIn = Number(event?.admitted_count || 0)
+  const remaining = Math.max(expected - checkedIn, 0)
+  const progress = expected ? Math.round((checkedIn / expected) * 100) : 0
+  return (
+    <div className="sc-command">
+      <div className="sc-mockup-note">
+        <span>Design preview</span>
+        <p>This command-center concept is isolated from live scanning. Camera and action controls are intentionally disabled.</p>
+        <a href="/scanner-redesign">Return to working scanner</a>
+      </div>
+
+      <section className="sc-command-hero">
+        <div>
+          <span className="sc-command-kicker">Live check-in command center</span>
+          <h1>{event?.name || 'Selected event'}</h1>
+          <p>One focused workspace for arrivals, access decisions, seating guidance, and operator handoff.</p>
+        </div>
+        <div className="sc-command-health">
+          <span className={online ? 'online' : 'offline'}><i />{online ? 'Online' : 'Offline'}</span>
+          <span><Icon name="users" size={13}/> Main entrance</span>
+          <span><Icon name="clock" size={13}/> Synced just now</span>
+        </div>
+      </section>
+
+      <div className="sc-command-metrics">
+        <article><span>Expected</span><strong>{expected || '—'}</strong><small>Confirmed guest list</small></article>
+        <article className="success"><span>Checked in</span><strong>{checkedIn || '—'}</strong><small>{progress}% of expected</small></article>
+        <article><span>Remaining</span><strong>{expected ? remaining : '—'}</strong><small>Not yet arrived</small></article>
+        <article className="accent"><span>Arrival pace</span><strong>18<small>/hr</small></strong><small>Last 30 minutes</small></article>
+      </div>
+
+      <div className="sc-command-tabs">
+        <button className="active"><Icon name="ticket" size={14}/> Scan</button>
+        <button><Icon name="search" size={14}/> Manual check-in</button>
+        <button><Icon name="external" size={14}/> Check-out</button>
+        <button><Icon name="ticket" size={14}/> Event QR</button>
+      </div>
+
+      <div className="sc-command-workspace">
+        <section className="sc-command-panel sc-command-capture">
+          <div className="sc-command-panel-head">
+            <div><span>Camera station</span><strong>Ready to scan</strong></div>
+            <button disabled><Icon name="settings" size={13}/> Station settings</button>
+          </div>
+          <div className="sc-command-camera">
+            <div className="sc-command-reticle"><i/><i/><i/><i/></div>
+            <Icon name="ticket" size={44}/>
+            <strong>Place the guest QR inside the frame</strong>
+            <span>Fast continuous scanning · duplicates are protected</span>
+            <button disabled>Start camera</button>
+          </div>
+          <div className="sc-command-token">
+            <Icon name="search" size={14}/>
+            <input disabled placeholder="Paste pass URL or QR token" />
+            <button disabled>Record scan</button>
+          </div>
+          <div className="sc-command-station">
+            <label>Active lane<select disabled><option>Main entrance</option></select></label>
+            <label>Operator<select disabled><option>DevOps Clinics</option></select></label>
+            <button disabled><Icon name="settings" size={13}/> Flash</button>
+          </div>
+        </section>
+
+        <aside className="sc-command-panel sc-command-arrival">
+          <div className="sc-command-panel-head"><div><span>Latest arrival</span><strong>Guest guidance</strong></div><span className="sc-command-ready">Ready</span></div>
+          <div className="sc-command-guest">
+            <span className="sc-command-avatar">AY</span>
+            <div><strong>Aminah Yusuf</strong><small>Confirmed guest · pass verified</small></div>
+            <span className="sc-command-pass"><Icon name="check" size={14}/> Admitted</span>
+          </div>
+          <div className="sc-command-guidance">
+            <div><Icon name="chair" size={16}/><span>Table assignment<strong>Esteemed Parents · Table 12</strong></span></div>
+            <div><Icon name="users" size={16}/><span>Guest party<strong>2 guests · both arrived</strong></span></div>
+            <div><Icon name="card" size={16}/><span>Meal note<strong>Standard menu</strong></span></div>
+          </div>
+          <div className="sc-command-next">
+            <span>Next required action</span>
+            <strong>Direct guest to Table 12</strong>
+            <button disabled>Confirm handoff</button>
+          </div>
+        </aside>
+      </div>
+
+      <div className="sc-command-lower">
+        <section className="sc-command-panel">
+          <div className="sc-command-panel-head"><div><span>Live arrivals</span><strong>Recent activity</strong></div><button disabled>View attendance</button></div>
+          {[
+            ['Aminah Yusuf', 'Just now', 'Esteemed Parents · 12', 'Checked in'],
+            ['Ibrahim AbdulWaheed', '2 min ago', 'Graduands Guests · 8', 'Checked in'],
+            ['Maryam Fashola', '5 min ago', 'Esteemed Parents · 11', 'Checked in'],
+          ].map((row) => <div className="sc-command-activity" key={row[0]}><span>{row[0][0]}</span><div><strong>{row[0]}</strong><small>{row[2]}</small></div><time>{row[1]}</time><b>{row[3]}</b></div>)}
+        </section>
+        <section className="sc-command-panel">
+          <div className="sc-command-panel-head"><div><span>Station health</span><strong>Operations</strong></div></div>
+          <div className="sc-command-ops">
+            <div><span>Camera permission</span><strong className="ok">Ready</strong></div>
+            <div><span>Offline manifest</span><strong>236 passes</strong></div>
+            <div><span>Pending sync</span><strong className="ok">0 actions</strong></div>
+            <div><span>Duplicate protection</span><strong className="ok">On</strong></div>
+          </div>
+        </section>
+      </div>
+    </div>
+  )
+}
+
 export default function ScannerRedesignPage() {
   const [eventId] = useCurrentEvent()
   const { event, error: eventError } = useEventDetails(eventId)
@@ -432,6 +540,10 @@ export default function ScannerRedesignPage() {
   }
 
   const stats = useMemo(() => ({ expected: event?.guest_count ?? '—', checkedIn: event?.admitted_count ?? '—' }), [event])
+  const commandMockup = new URLSearchParams(window.location.search).get('mockup') === 'command'
+  if (commandMockup) {
+    return <RedesignShell topActive="checkin" eventScoped><ScannerCommandMockup event={event} online={online}/></RedesignShell>
+  }
   return (
     <RedesignShell topActive="checkin" eventScoped>
       <div className="sc-page">

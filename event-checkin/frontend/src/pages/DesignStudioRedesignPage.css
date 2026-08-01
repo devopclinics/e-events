@@ -5,9 +5,11 @@
 .ds-stat-row > div { display: flex; flex-direction: column; gap: 2px; }
 .ds-stat-row strong { font-size: 20px; color: var(--ink); }
 .ds-stat-row span { font-size: 10.5px; color: var(--muted); }
-.ds-filter-row { display: flex; gap: 8px; margin-bottom: 14px; flex-wrap: wrap; }
+.ds-filter-row { display: flex; gap: 8px; margin-bottom: 14px; align-items: center; flex-wrap: nowrap; }
 
-.ds-templates-layout { display: grid; grid-template-columns: 1fr 240px; gap: 14px; align-items: start; }
+.ds-templates-layout { display: grid; grid-template-columns: 1fr 280px; gap: 18px; align-items: start; }
+/* Auto-fill: on a 1440px viewport the left 1fr ≈ 1080px → 4 cards at minmax(220px,1fr); as more templates are added rows fill naturally */
+.ds-tpl-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 14px; }
 .ds-template-card { padding: 16px 15px; display: flex; flex-direction: column; align-items: center; text-align: center; gap: 6px; cursor: pointer; }
 .ds-template-card.selected { border-color: var(--teal); }
 .ds-template-swatch { width: 48px; height: 48px; border-radius: 12px; background: var(--teal-soft); color: var(--teal);
@@ -19,6 +21,10 @@
 .ds-template-card strong { font-size: 12.5px; color: var(--ink); }
 .ds-template-card span { font-size: 10.5px; color: var(--muted); }
 .ds-surface-chips { display: flex; flex-wrap: wrap; gap: 4px; justify-content: center; margin: 6px 0; }
+/* Surface chips are now interactive buttons — clicking jumps to that surface's preview tab */
+.ds-surface-chip { cursor: pointer; border: 1px solid var(--line); background: var(--surface-2); color: var(--muted);
+  font-size: 10.5px; padding: 2px 8px; border-radius: 100px; transition: border-color .15s, color .15s, background .15s; }
+.ds-surface-chip:hover { border-color: var(--teal); color: var(--teal); background: var(--teal-soft); }
 .ds-side-preview { position: sticky; top: 78px; }
 .ds-template-hero { position: relative; overflow: hidden; border-radius: 14px; padding: 16px; min-height: 90px; display: flex; align-items: flex-end; }
 .ds-template-hero-image { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
@@ -45,6 +51,13 @@
 
 .ds-flyer-preview, .ds-page-preview { display: flex; flex-direction: column; align-items: center; text-align: center;
   gap: 8px; padding: 30px 16px; background: var(--surface-2); border: 1px dashed var(--line); border-radius: 12px; color: var(--faint); }
+.ds-flyer-preview { position: relative; min-height: 240px; justify-content: center; }
+.ds-flyer-preview-img { width: 100%; max-width: 300px; border-radius: 8px; box-shadow: 0 3px 14px rgba(0,0,0,.15);
+  display: block; transition: opacity .15s ease; }
+.ds-flyer-preview-img.loading { opacity: .55; }
+.ds-flyer-preview-spinner { position: absolute; bottom: 10px; right: 10px; font-size: 10px; font-weight: 700;
+  background: var(--surface); color: var(--muted); padding: 3px 9px; border-radius: 100px; box-shadow: 0 1px 5px rgba(0,0,0,.15); }
+.ds-flyer-preview-error { color: var(--danger); font-size: 12px; max-width: 260px; }
 .ds-page-preview.mobile { max-width: 280px; margin: 0 auto; }
 .ds-page-preview h3 { margin: 4px 0 0; color: var(--ink); font-size: 15px; }
 .ds-page-preview p { margin: 0 0 8px; font-size: 11px; color: var(--muted); }
@@ -53,6 +66,11 @@
 .ds-feed-sample { width: 100%; margin-top: 10px; display: flex; flex-direction: column; gap: 6px; }
 .ds-feed-item { display: flex; align-items: center; gap: 6px; font-size: 10px; color: var(--muted); background: var(--surface);
   border-radius: 7px; padding: 6px 9px; }
+
+.ds-page-preview-frame-wrap { width: 100%; height: 640px; border-radius: 12px; overflow: hidden; border: 1px solid var(--line);
+  background: var(--surface-2); transition: max-width .15s ease; }
+.ds-page-preview-frame-wrap.mobile { max-width: 390px; margin: 0 auto; height: 700px; }
+.ds-page-preview-frame { width: 100%; height: 100%; border: 0; display: block; }
 
 .ds-recent-row { display: flex; align-items: center; gap: 8px; font-size: 11px; color: var(--ink); padding: 8px 0; border-bottom: 1px solid var(--line-soft); }
 .ds-recent-row:last-child { border-bottom: 0; }
@@ -90,15 +108,45 @@
 .ds-pass-qr { margin-top: 12px; width: 56px; height: 56px; border-radius: 8px; background: rgba(255,255,255,.15);
   display: grid; place-items: center; }
 
-.ds-email-preview { border: 1px solid var(--line); border-radius: 12px; overflow: hidden; }
-.ds-email-banner { height: 80px; background: var(--teal-soft); color: var(--teal); display: grid; place-items: center; }
-.ds-email-preview strong { display: block; padding: 14px 16px 4px; font-size: 13px; color: var(--ink); }
-.ds-email-preview p { padding: 0 16px; font-size: 11.5px; color: var(--muted); margin: 0 0 14px; }
-.ds-email-preview button { margin: 0 16px 16px; }
+/* ── festio pass tab's real preview card (matches DesignStudioPage.jsx's PassPreview) ── */
+.ds-pass-card { max-width: 320px; margin: 0 auto; border-radius: 20px; overflow: hidden;
+  border: 1px solid var(--line); background: var(--surface); box-shadow: 0 8px 24px rgba(0,0,0,.1); }
+.ds-pass-card-cover { height: 110px; background-size: cover; background-position: center; }
+.ds-pass-card-body { padding: 18px; }
+.ds-pass-card-kicker { font-size: 10px; font-weight: 800; letter-spacing: .12em; text-transform: uppercase; color: var(--muted); }
+.ds-pass-card-body strong { display: block; margin-top: 4px; font-size: 19px; color: var(--ink); }
+.ds-pass-card-body span { font-size: 12px; color: var(--muted); font-weight: 600; }
+.ds-pass-card-pill { display: inline-block; margin-top: 8px; padding: 4px 10px; border-radius: 100px;
+  background: var(--surface-2); font-size: 11px; font-weight: 700; color: var(--ink); }
+.ds-pass-qr-block { margin-top: 16px; display: grid; place-items: center; padding: 14px; border-radius: 14px; background: var(--surface-2); }
+.ds-pass-qr-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 2px; width: 112px; height: 112px; }
+.ds-pass-qr-grid span { border-radius: 1px; background: var(--surface); }
+.ds-pass-qr-grid span.on { background: var(--ink); }
+.ds-pass-card-note { margin: 12px 0 0; font-size: 12px; line-height: 1.5; color: var(--muted); }
+.ds-pass-card-cta { display: block; margin-top: 14px; padding: 11px; border-radius: 11px; text-align: center;
+  font-size: 12.5px; font-weight: 800; color: var(--teal-ink); cursor: default; }
+.ds-pass-card-footer { margin: 10px 0 0; font-size: 10.5px; color: var(--faint); }
+
+.ds-email-card { max-width: 480px; margin: 0 auto; border-radius: 14px; overflow: hidden;
+  border: 1px solid var(--line); box-shadow: 0 8px 24px rgba(0,0,0,.08); }
+.ds-email-card-banner { padding: 20px 22px; }
+.ds-email-card-brand { display: flex; align-items: center; justify-content: space-between; font-size: 11px; font-weight: 700; opacity: .9; }
+.ds-email-card-banner h3 { margin: 16px 0 0; font-size: 20px; font-weight: 800; }
+.ds-email-card-cover { width: 100%; height: 140px; object-fit: cover; display: block; }
+.ds-email-card-body { padding: 20px 22px; background: var(--surface); }
+.ds-email-card-greeting { margin: 0 0 8px; font-size: 12.5px; color: var(--muted); }
+.ds-email-card-message { margin: 0 0 14px; font-size: 13px; line-height: 1.55; color: var(--ink); white-space: pre-wrap; }
+.ds-email-card-details { background: var(--surface-2); border-radius: 12px; padding: 12px 14px; font-size: 12px;
+  color: var(--ink); display: flex; flex-direction: column; gap: 4px; margin-bottom: 16px; }
+.ds-email-cta { display: inline-flex; align-items: center; height: 40px; padding: 0 16px;
+  border-radius: 10px; font-size: 12.5px; font-weight: 800; color: var(--teal-ink); cursor: default; }
+.ds-email-card-footer { margin: 16px 0 0; font-size: 10.5px; color: var(--faint); }
 
 @media (max-width: 1100px) {
   .rr-grid4 { grid-template-columns: 1fr 1fr; }
+  .ds-filter-row { flex-wrap: wrap; }
   .ds-templates-layout, .ds-flyer-layout { grid-template-columns: 1fr; }
+  .ds-tpl-grid { grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); }
   .ds-side-preview { position: static; }
 }
 

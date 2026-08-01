@@ -330,6 +330,14 @@ async def render_event_flyer(event_id: str, body: RenderRequest):
     except Exception as e:  # rendering must never 500 the studio hard
         raise HTTPException(502, f"render failed: {e}")
 
+    media = "application/pdf" if fmt == "pdf" else "image/png"
+    # Live-preview renders (Design Studio calling this on every edit) must not
+    # persist a file — the Studio only needs the bytes to show inline. Only a
+    # real download/render-and-use-as-cover action should leave a row in the
+    # event's rendered-outputs list.
+    if body.preview:
+        return Response(content=content, media_type=media)
+
     # Persist the output so it can be re-downloaded / listed.
     out_dir = os.path.join(settings.storage_path, "outputs", event_id)
     os.makedirs(out_dir, exist_ok=True)
@@ -337,7 +345,6 @@ async def render_event_flyer(event_id: str, body: RenderRequest):
     with open(os.path.join(out_dir, name), "wb") as f:
         f.write(content)
 
-    media = "application/pdf" if fmt == "pdf" else "image/png"
     return Response(
         content=content, media_type=media,
         headers={"Content-Disposition": f'inline; filename="{name}"',

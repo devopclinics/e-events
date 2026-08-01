@@ -75,7 +75,10 @@ test.describe('Stage C Design Studio publishing', () => {
 
     await page.goto('/design-studio-redesign')
     await expect(page.getByRole('heading', { name: 'Design Studio' })).toBeVisible()
-    await page.getByRole('button', { name: 'Event Page' }).click()
+    // Scoped to the tab strip — template cards' surface chips ("Preview Event
+    // Page") share the same accessible name as the tab button once the real
+    // template catalog has loaded, which an unscoped locator can't disambiguate.
+    await page.locator('.rr-tabs').getByRole('button', { name: 'Event Page', exact: true }).click()
 
     await page.locator('.rd-toggle-row', { hasText: 'Welcome label' }).locator('label.rd-switch').click()
     await page.getByPlaceholder('Label, e.g. Organized by').fill('Hosted by')

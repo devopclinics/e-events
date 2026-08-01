@@ -10,6 +10,24 @@ const TABS = ['Templates', 'Flyer', 'Event Page', 'Festio Pass', 'Email Preview'
 const TEMPLATE_CATEGORIES = ['All', 'Wedding', 'Community', 'Conference', 'Celebration']
 const TEMPLATE_STYLES = ['All styles', 'Warm', 'Minimal', 'Dark', 'Playful']
 
+// Maps a surface label (from the API or mock data, case-insensitive) to the
+// Design Studio tab that previews it. Clicking a chip on a template card
+// selects that template and jumps straight to its surface preview.
+const SURFACE_TAB = {
+  'rsvp page': 'Event Page',
+  'event page': 'Event Page',
+  'rsvp_page': 'Event Page',
+  'event_page': 'Event Page',
+  'flyer': 'Flyer',
+  'festiohub': 'Event Page',
+  'festio hub': 'Event Page',
+  'festio_hub': 'Event Page',
+  'festio pass': 'Festio Pass',
+  'festio_pass': 'Festio Pass',
+  'pass': 'Festio Pass',
+  'email': 'Email Preview',
+}
+
 const TEMPLATES = [
   { name: 'Botanical Gold', category: 'Wedding', style: 'Warm', tier: 'premium', tone: 'Warm, floral', selected: true, surfaces: ['Event Page', 'Flyer', 'Pass', 'Email'] },
   { name: 'Modern Mono', category: 'Conference', style: 'Minimal', tier: 'free', tone: 'Minimal, high-contrast', selected: false, surfaces: ['Event Page', 'Flyer', 'Email'] },
@@ -107,6 +125,12 @@ const DEFAULT_PAGE_SECTIONS = {
 
 const EMAIL_TYPES = ['Invitation', 'RSVP confirmation', 'Festio Pass email', 'Reminder', 'Broadcast', 'Check-in confirmation']
 
+// A representative-looking 7x7 QR pattern for the illustrative pass preview —
+// each real guest's actual pass carries their own unique token, this is only
+// here so the preview reads as "a QR code" at a glance.
+const QR_ON_INDEXES = new Set([0, 1, 2, 3, 6, 7, 9, 11, 13, 14, 16, 18, 20, 21, 24, 27, 28, 30, 32, 34, 36, 39, 41, 42, 43, 45, 48])
+const QR_SAMPLE_PATTERN = Array.from({ length: 49 }, (_, i) => QR_ON_INDEXES.has(i))
+
 const PUBLISH_CHECKLIST = [
   { label: 'Template selected', done: true },
   { label: 'Cover image added', done: true },
@@ -160,6 +184,16 @@ export default function DesignStudioRedesignPage() {
   const [renderBusy, setRenderBusy] = useState(false)
   const coverFileRef = useRef(null)
 
+  // Live flyer preview: a real server render (same engine the download
+  // buttons use), debounced on every edit, with preview:true so the
+  // design-service skips persisting a file — a live preview shouldn't
+  // clutter "Recent rendered files" with a new row per keystroke.
+  const [flyerPreviewUrl, setFlyerPreviewUrl] = useState('')
+  const [flyerPreviewLoading, setFlyerPreviewLoading] = useState(false)
+  const [flyerPreviewError, setFlyerPreviewError] = useState('')
+  const flyerPreviewTimerRef = useRef(null)
+  const flyerPreviewObjectUrlRef = useRef('')
+
   async function loadDesignStudio() {
     if (!eventId) return
     setDesignBusy(true)
@@ -205,6 +239,49 @@ export default function DesignStudioRedesignPage() {
   }
 
   useEffect(() => { loadDesignStudio() }, [eventId])
+
+  // a5/a4 are print-only sizes (design-service serves them as PDF, never
+  // PNG) — there's no honest way to show those inline, so the live preview
+  // only covers the three PNG-native sizes and says so for the other two.
+  const flyerPreviewSupported = ['square', 'story', 'portrait'].includes(flyerSettings.size)
+
+  useEffect(() => {
+    if (tab !== 'Flyer' || !eventId || !flyerPreviewSupported) return undefined
+    clearTimeout(flyerPreviewTimerRef.current)
+    flyerPreviewTimerRef.current = setTimeout(async () => {
+      setFlyerPreviewLoading(true)
+      setFlyerPreviewError('')
+      try {
+        const { blob } = await api.renderFlyer(eventId, {
+          size: flyerSettings.size,
+          format: 'png',
+          template_id: selectedFlyerTplId || undefined,
+          colors,
+          wording,
+          cover_image_url: design?.asset_config?.cover_image_url || undefined,
+          image_position: imagePosition,
+          text_scale: flyerTextScale,
+          qr_enabled: flyerSettings.qr,
+          qr_position: flyerSettings.qrPosition,
+          qr_data: flyerSettings.qr && flyerSettings.rsvpLink ? `https://festio.events/invite/${eventId}` : null,
+          preview: true,
+        }, { download: false })
+        if (flyerPreviewObjectUrlRef.current) URL.revokeObjectURL(flyerPreviewObjectUrlRef.current)
+        const url = URL.createObjectURL(blob)
+        flyerPreviewObjectUrlRef.current = url
+        setFlyerPreviewUrl(url)
+      } catch (e) {
+        setFlyerPreviewError(e.message || 'Live preview is temporarily unavailable — the download buttons still render the real file.')
+      } finally {
+        setFlyerPreviewLoading(false)
+      }
+    }, 900)
+    return () => clearTimeout(flyerPreviewTimerRef.current)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tab, eventId, flyerPreviewSupported, flyerSettings.size, flyerSettings.qr, flyerSettings.qrPosition, flyerSettings.rsvpLink,
+      selectedFlyerTplId, colors, wording, imagePosition, flyerTextScale, design?.asset_config?.cover_image_url])
+
+  useEffect(() => () => { if (flyerPreviewObjectUrlRef.current) URL.revokeObjectURL(flyerPreviewObjectUrlRef.current) }, [])
 
   function notify(msg) {
     setToast(msg)
@@ -266,12 +343,10 @@ export default function DesignStudioRedesignPage() {
     await savePageSettings(next)
   }
 
-  function openDraftPreview() {
-    if (!eventId || !activeTemplate) {
-      notify('Select a supported design first')
-      return
-    }
-    const theme = {
+  const activeTemplate = templates.find((t) => t.selected)
+
+  function buildDraftTheme() {
+    return {
       event_id: eventId,
       template_id: activeTemplate.id,
       is_default: false,
@@ -285,13 +360,56 @@ export default function DesignStudioRedesignPage() {
       pass_options: passOptions,
       page_config: pageSections,
     }
+  }
+
+  function syncDraftPreviewStorage() {
+    if (!eventId || !activeTemplate) return false
     try {
-      sessionStorage.setItem(`festio:design-preview:${eventId}`, JSON.stringify({ event_id: eventId, theme, saved_at: Date.now() }))
-      window.open(`/invite/${eventId}?studio-preview=1`, '_blank', 'noopener')
+      sessionStorage.setItem(`festio:design-preview:${eventId}`, JSON.stringify({ event_id: eventId, theme: buildDraftTheme(), saved_at: Date.now() }))
+      return true
     } catch {
+      return false
+    }
+  }
+
+  function openDraftPreview() {
+    if (!eventId || !activeTemplate) {
+      notify('Select a supported design first')
+      return
+    }
+    if (syncDraftPreviewStorage()) {
+      window.open(`/invite/${eventId}?studio-preview=1`, '_blank', 'noopener')
+    } else {
       notify('Could not open the draft preview. Allow pop-ups and try again.')
     }
   }
+
+  // Inline "Live preview" iframe (Event Page tab): reuses the same
+  // sessionStorage handoff as openDraftPreview() above, but keeps it synced
+  // as you edit instead of requiring a manual "open in new tab" click each
+  // time. First sync per event/template is immediate so the iframe never
+  // flashes the published page before the draft; edits after that are
+  // debounced so typing doesn't reload the iframe on every keystroke.
+  const [eventPagePreviewNonce, setEventPagePreviewNonce] = useState(0)
+  const eventPageSyncedRef = useRef(false)
+  const eventPagePreviewTimerRef = useRef(null)
+
+  useEffect(() => { eventPageSyncedRef.current = false }, [eventId])
+
+  useEffect(() => {
+    if (tab !== 'Event Page' || !eventId || !activeTemplate) return undefined
+    const delay = eventPageSyncedRef.current ? 700 : 0
+    clearTimeout(eventPagePreviewTimerRef.current)
+    eventPagePreviewTimerRef.current = setTimeout(() => {
+      if (syncDraftPreviewStorage()) {
+        eventPageSyncedRef.current = true
+        setEventPagePreviewNonce((n) => n + 1)
+      }
+    }, delay)
+    return () => clearTimeout(eventPagePreviewTimerRef.current)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tab, eventId, activeTemplate?.id, colors, fontPairing, wording, passOptions, pageSections,
+      design?.asset_config?.cover_image_url, design?.asset_config?.flyer_image_url])
 
   async function saveFlyerAndPassSettings() {
     if (!eventId || designBusy) return
@@ -406,7 +524,6 @@ export default function DesignStudioRedesignPage() {
     setPageSections((prev) => ({ ...prev, [section]: { ...prev[section], [key]: value } }))
   }
 
-  const activeTemplate = templates.find((t) => t.selected)
   const filteredTemplates = templates.filter((t) =>
     (tplCategory === 'All' || t.category === tplCategory) &&
     (tplStyle === 'All styles' || t.style === tplStyle) &&
@@ -442,20 +559,20 @@ export default function DesignStudioRedesignPage() {
             <div><strong>4</strong><span>Surfaces per template</span></div>
           </div>
           <div className="ds-filter-row">
-            <div className="rd-search" style={{ flex: 1 }}>
+            <div className="rd-search" style={{ flex: 1, minWidth: 180 }}>
               <Icon name="search" size={14} />
               <input placeholder="Search templates…" value={tplQuery} onChange={(e) => setTplQuery(e.target.value)} />
             </div>
-            <select className="rr-select gr-inline-select" value={tplCategory} onChange={(e) => setTplCategory(e.target.value)}>
+            <select className="rr-select" style={{ flex: '0 0 auto' }} value={tplCategory} onChange={(e) => setTplCategory(e.target.value)}>
               {TEMPLATE_CATEGORIES.map((c) => <option key={c}>{c}</option>)}
             </select>
-            <select className="rr-select gr-inline-select" value={tplStyle} onChange={(e) => setTplStyle(e.target.value)}>
+            <select className="rr-select" style={{ flex: '0 0 auto' }} value={tplStyle} onChange={(e) => setTplStyle(e.target.value)}>
               {TEMPLATE_STYLES.map((s) => <option key={s}>{s}</option>)}
             </select>
           </div>
 
           <div className="ds-templates-layout">
-            <div className="rr-grid3">
+            <div className="ds-tpl-grid">
               {filteredTemplates.map((t) => (
                 <div className={`rr-panel ds-template-card ${t.selected ? 'selected' : ''}`} key={t.name} onClick={() => setPreviewTpl(t)}>
                   {t.thumbnailUrl ? (
@@ -474,7 +591,23 @@ export default function DesignStudioRedesignPage() {
                   </div>
                   <strong>{t.name}</strong>
                   <span>{t.tone}</span>
-                  <div className="ds-surface-chips">{t.surfaces.map((s) => <span key={s} className="rd-chip">{s}</span>)}</div>
+                  <div className="ds-surface-chips">
+                    {t.surfaces.map((s) => {
+                      const targetTab = SURFACE_TAB[s.toLowerCase()]
+                      return (
+                        <button
+                          key={s}
+                          className="rd-chip ds-surface-chip"
+                          title={`Preview ${s}`}
+                          onClick={(e) => {
+                            e.stopPropagation()
+                            setPreviewTpl(t)
+                            if (targetTab) setTab(targetTab)
+                          }}
+                        >{s}</button>
+                      )
+                    })}
+                  </div>
                   <div className="rd-row2">
                     <button className="rr-btn secondary" style={{ flex: 1, justifyContent: 'center' }} onClick={(e) => { e.stopPropagation(); setPreviewTpl(t) }}>Preview</button>
                     {!t.selected && <button disabled={designBusy} className="rr-btn primary" style={{ flex: 1, justifyContent: 'center' }} onClick={(e) => { e.stopPropagation(); selectTemplate(t) }}>{designBusy ? 'Saving…' : 'Select'}</button>}
@@ -608,16 +741,23 @@ export default function DesignStudioRedesignPage() {
 
           <div className="ds-flyer-col">
             <div className="rd-panel">
-              <div className="rd-panel-head"><h3>Preview</h3></div>
+              <div className="rd-panel-head"><h3>Preview</h3><p>{flyerPreviewSupported ? 'Live — the exact file the download buttons produce' : 'Print sizes render as PDF only — download to check'}</p></div>
               <div className="rd-panel-body">
-                <div className="ds-flyer-preview" style={design?.asset_config?.cover_image_url ? {
-                  backgroundImage: `url(${design.asset_config.cover_image_url})`,
-                  backgroundPosition: `${imagePosition.x}% ${imagePosition.y}%`,
-                  backgroundSize: `${imagePosition.zoom}% auto`,
-                  transform: `rotate(${imagePosition.rotate}deg)`,
-                } : undefined}>
-                  {!design?.asset_config?.cover_image_url && <><Icon name="image" size={26} /><span>Upload a photo to preview</span></>}
+                <div className="ds-flyer-preview">
+                  {!flyerPreviewSupported ? (
+                    <><Icon name="file" size={26} /><span>No inline preview for {FLYER_SIZES.find((s) => s.id === flyerSettings.size)?.label || flyerSettings.size} — it's a print PDF.</span></>
+                  ) : flyerPreviewUrl ? (
+                    <img src={flyerPreviewUrl} alt="Live flyer preview" className={`ds-flyer-preview-img${flyerPreviewLoading ? ' loading' : ''}`} />
+                  ) : flyerPreviewLoading ? (
+                    <span>Rendering preview…</span>
+                  ) : flyerPreviewError ? (
+                    <span className="ds-flyer-preview-error">{flyerPreviewError}</span>
+                  ) : (
+                    <><Icon name="image" size={26} /><span>Preview renders after your first edit</span></>
+                  )}
+                  {flyerPreviewUrl && flyerPreviewLoading && <div className="ds-flyer-preview-spinner">Updating…</div>}
                 </div>
+                {flyerPreviewUrl && flyerPreviewError && <p className="rd-hint" style={{ marginTop: 6 }}>{flyerPreviewError}</p>}
                 <div className="rd-row2" style={{ marginTop: 10 }}>
                   <button className="rr-btn secondary" disabled={renderBusy} style={{ flex: 1, justifyContent: 'center' }} onClick={() => renderFlyer('png', false)}>{renderBusy ? 'Rendering…' : 'Download PNG'}</button>
                   <button className="rr-btn secondary" disabled={renderBusy} style={{ flex: 1, justifyContent: 'center' }} onClick={() => renderFlyer('pdf', false)}>{renderBusy ? 'Rendering…' : 'Download PDF'}</button>
@@ -673,26 +813,28 @@ export default function DesignStudioRedesignPage() {
                 <button className="rr-btn secondary" disabled={designBusy} style={{ flex: 1, justifyContent: 'center' }} onClick={resetPageSettings}>Reset safe default</button>
                 <button className="rr-btn primary" disabled={designBusy} style={{ flex: 1, justifyContent: 'center' }} onClick={() => savePageSettings()}>{designBusy ? 'Saving…' : 'Save page settings'}</button>
               </div>
-              <button className="rr-link-btn" onClick={openDraftPreview} style={{ marginTop: 8 }}>Open true draft preview <Icon name="external" size={12} /></button>
+              <button className="rr-link-btn" onClick={openDraftPreview} style={{ marginTop: 8 }}>Open in a full tab <Icon name="external" size={12} /></button>
             </div>
           </div>
 
           <div className="rd-panel">
             <div className="rd-panel-head ds-preview-head">
-              <h3>Live preview</h3>
+              <div><h3>Live preview</h3><p>The real event page, rendered with your unsaved edits</p></div>
               <div className="rd-seg"><button className={!mobilePreview ? 'on' : ''} onClick={() => setMobilePreview(false)}>Desktop</button><button className={mobilePreview ? 'on' : ''} onClick={() => setMobilePreview(true)}>Mobile</button></div>
             </div>
             <div className="rd-panel-body">
-              <div className={`ds-page-preview ${mobilePreview ? 'mobile' : ''}`}>
-                <div className="ds-page-hero"><Icon name="calendar" size={20} /></div>
-                <h3>{wording.eventTitle || 'Your event'}</h3>
-                <p>{[wording.date, wording.venue].filter(Boolean).join(' · ') || 'Add the event date and venue'}</p>
-                <button className="rr-btn primary" style={{ pointerEvents: 'none' }}>View live page</button>
-                <div className="ds-feed-sample">
-                  <div className="ds-feed-item"><Icon name="check" size={11} /> Event status set to Active</div>
-                  <div className="ds-feed-item"><Icon name="palette" size={11} /> Draft design preview</div>
+              {!eventId || !activeTemplate ? (
+                <div className="ds-page-preview"><Icon name="calendar" size={20} /><span>Select a template to preview the live page.</span></div>
+              ) : (
+                <div className={`ds-page-preview-frame-wrap ${mobilePreview ? 'mobile' : ''}`}>
+                  <iframe
+                    key={eventId}
+                    src={eventPagePreviewNonce > 0 ? `/invite/${eventId}?studio-preview=1&_p=${eventPagePreviewNonce}` : undefined}
+                    title="Live event page preview"
+                    className="ds-page-preview-frame"
+                  />
                 </div>
-              </div>
+              )}
             </div>
           </div>
         </div>
@@ -721,33 +863,59 @@ export default function DesignStudioRedesignPage() {
             </div>
           </div>
           <div className="rd-panel">
-            <div className="rd-panel-head"><h3>Preview</h3><p>Illustrative — not a live-rendered pass</p></div>
+            <div className="rd-panel-head"><h3>Preview</h3><p>Sample guest — your real colors, wording, and photo</p></div>
             <div className="rd-panel-body">
-              <div className="ds-pass-preview">
-                <div className="ds-pass-top"><span>FESTIO PASS</span><Icon name="ticket" size={16} /></div>
-                <strong>{wording.eventTitle || 'Your event'}</strong>
-                <span>Sample Guest{(passOptions.showTable || passOptions.showSeat) && ' · Table 3, Seat 4'}</span>
-                <div className="ds-pass-qr"><Icon name="grid" size={30} /></div>
-                {wording.admissionNote && <p className="rd-rowlink" style={{ marginTop: 6 }}>{wording.admissionNote}</p>}
+              <div className="ds-pass-card">
+                <div className="ds-pass-card-cover" style={{ backgroundImage: design?.asset_config?.cover_image_url ? `url(${design.asset_config.cover_image_url})` : `linear-gradient(135deg, ${colors.background}, ${colors.accent})` }} />
+                <div className="ds-pass-card-body">
+                  <div className="ds-pass-card-kicker">Festio Pass</div>
+                  <strong>{wording.eventTitle || 'Your event'}</strong>
+                  <span>{[wording.date, wording.time].filter(Boolean).join(' · ') || 'Date and time not set yet'}</span>
+                  {(passOptions.showTable || passOptions.showSeat) && (
+                    <div className="ds-pass-card-pill">{[passOptions.showTable && 'Table VIP-2', passOptions.showSeat && 'Seat 4'].filter(Boolean).join(' · ')}</div>
+                  )}
+                  <div className="ds-pass-qr-block">
+                    <div className="ds-pass-qr-grid">
+                      {QR_SAMPLE_PATTERN.map((on, i) => <span key={i} className={on ? 'on' : ''} />)}
+                    </div>
+                  </div>
+                  {wording.admissionNote && <p className="ds-pass-card-note">{wording.admissionNote}</p>}
+                  {passOptions.showHubButton && <span className="ds-pass-card-cta" style={{ background: colors.accent }}>Open FestioHub</span>}
+                  {wording.footerNote && <p className="ds-pass-card-footer">{wording.footerNote}</p>}
+                </div>
               </div>
-              <div className="rd-hint" style={{ marginTop: 12 }}>Pass styling applies to live guest passes after the design is published; QR tokens are intentionally unchanged.</div>
+              <div className="rd-hint" style={{ marginTop: 12 }}>QR pattern shown is illustrative — each guest's real pass carries their own unique, unforgeable token. Everything else here is your actual saved wording, colors, and photo.</div>
             </div>
           </div>
         </div>
       )}
 
       {tab === 'Email Preview' && (
-        <div className="rd-panel" style={{ maxWidth: 620 }}>
-          <div className="rd-panel-head"><h3>Email preview</h3><p>Illustrative layout using your saved wording and colors — not a live-rendered template per type</p></div>
+        <div className="rd-panel" style={{ maxWidth: 680 }}>
+          <div className="rd-panel-head"><h3>Email preview</h3><p>Your real saved wording, colors, and photo — layout is representative, actual delivery uses your provider's rendering</p></div>
           <div className="rd-panel-body">
             <div className="rd-seg" style={{ marginBottom: 14, flexWrap: 'wrap' }}>
               {EMAIL_TYPES.map((t) => <button key={t} className={emailType === t ? 'on' : ''} onClick={() => setEmailType(t)}>{t}</button>)}
             </div>
-            <div className="ds-email-preview" style={{ background: colors.background, color: colors.text }}>
-              <div className="ds-email-banner" style={{ background: colors.primary }}><Icon name="mail" size={20} /></div>
-              <strong>{emailType === 'Invitation' ? `${wording.inviteLabel || "You're invited"}: ${wording.eventTitle || 'your event'}` : emailType === 'RSVP confirmation' ? "You're confirmed!" : emailType === 'Festio Pass email' ? 'Your Festio Pass is ready' : emailType === 'Reminder' ? `Don't forget — ${wording.eventTitle || 'your event'}` : emailType === 'Broadcast' ? 'An update from your organizer' : "You're checked in!"}</strong>
-              <p>{[wording.date, wording.venue].filter(Boolean).join(' at ') || 'Date and venue not set yet'}</p>
-              <button className="rr-btn primary" style={{ pointerEvents: 'none', background: colors.primary }}>{emailType === 'RSVP confirmation' || emailType === 'Check-in confirmation' ? 'View details' : 'RSVP now'}</button>
+            <div className="ds-email-card">
+              <div className="ds-email-card-banner" style={{ background: colors.primary, color: '#fff' }}>
+                <div className="ds-email-card-brand"><strong>Festio</strong><span>Digital Invitation</span></div>
+                <h3>{emailType === 'Invitation' ? `${wording.inviteLabel || "You're invited"}: ${wording.eventTitle || 'your event'}` : emailType === 'RSVP confirmation' ? "You're confirmed!" : emailType === 'Festio Pass email' ? 'Your Festio Pass is ready' : emailType === 'Reminder' ? `Don't forget — ${wording.eventTitle || 'your event'}` : emailType === 'Broadcast' ? 'An update from your organizer' : "You're checked in!"}</h3>
+              </div>
+              {design?.asset_config?.cover_image_url && <img src={design.asset_config.cover_image_url} alt="" className="ds-email-card-cover" />}
+              <div className="ds-email-card-body">
+                <p className="ds-email-card-greeting">Hi there,</p>
+                {wording.customMessage && <p className="ds-email-card-message">{wording.customMessage}</p>}
+                <div className="ds-email-card-details">
+                  {wording.date && <div><strong>Date:</strong> {wording.date}</div>}
+                  {wording.time && <div><strong>Time:</strong> {wording.time}</div>}
+                  {wording.venue && <div><strong>Venue:</strong> {wording.venue}</div>}
+                  {!wording.date && !wording.time && !wording.venue && <div className="rd-rowlink">Date, time, and venue not set yet</div>}
+                </div>
+                {/* Illustrative CTA, not a real button — a <span> styled to match so it never looks clickable when it isn't. */}
+                <span className="ds-email-cta" style={{ background: colors.primary }}>{emailType === 'RSVP confirmation' || emailType === 'Check-in confirmation' ? 'View details' : emailType === 'Festio Pass email' ? 'View my Festio Pass' : 'RSVP now'}</span>
+                <p className="ds-email-card-footer">This link is unique to each guest. Please don't share it.</p>
+              </div>
             </div>
           </div>
         </div>

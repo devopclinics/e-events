@@ -294,7 +294,10 @@ export const api = {
       a.remove()
       URL.revokeObjectURL(url)
     }
-    return { outputUrl }
+    // Preview renders (body.preview=true) skip server-side persistence, so
+    // outputUrl is never set for them — the caller displays this blob
+    // directly instead (see Design Studio's live flyer preview).
+    return { outputUrl, blob }
   },
   generateQR: (eventId) => req('POST', `/events/${eventId}/guests/generate-qr`),
   sendInvites: (eventId) => req('POST', `/events/${eventId}/guests/send-invites`),

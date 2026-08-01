@@ -19,7 +19,10 @@ test.describe('Stage C Design Studio flyer — isolated staging fixture', () => 
     const original = await originalResp.json()
 
     try {
-      await page.getByRole('button', { name: 'Flyer', exact: true }).click()
+      // Scoped to the tab strip — a loaded template card's surface chip
+      // ("Preview Flyer") shares the exact accessible name "Flyer" with the
+      // tab button, which an unscoped locator can't disambiguate.
+      await page.locator('.rr-tabs').getByRole('button', { name: 'Flyer', exact: true }).click()
       const eventTitle = fieldNear(page, 'Event title')
       await eventTitle.fill(`E2E Flyer Check ${Date.now()}`)
       await page.getByRole('button', { name: 'Save flyer settings', exact: true }).click()

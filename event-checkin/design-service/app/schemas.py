@@ -74,3 +74,4 @@ class RenderRequest(BaseModel):
     qr_data: str | None = None      # URL/text to encode (e.g. the RSVP link)
     qr_position: str = "bottom-right"
     qr_enabled: bool = True
+    preview: bool = False           # live-preview render: skip disk persistence

@@ -242,50 +242,210 @@
    in the Event Page tab section below, reused here) — FestioHub now renders
    for real behind that preview, so a hand-drawn mockup would drift from it. */
 
-/* ── GuestHub tab: swatches are miniatures of the real anatomy every one of
-   guesthub-mockups.html / guesthub-mockups-2.html shares (brand+pill header,
-   guest-name-over-QR hero, tab row), not a plain gradient — plus one real
-   signature motif per template pulled from that file's own markup. */
-.ds-gh-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 14px; }
+/* ── GuestHub tab: each swatch reproduces its own mockup's real composition
+   (guesthub-mockups.html / guesthub-mockups-2.html) — cover/topbar shape,
+   hero-row layout, and body content pattern — not a shared frame. See
+   GuestHubSwatch() in DesignStudioRedesignPage.jsx for the per-id markup. */
+.ds-gh-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(258px, 1fr)); gap: 14px; }
 .ds-gh-card { border: 1px solid var(--line); border-radius: 12px; padding: 12px; background: var(--surface); display: flex; flex-direction: column; gap: 10px; }
 .ds-gh-card.selected { border-color: var(--teal); box-shadow: 0 0 0 1px var(--teal); }
 
-.ds-gh-swatch { border-radius: 8px; padding: 10px; display: flex; flex-direction: column; gap: 8px; overflow: hidden; }
-.ds-gh-swatch-head { display: flex; align-items: center; justify-content: space-between; }
-.ds-gh-swatch-brand { font-size: 8.5px; font-weight: 800; letter-spacing: .22em; }
-.ds-gh-swatch-pill { font-size: 7.5px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; padding: 2px 7px; border-radius: 99px; border: 1px solid; }
-.ds-gh-swatch-hero { display: flex; align-items: center; gap: 8px; }
-.ds-gh-swatch-qr { width: 26px; height: 26px; border: 1.5px solid; border-radius: 4px; flex: none; }
-.ds-gh-swatch-hero-text { display: flex; flex-direction: column; gap: 1px; min-width: 0; }
-.ds-gh-swatch-hero-text strong { font-size: 13px; line-height: 1.15; }
-.ds-gh-swatch-hero-text span { font-size: 8px; opacity: .6; letter-spacing: .04em; }
-.ds-gh-swatch-tabs { display: flex; gap: 10px; padding-top: 6px; border-top: 1px solid currentColor; opacity: .9; }
-.ds-gh-swatch-tabs span { font-size: 7.5px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; padding-bottom: 4px; border-bottom: 2px solid transparent; opacity: .55; }
-.ds-gh-swatch-tabs span:first-child { opacity: 1; }
+/* shared base every ds-gh-tpl-* variant builds on */
+.ds-gh-tpl { border-radius: 10px; overflow: hidden; background: var(--p-bg); color: var(--p-text); font-size: 11px; line-height: 1.3; }
+.ds-gh-tpl .gh-qr-svg { display: block; }
+.ds-gh-tpl .gh-guest { display: block; font-size: 12.5px; font-weight: 700; line-height: 1.15; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.ds-gh-tpl .gh-event { display: block; font-size: 9px; opacity: .65; margin-top: 2px; }
+.ds-gh-tpl .gh-hero-text { display: flex; flex-direction: column; gap: 3px; min-width: 0; flex: 1; }
+.ds-gh-tpl .gh-tabs { display: flex; gap: 10px; }
+.ds-gh-tpl .gh-tabs span { font-size: 7px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; opacity: .45; padding-bottom: 4px; border-bottom: 2px solid transparent; }
+.ds-gh-tpl .gh-tabs span.active { opacity: 1; }
+.ds-gh-tpl .gh-body { display: flex; flex-direction: column; gap: 6px; padding: 10px 12px 12px; }
+.ds-gh-tpl .gh-meta { font-size: 9px; opacity: .6; }
+.ds-gh-tpl .gh-tag { font-size: 8px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; padding: 3px 8px; border-radius: 99px; display: inline-block; width: fit-content; }
+.ds-gh-tpl .gh-tag.red { background: #e63329; color: #fff; border-radius: 3px; }
+.ds-gh-tpl .gh-tag.live { background: linear-gradient(135deg, #a855f7, #ec4899); color: #fff; border-radius: 99px; }
 
-.ds-gh-motif { height: 18px; position: relative; }
-/* Noir Couture — thin hairline rule with a center diamond, like the file's h-section-title divider */
-.ds-gh-motif-gold-frame::before { content: ''; position: absolute; top: 50%; left: 0; right: 0; height: 1px; background: var(--m-accent); opacity: .5; }
-.ds-gh-motif-gold-frame::after { content: ''; position: absolute; top: 50%; left: 50%; width: 5px; height: 5px; background: var(--m-accent); transform: translate(-50%, -50%) rotate(45deg); }
-/* Bloom Editorial — a small connected timeline of program dots (h-prog-dot) */
-.ds-gh-motif-rose-dot { display: flex; align-items: center; gap: 5px; }
-.ds-gh-motif-rose-dot::before, .ds-gh-motif-rose-dot::after { content: ''; width: 6px; height: 6px; border-radius: 50%; background: var(--m-accent); }
-.ds-gh-motif-rose-dot::before { box-shadow: 14px 0 0 var(--m-accent); }
-/* Electric Rave — a glowing "LIVE" chip (h-live-badge) */
-.ds-gh-motif-live-pulse::before { content: 'LIVE'; font-size: 7px; font-weight: 800; letter-spacing: .1em; color: var(--m-accent); border: 1px solid var(--m-accent); border-radius: 99px; padding: 2px 7px; box-shadow: 0 0 8px var(--m-accent); }
-/* Linen & Gold — a centered ornament rule (h-ornament) */
-.ds-gh-motif-ornament::before { content: ''; position: absolute; top: 50%; left: 20%; right: 20%; height: 1px; background: var(--m-accent); opacity: .6; }
-.ds-gh-motif-ornament::after { content: '✦'; position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); font-size: 9px; color: var(--m-accent); }
-/* Celestial — a glowing moon circle (h-moon) */
-.ds-gh-motif-moon-glow::before { content: ''; position: absolute; top: 1px; left: 6px; width: 14px; height: 14px; border-radius: 50%; background: var(--m-accent); box-shadow: 0 0 10px 2px var(--m-accent); }
-/* Soleil — a warm gradient band (h-banner) */
-.ds-gh-motif-sun-chip { border-radius: 4px; background: linear-gradient(90deg, var(--m-accent), transparent); opacity: .8; }
-/* Mono Print — a bold brutalist date stamp (h-big-date) */
-.ds-gh-motif-big-date::before { content: '09'; font-family: 'Space Grotesk', sans-serif; font-weight: 700; font-size: 15px; line-height: 1; color: var(--m-accent); }
-/* Verdant — a small leaf accent (h-leaf-dec) */
-.ds-gh-motif-leaf::before { content: ''; position: absolute; top: 2px; left: 6px; width: 12px; height: 12px; background: var(--m-accent); border-radius: 0 60% 0 60%; opacity: .8; }
-/* Coastal Club — a circular crest/emblem (h-hull-emblem) */
-.ds-gh-motif-hull-emblem::before { content: ''; position: absolute; top: 1px; left: 6px; width: 14px; height: 14px; border-radius: 50%; border: 1.5px solid var(--m-accent); }
-.ds-gh-motif-hull-emblem::after { content: '⚓'; position: absolute; top: 1px; left: 9px; font-size: 8px; color: var(--m-accent); }
-/* Haze — a frosted glass panel (h-glass-card) */
-.ds-gh-motif-glass-blur { border-radius: 5px; background: color-mix(in srgb, var(--m-surface) 60%, transparent); backdrop-filter: blur(4px); border: 1px solid color-mix(in srgb, var(--m-accent) 40%, transparent); }
+/* 01 — Noir Couture: dark topbar+pill, QR-left hero, gold hairline timeline */
+.ds-gh-tpl-noir-couture { border: 1px solid #222; font-family: inherit; }
+.ds-gh-tpl-noir-couture .gh-topbar { display: flex; align-items: center; justify-content: space-between; padding: 8px 10px; border-bottom: 1px solid #222; }
+.ds-gh-tpl-noir-couture .gh-brand { font-size: 7.5px; letter-spacing: .25em; text-transform: uppercase; color: var(--p-accent); }
+.ds-gh-tpl-noir-couture .gh-pill { font-size: 7px; font-weight: 700; letter-spacing: .1em; text-transform: uppercase; color: var(--p-accent); background: color-mix(in srgb, var(--p-accent) 15%, transparent); border: 1px solid color-mix(in srgb, var(--p-accent) 30%, transparent); padding: 2px 7px; border-radius: 2px; }
+.ds-gh-tpl-noir-couture .gh-hero { display: flex; gap: 10px; padding: 12px 10px; border-bottom: 1px solid #222; }
+.ds-gh-tpl-noir-couture .gh-qr { border: 1px solid var(--p-accent); padding: 3px; flex: none; }
+.ds-gh-tpl-noir-couture .gh-guest { font-style: italic; font-weight: 400; color: var(--p-text); }
+.ds-gh-tpl-noir-couture .gh-status { display: flex; align-items: center; gap: 5px; font-size: 9px; color: var(--p-accent); margin-top: 2px; }
+.ds-gh-tpl-noir-couture .gh-status i { width: 5px; height: 5px; border-radius: 50%; background: var(--p-accent); box-shadow: 0 0 6px var(--p-accent); }
+.ds-gh-tpl-noir-couture .gh-tabs { padding: 0 10px; border-bottom: 1px solid #222; }
+.ds-gh-tpl-noir-couture .gh-tabs span { flex: 1; text-align: center; padding-top: 8px; }
+.ds-gh-tpl-noir-couture .gh-tl-item { display: flex; align-items: baseline; gap: 8px; }
+.ds-gh-tpl-noir-couture .gh-tl-time { font-size: 8.5px; color: var(--p-accent); min-width: 26px; }
+.ds-gh-tpl-noir-couture .gh-tl-dot { width: 5px; height: 5px; border-radius: 50%; border: 1px solid var(--p-accent); flex: none; }
+.ds-gh-tpl-noir-couture .gh-tl-text { font-size: 9.5px; }
+
+/* 02 — Bloom Editorial: rose colored topbar, white pass-card below, pill tabs, dot timeline */
+.ds-gh-tpl-bloom-editorial { box-shadow: 0 8px 24px rgba(50,20,20,.12); }
+.ds-gh-tpl-bloom-editorial .gh-topbar { background: var(--p-accent); color: #fff; padding: 12px 12px 30px; position: relative; }
+.ds-gh-tpl-bloom-editorial .gh-topbar::before { content: '❀'; position: absolute; right: -6px; top: -14px; font-size: 64px; opacity: .15; }
+.ds-gh-tpl-bloom-editorial .gh-brand { display: block; font-size: 8px; letter-spacing: .15em; text-transform: uppercase; opacity: .75; }
+.ds-gh-tpl-bloom-editorial .gh-event { display: block; font-size: 13px; font-weight: 700; color: #fff; opacity: 1; margin-top: 4px; }
+.ds-gh-tpl-bloom-editorial .gh-date { display: block; font-size: 8px; opacity: .75; margin-top: 3px; }
+.ds-gh-tpl-bloom-editorial .gh-pass-card { display: flex; align-items: center; gap: 10px; background: var(--p-surface); border-radius: 10px; margin: -20px 10px 0; padding: 10px; position: relative; box-shadow: 0 4px 14px rgba(50,20,20,.1); }
+.ds-gh-tpl-bloom-editorial .gh-qr.round { flex: none; }
+.ds-gh-tpl-bloom-editorial .gh-tag { background: color-mix(in srgb, var(--p-accent) 12%, transparent); color: var(--p-accent); }
+.ds-gh-tpl-bloom-editorial .gh-tabs { padding: 10px 12px 0; gap: 6px; }
+.ds-gh-tpl-bloom-editorial .gh-tabs span { flex: 1; text-align: center; border-radius: 99px; border-bottom: none; padding: 5px 4px; }
+.ds-gh-tpl-bloom-editorial .gh-tabs span.active { background: color-mix(in srgb, var(--p-accent) 12%, transparent); }
+.ds-gh-tpl-bloom-editorial .gh-prog-item { display: flex; align-items: center; gap: 8px; }
+.ds-gh-tpl-bloom-editorial .gh-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--p-surface); border: 2px solid color-mix(in srgb, var(--p-text) 15%, transparent); flex: none; }
+.ds-gh-tpl-bloom-editorial .gh-dot.live { background: var(--p-accent); border-color: var(--p-accent); }
+.ds-gh-tpl-bloom-editorial .gh-prog-name { flex: 1; font-size: 9.5px; }
+.ds-gh-tpl-bloom-editorial .gh-prog-time { font-size: 8.5px; font-weight: 700; color: var(--p-accent); }
+
+/* 03 — Electric Rave: dark topbar+live badge, gradient pass-zone, stat grid */
+.ds-gh-tpl-electric-rave { border: 1px solid color-mix(in srgb, var(--p-primary) 20%, transparent); box-shadow: 0 8px 26px rgba(0,0,0,.5); }
+.ds-gh-tpl-electric-rave .gh-topbar { display: flex; align-items: center; justify-content: space-between; padding: 8px 10px; border-bottom: 1px solid color-mix(in srgb, var(--p-primary) 20%, transparent); }
+.ds-gh-tpl-electric-rave .gh-brand { font-size: 7.5px; font-weight: 700; letter-spacing: .15em; text-transform: uppercase; color: var(--p-primary); }
+.ds-gh-tpl-electric-rave .gh-live { display: flex; align-items: center; gap: 4px; font-size: 6.5px; font-weight: 700; letter-spacing: .1em; text-transform: uppercase; color: #22d3ee; border: 1px solid rgba(34,211,238,.3); padding: 2px 7px; border-radius: 3px; }
+.ds-gh-tpl-electric-rave .gh-live i { width: 5px; height: 5px; border-radius: 50%; background: #22d3ee; box-shadow: 0 0 6px #22d3ee; }
+.ds-gh-tpl-electric-rave .gh-pass-zone { display: flex; gap: 10px; margin: 10px; padding: 10px; background: linear-gradient(135deg, color-mix(in srgb, var(--p-primary) 14%, transparent) 0%, color-mix(in srgb, #22d3ee 8%, transparent) 100%); border: 1px solid color-mix(in srgb, var(--p-primary) 20%, transparent); border-radius: 6px; }
+.ds-gh-tpl-electric-rave .gh-qr { border: 1px solid color-mix(in srgb, var(--p-primary) 40%, transparent); padding: 3px; border-radius: 4px; flex: none; box-shadow: 0 0 14px color-mix(in srgb, var(--p-primary) 30%, transparent); }
+.ds-gh-tpl-electric-rave .gh-chip { font-size: 7.5px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; color: #22d3ee; background: rgba(34,211,238,.08); border: 1px solid rgba(34,211,238,.2); padding: 2px 8px; border-radius: 3px; width: fit-content; }
+.ds-gh-tpl-electric-rave .gh-tabs { padding: 0 10px; gap: 12px; border-bottom: 1px solid color-mix(in srgb, var(--p-primary) 20%, transparent); }
+.ds-gh-tpl-electric-rave .gh-tabs span { padding-top: 8px; }
+.ds-gh-tpl-electric-rave .gh-activity-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.ds-gh-tpl-electric-rave .gh-stat { background: var(--p-surface); border: 1px solid color-mix(in srgb, var(--p-primary) 20%, transparent); border-radius: 6px; padding: 8px; display: flex; flex-direction: column; gap: 3px; }
+.ds-gh-tpl-electric-rave .gh-stat-label { font-size: 6.5px; font-weight: 700; letter-spacing: .1em; text-transform: uppercase; opacity: .5; }
+.ds-gh-tpl-electric-rave .gh-stat-val { font-size: 13px; font-weight: 700; color: var(--p-primary); }
+
+/* 04 — Linen & Gold: dark cover banner, overlapping pass-card, ornament rule, menu grid */
+.ds-gh-tpl-linen-gold { border-radius: 16px; box-shadow: 0 10px 30px rgba(44,34,24,.14); font-family: 'Cormorant Garamond', Georgia, serif !important; }
+.ds-gh-tpl-linen-gold .gh-cover { height: 46px; background: linear-gradient(135deg, #3b2a1a 0%, #6b4e2e 50%, #8b6f47 100%); display: flex; align-items: center; justify-content: center; }
+.ds-gh-tpl-linen-gold .gh-cover-event { font-size: 12px; font-weight: 600; font-style: italic; color: #fff; }
+.ds-gh-tpl-linen-gold .gh-pass-card { display: flex; align-items: center; gap: 10px; background: var(--p-surface); border-radius: 10px; margin: -14px 10px 0; padding: 10px; position: relative; box-shadow: 0 6px 20px rgba(44,34,24,.12); }
+.ds-gh-tpl-linen-gold .gh-qr { border: 1.5px solid var(--p-accent); padding: 3px; border-radius: 3px; flex: none; }
+.ds-gh-tpl-linen-gold .gh-guest { font-style: italic; font-weight: 600; }
+.ds-gh-tpl-linen-gold .gh-tag { background: color-mix(in srgb, var(--p-primary) 10%, transparent); color: var(--p-primary); font-family: 'DM Sans', sans-serif; }
+.ds-gh-tpl-linen-gold .gh-ornament { text-align: center; font-size: 11px; color: var(--p-accent); padding: 10px 0 0; }
+.ds-gh-tpl-linen-gold .gh-tabs { padding: 8px 10px 0; gap: 4px; font-family: 'DM Sans', sans-serif; }
+.ds-gh-tpl-linen-gold .gh-tabs span { flex: 1; text-align: center; border-radius: 5px; border-bottom: none; padding: 4px; }
+.ds-gh-tpl-linen-gold .gh-tabs span.active { background: color-mix(in srgb, var(--p-primary) 10%, transparent); }
+.ds-gh-tpl-linen-gold .gh-menu-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.ds-gh-tpl-linen-gold .gh-menu-item { background: var(--p-bg); border-radius: 6px; padding: 8px; border: 1px solid color-mix(in srgb, var(--p-text) 10%, transparent); }
+.ds-gh-tpl-linen-gold .course { display: block; font-size: 6.5px; font-weight: 700; letter-spacing: .1em; text-transform: uppercase; opacity: .55; font-family: 'DM Sans', sans-serif; }
+.ds-gh-tpl-linen-gold .dish { display: block; font-size: 10px; margin-top: 2px; }
+
+/* 05 — Celestial Midnight: starfield skyline w/ moon, QR pass-card, icon programme rows */
+.ds-gh-tpl-celestial-midnight { border-radius: 12px; border: 1px solid color-mix(in srgb, var(--p-primary) 12%, transparent); box-shadow: 0 12px 30px rgba(3,8,22,.7); }
+.ds-gh-tpl-celestial-midnight .gh-skyline { height: 54px; background: linear-gradient(180deg, #020614 0%, #0a1a4a 70%, #1a2a6c 100%); position: relative; display: flex; align-items: center; justify-content: center; overflow: hidden; }
+.ds-gh-tpl-celestial-midnight .gh-moon { position: absolute; top: 8px; right: 12px; width: 18px; height: 18px; border-radius: 50%; background: radial-gradient(circle at 35% 35%, #d0dbff, #8098e0); box-shadow: 0 0 16px rgba(128,152,224,.5); }
+.ds-gh-tpl-celestial-midnight .gh-stars { position: absolute; inset: 0; background-image: radial-gradient(1px 1px at 20% 30%, rgba(255,255,255,.8), transparent), radial-gradient(1px 1px at 60% 20%, rgba(255,255,255,.7), transparent), radial-gradient(1px 1px at 80% 60%, rgba(255,255,255,.6), transparent), radial-gradient(1px 1px at 35% 70%, rgba(255,255,255,.5), transparent); }
+.ds-gh-tpl-celestial-midnight .gh-title { position: relative; font-size: 9px; font-weight: 300; letter-spacing: .18em; text-transform: uppercase; color: #c8d4f0; text-shadow: 0 0 12px rgba(200,212,240,.4); }
+.ds-gh-tpl-celestial-midnight .gh-pass-card { display: flex; gap: 10px; margin: 10px; padding: 10px; background: var(--p-surface); border: 1px solid color-mix(in srgb, var(--p-primary) 15%, transparent); border-radius: 8px; }
+.ds-gh-tpl-celestial-midnight .gh-qr { flex: none; padding: 3px; border-radius: 4px; border: 1px solid color-mix(in srgb, var(--p-primary) 20%, transparent); }
+.ds-gh-tpl-celestial-midnight .gh-stars-row { font-size: 8.5px; color: #5060a0; }
+.ds-gh-tpl-celestial-midnight .gh-stars-row::before { content: none; }
+.ds-gh-tpl-celestial-midnight .gh-tabs { margin: 0 10px; border-bottom: 1px solid color-mix(in srgb, var(--p-primary) 12%, transparent); }
+.ds-gh-tpl-celestial-midnight .gh-tabs span { padding-top: 8px; }
+.ds-gh-tpl-celestial-midnight .gh-prog-row { display: flex; align-items: center; gap: 8px; padding: 6px 8px; background: var(--p-surface); border: 1px solid color-mix(in srgb, var(--p-primary) 12%, transparent); border-radius: 6px; }
+.ds-gh-tpl-celestial-midnight .gh-prog-time { font-size: 8px; font-weight: 700; color: var(--p-primary); }
+.ds-gh-tpl-celestial-midnight .gh-prog-name { flex: 1; font-size: 9.5px; }
+
+/* 06 — Soleil: warm gradient banner w/ sun, chip-row pass, activity list */
+.ds-gh-tpl-soleil { border-radius: 16px; box-shadow: 0 10px 28px rgba(251,113,74,.15); }
+.ds-gh-tpl-soleil .gh-banner { background: linear-gradient(160deg, #f59e0b 0%, #fb923c 50%, #f87171 100%); padding: 10px 12px 14px; position: relative; overflow: hidden; }
+.ds-gh-tpl-soleil .gh-banner::before { content: '☀'; position: absolute; right: -6px; top: -10px; font-size: 56px; opacity: .15; }
+.ds-gh-tpl-soleil .gh-brand-tag { display: inline-block; font-size: 6.5px; font-weight: 800; letter-spacing: .15em; text-transform: uppercase; color: #fff; background: rgba(255,255,255,.18); padding: 2px 8px; border-radius: 99px; margin-bottom: 6px; }
+.ds-gh-tpl-soleil .gh-event { display: block; font-size: 13px; font-weight: 800; color: #fff; opacity: 1; margin: 0; }
+.ds-gh-tpl-soleil .gh-date { display: block; font-size: 8px; color: rgba(255,255,255,.85); margin-top: 3px; }
+.ds-gh-tpl-soleil .gh-pass-row { display: flex; align-items: center; gap: 10px; margin: 10px; background: var(--p-surface); border: 1.5px solid #fde68a; border-radius: 10px; padding: 9px; }
+.ds-gh-tpl-soleil .gh-qr { flex: none; border-radius: 6px; padding: 3px; background: #fef3c7; }
+.ds-gh-tpl-soleil .gh-chips { display: flex; gap: 4px; margin-top: 5px; flex-wrap: wrap; }
+.ds-gh-tpl-soleil .gh-chip { background: color-mix(in srgb, var(--p-accent) 12%, transparent); color: var(--p-accent); }
+.ds-gh-tpl-soleil .gh-chip.alt { background: #fef3c7; color: #a07040; }
+.ds-gh-tpl-soleil .gh-tabs { padding: 0 12px; gap: 5px; }
+.ds-gh-tpl-soleil .gh-tabs span { flex: 1; text-align: center; border-radius: 99px; border-bottom: none; padding: 5px 3px; }
+.ds-gh-tpl-soleil .gh-tabs span.active { background: linear-gradient(135deg, #f59e0b, #fb923c); color: #fff !important; }
+.ds-gh-tpl-soleil .gh-act-row { display: flex; align-items: center; gap: 8px; background: var(--p-bg); border: 1px solid #fde68a; border-radius: 8px; padding: 6px 8px; }
+.ds-gh-tpl-soleil .gh-act-name { flex: 1; font-size: 9.5px; font-weight: 700; }
+.ds-gh-tpl-soleil .gh-act-time { font-size: 8.5px; font-weight: 800; color: #f59e0b; }
+
+/* 07 — Mono Print: split header w/ big-date block, 3-col pass-block, bordered rows */
+.ds-gh-tpl-mono-print { border-radius: 0; border: 2px solid #1a1a1a; box-shadow: 4px 4px 0 #1a1a1a; font-family: 'Space Grotesk', sans-serif !important; }
+.ds-gh-tpl-mono-print .gh-header { display: flex; border-bottom: 2px solid #1a1a1a; }
+.ds-gh-tpl-mono-print .gh-header-left { flex: 1; padding: 8px 10px; border-right: 2px solid #1a1a1a; }
+.ds-gh-tpl-mono-print .gh-issue { display: block; font-size: 6.5px; font-weight: 700; letter-spacing: .2em; text-transform: uppercase; opacity: .55; }
+.ds-gh-tpl-mono-print .gh-event { display: block; font-size: 13px; font-weight: 800; letter-spacing: -.02em; line-height: 1.05; margin-top: 3px; opacity: 1; }
+.ds-gh-tpl-mono-print .gh-header-right { width: 44px; flex: none; background: #0a0a0a; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px; }
+.ds-gh-tpl-mono-print .gh-big-date { font-size: 18px; font-weight: 800; color: #fff; line-height: 1; }
+.ds-gh-tpl-mono-print .gh-big-month { font-size: 6.5px; font-weight: 700; letter-spacing: .12em; text-transform: uppercase; color: rgba(255,255,255,.6); }
+.ds-gh-tpl-mono-print .gh-pass-block { display: flex; align-items: stretch; border-bottom: 2px solid #1a1a1a; }
+.ds-gh-tpl-mono-print .gh-qr { width: 46px; flex: none; border-right: 2px solid #1a1a1a; display: flex; align-items: center; justify-content: center; background: #fff; }
+.ds-gh-tpl-mono-print .gh-hero-text { flex: 1; padding: 8px 10px; justify-content: center; gap: 2px; }
+.ds-gh-tpl-mono-print .gh-guest { text-transform: uppercase; font-size: 11.5px; }
+.ds-gh-tpl-mono-print .gh-status-block { width: 44px; flex: none; background: #e63329; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px; font-size: 13px; color: #fff; }
+.ds-gh-tpl-mono-print .gh-status-block span { font-size: 6px; font-weight: 800; letter-spacing: .1em; text-transform: uppercase; text-align: center; }
+.ds-gh-tpl-mono-print .gh-tabs { border-bottom: 2px solid #1a1a1a; gap: 0; }
+.ds-gh-tpl-mono-print .gh-tabs span { flex: 1; text-align: center; padding: 7px 4px; border-right: 1px solid #1a1a1a; border-bottom: none; }
+.ds-gh-tpl-mono-print .gh-tabs span:last-child { border-right: none; }
+.ds-gh-tpl-mono-print .gh-tabs span.active { background: #0a0a0a; color: #fff !important; opacity: 1; }
+.ds-gh-tpl-mono-print .gh-prog-row.bordered { border: 2px solid #1a1a1a; background: #fff; padding: 6px 8px; }
+.ds-gh-tpl-mono-print .gh-prog-time { font-size: 9px; font-weight: 800; min-width: 30px; }
+.ds-gh-tpl-mono-print .gh-prog-name { flex: 1; font-size: 9.5px; font-weight: 700; }
+
+/* 08 — Verdant: dark canopy w/ leaf motif, tag pass-card, wellness stat grid */
+.ds-gh-tpl-verdant { border-radius: 14px; box-shadow: 0 10px 26px rgba(26,51,32,.15); }
+.ds-gh-tpl-verdant .gh-canopy { background: #1a3320; padding: 10px 12px; position: relative; overflow: hidden; background-image: radial-gradient(ellipse 80% 60% at 90% -10%, rgba(82,183,136,.3) 0%, transparent 60%); }
+.ds-gh-tpl-verdant .gh-badge { display: inline-block; font-size: 6.5px; font-weight: 700; letter-spacing: .15em; text-transform: uppercase; color: #52b788; background: rgba(82,183,136,.15); border: 1px solid rgba(82,183,136,.3); padding: 2px 8px; border-radius: 99px; margin-bottom: 5px; }
+.ds-gh-tpl-verdant .gh-event { display: block; font-size: 12px; font-weight: 700; color: #fff; opacity: 1; margin: 0; }
+.ds-gh-tpl-verdant .gh-sub { display: block; font-size: 8px; color: rgba(255,255,255,.5); margin-top: 3px; }
+.ds-gh-tpl-verdant .gh-pass-card { display: flex; align-items: center; gap: 10px; margin: 10px; background: var(--p-surface); border: 1.5px solid #b7e4c7; border-radius: 10px; padding: 9px; }
+.ds-gh-tpl-verdant .gh-qr { flex: none; border-radius: 6px; padding: 3px; background: #d8f3dc; }
+.ds-gh-tpl-verdant .gh-chips { display: flex; gap: 4px; margin-top: 5px; flex-wrap: wrap; }
+.ds-gh-tpl-verdant .gh-chip { background: #d8f3dc; color: #2d6a4f; }
+.ds-gh-tpl-verdant .gh-chip.live { background: #2d6a4f; color: #fff; }
+.ds-gh-tpl-verdant .gh-tabs { padding: 0 10px; gap: 4px; }
+.ds-gh-tpl-verdant .gh-tabs span { flex: 1; text-align: center; border-radius: 99px; border-bottom: none; padding: 5px 3px; }
+.ds-gh-tpl-verdant .gh-tabs span.active { background: #2d6a4f; color: #fff !important; }
+.ds-gh-tpl-verdant .gh-wellness-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.ds-gh-tpl-verdant .gh-stat { background: var(--p-bg); border: 1.5px solid #b7e4c7; border-radius: 8px; padding: 8px; display: flex; flex-direction: column; gap: 3px; }
+.ds-gh-tpl-verdant .gh-stat-val { font-size: 10px; font-weight: 700; }
+
+/* 09 — Coastal Club: navy hull w/ rope-stripe + emblem, 3-col pass-strip, leg rows */
+.ds-gh-tpl-coastal-club { border-radius: 8px; border: 1.5px solid #d4cbb8; box-shadow: 0 10px 26px rgba(15,32,64,.18); }
+.ds-gh-tpl-coastal-club .gh-hull { background: #0f2040; }
+.ds-gh-tpl-coastal-club .gh-rope { height: 4px; background: repeating-linear-gradient(90deg, #b8912a 0, #b8912a 8px, #fff 8px, #fff 16px); }
+.ds-gh-tpl-coastal-club .gh-hull-body { display: flex; align-items: flex-start; justify-content: space-between; gap: 10px; padding: 10px 12px; }
+.ds-gh-tpl-coastal-club .gh-club { display: block; font-size: 6.5px; font-weight: 700; letter-spacing: .2em; text-transform: uppercase; color: #b8912a; margin-bottom: 4px; }
+.ds-gh-tpl-coastal-club .gh-event { display: block; font-size: 12px; font-weight: 700; color: #fff; opacity: 1; margin: 0; }
+.ds-gh-tpl-coastal-club .gh-emblem { flex: none; width: 34px; height: 34px; border: 1.5px solid #b8912a; border-radius: 50%; display: flex; flex-direction: column; align-items: center; justify-content: center; color: #b8912a; gap: 1px; }
+.ds-gh-tpl-coastal-club .gh-emblem span { font-size: 5px; font-weight: 700; letter-spacing: .1em; }
+.ds-gh-tpl-coastal-club .gh-pass-strip { display: flex; align-items: stretch; border-bottom: 1.5px solid #d4cbb8; background: #fff; }
+.ds-gh-tpl-coastal-club .gh-qr { width: 46px; flex: none; display: flex; align-items: center; justify-content: center; border-right: 1.5px solid #d4cbb8; }
+.ds-gh-tpl-coastal-club .gh-hero-text { flex: 1; padding: 8px 10px; justify-content: center; }
+.ds-gh-tpl-coastal-club .gh-status-col { width: 44px; flex: none; background: #0f2040; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px; font-size: 14px; color: #b8912a; border-left: 1.5px solid #d4cbb8; }
+.ds-gh-tpl-coastal-club .gh-status-col span { font-size: 6px; font-weight: 800; letter-spacing: .08em; text-transform: uppercase; color: rgba(255,255,255,.6); text-align: center; }
+.ds-gh-tpl-coastal-club .gh-tabs { border-bottom: 1.5px solid #d4cbb8; }
+.ds-gh-tpl-coastal-club .gh-tabs span { flex: 1; text-align: center; padding-top: 8px; }
+.ds-gh-tpl-coastal-club .gh-leg { display: flex; align-items: center; gap: 8px; padding: 6px 8px; background: #fff; border: 1px solid #d4cbb8; border-radius: 4px; }
+.ds-gh-tpl-coastal-club .gh-leg-num { font-size: 8px; font-weight: 800; color: #b8912a; min-width: 26px; }
+.ds-gh-tpl-coastal-club .gh-leg-name { flex: 1; font-size: 9.5px; }
+.ds-gh-tpl-coastal-club .gh-leg-time { font-size: 8.5px; font-weight: 700; color: #0f2040; }
+
+/* 10 — Haze: glassmorphism gradient bg, blurred pass-glass, glow lineup rows */
+.ds-gh-tpl-haze { border-radius: 18px; position: relative; overflow: hidden; box-shadow: 0 14px 32px rgba(0,0,0,.6); background: linear-gradient(145deg, #1a0533 0%, #0d1b4b 40%, #0a1a3a 70%, #1a0328 100%) !important; }
+.ds-gh-tpl-haze::before { content: ''; position: absolute; top: -50px; left: -40px; width: 160px; height: 160px; border-radius: 50%; background: radial-gradient(circle, rgba(168,85,247,.3) 0%, transparent 70%); pointer-events: none; }
+.ds-gh-tpl-haze .gh-top { position: relative; display: flex; align-items: flex-start; justify-content: space-between; gap: 8px; padding: 10px 12px; }
+.ds-gh-tpl-haze .gh-brand { display: block; font-size: 7px; font-weight: 600; letter-spacing: .15em; text-transform: uppercase; opacity: .5; }
+.ds-gh-tpl-haze .gh-event { display: block; font-size: 12px; font-weight: 700; opacity: 1; margin-top: 3px; }
+.ds-gh-tpl-haze .gh-invite-badge { flex: none; background: linear-gradient(135deg, rgba(168,85,247,.3), rgba(59,130,246,.3)); border: 1px solid rgba(255,255,255,.15); border-radius: 99px; padding: 3px 9px; font-size: 7px; font-weight: 700; letter-spacing: .1em; text-transform: uppercase; }
+.ds-gh-tpl-haze .gh-pass-glass { position: relative; display: flex; align-items: center; gap: 10px; margin: 0 10px 10px; background: rgba(255,255,255,.12); border: 1px solid rgba(255,255,255,.12); border-radius: 12px; padding: 10px; backdrop-filter: blur(14px); }
+.ds-gh-tpl-haze .gh-qr { flex: none; background: rgba(255,255,255,.08); border: 1px solid rgba(255,255,255,.12); border-radius: 6px; padding: 3px; }
+.ds-gh-tpl-haze .gh-gradient-tag { margin-top: 5px; display: inline-flex; align-items: center; gap: 4px; background: linear-gradient(135deg, rgba(168,85,247,.2), rgba(236,72,153,.2)); border: 1px solid rgba(255,255,255,.12); border-radius: 99px; padding: 3px 9px; font-size: 8px; width: fit-content; }
+.ds-gh-tpl-haze .gh-gradient-tag::before { content: '✦'; color: #d946ef; font-size: 7px; }
+.ds-gh-tpl-haze .gh-tabs { position: relative; padding: 0 12px; gap: 4px; margin-bottom: 8px; }
+.ds-gh-tpl-haze .gh-tabs span { flex: 1; text-align: center; border-radius: 99px; border-bottom: none; padding: 5px 3px; color: rgba(255,255,255,.5) !important; }
+.ds-gh-tpl-haze .gh-tabs span.active { background: linear-gradient(135deg, rgba(168,85,247,.25), rgba(59,130,246,.25)); color: #fff !important; }
+.ds-gh-tpl-haze .gh-prog-row { position: relative; display: flex; align-items: center; gap: 8px; padding: 6px 8px; background: rgba(255,255,255,.05); border: 1px solid rgba(255,255,255,.1); border-radius: 8px; }
+.ds-gh-tpl-haze .gh-prog-row.glow { border-color: rgba(168,85,247,.35); background: rgba(168,85,247,.1); }
+.ds-gh-tpl-haze .gh-prog-time { font-size: 8px; font-weight: 700; opacity: .6; }
+.ds-gh-tpl-haze .gh-prog-name { flex: 1; font-size: 9.5px; }

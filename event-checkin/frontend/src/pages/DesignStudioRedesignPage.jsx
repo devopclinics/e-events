@@ -95,11 +95,11 @@ const HUB_STYLE_CATEGORIES = ['All', 'Layout', 'Luxury', 'Warm', 'Vibrant', 'Dar
 
 // GuestHub tab: same 10 visual themes as FestioHub's "Apply palette" (still
 // reachable there for fine-tuning just the card), presented as whole-
-// experience templates instead. Swatches are miniatures of the actual
-// mockups (guesthub-mockups.html / guesthub-mockups-2.html) — same shared
-// anatomy every one of those files uses (brand+pill header, guest-name-over-
-// QR hero, tab row) with one real signature motif per template pulled from
-// that file's own markup, not a generic gradient.
+// experience templates instead. Each swatch below reproduces its own
+// mockup's actual composition — topbar/cover shape, hero-row layout (side-
+// by-side vs. overlapping vs. 3-column split), and body content pattern —
+// straight from guesthub-mockups.html / guesthub-mockups-2.html, not a
+// single shared frame with a decorative sticker swapped per style.
 const GUESTHUB_FONT_CSS = {
   'elegant-serif': "'Cormorant Garamond', Georgia, serif",
   'classic-serif': "Georgia, 'Times New Roman', serif",
@@ -107,17 +107,243 @@ const GUESTHUB_FONT_CSS = {
   'modern-sans': "'Inter', -apple-system, sans-serif",
   'display-rounded': "'Nunito', -apple-system, sans-serif",
 }
-const GUESTHUB_MOTIFS = {
-  'noir-couture': 'gold-frame',       // h-qr-frame: square, 1px gold border
-  'bloom-editorial': 'rose-dot',      // h-prog-dot: soft rounded timeline dot
-  'electric-rave': 'live-pulse',      // h-live-badge: glowing "LIVE" chip
-  'linen-gold': 'ornament',           // h-ornament: thin center divider rule
-  'celestial-midnight': 'moon-glow',  // h-moon: glowing circle
-  'soleil': 'sun-chip',               // h-banner: warm gradient top band
-  'mono-print': 'big-date',           // h-big-date/h-big-month: brutalist date stamp
-  'verdant': 'leaf',                  // h-leaf-dec: leaf accent
-  'coastal-club': 'hull-emblem',      // h-hull-emblem: circular crest badge
-  'haze': 'glass-blur',               // h-glass-card: frosted blur panel
+
+function GhMiniQR({ color, size = 26 }) {
+  return (
+    <svg viewBox="0 0 40 40" width={size} height={size} className="gh-qr-svg">
+      <rect x="2" y="2" width="14" height="14" rx="1" stroke={color} strokeWidth="1.5" fill="none" />
+      <rect x="5" y="5" width="8" height="8" fill={color} rx="0.5" />
+      <rect x="24" y="2" width="14" height="14" rx="1" stroke={color} strokeWidth="1.5" fill="none" />
+      <rect x="27" y="5" width="8" height="8" fill={color} rx="0.5" />
+      <rect x="2" y="24" width="14" height="14" rx="1" stroke={color} strokeWidth="1.5" fill="none" />
+      <rect x="5" y="27" width="8" height="8" fill={color} rx="0.5" />
+      <rect x="24" y="24" width="4" height="4" fill={color} rx="0.3" />
+      <rect x="30" y="24" width="4" height="4" fill={color} rx="0.3" />
+      <rect x="24" y="30" width="4" height="4" fill={color} rx="0.3" />
+      <rect x="30" y="30" width="4" height="4" fill={color} rx="0.3" />
+    </svg>
+  )
+}
+
+function GhTabs({ items, accent }) {
+  return (
+    <div className="gh-tabs">
+      {items.map((t, i) => (
+        <span key={t} className={i === 0 ? 'active' : ''} style={i === 0 ? { color: accent, borderColor: accent } : undefined}>{t}</span>
+      ))}
+    </div>
+  )
+}
+
+// One case per template id — each mirrors that specific mockup's real DOM
+// shape and sample copy (guest name, event name, programme items), scaled
+// down for a card-sized preview.
+function GuestHubSwatch({ s, font }) {
+  const p = s.colorPreset
+  const vars = { '--p-bg': p.background, '--p-surface': p.surface, '--p-accent': p.accent, '--p-primary': p.primary, '--p-text': p.text, fontFamily: font }
+  switch (s.id) {
+    case 'noir-couture':
+      return (
+        <div className="ds-gh-tpl ds-gh-tpl-noir-couture" style={vars}>
+          <div className="gh-topbar">
+            <span className="gh-brand">Festio GuestHub</span>
+            <span className="gh-pill">✓ Confirmed</span>
+          </div>
+          <div className="gh-hero">
+            <span className="gh-qr"><GhMiniQR color={p.accent} /></span>
+            <div className="gh-hero-text">
+              <strong className="gh-guest">Isabelle Fontaine</strong>
+              <span className="gh-event">The Maison Gala</span>
+              <span className="gh-status"><i />Ready for entry</span>
+            </div>
+          </div>
+          <GhTabs items={['Pass', 'Activity', 'Program', 'Message']} accent={p.accent} />
+          <div className="gh-body">
+            <div className="gh-tl-item"><span className="gh-tl-time">7:30</span><span className="gh-tl-dot" /><span className="gh-tl-text">Welcome Reception</span></div>
+            <div className="gh-tl-item"><span className="gh-tl-time">8:15</span><span className="gh-tl-dot" /><span className="gh-tl-text">Dinner Service</span></div>
+          </div>
+        </div>
+      )
+    case 'bloom-editorial':
+      return (
+        <div className="ds-gh-tpl ds-gh-tpl-bloom-editorial" style={vars}>
+          <div className="gh-topbar">
+            <span className="gh-brand">GuestHub by Festio</span>
+            <strong className="gh-event">The Garden Soirée</strong>
+            <span className="gh-date">Sat, 9 Aug · 6 PM</span>
+          </div>
+          <div className="gh-pass-card">
+            <span className="gh-qr round"><GhMiniQR color={p.accent} /></span>
+            <div className="gh-hero-text">
+              <strong className="gh-guest">Amélie Rousseau</strong>
+              <span className="gh-tag">Ready for entry</span>
+            </div>
+          </div>
+          <GhTabs items={['Pass', 'Program', 'Messages', 'More']} accent={p.accent} />
+          <div className="gh-body">
+            <div className="gh-prog-item"><span className="gh-dot live" /><span className="gh-prog-name">Welcome &amp; Cocktails</span><span className="gh-prog-time">6:00</span></div>
+            <div className="gh-prog-item"><span className="gh-dot" /><span className="gh-prog-name">Dinner Seated</span><span className="gh-prog-time">7:30</span></div>
+          </div>
+        </div>
+      )
+    case 'electric-rave':
+      return (
+        <div className="ds-gh-tpl ds-gh-tpl-electric-rave" style={vars}>
+          <div className="gh-topbar">
+            <span className="gh-brand">GuestHub</span>
+            <span className="gh-live"><i />Live tonight</span>
+          </div>
+          <div className="gh-pass-zone">
+            <span className="gh-qr"><GhMiniQR color={p.primary} /></span>
+            <div className="gh-hero-text">
+              <strong className="gh-guest">Zara Knox</strong>
+              <span className="gh-event">Noir Frequency</span>
+              <span className="gh-chip">Ready for Entry</span>
+            </div>
+          </div>
+          <GhTabs items={['Pass', 'Activity', 'Program', 'Chat']} accent={p.primary} />
+          <div className="gh-body gh-activity-grid">
+            <div className="gh-stat"><span className="gh-stat-label">Status</span><span className="gh-stat-val">VIP</span></div>
+            <div className="gh-stat"><span className="gh-stat-label">Attending</span><span className="gh-stat-val">347</span></div>
+          </div>
+        </div>
+      )
+    case 'linen-gold':
+      return (
+        <div className="ds-gh-tpl ds-gh-tpl-linen-gold" style={vars}>
+          <div className="gh-cover"><span className="gh-cover-event">La Belle Époque</span></div>
+          <div className="gh-pass-card overlap">
+            <span className="gh-qr"><GhMiniQR color={p.accent} /></span>
+            <div className="gh-hero-text">
+              <strong className="gh-guest">Madeleine Lefèvre</strong>
+              <span className="gh-chip">Table Lumière · Seat 4</span>
+            </div>
+          </div>
+          <div className="gh-ornament">— ✦ —</div>
+          <GhTabs items={['Pass', 'Menu', 'Program', 'Message']} accent={p.accent} />
+          <div className="gh-body gh-menu-grid">
+            <div className="gh-menu-item"><span className="course">Entrée</span><span className="dish">Velouté</span></div>
+            <div className="gh-menu-item"><span className="course">Main</span><span className="dish">Magret de Canard</span></div>
+          </div>
+        </div>
+      )
+    case 'celestial-midnight':
+      return (
+        <div className="ds-gh-tpl ds-gh-tpl-celestial-midnight" style={vars}>
+          <div className="gh-skyline"><span className="gh-moon" /><span className="gh-stars" /><span className="gh-title">Constellation Gala</span></div>
+          <div className="gh-pass-card">
+            <span className="gh-qr"><GhMiniQR color={p.primary} /></span>
+            <div className="gh-hero-text">
+              <strong className="gh-guest">Selene Moreau</strong>
+              <span className="gh-stars-row">★★★★★ Constellation Tier</span>
+            </div>
+          </div>
+          <GhTabs items={['Pass', 'Updates', 'Program', 'Chat']} accent={p.primary} />
+          <div className="gh-body">
+            <div className="gh-prog-row"><span>🌙</span><span className="gh-prog-time">20:00</span><span className="gh-prog-name">Grand Arrival</span></div>
+            <div className="gh-prog-row"><span>🥂</span><span className="gh-prog-time">21:00</span><span className="gh-prog-name">Dinner Under Stars</span></div>
+          </div>
+        </div>
+      )
+    case 'soleil':
+      return (
+        <div className="ds-gh-tpl ds-gh-tpl-soleil" style={vars}>
+          <div className="gh-banner">
+            <span className="gh-brand-tag">GuestHub</span>
+            <strong className="gh-event">Riviera Sunset Gala</strong>
+            <span className="gh-date">Cannes Beach Club</span>
+          </div>
+          <div className="gh-pass-row">
+            <span className="gh-qr"><GhMiniQR color={p.accent} /></span>
+            <div className="gh-hero-text">
+              <strong className="gh-guest">Sofia Marchetti</strong>
+              <div className="gh-chips"><span className="gh-chip">✓ Confirmed</span><span className="gh-chip alt">Plage · 12</span></div>
+            </div>
+          </div>
+          <GhTabs items={['Pass', 'Activity', 'Program', 'Chat']} accent={p.accent} />
+          <div className="gh-body">
+            <div className="gh-act-row"><span>🌊</span><span className="gh-act-name">Beach Arrival</span><span className="gh-act-time">18:00</span></div>
+            <div className="gh-act-row"><span>🍽️</span><span className="gh-act-name">Dîner en Blanc</span><span className="gh-act-time">20:00</span></div>
+          </div>
+        </div>
+      )
+    case 'mono-print':
+      return (
+        <div className="ds-gh-tpl ds-gh-tpl-mono-print" style={vars}>
+          <div className="gh-header">
+            <div className="gh-header-left"><span className="gh-issue">GuestHub Pass</span><strong className="gh-event">The Industry Summit</strong></div>
+            <div className="gh-header-right"><span className="gh-big-date">09</span><span className="gh-big-month">Aug</span></div>
+          </div>
+          <div className="gh-pass-block">
+            <span className="gh-qr"><GhMiniQR color={p.primary} /></span>
+            <div className="gh-hero-text"><strong className="gh-guest">Dara Okonkwo</strong><span className="gh-meta">Table 12</span></div>
+            <div className="gh-status-block">✓<span>Entry</span></div>
+          </div>
+          <GhTabs items={['Pass', 'Agenda', 'Speakers', 'Contact']} accent={p.accent} />
+          <div className="gh-body">
+            <div className="gh-prog-row bordered"><span className="gh-prog-time">9:00</span><span className="gh-prog-name">Opening Keynote</span><span className="gh-tag red">Live</span></div>
+            <div className="gh-prog-row bordered"><span className="gh-prog-time">11:00</span><span className="gh-prog-name">Track A</span><span className="gh-tag">Your Track</span></div>
+          </div>
+        </div>
+      )
+    case 'verdant':
+      return (
+        <div className="ds-gh-tpl ds-gh-tpl-verdant" style={vars}>
+          <div className="gh-canopy"><span className="gh-badge">Festio GuestHub</span><strong className="gh-event">Forest Wellness Retreat</strong><span className="gh-sub">Springwater Lodge</span></div>
+          <div className="gh-pass-card">
+            <span className="gh-qr"><GhMiniQR color={p.primary} /></span>
+            <div className="gh-hero-text"><strong className="gh-guest">Priya Nair</strong><div className="gh-chips"><span className="gh-chip live">🌿 Checked In</span><span className="gh-chip">Cabin Maple</span></div></div>
+          </div>
+          <GhTabs items={['Pass', 'Wellness', 'Schedule', 'Message']} accent={p.primary} />
+          <div className="gh-body gh-wellness-grid">
+            <div className="gh-stat"><span>🧘</span><span className="gh-stat-val">3 of 5</span></div>
+            <div className="gh-stat"><span>🍵</span><span className="gh-stat-val">Plant-based</span></div>
+          </div>
+        </div>
+      )
+    case 'coastal-club':
+      return (
+        <div className="ds-gh-tpl ds-gh-tpl-coastal-club" style={vars}>
+          <div className="gh-hull">
+            <div className="gh-rope" />
+            <div className="gh-hull-body">
+              <div><span className="gh-club">Royal Harbour Yacht Club</span><strong className="gh-event">Summer Regatta</strong></div>
+              <div className="gh-emblem">⚓<span>RHYC</span></div>
+            </div>
+          </div>
+          <div className="gh-pass-strip">
+            <span className="gh-qr"><GhMiniQR color={p.text} /></span>
+            <div className="gh-hero-text"><strong className="gh-guest">Charles Whitfield III</strong><span className="gh-meta">Commodore's Table</span></div>
+            <div className="gh-status-col">⚓<span>On Board</span></div>
+          </div>
+          <GhTabs items={['Pass', 'Races', 'Dinner', 'Message']} accent={p.accent} />
+          <div className="gh-body">
+            <div className="gh-leg"><span className="gh-leg-num">LEG 1</span><span className="gh-leg-name">Harbour Start</span><span className="gh-tag red">Live</span></div>
+            <div className="gh-leg"><span className="gh-leg-num">GALA</span><span className="gh-leg-name">Prizegiving Dinner</span><span className="gh-leg-time">19:00</span></div>
+          </div>
+        </div>
+      )
+    case 'haze':
+      return (
+        <div className="ds-gh-tpl ds-gh-tpl-haze" style={vars}>
+          <div className="gh-top">
+            <div><span className="gh-brand">GuestHub · Festio</span><strong className="gh-event">Aurora Experience Night</strong></div>
+            <span className="gh-invite-badge">✦ VIP</span>
+          </div>
+          <div className="gh-pass-glass">
+            <span className="gh-qr"><GhMiniQR color={p.primary} /></span>
+            <div className="gh-hero-text"><strong className="gh-guest">Yuki Tanaka</strong><span className="gh-gradient-tag">Backstage + All Areas</span></div>
+          </div>
+          <GhTabs items={['Pass', 'Lineup', 'Updates', 'Chat']} accent="#ffffff" />
+          <div className="gh-body">
+            <div className="gh-prog-row glow"><span className="gh-prog-time">21:00</span><span className="gh-prog-name">ZARA ft. HALO</span><span className="gh-tag live">Live</span></div>
+            <div className="gh-prog-row"><span className="gh-prog-time">22:30</span><span className="gh-prog-name">DJ Nocturne</span></div>
+          </div>
+        </div>
+      )
+    default:
+      return null
+  }
 }
 
 const TEMPLATE_CATEGORIES = ['All', 'Wedding', 'Community', 'Conference', 'Celebration']
@@ -1072,29 +1298,9 @@ export default function DesignStudioRedesignPage() {
               <div className="ds-gh-grid">
                 {HUB_STYLES.filter((s) => s.colorPreset).map((s) => {
                   const font = GUESTHUB_FONT_CSS[s.fontSuggestion] || GUESTHUB_FONT_CSS['modern-sans']
-                  const motif = GUESTHUB_MOTIFS[s.id]
-                  const p = s.colorPreset
                   return (
                     <div key={s.id} className={`ds-gh-card ${hubStyle === s.id ? 'selected' : ''}`}>
-                      <div className="ds-gh-swatch" style={{ background: p.background, color: p.text, fontFamily: font }}>
-                        <div className="ds-gh-swatch-head">
-                          <span className="ds-gh-swatch-brand" style={{ color: p.accent }}>FESTIO</span>
-                          <span className="ds-gh-swatch-pill" style={{ background: `${p.accent}22`, color: p.accent, borderColor: `${p.accent}55` }}>Attending</span>
-                        </div>
-                        <div className="ds-gh-swatch-hero">
-                          <span className="ds-gh-swatch-qr" style={{ borderColor: p.accent }} />
-                          <div className="ds-gh-swatch-hero-text">
-                            <strong style={{ fontFamily: font }}>Guest Name</strong>
-                            <span>{s.name}</span>
-                          </div>
-                        </div>
-                        <div className={`ds-gh-motif ds-gh-motif-${motif}`} style={{ '--m-accent': p.accent, '--m-surface': p.surface }} />
-                        <div className="ds-gh-swatch-tabs">
-                          <span style={{ color: p.accent, borderColor: p.accent }}>Pass</span>
-                          <span>Program</span>
-                          <span>Messages</span>
-                        </div>
-                      </div>
+                      <GuestHubSwatch s={s} font={font} />
                       <div className="ds-hub-card-meta">
                         <div className="ds-hub-card-top">
                           <strong>{s.name}</strong>

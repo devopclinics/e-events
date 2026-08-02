@@ -229,7 +229,15 @@ function designColors(theme) {
 }
 
 function designCover(theme, event) {
-  return theme?.flyer_image_url || theme?.cover_image_url || event?.invite_cover_image || ''
+  // cover_image_url is an explicit photo upload (uploadFlyerPhoto in Design
+  // Studio) — it should always win. flyer_image_url is only a fallback: it
+  // can be a real rendered flyer, but can also just be a template's stock
+  // preview thumbnail left over from picking a flyer template without ever
+  // rendering/applying one (chooseFlyerTemplate in the legacy Design Studio
+  // sets it to the template's preview image as a provisional placeholder).
+  // Letting that placeholder outrank an actual uploaded photo meant an
+  // organizer's own photo could never appear on the live guest page.
+  return theme?.cover_image_url || theme?.flyer_image_url || event?.invite_cover_image || ''
 }
 
 function themedPageBackground(colors) {
@@ -2256,8 +2264,11 @@ export default function InvitePage() {
   const page = publicPageConfig(designTheme?.page_config)
   const dCover = designCover(designTheme, event)
   // Rendered flyers already carry their own invitation heading and event name.
-  // Keep the flyer as the hero instead of repeating that artwork in text.
-  const flyerLedHero = !!designTheme?.flyer_image_url
+  // Keep the flyer as the hero instead of repeating that artwork in text —
+  // but only when there's no separately uploaded cover photo taking its
+  // place above (designCover()'s priority), since an uploaded photo has no
+  // baked-in title and needs the normal title/host overlay restored.
+  const flyerLedHero = !designTheme?.cover_image_url && !!designTheme?.flyer_image_url
   const atCapacity = event.rsvp_capacity != null && event.rsvp_count >= event.rsvp_capacity
   const deadlinePassed = !!event.deadline_passed
   const title = dWording.eventTitle || eventTitle(event)

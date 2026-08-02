@@ -5,7 +5,21 @@ import { useEventDetails } from '../hooks/useEventDetails'
 import { api } from '../api'
 import './DesignStudioRedesignPage.css'
 
-const TABS = ['Templates', 'Flyer', 'Event Page', 'Festio Pass', 'Email Preview', 'Publish']
+const TABS = ['Templates', 'Flyer', 'Event Page', 'Festio Pass', 'FestioHub', 'Email Preview', 'Publish']
+
+// FestioHub layout styles — arrangements of the real Hub modules (guest_pass,
+// next_action, activity_progress, live_program, festiome, messages read by
+// InvitePage.jsx's GuestHub component via designTheme.hub_layout). The choice
+// is saved for real via theme_config.hubStyle; live per-style guest-facing
+// rendering in GuestHub itself is a separate follow-up — see rd-hint copy
+// on this tab.
+const HUB_STYLES = [
+  { id: 'wallet-pass', name: 'Wallet Pass', tagline: 'Pass-first, native-app feel', bestFor: 'Best when guests need their QR fast, at the door.' },
+  { id: 'card-dashboard', name: 'Card Dashboard', tagline: 'Everything visible at once', bestFor: 'No tabs to learn — every module as its own card.' },
+  { id: 'story-feed', name: 'Story Feed', tagline: 'Community-first', bestFor: 'Best for events leaning on FestioMe engagement.' },
+  { id: 'timeline', name: 'Timeline', tagline: 'Guided, chronological', bestFor: 'Reassuring for first-time or formal-event guests.' },
+  { id: 'minimal-list', name: 'Minimal List', tagline: 'Utility-first, fastest to scan', bestFor: 'For guests who just want in and out.' },
+]
 
 const TEMPLATE_CATEGORIES = ['All', 'Wedding', 'Community', 'Conference', 'Celebration']
 const TEMPLATE_STYLES = ['All styles', 'Warm', 'Minimal', 'Dark', 'Playful']
@@ -19,9 +33,9 @@ const SURFACE_TAB = {
   'rsvp_page': 'Event Page',
   'event_page': 'Event Page',
   'flyer': 'Flyer',
-  'festiohub': 'Event Page',
-  'festio hub': 'Event Page',
-  'festio_hub': 'Event Page',
+  'festiohub': 'FestioHub',
+  'festio hub': 'FestioHub',
+  'festio_hub': 'FestioHub',
   'festio pass': 'Festio Pass',
   'festio_pass': 'Festio Pass',
   'pass': 'Festio Pass',
@@ -182,6 +196,8 @@ export default function DesignStudioRedesignPage() {
   const [selectedFlyerTplId, setSelectedFlyerTplId] = useState('')
   const [coverBusy, setCoverBusy] = useState(false)
   const [renderBusy, setRenderBusy] = useState(false)
+  const [hubStyle, setHubStyle] = useState(HUB_STYLES[0].id)
+  const [hubStyleBusy, setHubStyleBusy] = useState(false)
   const coverFileRef = useRef(null)
 
   // Live flyer preview: a real server render (same engine the download
@@ -227,6 +243,7 @@ export default function DesignStudioRedesignPage() {
       setColors({ ...DEFAULT_COLORS, ...(saved.theme_config?.colors || {}) })
       setFontPairing(saved.theme_config?.fontPairing || FONT_OPTIONS[0].id)
       setPassOptions({ ...DEFAULT_PASS_OPTIONS, ...(saved.theme_config?.passOptions || {}) })
+      setHubStyle(saved.theme_config?.hubStyle || HUB_STYLES[0].id)
       setFlyerTextScale(saved.asset_config?.flyer_text_scale ?? 1)
       setFlyerSettings({ ...DEFAULT_FLYER_SETTINGS, ...(saved.asset_config?.flyer_settings || {}) })
       setImagePosition({ ...DEFAULT_IMAGE_POSITION, ...(saved.asset_config?.image_position || {}) })
@@ -447,6 +464,25 @@ export default function DesignStudioRedesignPage() {
       setDesign(saved)
       notify('Flyer template saved')
     } catch (e) { notify(e.message || 'Flyer template could not be saved') }
+  }
+
+  async function selectHubStyle(styleId) {
+    setHubStyle(styleId)
+    if (!eventId) return
+    setHubStyleBusy(true)
+    try {
+      const saved = await api.saveEventDesign(eventId, {
+        selected_template_id: design?.selected_template_id || null,
+        selected_flyer_template_id: design?.selected_flyer_template_id || null,
+        theme_config: { ...(design?.theme_config || {}), hubStyle: styleId },
+        wording_config: design?.wording_config || {},
+        asset_config: design?.asset_config || {},
+        page_config: design?.page_config || {},
+      })
+      setDesign(saved)
+      notify(`${HUB_STYLES.find((s) => s.id === styleId)?.name || 'FestioHub style'} saved`)
+    } catch (e) { notify(e.message || 'FestioHub style could not be saved') }
+    finally { setHubStyleBusy(false) }
   }
 
   async function uploadFlyerPhoto(file) {
@@ -885,6 +921,94 @@ export default function DesignStudioRedesignPage() {
                 </div>
               </div>
               <div className="rd-hint" style={{ marginTop: 12 }}>QR pattern shown is illustrative — each guest's real pass carries their own unique, unforgeable token. Everything else here is your actual saved wording, colors, and photo.</div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {tab === 'FestioHub' && (
+        <div className="rd-wide-grid">
+          <div className="rd-panel">
+            <div className="rd-panel-head"><h3>Hub layout style</h3><p>How guests see their pass, program, and community — after they RSVP</p></div>
+            <div className="rd-panel-body">
+              <div className="ds-hub-grid">
+                {HUB_STYLES.map((s) => (
+                  <div key={s.id} className={`ds-hub-card ${hubStyle === s.id ? 'selected' : ''}`}>
+                    <div className={`ds-hub-swatch ds-hub-swatch-${s.id}`}>
+                      {s.id === 'wallet-pass' && (<><span className="hs-pass"/><span className="hs-tabs"><i/><i/><i/><i/></span></>)}
+                      {s.id === 'card-dashboard' && (<><span className="hs-row"/><span className="hs-row"/><span className="hs-row"/></>)}
+                      {s.id === 'story-feed' && (<><span className="hs-circles"><i/><i/><i/></span><span className="hs-row wide"/></>)}
+                      {s.id === 'timeline' && (<><span className="hs-tl"><i/><i/><i/></span></>)}
+                      {s.id === 'minimal-list' && (<><span className="hs-line"/><span className="hs-line"/><span className="hs-line"/><span className="hs-line"/></>)}
+                    </div>
+                    <strong>{s.name}</strong>
+                    <span>{s.tagline}</span>
+                    <p className="rd-rowlink" style={{ margin: '6px 0 12px' }}>{s.bestFor}</p>
+                    <button className={`rr-btn ${hubStyle === s.id ? 'secondary' : 'primary'}`} style={{ width: '100%', justifyContent: 'center' }}
+                      disabled={hubStyleBusy} onClick={() => selectHubStyle(s.id)}>
+                      {hubStyle === s.id ? 'Selected' : hubStyleBusy ? 'Saving…' : 'Use this style'}
+                    </button>
+                  </div>
+                ))}
+              </div>
+              <div className="rd-hint" style={{ marginTop: 14 }}>
+                Your pick is saved to this event's design record now. Guest-facing FestioHub currently renders the same module list (pass, program, community, messages) regardless of style — matching each style's actual arrangement live is a follow-up build, not yet wired.
+              </div>
+            </div>
+          </div>
+          <div className="rd-panel">
+            <div className="rd-panel-head"><h3>Preview</h3><p>{HUB_STYLES.find((s) => s.id === hubStyle)?.name}</p></div>
+            <div className="rd-panel-body">
+              <div className="ds-hub-phone">
+                <div className="ds-hub-phone-notch"/>
+                <div className={`ds-hub-phone-screen ds-hub-phone-${hubStyle}`}>
+                  {hubStyle === 'wallet-pass' && (
+                    <>
+                      <div className="hp-kick">{event?.name || 'Your event'}</div>
+                      <div className="hp-pass">
+                        <div className="hp-pass-kick">FESTIO PASS</div>
+                        <strong>{wording.eventTitle || 'Guest name'}</strong>
+                        <span>{[wording.date, wording.time].filter(Boolean).join(' · ') || 'Date not set'}</span>
+                        <div className="hp-pass-qr"><Icon name="grid" size={26}/></div>
+                      </div>
+                      <div className="hp-tabbar"><span className="on">Pass</span><span>Program</span><span>Community</span><span>Messages</span></div>
+                    </>
+                  )}
+                  {hubStyle === 'card-dashboard' && (
+                    <>
+                      <div className="hp-cover"/>
+                      <div className="hp-greet">Welcome</div>
+                      <div className="hp-card"><Icon name="grid" size={13}/> Your Pass</div>
+                      <div className="hp-card"><Icon name="calendar" size={13}/> Today's Program</div>
+                      <div className="hp-card"><Icon name="message" size={13}/> Community <span className="hp-badge">12</span></div>
+                    </>
+                  )}
+                  {hubStyle === 'story-feed' && (
+                    <>
+                      <div className="hp-stories"><i/><i/><i/></div>
+                      <div className="hp-post">Doors open at 8:30 AM — arrive early for seating.</div>
+                      <div className="hp-post">So excited to celebrate together! 🎉</div>
+                      <div className="hp-fab"><Icon name="grid" size={16}/></div>
+                    </>
+                  )}
+                  {hubStyle === 'timeline' && (
+                    <>
+                      <div className="hp-step done">RSVP confirmed</div>
+                      <div className="hp-step done">Pass ready</div>
+                      <div className="hp-step now">Event day</div>
+                      <div className="hp-step next">Program in progress</div>
+                    </>
+                  )}
+                  {hubStyle === 'minimal-list' && (
+                    <>
+                      <div className="hp-lrow">Your Pass <span>›</span></div>
+                      <div className="hp-lrow">Today's Program <span>›</span></div>
+                      <div className="hp-lrow">Community <span>›</span></div>
+                      <div className="hp-lrow">Messages <span>›</span></div>
+                    </>
+                  )}
+                </div>
+              </div>
             </div>
           </div>
         </div>

@@ -25,7 +25,16 @@ test.describe('Stage C FestioHub style — real guest-facing render', () => {
 
   test('renders with sample data and no real RSVP for every style, each with a distinct real arrangement', async ({ page }) => {
     await previewWithStyle(page, 'wallet-pass')
-    await expect(page.getByRole('heading', { name: 'FestioHub' })).toBeVisible()
+    const heading = page.getByRole('heading', { name: 'FestioHub' })
+    await expect(heading).toBeVisible()
+    // Regression guard: the #guest-hub section doesn't exist until the async
+    // event/theme fetch resolves, so the browser's load-time anchor scroll
+    // always misses it — GuestHub has to scroll itself into view once it
+    // mounts. toBeVisible() alone doesn't catch this (an element below the
+    // fold still passes it), so assert the page actually scrolled and the
+    // heading sits within the viewport, not just present somewhere in the DOM.
+    await expect.poll(() => page.evaluate(() => window.scrollY)).toBeGreaterThan(0)
+    await expect(heading).toBeInViewport()
     await expect(page.getByRole('tab').first()).toHaveText(/Pass/)
 
     await previewWithStyle(page, 'story-feed')

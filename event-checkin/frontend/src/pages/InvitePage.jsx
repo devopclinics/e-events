@@ -1254,6 +1254,17 @@ function GuestHub({ event, accessToken, designTheme, previewMock = false }) {
   const tabsActive = (keys) => !tabbed || keys.includes(hubTab)
   const hubTabOrder = HUB_TAB_ORDER[hubStyle] || ['pass', 'activity', 'program', 'messages']
 
+  // Design Studio's preview iframe loads with #guest-hub in the URL, but this
+  // section doesn't exist in the DOM until the async event/theme fetch above
+  // resolves — the browser's own anchor-scroll only fires once, on load, so
+  // it always misses and the iframe is stuck showing the hero/flyer instead.
+  // Scroll it into view ourselves once this component actually mounts.
+  useEffect(() => {
+    if (!previewMock) return undefined
+    const id = requestAnimationFrame(() => document.getElementById('guest-hub')?.scrollIntoView({ block: 'start' }))
+    return () => cancelAnimationFrame(id)
+  }, [previewMock])
+
   useEffect(() => {
     const capture = (e) => { e.preventDefault(); setInstallPrompt(e); window.__festioInstallPrompt = e }
     const ready = () => setInstallPrompt(window.__festioInstallPrompt || null)

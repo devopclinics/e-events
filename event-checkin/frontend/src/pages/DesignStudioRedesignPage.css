@@ -168,26 +168,45 @@
 .ds-hub-card.selected { border-color: var(--teal); box-shadow: 0 0 0 1px var(--teal); }
 .ds-hub-card strong { font-size: 13.5px; margin-top: 2px; }
 .ds-hub-card > span { font-size: 11.5px; color: var(--muted); }
-.ds-hub-swatch { height: 74px; border-radius: 8px; background: var(--surface-2); margin-bottom: 10px; position: relative; overflow: hidden; padding: 8px; }
+/* Each swatch gets its own mood/background rather than a shared neutral card
+   — these are meant to read apart from each other at a glance, the way the
+   5 real Hub arrangements do (tab dock vs. stacked cards vs. dark feed vs.
+   connected steps vs. flat rows), not as five variations of the same box. */
+.ds-hub-swatch { height: 78px; border-radius: 8px; margin-bottom: 10px; position: relative; overflow: hidden; padding: 9px; }
 
-.ds-hub-swatch-wallet-pass .hs-pass { position: absolute; top: 8px; left: 8px; right: 8px; height: 42px; border-radius: 6px;
-  background: linear-gradient(150deg, var(--teal), var(--teal-dark)); }
-.ds-hub-swatch-wallet-pass .hs-tabs { position: absolute; bottom: 8px; left: 8px; right: 8px; display: flex; gap: 4px; }
-.ds-hub-swatch-wallet-pass .hs-tabs i { flex: 1; height: 8px; border-radius: 3px; background: var(--line); }
+.ds-hub-swatch-wallet-pass { background: linear-gradient(165deg, #0c1a1c, #0a1416); }
+.ds-hub-swatch-wallet-pass .hs-pass { position: absolute; top: 9px; left: 9px; right: 9px; height: 40px; border-radius: 6px;
+  background: linear-gradient(150deg, #123b38, #0a2422); border: 1px solid #1f5a52; }
+.ds-hub-swatch-wallet-pass .hs-pass::after { content: ""; position: absolute; right: 8px; top: 8px; bottom: 8px; width: 22px; border-radius: 4px; background: #d9a94f; opacity: .85; }
+.ds-hub-swatch-wallet-pass .hs-tabs { position: absolute; bottom: 9px; left: 9px; right: 9px; display: flex; gap: 4px;
+  background: rgba(255,255,255,.06); border-radius: 999px; padding: 3px; }
+.ds-hub-swatch-wallet-pass .hs-tabs i { flex: 1; height: 7px; border-radius: 999px; background: rgba(255,255,255,.18); }
+.ds-hub-swatch-wallet-pass .hs-tabs i:first-child { background: #6cf7c2; }
 
-.ds-hub-swatch-card-dashboard .hs-row { display: block; height: 14px; border-radius: 4px; background: var(--surface); border: 1px solid var(--line); margin-bottom: 5px; }
+.ds-hub-swatch-card-dashboard { background: #fbf9f4; display: flex; flex-direction: column; gap: 5px; justify-content: center; }
+.ds-hub-swatch-card-dashboard .hs-row { display: flex; align-items: center; height: 16px; border-radius: 5px; background: #fff;
+  border: 1px solid #eee3d2; box-shadow: 0 1px 0 rgba(0,0,0,.02); position: relative; padding-left: 8px; }
+.ds-hub-swatch-card-dashboard .hs-row::before { content: ""; width: 6px; height: 6px; border-radius: 2px; background: var(--teal); opacity: .8; }
 
-.ds-hub-swatch-story-feed .hs-circles { display: flex; gap: 5px; margin-bottom: 8px; }
-.ds-hub-swatch-story-feed .hs-circles i { width: 16px; height: 16px; border-radius: 50%; background: var(--teal-soft); border: 1.5px solid var(--teal); display: block; }
-.ds-hub-swatch-story-feed .hs-row { height: 24px; border-radius: 6px; background: var(--surface); border: 1px solid var(--line); }
+.ds-hub-swatch-story-feed { background: #1b1410; }
+.ds-hub-swatch-story-feed .hs-circles { display: flex; gap: 6px; margin-bottom: 9px; }
+.ds-hub-swatch-story-feed .hs-circles i { width: 17px; height: 17px; border-radius: 50%; display: block;
+  background: conic-gradient(from 90deg, #ff8f5e, #d9a94f, #ff8f5e); }
+.ds-hub-swatch-story-feed .hs-row.wide { height: 26px; border-radius: 7px; background: #241b15; }
 
-.ds-hub-swatch-timeline .hs-tl { display: flex; flex-direction: column; gap: 10px; padding-left: 4px; position: relative; }
-.ds-hub-swatch-timeline .hs-tl::before { content: ""; position: absolute; left: 9px; top: 4px; bottom: 4px; width: 1px; background: var(--line); }
-.ds-hub-swatch-timeline .hs-tl i { width: 9px; height: 9px; border-radius: 50%; background: var(--teal); display: block; position: relative; }
+.ds-hub-swatch-timeline { background: #fdfcf9; }
+.ds-hub-swatch-timeline .hs-tl { display: flex; flex-direction: column; gap: 10px; padding: 3px 0 3px 5px; position: relative; height: 100%; justify-content: center; }
+.ds-hub-swatch-timeline .hs-tl::before { content: ""; position: absolute; left: 9px; top: 6px; bottom: 6px; width: 1px; background: var(--line); }
+.ds-hub-swatch-timeline .hs-tl i { width: 9px; height: 9px; border-radius: 50%; background: var(--success); display: block; position: relative; }
+.ds-hub-swatch-timeline .hs-tl i:last-child { background: var(--teal); box-shadow: 0 0 0 3px var(--teal-soft); }
 
-.ds-hub-swatch-minimal-list .hs-line { display: block; height: 9px; border-radius: 3px; background: var(--surface); border: 1px solid var(--line); margin-bottom: 6px; width: 80%; }
-.ds-hub-swatch-minimal-list .hs-line:nth-child(2) { width: 95%; }
-.ds-hub-swatch-minimal-list .hs-line:nth-child(3) { width: 65%; }
+.ds-hub-swatch-minimal-list { background: #111214; display: flex; flex-direction: column; gap: 6px; justify-content: center; }
+.ds-hub-swatch-minimal-list .hs-line { display: flex; align-items: center; height: 11px;
+  border-bottom: 1px solid #23252a; padding: 0 1px 5px; }
+.ds-hub-swatch-minimal-list .hs-line::before { content: ""; display: block; height: 6px; border-radius: 2px; background: #4a4f57; width: 78%; }
+.ds-hub-swatch-minimal-list .hs-line:nth-child(2)::before { width: 92%; }
+.ds-hub-swatch-minimal-list .hs-line:nth-child(3)::before { width: 60%; }
+.ds-hub-swatch-minimal-list .hs-line:last-child { border-bottom: none; }
 
 /* The old static per-style "phone mockup" preview was replaced by a real
    <iframe> onto /invite/{eventId}?studio-preview=1 (see ds-page-preview-frame*

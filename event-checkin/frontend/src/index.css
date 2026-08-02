@@ -894,3 +894,64 @@ textarea:focus {
   }
 }
 }
+
+/* ── FestioHub layout styles ──────────────────────────────────────────────
+   Chosen in Design Studio's "FestioHub" tab, saved as theme_config.hubStyle,
+   read back here as designTheme.hub_style. wallet-pass/story-feed keep the
+   tab bar (differing only in tab order + chrome below); card-dashboard/
+   timeline/minimal-list reuse the pre-existing "every section at once"
+   stacked layout and differ only in the rhythm applied to that same content. */
+.fh-hub-tabs-wallet-pass {
+  position: sticky;
+  bottom: 12px;
+  z-index: 5;
+  box-shadow: 0 10px 30px -8px rgba(15, 23, 42, 0.35);
+}
+.fh-hub-tabs-story-feed {
+  overflow-x: auto;
+  scrollbar-width: none;
+  border-radius: 999px;
+  justify-content: flex-start;
+}
+.fh-hub-tabs-story-feed::-webkit-scrollbar { display: none; }
+.fh-hub-tabs-story-feed > button {
+  flex: none;
+  min-width: 92px;
+  border-radius: 999px;
+}
+
+.fh-hub-style-timeline > *:not(:first-child) {
+  position: relative;
+  padding-left: 22px;
+  margin-left: 6px;
+}
+.fh-hub-style-timeline > *:not(:first-child)::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 22px;
+  width: 9px;
+  height: 9px;
+  border-radius: 999px;
+  background: currentColor;
+  opacity: 0.55;
+}
+.fh-hub-style-timeline > *:not(:first-child)::after {
+  content: '';
+  position: absolute;
+  left: 4px;
+  top: -8px;
+  bottom: -8px;
+  width: 1px;
+  background: currentColor;
+  opacity: 0.18;
+}
+
+.fh-hub-style-minimal-list > * {
+  border-radius: 10px !important;
+  box-shadow: none !important;
+  padding: 10px 14px !important;
+}
+.fh-hub-style-minimal-list > * + * {
+  margin-top: 8px !important;
+}

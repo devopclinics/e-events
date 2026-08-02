@@ -34,11 +34,13 @@ test.describe('Stage C Design Studio FestioHub style — isolated staging fixtur
       expect(saved.theme_config.hubStyle).toBe('timeline')
       await expect(page.locator('.rd-toast')).toContainText('Timeline saved')
 
-      // The card now reads "Selected" and the preview panel switches to the
-      // real Timeline mockup (proving the choice round-tripped, not just a
-      // local click state).
+      // The card now reads "Selected" and the live-preview iframe (the real
+      // /invite/{id}?studio-preview=1 page, not a hand-drawn mockup) picks up
+      // the new draft — proving the choice round-tripped, not just a local
+      // click state.
       await expect(page.locator('.ds-hub-card', { hasText: 'Timeline' }).getByRole('button', { name: 'Selected' })).toBeVisible()
-      await expect(page.locator('.ds-hub-phone-timeline')).toBeVisible()
+      const frame = page.frameLocator('.ds-page-preview-frame')
+      await expect(frame.locator('.fh-hub-style-timeline')).toBeVisible({ timeout: 15000 })
 
       const refetch = await page.request.get(`/api/events/${eventId}/design`, { headers: { Authorization: authorization } })
       expect((await refetch.json()).theme_config.hubStyle).toBe('timeline')

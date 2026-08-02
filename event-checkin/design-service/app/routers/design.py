@@ -24,6 +24,7 @@ router = APIRouter(prefix="/api/v1/design")
 
 HUB_MODULES = {"guest_pass", "next_action", "activity_progress", "live_program", "festiome", "messages"}
 HUB_DEFAULT_TABS = {"pass", "activity", "program", "messages", "activity_when_actionable"}
+HUB_STYLES = {"wallet-pass", "card-dashboard", "story-feed", "timeline", "minimal-list"}
 HUB_VARIANTS = {"guest_pass": {"compact"}, "live_program": {"now_plus_two", "now_only"}}
 DEFAULT_HUB_LAYOUT = {
     "version": 1,
@@ -246,6 +247,7 @@ def public_theme(
         wording=design.get("wording_config", {}),
         pass_options=design.get("theme_config", {}).get("passOptions", {}),
         hub_layout=hub_layout,
+        hub_style=design.get("theme_config", {}).get("hubStyle") if design.get("theme_config", {}).get("hubStyle") in HUB_STYLES else "wallet-pass",
         page_config=design.get("page_config", {}),
     )
 

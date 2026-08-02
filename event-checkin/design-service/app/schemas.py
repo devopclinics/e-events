@@ -39,6 +39,7 @@ class PublicTheme(BaseModel):
     wording: dict = Field(default_factory=dict)
     pass_options: dict = Field(default_factory=dict)
     hub_layout: dict = Field(default_factory=dict)
+    hub_style: str = "wallet-pass"
     page_config: dict = Field(default_factory=dict)
 
 

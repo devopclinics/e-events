@@ -1,9 +1,64 @@
 import { useState, useEffect, useCallback } from 'react'
+import confetti from 'canvas-confetti'
 import { useParams } from 'react-router-dom'
 import { api } from '../api'
 import { isNativePushSupported, registerNativePush, unregisterNativePush } from '../push/fcmPush'
 import { parseUtc, fmtEventDateRange } from '../timeutil'
 import { seatingTerm } from '../seatingTerm'
+
+// ── Invite page helpers ───────────────────────────────────────────────────────
+
+/** Days remaining until event_date (event timezone-agnostic — counts calendar days). */
+function daysUntil(isoDate) {
+  if (!isoDate) return null
+  const now = new Date()
+  const target = new Date(isoDate)
+  const diff = Math.ceil((target - now) / 86400000)
+  return diff
+}
+
+/** Google Calendar deeplink for an event. */
+function googleCalUrl(event) {
+  const fmt = (d) => new Date(d).toISOString().replace(/[-:]/g, '').replace('.000', '')
+  const start = fmt(event.event_date)
+  const end   = event.event_end_date ? fmt(event.event_end_date) : fmt(new Date(new Date(event.event_date).getTime() + 2 * 3600000))
+  const loc   = [event.venue_name, event.venue_address].filter(Boolean).join(', ')
+  return `https://calendar.google.com/calendar/render?action=TEMPLATE` +
+    `&text=${encodeURIComponent(event.name)}` +
+    `&dates=${start}/${end}` +
+    (loc ? `&location=${encodeURIComponent(loc)}` : '') +
+    (event.description ? `&details=${encodeURIComponent(event.description.slice(0, 500))}` : '')
+}
+
+/** Download an ICS calendar file for the event. */
+function downloadICS(event) {
+  const fmt = (d) => new Date(d).toISOString().replace(/[-:]/g, '').replace('.000', '').replace('Z', 'Z')
+  const start = fmt(event.event_date)
+  const end   = event.event_end_date ? fmt(event.event_end_date) : fmt(new Date(new Date(event.event_date).getTime() + 2 * 3600000))
+  const loc   = [event.venue_name, event.venue_address].filter(Boolean).join(', ')
+  const ics = [
+    'BEGIN:VCALENDAR', 'VERSION:2.0', 'PRODID:-//Festio//EN', 'CALSCALE:GREGORIAN',
+    'BEGIN:VEVENT',
+    `DTSTART:${start}`, `DTEND:${end}`,
+    `SUMMARY:${event.name.replace(/,/g, '\\,')}`,
+    loc ? `LOCATION:${loc.replace(/,/g, '\\,')}` : '',
+    event.description ? `DESCRIPTION:${event.description.slice(0, 500).replace(/\n/g, '\\n').replace(/,/g, '\\,')}` : '',
+    `URL:${window.location.href}`,
+    `UID:festio-${event.id}@festio.events`,
+    'END:VEVENT', 'END:VCALENDAR',
+  ].filter(Boolean).join('\r\n')
+  const blob = new Blob([ics], { type: 'text/calendar' })
+  const a = document.createElement('a')
+  a.href = URL.createObjectURL(blob)
+  a.download = `${event.name.replace(/[^a-z0-9]/gi, '_').toLowerCase()}.ics`
+  a.click()
+  URL.revokeObjectURL(a.href)
+}
+
+/** WhatsApp share URL. */
+function whatsappShareUrl(text) {
+  return `https://wa.me/?text=${encodeURIComponent(text)}`
+}
 
 // Format a phone as an international number, defaulting to Nigeria (+234).
 // Already-international numbers (starting with +) are kept as-is.
@@ -795,10 +850,28 @@ function ConfirmView({ confirm, event }) {
   const hubPath = confirm.invite_token ? `/r/${confirm.invite_token}#guest-hub` : ''
   const hubUrl = hubPath && typeof window !== 'undefined' ? `${window.location.origin}${hubPath}` : ''
   const [copied, setCopied] = useState(false)
+  const [rsvpLinkCopied, setRsvpLinkCopied] = useState(false)
+
+  useEffect(() => {
+    if (event?.rsvp_confetti_enabled !== false) {
+      confetti({
+        particleCount: 140,
+        spread: 80,
+        origin: { y: 0.55 },
+        colors: ['#0d9488', '#34d399', '#fbbf24', '#f9a8d4', '#60a5fa', '#a78bfa'],
+      })
+    }
+  }, [])
+
   const copyHub = async () => {
     if (!hubUrl) return
     try { await navigator.clipboard.writeText(hubUrl); setCopied(true); setTimeout(() => setCopied(false), 2000) } catch { /* ignore */ }
   }
+
+  const copyRsvpLink = async () => {
+    try { await navigator.clipboard.writeText(window.location.href); setRsvpLinkCopied(true); setTimeout(() => setRsvpLinkCopied(false), 2000) } catch { /* ignore */ }
+  }
+
   return (
     <div className="space-y-5">
       <div>
@@ -853,6 +926,40 @@ function ConfirmView({ confirm, event }) {
           Share Invitation
         </button>
       </div>
+
+      {/* Add to calendar */}
+      {event?.invite_add_to_calendar_enabled !== false && (
+        <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3">
+          <div className="mb-2 text-xs font-extrabold uppercase tracking-[0.18em] text-slate-500">Add to calendar</div>
+          <div className="flex flex-wrap gap-2">
+            <a href={googleCalUrl(event)} target="_blank" rel="noopener noreferrer" className="inline-flex min-h-9 items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-bold text-slate-700 transition hover:bg-slate-100">
+              📅 Google Calendar
+            </a>
+            <button type="button" onClick={() => downloadICS(event)} className="inline-flex min-h-9 items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-bold text-slate-700 transition hover:bg-slate-100">
+              📥 Apple / Outlook (.ics)
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Invite a friend */}
+      {event?.invite_share_enabled !== false && (
+        <div className="rounded-2xl border border-teal-100 bg-teal-50 px-4 py-3">
+          <div className="mb-2 text-xs font-extrabold uppercase tracking-[0.18em] text-teal-700">Know someone who should come?</div>
+          <div className="flex flex-wrap gap-2">
+            <a
+              href={whatsappShareUrl(`You're invited to ${event.name}!\nRSVP here: ${window.location.href}`)}
+              target="_blank" rel="noopener noreferrer"
+              className="inline-flex min-h-9 items-center gap-1.5 rounded-lg bg-[#25D366] px-3 py-1.5 text-xs font-bold text-white transition hover:opacity-90"
+            >
+              Share on WhatsApp
+            </a>
+            <button type="button" onClick={copyRsvpLink} className="inline-flex min-h-9 items-center gap-1.5 rounded-lg border border-teal-200 bg-white px-3 py-1.5 text-xs font-bold text-teal-700 transition hover:bg-teal-50">
+              {rsvpLinkCopied ? 'Link copied ✓' : 'Copy RSVP link'}
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
@@ -1036,7 +1143,63 @@ function TokenRSVPForm({ event, prefill, token, theme, onDone }) {
   )
 }
 
-function GuestHub({ event, accessToken, designTheme }) {
+// FestioHub layout styles, chosen in Design Studio and saved as
+// theme_config.hubStyle → design-service's public-theme hub_style field.
+// Two axes distinguish them, reusing the SAME real modules/data rather than
+// inventing per-style content: (1) tabbed vs. all-sections-stacked — reusing
+// the pre-existing guestHubV2=false "stacked" rendering path below for the
+// non-tabbed styles — and (2) a CSS treatment on the stacked container for
+// timeline/minimal-list. wallet-pass and story-feed both keep tabs but differ
+// in tab order (pass-first vs. activity/community-first) and tab-bar chrome.
+const HUB_STYLES = new Set(['wallet-pass', 'card-dashboard', 'story-feed', 'timeline', 'minimal-list'])
+const HUB_TABBED_STYLES = new Set(['wallet-pass', 'story-feed'])
+const HUB_TAB_ORDER = {
+  'story-feed': ['activity', 'messages', 'program', 'pass'],
+}
+const HUB_TAB_META = {
+  pass: ['pass', 'Pass', '🎫'],
+  activity: ['activity', 'Activity', '✅'],
+  program: ['program', 'Program', '📅'],
+  messages: ['messages', 'Messages', '💬'],
+}
+const PREVIEW_QR_DATA_URI = 'data:image/svg+xml;utf8,' + encodeURIComponent(
+  '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 7 7" shape-rendering="crispEdges">' +
+  '<rect width="7" height="7" fill="#fff"/>' +
+  [[0,0],[1,0],[2,0],[0,1],[2,1],[0,2],[1,2],[2,2],[4,0],[4,1],[4,2],[6,0],[6,2],[0,4],[1,4],[2,4],[0,6],[2,6],[4,4],[5,5],[6,6],[4,6],[6,4],[3,3],[5,1],[1,5]]
+    .map(([x, y]) => `<rect x="${x}" y="${y}" width="1" height="1" fill="#0f172a"/>`).join('') +
+  '</svg>'
+)
+// Sample data for the "Preview" surface in Design Studio, where there's no
+// real guest/RSVP to load a Hub for — same shapes api.guestHub()/
+// api.guestExperience() return, so every module renders exactly as it would
+// for a real confirmed guest.
+const PREVIEW_HUB = {
+  guest: { name: 'Ada Guest', table_name: 'Table 7', seat_number: '12', admitted: false, checked_out: false, qr_token: 'preview', rsvp_status: 'confirmed' },
+  announcements: [{ id: 'p1', title: 'Doors open at 6pm', body: 'Please arrive a little early to find parking.' }],
+  direct_messages: [],
+  chat_messages: [],
+  capabilities: { direct_host_messages: true, guest_chat: true, guest_chat_posting: true, festiome: true },
+}
+const PREVIEW_JOURNEY = {
+  experience_enabled: true,
+  total_count: 4,
+  completed_count: 1,
+  next_steps: [{ id: 's2', title: 'Find your table', guest_message: 'Your seat is ready — check the Pass tab.', self_service: true }],
+  steps: [
+    { id: 's1', title: 'RSVP confirmed', status: 'completed', required: true },
+    { id: 's2', title: 'Find your table', status: 'blocked', required: true, actionable: true, guest_message: 'Your seat is ready — check the Pass tab.' },
+    { id: 's3', title: 'Check in at the door', status: 'blocked', required: true },
+    { id: 's4', title: 'Leave feedback', status: 'blocked', required: false },
+  ],
+  program: {
+    enabled: true,
+    current_segments: [{ step_id: 'p1', title: 'Cocktail hour', category: 'Reception', ends_at: new Date(Date.now() + 30 * 60000).toISOString() }],
+    next_segments: [{ step_id: 'p2', title: 'Dinner service', starts_at: new Date(Date.now() + 45 * 60000).toISOString() }],
+    days: [],
+  },
+}
+
+function GuestHub({ event, accessToken, designTheme, previewMock = false }) {
   const [hub, setHub] = useState(null)
   const [error, setError] = useState('')
   const [hidden, setHidden] = useState(false)
@@ -1082,8 +1245,14 @@ function GuestHub({ event, accessToken, designTheme }) {
   // section renders at once (as it did before the tab bar existed) instead
   // of being gated to a single active tab.
   const guestHubV2 = event?.guest_hub_v2 !== false
-  const tabActive = (key) => !guestHubV2 || hubTab === key
-  const tabsActive = (keys) => !guestHubV2 || keys.includes(hubTab)
+  const hubStyle = HUB_STYLES.has(designTheme?.hub_style) ? designTheme.hub_style : 'wallet-pass'
+  // card-dashboard/timeline/minimal-list reuse the same "every section at
+  // once" path the guestHubV2=false rollout flag already exercises — that
+  // path is real and tested, not new here. wallet-pass/story-feed keep tabs.
+  const tabbed = guestHubV2 && HUB_TABBED_STYLES.has(hubStyle)
+  const tabActive = (key) => !tabbed || hubTab === key
+  const tabsActive = (keys) => !tabbed || keys.includes(hubTab)
+  const hubTabOrder = HUB_TAB_ORDER[hubStyle] || ['pass', 'activity', 'program', 'messages']
 
   useEffect(() => {
     const capture = (e) => { e.preventDefault(); setInstallPrompt(e); window.__festioInstallPrompt = e }
@@ -1101,11 +1270,11 @@ function GuestHub({ event, accessToken, designTheme }) {
   }, [])
 
   useEffect(() => {
-    if (!accessToken) return
+    if (!accessToken || previewMock) return
     try {
       localStorage.setItem('festio:installed-guest-hub', `${window.location.pathname}${window.location.search}#guest-hub`)
     } catch { /* installation remains optional in private browsing */ }
-  }, [accessToken])
+  }, [accessToken, previewMock])
 
   useEffect(() => {
     if (!installPrompt || sessionStorage.getItem('festio:install-prompt-dismissed')) return
@@ -1114,7 +1283,7 @@ function GuestHub({ event, accessToken, designTheme }) {
   }, [installPrompt])
 
   const loadPush = useCallback(async () => {
-    if (!event?.id || !accessToken) return
+    if (!event?.id || !accessToken || previewMock) return
     // Native (Capacitor) app: FCM, not the browser VAPID flow below — there's
     // no service worker/PushManager to check, and no upfront config fetch
     // needed since registerNativePush() fails harmlessly if FCM is disabled
@@ -1139,7 +1308,7 @@ function GuestHub({ event, accessToken, designTheme }) {
       // Push is optional. Keep the pass, QR, and event updates working normally.
       setPushConfig(null)
     }
-  }, [event?.id, accessToken])
+  }, [event?.id, accessToken, previewMock])
 
   useEffect(() => { loadPush() }, [loadPush])
 
@@ -1209,14 +1378,23 @@ function GuestHub({ event, accessToken, designTheme }) {
   }
 
   const loadJourney = useCallback(async () => {
-    if (!event?.id || !accessToken) return
+    if (!event?.id || !accessToken || previewMock) return
     try {
       const data = await api.guestExperience(event.id, accessToken)
       setJourney(data)
     } catch { /* journey is best-effort; keep the rest of the Hub working */ }
-  }, [event?.id, accessToken])
+  }, [event?.id, accessToken, previewMock])
 
   useEffect(() => { loadJourney() }, [loadJourney])
+  // Preview surface only: seed sample data instead of loading from the API,
+  // so every module renders and the style choice is actually visible without
+  // a real guest and RSVP.
+  useEffect(() => {
+    if (!previewMock) return
+    setHub(PREVIEW_HUB)
+    setJourney(PREVIEW_JOURNEY)
+    setFeedbackForms([])
+  }, [previewMock])
   useEffect(() => {
     const configured = hubLayout.defaultTab
     if (configured === 'activity_when_actionable') {
@@ -1228,19 +1406,19 @@ function GuestHub({ event, accessToken, designTheme }) {
     }
   }, [journey?.next_steps?.length, hubLayout.defaultTab])
   useEffect(() => {
-    if (!event?.id || !accessToken) return undefined
+    if (!event?.id || !accessToken || previewMock) return undefined
     const timer = setInterval(loadJourney, 30000)
     return () => clearInterval(timer)
-  }, [event?.id, accessToken, loadJourney])
+  }, [event?.id, accessToken, previewMock, loadJourney])
 
   const loadFeedback = useCallback(async () => {
-    if (!event?.id || !accessToken) return
+    if (!event?.id || !accessToken || previewMock) return
     try {
       const data = await api.guestFeedback(event.id, accessToken)
       setFeedbackForms(data.forms || [])
       setFeedbackAnswers(Object.fromEntries((data.forms || []).map((form) => [form.step_id, form.answers || {}])))
     } catch { setFeedbackForms([]) }
-  }, [event?.id, accessToken])
+  }, [event?.id, accessToken, previewMock])
 
   useEffect(() => { loadFeedback() }, [loadFeedback])
   useEffect(() => {
@@ -1286,7 +1464,7 @@ function GuestHub({ event, accessToken, designTheme }) {
   }
 
   useEffect(() => {
-    if (!event?.id || !accessToken) return
+    if (!event?.id || !accessToken || previewMock) return
     let cancelled = false
     async function load() {
       try {
@@ -1305,7 +1483,7 @@ function GuestHub({ event, accessToken, designTheme }) {
     load()
     const id = setInterval(load, 25000)
     return () => { cancelled = true; clearInterval(id) }
-  }, [event?.id, accessToken])
+  }, [event?.id, accessToken, previewMock])
 
   async function sendMessage(e) {
     e.preventDefault()
@@ -1364,7 +1542,7 @@ function GuestHub({ event, accessToken, designTheme }) {
   return (
     <section className="py-2">
       <div
-        className="mx-auto w-full max-w-[900px] rounded-[1.65rem] border p-5 shadow-2xl backdrop-blur sm:p-7"
+        className={`mx-auto w-full max-w-[900px] rounded-[1.65rem] border p-5 shadow-2xl backdrop-blur sm:p-7 fh-hub-style-${hubStyle}`}
         style={{ background: `linear-gradient(145deg, ${tone.background}, ${tone.surface})`, borderColor: tone.border, color: tone.text, boxShadow: `0 22px 48px ${tone.shadow}` }}
       >
         <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
@@ -1379,14 +1557,10 @@ function GuestHub({ event, accessToken, designTheme }) {
           )}
         </div>
 
-        {guestHubV2 && (
-          <div className="mt-5 flex gap-1 rounded-2xl border p-1" style={{ background: tone.panel, borderColor: tone.border }} role="tablist" aria-label="FestioHub sections">
-            {[
-              ['pass', 'Pass', '🎫'],
-              ['activity', 'Activity', '✅'],
-              ['program', 'Program', '📅'],
-              ['messages', 'Messages', '💬'],
-            ].filter(([key]) => key !== 'program' || (journey?.program?.enabled && hubModuleVisible('live_program')))
+        {tabbed && (
+          <div className={`mt-5 flex gap-1 rounded-2xl border p-1 fh-hub-tabs fh-hub-tabs-${hubStyle}`} style={{ background: tone.panel, borderColor: tone.border }} role="tablist" aria-label="FestioHub sections">
+            {hubTabOrder.map((key) => HUB_TAB_META[key])
+              .filter(([key]) => key !== 'program' || (journey?.program?.enabled && hubModuleVisible('live_program')))
               .filter(([key]) => key !== 'messages' || (hubModuleVisible('messages') && (hub?.capabilities?.direct_host_messages || hub?.capabilities?.guest_chat)))
               .map(([key, label, icon]) => (
                 <button key={key} type="button" role="tab" aria-selected={hubTab === key} onClick={() => setHubTab(key)}
@@ -1399,7 +1573,7 @@ function GuestHub({ event, accessToken, designTheme }) {
           </div>
         )}
 
-        {guestHubV2 && hubTab === 'activity' && (
+        {tabbed && hubTab === 'activity' && (
           <div className="mt-5 grid gap-3">
             {effectiveHubModules.filter((module) => module.visible !== false).map((module) => {
               const activityDetailShown = hubModuleVisible('activity_progress') && journey?.experience_enabled && journey.steps?.length > 0
@@ -1783,7 +1957,7 @@ function GuestHub({ event, accessToken, designTheme }) {
               >
                 <div className="rounded-2xl bg-white p-3">
                   <img
-                    src={`/api/scan/${hub.guest.qr_token}/qr.png`}
+                    src={previewMock ? PREVIEW_QR_DATA_URI : `/api/scan/${hub.guest.qr_token}/qr.png`}
                     alt="Your QR pass code"
                     className="mx-auto h-40 w-40"
                   />
@@ -2097,6 +2271,8 @@ export default function InvitePage() {
   )
   const heroWhen = [dateLabel, timeLabel].filter(Boolean).join(' · ')
   const capacityLabel = event.rsvp_capacity != null ? `${event.rsvp_count} / ${event.rsvp_capacity} spots claimed` : ''
+  const capacityPct = event.rsvp_capacity ? Math.min(100, Math.round((event.rsvp_count / event.rsvp_capacity) * 100)) : 0
+  const daysLeft = daysUntil(event.event_date)
   const guestHubToken = confirmed?.rsvp_status === 'confirmed'
     ? confirmed.qr_token
     : tokenMode && event?.rsvp_enabled === false && guest?.rsvp_status === 'invited'
@@ -2108,7 +2284,10 @@ export default function InvitePage() {
       : prior?.rsvp_status === 'confirmed' && prior?.qr_token
         ? prior.qr_token
       : ''
-  const hasGuestHub = !!guestHubToken
+  // Design Studio's FestioHub preview has no real guest/RSVP to derive a
+  // token from — show the Hub anyway, with GuestHub's own preview-mock data,
+  // so a hub_style choice is actually visible before publishing.
+  const hasGuestHub = !!guestHubToken || isStudioPreview
 
   let rsvpPanel
   if (confirmed) {
@@ -2266,7 +2445,7 @@ export default function InvitePage() {
 
         {hasGuestHub && (
           <section id="guest-hub" className="scroll-mt-6 py-6">
-            <GuestHub event={event} accessToken={guestHubToken} designTheme={designTheme} />
+            <GuestHub event={event} accessToken={guestHubToken || (isStudioPreview ? 'preview' : '')} designTheme={designTheme} previewMock={isStudioPreview} />
           </section>
         )}
 
@@ -2274,8 +2453,23 @@ export default function InvitePage() {
           <div className="rounded-3xl border p-6 shadow-xl backdrop-blur sm:p-7" style={{ background: tone.panelStrong, borderColor: tone.border, boxShadow: `0 22px 48px ${tone.shadow}`, color: tone.text }}>
             <div className="mb-6 flex items-center justify-between gap-4">
               <h2 className="text-3xl font-extrabold">Event details</h2>
-              {capacityLabel && <span className="rounded-full px-3 py-1 text-xs font-bold" style={{ background: tone.chip, color: tone.text }}>{capacityLabel}</span>}
+              {event.invite_countdown_enabled !== false && daysLeft !== null && daysLeft > 0 && (
+                <span className="rounded-full px-3 py-1 text-xs font-extrabold" style={{ background: tone.chip, color: tone.accent }}>
+                  {daysLeft === 1 ? 'Tomorrow!' : `${daysLeft} days to go`}
+                </span>
+              )}
             </div>
+            {event.invite_capacity_bar_enabled !== false && capacityLabel && (
+              <div className="mb-5">
+                <div className="mb-1 flex justify-between text-xs font-bold" style={{ color: tone.muted }}>
+                  <span>{capacityLabel}</span>
+                  <span>{capacityPct}%</span>
+                </div>
+                <div className="h-2 w-full overflow-hidden rounded-full" style={{ background: tone.chip }}>
+                  <div className="h-full rounded-full transition-all" style={{ width: `${capacityPct}%`, background: capacityPct >= 90 ? '#ef4444' : tone.accent || '#0d9488' }} />
+                </div>
+              </div>
+            )}
             <div className="grid gap-4 sm:grid-cols-2">
               <DetailRow icon="📅" label="Date" value={dateLabel} tone={tone} />
               <DetailRow icon="🕐" label="Time" value={timeLabel} tone={tone} />
@@ -2304,6 +2498,54 @@ export default function InvitePage() {
             )}
           </div>}
         </section>
+
+        {/* Share & calendar row — shown on the public page when enabled */}
+        {(event.invite_share_enabled !== false || event.invite_add_to_calendar_enabled !== false) && (
+          <section className="py-4">
+            <div className="flex flex-wrap items-center gap-3">
+              {event.invite_share_enabled !== false && (
+                <>
+                  <a
+                    href={whatsappShareUrl(`You're invited to ${event.name}!\nRSVP here: ${window.location.href}`)}
+                    target="_blank" rel="noopener noreferrer"
+                    className="inline-flex min-h-10 items-center gap-2 rounded-xl px-4 py-2 text-sm font-bold text-white transition hover:opacity-90"
+                    style={{ background: '#25D366' }}
+                  >
+                    Share on WhatsApp
+                  </a>
+                  <button
+                    type="button"
+                    onClick={() => { navigator.clipboard?.writeText(window.location.href); }}
+                    className="inline-flex min-h-10 items-center gap-2 rounded-xl border px-4 py-2 text-sm font-bold transition hover:opacity-80"
+                    style={{ borderColor: tone.border, background: tone.chip, color: tone.text }}
+                  >
+                    Copy invite link
+                  </button>
+                </>
+              )}
+              {event.invite_add_to_calendar_enabled !== false && (
+                <>
+                  <a
+                    href={googleCalUrl(event)}
+                    target="_blank" rel="noopener noreferrer"
+                    className="inline-flex min-h-10 items-center gap-2 rounded-xl border px-4 py-2 text-sm font-bold transition hover:opacity-80"
+                    style={{ borderColor: tone.border, background: tone.chip, color: tone.text }}
+                  >
+                    📅 Add to Google Calendar
+                  </a>
+                  <button
+                    type="button"
+                    onClick={() => downloadICS(event)}
+                    className="inline-flex min-h-10 items-center gap-2 rounded-xl border px-4 py-2 text-sm font-bold transition hover:opacity-80"
+                    style={{ borderColor: tone.border, background: tone.chip, color: tone.text }}
+                  >
+                    📥 Save .ics
+                  </button>
+                </>
+              )}
+            </div>
+          </section>
+        )}
 
         {rsvpPanel && (
           <section id="rsvp" className="scroll-mt-6 py-9">

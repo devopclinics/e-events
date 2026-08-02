@@ -363,24 +363,29 @@ export default function DesignStudioRedesignPage() {
   const activeTemplate = templates.find((t) => t.selected)
 
   function buildDraftTheme() {
+    // template_id/layout/button_style only matter to the Event Page/Flyer/Pass
+    // surfaces — FestioHub's preview needs none of them, so this stays valid
+    // (falls back like design-service's own default_template() would) even
+    // before an organizer has picked a template.
     return {
       event_id: eventId,
-      template_id: activeTemplate.id,
-      is_default: false,
+      template_id: activeTemplate?.id || null,
+      is_default: !activeTemplate,
       colors,
       font_pairing: fontPairing,
-      button_style: design?.theme_config?.buttonStyle || activeTemplate.buttonStyle,
-      layout: activeTemplate.layout,
+      button_style: design?.theme_config?.buttonStyle || activeTemplate?.buttonStyle || 'square',
+      layout: activeTemplate?.layout || {},
       cover_image_url: design?.asset_config?.cover_image_url || '',
       flyer_image_url: design?.asset_config?.flyer_image_url || '',
       wording,
       pass_options: passOptions,
       page_config: pageSections,
+      hub_style: hubStyle,
     }
   }
 
   function syncDraftPreviewStorage() {
-    if (!eventId || !activeTemplate) return false
+    if (!eventId) return false
     try {
       sessionStorage.setItem(`festio:design-preview:${eventId}`, JSON.stringify({ event_id: eventId, theme: buildDraftTheme(), saved_at: Date.now() }))
       return true
@@ -389,13 +394,13 @@ export default function DesignStudioRedesignPage() {
     }
   }
 
-  function openDraftPreview() {
-    if (!eventId || !activeTemplate) {
+  function openDraftPreview(anchor = '') {
+    if (!eventId) {
       notify('Select a supported design first')
       return
     }
     if (syncDraftPreviewStorage()) {
-      window.open(`/invite/${eventId}?studio-preview=1`, '_blank', 'noopener')
+      window.open(`/invite/${eventId}?studio-preview=1${anchor}`, '_blank', 'noopener')
     } else {
       notify('Could not open the draft preview. Allow pop-ups and try again.')
     }
@@ -414,7 +419,8 @@ export default function DesignStudioRedesignPage() {
   useEffect(() => { eventPageSyncedRef.current = false }, [eventId])
 
   useEffect(() => {
-    if (tab !== 'Event Page' || !eventId || !activeTemplate) return undefined
+    if (tab !== 'Event Page' && tab !== 'FestioHub') return undefined
+    if (!eventId || (tab === 'Event Page' && !activeTemplate)) return undefined
     const delay = eventPageSyncedRef.current ? 700 : 0
     clearTimeout(eventPagePreviewTimerRef.current)
     eventPagePreviewTimerRef.current = setTimeout(() => {
@@ -425,7 +431,7 @@ export default function DesignStudioRedesignPage() {
     }, delay)
     return () => clearTimeout(eventPagePreviewTimerRef.current)
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [tab, eventId, activeTemplate?.id, colors, fontPairing, wording, passOptions, pageSections,
+  }, [tab, eventId, activeTemplate?.id, colors, fontPairing, wording, passOptions, pageSections, hubStyle,
       design?.asset_config?.cover_image_url, design?.asset_config?.flyer_image_url])
 
   async function saveFlyerAndPassSettings() {
@@ -952,63 +958,29 @@ export default function DesignStudioRedesignPage() {
                 ))}
               </div>
               <div className="rd-hint" style={{ marginTop: 14 }}>
-                Your pick is saved to this event's design record now. Guest-facing FestioHub currently renders the same module list (pass, program, community, messages) regardless of style — matching each style's actual arrangement live is a follow-up build, not yet wired.
+                Your pick is saved to this event's design record and is what guests actually see in FestioHub after they RSVP — reordered tabs, tab-bar chrome, or section rhythm depending on the style, built from the same real pass/program/community/messages modules.
               </div>
             </div>
           </div>
           <div className="rd-panel">
-            <div className="rd-panel-head"><h3>Preview</h3><p>{HUB_STYLES.find((s) => s.id === hubStyle)?.name}</p></div>
+            <div className="rd-panel-head ds-preview-head">
+              <div><h3>Live preview</h3><p>The real FestioHub, with sample guest data and the selected style</p></div>
+              <div className="rd-seg"><button className={!mobilePreview ? 'on' : ''} onClick={() => setMobilePreview(false)}>Desktop</button><button className={mobilePreview ? 'on' : ''} onClick={() => setMobilePreview(true)}>Mobile</button></div>
+            </div>
             <div className="rd-panel-body">
-              <div className="ds-hub-phone">
-                <div className="ds-hub-phone-notch"/>
-                <div className={`ds-hub-phone-screen ds-hub-phone-${hubStyle}`}>
-                  {hubStyle === 'wallet-pass' && (
-                    <>
-                      <div className="hp-kick">{event?.name || 'Your event'}</div>
-                      <div className="hp-pass">
-                        <div className="hp-pass-kick">FESTIO PASS</div>
-                        <strong>{wording.eventTitle || 'Guest name'}</strong>
-                        <span>{[wording.date, wording.time].filter(Boolean).join(' · ') || 'Date not set'}</span>
-                        <div className="hp-pass-qr"><Icon name="grid" size={26}/></div>
-                      </div>
-                      <div className="hp-tabbar"><span className="on">Pass</span><span>Program</span><span>Community</span><span>Messages</span></div>
-                    </>
-                  )}
-                  {hubStyle === 'card-dashboard' && (
-                    <>
-                      <div className="hp-cover"/>
-                      <div className="hp-greet">Welcome</div>
-                      <div className="hp-card"><Icon name="grid" size={13}/> Your Pass</div>
-                      <div className="hp-card"><Icon name="calendar" size={13}/> Today's Program</div>
-                      <div className="hp-card"><Icon name="message" size={13}/> Community <span className="hp-badge">12</span></div>
-                    </>
-                  )}
-                  {hubStyle === 'story-feed' && (
-                    <>
-                      <div className="hp-stories"><i/><i/><i/></div>
-                      <div className="hp-post">Doors open at 8:30 AM — arrive early for seating.</div>
-                      <div className="hp-post">So excited to celebrate together! 🎉</div>
-                      <div className="hp-fab"><Icon name="grid" size={16}/></div>
-                    </>
-                  )}
-                  {hubStyle === 'timeline' && (
-                    <>
-                      <div className="hp-step done">RSVP confirmed</div>
-                      <div className="hp-step done">Pass ready</div>
-                      <div className="hp-step now">Event day</div>
-                      <div className="hp-step next">Program in progress</div>
-                    </>
-                  )}
-                  {hubStyle === 'minimal-list' && (
-                    <>
-                      <div className="hp-lrow">Your Pass <span>›</span></div>
-                      <div className="hp-lrow">Today's Program <span>›</span></div>
-                      <div className="hp-lrow">Community <span>›</span></div>
-                      <div className="hp-lrow">Messages <span>›</span></div>
-                    </>
-                  )}
+              {!eventId ? (
+                <div className="ds-page-preview"><Icon name="calendar" size={20} /><span>Select an event to preview FestioHub.</span></div>
+              ) : (
+                <div className={`ds-page-preview-frame-wrap ${mobilePreview ? 'mobile' : ''}`}>
+                  <iframe
+                    key={eventId}
+                    src={eventPagePreviewNonce > 0 ? `/invite/${eventId}?studio-preview=1&_p=${eventPagePreviewNonce}#guest-hub` : undefined}
+                    title="Live FestioHub preview"
+                    className="ds-page-preview-frame"
+                  />
                 </div>
-              </div>
+              )}
+              <button className="rr-link-btn" onClick={() => openDraftPreview('#guest-hub')} style={{ marginTop: 8 }}>Open in a full tab <Icon name="external" size={12} /></button>
             </div>
           </div>
         </div>

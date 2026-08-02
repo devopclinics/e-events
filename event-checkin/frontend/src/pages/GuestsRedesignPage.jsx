@@ -648,6 +648,11 @@ function InviteTab({ notify, onSendInvites, onSendGuests, onPreviewInvite, event
   const [addingQuestion, setAddingQuestion] = useState(false)
   const [editingQuestion, setEditingQuestion] = useState(null)
   const [categoryLimits, setCategoryLimits] = useState({})
+  const [showCountdown, setShowCountdown] = useState(true)
+  const [showCapacityBar, setShowCapacityBar] = useState(true)
+  const [showShare, setShowShare] = useState(true)
+  const [showCalendar, setShowCalendar] = useState(true)
+  const [showConfetti, setShowConfetti] = useState(true)
   const [categorySeating, setCategorySeating] = useState({})
   const [newCategory, setNewCategory] = useState('')
   const [deadline, setDeadline] = useState('')
@@ -657,6 +662,50 @@ function InviteTab({ notify, onSendInvites, onSendGuests, onPreviewInvite, event
   const [coverBusy, setCoverBusy] = useState(false)
   const [regenerateLink, setRegenerateLink] = useState(false)
   const coverFileRef = useRef(null)
+  // The Design Studio Flyer tab has its own separate cover_image_url (and a
+  // flyer_image_url, which can be a real rendered flyer or just a template's
+  // stock preview picked without ever rendering — see designCover() in
+  // InvitePage.jsx) that outranks this event's plain invite_cover_image on
+  // the live guest page. "Use as RSVP cover" makes an image uploaded HERE
+  // win regardless, by writing it into that same design record.
+  const [designCoverUrl, setDesignCoverUrl] = useState(undefined) // undefined = not loaded yet
+  const [coverApplyBusy, setCoverApplyBusy] = useState(false)
+
+  useEffect(() => {
+    if (!eventId) return
+    let cancelled = false
+    api.getEventDesign(eventId).then((d) => { if (!cancelled) setDesignCoverUrl(d?.asset_config?.cover_image_url || '') }).catch(() => { if (!cancelled) setDesignCoverUrl('') })
+    return () => { cancelled = true }
+  }, [eventId])
+
+  async function useAsRsvpCover() {
+    if (!eventId || !event?.invite_cover_image || coverApplyBusy) return
+    setCoverApplyBusy(true)
+    try {
+      const design = await api.getEventDesign(eventId)
+      const saved = await api.saveEventDesign(eventId, {
+        asset_config: { ...(design?.asset_config || {}), cover_image_url: event.invite_cover_image },
+      })
+      setDesignCoverUrl(saved?.asset_config?.cover_image_url || '')
+      notify('Now used as the RSVP cover')
+    } catch (e) { notify(e.message || 'Could not apply as RSVP cover', true) }
+    finally { setCoverApplyBusy(false) }
+  }
+
+  async function resetRsvpCoverToDefault() {
+    if (!eventId || coverApplyBusy) return
+    setCoverApplyBusy(true)
+    try {
+      const design = await api.getEventDesign(eventId)
+      const saved = await api.saveEventDesign(eventId, {
+        asset_config: { ...(design?.asset_config || {}), cover_image_url: '' },
+      })
+      setDesignCoverUrl(saved?.asset_config?.cover_image_url || '')
+      notify('RSVP cover reset to the design default')
+    } catch (e) { notify(e.message || 'Could not reset the RSVP cover', true) }
+    finally { setCoverApplyBusy(false) }
+  }
+
   const hasPublicLink = !!event?.rsvp_token
   const publicLink = hasPublicLink ? `${window.location.origin}/rsvp/${event.rsvp_token}` : ''
 
@@ -675,6 +724,15 @@ function InviteTab({ notify, onSendInvites, onSendGuests, onPreviewInvite, event
     if (!eventId) return
     setCoverBusy(true)
     try {
+      // If this exact image was applied as the RSVP cover, clear that too —
+      // otherwise removing it here would silently leave the old image live
+      // on the guest page via the design record. Only clears when it's a
+      // match, so an unrelated cover set through Design Studio is untouched.
+      if (designCoverUrl && event?.invite_cover_image && designCoverUrl === event.invite_cover_image) {
+        const design = await api.getEventDesign(eventId)
+        const saved = await api.saveEventDesign(eventId, { asset_config: { ...(design?.asset_config || {}), cover_image_url: '' } })
+        setDesignCoverUrl(saved?.asset_config?.cover_image_url || '')
+      }
       await api.deleteCoverImage(eventId)
       await onEventChanged()
       notify('Cover image removed')
@@ -718,6 +776,11 @@ function InviteTab({ notify, onSendInvites, onSendGuests, onPreviewInvite, event
     setInviteMessage(event.invite_message || '')
     setCategoryLimits(event.rsvp_multi_invitee_limit_rules || {})
     setCategorySeating(event.rsvp_category_seating_rules || {})
+    setShowCountdown(event.invite_countdown_enabled !== false)
+    setShowCapacityBar(event.invite_capacity_bar_enabled !== false)
+    setShowShare(event.invite_share_enabled !== false)
+    setShowCalendar(event.invite_add_to_calendar_enabled !== false)
+    setShowConfetti(event.rsvp_confetti_enabled !== false)
   }, [event])
 
   function copyLink() {
@@ -751,6 +814,11 @@ function InviteTab({ notify, onSendInvites, onSendGuests, onPreviewInvite, event
         rsvp_deadline: deadline ? new Date(deadline).toISOString() : null,
         rsvp_capacity: capacity === '' ? null : Math.max(0, Number(capacity) || 0),
         invite_message: inviteMessage || null,
+        invite_countdown_enabled: showCountdown,
+        invite_capacity_bar_enabled: showCapacityBar,
+        invite_share_enabled: showShare,
+        invite_add_to_calendar_enabled: showCalendar,
+        rsvp_confetti_enabled: showConfetti,
       })
       await onEventChanged()
       notify('RSVP settings saved')
@@ -840,6 +908,18 @@ function InviteTab({ notify, onSendInvites, onSendGuests, onPreviewInvite, event
               <button className="rr-btn secondary" disabled={coverBusy} onClick={() => coverFileRef.current?.click()}>{coverBusy ? 'Working…' : 'Upload'}</button>
               {event?.invite_cover_image && <button className="rr-link-btn gr-danger-link" disabled={coverBusy} onClick={removeCover}>Remove</button>}
             </div>
+            {event?.invite_cover_image && designCoverUrl !== undefined && (
+              <div style={{ marginTop: 8, display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+                {designCoverUrl === event.invite_cover_image ? (
+                  <>
+                    <span className="rd-hint" style={{ color: 'var(--success, #2f7d5a)', fontWeight: 700 }}>✓ Currently the RSVP cover</span>
+                    <button className="rr-link-btn" disabled={coverApplyBusy} onClick={resetRsvpCoverToDefault}>{coverApplyBusy ? 'Working…' : 'Reset to default'}</button>
+                  </>
+                ) : (
+                  <button className="rr-btn secondary" disabled={coverApplyBusy} onClick={useAsRsvpCover}>{coverApplyBusy ? 'Applying…' : 'Use as RSVP cover'}</button>
+                )}
+              </div>
+            )}
 
             {rsvpEnabled && <><div className="rd-toggle-row" style={{ marginTop: 16 }}>
               <span style={{ fontSize: 12, fontWeight: 600 }}>
@@ -882,6 +962,26 @@ function InviteTab({ notify, onSendInvites, onSendGuests, onPreviewInvite, event
               Allow the same email address on multiple RSVP guests
             </label>}
             <button className="rr-btn primary" disabled={saving} style={{ marginTop: 14 }} onClick={saveSettings}>{saving ? 'Saving…' : 'Save invitation settings'}</button>
+
+            <div className="rr-section-title" style={{ margin: '18px 0 8px' }}>
+              <div><h2 style={{ fontSize: 12 }}>Invite page display</h2><p>Toggle widgets shown on your public RSVP page</p></div>
+            </div>
+            {[
+              ['showCountdown',   showCountdown,   setShowCountdown,   'Event countdown ("11 days to go")'],
+              ['showCapacityBar', showCapacityBar, setShowCapacityBar, 'Capacity progress bar'],
+              ['showShare',       showShare,       setShowShare,       'Share buttons (WhatsApp + copy link)'],
+              ['showCalendar',    showCalendar,    setShowCalendar,    'Add to calendar (Google Cal + .ics)'],
+              ['showConfetti',    showConfetti,    setShowConfetti,    'Confetti on RSVP confirmation'],
+            ].map(([key, val, setter, label]) => (
+              <div key={key} className="rd-toggle-row" style={{ marginTop: 8 }}>
+                <span style={{ fontSize: 12, fontWeight: 600 }}>{label}</span>
+                <label className="rd-switch">
+                  <input type="checkbox" checked={val} onChange={(e) => setter(e.target.checked)} />
+                  <span className="track" /><span className="knob" />
+                </label>
+              </div>
+            ))}
+            <button className="rr-btn primary" disabled={saving} style={{ marginTop: 14 }} onClick={saveSettings}>{saving ? 'Saving…' : 'Save display settings'}</button>
           </div>
         </div>
 

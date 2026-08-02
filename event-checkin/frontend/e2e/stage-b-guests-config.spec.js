@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test'
-import { expectQaEventLoaded, fieldNear, openGuestActions, signIn } from './helpers.js'
+import { expectQaEventLoaded, fieldNear, firebaseAccessToken, openGuestActions, signIn } from './helpers.js'
 
 // Minimal valid 1x1 PNG, matches the fixture used to live-verify uploadCoverImage this session.
 const ONE_PX_PNG = Buffer.from(
@@ -291,6 +291,15 @@ test.describe('Stage B guest households and RSVP configuration — isolated stag
     const originallyEnabled = await withRsvpCard.locator('input').isChecked()
     if (!originallyEnabled) await withRsvpCard.click()
 
+    // "Use as RSVP cover" below writes into the shared fixture's real design
+    // record — capture its current asset_config so the finally block can put
+    // it back exactly, not just blank it (this fixture's asset_config may
+    // carry real state from other Design Studio tests).
+    const designToken = await firebaseAccessToken(page)
+    const designHeaders = { Authorization: `Bearer ${designToken}` }
+    const originalDesignResp = await page.request.get(`/api/events/${process.env.E2E_EVENT_ID}/design`, { headers: designHeaders })
+    const originalAssetConfig = originalDesignResp.ok() ? (await originalDesignResp.json()).asset_config || {} : {}
+
     try {
       await page.locator('input[type="file"]').setInputFiles({
         name: 'e2e-cover.png', mimeType: 'image/png', buffer: ONE_PX_PNG,
@@ -302,6 +311,29 @@ test.describe('Stage B guest households and RSVP configuration — isolated stag
       const preview = page.locator('.gr-cover-preview img')
       await expect(preview).toBeVisible()
       await expect(preview).toHaveAttribute('src', /.+/)
+      const uploadedUrl = await preview.getAttribute('src')
+
+      // "Use as RSVP cover" — writes this upload into the design record's
+      // asset_config.cover_image_url (see designCover() in InvitePage.jsx),
+      // since that outranks the plain invite_cover_image on the live guest
+      // page. Regression coverage for a real bug: an uploaded photo here
+      // could never actually reach the guest page while Design Studio had
+      // any flyer_image_url set, even just a template's stock preview.
+      const applyResponse = page.waitForResponse((response) =>
+        response.url().includes(`/api/events/${process.env.E2E_EVENT_ID}/design`) && response.request().method() === 'PUT'
+      )
+      await page.getByRole('button', { name: 'Use as RSVP cover', exact: true }).click()
+      const applied = await (await applyResponse).json()
+      expect(applied.asset_config.cover_image_url).toBe(uploadedUrl)
+      await expect(page.getByText('✓ Currently the RSVP cover')).toBeVisible()
+
+      const resetResponse = page.waitForResponse((response) =>
+        response.url().includes(`/api/events/${process.env.E2E_EVENT_ID}/design`) && response.request().method() === 'PUT'
+      )
+      await page.getByRole('button', { name: 'Reset to default', exact: true }).click()
+      const reset = await (await resetResponse).json()
+      expect(reset.asset_config.cover_image_url).toBe('')
+      await expect(page.getByRole('button', { name: 'Use as RSVP cover', exact: true })).toBeVisible()
 
       const removeResponse = page.waitForResponse((response) =>
         /\/upload-cover$/.test(response.url()) && response.request().method() === 'DELETE'
@@ -313,6 +345,11 @@ test.describe('Stage B guest households and RSVP configuration — isolated stag
       if (!originallyEnabled) {
         await page.locator('.gr-mode-card').filter({ hasText: 'Skip RSVP' }).click()
       }
+      const restore = await page.request.put(`/api/events/${process.env.E2E_EVENT_ID}/design`, {
+        headers: designHeaders,
+        data: { asset_config: originalAssetConfig },
+      })
+      expect(restore.ok()).toBeTruthy()
     }
   })
 })

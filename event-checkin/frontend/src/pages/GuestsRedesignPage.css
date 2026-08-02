@@ -117,9 +117,12 @@
 .gr-mode-card span { font-size: 10.5px; color: var(--muted); }
 
 .gr-preview-link { display: inline-block; margin-top: 8px; }
+.gr-cover-banner { width: 100%; max-height: 170px; min-height: 90px; border-radius: 10px; background: var(--surface-2);
+  border: 1px solid var(--line); overflow: hidden; margin-bottom: 8px; }
+.gr-cover-banner img { display: block; width: 100%; max-height: 170px; object-fit: cover; }
+.gr-cover-banner-empty { display: flex; align-items: center; justify-content: center; gap: 8px; height: 90px;
+  color: var(--faint); font-size: 12px; font-weight: 600; }
 .gr-cover-row { display: flex; align-items: center; gap: 10px; margin-bottom: 4px; }
-.gr-cover-preview { width: 44px; height: 44px; border-radius: 8px; background: var(--surface-2); color: var(--faint);
-  display: grid; place-items: center; border: 1px dashed var(--line); flex: none; }
 
 .gr-field-table th, .gr-field-table td { font-size: 10.5px; }
 

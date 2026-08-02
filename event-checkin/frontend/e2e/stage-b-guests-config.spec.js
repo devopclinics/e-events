@@ -308,7 +308,7 @@ test.describe('Stage B guest households and RSVP configuration — isolated stag
         /\/upload-cover$/.test(response.url()) && response.request().method() === 'POST'
       )
       await uploadResponse
-      const preview = page.locator('.gr-cover-preview img')
+      const preview = page.locator('.gr-cover-banner img')
       await expect(preview).toBeVisible()
       await expect(preview).toHaveAttribute('src', /.+/)
       const uploadedUrl = await preview.getAttribute('src')
@@ -327,6 +327,26 @@ test.describe('Stage B guest households and RSVP configuration — isolated stag
       expect(applied.asset_config.cover_image_url).toBe(uploadedUrl)
       await expect(page.getByText('✓ Currently the RSVP cover')).toBeVisible()
 
+      // Replacing the photo while it's already applied must re-apply
+      // automatically. Regression for the bug reported live: uploading a new
+      // image left the OLD one still showing as the RSVP cover until
+      // "Use as RSVP cover" was clicked again by hand.
+      const reuploadResponse = page.waitForResponse((response) =>
+        /\/upload-cover$/.test(response.url()) && response.request().method() === 'POST'
+      )
+      const reapplyResponse = page.waitForResponse((response) =>
+        response.url().includes(`/api/events/${process.env.E2E_EVENT_ID}/design`) && response.request().method() === 'PUT'
+      )
+      await page.locator('input[type="file"]').setInputFiles({
+        name: 'e2e-cover-2.png', mimeType: 'image/png', buffer: ONE_PX_PNG,
+      })
+      await reuploadResponse
+      const reapplied = await (await reapplyResponse).json()
+      const replacedUrl = await preview.getAttribute('src')
+      expect(replacedUrl).not.toBe(uploadedUrl)
+      expect(reapplied.asset_config.cover_image_url).toBe(replacedUrl)
+      await expect(page.getByText('✓ Currently the RSVP cover')).toBeVisible()
+
       const resetResponse = page.waitForResponse((response) =>
         response.url().includes(`/api/events/${process.env.E2E_EVENT_ID}/design`) && response.request().method() === 'PUT'
       )
@@ -340,7 +360,7 @@ test.describe('Stage B guest households and RSVP configuration — isolated stag
       )
       await page.getByRole('button', { name: 'Remove', exact: true }).click()
       await removeResponse
-      await expect(page.locator('.gr-cover-preview img')).toHaveCount(0)
+      await expect(page.locator('.gr-cover-banner img')).toHaveCount(0)
     } finally {
       if (!originallyEnabled) {
         await page.locator('.gr-mode-card').filter({ hasText: 'Skip RSVP' }).click()

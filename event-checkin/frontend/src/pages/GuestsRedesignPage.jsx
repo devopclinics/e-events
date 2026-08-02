@@ -713,9 +713,20 @@ function InviteTab({ notify, onSendInvites, onSendGuests, onPreviewInvite, event
     if (!file || !eventId) return
     setCoverBusy(true)
     try {
-      await api.uploadCoverImage(eventId, file)
+      // If the previous image was already applied as the RSVP cover, a
+      // replacement upload should just take over — reapplying "Use as RSVP
+      // cover" every single time you swap the photo isn't an override, it's
+      // busywork, and the old image staying live in the meantime looks like
+      // upload doesn't work at all.
+      const wasApplied = !!designCoverUrl && !!event?.invite_cover_image && designCoverUrl === event.invite_cover_image
+      const result = await api.uploadCoverImage(eventId, file)
       await onEventChanged()
-      notify('Cover image uploaded')
+      if (wasApplied && result?.url) {
+        const design = await api.getEventDesign(eventId)
+        const saved = await api.saveEventDesign(eventId, { asset_config: { ...(design?.asset_config || {}), cover_image_url: result.url } })
+        setDesignCoverUrl(saved?.asset_config?.cover_image_url || '')
+      }
+      notify(wasApplied ? 'Cover image uploaded and applied as the RSVP cover' : 'Cover image uploaded')
     } catch (e) { notify(e.message || 'Cover image could not be uploaded', true) }
     finally { setCoverBusy(false); if (coverFileRef.current) coverFileRef.current.value = '' }
   }
@@ -902,10 +913,14 @@ function InviteTab({ notify, onSendInvites, onSendGuests, onPreviewInvite, event
             </button>
 
             <label className="rd-field-label" style={{ marginTop: 4 }}>Cover image</label>
+            <div className="gr-cover-banner">
+              {event?.invite_cover_image
+                ? <img src={event.invite_cover_image} alt="Cover" />
+                : <span className="gr-cover-banner-empty"><Icon name="image" size={22} /> No cover image yet</span>}
+            </div>
             <div className="gr-cover-row">
-              <div className="gr-cover-preview">{event?.invite_cover_image ? <img src={event.invite_cover_image} alt="Cover" style={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: 'inherit' }} /> : <Icon name="image" size={18} />}</div>
               <input ref={coverFileRef} type="file" accept="image/jpeg,image/png,image/webp,image/gif" hidden onChange={(e) => uploadCover(e.target.files?.[0])} />
-              <button className="rr-btn secondary" disabled={coverBusy} onClick={() => coverFileRef.current?.click()}>{coverBusy ? 'Working…' : 'Upload'}</button>
+              <button className="rr-btn secondary" disabled={coverBusy} onClick={() => coverFileRef.current?.click()}>{coverBusy ? 'Working…' : event?.invite_cover_image ? 'Replace image' : 'Upload'}</button>
               {event?.invite_cover_image && <button className="rr-link-btn gr-danger-link" disabled={coverBusy} onClick={removeCover}>Remove</button>}
             </div>
             {event?.invite_cover_image && designCoverUrl !== undefined && (

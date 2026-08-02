@@ -5,7 +5,7 @@ import { useEventDetails } from '../hooks/useEventDetails'
 import { api } from '../api'
 import './DesignStudioRedesignPage.css'
 
-const TABS = ['Templates', 'Flyer', 'Event Page', 'Festio Pass', 'FestioHub', 'Email Preview', 'Publish']
+const TABS = ['Templates', 'GuestHub', 'Flyer', 'Event Page', 'Festio Pass', 'FestioHub', 'Email Preview', 'Publish']
 
 // FestioHub layout + visual themes. Each entry combines a layout type
 // (tabbed vs stacked, mirrored in InvitePage.jsx's HUB_TABBED_STYLES) with
@@ -92,6 +92,33 @@ const HUB_STYLES = [
   },
 ]
 const HUB_STYLE_CATEGORIES = ['All', 'Layout', 'Luxury', 'Warm', 'Vibrant', 'Dark', 'Nature', 'Editorial']
+
+// GuestHub tab: same 10 visual themes as FestioHub's "Apply palette" (still
+// reachable there for fine-tuning just the card), presented as whole-
+// experience templates instead. Swatches are miniatures of the actual
+// mockups (guesthub-mockups.html / guesthub-mockups-2.html) — same shared
+// anatomy every one of those files uses (brand+pill header, guest-name-over-
+// QR hero, tab row) with one real signature motif per template pulled from
+// that file's own markup, not a generic gradient.
+const GUESTHUB_FONT_CSS = {
+  'elegant-serif': "'Cormorant Garamond', Georgia, serif",
+  'classic-serif': "Georgia, 'Times New Roman', serif",
+  'bold-sans': "'Space Grotesk', -apple-system, sans-serif",
+  'modern-sans': "'Inter', -apple-system, sans-serif",
+  'display-rounded': "'Nunito', -apple-system, sans-serif",
+}
+const GUESTHUB_MOTIFS = {
+  'noir-couture': 'gold-frame',       // h-qr-frame: square, 1px gold border
+  'bloom-editorial': 'rose-dot',      // h-prog-dot: soft rounded timeline dot
+  'electric-rave': 'live-pulse',      // h-live-badge: glowing "LIVE" chip
+  'linen-gold': 'ornament',           // h-ornament: thin center divider rule
+  'celestial-midnight': 'moon-glow',  // h-moon: glowing circle
+  'soleil': 'sun-chip',               // h-banner: warm gradient top band
+  'mono-print': 'big-date',           // h-big-date/h-big-month: brutalist date stamp
+  'verdant': 'leaf',                  // h-leaf-dec: leaf accent
+  'coastal-club': 'hull-emblem',      // h-hull-emblem: circular crest badge
+  'haze': 'glass-blur',               // h-glass-card: frosted blur panel
+}
 
 const TEMPLATE_CATEGORIES = ['All', 'Wedding', 'Community', 'Conference', 'Celebration']
 const TEMPLATE_STYLES = ['All styles', 'Warm', 'Minimal', 'Dark', 'Playful']
@@ -492,7 +519,7 @@ export default function DesignStudioRedesignPage() {
   useEffect(() => { eventPageSyncedRef.current = false }, [eventId])
 
   useEffect(() => {
-    if (tab !== 'Event Page' && tab !== 'FestioHub') return undefined
+    if (tab !== 'Event Page' && tab !== 'FestioHub' && tab !== 'GuestHub') return undefined
     if (!eventId || (tab === 'Event Page' && !activeTemplate)) return undefined
     const delay = eventPageSyncedRef.current ? 700 : 0
     clearTimeout(eventPagePreviewTimerRef.current)
@@ -1032,6 +1059,86 @@ export default function DesignStudioRedesignPage() {
                 </div>
               </div>
               <div className="rd-hint" style={{ marginTop: 12 }}>QR pattern shown is illustrative — each guest's real pass carries their own unique, unforgeable token. Everything else here is your actual saved wording, colors, and photo.</div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {tab === 'GuestHub' && (
+        <div className="rd-wide-grid">
+          <div className="rd-panel">
+            <div className="rd-panel-head"><h3>GuestHub templates</h3><p>One look for the whole guest experience — RSVP page and FestioHub together</p></div>
+            <div className="rd-panel-body">
+              <div className="ds-gh-grid">
+                {HUB_STYLES.filter((s) => s.colorPreset).map((s) => {
+                  const font = GUESTHUB_FONT_CSS[s.fontSuggestion] || GUESTHUB_FONT_CSS['modern-sans']
+                  const motif = GUESTHUB_MOTIFS[s.id]
+                  const p = s.colorPreset
+                  return (
+                    <div key={s.id} className={`ds-gh-card ${hubStyle === s.id ? 'selected' : ''}`}>
+                      <div className="ds-gh-swatch" style={{ background: p.background, color: p.text, fontFamily: font }}>
+                        <div className="ds-gh-swatch-head">
+                          <span className="ds-gh-swatch-brand" style={{ color: p.accent }}>FESTIO</span>
+                          <span className="ds-gh-swatch-pill" style={{ background: `${p.accent}22`, color: p.accent, borderColor: `${p.accent}55` }}>Attending</span>
+                        </div>
+                        <div className="ds-gh-swatch-hero">
+                          <span className="ds-gh-swatch-qr" style={{ borderColor: p.accent }} />
+                          <div className="ds-gh-swatch-hero-text">
+                            <strong style={{ fontFamily: font }}>Guest Name</strong>
+                            <span>{s.name}</span>
+                          </div>
+                        </div>
+                        <div className={`ds-gh-motif ds-gh-motif-${motif}`} style={{ '--m-accent': p.accent, '--m-surface': p.surface }} />
+                        <div className="ds-gh-swatch-tabs">
+                          <span style={{ color: p.accent, borderColor: p.accent }}>Pass</span>
+                          <span>Program</span>
+                          <span>Messages</span>
+                        </div>
+                      </div>
+                      <div className="ds-hub-card-meta">
+                        <div className="ds-hub-card-top">
+                          <strong>{s.name}</strong>
+                          <span className={`ds-hub-cat-badge cat-${s.category.toLowerCase()}`}>{s.category}</span>
+                        </div>
+                        <span className="ds-hub-tagline">{s.tagline}</span>
+                        <p className="ds-hub-bestfor">{s.bestFor}</p>
+                      </div>
+                      <button
+                        className={`rr-btn ${hubStyle === s.id ? 'secondary' : 'primary'}`}
+                        disabled={hubStyleBusy}
+                        style={{ width: '100%', justifyContent: 'center' }}
+                        onClick={async () => { await selectHubStyle(s.id); await applyHubColorPreset(s.id) }}
+                      >
+                        {hubStyle === s.id ? '✓ Applied' : 'Use this template'}
+                      </button>
+                    </div>
+                  )
+                })}
+              </div>
+              <div className="rd-hint" style={{ marginTop: 14 }}>
+                Applies colors, font, and FestioHub's arrangement together across your RSVP page and FestioHub card. Fine-tune any one of them afterward in Flyer / Event Page / FestioHub without losing the others.
+              </div>
+            </div>
+          </div>
+          <div className="rd-panel">
+            <div className="rd-panel-head ds-preview-head">
+              <div><h3>Live preview</h3><p>The real guest page, top to bottom, with the selected template</p></div>
+              <div className="rd-seg"><button className={!mobilePreview ? 'on' : ''} onClick={() => setMobilePreview(false)}>Desktop</button><button className={mobilePreview ? 'on' : ''} onClick={() => setMobilePreview(true)}>Mobile</button></div>
+            </div>
+            <div className="rd-panel-body">
+              {!eventId ? (
+                <div className="ds-page-preview"><Icon name="calendar" size={20} /><span>Select an event to preview GuestHub.</span></div>
+              ) : (
+                <div className={`ds-page-preview-frame-wrap ${mobilePreview ? 'mobile' : ''}`}>
+                  <iframe
+                    key={eventId}
+                    src={eventPagePreviewNonce > 0 ? `/invite/${eventId}?studio-preview=1&_p=${eventPagePreviewNonce}` : undefined}
+                    title="Live GuestHub preview"
+                    className="ds-page-preview-frame"
+                  />
+                </div>
+              )}
+              <button className="rr-link-btn" onClick={() => openDraftPreview()} style={{ marginTop: 8 }}>Open in a full tab <Icon name="external" size={12} /></button>
             </div>
           </div>
         </div>

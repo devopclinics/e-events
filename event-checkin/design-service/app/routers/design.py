@@ -24,7 +24,11 @@ router = APIRouter(prefix="/api/v1/design")
 
 HUB_MODULES = {"guest_pass", "next_action", "activity_progress", "live_program", "festiome", "messages"}
 HUB_DEFAULT_TABS = {"pass", "activity", "program", "messages", "activity_when_actionable"}
-HUB_STYLES = {"wallet-pass", "card-dashboard", "story-feed", "timeline", "minimal-list"}
+HUB_STYLES = {
+    "wallet-pass", "card-dashboard", "story-feed", "timeline", "minimal-list",
+    "noir-couture", "bloom-editorial", "electric-rave", "linen-gold", "celestial-midnight",
+    "soleil", "mono-print", "verdant", "coastal-club", "haze",
+}
 HUB_VARIANTS = {"guest_pass": {"compact"}, "live_program": {"now_plus_two", "now_only"}}
 DEFAULT_HUB_LAYOUT = {
     "version": 1,

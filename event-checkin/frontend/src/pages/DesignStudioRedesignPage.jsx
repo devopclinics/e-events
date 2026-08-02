@@ -7,19 +7,91 @@ import './DesignStudioRedesignPage.css'
 
 const TABS = ['Templates', 'Flyer', 'Event Page', 'Festio Pass', 'FestioHub', 'Email Preview', 'Publish']
 
-// FestioHub layout styles — arrangements of the real Hub modules (guest_pass,
-// next_action, activity_progress, live_program, festiome, messages read by
-// InvitePage.jsx's GuestHub component via designTheme.hub_layout). The choice
-// is saved for real via theme_config.hubStyle; live per-style guest-facing
-// rendering in GuestHub itself is a separate follow-up — see rd-hint copy
-// on this tab.
+// FestioHub layout + visual themes. Each entry combines a layout type
+// (tabbed vs stacked, mirrored in InvitePage.jsx's HUB_TABBED_STYLES) with
+// an optional colorPreset applied when the organizer clicks "Apply palette".
+// Saved as theme_config.hubStyle; InvitePage reads designTheme.hub_style and
+// applies the fh-hub-style-{id} CSS class. No backend change needed.
 const HUB_STYLES = [
-  { id: 'wallet-pass', name: 'Wallet Pass', tagline: 'Pass-first, native-app feel', bestFor: 'Best when guests need their QR fast, at the door.' },
-  { id: 'card-dashboard', name: 'Card Dashboard', tagline: 'Everything visible at once', bestFor: 'No tabs to learn — every module as its own card.' },
-  { id: 'story-feed', name: 'Story Feed', tagline: 'Community-first', bestFor: 'Best for events leaning on FestioMe engagement.' },
-  { id: 'timeline', name: 'Timeline', tagline: 'Guided, chronological', bestFor: 'Reassuring for first-time or formal-event guests.' },
-  { id: 'minimal-list', name: 'Minimal List', tagline: 'Utility-first, fastest to scan', bestFor: 'For guests who just want in and out.' },
+  // ── 5 original layout styles (no color preset) ──
+  { id: 'wallet-pass',    name: 'Wallet Pass',    category: 'Layout',    tagline: 'Pass-first, native-app feel',     bestFor: 'Best when guests need their QR fast, at the door.', colorPreset: null, fontSuggestion: null },
+  { id: 'card-dashboard', name: 'Card Dashboard', category: 'Layout',    tagline: 'Everything visible at once',      bestFor: 'No tabs to learn — every module as its own card.', colorPreset: null, fontSuggestion: null },
+  { id: 'story-feed',     name: 'Story Feed',     category: 'Layout',    tagline: 'Community-first',                 bestFor: 'Best for events leaning on FestioMe engagement.', colorPreset: null, fontSuggestion: null },
+  { id: 'timeline',       name: 'Timeline',       category: 'Layout',    tagline: 'Guided, chronological',           bestFor: 'Reassuring for first-time or formal-event guests.', colorPreset: null, fontSuggestion: null },
+  { id: 'minimal-list',   name: 'Minimal List',   category: 'Layout',    tagline: 'Utility-first, fastest to scan', bestFor: 'For guests who just want in and out.', colorPreset: null, fontSuggestion: null },
+  // ── 10 new visual themes ──
+  {
+    id: 'noir-couture', name: 'Noir Couture', category: 'Luxury',
+    tagline: 'Gold on black — editorial luxury',
+    bestFor: 'Galas, fashion events, award nights, black-tie dinners.',
+    fontSuggestion: 'elegant-serif',
+    colorPreset: { background: '#0a0a0a', surface: '#111111', accent: '#c9a84c', primary: '#8b7355', text: '#e8e0d0' },
+  },
+  {
+    id: 'bloom-editorial', name: 'Bloom Editorial', category: 'Warm',
+    tagline: 'Rose and blush — soft romantic',
+    bestFor: 'Weddings, bridal showers, engagement parties, anniversaries.',
+    fontSuggestion: 'classic-serif',
+    colorPreset: { background: '#faf7f4', surface: '#ffffff', accent: '#c2696a', primary: '#9b7f7f', text: '#2e1f1f' },
+  },
+  {
+    id: 'electric-rave', name: 'Electric Rave', category: 'Vibrant',
+    tagline: 'Neon on dark — high-energy club',
+    bestFor: 'Concerts, club nights, music festivals, launch parties.',
+    fontSuggestion: 'bold-sans',
+    colorPreset: { background: '#07070f', surface: '#0f0f1a', accent: '#7c3aed', primary: '#22d3ee', text: '#e2e0f0' },
+  },
+  {
+    id: 'linen-gold', name: 'Linen & Gold', category: 'Warm',
+    tagline: 'Earth tones — warm, organic luxury',
+    bestFor: 'Weddings, rustic celebrations, outdoor summer events.',
+    fontSuggestion: 'elegant-serif',
+    colorPreset: { background: '#f7f3ee', surface: '#ffffff', accent: '#c4a47c', primary: '#8b6f47', text: '#2c2218' },
+  },
+  {
+    id: 'celestial-midnight', name: 'Celestial', category: 'Dark',
+    tagline: 'Midnight blue — cosmic elegance',
+    bestFor: 'Formal galas, space-themed events, winter celebrations.',
+    fontSuggestion: 'modern-sans',
+    colorPreset: { background: '#030816', surface: '#080f28', accent: '#3b82f6', primary: '#818cf8', text: '#e2e8f8' },
+  },
+  {
+    id: 'soleil', name: 'Soleil', category: 'Vibrant',
+    tagline: 'Amber and coral — joyful summer',
+    bestFor: 'Garden parties, outdoor festivals, birthday celebrations.',
+    fontSuggestion: 'display-rounded',
+    colorPreset: { background: '#fffbf5', surface: '#ffffff', accent: '#f59e0b', primary: '#fb923c', text: '#1c0a00' },
+  },
+  {
+    id: 'mono-print', name: 'Mono Print', category: 'Editorial',
+    tagline: 'Bold ink on paper — brutalist editorial',
+    bestFor: 'Art exhibitions, design conferences, zine launches.',
+    fontSuggestion: 'bold-sans',
+    colorPreset: { background: '#f5f0eb', surface: '#ffffff', accent: '#e63329', primary: '#0a0a0a', text: '#0a0a0a' },
+  },
+  {
+    id: 'verdant', name: 'Verdant', category: 'Nature',
+    tagline: 'Forest green — nature & wellness',
+    bestFor: 'Wellness retreats, eco events, outdoor ceremonies, garden parties.',
+    fontSuggestion: 'modern-sans',
+    colorPreset: { background: '#f0f7f0', surface: '#ffffff', accent: '#52b788', primary: '#2d6a4f', text: '#1a3320' },
+  },
+  {
+    id: 'coastal-club', name: 'Coastal Club', category: 'Luxury',
+    tagline: 'Navy & brass — nautical luxury',
+    bestFor: 'Yacht clubs, coastal weddings, sailing events, maritime galas.',
+    fontSuggestion: 'modern-sans',
+    colorPreset: { background: '#f8f4ec', surface: '#ffffff', accent: '#b8912a', primary: '#0f2040', text: '#0f2040' },
+  },
+  {
+    id: 'haze', name: 'Haze', category: 'Dark',
+    tagline: 'Purple glass — moody glassmorphism',
+    bestFor: 'Late-night events, festival after-parties, intimate lounge experiences.',
+    fontSuggestion: 'modern-sans',
+    colorPreset: { background: '#1a0533', surface: '#0d1b4b', accent: '#a855f7', primary: '#ec4899', text: '#ffffff' },
+  },
 ]
+const HUB_STYLE_CATEGORIES = ['All', 'Layout', 'Luxury', 'Warm', 'Vibrant', 'Dark', 'Nature', 'Editorial']
 
 const TEMPLATE_CATEGORIES = ['All', 'Wedding', 'Community', 'Conference', 'Celebration']
 const TEMPLATE_STYLES = ['All styles', 'Warm', 'Minimal', 'Dark', 'Playful']
@@ -198,6 +270,7 @@ export default function DesignStudioRedesignPage() {
   const [renderBusy, setRenderBusy] = useState(false)
   const [hubStyle, setHubStyle] = useState(HUB_STYLES[0].id)
   const [hubStyleBusy, setHubStyleBusy] = useState(false)
+  const [hubCategory, setHubCategory] = useState('All')
   const coverFileRef = useRef(null)
 
   // Live flyer preview: a real server render (same engine the download
@@ -488,6 +561,30 @@ export default function DesignStudioRedesignPage() {
       setDesign(saved)
       notify(`${HUB_STYLES.find((s) => s.id === styleId)?.name || 'FestioHub style'} saved`)
     } catch (e) { notify(e.message || 'FestioHub style could not be saved') }
+    finally { setHubStyleBusy(false) }
+  }
+
+  async function applyHubColorPreset(styleId) {
+    const style = HUB_STYLES.find((s) => s.id === styleId)
+    if (!style?.colorPreset) return
+    const nextColors = { ...DEFAULT_COLORS, ...style.colorPreset }
+    const nextFont = style.fontSuggestion || fontPairing
+    setColors(nextColors)
+    setFontPairing(nextFont)
+    if (!eventId) return
+    setHubStyleBusy(true)
+    try {
+      const saved = await api.saveEventDesign(eventId, {
+        selected_template_id: design?.selected_template_id || null,
+        selected_flyer_template_id: design?.selected_flyer_template_id || null,
+        theme_config: { ...(design?.theme_config || {}), hubStyle: styleId, colors: nextColors, fontPairing: nextFont },
+        wording_config: design?.wording_config || {},
+        asset_config: design?.asset_config || {},
+        page_config: design?.page_config || {},
+      })
+      setDesign(saved)
+      notify(`${style.name} palette applied`)
+    } catch (e) { notify(e.message || 'Palette could not be applied') }
     finally { setHubStyleBusy(false) }
   }
 
@@ -943,30 +1040,68 @@ export default function DesignStudioRedesignPage() {
       {tab === 'FestioHub' && (
         <div className="rd-wide-grid">
           <div className="rd-panel">
-            <div className="rd-panel-head"><h3>Hub layout style</h3><p>How guests see their pass, program, and community — after they RSVP</p></div>
+            <div className="rd-panel-head"><h3>Hub style</h3><p>Choose a layout and visual theme — guests see this after they RSVP</p></div>
             <div className="rd-panel-body">
+              <div className="ds-hub-cats">
+                {HUB_STYLE_CATEGORIES.map((cat) => (
+                  <button key={cat} className={`ds-hub-cat-pill ${hubCategory === cat ? 'active' : ''}`} onClick={() => setHubCategory(cat)}>{cat}</button>
+                ))}
+              </div>
               <div className="ds-hub-grid">
-                {HUB_STYLES.map((s) => (
-                  <div key={s.id} className={`ds-hub-card ${hubStyle === s.id ? 'selected' : ''}`}>
-                    <div className={`ds-hub-swatch ds-hub-swatch-${s.id}`}>
+                {HUB_STYLES
+                  .filter((s) => hubCategory === 'All' || s.category === hubCategory)
+                  .map((s) => (
+                  <div key={s.id} className={`ds-hub-card ${hubStyle === s.id ? 'selected' : ''} ${s.colorPreset ? 'themed' : ''}`}>
+                    <div
+                      className={`ds-hub-swatch ds-hub-swatch-${s.id}`}
+                      style={s.colorPreset ? { background: `linear-gradient(135deg, ${s.colorPreset.background} 0%, ${s.colorPreset.surface} 55%, ${s.colorPreset.accent}66 100%)` } : undefined}
+                    >
                       {s.id === 'wallet-pass' && (<><span className="hs-pass"/><span className="hs-tabs"><i/><i/><i/><i/></span></>)}
                       {s.id === 'card-dashboard' && (<><span className="hs-row"/><span className="hs-row"/><span className="hs-row"/></>)}
                       {s.id === 'story-feed' && (<><span className="hs-circles"><i/><i/><i/></span><span className="hs-row wide"/></>)}
                       {s.id === 'timeline' && (<><span className="hs-tl"><i/><i/><i/></span></>)}
                       {s.id === 'minimal-list' && (<><span className="hs-line"/><span className="hs-line"/><span className="hs-line"/><span className="hs-line"/></>)}
+                      {s.colorPreset && (
+                        <div className="ds-hub-swatches">
+                          {Object.values(s.colorPreset).map((hex, i) => (
+                            <span key={i} className="ds-hub-dot" style={{ background: hex }} />
+                          ))}
+                        </div>
+                      )}
                     </div>
-                    <strong>{s.name}</strong>
-                    <span>{s.tagline}</span>
-                    <p className="rd-rowlink" style={{ margin: '6px 0 12px' }}>{s.bestFor}</p>
-                    <button className={`rr-btn ${hubStyle === s.id ? 'secondary' : 'primary'}`} style={{ width: '100%', justifyContent: 'center' }}
-                      disabled={hubStyleBusy} onClick={() => selectHubStyle(s.id)}>
-                      {hubStyle === s.id ? 'Selected' : hubStyleBusy ? 'Saving…' : 'Use this style'}
-                    </button>
+                    <div className="ds-hub-card-meta">
+                      <div className="ds-hub-card-top">
+                        <strong>{s.name}</strong>
+                        <span className={`ds-hub-cat-badge cat-${s.category.toLowerCase()}`}>{s.category}</span>
+                      </div>
+                      <span className="ds-hub-tagline">{s.tagline}</span>
+                      <p className="ds-hub-bestfor">{s.bestFor}</p>
+                    </div>
+                    <div className="ds-hub-card-actions">
+                      <button
+                        className={`rr-btn ${hubStyle === s.id ? 'secondary' : 'primary'}`}
+                        disabled={hubStyleBusy}
+                        onClick={() => selectHubStyle(s.id)}
+                        style={{ flex: 1, justifyContent: 'center' }}
+                      >
+                        {hubStyle === s.id ? '✓ Selected' : 'Select'}
+                      </button>
+                      {s.colorPreset && (
+                        <button
+                          className="rr-btn secondary ds-hub-palette-btn"
+                          disabled={hubStyleBusy}
+                          title={`Apply ${s.name} color palette and font`}
+                          onClick={async () => { await selectHubStyle(s.id); await applyHubColorPreset(s.id) }}
+                        >
+                          Apply palette
+                        </button>
+                      )}
+                    </div>
                   </div>
                 ))}
               </div>
               <div className="rd-hint" style={{ marginTop: 14 }}>
-                Your pick is saved to this event's design record and is what guests actually see in FestioHub after they RSVP — reordered tabs, tab-bar chrome, or section rhythm depending on the style, built from the same real pass/program/community/messages modules.
+                <strong>Select</strong> saves the layout and visual style. <strong>Apply palette</strong> also sets your event's colors and font to match — fine-tune them in Flyer / Event Page afterward.
               </div>
             </div>
           </div>

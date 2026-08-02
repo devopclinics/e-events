@@ -5,6 +5,7 @@ import { api } from '../api'
 import { isNativePushSupported, registerNativePush, unregisterNativePush } from '../push/fcmPush'
 import { parseUtc, fmtEventDateRange } from '../timeutil'
 import { seatingTerm } from '../seatingTerm'
+import './GuestHubThemes.css'
 
 // ── Invite page helpers ───────────────────────────────────────────────────────
 
@@ -226,6 +227,25 @@ function scrollToRsvp() {
 
 function designColors(theme) {
   return theme?.colors || {}
+}
+
+// font_pairing has been a real, saveable field since the original template
+// catalog (design-service/app/catalog.py), and Design Studio's "Apply
+// palette" (FestioHub styles) already writes it — but until now nothing on
+// this page ever read it back: it only ever reached design-service's flyer
+// PNG renderer. Ten new visual themes with the same generic system font
+// would have looked identical to each other beyond color, so this is a real
+// gap worth closing, not just for these — any event with a font_pairing set
+// benefits.
+const FONT_STACKS = {
+  'modern-sans': "'Inter', -apple-system, 'Segoe UI', sans-serif",
+  'classic-serif': "Georgia, 'Times New Roman', serif",
+  'elegant-serif': "'Cormorant Garamond', Georgia, serif",
+  'display-rounded': "'Nunito', -apple-system, 'Segoe UI', sans-serif",
+  'bold-sans': "'Space Grotesk', -apple-system, 'Segoe UI', sans-serif",
+}
+function designFontFamily(theme) {
+  return FONT_STACKS[theme?.font_pairing] || FONT_STACKS['modern-sans']
 }
 
 function designCover(theme, event) {
@@ -1159,8 +1179,17 @@ function TokenRSVPForm({ event, prefill, token, theme, onDone }) {
 // non-tabbed styles — and (2) a CSS treatment on the stacked container for
 // timeline/minimal-list. wallet-pass and story-feed both keep tabs but differ
 // in tab order (pass-first vs. activity/community-first) and tab-bar chrome.
-const HUB_STYLES = new Set(['wallet-pass', 'card-dashboard', 'story-feed', 'timeline', 'minimal-list'])
-const HUB_TABBED_STYLES = new Set(['wallet-pass', 'story-feed'])
+const HUB_STYLES = new Set([
+  'wallet-pass', 'card-dashboard', 'story-feed', 'timeline', 'minimal-list',
+  // 10 new visual themes
+  'noir-couture', 'bloom-editorial', 'electric-rave', 'linen-gold',
+  'celestial-midnight', 'soleil', 'mono-print', 'verdant', 'coastal-club', 'haze',
+])
+const HUB_TABBED_STYLES = new Set([
+  'wallet-pass', 'story-feed',
+  // new tabbed themes
+  'noir-couture', 'electric-rave', 'celestial-midnight', 'haze',
+])
 const HUB_TAB_ORDER = {
   'story-feed': ['activity', 'messages', 'program', 'pass'],
 }
@@ -2234,7 +2263,13 @@ export default function InvitePage() {
       festiome_enabled: event.festiome_addon_enabled && event.festiome_enabled,
     })
       .then((themePayload) => {
-        if (!cancelled) setDesignTheme(themePayload?.is_default ? null : themePayload)
+        // is_default only means "no Event Page template family selected" —
+        // it doesn't mean nothing was customized. Discarding the whole
+        // payload here threw away real colors/font/hub_style/wording any
+        // event had saved (e.g. via the FestioHub tab's "Apply palette")
+        // whenever the organizer hadn't separately picked a template too,
+        // silently reverting the live page to hardcoded defaults.
+        if (!cancelled) setDesignTheme(themePayload)
       })
       .catch(() => {
         if (!cancelled) setDesignTheme(null)
@@ -2401,7 +2436,7 @@ export default function InvitePage() {
   return (
     <div
       className="invite-page min-h-screen bg-[radial-gradient(circle_at_18%_0%,rgba(20,184,166,0.24),transparent_36rem),linear-gradient(140deg,#07111f_0%,#0f172a_48%,#132f38_100%)]"
-      style={{ ...themedPageBackground(dColors), color: tone.text }}
+      style={{ ...themedPageBackground(dColors), color: tone.text, fontFamily: designFontFamily(designTheme) }}
     >
       <header className="px-5 py-6 sm:px-6">
         <div className="mx-auto flex max-w-[1180px] items-center justify-between">

@@ -1,4 +1,4 @@
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=Cormorant+Garamond:ital,wght@0,400;0,600;1,400;1,600&family=Nunito:wght@400;600;700;800&family=Space+Grotesk:wght@400;500;600;700&display=swap');
 
 @tailwind base;
 @tailwind components;
@@ -954,4 +954,53 @@ textarea:focus {
 }
 .fh-hub-style-minimal-list > * + * {
   margin-top: 8px !important;
+}
+
+/* ── 10 visual themes: light shape/texture on top of the colors + font
+   Apply palette already sets — same "> * scoped to the outer card" approach
+   as timeline/minimal-list above, no JSX changes needed. Colors carry most
+   of the identity already (via theme_config.colors -> tone), this layer is
+   just the shape/material cues color alone can't express. */
+.fh-hub-style-noir-couture h2,
+.fh-hub-style-linen-gold h2,
+.fh-hub-style-coastal-club h2 {
+  font-style: italic;
+  letter-spacing: .01em;
+}
+.fh-hub-style-noir-couture > * {
+  border-width: 1px !important;
+  border-radius: 6px !important;
+}
+.fh-hub-style-electric-rave h2 {
+  text-transform: uppercase;
+  letter-spacing: .04em;
+}
+.fh-hub-style-electric-rave > * {
+  box-shadow: 0 0 0 1px color-mix(in srgb, currentColor 12%, transparent), 0 12px 30px -18px currentColor !important;
+}
+.fh-hub-style-mono-print > * {
+  border-radius: 2px !important;
+  border-width: 1.5px !important;
+  box-shadow: 3px 3px 0 currentColor !important;
+}
+.fh-hub-style-mono-print h2 {
+  text-transform: uppercase;
+  letter-spacing: -.01em;
+}
+.fh-hub-style-coastal-club > * {
+  border-radius: 6px !important;
+  border-width: 1.5px !important;
+}
+.fh-hub-style-celestial-midnight > *,
+.fh-hub-style-haze > * {
+  background-image: radial-gradient(currentColor 0.6px, transparent 0.8px) !important;
+  background-size: 14px 14px !important;
+  background-position: -4px -4px !important;
+  background-blend-mode: soft-light;
+}
+.fh-hub-style-haze > * {
+  backdrop-filter: blur(10px);
+}
+.fh-hub-style-bloom-editorial > * {
+  border-radius: 20px !important;
 }

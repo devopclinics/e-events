@@ -162,16 +162,45 @@
 }
 
 /* ── FestioHub style tab ──────────────────────────────────────────────── */
+
+/* Category filter pills */
+.ds-hub-cats { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 16px; }
+.ds-hub-cat-pill { padding: 5px 13px; border-radius: 999px; font-size: 11.5px; font-weight: 600; border: 1px solid var(--line); background: transparent; color: var(--muted); cursor: pointer; transition: background .12s, color .12s, border-color .12s; white-space: nowrap; }
+.ds-hub-cat-pill:hover { background: var(--surface-alt, #f6f3ee); color: var(--text); border-color: var(--teal); }
+.ds-hub-cat-pill.active { background: var(--teal); color: #fff; border-color: var(--teal); }
+
 .ds-hub-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px; }
 @media (max-width: 700px) { .ds-hub-grid { grid-template-columns: 1fr; } }
-.ds-hub-card { border: 1px solid var(--line); border-radius: 12px; padding: 14px; background: var(--surface); display: flex; flex-direction: column; }
+.ds-hub-card { border: 1px solid var(--line); border-radius: 12px; padding: 14px; background: var(--surface); display: flex; flex-direction: column; gap: 0; }
 .ds-hub-card.selected { border-color: var(--teal); box-shadow: 0 0 0 1px var(--teal); }
-.ds-hub-card strong { font-size: 13.5px; margin-top: 2px; }
-.ds-hub-card > span { font-size: 11.5px; color: var(--muted); }
-/* Each swatch gets its own mood/background rather than a shared neutral card
-   — these are meant to read apart from each other at a glance, the way the
-   5 real Hub arrangements do (tab dock vs. stacked cards vs. dark feed vs.
-   connected steps vs. flat rows), not as five variations of the same box. */
+.ds-hub-card.themed { border-style: solid; }
+
+/* Card internal layout */
+.ds-hub-card-meta { display: flex; flex-direction: column; gap: 2px; margin-bottom: 10px; }
+.ds-hub-card-top { display: flex; align-items: center; gap: 8px; margin-top: 2px; flex-wrap: wrap; }
+.ds-hub-card-top strong { font-size: 13.5px; }
+.ds-hub-tagline { font-size: 11.5px; color: var(--muted); }
+.ds-hub-bestfor { font-size: 11px; color: var(--muted); opacity: .75; margin-top: 3px; line-height: 1.5; }
+
+/* Actions row */
+.ds-hub-card-actions { display: flex; gap: 6px; margin-top: auto; }
+.ds-hub-palette-btn { white-space: nowrap; font-size: 11.5px; padding: 0 10px; }
+
+/* Category badges on cards */
+.ds-hub-cat-badge { font-size: 9.5px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; padding: 2px 7px; border-radius: 4px; white-space: nowrap; }
+.cat-layout    { background: rgba(20,184,166,.1); color: var(--teal); }
+.cat-luxury    { background: rgba(201,168,76,.15); color: #b8912a; }
+.cat-warm      { background: rgba(251,146,60,.12); color: #f97316; }
+.cat-vibrant   { background: rgba(167,139,250,.15); color: #8b5cf6; }
+.cat-dark      { background: rgba(100,116,139,.12); color: #64748b; }
+.cat-nature    { background: rgba(52,211,153,.12); color: #10b981; }
+.cat-editorial { background: rgba(239,68,68,.12); color: #ef4444; }
+
+/* Swatch bar and color dots for themed cards */
+.ds-hub-swatches { position: absolute; bottom: 7px; left: 9px; right: 9px; display: flex; gap: 4px; }
+.ds-hub-dot { width: 14px; height: 14px; border-radius: 50%; border: 1.5px solid rgba(255,255,255,.18); flex-shrink: 0; }
+
+/* Each swatch gets its own mood/background rather than a shared neutral card */
 .ds-hub-swatch { height: 78px; border-radius: 8px; margin-bottom: 10px; position: relative; overflow: hidden; padding: 9px; }
 
 .ds-hub-swatch-wallet-pass { background: linear-gradient(165deg, #0c1a1c, #0a1416); }

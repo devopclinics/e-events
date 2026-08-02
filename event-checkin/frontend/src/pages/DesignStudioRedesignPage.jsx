@@ -779,6 +779,14 @@ export default function DesignStudioRedesignPage() {
             </div>
 
             <button className="rr-btn primary" disabled={designBusy} style={{ width: '100%', justifyContent: 'center' }} onClick={saveFlyerAndPassSettings}>{designBusy ? 'Saving…' : 'Save flyer settings'}</button>
+            {/* Also lives in the Preview panel's own copy of this button
+                below — duplicated here because on narrower windows the two
+                columns stack and the Preview panel (with the only other
+                "apply this" action) ends up below the entire settings list,
+                easy to miss after a long scroll past 15+ wording fields. */}
+            <button className="rr-btn secondary" disabled={renderBusy} style={{ width: '100%', justifyContent: 'center' }} onClick={() => renderFlyer(null, true)}>
+              {renderBusy ? 'Rendering…' : 'Render & use as cover'}
+            </button>
           </div>
 
           <div className="ds-flyer-col">

@@ -2446,36 +2446,52 @@ export default function InvitePage() {
 
       <section
         className="gh-hero relative overflow-hidden px-5 py-14 sm:px-6 sm:py-20 lg:py-24"
-        style={dCover
-          ? { backgroundImage: `url(${dCover})`, backgroundSize: 'cover', backgroundPosition: 'center' }
-          : heroFallbackBackground(dColors)}
+        style={dCover ? undefined : heroFallbackBackground(dColors)}
       >
+        {dCover && (
+          <>
+            {/* A cover photo can be any aspect ratio (most are tall/portrait
+                flyers); cover-cropping it into a short wide banner cuts off
+                heads/bodies. Blurred cover-fill backdrop + the full photo
+                shown uncropped on top — same technique Spotify/Apple Music
+                use for mismatched art. */}
+            <div className="absolute inset-0 scale-110" style={{ backgroundImage: `url(${dCover})`, backgroundSize: 'cover', backgroundPosition: 'center', filter: 'blur(32px) brightness(0.55) saturate(1.15)' }} />
+            <div className="absolute inset-0" style={{ backgroundImage: `url(${dCover})`, backgroundSize: 'contain', backgroundPosition: 'center', backgroundRepeat: 'no-repeat' }} />
+          </>
+        )}
         <div className="gh-hero-scrim absolute inset-0" />
         <div className="relative mx-auto max-w-[820px] text-center">
-          {flyerLedHero || !page.hero.showTitle ? <h1 className="sr-only">{title}</h1> : <>
-            {page.hero.showWelcomeLabel && <div className="text-sm font-extrabold uppercase tracking-[0.24em] text-white/85">{dWording.inviteLabel || "You're invited to"}</div>}
-            <h1 className="mt-3 text-4xl font-extrabold leading-[1.05] text-white sm:text-6xl">{title}</h1>
-          </>}
-          {!flyerLedHero && page.hero.showHost && host && (hostWebsite
-            ? <a href={hostWebsite} target="_blank" rel="noopener noreferrer" className="mt-4 inline-block text-lg font-semibold text-white underline decoration-2 underline-offset-4 hover:opacity-80">{host}</a>
-            : <p className="mt-4 text-lg font-semibold text-white">{host}</p>)}
-          {(heroWhen || venue) && <p className="mt-4 text-base font-semibold text-white/85">{[heroWhen, venue].filter(Boolean).join(' · ')}</p>}
-          <div className="mt-8 flex flex-col justify-center gap-3 sm:flex-row">
-            <PrimaryButton
-              type="button"
-              className="gh-cta"
-              style={dColors.accent ? { background: dColors.accent } : undefined}
-              onClick={() => document.getElementById(hasGuestHub ? 'guest-hub' : 'rsvp')?.scrollIntoView({ behavior: 'smooth' })}
-            >
-              {hasGuestHub ? 'Open FestioHub' : 'Confirm My RSVP'}
-            </PrimaryButton>
-            <SecondaryButton
-              type="button"
-              style={{ background: 'rgba(255,255,255,.14)', borderColor: 'rgba(255,255,255,.3)', color: '#fff' }}
-              onClick={() => document.getElementById('details')?.scrollIntoView({ behavior: 'smooth' })}
-            >
-              View Event Details
-            </SecondaryButton>
+          {/* A solid backing panel, not just the directional scrim above —
+              cover photos are sometimes designed flyers with their own
+              baked-in text/graphics (not a plain photograph), and text
+              floating directly on top of that clashes and becomes unreadable.
+              The panel guarantees legibility regardless of what's in the photo. */}
+          <div className="gh-hero-textpanel inline-block rounded-3xl px-6 py-8 sm:px-12 sm:py-10" style={{ background: 'rgba(10,10,15,.52)', backdropFilter: 'blur(6px)' }}>
+            {flyerLedHero || !page.hero.showTitle ? <h1 className="sr-only">{title}</h1> : <>
+              {page.hero.showWelcomeLabel && <div className="text-sm font-extrabold uppercase tracking-[0.24em] text-white/85">{dWording.inviteLabel || "You're invited to"}</div>}
+              <h1 className="mt-3 text-4xl font-extrabold leading-[1.05] text-white sm:text-6xl">{title}</h1>
+            </>}
+            {!flyerLedHero && page.hero.showHost && host && (hostWebsite
+              ? <a href={hostWebsite} target="_blank" rel="noopener noreferrer" className="mt-4 inline-block text-lg font-semibold text-white underline decoration-2 underline-offset-4 hover:opacity-80">{host}</a>
+              : <p className="mt-4 text-lg font-semibold text-white">{host}</p>)}
+            {(heroWhen || venue) && <p className="mt-4 text-base font-semibold text-white/85">{[heroWhen, venue].filter(Boolean).join(' · ')}</p>}
+            <div className="mt-8 flex flex-col justify-center gap-3 sm:flex-row">
+              <PrimaryButton
+                type="button"
+                className="gh-cta"
+                style={dColors.accent ? { background: dColors.accent } : undefined}
+                onClick={() => document.getElementById(hasGuestHub ? 'guest-hub' : 'rsvp')?.scrollIntoView({ behavior: 'smooth' })}
+              >
+                {hasGuestHub ? 'Open FestioHub' : 'Confirm My RSVP'}
+              </PrimaryButton>
+              <SecondaryButton
+                type="button"
+                style={{ background: 'rgba(255,255,255,.14)', borderColor: 'rgba(255,255,255,.3)', color: '#fff' }}
+                onClick={() => document.getElementById('details')?.scrollIntoView({ behavior: 'smooth' })}
+              >
+                View Event Details
+              </SecondaryButton>
+            </div>
           </div>
         </div>
       </section>

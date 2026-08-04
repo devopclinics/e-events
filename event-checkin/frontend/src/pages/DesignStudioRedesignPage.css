@@ -195,6 +195,11 @@
 .cat-dark      { background: rgba(100,116,139,.12); color: #64748b; }
 .cat-nature    { background: rgba(52,211,153,.12); color: #10b981; }
 .cat-editorial { background: rgba(239,68,68,.12); color: #ef4444; }
+.cat-classic   { background: rgba(20,184,166,.1); color: #0d9488; }
+.cat-corporate { background: rgba(138,109,59,.14); color: #8a6d3b; }
+.cat-tech      { background: rgba(56,189,248,.14); color: #0284c7; }
+.cat-community { background: rgba(107,142,90,.14); color: #4d6b40; }
+.cat-formal    { background: rgba(122,46,46,.12); color: #7a2e2e; }
 
 /* Swatch bar and color dots for themed cards */
 .ds-hub-swatches { position: absolute; bottom: 7px; left: 9px; right: 9px; display: flex; gap: 4px; }
@@ -449,3 +454,95 @@
 .ds-gh-tpl-haze .gh-prog-row.glow { border-color: rgba(168,85,247,.35); background: rgba(168,85,247,.1); }
 .ds-gh-tpl-haze .gh-prog-time { font-size: 8px; font-weight: 700; opacity: .6; }
 .ds-gh-tpl-haze .gh-prog-name { flex: 1; font-size: 9.5px; }
+
+.ds-gh-tpl .gh-chip { font-size: 7.5px; font-weight: 700; padding: 2px 8px; border-radius: 99px; display: inline-block; width: fit-content; }
+.ds-gh-tpl .gh-chip.live { background: var(--p-accent); color: #fff; }
+
+/* ── Minimal family (Classic Navy / Ivory Formal / Slate Professional /
+   Sage Community / Champagne Minimal) — deliberately one shared skeleton,
+   restraint from color/font alone, not per-template structure. Full-bleed
+   hero (no gh-side-hero here — that's the sidecard family below). ── */
+.ds-gh-minimal { border: 1px solid color-mix(in srgb, var(--p-text) 12%, transparent); }
+.ds-gh-minimal .gh-topbar { display: flex; align-items: center; justify-content: space-between; padding: 8px 10px; border-bottom: 1px solid color-mix(in srgb, var(--p-text) 10%, transparent); }
+.ds-gh-minimal .gh-brand { font-size: 7px; font-weight: 700; letter-spacing: .18em; text-transform: uppercase; color: var(--p-accent); }
+.ds-gh-minimal .gh-pill { font-size: 7px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; color: var(--p-accent); background: color-mix(in srgb, var(--p-accent) 14%, transparent); border: 1px solid color-mix(in srgb, var(--p-accent) 30%, transparent); padding: 2px 7px; border-radius: 4px; }
+.ds-gh-minimal .gh-hero { display: flex; gap: 8px; padding: 10px; border-bottom: 1px solid color-mix(in srgb, var(--p-text) 10%, transparent); align-items: center; }
+.ds-gh-minimal .gh-qr { border: 1px solid var(--p-accent); border-radius: 4px; padding: 3px; flex: none; }
+.ds-gh-minimal .gh-status { display: flex; align-items: center; gap: 5px; font-size: 8px; color: var(--p-accent); margin-top: 2px; }
+.ds-gh-minimal .gh-status i { width: 4px; height: 4px; border-radius: 50%; background: var(--p-accent); }
+.ds-gh-minimal .gh-tabs { padding: 0 10px; border-bottom: 1px solid color-mix(in srgb, var(--p-text) 10%, transparent); }
+.ds-gh-minimal .gh-tabs span { flex: 1; text-align: center; padding-top: 8px; padding-bottom: 6px; }
+.ds-gh-minimal .gh-tabs span.active { color: var(--p-accent) !important; border-bottom-color: var(--p-accent); }
+.ds-gh-minimal .gh-tl-item { display: flex; align-items: center; gap: 8px; }
+.ds-gh-minimal .gh-tl-time { font-size: 8px; font-weight: 700; color: var(--p-accent); min-width: 26px; }
+.ds-gh-minimal .gh-tl-dot { width: 4px; height: 4px; background: var(--p-accent); flex: none; }
+.ds-gh-minimal .gh-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--p-accent); flex: none; }
+.ds-gh-minimal .gh-tl-text { font-size: 9.5px; }
+.ds-gh-tpl-sage-community { border-radius: 16px; }
+.ds-gh-tpl-sage-community .gh-tabs span.active { border-radius: 99px 99px 0 0; }
+.ds-gh-tpl-ivory-formal, .ds-gh-tpl-champagne-minimal { box-shadow: 0 6px 18px rgba(0,0,0,.08); }
+
+/* ── Side-card family shared hero (Heritage Navy / Ivory Ledger / Graphite
+   Tech / Meadow Community / Parchment Classic) — photo sits beside the
+   text instead of full-bleed above it; each keeps its own restructured
+   pass anatomy (stub / ledger / badge / circle / formal) below. ── */
+.ds-gh-tpl .gh-side-hero { display: flex; gap: 8px; align-items: center; padding: 10px; }
+.ds-gh-tpl .gh-poster { width: 40px; height: 50px; flex: none; border-radius: 5px; background-size: cover; background-position: center; }
+
+/* 11 — Heritage Navy: ticket stub */
+.ds-gh-tpl-heritage-navy { border: 1px solid color-mix(in srgb, var(--p-text) 12%, transparent); }
+.ds-gh-tpl-heritage-navy .gh-poster { background-image: linear-gradient(160deg, #7cb342, #33691e); }
+.ds-gh-tpl-heritage-navy .gh-stub { margin: 0 10px 8px; display: flex; border: 1px solid color-mix(in srgb, var(--p-text) 15%, transparent); border-radius: 6px; overflow: hidden; }
+.ds-gh-tpl-heritage-navy .gh-stub-main { flex: 1; padding: 8px; display: flex; flex-direction: column; gap: 2px; }
+.ds-gh-tpl-heritage-navy .gh-stub-qr { width: 36px; flex: none; border-left: 1px dashed color-mix(in srgb, var(--p-text) 25%, transparent); display: grid; place-items: center; padding: 4px; }
+.ds-gh-tpl-heritage-navy .gh-tabs { padding: 0 10px; border-bottom: 1px solid color-mix(in srgb, var(--p-text) 10%, transparent); }
+.ds-gh-tpl-heritage-navy .gh-tabs span { flex: 1; text-align: center; padding: 6px 0; }
+.ds-gh-tpl-heritage-navy .gh-tabs span.active { color: var(--p-accent) !important; border-bottom-color: var(--p-accent); }
+.ds-gh-tpl-heritage-navy .gh-tl-item { display: flex; align-items: center; gap: 8px; }
+.ds-gh-tpl-heritage-navy .gh-tl-time { font-size: 8px; font-weight: 700; color: var(--p-accent); min-width: 24px; }
+.ds-gh-tpl-heritage-navy .gh-tl-dot { width: 4px; height: 4px; background: var(--p-accent); flex: none; }
+.ds-gh-tpl-heritage-navy .gh-tl-text { font-size: 9px; }
+
+/* 12 — Ivory Ledger: invoice ledger */
+.ds-gh-tpl-ivory-ledger { border: 1px solid color-mix(in srgb, var(--p-text) 15%, transparent); }
+.ds-gh-tpl-ivory-ledger .gh-poster { background-image: linear-gradient(160deg, #d4b978, #4a3d24); }
+.ds-gh-tpl-ivory-ledger .gh-ledger-head { margin: 0 10px 8px; display: flex; gap: 14px; border-top: 1.5px solid var(--p-text); padding-top: 6px; }
+.ds-gh-tpl-ivory-ledger .gh-ledger-head .k { display: block; font-size: 6.5px; font-weight: 700; letter-spacing: .1em; text-transform: uppercase; opacity: .55; }
+.ds-gh-tpl-ivory-ledger .gh-ledger-head .v { display: block; font-size: 9px; font-weight: 700; margin-top: 2px; }
+.ds-gh-tpl-ivory-ledger .gh-tabs { padding: 0 10px; gap: 12px; border-bottom: 1px solid color-mix(in srgb, var(--p-text) 10%, transparent); }
+.ds-gh-tpl-ivory-ledger .gh-tabs span.active { color: var(--p-accent) !important; border-bottom-color: var(--p-accent); }
+.ds-gh-tpl-ivory-ledger .gh-order-row { display: flex; align-items: baseline; gap: 4px; font-size: 9px; }
+.ds-gh-tpl-ivory-ledger .gh-order-row .leader { flex: 1; border-bottom: 1px dotted color-mix(in srgb, var(--p-text) 40%, transparent); margin-bottom: 2px; }
+.ds-gh-tpl-ivory-ledger .gh-order-row .time { font-size: 8px; font-weight: 700; color: var(--p-accent); }
+
+/* 13 — Graphite Tech: scan badge */
+.ds-gh-tpl-graphite-tech { border: 1px solid color-mix(in srgb, var(--p-accent) 25%, transparent); }
+.ds-gh-tpl-graphite-tech .gh-poster { background-image: linear-gradient(160deg, #38bdf8, #0c1e30); }
+.ds-gh-tpl-graphite-tech .gh-badge-row { margin: 0 10px 8px; display: flex; align-items: center; gap: 8px; padding: 8px; border: 1px solid color-mix(in srgb, var(--p-accent) 30%, transparent); border-radius: 6px; }
+.ds-gh-tpl-graphite-tech .gh-badge-mini { flex: none; border: 1px solid var(--p-accent); border-radius: 4px; padding: 3px; }
+.ds-gh-tpl-graphite-tech .gh-tag { background: color-mix(in srgb, var(--p-accent) 15%, transparent); color: var(--p-accent); border: 1px solid var(--p-accent); }
+.ds-gh-tpl-graphite-tech .gh-tabs { padding: 0 10px; border-bottom: 1px solid color-mix(in srgb, var(--p-accent) 20%, transparent); }
+.ds-gh-tpl-graphite-tech .gh-tabs span.active { color: var(--p-accent) !important; border-bottom-color: var(--p-accent); }
+.ds-gh-tpl-graphite-tech .gh-activity-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+.ds-gh-tpl-graphite-tech .gh-stat { border: 1px solid color-mix(in srgb, var(--p-accent) 25%, transparent); border-radius: 4px; padding: 6px; }
+.ds-gh-tpl-graphite-tech .gh-stat-label { display: block; font-size: 6.5px; font-weight: 700; letter-spacing: .1em; text-transform: uppercase; opacity: .55; }
+.ds-gh-tpl-graphite-tech .gh-stat-val { display: block; font-size: 11px; font-weight: 700; color: var(--p-accent); margin-top: 2px; }
+
+/* 14 — Meadow Community: circular pass */
+.ds-gh-tpl-meadow-community { border-radius: 16px; overflow: hidden; }
+.ds-gh-tpl-meadow-community .gh-poster { background-image: linear-gradient(160deg, #a3c585, #3a4a2e); }
+.ds-gh-tpl-meadow-community .gh-circle-row { margin: 0 10px 8px; display: flex; align-items: center; gap: 8px; }
+.ds-gh-tpl-meadow-community .gh-qr-circle { flex: none; border-radius: 50%; border: 2px solid var(--p-accent); padding: 3px; background: var(--p-surface); }
+.ds-gh-tpl-meadow-community .gh-tabs { padding: 0 10px; gap: 6px; border-bottom: 1px solid color-mix(in srgb, var(--p-text) 10%, transparent); }
+.ds-gh-tpl-meadow-community .gh-tabs span { border-radius: 99px 99px 0 0; }
+.ds-gh-tpl-meadow-community .gh-tabs span.active { color: var(--p-accent) !important; border-bottom-color: var(--p-accent); }
+.ds-gh-tpl-meadow-community .gh-prog-item { display: flex; align-items: center; gap: 6px; }
+.ds-gh-tpl-meadow-community .gh-dot.live { width: 6px; height: 6px; border-radius: 50%; background: var(--p-accent); flex: none; }
+.ds-gh-tpl-meadow-community .gh-prog-name { flex: 1; font-size: 9px; }
+.ds-gh-tpl-meadow-community .gh-prog-time { font-size: 8px; font-weight: 700; color: var(--p-accent); }
+
+/* 15 — Parchment Classic: centered formal invitation */
+.ds-gh-tpl-parchment-classic { border: 1px solid color-mix(in srgb, var(--p-accent) 25%, transparent); }
+.ds-gh-tpl-parchment-classic .gh-poster { background-image: linear-gradient(160deg, #c99a9a, #3a1414); }
+.ds-gh-tpl-parchment-classic .gh-poster-framed { border: 1.5px solid var(--p-accent); padding: 2px; background-clip: content-box; }
+.ds-gh-tpl-parchment-classic .gh-ornament { text-align: center; color: var(--p-accent); font-size: 9px; padding: 2px 0 6px; }

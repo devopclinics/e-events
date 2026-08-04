@@ -28,6 +28,8 @@ HUB_STYLES = {
     "wallet-pass", "card-dashboard", "story-feed", "timeline", "minimal-list",
     "noir-couture", "bloom-editorial", "electric-rave", "linen-gold", "celestial-midnight",
     "soleil", "mono-print", "verdant", "coastal-club", "haze",
+    "classic-navy", "ivory-formal", "slate-professional", "sage-community", "champagne-minimal",
+    "heritage-navy", "ivory-ledger", "graphite-tech", "meadow-community", "parchment-classic",
 }
 HUB_VARIANTS = {"guest_pass": {"compact"}, "live_program": {"now_plus_two", "now_only"}}
 DEFAULT_HUB_LAYOUT = {

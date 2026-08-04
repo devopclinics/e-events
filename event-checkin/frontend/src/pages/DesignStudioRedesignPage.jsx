@@ -90,8 +90,89 @@ const HUB_STYLES = [
     fontSuggestion: 'modern-sans',
     colorPreset: { background: '#1a0533', surface: '#0d1b4b', accent: '#a855f7', primary: '#ec4899', text: '#ffffff' },
   },
+  // ── 10 minimal/classic themes — restrained counterparts to the 10 above,
+  // for events that don't want a fashion-forward treatment (school, corporate,
+  // conference, community, formal). Each "class" ships as a pair: one using
+  // the full-bleed photo hero (heroLayout omitted = default), one using the
+  // side-by-side poster hero (heroLayout: 'sidecard') — see HUB_SIDECARD_STYLES
+  // in InvitePage.jsx, the live page's source of truth for which hero to render.
+  {
+    id: 'classic-navy', name: 'Classic Navy', category: 'Classic',
+    tagline: 'Navy & teal — the original default, formalized',
+    bestFor: 'School events, formal ceremonies, general-purpose invitations.',
+    fontSuggestion: 'modern-sans',
+    colorPreset: { background: '#0f172a', surface: '#16223a', accent: '#14b8a6', primary: '#16223a', text: '#f1f5f9' },
+  },
+  {
+    id: 'ivory-formal', name: 'Ivory Formal', category: 'Corporate',
+    tagline: 'Ivory & gold — restrained corporate',
+    bestFor: 'Corporate dinners, galas, partner and donor events.',
+    fontSuggestion: 'elegant-serif',
+    colorPreset: { background: '#faf8f4', surface: '#ffffff', accent: '#8a6d3b', primary: '#2c2418', text: '#1f2937' },
+  },
+  {
+    id: 'slate-professional', name: 'Slate Professional', category: 'Tech',
+    tagline: 'Slate & sky blue — structured tech',
+    bestFor: 'Conferences, product summits, tech meetups.',
+    fontSuggestion: 'bold-sans',
+    colorPreset: { background: '#1e293b', surface: '#253449', accent: '#38bdf8', primary: '#0f1c2e', text: '#f1f5f9' },
+  },
+  {
+    id: 'sage-community', name: 'Sage Community', category: 'Community',
+    tagline: 'Sage & warm green — friendly and approachable',
+    bestFor: 'School events, nonprofit fundraisers, community gatherings.',
+    fontSuggestion: 'display-rounded',
+    colorPreset: { background: '#f4f7f0', surface: '#ffffff', accent: '#6b8e5a', primary: '#3a4a2e', text: '#283618' },
+  },
+  {
+    id: 'champagne-minimal', name: 'Champagne Minimal', category: 'Formal',
+    tagline: 'Champagne & gold — quiet elegance',
+    bestFor: 'Weddings and anniversaries that want restraint, not maximalism.',
+    fontSuggestion: 'elegant-serif',
+    colorPreset: { background: '#f7f2ec', surface: '#ffffff', accent: '#b08d57', primary: '#4a3a24', text: '#2c2218' },
+  },
+  {
+    id: 'heritage-navy', name: 'Heritage Navy', category: 'Classic',
+    tagline: 'Navy & teal — ticket-stub pass, side-card hero',
+    bestFor: 'School events, formal ceremonies — your uploaded photo sits beside the title, not full-bleed.',
+    fontSuggestion: 'modern-sans',
+    heroLayout: 'sidecard',
+    colorPreset: { background: '#0f172a', surface: '#16223a', accent: '#14b8a6', primary: '#16223a', text: '#f1f5f9' },
+  },
+  {
+    id: 'ivory-ledger', name: 'Ivory Ledger', category: 'Corporate',
+    tagline: 'Ivory & gold — invoice-ledger pass, side-card hero',
+    bestFor: 'Corporate dinners and galas that want a printed-program feel.',
+    fontSuggestion: 'elegant-serif',
+    heroLayout: 'sidecard',
+    colorPreset: { background: '#faf8f4', surface: '#ffffff', accent: '#8a6d3b', primary: '#4a3d24', text: '#1f2937' },
+  },
+  {
+    id: 'graphite-tech', name: 'Graphite Tech', category: 'Tech',
+    tagline: 'Slate & sky blue — scan-badge pass, side-card hero',
+    bestFor: 'Conferences and summits — a conference-badge feel for the pass.',
+    fontSuggestion: 'bold-sans',
+    heroLayout: 'sidecard',
+    colorPreset: { background: '#1e293b', surface: '#253449', accent: '#38bdf8', primary: '#0c1e30', text: '#f1f5f9' },
+  },
+  {
+    id: 'meadow-community', name: 'Meadow Community', category: 'Community',
+    tagline: 'Sage & warm green — circular pass, side-card hero',
+    bestFor: 'School and nonprofit events with a warm, bulletin-board feel.',
+    fontSuggestion: 'display-rounded',
+    heroLayout: 'sidecard',
+    colorPreset: { background: '#f4f7f0', surface: '#ffffff', accent: '#6b8e5a', primary: '#3a4a2e', text: '#283618' },
+  },
+  {
+    id: 'parchment-classic', name: 'Parchment Classic', category: 'Formal',
+    tagline: 'Parchment & burgundy — formal invitation, side-card hero',
+    bestFor: 'Weddings and formal events that want a printed-invitation feel.',
+    fontSuggestion: 'elegant-serif',
+    heroLayout: 'sidecard',
+    colorPreset: { background: '#f8f3e9', surface: '#ffffff', accent: '#7a2e2e', primary: '#3a1414', text: '#2b2118' },
+  },
 ]
-const HUB_STYLE_CATEGORIES = ['All', 'Layout', 'Luxury', 'Warm', 'Vibrant', 'Dark', 'Nature', 'Editorial']
+const HUB_STYLE_CATEGORIES = ['All', 'Layout', 'Luxury', 'Warm', 'Vibrant', 'Dark', 'Nature', 'Editorial', 'Classic', 'Corporate', 'Tech', 'Community', 'Formal']
 
 // GuestHub tab: same 10 visual themes as FestioHub's "Apply palette" (still
 // reachable there for fine-tuning just the card), presented as whole-
@@ -338,6 +419,128 @@ function GuestHubSwatch({ s, font }) {
           <div className="gh-body">
             <div className="gh-prog-row glow"><span className="gh-prog-time">21:00</span><span className="gh-prog-name">ZARA ft. HALO</span><span className="gh-tag live">Live</span></div>
             <div className="gh-prog-row"><span className="gh-prog-time">22:30</span><span className="gh-prog-name">DJ Nocturne</span></div>
+          </div>
+        </div>
+      )
+
+    // ── 5 minimal, full-bleed-hero counterparts. Same restrained anatomy on
+    // purpose (topbar+pill, QR+name hero, tabs, simple rows) — the point of
+    // this family is calm consistency, not per-template motifs.
+    case 'classic-navy':
+    case 'ivory-formal':
+    case 'slate-professional':
+    case 'sage-community':
+    case 'champagne-minimal': {
+      const serifTitle = ['ivory-formal', 'champagne-minimal'].includes(s.id)
+      const rounded = s.id === 'sage-community'
+      return (
+        <div className={`ds-gh-tpl ds-gh-tpl-${s.id} ds-gh-minimal`} style={vars}>
+          <div className="gh-topbar">
+            <span className="gh-brand">Festio GuestHub</span>
+            <span className="gh-pill">✓ Confirmed</span>
+          </div>
+          <div className="gh-hero">
+            <span className="gh-qr"><GhMiniQR color={p.accent} /></span>
+            <div className="gh-hero-text">
+              <strong className="gh-guest" style={serifTitle ? { fontFamily: "'Cormorant Garamond', serif", fontStyle: 'italic' } : undefined}>Guest Name</strong>
+              <span className="gh-event">{s.name}</span>
+              <span className="gh-status"><i />Ready for entry</span>
+            </div>
+          </div>
+          <GhTabs items={['Pass', 'Program', 'Messages']} accent={p.accent} />
+          <div className="gh-body">
+            <div className="gh-tl-item"><span className="gh-tl-time">9:00</span><span className={rounded ? 'gh-dot' : 'gh-tl-dot'} /><span className="gh-tl-text">Opening</span></div>
+            <div className="gh-tl-item"><span className="gh-tl-time">10:30</span><span className={rounded ? 'gh-dot' : 'gh-tl-dot'} /><span className="gh-tl-text">Main Event</span></div>
+          </div>
+        </div>
+      )
+    }
+
+    // ── 5 side-card counterparts — each keeps the distinct anatomy from the
+    // "restructured" pass: a ticket stub, an invoice ledger, a scan badge,
+    // a circular pass, a formal invitation. Hero photo sits beside the
+    // text (heroLayout: 'sidecard') instead of full-bleed above it.
+    case 'heritage-navy':
+      return (
+        <div className="ds-gh-tpl ds-gh-tpl-heritage-navy" style={vars}>
+          <div className="gh-side-hero">
+            <span className="gh-poster" />
+            <div><span className="gh-brand" style={{ display: 'block' }}>You're Invited To</span><strong className="gh-guest" style={{ fontSize: 12 }}>Al-Azeemah Class of 2026</strong></div>
+          </div>
+          <div className="gh-stub">
+            <div className="gh-stub-main"><strong className="gh-guest">Amara Ibrahim</strong><span className="gh-event">Ready for entry</span></div>
+            <div className="gh-stub-qr"><GhMiniQR color={p.accent} size={22} /></div>
+          </div>
+          <GhTabs items={['Pass', 'Program', 'Messages']} accent={p.accent} />
+          <div className="gh-body">
+            <div className="gh-tl-item"><span className="gh-tl-time">9:00</span><span className="gh-tl-dot" /><span className="gh-tl-text">Opening Recitation</span></div>
+          </div>
+        </div>
+      )
+    case 'ivory-ledger':
+      return (
+        <div className="ds-gh-tpl ds-gh-tpl-ivory-ledger" style={vars}>
+          <div className="gh-side-hero">
+            <span className="gh-poster" />
+            <div><span className="gh-brand" style={{ display: 'block' }}>Guest Pass</span><strong className="gh-guest" style={{ fontFamily: "'Cormorant Garamond', serif", fontStyle: 'italic', fontSize: 13 }}>Annual Partners Dinner</strong></div>
+          </div>
+          <div className="gh-ledger-head">
+            <div><span className="k">Guest</span><span className="v">E. Whitfield</span></div>
+            <div><span className="k">Table</span><span className="v">No. 4</span></div>
+          </div>
+          <GhTabs items={['Pass', 'Program', 'Messages']} accent={p.accent} />
+          <div className="gh-body">
+            <div className="gh-order-row"><span className="name">Reception</span><span className="leader" /><span className="time">7:00</span></div>
+            <div className="gh-order-row"><span className="name">Dinner</span><span className="leader" /><span className="time">8:00</span></div>
+          </div>
+        </div>
+      )
+    case 'graphite-tech':
+      return (
+        <div className="ds-gh-tpl ds-gh-tpl-graphite-tech" style={vars}>
+          <div className="gh-side-hero">
+            <span className="gh-poster" style={{ borderRadius: 6 }} />
+            <div><span className="gh-brand" style={{ display: 'block', textTransform: 'uppercase' }}>Guest Pass</span><strong className="gh-guest" style={{ fontSize: 12, textTransform: 'uppercase' }}>Product Summit 2026</strong></div>
+          </div>
+          <div className="gh-badge-row">
+            <span className="gh-badge-mini"><GhMiniQR color={p.accent} size={30} /></span>
+            <div><strong className="gh-guest" style={{ fontSize: 12 }}>David Chen</strong><span className="gh-tag" style={{ marginTop: 4 }}>Speaker</span></div>
+          </div>
+          <GhTabs items={['Pass', 'Agenda', 'Contact']} accent={p.accent} />
+          <div className="gh-body gh-activity-grid">
+            <div className="gh-stat"><span className="gh-stat-label">Status</span><span className="gh-stat-val">VIP</span></div>
+            <div className="gh-stat"><span className="gh-stat-label">Track</span><span className="gh-stat-val">B</span></div>
+          </div>
+        </div>
+      )
+    case 'meadow-community':
+      return (
+        <div className="ds-gh-tpl ds-gh-tpl-meadow-community" style={vars}>
+          <div className="gh-side-hero">
+            <span className="gh-poster" style={{ borderRadius: '50% / 40%' }} />
+            <div><span className="gh-brand" style={{ display: 'block' }}>You're Invited</span><strong className="gh-guest" style={{ fontSize: 12 }}>Harvest Fundraiser</strong></div>
+          </div>
+          <div className="gh-circle-row">
+            <span className="gh-qr-circle"><GhMiniQR color={p.accent} size={22} /></span>
+            <div><strong className="gh-guest" style={{ fontSize: 12 }}>Priya Sharma</strong><span className="gh-chip live" style={{ marginTop: 4 }}>Family of 4</span></div>
+          </div>
+          <GhTabs items={['Pass', 'Program', 'Messages']} accent={p.accent} />
+          <div className="gh-body">
+            <div className="gh-prog-item"><span className="gh-dot live" /><span className="gh-prog-name">Doors Open</span><span className="gh-prog-time">11:00</span></div>
+          </div>
+        </div>
+      )
+    case 'parchment-classic':
+      return (
+        <div className="ds-gh-tpl ds-gh-tpl-parchment-classic" style={vars}>
+          <div className="gh-side-hero">
+            <span className="gh-poster gh-poster-framed" />
+            <div><span className="gh-brand" style={{ display: 'block', fontSize: 8 }}>Together With Their Families</span><strong className="gh-guest" style={{ fontFamily: "'Cormorant Garamond', serif", fontSize: 14 }}>Aisha &amp; Tunde</strong></div>
+          </div>
+          <div className="gh-ornament">✦</div>
+          <div className="gh-body" style={{ textAlign: 'center', paddingTop: 0 }}>
+            <strong className="gh-guest" style={{ fontFamily: "'Cormorant Garamond', serif", fontStyle: 'italic', fontSize: 12 }}>Grace Adeyemi</strong>
+            <span className="gh-event">Table 6 · Guest of the Bride</span>
           </div>
         </div>
       )
@@ -1309,8 +1512,13 @@ export default function DesignStudioRedesignPage() {
           <div className="rd-panel">
             <div className="rd-panel-head"><h3>GuestHub templates</h3><p>One look for the whole guest experience — RSVP page and FestioHub together</p></div>
             <div className="rd-panel-body">
+              <div className="ds-hub-cats">
+                {HUB_STYLE_CATEGORIES.filter((cat) => cat !== 'Layout').map((cat) => (
+                  <button key={cat} className={`ds-hub-cat-pill ${hubCategory === cat ? 'active' : ''}`} onClick={() => setHubCategory(cat)}>{cat}</button>
+                ))}
+              </div>
               <div className="ds-gh-grid">
-                {HUB_STYLES.filter((s) => s.colorPreset).map((s) => {
+                {HUB_STYLES.filter((s) => s.colorPreset && (hubCategory === 'All' || s.category === hubCategory)).map((s) => {
                   const font = GUESTHUB_FONT_CSS[s.fontSuggestion] || GUESTHUB_FONT_CSS['modern-sans']
                   return (
                     <div key={s.id} className={`ds-gh-card ${hubStyle === s.id ? 'selected' : ''}`}>

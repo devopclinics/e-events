@@ -1167,11 +1167,23 @@ const HUB_STYLES = new Set([
   // 10 new visual themes
   'noir-couture', 'bloom-editorial', 'electric-rave', 'linen-gold',
   'celestial-midnight', 'soleil', 'mono-print', 'verdant', 'coastal-club', 'haze',
+  // 10 minimal/classic themes (5 full-bleed-hero + 5 side-card-hero — see
+  // HUB_SIDECARD_STYLES below)
+  'classic-navy', 'ivory-formal', 'slate-professional', 'sage-community', 'champagne-minimal',
+  'heritage-navy', 'ivory-ledger', 'graphite-tech', 'meadow-community', 'parchment-classic',
 ])
 const HUB_TABBED_STYLES = new Set([
   'wallet-pass', 'story-feed',
   // new tabbed themes
   'noir-couture', 'electric-rave', 'celestial-midnight', 'haze',
+])
+// Page-level hero layout: the cover photo sits beside the title (like the
+// original default look) instead of full-bleed above it. Design Studio's
+// HUB_STYLES array carries the same heroLayout:'sidecard' flag for its own
+// swatch preview — this is the live page's independent source of truth,
+// since design-service's public-theme payload only exposes the hub_style id.
+const HUB_SIDECARD_STYLES = new Set([
+  'heritage-navy', 'ivory-ledger', 'graphite-tech', 'meadow-community', 'parchment-classic',
 ])
 const HUB_TAB_ORDER = {
   'story-feed': ['activity', 'messages', 'program', 'pass'],
@@ -2290,6 +2302,7 @@ export default function InvitePage() {
   const page = publicPageConfig(designTheme?.page_config)
   const dCover = designCover(designTheme, event)
   const pageHubStyle = HUB_STYLES.has(designTheme?.hub_style) ? designTheme.hub_style : 'wallet-pass'
+  const isSidecardHero = HUB_SIDECARD_STYLES.has(pageHubStyle)
   // Rendered flyers already carry their own invitation heading and event name.
   // Keep the flyer as the hero instead of repeating that artwork in text —
   // but only when there's no separately uploaded cover photo taking its
@@ -2452,68 +2465,115 @@ export default function InvitePage() {
         </div>
       )}
 
-      <section
-        className="gh-hero relative flex min-h-[70vh] items-center overflow-hidden px-5 py-14 sm:px-6 sm:py-20 lg:min-h-[80vh] lg:py-24"
-        style={dCover ? undefined : heroFallbackBackground(dColors)}
-      >
-        {dCover && (
-          // Most cover photos are tall/portrait flyers, not landscape. Two
-          // earlier attempts didn't work: `cover` at the previous shorter
-          // hero height cropped subjects out entirely; `contain` avoided
-          // cropping but left the photo squeezed into a narrow letterboxed
-          // strip with dead blurred space on both sides — it never felt like
-          // a real banner. A real banner has to crop *something* off a
-          // portrait photo to fill a wide frame; the fix is to crop less by
-          // giving the hero real height (min-h-70/80vh above), bias the
-          // default crop toward the top third (where a flyer's subject/
-          // header usually sits), and let the organizer fine-tune the crop
-          // via page.hero.focusX/focusY (Event Page tab, Design Studio).
-          <div className="absolute inset-0" style={{ backgroundImage: `url(${dCover})`, backgroundSize: 'cover', backgroundPosition: `${page.hero.focusX ?? 50}% ${page.hero.focusY ?? 20}%` }} />
-        )}
-        <div className="gh-hero-scrim absolute inset-0" />
-        <div className="relative mx-auto max-w-[820px] text-center">
-          {/* A solid backing panel, not just the directional scrim above —
-              cover photos are sometimes designed flyers with their own
-              baked-in text/graphics (not a plain photograph), and text
-              floating directly on top of that clashes and becomes unreadable.
-              The panel guarantees legibility regardless of what's in the photo. */}
-          <div className="gh-hero-textpanel inline-block rounded-3xl px-6 py-8 sm:px-12 sm:py-10" style={(() => {
-            const overlayPct = Math.max(0, Math.min(90, page.hero.overlayOpacity ?? 55))
-            // backdrop-filter blurs whatever's behind the panel regardless of
-            // the panel's own background alpha — at 0% darkness the rgba
-            // background vanishes but a fixed blur would still visibly frost
-            // the photo, so 0% never actually looked transparent. Scale the
-            // blur down with the opacity so 0% is genuinely a no-op overlay.
-            return { background: `rgba(10,10,15,${overlayPct / 100})`, backdropFilter: `blur(${(overlayPct / 90) * 6}px)` }
-          })()}>
-            {flyerLedHero || !page.hero.showTitle ? <h1 className="sr-only">{title}</h1> : <>
-              {page.hero.showWelcomeLabel && <div className="text-sm font-extrabold uppercase tracking-[0.24em] text-white/85">{dWording.inviteLabel || "You're invited to"}</div>}
-              <h1 className="mt-3 text-4xl font-extrabold leading-[1.05] text-white sm:text-6xl">{title}</h1>
-            </>}
-            {!flyerLedHero && page.hero.showHost && host && (hostWebsite
-              ? <a href={hostWebsite} target="_blank" rel="noopener noreferrer" className="mt-4 inline-block text-lg font-semibold text-white underline decoration-2 underline-offset-4 hover:opacity-80">{host}</a>
-              : <p className="mt-4 text-lg font-semibold text-white">{host}</p>)}
-            {(heroWhen || venue) && <p className="mt-4 text-base font-semibold text-white/85">{[heroWhen, venue].filter(Boolean).join(' · ')}</p>}
-            <div className="mt-8 flex flex-col justify-center gap-3 sm:flex-row">
-              <PrimaryButton
-                type="button"
-                className="gh-cta"
-                style={dColors.accent ? { background: dColors.accent } : undefined}
-                onClick={() => document.getElementById(hasGuestHub ? 'guest-hub' : 'rsvp')?.scrollIntoView({ behavior: 'smooth' })}
-              >
-                {hasGuestHub ? 'Open FestioHub' : 'Confirm My RSVP'}
-              </PrimaryButton>
-              <SecondaryButton
-                type="button"
-                style={{ background: 'rgba(255,255,255,.14)', borderColor: 'rgba(255,255,255,.3)', color: '#fff' }}
-                onClick={() => document.getElementById('details')?.scrollIntoView({ behavior: 'smooth' })}
-              >
-                View Event Details
-              </SecondaryButton>
+      {isSidecardHero ? (
+        // Some templates (the original default's own look, and its restyled
+        // siblings) put the photo beside the text instead of full-bleed above
+        // it — no crop/legibility concerns since the photo isn't underneath
+        // the text, so this branch is much simpler than the banner one below.
+        <section className="mx-auto max-w-[1180px] px-5 py-10 sm:px-6 sm:py-16">
+          <div className="flex flex-col items-center gap-8 sm:flex-row sm:items-center">
+            <div
+              className="w-full max-w-[240px] flex-none overflow-hidden rounded-2xl shadow-2xl"
+              style={{
+                aspectRatio: '4 / 5',
+                backgroundSize: 'cover',
+                backgroundPosition: `${page.hero.focusX ?? 50}% ${page.hero.focusY ?? 20}%`,
+                ...(dCover ? { backgroundImage: `url(${dCover})` } : heroFallbackBackground(dColors)),
+              }}
+            />
+            <div className="flex-1 text-center sm:text-left">
+              {flyerLedHero || !page.hero.showTitle ? <h1 className="sr-only">{title}</h1> : <>
+                {page.hero.showWelcomeLabel && <div className="text-sm font-extrabold uppercase tracking-[0.24em]" style={{ color: tone.accent }}>{dWording.inviteLabel || "You're invited to"}</div>}
+                <h1 className="mt-3 text-3xl font-extrabold leading-[1.08] sm:text-5xl" style={{ color: tone.text }}>{title}</h1>
+              </>}
+              {!flyerLedHero && page.hero.showHost && host && (hostWebsite
+                ? <a href={hostWebsite} target="_blank" rel="noopener noreferrer" className="mt-4 inline-block text-lg font-semibold underline decoration-2 underline-offset-4 hover:opacity-80" style={{ color: tone.text }}>{host}</a>
+                : <p className="mt-4 text-lg font-semibold" style={{ color: tone.text }}>{host}</p>)}
+              {(heroWhen || venue) && <p className="mt-4 text-base font-semibold" style={{ color: tone.muted }}>{[heroWhen, venue].filter(Boolean).join(' · ')}</p>}
+              <div className="mt-8 flex flex-col justify-center gap-3 sm:flex-row sm:justify-start">
+                <PrimaryButton
+                  type="button"
+                  className="gh-cta"
+                  style={dColors.accent ? { background: dColors.accent } : undefined}
+                  onClick={() => document.getElementById(hasGuestHub ? 'guest-hub' : 'rsvp')?.scrollIntoView({ behavior: 'smooth' })}
+                >
+                  {hasGuestHub ? 'Open FestioHub' : 'Confirm My RSVP'}
+                </PrimaryButton>
+                <SecondaryButton
+                  type="button"
+                  style={{ background: tone.chip, borderColor: tone.border, color: tone.text }}
+                  onClick={() => document.getElementById('details')?.scrollIntoView({ behavior: 'smooth' })}
+                >
+                  View Event Details
+                </SecondaryButton>
+              </div>
             </div>
           </div>
-        </div>
-      </section>
+        </section>
+      ) : (
+        <section
+          className="gh-hero relative flex min-h-[70vh] items-center overflow-hidden px-5 py-14 sm:px-6 sm:py-20 lg:min-h-[80vh] lg:py-24"
+          style={dCover ? undefined : heroFallbackBackground(dColors)}
+        >
+          {dCover && (
+            // Most cover photos are tall/portrait flyers, not landscape. Two
+            // earlier attempts didn't work: `cover` at the previous shorter
+            // hero height cropped subjects out entirely; `contain` avoided
+            // cropping but left the photo squeezed into a narrow letterboxed
+            // strip with dead blurred space on both sides — it never felt like
+            // a real banner. A real banner has to crop *something* off a
+            // portrait photo to fill a wide frame; the fix is to crop less by
+            // giving the hero real height (min-h-70/80vh above), bias the
+            // default crop toward the top third (where a flyer's subject/
+            // header usually sits), and let the organizer fine-tune the crop
+            // via page.hero.focusX/focusY (Event Page tab, Design Studio).
+            <div className="absolute inset-0" style={{ backgroundImage: `url(${dCover})`, backgroundSize: 'cover', backgroundPosition: `${page.hero.focusX ?? 50}% ${page.hero.focusY ?? 20}%` }} />
+          )}
+          <div className="gh-hero-scrim absolute inset-0" />
+          <div className="relative mx-auto max-w-[820px] text-center">
+            {/* A solid backing panel, not just the directional scrim above —
+                cover photos are sometimes designed flyers with their own
+                baked-in text/graphics (not a plain photograph), and text
+                floating directly on top of that clashes and becomes unreadable.
+                The panel guarantees legibility regardless of what's in the photo. */}
+            <div className="gh-hero-textpanel inline-block rounded-3xl px-6 py-8 sm:px-12 sm:py-10" style={(() => {
+              const overlayPct = Math.max(0, Math.min(90, page.hero.overlayOpacity ?? 55))
+              // backdrop-filter blurs whatever's behind the panel regardless of
+              // the panel's own background alpha — at 0% darkness the rgba
+              // background vanishes but a fixed blur would still visibly frost
+              // the photo, so 0% never actually looked transparent. Scale the
+              // blur down with the opacity so 0% is genuinely a no-op overlay.
+              return { background: `rgba(10,10,15,${overlayPct / 100})`, backdropFilter: `blur(${(overlayPct / 90) * 6}px)` }
+            })()}>
+              {flyerLedHero || !page.hero.showTitle ? <h1 className="sr-only">{title}</h1> : <>
+                {page.hero.showWelcomeLabel && <div className="text-sm font-extrabold uppercase tracking-[0.24em] text-white/85">{dWording.inviteLabel || "You're invited to"}</div>}
+                <h1 className="mt-3 text-4xl font-extrabold leading-[1.05] text-white sm:text-6xl">{title}</h1>
+              </>}
+              {!flyerLedHero && page.hero.showHost && host && (hostWebsite
+                ? <a href={hostWebsite} target="_blank" rel="noopener noreferrer" className="mt-4 inline-block text-lg font-semibold text-white underline decoration-2 underline-offset-4 hover:opacity-80">{host}</a>
+                : <p className="mt-4 text-lg font-semibold text-white">{host}</p>)}
+              {(heroWhen || venue) && <p className="mt-4 text-base font-semibold text-white/85">{[heroWhen, venue].filter(Boolean).join(' · ')}</p>}
+              <div className="mt-8 flex flex-col justify-center gap-3 sm:flex-row">
+                <PrimaryButton
+                  type="button"
+                  className="gh-cta"
+                  style={dColors.accent ? { background: dColors.accent } : undefined}
+                  onClick={() => document.getElementById(hasGuestHub ? 'guest-hub' : 'rsvp')?.scrollIntoView({ behavior: 'smooth' })}
+                >
+                  {hasGuestHub ? 'Open FestioHub' : 'Confirm My RSVP'}
+                </PrimaryButton>
+                <SecondaryButton
+                  type="button"
+                  style={{ background: 'rgba(255,255,255,.14)', borderColor: 'rgba(255,255,255,.3)', color: '#fff' }}
+                  onClick={() => document.getElementById('details')?.scrollIntoView({ behavior: 'smooth' })}
+                >
+                  View Event Details
+                </SecondaryButton>
+              </div>
+            </div>
+          </div>
+        </section>
+      )}
 
       <main className="mx-auto max-w-[1180px] px-5 pb-16 sm:px-6">
         <section className="py-8">

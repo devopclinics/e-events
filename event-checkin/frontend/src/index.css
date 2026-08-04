@@ -1063,3 +1063,36 @@ textarea:focus {
   backdrop-filter: blur(10px);
 }
 .gh-page-style-haze .gh-cta { border-radius: 999px; }
+
+/* ── 10 minimal/classic themes — restrained shape language matching each
+   template's own pass-card anatomy (Design Studio's GuestHub tab). ── */
+.gh-page-style-classic-navy .gh-panel,
+.gh-page-style-heritage-navy .gh-panel { border-radius: 6px; }
+.gh-page-style-classic-navy .gh-cta,
+.gh-page-style-heritage-navy .gh-cta { border-radius: 6px; }
+
+.gh-page-style-ivory-formal .gh-panel,
+.gh-page-style-ivory-ledger .gh-panel { border-radius: 10px; }
+.gh-page-style-ivory-formal h2,
+.gh-page-style-ivory-ledger h2 { font-style: italic; }
+.gh-page-style-ivory-formal .gh-cta,
+.gh-page-style-ivory-ledger .gh-cta { border-radius: 4px; }
+
+.gh-page-style-slate-professional .gh-panel,
+.gh-page-style-graphite-tech .gh-panel { border-radius: 4px; }
+.gh-page-style-slate-professional h2,
+.gh-page-style-graphite-tech h2 { text-transform: uppercase; letter-spacing: .02em; }
+.gh-page-style-slate-professional .gh-cta,
+.gh-page-style-graphite-tech .gh-cta { border-radius: 4px; }
+
+.gh-page-style-sage-community .gh-panel,
+.gh-page-style-meadow-community .gh-panel { border-radius: 20px; }
+.gh-page-style-sage-community .gh-cta,
+.gh-page-style-meadow-community .gh-cta { border-radius: 999px; }
+
+.gh-page-style-champagne-minimal .gh-panel,
+.gh-page-style-parchment-classic .gh-panel { border-radius: 10px; }
+.gh-page-style-champagne-minimal h2,
+.gh-page-style-parchment-classic h2 { font-style: italic; }
+.gh-page-style-champagne-minimal .gh-cta,
+.gh-page-style-parchment-classic .gh-cta { border-radius: 999px; }

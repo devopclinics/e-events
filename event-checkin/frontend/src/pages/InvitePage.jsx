@@ -360,7 +360,7 @@ function externalUrl(value) {
 }
 
 const DEFAULT_PAGE_CONFIG = {
-  hero: { showWelcomeLabel: true, showTitle: true, showHost: true, overlayOpacity: 55 },
+  hero: { showWelcomeLabel: true, showTitle: true, showHost: true, overlayOpacity: 55, focusX: 50, focusY: 20 },
   organizer: { show: true, label: 'Organized by' },
   details: { showVenue: true, showHotel: true, showHost: true, showAdmission: true },
   about: { show: true, ctaLabel: '' },
@@ -2456,10 +2456,11 @@ export default function InvitePage() {
           // strip with dead blurred space on both sides — it never felt like
           // a real banner. A real banner has to crop *something* off a
           // portrait photo to fill a wide frame; the fix is to crop less by
-          // giving the hero real height (min-h-70/80vh above) and bias the
-          // crop toward the top third, where a flyer's subject/header
-          // usually sits, instead of a blind center crop.
-          <div className="absolute inset-0" style={{ backgroundImage: `url(${dCover})`, backgroundSize: 'cover', backgroundPosition: 'center 20%' }} />
+          // giving the hero real height (min-h-70/80vh above), bias the
+          // default crop toward the top third (where a flyer's subject/
+          // header usually sits), and let the organizer fine-tune the crop
+          // via page.hero.focusX/focusY (Event Page tab, Design Studio).
+          <div className="absolute inset-0" style={{ backgroundImage: `url(${dCover})`, backgroundSize: 'cover', backgroundPosition: `${page.hero.focusX ?? 50}% ${page.hero.focusY ?? 20}%` }} />
         )}
         <div className="gh-hero-scrim absolute inset-0" />
         <div className="relative mx-auto max-w-[820px] text-center">

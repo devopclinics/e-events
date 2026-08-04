@@ -456,7 +456,7 @@ const CROP_SLIDERS = [
 // There is no "seating preview" or "FestioHub live feed" section in that contract —
 // those never had a real effect and are not offered here.
 const DEFAULT_PAGE_SECTIONS = {
-  hero: { showWelcomeLabel: true, showTitle: true, showHost: true, overlayOpacity: 55 },
+  hero: { showWelcomeLabel: true, showTitle: true, showHost: true, overlayOpacity: 55, focusX: 50, focusY: 20 },
   organizer: { show: true, label: 'Organized by' },
   details: { showVenue: true, showHotel: true, showHost: true, showAdmission: true },
   about: { show: true, ctaLabel: '', ctaUrl: '' },
@@ -746,7 +746,7 @@ export default function DesignStudioRedesignPage() {
 
   useEffect(() => {
     if (tab !== 'Event Page' && tab !== 'FestioHub' && tab !== 'GuestHub') return undefined
-    if (!eventId || (tab === 'Event Page' && !activeTemplate)) return undefined
+    if (!eventId) return undefined
     const delay = eventPageSyncedRef.current ? 700 : 0
     clearTimeout(eventPagePreviewTimerRef.current)
     eventPagePreviewTimerRef.current = setTimeout(() => {
@@ -1196,6 +1196,15 @@ export default function DesignStudioRedesignPage() {
                 <input type="range" min={0} max={90} value={pageSections.hero.overlayOpacity ?? 55} className="ds-slider" onChange={(e) => setPageSection('hero', 'overlayOpacity', Number(e.target.value))} />
                 <p className="rd-hint" style={{ marginTop: 4 }}>The dark panel behind your hero title/RSVP button — lower it to show more of your cover photo, raise it if the text is hard to read.</p>
               </div>
+              <div style={{ marginTop: 10 }}>
+                <label className="rd-field-label">Photo horizontal position ({pageSections.hero.focusX ?? 50}%)</label>
+                <input type="range" min={0} max={100} value={pageSections.hero.focusX ?? 50} className="ds-slider" onChange={(e) => setPageSection('hero', 'focusX', Number(e.target.value))} />
+              </div>
+              <div style={{ marginTop: 10 }}>
+                <label className="rd-field-label">Photo vertical position ({pageSections.hero.focusY ?? 20}%)</label>
+                <input type="range" min={0} max={100} value={pageSections.hero.focusY ?? 20} className="ds-slider" onChange={(e) => setPageSection('hero', 'focusY', Number(e.target.value))} />
+                <p className="rd-hint" style={{ marginTop: 4 }}>Your cover photo fills the hero banner edge-to-edge and crops to fit — these move which part of the photo stays in frame (e.g. lower the vertical value to keep faces higher up in frame).</p>
+              </div>
 
               <label className="rd-field-label" style={{ marginTop: 12 }}>Organizer</label>
               <div className="rd-toggle-row"><span style={{ fontSize: 12, fontWeight: 600 }}>Show organizer line</span><label className="rd-switch"><input type="checkbox" checked={pageSections.organizer.show} onChange={(e) => setPageSection('organizer', 'show', e.target.checked)} /><span className="track" /><span className="knob" /></label></div>
@@ -1228,8 +1237,8 @@ export default function DesignStudioRedesignPage() {
               <div className="rd-seg"><button className={!mobilePreview ? 'on' : ''} onClick={() => setMobilePreview(false)}>Desktop</button><button className={mobilePreview ? 'on' : ''} onClick={() => setMobilePreview(true)}>Mobile</button></div>
             </div>
             <div className="rd-panel-body">
-              {!eventId || !activeTemplate ? (
-                <div className="ds-page-preview"><Icon name="calendar" size={20} /><span>Select a template to preview the live page.</span></div>
+              {!eventId ? (
+                <div className="ds-page-preview"><Icon name="calendar" size={20} /><span>Select an event to preview the live page.</span></div>
               ) : (
                 <div className={`ds-page-preview-frame-wrap ${mobilePreview ? 'mobile' : ''}`}>
                   <iframe

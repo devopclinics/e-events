@@ -2520,11 +2520,6 @@ export default function InvitePage() {
           <p className="mx-auto max-w-2xl whitespace-pre-line text-center text-lg leading-8" style={{ color: tone.muted }}>
             {dWording.rsvpNote || event.invite_message || 'Join us for a beautiful evening of celebration, food, memories, and good company.'}
           </p>
-          <div className="mt-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-            <DetailRow icon="📅" label="When" value={heroWhen} tone={tone} />
-            <DetailRow icon="📍" label="Location" value={venue || 'Venue details coming soon'} tone={tone} href={event.venue_address ? mapUrl(event.venue_address) : ''} />
-            <DetailRow icon="🎟️" label="Admission" value="QR pass at entry" tone={tone} />
-          </div>
         </section>
 
         {hasGuestHub && (
@@ -2561,6 +2556,7 @@ export default function InvitePage() {
               {page.details.showHotel && (event.hotel_name || event.hotel_address) && <DetailRow icon="🏨" label="Hotel information" value={[event.hotel_name, event.hotel_address].filter(Boolean).join(' · ')} tone={tone} href={event.hotel_address ? mapUrl(event.hotel_address) : ''} />}
               {page.details.showHost && <DetailRow icon="👤" label="Host" value={host} tone={tone} href={hostWebsite} />}
               {event.rsvp_enabled && <DetailRow icon="⏳" label="RSVP deadline" value={deadline} tone={tone} />}
+              <DetailRow icon="🎟️" label="Admission" value="QR pass at entry" tone={tone} />
               {page.details.showAdmission && <DetailRow icon="✓" label="Admission note" value={admissionNote} tone={tone} />}
             </div>
           </div>

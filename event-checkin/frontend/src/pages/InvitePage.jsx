@@ -2445,19 +2445,21 @@ export default function InvitePage() {
       )}
 
       <section
-        className="gh-hero relative overflow-hidden px-5 py-14 sm:px-6 sm:py-20 lg:py-24"
+        className="gh-hero relative flex min-h-[70vh] items-center overflow-hidden px-5 py-14 sm:px-6 sm:py-20 lg:min-h-[80vh] lg:py-24"
         style={dCover ? undefined : heroFallbackBackground(dColors)}
       >
         {dCover && (
-          <>
-            {/* A cover photo can be any aspect ratio (most are tall/portrait
-                flyers); cover-cropping it into a short wide banner cuts off
-                heads/bodies. Blurred cover-fill backdrop + the full photo
-                shown uncropped on top — same technique Spotify/Apple Music
-                use for mismatched art. */}
-            <div className="absolute inset-0 scale-110" style={{ backgroundImage: `url(${dCover})`, backgroundSize: 'cover', backgroundPosition: 'center', filter: 'blur(32px) brightness(0.55) saturate(1.15)' }} />
-            <div className="absolute inset-0" style={{ backgroundImage: `url(${dCover})`, backgroundSize: 'contain', backgroundPosition: 'center', backgroundRepeat: 'no-repeat' }} />
-          </>
+          // Most cover photos are tall/portrait flyers, not landscape. Two
+          // earlier attempts didn't work: `cover` at the previous shorter
+          // hero height cropped subjects out entirely; `contain` avoided
+          // cropping but left the photo squeezed into a narrow letterboxed
+          // strip with dead blurred space on both sides — it never felt like
+          // a real banner. A real banner has to crop *something* off a
+          // portrait photo to fill a wide frame; the fix is to crop less by
+          // giving the hero real height (min-h-70/80vh above) and bias the
+          // crop toward the top third, where a flyer's subject/header
+          // usually sits, instead of a blind center crop.
+          <div className="absolute inset-0" style={{ backgroundImage: `url(${dCover})`, backgroundSize: 'cover', backgroundPosition: 'center 20%' }} />
         )}
         <div className="gh-hero-scrim absolute inset-0" />
         <div className="relative mx-auto max-w-[820px] text-center">

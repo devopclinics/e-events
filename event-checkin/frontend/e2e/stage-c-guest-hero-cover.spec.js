@@ -10,12 +10,10 @@ import { test, expect } from '@playwright/test'
 // writes, so the shared QA fixture is untouched.
 //
 // The hero used to render the cover photo as a poster <img> in a two-column
-// layout; it's now a full-bleed banner on .gh-hero (the whole GuestHub page
-// was extended to carry the flyer as a banner, not just a separate card) —
-// a blurred cover-fill backdrop plus the uncropped photo on top (avoids
-// cutting off subjects when the photo's aspect ratio doesn't match a wide
-// short banner), both as background-image on child divs, not on .gh-hero
-// itself. Assert the second (foreground, uncropped) layer's src.
+// layout; it's now a full-bleed cover-cropped banner on a child div inside
+// .gh-hero (the whole GuestHub page was extended to carry the flyer as a
+// banner, not just a separate card) — assert that child's background-image
+// url instead of an <img> src.
 test.describe('Stage C guest hero — cover photo vs. flyer image priority', () => {
   const eventId = process.env.E2E_EVENT_ID
 
@@ -39,9 +37,9 @@ test.describe('Stage C guest hero — cover photo vs. flyer image priority', () 
 
     const hero = page.locator('.gh-hero')
     await expect(hero).toBeVisible()
-    const photoLayer = hero.locator('div').nth(1)
+    const photoLayer = hero.locator('div').first()
     await expect(photoLayer).toHaveCSS('background-image', /cover-priority-qa/)
-    await expect(photoLayer).toHaveCSS('background-size', 'contain')
+    await expect(photoLayer).toHaveCSS('background-size', 'cover')
     // flyerLedHero must be false here (cover_image_url present) — the real
     // <h1> title renders instead of the sr-only fallback flyer-led mode uses.
     await expect(page.getByRole('heading', { name: 'Cover Priority QA', level: 1 })).toBeVisible()

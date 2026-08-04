@@ -1278,9 +1278,17 @@ function GuestHub({ event, accessToken, designTheme, previewMock = false }) {
   // section doesn't exist in the DOM until the async event/theme fetch above
   // resolves — the browser's own anchor-scroll only fires once, on load, so
   // it always misses and the iframe is stuck showing the hero/flyer instead.
-  // Scroll it into view ourselves once this component actually mounts.
+  // Scroll it into view ourselves once this component actually mounts. This
+  // is the default/intended behavior for a studio-preview link generally
+  // (direct link, FestioHub tab, GuestHub tab) — but the Event Page tab's
+  // iframe also sets previewMock (isStudioPreview forces hasGuestHub true so
+  // the card renders at all there) and every edit on that tab (e.g. the
+  // hero photo sliders) reloaded the iframe, yanking the preview straight
+  // past the hero down to this card. Can't tell that case apart by URL hash
+  // alone (Event Page and GuestHub tabs' src are otherwise identical), so
+  // the Event Page tab's iframe explicitly opts out via ?focus=hero.
   useEffect(() => {
-    if (!previewMock) return undefined
+    if (!previewMock || new URLSearchParams(window.location.search).get('focus') === 'hero') return undefined
     const id = requestAnimationFrame(() => document.getElementById('guest-hub')?.scrollIntoView({ block: 'start' }))
     return () => cancelAnimationFrame(id)
   }, [previewMock])
@@ -2469,7 +2477,15 @@ export default function InvitePage() {
               baked-in text/graphics (not a plain photograph), and text
               floating directly on top of that clashes and becomes unreadable.
               The panel guarantees legibility regardless of what's in the photo. */}
-          <div className="gh-hero-textpanel inline-block rounded-3xl px-6 py-8 sm:px-12 sm:py-10" style={{ background: `rgba(10,10,15,${Math.max(0, Math.min(90, page.hero.overlayOpacity ?? 55)) / 100})`, backdropFilter: 'blur(6px)' }}>
+          <div className="gh-hero-textpanel inline-block rounded-3xl px-6 py-8 sm:px-12 sm:py-10" style={(() => {
+            const overlayPct = Math.max(0, Math.min(90, page.hero.overlayOpacity ?? 55))
+            // backdrop-filter blurs whatever's behind the panel regardless of
+            // the panel's own background alpha — at 0% darkness the rgba
+            // background vanishes but a fixed blur would still visibly frost
+            // the photo, so 0% never actually looked transparent. Scale the
+            // blur down with the opacity so 0% is genuinely a no-op overlay.
+            return { background: `rgba(10,10,15,${overlayPct / 100})`, backdropFilter: `blur(${(overlayPct / 90) * 6}px)` }
+          })()}>
             {flyerLedHero || !page.hero.showTitle ? <h1 className="sr-only">{title}</h1> : <>
               {page.hero.showWelcomeLabel && <div className="text-sm font-extrabold uppercase tracking-[0.24em] text-white/85">{dWording.inviteLabel || "You're invited to"}</div>}
               <h1 className="mt-3 text-4xl font-extrabold leading-[1.05] text-white sm:text-6xl">{title}</h1>

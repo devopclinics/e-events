@@ -1243,7 +1243,7 @@ export default function DesignStudioRedesignPage() {
                 <div className={`ds-page-preview-frame-wrap ${mobilePreview ? 'mobile' : ''}`}>
                   <iframe
                     key={eventId}
-                    src={eventPagePreviewNonce > 0 ? `/invite/${eventId}?studio-preview=1&_p=${eventPagePreviewNonce}` : undefined}
+                    src={eventPagePreviewNonce > 0 ? `/invite/${eventId}?studio-preview=1&_p=${eventPagePreviewNonce}&focus=hero` : undefined}
                     title="Live event page preview"
                     className="ds-page-preview-frame"
                   />

@@ -456,7 +456,7 @@ const CROP_SLIDERS = [
 // There is no "seating preview" or "FestioHub live feed" section in that contract —
 // those never had a real effect and are not offered here.
 const DEFAULT_PAGE_SECTIONS = {
-  hero: { showWelcomeLabel: true, showTitle: true, showHost: true },
+  hero: { showWelcomeLabel: true, showTitle: true, showHost: true, overlayOpacity: 55 },
   organizer: { show: true, label: 'Organized by' },
   details: { showVenue: true, showHotel: true, showHost: true, showAdmission: true },
   about: { show: true, ctaLabel: '', ctaUrl: '' },
@@ -1191,6 +1191,11 @@ export default function DesignStudioRedesignPage() {
               <div className="rd-toggle-row"><span style={{ fontSize: 12, fontWeight: 600 }}>Welcome label</span><label className="rd-switch"><input type="checkbox" checked={pageSections.hero.showWelcomeLabel} onChange={(e) => setPageSection('hero', 'showWelcomeLabel', e.target.checked)} /><span className="track" /><span className="knob" /></label></div>
               <div className="rd-toggle-row"><span style={{ fontSize: 12, fontWeight: 600 }}>Event title</span><label className="rd-switch"><input type="checkbox" checked={pageSections.hero.showTitle} onChange={(e) => setPageSection('hero', 'showTitle', e.target.checked)} /><span className="track" /><span className="knob" /></label></div>
               <div className="rd-toggle-row"><span style={{ fontSize: 12, fontWeight: 600 }}>Host name</span><label className="rd-switch"><input type="checkbox" checked={pageSections.hero.showHost} onChange={(e) => setPageSection('hero', 'showHost', e.target.checked)} /><span className="track" /><span className="knob" /></label></div>
+              <div style={{ marginTop: 10 }}>
+                <label className="rd-field-label">Photo overlay darkness ({pageSections.hero.overlayOpacity ?? 55}%)</label>
+                <input type="range" min={0} max={90} value={pageSections.hero.overlayOpacity ?? 55} className="ds-slider" onChange={(e) => setPageSection('hero', 'overlayOpacity', Number(e.target.value))} />
+                <p className="rd-hint" style={{ marginTop: 4 }}>The dark panel behind your hero title/RSVP button — lower it to show more of your cover photo, raise it if the text is hard to read.</p>
+              </div>
 
               <label className="rd-field-label" style={{ marginTop: 12 }}>Organizer</label>
               <div className="rd-toggle-row"><span style={{ fontSize: 12, fontWeight: 600 }}>Show organizer line</span><label className="rd-switch"><input type="checkbox" checked={pageSections.organizer.show} onChange={(e) => setPageSection('organizer', 'show', e.target.checked)} /><span className="track" /><span className="knob" /></label></div>

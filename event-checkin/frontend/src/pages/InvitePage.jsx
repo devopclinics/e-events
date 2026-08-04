@@ -360,7 +360,7 @@ function externalUrl(value) {
 }
 
 const DEFAULT_PAGE_CONFIG = {
-  hero: { showWelcomeLabel: true, showTitle: true, showHost: true },
+  hero: { showWelcomeLabel: true, showTitle: true, showHost: true, overlayOpacity: 55 },
   organizer: { show: true, label: 'Organized by' },
   details: { showVenue: true, showHotel: true, showHost: true, showAdmission: true },
   about: { show: true, ctaLabel: '' },
@@ -2468,7 +2468,7 @@ export default function InvitePage() {
               baked-in text/graphics (not a plain photograph), and text
               floating directly on top of that clashes and becomes unreadable.
               The panel guarantees legibility regardless of what's in the photo. */}
-          <div className="gh-hero-textpanel inline-block rounded-3xl px-6 py-8 sm:px-12 sm:py-10" style={{ background: 'rgba(10,10,15,.52)', backdropFilter: 'blur(6px)' }}>
+          <div className="gh-hero-textpanel inline-block rounded-3xl px-6 py-8 sm:px-12 sm:py-10" style={{ background: `rgba(10,10,15,${Math.max(0, Math.min(90, page.hero.overlayOpacity ?? 55)) / 100})`, backdropFilter: 'blur(6px)' }}>
             {flyerLedHero || !page.hero.showTitle ? <h1 className="sr-only">{title}</h1> : <>
               {page.hero.showWelcomeLabel && <div className="text-sm font-extrabold uppercase tracking-[0.24em] text-white/85">{dWording.inviteLabel || "You're invited to"}</div>}
               <h1 className="mt-3 text-4xl font-extrabold leading-[1.05] text-white sm:text-6xl">{title}</h1>

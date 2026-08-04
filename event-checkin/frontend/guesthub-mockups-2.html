@@ -1,0 +1,1340 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>GuestHub — Mockup Templates Vol. 2</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;500;600;700;800&family=DM+Sans:wght@300;400;500;600&family=Libre+Baskerville:ital,wght@0,400;0,700;1,400&family=Space+Mono:wght@400;700&family=Nunito:wght@300;400;500;600;700&family=Plus+Jakarta+Sans:wght@300;400;500;600;700&display=swap" />
+<style>
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+body { background: #111; color: #fff; font-family: 'DM Sans', sans-serif; }
+
+/* ─── LAYOUT ─── */
+.page-header { text-align: center; padding: 60px 24px 40px; }
+.page-header h1 { font-family: 'Syne', sans-serif; font-size: clamp(22px, 3.5vw, 38px); font-weight: 800; letter-spacing: -0.02em; color: #fff; }
+.page-header p { margin-top: 8px; color: #555; font-size: 13px; letter-spacing: 0.06em; }
+.page-header .vol { font-size: 10px; letter-spacing: 0.25em; text-transform: uppercase; color: #444; margin-bottom: 8px; display: block; }
+
+.templates-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(340px, 1fr));
+  gap: 48px 32px;
+  padding: 0 32px 80px;
+  max-width: 1800px; margin: 0 auto;
+}
+.template-wrap { display: flex; flex-direction: column; gap: 16px; }
+.template-label {
+  font-size: 10px; font-weight: 700; letter-spacing: 0.22em; text-transform: uppercase; color: #555;
+  display: flex; align-items: center; gap: 10px;
+}
+.template-label::after { content: ''; flex: 1; height: 1px; background: #222; }
+.template-num { color: #333; }
+
+/* shared QR helper */
+.qr-svg { width: 100%; height: 100%; }
+
+
+/* ════════════════════════════════════════════
+   06 — SOLEIL (Mediterranean Summer)
+   ════════════════════════════════════════════ */
+.hub-06 {
+  --sun: #f59e0b;
+  --coral: #fb7185;
+  --peach: #fed7aa;
+  --cream: #fffbf5;
+  --sand: #fef3c7;
+  --text: #1c0a00;
+  --muted: #a07040;
+  --border: #fde68a;
+  background: var(--cream);
+  border-radius: 22px; overflow: hidden;
+  font-family: 'Nunito', sans-serif;
+  box-shadow: 0 24px 70px rgba(251,113,74,0.15), 0 4px 16px rgba(251,113,74,0.08);
+}
+
+.hub-06 .h-banner {
+  background: linear-gradient(160deg, #f59e0b 0%, #fb923c 50%, #f87171 100%);
+  padding: 24px 22px 20px; position: relative; overflow: hidden;
+}
+.hub-06 .h-banner::before {
+  content: '☀';
+  position: absolute; right: -10px; top: -20px;
+  font-size: 120px; opacity: 0.12; line-height: 1;
+  transform: rotate(10deg);
+}
+.hub-06 .h-banner-top {
+  display: flex; justify-content: space-between; align-items: center;
+  margin-bottom: 14px;
+}
+.hub-06 .h-brand-tag {
+  font-size: 9px; font-weight: 800; letter-spacing: 0.25em; text-transform: uppercase;
+  color: rgba(255,255,255,0.8); background: rgba(255,255,255,0.15);
+  padding: 4px 10px; border-radius: 100px;
+}
+.hub-06 .h-temp-badge {
+  font-size: 11px; font-weight: 700; color: #fff;
+  display: flex; align-items: center; gap: 4px;
+}
+.hub-06 .h-event-name {
+  font-size: 24px; font-weight: 800; color: #fff; line-height: 1.2; position: relative; z-index: 1;
+  letter-spacing: -0.01em;
+}
+.hub-06 .h-event-date { font-size: 12px; color: rgba(255,255,255,0.75); margin-top: 5px; font-weight: 600; }
+
+.hub-06 .h-pass-row {
+  display: flex; gap: 14px; align-items: center;
+  margin: 16px; background: #fff;
+  border-radius: 14px; padding: 16px;
+  border: 2px solid var(--border);
+  box-shadow: 0 4px 16px rgba(245,158,11,0.1);
+}
+.hub-06 .h-qr {
+  width: 72px; height: 72px; flex-shrink: 0; border-radius: 10px;
+  background: var(--sand); padding: 8px; display: grid; place-items: center;
+  border: 1.5px solid var(--border);
+}
+.hub-06 .h-pass-info { flex: 1; min-width: 0; }
+.hub-06 .h-guest-name {
+  font-size: 18px; font-weight: 800; color: var(--text); letter-spacing: -0.01em;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.hub-06 .h-chips { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 7px; }
+.hub-06 .h-chip {
+  font-size: 10px; font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase;
+  padding: 4px 10px; border-radius: 100px;
+}
+.hub-06 .h-chip.status { background: rgba(251,113,74,0.12); color: var(--coral); }
+.hub-06 .h-chip.seat { background: var(--sand); color: var(--muted); }
+
+.hub-06 .h-tabs {
+  display: flex; padding: 0 14px; gap: 6px; margin-bottom: 4px;
+}
+.hub-06 .h-tab {
+  flex: 1; padding: 9px 6px; text-align: center; border-radius: 100px;
+  font-size: 10px; font-weight: 800; letter-spacing: 0.12em; text-transform: uppercase;
+  color: var(--muted); cursor: pointer; transition: all 0.2s;
+}
+.hub-06 .h-tab.active { background: linear-gradient(135deg, #f59e0b, #fb923c); color: #fff; }
+
+.hub-06 .h-body { padding: 8px 16px 22px; display: flex; flex-direction: column; gap: 12px; }
+.hub-06 .h-card {
+  background: #fff; border-radius: 14px; padding: 16px;
+  border: 1.5px solid var(--border);
+}
+.hub-06 .h-card-title {
+  font-size: 10px; font-weight: 800; letter-spacing: 0.2em; text-transform: uppercase;
+  color: var(--muted); margin-bottom: 12px;
+}
+.hub-06 .h-activity-row {
+  display: flex; align-items: center; gap: 12px;
+  padding: 9px 12px; border-radius: 10px; background: var(--cream);
+  margin-bottom: 6px; border: 1px solid var(--border);
+}
+.hub-06 .h-activity-row:last-child { margin-bottom: 0; }
+.hub-06 .h-act-icon { font-size: 18px; width: 24px; text-align: center; }
+.hub-06 .h-act-info { flex: 1; }
+.hub-06 .h-act-name { font-size: 13px; font-weight: 700; color: var(--text); }
+.hub-06 .h-act-loc { font-size: 10px; color: var(--muted); margin-top: 2px; }
+.hub-06 .h-act-time { font-size: 11px; font-weight: 800; color: var(--sun); }
+
+.hub-06 .h-msg-row { display: flex; gap: 8px; }
+.hub-06 .h-msg-row input {
+  flex: 1; border: 1.5px solid var(--border); background: var(--cream);
+  border-radius: 100px; padding: 10px 16px; font-size: 13px; font-family: 'Nunito', sans-serif;
+  color: var(--text); outline: none;
+}
+.hub-06 .h-msg-row button {
+  background: linear-gradient(135deg, #f59e0b, #fb923c); border: none; color: #fff;
+  padding: 0 20px; border-radius: 100px; font-size: 13px; font-weight: 800; cursor: pointer;
+}
+
+
+/* ════════════════════════════════════════════
+   07 — MONO PRINT (Brutal Editorial)
+   ════════════════════════════════════════════ */
+.hub-07 {
+  --bg: #f5f0eb;
+  --ink: #0a0a0a;
+  --red: #e63329;
+  --muted: #9a9080;
+  --border: #1a1a1a;
+  background: var(--bg);
+  border-radius: 0; overflow: hidden;
+  font-family: 'Syne', sans-serif;
+  border: 2px solid var(--border);
+  box-shadow: 6px 6px 0 var(--border);
+}
+
+.hub-07 .h-header {
+  border-bottom: 2px solid var(--border); padding: 0;
+  display: flex; align-items: stretch;
+}
+.hub-07 .h-header-left {
+  flex: 1; padding: 20px; border-right: 2px solid var(--border);
+}
+.hub-07 .h-issue-line {
+  font-size: 9px; font-weight: 700; letter-spacing: 0.3em; text-transform: uppercase; color: var(--muted);
+}
+.hub-07 .h-event-name {
+  font-size: 28px; font-weight: 800; color: var(--ink); line-height: 1;
+  letter-spacing: -0.03em; margin-top: 6px;
+}
+.hub-07 .h-header-right {
+  width: 90px; flex-shrink: 0; display: flex; flex-direction: column;
+  align-items: center; justify-content: center; padding: 12px 8px;
+  background: var(--ink); gap: 4px;
+}
+.hub-07 .h-big-date { font-size: 36px; font-weight: 800; color: #fff; line-height: 1; }
+.hub-07 .h-big-month { font-size: 10px; font-weight: 700; letter-spacing: 0.2em; text-transform: uppercase; color: rgba(255,255,255,0.6); }
+
+.hub-07 .h-pass-block {
+  border-bottom: 2px solid var(--border);
+  display: flex; align-items: stretch;
+}
+.hub-07 .h-qr-block {
+  width: 90px; flex-shrink: 0; border-right: 2px solid var(--border);
+  display: grid; place-items: center; padding: 14px;
+  background: #fff;
+}
+.hub-07 .h-pass-details { flex: 1; padding: 16px; display: flex; flex-direction: column; justify-content: center; gap: 4px; }
+.hub-07 .h-guest-name {
+  font-size: 22px; font-weight: 800; color: var(--ink); letter-spacing: -0.02em;
+  text-transform: uppercase;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.hub-07 .h-pass-meta { font-size: 11px; color: var(--muted); font-weight: 600; letter-spacing: 0.08em; }
+.hub-07 .h-status-block {
+  width: 90px; flex-shrink: 0; border-left: 2px solid var(--border);
+  background: var(--red); display: flex; flex-direction: column;
+  align-items: center; justify-content: center; padding: 12px 8px; gap: 2px;
+}
+.hub-07 .h-status-word { font-size: 10px; font-weight: 800; letter-spacing: 0.2em; text-transform: uppercase; color: #fff; text-align: center; }
+.hub-07 .h-status-check { font-size: 28px; color: #fff; }
+
+.hub-07 .h-tabs {
+  display: flex; border-bottom: 2px solid var(--border);
+}
+.hub-07 .h-tab {
+  flex: 1; padding: 12px 8px; text-align: center;
+  font-size: 10px; font-weight: 800; letter-spacing: 0.2em; text-transform: uppercase;
+  color: var(--muted); cursor: pointer; border-right: 2px solid var(--border);
+  transition: all 0.15s;
+}
+.hub-07 .h-tab:last-child { border-right: none; }
+.hub-07 .h-tab.active { background: var(--ink); color: #fff; }
+
+.hub-07 .h-body { padding: 20px; display: flex; flex-direction: column; gap: 16px; }
+.hub-07 .h-section-head {
+  display: flex; align-items: baseline; gap: 12px; margin-bottom: 10px;
+}
+.hub-07 .h-section-head h3 {
+  font-size: 9px; font-weight: 800; letter-spacing: 0.3em; text-transform: uppercase; color: var(--muted);
+}
+.hub-07 .h-section-head::after { content: ''; flex: 1; height: 2px; background: var(--border); }
+
+.hub-07 .h-prog-row {
+  display: flex; align-items: center;
+  border: 2px solid var(--border); background: #fff; margin-bottom: 6px;
+}
+.hub-07 .h-prog-row:last-child { margin-bottom: 0; }
+.hub-07 .h-prog-time-col {
+  width: 60px; flex-shrink: 0; border-right: 2px solid var(--border); padding: 10px 8px;
+  text-align: center;
+}
+.hub-07 .h-prog-time { font-size: 13px; font-weight: 800; color: var(--ink); display: block; }
+.hub-07 .h-prog-ampm { font-size: 8px; font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase; color: var(--muted); }
+.hub-07 .h-prog-name-col { flex: 1; padding: 10px 14px; }
+.hub-07 .h-prog-name { font-size: 13px; font-weight: 700; color: var(--ink); }
+.hub-07 .h-prog-sub { font-size: 10px; color: var(--muted); margin-top: 2px; font-weight: 600; }
+.hub-07 .h-prog-tag-col {
+  width: 60px; flex-shrink: 0; border-left: 2px solid var(--border); padding: 10px 8px;
+  background: var(--ink); display: grid; place-items: center;
+}
+.hub-07 .h-prog-tag { font-size: 8px; font-weight: 800; letter-spacing: 0.12em; text-transform: uppercase; color: #fff; text-align: center; }
+.hub-07 .h-prog-tag.red { background: var(--red); }
+
+.hub-07 .h-msg-row { display: flex; gap: 0; border: 2px solid var(--border); }
+.hub-07 .h-msg-row input {
+  flex: 1; border: none; background: #fff;
+  padding: 12px 14px; font-size: 12px; font-family: 'Syne', sans-serif;
+  color: var(--ink); outline: none; font-weight: 600;
+}
+.hub-07 .h-msg-row button {
+  background: var(--ink); border: none; color: #fff;
+  padding: 0 20px; font-size: 10px; font-weight: 800;
+  letter-spacing: 0.2em; text-transform: uppercase; cursor: pointer;
+  border-left: 2px solid var(--border);
+}
+
+
+/* ════════════════════════════════════════════
+   08 — VERDANT (Botanical Wellness)
+   ════════════════════════════════════════════ */
+.hub-08 {
+  --bg: #f0f7f0;
+  --surface: #fff;
+  --deep: #1a3320;
+  --green: #2d6a4f;
+  --mid: #52b788;
+  --light: #d8f3dc;
+  --text: #1a3320;
+  --muted: #6a9a7a;
+  --border: #b7e4c7;
+  background: var(--bg);
+  border-radius: 20px; overflow: hidden;
+  font-family: 'Plus Jakarta Sans', sans-serif;
+  box-shadow: 0 20px 60px rgba(26,51,32,0.15);
+}
+
+.hub-08 .h-canopy {
+  background: var(--deep);
+  padding: 24px 22px; position: relative; overflow: hidden;
+  min-height: 110px; display: flex; flex-direction: column; justify-content: flex-end;
+}
+.hub-08 .h-canopy::before {
+  content: '';
+  position: absolute; inset: 0;
+  background:
+    radial-gradient(ellipse 80% 60% at 90% -10%, rgba(82,183,136,0.3) 0%, transparent 60%),
+    radial-gradient(ellipse 60% 80% at -10% 100%, rgba(45,106,79,0.4) 0%, transparent 50%);
+}
+.hub-08 .h-leaf-dec {
+  position: absolute; font-size: 80px; opacity: 0.08; line-height: 1;
+}
+.hub-08 .h-leaf-dec:nth-child(1) { right: -10px; top: -20px; transform: rotate(-30deg); }
+.hub-08 .h-leaf-dec:nth-child(2) { right: 50px; bottom: -20px; transform: rotate(15deg); font-size: 50px; }
+.hub-08 .h-canopy-badge {
+  font-size: 9px; font-weight: 700; letter-spacing: 0.25em; text-transform: uppercase;
+  color: var(--mid); background: rgba(82,183,136,0.15);
+  border: 1px solid rgba(82,183,136,0.3); padding: 4px 12px; border-radius: 100px;
+  display: inline-block; margin-bottom: 10px; position: relative; z-index: 1;
+}
+.hub-08 .h-event-name {
+  font-size: 22px; font-weight: 700; color: #fff; line-height: 1.2;
+  position: relative; z-index: 1; letter-spacing: -0.01em;
+}
+.hub-08 .h-event-sub {
+  font-size: 11px; color: rgba(255,255,255,0.5); margin-top: 5px;
+  position: relative; z-index: 1; font-weight: 500; letter-spacing: 0.04em;
+}
+
+.hub-08 .h-pass-card {
+  margin: 16px; background: var(--surface); border-radius: 14px; padding: 18px;
+  border: 1.5px solid var(--border); display: flex; gap: 16px; align-items: center;
+  box-shadow: 0 4px 20px rgba(26,51,32,0.08);
+}
+.hub-08 .h-qr-box {
+  width: 74px; height: 74px; flex-shrink: 0; border-radius: 10px;
+  background: var(--light); padding: 8px; display: grid; place-items: center;
+  border: 1.5px solid var(--border);
+}
+.hub-08 .h-pass-right { flex: 1; min-width: 0; }
+.hub-08 .h-guest-name {
+  font-size: 18px; font-weight: 700; color: var(--text);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.hub-08 .h-pass-tags { display: flex; gap: 6px; margin-top: 7px; flex-wrap: wrap; }
+.hub-08 .h-pass-tag {
+  font-size: 10px; font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase;
+  padding: 4px 10px; border-radius: 100px;
+  background: var(--light); color: var(--green);
+  border: 1px solid var(--border);
+}
+.hub-08 .h-pass-tag.live {
+  background: var(--green); color: #fff; border-color: var(--green);
+}
+
+.hub-08 .h-tabs {
+  display: flex; padding: 0 14px; gap: 4px; margin-bottom: 8px;
+}
+.hub-08 .h-tab {
+  flex: 1; padding: 8px 6px; text-align: center; border-radius: 100px;
+  font-size: 10px; font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--muted); cursor: pointer; transition: all 0.2s;
+}
+.hub-08 .h-tab.active { background: var(--green); color: #fff; }
+
+.hub-08 .h-body { padding: 0 16px 22px; display: flex; flex-direction: column; gap: 12px; }
+.hub-08 .h-module { background: var(--surface); border-radius: 12px; padding: 16px; border: 1.5px solid var(--border); }
+.hub-08 .h-module-title {
+  font-size: 10px; font-weight: 700; letter-spacing: 0.18em; text-transform: uppercase; color: var(--muted);
+  margin-bottom: 12px;
+}
+
+.hub-08 .h-wellness-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.hub-08 .h-wellness-card {
+  background: var(--bg); border-radius: 10px; padding: 12px;
+  border: 1.5px solid var(--border); display: flex; flex-direction: column; gap: 4px;
+}
+.hub-08 .h-wellness-card .w-icon { font-size: 18px; }
+.hub-08 .h-wellness-card .w-label { font-size: 9px; font-weight: 700; letter-spacing: 0.14em; text-transform: uppercase; color: var(--muted); margin-top: 6px; }
+.hub-08 .h-wellness-card .w-val { font-size: 14px; font-weight: 700; color: var(--text); }
+
+.hub-08 .h-schedule-item {
+  display: flex; align-items: flex-start; gap: 12px;
+  padding: 10px 0; border-bottom: 1px solid var(--border);
+}
+.hub-08 .h-schedule-item:last-child { border-bottom: none; padding-bottom: 0; }
+.hub-08 .h-sched-dot {
+  width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0; margin-top: 4px;
+}
+.hub-08 .h-sched-dot.now { background: var(--mid); box-shadow: 0 0 0 3px rgba(82,183,136,0.2); }
+.hub-08 .h-sched-dot.next { background: var(--border); }
+.hub-08 .h-sched-info { flex: 1; }
+.hub-08 .h-sched-name { font-size: 13px; font-weight: 600; color: var(--text); }
+.hub-08 .h-sched-sub { font-size: 10px; color: var(--muted); margin-top: 2px; }
+.hub-08 .h-sched-time { font-size: 10px; font-weight: 700; color: var(--green); }
+
+.hub-08 .h-msg-row { display: flex; gap: 8px; }
+.hub-08 .h-msg-row input {
+  flex: 1; background: var(--bg); border: 1.5px solid var(--border);
+  border-radius: 100px; padding: 10px 16px; font-size: 12px; font-family: 'Plus Jakarta Sans', sans-serif;
+  color: var(--text); outline: none;
+}
+.hub-08 .h-msg-row button {
+  background: var(--green); border: none; color: #fff;
+  padding: 0 20px; border-radius: 100px; font-size: 12px; font-weight: 700; cursor: pointer;
+}
+
+
+/* ════════════════════════════════════════════
+   09 — COASTAL CLUB (Yacht/Regatta Luxe)
+   ════════════════════════════════════════════ */
+.hub-09 {
+  --navy: #0f2040;
+  --navy-mid: #1e3a5f;
+  --brass: #b8912a;
+  --cream: #f8f4ec;
+  --white: #ffffff;
+  --red: #c0392b;
+  --text: #0f2040;
+  --muted: #6b7f9a;
+  --border: #d4cbb8;
+  background: var(--cream);
+  overflow: hidden; border-radius: 8px;
+  font-family: 'Plus Jakarta Sans', sans-serif;
+  border: 1.5px solid var(--border);
+  box-shadow: 0 20px 50px rgba(15,32,64,0.18);
+}
+
+.hub-09 .h-hull {
+  background: var(--navy);
+  position: relative; overflow: hidden;
+}
+.hub-09 .h-rope-line {
+  height: 5px;
+  background: repeating-linear-gradient(90deg, #b8912a 0, #b8912a 10px, #fff 10px, #fff 20px);
+}
+.hub-09 .h-hull-body { padding: 18px 22px 20px; display: flex; align-items: flex-start; gap: 16px; }
+.hub-09 .h-hull-left { flex: 1; }
+.hub-09 .h-club-name {
+  font-size: 9px; font-weight: 700; letter-spacing: 0.3em; text-transform: uppercase;
+  color: var(--brass); margin-bottom: 8px;
+}
+.hub-09 .h-event-name {
+  font-size: 22px; font-weight: 700; color: #fff; line-height: 1.2;
+  letter-spacing: -0.01em;
+}
+.hub-09 .h-event-detail {
+  font-size: 11px; color: rgba(255,255,255,0.5); margin-top: 6px; font-weight: 500;
+}
+.hub-09 .h-hull-emblem {
+  width: 52px; height: 52px; flex-shrink: 0;
+  border: 2px solid var(--brass); border-radius: 50%;
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  color: var(--brass); gap: 2px;
+}
+.hub-09 .h-emblem-icon { font-size: 20px; line-height: 1; }
+.hub-09 .h-emblem-text { font-size: 6px; font-weight: 700; letter-spacing: 0.15em; text-transform: uppercase; color: rgba(184,145,42,0.8); }
+
+.hub-09 .h-pass-strip {
+  display: flex; align-items: stretch; border-bottom: 1.5px solid var(--border); background: var(--white);
+}
+.hub-09 .h-qr-col {
+  width: 84px; flex-shrink: 0; border-right: 1.5px solid var(--border);
+  padding: 14px; display: grid; place-items: center;
+}
+.hub-09 .h-pass-col { flex: 1; padding: 14px 16px; }
+.hub-09 .h-guest-name {
+  font-size: 18px; font-weight: 700; color: var(--text); letter-spacing: -0.01em;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.hub-09 .h-pass-sub { font-size: 11px; color: var(--muted); margin-top: 4px; }
+.hub-09 .h-pass-badges { display: flex; gap: 6px; margin-top: 8px; }
+.hub-09 .h-badge {
+  font-size: 9px; font-weight: 700; letter-spacing: 0.14em; text-transform: uppercase;
+  padding: 4px 10px; border-radius: 3px;
+}
+.hub-09 .h-badge.status { background: rgba(15,32,64,0.08); color: var(--navy); }
+.hub-09 .h-badge.brass { background: rgba(184,145,42,0.12); color: var(--brass); }
+.hub-09 .h-status-col {
+  width: 70px; flex-shrink: 0; border-left: 1.5px solid var(--border);
+  background: var(--navy); display: flex; flex-direction: column;
+  align-items: center; justify-content: center; padding: 12px 6px; gap: 4px;
+}
+.hub-09 .h-status-icon { font-size: 22px; color: var(--brass); }
+.hub-09 .h-status-word { font-size: 8px; font-weight: 800; letter-spacing: 0.15em; text-transform: uppercase; color: rgba(255,255,255,0.6); text-align: center; }
+
+.hub-09 .h-tabs { display: flex; border-bottom: 1.5px solid var(--border); }
+.hub-09 .h-tab {
+  flex: 1; padding: 12px 8px; text-align: center;
+  font-size: 10px; font-weight: 700; letter-spacing: 0.14em; text-transform: uppercase;
+  color: var(--muted); cursor: pointer; border-bottom: 2px solid transparent; transition: all 0.2s;
+}
+.hub-09 .h-tab.active { color: var(--navy); border-bottom-color: var(--brass); }
+
+.hub-09 .h-body { padding: 18px; display: flex; flex-direction: column; gap: 14px; }
+.hub-09 .h-panel { background: var(--white); border-radius: 6px; padding: 16px; border: 1.5px solid var(--border); }
+.hub-09 .h-panel-title {
+  font-size: 9px; font-weight: 700; letter-spacing: 0.25em; text-transform: uppercase;
+  color: var(--muted); margin-bottom: 12px; display: flex; align-items: center; gap: 8px;
+}
+.hub-09 .h-panel-title::after { content: ''; flex: 1; height: 1px; background: var(--border); }
+.hub-09 .h-leg { display: flex; align-items: center; gap: 12px; padding: 8px 0; border-bottom: 1px solid var(--border); }
+.hub-09 .h-leg:last-child { border-bottom: none; padding-bottom: 0; }
+.hub-09 .h-leg-num { font-size: 11px; font-weight: 800; color: var(--brass); min-width: 28px; }
+.hub-09 .h-leg-info { flex: 1; }
+.hub-09 .h-leg-name { font-size: 13px; font-weight: 600; color: var(--text); }
+.hub-09 .h-leg-sub { font-size: 10px; color: var(--muted); margin-top: 1px; }
+.hub-09 .h-leg-time { font-size: 11px; font-weight: 700; color: var(--navy); }
+.hub-09 .h-leg-live { font-size: 8px; font-weight: 800; letter-spacing: 0.12em; text-transform: uppercase; background: var(--red); color: #fff; padding: 2px 7px; border-radius: 2px; }
+
+.hub-09 .h-msg-row { display: flex; gap: 0; border: 1.5px solid var(--border); border-radius: 6px; overflow: hidden; }
+.hub-09 .h-msg-row input {
+  flex: 1; border: none; background: var(--white);
+  padding: 11px 14px; font-size: 12px; font-family: 'Plus Jakarta Sans', sans-serif;
+  color: var(--text); outline: none;
+}
+.hub-09 .h-msg-row button {
+  background: var(--navy); border: none; color: var(--brass);
+  padding: 0 18px; font-size: 10px; font-weight: 800;
+  letter-spacing: 0.18em; text-transform: uppercase; cursor: pointer;
+  border-left: 1.5px solid var(--border);
+}
+
+
+/* ════════════════════════════════════════════
+   10 — HAZE (Glassmorphism / Dreamy)
+   ════════════════════════════════════════════ */
+.hub-10 {
+  --grad-a: #a855f7;
+  --grad-b: #3b82f6;
+  --grad-c: #ec4899;
+  --text: #fff;
+  --muted: rgba(255,255,255,0.5);
+  --border: rgba(255,255,255,0.12);
+  --glass: rgba(255,255,255,0.07);
+  --glass-strong: rgba(255,255,255,0.12);
+  background: linear-gradient(145deg, #1a0533 0%, #0d1b4b 40%, #0a1a3a 70%, #1a0328 100%);
+  border-radius: 24px; overflow: hidden;
+  font-family: 'DM Sans', sans-serif;
+  box-shadow: 0 30px 80px rgba(0,0,0,0.7), 0 0 0 1px rgba(255,255,255,0.06);
+  position: relative;
+}
+.hub-10::before {
+  content: '';
+  position: absolute; top: -80px; left: -60px;
+  width: 260px; height: 260px; border-radius: 50%;
+  background: radial-gradient(circle, rgba(168,85,247,0.3) 0%, transparent 70%);
+  pointer-events: none;
+}
+.hub-10::after {
+  content: '';
+  position: absolute; bottom: -60px; right: -60px;
+  width: 200px; height: 200px; border-radius: 50%;
+  background: radial-gradient(circle, rgba(59,130,246,0.25) 0%, transparent 70%);
+  pointer-events: none;
+}
+
+.hub-10 .h-top {
+  padding: 24px 22px 20px; position: relative; z-index: 1;
+  display: flex; align-items: flex-start; justify-content: space-between;
+}
+.hub-10 .h-brand { font-size: 10px; font-weight: 600; letter-spacing: 0.2em; text-transform: uppercase; color: var(--muted); }
+.hub-10 .h-event-name {
+  font-size: 22px; font-weight: 700; color: var(--text); line-height: 1.2;
+  letter-spacing: -0.01em; margin-top: 6px;
+}
+.hub-10 .h-event-when { font-size: 11px; color: var(--muted); margin-top: 5px; }
+.hub-10 .h-invite-badge {
+  background: linear-gradient(135deg, rgba(168,85,247,0.3), rgba(59,130,246,0.3));
+  border: 1px solid rgba(255,255,255,0.15); border-radius: 100px;
+  padding: 6px 12px; font-size: 9px; font-weight: 700; letter-spacing: 0.15em; text-transform: uppercase; color: var(--text);
+  white-space: nowrap; flex-shrink: 0;
+  backdrop-filter: blur(8px);
+}
+
+.hub-10 .h-pass-glass {
+  margin: 0 18px 18px;
+  background: var(--glass-strong); border-radius: 18px;
+  border: 1px solid var(--border); padding: 18px;
+  backdrop-filter: blur(20px);
+  display: flex; align-items: center; gap: 16px;
+  position: relative; z-index: 1;
+}
+.hub-10 .h-qr-glow {
+  width: 76px; height: 76px; flex-shrink: 0; border-radius: 12px;
+  background: rgba(255,255,255,0.08); border: 1px solid var(--border);
+  padding: 8px; display: grid; place-items: center;
+  box-shadow: 0 0 20px rgba(168,85,247,0.2);
+}
+.hub-10 .h-pass-right { flex: 1; min-width: 0; }
+.hub-10 .h-guest-name {
+  font-size: 19px; font-weight: 700; color: var(--text);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis; letter-spacing: -0.01em;
+}
+.hub-10 .h-gradient-tag {
+  margin-top: 8px; display: inline-flex; align-items: center; gap: 6px;
+  background: linear-gradient(135deg, rgba(168,85,247,0.2), rgba(236,72,153,0.2));
+  border: 1px solid rgba(255,255,255,0.12); border-radius: 100px;
+  padding: 4px 12px; font-size: 10px; font-weight: 600; color: rgba(255,255,255,0.9);
+}
+.hub-10 .h-gradient-tag::before { content: '✦'; color: #d946ef; font-size: 8px; }
+.hub-10 .h-pass-meta { font-size: 11px; color: var(--muted); margin-top: 5px; }
+
+.hub-10 .h-tabs {
+  display: flex; padding: 0 16px; gap: 4px; margin-bottom: 8px; position: relative; z-index: 1;
+}
+.hub-10 .h-tab {
+  flex: 1; padding: 9px 6px; text-align: center; border-radius: 100px;
+  font-size: 10px; font-weight: 700; letter-spacing: 0.12em; text-transform: uppercase;
+  color: var(--muted); cursor: pointer; transition: all 0.2s;
+}
+.hub-10 .h-tab.active {
+  background: linear-gradient(135deg, rgba(168,85,247,0.25), rgba(59,130,246,0.25));
+  color: #fff; border: 1px solid rgba(255,255,255,0.12);
+  backdrop-filter: blur(8px);
+}
+
+.hub-10 .h-body { padding: 0 18px 24px; display: flex; flex-direction: column; gap: 12px; position: relative; z-index: 1; }
+
+.hub-10 .h-glass-card {
+  background: var(--glass); border: 1px solid var(--border); border-radius: 14px; padding: 16px;
+  backdrop-filter: blur(12px);
+}
+.hub-10 .h-card-title {
+  font-size: 10px; font-weight: 600; letter-spacing: 0.18em; text-transform: uppercase;
+  color: var(--muted); margin-bottom: 12px;
+}
+.hub-10 .h-hype-row {
+  display: flex; align-items: center; gap: 12px; padding: 10px 12px; border-radius: 10px;
+  background: rgba(255,255,255,0.05); border: 1px solid var(--border); margin-bottom: 6px;
+}
+.hub-10 .h-hype-row:last-child { margin-bottom: 0; }
+.hub-10 .h-hype-avatar { font-size: 20px; width: 28px; text-align: center; }
+.hub-10 .h-hype-name { font-size: 12px; font-weight: 600; color: var(--text); flex: 1; }
+.hub-10 .h-hype-rsvp { font-size: 10px; color: var(--muted); }
+
+.hub-10 .h-prog-row {
+  display: flex; align-items: center; gap: 10px; padding: 9px 12px;
+  background: rgba(255,255,255,0.05); border: 1px solid var(--border); border-radius: 10px; margin-bottom: 6px;
+}
+.hub-10 .h-prog-row:last-child { margin-bottom: 0; }
+.hub-10 .h-prog-row.glow { border-color: rgba(168,85,247,0.35); background: rgba(168,85,247,0.1); }
+.hub-10 .h-prog-time { font-size: 10px; font-weight: 700; color: var(--muted); min-width: 40px; }
+.hub-10 .h-prog-time.active { color: #d946ef; }
+.hub-10 .h-prog-name { flex: 1; font-size: 12px; font-weight: 500; color: var(--text); }
+.hub-10 .h-prog-live {
+  font-size: 8px; font-weight: 800; letter-spacing: 0.12em; text-transform: uppercase;
+  padding: 3px 8px; border-radius: 100px;
+  background: linear-gradient(135deg, #a855f7, #ec4899); color: #fff;
+}
+
+.hub-10 .h-msg-row {
+  display: flex; gap: 8px;
+  background: rgba(255,255,255,0.06); border: 1px solid var(--border); border-radius: 100px; padding: 4px 4px 4px 16px;
+  backdrop-filter: blur(8px);
+}
+.hub-10 .h-msg-row input {
+  flex: 1; background: none; border: none; outline: none;
+  font-size: 12px; color: var(--text); font-family: 'DM Sans', sans-serif;
+}
+.hub-10 .h-msg-row input::placeholder { color: var(--muted); }
+.hub-10 .h-msg-row button {
+  background: linear-gradient(135deg, #a855f7, #3b82f6); border: none; color: #fff;
+  width: 34px; height: 34px; border-radius: 50%; font-size: 14px; cursor: pointer; flex-shrink: 0;
+  display: grid; place-items: center;
+}
+
+.page-footer {
+  text-align: center; padding: 40px 24px 60px;
+  font-size: 11px; letter-spacing: 0.15em; text-transform: uppercase; color: #333;
+  font-family: 'DM Sans', sans-serif;
+}
+
+/* ════════════════════════════════════════════
+   FULL-PAGE CHROME — hero (uploaded photo, full-bleed) +
+   event details + about + RSVP, wrapping the pass card above
+   ════════════════════════════════════════════ */
+.h-page-hero { position: relative; overflow: hidden; min-height: 260px; display: flex; align-items: flex-end; background-size: cover; background-position: center; }
+.h-page-hero::after { content: ''; position: absolute; inset: 0; background: linear-gradient(0deg, rgba(0,0,0,.72) 0%, rgba(0,0,0,.22) 55%, rgba(0,0,0,.05) 100%); z-index: 1; }
+.h-page-hero-inner { position: relative; z-index: 2; width: 100%; padding: 24px; }
+.h-photo-tag { position: absolute; top: 16px; right: 16px; z-index: 2; display: inline-flex; align-items: center; gap: 5px; font-size: 9px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; background: rgba(0,0,0,.5); color: #fff; padding: 5px 11px; border-radius: 99px; backdrop-filter: blur(4px); font-family: 'DM Sans', sans-serif; }
+.h-page-eyebrow { font-size: 11px; font-weight: 700; letter-spacing: .28em; text-transform: uppercase; }
+.h-page-title { font-size: 30px; font-weight: 700; line-height: 1.15; margin-top: 12px; color: #fff; font-family: 'DM Sans', sans-serif; }
+.h-page-meta { font-size: 13px; margin-top: 10px; color: rgba(255,255,255,.85); }
+.h-page-cta { margin-top: 20px; display: inline-flex; align-items: center; gap: 6px; font-size: 11px; font-weight: 700; letter-spacing: .1em; text-transform: uppercase; padding: 12px 22px; border-radius: 99px; cursor: pointer; border: none; }
+.h-page-panel { margin: 20px; padding: 20px; }
+.h-page-panel-title { font-size: 11px; font-weight: 700; letter-spacing: .2em; text-transform: uppercase; margin-bottom: 14px; opacity: .6; }
+.h-page-detail { display: flex; justify-content: space-between; gap: 10px; padding: 9px 0; font-size: 13px; }
+.h-page-detail + .h-page-detail { border-top: 1px solid rgba(127,127,127,.18); }
+.h-page-detail .k { opacity: .55; }
+.h-page-detail .v { font-weight: 600; text-align: right; }
+.h-page-about p { font-size: 13px; line-height: 1.7; opacity: .75; }
+.h-page-rsvp { display: flex; gap: 10px; margin-top: 14px; }
+.h-page-rsvp button { flex: 1; padding: 13px; border-radius: 10px; font-size: 11px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; cursor: pointer; border: 1.5px solid transparent; }
+.h-page-confirm { width: 100%; margin-top: 12px; padding: 15px; border-radius: 10px; font-size: 13px; font-weight: 800; letter-spacing: .08em; text-transform: uppercase; cursor: pointer; border: none; }
+
+/* 06 Soleil */
+.hub-06 .h-page-hero{background:radial-gradient(90% 70% at 75% 15%, rgba(255,220,150,.5), transparent 60%), linear-gradient(160deg, #fb923c 0%, #f59e0b 45%, #7c2d12 100%)}
+.hub-06 .h-page-eyebrow{color:rgba(255,255,255,.9)}
+.hub-06 .h-page-title{font-family:'Nunito',sans-serif;font-weight:800}
+.hub-06 .h-page-cta{background:#fff;color:var(--sun);font-family:'Nunito',sans-serif}
+.hub-06 .h-page-panel{background:#fff;border:1.5px solid var(--border);border-radius:14px;color:var(--text);font-family:'Nunito',sans-serif}
+.hub-06 .h-page-panel-title{color:var(--muted)}
+.hub-06 .h-page-rsvp button{background:var(--cream);border-color:var(--border);color:var(--muted)}
+.hub-06 .h-page-rsvp button.yes{background:rgba(251,113,74,.12);border-color:var(--coral);color:var(--coral)}
+.hub-06 .h-page-confirm{background:linear-gradient(135deg,#f59e0b,#fb923c);color:#fff}
+
+/* 07 Mono Print */
+.hub-07 .h-page-hero{background:linear-gradient(160deg, #3a3a3a 0%, #0a0a0a 70%);border-bottom:2px solid var(--border)}
+.hub-07 .h-page-eyebrow{color:var(--red)}
+.hub-07 .h-page-title{font-family:'Syne',sans-serif;text-transform:uppercase}
+.hub-07 .h-page-cta{background:var(--red);color:#fff;border-radius:0;font-family:'Syne',sans-serif}
+.hub-07 .h-page-panel{background:#fff;border:2px solid var(--border);color:var(--ink);font-family:'Syne',sans-serif}
+.hub-07 .h-page-panel-title{color:var(--ink)}
+.hub-07 .h-page-rsvp button{background:#fff;border-color:var(--border);border-radius:0;color:var(--muted)}
+.hub-07 .h-page-rsvp button.yes{background:var(--ink);color:#fff}
+.hub-07 .h-page-confirm{background:var(--red);color:#fff;border-radius:0}
+
+/* 08 Verdant */
+.hub-08 .h-page-hero{background:radial-gradient(90% 70% at 85% 0%, rgba(82,183,136,.35), transparent 60%), linear-gradient(160deg, #234d2e 0%, #1a3320 60%, #0d1911 100%)}
+.hub-08 .h-page-eyebrow{color:var(--mid)}
+.hub-08 .h-page-title{font-family:'Plus Jakarta Sans',sans-serif}
+.hub-08 .h-page-cta{background:var(--green);color:#fff;font-family:'Plus Jakarta Sans',sans-serif}
+.hub-08 .h-page-panel{background:var(--surface);border:1.5px solid var(--border);border-radius:12px;color:var(--text);font-family:'Plus Jakarta Sans',sans-serif}
+.hub-08 .h-page-panel-title{color:var(--muted)}
+.hub-08 .h-page-rsvp button{background:var(--bg);border-color:var(--border);color:var(--muted)}
+.hub-08 .h-page-rsvp button.yes{background:var(--light);border-color:var(--green);color:var(--green)}
+.hub-08 .h-page-confirm{background:var(--green);color:#fff}
+
+/* 09 Coastal Club */
+.hub-09 .h-page-hero{background:radial-gradient(80% 60% at 80% 0%, rgba(184,145,42,.3), transparent 55%), linear-gradient(160deg, #1e3a5f 0%, #0f2040 70%, #060e1c 100%)}
+.hub-09 .h-page-eyebrow{color:var(--brass)}
+.hub-09 .h-page-title{font-family:'Plus Jakarta Sans',sans-serif}
+.hub-09 .h-page-cta{background:var(--brass);color:var(--navy);border-radius:3px;font-family:'Plus Jakarta Sans',sans-serif}
+.hub-09 .h-page-panel{background:var(--white);border:1.5px solid var(--border);border-radius:6px;color:var(--text);font-family:'Plus Jakarta Sans',sans-serif}
+.hub-09 .h-page-panel-title{color:var(--muted)}
+.hub-09 .h-page-rsvp button{background:var(--white);border-color:var(--border);border-radius:3px;color:var(--muted)}
+.hub-09 .h-page-rsvp button.yes{background:rgba(184,145,42,.12);border-color:var(--brass);color:var(--brass)}
+.hub-09 .h-page-confirm{background:var(--navy);color:var(--brass);border-radius:3px}
+
+/* 10 Haze */
+.hub-10 .h-page-hero{background:linear-gradient(145deg,#1a0533 0%,#0d1b4b 40%,#0a1a3a 70%,#1a0328 100%)}
+.hub-10 .h-page-hero::before{content:'';position:absolute;top:-60px;left:-40px;width:200px;height:200px;border-radius:50%;background:radial-gradient(circle,rgba(168,85,247,.3) 0%,transparent 70%);z-index:1}
+.hub-10 .h-page-cta{background:linear-gradient(135deg,#a855f7,#3b82f6);color:#fff}
+.hub-10 .h-page-panel{background:var(--glass);border:1px solid var(--border);border-radius:14px;color:#fff;backdrop-filter:blur(12px)}
+.hub-10 .h-page-panel-title{color:var(--muted)}
+.hub-10 .h-page-rsvp button{background:rgba(255,255,255,.05);border-color:var(--border);color:var(--muted)}
+.hub-10 .h-page-rsvp button.yes{background:rgba(168,85,247,.15);border-color:#a855f7;color:#fff}
+.hub-10 .h-page-confirm{background:linear-gradient(135deg,#a855f7,#3b82f6);color:#fff}
+</style>
+</head>
+<body>
+
+<div class="page-header">
+  <span class="vol">Vol. 2</span>
+  <h1>GuestHub — Five More</h1>
+  <p>Modern events deserve modern passes</p>
+</div>
+
+<div class="templates-grid">
+
+  <!-- ══════════════════════════════════
+       06 · SOLEIL
+       ══════════════════════════════════ -->
+  <div class="template-wrap">
+    <div class="template-label"><span class="template-num">06</span>Soleil</div>
+    <div class="hub-06">
+      <div class="h-page-hero">
+        <span class="h-photo-tag">📷 Your uploaded photo</span>
+        <div class="h-page-hero-inner">
+          <div class="h-page-eyebrow">You're Invited</div>
+          <div class="h-page-title">Riviera Sunset Gala</div>
+          <div class="h-page-meta">Saturday, 9 August · Cannes Beach Club</div>
+          <button class="h-page-cta">View My Pass ↓</button>
+        </div>
+      </div>
+      <div class="h-banner">
+        <div class="h-banner-top">
+          <div class="h-brand-tag">GuestHub</div>
+          <div class="h-temp-badge">☀️ 32°C · Outdoor</div>
+        </div>
+        <div class="h-event-name">Riviera Sunset Gala</div>
+        <div class="h-event-date">Saturday, 9 August 2026 · Cannes Beach Club</div>
+      </div>
+      <div class="h-pass-row">
+        <div class="h-qr">
+          <svg class="qr-svg" viewBox="0 0 34 34" fill="none">
+            <rect x="1" y="1" width="12" height="12" rx="1.5" stroke="#f59e0b" stroke-width="1.5"/>
+            <rect x="4" y="4" width="6" height="6" fill="#f59e0b" rx="1"/>
+            <rect x="21" y="1" width="12" height="12" rx="1.5" stroke="#f59e0b" stroke-width="1.5"/>
+            <rect x="24" y="4" width="6" height="6" fill="#f59e0b" rx="1"/>
+            <rect x="1" y="21" width="12" height="12" rx="1.5" stroke="#f59e0b" stroke-width="1.5"/>
+            <rect x="4" y="24" width="6" height="6" fill="#f59e0b" rx="1"/>
+            <rect x="21" y="21" width="4" height="4" fill="#f59e0b" rx="0.5"/>
+            <rect x="27" y="21" width="4" height="4" fill="#f59e0b" rx="0.5"/>
+            <rect x="21" y="27" width="4" height="4" fill="#f59e0b" rx="0.5"/>
+            <rect x="27" y="27" width="4" height="4" fill="#f59e0b" rx="0.5"/>
+          </svg>
+        </div>
+        <div class="h-pass-info">
+          <div class="h-guest-name">Sofia Marchetti</div>
+          <div class="h-chips">
+            <div class="h-chip status">✓ Confirmed</div>
+            <div class="h-chip seat">🪑 Plage · 12</div>
+            <div class="h-chip seat">🍹 VIP Bar</div>
+          </div>
+        </div>
+      </div>
+      <div class="h-tabs">
+        <div class="h-tab active">Pass</div>
+        <div class="h-tab">Activity</div>
+        <div class="h-tab">Program</div>
+        <div class="h-tab">Chat</div>
+      </div>
+      <div class="h-body">
+        <div class="h-card">
+          <div class="h-card-title">Today's Programme</div>
+          <div class="h-activity-row">
+            <div class="h-act-icon">🌊</div>
+            <div class="h-act-info">
+              <div class="h-act-name">Beach Arrival & Welcome Drinks</div>
+              <div class="h-act-loc">Plage Privée — Section VIP</div>
+            </div>
+            <div class="h-act-time">18:00</div>
+          </div>
+          <div class="h-activity-row">
+            <div class="h-act-icon">🍽️</div>
+            <div class="h-act-info">
+              <div class="h-act-name">Dîner en Blanc</div>
+              <div class="h-act-loc">Grand Terrace — dress code: white</div>
+            </div>
+            <div class="h-act-time">20:00</div>
+          </div>
+          <div class="h-activity-row">
+            <div class="h-act-icon">💃</div>
+            <div class="h-act-info">
+              <div class="h-act-name">DJ Set & Fireworks</div>
+              <div class="h-act-loc">Main Stage · Plage</div>
+            </div>
+            <div class="h-act-time">22:30</div>
+          </div>
+        </div>
+        <div class="h-card">
+          <div class="h-card-title">Message the Host</div>
+          <div class="h-msg-row">
+            <input type="text" placeholder="Any questions? Write here…" />
+            <button>Send ☀️</button>
+          </div>
+        </div>
+      </div>
+      <div class="h-page-panel">
+        <div class="h-page-panel-title">Event Details</div>
+        <div class="h-page-detail"><span class="k">Venue</span><span class="v">Cannes Beach Club</span></div>
+        <div class="h-page-detail"><span class="k">Dress code</span><span class="v">Dîner en blanc</span></div>
+      </div>
+      <div class="h-page-panel">
+        <div class="h-page-panel-title">About This Event</div>
+        <div class="h-page-about"><p>Sun, sand, and a Mediterranean summer evening on the Riviera.</p></div>
+      </div>
+      <div class="h-page-panel">
+        <div class="h-page-panel-title">Will You Be Attending?</div>
+        <div class="h-page-rsvp"><button class="yes">Yes, I'll be there</button><button>Can't make it</button></div>
+        <button class="h-page-confirm">Confirm My RSVP</button>
+      </div>
+    </div>
+  </div>
+
+
+  <!-- ══════════════════════════════════
+       07 · MONO PRINT
+       ══════════════════════════════════ -->
+  <div class="template-wrap">
+    <div class="template-label"><span class="template-num">07</span>Mono Print</div>
+    <div class="hub-07">
+      <div class="h-page-hero">
+        <span class="h-photo-tag">📷 Your uploaded photo</span>
+        <div class="h-page-hero-inner">
+          <div class="h-page-eyebrow">GuestHub Pass</div>
+          <div class="h-page-title">The Industry Summit '26</div>
+          <div class="h-page-meta">9 August 2026 · 9:00 AM</div>
+          <button class="h-page-cta">View My Pass ↓</button>
+        </div>
+      </div>
+      <div class="h-header">
+        <div class="h-header-left">
+          <div class="h-issue-line">GuestHub — Personal Pass</div>
+          <div class="h-event-name">The Industry<br/>Summit '26</div>
+        </div>
+        <div class="h-header-right">
+          <div class="h-big-date">09</div>
+          <div class="h-big-month">August</div>
+        </div>
+      </div>
+      <div class="h-pass-block">
+        <div class="h-qr-block">
+          <svg class="qr-svg" viewBox="0 0 56 56" fill="none">
+            <rect x="2" y="2" width="20" height="20" rx="1" stroke="#0a0a0a" stroke-width="2"/>
+            <rect x="7" y="7" width="10" height="10" fill="#0a0a0a" rx="0.5"/>
+            <rect x="34" y="2" width="20" height="20" rx="1" stroke="#0a0a0a" stroke-width="2"/>
+            <rect x="39" y="7" width="10" height="10" fill="#0a0a0a" rx="0.5"/>
+            <rect x="2" y="34" width="20" height="20" rx="1" stroke="#0a0a0a" stroke-width="2"/>
+            <rect x="7" y="39" width="10" height="10" fill="#0a0a0a" rx="0.5"/>
+            <rect x="34" y="34" width="8" height="8" fill="#0a0a0a" rx="0.5"/>
+            <rect x="46" y="34" width="8" height="8" fill="#0a0a0a" rx="0.5"/>
+            <rect x="34" y="46" width="8" height="8" fill="#0a0a0a" rx="0.5"/>
+            <rect x="46" y="46" width="8" height="8" fill="#0a0a0a" rx="0.5"/>
+            <rect x="26" y="2" width="6" height="6" fill="#0a0a0a" rx="0.4"/>
+            <rect x="26" y="10" width="6" height="6" fill="#0a0a0a" rx="0.4"/>
+            <rect x="26" y="18" width="6" height="6" fill="#0a0a0a" rx="0.4"/>
+          </svg>
+        </div>
+        <div class="h-pass-details">
+          <div class="h-guest-name">DARA OKONKWO</div>
+          <div class="h-pass-meta">Table 12 · Speaker Track A</div>
+          <div class="h-pass-meta" style="margin-top:4px">09 AUG '26 · 09:00 AM</div>
+        </div>
+        <div class="h-status-block">
+          <div class="h-status-check">✓</div>
+          <div class="h-status-word">Entry<br/>Approved</div>
+        </div>
+      </div>
+      <div class="h-tabs">
+        <div class="h-tab active">Pass</div>
+        <div class="h-tab">Agenda</div>
+        <div class="h-tab">Speakers</div>
+        <div class="h-tab">Contact</div>
+      </div>
+      <div class="h-body">
+        <div>
+          <div class="h-section-head"><h3>Full Agenda</h3></div>
+          <div class="h-prog-row">
+            <div class="h-prog-time-col">
+              <span class="h-prog-time">9:00</span>
+              <span class="h-prog-ampm">AM</span>
+            </div>
+            <div class="h-prog-name-col">
+              <div class="h-prog-name">Opening Keynote</div>
+              <div class="h-prog-sub">Main Hall · All attendees</div>
+            </div>
+            <div class="h-prog-tag-col" style="background:#e63329">
+              <div class="h-prog-tag">Live</div>
+            </div>
+          </div>
+          <div class="h-prog-row">
+            <div class="h-prog-time-col">
+              <span class="h-prog-time">11:00</span>
+              <span class="h-prog-ampm">AM</span>
+            </div>
+            <div class="h-prog-name-col">
+              <div class="h-prog-name">Track A — Product Design</div>
+              <div class="h-prog-sub">Room 3 · Your session</div>
+            </div>
+            <div class="h-prog-tag-col">
+              <div class="h-prog-tag">Your<br/>Track</div>
+            </div>
+          </div>
+          <div class="h-prog-row">
+            <div class="h-prog-time-col">
+              <span class="h-prog-time">2:00</span>
+              <span class="h-prog-ampm">PM</span>
+            </div>
+            <div class="h-prog-name-col">
+              <div class="h-prog-name">Networking Lunch</div>
+              <div class="h-prog-sub">Atrium — all guests</div>
+            </div>
+            <div class="h-prog-tag-col">
+              <div class="h-prog-tag">Open</div>
+            </div>
+          </div>
+        </div>
+        <div class="h-msg-row">
+          <input type="text" placeholder="Message the organizing team…" />
+          <button>SEND →</button>
+        </div>
+      </div>
+      <div class="h-page-panel">
+        <div class="h-page-panel-title">Event Details</div>
+        <div class="h-page-detail"><span class="k">Venue</span><span class="v">Main Hall, Conference Center</span></div>
+        <div class="h-page-detail"><span class="k">RSVP by</span><span class="v">Aug 1, 2026</span></div>
+      </div>
+      <div class="h-page-panel">
+        <div class="h-page-panel-title">About This Event</div>
+        <div class="h-page-about"><p>A full day of talks, workshops, and networking for design + product leaders.</p></div>
+      </div>
+      <div class="h-page-panel">
+        <div class="h-page-panel-title">Will You Be Attending?</div>
+        <div class="h-page-rsvp"><button class="yes">Yes, I'll be there</button><button>Can't make it</button></div>
+        <button class="h-page-confirm">Confirm My RSVP</button>
+      </div>
+    </div>
+  </div>
+
+
+  <!-- ══════════════════════════════════
+       08 · VERDANT
+       ══════════════════════════════════ -->
+  <div class="template-wrap">
+    <div class="template-label"><span class="template-num">08</span>Verdant</div>
+    <div class="hub-08">
+      <div class="h-page-hero">
+        <span class="h-photo-tag">📷 Your uploaded photo</span>
+        <div class="h-page-hero-inner">
+          <div class="h-page-eyebrow">You're Invited</div>
+          <div class="h-page-title">Forest Wellness Retreat</div>
+          <div class="h-page-meta">Springwater Lodge · 9–11 August 2026</div>
+          <button class="h-page-cta">View My Pass ↓</button>
+        </div>
+      </div>
+      <div class="h-canopy">
+        <div class="h-leaf-dec">🌿</div>
+        <div class="h-leaf-dec">🍃</div>
+        <div class="h-canopy-badge">Festio GuestHub</div>
+        <div class="h-event-name">Forest Wellness Retreat</div>
+        <div class="h-event-sub">Springwater Lodge · 9–11 August 2026</div>
+      </div>
+      <div class="h-pass-card">
+        <div class="h-qr-box">
+          <svg class="qr-svg" viewBox="0 0 34 34" fill="none">
+            <rect x="1" y="1" width="12" height="12" rx="1" stroke="#2d6a4f" stroke-width="1.5"/>
+            <rect x="4" y="4" width="6" height="6" fill="#2d6a4f" rx="0.5"/>
+            <rect x="21" y="1" width="12" height="12" rx="1" stroke="#2d6a4f" stroke-width="1.5"/>
+            <rect x="24" y="4" width="6" height="6" fill="#2d6a4f" rx="0.5"/>
+            <rect x="1" y="21" width="12" height="12" rx="1" stroke="#2d6a4f" stroke-width="1.5"/>
+            <rect x="4" y="24" width="6" height="6" fill="#2d6a4f" rx="0.5"/>
+            <rect x="21" y="21" width="4" height="4" fill="#2d6a4f" rx="0.3"/>
+            <rect x="27" y="21" width="4" height="4" fill="#2d6a4f" rx="0.3"/>
+            <rect x="21" y="27" width="4" height="4" fill="#2d6a4f" rx="0.3"/>
+            <rect x="27" y="27" width="4" height="4" fill="#2d6a4f" rx="0.3"/>
+          </svg>
+        </div>
+        <div class="h-pass-right">
+          <div class="h-guest-name">Priya Nair</div>
+          <div class="h-pass-tags">
+            <div class="h-pass-tag live">🌿 Checked In</div>
+            <div class="h-pass-tag">Cabin Maple · Bed 2</div>
+          </div>
+        </div>
+      </div>
+      <div class="h-tabs">
+        <div class="h-tab active">Pass</div>
+        <div class="h-tab">Wellness</div>
+        <div class="h-tab">Schedule</div>
+        <div class="h-tab">Message</div>
+      </div>
+      <div class="h-body">
+        <div class="h-module">
+          <div class="h-module-title">Your Retreat Stats</div>
+          <div class="h-wellness-grid">
+            <div class="h-wellness-card">
+              <div class="w-icon">🧘</div>
+              <div class="w-label">Sessions booked</div>
+              <div class="w-val">3 of 5</div>
+            </div>
+            <div class="h-wellness-card">
+              <div class="w-icon">🍵</div>
+              <div class="w-label">Meal plan</div>
+              <div class="w-val">Plant-based</div>
+            </div>
+            <div class="h-wellness-card">
+              <div class="w-icon">🌙</div>
+              <div class="w-label">Nights</div>
+              <div class="w-val">2 nights</div>
+            </div>
+            <div class="h-wellness-card">
+              <div class="w-icon">🏕️</div>
+              <div class="w-label">Cabin</div>
+              <div class="w-val">Maple</div>
+            </div>
+          </div>
+        </div>
+        <div class="h-module">
+          <div class="h-module-title">Today's Schedule</div>
+          <div class="h-schedule-item">
+            <div class="h-sched-dot now"></div>
+            <div class="h-sched-info">
+              <div class="h-sched-name">Morning Yoga — Sunrise Flow</div>
+              <div class="h-sched-sub">🌅 Open Deck — happening now</div>
+            </div>
+            <div class="h-sched-time">06:30</div>
+          </div>
+          <div class="h-schedule-item">
+            <div class="h-sched-dot next"></div>
+            <div class="h-sched-info">
+              <div class="h-sched-name">Forest Bathing Walk</div>
+              <div class="h-sched-sub">🌲 Meet at the Lodge gate</div>
+            </div>
+            <div class="h-sched-time">09:00</div>
+          </div>
+          <div class="h-schedule-item">
+            <div class="h-sched-dot next"></div>
+            <div class="h-sched-info">
+              <div class="h-sched-name">Plant-based Brunch</div>
+              <div class="h-sched-sub">🍃 The Green Hall</div>
+            </div>
+            <div class="h-sched-time">11:30</div>
+          </div>
+        </div>
+        <div class="h-msg-row">
+          <input type="text" placeholder="Message your host…" />
+          <button>Send 🌿</button>
+        </div>
+      </div>
+      <div class="h-page-panel">
+        <div class="h-page-panel-title">Event Details</div>
+        <div class="h-page-detail"><span class="k">Venue</span><span class="v">Springwater Lodge</span></div>
+        <div class="h-page-detail"><span class="k">Meal plan</span><span class="v">Plant-based</span></div>
+      </div>
+      <div class="h-page-panel">
+        <div class="h-page-panel-title">About This Event</div>
+        <div class="h-page-about"><p>A weekend of yoga, forest bathing, and rest, deep in the woods.</p></div>
+      </div>
+      <div class="h-page-panel">
+        <div class="h-page-panel-title">Will You Be Attending?</div>
+        <div class="h-page-rsvp"><button class="yes">Yes, I'll be there</button><button>Can't make it</button></div>
+        <button class="h-page-confirm">Confirm My RSVP</button>
+      </div>
+    </div>
+  </div>
+
+
+  <!-- ══════════════════════════════════
+       09 · COASTAL CLUB
+       ══════════════════════════════════ -->
+  <div class="template-wrap">
+    <div class="template-label"><span class="template-num">09</span>Coastal Club</div>
+    <div class="hub-09">
+      <div class="h-page-hero">
+        <span class="h-photo-tag">📷 Your uploaded photo</span>
+        <div class="h-page-hero-inner">
+          <div class="h-page-eyebrow">Royal Harbour Yacht Club</div>
+          <div class="h-page-title">Summer Regatta Opening Gala</div>
+          <div class="h-page-meta">9 August 2026 · Newport Marina · Black Tie</div>
+          <button class="h-page-cta">View My Pass ↓</button>
+        </div>
+      </div>
+      <div class="h-hull">
+        <div class="h-rope-line"></div>
+        <div class="h-hull-body">
+          <div class="h-hull-left">
+            <div class="h-club-name">Royal Harbour Yacht Club — GuestHub</div>
+            <div class="h-event-name">Summer Regatta<br/>Opening Gala</div>
+            <div class="h-event-detail">9 August 2026 · Newport Marina · Black Tie</div>
+          </div>
+          <div class="h-hull-emblem">
+            <div class="h-emblem-icon">⚓</div>
+            <div class="h-emblem-text">RHYC</div>
+          </div>
+        </div>
+      </div>
+      <div class="h-pass-strip">
+        <div class="h-qr-col">
+          <svg class="qr-svg" viewBox="0 0 56 56" fill="none">
+            <rect x="2" y="2" width="20" height="20" rx="1" stroke="#0f2040" stroke-width="2"/>
+            <rect x="7" y="7" width="10" height="10" fill="#0f2040" rx="0.5"/>
+            <rect x="34" y="2" width="20" height="20" rx="1" stroke="#0f2040" stroke-width="2"/>
+            <rect x="39" y="7" width="10" height="10" fill="#0f2040" rx="0.5"/>
+            <rect x="2" y="34" width="20" height="20" rx="1" stroke="#0f2040" stroke-width="2"/>
+            <rect x="7" y="39" width="10" height="10" fill="#0f2040" rx="0.5"/>
+            <rect x="34" y="34" width="8" height="8" fill="#b8912a" rx="0.5"/>
+            <rect x="46" y="34" width="8" height="8" fill="#0f2040" rx="0.5"/>
+            <rect x="34" y="46" width="8" height="8" fill="#0f2040" rx="0.5"/>
+            <rect x="46" y="46" width="8" height="8" fill="#b8912a" rx="0.5"/>
+          </svg>
+        </div>
+        <div class="h-pass-col">
+          <div class="h-guest-name">Charles Whitfield III</div>
+          <div class="h-pass-sub">Member #0042 · Commodore's Table</div>
+          <div class="h-pass-badges">
+            <div class="h-badge status">✓ Admitted</div>
+            <div class="h-badge brass">⚓ Patron</div>
+          </div>
+        </div>
+        <div class="h-status-col">
+          <div class="h-status-icon">⚓</div>
+          <div class="h-status-word">On<br/>Board</div>
+        </div>
+      </div>
+      <div class="h-tabs">
+        <div class="h-tab active">Pass</div>
+        <div class="h-tab">Races</div>
+        <div class="h-tab">Dinner</div>
+        <div class="h-tab">Message</div>
+      </div>
+      <div class="h-body">
+        <div class="h-panel">
+          <div class="h-panel-title">Today's Racing Programme</div>
+          <div class="h-leg">
+            <div class="h-leg-num">LEG 1</div>
+            <div class="h-leg-info">
+              <div class="h-leg-name">Harbour Start — J/24 Class</div>
+              <div class="h-leg-sub">East Channel Buoy · 4.2 NM</div>
+            </div>
+            <div class="h-leg-live">LIVE</div>
+          </div>
+          <div class="h-leg">
+            <div class="h-leg-num">LEG 2</div>
+            <div class="h-leg-info">
+              <div class="h-leg-name">Windward–Leeward — Open Class</div>
+              <div class="h-leg-sub">Triangle Course · 8.0 NM</div>
+            </div>
+            <div class="h-leg-time">14:30</div>
+          </div>
+          <div class="h-leg">
+            <div class="h-leg-num">GALA</div>
+            <div class="h-leg-info">
+              <div class="h-leg-name">Prizegiving Dinner & Dance</div>
+              <div class="h-leg-sub">Commodore's Pavilion</div>
+            </div>
+            <div class="h-leg-time">19:00</div>
+          </div>
+        </div>
+        <div class="h-msg-row">
+          <input type="text" placeholder="Message the events team…" />
+          <button>Send ⚓</button>
+        </div>
+      </div>
+      <div class="h-page-panel">
+        <div class="h-page-panel-title">Event Details</div>
+        <div class="h-page-detail"><span class="k">Venue</span><span class="v">Newport Marina</span></div>
+        <div class="h-page-detail"><span class="k">Dress code</span><span class="v">Black tie</span></div>
+      </div>
+      <div class="h-page-panel">
+        <div class="h-page-panel-title">About This Event</div>
+        <div class="h-page-about"><p>An afternoon of racing followed by dinner and dancing at the club.</p></div>
+      </div>
+      <div class="h-page-panel">
+        <div class="h-page-panel-title">Will You Be Attending?</div>
+        <div class="h-page-rsvp"><button class="yes">Yes, I'll be there</button><button>Can't make it</button></div>
+        <button class="h-page-confirm">Confirm My RSVP</button>
+      </div>
+    </div>
+  </div>
+
+
+  <!-- ══════════════════════════════════
+       10 · HAZE
+       ══════════════════════════════════ -->
+  <div class="template-wrap">
+    <div class="template-label"><span class="template-num">10</span>Haze</div>
+    <div class="hub-10">
+      <div class="h-page-hero">
+        <span class="h-photo-tag">📷 Your uploaded photo</span>
+        <div class="h-page-hero-inner">
+          <div class="h-page-eyebrow">You're Invited</div>
+          <div class="h-page-title">Aurora Experience Night</div>
+          <div class="h-page-meta">Saturday, 9 August · 8 PM – Late</div>
+          <button class="h-page-cta">View My Pass ↓</button>
+        </div>
+      </div>
+      <div class="h-top">
+        <div>
+          <div class="h-brand">GuestHub · Festio</div>
+          <div class="h-event-name">AURORA<br/>Experience Night</div>
+          <div class="h-event-when">Saturday, 9 August · 8 PM – Late</div>
+        </div>
+        <div class="h-invite-badge">✦ VIP Pass</div>
+      </div>
+      <div class="h-pass-glass">
+        <div class="h-qr-glow">
+          <svg class="qr-svg" viewBox="0 0 34 34" fill="none">
+            <rect x="1" y="1" width="12" height="12" rx="1.5" stroke="#a855f7" stroke-width="1.5"/>
+            <rect x="4" y="4" width="6" height="6" fill="#a855f7" rx="1"/>
+            <rect x="21" y="1" width="12" height="12" rx="1.5" stroke="#3b82f6" stroke-width="1.5"/>
+            <rect x="24" y="4" width="6" height="6" fill="#3b82f6" rx="1"/>
+            <rect x="1" y="21" width="12" height="12" rx="1.5" stroke="#ec4899" stroke-width="1.5"/>
+            <rect x="4" y="24" width="6" height="6" fill="#ec4899" rx="1"/>
+            <rect x="21" y="21" width="4" height="4" fill="#a855f7" rx="0.5"/>
+            <rect x="27" y="21" width="4" height="4" fill="#3b82f6" rx="0.5"/>
+            <rect x="21" y="27" width="4" height="4" fill="#ec4899" rx="0.5"/>
+            <rect x="27" y="27" width="4" height="4" fill="#a855f7" rx="0.5"/>
+          </svg>
+        </div>
+        <div class="h-pass-right">
+          <div class="h-guest-name">Yuki Tanaka</div>
+          <div class="h-gradient-tag">Backstage + All Areas</div>
+          <div class="h-pass-meta" style="margin-top:6px">🎪 Stage Left · Row 1</div>
+        </div>
+      </div>
+      <div class="h-tabs">
+        <div class="h-tab active">Pass</div>
+        <div class="h-tab">Lineup</div>
+        <div class="h-tab">Updates</div>
+        <div class="h-tab">Chat</div>
+      </div>
+      <div class="h-body">
+        <div class="h-glass-card">
+          <div class="h-card-title">Who else is attending</div>
+          <div class="h-hype-row">
+            <div class="h-hype-avatar">🎭</div>
+            <div class="h-hype-name">Lena Park</div>
+            <div class="h-hype-rsvp">VIP · Just arrived</div>
+          </div>
+          <div class="h-hype-row">
+            <div class="h-hype-avatar">🌟</div>
+            <div class="h-hype-name">Marco De Luca</div>
+            <div class="h-hype-rsvp">Artist Tier</div>
+          </div>
+          <div class="h-hype-row">
+            <div class="h-hype-avatar">🦋</div>
+            <div class="h-hype-name">Aisha Osei</div>
+            <div class="h-hype-rsvp">VIP · On the way</div>
+          </div>
+        </div>
+        <div class="h-glass-card">
+          <div class="h-card-title">Tonight's Lineup</div>
+          <div class="h-prog-row glow">
+            <div class="h-prog-time active">21:00</div>
+            <div class="h-prog-name">ZARA ft. HALO — Live Set</div>
+            <div class="h-prog-live">Live</div>
+          </div>
+          <div class="h-prog-row">
+            <div class="h-prog-time">22:30</div>
+            <div class="h-prog-name">DJ Nocturne — Aurora Mix</div>
+          </div>
+          <div class="h-prog-row">
+            <div class="h-prog-time">00:30</div>
+            <div class="h-prog-name">Closing Ceremony + Light Show</div>
+          </div>
+        </div>
+        <div class="h-msg-row">
+          <input type="text" placeholder="Message your host…" />
+          <button>↑</button>
+        </div>
+      </div>
+      <div class="h-page-panel">
+        <div class="h-page-panel-title">Event Details</div>
+        <div class="h-page-detail"><span class="k">Venue</span><span class="v">Aurora Warehouse</span></div>
+        <div class="h-page-detail"><span class="k">Admission</span><span class="v">QR pass at entry</span></div>
+      </div>
+      <div class="h-page-panel">
+        <div class="h-page-panel-title">About This Event</div>
+        <div class="h-page-about"><p>Late-night, moody, glassy — an intimate lounge night with a rotating lineup.</p></div>
+      </div>
+      <div class="h-page-panel">
+        <div class="h-page-panel-title">Will You Be Attending?</div>
+        <div class="h-page-rsvp"><button class="yes">Yes, I'll be there</button><button>Can't make it</button></div>
+        <button class="h-page-confirm">Confirm My RSVP</button>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<div class="page-footer">Festio GuestHub Mockups — Vol. 2 · 2026</div>
+
+</body>
+</html>

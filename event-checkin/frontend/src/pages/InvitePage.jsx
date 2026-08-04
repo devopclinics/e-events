@@ -269,6 +269,22 @@ function themedPageBackground(colors) {
   }
 }
 
+// Hero-only fallback for events with no uploaded cover photo. Several of the
+// 10 GuestHub color presets carry their real identity in `primary` (Coastal
+// Club's navy, Verdant's forest green, Haze's pink) rather than in
+// `background`/`surface` (often just a light neutral) — themedPageBackground()
+// alone renders those as a washed-out neutral hero instead of the template's
+// actual mood. Fades primary/accent to near-black instead, matching the
+// "no photo yet" placeholder look used in the GuestHub template previews.
+function heroFallbackBackground(colors) {
+  const base = colors?.primary || colors?.accent
+  if (!base) return { background: 'linear-gradient(145deg, #0f172a 0%, #113f46 52%, #14b8a6 100%)' }
+  const glow = colors?.accent || base
+  return {
+    background: `radial-gradient(120% 100% at 80% 0%, ${glow}40, transparent 60%), linear-gradient(160deg, ${base} 0%, #0a0a0a 100%)`,
+  }
+}
+
 function hexToRgb(hex) {
   const clean = String(hex || '').replace('#', '').trim()
   if (!/^[0-9a-f]{6}$/i.test(clean)) return null
@@ -324,41 +340,6 @@ function SecondaryButton({ children, className = '', ...props }) {
     >
       {children}
     </button>
-  )
-}
-
-function EventPoster({ event, coverImage, colors = {}, titleOverride, inviteLabel }) {
-  const title = titleOverride || eventTitle(event)
-  if (coverImage) {
-    return (
-      <div className="relative mx-auto w-full max-w-[420px]">
-        <div className="absolute -inset-5 rounded-[2rem] blur-3xl" style={{ background: `${colors.accent || '#14b8a6'}33` }} />
-        <div className="relative overflow-hidden rounded-[1.6rem] border border-white/[0.14] bg-slate-950 shadow-2xl shadow-black/45">
-          <img
-            src={coverImage}
-            alt={`${title} event flyer`}
-            className="aspect-[4/5] w-full object-contain"
-          />
-        </div>
-      </div>
-    )
-  }
-
-  return (
-    <div className="relative mx-auto w-full max-w-[420px]">
-      <div className="absolute -inset-5 rounded-[2rem] blur-3xl" style={{ background: `${colors.accent || '#14b8a6'}33` }} />
-      <div
-        className="relative flex aspect-[4/5] w-full flex-col justify-between overflow-hidden rounded-[1.6rem] border border-white/[0.14] p-8 shadow-2xl shadow-black/45"
-        style={{ background: `linear-gradient(145deg, ${colors.background || '#0f172a'}, ${colors.surface || '#113f46'} 52%, ${colors.accent || '#14b8a6'})` }}
-      >
-        <div className="h-16 w-16 rounded-2xl border border-white/20 bg-white/10" />
-        <div>
-          <div className="mb-3 text-xs font-extrabold uppercase tracking-[0.28em]" style={{ color: colors.accent || '#ccfbf1' }}>{inviteLabel || "You're invited"}</div>
-          <div className="text-4xl font-extrabold leading-tight sm:text-5xl" style={{ color: readableTone(colors).text }}>{title}</div>
-          {event.event_date && <div className="mt-5 text-sm font-semibold" style={{ color: readableTone(colors).muted }}>{fmtDate(event.event_date, event.timezone)}</div>}
-        </div>
-      </div>
-    </div>
   )
 }
 
@@ -530,7 +511,7 @@ function SmsConsentCheckbox({ checked, onChange, disabled = false }) {
   )
 }
 
-function RSVPForm({ event, theme, onConfirmed }) {
+function RSVPForm({ event, theme, onConfirmed, tone }) {
   const t = THEMES[theme] || THEMES.default
   // Pre-fill from ?first_name=&last_name=&email= when present — used by a
   // private Calendar link for a contact who hasn't registered for this event
@@ -660,7 +641,7 @@ function RSVPForm({ event, theme, onConfirmed }) {
   const inputCls = 'w-full min-h-12 rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-950 placeholder-slate-400 focus:outline-none focus:ring-4 focus:ring-teal-300/20'
 
   return (
-    <div className="space-y-5">
+    <div className="gh-panel space-y-5">
       <div>
         <h2 className="text-2xl font-extrabold text-slate-950">{multiInvitee ? 'Submit invited guests' : 'Will you be attending?'}</h2>
         <p className="mt-2 text-sm leading-relaxed text-slate-500">
@@ -675,6 +656,7 @@ function RSVPForm({ event, theme, onConfirmed }) {
           type="button"
           onClick={() => setChoice('yes')}
           className={`rounded-2xl border p-4 text-left transition focus:outline-none focus:ring-4 focus:ring-teal-300/20 ${choice === 'yes' ? 'border-teal-400 bg-teal-50 shadow-lg shadow-teal-950/5' : 'border-slate-200 bg-white hover:border-teal-200 hover:bg-slate-50'}`}
+          style={choice === 'yes' && tone?.accent ? { borderColor: tone.accent, background: `${tone.accent}14` } : undefined}
         >
           <div className="text-lg font-extrabold text-slate-950">Yes, I'll be there</div>
           <div className="mt-1 text-sm text-slate-500">Confirm my RSVP</div>
@@ -860,7 +842,7 @@ function RSVPForm({ event, theme, onConfirmed }) {
             </div>
           )}
 
-          <PrimaryButton type="submit" disabled={loading} className="w-full">
+          <PrimaryButton type="submit" disabled={loading} className="gh-cta w-full" style={tone?.accent ? { background: tone.accent } : undefined}>
             {loading ? 'Submitting...' : multiInvitee ? 'Submit RSVP for review' : 'Confirm My RSVP'}
           </PrimaryButton>
         </form>
@@ -1032,7 +1014,7 @@ function DeclinedView({ confirm }) {
 
 // ── Personalised (token) RSVP form — confirm or decline ─────────────────────────
 
-function TokenRSVPForm({ event, prefill, token, theme, onDone }) {
+function TokenRSVPForm({ event, prefill, token, theme, onDone, tone }) {
   const t = THEMES[theme] || THEMES.default
   const [form, setForm] = useState({
     first_name: prefill.first_name || '',
@@ -1090,7 +1072,7 @@ function TokenRSVPForm({ event, prefill, token, theme, onDone }) {
   }
 
   return (
-    <div className="space-y-5">
+    <div className="gh-panel space-y-5">
       <div>
         <h2 className="text-2xl font-extrabold text-slate-950">Will you be attending?</h2>
         <p className="mt-2 text-sm leading-relaxed text-slate-500">Confirm your spot or let the host know you can't make it.</p>
@@ -1154,7 +1136,8 @@ function TokenRSVPForm({ event, prefill, token, theme, onDone }) {
           type="button"
           onClick={() => submit('confirmed')}
           disabled={!!loading}
-          className="w-full"
+          className="gh-cta w-full"
+          style={tone?.accent ? { background: tone.accent } : undefined}
         >
           {loading === 'confirmed' ? 'Confirming...' : 'Confirm My RSVP'}
         </PrimaryButton>
@@ -2298,6 +2281,7 @@ export default function InvitePage() {
   const dWording = designTheme?.wording || {}
   const page = publicPageConfig(designTheme?.page_config)
   const dCover = designCover(designTheme, event)
+  const pageHubStyle = HUB_STYLES.has(designTheme?.hub_style) ? designTheme.hub_style : 'wallet-pass'
   // Rendered flyers already carry their own invitation heading and event name.
   // Keep the flyer as the hero instead of repeating that artwork in text —
   // but only when there's no separately uploaded cover photo taking its
@@ -2374,7 +2358,7 @@ export default function InvitePage() {
             You're currently marked as <span className="font-bold">{guest?.rsvp_status === 'confirmed' ? 'Attending' : 'Not attending'}</span>. You can update your RSVP before the deadline.
           </div>
         )}
-        <TokenRSVPForm event={event} prefill={guest} token={token} theme={theme} onDone={setConfirmed} />
+        <TokenRSVPForm event={event} prefill={guest} token={token} theme={theme} onDone={setConfirmed} tone={tone} />
       </div>
     )
   } else if (!event.rsvp_enabled) {
@@ -2428,14 +2412,14 @@ export default function InvitePage() {
             This event is at capacity — RSVPs below join the waitlist and we'll notify you if a spot opens up.
           </div>
         )}
-        <RSVPForm event={event} theme={theme} onConfirmed={handleConfirmed} />
+        <RSVPForm event={event} theme={theme} onConfirmed={handleConfirmed} tone={tone} />
       </div>
     )
   }
 
   return (
     <div
-      className="invite-page min-h-screen bg-[radial-gradient(circle_at_18%_0%,rgba(20,184,166,0.24),transparent_36rem),linear-gradient(140deg,#07111f_0%,#0f172a_48%,#132f38_100%)]"
+      className={`invite-page min-h-screen bg-[radial-gradient(circle_at_18%_0%,rgba(20,184,166,0.24),transparent_36rem),linear-gradient(140deg,#07111f_0%,#0f172a_48%,#132f38_100%)] gh-page-style-${pageHubStyle}`}
       style={{ ...themedPageBackground(dColors), color: tone.text, fontFamily: designFontFamily(designTheme) }}
     >
       <header className="px-5 py-6 sm:px-6">
@@ -2460,43 +2444,51 @@ export default function InvitePage() {
         </div>
       )}
 
+      <section
+        className="gh-hero relative overflow-hidden px-5 py-14 sm:px-6 sm:py-20 lg:py-24"
+        style={dCover
+          ? { backgroundImage: `url(${dCover})`, backgroundSize: 'cover', backgroundPosition: 'center' }
+          : heroFallbackBackground(dColors)}
+      >
+        <div className="gh-hero-scrim absolute inset-0" />
+        <div className="relative mx-auto max-w-[820px] text-center">
+          {flyerLedHero || !page.hero.showTitle ? <h1 className="sr-only">{title}</h1> : <>
+            {page.hero.showWelcomeLabel && <div className="text-sm font-extrabold uppercase tracking-[0.24em] text-white/85">{dWording.inviteLabel || "You're invited to"}</div>}
+            <h1 className="mt-3 text-4xl font-extrabold leading-[1.05] text-white sm:text-6xl">{title}</h1>
+          </>}
+          {!flyerLedHero && page.hero.showHost && host && (hostWebsite
+            ? <a href={hostWebsite} target="_blank" rel="noopener noreferrer" className="mt-4 inline-block text-lg font-semibold text-white underline decoration-2 underline-offset-4 hover:opacity-80">{host}</a>
+            : <p className="mt-4 text-lg font-semibold text-white">{host}</p>)}
+          {(heroWhen || venue) && <p className="mt-4 text-base font-semibold text-white/85">{[heroWhen, venue].filter(Boolean).join(' · ')}</p>}
+          <div className="mt-8 flex flex-col justify-center gap-3 sm:flex-row">
+            <PrimaryButton
+              type="button"
+              className="gh-cta"
+              style={dColors.accent ? { background: dColors.accent } : undefined}
+              onClick={() => document.getElementById(hasGuestHub ? 'guest-hub' : 'rsvp')?.scrollIntoView({ behavior: 'smooth' })}
+            >
+              {hasGuestHub ? 'Open FestioHub' : 'Confirm My RSVP'}
+            </PrimaryButton>
+            <SecondaryButton
+              type="button"
+              style={{ background: 'rgba(255,255,255,.14)', borderColor: 'rgba(255,255,255,.3)', color: '#fff' }}
+              onClick={() => document.getElementById('details')?.scrollIntoView({ behavior: 'smooth' })}
+            >
+              View Event Details
+            </SecondaryButton>
+          </div>
+        </div>
+      </section>
+
       <main className="mx-auto max-w-[1180px] px-5 pb-16 sm:px-6">
-        <section className="grid items-center gap-10 py-7 md:grid-cols-[minmax(320px,420px)_minmax(0,1fr)] md:gap-12 lg:gap-16 lg:py-14">
-          <EventPoster event={event} coverImage={dCover} colors={dColors} titleOverride={title} inviteLabel={dWording.inviteLabel} />
-
-          <div className="space-y-8">
-            <div>
-              {flyerLedHero || !page.hero.showTitle ? <h1 className="sr-only">{title}</h1> : <>{page.hero.showWelcomeLabel && <div className="mb-4 text-sm font-extrabold uppercase tracking-[0.24em]" style={{ color: tone.accent }}>{dWording.inviteLabel || "You're invited to"}</div>}<h1 className="max-w-3xl text-5xl font-extrabold leading-[1.02] sm:text-6xl lg:text-7xl" style={{ color: tone.primary }}>{title}</h1></>}
-              {!flyerLedHero && page.hero.showHost && host && (hostWebsite
-                ? <a href={hostWebsite} target="_blank" rel="noopener noreferrer" className="mt-5 inline-block text-xl font-semibold underline decoration-2 underline-offset-4 hover:opacity-80" style={{ color: tone.text }}>{host}</a>
-                : <p className="mt-5 text-xl font-semibold" style={{ color: tone.text }}>{host}</p>)}
-              <p className="mt-6 max-w-2xl whitespace-pre-line text-lg leading-8" style={{ color: tone.muted }}>
-                {dWording.rsvpNote || event.invite_message || 'Join us for a beautiful evening of celebration, food, memories, and good company.'}
-              </p>
-            </div>
-
-            <div className="grid gap-4 sm:grid-cols-2">
-              <DetailRow icon="📅" label="When" value={heroWhen} tone={tone} />
-              <DetailRow icon="📍" label="Location" value={venue || 'Venue details coming soon'} tone={tone} href={event.venue_address ? mapUrl(event.venue_address) : ''} />
-              <DetailRow icon="🎟️" label="Admission" value="QR pass at entry" tone={tone} />
-            </div>
-
-            <div className="flex flex-col gap-3 sm:flex-row">
-              <PrimaryButton
-                type="button"
-                style={dColors.accent ? { background: dColors.accent } : undefined}
-                onClick={() => document.getElementById(hasGuestHub ? 'guest-hub' : 'rsvp')?.scrollIntoView({ behavior: 'smooth' })}
-              >
-                {hasGuestHub ? 'Open FestioHub' : 'Confirm My RSVP'}
-              </PrimaryButton>
-              <SecondaryButton
-                type="button"
-                style={{ background: tone.chip, borderColor: tone.border, color: tone.text }}
-                onClick={() => document.getElementById('details')?.scrollIntoView({ behavior: 'smooth' })}
-              >
-                View Event Details
-              </SecondaryButton>
-            </div>
+        <section className="py-8">
+          <p className="mx-auto max-w-2xl whitespace-pre-line text-center text-lg leading-8" style={{ color: tone.muted }}>
+            {dWording.rsvpNote || event.invite_message || 'Join us for a beautiful evening of celebration, food, memories, and good company.'}
+          </p>
+          <div className="mt-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+            <DetailRow icon="📅" label="When" value={heroWhen} tone={tone} />
+            <DetailRow icon="📍" label="Location" value={venue || 'Venue details coming soon'} tone={tone} href={event.venue_address ? mapUrl(event.venue_address) : ''} />
+            <DetailRow icon="🎟️" label="Admission" value="QR pass at entry" tone={tone} />
           </div>
         </section>
 
@@ -2507,7 +2499,7 @@ export default function InvitePage() {
         )}
 
         <section id="details" className="grid gap-6 py-8 md:grid-cols-[minmax(0,1.55fr)_minmax(300px,0.75fr)]">
-          <div className="rounded-3xl border p-6 shadow-xl backdrop-blur sm:p-7" style={{ background: tone.panelStrong, borderColor: tone.border, boxShadow: `0 22px 48px ${tone.shadow}`, color: tone.text }}>
+          <div className="gh-panel rounded-3xl border p-6 shadow-xl backdrop-blur sm:p-7" style={{ background: tone.panelStrong, borderColor: tone.border, boxShadow: `0 22px 48px ${tone.shadow}`, color: tone.text }}>
             <div className="mb-6 flex items-center justify-between gap-4">
               <h2 className="text-3xl font-extrabold">Event details</h2>
               {event.invite_countdown_enabled !== false && daysLeft !== null && daysLeft > 0 && (
@@ -2538,7 +2530,7 @@ export default function InvitePage() {
             </div>
           </div>
 
-          {page.about.show && <div className="rounded-3xl border p-6 shadow-xl backdrop-blur sm:p-7" style={{ background: tone.panelStrong, borderColor: tone.border, boxShadow: `0 22px 48px ${tone.shadow}`, color: tone.text }}>
+          {page.about.show && <div className="gh-panel rounded-3xl border p-6 shadow-xl backdrop-blur sm:p-7" style={{ background: tone.panelStrong, borderColor: tone.border, boxShadow: `0 22px 48px ${tone.shadow}`, color: tone.text }}>
             <h2 className="text-3xl font-extrabold">About this event</h2>
             <div className="mt-5 space-y-4 text-base leading-8" style={{ color: tone.muted }}>
               {String(about).split(/\r?\n+/).filter(Boolean).map((paragraph, index) => <p key={index} className="whitespace-pre-line">{paragraph}</p>)}

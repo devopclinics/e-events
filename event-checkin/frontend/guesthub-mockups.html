@@ -1,0 +1,1301 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>GuestHub — 5 Mockup Templates</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;0,600;1,300;1,400&family=DM+Sans:wght@300;400;500;600&family=Space+Grotesk:wght@300;400;500;600;700&family=Playfair+Display:ital,wght@0,400;0,700;1,400&family=Inter:wght@300;400;500;600&display=swap" />
+<style>
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+body { background: #0c0c0c; color: #fff; font-family: 'Inter', sans-serif; }
+
+/* ─── LAYOUT ─── */
+.page-header {
+  text-align: center; padding: 60px 24px 40px;
+  font-family: 'DM Sans', sans-serif;
+}
+.page-header h1 { font-size: clamp(24px, 4vw, 42px); font-weight: 300; letter-spacing: 0.15em; text-transform: uppercase; color: #fff; }
+.page-header p { margin-top: 10px; color: #888; font-size: 14px; letter-spacing: 0.05em; }
+
+.templates-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(340px, 1fr));
+  gap: 48px 32px;
+  padding: 0 32px 80px;
+  max-width: 1800px;
+  margin: 0 auto;
+}
+
+.template-wrap { display: flex; flex-direction: column; gap: 16px; }
+.template-label {
+  font-family: 'DM Sans', sans-serif;
+  font-size: 11px; font-weight: 600; letter-spacing: 0.2em; text-transform: uppercase; color: #666;
+  display: flex; align-items: center; gap: 10px;
+}
+.template-label::after { content: ''; flex: 1; height: 1px; background: #222; }
+.template-num { color: #444; }
+
+
+/* ═══════════════════════════════════════════════
+   TEMPLATE 01 — NOIR COUTURE
+   ═══════════════════════════════════════════════ */
+.hub-01 {
+  --c-bg: #0a0a0a;
+  --c-surface: #111;
+  --c-border: #222;
+  --c-gold: #c9a84c;
+  --c-gold-dim: rgba(201,168,76,0.12);
+  --c-text: #e8e0d0;
+  --c-muted: #6b6560;
+  background: var(--c-bg);
+  border: 1px solid var(--c-border);
+  border-radius: 4px;
+  overflow: hidden;
+  font-family: 'DM Sans', sans-serif;
+}
+
+.hub-01 .h-topbar {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 14px 20px;
+  border-bottom: 1px solid var(--c-border);
+}
+.hub-01 .h-brand {
+  font-family: 'Cormorant Garamond', serif;
+  font-size: 13px; letter-spacing: 0.35em; text-transform: uppercase; color: var(--c-gold); font-weight: 400;
+}
+.hub-01 .h-pill {
+  background: var(--c-gold-dim); color: var(--c-gold);
+  font-size: 9px; font-weight: 600; letter-spacing: 0.2em; text-transform: uppercase;
+  padding: 4px 10px; border-radius: 2px; border: 1px solid rgba(201,168,76,0.25);
+}
+
+.hub-01 .h-hero {
+  padding: 32px 20px 24px;
+  border-bottom: 1px solid var(--c-border);
+  display: flex; align-items: flex-start; gap: 20px;
+}
+.hub-01 .h-qr-frame {
+  width: 88px; height: 88px; flex-shrink: 0;
+  border: 1px solid var(--c-gold); padding: 8px;
+  display: grid; place-items: center;
+}
+.hub-01 .h-qr-frame svg { width: 100%; height: 100%; opacity: 0.9; }
+.hub-01 .h-guest-info { flex: 1; min-width: 0; }
+.hub-01 .h-guest-name {
+  font-family: 'Cormorant Garamond', serif;
+  font-size: 24px; font-weight: 300; letter-spacing: 0.05em; color: var(--c-text);
+  font-style: italic;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.hub-01 .h-event-name {
+  margin-top: 4px; font-size: 11px; font-weight: 500; letter-spacing: 0.2em;
+  text-transform: uppercase; color: var(--c-muted);
+}
+.hub-01 .h-status-row { margin-top: 14px; display: flex; align-items: center; gap: 8px; }
+.hub-01 .h-status-dot {
+  width: 6px; height: 6px; border-radius: 50%; background: var(--c-gold);
+  box-shadow: 0 0 8px var(--c-gold);
+}
+.hub-01 .h-status-text { font-size: 11px; color: var(--c-gold); letter-spacing: 0.12em; }
+.hub-01 .h-meta-row {
+  margin-top: 8px; display: flex; flex-direction: column; gap: 4px;
+}
+.hub-01 .h-meta-item { font-size: 11px; color: var(--c-muted); display: flex; gap: 8px; }
+.hub-01 .h-meta-item strong { color: var(--c-text); font-weight: 400; }
+
+.hub-01 .h-tabs {
+  display: flex; border-bottom: 1px solid var(--c-border);
+}
+.hub-01 .h-tab {
+  flex: 1; padding: 12px 8px; text-align: center;
+  font-size: 10px; font-weight: 600; letter-spacing: 0.18em; text-transform: uppercase;
+  color: var(--c-muted); cursor: pointer;
+  border-bottom: 2px solid transparent; transition: all 0.2s;
+}
+.hub-01 .h-tab.active { color: var(--c-gold); border-bottom-color: var(--c-gold); }
+
+.hub-01 .h-body { padding: 20px; display: flex; flex-direction: column; gap: 14px; }
+
+.hub-01 .h-section-title {
+  font-size: 9px; font-weight: 600; letter-spacing: 0.25em; text-transform: uppercase; color: var(--c-muted);
+  display: flex; align-items: center; gap: 10px; margin-bottom: 2px;
+}
+.hub-01 .h-section-title::after { content: ''; flex: 1; height: 1px; background: var(--c-border); }
+
+.hub-01 .h-timeline-item {
+  display: flex; gap: 12px; align-items: flex-start;
+}
+.hub-01 .h-tl-time {
+  font-size: 10px; font-weight: 600; letter-spacing: 0.1em; color: var(--c-gold);
+  min-width: 38px; padding-top: 2px;
+}
+.hub-01 .h-tl-dot {
+  width: 2px; flex-shrink: 0; position: relative;
+  background: var(--c-border); margin: 0 4px;
+}
+.hub-01 .h-tl-dot::before {
+  content: ''; position: absolute; top: 5px; left: -3px;
+  width: 8px; height: 8px; border-radius: 50%;
+  border: 1px solid var(--c-gold); background: var(--c-bg);
+}
+.hub-01 .h-tl-text { font-size: 12px; color: var(--c-text); line-height: 1.5; padding-bottom: 14px; }
+.hub-01 .h-tl-text small { display: block; font-size: 10px; color: var(--c-muted); margin-top: 2px; }
+
+.hub-01 .h-msg-input {
+  display: flex; gap: 8px; margin-top: 4px;
+}
+.hub-01 .h-msg-input input {
+  flex: 1; background: var(--c-surface); border: 1px solid var(--c-border);
+  border-radius: 2px; padding: 10px 14px; font-size: 12px; color: var(--c-text);
+  font-family: 'DM Sans', sans-serif; outline: none;
+}
+.hub-01 .h-msg-input input::placeholder { color: var(--c-muted); }
+.hub-01 .h-msg-input button {
+  background: var(--c-gold-dim); border: 1px solid rgba(201,168,76,0.3);
+  color: var(--c-gold); padding: 0 16px; font-size: 11px; font-weight: 600;
+  letter-spacing: 0.12em; text-transform: uppercase; cursor: pointer; border-radius: 2px;
+}
+
+
+/* ═══════════════════════════════════════════════
+   TEMPLATE 02 — BLOOM EDITORIAL
+   ═══════════════════════════════════════════════ */
+.hub-02 {
+  --c-bg: #faf7f4;
+  --c-surface: #fff;
+  --c-border: #e8e0d8;
+  --c-rose: #c2696a;
+  --c-dusty: #9b7f7f;
+  --c-text: #2e1f1f;
+  --c-muted: #a09090;
+  background: var(--c-bg);
+  border-radius: 16px;
+  overflow: hidden;
+  font-family: 'DM Sans', sans-serif;
+  box-shadow: 0 20px 60px rgba(50,20,20,0.1), 0 4px 12px rgba(50,20,20,0.06);
+}
+
+.hub-02 .h-topbar {
+  background: var(--c-rose);
+  padding: 20px 22px 18px;
+  position: relative; overflow: hidden;
+}
+.hub-02 .h-topbar::before {
+  content: '❀';
+  position: absolute; right: -10px; top: -20px;
+  font-size: 100px; opacity: 0.1; line-height: 1;
+}
+.hub-02 .h-topbar::after {
+  content: '✿';
+  position: absolute; right: 40px; bottom: -30px;
+  font-size: 70px; opacity: 0.08; line-height: 1;
+}
+.hub-02 .h-brand {
+  font-family: 'Playfair Display', serif;
+  font-size: 11px; letter-spacing: 0.2em; text-transform: uppercase; color: rgba(255,255,255,0.7);
+}
+.hub-02 .h-event-name {
+  font-family: 'Playfair Display', serif;
+  font-size: 20px; font-weight: 700; color: #fff; margin-top: 4px; line-height: 1.3;
+}
+.hub-02 .h-event-date {
+  font-size: 11px; color: rgba(255,255,255,0.7); margin-top: 6px; letter-spacing: 0.08em;
+}
+
+.hub-02 .h-pass-card {
+  margin: 20px; background: var(--c-surface); border-radius: 12px;
+  padding: 20px; display: flex; align-items: center; gap: 18px;
+  box-shadow: 0 2px 16px rgba(50,20,20,0.08);
+  border: 1px solid var(--c-border);
+}
+.hub-02 .h-qr-wrap {
+  width: 76px; height: 76px; flex-shrink: 0;
+  background: var(--c-bg); border-radius: 8px; padding: 8px;
+  display: grid; place-items: center;
+}
+.hub-02 .h-pass-right { flex: 1; min-width: 0; }
+.hub-02 .h-guest-name {
+  font-family: 'Playfair Display', serif;
+  font-size: 18px; font-weight: 700; color: var(--c-text);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.hub-02 .h-pass-tag {
+  display: inline-flex; align-items: center; gap: 5px;
+  background: rgba(194,105,106,0.1); color: var(--c-rose);
+  font-size: 10px; font-weight: 600; letter-spacing: 0.12em; text-transform: uppercase;
+  padding: 4px 10px; border-radius: 100px; margin-top: 8px;
+}
+.hub-02 .h-pass-tag::before { content: '●'; font-size: 6px; }
+.hub-02 .h-pass-meta { margin-top: 8px; font-size: 11px; color: var(--c-muted); }
+.hub-02 .h-pass-meta span { color: var(--c-dusty); font-weight: 500; }
+
+.hub-02 .h-tabs {
+  display: flex; padding: 0 16px; gap: 4px;
+}
+.hub-02 .h-tab {
+  flex: 1; padding: 10px 6px; text-align: center;
+  font-size: 10px; font-weight: 600; letter-spacing: 0.14em; text-transform: uppercase;
+  color: var(--c-muted); cursor: pointer; border-radius: 100px; transition: all 0.2s;
+}
+.hub-02 .h-tab.active { background: rgba(194,105,106,0.1); color: var(--c-rose); }
+
+.hub-02 .h-body { padding: 16px 20px 20px; display: flex; flex-direction: column; gap: 12px; }
+
+.hub-02 .h-module {
+  background: var(--c-surface); border-radius: 10px; padding: 16px;
+  border: 1px solid var(--c-border);
+}
+.hub-02 .h-module-title {
+  font-size: 10px; font-weight: 600; letter-spacing: 0.18em; text-transform: uppercase;
+  color: var(--c-muted); margin-bottom: 12px;
+}
+.hub-02 .h-prog-item {
+  display: flex; align-items: flex-start; gap: 12px; padding: 8px 0;
+  border-bottom: 1px solid var(--c-border);
+}
+.hub-02 .h-prog-item:last-child { border-bottom: none; padding-bottom: 0; }
+.hub-02 .h-prog-time { font-size: 10px; font-weight: 700; color: var(--c-rose); min-width: 36px; padding-top: 2px; }
+.hub-02 .h-prog-info { flex: 1; }
+.hub-02 .h-prog-name { font-size: 13px; font-weight: 500; color: var(--c-text); }
+.hub-02 .h-prog-loc { font-size: 10px; color: var(--c-muted); margin-top: 2px; }
+.hub-02 .h-prog-dot {
+  width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0;
+  margin-top: 4px;
+}
+.hub-02 .h-prog-dot.live { background: var(--c-rose); box-shadow: 0 0 0 3px rgba(194,105,106,0.2); }
+.hub-02 .h-prog-dot.upcoming { background: var(--c-border); }
+
+.hub-02 .h-msg-area { display: flex; flex-direction: column; gap: 8px; }
+.hub-02 .h-msg-bubble {
+  background: rgba(194,105,106,0.06); border-radius: 8px 8px 0 8px;
+  padding: 10px 14px; font-size: 12px; color: var(--c-dusty); line-height: 1.5;
+  align-self: flex-end; max-width: 85%;
+}
+.hub-02 .h-msg-input {
+  display: flex; gap: 8px; margin-top: 4px;
+}
+.hub-02 .h-msg-input input {
+  flex: 1; background: var(--c-bg); border: 1px solid var(--c-border);
+  border-radius: 100px; padding: 10px 16px; font-size: 12px; color: var(--c-text);
+  font-family: 'DM Sans', sans-serif; outline: none;
+}
+.hub-02 .h-msg-input button {
+  background: var(--c-rose); border: none; color: #fff;
+  width: 38px; height: 38px; border-radius: 50%; font-size: 14px; cursor: pointer;
+  display: grid; place-items: center; flex-shrink: 0;
+}
+
+
+/* ═══════════════════════════════════════════════
+   TEMPLATE 03 — CIRCUIT / ELECTRIC RAVE
+   ═══════════════════════════════════════════════ */
+.hub-03 {
+  --c-bg: #07070f;
+  --c-surface: #0f0f1a;
+  --c-border: rgba(120,80,255,0.15);
+  --c-primary: #7c3aed;
+  --c-neon: #a78bfa;
+  --c-cyan: #22d3ee;
+  --c-text: #e2e0f0;
+  --c-muted: #6060a0;
+  background: var(--c-bg);
+  border-radius: 8px; overflow: hidden;
+  font-family: 'Space Grotesk', sans-serif;
+  border: 1px solid var(--c-border);
+  box-shadow: 0 0 0 1px rgba(120,80,255,0.05), 0 20px 60px rgba(0,0,0,0.8);
+}
+
+.hub-03 .h-topbar {
+  padding: 16px 20px;
+  border-bottom: 1px solid var(--c-border);
+  display: flex; align-items: center; justify-content: space-between;
+  background: linear-gradient(135deg, rgba(124,58,237,0.08) 0%, transparent 60%);
+}
+.hub-03 .h-brand {
+  font-size: 11px; font-weight: 700; letter-spacing: 0.2em; text-transform: uppercase;
+  color: var(--c-neon);
+}
+.hub-03 .h-live-badge {
+  display: flex; align-items: center; gap: 6px;
+  font-size: 9px; font-weight: 700; letter-spacing: 0.15em; text-transform: uppercase;
+  color: var(--c-cyan);
+  border: 1px solid rgba(34,211,238,0.3); padding: 4px 10px; border-radius: 4px;
+  background: rgba(34,211,238,0.06);
+}
+.hub-03 .h-live-badge::before {
+  content: ''; width: 6px; height: 6px; border-radius: 50%; background: var(--c-cyan);
+  box-shadow: 0 0 8px var(--c-cyan);
+  animation: pulse 1.5s infinite;
+}
+@keyframes pulse { 0%,100% { opacity: 1 } 50% { opacity: 0.4 } }
+
+.hub-03 .h-pass-zone {
+  margin: 20px; padding: 20px;
+  background: linear-gradient(135deg, rgba(124,58,237,0.12) 0%, rgba(34,211,238,0.06) 100%);
+  border: 1px solid var(--c-border); border-radius: 6px;
+  display: flex; align-items: center; gap: 20px;
+  position: relative; overflow: hidden;
+}
+.hub-03 .h-pass-zone::before {
+  content: '';
+  position: absolute; inset: 0;
+  background: repeating-linear-gradient(
+    45deg, transparent, transparent 24px,
+    rgba(120,80,255,0.03) 24px, rgba(120,80,255,0.03) 25px
+  );
+}
+.hub-03 .h-qr-frame {
+  width: 80px; height: 80px; flex-shrink: 0;
+  border: 1px solid rgba(167,139,250,0.4); border-radius: 6px; padding: 8px;
+  background: var(--c-bg); display: grid; place-items: center;
+  box-shadow: 0 0 20px rgba(124,58,237,0.3);
+}
+.hub-03 .h-pass-info { flex: 1; min-width: 0; position: relative; z-index: 1; }
+.hub-03 .h-guest-name {
+  font-size: 20px; font-weight: 700; color: var(--c-text);
+  letter-spacing: -0.02em;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.hub-03 .h-event-name {
+  font-size: 11px; color: var(--c-muted); margin-top: 4px;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.hub-03 .h-status-chip {
+  margin-top: 10px; display: inline-flex; align-items: center; gap: 6px;
+  font-size: 10px; font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--c-cyan); background: rgba(34,211,238,0.08);
+  border: 1px solid rgba(34,211,238,0.2); padding: 4px 12px; border-radius: 4px;
+}
+
+.hub-03 .h-tabs {
+  display: flex; border-bottom: 1px solid var(--c-border); padding: 0 20px; gap: 0;
+}
+.hub-03 .h-tab {
+  padding: 12px 14px; font-size: 10px; font-weight: 700; letter-spacing: 0.14em; text-transform: uppercase;
+  color: var(--c-muted); cursor: pointer; border-bottom: 2px solid transparent; transition: all 0.2s;
+}
+.hub-03 .h-tab.active { color: var(--c-neon); border-bottom-color: var(--c-neon); }
+
+.hub-03 .h-body { padding: 20px; display: flex; flex-direction: column; gap: 16px; }
+
+.hub-03 .h-activity-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.hub-03 .h-activity-card {
+  background: var(--c-surface); border: 1px solid var(--c-border); border-radius: 6px;
+  padding: 14px; display: flex; flex-direction: column; gap: 4px;
+}
+.hub-03 .h-activity-card .icon { font-size: 20px; line-height: 1; }
+.hub-03 .h-activity-card .label { font-size: 9px; font-weight: 700; letter-spacing: 0.15em; text-transform: uppercase; color: var(--c-muted); margin-top: 8px; }
+.hub-03 .h-activity-card .value { font-size: 20px; font-weight: 700; color: var(--c-text); }
+.hub-03 .h-activity-card .value.accent { color: var(--c-neon); }
+
+.hub-03 .h-prog-row {
+  display: flex; align-items: center; gap: 12px;
+  padding: 10px 14px; border-radius: 6px; border: 1px solid var(--c-border);
+  background: var(--c-surface);
+}
+.hub-03 .h-prog-row.now { border-color: rgba(167,139,250,0.3); background: rgba(124,58,237,0.08); }
+.hub-03 .h-prog-time { font-size: 10px; font-weight: 700; color: var(--c-muted); min-width: 38px; }
+.hub-03 .h-prog-time.now { color: var(--c-neon); }
+.hub-03 .h-prog-name { flex: 1; font-size: 12px; font-weight: 500; color: var(--c-text); }
+.hub-03 .h-prog-badge {
+  font-size: 8px; font-weight: 800; letter-spacing: 0.15em; text-transform: uppercase;
+  padding: 3px 8px; border-radius: 3px;
+  background: rgba(167,139,250,0.15); color: var(--c-neon); border: 1px solid rgba(167,139,250,0.2);
+}
+
+.hub-03 .h-msg-input { display: flex; gap: 8px; }
+.hub-03 .h-msg-input input {
+  flex: 1; background: var(--c-surface); border: 1px solid var(--c-border);
+  border-radius: 6px; padding: 10px 14px; font-size: 12px; color: var(--c-text);
+  font-family: 'Space Grotesk', sans-serif; outline: none;
+}
+.hub-03 .h-msg-input input::placeholder { color: var(--c-muted); }
+.hub-03 .h-msg-input button {
+  background: linear-gradient(135deg, var(--c-primary), #6366f1);
+  border: none; color: #fff; padding: 0 18px; border-radius: 6px;
+  font-size: 11px; font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase;
+  cursor: pointer;
+}
+
+
+/* ═══════════════════════════════════════════════
+   TEMPLATE 04 — LINEN & GOLD (EARTHY LUXE)
+   ═══════════════════════════════════════════════ */
+.hub-04 {
+  --c-bg: #f7f3ee;
+  --c-surface: #fff;
+  --c-border: #e4ddd6;
+  --c-earth: #8b6f47;
+  --c-warm: #c4a47c;
+  --c-text: #2c2218;
+  --c-muted: #9c8872;
+  background: var(--c-bg);
+  border-radius: 20px; overflow: hidden;
+  font-family: 'Cormorant Garamond', serif;
+  box-shadow: 0 24px 80px rgba(44,34,24,0.14), 0 4px 16px rgba(44,34,24,0.06);
+}
+
+.hub-04 .h-cover {
+  height: 100px;
+  background: linear-gradient(135deg, #3b2a1a 0%, #6b4e2e 50%, #8b6f47 100%);
+  position: relative; overflow: hidden;
+  display: flex; align-items: flex-end; padding: 16px 20px;
+}
+.hub-04 .h-cover::before {
+  content: '';
+  position: absolute; inset: 0;
+  background-image: url("data:image/svg+xml,%3Csvg width='60' height='60' viewBox='0 0 60 60' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='none' fill-rule='evenodd'%3E%3Cg fill='%23ffffff' fill-opacity='0.03'%3E%3Cpath d='M36 34v-4h-2v4h-4v2h4v4h2v-4h4v-2h-4zm0-30V0h-2v4h-4v2h4v4h2V6h4V4h-4zM6 34v-4H4v4H0v2h4v4h2v-4h4v-2H6zM6 4V0H4v4H0v2h4v4h2V6h4V4H6z'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E");
+}
+.hub-04 .h-cover-label {
+  font-size: 10px; letter-spacing: 0.3em; text-transform: uppercase; color: rgba(255,255,255,0.6);
+  font-family: 'DM Sans', sans-serif; font-weight: 400;
+}
+.hub-04 .h-cover-event {
+  font-size: 22px; font-weight: 600; color: #fff; font-style: italic;
+  position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
+  white-space: nowrap;
+}
+
+.hub-04 .h-pass-card {
+  margin: -20px 20px 0; background: var(--c-surface);
+  border-radius: 12px; padding: 20px;
+  box-shadow: 0 8px 32px rgba(44,34,24,0.12);
+  display: flex; gap: 16px; align-items: center;
+  border: 1px solid var(--c-border);
+  position: relative; z-index: 1;
+}
+.hub-04 .h-qr-box {
+  width: 72px; height: 72px; flex-shrink: 0;
+  border: 1.5px solid var(--c-warm); padding: 7px; border-radius: 4px;
+  display: grid; place-items: center; background: var(--c-bg);
+}
+.hub-04 .h-pass-right { flex: 1; min-width: 0; }
+.hub-04 .h-guest-name {
+  font-size: 20px; font-weight: 600; color: var(--c-text);
+  font-style: italic; line-height: 1.2;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.hub-04 .h-seat-info {
+  margin-top: 6px; display: flex; gap: 10px;
+}
+.hub-04 .h-seat-chip {
+  font-family: 'DM Sans', sans-serif;
+  font-size: 10px; font-weight: 600; letter-spacing: 0.12em; text-transform: uppercase;
+  background: rgba(139,111,71,0.1); color: var(--c-earth);
+  padding: 4px 10px; border-radius: 4px;
+}
+.hub-04 .h-status-line {
+  margin-top: 8px; font-family: 'DM Sans', sans-serif;
+  font-size: 11px; color: var(--c-muted); display: flex; align-items: center; gap: 6px;
+}
+.hub-04 .h-status-line::before { content: '◉'; color: var(--c-warm); font-size: 8px; }
+
+.hub-04 .h-divider {
+  height: 1px; background: var(--c-border); margin: 20px;
+}
+.hub-04 .h-ornament {
+  text-align: center; font-size: 16px; color: var(--c-warm); letter-spacing: 0.5em;
+  margin: -28px 0 14px;
+}
+
+.hub-04 .h-tabs {
+  display: flex; padding: 0 16px 0; gap: 6px; margin-bottom: 16px;
+}
+.hub-04 .h-tab {
+  flex: 1; padding: 9px 6px; text-align: center;
+  font-family: 'DM Sans', sans-serif;
+  font-size: 9px; font-weight: 700; letter-spacing: 0.2em; text-transform: uppercase;
+  color: var(--c-muted); cursor: pointer; border-radius: 6px; transition: all 0.2s;
+}
+.hub-04 .h-tab.active { background: rgba(139,111,71,0.1); color: var(--c-earth); }
+
+.hub-04 .h-body { padding: 0 20px 24px; display: flex; flex-direction: column; gap: 12px; }
+
+.hub-04 .h-module { background: var(--c-surface); border-radius: 10px; padding: 16px; border: 1px solid var(--c-border); }
+.hub-04 .h-module-title {
+  font-family: 'DM Sans', sans-serif;
+  font-size: 9px; font-weight: 700; letter-spacing: 0.22em; text-transform: uppercase; color: var(--c-muted);
+  margin-bottom: 14px; display: flex; align-items: center; gap: 8px;
+}
+.hub-04 .h-module-title::after { content: ''; flex: 1; height: 1px; background: var(--c-border); }
+
+.hub-04 .h-menu-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.hub-04 .h-menu-item {
+  background: var(--c-bg); border-radius: 8px; padding: 12px 14px;
+  border: 1px solid var(--c-border);
+}
+.hub-04 .h-menu-item .course { font-family: 'DM Sans', sans-serif; font-size: 9px; font-weight: 700; letter-spacing: 0.15em; text-transform: uppercase; color: var(--c-muted); }
+.hub-04 .h-menu-item .dish { font-size: 14px; color: var(--c-text); margin-top: 4px; }
+
+.hub-04 .h-msg-input { display: flex; gap: 8px; margin-top: 4px; }
+.hub-04 .h-msg-input input {
+  flex: 1; background: var(--c-bg); border: 1px solid var(--c-border);
+  border-radius: 8px; padding: 10px 14px; font-size: 13px; color: var(--c-text);
+  font-family: 'Cormorant Garamond', serif; outline: none; font-style: italic;
+}
+.hub-04 .h-msg-input button {
+  background: var(--c-earth); border: none; color: #fff;
+  padding: 0 18px; border-radius: 8px;
+  font-family: 'DM Sans', sans-serif; font-size: 11px; font-weight: 700;
+  letter-spacing: 0.1em; text-transform: uppercase; cursor: pointer;
+}
+
+
+/* ═══════════════════════════════════════════════
+   TEMPLATE 05 — CELESTIAL / MIDNIGHT LUXE
+   ═══════════════════════════════════════════════ */
+.hub-05 {
+  --c-bg: #030816;
+  --c-surface: #080f28;
+  --c-border: rgba(148,163,214,0.12);
+  --c-silver: #c8d4f0;
+  --c-blue: #3b82f6;
+  --c-aurora: #818cf8;
+  --c-text: #e2e8f8;
+  --c-muted: #5060a0;
+  background: var(--c-bg);
+  border-radius: 12px; overflow: hidden;
+  font-family: 'Inter', sans-serif;
+  border: 1px solid var(--c-border);
+  box-shadow: 0 30px 80px rgba(3,8,22,0.8), 0 0 0 1px rgba(148,163,214,0.05);
+}
+
+.hub-05 .h-skyline {
+  height: 120px;
+  background: linear-gradient(180deg, #020614 0%, #0a1a4a 70%, #1a2a6c 100%);
+  position: relative; overflow: hidden; display: flex; align-items: center; justify-content: center;
+}
+.hub-05 .h-stars {
+  position: absolute; inset: 0;
+  background-image:
+    radial-gradient(1px 1px at 20% 30%, rgba(255,255,255,0.8) 0%, transparent 100%),
+    radial-gradient(1px 1px at 40% 70%, rgba(255,255,255,0.6) 0%, transparent 100%),
+    radial-gradient(1px 1px at 60% 20%, rgba(255,255,255,0.9) 0%, transparent 100%),
+    radial-gradient(1px 1px at 80% 50%, rgba(255,255,255,0.7) 0%, transparent 100%),
+    radial-gradient(1px 1px at 15% 80%, rgba(255,255,255,0.5) 0%, transparent 100%),
+    radial-gradient(1px 1px at 90% 10%, rgba(255,255,255,0.8) 0%, transparent 100%),
+    radial-gradient(1.5px 1.5px at 35% 45%, rgba(255,255,255,0.6) 0%, transparent 100%),
+    radial-gradient(1px 1px at 70% 85%, rgba(255,255,255,0.7) 0%, transparent 100%);
+}
+.hub-05 .h-moon {
+  width: 40px; height: 40px; border-radius: 50%;
+  background: radial-gradient(circle at 35% 35%, #d0dbff, #8098e0);
+  box-shadow: 0 0 30px rgba(128,152,224,0.4), 0 0 60px rgba(128,152,224,0.15);
+  position: absolute; top: 16px; right: 24px;
+}
+.hub-05 .h-event-title {
+  font-size: 16px; font-weight: 300; letter-spacing: 0.2em; text-transform: uppercase;
+  color: var(--c-silver); text-align: center; position: relative; z-index: 1;
+  text-shadow: 0 0 20px rgba(200,212,240,0.4);
+}
+
+.hub-05 .h-pass-card {
+  margin: 20px; background: var(--c-surface);
+  border: 1px solid var(--c-border); border-radius: 10px;
+  padding: 20px; display: flex; gap: 16px; align-items: center;
+  position: relative; overflow: hidden;
+}
+.hub-05 .h-pass-card::before {
+  content: '';
+  position: absolute; top: -40px; right: -40px;
+  width: 120px; height: 120px; border-radius: 50%;
+  background: radial-gradient(circle, rgba(99,102,241,0.1) 0%, transparent 70%);
+}
+.hub-05 .h-qr-frame {
+  width: 78px; height: 78px; flex-shrink: 0; padding: 8px;
+  border-radius: 8px; border: 1px solid rgba(148,163,214,0.2);
+  background: rgba(148,163,214,0.04); display: grid; place-items: center;
+  box-shadow: 0 0 20px rgba(99,102,241,0.15);
+}
+.hub-05 .h-pass-right { flex: 1; min-width: 0; position: relative; z-index: 1; }
+.hub-05 .h-guest-name {
+  font-size: 18px; font-weight: 600; color: var(--c-text); letter-spacing: 0.02em;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.hub-05 .h-constellation {
+  display: flex; align-items: center; gap: 6px; margin-top: 6px;
+}
+.hub-05 .h-star { color: #fbbf24; font-size: 8px; letter-spacing: 2px; }
+.hub-05 .h-tier { font-size: 11px; color: var(--c-muted); letter-spacing: 0.08em; }
+.hub-05 .h-status-tag {
+  margin-top: 10px; display: inline-flex; align-items: center; gap: 6px;
+  font-size: 10px; font-weight: 600; letter-spacing: 0.12em; text-transform: uppercase;
+  color: #60a5fa; background: rgba(59,130,246,0.1);
+  border: 1px solid rgba(59,130,246,0.2); padding: 4px 12px; border-radius: 4px;
+}
+.hub-05 .h-status-tag .dot { width: 5px; height: 5px; border-radius: 50%; background: #60a5fa; }
+
+.hub-05 .h-tabs {
+  display: flex; border-bottom: 1px solid var(--c-border); margin: 0 20px;
+}
+.hub-05 .h-tab {
+  padding: 12px 14px; font-size: 10px; font-weight: 600; letter-spacing: 0.15em; text-transform: uppercase;
+  color: var(--c-muted); cursor: pointer; border-bottom: 2px solid transparent;
+  transition: all 0.2s; white-space: nowrap;
+}
+.hub-05 .h-tab.active { color: var(--c-aurora); border-bottom-color: var(--c-aurora); }
+
+.hub-05 .h-body { padding: 20px; display: flex; flex-direction: column; gap: 12px; }
+
+.hub-05 .h-announce {
+  background: linear-gradient(135deg, rgba(99,102,241,0.1), rgba(59,130,246,0.06));
+  border: 1px solid rgba(99,102,241,0.2); border-radius: 8px; padding: 14px 16px;
+  display: flex; gap: 12px; align-items: flex-start;
+}
+.hub-05 .h-announce-icon { font-size: 16px; line-height: 1.4; }
+.hub-05 .h-announce-body { flex: 1; }
+.hub-05 .h-announce-title { font-size: 12px; font-weight: 600; color: var(--c-aurora); margin-bottom: 4px; }
+.hub-05 .h-announce-text { font-size: 12px; color: var(--c-muted); line-height: 1.5; }
+
+.hub-05 .h-prog-list { display: flex; flex-direction: column; gap: 8px; }
+.hub-05 .h-prog-row {
+  display: flex; align-items: center; gap: 12px; padding: 10px 14px;
+  background: var(--c-surface); border: 1px solid var(--c-border); border-radius: 8px;
+}
+.hub-05 .h-prog-row.current { border-color: rgba(129,140,248,0.3); background: rgba(129,140,248,0.06); }
+.hub-05 .h-prog-icon { font-size: 14px; width: 20px; text-align: center; }
+.hub-05 .h-prog-time { font-size: 10px; font-weight: 700; color: var(--c-muted); min-width: 40px; }
+.hub-05 .h-prog-time.now { color: var(--c-aurora); }
+.hub-05 .h-prog-name { flex: 1; font-size: 12px; color: var(--c-text); font-weight: 500; }
+.hub-05 .h-prog-now {
+  font-size: 8px; font-weight: 800; letter-spacing: 0.15em; text-transform: uppercase;
+  color: var(--c-aurora); border: 1px solid rgba(129,140,248,0.3);
+  padding: 3px 7px; border-radius: 3px; background: rgba(129,140,248,0.1);
+}
+
+.hub-05 .h-msg-input { display: flex; gap: 8px; }
+.hub-05 .h-msg-input input {
+  flex: 1; background: var(--c-surface); border: 1px solid var(--c-border);
+  border-radius: 8px; padding: 10px 14px; font-size: 12px; color: var(--c-text);
+  font-family: 'Inter', sans-serif; outline: none;
+}
+.hub-05 .h-msg-input input::placeholder { color: var(--c-muted); }
+.hub-05 .h-msg-input button {
+  background: linear-gradient(135deg, #4f46e5, #3b82f6);
+  border: none; color: #fff; padding: 0 18px; border-radius: 8px;
+  font-size: 11px; font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase; cursor: pointer;
+  box-shadow: 0 4px 12px rgba(79,70,229,0.3);
+}
+
+/* ─── SHARED QR SVG ─── */
+.qr-svg { width: 100%; height: 100%; }
+
+
+/* ═══════════════════════════════════════════════
+   FULL-PAGE CHROME — hero (uploaded photo, full-bleed) +
+   event details + about + RSVP, wrapping the pass card above
+   ═══════════════════════════════════════════════ */
+.h-page-hero { position: relative; overflow: hidden; min-height: 260px; display: flex; align-items: flex-end; background-size: cover; background-position: center; }
+.h-page-hero::after { content: ''; position: absolute; inset: 0; background: linear-gradient(0deg, rgba(0,0,0,.72) 0%, rgba(0,0,0,.22) 55%, rgba(0,0,0,.05) 100%); z-index: 1; }
+.h-page-hero-inner { position: relative; z-index: 2; width: 100%; padding: 24px; }
+.h-photo-tag { position: absolute; top: 16px; right: 16px; z-index: 2; display: inline-flex; align-items: center; gap: 5px; font-size: 9px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; background: rgba(0,0,0,.5); color: #fff; padding: 5px 11px; border-radius: 99px; backdrop-filter: blur(4px); font-family: 'DM Sans', sans-serif; }
+.h-page-eyebrow { font-size: 11px; font-weight: 700; letter-spacing: .28em; text-transform: uppercase; }
+.h-page-title { font-size: 30px; font-weight: 700; line-height: 1.15; margin-top: 12px; color: #fff; }
+.h-page-meta { font-size: 13px; margin-top: 10px; color: rgba(255,255,255,.85); }
+.h-page-cta { margin-top: 20px; display: inline-flex; align-items: center; gap: 6px; font-size: 11px; font-weight: 700; letter-spacing: .1em; text-transform: uppercase; padding: 12px 22px; border-radius: 99px; cursor: pointer; border: none; }
+.h-page-panel { margin: 20px; padding: 20px; }
+.h-page-panel-title { font-size: 11px; font-weight: 700; letter-spacing: .2em; text-transform: uppercase; margin-bottom: 14px; opacity: .6; }
+.h-page-detail { display: flex; justify-content: space-between; gap: 10px; padding: 9px 0; font-size: 13px; }
+.h-page-detail + .h-page-detail { border-top: 1px solid rgba(127,127,127,.18); }
+.h-page-detail .k { opacity: .55; }
+.h-page-detail .v { font-weight: 600; text-align: right; }
+.h-page-about p { font-size: 13px; line-height: 1.7; opacity: .75; }
+.h-page-rsvp { display: flex; gap: 10px; margin-top: 14px; }
+.h-page-rsvp button { flex: 1; padding: 13px; border-radius: 10px; font-size: 11px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; cursor: pointer; border: 1.5px solid transparent; }
+.h-page-confirm { width: 100%; margin-top: 12px; padding: 15px; border-radius: 10px; font-size: 13px; font-weight: 800; letter-spacing: .08em; text-transform: uppercase; cursor: pointer; border: none; }
+
+/* 01 Noir Couture */
+.hub-01 .h-page-hero{background:radial-gradient(120% 100% at 80% 0%, rgba(201,168,76,.25), transparent 60%), radial-gradient(100% 100% at 10% 100%, rgba(0,0,0,.6), transparent 50%), linear-gradient(160deg, #241f12 0%, #0a0a0a 70%)}
+.hub-01 .h-page-eyebrow{color:var(--c-gold)}
+.hub-01 .h-page-title{font-family:'Cormorant Garamond',serif;font-style:italic;font-weight:400}
+.hub-01 .h-page-cta{background:var(--c-gold-dim);color:var(--c-gold);border:1px solid rgba(201,168,76,.3)}
+.hub-01 .h-page-panel{border:1px solid var(--c-border);color:var(--c-text)}
+.hub-01 .h-page-panel-title{color:var(--c-gold);opacity:1}
+.hub-01 .h-page-rsvp button{background:var(--c-surface);border-color:var(--c-border);color:var(--c-muted);font-family:'DM Sans',sans-serif}
+.hub-01 .h-page-rsvp button.yes{border-color:var(--c-gold);color:var(--c-gold)}
+.hub-01 .h-page-confirm{background:var(--c-gold);color:#1a1508;font-family:'DM Sans',sans-serif}
+
+/* 02 Bloom Editorial */
+.hub-02 .h-page-hero{background:radial-gradient(100% 100% at 20% 0%, rgba(255,255,255,.25), transparent 60%), linear-gradient(160deg, #e8a5a0 0%, #c2696a 55%, #6b3535 100%)}
+.hub-02 .h-page-eyebrow{color:rgba(255,255,255,.85)}
+.hub-02 .h-page-title{font-family:'Playfair Display',serif}
+.hub-02 .h-page-cta{background:#fff;color:var(--c-rose);font-family:'DM Sans',sans-serif}
+.hub-02 .h-page-panel{background:var(--c-surface);border:1px solid var(--c-border);border-radius:10px;color:var(--c-text)}
+.hub-02 .h-page-panel-title{color:var(--c-muted);font-family:'DM Sans',sans-serif}
+.hub-02 .h-page-rsvp button{background:var(--c-bg);border-color:var(--c-border);color:var(--c-muted);font-family:'DM Sans',sans-serif}
+.hub-02 .h-page-rsvp button.yes{background:rgba(194,105,106,.1);border-color:var(--c-rose);color:var(--c-rose)}
+.hub-02 .h-page-confirm{background:var(--c-rose);color:#fff;font-family:'DM Sans',sans-serif}
+
+/* 03 Electric Rave */
+.hub-03 .h-page-hero{background:radial-gradient(90% 90% at 70% 10%, rgba(167,139,250,.4), transparent 60%), radial-gradient(80% 80% at 20% 90%, rgba(34,211,238,.25), transparent 55%), linear-gradient(160deg, #1a0f3d 0%, #07070f 80%)}
+.hub-03 .h-page-eyebrow{color:var(--c-cyan)}
+.hub-03 .h-page-title{font-weight:800;text-shadow:0 0 20px rgba(124,58,237,.4)}
+.hub-03 .h-page-cta{background:linear-gradient(135deg,var(--c-primary),#6366f1);color:#fff}
+.hub-03 .h-page-panel{background:var(--c-surface);border:1px solid var(--c-border);border-radius:6px;color:var(--c-text)}
+.hub-03 .h-page-panel-title{color:var(--c-neon)}
+.hub-03 .h-page-rsvp button{background:var(--c-bg);border-color:var(--c-border);color:var(--c-muted)}
+.hub-03 .h-page-rsvp button.yes{border-color:var(--c-neon);color:var(--c-neon)}
+.hub-03 .h-page-confirm{background:linear-gradient(135deg,var(--c-primary),#6366f1);color:#fff}
+
+/* 04 Linen & Gold */
+.hub-04 .h-page-hero{background:linear-gradient(150deg, #8b6f47 0%, #6b4e2e 55%, #241708 100%)}
+.hub-04 .h-page-eyebrow{font-family:'DM Sans',sans-serif;color:rgba(255,255,255,.7)}
+.hub-04 .h-page-title{font-style:italic;font-weight:600}
+.hub-04 .h-page-cta{font-family:'DM Sans',sans-serif;background:#fff;color:var(--c-earth)}
+.hub-04 .h-page-panel{background:var(--c-surface);border:1px solid var(--c-border);border-radius:10px;color:var(--c-text)}
+.hub-04 .h-page-panel-title{font-family:'DM Sans',sans-serif;color:var(--c-muted)}
+.hub-04 .h-page-rsvp button{font-family:'DM Sans',sans-serif;background:var(--c-bg);border-color:var(--c-border);color:var(--c-muted)}
+.hub-04 .h-page-rsvp button.yes{background:rgba(139,111,71,.1);border-color:var(--c-earth);color:var(--c-earth)}
+.hub-04 .h-page-confirm{font-family:'DM Sans',sans-serif;background:var(--c-earth);color:#fff}
+
+/* 05 Celestial Midnight */
+.hub-05 .h-page-hero{background:radial-gradient(60% 40% at 85% 10%, rgba(128,152,224,.35), transparent 60%), linear-gradient(180deg, #1a2a6c 0%, #0a1a4a 55%, #020614 100%)}
+.hub-05 .h-page-eyebrow{color:var(--c-aurora)}
+.hub-05 .h-page-title{font-weight:300;letter-spacing:.03em;color:var(--c-silver);text-shadow:0 0 16px rgba(200,212,240,.4)}
+.hub-05 .h-page-cta{background:linear-gradient(135deg,#4f46e5,#3b82f6);color:#fff}
+.hub-05 .h-page-panel{background:var(--c-surface);border:1px solid var(--c-border);border-radius:8px;color:var(--c-text)}
+.hub-05 .h-page-panel-title{color:var(--c-aurora)}
+.hub-05 .h-page-rsvp button{background:var(--c-bg);border-color:var(--c-border);color:var(--c-muted)}
+.hub-05 .h-page-rsvp button.yes{border-color:var(--c-aurora);color:var(--c-aurora)}
+.hub-05 .h-page-confirm{background:linear-gradient(135deg,#4f46e5,#3b82f6);color:#fff}
+
+
+/* ─── FOOTER ─── */
+.page-footer {
+  text-align: center; padding: 40px 24px 60px;
+  font-family: 'DM Sans', sans-serif; font-size: 11px;
+  letter-spacing: 0.15em; text-transform: uppercase; color: #333;
+}
+</style>
+</head>
+<body>
+
+<div class="page-header">
+  <h1>GuestHub</h1>
+  <p>Five Mockup Templates — Unique · Modern · Fashionista</p>
+</div>
+
+<div class="templates-grid">
+
+  <!-- ══════════════════════════════════════
+       01 · NOIR COUTURE
+       ══════════════════════════════════════ -->
+  <div class="template-wrap">
+    <div class="template-label"><span class="template-num">01</span>Noir Couture</div>
+    <div class="hub-01">
+      <div class="h-page-hero">
+        <span class="h-photo-tag">📷 Your uploaded photo</span>
+        <div class="h-page-hero-inner">
+          <div class="h-page-eyebrow">You're Invited</div>
+          <div class="h-page-title">The Maison Gala</div>
+          <div class="h-page-meta">Saturday, Aug 9 · 7:30 PM · Grand Ballroom</div>
+          <button class="h-page-cta">View My Pass ↓</button>
+        </div>
+      </div>
+      <div class="h-topbar">
+        <div class="h-brand">Festio GuestHub</div>
+        <div class="h-pill">✓ Confirmed</div>
+      </div>
+      <div class="h-hero">
+        <div class="h-qr-frame">
+          <svg class="qr-svg" viewBox="0 0 40 40" fill="none">
+            <rect x="2" y="2" width="14" height="14" rx="1" stroke="#c9a84c" stroke-width="1.5"/>
+            <rect x="5" y="5" width="8" height="8" fill="#c9a84c" rx="0.5"/>
+            <rect x="24" y="2" width="14" height="14" rx="1" stroke="#c9a84c" stroke-width="1.5"/>
+            <rect x="27" y="5" width="8" height="8" fill="#c9a84c" rx="0.5"/>
+            <rect x="2" y="24" width="14" height="14" rx="1" stroke="#c9a84c" stroke-width="1.5"/>
+            <rect x="5" y="27" width="8" height="8" fill="#c9a84c" rx="0.5"/>
+            <rect x="24" y="24" width="4" height="4" fill="#c9a84c" rx="0.3"/>
+            <rect x="30" y="24" width="4" height="4" fill="#c9a84c" rx="0.3"/>
+            <rect x="24" y="30" width="4" height="4" fill="#c9a84c" rx="0.3"/>
+            <rect x="30" y="30" width="4" height="4" fill="#c9a84c" rx="0.3"/>
+            <rect x="18" y="2" width="4" height="4" fill="#c9a84c" rx="0.3"/>
+            <rect x="18" y="8" width="4" height="4" fill="#c9a84c" rx="0.3"/>
+            <rect x="18" y="14" width="4" height="4" fill="#c9a84c" rx="0.3"/>
+          </svg>
+        </div>
+        <div class="h-guest-info">
+          <div class="h-guest-name">Isabelle Fontaine</div>
+          <div class="h-event-name">The Maison Gala · Spring '26</div>
+          <div class="h-status-row">
+            <div class="h-status-dot"></div>
+            <div class="h-status-text">Ready for entry</div>
+          </div>
+          <div class="h-meta-row">
+            <div class="h-meta-item">Table <strong>Ivory · Seat 03</strong></div>
+            <div class="h-meta-item">Date <strong>Saturday, Aug 9 · 7:30 PM</strong></div>
+          </div>
+        </div>
+      </div>
+      <div class="h-tabs">
+        <div class="h-tab active">Pass</div>
+        <div class="h-tab">Activity</div>
+        <div class="h-tab">Program</div>
+        <div class="h-tab">Message</div>
+      </div>
+      <div class="h-body">
+        <div class="h-section-title">Evening Programme</div>
+        <div class="h-timeline-item">
+          <div class="h-tl-time">7:30</div>
+          <div class="h-tl-dot"></div>
+          <div class="h-tl-text">Welcome Reception<small>Champagne Terrace — Level 2</small></div>
+        </div>
+        <div class="h-timeline-item">
+          <div class="h-tl-time">8:15</div>
+          <div class="h-tl-dot"></div>
+          <div class="h-tl-text">Dinner Service<small>Grand Ballroom — Main Hall</small></div>
+        </div>
+        <div class="h-timeline-item">
+          <div class="h-tl-time">9:45</div>
+          <div class="h-tl-dot"></div>
+          <div class="h-tl-text">Live Orchestra & Dancing<small>All venues</small></div>
+        </div>
+        <div class="h-section-title">Message Host</div>
+        <div class="h-msg-input">
+          <input type="text" placeholder="Write a message…" />
+          <button>Send</button>
+        </div>
+      </div>
+      <div class="h-page-panel">
+        <div class="h-page-panel-title">Event Details</div>
+        <div class="h-page-detail"><span class="k">Date</span><span class="v">Saturday, Aug 9 2026</span></div>
+        <div class="h-page-detail"><span class="k">Venue</span><span class="v">Grand Ballroom, The Maison</span></div>
+        <div class="h-page-detail"><span class="k">RSVP by</span><span class="v">Aug 1, 2026</span></div>
+        <div class="h-page-detail"><span class="k">Admission</span><span class="v">QR pass at entry</span></div>
+      </div>
+      <div class="h-page-panel">
+        <div class="h-page-panel-title">About This Event</div>
+        <div class="h-page-about"><p>An evening of couture, candlelight, and celebration — join us for the Maison's spring gala.</p></div>
+      </div>
+      <div class="h-page-panel">
+        <div class="h-page-panel-title">Will You Be Attending?</div>
+        <div class="h-page-rsvp"><button class="yes">Yes, I'll be there</button><button>Can't make it</button></div>
+        <button class="h-page-confirm">Confirm My RSVP</button>
+      </div>
+    </div>
+  </div>
+
+
+  <!-- ══════════════════════════════════════
+       02 · BLOOM EDITORIAL
+       ══════════════════════════════════════ -->
+  <div class="template-wrap">
+    <div class="template-label"><span class="template-num">02</span>Bloom Editorial</div>
+    <div class="hub-02">
+      <div class="h-page-hero">
+        <span class="h-photo-tag">📷 Your uploaded photo</span>
+        <div class="h-page-hero-inner">
+          <div class="h-page-eyebrow">You're Invited</div>
+          <div class="h-page-title">The Garden Soirée</div>
+          <div class="h-page-meta">Saturday, 9 August 2026 · 6 PM</div>
+          <button class="h-page-cta">View My Pass ↓</button>
+        </div>
+      </div>
+      <div class="h-topbar">
+        <div class="h-brand">GuestHub by Festio</div>
+        <div class="h-event-name">The Garden Soirée</div>
+        <div class="h-event-date">Saturday, 9 August 2026 · 6 PM</div>
+      </div>
+      <div class="h-pass-card">
+        <div class="h-qr-wrap">
+          <svg class="qr-svg" viewBox="0 0 36 36" fill="none">
+            <rect x="1" y="1" width="13" height="13" rx="1" stroke="#c2696a" stroke-width="1.5"/>
+            <rect x="4" y="4" width="7" height="7" fill="#c2696a" rx="0.5"/>
+            <rect x="22" y="1" width="13" height="13" rx="1" stroke="#c2696a" stroke-width="1.5"/>
+            <rect x="25" y="4" width="7" height="7" fill="#c2696a" rx="0.5"/>
+            <rect x="1" y="22" width="13" height="13" rx="1" stroke="#c2696a" stroke-width="1.5"/>
+            <rect x="4" y="25" width="7" height="7" fill="#c2696a" rx="0.5"/>
+            <rect x="22" y="22" width="4" height="4" fill="#c2696a" rx="0.3"/>
+            <rect x="28" y="22" width="4" height="4" fill="#c2696a" rx="0.3"/>
+            <rect x="22" y="28" width="4" height="4" fill="#c2696a" rx="0.3"/>
+            <rect x="28" y="28" width="4" height="4" fill="#c2696a" rx="0.3"/>
+            <rect x="16" y="1" width="4" height="4" fill="#c2696a" rx="0.3"/>
+          </svg>
+        </div>
+        <div class="h-pass-right">
+          <div class="h-guest-name">Amélie Rousseau</div>
+          <div class="h-pass-tag">Ready for entry</div>
+          <div class="h-pass-meta">Table <span>Rose · Seat 07</span></div>
+        </div>
+      </div>
+      <div style="height: 16px"></div>
+      <div class="h-tabs">
+        <div class="h-tab active">Pass</div>
+        <div class="h-tab">Program</div>
+        <div class="h-tab">Messages</div>
+        <div class="h-tab">More</div>
+      </div>
+      <div class="h-body">
+        <div class="h-module">
+          <div class="h-module-title">This Evening's Programme</div>
+          <div class="h-prog-item">
+            <div class="h-prog-dot live"></div>
+            <div class="h-prog-info">
+              <div class="h-prog-name">Welcome & Cocktails</div>
+              <div class="h-prog-loc">🌿 Garden Pavilion — happening now</div>
+            </div>
+            <div class="h-prog-time">6:00</div>
+          </div>
+          <div class="h-prog-item">
+            <div class="h-prog-dot upcoming"></div>
+            <div class="h-prog-info">
+              <div class="h-prog-name">Dinner Seated</div>
+              <div class="h-prog-loc">🌹 Rose Hall</div>
+            </div>
+            <div class="h-prog-time">7:30</div>
+          </div>
+          <div class="h-prog-item">
+            <div class="h-prog-dot upcoming"></div>
+            <div class="h-prog-info">
+              <div class="h-prog-name">Live Music & Dancing</div>
+              <div class="h-prog-loc">✨ The Orangerie</div>
+            </div>
+            <div class="h-prog-time">9:00</div>
+          </div>
+        </div>
+        <div class="h-module">
+          <div class="h-module-title">Message the Host</div>
+          <div class="h-msg-area">
+            <div class="h-msg-bubble">Thank you for the invitation, see you tonight! 🌸</div>
+          </div>
+          <div class="h-msg-input" style="margin-top: 10px">
+            <input type="text" placeholder="Reply to the host…" />
+            <button>➤</button>
+          </div>
+        </div>
+      </div>
+      <div class="h-page-panel">
+        <div class="h-page-panel-title">Event Details</div>
+        <div class="h-page-detail"><span class="k">Venue</span><span class="v">The Garden Pavilion</span></div>
+        <div class="h-page-detail"><span class="k">RSVP by</span><span class="v">Aug 1, 2026</span></div>
+      </div>
+      <div class="h-page-panel">
+        <div class="h-page-panel-title">About This Event</div>
+        <div class="h-page-about"><p>A soft, romantic evening among the roses — cocktails, dinner, and dancing under string lights.</p></div>
+      </div>
+      <div class="h-page-panel">
+        <div class="h-page-panel-title">Will You Be Attending?</div>
+        <div class="h-page-rsvp"><button class="yes">Yes, I'll be there</button><button>Can't make it</button></div>
+        <button class="h-page-confirm">Confirm My RSVP</button>
+      </div>
+    </div>
+  </div>
+
+
+  <!-- ══════════════════════════════════════
+       03 · ELECTRIC RAVE
+       ══════════════════════════════════════ -->
+  <div class="template-wrap">
+    <div class="template-label"><span class="template-num">03</span>Electric Rave</div>
+    <div class="hub-03">
+      <div class="h-page-hero">
+        <span class="h-photo-tag">📷 Your uploaded photo</span>
+        <div class="h-page-hero-inner">
+          <div class="h-page-eyebrow">Live Tonight</div>
+          <div class="h-page-title">Noir Frequency</div>
+          <div class="h-page-meta">Saturday, 9 August · Doors 8 PM</div>
+          <button class="h-page-cta">View My Pass ↓</button>
+        </div>
+      </div>
+      <div class="h-topbar">
+        <div class="h-brand">GuestHub</div>
+        <div class="h-live-badge">Live tonight</div>
+      </div>
+      <div class="h-pass-zone">
+        <div class="h-qr-frame">
+          <svg class="qr-svg" viewBox="0 0 36 36" fill="none">
+            <rect x="1" y="1" width="13" height="13" rx="1" stroke="#a78bfa" stroke-width="1.5"/>
+            <rect x="4" y="4" width="7" height="7" fill="#a78bfa" rx="0.5"/>
+            <rect x="22" y="1" width="13" height="13" rx="1" stroke="#a78bfa" stroke-width="1.5"/>
+            <rect x="25" y="4" width="7" height="7" fill="#a78bfa" rx="0.5"/>
+            <rect x="1" y="22" width="13" height="13" rx="1" stroke="#a78bfa" stroke-width="1.5"/>
+            <rect x="4" y="25" width="7" height="7" fill="#a78bfa" rx="0.5"/>
+            <rect x="22" y="22" width="4" height="4" fill="#a78bfa" rx="0.3"/>
+            <rect x="28" y="22" width="4" height="4" fill="#a78bfa" rx="0.3"/>
+            <rect x="22" y="28" width="4" height="4" fill="#a78bfa" rx="0.3"/>
+            <rect x="28" y="28" width="4" height="4" fill="#a78bfa" rx="0.3"/>
+            <rect x="16" y="1" width="4" height="4" fill="#a78bfa" rx="0.3"/>
+            <rect x="16" y="7" width="4" height="4" fill="#a78bfa" rx="0.3"/>
+          </svg>
+        </div>
+        <div class="h-pass-info">
+          <div class="h-guest-name">Zara Knox</div>
+          <div class="h-event-name">Noir Frequency — An Electronic Fashion Gala</div>
+          <div class="h-status-chip"><span class="h-live-badge" style="border:none;background:none;padding:0;font-size:9px;gap:4px;color:var(--c-cyan)">●</span>Ready for Entry</div>
+        </div>
+      </div>
+      <div class="h-tabs">
+        <div class="h-tab active">Pass</div>
+        <div class="h-tab">Activity</div>
+        <div class="h-tab">Program</div>
+        <div class="h-tab">Chat</div>
+      </div>
+      <div class="h-body">
+        <div class="h-activity-grid">
+          <div class="h-activity-card">
+            <div class="icon">🎟️</div>
+            <div class="label">Your status</div>
+            <div class="value accent">VIP</div>
+          </div>
+          <div class="h-activity-card">
+            <div class="icon">🪑</div>
+            <div class="label">Section</div>
+            <div class="value">VOID · F3</div>
+          </div>
+          <div class="h-activity-card">
+            <div class="icon">👥</div>
+            <div class="label">Attending</div>
+            <div class="value accent">347</div>
+          </div>
+          <div class="h-activity-card">
+            <div class="icon">⏱</div>
+            <div class="label">Starts in</div>
+            <div class="value">2h 14m</div>
+          </div>
+        </div>
+        <div class="h-prog-row now">
+          <div class="h-prog-time now">20:00</div>
+          <div class="h-prog-name">Doors Open · Red Carpet Arrivals</div>
+          <div class="h-prog-badge">Now</div>
+        </div>
+        <div class="h-prog-row">
+          <div class="h-prog-time">21:30</div>
+          <div class="h-prog-name">ZELLA — Live Performance</div>
+        </div>
+        <div class="h-prog-row">
+          <div class="h-prog-time">23:00</div>
+          <div class="h-prog-name">Runway Show: SS'27 Preview</div>
+        </div>
+        <div class="h-msg-input">
+          <input type="text" placeholder="Message the team…" />
+          <button>Send →</button>
+        </div>
+      </div>
+      <div class="h-page-panel">
+        <div class="h-page-panel-title">Event Details</div>
+        <div class="h-page-detail"><span class="k">Venue</span><span class="v">Warehouse 9, Docklands</span></div>
+        <div class="h-page-detail"><span class="k">Admission</span><span class="v">QR pass at entry</span></div>
+      </div>
+      <div class="h-page-panel">
+        <div class="h-page-panel-title">About This Event</div>
+        <div class="h-page-about"><p>An electronic fashion gala — runway, live sets, and a night that doesn't stop till sunrise.</p></div>
+      </div>
+      <div class="h-page-panel">
+        <div class="h-page-panel-title">Will You Be Attending?</div>
+        <div class="h-page-rsvp"><button class="yes">Yes, I'll be there</button><button>Can't make it</button></div>
+        <button class="h-page-confirm">Confirm My RSVP</button>
+      </div>
+    </div>
+  </div>
+
+
+  <!-- ══════════════════════════════════════
+       04 · LINEN & GOLD (EARTHY LUXE)
+       ══════════════════════════════════════ -->
+  <div class="template-wrap">
+    <div class="template-label"><span class="template-num">04</span>Linen & Gold</div>
+    <div class="hub-04">
+      <div class="h-page-hero">
+        <span class="h-photo-tag">📷 Your uploaded photo</span>
+        <div class="h-page-hero-inner">
+          <div class="h-page-eyebrow">Your Invitation</div>
+          <div class="h-page-title">La Belle Époque</div>
+          <div class="h-page-meta">Saturday, 9 August 2026</div>
+          <button class="h-page-cta">View My Pass ↓</button>
+        </div>
+      </div>
+      <div class="h-cover">
+        <div class="h-cover-event">La Belle Époque</div>
+        <div class="h-cover-label">Your invitation</div>
+      </div>
+      <div class="h-pass-card">
+        <div class="h-qr-box">
+          <svg class="qr-svg" viewBox="0 0 34 34" fill="none">
+            <rect x="1" y="1" width="12" height="12" rx="1" stroke="#c4a47c" stroke-width="1.5"/>
+            <rect x="4" y="4" width="6" height="6" fill="#c4a47c" rx="0.4"/>
+            <rect x="21" y="1" width="12" height="12" rx="1" stroke="#c4a47c" stroke-width="1.5"/>
+            <rect x="24" y="4" width="6" height="6" fill="#c4a47c" rx="0.4"/>
+            <rect x="1" y="21" width="12" height="12" rx="1" stroke="#c4a47c" stroke-width="1.5"/>
+            <rect x="4" y="24" width="6" height="6" fill="#c4a47c" rx="0.4"/>
+            <rect x="21" y="21" width="4" height="4" fill="#c4a47c" rx="0.3"/>
+            <rect x="27" y="21" width="4" height="4" fill="#c4a47c" rx="0.3"/>
+            <rect x="21" y="27" width="4" height="4" fill="#c4a47c" rx="0.3"/>
+            <rect x="27" y="27" width="4" height="4" fill="#c4a47c" rx="0.3"/>
+          </svg>
+        </div>
+        <div class="h-pass-right">
+          <div class="h-guest-name">Madeleine Lefèvre</div>
+          <div class="h-seat-info">
+            <div class="h-seat-chip">Table Lumière</div>
+            <div class="h-seat-chip">Seat 4</div>
+          </div>
+          <div class="h-status-line">Ready for entry — All access</div>
+        </div>
+      </div>
+      <div class="h-divider"></div>
+      <div class="h-ornament">— ✦ —</div>
+      <div class="h-tabs">
+        <div class="h-tab active">Pass</div>
+        <div class="h-tab">Menu</div>
+        <div class="h-tab">Program</div>
+        <div class="h-tab">Message</div>
+      </div>
+      <div class="h-body">
+        <div class="h-module">
+          <div class="h-module-title">Dinner Selection</div>
+          <div class="h-menu-grid">
+            <div class="h-menu-item">
+              <div class="course">Entrée</div>
+              <div class="dish">Velouté de Champignons</div>
+            </div>
+            <div class="h-menu-item">
+              <div class="course">Main</div>
+              <div class="dish">Magret de Canard</div>
+            </div>
+            <div class="h-menu-item">
+              <div class="course">Dessert</div>
+              <div class="dish">Tarte Tatin au Four</div>
+            </div>
+            <div class="h-menu-item">
+              <div class="course">Wine</div>
+              <div class="dish">Château Margaux '21</div>
+            </div>
+          </div>
+        </div>
+        <div class="h-module">
+          <div class="h-module-title">Send a note</div>
+          <div class="h-msg-input">
+            <input type="text" placeholder="A message for your host…" />
+            <button>Send</button>
+          </div>
+        </div>
+      </div>
+      <div class="h-page-panel">
+        <div class="h-page-panel-title">Event Details</div>
+        <div class="h-page-detail"><span class="k">Venue</span><span class="v">The Belle Époque Hall</span></div>
+        <div class="h-page-detail"><span class="k">RSVP by</span><span class="v">Aug 1, 2026</span></div>
+      </div>
+      <div class="h-page-panel">
+        <div class="h-page-panel-title">About This Event</div>
+        <div class="h-page-about"><p>Earth tones, candlelight, and an evening of quiet, organic luxury.</p></div>
+      </div>
+      <div class="h-page-panel">
+        <div class="h-page-panel-title">Will You Be Attending?</div>
+        <div class="h-page-rsvp"><button class="yes">Yes, I'll be there</button><button>Can't make it</button></div>
+        <button class="h-page-confirm">Confirm My RSVP</button>
+      </div>
+    </div>
+  </div>
+
+
+  <!-- ══════════════════════════════════════
+       05 · CELESTIAL / MIDNIGHT LUXE
+       ══════════════════════════════════════ -->
+  <div class="template-wrap">
+    <div class="template-label"><span class="template-num">05</span>Celestial Midnight</div>
+    <div class="hub-05">
+      <div class="h-page-hero">
+        <span class="h-photo-tag">📷 Your uploaded photo</span>
+        <div class="h-page-hero-inner">
+          <div class="h-page-eyebrow">You're Invited</div>
+          <div class="h-page-title">Constellation Gala</div>
+          <div class="h-page-meta">Saturday, 9 August · 8 PM</div>
+          <button class="h-page-cta">View My Pass ↓</button>
+        </div>
+      </div>
+      <div class="h-skyline">
+        <div class="h-stars"></div>
+        <div class="h-moon"></div>
+        <div class="h-event-title">Constellation Gala</div>
+      </div>
+      <div class="h-pass-card">
+        <div class="h-qr-frame">
+          <svg class="qr-svg" viewBox="0 0 36 36" fill="none">
+            <rect x="1" y="1" width="13" height="13" rx="1" stroke="#818cf8" stroke-width="1.5"/>
+            <rect x="4" y="4" width="7" height="7" fill="#818cf8" rx="0.5"/>
+            <rect x="22" y="1" width="13" height="13" rx="1" stroke="#818cf8" stroke-width="1.5"/>
+            <rect x="25" y="4" width="7" height="7" fill="#818cf8" rx="0.5"/>
+            <rect x="1" y="22" width="13" height="13" rx="1" stroke="#818cf8" stroke-width="1.5"/>
+            <rect x="4" y="25" width="7" height="7" fill="#818cf8" rx="0.5"/>
+            <rect x="22" y="22" width="4" height="4" fill="#818cf8" rx="0.3"/>
+            <rect x="28" y="22" width="4" height="4" fill="#818cf8" rx="0.3"/>
+            <rect x="22" y="28" width="4" height="4" fill="#818cf8" rx="0.3"/>
+            <rect x="28" y="28" width="4" height="4" fill="#818cf8" rx="0.3"/>
+            <rect x="16" y="1" width="4" height="4" fill="#818cf8" rx="0.3"/>
+            <rect x="16" y="7" width="4" height="4" fill="#818cf8" rx="0.3"/>
+            <rect x="16" y="13" width="4" height="4" fill="#818cf8" rx="0.3"/>
+          </svg>
+        </div>
+        <div class="h-pass-right">
+          <div class="h-guest-name">Selene Moreau</div>
+          <div class="h-constellation">
+            <span class="h-star">★★★★★</span>
+            <span class="h-tier">Constellation Tier</span>
+          </div>
+          <div class="h-status-tag"><span class="dot"></span>Entry Approved</div>
+        </div>
+      </div>
+      <div style="padding: 0 20px">
+        <div class="h-tabs" style="margin: 0">
+          <div class="h-tab active">Pass</div>
+          <div class="h-tab">Updates</div>
+          <div class="h-tab">Program</div>
+          <div class="h-tab">Chat</div>
+        </div>
+      </div>
+      <div class="h-body">
+        <div class="h-announce">
+          <div class="h-announce-icon">✦</div>
+          <div class="h-announce-body">
+            <div class="h-announce-title">From the Host</div>
+            <div class="h-announce-text">Doors open at 8 PM. Valet available. Dress code: Black tie with a celestial touch.</div>
+          </div>
+        </div>
+        <div class="h-prog-list">
+          <div class="h-prog-row current">
+            <div class="h-prog-icon">🌙</div>
+            <div class="h-prog-time now">20:00</div>
+            <div class="h-prog-name">Grand Arrival & Stargazing Terrace</div>
+            <div class="h-prog-now">Now</div>
+          </div>
+          <div class="h-prog-row">
+            <div class="h-prog-icon">🥂</div>
+            <div class="h-prog-time">21:00</div>
+            <div class="h-prog-name">Dinner Under the Stars</div>
+          </div>
+          <div class="h-prog-row">
+            <div class="h-prog-icon">💃</div>
+            <div class="h-prog-time">23:00</div>
+            <div class="h-prog-name">Live Performance & Dancing</div>
+          </div>
+        </div>
+        <div class="h-msg-input">
+          <input type="text" placeholder="Message your host…" />
+          <button>Send ↑</button>
+        </div>
+      </div>
+      <div class="h-page-panel">
+        <div class="h-page-panel-title">Event Details</div>
+        <div class="h-page-detail"><span class="k">Venue</span><span class="v">The Observatory Hall</span></div>
+        <div class="h-page-detail"><span class="k">Dress code</span><span class="v">Black tie</span></div>
+      </div>
+      <div class="h-page-panel">
+        <div class="h-page-panel-title">About This Event</div>
+        <div class="h-page-about"><p>An evening under the stars — dinner, dancing, and a stargazing terrace.</p></div>
+      </div>
+      <div class="h-page-panel">
+        <div class="h-page-panel-title">Will You Be Attending?</div>
+        <div class="h-page-rsvp"><button class="yes">Yes, I'll be there</button><button>Can't make it</button></div>
+        <button class="h-page-confirm">Confirm My RSVP</button>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<div class="page-footer">Festio GuestHub Mockups — v1 · 2026</div>
+
+</body>
+</html>

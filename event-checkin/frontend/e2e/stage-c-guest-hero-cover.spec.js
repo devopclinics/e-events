@@ -8,6 +8,11 @@ import { test, expect } from '@playwright/test'
 // live guest page. Read-only against the public /invite page via the same
 // studio-preview sessionStorage handoff used elsewhere — no design record
 // writes, so the shared QA fixture is untouched.
+//
+// The hero used to render the cover photo as a poster <img> in a two-column
+// layout; it's now a full-bleed CSS background-image on .gh-hero (the whole
+// GuestHub page was extended to carry the flyer as a banner, not just a
+// separate card) — assert the background-image url instead of an <img> src.
 test.describe('Stage C guest hero — cover photo vs. flyer image priority', () => {
   const eventId = process.env.E2E_EVENT_ID
 
@@ -29,9 +34,9 @@ test.describe('Stage C guest hero — cover photo vs. flyer image priority', () 
     }, { id: eventId })
     await page.goto(`/invite/${eventId}?studio-preview=1`)
 
-    const poster = page.locator('img[alt$="event flyer"]')
-    await expect(poster).toBeVisible()
-    await expect(poster).toHaveAttribute('src', /cover-priority-qa/)
+    const hero = page.locator('.gh-hero')
+    await expect(hero).toBeVisible()
+    await expect(hero).toHaveCSS('background-image', /cover-priority-qa/)
     // flyerLedHero must be false here (cover_image_url present) — the real
     // <h1> title renders instead of the sr-only fallback flyer-led mode uses.
     await expect(page.getByRole('heading', { name: 'Cover Priority QA', level: 1 })).toBeVisible()

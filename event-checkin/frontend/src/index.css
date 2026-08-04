@@ -1004,3 +1004,62 @@ textarea:focus {
 .fh-hub-style-bloom-editorial > * {
   border-radius: 20px !important;
 }
+
+/* ── GuestHub page-wide shape/texture — a SEPARATE class namespace
+   (gh-page-style-*, set on the page root) from fh-hub-style-* above. The
+   fh-hub-style-* rules use `> *` child selectors scoped to the FestioHub
+   card only; reusing that same class on the page root would leak those
+   !important rules onto <header>/<main>. gh-panel/gh-cta are explicit
+   classNames instead, so there's no collision. Color/font already thread
+   page-wide via designColors()/designFontFamily() — this layer only adds
+   the shape/material identity, matching the FestioHub card treatment above. */
+.gh-hero-scrim {
+  background: linear-gradient(0deg, rgba(0,0,0,.62) 0%, rgba(0,0,0,.18) 55%, rgba(0,0,0,.05) 100%);
+  pointer-events: none;
+}
+.gh-page-style-noir-couture .gh-panel { border-radius: 6px; border-width: 1px; }
+.gh-page-style-noir-couture h2 { font-style: italic; letter-spacing: .01em; }
+.gh-page-style-noir-couture .gh-cta { border-radius: 4px; }
+
+.gh-page-style-bloom-editorial .gh-panel { border-radius: 20px; }
+.gh-page-style-bloom-editorial .gh-cta { border-radius: 999px; }
+
+.gh-page-style-electric-rave .gh-panel { box-shadow: 0 0 0 1px color-mix(in srgb, currentColor 12%, transparent), 0 12px 30px -18px currentColor; }
+.gh-page-style-electric-rave h2 { text-transform: uppercase; letter-spacing: .04em; }
+.gh-page-style-electric-rave .gh-cta { border-radius: 6px; }
+
+.gh-page-style-linen-gold .gh-panel { border-radius: 16px; }
+.gh-page-style-linen-gold h2 { font-style: italic; letter-spacing: .01em; }
+.gh-page-style-linen-gold .gh-cta { border-radius: 8px; }
+
+.gh-page-style-celestial-midnight .gh-panel {
+  border-radius: 10px;
+  background-image: radial-gradient(currentColor 0.6px, transparent 0.8px);
+  background-size: 14px 14px;
+  background-position: -4px -4px;
+  background-blend-mode: soft-light;
+}
+
+.gh-page-style-soleil .gh-panel { border-radius: 18px; }
+.gh-page-style-soleil .gh-cta { border-radius: 999px; }
+
+.gh-page-style-mono-print .gh-panel { border-radius: 2px; border-width: 1.5px; box-shadow: 3px 3px 0 currentColor; }
+.gh-page-style-mono-print h2 { text-transform: uppercase; letter-spacing: -.01em; }
+.gh-page-style-mono-print .gh-cta { border-radius: 0; }
+
+.gh-page-style-verdant .gh-panel { border-radius: 14px; }
+.gh-page-style-verdant .gh-cta { border-radius: 999px; }
+
+.gh-page-style-coastal-club .gh-panel { border-radius: 6px; border-width: 1.5px; }
+.gh-page-style-coastal-club h2 { font-style: italic; letter-spacing: .01em; }
+.gh-page-style-coastal-club .gh-cta { border-radius: 3px; }
+
+.gh-page-style-haze .gh-panel {
+  border-radius: 18px;
+  background-image: radial-gradient(currentColor 0.6px, transparent 0.8px);
+  background-size: 14px 14px;
+  background-position: -4px -4px;
+  background-blend-mode: soft-light;
+  backdrop-filter: blur(10px);
+}
+.gh-page-style-haze .gh-cta { border-radius: 999px; }

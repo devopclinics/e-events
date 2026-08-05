@@ -8,6 +8,7 @@ import { useGuests } from '../hooks/useGuests'
 import { useTasks } from '../hooks/useEventResources'
 import { api } from '../api'
 import { useAuth } from '../context/AuthContext'
+import { zonedWallTimeToUtcISOString, utcToZonedInput } from '../timeutil'
 import './AdminRedesignPage.css'
 
 const RESET_OPTIONS = [
@@ -160,10 +161,10 @@ export default function AdminRedesignPage() {
       name: event.name || '',
       type: event.event_type || 'Other',
       host: event.couples_name || '',
-      date: String(event.event_date || '').slice(0, 16),
+      date: utcToZonedInput(event.event_date, event.timezone || 'Africa/Lagos'),
       timezone: event.timezone || 'Africa/Lagos',
       multiDay: !!event.event_end_date,
-      endDate: String(event.event_end_date || '').slice(0, 16),
+      endDate: event.event_end_date ? utcToZonedInput(event.event_end_date, event.timezone || 'Africa/Lagos') : '',
       baseUrl: event.checkin_base_url || '',
       venue: event.venue_name || '',
       venueAddress: event.venue_address || '',
@@ -182,8 +183,10 @@ export default function AdminRedesignPage() {
         name: eventForm.name.trim(),
         event_type: eventForm.type,
         couples_name: eventForm.host.trim(),
-        event_date: eventForm.date,
-        event_end_date: eventForm.multiDay && eventForm.endDate ? eventForm.endDate : null,
+        event_date: zonedWallTimeToUtcISOString(eventForm.date, eventForm.timezone),
+        event_end_date: eventForm.multiDay && eventForm.endDate
+          ? zonedWallTimeToUtcISOString(eventForm.endDate, eventForm.timezone)
+          : null,
         timezone: eventForm.timezone,
         checkin_base_url: eventForm.baseUrl.trim(),
         venue_name: eventForm.venue.trim() || null,

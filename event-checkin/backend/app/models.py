@@ -396,6 +396,9 @@ class Event(Base):
     invite_mode: Mapped[str] = mapped_column(String(20), default="open")
     # RSVP cutoff. After this instant the invite page is read-only. None = no deadline.
     rsvp_deadline: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    # When True, the invite page shows "Time to be announced" instead of the
+    # event_date time, and hides calendar-download links (their time would be wrong).
+    event_time_tbd: Mapped[bool] = mapped_column(Boolean, default=False)
     # Open mode only: when True, self-service RSVPs land as "pending" and a
     # planner must approve before a ticket is issued. No effect in closed mode.
     rsvp_require_approval: Mapped[bool] = mapped_column(Boolean, default=False)
@@ -418,6 +421,9 @@ class Event(Base):
     # invitee row in multi-invitee RSVP. None = use the platform default list
     # (InvitePage.jsx DEFAULT_INVITEE_TYPES) — existing events are unaffected.
     rsvp_invitee_type_options: Mapped[list | None] = mapped_column(JSON, nullable=True)
+    # Per-event override for the "Age group" dropdown shown on each additional
+    # invitee row in multi-invitee RSVP. None = no age-group field is shown.
+    rsvp_invitee_age_options: Mapped[list | None] = mapped_column(JSON, nullable=True)
 
     # ── Per-event entitlements (Phase 2) — what an Event Pass unlocks ─────────
     # plan_tier: "free" | "tier50" | "tier150" | "tier300" | "unlimited" | "comp"

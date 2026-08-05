@@ -20,9 +20,9 @@ function daysUntil(isoDate) {
 
 /** Google Calendar deeplink for an event. */
 function googleCalUrl(event) {
-  const fmt = (d) => new Date(d).toISOString().replace(/[-:]/g, '').replace('.000', '')
+  const fmt = (d) => parseUtc(d).toISOString().replace(/[-:]/g, '').replace('.000', '')
   const start = fmt(event.event_date)
-  const end   = event.event_end_date ? fmt(event.event_end_date) : fmt(new Date(new Date(event.event_date).getTime() + 2 * 3600000))
+  const end   = event.event_end_date ? fmt(event.event_end_date) : fmt(new Date(parseUtc(event.event_date).getTime() + 2 * 3600000))
   const loc   = [event.venue_name, event.venue_address].filter(Boolean).join(', ')
   return `https://calendar.google.com/calendar/render?action=TEMPLATE` +
     `&text=${encodeURIComponent(event.name)}` +
@@ -33,9 +33,9 @@ function googleCalUrl(event) {
 
 /** Download an ICS calendar file for the event. */
 function downloadICS(event) {
-  const fmt = (d) => new Date(d).toISOString().replace(/[-:]/g, '').replace('.000', '').replace('Z', 'Z')
+  const fmt = (d) => parseUtc(d).toISOString().replace(/[-:]/g, '').replace('.000', '').replace('Z', 'Z')
   const start = fmt(event.event_date)
-  const end   = event.event_end_date ? fmt(event.event_end_date) : fmt(new Date(new Date(event.event_date).getTime() + 2 * 3600000))
+  const end   = event.event_end_date ? fmt(event.event_end_date) : fmt(new Date(parseUtc(event.event_date).getTime() + 2 * 3600000))
   const loc   = [event.venue_name, event.venue_address].filter(Boolean).join(', ')
   const ics = [
     'BEGIN:VCALENDAR', 'VERSION:2.0', 'PRODID:-//Festio//EN', 'CALSCALE:GREGORIAN',
@@ -534,7 +534,7 @@ function RSVPForm({ event, theme, onConfirmed, tone }) {
   const [smsConsent, setSmsConsent] = useState(false)
   const [choice, setChoice] = useState('')
   const [answers, setAnswers] = useState({})
-  const emptyInvitee = () => ({ first_name: '', last_name: '', relationship: '', phone: '', email: '', guest_type: 'Invited Guest', notes: '' })
+  const emptyInvitee = () => ({ first_name: '', last_name: '', relationship: '', phone: '', email: '', guest_type: 'Invited Guest', age_group: '', notes: '' })
   const [invitees, setInvitees] = useState([])
   const [shipAddr, setShipAddr] = useState({})
   const [sizes, setSizes] = useState({})
@@ -627,6 +627,7 @@ function RSVPForm({ event, theme, onConfirmed, tone }) {
                   phone: normalizePhone(row.phone) || undefined,
                   email: row.email.trim() || undefined,
                   guest_type: row.guest_type,
+                  age_group: row.age_group || undefined,
                   notes: row.notes.trim() || undefined,
                 }))
                 .filter((row) => row.first_name || row.last_name || row.phone || row.email)
@@ -650,7 +651,7 @@ function RSVPForm({ event, theme, onConfirmed, tone }) {
   return (
     <div className="gh-panel space-y-5">
       <div>
-        <h2 className="text-2xl font-extrabold text-slate-950">{multiInvitee ? 'Submit invited guests' : 'Will you be attending?'}</h2>
+        <h2 className="text-2xl font-extrabold text-slate-950">{multiInvitee ? 'Register yourself and your guests' : 'Will you be attending?'}</h2>
         <p className="mt-2 text-sm leading-relaxed text-slate-500">
           {multiInvitee
             ? 'Submit your RSVP details for review. Approved guests receive their own QR pass.'
@@ -719,14 +720,14 @@ function RSVPForm({ event, theme, onConfirmed, tone }) {
           {multiInvitee && (
             <div className="space-y-4 rounded-3xl border border-slate-200 bg-slate-50 p-4">
               <div className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-xs leading-relaxed text-amber-800">
-                The submitter is the main invited guest and will receive their own QR pass
+                The primary registrant will receive an individual Festio Pass
                 {event.rsvp_require_approval ? ' after approval' : ' right away'}.
-                Add only their additional invited guests below.
+                Please add every spouse, child or invited guest attending with you below.
               </div>
               {categoryQuestion && (
                 <div className="rounded-2xl border border-teal-100 bg-white p-4">
                   <label className="mb-2 block text-sm font-bold text-slate-700">
-                    Invitation category <span className="text-red-500">*</span>
+                    Registrant category <span className="text-red-500">*</span>
                   </label>
                   <select
                     required
@@ -764,8 +765,8 @@ function RSVPForm({ event, theme, onConfirmed, tone }) {
                   <div className={`text-xs font-extrabold uppercase tracking-[0.18em] ${t.accent}`}>Additional invited guests</div>
                   <p className="mt-1 text-xs text-slate-500">
                     {needsInviteeCategory
-                      ? 'Select an invitation category to see how many additional guests are allowed.'
-                      : `Submitter plus up to ${additionalInviteeLimit} additional guest${additionalInviteeLimit === 1 ? '' : 's'}${selectedCategory ? ` for ${selectedCategory}` : ''}. Each ${event.rsvp_require_approval ? 'approved' : 'registered'} person gets a separate QR pass.`}
+                      ? 'Select a registrant category to see how many additional guests are allowed.'
+                      : 'You may add your family members and invited guests below.'}
                   </p>
                 </div>
                 <button type="button" onClick={addInvitee} disabled={needsInviteeCategory || invitees.length >= additionalInviteeLimit}
@@ -796,6 +797,15 @@ function RSVPForm({ event, theme, onConfirmed, tone }) {
                         {inviteeTypes.map((type) => <option key={type} value={type}>{type}</option>)}
                       </select>
                     </div>
+                    {event.rsvp_invitee_age_options?.length > 0 && (
+                    <div>
+                      <label className="mb-1 block text-xs font-bold text-slate-600">Age group</label>
+                      <select value={row.age_group} onChange={(e) => setInvitee(index, 'age_group', e.target.value)} className={inputCls}>
+                        <option value="">Select age group</option>
+                        {event.rsvp_invitee_age_options.map((age) => <option key={age} value={age}>{age}</option>)}
+                      </select>
+                    </div>
+                    )}
                     <div>
                       <label className="mb-1 block text-xs font-bold text-slate-600">Relationship / role</label>
                       <input value={row.relationship} onChange={(e) => setInvitee(index, 'relationship', e.target.value)} className={inputCls} placeholder="Aunt, teacher, chairman, etc." />
@@ -945,8 +955,9 @@ function ConfirmView({ confirm, event }) {
         </button>
       </div>
 
-      {/* Add to calendar */}
-      {event?.invite_add_to_calendar_enabled !== false && (
+      {/* Add to calendar — hidden while the start time is still TBD, since a
+          calendar entry needs a real time to be useful. */}
+      {event?.invite_add_to_calendar_enabled !== false && !event?.event_time_tbd && (
         <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3">
           <div className="mb-2 text-xs font-extrabold uppercase tracking-[0.18em] text-slate-500">Add to calendar</div>
           <div className="flex flex-wrap gap-2">
@@ -2323,7 +2334,7 @@ export default function InvitePage() {
   const dateLabel = dWording.date || (event.event_end_date
     ? fmtEventDateRange(event.event_date, event.event_end_date, event.timezone)
     : fmtDate(event.event_date, event.timezone))
-  const timeLabel = dWording.time || fmtTime(event.event_date, event.timezone)
+  const timeLabel = event.event_time_tbd ? 'Time to be announced' : (dWording.time || fmtTime(event.event_date, event.timezone))
   const venue = [dWording.venue, dWording.address].filter(Boolean).join(' · ') || venueText(event)
   const host = dWording.hostName || hostText(event)
   const hostWebsite = externalUrl(dWording.hostWebsite)
@@ -2671,7 +2682,7 @@ export default function InvitePage() {
                   </button>
                 </>
               )}
-              {event.invite_add_to_calendar_enabled !== false && (
+              {event.invite_add_to_calendar_enabled !== false && !event.event_time_tbd && (
                 <>
                   <a
                     href={googleCalUrl(event)}

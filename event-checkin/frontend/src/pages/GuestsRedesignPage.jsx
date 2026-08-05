@@ -657,6 +657,9 @@ function InviteTab({ notify, onSendInvites, onSendGuests, onPreviewInvite, event
   const [newCategory, setNewCategory] = useState('')
   const [inviteeTypeOptions, setInviteeTypeOptions] = useState([])
   const [newInviteeType, setNewInviteeType] = useState('')
+  const [inviteeAgeOptions, setInviteeAgeOptions] = useState([])
+  const [newInviteeAge, setNewInviteeAge] = useState('')
+  const [timeTbd, setTimeTbd] = useState(false)
   const [deadline, setDeadline] = useState('')
   const [capacity, setCapacity] = useState('')
   const [inviteMessage, setInviteMessage] = useState('')
@@ -784,12 +787,14 @@ function InviteTab({ notify, onSendInvites, onSendGuests, onPreviewInvite, event
     setSubmitterPhone(!event.rsvp_collect_phone ? 'dontask' : event.rsvp_phone_required ? 'required' : 'optional')
     setAdditionalEmail(event.rsvp_invitee_email_required ? 'required' : 'optional')
     setAdditionalPhone(!event.rsvp_collect_phone ? 'dontask' : event.rsvp_invitee_phone_required ? 'required' : 'optional')
+    setTimeTbd(!!event.event_time_tbd)
     setDeadline(utcToLocalInput(event.rsvp_deadline))
     setCapacity(event.rsvp_capacity ?? '')
     setInviteMessage(event.invite_message || '')
     setCategoryLimits(event.rsvp_multi_invitee_limit_rules || {})
     setCategorySeating(event.rsvp_category_seating_rules || {})
     setInviteeTypeOptions(event.rsvp_invitee_type_options || [])
+    setInviteeAgeOptions(event.rsvp_invitee_age_options || [])
     setShowCountdown(event.invite_countdown_enabled !== false)
     setShowCapacityBar(event.invite_capacity_bar_enabled !== false)
     setShowShare(event.invite_share_enabled !== false)
@@ -820,12 +825,14 @@ function InviteTab({ notify, onSendInvites, onSendGuests, onPreviewInvite, event
         rsvp_multi_invitee_limit_rules: Object.keys(categoryLimits).length ? categoryLimits : null,
         rsvp_category_seating_rules: Object.keys(categorySeating).length ? categorySeating : null,
         rsvp_invitee_type_options: inviteeTypeOptions.length ? inviteeTypeOptions : null,
+        rsvp_invitee_age_options: inviteeAgeOptions.length ? inviteeAgeOptions : null,
         rsvp_collect_email: submitterEmail !== 'dontask',
         rsvp_email_required: submitterEmail === 'required',
         rsvp_invitee_email_required: submitterEmail !== 'dontask' && additionalEmail === 'required',
         rsvp_collect_phone: submitterPhone !== 'dontask',
         rsvp_phone_required: submitterPhone === 'required',
         rsvp_invitee_phone_required: submitterPhone !== 'dontask' && additionalPhone === 'required',
+        event_time_tbd: timeTbd,
         rsvp_deadline: deadline ? new Date(deadline).toISOString() : null,
         rsvp_capacity: capacity === '' ? null : Math.max(0, Number(capacity) || 0),
         invite_message: inviteMessage || null,
@@ -959,6 +966,13 @@ function InviteTab({ notify, onSendInvites, onSendGuests, onPreviewInvite, event
               </label>
             </div>}
 
+            <div className="rd-toggle-row" style={{ marginTop: 12 }}>
+              <span style={{ fontSize: 12, fontWeight: 600 }}>Event time is not set yet (show "Time to be announced", hide calendar downloads)</span>
+              <label className="rd-switch">
+                <input type="checkbox" checked={timeTbd} onChange={(e) => { setTimeTbd(e.target.checked); notify(`Event time ${e.target.checked ? 'marked as TBD' : 'set'}`) }} />
+                <span className="track" /><span className="knob" />
+              </label>
+            </div>
             <div className="rd-row2" style={{ marginTop: 12 }}>
               <div style={{ flex: 1 }}>
                 <label className="rd-field-label">RSVP deadline</label>
@@ -1131,6 +1145,26 @@ function InviteTab({ notify, onSendInvites, onSendGuests, onPreviewInvite, event
                   if (!inviteeTypeOptions.includes(type)) setInviteeTypeOptions((prev) => [...prev, type])
                   setNewInviteeType('')
                 }}><Icon name="plus" size={12} /> Add guest type</button>
+              </div>
+
+              <label className="rd-field-label" style={{ marginTop: 18 }}>Age group options</label>
+              {inviteeAgeOptions.length > 0 ? (
+                <div className="gr-quick-row" style={{ flexWrap: 'wrap', gap: 6 }}>
+                  {inviteeAgeOptions.map((age) => (
+                    <span key={age} className="rd-hint" style={{ display: 'inline-flex', alignItems: 'center', gap: 6, border: '1px solid var(--border, #e2e8f0)', borderRadius: 999, padding: '4px 10px' }}>
+                      {age}
+                      <button type="button" className="rr-link-btn gr-danger-link" style={{ padding: 0 }} onClick={() => setInviteeAgeOptions((prev) => prev.filter((a) => a !== age))}>×</button>
+                    </span>
+                  ))}
+                </div>
+              ) : <div className="rd-hint">No age group field shown on additional guests. Add one to enable it.</div>}
+              <div className="rd-row2" style={{ marginTop: 8 }}>
+                <input className="rd-field" value={newInviteeAge} placeholder="Age group (e.g. Under 5)" onChange={(e) => setNewInviteeAge(e.target.value)} />
+                <button className="rr-btn secondary" disabled={!newInviteeAge.trim()} onClick={() => {
+                  const age = newInviteeAge.trim()
+                  if (!inviteeAgeOptions.includes(age)) setInviteeAgeOptions((prev) => [...prev, age])
+                  setNewInviteeAge('')
+                }}><Icon name="plus" size={12} /> Add age group</button>
               </div>
             </>
           )}

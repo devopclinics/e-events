@@ -632,7 +632,10 @@ async def _submit_multi_invitee_rsvp(
             rsvp_submitter_phone=submitter_phone,
             rsvp_relationship=(invitee.relationship or "").strip() or None,
             rsvp_guest_type=guest_type,
-            rsvp_notes=(invitee.notes or "").strip() or None,
+            rsvp_notes=" | ".join(filter(None, [
+                f"Age group: {(invitee.age_group or '').strip()}" if (invitee.age_group or "").strip() else None,
+                (invitee.notes or "").strip() or None,
+            ])) or None,
         )
         db.add(guest)
         await db.flush()

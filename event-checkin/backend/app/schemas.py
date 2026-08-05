@@ -1989,6 +1989,8 @@ class RSVPQuestionOut(BaseModel):
     options: Optional[str] = None  # JSON string e.g. '["Option A","Option B"]'
     is_required: bool
     sort_order: int
+    depends_on_question_id: Optional[str] = None
+    depends_on_value: Optional[str] = None
 
 
 class RSVPQuestionCreate(BaseModel):
@@ -1997,6 +1999,8 @@ class RSVPQuestionCreate(BaseModel):
     options: Optional[str] = None
     is_required: bool = False
     sort_order: int = 0
+    depends_on_question_id: Optional[str] = None
+    depends_on_value: Optional[str] = None
 
 
 class RSVPQuestionUpdate(BaseModel):
@@ -2005,6 +2009,8 @@ class RSVPQuestionUpdate(BaseModel):
     options: Optional[str] = None
     is_required: Optional[bool] = None
     sort_order: Optional[int] = None
+    depends_on_question_id: Optional[str] = None
+    depends_on_value: Optional[str] = None
 
 
 class InviteSettingsUpdate(BaseModel):

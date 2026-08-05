@@ -1181,6 +1181,11 @@ class RSVPQuestion(Base):
     options: Mapped[str | None] = mapped_column(Text, nullable=True)  # JSON: ["Option A", "Option B"]
     is_required: Mapped[bool] = mapped_column(Boolean, default=False)
     sort_order: Mapped[int] = mapped_column(Integer, default=0)
+    # Optional conditional visibility: when set, this question is only shown
+    # (and only enforced as required) if the referenced question's submitted
+    # answer equals depends_on_value. Both null = always shown, platform default.
+    depends_on_question_id: Mapped[str | None] = mapped_column(String(36), ForeignKey("rsvp_questions.id"), nullable=True)
+    depends_on_value: Mapped[str | None] = mapped_column(String(255), nullable=True)
 
     event: Mapped["Event"] = relationship("Event", back_populates="rsvp_questions")
     answers: Mapped[list["RSVPAnswer"]] = relationship("RSVPAnswer", cascade="all, delete-orphan")

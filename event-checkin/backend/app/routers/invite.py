@@ -83,7 +83,10 @@ async def _require_questions_answered(
     event_id: str, answers: dict[str, str], db: AsyncSession
 ) -> None:
     """Reject the submission if any required question is missing/blank.
-    For boolean questions either 'yes' or 'no' counts as answered."""
+    For boolean questions either 'yes' or 'no' counts as answered.
+    A question with depends_on_question_id set is only enforced when the
+    referenced question's submitted answer equals depends_on_value —
+    matches the conditional show/hide on the public form."""
     required = (await db.execute(
         select(RSVPQuestion).where(
             RSVPQuestion.event_id == event_id,
@@ -91,6 +94,8 @@ async def _require_questions_answered(
         )
     )).scalars().all()
     for q in required:
+        if q.depends_on_question_id and (answers.get(q.depends_on_question_id) or "") != (q.depends_on_value or ""):
+            continue
         if not (answers.get(q.id) or "").strip():
             raise HTTPException(422, f"Please answer: {q.question}")
 

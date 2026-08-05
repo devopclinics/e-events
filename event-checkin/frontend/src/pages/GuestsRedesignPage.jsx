@@ -497,7 +497,7 @@ const INVITE_THEMES = [
   { id: 'midnight', label: 'Midnight' },
   { id: 'forest', label: 'Forest' },
 ]
-function QuestionForm({ notify, onDone, onSave, question = null }) {
+function QuestionForm({ notify, onDone, onSave, question = null, allQuestions = [] }) {
   const [type, setType] = useState(question?.type || QUESTION_TYPES[0])
   const [preset, setPreset] = useState(PRESET_QUESTIONS[0])
   const [text, setText] = useState(question?.q || '')
@@ -508,6 +508,19 @@ function QuestionForm({ notify, onDone, onSave, question = null }) {
     try { return JSON.parse(value).join('\n') } catch { return String(value) }
   })
   const [required, setRequired] = useState(!!question?.required)
+  const [dependsOnId, setDependsOnId] = useState(question?.raw?.depends_on_question_id || '')
+  const [dependsOnValue, setDependsOnValue] = useState(question?.raw?.depends_on_value || '')
+
+  const conditionCandidates = allQuestions.filter((q) => q.id !== question?.id)
+  const dependsOnQuestion = conditionCandidates.find((q) => q.id === dependsOnId)
+  const dependsOnOptions = (() => {
+    if (!dependsOnQuestion) return []
+    if (dependsOnQuestion.type === 'Yes / No') return ['Yes', 'No']
+    const raw = dependsOnQuestion.raw?.options
+    if (Array.isArray(raw)) return raw
+    if (!raw) return []
+    try { return JSON.parse(raw) } catch { return [] }
+  })()
 
   return (
     <div className="gr-question-form">
@@ -534,6 +547,29 @@ function QuestionForm({ notify, onDone, onSave, question = null }) {
           <textarea className="rr-textarea" rows={3} placeholder={'Beef\nChicken\nVegetarian'} value={options} onChange={(e) => setOptions(e.target.value)} />
         </>
       )}
+      {conditionCandidates.length > 0 && (
+        <>
+          <label className="rd-field-label" style={{ marginTop: 10 }}>Show this question only when… (optional)</label>
+          <select className="rr-select" value={dependsOnId} onChange={(e) => { setDependsOnId(e.target.value); setDependsOnValue('') }}>
+            <option value="">Always show</option>
+            {conditionCandidates.map((q) => <option key={q.id} value={q.id}>{q.q}</option>)}
+          </select>
+          {dependsOnQuestion && (
+            <div style={{ marginTop: 8 }}>
+              <label className="rd-field-label">…equals</label>
+              {dependsOnOptions.length > 0 ? (
+                <select className="rr-select" value={dependsOnValue} onChange={(e) => setDependsOnValue(e.target.value)}>
+                  <option value="">Select a value</option>
+                  {dependsOnOptions.map((value) => <option key={value} value={value}>{value}</option>)}
+                </select>
+              ) : (
+                <input className="rd-field" placeholder="Answer to match" value={dependsOnValue} onChange={(e) => setDependsOnValue(e.target.value)} />
+              )}
+              <p className="rd-hint" style={{ marginTop: 4 }}>Hidden (and not required) on the RSVP form unless this condition is met.</p>
+            </div>
+          )}
+        </>
+      )}
       <div className="rd-row2" style={{ marginTop: 8 }}>
         <button className="rr-btn secondary" style={{ flex: 1, justifyContent: 'center' }} onClick={onDone}>Cancel</button>
         <button className="rr-btn primary" style={{ flex: 1, justifyContent: 'center' }} onClick={async () => {
@@ -548,6 +584,8 @@ function QuestionForm({ notify, onDone, onSave, question = null }) {
                 : null,
               is_required: required,
               sort_order: 0,
+              depends_on_question_id: dependsOnId || null,
+              depends_on_value: dependsOnId ? (dependsOnValue || null) : null,
             })
             notify(`Question ${question ? 'updated' : 'added'}: "${questionText}"`)
             onDone()
@@ -1182,13 +1220,18 @@ function InviteTab({ notify, onSendInvites, onSendGuests, onPreviewInvite, event
 
       <div className="rr-panel" style={{ maxWidth: 620 }}>
         <div className="rd-panel-body" style={{ paddingTop: 16 }}>
-          {addingQuestion && <QuestionForm notify={notify} onDone={() => setAddingQuestion(false)} onSave={(data) => api.createRSVPQuestion(eventId, { ...data, sort_order: rsvpQuestions.length }).then(onQuestionsChanged)} />}
-          {editingQuestion && <QuestionForm question={editingQuestion} notify={notify} onDone={() => setEditingQuestion(null)} onSave={(data) => api.updateRSVPQuestion(eventId, editingQuestion.id, { ...data, sort_order: editingQuestion.raw.sort_order }).then(onQuestionsChanged)} />}
+          {addingQuestion && <QuestionForm notify={notify} onDone={() => setAddingQuestion(false)} onSave={(data) => api.createRSVPQuestion(eventId, { ...data, sort_order: rsvpQuestions.length }).then(onQuestionsChanged)} allQuestions={rsvpQuestions} />}
+          {editingQuestion && <QuestionForm question={editingQuestion} notify={notify} onDone={() => setEditingQuestion(null)} onSave={(data) => api.updateRSVPQuestion(eventId, editingQuestion.id, { ...data, sort_order: editingQuestion.raw.sort_order }).then(onQuestionsChanged)} allQuestions={rsvpQuestions} />}
           {rsvpQuestions.map((rq, i) => (
             <div className="gr-question-row" key={rq.id || rq.q}>
               <div className="gr-question-text">
                 <strong>{i + 1}. {rq.q}</strong>
-                <span>{rq.type}{rq.required ? ' · Required' : ''}</span>
+                <span>{rq.type}{rq.required ? ' · Required' : ''}
+                  {rq.raw?.depends_on_question_id && (() => {
+                    const dep = rsvpQuestions.find((other) => other.id === rq.raw.depends_on_question_id)
+                    return dep ? ` · Shown only when "${dep.q}" = ${rq.raw.depends_on_value}` : ''
+                  })()}
+                </span>
               </div>
               <div className="gr-question-actions">
                 <button className="rr-link-btn" onClick={() => { setAddingQuestion(false); setEditingQuestion(rq) }}>Edit</button>

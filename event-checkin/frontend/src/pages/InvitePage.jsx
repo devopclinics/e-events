@@ -352,6 +352,15 @@ function mapUrl(address) {
   return address ? `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(address)}` : ''
 }
 
+// A question with depends_on_question_id set is only shown (and only
+// enforced as required) once the referenced question's current answer
+// equals depends_on_value — keep in sync with the same check server-side
+// in backend/app/routers/invite.py's _require_questions_answered.
+function questionConditionMet(question, answers) {
+  if (!question.depends_on_question_id) return true
+  return (answers[question.depends_on_question_id] || '') === (question.depends_on_value || '')
+}
+
 function externalUrl(value) {
   const text = String(value || '').trim()
   if (!text) return ''
@@ -837,7 +846,7 @@ function RSVPForm({ event, theme, onConfirmed, tone, dWording = {} }) {
           {event.questions?.length > 0 && (
             <div className="space-y-4 pt-1">
               <div className={`text-xs font-extrabold uppercase tracking-[0.18em] ${t.accent}`}>A few quick questions</div>
-              {event.questions.filter((q) => q.id !== categoryQuestion?.id).map((q) => (
+              {event.questions.filter((q) => q.id !== categoryQuestion?.id && questionConditionMet(q, answers)).map((q) => (
                 <QuestionField
                   key={q.id}
                   question={q}
@@ -1057,7 +1066,7 @@ function TokenRSVPForm({ event, prefill, token, theme, onDone, tone }) {
         return
       }
       const missing = (event.questions || []).find(
-        (q) => q.is_required && !(answers[q.id] || '').trim(),
+        (q) => q.is_required && questionConditionMet(q, answers) && !(answers[q.id] || '').trim(),
       )
       if (missing) { setError(`Please answer: ${missing.question}`); return }
     }
@@ -1127,7 +1136,7 @@ function TokenRSVPForm({ event, prefill, token, theme, onDone, tone }) {
       {event.questions?.length > 0 && (
         <div className="space-y-4 pt-1">
           <div className={`text-xs font-extrabold uppercase tracking-[0.18em] ${t.accent}`}>A few quick questions</div>
-          {event.questions.map((q) => (
+          {event.questions.filter((q) => questionConditionMet(q, answers)).map((q) => (
             <QuestionField
               key={q.id}
               question={q}

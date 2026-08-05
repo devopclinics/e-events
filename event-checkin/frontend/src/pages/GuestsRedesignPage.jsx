@@ -1219,12 +1219,17 @@ function InviteTab({ notify, onSendInvites, onSendGuests, onPreviewInvite, event
         <div><h2>Custom RSVP questions</h2><p>Ask guests anything extra when they confirm</p></div>
         <button onClick={() => setAddingQuestion((v) => !v)}><Icon name="plus" size={14} /> Add question</button>
       </div>
+      {rsvpQuestions.some((rq) => rq.q === 'Invitation category') && (
+        <p className="rd-hint" style={{ marginTop: -8, marginBottom: 12 }}>
+          "Invitation category" is managed above in Multi-invitee settings — its options come from the category list there, so it isn't listed here to edit directly.
+        </p>
+      )}
 
       <div className="rr-panel" style={{ maxWidth: 620 }}>
         <div className="rd-panel-body" style={{ paddingTop: 16 }}>
           {addingQuestion && <QuestionForm notify={notify} onDone={() => setAddingQuestion(false)} onSave={(data) => api.createRSVPQuestion(eventId, { ...data, sort_order: rsvpQuestions.length }).then(onQuestionsChanged)} allQuestions={rsvpQuestions} />}
           {editingQuestion && <QuestionForm question={editingQuestion} notify={notify} onDone={() => setEditingQuestion(null)} onSave={(data) => api.updateRSVPQuestion(eventId, editingQuestion.id, { ...data, sort_order: editingQuestion.raw.sort_order }).then(onQuestionsChanged)} allQuestions={rsvpQuestions} />}
-          {rsvpQuestions.map((rq, i) => (
+          {rsvpQuestions.filter((rq) => rq.q !== 'Invitation category').map((rq, i) => (
             <div className="gr-question-row" key={rq.id || rq.q}>
               <div className="gr-question-text">
                 <strong>{i + 1}. {rq.q}</strong>

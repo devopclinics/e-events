@@ -698,25 +698,25 @@ function RSVPForm({ event, theme, onConfirmed, tone, dWording = {} }) {
         <form onSubmit={handleSubmit} className="space-y-5">
           <div className="grid gap-4 sm:grid-cols-2">
             <div>
-              <label className="mb-2 block text-sm font-bold text-slate-700">{multiInvitee ? 'Submitter first name' : 'First name'} <span className="text-red-500">*</span></label>
+              <label className="mb-2 block text-sm font-bold text-slate-700">{dWording.firstNameLabel || (multiInvitee ? 'Submitter first name' : 'First name')} <span className="text-red-500">*</span></label>
               <input required value={form.first_name} onChange={set('first_name')} className={inputCls} placeholder="Jane" />
             </div>
             <div>
-              <label className="mb-2 block text-sm font-bold text-slate-700">{multiInvitee ? 'Submitter last name' : 'Last name'} <span className="text-red-500">*</span></label>
+              <label className="mb-2 block text-sm font-bold text-slate-700">{dWording.lastNameLabel || (multiInvitee ? 'Submitter last name' : 'Last name')} <span className="text-red-500">*</span></label>
               <input required value={form.last_name} onChange={set('last_name')} className={inputCls} placeholder="Smith" />
             </div>
           </div>
 
           {collectEmail && (
             <div>
-              <label className="mb-2 block text-sm font-bold text-slate-700">{multiInvitee ? 'Submitter email' : 'Email'} {emailRequired ? <span className="text-red-500">*</span> : <span className="text-slate-400">(optional)</span>}</label>
+              <label className="mb-2 block text-sm font-bold text-slate-700">{dWording.emailLabel || (multiInvitee ? 'Submitter email' : 'Email')} {emailRequired ? <span className="text-red-500">*</span> : <span className="text-slate-400">(optional)</span>}</label>
               <input required={emailRequired} type="email" value={form.email} onChange={set('email')} className={inputCls} placeholder="jane@example.com" />
             </div>
           )}
 
           {collectPhone && (
             <div>
-              <label className="mb-2 block text-sm font-bold text-slate-700">{multiInvitee ? 'Submitter phone' : 'Phone'} {phoneRequired ? <span className="text-red-500">*</span> : <span className="text-slate-400">(optional)</span>}</label>
+              <label className="mb-2 block text-sm font-bold text-slate-700">{dWording.phoneLabel || (multiInvitee ? 'Submitter phone' : 'Phone')} {phoneRequired ? <span className="text-red-500">*</span> : <span className="text-slate-400">(optional)</span>}</label>
               <input required={phoneRequired} type="tel" value={form.phone} onChange={set('phone')} className={inputCls} placeholder="(555) 123-4567" />
               <p className="mt-1 text-xs text-slate-500">Enter a U.S. number, or select the appropriate country code for an international number.</p>
             </div>
@@ -1040,7 +1040,7 @@ function DeclinedView({ confirm }) {
 
 // ── Personalised (token) RSVP form — confirm or decline ─────────────────────────
 
-function TokenRSVPForm({ event, prefill, token, theme, onDone, tone }) {
+function TokenRSVPForm({ event, prefill, token, theme, onDone, tone, dWording = {} }) {
   const t = THEMES[theme] || THEMES.default
   const [form, setForm] = useState({
     first_name: prefill.first_name || '',
@@ -1106,25 +1106,25 @@ function TokenRSVPForm({ event, prefill, token, theme, onDone, tone }) {
 
       <div className="grid gap-4 sm:grid-cols-2">
         <div>
-          <label className="mb-2 block text-sm font-bold text-slate-700">First name <span className="text-red-500">*</span></label>
+          <label className="mb-2 block text-sm font-bold text-slate-700">{dWording.firstNameLabel || 'First name'} <span className="text-red-500">*</span></label>
           <input value={form.first_name} onChange={set('first_name')} className={inputCls} placeholder="Jane" />
         </div>
         <div>
-          <label className="mb-2 block text-sm font-bold text-slate-700">Last name <span className="text-red-500">*</span></label>
+          <label className="mb-2 block text-sm font-bold text-slate-700">{dWording.lastNameLabel || 'Last name'} <span className="text-red-500">*</span></label>
           <input value={form.last_name} onChange={set('last_name')} className={inputCls} placeholder="Smith" />
         </div>
       </div>
 
       {prefill.email && (
         <div>
-          <label className="mb-2 block text-sm font-bold text-slate-700">Email</label>
+          <label className="mb-2 block text-sm font-bold text-slate-700">{dWording.emailLabel || 'Email'}</label>
           <input value={prefill.email} disabled readOnly className={lockedCls} />
         </div>
       )}
 
       {event.rsvp_collect_phone && (
         <div>
-          <label className="mb-2 block text-sm font-bold text-slate-700">Phone <span className="text-slate-400">(optional)</span></label>
+          <label className="mb-2 block text-sm font-bold text-slate-700">{dWording.phoneLabel || 'Phone'} <span className="text-slate-400">(optional)</span></label>
           <input type="tel" value={form.phone} onChange={set('phone')} className={inputCls} placeholder="+1 (832) 000-0000" />
         </div>
       )}
@@ -2405,7 +2405,7 @@ export default function InvitePage() {
             You're currently marked as <span className="font-bold">{guest?.rsvp_status === 'confirmed' ? 'Attending' : 'Not attending'}</span>. You can update your RSVP before the deadline.
           </div>
         )}
-        <TokenRSVPForm event={event} prefill={guest} token={token} theme={theme} onDone={setConfirmed} tone={tone} />
+        <TokenRSVPForm event={event} prefill={guest} token={token} theme={theme} onDone={setConfirmed} tone={tone} dWording={dWording} />
       </div>
     )
   } else if (!event.rsvp_enabled) {

@@ -1052,7 +1052,9 @@ function InviteTab({ notify, onSendInvites, onSendGuests, onPreviewInvite, event
                   </td>
                 </tr>
               </tbody>
-            </table></>}
+            </table>
+            <button className="rr-btn primary" disabled={saving} style={{ marginTop: 14 }} onClick={saveSettings}>{saving ? 'Saving…' : 'Save RSVP form fields'}</button>
+            </>}
           </div>
         </div>
       </div>
@@ -1108,6 +1110,7 @@ function InviteTab({ notify, onSendInvites, onSendGuests, onPreviewInvite, event
               </div>
             </>
           )}
+          <button className="rr-btn primary" disabled={saving} style={{ marginTop: 14 }} onClick={saveSettings}>{saving ? 'Saving…' : 'Save multi-invitee settings'}</button>
         </div>
       </div>
       )}

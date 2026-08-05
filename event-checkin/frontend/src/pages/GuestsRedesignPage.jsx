@@ -655,6 +655,8 @@ function InviteTab({ notify, onSendInvites, onSendGuests, onPreviewInvite, event
   const [showConfetti, setShowConfetti] = useState(true)
   const [categorySeating, setCategorySeating] = useState({})
   const [newCategory, setNewCategory] = useState('')
+  const [inviteeTypeOptions, setInviteeTypeOptions] = useState([])
+  const [newInviteeType, setNewInviteeType] = useState('')
   const [deadline, setDeadline] = useState('')
   const [capacity, setCapacity] = useState('')
   const [inviteMessage, setInviteMessage] = useState('')
@@ -787,6 +789,7 @@ function InviteTab({ notify, onSendInvites, onSendGuests, onPreviewInvite, event
     setInviteMessage(event.invite_message || '')
     setCategoryLimits(event.rsvp_multi_invitee_limit_rules || {})
     setCategorySeating(event.rsvp_category_seating_rules || {})
+    setInviteeTypeOptions(event.rsvp_invitee_type_options || [])
     setShowCountdown(event.invite_countdown_enabled !== false)
     setShowCapacityBar(event.invite_capacity_bar_enabled !== false)
     setShowShare(event.invite_share_enabled !== false)
@@ -816,6 +819,7 @@ function InviteTab({ notify, onSendInvites, onSendGuests, onPreviewInvite, event
         rsvp_multi_invitee_limit: Math.max(1, Math.min(100, Number(maxInvitees) || 1)),
         rsvp_multi_invitee_limit_rules: Object.keys(categoryLimits).length ? categoryLimits : null,
         rsvp_category_seating_rules: Object.keys(categorySeating).length ? categorySeating : null,
+        rsvp_invitee_type_options: inviteeTypeOptions.length ? inviteeTypeOptions : null,
         rsvp_collect_email: submitterEmail !== 'dontask',
         rsvp_email_required: submitterEmail === 'required',
         rsvp_invitee_email_required: submitterEmail !== 'dontask' && additionalEmail === 'required',
@@ -1107,6 +1111,26 @@ function InviteTab({ notify, onSendInvites, onSendGuests, onPreviewInvite, event
                   setCategoryLimits((prev) => ({ ...prev, [category]: Math.max(1, Number(maxInvitees) || 1) }))
                   setNewCategory('')
                 }}><Icon name="plus" size={12} /> Add category</button>
+              </div>
+
+              <label className="rd-field-label" style={{ marginTop: 18 }}>Guest type options</label>
+              {inviteeTypeOptions.length > 0 ? (
+                <div className="gr-quick-row" style={{ flexWrap: 'wrap', gap: 6 }}>
+                  {inviteeTypeOptions.map((type) => (
+                    <span key={type} className="rd-hint" style={{ display: 'inline-flex', alignItems: 'center', gap: 6, border: '1px solid var(--border, #e2e8f0)', borderRadius: 999, padding: '4px 10px' }}>
+                      {type}
+                      <button type="button" className="rr-link-btn gr-danger-link" style={{ padding: 0 }} onClick={() => setInviteeTypeOptions((prev) => prev.filter((t) => t !== type))}>×</button>
+                    </span>
+                  ))}
+                </div>
+              ) : <div className="rd-hint">Using the platform default list (Parent/Guardian, Invited Guest, Teacher, School/Staff, VIP/Dignitary, Other).</div>}
+              <div className="rd-row2" style={{ marginTop: 8 }}>
+                <input className="rd-field" value={newInviteeType} placeholder="Guest type name (e.g. Spouse)" onChange={(e) => setNewInviteeType(e.target.value)} />
+                <button className="rr-btn secondary" disabled={!newInviteeType.trim()} onClick={() => {
+                  const type = newInviteeType.trim()
+                  if (!inviteeTypeOptions.includes(type)) setInviteeTypeOptions((prev) => [...prev, type])
+                  setNewInviteeType('')
+                }}><Icon name="plus" size={12} /> Add guest type</button>
               </div>
             </>
           )}

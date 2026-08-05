@@ -414,6 +414,10 @@ class Event(Base):
     # invited guest to a table in the invitee bucket (values match SeatingTable.category).
     # "invitee" may be omitted for submitter-only categories.
     rsvp_category_seating_rules: Mapped[dict | None] = mapped_column(JSON, nullable=True)
+    # Per-event override for the "Guest type" dropdown shown on each additional
+    # invitee row in multi-invitee RSVP. None = use the platform default list
+    # (InvitePage.jsx DEFAULT_INVITEE_TYPES) — existing events are unaffected.
+    rsvp_invitee_type_options: Mapped[list | None] = mapped_column(JSON, nullable=True)
 
     # ── Per-event entitlements (Phase 2) — what an Event Pass unlocks ─────────
     # plan_tier: "free" | "tier50" | "tier150" | "tier300" | "unlimited" | "comp"

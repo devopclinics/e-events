@@ -83,6 +83,11 @@ function vapidKeyToUint8Array(value) {
 
 // ── Theme definitions ─────────────────────────────────────────────────────────
 
+// Fallback "Guest type" options for the additional-invitee repeater, used
+// whenever an event has no rsvp_invitee_type_options override configured
+// (Guests → Multi-invitee settings → Guest type options).
+const DEFAULT_INVITEE_TYPES = ['Parent/Guardian', 'Invited Guest', 'Teacher', 'School/Staff', 'VIP/Dignitary', 'Other']
+
 const THEMES = {
   default: {
     bg: 'bg-gradient-to-br from-teal-50 to-cyan-100 dark:from-slate-900 dark:to-slate-800',
@@ -563,7 +568,9 @@ function RSVPForm({ event, theme, onConfirmed, tone }) {
   const phoneRequired = collectPhone && !!event.rsvp_phone_required
   const inviteeEmailRequired = collectEmail && !!event.rsvp_invitee_email_required
   const inviteePhoneRequired = collectPhone && !!event.rsvp_invitee_phone_required
-  const inviteeTypes = ['Parent/Guardian', 'Invited Guest', 'Teacher', 'School/Staff', 'VIP/Dignitary', 'Other']
+  const inviteeTypes = event.rsvp_invitee_type_options?.length
+    ? event.rsvp_invitee_type_options
+    : DEFAULT_INVITEE_TYPES
 
   useEffect(() => {
     if (additionalInviteeLimit <= 0) {
@@ -712,7 +719,8 @@ function RSVPForm({ event, theme, onConfirmed, tone }) {
           {multiInvitee && (
             <div className="space-y-4 rounded-3xl border border-slate-200 bg-slate-50 p-4">
               <div className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-xs leading-relaxed text-amber-800">
-                The submitter is the main invited guest and will receive their own QR pass after approval.
+                The submitter is the main invited guest and will receive their own QR pass
+                {event.rsvp_require_approval ? ' after approval' : ' right away'}.
                 Add only their additional invited guests below.
               </div>
               {categoryQuestion && (
@@ -757,7 +765,7 @@ function RSVPForm({ event, theme, onConfirmed, tone }) {
                   <p className="mt-1 text-xs text-slate-500">
                     {needsInviteeCategory
                       ? 'Select an invitation category to see how many additional guests are allowed.'
-                      : `Submitter plus up to ${additionalInviteeLimit} additional guest${additionalInviteeLimit === 1 ? '' : 's'}${selectedCategory ? ` for ${selectedCategory}` : ''}. Each approved person gets a separate QR pass.`}
+                      : `Submitter plus up to ${additionalInviteeLimit} additional guest${additionalInviteeLimit === 1 ? '' : 's'}${selectedCategory ? ` for ${selectedCategory}` : ''}. Each ${event.rsvp_require_approval ? 'approved' : 'registered'} person gets a separate QR pass.`}
                   </p>
                 </div>
                 <button type="button" onClick={addInvitee} disabled={needsInviteeCategory || invitees.length >= additionalInviteeLimit}

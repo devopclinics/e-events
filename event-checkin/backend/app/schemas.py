@@ -224,6 +224,7 @@ class EventOut(BaseModel):
     rsvp_multi_invitee_limit: int = 10
     rsvp_multi_invitee_limit_rules: Optional[dict[str, int]] = None
     rsvp_category_seating_rules: Optional[dict[str, dict[str, Optional[str]]]] = None
+    rsvp_invitee_type_options: Optional[list[str]] = None
     # Entitlements (Phase 2)
     plan_tier: str = "free"
     is_paid: bool = False
@@ -2024,6 +2025,7 @@ class InviteSettingsUpdate(BaseModel):
     rsvp_multi_invitee_limit: Optional[int] = None
     rsvp_multi_invitee_limit_rules: Optional[dict[str, int]] = None
     rsvp_category_seating_rules: Optional[dict[str, dict[str, Optional[str]]]] = None
+    rsvp_invitee_type_options: Optional[list[str]] = None
 
     @field_validator("rsvp_deadline", mode="after")
     @classmethod

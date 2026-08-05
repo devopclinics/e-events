@@ -2081,9 +2081,13 @@ class InvitePageOut(BaseModel):
     invite_cover_image: Optional[str] = None
     invite_mode: str = "open"
     rsvp_deadline: Optional[datetime] = None
+    event_time_tbd: bool = False
+    rsvp_require_approval: bool = False
     rsvp_multi_invitee_enabled: bool = False
     rsvp_multi_invitee_limit: int = 10
     rsvp_multi_invitee_limit_rules: Optional[dict[str, int]] = None
+    rsvp_invitee_type_options: Optional[list[str]] = None
+    rsvp_invitee_age_options: Optional[list[str]] = None
     # rsvp_count populated by the endpoint
     rsvp_count: int = 0
     # deadline_passed computed by the endpoint

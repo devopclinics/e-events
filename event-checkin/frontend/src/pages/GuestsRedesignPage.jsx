@@ -6,6 +6,7 @@ import { useCurrentEvent } from '../hooks/useCurrentEvent'
 import { useEventDetails } from '../hooks/useEventDetails'
 import { useGuests } from '../hooks/useGuests'
 import { api } from '../api'
+import { INVITE_THEMES, RSVP_QUESTION_PRESETS } from './AdminPage'
 import './GuestsRedesignPage.css'
 
 const STAT_TILES = [
@@ -489,17 +490,9 @@ function GuestsTab({ notify, onView, onEdit, onRemove, onApproveRsvp, onRejectRs
 }
 
 const QUESTION_TYPES = ['Yes / No', 'Short answer', 'Multiple choice']
-const PRESET_QUESTIONS = ['— Choose a preset —', 'Dietary restrictions', 'Plus-one?', 'Song request', 'Transportation needed?']
-const INVITE_THEMES = [
-  { id: 'default', label: 'Teal (Default)' },
-  { id: 'gold', label: 'Gold' },
-  { id: 'rose', label: 'Rose' },
-  { id: 'midnight', label: 'Midnight' },
-  { id: 'forest', label: 'Forest' },
-]
 function QuestionForm({ notify, onDone, onSave, question = null, allQuestions = [] }) {
   const [type, setType] = useState(question?.type || QUESTION_TYPES[0])
-  const [preset, setPreset] = useState(PRESET_QUESTIONS[0])
+  const [preset, setPreset] = useState('')
   const [text, setText] = useState(question?.q || '')
   const [options, setOptions] = useState(() => {
     const value = question?.raw?.options
@@ -525,8 +518,17 @@ function QuestionForm({ notify, onDone, onSave, question = null, allQuestions = 
   return (
     <div className="gr-question-form">
       <label className="rd-field-label">Start from a preset (optional)</label>
-      <select className="rr-select" value={preset} onChange={(e) => { setPreset(e.target.value); if (e.target.value !== PRESET_QUESTIONS[0]) setText(e.target.value) }}>
-        {PRESET_QUESTIONS.map((p) => <option key={p}>{p}</option>)}
+      <select className="rr-select" value={preset} onChange={(e) => {
+        setPreset(e.target.value)
+        const p = RSVP_QUESTION_PRESETS.find((item) => item.label === e.target.value)
+        if (!p) return
+        setText(p.question)
+        setType(QUESTION_TYPE_LABEL[p.question_type] || QUESTION_TYPES[1])
+        setOptions((p.options || '').split(',').map((value) => value.trim()).filter(Boolean).join('\n'))
+        setRequired(!!p.is_required)
+      }}>
+        <option value="">— Choose a preset —</option>
+        {RSVP_QUESTION_PRESETS.map((p) => <option key={p.label} value={p.label}>{p.label}</option>)}
       </select>
       <label className="rd-field-label">Question</label>
       <input className="rd-field" placeholder="e.g. Will you need parking?" value={text} onChange={(e) => setText(e.target.value)} />
@@ -573,7 +575,7 @@ function QuestionForm({ notify, onDone, onSave, question = null, allQuestions = 
       <div className="rd-row2" style={{ marginTop: 8 }}>
         <button className="rr-btn secondary" style={{ flex: 1, justifyContent: 'center' }} onClick={onDone}>Cancel</button>
         <button className="rr-btn primary" style={{ flex: 1, justifyContent: 'center' }} onClick={async () => {
-          const questionText = (text || (preset !== PRESET_QUESTIONS[0] ? preset : '')).trim()
+          const questionText = text.trim()
           if (!questionText) return
           try {
             await onSave({

@@ -4123,7 +4123,7 @@ function MenuDashboard({ eventId }) {
 
 // ── Invite & RSVP panel ───────────────────────────────────────────────────────
 
-const INVITE_THEMES = [
+export const INVITE_THEMES = [
   { id: 'default',  label: 'Teal (Default)' },
   { id: 'gold',     label: 'Gold' },
   { id: 'rose',     label: 'Rose' },

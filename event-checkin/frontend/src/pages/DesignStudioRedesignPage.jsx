@@ -601,6 +601,10 @@ const WORDING_FIELDS = [
   ['aboutWebsite', 'About / website', ''],
   ['footerMessage', 'Footer message', ''],
   ['footerNote', 'Footer note', ''],
+  ['multiInviteeHeading', 'Multi-guest form heading', ''],
+  ['registrantCategoryLabel', 'Registrant category field label', ''],
+  ['registrantNote', 'Registrant note (above the guest list)', ''],
+  ['additionalGuestsNote', 'Additional guests helper text', ''],
 ]
 const DEFAULT_WORDING = Object.fromEntries(WORDING_FIELDS.map(([key, , fallback]) => [key, fallback]))
 

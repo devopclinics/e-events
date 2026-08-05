@@ -516,7 +516,7 @@ function SmsConsentCheckbox({ checked, onChange, disabled = false }) {
   )
 }
 
-function RSVPForm({ event, theme, onConfirmed, tone }) {
+function RSVPForm({ event, theme, onConfirmed, tone, dWording = {} }) {
   const t = THEMES[theme] || THEMES.default
   // Pre-fill from ?first_name=&last_name=&email= when present — used by a
   // private Calendar link for a contact who hasn't registered for this event
@@ -651,7 +651,7 @@ function RSVPForm({ event, theme, onConfirmed, tone }) {
   return (
     <div className="gh-panel space-y-5">
       <div>
-        <h2 className="text-2xl font-extrabold text-slate-950">{multiInvitee ? 'Register yourself and your guests' : 'Will you be attending?'}</h2>
+        <h2 className="text-2xl font-extrabold text-slate-950">{multiInvitee ? (dWording.multiInviteeHeading || 'Register yourself and your guests') : 'Will you be attending?'}</h2>
         <p className="mt-2 text-sm leading-relaxed text-slate-500">
           {multiInvitee
             ? 'Submit your RSVP details for review. Approved guests receive their own QR pass.'
@@ -720,14 +720,12 @@ function RSVPForm({ event, theme, onConfirmed, tone }) {
           {multiInvitee && (
             <div className="space-y-4 rounded-3xl border border-slate-200 bg-slate-50 p-4">
               <div className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-xs leading-relaxed text-amber-800">
-                The primary registrant will receive an individual Festio Pass
-                {event.rsvp_require_approval ? ' after approval' : ' right away'}.
-                Please add every spouse, child or invited guest attending with you below.
+                {dWording.registrantNote || `The primary registrant will receive an individual Festio Pass ${event.rsvp_require_approval ? 'after approval' : 'right away'}. Please add every spouse, child or invited guest attending with you below.`}
               </div>
               {categoryQuestion && (
                 <div className="rounded-2xl border border-teal-100 bg-white p-4">
                   <label className="mb-2 block text-sm font-bold text-slate-700">
-                    Registrant category <span className="text-red-500">*</span>
+                    {dWording.registrantCategoryLabel || 'Registrant category'} <span className="text-red-500">*</span>
                   </label>
                   <select
                     required
@@ -766,7 +764,7 @@ function RSVPForm({ event, theme, onConfirmed, tone }) {
                   <p className="mt-1 text-xs text-slate-500">
                     {needsInviteeCategory
                       ? 'Select a registrant category to see how many additional guests are allowed.'
-                      : 'You may add your family members and invited guests below.'}
+                      : (dWording.additionalGuestsNote || 'You may add your family members and invited guests below.')}
                   </p>
                 </div>
                 <button type="button" onClick={addInvitee} disabled={needsInviteeCategory || invitees.length >= additionalInviteeLimit}
@@ -2452,7 +2450,7 @@ export default function InvitePage() {
             This event is at capacity — RSVPs below join the waitlist and we'll notify you if a spot opens up.
           </div>
         )}
-        <RSVPForm event={event} theme={theme} onConfirmed={handleConfirmed} tone={tone} />
+        <RSVPForm event={event} theme={theme} onConfirmed={handleConfirmed} tone={tone} dWording={dWording} />
       </div>
     )
   }

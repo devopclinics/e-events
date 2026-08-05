@@ -76,11 +76,22 @@ export function fmtEventDateRange(startIso, endIso, timeZone, opts = {}) {
   const single = () => start.toLocaleDateString(undefined, dateOpts)
   const end = parseUtc(endIso)
   if (!end) return single()
-  const dayKey = (d) => new Intl.DateTimeFormat('en-CA', { ...(timeZone && { timeZone }) }).format(d)
+  const tzOpts = timeZone ? { timeZone } : {}
+  const dayKey = (d) => new Intl.DateTimeFormat('en-CA', tzOpts).format(d)
   if (dayKey(start) === dayKey(end)) return single()
-  const shortOpts = { month: 'short', day: 'numeric', ...(timeZone && { timeZone }) }
-  const sameYear = start.getUTCFullYear() === end.getUTCFullYear()
-  const startLabel = start.toLocaleDateString(undefined, sameYear ? shortOpts : { ...shortOpts, year: 'numeric' })
-  const endLabel = end.toLocaleDateString(undefined, opts.short ? shortOpts : dateOpts)
+  const monthOpts = opts.short ? { month: 'short', ...tzOpts } : { month: 'long', ...tzOpts }
+  const yearOpts = { year: 'numeric', ...tzOpts }
+  const sameMonth = start.toLocaleDateString(undefined, monthOpts) === end.toLocaleDateString(undefined, monthOpts)
+  const sameYear = start.toLocaleDateString(undefined, yearOpts) === end.toLocaleDateString(undefined, yearOpts)
+  if (sameMonth && sameYear) {
+    const month = start.toLocaleDateString(undefined, monthOpts)
+    const startDay = start.toLocaleDateString(undefined, { day: 'numeric', ...tzOpts })
+    const endDay = end.toLocaleDateString(undefined, { day: 'numeric', ...tzOpts })
+    const year = start.toLocaleDateString(undefined, { year: 'numeric', ...tzOpts })
+    return `${month} ${startDay}–${endDay}, ${year}`
+  }
+  const dayOpts = { month: monthOpts.month, day: 'numeric', ...tzOpts }
+  const startLabel = start.toLocaleDateString(undefined, sameYear ? dayOpts : { ...dayOpts, year: 'numeric' })
+  const endLabel = end.toLocaleDateString(undefined, { ...dayOpts, year: 'numeric' })
   return `${startLabel} – ${endLabel}`
 }

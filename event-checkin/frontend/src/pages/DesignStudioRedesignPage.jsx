@@ -602,11 +602,27 @@ const WORDING_FIELDS = [
   ['footerMessage', 'Footer message', ''],
   ['footerNote', 'Footer note', ''],
   ['multiInviteeHeading', 'Multi-guest form heading', ''],
+  ['multiInviteeSubheading', 'Multi-guest form subheading', ''],
   ['registrantCategoryLabel', 'Registrant category field label', ''],
   ['registrantNote', 'Registrant note (above the guest list)', ''],
+  ['additionalGuestsHeading', 'Additional guests section heading', 'Family Members and Additional Guests'],
   ['additionalGuestsNote', 'Additional guests helper text', ''],
+  ['submitButtonLabel', 'Submit button label', ''],
+  ['hotelBookingUrl', 'Hotel reservation link URL', ''],
+  ['hotelBookingLabel', 'Hotel reservation button label', 'Reserve Your Hotel Room'],
 ]
 const DEFAULT_WORDING = Object.fromEntries(WORDING_FIELDS.map(([key, , fallback]) => [key, fallback]))
+// Only persist wording fields the organizer actually changed from their
+// placeholder default. Sending the full state unconditionally (every field,
+// including ones never touched) means an untouched field's default text
+// gets saved as a "real" override — which then wins over the actual event
+// field on the guest page (see InvitePage.jsx's dWording.x || event.x
+// precedence), silently shadowing correct data with generic placeholder copy.
+function wordingOverridesOnly(wordingState) {
+  return Object.fromEntries(
+    Object.entries(wordingState || {}).filter(([key, value]) => value !== DEFAULT_WORDING[key])
+  )
+}
 
 const COLOR_FIELDS = [
   { key: 'primary', label: 'Primary' },
@@ -975,7 +991,7 @@ export default function DesignStudioRedesignPage() {
         selected_template_id: design?.selected_template_id || null,
         selected_flyer_template_id: selectedFlyerTplId || null,
         theme_config: { ...(design?.theme_config || {}), colors, fontPairing, passOptions },
-        wording_config: wording,
+        wording_config: wordingOverridesOnly(wording),
         asset_config: { ...(design?.asset_config || {}), flyer_text_scale: flyerTextScale, flyer_settings: flyerSettings, image_position: imagePosition },
         page_config: design?.page_config || {},
       })
@@ -1072,7 +1088,7 @@ export default function DesignStudioRedesignPage() {
     setRenderBusy(true)
     try {
       await api.saveEventDesign(eventId, {
-        wording_config: wording,
+        wording_config: wordingOverridesOnly(wording),
         asset_config: { ...(design?.asset_config || {}), image_position: imagePosition, flyer_text_scale: flyerTextScale },
       })
       const result = await api.renderFlyer(eventId, {

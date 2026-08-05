@@ -654,7 +654,7 @@ function RSVPForm({ event, theme, onConfirmed, tone, dWording = {} }) {
         <h2 className="text-2xl font-extrabold text-slate-950">{multiInvitee ? (dWording.multiInviteeHeading || 'Register yourself and your guests') : 'Will you be attending?'}</h2>
         <p className="mt-2 text-sm leading-relaxed text-slate-500">
           {multiInvitee
-            ? 'Submit your RSVP details for review. Approved guests receive their own QR pass.'
+            ? (dWording.multiInviteeSubheading || `Complete your registration to receive an individual Festio Pass for every registered attendee${event.rsvp_require_approval ? ', pending review' : ''}.`)
             : 'Let the host know so they can prepare your spot and Festio Pass.'}
         </p>
       </div>
@@ -708,8 +708,8 @@ function RSVPForm({ event, theme, onConfirmed, tone, dWording = {} }) {
           {collectPhone && (
             <div>
               <label className="mb-2 block text-sm font-bold text-slate-700">{multiInvitee ? 'Submitter phone' : 'Phone'} {phoneRequired ? <span className="text-red-500">*</span> : <span className="text-slate-400">(optional)</span>}</label>
-              <input required={phoneRequired} type="tel" value={form.phone} onChange={set('phone')} className={inputCls} placeholder="0803 000 0000" />
-              <p className="mt-1 text-xs text-slate-500">Nigerian number? Just enter it starting with 0 (e.g. 08030000000) — we'll add <span className="font-semibold">+234</span> for you. For another country, type your full number with its + code.</p>
+              <input required={phoneRequired} type="tel" value={form.phone} onChange={set('phone')} className={inputCls} placeholder="(555) 123-4567" />
+              <p className="mt-1 text-xs text-slate-500">Enter a U.S. number, or select the appropriate country code for an international number.</p>
             </div>
           )}
 
@@ -760,7 +760,7 @@ function RSVPForm({ event, theme, onConfirmed, tone, dWording = {} }) {
                 <>
                   <div className="flex items-center justify-between gap-3">
                 <div>
-                  <div className={`text-xs font-extrabold uppercase tracking-[0.18em] ${t.accent}`}>Additional invited guests</div>
+                  <div className={`text-xs font-extrabold uppercase tracking-[0.18em] ${t.accent}`}>{dWording.additionalGuestsHeading || 'Family Members and Additional Guests'}</div>
                   <p className="mt-1 text-xs text-slate-500">
                     {needsInviteeCategory
                       ? 'Select a registrant category to see how many additional guests are allowed.'
@@ -811,7 +811,7 @@ function RSVPForm({ event, theme, onConfirmed, tone, dWording = {} }) {
                     {collectPhone && (
                     <div>
                       <label className="mb-1 block text-xs font-bold text-slate-600">Phone {inviteePhoneRequired ? <span className="text-red-500">*</span> : <span className="text-slate-400">(optional)</span>}</label>
-                      <input required={inviteePhoneRequired} type="tel" value={row.phone} onChange={(e) => setInvitee(index, 'phone', e.target.value)} className={inputCls} placeholder="+234..." />
+                      <input required={inviteePhoneRequired} type="tel" value={row.phone} onChange={(e) => setInvitee(index, 'phone', e.target.value)} className={inputCls} placeholder="(555) 123-4567" />
                     </div>
                     )}
                     {collectEmail && (
@@ -859,7 +859,7 @@ function RSVPForm({ event, theme, onConfirmed, tone, dWording = {} }) {
           )}
 
           <PrimaryButton type="submit" disabled={loading} className="gh-cta w-full" style={tone?.accent ? { background: tone.accent } : undefined}>
-            {loading ? 'Submitting...' : multiInvitee ? 'Submit RSVP for review' : 'Confirm My RSVP'}
+            {loading ? 'Submitting...' : multiInvitee ? (dWording.submitButtonLabel || 'Complete Registration') : 'Confirm My RSVP'}
           </PrimaryButton>
         </form>
       )}
@@ -2636,6 +2636,16 @@ export default function InvitePage() {
               <DetailRow icon="🎟️" label="Admission" value="QR pass at entry" tone={tone} />
               {page.details.showAdmission && <DetailRow icon="✓" label="Admission note" value={admissionNote} tone={tone} />}
             </div>
+            {externalUrl(dWording.hotelBookingUrl) && (
+              <a
+                href={externalUrl(dWording.hotelBookingUrl)}
+                target="_blank" rel="noopener noreferrer"
+                className="mt-5 inline-flex min-h-11 items-center gap-2 rounded-xl px-5 py-2.5 text-sm font-extrabold transition hover:opacity-90"
+                style={{ background: tone.accent, color: '#0a0a0a' }}
+              >
+                🏨 {dWording.hotelBookingLabel || 'Reserve Your Hotel Room'}
+              </a>
+            )}
           </div>
 
           {page.about.show && <div className="gh-panel rounded-3xl border p-6 shadow-xl backdrop-blur sm:p-7" style={{ background: tone.panelStrong, borderColor: tone.border, boxShadow: `0 22px 48px ${tone.shadow}`, color: tone.text }}>

@@ -781,7 +781,11 @@ function RSVPForm({ event, theme, onConfirmed, tone, dWording = {} }) {
                   Add additional guest
                 </button>
                   </div>
-                  {invitees.map((row, index) => (
+                  {invitees.map((row, index) => {
+                const rowContactExempt = (event.rsvp_invitee_contact_exempt_types || []).includes(row.guest_type)
+                const rowPhoneRequired = inviteePhoneRequired && !rowContactExempt
+                const rowEmailRequired = inviteeEmailRequired && !rowContactExempt
+                return (
                 <div key={index} className="rounded-2xl border border-slate-200 bg-white p-4">
                   <div className="mb-3 flex items-center justify-between">
                     <div className="text-sm font-extrabold text-slate-800">Invitee {index + 1}</div>
@@ -819,16 +823,16 @@ function RSVPForm({ event, theme, onConfirmed, tone, dWording = {} }) {
                     </div>
                     {collectPhone && (
                     <div>
-                      <label className="mb-1 block text-xs font-bold text-slate-600">Phone {inviteePhoneRequired ? <span className="text-red-500">*</span> : <span className="text-slate-400">(optional)</span>}</label>
-                      <input required={inviteePhoneRequired} type="tel" value={row.phone} onChange={(e) => setInvitee(index, 'phone', e.target.value)} className={inputCls} placeholder="(555) 123-4567" />
+                      <label className="mb-1 block text-xs font-bold text-slate-600">Phone {rowPhoneRequired ? <span className="text-red-500">*</span> : <span className="text-slate-400">(optional)</span>}</label>
+                      <input required={rowPhoneRequired} type="tel" value={row.phone} onChange={(e) => setInvitee(index, 'phone', e.target.value)} className={inputCls} placeholder="(555) 123-4567" />
                     </div>
                     )}
                     {collectEmail && (
                     <div className="sm:col-span-2">
                       <label className="mb-1 block text-xs font-bold text-slate-600">
-                        Email {inviteeEmailRequired ? <span className="text-red-500">*</span> : <span className="text-slate-400">(optional)</span>}
+                        Email {rowEmailRequired ? <span className="text-red-500">*</span> : <span className="text-slate-400">(optional)</span>}
                       </label>
-                      <input required={inviteeEmailRequired} type="email" value={row.email} onChange={(e) => setInvitee(index, 'email', e.target.value)} className={inputCls} placeholder="invitee@example.com" />
+                      <input required={rowEmailRequired} type="email" value={row.email} onChange={(e) => setInvitee(index, 'email', e.target.value)} className={inputCls} placeholder="invitee@example.com" />
                     </div>
                     )}
                     <div className="sm:col-span-2">
@@ -837,7 +841,7 @@ function RSVPForm({ event, theme, onConfirmed, tone, dWording = {} }) {
                     </div>
                   </div>
                 </div>
-                  ))}
+                )})}
                 </>
               )}
             </div>

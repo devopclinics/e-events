@@ -227,6 +227,7 @@ class EventOut(BaseModel):
     rsvp_category_seating_rules: Optional[dict[str, dict[str, Optional[str]]]] = None
     rsvp_invitee_type_options: Optional[list[str]] = None
     rsvp_invitee_age_options: Optional[list[str]] = None
+    rsvp_invitee_contact_exempt_types: Optional[list[str]] = None
     # Entitlements (Phase 2)
     plan_tier: str = "free"
     is_paid: bool = False
@@ -2036,6 +2037,7 @@ class InviteSettingsUpdate(BaseModel):
     rsvp_category_seating_rules: Optional[dict[str, dict[str, Optional[str]]]] = None
     rsvp_invitee_type_options: Optional[list[str]] = None
     rsvp_invitee_age_options: Optional[list[str]] = None
+    rsvp_invitee_contact_exempt_types: Optional[list[str]] = None
 
     @field_validator("rsvp_deadline", mode="after")
     @classmethod
@@ -2094,6 +2096,7 @@ class InvitePageOut(BaseModel):
     rsvp_multi_invitee_limit_rules: Optional[dict[str, int]] = None
     rsvp_invitee_type_options: Optional[list[str]] = None
     rsvp_invitee_age_options: Optional[list[str]] = None
+    rsvp_invitee_contact_exempt_types: Optional[list[str]] = None
     # rsvp_count populated by the endpoint
     rsvp_count: int = 0
     # deadline_passed computed by the endpoint

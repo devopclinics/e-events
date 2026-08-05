@@ -697,6 +697,7 @@ function InviteTab({ notify, onSendInvites, onSendGuests, onPreviewInvite, event
   const [newCategory, setNewCategory] = useState('')
   const [inviteeTypeOptions, setInviteeTypeOptions] = useState([])
   const [newInviteeType, setNewInviteeType] = useState('')
+  const [contactExemptTypes, setContactExemptTypes] = useState([])
   const [inviteeAgeOptions, setInviteeAgeOptions] = useState([])
   const [newInviteeAge, setNewInviteeAge] = useState('')
   const [timeTbd, setTimeTbd] = useState(false)
@@ -834,6 +835,7 @@ function InviteTab({ notify, onSendInvites, onSendGuests, onPreviewInvite, event
     setCategoryLimits(event.rsvp_multi_invitee_limit_rules || {})
     setCategorySeating(event.rsvp_category_seating_rules || {})
     setInviteeTypeOptions(event.rsvp_invitee_type_options || [])
+    setContactExemptTypes(event.rsvp_invitee_contact_exempt_types || [])
     setInviteeAgeOptions(event.rsvp_invitee_age_options || [])
     setShowCountdown(event.invite_countdown_enabled !== false)
     setShowCapacityBar(event.invite_capacity_bar_enabled !== false)
@@ -865,6 +867,7 @@ function InviteTab({ notify, onSendInvites, onSendGuests, onPreviewInvite, event
         rsvp_multi_invitee_limit_rules: Object.keys(categoryLimits).length ? categoryLimits : null,
         rsvp_category_seating_rules: Object.keys(categorySeating).length ? categorySeating : null,
         rsvp_invitee_type_options: inviteeTypeOptions.length ? inviteeTypeOptions : null,
+        rsvp_invitee_contact_exempt_types: contactExemptTypes.length ? contactExemptTypes : null,
         rsvp_invitee_age_options: inviteeAgeOptions.length ? inviteeAgeOptions : null,
         rsvp_collect_email: submitterEmail !== 'dontask',
         rsvp_email_required: submitterEmail === 'required',
@@ -1186,6 +1189,25 @@ function InviteTab({ notify, onSendInvites, onSendGuests, onPreviewInvite, event
                   setNewInviteeType('')
                 }}><Icon name="plus" size={12} /> Add guest type</button>
               </div>
+
+              {inviteeTypeOptions.length > 0 && (
+                <>
+                  <label className="rd-field-label" style={{ marginTop: 18 }}>Skip contact info requirement for these guest types</label>
+                  <p className="rd-hint" style={{ marginTop: -2 }}>Even if Phone or Email is set to Required for additional guests above, these guest types won't be blocked from submitting without their own contact info.</p>
+                  <div className="gr-quick-row" style={{ flexWrap: 'wrap', gap: 6, marginTop: 6 }}>
+                    {inviteeTypeOptions.map((type) => (
+                      <label key={type} style={{ display: 'inline-flex', alignItems: 'center', gap: 6, border: '1px solid var(--border, #e2e8f0)', borderRadius: 999, padding: '4px 10px', fontSize: 12, cursor: 'pointer' }}>
+                        <input
+                          type="checkbox"
+                          checked={contactExemptTypes.includes(type)}
+                          onChange={(e) => setContactExemptTypes((prev) => e.target.checked ? [...prev, type] : prev.filter((t) => t !== type))}
+                        />
+                        {type}
+                      </label>
+                    ))}
+                  </div>
+                </>
+              )}
 
               <label className="rd-field-label" style={{ marginTop: 18 }}>Age group options</label>
               {inviteeAgeOptions.length > 0 ? (

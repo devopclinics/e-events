@@ -424,6 +424,11 @@ class Event(Base):
     # Per-event override for the "Age group" dropdown shown on each additional
     # invitee row in multi-invitee RSVP. None = no age-group field is shown.
     rsvp_invitee_age_options: Mapped[list | None] = mapped_column(JSON, nullable=True)
+    # Guest-type values (drawn from rsvp_invitee_type_options) exempt from
+    # rsvp_invitee_email_required/rsvp_invitee_phone_required -- e.g. a child
+    # doesn't need their own contact info when the submitting parent's is
+    # already collected. None/empty = no exemptions, existing behavior.
+    rsvp_invitee_contact_exempt_types: Mapped[list | None] = mapped_column(JSON, nullable=True)
 
     # ── Per-event entitlements (Phase 2) — what an Event Pass unlocks ─────────
     # plan_tier: "free" | "tier50" | "tier150" | "tier300" | "unlimited" | "comp"

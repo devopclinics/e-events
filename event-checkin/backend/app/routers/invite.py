@@ -521,16 +521,19 @@ async def _submit_multi_invitee_rsvp(
         # Additional invited guests: email/phone are required only when the event
         # both collects the field AND marks it required for invitees (defaults off,
         # since the submitter is the point of contact). Phone is format-checked
-        # whenever provided.
+        # whenever provided. A guest_type listed in rsvp_invitee_contact_exempt_types
+        # (e.g. "Child") is exempt from both required checks even when generally on.
+        invitee_guest_type = (invitee.guest_type or "").strip() or "Invited Guest"
+        contact_exempt = invitee_guest_type in (event.rsvp_invitee_contact_exempt_types or [])
         email = invitee.email.lower().strip() if invitee.email else None
-        if event.rsvp_collect_email and event.rsvp_invitee_email_required and not email:
+        if event.rsvp_collect_email and event.rsvp_invitee_email_required and not contact_exempt and not email:
             raise HTTPException(422, f"Email is required for {first} {last}".strip())
         phone = None
         if invitee.phone and invitee.phone.strip():
             phone = _normalize_phone(invitee.phone.strip())
             if phone is None:
                 raise HTTPException(422, f"Phone format not recognised for {first} {last}".strip())
-        elif event.rsvp_collect_phone and event.rsvp_invitee_phone_required:
+        elif event.rsvp_collect_phone and event.rsvp_invitee_phone_required and not contact_exempt:
             raise HTTPException(422, f"Phone is required for {first} {last}".strip())
         contact_keys = []
         if email and not event.rsvp_allow_duplicate_emails:

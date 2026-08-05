@@ -2466,7 +2466,7 @@ export default function InvitePage() {
             ? <span className="text-sm font-extrabold uppercase tracking-[0.24em]" style={{ color: tone.accent }}>{dWording.inviteLabel || 'Welcome to'}</span>
             : <span />}
           <div className="flex flex-col items-end gap-1">
-            <span className="rounded-full border px-4 py-2 text-sm font-bold" style={{ background: tone.chip, borderColor: tone.border, color: tone.text }}>Festio</span>
+            <span className="rounded-full border px-4 py-2 text-sm font-bold" style={{ background: tone.chip, borderColor: tone.border, color: tone.text }}>Powered by Festio</span>
             {flyerLedHero && page.organizer.show && host && (hostWebsite
               ? <a href={hostWebsite} target="_blank" rel="noopener noreferrer" className="text-[11px] font-semibold underline underline-offset-2 hover:opacity-80" style={{ color: tone.muted }}>{page.organizer.label || 'Organized by'} {host}</a>
               : <span className="text-[11px] font-semibold" style={{ color: tone.muted }}>{page.organizer.label || 'Organized by'} {host}</span>)}
@@ -2500,7 +2500,7 @@ export default function InvitePage() {
             />
             <div className="flex-1 text-center sm:text-left">
               {flyerLedHero || !page.hero.showTitle ? <h1 className="sr-only">{title}</h1> : <>
-                {page.hero.showWelcomeLabel && <div className="text-sm font-extrabold uppercase tracking-[0.24em]" style={{ color: tone.accent }}>{dWording.inviteLabel || "You're invited to"}</div>}
+                {page.hero.showWelcomeLabel && <div className="text-sm font-extrabold uppercase tracking-[0.24em]" style={{ color: tone.accent }}>{dWording.heroInviteLabel || "You're invited"}</div>}
                 <h1 className="mt-3 text-3xl font-extrabold leading-[1.08] sm:text-5xl" style={{ color: tone.text }}>{title}</h1>
               </>}
               {!flyerLedHero && page.hero.showHost && host && (hostWebsite
@@ -2563,7 +2563,7 @@ export default function InvitePage() {
               return { background: `rgba(10,10,15,${overlayPct / 100})`, backdropFilter: `blur(${(overlayPct / 90) * 6}px)` }
             })()}>
               {flyerLedHero || !page.hero.showTitle ? <h1 className="sr-only">{title}</h1> : <>
-                {page.hero.showWelcomeLabel && <div className="text-sm font-extrabold uppercase tracking-[0.24em] text-white/85">{dWording.inviteLabel || "You're invited to"}</div>}
+                {page.hero.showWelcomeLabel && <div className="text-sm font-extrabold uppercase tracking-[0.24em] text-white/85">{dWording.heroInviteLabel || "You're invited"}</div>}
                 <h1 className="mt-3 text-4xl font-extrabold leading-[1.05] text-white sm:text-6xl">{title}</h1>
               </>}
               {!flyerLedHero && page.hero.showHost && host && (hostWebsite

@@ -581,7 +581,8 @@ const TEMPLATES = [
 // already-shipped legacy page these records are shared live with — getting
 // these keys wrong would write malformed data into real event-design rows).
 const WORDING_FIELDS = [
-  ['inviteLabel', 'Invite label', "You're invited"],
+  ['inviteLabel', 'Top header label (above the hero)', 'Welcome to'],
+  ['heroInviteLabel', 'Hero invite label (above the event name)', "You're invited"],
   ['eventTitle', 'Event title', ''],
   ['eventSubtitle', 'Subtitle', ''],
   ['hostName', 'Host name', ''],

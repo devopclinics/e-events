@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test'
-import { expectQaEventLoaded, openGuestActions, signIn } from './helpers.js'
+import { axeSeriousViolations, expectQaEventLoaded, formatAxeViolations, openGuestActions, signIn } from './helpers.js'
 
 test.describe.configure({ mode: 'serial' })
 
@@ -15,6 +15,11 @@ test.describe('Stage B guest CRUD — isolated staging fixture', () => {
     await signIn(page)
     await page.goto('/guests-redesign')
     await expectQaEventLoaded(page)
+  })
+
+  test('redesign guest list has no serious/critical accessibility violations', async ({ page }) => {
+    const violations = await axeSeriousViolations(page)
+    expect(violations, formatAxeViolations(violations)).toEqual([])
   })
 
   test('add, edit, and remove a synthetic guest with confirmed UI state', async ({ page }) => {

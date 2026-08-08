@@ -813,6 +813,7 @@ export default function ScanAutoPage() {
   const { guest, event, status, table_name, seat_number, menu_categories, guest_choices, partner, menu_locked } = data || {}
   const colors = passThemeColors(designTheme)
   const wording = designTheme?.wording || {}
+  const paidPass = guest?.paid_ticket_pass_design || {}
   const passOpts = { showTable: true, showSeat: true, showHubButton: true, ...(designTheme?.pass_options || {}) }
   const guestHubToken = guest?.invite_token || guest?.qr_token || token
   const showGuestHubButton = Boolean(guestHubToken && (passOpts.showHubButton || event?.experience_enabled))
@@ -823,10 +824,10 @@ export default function ScanAutoPage() {
   const eventName = wording.eventTitle || event?.name || 'Event'
   const hostName = wording.hostName || event?.couples_name || ''
   const isConsentView = window.location.hash === '#consent'
-  const headerEyebrow = isConsentView ? 'Review and sign' : "You're invited to"
+  const headerEyebrow = isConsentView ? 'Review and sign' : (paidPass.eyebrow || "You're invited to")
   const headerTitle = isConsentView ? 'Event consent' : eventName
   const headerSubtitle = isConsentView ? eventName : hostName
-  const admissionText = wording.admissionNote || (status === 'admitted'
+  const admissionText = paidPass.qr_instruction || wording.admissionNote || (status === 'admitted'
     ? 'You have already been checked in.'
     : 'Show this code to the check-in official at the entrance.')
 
@@ -868,7 +869,7 @@ export default function ScanAutoPage() {
         <div className="px-6 pb-8 pt-2 space-y-5">
           {/* Guest name */}
           <div className="text-center">
-            <p className="text-xs uppercase tracking-widest text-slate-400 font-medium mb-0.5">Guest</p>
+            <p className="text-xs uppercase tracking-widest text-slate-400 font-medium mb-0.5">{paidPass.attendee_label || 'Guest'}</p>
             <p className="text-slate-800 dark:text-white text-xl font-bold">
               {guest?.first_name} {guest?.last_name}
             </p>
@@ -941,9 +942,9 @@ export default function ScanAutoPage() {
                 <a
                   href={`/r/${guestHubToken}#guest-hub`}
                   className="inline-flex min-h-11 w-full max-w-xs items-center justify-center rounded-lg px-5 py-2.5 text-sm font-bold text-slate-950"
-                  style={{ background: colors.accent || '#14b8a6' }}
+                  style={{ background: paidPass.accent_color || colors.accent || '#14b8a6' }}
                 >
-                  {event?.live_program_enabled ? 'Open Live Program' : event?.experience_enabled ? 'Track my activity' : 'Open FestioHub'}
+                  {paidPass.button_label || (event?.live_program_enabled ? 'Open Live Program' : event?.experience_enabled ? 'Track my activity' : 'Open FestioHub')}
                 </a>
               )}
               {event?.festiome_addon_enabled && event?.festiome_enabled && guest?.event_id && (
@@ -956,6 +957,8 @@ export default function ScanAutoPage() {
               )}
             </div>
           )}
+
+          {paidPass.footer_message && <p className="text-center text-xs text-slate-400">{paidPass.footer_message}</p>}
 
           {/* Gift registry — surfaced on the pass so guests can reach it directly */}
           {event?.registry_enabled && event?.registry_token && (

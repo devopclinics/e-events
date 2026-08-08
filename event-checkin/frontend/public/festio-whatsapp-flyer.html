@@ -1,0 +1,361 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Festio — WhatsApp Promo Flyer Mockup</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      background: #111b21;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      min-height: 100vh;
+      font-family: -apple-system, 'Segoe UI', sans-serif;
+      padding: 32px 16px;
+    }
+
+    /* ── WhatsApp chat bubble wrapper ───────────────────────────── */
+    .chat-wrap {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      max-width: 360px;
+      width: 100%;
+    }
+
+    .bubble {
+      background: #202c33;
+      border-radius: 0 12px 12px 12px;
+      overflow: hidden;
+      box-shadow: 0 2px 8px rgba(0,0,0,.45);
+      position: relative;
+    }
+
+    .bubble::before {
+      content: '';
+      position: absolute;
+      top: 0; left: -8px;
+      border-width: 0 8px 8px 0;
+      border-style: solid;
+      border-color: transparent #202c33 transparent transparent;
+    }
+
+    /* ── Flyer card inside the bubble ─────────────────────────────── */
+    .flyer {
+      background: linear-gradient(160deg, #0d1f1e 0%, #0a2520 40%, #051a18 100%);
+      position: relative;
+      overflow: hidden;
+    }
+
+    /* decorative rings */
+    .flyer::before {
+      content: '';
+      position: absolute;
+      top: -80px; right: -80px;
+      width: 280px; height: 280px;
+      border-radius: 50%;
+      border: 40px solid rgba(20,184,166,.08);
+      pointer-events: none;
+    }
+    .flyer::after {
+      content: '';
+      position: absolute;
+      bottom: -60px; left: -60px;
+      width: 220px; height: 220px;
+      border-radius: 50%;
+      border: 30px solid rgba(20,184,166,.06);
+      pointer-events: none;
+    }
+
+    .flyer-inner {
+      position: relative;
+      z-index: 1;
+      padding: 28px 24px 24px;
+    }
+
+    /* badge */
+    .badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 7px;
+      background: rgba(20,184,166,.12);
+      border: 1px solid rgba(20,184,166,.30);
+      border-radius: 100px;
+      padding: 4px 12px;
+      font-size: 9px;
+      font-weight: 900;
+      letter-spacing: .18em;
+      text-transform: uppercase;
+      color: #5eead4;
+      margin-bottom: 18px;
+    }
+    .badge-dot {
+      width: 6px; height: 6px;
+      border-radius: 50%;
+      background: #2dd4bf;
+      box-shadow: 0 0 6px #2dd4bf;
+      flex-shrink: 0;
+    }
+
+    /* headline */
+    .headline {
+      font-size: 24px;
+      font-weight: 900;
+      line-height: 1.15;
+      color: #f8fafc;
+      letter-spacing: -.3px;
+      margin-bottom: 6px;
+    }
+    .headline span {
+      background: linear-gradient(90deg, #2dd4bf, #34d399, #fbbf24);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+    }
+
+    .sub {
+      font-size: 12px;
+      line-height: 1.6;
+      color: #94a3b8;
+      margin-bottom: 22px;
+    }
+
+    /* divider */
+    .divider {
+      height: 1px;
+      background: linear-gradient(90deg, rgba(20,184,166,.25), transparent);
+      margin-bottom: 20px;
+    }
+
+    /* feature chips */
+    .chips {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+      margin-bottom: 22px;
+    }
+    .chip {
+      background: rgba(255,255,255,.055);
+      border: 1px solid rgba(255,255,255,.09);
+      border-radius: 100px;
+      padding: 4px 10px;
+      font-size: 10px;
+      font-weight: 700;
+      color: #cbd5e1;
+      white-space: nowrap;
+    }
+
+    /* feature rows */
+    .features {
+      display: flex;
+      flex-direction: column;
+      gap: 9px;
+      margin-bottom: 24px;
+    }
+    .feature-row {
+      display: flex;
+      align-items: flex-start;
+      gap: 10px;
+    }
+    .feature-icon {
+      flex-shrink: 0;
+      width: 26px; height: 26px;
+      border-radius: 8px;
+      background: rgba(20,184,166,.14);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 13px;
+    }
+    .feature-text strong {
+      display: block;
+      font-size: 11px;
+      font-weight: 800;
+      color: #e2e8f0;
+      line-height: 1.3;
+    }
+    .feature-text span {
+      font-size: 10px;
+      color: #64748b;
+      line-height: 1.4;
+    }
+
+    /* CTA */
+    .cta-wrap {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+    .cta-primary {
+      display: block;
+      background: linear-gradient(135deg, #14b8a6, #0d9488);
+      color: #042f2e;
+      font-size: 13px;
+      font-weight: 900;
+      text-align: center;
+      padding: 12px 16px;
+      border-radius: 12px;
+      letter-spacing: .01em;
+      text-decoration: none;
+      box-shadow: 0 4px 14px rgba(20,184,166,.35);
+    }
+    .cta-secondary {
+      display: block;
+      background: rgba(255,255,255,.06);
+      border: 1px solid rgba(255,255,255,.10);
+      color: #94a3b8;
+      font-size: 11px;
+      font-weight: 700;
+      text-align: center;
+      padding: 9px 16px;
+      border-radius: 10px;
+      text-decoration: none;
+    }
+
+    /* footer strip */
+    .footer-strip {
+      background: rgba(20,184,166,.08);
+      border-top: 1px solid rgba(20,184,166,.14);
+      padding: 10px 24px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+    .footer-logo {
+      font-size: 13px;
+      font-weight: 900;
+      color: #2dd4bf;
+      letter-spacing: -.2px;
+    }
+    .footer-url {
+      font-size: 9px;
+      color: #475569;
+      font-weight: 600;
+    }
+
+    /* bubble caption / timestamp */
+    .caption {
+      padding: 8px 12px 4px;
+      font-size: 11.5px;
+      color: #e9edef;
+      line-height: 1.5;
+    }
+    .ts {
+      text-align: right;
+      font-size: 10px;
+      color: #8696a0;
+      padding: 0 12px 8px;
+    }
+
+    /* ── Print / export hint ──────────────────────────────────────── */
+    .hint {
+      margin-top: 24px;
+      text-align: center;
+      font-size: 11px;
+      color: #3d5a66;
+    }
+  </style>
+</head>
+<body>
+
+  <div class="chat-wrap">
+
+    <!-- WhatsApp message bubble -->
+    <div class="bubble">
+
+      <!-- The flyer image area -->
+      <div class="flyer">
+        <div class="flyer-inner">
+
+          <div class="badge">
+            <span class="badge-dot"></span>
+            Guest Operating System
+          </div>
+
+          <h1 class="headline">
+            Run every guest moment<br>
+            <span>from invite to exit.</span>
+          </h1>
+          <p class="sub">
+            One platform for RSVPs, seating, QR passes,<br>
+            check-in, messaging &amp; live attendance.
+          </p>
+
+          <div class="divider"></div>
+
+          <div class="chips">
+            <span class="chip">RSVP</span>
+            <span class="chip">QR Passes</span>
+            <span class="chip">Seating</span>
+            <span class="chip">Check-In</span>
+            <span class="chip">Messaging</span>
+            <span class="chip">Live Dashboard</span>
+            <span class="chip">Orders</span>
+            <span class="chip">Design Studio</span>
+          </div>
+
+          <div class="features">
+            <div class="feature-row">
+              <div class="feature-icon">🎟️</div>
+              <div class="feature-text">
+                <strong>Invite &amp; RSVP</strong>
+                <span>Public or private links, capacity limits &amp; approvals</span>
+              </div>
+            </div>
+            <div class="feature-row">
+              <div class="feature-icon">💺</div>
+              <div class="feature-text">
+                <strong>Seating &amp; Access</strong>
+                <span>Tables, zones, auto-assignment &amp; VIP rules</span>
+              </div>
+            </div>
+            <div class="feature-row">
+              <div class="feature-icon">📲</div>
+              <div class="feature-text">
+                <strong>Messaging</strong>
+                <span>Email, SMS, WhatsApp &amp; in-app broadcasts</span>
+              </div>
+            </div>
+            <div class="feature-row">
+              <div class="feature-icon">🔍</div>
+              <div class="feature-text">
+                <strong>Live Check-In</strong>
+                <span>QR scanner, walk-ins, duplicates &amp; staff roles</span>
+              </div>
+            </div>
+          </div>
+
+          <div class="cta-wrap">
+            <a href="https://festio.events/register" class="cta-primary">
+              Create Your Free Event →
+            </a>
+            <a href="mailto:events@festio.events" class="cta-secondary">
+              Book a Demo · events@festio.events
+            </a>
+          </div>
+
+        </div>
+
+        <div class="footer-strip">
+          <span class="footer-logo">Festio</span>
+          <span class="footer-url">festio.events</span>
+        </div>
+      </div>
+
+      <!-- Caption text below image in the bubble -->
+      <div class="caption">
+        Stop juggling spreadsheets and group chats. Festio manages your entire guest journey — before, during, and after your event. 🎉
+      </div>
+      <div class="ts">09:41 ✓✓</div>
+
+    </div>
+
+  </div>
+
+  <p class="hint">Open in browser · Screenshot or print to PDF at 390 px wide for WhatsApp sharing</p>
+
+</body>
+</html>

@@ -931,6 +931,10 @@ export default function ScannerPage() {
 
   function offlineAdmit(token) {
     const manifest = offlineManifest || loadOfflineManifest(eventId)
+    if (manifest?.expires_at && Date.parse(manifest.expires_at) < Date.now()) {
+      setResult({status:'invalid',message:'Offline safety data is more than 30 minutes old. Reconnect and refresh before admitting tickets.'})
+      return
+    }
     if (!manifest?.guests?.length) {
       setResult({
         status: 'invalid',
@@ -941,6 +945,10 @@ export default function ScannerPage() {
     const guest = manifest.guests.find((g) => g.qr_token === token)
     if (!guest) {
       setResult({ status: 'invalid', message: 'Offline guest list does not contain this QR code.' })
+      return
+    }
+    if (guest.rsvp_status === 'declined') {
+      setResult({ status: 'invalid', message: 'This pass was cancelled or revoked. Do not admit.', guest })
       return
     }
     if (guest.admitted) {

@@ -12,7 +12,9 @@ import { logFeatureFlagCohort } from './redesignTelemetry'
 // given redesignRoute instead of rendering the legacy page.
 //
 // Rules:
-//  - Platform superadmins are never auto-redirected (they need to test both).
+//  - Superadmins follow cohort like any other user — no standing exemption.
+//    Anyone (including staff) who wants legacy can use the explicit
+//    "Switch to legacy UI" link (?ui=legacy), which always wins.
 //  - While the event list is loading a minimal spinner is shown — the legacy
 //    page never flashes before the redirect fires.
 //  - If the event list call fails the legacy page is shown (safe fallback).
@@ -60,6 +62,13 @@ export default function RedesignGate({ redesignRoute, children }) {
     return () => { cancelled = true }
   }, [user, currentEventId])
 
+  // One-shot bypass for a single navigation (e.g. a redesign page punting to
+  // its not-yet-built legacy counterpart). Unlike ?ui=legacy this is never
+  // persisted to the global UI preference — it only applies to this visit.
+  if (location.state?.forceLegacy) {
+    return children
+  }
+
   // An explicit legacy choice always wins over cohort defaults. This is the
   // operational rollback path exposed by the redesign shell.
   if (uiPreference === 'legacy' || requestedPreference === 'legacy') {
@@ -80,8 +89,13 @@ export default function RedesignGate({ redesignRoute, children }) {
     )
   }
 
-  // Superadmins are excluded from auto-redirect so they can test both UIs.
-  if (!user?.is_platform_superadmin && AUTO_REDIRECT_COHORTS.has(cohort)) {
+  // An explicit "redesign" preference (e.g. visiting once with ?ui=redesign)
+  // always redirects, regardless of cohort.
+  if (uiPreference === 'redesign' || requestedPreference === 'redesign') {
+    return <Navigate to={redesignRoute} replace />
+  }
+
+  if (AUTO_REDIRECT_COHORTS.has(cohort)) {
     return <Navigate to={redesignRoute} replace />
   }
 

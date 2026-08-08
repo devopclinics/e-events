@@ -1,0 +1,3 @@
+ALTER TABLE waitlist_entries ADD COLUMN IF NOT EXISTS offer_token VARCHAR(64) UNIQUE;
+ALTER TABLE waitlist_entries ADD COLUMN IF NOT EXISTS offer_expires_at TIMESTAMP;
+ALTER TABLE waitlist_entries ADD COLUMN IF NOT EXISTS offered_at TIMESTAMP;

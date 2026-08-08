@@ -1,0 +1,2 @@
+ALTER TABLE ticket_products ADD COLUMN IF NOT EXISTS product_type VARCHAR(20) NOT NULL DEFAULT 'ticket';
+ALTER TABLE ticket_products ADD COLUMN IF NOT EXISTS allow_custom_amount BOOLEAN NOT NULL DEFAULT FALSE;

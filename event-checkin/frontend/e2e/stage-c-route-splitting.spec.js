@@ -8,7 +8,7 @@ test.describe('Phase 8 route-level code splitting', () => {
       if (response.request().resourceType() === 'script') scripts.push(new URL(response.url()).pathname)
     })
     await page.goto('/')
-    await expect(page.getByRole('heading', { name: /Run every guest moment/i })).toBeVisible()
+    await expect(page.getByRole('heading', { name: /Every guest gets/i })).toBeVisible()
     expect(scripts.some((path) => /AdminPage-|AdminRedesignPage-/.test(path))).toBe(false)
   })
 
@@ -25,7 +25,7 @@ test.describe('Phase 8 route-level code splitting', () => {
   })
 
   test('shows an accessible loading fallback while a route chunk is pending', async ({ page }) => {
-    await page.route('**/assets/PricingPage-*.js', async (route) => {
+    await page.route('**/assets/PricingRedesignPage-*.js', async (route) => {
       await new Promise((resolve) => setTimeout(resolve, 800))
       await route.continue()
     })
@@ -36,7 +36,7 @@ test.describe('Phase 8 route-level code splitting', () => {
   })
 
   test('offers reload recovery when a route chunk fails', async ({ page }) => {
-    await page.route('**/assets/PricingPage-*.js', (route) => route.abort('failed'))
+    await page.route('**/assets/PricingRedesignPage-*.js', (route) => route.abort('failed'))
     await page.goto('/pricing')
     await expect(page.getByRole('alert')).toContainText('This page could not be loaded')
     await expect(page.getByRole('button', { name: 'Reload page' })).toBeVisible()

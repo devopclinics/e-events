@@ -1,5 +1,5 @@
 import { chromium, test, expect } from '@playwright/test'
-import { requiredEnv, signIn } from './helpers.js'
+import { axeSeriousViolations, formatAxeViolations, requiredEnv, signIn } from './helpers.js'
 
 test.describe.configure({ mode: 'serial' })
 
@@ -21,6 +21,13 @@ async function firebaseAccessToken(page) {
 }
 
 test.describe('Stage C check-in — isolated staging fixture', () => {
+  test('redesign scanner page has no serious/critical accessibility violations', async ({ page }) => {
+    await signIn(page)
+    await page.goto('/scanner-redesign')
+    const violations = await axeSeriousViolations(page)
+    expect(violations, formatAxeViolations(violations)).toEqual([])
+  })
+
   test('server-confirmed admission, duplicate, invalid scan, and cleanup', async ({ page, request }) => {
     const eventId = requiredEnv('E2E_EVENT_ID')
     const suffix = `${Date.now()}-${Math.random().toString(16).slice(2, 8)}`

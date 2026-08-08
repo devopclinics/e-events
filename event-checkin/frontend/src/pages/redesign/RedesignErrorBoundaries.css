@@ -39,14 +39,14 @@
   background: var(--danger-soft, #fbeae6); color: var(--danger, #c1503f);
   display: grid; place-items: center; font-size: 19px; font-weight: 800; }
 .rr-eb-app-card h1 { font-size: 17px; margin: 0 0 8px; color: var(--ink, #211a13); }
-.rr-eb-app-card p { font-size: 12px; color: var(--muted, #7c6f60); line-height: 1.55; margin: 0 0 22px; }
+.rr-eb-app-card p { font-size: 12px; color: var(--muted, #6b5f52); line-height: 1.55; margin: 0 0 22px; }
 
 /* ── RedesignShellBoundary: centered in the content region ─────────── */
 .rr-eb-shell { min-height: 60vh; display: grid; place-items: center; padding: 40px 20px;
   color: var(--ink, #211a13); }
 .rr-eb-shell-card { max-width: 380px; text-align: center; }
 .rr-eb-shell-card h2 { font-size: 15px; margin: 12px 0 8px; color: var(--ink, #211a13); }
-.rr-eb-shell-card p { font-size: 12px; color: var(--muted, #7c6f60); line-height: 1.55; margin: 0 0 18px; }
+.rr-eb-shell-card p { font-size: 12px; color: var(--muted, #6b5f52); line-height: 1.55; margin: 0 0 18px; }
 
 /* ── RedesignRouteBoundary: inline card, not full page ──────────────── */
 .rr-eb-route { border: 1px solid var(--line); background: var(--surface); border-radius: 14px;

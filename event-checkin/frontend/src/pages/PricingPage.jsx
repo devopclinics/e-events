@@ -9,10 +9,11 @@ function money(amount, currency) {
 }
 
 const compareRows = [
-  ['Guest limit', '25', '50', '150', '300', '1,000', 'Custom'],
+  ['Events per free account', '1', 'Unlimited', 'Unlimited', 'Unlimited', 'Unlimited', 'Unlimited'],
+  ['Guest limit', '25', '50', '150', '300', '500', 'Custom'],
   ['Email invitations', 'Yes', 'Yes', 'Yes', 'Yes', 'Yes', 'Yes'],
   ['SMS/WhatsApp', 'No', 'Yes', 'Yes', 'Yes', 'Yes', 'Custom'],
-  ['QR check-in', 'Preview', 'Yes', 'Yes', 'Yes', 'Yes', 'Yes'],
+  ['QR check-in', 'Yes', 'Yes', 'Yes', 'Yes', 'Yes', 'Yes'],
   ['Design Studio', 'No', 'Standard templates', 'Expanded templates', 'Expanded templates', 'Expanded templates', 'Custom'],
   ['Seating/table groups', 'Preview', 'Basic', 'Advanced', 'Advanced', 'Advanced', 'Custom'],
   ['Access zones/gates', 'No', 'No', 'Yes', 'Yes', 'Yes', 'Custom'],
@@ -21,8 +22,57 @@ const compareRows = [
   ['Support', 'Self-serve', 'Self-serve', 'Self-serve', 'Priority queue', 'Priority', 'Dedicated'],
 ]
 
+const INCLUDED_IN_EVERY_PLAN = [
+  'Guest communication', 'QR check-in', 'RSVP & invite management', 'Guest list management',
+  'Reports dashboard', 'Team & task management', 'FestioHub', 'FestioPass',
+  'Design Studio', 'SMS & WhatsApp sending', 'Festio branding removed',
+]
+
+const ADDON_ICON = {
+  addon_registry: '✦', addon_menu: '◐', addon_planner: '▦',
+  addon_logistics: '⇄', addon_festiome: '✷',
+  addon_seating: '▦', addon_experience: '◎', addon_venue_access: '⚡',
+}
+
+function AddonCard({ addon, unlocked }) {
+  const buyHref = '/register?plan=' + encodeURIComponent(addon.key)
+  return (
+    <div className="flex flex-col rounded-lg border border-slate-200 bg-white p-5 dark:border-slate-800 dark:bg-slate-900">
+      <div className="flex items-start justify-between gap-2">
+        <div className="grid h-9 w-9 place-items-center rounded-lg bg-teal-50 text-teal-700 dark:bg-teal-400/10 dark:text-teal-300">
+          {ADDON_ICON[addon.key] || '✦'}
+        </div>
+        {unlocked ? (
+          <div className="text-right">
+            <div className="text-lg font-black text-slate-950 dark:text-white">{money(addon.amount, addon.currency)}</div>
+            <div className="text-[10px] font-bold uppercase tracking-wide text-slate-400">per event</div>
+          </div>
+        ) : (
+          <span className="rounded-full bg-slate-100 px-2.5 py-1 text-[10px] font-black text-slate-500 dark:bg-slate-800 dark:text-slate-400">
+            🔒 Starter+
+          </span>
+        )}
+      </div>
+      <h3 className="mt-3 text-sm font-black text-slate-950 dark:text-white">{addon.label}</h3>
+      <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">{addon.description}</p>
+      <ul className="mt-3 flex-1 space-y-1 text-[11px] font-semibold text-slate-400 dark:text-slate-500">
+        {(addon.capabilities || []).map((c) => <li key={c}>+ {c}</li>)}
+      </ul>
+      {unlocked ? (
+        <Link to={buyHref} className="mt-4 inline-flex min-h-9 items-center justify-center rounded-lg bg-teal-600 px-4 text-xs font-black text-white hover:bg-teal-700">
+          Add to event
+        </Link>
+      ) : (
+        <button disabled className="mt-4 inline-flex min-h-9 cursor-not-allowed items-center justify-center rounded-lg border border-slate-200 px-4 text-xs font-bold text-slate-400 dark:border-slate-700 dark:text-slate-500">
+          Create a paid event to unlock
+        </button>
+      )}
+    </div>
+  )
+}
+
 const faqs = [
-  ['Can I create before paying?', 'Yes. Create a draft event and use the free RSVP/email workflow for up to 25 guests. Paid modules like Design Studio, QR check-in, seating, access, logistics, registry, and Experience activate after an Event Pass.'],
+  ['Can I create before paying?', 'Yes. Create a draft event and use the free RSVP/email workflow for up to 25 guests, including QR check-in. Paid modules like Design Studio, seating, access, logistics, registry, and Experience activate after an Event Pass. Free accounts can create 1 event; additional events need an Event Pass on an existing one first.'],
   ['What counts as a message credit?', 'SMS/WhatsApp/MMS/RCS usage consumes credits. Email is included for normal RSVP and invitation flows.'],
   ['Do failed messages count?', 'Failed messages should not permanently consume credits. Full reserve/refund ledger behavior is planned as the next messaging phase.'],
   ['Can I buy more credits?', 'Yes. Paid events can buy top-ups from Event Setup.'],
@@ -41,6 +91,8 @@ export default function PricingPage() {
 
   const tiers = data?.tiers || []
   const packs = data?.packs || []
+  const addonPlans = data?.addon_plans || []
+  const addonsUnlocked = !!data?.addon_plans_unlocked
   const free = data?.free
   const enterprise = data?.enterprise
 
@@ -76,7 +128,7 @@ export default function PricingPage() {
                 price={money(0, currency)}
                 detail="Create and preview"
                 guest={`Up to ${free?.guest_cap || 25} guests`}
-                credits="Email only"
+                credits="Email only · 75 emails/event"
                 features={free?.capabilities || []}
                 limitations={free?.limitations || []}
                 cta="Start free"
@@ -91,7 +143,7 @@ export default function PricingPage() {
                   guest={`Up to ${tier.guest_cap?.toLocaleString()} guests`}
                   credits={`${tier.credits.toLocaleString()} message credits`}
                   description={tier.description}
-                  features={tier.capabilities || []}
+                  features={INCLUDED_IN_EVERY_PLAN}
                   cta="Create event"
                   to={`/register?plan=${encodeURIComponent(tier.key)}`}
                   highlighted={tier.key === 'tier300'}
@@ -100,7 +152,7 @@ export default function PricingPage() {
               <PlanCard
                 name={enterprise?.name || 'Enterprise'}
                 price="Custom"
-                detail="For 1,000+ guests"
+                detail="For 750+ guests"
                 guest="Custom guest volume"
                 credits="Custom message volume"
                 features={enterprise?.capabilities || []}
@@ -108,6 +160,36 @@ export default function PricingPage() {
                 to="mailto:hello@festio.events?subject=Festio%20Enterprise"
               />
             </div>
+
+            <div className="mt-10 rounded-2xl bg-slate-950 p-8 text-white dark:bg-white/5">
+              <p className="text-xs font-black uppercase tracking-widest text-teal-400">Included in every paid plan</p>
+              <h2 className="mt-2 max-w-2xl text-lg font-black leading-snug sm:text-xl">
+                Starter, Standard, Pro, and Scale all include this. No exceptions, no upsell.
+              </h2>
+              <div className="mt-5 grid grid-cols-2 gap-x-6 gap-y-2 sm:grid-cols-4">
+                {INCLUDED_IN_EVERY_PLAN.map((item) => (
+                  <div key={item} className="flex items-center gap-2 text-sm font-semibold text-slate-200">
+                    <span className="grid h-4 w-4 flex-none place-items-center rounded-full bg-teal-400 text-[9px] font-black text-slate-950">✓</span>
+                    {item}
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            <section className="mt-12">
+              <div>
+                <h2 className="text-xl font-black text-slate-950 dark:text-white">Add-ons</h2>
+                <p className="text-sm text-slate-500 dark:text-slate-400">Build the event you&apos;re actually running. Buy only the modules your event needs, on top of any paid tier, at their own price.</p>
+              </div>
+              <div className="mt-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+                {addonPlans.map((addon) => (
+                  <AddonCard key={addon.key} addon={addon} unlocked={addonsUnlocked} />
+                ))}
+              </div>
+              <p className="mt-4 max-w-2xl text-xs text-slate-400 dark:text-slate-500">
+                Advanced messaging (MMS/rich media) isn&apos;t its own add-on. It&apos;s included once you&apos;re on any paid tier, and billed the same way SMS/WhatsApp already is: by message credits, not a separate fee.
+              </p>
+            </section>
 
             <section className="mt-12">
               <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">

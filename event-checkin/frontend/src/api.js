@@ -186,6 +186,94 @@ async function festiomeDownloadAttachment(path, filename) {
   URL.revokeObjectURL(url)
 }
 
+let plannerSession = null // { token, expiresAt, eventId }
+
+async function getPlannerSession(eventId, force = false) {
+  const now = Date.now()
+  if (!force && plannerSession?.token && plannerSession.eventId === eventId && plannerSession.expiresAt > now + 30000) {
+    return plannerSession.token
+  }
+  const firebaseToken = await getToken()
+  if (!firebaseToken) throw new Error('Your Festio session is still loading. Please try again.')
+  const res = await fetch(`${BASE}/auth/planner-token?event_id=${encodeURIComponent(eventId)}`, {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${firebaseToken}` },
+    signal: AbortSignal.timeout(10000),
+  })
+  if (!res.ok) {
+    const data = await res.json().catch(() => ({}))
+    const error = new Error(data.detail || 'Planner is temporarily unavailable.')
+    error.status = res.status
+    throw error
+  }
+  const data = await res.json()
+  plannerSession = { token: data.token, expiresAt: now + Number(data.expires_in || 900) * 1000, eventId }
+  return data.token
+}
+
+async function plannerReq(eventId, method, path, body, options = {}) {
+  const token = await getPlannerSession(eventId)
+  const opts = {
+    method,
+    headers: { Authorization: `Bearer ${token}`, ...(body && !options.isForm ? { 'Content-Type': 'application/json' } : {}) },
+  }
+  if (body) opts.body = options.isForm ? body : JSON.stringify(body)
+  const res = await fetch(`${BASE}/planner/${encodeURIComponent(eventId)}${path}`, opts)
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ detail: res.statusText }))
+    const detail = Array.isArray(err.detail) ? err.detail.map((d) => d.msg || JSON.stringify(d)).join('; ') : err.detail
+    throw new Error((typeof detail === 'string' && detail) || res.statusText)
+  }
+  return res.status === 204 ? null : res.json()
+}
+
+async function plannerDownload(eventId, path, filename) {
+  const token = await getPlannerSession(eventId)
+  const res = await fetch(path, {
+    headers: { Authorization: `Bearer ${token}` },
+    signal: AbortSignal.timeout(30000),
+  })
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}))
+    throw new Error(body.detail || 'Planner document could not be downloaded')
+  }
+  const url = URL.createObjectURL(await res.blob())
+  const anchor = document.createElement('a')
+  anchor.href = url
+  anchor.download = filename || 'planner-document'
+  document.body.appendChild(anchor)
+  anchor.click()
+  anchor.remove()
+  URL.revokeObjectURL(url)
+}
+
+let ticketingSession = null
+async function ticketingReq(eventId, method, path, body) {
+  const now = Date.now()
+  if (!ticketingSession?.token || ticketingSession.eventId !== eventId || ticketingSession.expiresAt < now + 30000) {
+    const firebaseToken = await getToken()
+    if (!firebaseToken) throw new Error('Your Festio session is still loading. Please try again.')
+    const authRes = await fetch(`${BASE}/auth/ticketing-token?event_id=${encodeURIComponent(eventId)}`, {
+      method: 'POST', headers: { Authorization: `Bearer ${firebaseToken}` }, signal: AbortSignal.timeout(10000),
+    })
+    if (!authRes.ok) {
+      const data = await authRes.json().catch(() => ({}))
+      const error = new Error(data.detail || 'Ticketing is not available.'); error.status = authRes.status; throw error
+    }
+    const data = await authRes.json()
+    ticketingSession = { token: data.token, eventId, expiresAt: now + Number(data.expires_in || 900) * 1000 }
+  }
+  const res = await fetch(`${BASE}/ticketing${path}`, {
+    method, headers: { Authorization: `Bearer ${ticketingSession.token}`, ...(body ? { 'Content-Type': 'application/json' } : {}) },
+    ...(body ? { body: JSON.stringify(body) } : {}), signal: AbortSignal.timeout(15000),
+  })
+  if (!res.ok) {
+    const data = await res.json().catch(() => ({})); const error = new Error(data.detail || res.statusText)
+    error.status = res.status; throw error
+  }
+  return res.status === 204 ? null : res.json()
+}
+
 // Fetch a file endpoint (with auth) and trigger a browser download.
 async function downloadFile(path, filename, { withAuth = true } = {}) {
   const headers = {}
@@ -214,6 +302,7 @@ export const api = {
   createEvent: (data) => req('POST', '/events', data),
   updateEvent: (id, data) => req('PUT', `/events/${id}`, data),
   deleteEvent: (id) => req('DELETE', `/events/${id}`),
+  duplicateEvent: (id, data) => req('POST', `/events/${id}/duplicate`, data),
   changeStatus: (id, status, ifUnmodifiedSince) =>
     req('PATCH', `/events/${id}/status`, ifUnmodifiedSince ? { status, if_unmodified_since: ifUnmodifiedSince } : { status }),
   updateSource: (id, data) => req('PUT', `/events/${id}/source`, data),
@@ -458,6 +547,7 @@ export const api = {
 
   // Tasks (per-event to-do management)
   listTasks: (eventId) => req('GET', `/events/${eventId}/tasks`),
+  listTaskAssignees: (eventId) => req('GET', `/events/${eventId}/tasks/assignees`),
   createTask: (eventId, data) => req('POST', `/events/${eventId}/tasks`, data),
   updateTask: (eventId, id, data, ifUnmodifiedSince) =>
     req('PUT', `/events/${eventId}/tasks/${id}${ifUnmodifiedSince ? `?if_unmodified_since=${encodeURIComponent(ifUnmodifiedSince)}` : ''}`, data),
@@ -903,8 +993,10 @@ export const api = {
   getCreditLedger: (eventId) => req('GET', `/billing/credits/${eventId}`),
   checkout: (eventId, tier) => req('POST', '/billing/checkout', { event_id: eventId, tier }),
   setBillingCurrency: (eventId, currency) => req('POST', '/billing/currency', { event_id: eventId, currency }),
-  // Public marketing pricing (no auth)
-  getPricing: (currency = 'USD') => fetch(`/api/billing/pricing?currency=${currency}`).then((r) => r.json()),
+  // Public marketing pricing. Auth is optional: signed in with a paid event
+  // reveals add-on prices (req() attaches a token automatically when signed
+  // in, and the endpoint never requires one -- see get_current_user_optional).
+  getPricing: (currency = 'USD') => req('GET', `/billing/pricing?currency=${currency}`),
 
   // Trial-credit requests (customer)
   submitTrialRequest: (body) => req('POST', '/trial-requests', body),
@@ -929,6 +1021,7 @@ export const api = {
   // Account management
   adminListAccounts: () => req('GET', '/admin/accounts'),
   adminSetOrgActive: (orgId, active) => req('PATCH', `/admin/orgs/${orgId}/active`, { active }),
+  adminSetOrgRedesignCohort: (orgId, redesign_cohort) => req('PATCH', `/admin/orgs/${orgId}/redesign-cohort`, { redesign_cohort }),
   adminDeleteOrg: (orgId) => req('DELETE', `/admin/orgs/${orgId}`),
   adminSetMemberRole: (orgId, userId, role) => req('PATCH', `/admin/orgs/${orgId}/members/${userId}`, { role }),
   adminRemoveMember: (orgId, userId) => req('DELETE', `/admin/orgs/${orgId}/members/${userId}`),
@@ -1085,6 +1178,94 @@ export const api = {
     req('POST', `/events/${eventId}/festiome/groups/${groupId}/join-requests/${requestId}/approve`, data || {}),
   festiomeManageDenyJoin: (eventId, groupId, requestId) =>
     req('POST', `/events/${eventId}/festiome/groups/${groupId}/join-requests/${requestId}/deny`),
+
+  // Planner (planner-service — event budget, vendors, timeline, runsheet, documents).
+  plannerDashboard: (eventId) => plannerReq(eventId, 'GET', '/dashboard'),
+  plannerGetBudget: (eventId) => plannerReq(eventId, 'GET', '/budget'),
+  plannerSaveBudget: (eventId, body) => plannerReq(eventId, 'POST', '/budget', body),
+  plannerAddCategory: (eventId, body) => plannerReq(eventId, 'POST', '/budget/categories', body),
+  plannerUpdateCategory: (eventId, catId, body) => plannerReq(eventId, 'PATCH', `/budget/categories/${catId}`, body),
+  plannerDeleteCategory: (eventId, catId) => plannerReq(eventId, 'DELETE', `/budget/categories/${catId}`),
+  plannerAddBudgetItem: (eventId, categoryId, body) => plannerReq(eventId, 'POST', `/budget/items?category_id=${categoryId}`, body),
+  plannerUpdateBudgetItem: (eventId, itemId, body) => plannerReq(eventId, 'PATCH', `/budget/items/${itemId}`, body),
+  plannerDeleteBudgetItem: (eventId, itemId) => plannerReq(eventId, 'DELETE', `/budget/items/${itemId}`),
+  plannerListVendors: (eventId) => plannerReq(eventId, 'GET', '/vendors'),
+  plannerCreateVendor: (eventId, body) => plannerReq(eventId, 'POST', '/vendors', body),
+  plannerGetVendor: (eventId, vendorId) => plannerReq(eventId, 'GET', `/vendors/${vendorId}`),
+  plannerUpdateVendor: (eventId, vendorId, body) => plannerReq(eventId, 'PATCH', `/vendors/${vendorId}`, body),
+  plannerDeleteVendor: (eventId, vendorId) => plannerReq(eventId, 'DELETE', `/vendors/${vendorId}`),
+  plannerAddVendorPayment: (eventId, vendorId, body) => plannerReq(eventId, 'POST', `/vendors/${vendorId}/payments`, body),
+  plannerUpdateVendorPayment: (eventId, vendorId, payId, body) => plannerReq(eventId, 'PATCH', `/vendors/${vendorId}/payments/${payId}`, body),
+  plannerProcurement: (eventId) => plannerReq(eventId, 'GET', '/procurement'),
+  plannerSelectQuoteItem: (eventId, body) => plannerReq(eventId, 'PUT', '/procurement/selections', body),
+  plannerClearQuoteItemSelection: (eventId, selectionId) => plannerReq(eventId, 'DELETE', `/procurement/selections/${selectionId}`),
+  plannerSetProcurementRequirement: (eventId, body) => plannerReq(eventId, 'PUT', '/procurement/requirements', body),
+  plannerCreateQuote: (eventId, vendorId, body) => plannerReq(eventId, 'POST', `/vendors/${vendorId}/quotes`, body),
+  plannerUpdateQuote: (eventId, quoteId, body) => plannerReq(eventId, 'PATCH', `/quotes/${quoteId}`, body),
+  plannerDecideQuote: (eventId, quoteId, decision) => plannerReq(eventId, 'POST', `/quotes/${quoteId}/decision`, { decision }),
+  plannerCreateChangeOrder: (eventId, vendorId, body) => plannerReq(eventId, 'POST', `/vendors/${vendorId}/change-orders`, body),
+  plannerDecideChangeOrder: (eventId, changeId, decision) => plannerReq(eventId, 'POST', `/change-orders/${changeId}/decision`, { decision }),
+  plannerCreateVendorPortalLink: (eventId, vendorId) => plannerReq(eventId, 'POST', `/vendors/${vendorId}/portal-link`),
+  plannerVendorPortal: (token) => req('GET', `/planner/vendor-portal/${encodeURIComponent(token)}`),
+  plannerVendorSubmitQuote: (token, body) => req('POST', `/planner/vendor-portal/${encodeURIComponent(token)}/quotes`, body),
+  plannerVendorRequestChange: (token, body) => req('POST', `/planner/vendor-portal/${encodeURIComponent(token)}/change-orders`, body),
+  plannerVendorAcknowledgeChange: (token, changeId) => req('POST', `/planner/vendor-portal/${encodeURIComponent(token)}/change-orders/${changeId}/acknowledge`),
+  plannerDownloadDocument: (eventId, path, filename) => plannerDownload(eventId, path, filename),
+  plannerListMilestones: (eventId) => plannerReq(eventId, 'GET', '/milestones'),
+  plannerCreateMilestone: (eventId, body) => plannerReq(eventId, 'POST', '/milestones', body),
+  plannerUpdateMilestone: (eventId, msId, body) => plannerReq(eventId, 'PATCH', `/milestones/${msId}`, body),
+  plannerDeleteMilestone: (eventId, msId) => plannerReq(eventId, 'DELETE', `/milestones/${msId}`),
+  plannerCreateTask: (eventId, body) => plannerReq(eventId, 'POST', '/tasks', body),
+  plannerUpdateTask: (eventId, taskId, body) => plannerReq(eventId, 'PATCH', `/tasks/${taskId}`, body),
+  plannerDeleteTask: (eventId, taskId) => plannerReq(eventId, 'DELETE', `/tasks/${taskId}`),
+  plannerListRunsheet: (eventId) => plannerReq(eventId, 'GET', '/runsheet'),
+  plannerCreateRunsheetItem: (eventId, body) => plannerReq(eventId, 'POST', '/runsheet', body),
+  plannerUpdateRunsheetItem: (eventId, itemId, body) => plannerReq(eventId, 'PATCH', `/runsheet/${itemId}`, body),
+  plannerReorderRunsheet: (eventId, items) => plannerReq(eventId, 'PATCH', '/runsheet/reorder', { items }),
+  plannerDeleteRunsheetItem: (eventId, itemId) => plannerReq(eventId, 'DELETE', `/runsheet/${itemId}`),
+  plannerListDocuments: (eventId) => plannerReq(eventId, 'GET', '/documents'),
+  plannerUploadDocument: (eventId, formData) => plannerReq(eventId, 'POST', '/documents/upload', formData, { isForm: true }),
+  plannerUpdateDocument: (eventId, docId, body) => plannerReq(eventId, 'PATCH', `/documents/${docId}`, body),
+  plannerDeleteDocument: (eventId, docId) => plannerReq(eventId, 'DELETE', `/documents/${docId}`),
+
+  // Paid admission (standalone staging-only ticketing-service).
+  ticketingConfig: (eventId) => ticketingReq(eventId, 'GET', `/events/${eventId}/config`),
+  saveTicketingConfig: (eventId, body) => ticketingReq(eventId, 'PUT', `/events/${eventId}/config`, body),
+  ticketingPayoutAccounts: (eventId) => ticketingReq(eventId, 'GET', `/events/${eventId}/payout-accounts`),
+  ticketingPaystackBanks: (eventId) => ticketingReq(eventId, 'GET', `/events/${eventId}/paystack/banks`),
+  createPaystackPayoutAccount: (eventId, body) => ticketingReq(eventId, 'POST', `/events/${eventId}/payout-accounts/paystack`, body),
+  createStripePayoutAccount: (eventId, body) => ticketingReq(eventId, 'POST', `/events/${eventId}/payout-accounts/stripe`, body),
+  selectTicketingPayoutAccount: (eventId, accountId) => ticketingReq(eventId, 'POST', `/events/${eventId}/payout-accounts/${accountId}/select`),
+  resumeStripePayoutOnboarding: (eventId, accountId) => ticketingReq(eventId, 'POST', `/events/${eventId}/payout-accounts/${accountId}/onboarding-link`),
+  setTicketingFeePolicy: (eventId, body) => ticketingReq(eventId, 'PUT', `/events/${eventId}/fee-policy`, body),
+  deleteTicketingFeePolicy: (eventId, scope) => ticketingReq(eventId, 'DELETE', `/events/${eventId}/fee-policy/${scope}`),
+  ticketingProducts: (eventId) => ticketingReq(eventId, 'GET', `/events/${eventId}/products`),
+  createTicketingProduct: (eventId, body) => ticketingReq(eventId, 'POST', `/events/${eventId}/products`, body),
+  updateTicketingProduct: (eventId, id, body) => ticketingReq(eventId, 'PUT', `/events/${eventId}/products/${id}`, body),
+  deleteTicketingProduct: (eventId, id) => ticketingReq(eventId, 'DELETE', `/events/${eventId}/products/${id}`),
+  ticketingPromos: (eventId) => ticketingReq(eventId, 'GET', `/events/${eventId}/promos`),
+  createTicketingPromo: (eventId, body) => ticketingReq(eventId, 'POST', `/events/${eventId}/promos`, body),
+  ticketingSales: (eventId) => ticketingReq(eventId, 'GET', `/events/${eventId}/sales`),
+  retryTicketFulfillment: (eventId, orderId) => ticketingReq(eventId, 'POST', `/events/${eventId}/orders/${orderId}/fulfill`),
+  resendTicketOrder: (eventId, orderId) => ticketingReq(eventId, 'POST', `/events/${eventId}/orders/${orderId}/resend`),
+  refundTicketOrder: (eventId, orderId, body) => ticketingReq(eventId, 'POST', `/events/${eventId}/orders/${orderId}/refunds`, body),
+  createComplimentaryTicketOrder: (eventId, body) => ticketingReq(eventId, 'POST', `/events/${eventId}/complimentary-orders`, body),
+  ticketingAudit: (eventId) => ticketingReq(eventId, 'GET', `/events/${eventId}/audit`),
+  ticketingReconciliation: (eventId) => ticketingReq(eventId, 'GET', `/events/${eventId}/reconciliation`),
+  offerWaitlistTicket: (eventId, entryId, body={minutes:30}) => ticketingReq(eventId, 'POST', `/events/${eventId}/waitlist/${entryId}/offer`, body),
+  runTicketingOperations: (eventId) => ticketingReq(eventId, 'POST', `/events/${eventId}/operations/run`, {}),
+  emailTicketSalesReport: (eventId, recipient) => ticketingReq(eventId, 'POST', `/events/${eventId}/sales-report/email`, {recipient}),
+  ticketingPaymentEvents: (eventId) => ticketingReq(eventId, 'GET', `/events/${eventId}/payment-events`),
+  replayTicketingPaymentEvent: (eventId, paymentEventId) => ticketingReq(eventId, 'POST', `/events/${eventId}/payment-events/${paymentEventId}/replay`, {}),
+  ticketingJournal: (eventId) => ticketingReq(eventId, 'GET', `/events/${eventId}/journal`),
+  ticketingPrivacyRequests: (eventId) => ticketingReq(eventId, 'GET', `/events/${eventId}/privacy-requests`),
+  decideTicketingPrivacyRequest: (eventId, requestId, body) => ticketingReq(eventId, 'POST', `/events/${eventId}/privacy-requests/${requestId}/decision`, body),
+  ticketingOperationsSubscription: (eventId) => ticketingReq(eventId, 'GET', `/events/${eventId}/operations/subscription`),
+  saveTicketingOperationsSubscription: (eventId, body) => ticketingReq(eventId, 'PUT', `/events/${eventId}/operations/subscription`, body),
+  retryTicketRefund: (eventId, refundId) => ticketingReq(eventId, 'POST', `/events/${eventId}/refunds/${refundId}/retry`, {}),
+  ticketingProviderReadiness: (eventId) => ticketingReq(eventId, 'GET', `/events/${eventId}/provider-readiness`),
+  bootstrapTicketingProvider: (eventId, provider) => ticketingReq(eventId, 'POST', `/events/${eventId}/provider-bootstrap`, {provider, register_webhook:true}),
+  decideTicketCancellation: (eventId, requestId, body) => ticketingReq(eventId, 'POST', `/events/${eventId}/cancellations/${requestId}/decision`, body),
 
   // Guided event setup (setup-service — orchestrates bulk/structured operations
   // against backend's own gated endpoints; see setup-service/app/main.py).

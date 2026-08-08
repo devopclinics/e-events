@@ -705,6 +705,7 @@ function OrgTab({ notify, eventId }) {
                       <div className="bl-org-member-role">
                         <label>Organization role</label>
                         <select
+                          aria-label="Organization role"
                           value={m.role}
                           disabled={roleSubmittingFor === m.user.id}
                           onChange={(e) => changeRole(m.user.id, e.target.value)}
@@ -732,6 +733,7 @@ function OrgTab({ notify, eventId }) {
                   />
                   <select
                     className="rd-field"
+                    aria-label="Teammate role"
                     value={invite.role}
                     onChange={(e) => setInvite((p) => ({ ...p, role: e.target.value }))}
                     style={{ flex: '0 0 auto' }}

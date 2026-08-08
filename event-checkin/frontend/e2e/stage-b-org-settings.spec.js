@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test'
-import { signIn } from './helpers.js'
+import { axeSeriousViolations, formatAxeViolations, signIn } from './helpers.js'
 
 test.describe.configure({ mode: 'serial' })
 
@@ -8,6 +8,11 @@ test.describe('Stage B organization settings — isolated staging fixture', () =
     await signIn(page)
     await page.goto('/billing-redesign?tab=org')
     await expect(page.getByRole('heading', { name: 'Org Settings' })).toBeVisible()
+  })
+
+  test('redesign org settings page has no serious/critical accessibility violations', async ({ page }) => {
+    const violations = await axeSeriousViolations(page)
+    expect(violations, formatAxeViolations(violations)).toEqual([])
   })
 
   test('contact-list/contact and calendar CRUD', async ({ page }) => {

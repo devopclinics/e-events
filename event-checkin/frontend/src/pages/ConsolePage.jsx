@@ -371,7 +371,14 @@ function AccountsTab({ me }) {
               {!o.is_active && <span className="text-[11px] px-2 py-0.5 rounded-full bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300">Suspended</span>}
               <span className="text-xs text-slate-400 font-normal">· {o.event_count} event(s) · {o.members.length} member(s)</span>
             </div>
-            <div className="flex gap-2">
+            <div className="flex items-center gap-2">
+              <label className="text-[11px] text-slate-400 flex items-center gap-1.5">
+                Redesign
+                <select value={o.redesign_cohort} onChange={(e) => run(() => api.adminSetOrgRedesignCohort(o.id, e.target.value), 'Redesign cohort updated.')}
+                  className="border dark:border-slate-600 rounded px-2 py-1 text-xs bg-white dark:bg-slate-700 dark:text-white">
+                  {['legacy_only', 'redesign_opt_in', 'redesign_internal', 'redesign_default', 'legacy_retired'].map((c) => <option key={c} value={c}>{c}</option>)}
+                </select>
+              </label>
               <button onClick={() => {
                 if (o.is_active && !window.confirm(`Suspend ${o.name}? Members will lose access until it is reactivated.`)) return
                 run(() => api.adminSetOrgActive(o.id, !o.is_active), o.is_active ? 'Org suspended.' : 'Org reactivated.')

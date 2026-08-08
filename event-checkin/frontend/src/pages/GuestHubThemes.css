@@ -1,0 +1,380 @@
+/*
+ * GuestHubThemes.css
+ * Per-style visual overrides for the GuestHub container.
+ * Applied via the .fh-hub-style-{id} class on the hub container in InvitePage.jsx.
+ * Each block scopes only visual decoration — layout (tabbed/stacked) is still
+ * controlled by HUB_TABBED_STYLES in InvitePage.jsx.
+ *
+ * All 10 themes also work with the event's real color palette from
+ * designTheme.colors — these overrides add personality on top of that.
+ */
+
+/* ═══════════════════════════════════════════════════════════════════
+   01 — NOIR COUTURE
+   Dark editorial. Gold borders. Thin letters. Serif name.
+   ═══════════════════════════════════════════════════════════════════ */
+.fh-hub-style-noir-couture {
+  border-radius: 4px !important;
+  border: 1px solid rgba(201, 168, 76, 0.35) !important;
+  box-shadow: 0 0 0 1px rgba(201, 168, 76, 0.12), 0 24px 64px rgba(0, 0, 0, 0.7) !important;
+}
+.fh-hub-style-noir-couture .fh-hub-guest-name {
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  font-size: 0.9em;
+}
+/* Tab bar: thin gold underline indicator, no pill background */
+.fh-hub-style-noir-couture .fh-tab-bar {
+  border-bottom: 1px solid rgba(201, 168, 76, 0.25);
+  background: transparent !important;
+  border-radius: 0 !important;
+  padding: 0 !important;
+  gap: 0 !important;
+}
+.fh-hub-style-noir-couture .fh-tab-btn {
+  border-radius: 0 !important;
+  font-size: 10px;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  padding: 10px 16px !important;
+  border-bottom: 2px solid transparent;
+  margin-bottom: -1px;
+  transition: border-color .2s, color .2s;
+}
+.fh-hub-style-noir-couture .fh-tab-btn.active {
+  border-bottom-color: #c9a84c;
+  color: #c9a84c !important;
+  background: transparent !important;
+}
+/* Module cards: sharp corners, thin gold top accent */
+.fh-hub-style-noir-couture .fh-module-card {
+  border-radius: 2px !important;
+  border-top: 2px solid rgba(201, 168, 76, 0.4) !important;
+}
+
+/* ═══════════════════════════════════════════════════════════════════
+   02 — BLOOM EDITORIAL
+   Warm blush. Soft serif. Rounded cards. Decorative dividers.
+   ═══════════════════════════════════════════════════════════════════ */
+.fh-hub-style-bloom-editorial {
+  border-radius: 20px !important;
+  border: 1px solid rgba(194, 105, 106, 0.2) !important;
+  box-shadow: 0 8px 40px rgba(194, 105, 106, 0.1), 0 2px 6px rgba(194, 105, 106, 0.08) !important;
+}
+.fh-hub-style-bloom-editorial .fh-module-card {
+  border-radius: 14px !important;
+  border: 1px solid rgba(194, 105, 106, 0.15) !important;
+}
+/* Decorative top stripe */
+.fh-hub-style-bloom-editorial::before {
+  content: "";
+  display: block;
+  height: 3px;
+  width: 60px;
+  margin: 0 auto 16px;
+  background: linear-gradient(90deg, #c2696a, #e8a0a0, #c2696a);
+  border-radius: 999px;
+}
+.fh-hub-style-bloom-editorial .fh-tab-btn.active {
+  background: rgba(194, 105, 106, 0.12) !important;
+  color: #c2696a !important;
+}
+
+/* ═══════════════════════════════════════════════════════════════════
+   03 — ELECTRIC RAVE
+   Dark. Neon violet/cyan glows. Grid overlay.
+   ═══════════════════════════════════════════════════════════════════ */
+.fh-hub-style-electric-rave {
+  border-radius: 8px !important;
+  border: 1px solid rgba(124, 58, 237, 0.4) !important;
+  box-shadow:
+    0 0 0 1px rgba(124, 58, 237, 0.2),
+    0 0 40px rgba(124, 58, 237, 0.15),
+    0 24px 64px rgba(0, 0, 0, 0.8) !important;
+  position: relative;
+  overflow: hidden;
+}
+/* Faint grid background */
+.fh-hub-style-electric-rave::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background-image:
+    linear-gradient(rgba(124, 58, 237, 0.06) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(124, 58, 237, 0.06) 1px, transparent 1px);
+  background-size: 28px 28px;
+  pointer-events: none;
+  z-index: 0;
+}
+.fh-hub-style-electric-rave > * { position: relative; z-index: 1; }
+.fh-hub-style-electric-rave .fh-tab-btn.active {
+  background: rgba(124, 58, 237, 0.25) !important;
+  color: #a78bfa !important;
+  box-shadow: 0 0 12px rgba(124, 58, 237, 0.3) !important;
+}
+.fh-hub-style-electric-rave .fh-module-card {
+  border: 1px solid rgba(124, 58, 237, 0.2) !important;
+  box-shadow: 0 0 12px rgba(34, 211, 238, 0.05) !important;
+}
+
+/* ═══════════════════════════════════════════════════════════════════
+   04 — LINEN & GOLD
+   Warm cream. Serif headers. Ornamental centred divider.
+   ═══════════════════════════════════════════════════════════════════ */
+.fh-hub-style-linen-gold {
+  border-radius: 12px !important;
+  border: 1px solid rgba(196, 164, 124, 0.35) !important;
+  box-shadow: 0 4px 32px rgba(139, 111, 71, 0.1), inset 0 1px 0 rgba(255, 255, 255, 0.5) !important;
+}
+.fh-hub-style-linen-gold .fh-module-card {
+  border: 1px solid rgba(196, 164, 124, 0.25) !important;
+  border-radius: 8px !important;
+  box-shadow: 0 1px 4px rgba(139, 111, 71, 0.08) !important;
+}
+/* Gold section divider ornament */
+.fh-hub-style-linen-gold .fh-section-divider::after {
+  content: "— ✦ —";
+  display: block;
+  text-align: center;
+  font-size: 11px;
+  letter-spacing: 0.25em;
+  color: #c4a47c;
+  margin: 8px 0;
+}
+.fh-hub-style-linen-gold .fh-tab-btn.active {
+  background: rgba(196, 164, 124, 0.2) !important;
+  color: #8b6f47 !important;
+}
+
+/* ═══════════════════════════════════════════════════════════════════
+   05 — CELESTIAL MIDNIGHT
+   Deep blue. Soft star texture. Blue/indigo glow.
+   ═══════════════════════════════════════════════════════════════════ */
+.fh-hub-style-celestial-midnight {
+  border-radius: 16px !important;
+  border: 1px solid rgba(59, 130, 246, 0.3) !important;
+  box-shadow:
+    0 0 0 1px rgba(59, 130, 246, 0.12),
+    0 0 60px rgba(59, 130, 246, 0.12),
+    0 24px 64px rgba(0, 0, 0, 0.85) !important;
+  position: relative;
+  overflow: hidden;
+}
+/* Radial star-glow top-right */
+.fh-hub-style-celestial-midnight::before {
+  content: "";
+  position: absolute;
+  top: -40px;
+  right: -40px;
+  width: 180px;
+  height: 180px;
+  background: radial-gradient(circle, rgba(129, 140, 248, 0.18) 0%, transparent 70%);
+  pointer-events: none;
+  z-index: 0;
+}
+.fh-hub-style-celestial-midnight > * { position: relative; z-index: 1; }
+.fh-hub-style-celestial-midnight .fh-tab-btn.active {
+  background: rgba(59, 130, 246, 0.2) !important;
+  color: #93c5fd !important;
+}
+.fh-hub-style-celestial-midnight .fh-module-card {
+  border: 1px solid rgba(59, 130, 246, 0.18) !important;
+}
+
+/* ═══════════════════════════════════════════════════════════════════
+   06 — SOLEIL
+   Bright cream/white. Amber/coral. Pill-shaped everything.
+   ═══════════════════════════════════════════════════════════════════ */
+.fh-hub-style-soleil {
+  border-radius: 24px !important;
+  border: 2px dashed rgba(245, 158, 11, 0.35) !important;
+  box-shadow: 0 8px 40px rgba(245, 158, 11, 0.12) !important;
+}
+.fh-hub-style-soleil .fh-tab-btn {
+  border-radius: 999px !important;
+  padding: 6px 18px !important;
+}
+.fh-hub-style-soleil .fh-tab-btn.active {
+  background: linear-gradient(135deg, #f59e0b, #fb923c) !important;
+  color: #fff !important;
+  box-shadow: 0 4px 14px rgba(245, 158, 11, 0.35) !important;
+}
+.fh-hub-style-soleil .fh-module-card {
+  border-radius: 16px !important;
+  border: 1.5px solid rgba(245, 158, 11, 0.2) !important;
+}
+/* Sun accent top-right */
+.fh-hub-style-soleil::after {
+  content: "☀";
+  position: absolute;
+  top: 14px;
+  right: 18px;
+  font-size: 18px;
+  opacity: 0.18;
+  pointer-events: none;
+}
+
+/* ═══════════════════════════════════════════════════════════════════
+   07 — MONO PRINT
+   High contrast B&W. Zero radius. Red accent. Newspaper feel.
+   ═══════════════════════════════════════════════════════════════════ */
+.fh-hub-style-mono-print {
+  border-radius: 0 !important;
+  border: 2px solid #0a0a0a !important;
+  box-shadow: 4px 4px 0 #0a0a0a !important;
+}
+.fh-hub-style-mono-print .fh-module-card {
+  border-radius: 0 !important;
+  border: 1px solid #0a0a0a !important;
+  box-shadow: none !important;
+}
+.fh-hub-style-mono-print .fh-tab-bar {
+  border-bottom: 2px solid #0a0a0a !important;
+  border-radius: 0 !important;
+}
+.fh-hub-style-mono-print .fh-tab-btn {
+  border-radius: 0 !important;
+  font-weight: 800;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  font-size: 10px;
+  border-bottom: 3px solid transparent;
+  margin-bottom: -2px;
+}
+.fh-hub-style-mono-print .fh-tab-btn.active {
+  border-bottom-color: #e63329 !important;
+  color: #e63329 !important;
+  background: transparent !important;
+}
+/* Column divider lines between sections */
+.fh-hub-style-mono-print .fh-module-card + .fh-module-card {
+  border-top: none !important;
+}
+
+/* ═══════════════════════════════════════════════════════════════════
+   08 — VERDANT
+   Light forest green. Leaf-round corners. Nature glow.
+   ═══════════════════════════════════════════════════════════════════ */
+.fh-hub-style-verdant {
+  border-radius: 18px !important;
+  border: 1px solid rgba(82, 183, 136, 0.3) !important;
+  box-shadow: 0 8px 40px rgba(45, 106, 79, 0.1), 0 2px 6px rgba(82, 183, 136, 0.08) !important;
+}
+.fh-hub-style-verdant .fh-module-card {
+  border-radius: 12px !important;
+  border: 1px solid rgba(82, 183, 136, 0.2) !important;
+}
+.fh-hub-style-verdant .fh-tab-btn {
+  border-radius: 999px !important;
+}
+.fh-hub-style-verdant .fh-tab-btn.active {
+  background: rgba(82, 183, 136, 0.18) !important;
+  color: #2d6a4f !important;
+}
+/* Leaf divider */
+.fh-hub-style-verdant::before {
+  content: "";
+  display: block;
+  height: 3px;
+  width: 48px;
+  margin: 0 auto 14px;
+  background: linear-gradient(90deg, transparent, #52b788, transparent);
+  border-radius: 999px;
+}
+
+/* ═══════════════════════════════════════════════════════════════════
+   09 — COASTAL CLUB
+   Cream. Navy. Brass rope top stripe. Zero inner radius.
+   ═══════════════════════════════════════════════════════════════════ */
+.fh-hub-style-coastal-club {
+  border-radius: 4px !important;
+  border: 1px solid rgba(15, 32, 64, 0.25) !important;
+  box-shadow: 0 4px 24px rgba(15, 32, 64, 0.1) !important;
+  overflow: hidden;
+}
+/* Brass rope stripe at the very top */
+.fh-hub-style-coastal-club::before {
+  content: "";
+  display: block;
+  height: 5px;
+  background: repeating-linear-gradient(
+    90deg,
+    #b8912a 0px, #b8912a 8px,
+    #e8c96a 8px, #e8c96a 12px,
+    #b8912a 12px, #b8912a 20px,
+    #8b6a1a 20px, #8b6a1a 24px
+  );
+  margin-bottom: 12px;
+}
+.fh-hub-style-coastal-club .fh-module-card {
+  border-radius: 0 !important;
+  border: 1px solid rgba(15, 32, 64, 0.12) !important;
+}
+.fh-hub-style-coastal-club .fh-tab-bar {
+  border-bottom: 2px solid rgba(15, 32, 64, 0.2) !important;
+  border-radius: 0 !important;
+}
+.fh-hub-style-coastal-club .fh-tab-btn {
+  border-radius: 0 !important;
+  border-bottom: 2px solid transparent;
+  margin-bottom: -2px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  font-size: 10.5px;
+  font-weight: 700;
+}
+.fh-hub-style-coastal-club .fh-tab-btn.active {
+  border-bottom-color: #b8912a !important;
+  color: #0f2040 !important;
+  background: transparent !important;
+}
+
+/* ═══════════════════════════════════════════════════════════════════
+   10 — HAZE
+   Deep purple. Glassmorphism panels. Gradient border glow.
+   ═══════════════════════════════════════════════════════════════════ */
+.fh-hub-style-haze {
+  border-radius: 20px !important;
+  border: 1px solid rgba(168, 85, 247, 0.35) !important;
+  box-shadow:
+    0 0 0 1px rgba(168, 85, 247, 0.12),
+    0 0 60px rgba(168, 85, 247, 0.18),
+    0 0 120px rgba(59, 130, 246, 0.1),
+    0 32px 80px rgba(0, 0, 0, 0.8) !important;
+  position: relative;
+  overflow: hidden;
+}
+/* Purple radial glow */
+.fh-hub-style-haze::before {
+  content: "";
+  position: absolute;
+  top: -60px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 280px;
+  height: 180px;
+  background: radial-gradient(ellipse, rgba(168, 85, 247, 0.2) 0%, transparent 70%);
+  pointer-events: none;
+  z-index: 0;
+}
+.fh-hub-style-haze > * { position: relative; z-index: 1; }
+/* Glassmorphic module cards */
+.fh-hub-style-haze .fh-module-card {
+  background: rgba(255, 255, 255, 0.06) !important;
+  backdrop-filter: blur(12px) !important;
+  -webkit-backdrop-filter: blur(12px) !important;
+  border: 1px solid rgba(255, 255, 255, 0.1) !important;
+  border-radius: 14px !important;
+}
+/* Glassmorphic tab bar */
+.fh-hub-style-haze .fh-tab-bar {
+  background: rgba(255, 255, 255, 0.05) !important;
+  backdrop-filter: blur(8px) !important;
+  -webkit-backdrop-filter: blur(8px) !important;
+  border: 1px solid rgba(255, 255, 255, 0.1) !important;
+}
+.fh-hub-style-haze .fh-tab-btn.active {
+  background: rgba(168, 85, 247, 0.3) !important;
+  color: #d8b4fe !important;
+  box-shadow: 0 0 16px rgba(168, 85, 247, 0.3) !important;
+}

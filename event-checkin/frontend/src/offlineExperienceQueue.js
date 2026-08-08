@@ -191,6 +191,9 @@ export function recordOfflineScan({
   zoneId = null,
   direction = null,
 }) {
+  if (manifest?.expires_at && Date.parse(manifest.expires_at) < Date.now()) {
+    return {result:{status:'invalid',message:'Offline safety data is more than 30 minutes old. Reconnect and refresh before admitting tickets.'},manifest}
+  }
   if (!manifest?.guests?.length) {
     return {
       result: {
@@ -202,6 +205,9 @@ export function recordOfflineScan({
   }
   const guest = manifest.guests.find((item) => item.qr_token === token)
   if (!guest) return { result: { status: 'invalid', message: 'Offline guest list does not contain this QR code.' }, manifest }
+  if (guest.rsvp_status === 'declined') return {
+    result: { status: 'invalid', message: 'This pass was cancelled or revoked. Do not admit.', guest }, manifest,
+  }
 
   if (mode === 'admission') {
     if (guest.admitted) {

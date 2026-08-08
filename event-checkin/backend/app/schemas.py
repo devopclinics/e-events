@@ -96,6 +96,28 @@ class EventCreate(BaseModel):
         return self
 
 
+class EventDuplicateIn(BaseModel):
+    """New date (required — the one thing that can never be copied verbatim)
+    and an optional name override; everything else is cloned from the source
+    event's configuration by the duplicate endpoint."""
+    name: Optional[str] = None
+    event_date: datetime
+    event_end_date: Optional[datetime] = None
+
+    @field_validator("event_date", "event_end_date", mode="after")
+    @classmethod
+    def strip_tz(cls, v):
+        if v is not None and v.tzinfo is not None:
+            return v.astimezone(timezone.utc).replace(tzinfo=None)
+        return v
+
+    @model_validator(mode="after")
+    def check_end_after_start(self):
+        if self.event_end_date is not None and self.event_end_date < self.event_date:
+            raise ValueError("event_end_date must not be before event_date")
+        return self
+
+
 class EventUpdate(BaseModel):
     name: Optional[str] = None
     couples_name: Optional[str] = None
@@ -160,6 +182,8 @@ class EventOut(BaseModel):
     experience_enabled: bool = False
     live_program_enabled: bool = False
     festiome_addon_enabled: bool = False
+    planner_enabled: bool = False
+    purchased_addons: Optional[list[str]] = None
     festiome_enabled: bool = False
     festiome_id: Optional[str] = None
     festiome_open_url: Optional[str] = None
@@ -256,6 +280,12 @@ class EventMemberOut(BaseModel):
     can_view_dashboard: bool = False
     can_view_guests: bool = False
     can_manage_guests: bool = False
+    can_view_planner: bool = False
+    can_manage_planner_tasks: bool = False
+    can_manage_planner_budget: bool = False
+    can_manage_planner_vendors: bool = False
+    can_manage_planner_documents: bool = False
+    can_manage_planner_runsheet: bool = False
     event_role: str = "staff"
     access_level: str = "edit"
     # Allowed sections (table group ids) for section-based scanning.
@@ -917,7 +947,7 @@ class MemberRole(BaseModel):
 
 
 class PlanUpsert(BaseModel):
-    kind: Literal["tier", "pack"]
+    kind: Literal["tier", "pack", "addon"]
     label: str
     guest_cap: Optional[int] = None
     credits: int = 0
@@ -1123,6 +1153,9 @@ class TaskCreate(BaseModel):
     assignee_user_id: Optional[str] = None
     due_date: Optional[datetime] = None
     sort_order: Optional[int] = None
+    planner_milestone_id: Optional[str] = None
+    planner_vendor_id: Optional[str] = None
+    priority: Literal["low", "normal", "high"] = "normal"
 
 
 class TaskOut(BaseModel):
@@ -1130,6 +1163,9 @@ class TaskOut(BaseModel):
     event_id: str
     title: str
     notes: Optional[str] = None
+    planner_milestone_id: Optional[str] = None
+    planner_vendor_id: Optional[str] = None
+    priority: str = "normal"
     assignee_user_id: Optional[str] = None
     assignee_name: Optional[str] = None
     due_date: Optional[datetime] = None
@@ -1753,6 +1789,7 @@ class GuestOut(BaseModel):
     rsvp_submitter_phone: Optional[str] = None
     rsvp_relationship: Optional[str] = None
     rsvp_guest_type: Optional[str] = None
+    paid_ticket_pass_design: Optional[dict] = None
     updated_at: Optional[datetime] = None
     rsvp_notes: Optional[str] = None
 
@@ -1990,8 +2027,6 @@ class RSVPQuestionOut(BaseModel):
     options: Optional[str] = None  # JSON string e.g. '["Option A","Option B"]'
     is_required: bool
     sort_order: int
-    depends_on_question_id: Optional[str] = None
-    depends_on_value: Optional[str] = None
 
 
 class RSVPQuestionCreate(BaseModel):
@@ -2000,8 +2035,6 @@ class RSVPQuestionCreate(BaseModel):
     options: Optional[str] = None
     is_required: bool = False
     sort_order: int = 0
-    depends_on_question_id: Optional[str] = None
-    depends_on_value: Optional[str] = None
 
 
 class RSVPQuestionUpdate(BaseModel):
@@ -2010,8 +2043,6 @@ class RSVPQuestionUpdate(BaseModel):
     options: Optional[str] = None
     is_required: Optional[bool] = None
     sort_order: Optional[int] = None
-    depends_on_question_id: Optional[str] = None
-    depends_on_value: Optional[str] = None
 
 
 class InviteSettingsUpdate(BaseModel):
@@ -2038,6 +2069,12 @@ class InviteSettingsUpdate(BaseModel):
     rsvp_invitee_type_options: Optional[list[str]] = None
     rsvp_invitee_age_options: Optional[list[str]] = None
     rsvp_invitee_contact_exempt_types: Optional[list[str]] = None
+    # Invite page display toggles
+    invite_countdown_enabled: Optional[bool] = None
+    invite_capacity_bar_enabled: Optional[bool] = None
+    invite_share_enabled: Optional[bool] = None
+    invite_add_to_calendar_enabled: Optional[bool] = None
+    rsvp_confetti_enabled: Optional[bool] = None
 
     @field_validator("rsvp_deadline", mode="after")
     @classmethod
@@ -2107,6 +2144,12 @@ class InvitePageOut(BaseModel):
     registry_enabled: bool = False
     registry_token: Optional[str] = None
     seating_term: Optional[str] = None
+    # Invite page display toggles (all default True)
+    invite_countdown_enabled: bool = True
+    invite_capacity_bar_enabled: bool = True
+    invite_share_enabled: bool = True
+    invite_add_to_calendar_enabled: bool = True
+    rsvp_confetti_enabled: bool = True
 
 
 class RSVPInviteeSubmit(BaseModel):

@@ -312,16 +312,16 @@ function GuestsTab({ notify, onView, onEdit, onRemove, onApproveRsvp, onRejectRs
       </div>
 
       <div className="gr-select-row">
-        <select className="rr-select gr-inline-select" value={role} onChange={(e) => setRole(e.target.value)}>
+        <select className="rr-select gr-inline-select" aria-label="Filter by role" value={role} onChange={(e) => setRole(e.target.value)}>
           {roleOptions.map((o) => <option key={o}>{o}</option>)}
         </select>
-        <select className="rr-select gr-inline-select" value={household} onChange={(e) => setHousehold(e.target.value)}>
+        <select className="rr-select gr-inline-select" aria-label="Filter by household" value={household} onChange={(e) => setHousehold(e.target.value)}>
           {householdOptions.map((o) => <option key={o}>{o}</option>)}
         </select>
-        <select className="rr-select gr-inline-select" value={tableGroup} onChange={(e) => setTableGroup(e.target.value)}>
+        <select className="rr-select gr-inline-select" aria-label="Filter by table group" value={tableGroup} onChange={(e) => setTableGroup(e.target.value)}>
           {tableGroupOptions.map((o) => <option key={o}>{o}</option>)}
         </select>
-        <select className="rr-select gr-inline-select" value={submitter} onChange={(e) => setSubmitter(e.target.value)}>
+        <select className="rr-select gr-inline-select" aria-label="Filter by submitter" value={submitter} onChange={(e) => setSubmitter(e.target.value)}>
           {submitterOptions.map((o) => <option key={o}>{o}</option>)}
         </select>
       </div>
@@ -372,7 +372,7 @@ function GuestsTab({ notify, onView, onEdit, onRemove, onApproveRsvp, onRejectRs
             <thead>
               <tr>
                 <th style={{ width: 26 }}>
-                  <input type="checkbox" checked={fullPageSelected} onChange={() => toggleSelectAll(filtered)} />
+                  <input type="checkbox" aria-label="Select all guests on this page" checked={fullPageSelected} onChange={() => toggleSelectAll(filtered)} />
                 </th>
                 <th>Name</th>
                 <th>Email / Phone</th>
@@ -388,7 +388,7 @@ function GuestsTab({ notify, onView, onEdit, onRemove, onApproveRsvp, onRejectRs
             <tbody>
               {filtered.map((g) => (
                 <tr key={g.id}>
-                  <td><input type="checkbox" checked={selected.has(g.id)} onChange={() => toggleSelected(g.id)} /></td>
+                  <td><input type="checkbox" aria-label={`Select ${g.first_name} ${g.last_name}`} checked={selected.has(g.id)} onChange={() => toggleSelected(g.id)} /></td>
                   <td>
                     <div className="rd-who">
                       <span className="dot">{g.initials}</span>

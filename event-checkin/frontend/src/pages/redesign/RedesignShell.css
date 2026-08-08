@@ -1,11 +1,11 @@
 .admin-redesign {
-  --ink: #211a13; --muted: #7c6f60; --faint: #a89a89;
+  --ink: #211a13; --muted: #6b5f52; --faint: #6f6559;
   --line: #e9e1d3; --line-soft: #f1ebe0;
   --page-bg: #faf6ee; --surface: #fffdf9; --surface-2: #f6f0e4; --surface-3: #efe6d4;
-  --teal: #b6672f; --teal-dark: #954f21; --teal-soft: #f7e9da; --teal-ink: #fff;
-  --success: #4a8a63; --success-soft: #e6f0e6;
-  --warning: #b5720a; --warning-soft: #fbf0da;
-  --danger: #c1503f; --danger-soft: #fbeae6;
+  --teal: #95522a; --teal-dark: #954f21; --teal-soft: #f7e9da; --teal-ink: #fff;
+  --success: #3f7554; --success-soft: #e6f0e6;
+  --warning: #996008; --warning-soft: #fbf0da;
+  --danger: #b2493a; --danger-soft: #fbeae6;
   --shadow: 0 1px 0 rgba(60,40,10,.03), 0 10px 26px -18px rgba(60,40,10,.22);
   /* aliases: some newer redesign pages reference this shorter naming — kept as
      aliases (not duplicated values) so both names always stay in sync. */
@@ -60,6 +60,9 @@
   display: grid; place-items: center; font-size: 11px; font-weight: 700; flex: none; }
 .rr-theme-btn { border: 0; background: none; color: var(--muted); padding: 7px; border-radius: 8px; cursor: pointer; }
 .rr-theme-btn:hover { background: var(--surface-2); color: var(--ink); }
+.rr-logout-btn { border: 1px solid var(--line); background: none; color: var(--muted); font-size: 11px; font-weight: 600;
+  padding: 5px 10px; border-radius: 8px; cursor: pointer; white-space: nowrap; }
+.rr-logout-btn:hover { background: var(--surface-2); color: var(--ink); }
 .rr-menu { display: none; border: 0; background: none; font-size: 18px; color: var(--ink); padding: 4px 6px; }
 .rr-topbar-drawer { display: none; }
 

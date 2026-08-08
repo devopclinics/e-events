@@ -21,6 +21,7 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..auth import require_paid_event_admin, require_paid_event_member
+from ..entitlements import assert_feature_allowed
 from ..seating_terms import seating_term as _seating_term
 from ..config import settings
 from ..database import get_db
@@ -158,6 +159,7 @@ async def get_floor_plan(event_id: str, db: AsyncSession = Depends(get_db), _: U
     event = await db.get(Event, event_id)
     if not event:
         raise HTTPException(404, "Event not found")
+    assert_feature_allowed(event, "floor_plan")
     plan = await _get_or_make_plan(event_id, db)
     out = await _build_plan_out(event, plan, db, editable=True, expose_tokens=True)
     await db.commit()
@@ -169,6 +171,7 @@ async def save_floor_plan(event_id: str, data: FloorPlanSave, db: AsyncSession =
     event = await db.get(Event, event_id)
     if not event:
         raise HTTPException(404, "Event not found")
+    assert_feature_allowed(event, "floor_plan")
     plan = await _get_or_make_plan(event_id, db)
     await _apply_save(event_id, plan, data, db)
     await db.commit()

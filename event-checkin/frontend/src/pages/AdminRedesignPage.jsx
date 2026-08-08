@@ -109,6 +109,8 @@ export default function AdminRedesignPage() {
   const [editOpen, setEditOpen] = useState(false)
   const [resetOpen, setResetOpen] = useState(false)
   const [deleteOpen, setDeleteOpen] = useState(false)
+  const [duplicateOpen, setDuplicateOpen] = useState(false)
+  const [duplicateForm, setDuplicateForm] = useState({ name: '', date: '', endDate: '' })
   const [eventMutationBusy, setEventMutationBusy] = useState(false)
   const [eventForm, setEventForm] = useState({
     name: '',
@@ -318,6 +320,7 @@ export default function AdminRedesignPage() {
               <div className="rr-manage-menu" onMouseLeave={() => setManageOpen(false)}>
                 <button onClick={openEditEvent}><Icon name="settings" size={13}/> Edit event details</button>
                 <button onClick={() => { setManageOpen(false); setStatusOpen(true) }}><Icon name="check" size={13}/> Change status</button>
+                <button onClick={() => { setManageOpen(false); setDuplicateForm({ name: event?.name ? `${event.name} (Copy)` : '', date: '', endDate: '' }); setDuplicateOpen(true) }}><Icon name="plus" size={13}/> Duplicate event</button>
                 {user?.is_platform_superadmin && <button onClick={() => { setManageOpen(false); setResetOpen(true) }} className="danger"><Icon name="arrow" size={13}/> Reset event data</button>}
                 <button onClick={() => { setManageOpen(false); setDeleteOpen(true) }} className="danger"><Icon name="more" size={13}/> Delete event</button>
               </div>
@@ -601,6 +604,46 @@ export default function AdminRedesignPage() {
             <div className="rd-row2" style={{ marginTop: 4 }}>
               <button className="rr-btn secondary" style={{ flex: 1, justifyContent: 'center' }} onClick={() => setEditOpen(false)}>Cancel</button>
               <button className="rr-btn primary" disabled={eventMutationBusy || !eventForm.name.trim() || !eventForm.date || !eventForm.timezone} style={{ flex: 1, justifyContent: 'center' }} onClick={saveEventDetails}>{eventMutationBusy ? 'Saving…' : 'Save changes'}</button>
+            </div>
+          </div>
+        </Modal>
+      )}
+
+      {/* Duplicate event modal */}
+      {duplicateOpen && (
+        <Modal title="Duplicate event" onClose={() => setDuplicateOpen(false)} width={480}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+            <p className="rd-hint">
+              Creates a new event with the same RSVP settings, custom questions, ticket types, menu,
+              table groups, message templates, and branding. Guests, RSVPs, check-ins, and orders are
+              never copied — pick a new date to get started.
+            </p>
+            <div><label className="rd-field-label">New event name</label><input className="rd-field" value={duplicateForm.name} placeholder={event?.name ? `${event.name} (Copy)` : ''} onChange={(e) => setDuplicateForm({ ...duplicateForm, name: e.target.value })} /></div>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+              <div><label className="rd-field-label">Date &amp; time *</label><input className="rd-field" type="datetime-local" value={duplicateForm.date} onChange={(e) => setDuplicateForm({ ...duplicateForm, date: e.target.value })} /></div>
+              <div><label className="rd-field-label">End date &amp; time</label><input className="rd-field" type="datetime-local" value={duplicateForm.endDate} onChange={(e) => setDuplicateForm({ ...duplicateForm, endDate: e.target.value })} /></div>
+            </div>
+            <div className="rd-row2" style={{ marginTop: 4 }}>
+              <button className="rr-btn secondary" style={{ flex: 1, justifyContent: 'center' }} onClick={() => setDuplicateOpen(false)}>Cancel</button>
+              <button
+                className="rr-btn primary" style={{ flex: 1, justifyContent: 'center' }}
+                disabled={eventMutationBusy || !duplicateForm.date}
+                onClick={async () => {
+                  setEventMutationBusy(true)
+                  try {
+                    const created = await api.duplicateEvent(event.id, {
+                      name: duplicateForm.name.trim() || null,
+                      event_date: duplicateForm.date,
+                      event_end_date: duplicateForm.endDate || null,
+                    })
+                    setDuplicateOpen(false)
+                    setCurrentEventId(created.id)
+                    navigate('/admin-redesign')
+                    notify(`“${created.name}” created from this event's settings`)
+                  } catch (error) { notify(error.message || 'Event could not be duplicated', true) }
+                  finally { setEventMutationBusy(false) }
+                }}
+              >{eventMutationBusy ? 'Duplicating…' : 'Create duplicate'}</button>
             </div>
           </div>
         </Modal>

@@ -127,6 +127,23 @@ async def get_current_user(
     return user
 
 
+async def get_current_user_optional(
+    creds: HTTPAuthorizationCredentials = Depends(bearer),
+    db: AsyncSession = Depends(get_db),
+) -> User | None:
+    """Like get_current_user, but returns None instead of raising when there's
+    no token or it's invalid/expired -- for public endpoints (e.g. the pricing
+    page) that behave differently for a signed-in viewer without requiring
+    auth. Never use this where the caller needs to trust the identity for a
+    security decision; only for "is someone signed in" display logic."""
+    if not creds:
+        return None
+    try:
+        return await get_current_user(creds, db)
+    except HTTPException:
+        return None
+
+
 async def require_superadmin(user: User = Depends(get_current_user)) -> User:
     """Operator-only (you). For cross-tenant/global endpoints."""
     if not user.is_platform_superadmin:

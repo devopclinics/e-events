@@ -1,6 +1,6 @@
 import html as html_escape
 import json
-from datetime import datetime
+from datetime import datetime, timedelta
 from fastapi import APIRouter, Body, Depends, BackgroundTasks, HTTPException, Request
 from fastapi.responses import Response, RedirectResponse
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -514,6 +514,8 @@ async def view_ticket(qr_token: str, db: AsyncSession = Depends(get_db)):
     guest = (await db.execute(select(Guest).where(Guest.qr_token == qr_token))).scalar_one_or_none()
     if not guest:
         return TicketView(status="invalid")
+    if guest.rsvp_status == "declined":
+        return TicketView(status="invalid")
 
     event = await db.get(Event, guest.event_id)
     event_brief = EventBrief(
@@ -846,6 +848,8 @@ async def offline_manifest(
         "event_name": event.name if event else "",
         "venue_access_enabled": bool(event and event.venue_access_enabled),
         "generated_at": datetime.utcnow().isoformat(),
+        "expires_at": (datetime.utcnow() + timedelta(minutes=30)).isoformat(),
+        "revoked_passes": sum(1 for g in guests if g.rsvp_status == "declined" and g.qr_token),
         "guests": [{
             "id": g.id,
             "event_id": g.event_id,
@@ -998,11 +1002,6 @@ async def checkin_guard(event, current_user, db) -> ScanResult | None:
     if event and event.status != "active":
         label = "has not started yet" if event.status == "draft" else "has ended"
         return ScanResult(status="not_active", message=f"'{event.name}' {label}. Check-in is disabled.")
-    if event and not event.is_paid:
-        return ScanResult(
-            status="not_active",
-            message="This event needs an Event Pass to run check-in. Upgrade it in the admin panel.",
-        )
     if not current_user.is_platform_superadmin:
         org_role = await _org_role(current_user, event.org_id if event else None, db)
         if org_role is None:
@@ -1020,6 +1019,12 @@ async def perform_admission(guest, event, background_tasks, db) -> ScanResult:
     """Admit a guest — seat assignment (incl. table-group rules), admitted flags,
     notifications, and SSE broadcast. Shared by QR scan and manual check-in.
     Caller must have already validated the event + access (see checkin_guard)."""
+    if guest.rsvp_status == "declined":
+        return ScanResult(
+            status="denied",
+            message="This ticket has been cancelled and cannot be admitted.",
+            guest=GuestOut.model_validate(guest),
+        )
     if guest.admitted:
         admitted_time = local_hhmm(guest.admitted_at, event_tz(event)) or "unknown"
         table_name = None

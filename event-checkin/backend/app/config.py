@@ -26,6 +26,17 @@ class Settings(BaseSettings):
     messaging_service_url: str = "http://messaging-service:8001"
     messaging_internal_token: str = ""
 
+    # Planner is a standalone event-management suite (budget, vendors,
+    # timeline, runsheet, documents) — isolated service + database, reached
+    # only over HTTP via a short-lived scoped token minted below. Same
+    # shared-secret pattern as FestioMe/design above.
+    planner_service_url: str = "http://planner-service:8030"
+    planner_internal_token: str = ""
+    # Staging-only paid admission service. The service itself refuses to boot
+    # outside staging; this shared secret authenticates token exchange and
+    # idempotent fulfillment callbacks.
+    ticketing_internal_token: str = ""
+
     # Firebase — paste the service account JSON as a single-line string
     firebase_credentials: str = ""
 

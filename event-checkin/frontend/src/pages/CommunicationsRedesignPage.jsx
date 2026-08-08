@@ -44,6 +44,7 @@ const ADDON_TOGGLES = [
   { key: 'logistics', label: 'Logistics', desc: 'Ship merch and gifts to guests.', on: false, settings: [['Delivery settings', '/addons-redesign?tab=logistics']] },
   { key: 'registry', label: 'Registry', desc: 'Mark-only gift registry — items & cash funds.', on: true, settings: [['Gift-list settings', '/addons-redesign?tab=registry']] },
   { key: 'experience', label: 'Experience', desc: 'Operational guest journeys, sessions, consent, and feedback.', on: false, settings: [['Experience settings', '/experience-redesign']] },
+  { key: 'planner', label: 'Planner', desc: 'Budget, vendors, timeline, runsheet and documents for planning this event.', on: false, settings: [['Open planner', '/planner-redesign']] },
   { key: 'festiome', label: 'FestioMe', desc: 'Community chat space for this event\'s guests.', on: true, settings: [['Open FestioMe', '/festiome-redesign']] },
 ]
 
@@ -586,14 +587,14 @@ function BroadcastComposer({ notify, onSent, eventId }) {
         <div className="cm-purpose-grid">
           <div>
             <label className="rd-field-label">Message type</label>
-            <select className="rr-select" value={purpose} onChange={(event) => applyPurpose(event.target.value)}>
+            <select className="rr-select" aria-label="Message type" value={purpose} onChange={(event) => applyPurpose(event.target.value)}>
               {Object.entries(BROADCAST_PURPOSES).map(([value, item]) => <option key={value} value={value}>{item.label}</option>)}
             </select>
             <p className="rd-hint cm-broadcast-hint">{BROADCAST_PURPOSES[purpose].description}</p>
           </div>
           <div>
             <label className="rd-field-label">Send mode</label>
-            <select className="rr-select" value={sendMode} onChange={(event) => {
+            <select className="rr-select" aria-label="Send mode" value={sendMode} onChange={(event) => {
               const mode = event.target.value
               setSendMode(mode)
               setPickedGuests([])
@@ -693,7 +694,7 @@ function BroadcastComposer({ notify, onSent, eventId }) {
               ? <div className="cm-fixed-audience">One selected guest</div>
               : purpose === 'feedback'
                 ? <div className="cm-fixed-audience">Eligible guests who have not responded</div>
-                : <select className="rr-select" value={target} onChange={(e) => setTarget(e.target.value)} disabled={pickedGuests.length > 0}>
+                : <select className="rr-select" aria-label="Send to" value={target} onChange={(e) => setTarget(e.target.value)} disabled={pickedGuests.length > 0}>
                     {BROADCAST_TARGETS.map(({ label, value }) => <option key={value} value={value}>{label}</option>)}
                   </select>}
             {sendMode === 'audience' && purpose !== 'feedback' && pickedGuests.length > 0 && <p className="rd-hint">Audience ignored — sending only to selected guests and direct recipients.</p>}
@@ -1210,7 +1211,7 @@ const ROUTE_API_KEY = { invites: 'invite', admission: 'admission', rsvp: 'remind
 const ADDON_FEATURE_KEY = {
   venueAccess: 'venue_access_enabled', seating: 'seating_enabled', partnerPairing: 'partner_pairing_enabled',
   orders: 'menu_enabled', logistics: 'logistics_enabled', registry: 'registry_enabled',
-  experience: 'experience_enabled', festiome: 'festiome_addon_enabled',
+  experience: 'experience_enabled', festiome: 'festiome_addon_enabled', planner: 'planner_enabled',
 }
 const CHANNEL_FEATURE_KEY = { email: 'notify_email', sms: 'notify_sms', whatsapp: 'notify_whatsapp' }
 const THANKYOU_AUDIENCE_KEY = { 'Checked in': 'admitted', 'Confirmed': 'confirmed', 'All guests': 'all' }

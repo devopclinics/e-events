@@ -169,6 +169,8 @@
   <div class="cover-meta">
     <span>Draft v1</span>
     <span>&middot;</span>
+    <span>§7 decisions locked 2026-08-02</span>
+    <span>&middot;</span>
     <span>Not yet implemented</span>
   </div>
 </div>
@@ -206,6 +208,7 @@
 </tbody>
 </table>
 </div>
+<p class="note"><strong>Resolved 2026-08-03:</strong> <span class="ok">✓</span> Free ($0), Starter ($49), and Standard ($99) above are confirmed as authoritative over the Pricing Plans sheet's $100/$200 for those same two tiers — the sheet should be updated to match. Pro and Scale are intentionally not addressed by this decision.</p>
 <p class="note">NGN prices not yet set. NGN pricing will be a straight FX conversion of the finalized USD figures — see §7.</p>
 </section>
 
@@ -316,14 +319,18 @@
 <tr><td>Advanced Access &amp; Zone Control</td><td class="num">$49/event</td><td class="warn">Standard ($99) already includes basic access zones. This add-on is the deeper Venue Access Intelligence layer (multi-zone scan, occupancy/flow/peak/journey analytics).</td></tr>
 <tr><td>Premium Design Pack</td><td class="num">$49/event</td><td class="ok">No overlap with what's already bundled.</td></tr>
 <tr><td>White-label branding</td><td class="num">$99/event</td><td class="ok">No overlap.</td></tr>
-<tr><td>Custom domain</td><td class="num">$99 setup + annual renewal</td><td class="warn">Renewal amount not yet set (recommended: $49/year).</td></tr>
-<tr><td>Additional 100 guests</td><td class="num">$50</td><td class="warn">Scale-tier only, recommended — otherwise undercuts the tier ladder.</td></tr>
-<tr><td>Additional 500 guests</td><td class="num">$150</td><td class="warn">Same as above.</td></tr>
-<tr><td>Custom WhatsApp sender/template setup</td><td class="num">From $149</td><td class="warn">Open-ended "from" price — needs a defined base scope.</td></tr>
-<tr><td>Data import, cleanup, or integration setup</td><td class="num">From $149</td><td class="warn">Same as above.</td></tr>
+<tr><td>Custom domain</td><td class="num">$99 setup + $49/year renewal</td><td class="ok">Resolved 2026-08-02 — renewal locked at $49/year (see §7).</td></tr>
+<tr><td>Additional 100 guests</td><td class="num">$50</td><td class="ok">Resolved 2026-08-02 — Scale-tier only (see §7); otherwise undercuts the tier ladder.</td></tr>
+<tr><td>Additional 500 guests</td><td class="num">$150</td><td class="ok">Same as above — Scale-tier only.</td></tr>
+<tr><td>Custom WhatsApp sender/template setup</td><td class="num">$149 base</td><td class="ok">Resolved 2026-08-02 — $149 covers registration + 3 templates; $25/template after (see §7).</td></tr>
+<tr><td>Data import, cleanup, or integration setup</td><td class="num">$149 base</td><td class="ok">Resolved 2026-08-02 — $149 covers one clean import file up to 2,000 records; additional records or sources quoted separately (see §7).</td></tr>
+<tr><td>Planner Suite</td><td class="num">$99/event</td><td class="ok">NEW 2026-08-03 — budget tracker, vendor shortlist/quotes, milestones, tasks, runsheet (<code>planner_enabled</code>). <code>billing_mode = flat_per_event</code>, purchasable standalone at any tier per §4b's architecture — same pattern as White-label above.</td></tr>
+<tr><td>Seat Arrangement</td><td class="num">$1.25/guest</td><td class="ok">Restored 2026-08-03 — this price was only ever decided in §4b's prose, never an actual line item. <code>billing_mode = per_guest</code>.</td></tr>
 </tbody>
 </table>
 </div>
+<p class="note"><strong>Market comps behind the Planner price (2026-08-03):</strong> comparable standalone planning-suite tools price per-portfolio/month, not per-event — Aisle Planner's full project-management tier (budgets, timelines, vendor/file management, guest management) runs $69.99–$229.99/mo depending on project volume, Cvent Social Tables jumps from $49/mo (core diagramming) to $150/mo (Pro) for the advanced tier, and HoneyBook's automation/reporting tier is $49/mo. Collapsing a recurring per-month suite fee into a single one-time per-event charge, $99 sits at the top of our existing $49–$99 add-on band — the same price as White-label, our other "full feature surface" add-on, rather than the $49 single-capability price (Advanced Access, Premium Design Pack).</p>
+<p class="note">Partner pairing (<code>partner_pairing_enabled</code>) stays <strong>bundled</strong>, no separate charge — it's a minor sub-feature of seating (plus-one linking), not a standalone product surface like Planner.</p>
 <h3 class="sub">Service charges</h3>
 <p class="lede">These four move from bundled-free-at-Starter+ to a flat per-event activation charge.</p>
 <div class="table-scroll">
@@ -334,6 +341,7 @@
 <tr><td>Gift (Registry)</td><td class="num">$50/event</td><td class="ok">Same — no longer bundled, flat per-event charge to activate.</td></tr>
 <tr><td>FestioMe (guest group access)</td><td class="num">$50/event</td><td class="ok">Sub-groups, join policies, private channels, DMs, staff push.</td></tr>
 <tr><td>Guest Communication</td><td class="num">$10/event</td><td class="ok">Per-event customizable email/SMS/WhatsApp message templates.</td></tr>
+<tr><td>Orders (Menu)</td><td class="num">$50/event</td><td class="ok">Added 2026-08-03 — <code>menu_enabled</code> was resolved into this flat-fee group alongside its three siblings above but was missing its own row.</td></tr>
 </tbody>
 </table>
 </div>
@@ -420,22 +428,23 @@
 
 <section id="open">
 <h2 data-n="7">Open decisions</h2>
-<p class="lede">Resolved items are marked <span class="ok">✓</span>. Everything else carries a recommendation.</p>
+<p class="lede">Resolved items are marked <span class="ok">✓</span>. Reviewed and closed out 2026-08-02 — every item below now carries a locked decision, adopting the recommendation from the 2026-07-25/26 draft since no objection was raised against any of them.</p>
 <ol class="decisions">
 <li><span class="ok">✓ Resolved</span> — <strong>Refund policy: no refunds, ever.</strong> Once a send is attempted, the credit is spent — regardless of provider outcome, immediate rejection, or later delivery failure.</li>
-<li><strong>Guest-capacity add-on blocks — which tiers can buy them?</strong> <span class="rec">Recommend: Scale-only.</span> Otherwise a cheap tier plus guest blocks can undercut Scale's price for a similar guest count.</li>
-<li><strong>Advanced Access &amp; Zone Control wording.</strong> Needs the sentence written: "included at Standard+; this add-on is the deeper Venue Access Intelligence layer."</li>
-<li><strong>Email — truly unlimited, or a soft cap?</strong> <span class="rec">Recommend: unlimited in customer-facing language, invisible anti-abuse rate limit underneath.</span></li>
-<li><strong>Existing customers / already-granted credits.</strong> <span class="rec">Recommend: grandfather in place</span> — no retroactive clawback or conversion.</li>
-<li><strong>Bundle/credit expiry.</strong> <span class="rec">Recommend: keep the 30-days-post-event expiry.</span></li>
+<li><span class="ok">✓ Resolved</span> — <strong>Guest-capacity add-on blocks are Scale-only.</strong> Letting a cheaper tier buy guest blocks would let it undercut Scale's price for a similar guest count, so the 100/500-guest add-on rows in §4 only apply above Scale.</li>
+<li><span class="ok">✓ Resolved</span> — <strong>Advanced Access &amp; Zone Control wording is written</strong> (see §4): "Standard ($99) already includes basic access zones. This add-on is the deeper Venue Access Intelligence layer (multi-zone scan, occupancy/flow/peak/journey analytics)."</li>
+<li><span class="ok">✓ Resolved</span> — <strong>Email is unlimited in customer-facing language,</strong> with an invisible anti-abuse rate limit underneath — never surfaced to organizers as a cap.</li>
+<li><span class="ok">✓ Resolved</span> — <strong>Existing customers/already-granted credits are grandfathered in place.</strong> No retroactive clawback or conversion when this restructure ships.</li>
+<li><span class="ok">✓ Resolved</span> — <strong>Bundle/credit expiry stays 30 days post-event,</strong> unchanged from current behavior.</li>
 <li><span class="ok">✓ Resolved</span> — <strong>NGN pricing is a straight FX conversion</strong> of the finalized USD figures, decided once USD is locked in.</li>
-<li><strong>Custom domain annual renewal.</strong> <span class="rec">Recommend: $49/year.</span></li>
-<li><strong>"From $149" items base scope.</strong> <span class="rec">Recommend: define a concrete floor for each</span> — e.g. sender setup covers registration + 3 templates, $25/template after; import covers one clean file up to 2,000 records.</li>
-<li><strong>SMS billed as 1 credit but usually costs 2 segments (see §6 correction, found 2026-07-25).</strong> <span class="rec">Recommend: shorten the SMS templates back under 160 chars first (cheapest fix, no pricing change needed)</span> — if that's not enough, revisit whether SMS should cost 2 credits by default.</li>
-<li><strong>Top-up amounts.</strong> <span class="rec">Recommend: keep $50 / $250 / $1,000 as-is.</span></li>
-<li><strong>Pre-send cost estimate.</strong> <span class="rec">Recommend: show both</span> dollar amount and recipient count.</li>
+<li><span class="ok">✓ Resolved</span> — <strong>Custom domain annual renewal is $49/year.</strong> Reflected in §4's Custom domain row.</li>
+<li><span class="ok">✓ Resolved</span> — <strong>"From $149" items now have a defined floor scope.</strong> Custom WhatsApp sender/template setup: $149 covers registration + 3 templates, $25/template after. Data import/cleanup/integration setup: $149 covers one clean file up to 2,000 records, additional records or sources quoted separately. Both reflected in §4.</li>
+<li><span class="ok">✓ Resolved</span> — <strong>Fix the SMS template length first, not the price.</strong> Shorten templates back under 160 chars (drop the optional trailing compliance clause, use a shorter token-redirect link) before considering a 2-credit SMS charge — cheapest fix, no pricing change needed unless a follow-up template audit shows it isn't enough.</li>
+<li><span class="ok">✓ Resolved</span> — <strong>Top-up amounts stay $50 / $250 / $1,000</strong> (§3), no further changes.</li>
+<li><span class="ok">✓ Resolved</span> — <strong>Pre-send cost estimate shows both the dollar amount and the recipient count</strong> (already specified in §2b).</li>
 <li><span class="ok">✓ Resolved</span> — <strong>Deliveries/Gift/FestioMe/Guest Communication</strong> are now flat per-event service charges ($50/$50/$50/$10 — see §4), no longer included free at Starter+.</li>
 </ol>
+<p class="note">All §7 decisions are now closed. The remaining gap is entirely implementation: see §4b (add-on billing architecture — not started) and §8 (build-mapping appendix) for what has to be built before any of this is actually sellable.</p>
 </section>
 
 <section id="build">

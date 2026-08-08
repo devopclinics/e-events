@@ -1,9 +1,22 @@
 import { test, expect } from '@playwright/test'
-import { expectQaEventLoaded, requiredEnv, signIn } from './helpers.js'
+import { axeSeriousViolations, expectQaEventLoaded, formatAxeViolations, requiredEnv, signIn } from './helpers.js'
 
 test.describe.configure({ mode: 'serial' })
 
 test.describe('Stage C billing — provider-safe hosted handoff', () => {
+  test('redesign billing page has no serious/critical accessibility violations', async ({ page }) => {
+    const eventId = requiredEnv('E2E_EVENT_ID')
+    await signIn(page)
+    const tiersReady = page.waitForResponse((response) =>
+      response.url().includes(`/api/billing/tiers/${eventId}`) && response.status() === 200
+    )
+    await page.goto('/billing-redesign?tab=billing')
+    await expectQaEventLoaded(page)
+    await tiersReady
+    const violations = await axeSeriousViolations(page)
+    expect(violations, formatAxeViolations(violations)).toEqual([])
+  })
+
   test('ledger and capability catalog are interactive', async ({ page }) => {
     const eventId = requiredEnv('E2E_EVENT_ID')
     await signIn(page)

@@ -1,0 +1,37 @@
+.to-receipt { margin:22px 0; padding:25px; border:1px solid #dbe7e5; border-radius:18px; background:#fff; }
+.to-receipt-head { display:flex; justify-content:space-between; gap:20px; padding-bottom:18px; border-bottom:1px solid #e2e8f0; }
+.to-receipt-head small,.to-modal>small { font-weight:900; letter-spacing:.12em; color:#0f766e; }
+.to-receipt-head h2 { margin:5px 0; }
+.to-receipt-head>div:last-child { text-align:right; }
+.to-receipt-head span,.to-receipt-meta span { display:block; color:#64748b; font-size:11px; text-transform:uppercase; }
+.to-receipt-meta { display:grid; grid-template-columns:1.3fr 1.3fr .5fr; gap:15px; padding:13px 0; }
+.to-receipt-meta p { margin:0; }
+.to-receipt-meta b { display:block; margin-top:4px; font-size:12px; overflow-wrap:anywhere; }
+.to-paid { color:#047857; }
+.to-receipt-lines { display:grid; grid-template-columns:1fr auto; gap:9px; padding:17px; border-radius:12px; background:#f8fafc; }
+.to-receipt-lines strong { padding-top:10px; border-top:1px solid #cbd5e1; font-size:17px; }
+.to-receipt-actions { display:flex; align-items:center; justify-content:space-between; margin-top:16px; }
+.to-receipt-actions button,.to-pass button { border:1px solid #99d8d1; border-radius:10px; padding:10px 13px; background:#fff; color:#0f766e; font-weight:800; cursor:pointer; }
+.to-receipt-actions small { color:#64748b; }
+.to-modal-backdrop { position:fixed; z-index:1000; inset:0; display:grid; place-items:center; padding:18px; background:rgba(3,30,29,.7); backdrop-filter:blur(5px); }
+.to-modal { position:relative; width:min(500px,100%); box-sizing:border-box; padding:30px; border-radius:22px; background:#fff; box-shadow:0 30px 100px rgba(0,0,0,.3); }
+.to-modal h2 { margin:8px 0; }
+.to-modal p { color:#64748b; line-height:1.55; }
+.to-modal-close { position:absolute; right:16px; top:14px; border:0; background:transparent; color:#64748b; font-size:27px; cursor:pointer; }
+.to-modal form,.to-modal label { display:grid; gap:8px; }
+.to-modal form { gap:15px; margin-top:20px; }
+.to-modal label span { font-size:12px; font-weight:800; }
+.to-modal input { box-sizing:border-box; width:100%; padding:12px; border:1px solid #cbd5e1; border-radius:10px; font:inherit; }
+.to-modal-warning { display:grid; gap:4px; padding:13px; border-radius:11px; background:#f0fdfa; color:#475569; font-size:13px; }
+.to-modal-actions { display:flex; justify-content:flex-end; gap:9px; }
+.to-modal-actions button,.to-copy-link button,.to-done { border:0; border-radius:10px; padding:11px 14px; background:#0f766e; color:#fff; font-weight:800; cursor:pointer; }
+.to-modal-actions .secondary { border:1px solid #cbd5e1; background:#fff; color:#475569; }
+.to-success { text-align:center; }
+.to-success-mark { display:grid; place-items:center; width:48px; height:48px; margin:0 auto 12px; border-radius:50%; background:#d1fae5; color:#047857; font-size:24px; font-weight:900; }
+.to-copy-link { display:flex; gap:7px; margin:18px 0; }
+.to-copy-link input { min-width:0; }
+.to-copy-link button { flex:none; }
+.to-fine { font-size:12px; }
+.to-done { width:100%; }
+@media(max-width:600px) { .to-receipt-meta { grid-template-columns:1fr; } .to-receipt-head,.to-receipt-actions { align-items:flex-start; flex-direction:column; } .to-receipt-head>div:last-child { text-align:left; } .to-modal-actions { flex-direction:column-reverse; } }
+@media print { .to-modal-backdrop,.to-receipt-actions { display:none; } .to-receipt { break-inside:avoid; } }

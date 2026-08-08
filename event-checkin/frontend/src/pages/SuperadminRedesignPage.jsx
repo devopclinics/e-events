@@ -27,5 +27,9 @@ export default function SuperadminRedesignPage() {
   }
 
   // The existing media library is the production-backed implementation.
-  return <Navigate to="/media-library?ui=legacy" replace />
+  // Use a one-shot nav-state bypass, not ?ui=legacy — that query param
+  // persists a global "always show legacy" preference (it's the real
+  // Switch to legacy UI escape hatch in RedesignShell) and would silently
+  // opt the user out of the redesign on every other route too.
+  return <Navigate to="/media-library" state={{ forceLegacy: true }} replace />
 }

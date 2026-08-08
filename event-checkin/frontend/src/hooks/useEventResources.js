@@ -107,6 +107,7 @@ export function useEntitlements(event, loading = false) {
       venueAccess: !!event?.venue_access_enabled,
       experience: !!event?.experience_enabled,
       festiome: !!event?.festiome_addon_enabled,
+      planner: !!event?.planner_enabled,
     },
   }
 }

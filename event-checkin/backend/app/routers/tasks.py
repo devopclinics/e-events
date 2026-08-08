@@ -68,6 +68,8 @@ def _task_out(task: Task, names: dict[str, str]) -> dict:
     )
     return {
         "id": task.id, "event_id": task.event_id, "title": task.title, "notes": task.notes,
+        "planner_milestone_id": task.planner_milestone_id,
+        "planner_vendor_id": task.planner_vendor_id, "priority": task.priority,
         "assignee_user_id": task.assignee_user_id,
         "assignee_name": names.get(task.assignee_user_id) if task.assignee_user_id else None,
         "due_date": task.due_date, "status": task.status, "overdue": overdue,
@@ -88,6 +90,33 @@ async def _get_assignee(event_id: str, assignee_user_id: str | None, db: AsyncSe
     if not row:
         raise HTTPException(404, "Assignee is not a team member on this event")
     return row
+
+
+async def _ensure_planner_task_manager(event_id: str, actor: User, db: AsyncSession) -> None:
+    """Planner-linked tasks retain Planner's narrower mutation policy even
+    though they are stored in the shared task engine."""
+    if actor.is_platform_superadmin:
+        return
+    event = await db.get(Event, event_id)
+    if not event:
+        raise HTTPException(404, "Event not found")
+    membership = (await db.execute(select(Membership).where(
+        Membership.org_id == event.org_id, Membership.user_id == actor.id,
+        Membership.role.in_(["owner", "admin"]),
+    ))).scalar_one_or_none()
+    if membership:
+        return
+    assignment = (await db.execute(select(EventUser).where(
+        EventUser.event_id == event_id, EventUser.user_id == actor.id,
+    ))).scalar_one_or_none()
+    if assignment and (assignment.event_role == "manager" or assignment.can_manage_planner_tasks):
+        return
+    raise HTTPException(403, "Planner task management permission required")
+
+
+async def _ensure_task_mutation_allowed(task: Task, actor: User, db: AsyncSession) -> None:
+    if task.planner_milestone_id:
+        await _ensure_planner_task_manager(task.event_id, actor, db)
 
 
 def _notify_assignee(background_tasks: BackgroundTasks, event: Event, task: Task, assignee: User) -> None:
@@ -140,6 +169,24 @@ async def list_tasks(event_id: str, db: AsyncSession = Depends(get_db), _: User 
     return out
 
 
+@router.get("/{event_id}/tasks/assignees")
+async def list_task_assignees(
+    event_id: str, db: AsyncSession = Depends(get_db), _: User = Depends(require_event_member),
+):
+    """Small event-scoped directory for assignment pickers.
+
+    Unlike the team administration endpoint this intentionally works for every
+    event member; it exposes only the id/name/email needed to assign work.
+    """
+    rows = (await db.execute(
+        select(User.id, User.name, User.email)
+        .join(EventUser, EventUser.user_id == User.id)
+        .where(EventUser.event_id == event_id)
+        .order_by(User.name)
+    )).all()
+    return [{"id": row.id, "name": row.name, "email": row.email} for row in rows]
+
+
 @router.post("/{event_id}/tasks", response_model=TaskOut, status_code=201)
 async def create_task(
     event_id: str, data: TaskCreate, background_tasks: BackgroundTasks,
@@ -152,9 +199,13 @@ async def create_task(
     if not title:
         raise HTTPException(400, "title is required")
     assignee = await _get_assignee(event_id, data.assignee_user_id, db)
+    if data.planner_milestone_id:
+        await _ensure_planner_task_manager(event_id, actor, db)
     task = Task(
         event_id=event_id, title=title, notes=data.notes, assignee_user_id=data.assignee_user_id,
         due_date=data.due_date, sort_order=data.sort_order or 0,
+        planner_milestone_id=data.planner_milestone_id,
+        planner_vendor_id=data.planner_vendor_id, priority=data.priority,
     )
     db.add(task)
     await db.commit()
@@ -176,6 +227,8 @@ async def update_task(
     task = await db.get(Task, task_id)
     if not task or task.event_id != event_id:
         raise HTTPException(404, "Task not found")
+    if task.planner_milestone_id or data.planner_milestone_id:
+        await _ensure_planner_task_manager(event_id, actor, db)
     # Optional optimistic-concurrency guard: the redesign UI sends back the
     # updated_at it last saw, so a stale edit (someone else changed the task
     # first — most importantly its assignee) is rejected instead of silently
@@ -190,6 +243,9 @@ async def update_task(
     previous_assignee_id = task.assignee_user_id
     task.title = title
     task.notes = data.notes
+    task.planner_milestone_id = data.planner_milestone_id
+    task.planner_vendor_id = data.planner_vendor_id
+    task.priority = data.priority
     task.assignee_user_id = data.assignee_user_id
     task.due_date = data.due_date
     if data.sort_order is not None:
@@ -210,6 +266,7 @@ async def _set_status(event_id: str, task_id: str, status: str, db: AsyncSession
     task = await db.get(Task, task_id)
     if not task or task.event_id != event_id:
         raise HTTPException(404, "Task not found")
+    await _ensure_task_mutation_allowed(task, actor, db)
     previous_status = task.status
     task.status = status
     task.completed_at = datetime.utcnow() if status == "done" else None
@@ -242,10 +299,11 @@ async def reopen_task(event_id: str, task_id: str, db: AsyncSession = Depends(ge
 
 
 @router.delete("/{event_id}/tasks/{task_id}", status_code=204)
-async def delete_task(event_id: str, task_id: str, db: AsyncSession = Depends(get_db), _: User = Depends(require_event_member)):
+async def delete_task(event_id: str, task_id: str, db: AsyncSession = Depends(get_db), actor: User = Depends(require_event_member)):
     task = await db.get(Task, task_id)
     if not task or task.event_id != event_id:
         raise HTTPException(404, "Task not found")
+    await _ensure_task_mutation_allowed(task, actor, db)
     await db.execute(delete(TaskActivity).where(TaskActivity.task_id == task_id))
     await db.execute(delete(Subtask).where(Subtask.task_id == task_id))
     await db.delete(task)
@@ -284,6 +342,7 @@ async def add_task_comment(
     task = await db.get(Task, task_id)
     if not task or task.event_id != event_id:
         raise HTTPException(404, "Task not found")
+    await _ensure_task_mutation_allowed(task, actor, db)
     body = data.body.strip()
     if not body:
         raise HTTPException(400, "body is required")
@@ -313,6 +372,7 @@ async def create_subtask(
     task = await db.get(Task, task_id)
     if not task or task.event_id != event_id:
         raise HTTPException(404, "Task not found")
+    await _ensure_task_mutation_allowed(task, actor, db)
     title = data.title.strip()
     if not title:
         raise HTTPException(400, "title is required")
@@ -333,6 +393,7 @@ async def update_subtask(
     task = await db.get(Task, task_id)
     if not task or task.event_id != event_id:
         raise HTTPException(404, "Task not found")
+    await _ensure_task_mutation_allowed(task, actor, db)
     subtask = await db.get(Subtask, subtask_id)
     if not subtask or subtask.task_id != task_id:
         raise HTTPException(404, "Subtask not found")
@@ -366,6 +427,7 @@ async def delete_subtask(
     task = await db.get(Task, task_id)
     if not task or task.event_id != event_id:
         raise HTTPException(404, "Task not found")
+    await _ensure_task_mutation_allowed(task, actor, db)
     subtask = await db.get(Subtask, subtask_id)
     if not subtask or subtask.task_id != task_id:
         raise HTTPException(404, "Subtask not found")
@@ -405,6 +467,7 @@ async def upload_task_attachment(
     task = await db.get(Task, task_id)
     if not task or task.event_id != event_id:
         raise HTTPException(404, "Task not found")
+    await _ensure_task_mutation_allowed(task, actor, db)
     if file.content_type not in ALLOWED_ATTACHMENT_TYPES:
         raise HTTPException(400, f"Unsupported file type '{file.content_type}'.")
     data = await file.read()
@@ -435,6 +498,7 @@ async def delete_task_attachment(
     task = await db.get(Task, task_id)
     if not task or task.event_id != event_id:
         raise HTTPException(404, "Task not found")
+    await _ensure_task_mutation_allowed(task, actor, db)
     attachment = await db.get(TaskAttachment, attachment_id)
     if not attachment or attachment.task_id != task_id:
         raise HTTPException(404, "Attachment not found")

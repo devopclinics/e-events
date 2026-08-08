@@ -533,11 +533,12 @@ async def send_simple_email(
     attachments: list[tuple[str, bytes, str]] | None = None,
     guest_id: str | None = None,
     message_kind: str | None = "simple",
+    inline_images: list[tuple[str, bytes, str]] | None = None,
 ):
     """Shared Festio-branded HTML email for simple transactional templates."""
     if not to_email:
         return
-    msg = MIMEMultipart("mixed" if attachments else "alternative")
+    msg = MIMEMultipart("mixed" if attachments else "related" if inline_images else "alternative")
     msg["Subject"] = subject
     msg["From"] = settings.email_from
     msg["To"] = to_email
@@ -549,11 +550,16 @@ async def send_simple_email(
         preheader=_plain_text_from_html(html_body)[:140],
         theme=theme,
     )
-    body_part = MIMEMultipart("alternative") if attachments else msg
+    body_part = MIMEMultipart("alternative") if attachments or inline_images else msg
     body_part.attach(MIMEText(_plain_text_from_html(html_body), "plain", "utf-8"))
     body_part.attach(MIMEText(wrapped, "html", "utf-8"))
-    if attachments:
+    if attachments or inline_images:
         msg.attach(body_part)
+    for filename, content, cid in inline_images or []:
+        part = MIMEImage(content)
+        part.add_header("Content-ID", f"<{cid}>")
+        part.add_header("Content-Disposition", "inline", filename=filename)
+        msg.attach(part)
     for filename, content, content_type in attachments or []:
         maintype, _, subtype = (content_type or "application/octet-stream").partition("/")
         if maintype == "text":

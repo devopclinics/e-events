@@ -1,0 +1,748 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>GuestHub 10-Theme Implementation Plan</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=DM+Sans:wght@300;400;500;600&family=Space+Mono&display=swap" />
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+body{background:#0c0d10;color:#e2e8f0;font-family:'DM Sans',sans-serif;line-height:1.6;font-size:15px}
+
+/* ── PAGE ── */
+.wrap{max-width:1200px;margin:0 auto;padding:48px 32px 80px}
+h1{font-family:'Syne',sans-serif;font-size:clamp(28px,4vw,52px);font-weight:800;letter-spacing:-0.03em;color:#fff;line-height:1.1}
+h2{font-family:'Syne',sans-serif;font-size:22px;font-weight:700;color:#fff;margin-bottom:16px;letter-spacing:-0.01em}
+h3{font-family:'Syne',sans-serif;font-size:15px;font-weight:700;color:#e2e8f0;margin-bottom:8px}
+p{color:#94a3b8;line-height:1.7}
+code{font-family:'Space Mono',monospace;font-size:12px;background:rgba(255,255,255,0.07);padding:2px 7px;border-radius:4px;color:#a5f3fc}
+.mono{font-family:'Space Mono',monospace;font-size:11px}
+pre{font-family:'Space Mono',monospace;font-size:11.5px;background:#0a0d15;border:1px solid #1e293b;border-radius:8px;padding:16px;overflow-x:auto;color:#e2e8f0;line-height:1.7}
+pre .k{color:#818cf8}
+pre .s{color:#86efac}
+pre .c{color:#475569}
+pre .v{color:#fbbf24}
+
+/* ── SECTIONS ── */
+.section{margin-bottom:56px}
+.section-tag{font-size:10px;font-weight:700;letter-spacing:0.25em;text-transform:uppercase;color:#334155;margin-bottom:8px}
+.divider{height:1px;background:linear-gradient(90deg,#1e293b,transparent);margin:48px 0}
+
+/* ── HEADER ── */
+.page-head{padding:60px 0 48px}
+.page-head .sub{font-size:14px;color:#475569;margin-top:8px;letter-spacing:0.04em}
+.sprint-bar{display:flex;gap:8px;margin-top:24px;flex-wrap:wrap}
+.sprint-pill{padding:6px 16px;border-radius:100px;font-size:11px;font-weight:700;letter-spacing:0.1em;text-transform:uppercase}
+.sprint-pill.s1{background:rgba(99,102,241,0.15);color:#818cf8;border:1px solid rgba(99,102,241,0.2)}
+.sprint-pill.s2{background:rgba(52,211,153,0.12);color:#34d399;border:1px solid rgba(52,211,153,0.2)}
+.sprint-pill.s3{background:rgba(251,191,36,0.12);color:#fbbf24;border:1px solid rgba(251,191,36,0.2)}
+.sprint-pill.s4{background:rgba(248,113,113,0.12);color:#f87171;border:1px solid rgba(248,113,113,0.2)}
+.sprint-pill.s5{background:rgba(167,139,250,0.12);color:#a78bfa;border:1px solid rgba(167,139,250,0.2)}
+
+/* ── GRID ── */
+.grid-2{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+.grid-3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:16px}
+.grid-5{display:grid;grid-template-columns:repeat(5,1fr);gap:12px}
+@media(max-width:800px){.grid-2,.grid-3,.grid-5{grid-template-columns:1fr}}
+
+/* ── CARDS ── */
+.card{background:#111827;border:1px solid #1e293b;border-radius:12px;padding:20px}
+.card.accent{border-color:#312e81;background:linear-gradient(135deg,rgba(99,102,241,0.08),rgba(15,23,42,0))}
+.card h3{margin-bottom:6px}
+
+/* ── THEME CARDS ── */
+.theme-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:16px;margin-top:20px}
+.theme-card{background:#111827;border:1px solid #1e293b;border-radius:10px;overflow:hidden}
+.theme-card .tc-swatch{height:10px}
+.theme-card .tc-body{padding:14px}
+.theme-card .tc-num{font-size:10px;font-weight:700;letter-spacing:0.2em;color:#334155;margin-bottom:4px}
+.theme-card .tc-name{font-family:'Syne',sans-serif;font-size:14px;font-weight:700;color:#e2e8f0;margin-bottom:4px}
+.theme-card .tc-tag{font-size:10px;font-weight:600;letter-spacing:0.12em;text-transform:uppercase;margin-bottom:8px}
+.theme-card .tc-id{font-family:'Space Mono',monospace;font-size:10px;color:#475569;background:rgba(255,255,255,0.04);padding:3px 7px;border-radius:4px;display:inline-block;margin-bottom:8px}
+.theme-card .tc-colors{display:flex;gap:4px;margin-top:8px}
+.theme-card .tc-dot{width:18px;height:18px;border-radius:50%;border:1px solid rgba(255,255,255,0.1)}
+.theme-card .tc-font{font-size:10px;color:#475569;margin-top:6px}
+.theme-card .tc-layout{font-size:9px;color:#4b5563;margin-top:4px;font-weight:600;letter-spacing:0.12em;text-transform:uppercase}
+
+/* ── ARCH DIAGRAM ── */
+.arch{background:#080c14;border:1px solid #1e293b;border-radius:12px;padding:24px;margin-top:20px}
+.arch-row{display:flex;align-items:center;gap:12px;margin-bottom:12px}
+.arch-row:last-child{margin-bottom:0}
+.arch-box{padding:10px 16px;border-radius:8px;font-size:12px;font-weight:600;white-space:nowrap}
+.arch-box.file{background:rgba(99,102,241,0.15);border:1px solid rgba(99,102,241,0.25);color:#a5b4fc}
+.arch-box.api{background:rgba(52,211,153,0.1);border:1px solid rgba(52,211,153,0.2);color:#6ee7b7}
+.arch-box.data{background:rgba(251,191,36,0.1);border:1px solid rgba(251,191,36,0.2);color:#fde68a}
+.arch-box.css{background:rgba(244,114,182,0.1);border:1px solid rgba(244,114,182,0.2);color:#f9a8d4}
+.arch-arrow{color:#334155;font-size:18px;flex-shrink:0}
+.arch-note{font-size:11px;color:#475569;flex:1}
+
+/* ── SPRINT ── */
+.sprint{border:1px solid #1e293b;border-radius:12px;overflow:hidden;margin-bottom:16px}
+.sprint-head{padding:16px 20px;display:flex;align-items:center;gap:12px;border-bottom:1px solid #1e293b}
+.sprint-head .s-num{font-family:'Syne',sans-serif;font-size:22px;font-weight:800;color:#334155;min-width:32px}
+.sprint-head .s-title{font-family:'Syne',sans-serif;font-size:16px;font-weight:700;color:#e2e8f0}
+.sprint-head .s-dur{font-size:11px;font-weight:700;letter-spacing:0.15em;text-transform:uppercase;padding:4px 12px;border-radius:100px;margin-left:auto}
+.sprint-body{padding:20px;display:flex;flex-direction:column;gap:8px}
+.task{display:flex;align-items:flex-start;gap:12px;padding:10px 14px;background:rgba(255,255,255,0.03);border-radius:8px;border:1px solid rgba(255,255,255,0.05)}
+.task .t-check{width:16px;height:16px;border:1.5px solid #334155;border-radius:4px;flex-shrink:0;margin-top:2px;background:transparent}
+.task .t-label{font-size:13px;color:#cbd5e1;flex:1}
+.task .t-file{font-family:'Space Mono',monospace;font-size:10px;color:#475569;white-space:nowrap}
+.task.complex .t-check{border-color:#6366f1}
+.task.complex .t-label{color:#e2e8f0}
+
+/* ── DATA CONTRACT ── */
+.contract{background:#060a12;border:1px solid #1e2533;border-radius:10px;padding:20px}
+.contract h3{font-family:'Space Mono',monospace;font-size:12px;color:#64748b;margin-bottom:12px;letter-spacing:0.05em}
+
+/* ── TABLE ── */
+table{width:100%;border-collapse:collapse;font-size:13px}
+th{text-align:left;padding:10px 14px;background:#0f172a;color:#64748b;font-size:10px;font-weight:700;letter-spacing:0.15em;text-transform:uppercase;border-bottom:1px solid #1e293b}
+td{padding:10px 14px;border-bottom:1px solid rgba(255,255,255,0.04);color:#cbd5e1;vertical-align:top}
+tr:last-child td{border-bottom:none}
+td code{font-size:11px}
+
+/* ── BADGES ── */
+.badge{display:inline-block;padding:2px 8px;border-radius:4px;font-size:10px;font-weight:700;letter-spacing:0.1em;text-transform:uppercase}
+.badge.tabbed{background:rgba(99,102,241,0.15);color:#818cf8}
+.badge.stacked{background:rgba(52,211,153,0.12);color:#34d399}
+.badge.free{background:rgba(52,211,153,0.12);color:#34d399}
+.badge.premium{background:rgba(251,191,36,0.12);color:#fbbf24}
+.badge.new{background:rgba(244,114,182,0.12);color:#f9a8d4}
+.badge.existing{background:rgba(100,116,139,0.15);color:#94a3b8}
+.badge.dark{background:rgba(15,23,42,0.6);color:#64748b;border:1px solid #1e293b}
+.badge.warm{background:rgba(251,146,60,0.12);color:#fb923c}
+.badge.vibrant{background:rgba(167,139,250,0.15);color:#c4b5fd}
+.badge.nature{background:rgba(52,211,153,0.12);color:#6ee7b7}
+
+/* ── CALLOUT ── */
+.callout{background:rgba(99,102,241,0.07);border:1px solid rgba(99,102,241,0.18);border-radius:10px;padding:16px 20px;display:flex;gap:12px}
+.callout .icon{font-size:18px;flex-shrink:0;line-height:1.5}
+.callout p{color:#a5b4fc;font-size:13px}
+
+/* ── SWATCH ROW ── */
+.swatch-row{display:flex;gap:6px;margin:8px 0}
+.sw{display:inline-flex;flex-direction:column;align-items:center;gap:4px;font-size:9px;font-family:'Space Mono',monospace;color:#475569}
+.sw-dot{width:28px;height:28px;border-radius:6px;border:1px solid rgba(255,255,255,0.1)}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<!-- ══════════ HEADER ══════════ -->
+<div class="page-head">
+  <div class="section-tag">Implementation Plan · 2026-08-02</div>
+  <h1>GuestHub<br/>10 Hub Themes</h1>
+  <p class="sub">Design Studio integration — color presets, CSS themes, selector UI</p>
+  <div class="sprint-bar">
+    <span class="sprint-pill s1">Sprint 1 — Studio Data Layer</span>
+    <span class="sprint-pill s2">Sprint 2 — Studio Selector UI</span>
+    <span class="sprint-pill s3">Sprint 3 — Hub CSS Themes</span>
+    <span class="sprint-pill s4">Sprint 4 — InvitePage Wiring</span>
+    <span class="sprint-pill s5">Sprint 5 — Build &amp; Deploy</span>
+  </div>
+</div>
+
+<!-- ══════════ SYSTEM OVERVIEW ══════════ -->
+<div class="section">
+  <div class="section-tag">Architecture</div>
+  <h2>How the pieces connect</h2>
+  <div class="grid-2">
+    <div>
+      <p>The Hub theme system has two axes today: <strong>layout</strong> (tabbed vs stacked) and <strong>colors</strong> (from the event's global design palette). We're adding a <strong>third axis — visual style</strong> — which bundles a layout type, a color preset, CSS overrides, and a font suggestion into a single selectable option.</p>
+      <br/>
+      <p>When an organizer picks a hub theme in Design Studio, it writes <code>hubStyle</code> to <code>theme_config</code>. InvitePage reads <code>designTheme.hub_style</code> and applies the matching CSS class. The 10 new styles extend this exact flow with no API or DB changes needed.</p>
+    </div>
+    <div class="arch">
+      <div class="arch-row">
+        <div class="arch-box file">DesignStudioRedesignPage.jsx</div>
+        <div class="arch-arrow">→</div>
+        <div class="arch-box api">api.saveEventDesign()</div>
+      </div>
+      <div class="arch-row" style="padding-left:24px">
+        <div class="arch-arrow">↓</div>
+        <div class="arch-note">writes <code>theme_config.hubStyle</code> + optionally <code>theme_config.colors</code></div>
+      </div>
+      <div class="arch-row">
+        <div class="arch-box api">design-service DB</div>
+        <div class="arch-arrow">→</div>
+        <div class="arch-box data">GET /api/invite/{id}</div>
+      </div>
+      <div class="arch-row" style="padding-left:24px">
+        <div class="arch-arrow">↓</div>
+        <div class="arch-note">returns <code>design_theme.hub_style</code> + <code>design_theme.colors</code></div>
+      </div>
+      <div class="arch-row">
+        <div class="arch-box file">InvitePage.jsx — GuestHub</div>
+        <div class="arch-arrow">→</div>
+        <div class="arch-box css">fh-hub-style-{id}</div>
+      </div>
+      <div class="arch-row" style="padding-left:24px">
+        <div class="arch-arrow">↓</div>
+        <div class="arch-note">CSS class scopes all visual overrides for that theme</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="divider"></div>
+
+<!-- ══════════ 10 THEME REGISTRY ══════════ -->
+<div class="section">
+  <div class="section-tag">Theme Registry</div>
+  <h2>All 10 Hub Themes — IDs, Colors &amp; Metadata</h2>
+  <p>Each entry extends the existing <code>HUB_STYLES</code> array with a <code>colorPreset</code> and <code>category</code>. Existing 5 layouts remain unchanged.</p>
+
+  <div class="theme-grid" style="margin-top:24px">
+
+    <!-- 01 NOIR COUTURE -->
+    <div class="theme-card">
+      <div class="tc-swatch" style="background:linear-gradient(90deg,#0a0a0a,#c9a84c,#0a0a0a)"></div>
+      <div class="tc-body">
+        <div class="tc-num">01</div>
+        <div class="tc-name">Noir Couture</div>
+        <div class="tc-tag" style="color:#c9a84c">Luxury · Dark</div>
+        <div class="tc-id">noir-couture</div>
+        <div class="tc-colors">
+          <div class="tc-dot" style="background:#0a0a0a" title="background"></div>
+          <div class="tc-dot" style="background:#111" title="surface"></div>
+          <div class="tc-dot" style="background:#c9a84c" title="accent"></div>
+          <div class="tc-dot" style="background:#8b7355" title="primary"></div>
+          <div class="tc-dot" style="background:#e8e0d0" title="text"></div>
+        </div>
+        <div class="tc-font">Cormorant Garamond + DM Sans</div>
+        <div class="tc-layout">Tabbed · Wallet-pass order</div>
+      </div>
+    </div>
+
+    <!-- 02 BLOOM EDITORIAL -->
+    <div class="theme-card">
+      <div class="tc-swatch" style="background:linear-gradient(90deg,#faf7f4,#c2696a,#faf7f4)"></div>
+      <div class="tc-body">
+        <div class="tc-num">02</div>
+        <div class="tc-name">Bloom Editorial</div>
+        <div class="tc-tag" style="color:#c2696a">Warm · Romantic</div>
+        <div class="tc-id">bloom-editorial</div>
+        <div class="tc-colors">
+          <div class="tc-dot" style="background:#faf7f4"></div>
+          <div class="tc-dot" style="background:#ffffff"></div>
+          <div class="tc-dot" style="background:#c2696a"></div>
+          <div class="tc-dot" style="background:#9b7f7f"></div>
+          <div class="tc-dot" style="background:#2e1f1f"></div>
+        </div>
+        <div class="tc-font">Playfair Display + DM Sans</div>
+        <div class="tc-layout">Stacked · Card-dashboard</div>
+      </div>
+    </div>
+
+    <!-- 03 ELECTRIC RAVE -->
+    <div class="theme-card">
+      <div class="tc-swatch" style="background:linear-gradient(90deg,#07070f,#7c3aed,#22d3ee)"></div>
+      <div class="tc-body">
+        <div class="tc-num">03</div>
+        <div class="tc-name">Electric Rave</div>
+        <div class="tc-tag" style="color:#a78bfa">Dark · Neon</div>
+        <div class="tc-id">electric-rave</div>
+        <div class="tc-colors">
+          <div class="tc-dot" style="background:#07070f"></div>
+          <div class="tc-dot" style="background:#0f0f1a"></div>
+          <div class="tc-dot" style="background:#7c3aed"></div>
+          <div class="tc-dot" style="background:#22d3ee"></div>
+          <div class="tc-dot" style="background:#e2e0f0"></div>
+        </div>
+        <div class="tc-font">Space Grotesk</div>
+        <div class="tc-layout">Tabbed · Pass-first</div>
+      </div>
+    </div>
+
+    <!-- 04 LINEN & GOLD -->
+    <div class="theme-card">
+      <div class="tc-swatch" style="background:linear-gradient(90deg,#f7f3ee,#c4a47c,#3b2a1a)"></div>
+      <div class="tc-body">
+        <div class="tc-num">04</div>
+        <div class="tc-name">Linen &amp; Gold</div>
+        <div class="tc-tag" style="color:#c4a47c">Warm · Earthy</div>
+        <div class="tc-id">linen-gold</div>
+        <div class="tc-colors">
+          <div class="tc-dot" style="background:#f7f3ee"></div>
+          <div class="tc-dot" style="background:#ffffff"></div>
+          <div class="tc-dot" style="background:#c4a47c"></div>
+          <div class="tc-dot" style="background:#8b6f47"></div>
+          <div class="tc-dot" style="background:#2c2218"></div>
+        </div>
+        <div class="tc-font">Cormorant Garamond + DM Sans</div>
+        <div class="tc-layout">Stacked · Timeline</div>
+      </div>
+    </div>
+
+    <!-- 05 CELESTIAL -->
+    <div class="theme-card">
+      <div class="tc-swatch" style="background:linear-gradient(90deg,#030816,#3b82f6,#818cf8)"></div>
+      <div class="tc-body">
+        <div class="tc-num">05</div>
+        <div class="tc-name">Celestial</div>
+        <div class="tc-tag" style="color:#818cf8">Dark · Cosmic</div>
+        <div class="tc-id">celestial-midnight</div>
+        <div class="tc-colors">
+          <div class="tc-dot" style="background:#030816"></div>
+          <div class="tc-dot" style="background:#080f28"></div>
+          <div class="tc-dot" style="background:#3b82f6"></div>
+          <div class="tc-dot" style="background:#818cf8"></div>
+          <div class="tc-dot" style="background:#e2e8f8"></div>
+        </div>
+        <div class="tc-font">Inter</div>
+        <div class="tc-layout">Tabbed · Pass-first</div>
+      </div>
+    </div>
+
+    <!-- 06 SOLEIL -->
+    <div class="theme-card">
+      <div class="tc-swatch" style="background:linear-gradient(90deg,#f59e0b,#fb923c,#f87171)"></div>
+      <div class="tc-body">
+        <div class="tc-num">06</div>
+        <div class="tc-name">Soleil</div>
+        <div class="tc-tag" style="color:#f59e0b">Vibrant · Summer</div>
+        <div class="tc-id">soleil</div>
+        <div class="tc-colors">
+          <div class="tc-dot" style="background:#fffbf5"></div>
+          <div class="tc-dot" style="background:#ffffff"></div>
+          <div class="tc-dot" style="background:#f59e0b"></div>
+          <div class="tc-dot" style="background:#fb7185"></div>
+          <div class="tc-dot" style="background:#1c0a00"></div>
+        </div>
+        <div class="tc-font">Nunito</div>
+        <div class="tc-layout">Stacked · Card-dashboard</div>
+      </div>
+    </div>
+
+    <!-- 07 MONO PRINT -->
+    <div class="theme-card">
+      <div class="tc-swatch" style="background:linear-gradient(90deg,#f5f0eb,#0a0a0a,#e63329)"></div>
+      <div class="tc-body">
+        <div class="tc-num">07</div>
+        <div class="tc-name">Mono Print</div>
+        <div class="tc-tag" style="color:#e63329">Editorial · Brutalist</div>
+        <div class="tc-id">mono-print</div>
+        <div class="tc-colors">
+          <div class="tc-dot" style="background:#f5f0eb"></div>
+          <div class="tc-dot" style="background:#ffffff"></div>
+          <div class="tc-dot" style="background:#e63329"></div>
+          <div class="tc-dot" style="background:#0a0a0a"></div>
+          <div class="tc-dot" style="background:#0a0a0a"></div>
+        </div>
+        <div class="tc-font">Syne (Bold Sans)</div>
+        <div class="tc-layout">Stacked · Minimal-list</div>
+      </div>
+    </div>
+
+    <!-- 08 VERDANT -->
+    <div class="theme-card">
+      <div class="tc-swatch" style="background:linear-gradient(90deg,#f0f7f0,#2d6a4f,#1a3320)"></div>
+      <div class="tc-body">
+        <div class="tc-num">08</div>
+        <div class="tc-name">Verdant</div>
+        <div class="tc-tag" style="color:#52b788">Nature · Wellness</div>
+        <div class="tc-id">verdant</div>
+        <div class="tc-colors">
+          <div class="tc-dot" style="background:#f0f7f0"></div>
+          <div class="tc-dot" style="background:#ffffff"></div>
+          <div class="tc-dot" style="background:#52b788"></div>
+          <div class="tc-dot" style="background:#2d6a4f"></div>
+          <div class="tc-dot" style="background:#1a3320"></div>
+        </div>
+        <div class="tc-font">Plus Jakarta Sans</div>
+        <div class="tc-layout">Stacked · Timeline</div>
+      </div>
+    </div>
+
+    <!-- 09 COASTAL CLUB -->
+    <div class="theme-card">
+      <div class="tc-swatch" style="background:linear-gradient(90deg,#f8f4ec,#0f2040,#b8912a)"></div>
+      <div class="tc-body">
+        <div class="tc-num">09</div>
+        <div class="tc-name">Coastal Club</div>
+        <div class="tc-tag" style="color:#b8912a">Luxury · Nautical</div>
+        <div class="tc-id">coastal-club</div>
+        <div class="tc-colors">
+          <div class="tc-dot" style="background:#f8f4ec"></div>
+          <div class="tc-dot" style="background:#ffffff"></div>
+          <div class="tc-dot" style="background:#b8912a"></div>
+          <div class="tc-dot" style="background:#0f2040"></div>
+          <div class="tc-dot" style="background:#0f2040"></div>
+        </div>
+        <div class="tc-font">Plus Jakarta Sans</div>
+        <div class="tc-layout">Stacked · Minimal-list</div>
+      </div>
+    </div>
+
+    <!-- 10 HAZE -->
+    <div class="theme-card">
+      <div class="tc-swatch" style="background:linear-gradient(90deg,#1a0533,#a855f7,#3b82f6)"></div>
+      <div class="tc-body">
+        <div class="tc-num">10</div>
+        <div class="tc-name">Haze</div>
+        <div class="tc-tag" style="color:#d946ef">Dark · Glassmorphism</div>
+        <div class="tc-id">haze</div>
+        <div class="tc-colors">
+          <div class="tc-dot" style="background:#1a0533"></div>
+          <div class="tc-dot" style="background:#0d1b4b"></div>
+          <div class="tc-dot" style="background:#a855f7"></div>
+          <div class="tc-dot" style="background:#ec4899"></div>
+          <div class="tc-dot" style="background:#ffffff"></div>
+        </div>
+        <div class="tc-font">DM Sans</div>
+        <div class="tc-layout">Tabbed · Story-feed</div>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<div class="divider"></div>
+
+<!-- ══════════ DATA CONTRACT ══════════ -->
+<div class="section">
+  <div class="section-tag">Data Contract</div>
+  <h2>Code changes — data layer</h2>
+
+  <div class="grid-2">
+    <div>
+      <h3>DesignStudioRedesignPage.jsx — HUB_STYLES extension</h3>
+      <p style="margin-bottom:12px;font-size:13px">Add <code>category</code>, <code>colorPreset</code>, <code>fontSuggestion</code> to each entry. Existing 5 entries keep their current shape + new fields appended.</p>
+      <pre><span class="c">// NEW shape — all 15 entries</span>
+<span class="k">const</span> HUB_STYLES = [
+  <span class="c">// ── existing 5 (layout-only, no preset) ──</span>
+  { id: <span class="s">'wallet-pass'</span>, name: <span class="s">'Wallet Pass'</span>,
+    category: <span class="s">'Layout'</span>, colorPreset: <span class="k">null</span>,
+    tagline: <span class="s">'Pass-first, native-app feel'</span> },
+  <span class="c">// ... (card-dashboard, story-feed, etc.)</span>
+
+  <span class="c">// ── 10 new visual themes ──</span>
+  { id: <span class="s">'noir-couture'</span>,
+    name: <span class="s">'Noir Couture'</span>,
+    category: <span class="s">'Luxury'</span>,
+    tagline: <span class="s">'Gold on black — editorial luxury'</span>,
+    bestFor: <span class="s">'Galas, fashion events, award nights'</span>,
+    fontSuggestion: <span class="s">'elegant-serif'</span>,
+    colorPreset: {
+      background: <span class="v">'#0a0a0a'</span>, surface: <span class="v">'#111111'</span>,
+      accent: <span class="v">'#c9a84c'</span>, primary: <span class="v">'#8b7355'</span>,
+      text: <span class="v">'#e8e0d0'</span>
+    }
+  },
+  <span class="c">// ... 9 more entries</span>
+]</pre>
+    </div>
+    <div>
+      <h3>InvitePage.jsx — HUB_STYLES Set</h3>
+      <p style="margin-bottom:12px;font-size:13px">Add all 10 new IDs to the existing Set. Add tabbed ones to <code>HUB_TABBED_STYLES</code>.</p>
+      <pre><span class="c">// Before: 5 entries</span>
+<span class="k">const</span> HUB_STYLES = <span class="k">new</span> Set([
+  <span class="s">'wallet-pass'</span>, <span class="s">'card-dashboard'</span>,
+  <span class="s">'story-feed'</span>, <span class="s">'timeline'</span>,
+  <span class="s">'minimal-list'</span>,
+  <span class="c">// ── 10 new ──</span>
+  <span class="s">'noir-couture'</span>, <span class="s">'bloom-editorial'</span>,
+  <span class="s">'electric-rave'</span>, <span class="s">'linen-gold'</span>,
+  <span class="s">'celestial-midnight'</span>, <span class="s">'soleil'</span>,
+  <span class="s">'mono-print'</span>, <span class="s">'verdant'</span>,
+  <span class="s">'coastal-club'</span>, <span class="s">'haze'</span>,
+])
+
+<span class="k">const</span> HUB_TABBED_STYLES = <span class="k">new</span> Set([
+  <span class="s">'wallet-pass'</span>, <span class="s">'story-feed'</span>,
+  <span class="c">// NEW tabbed styles:</span>
+  <span class="s">'noir-couture'</span>, <span class="s">'electric-rave'</span>,
+  <span class="s">'celestial-midnight'</span>, <span class="s">'haze'</span>,
+])</pre>
+      <br/>
+      <h3>No backend changes needed</h3>
+      <p style="font-size:13px"><code>hub_style</code> is already stored as a free string in <code>theme_config</code>. New IDs just work.</p>
+    </div>
+  </div>
+</div>
+
+<div class="divider"></div>
+
+<!-- ══════════ SPRINT PLAN ══════════ -->
+<div class="section">
+  <div class="section-tag">Implementation Sprints</div>
+  <h2>5 sprints · ~4–5 dev days</h2>
+
+  <!-- S1 -->
+  <div class="sprint">
+    <div class="sprint-head">
+      <div class="s-num">1</div>
+      <div>
+        <div class="s-title">Expand HUB_STYLES data + color preset logic</div>
+        <div style="font-size:12px;color:#475569;margin-top:2px">DesignStudioRedesignPage.jsx only · no visual changes yet</div>
+      </div>
+      <div class="s-dur sprint-pill s1">½ day</div>
+    </div>
+    <div class="sprint-body">
+      <div class="task complex">
+        <div class="t-check"></div>
+        <div class="t-label">Add 10 new entries to <code>HUB_STYLES</code> array with <code>category</code>, <code>colorPreset</code>, <code>fontSuggestion</code>, <code>tags</code></div>
+        <div class="t-file">DesignStudioRedesignPage.jsx</div>
+      </div>
+      <div class="task complex">
+        <div class="t-check"></div>
+        <div class="t-label">Add <code>applyHubColorPreset(styleId)</code> helper — calls <code>setColors(preset)</code> + <code>setFontPairing(font)</code> + saves design</div>
+        <div class="t-file">DesignStudioRedesignPage.jsx</div>
+      </div>
+      <div class="task">
+        <div class="t-check"></div>
+        <div class="t-label">Add category filter state: <code>hubCategory</code> + filter pills array (<code>'All','Layout','Luxury','Vibrant','Dark','Nature','Editorial'</code>)</div>
+        <div class="t-file">DesignStudioRedesignPage.jsx</div>
+      </div>
+      <div class="task">
+        <div class="t-check"></div>
+        <div class="t-label">Load <code>hubStyle</code> correctly from <code>design.theme_config.hubStyle</code> on mount (already done — verify for new IDs)</div>
+        <div class="t-file">DesignStudioRedesignPage.jsx</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- S2 -->
+  <div class="sprint">
+    <div class="sprint-head">
+      <div class="s-num">2</div>
+      <div>
+        <div class="s-title">FestioHub tab — new style selector UI</div>
+        <div style="font-size:12px;color:#475569;margin-top:2px">Replace the existing 5-card grid with a full style gallery</div>
+      </div>
+      <div class="s-dur sprint-pill s2">1 day</div>
+    </div>
+    <div class="sprint-body">
+      <div class="task complex">
+        <div class="t-check"></div>
+        <div class="t-label">Add category filter pills row above the style grid (All / Layout / Luxury / Vibrant / Dark / Nature / Editorial)</div>
+        <div class="t-file">DesignStudioRedesignPage.jsx + .css</div>
+      </div>
+      <div class="task complex">
+        <div class="t-check"></div>
+        <div class="t-label">Redesign style card component to show: gradient swatch bar, 5 color dots, name, tagline, tag pill, "Apply" button — responsive grid (3 cols desktop, 2 tablet, 1 mobile)</div>
+        <div class="t-file">DesignStudioRedesignPage.jsx + .css</div>
+      </div>
+      <div class="task">
+        <div class="t-check"></div>
+        <div class="t-label">"Apply colors + font" button on each card — calls <code>applyHubColorPreset()</code>, shows confirmation toast</div>
+        <div class="t-file">DesignStudioRedesignPage.jsx</div>
+      </div>
+      <div class="task">
+        <div class="t-check"></div>
+        <div class="t-label">Selected state on hub style card (highlighted border + checkmark), persisted from <code>design.theme_config.hubStyle</code></div>
+        <div class="t-file">DesignStudioRedesignPage.jsx</div>
+      </div>
+      <div class="task">
+        <div class="t-check"></div>
+        <div class="t-label">Add "Best for" tooltip/subtext to each card. Add <span class="badge premium">Premium</span> badge to Luxury/Dark categories</div>
+        <div class="t-file">DesignStudioRedesignPage.jsx</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- S3 -->
+  <div class="sprint">
+    <div class="sprint-head">
+      <div class="s-num">3</div>
+      <div>
+        <div class="s-title">CSS theme classes — 10 visual styles</div>
+        <div style="font-size:12px;color:#475569;margin-top:2px">New CSS file scoped to <code>.fh-hub-style-*</code> selectors</div>
+      </div>
+      <div class="s-dur sprint-pill s3">1.5 days</div>
+    </div>
+    <div class="sprint-body">
+      <div class="task complex">
+        <div class="t-check"></div>
+        <div class="t-label">Create <code>GuestHubThemes.css</code> — imported by InvitePage. Define CSS custom properties per <code>.fh-hub-style-{id}</code>: <code>--hub-radius</code>, <code>--hub-shadow</code>, <code>--hub-border</code>, <code>--hub-font</code>, <code>--hub-tab-style</code></div>
+        <div class="t-file">GuestHubThemes.css (new file)</div>
+      </div>
+      <div class="task complex">
+        <div class="t-check"></div>
+        <div class="t-label"><strong>noir-couture</strong>: border-radius 4px, thin gold borders, letter-spacing 0.15em tabs, serif name font override</div>
+        <div class="t-file">GuestHubThemes.css</div>
+      </div>
+      <div class="task complex">
+        <div class="t-check"></div>
+        <div class="t-label"><strong>bloom-editorial</strong>: radius 16px, rose-pink tab active bg, Playfair Display for guest name, floral decorative pseudo-element</div>
+        <div class="t-file">GuestHubThemes.css</div>
+      </div>
+      <div class="task complex">
+        <div class="t-check"></div>
+        <div class="t-label"><strong>electric-rave</strong>: radius 8px, neon glow box-shadow on pass card, grid pattern background-image, cyan <code>::before</code> live dot animation</div>
+        <div class="t-file">GuestHubThemes.css</div>
+      </div>
+      <div class="task">
+        <div class="t-check"></div>
+        <div class="t-label"><strong>linen-gold</strong>: warm cream bg override, serif font, rope-texture divider, ornamental centred <code>— ✦ —</code> before body</div>
+        <div class="t-file">GuestHubThemes.css</div>
+      </div>
+      <div class="task">
+        <div class="t-check"></div>
+        <div class="t-label"><strong>celestial-midnight</strong>: radial star pseudo-element, moon SVG top-right, blueish glass surface on pass card</div>
+        <div class="t-file">GuestHubThemes.css</div>
+      </div>
+      <div class="task">
+        <div class="t-check"></div>
+        <div class="t-label"><strong>soleil</strong>: fully rounded tabs (100px), gradient amber→coral on active tab, sun emoji absolute decoration, card border 2px dashed warm</div>
+        <div class="t-file">GuestHubThemes.css</div>
+      </div>
+      <div class="task">
+        <div class="t-check"></div>
+        <div class="t-label"><strong>mono-print</strong>: zero border-radius, 2px solid borders everywhere, red accent on active tab, bold uppercase all labels, newspaper column-line dividers</div>
+        <div class="t-file">GuestHubThemes.css</div>
+      </div>
+      <div class="task">
+        <div class="t-check"></div>
+        <div class="t-label"><strong>verdant</strong>: leaf-green active states, 100px tab pills, soft green glow on QR frame, nature-pattern SVG subtle background</div>
+        <div class="t-file">GuestHubThemes.css</div>
+      </div>
+      <div class="task">
+        <div class="t-check"></div>
+        <div class="t-label"><strong>coastal-club</strong>: brass rope top stripe (<code>repeating-linear-gradient</code>), navy header, nautical zero-radius on inner panels</div>
+        <div class="t-file">GuestHubThemes.css</div>
+      </div>
+      <div class="task complex">
+        <div class="t-check"></div>
+        <div class="t-label"><strong>haze</strong>: <code>backdrop-filter: blur(20px)</code> on all panels, gradient purple→blue radial glow bg, glassmorphic tab bar, gradient QR border glow</div>
+        <div class="t-file">GuestHubThemes.css</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- S4 -->
+  <div class="sprint">
+    <div class="sprint-head">
+      <div class="s-num">4</div>
+      <div>
+        <div class="s-title">InvitePage.jsx — register new styles + import CSS</div>
+        <div style="font-size:12px;color:#475569;margin-top:2px">Wire the CSS to the hub rendering path</div>
+      </div>
+      <div class="s-dur sprint-pill s4">½ day</div>
+    </div>
+    <div class="sprint-body">
+      <div class="task">
+        <div class="t-check"></div>
+        <div class="t-label">Add <code>import './GuestHubThemes.css'</code></div>
+        <div class="t-file">InvitePage.jsx</div>
+      </div>
+      <div class="task">
+        <div class="t-check"></div>
+        <div class="t-label">Add 10 new IDs to <code>HUB_STYLES</code> Set</div>
+        <div class="t-file">InvitePage.jsx · line ~1162</div>
+      </div>
+      <div class="task">
+        <div class="t-check"></div>
+        <div class="t-label">Add tabbed styles (<code>noir-couture</code>, <code>electric-rave</code>, <code>celestial-midnight</code>, <code>haze</code>) to <code>HUB_TABBED_STYLES</code> Set</div>
+        <div class="t-file">InvitePage.jsx · line ~1163</div>
+      </div>
+      <div class="task">
+        <div class="t-check"></div>
+        <div class="t-label">Verify Design Studio preview iframe picks up new styles correctly (hub preview uses <code>previewMock=true</code> path)</div>
+        <div class="t-file">DesignStudioRedesignPage.jsx preview URL</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- S5 -->
+  <div class="sprint">
+    <div class="sprint-head">
+      <div class="s-num">5</div>
+      <div>
+        <div class="s-title">Test · Version bump · Build · Deploy</div>
+      </div>
+      <div class="s-dur sprint-pill s5">½ day</div>
+    </div>
+    <div class="sprint-body">
+      <div class="task">
+        <div class="t-check"></div>
+        <div class="t-label">Smoke-test all 10 styles in Design Studio preview at <code>staging.festio.events/design-studio</code></div>
+      </div>
+      <div class="task">
+        <div class="t-check"></div>
+        <div class="t-label">Verify <code>applyHubColorPreset()</code> writes correct colors + font to existing event and reflects on public RSVP page</div>
+      </div>
+      <div class="task">
+        <div class="t-check"></div>
+        <div class="t-label">Check dark styles on light-mode system (glassmorphism/celestial overrides must not bleed)</div>
+      </div>
+      <div class="task complex">
+        <div class="t-check"></div>
+        <div class="t-label">Bump <code>VERSION</code>, <code>make push</code>, update <code>.env APP_VERSION</code>, <code>docker compose up -d</code>, <code>make promote TAG=x.x.x</code></div>
+        <div class="t-file">VERSION · .env · festio-infra</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="divider"></div>
+
+<!-- ══════════ COMPLETE REFERENCE TABLE ══════════ -->
+<div class="section">
+  <div class="section-tag">Reference</div>
+  <h2>Full theme table</h2>
+  <table>
+    <thead>
+      <tr><th>#</th><th>Name</th><th>CSS ID</th><th>Category</th><th>Layout mode</th><th>Fonts (Google)</th><th>Tier</th></tr>
+    </thead>
+    <tbody>
+      <tr><td>01</td><td><strong>Noir Couture</strong></td><td><code>noir-couture</code></td><td><span class="badge dark">Luxury</span></td><td><span class="badge tabbed">Tabbed</span></td><td>Cormorant Garamond + DM Sans</td><td><span class="badge premium">Premium</span></td></tr>
+      <tr><td>02</td><td><strong>Bloom Editorial</strong></td><td><code>bloom-editorial</code></td><td><span class="badge warm">Warm</span></td><td><span class="badge stacked">Stacked</span></td><td>Playfair Display + DM Sans</td><td><span class="badge free">Free</span></td></tr>
+      <tr><td>03</td><td><strong>Electric Rave</strong></td><td><code>electric-rave</code></td><td><span class="badge vibrant">Dark/Neon</span></td><td><span class="badge tabbed">Tabbed</span></td><td>Space Grotesk</td><td><span class="badge premium">Premium</span></td></tr>
+      <tr><td>04</td><td><strong>Linen &amp; Gold</strong></td><td><code>linen-gold</code></td><td><span class="badge warm">Warm</span></td><td><span class="badge stacked">Stacked</span></td><td>Cormorant Garamond + DM Sans</td><td><span class="badge free">Free</span></td></tr>
+      <tr><td>05</td><td><strong>Celestial Midnight</strong></td><td><code>celestial-midnight</code></td><td><span class="badge dark">Dark</span></td><td><span class="badge tabbed">Tabbed</span></td><td>Inter</td><td><span class="badge premium">Premium</span></td></tr>
+      <tr><td>06</td><td><strong>Soleil</strong></td><td><code>soleil</code></td><td><span class="badge vibrant">Vibrant</span></td><td><span class="badge stacked">Stacked</span></td><td>Nunito</td><td><span class="badge free">Free</span></td></tr>
+      <tr><td>07</td><td><strong>Mono Print</strong></td><td><code>mono-print</code></td><td><span class="badge dark">Editorial</span></td><td><span class="badge stacked">Stacked</span></td><td>Syne</td><td><span class="badge free">Free</span></td></tr>
+      <tr><td>08</td><td><strong>Verdant</strong></td><td><code>verdant</code></td><td><span class="badge nature">Nature</span></td><td><span class="badge stacked">Stacked</span></td><td>Plus Jakarta Sans</td><td><span class="badge free">Free</span></td></tr>
+      <tr><td>09</td><td><strong>Coastal Club</strong></td><td><code>coastal-club</code></td><td><span class="badge dark">Luxury</span></td><td><span class="badge stacked">Stacked</span></td><td>Plus Jakarta Sans</td><td><span class="badge premium">Premium</span></td></tr>
+      <tr><td>10</td><td><strong>Haze</strong></td><td><code>haze</code></td><td><span class="badge vibrant">Dark/Glass</span></td><td><span class="badge tabbed">Tabbed</span></td><td>DM Sans</td><td><span class="badge premium">Premium</span></td></tr>
+      <tr style="opacity:0.5"><td>—</td><td colspan="6"><em>Existing 5 layout styles (Wallet Pass, Card Dashboard, Story Feed, Timeline, Minimal List) — unchanged, categorized as "Layout"</em></td></tr>
+    </tbody>
+  </table>
+</div>
+
+<div class="divider"></div>
+
+<!-- ══════════ FILES TOUCHED ══════════ -->
+<div class="section">
+  <div class="section-tag">File Map</div>
+  <h2>Files touched</h2>
+  <div class="grid-3">
+    <div class="card">
+      <div style="font-size:11px;color:#6366f1;font-weight:700;letter-spacing:0.15em;text-transform:uppercase;margin-bottom:8px">Modified</div>
+      <div style="display:flex;flex-direction:column;gap:6px">
+        <code style="display:block">DesignStudioRedesignPage.jsx</code>
+        <code style="display:block">DesignStudioRedesignPage.css</code>
+        <code style="display:block">InvitePage.jsx</code>
+        <code style="display:block">VERSION</code>
+        <code style="display:block">.env (APP_VERSION)</code>
+        <code style="display:block">festio-infra/charts/…/values.yaml</code>
+      </div>
+    </div>
+    <div class="card">
+      <div style="font-size:11px;color:#34d399;font-weight:700;letter-spacing:0.15em;text-transform:uppercase;margin-bottom:8px">Created</div>
+      <div style="display:flex;flex-direction:column;gap:6px">
+        <code style="display:block">GuestHubThemes.css</code>
+      </div>
+    </div>
+    <div class="card">
+      <div style="font-size:11px;color:#64748b;font-weight:700;letter-spacing:0.15em;text-transform:uppercase;margin-bottom:8px">No changes needed</div>
+      <div style="display:flex;flex-direction:column;gap:6px">
+        <code style="display:block">backend/ (all files)</code>
+        <code style="display:block">models.py / schemas.py</code>
+        <code style="display:block">routers/events.py</code>
+        <code style="display:block">GuestsRedesignPage.jsx</code>
+      </div>
+      <p style="font-size:12px;margin-top:8px">hub_style is already a free string in theme_config — zero backend work.</p>
+    </div>
+  </div>
+</div>
+
+<div style="text-align:center;padding:40px 0;font-size:11px;letter-spacing:0.15em;text-transform:uppercase;color:#1e293b;font-family:'DM Sans',sans-serif">
+  Festio GuestHub Theme Plan · 2026-08-02
+</div>
+
+</div>
+</body>
+</html>

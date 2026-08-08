@@ -11,11 +11,11 @@ from sqlalchemy import desc, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..database import get_db
-from ..models import Event, MessageCreditLedger, Organization, Payment, User
+from ..models import Event, Membership, MessageCreditLedger, Organization, Payment, User
 from ..schemas import CheckoutRequest, CheckoutOut, CurrencyRequest
-from ..auth import get_current_user, _org_role
+from ..auth import get_current_user, get_current_user_optional, _org_role
 from ..billing import (
-    get_plan, plan_amount, apply_purchase, tiers_public, packs_public, public_catalog,
+    get_plan, plan_amount, apply_purchase, tiers_public, packs_public, addons_public, public_catalog,
 )
 from ..config import settings
 from services import payments
@@ -52,6 +52,7 @@ async def list_tiers(event_id: str, user: User = Depends(get_current_user), db: 
     provider = _provider_for(currency)
     tiers = await tiers_public(db, currency)
     packs = await packs_public(db, currency)
+    addons = await addons_public(db, currency)
     return {
         "currency": currency,
         "provider": provider,
@@ -59,8 +60,10 @@ async def list_tiers(event_id: str, user: User = Depends(get_current_user), db: 
         "is_paid": event.is_paid,
         "plan_tier": event.plan_tier,
         "message_credits": event.message_credits,
+        "purchased_addons": event.purchased_addons or [],
         "tiers": tiers,
         "packs": packs,
+        "addon_plans": addons,
         "catalog": public_catalog(currency, tiers, packs),
     }
 
@@ -109,15 +112,53 @@ async def credit_ledger(event_id: str, limit: int = 50, user: User = Depends(get
     }
 
 
+async def _viewer_has_paid_event(user: User | None, db: AsyncSession) -> bool:
+    """Add-on prices are hidden on the public pricing page until the viewer
+    has at least one paid event -- prices are for customers, not a public
+    rate card. Anonymous visitors and Free-only accounts don't qualify."""
+    if not user:
+        return False
+    if user.is_platform_superadmin:
+        return True
+    row = (await db.execute(
+        select(Event.id)
+        .join(Membership, Membership.org_id == Event.org_id)
+        .where(Membership.user_id == user.id, Event.is_paid.is_(True))
+        .limit(1)
+    )).first()
+    return row is not None
+
+
 @router.get("/pricing")
-async def public_pricing(currency: str = "USD", db: AsyncSession = Depends(get_db)):
-    """Public pricing catalogue for the marketing page (no auth)."""
+async def public_pricing(
+    currency: str = "USD",
+    user: User | None = Depends(get_current_user_optional),
+    db: AsyncSession = Depends(get_db),
+):
+    """Public pricing catalogue for the marketing page. Auth is optional --
+    base tier/pack pricing is always public; add-on prices only reveal once
+    the viewer has a paid event (see _viewer_has_paid_event). The real
+    enforcement is in /checkout (kind="addon" requires event.is_paid), this
+    is a display-only gate, not a security boundary."""
     cur = currency.upper()
     if cur not in ("USD", "NGN"):
         cur = "USD"
     tiers = await tiers_public(db, cur)
     packs = await packs_public(db, cur)
-    return public_catalog(cur, tiers, packs)
+    addons = await addons_public(db, cur)
+    unlocked = await _viewer_has_paid_event(user, db)
+    if not unlocked:
+        addons = [{**a, "amount": None, "locked": True} for a in addons]
+    else:
+        addons = [{**a, "locked": False} for a in addons]
+    catalog = public_catalog(cur, tiers, packs)
+    # NOTE: public_catalog() already sets catalog["addons"] to the legacy
+    # descriptive category groups (AddOnCatalog in AdminPage.jsx reads that
+    # shape) -- the new priced add-on catalog is a distinct key so it doesn't
+    # collide with that existing consumer.
+    catalog["addon_plans"] = addons
+    catalog["addon_plans_unlocked"] = unlocked
+    return catalog
 
 
 @router.post("/currency")
@@ -141,6 +182,8 @@ async def checkout(body: CheckoutRequest, user: User = Depends(get_current_user)
         raise HTTPException(400, "Unknown or inactive item")
     if plan.kind == "pack" and not event.is_paid:
         raise HTTPException(400, "Buy an Event Pass before topping up message credits.")
+    if plan.kind == "addon" and not event.is_paid:
+        raise HTTPException(400, "Buy an Event Pass before adding this add-on.")
     org = await db.get(Organization, event.org_id)
     currency = (org.currency if org else "USD").upper()
     provider = _provider_for(currency)

@@ -156,6 +156,15 @@ const TOP_LINKS = [
     gate: ({ user, event }) => user?.role === 'admin' && !!event?.is_paid,
   },
   { id: 'results', label: 'Results', to: '/event-results-redesign', icon: 'barchart' },
+  {
+    id: 'planner', label: 'Planner', to: '/planner-redesign', icon: 'book',
+    gate: ({ event }) => !!event?.planner_enabled,
+  },
+  {
+    id: 'ticketing', label: 'Ticket sales', to: '/ticketing-redesign', icon: 'ticket',
+    gate: ({ user, ticketingMaster }) => ticketingMaster && user?.role === 'admin' && typeof window !== 'undefined' &&
+      (window.location.hostname === 'staging.festio.events' || window.location.hostname === 'localhost'),
+  },
   { id: 'mytasks', label: 'My Tasks', to: '/team-redesign?tab=mytasks', icon: 'file' },
   {
     id: 'org', label: 'Org Settings', to: '/billing-redesign?tab=org', icon: 'settings',
@@ -191,6 +200,8 @@ const SIDEBAR_NAV = [
   ['send', 'Invites & RSVP', '/guests-redesign?tab=invite', 'invite'],
   ['message', 'Guest Communication', '/communications-redesign?tab=hub', 'communication'],
   ['card', 'Billing', '/billing-redesign?tab=billing', 'billing'],
+  ['grp', 'Planning'],
+  ['book', 'Planner', '/planner-redesign', 'planner', null, 'planner'],
   ['grp', 'Add-ons', null, null, null, 'anyAddon'],
   ['ticket', 'Venue Access', '/checkin-redesign?tab=zones', 'access', null, 'venueAccess'],
   ['chair', 'Seating', '/addons-redesign?tab=seating', 'seating', null, 'seating'],
@@ -219,10 +230,17 @@ function ThemeToggle() {
 
 export default function RedesignShell({ topActive, withEventSidebar = false, eventScoped = withEventSidebar, eventActive, children }) {
   const location = useLocation()
-  const { user } = useAuth()
+  const { user, logout } = useAuth()
   const [currentEventId, setCurrentEventId] = useCurrentEvent()
   const [events, setEvents] = useState([])
   const [menu, setMenu] = useState(false)
+  const [ticketingMaster, setTicketingMaster] = useState(false)
+
+  useEffect(() => {
+    if (!['staging.festio.events', 'localhost'].includes(window.location.hostname)) return
+    fetch('/api/ticketing/status', { cache: 'no-store' }).then(r => r.ok ? r.json() : null)
+      .then(data => setTicketingMaster(!!data?.enabled)).catch(() => setTicketingMaster(false))
+  }, [])
 
   useEffect(() => {
     if (!user) { setEvents([]); return }
@@ -255,11 +273,12 @@ export default function RedesignShell({ topActive, withEventSidebar = false, eve
     registry: !!event?.registry_enabled,
     festiome: !!event?.festiome_addon_enabled && !(event?.blocked_comm_features || []).includes('festiome'),
     experience: !!event?.experience_enabled,
+    planner: !!event?.planner_enabled,
   }
   flags.anyAddon = flags.venueAccess || flags.seating || flags.orders || flags.logistics || flags.registry || flags.festiome
 
   const eventName = event?.name || (currentEventId ? 'Loading…' : 'No event selected')
-  const visibleTopLinks = TOP_LINKS.filter((l) => !l.gate || l.gate({ user, event }))
+  const visibleTopLinks = TOP_LINKS.filter((l) => !l.gate || l.gate({ user, event, ticketingMaster }))
 
   function handleShellError(error, errorInfo) {
     logRenderError({ module: 'shell', error: error?.message, errorInfo: errorInfo?.componentStack })
@@ -313,6 +332,17 @@ export default function RedesignShell({ topActive, withEventSidebar = false, eve
                 <div><strong>{user.name}</strong><span>{user.role}</span></div>
                 <div className="rr-topbar-avatar">{user.name?.[0]?.toUpperCase() || '?'}</div>
               </div>
+            )}
+            {user && (
+              <button
+                type="button"
+                className="rr-logout-btn"
+                onClick={logout}
+                title="Sign out"
+                aria-label="Sign out"
+              >
+                ↩ Sign out
+              </button>
             )}
             <ThemeToggle />
             <button className="rr-menu" onClick={() => setMenu((v) => !v)} aria-label="Menu">☰</button>

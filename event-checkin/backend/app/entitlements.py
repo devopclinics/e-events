@@ -35,23 +35,26 @@ PLAN_NAMES = {
     "comp": "Comp",
 }
 
+# Legacy tier-rank gate map. No longer consulted by event_allows() (see
+# BASELINE_PAID_FEATURES / FEATURE_ADDON below) -- every paid tier now ships
+# the same base package, so "requires at least tier150" no longer means
+# anything. Kept only for plan_rank()/event_plan_rank(), which still describe
+# which tier an event bought (guest_cap/credits), not feature eligibility.
 FEATURE_MIN_PLAN = {
     "paid_channels": "tier50",
     "branding_removed": "tier50",
-    "qr_checkin": "tier50",
     "seating_enabled": "tier50",
     "menu_enabled": "tier50",
     "logistics_enabled": "tier50",
     "registry_enabled": "tier50",
     "festiome_addon_enabled": "tier50",
+    "planner_enabled": "tier50",
     "design_publish": "tier50",
     "floor_plan": "tier150",
     "source_sync": "tier150",
     "venue_access_enabled": "tier150",
     "partner_pairing_enabled": "tier150",
     "experience_enabled": "tier300",
-    # Live Program extends the Experience workflow; keep its commercial gate
-    # aligned so it cannot be enabled independently on lower-tier events.
     "live_program_enabled": "tier300",
     "consent_forms": "tier300",
     "scanner_confirmation": "tier300",
@@ -62,49 +65,31 @@ FEATURE_MIN_PLAN = {
     "notify_mms": "tier300",
 }
 
-PLAN_CAPABILITIES = {
-    "tier50": [
-        "SMS/WhatsApp/email invitations",
-        "QR ticket generation and QR check-in",
-        "Basic seating/table allocation",
-        "Basic menu, registry, and logistics",
-        "Festio branding removed",
-        "Design Studio publishing with standard templates",
-    ],
-    "tier150": [
-        "Everything in Starter",
-        "Table groups/room groups and floor plan sharing",
-        "Access zones and ticket types",
-        "Guest import from file or source URL",
-        "Registry public page and vendor logistics",
-        "More Design Studio template families and flyer outputs",
-    ],
-    "tier300": [
-        "Everything in Standard",
-        "Experience workflows",
-        "Consent forms and signatures",
-        "Scanner confirmation and souvenir/handoff confirmation",
-        "Section-based scanning and manual check-in",
-        "Announcements, guest messaging, and MMS eligibility",
-    ],
-    "scale": [
-        "Everything in Pro",
-        "Higher-volume guest operations",
-        "Multi-section check-in workflows",
-        "Larger message batches",
-        "Priority support",
-        "Advanced logistics and access operations",
-    ],
-    "unlimited": [
-        "Everything in Pro",
-        "Higher-volume guest operations",
-        "Multi-section check-in workflows",
-        "Larger message batches",
-        "Priority support",
-        "Advanced logistics and access operations",
-    ],
-}
+# Included with every paid tier (Starter through Scale), no add-on purchase
+# required -- just event.is_paid. manual_checkin_enabled/self_checkin_enabled
+# and source_sync aren't listed here because they're not gated at all anymore
+# (fall through to the default `True` in event_allows), matching QR check-in.
+BASELINE_PAID_FEATURES = {"paid_channels", "branding_removed", "design_publish", "notify_mms"}
 
+# Feature flag -> the PricingPlan(kind="addon") key that unlocks it. Bundled by
+# product surface, not by legacy tier rank -- see docs/PHASE0 addon groupings.
+FEATURE_ADDON = {
+    "seating_enabled": "addon_seating",
+    "floor_plan": "addon_seating",
+    "partner_pairing_enabled": "addon_seating",
+    "menu_enabled": "addon_menu",
+    "logistics_enabled": "addon_logistics",
+    "registry_enabled": "addon_registry",
+    "venue_access_enabled": "addon_venue_access",
+    "section_mode_enabled": "addon_venue_access",
+    "experience_enabled": "addon_experience",
+    "live_program_enabled": "addon_experience",
+    "consent_forms": "addon_experience",
+    "scanner_confirmation": "addon_experience",
+    "souvenir_confirmation": "addon_experience",
+    "festiome_addon_enabled": "addon_festiome",
+    "planner_enabled": "addon_planner",
+}
 
 def guest_limit(event: Event) -> int | None:
     """Max guests for this event. None = unlimited."""
@@ -131,25 +116,32 @@ def min_plan_for_feature(feature: str) -> str | None:
     return FEATURE_MIN_PLAN.get(feature)
 
 
+def addon_for_feature(feature: str) -> str | None:
+    return FEATURE_ADDON.get(feature)
+
+
 def event_allows(event: Event, feature: str) -> bool:
-    required = min_plan_for_feature(feature)
-    if not required:
+    if feature in BASELINE_PAID_FEATURES:
+        return bool(event.is_paid)
+    addon = FEATURE_ADDON.get(feature)
+    if not addon:
         return True
-    return event_plan_rank(event) >= plan_rank(required)
-
-
-def feature_capabilities(plan_tier: str | None) -> list[str]:
-    return PLAN_CAPABILITIES.get(plan_tier or "", [])
+    return addon in (event.purchased_addons or [])
 
 
 def assert_feature_allowed(event: Event, feature: str) -> None:
     if event_allows(event, feature):
         return
-    required = min_plan_for_feature(feature) or "tier50"
+    addon = FEATURE_ADDON.get(feature)
+    if addon:
+        raise HTTPException(
+            402,
+            f"{feature.replace('_', ' ').title()} needs the {addon} add-on. Buy it for this event to unlock it.",
+            headers={"X-Required-Addon": addon},
+        )
     raise HTTPException(
         402,
-        f"{feature.replace('_', ' ').title()} requires {plan_label(required)} — upgrade this event to unlock it.",
-        headers={"X-Required-Plan": required},
+        f"{feature.replace('_', ' ').title()} requires a paid Event Pass. Upgrade this event to unlock it.",
     )
 
 
@@ -396,7 +388,7 @@ def last_credit_ledger_id(event: Event) -> str | None:
 
 
 # First N guest emails per event are free; override with EMAIL_FREE_QUOTA.
-EMAIL_FREE_QUOTA = max(0, int(os.getenv("EMAIL_FREE_QUOTA", "25")))
+EMAIL_FREE_QUOTA = max(0, int(os.getenv("EMAIL_FREE_QUOTA", "75")))
 
 
 def take_email_credit(event: Event, *, guest_id: str | None = None, reason: str = "email") -> bool:

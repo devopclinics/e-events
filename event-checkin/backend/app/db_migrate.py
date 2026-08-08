@@ -76,6 +76,9 @@ SCHEMA_PATCHES: list[str] = [
     _guarded_drop_not_null("guests", "email"),
     # Payments are org-level audit rows; deleting an event detaches them.
     _guarded_drop_not_null("payments", "event_id"),
+    "UPDATE guests SET paid_ticket_order_id = substring(rsvp_notes from '^Paid ticket order: ([^;]+)') "
+    "WHERE paid_ticket_order_id IS NULL AND rsvp_notes LIKE 'Paid ticket order: %'",
+    "CREATE INDEX IF NOT EXISTS ix_guests_paid_ticket_order_id ON guests (paid_ticket_order_id)",
 
     # ── Multi-tenancy backfill (idempotent) — see docs/PHASE1-MULTITENANCY-PLAN.md.
     # Runs after create_all (organizations/memberships tables) and auto-patch
@@ -133,25 +136,79 @@ SCHEMA_PATCHES: list[str] = [
         f"SELECT '{k}', '{kind}', '{label}', {cap}, {cr}, {usd}, {ngn}, TRUE, {so} "
         f"WHERE NOT EXISTS (SELECT 1 FROM pricing_plans WHERE key = '{k}')"
         for (k, kind, label, cap, cr, usd, ngn, so) in [
-            ("tier50",      "tier", "Starter · up to 50 guests",     "50",   100,  2900,  2900000,  1),
-            ("tier150",     "tier", "Standard · up to 150 guests",   "150",  300,  5900,  6500000,  2),
-            ("tier300",     "tier", "Pro · up to 300 guests",        "300",  700,  9900,  11000000, 3),
-            ("scale",       "tier", "Scale · up to 1,000 guests",    "1000", 2000, 14900, 18000000, 4),
-            ("credits_100", "pack", "100 message credits", "NULL", 100,  600,   500000,   1),
-            ("credits_500", "pack", "500 message credits", "NULL", 500,  2500,  2000000,  2),
-            ("credits_2000","pack", "2,000 message credits","NULL",2000, 8000,  7000000,  3),
+            ("tier50",      "tier", "Starter · up to 50 guests",     "50",   300,  10000, 10000000, 1),
+            ("tier150",     "tier", "Standard · up to 150 guests",   "150",  900,  20000, 20000000, 2),
+            ("tier300",     "tier", "Pro · up to 300 guests",        "300",  1800, 35000, 35000000, 3),
+            ("scale",       "tier", "Scale · up to 500 guests",      "500",  3000, 45000, 45000000, 4),
+            ("credits_100", "pack", "100 message credits", "NULL", 100,  1500,  1500000,  1),
+            ("credits_500", "pack", "500 message credits", "NULL", 500,  6500,  6500000,  2),
+            ("credits_2000","pack", "2,000 message credits","NULL",2000, 22000, 22000000, 3),
         ]
     ],
     # Keep live pricing aligned with the current public packaging. This is
     # intentionally idempotent and updates rows seeded by earlier releases.
-    "UPDATE pricing_plans SET label='Starter · up to 50 guests', guest_cap=50, credits=100, usd=2900, ngn=2900000, active=TRUE, sort_order=1 WHERE key='tier50'",
-    "UPDATE pricing_plans SET label='Standard · up to 150 guests', guest_cap=150, credits=300, usd=5900, ngn=6500000, active=TRUE, sort_order=2 WHERE key='tier150'",
-    "UPDATE pricing_plans SET label='Pro · up to 300 guests', guest_cap=300, credits=700, usd=9900, ngn=11000000, active=TRUE, sort_order=3 WHERE key='tier300'",
-    "UPDATE pricing_plans SET label='Scale · up to 1,000 guests', guest_cap=1000, credits=2000, usd=14900, ngn=18000000, active=TRUE, sort_order=4 WHERE key='scale'",
+    "UPDATE pricing_plans SET label='Starter · up to 50 guests', guest_cap=50, credits=300, usd=10000, ngn=10000000, active=TRUE, sort_order=1 WHERE key='tier50'",
+    "UPDATE pricing_plans SET label='Standard · up to 150 guests', guest_cap=150, credits=900, usd=20000, ngn=20000000, active=TRUE, sort_order=2 WHERE key='tier150'",
+    "UPDATE pricing_plans SET label='Pro · up to 300 guests', guest_cap=300, credits=1800, usd=35000, ngn=35000000, active=TRUE, sort_order=3 WHERE key='tier300'",
+    "UPDATE pricing_plans SET label='Scale · up to 500 guests', guest_cap=500, credits=3000, usd=45000, ngn=45000000, active=TRUE, sort_order=4 WHERE key='scale'",
     "UPDATE pricing_plans SET label='Legacy Scale · up to 1,000 guests', guest_cap=1000, credits=2000, usd=14900, ngn=18000000, active=FALSE WHERE key='unlimited'",
-    "UPDATE pricing_plans SET usd=600, ngn=500000 WHERE key='credits_100'",
-    "UPDATE pricing_plans SET usd=2500, ngn=2000000 WHERE key='credits_500'",
-    "UPDATE pricing_plans SET usd=8000, ngn=7000000 WHERE key='credits_2000'",
+    "UPDATE pricing_plans SET usd=1500, ngn=1500000 WHERE key='credits_100'",
+    "UPDATE pricing_plans SET usd=6500, ngn=6500000 WHERE key='credits_500'",
+    "UPDATE pricing_plans SET usd=22000, ngn=22000000 WHERE key='credits_2000'",
+
+    # 7b) Every paid tier now ships the same base package; feature modules that
+    # used to be tier-gated (seating, venue access, experience, etc.) become
+    # separately purchasable add-ons instead. Seed the catalog (idempotent).
+    *[
+        "INSERT INTO pricing_plans (key, kind, label, guest_cap, credits, usd, ngn, active, sort_order) "
+        f"SELECT '{k}', 'addon', '{label}', NULL, 0, {usd}, {ngn}, TRUE, {so} "
+        f"WHERE NOT EXISTS (SELECT 1 FROM pricing_plans WHERE key = '{k}')"
+        for (k, label, usd, ngn, so) in [
+            ("addon_registry",      "Registry",                    3900, 3900000, 1),
+            ("addon_menu",          "Menu & Orders",                3900, 3900000, 2),
+            ("addon_planner",       "Event Planner",                3900, 3900000, 3),
+            ("addon_logistics",     "Logistics",                    5900, 5900000, 4),
+            ("addon_festiome",      "FestioMe Community",           5900, 5900000, 5),
+            ("addon_seating",       "Seating & Floor Plans",        7900, 7900000, 6),
+            ("addon_experience",    "Experience Workflows",         7900, 7900000, 7),
+            ("addon_venue_access",  "Venue Access Intelligence",    9900, 9900000, 8),
+        ]
+    ],
+    # Keep add-on pricing aligned with current packaging (idempotent, same
+    # pattern as the tier sync above).
+    "UPDATE pricing_plans SET label='Registry', usd=3900, ngn=3900000, active=TRUE, sort_order=1 WHERE key='addon_registry'",
+    "UPDATE pricing_plans SET label='Menu & Orders', usd=3900, ngn=3900000, active=TRUE, sort_order=2 WHERE key='addon_menu'",
+    "UPDATE pricing_plans SET label='Event Planner', usd=3900, ngn=3900000, active=TRUE, sort_order=3 WHERE key='addon_planner'",
+    "UPDATE pricing_plans SET label='Logistics', usd=5900, ngn=5900000, active=TRUE, sort_order=4 WHERE key='addon_logistics'",
+    "UPDATE pricing_plans SET label='FestioMe Community', usd=5900, ngn=5900000, active=TRUE, sort_order=5 WHERE key='addon_festiome'",
+    "UPDATE pricing_plans SET label='Seating & Floor Plans', usd=7900, ngn=7900000, active=TRUE, sort_order=6 WHERE key='addon_seating'",
+    "UPDATE pricing_plans SET label='Experience Workflows', usd=7900, ngn=7900000, active=TRUE, sort_order=7 WHERE key='addon_experience'",
+    "UPDATE pricing_plans SET label='Venue Access Intelligence', usd=9900, ngn=9900000, active=TRUE, sort_order=8 WHERE key='addon_venue_access'",
+
+    # 7c) Grandfather existing events: any event that already has a formerly
+    # tier-gated feature switched on keeps it, recorded as a purchased add-on,
+    # so this migration never silently takes away something a live event is
+    # already using. Idempotent -- UNION + array_agg(DISTINCT) naturally
+    # de-duplicates on repeat runs.
+    *[
+        "UPDATE events SET purchased_addons = ("
+        "  SELECT to_json(array_agg(DISTINCT elem)) FROM ("
+        f"    SELECT jsonb_array_elements_text(COALESCE(purchased_addons::jsonb, '[]'::jsonb)) AS elem"
+        f"    UNION SELECT '{addon_key}'"
+        "  ) sub"
+        f") WHERE {cond}"
+        for (addon_key, cond) in [
+            ("addon_seating", "seating_enabled = TRUE OR EXISTS (SELECT 1 FROM seating_tables st WHERE st.event_id = events.id) OR EXISTS (SELECT 1 FROM floor_plans fp WHERE fp.event_id = events.id)"),
+            ("addon_menu", "menu_enabled = TRUE"),
+            ("addon_logistics", "logistics_enabled = TRUE"),
+            ("addon_registry", "registry_enabled = TRUE"),
+            ("addon_venue_access", "venue_access_enabled = TRUE OR section_mode_enabled = TRUE"),
+            ("addon_experience", "experience_enabled = TRUE OR live_program_enabled = TRUE OR EXISTS (SELECT 1 FROM consent_forms cf WHERE cf.event_id = events.id)"),
+            ("addon_festiome", "festiome_addon_enabled = TRUE"),
+            ("addon_planner", "planner_enabled = TRUE"),
+        ]
+    ],
+
     # RSVP links: backfill an unguessable share token on older events and add a
     # uniqueness constraint where the auto-patcher only added the bare column.
     "UPDATE events SET rsvp_token = gen_random_uuid()::text WHERE rsvp_token IS NULL",
@@ -212,6 +269,15 @@ SCHEMA_PATCHES: list[str] = [
     "INSERT INTO org_plans (key, label, usd_monthly, ngn_monthly, features, active, sort_order) "
     "SELECT 'api_access', 'API Access', 2900, 3500000, '[\"api_write\"]'::json, TRUE, 1 "
     "WHERE NOT EXISTS (SELECT 1 FROM org_plans WHERE key = 'api_access')",
+
+    # 2026-08-06 redesign cutover: models.py flipped the ORM default for NEW
+    # orgs from 'legacy_only' to 'redesign_default', but auto-patch only adds
+    # columns — it never rewrites existing rows. Backfill every org still
+    # sitting at the old default so the redesign is live everywhere, not just
+    # for orgs created after today. Scoped to 'legacy_only' specifically (not
+    # a blanket UPDATE) so it doesn't clobber cohorts someone set on purpose
+    # via the admin API (redesign_opt_in, redesign_internal, legacy_retired).
+    "UPDATE organizations SET redesign_cohort = 'redesign_default' WHERE redesign_cohort = 'legacy_only'",
 ]
 
 

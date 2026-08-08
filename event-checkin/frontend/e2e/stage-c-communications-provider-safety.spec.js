@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test'
-import { expectQaEventLoaded, fieldNear, signIn } from './helpers.js'
+import { axeSeriousViolations, expectQaEventLoaded, fieldNear, formatAxeViolations, signIn } from './helpers.js'
 
 test.describe.configure({ mode: 'serial' })
 
@@ -8,6 +8,11 @@ test.describe('Stage C communications — provider-safe redesign controls', () =
     await signIn(page)
     await page.goto('/communications-redesign?tab=messages')
     await expectQaEventLoaded(page)
+  })
+
+  test('redesign communications page has no serious/critical accessibility violations', async ({ page }) => {
+    const violations = await axeSeriousViolations(page)
+    expect(violations, formatAxeViolations(violations)).toEqual([])
   })
 
   test('loads real templates and renders a server preview without sending', async ({ page }) => {

@@ -4826,7 +4826,6 @@ const FEATURE_PLAN = {
   paid_channels: 'tier50',
   notify_sms: 'tier50',
   notify_whatsapp: 'tier50',
-  qr_checkin: 'tier50',
   seating_enabled: 'tier50',
   partner_pairing_enabled: 'tier150',
   menu_enabled: 'tier50',

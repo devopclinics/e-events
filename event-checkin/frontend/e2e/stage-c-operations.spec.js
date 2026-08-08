@@ -1,11 +1,18 @@
 import { test, expect } from '@playwright/test'
-import { expectQaEventLoaded, requiredEnv, signIn } from './helpers.js'
+import { axeSeriousViolations, expectQaEventLoaded, formatAxeViolations, requiredEnv, signIn } from './helpers.js'
 
 test.describe.configure({ mode: 'serial' })
 const suffix = `${Date.now()}-${Math.random().toString(16).slice(2, 8)}`
 
 test.describe('Stage C operations — isolated staging fixture', () => {
   test.beforeEach(async ({ page }) => { await signIn(page) })
+
+  test('redesign seating/operations page has no serious/critical accessibility violations', async ({ page }) => {
+    await page.goto('/addons-redesign?tab=seating')
+    await expectQaEventLoaded(page)
+    const violations = await axeSeriousViolations(page)
+    expect(violations, formatAxeViolations(violations)).toEqual([])
+  })
 
   test('seating uses confirmed table CRUD and floor-plan handoff', async ({ page }) => {
     const name = `E2E Table ${suffix}`

@@ -44,14 +44,22 @@ export default function RegisterPage() {
   const [params] = useSearchParams()
   const plan = params.get('plan') || ''
   const setupQuery = plan ? `?plan=${encodeURIComponent(plan)}` : ''
+  // Opt-in flag set by the redesign marketing pages (the main "/" and
+  // "/pricing" since the 2026-08-06 cutover) so a fresh signup started there
+  // lands on the redesign, bypassing the org's redesign_cohort gate (new
+  // orgs default to legacy_only). Every other entry point into /register
+  // omits this and keeps today's behavior.
+  const goToRedesign = params.get('redesign') === '1'
   const [form, setForm] = useState({ name: '', email: '', password: '' })
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
   const [pickerRole, setPickerRole] = useState(null)
 
   useEffect(() => {
-    if (user && !pickerRole) navigate(`/setup${setupQuery}`, { replace: true })
-  }, [user, pickerRole, navigate, setupQuery])
+    if (user && !pickerRole) {
+      navigate(goToRedesign ? `/setup-redesign${setupQuery}` : `/setup${setupQuery}`, { replace: true })
+    }
+  }, [user, pickerRole, navigate, setupQuery, goToRedesign])
 
   // Partner referral: remember the code through the Firebase signup redirect
   // so AuthContext can attribute this org once the account exists.
@@ -98,6 +106,16 @@ export default function RegisterPage() {
 
   function handlePick(view) {
     setPreferredView(view)
+    if (goToRedesign) {
+      const redesignTarget = {
+        setup: `/setup-redesign${setupQuery}`,
+        admin: '/admin-redesign',
+        dashboard: '/event-results-redesign',
+        scanner: '/scanner-redesign',
+      }[view] || `/${view}`
+      navigate(redesignTarget, { replace: true })
+      return
+    }
     navigate(view === 'setup' ? `/setup${setupQuery}` : view === 'admin' ? '/admin' : `/${view}`, { replace: true })
   }
 

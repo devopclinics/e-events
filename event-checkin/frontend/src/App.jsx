@@ -18,6 +18,8 @@ const ScanAutoPage = lazy(() => import('./pages/ScanAutoPage'))
 const LoginPage = lazy(() => import('./pages/LoginPage'))
 const RegisterPage = lazy(() => import('./pages/RegisterPage'))
 const LandingPage = lazy(() => import('./pages/LandingPage'))
+const LandingRedesignPage = lazy(() => import('./pages/LandingRedesignPage'))
+const PricingRedesignPage = lazy(() => import('./pages/PricingRedesignPage'))
 const InvitePage = lazy(() => import('./pages/InvitePage'))
 const VendorPage = lazy(() => import('./pages/VendorPage'))
 const RegistryPage = lazy(() => import('./pages/RegistryPage'))
@@ -54,6 +56,12 @@ const SuperadminRedesignPage = lazy(() => import('./pages/SuperadminRedesignPage
 const DesignStudioRedesignPage = lazy(() => import('./pages/DesignStudioRedesignPage'))
 const EventResultsRedesignPage = lazy(() => import('./pages/EventResultsRedesignPage'))
 const FestioMeRedesignPage = lazy(() => import('./pages/FestioMeRedesignPage'))
+const PlannerRedesignPage = lazy(() => import('./pages/PlannerRedesignPage'))
+const VendorPortalPage = lazy(() => import('./pages/VendorPortalPage'))
+const TicketingRedesignPage = lazy(() => import('./pages/TicketingRedesignPage'))
+const TicketOrderPage = lazy(() => import('./pages/TicketOrderPage'))
+const PublicTicketsPage = lazy(() => import('./pages/PublicTicketsPage'))
+const TicketTransferPage = lazy(() => import('./pages/TicketTransferPage'))
 const HelpRedesignPage = lazy(() => import('./pages/HelpRedesignPage'))
 const ScannerRedesignPage = lazy(() => import('./pages/ScannerRedesignPage'))
 const KitchenRedesignPage = lazy(() => import('./pages/KitchenRedesignPage'))
@@ -374,17 +382,29 @@ function AppRoutes() {
       {/* Client floor-plan share link — view or edit token, no auth required */}
       <Route path="/floor/:token" element={<FloorPlanPage />} />
       {/* Public marketing pages — no auth required */}
-      <Route path="/pricing" element={<PricingPage />} />
+      <Route path="/pricing" element={<PricingRedesignPage />} />
+      <Route path="/pricing-legacy" element={<PricingPage />} />
       <Route path="/refund-policy" element={<RefundPolicyPage />} />
       <Route path="/privacy" element={<PrivacyPage />} />
       <Route path="/terms" element={<TermsPage />} />
       <Route path="/sms-policy" element={<SmsPolicyPage />} />
+      {(window.location.hostname === 'staging.festio.events' || window.location.hostname === 'localhost') &&
+        <Route path="/tickets/orders/:orderId" element={<TicketOrderPage />} />}
+      {(window.location.hostname === 'staging.festio.events' || window.location.hostname === 'localhost') && <>
+        <Route path="/tickets" element={<PublicTicketsPage />} />
+        <Route path="/tickets/e/:eventId" element={<PublicTicketsPage />} />
+        <Route path="/tickets/transfers/:token" element={<TicketTransferPage />} />
+        <Route path="/embed/tickets/:eventId" element={<PublicTicketsPage embed />} />
+      </>}
       {/* Public API reference — readable before you have a key, no account needed */}
       <Route path="/api-docs" element={<ApiDocsPage />} />
       {/* Unlisted public help — shareable with prospects, no account needed */}
 
-      {/* Landing page: public marketing page — logged-in users keep their session */}
-      <Route path="/" element={<LandingPage />} />
+      {/* Landing page: public marketing page — logged-in users keep their session.
+          Redesign is the live default at "/" as of the 2026-08-06 cutover;
+          the legacy page is kept at /landing-legacy for auditing. */}
+      <Route path="/" element={<LandingRedesignPage />} />
+      <Route path="/landing-legacy" element={<LandingPage />} />
 
       {/* Admin redesign routes must not mount until Firebase has restored the
           session; otherwise their initial API reads receive 401 and bounce a
@@ -401,6 +421,10 @@ function AppRoutes() {
       <Route path="/design-studio-redesign" element={<ProtectedRoute adminOnly paidOnly><DesignStudioRedesignPage /></ProtectedRoute>} />
       <Route path="/event-results-redesign" element={<ProtectedRoute><EventResultsRedesignPage /></ProtectedRoute>} />
       <Route path="/festiome-redesign" element={<ProtectedRoute><FestioMeRedesignPage /></ProtectedRoute>} />
+      <Route path="/planner-redesign" element={<ProtectedRoute><PlannerRedesignPage /></ProtectedRoute>} />
+      <Route path="/vendor-portal/:token" element={<VendorPortalPage />} />
+      {(window.location.hostname === 'staging.festio.events' || window.location.hostname === 'localhost') &&
+        <Route path="/ticketing-redesign" element={<ProtectedRoute adminOnly><TicketingRedesignPage /></ProtectedRoute>} />}
       <Route path="/help-redesign" element={<ProtectedRoute paidOnly><HelpRedesignPage /></ProtectedRoute>} />
       <Route path="/scanner-redesign" element={<ProtectedRoute><ScannerRedesignPage /></ProtectedRoute>} />
       <Route path="/kitchen-redesign" element={<ProtectedRoute><KitchenRedesignPage /></ProtectedRoute>} />
@@ -427,16 +451,16 @@ function AppRoutes() {
               <Route path="/setup/guided" element={<ProtectedRoute setupOnly><RedesignGate redesignRoute="/setup-redesign"><GuidedSetupPage /></RedesignGate></ProtectedRoute>} />
               <Route path="/design-studio" element={<ProtectedRoute adminOnly paidOnly><RedesignGate redesignRoute="/design-studio-redesign"><DesignStudioPage /></RedesignGate></ProtectedRoute>} />
               <Route path="/floor-plan/:eventId" element={<ProtectedRoute adminOnly><RedesignGate redesignRoute="/floorplan-redesign"><FloorPlanPage /></RedesignGate></ProtectedRoute>} />
-              <Route path="/dashboard" element={<ProtectedRoute><DashboardPage /></ProtectedRoute>} />
-              <Route path="/results" element={<ProtectedRoute><ResultsPage /></ProtectedRoute>} />
+              <Route path="/dashboard" element={<ProtectedRoute><RedesignGate redesignRoute="/event-results-redesign"><DashboardPage /></RedesignGate></ProtectedRoute>} />
+              <Route path="/results" element={<ProtectedRoute><RedesignGate redesignRoute="/event-results-redesign"><ResultsPage /></RedesignGate></ProtectedRoute>} />
               <Route path="/my-tasks" element={<ProtectedRoute><RedesignGate redesignRoute="/team-redesign"><MyTasksPage /></RedesignGate></ProtectedRoute>} />
               <Route path="/org-settings" element={<ProtectedRoute><RedesignGate redesignRoute="/billing-redesign"><OrgSettingsPage /></RedesignGate></ProtectedRoute>} />
               <Route path="/api-explorer" element={<ProtectedRoute><RedesignGate redesignRoute="/api-explorer-redesign"><ApiExplorerPage /></RedesignGate></ProtectedRoute>} />
               <Route path="/festiome" element={<ProtectedRoute><RedesignGate redesignRoute="/festiome-redesign"><FestioMePage /></RedesignGate></ProtectedRoute>} />
-              <Route path="/scanner" element={<ProtectedRoute><ScannerPage /></ProtectedRoute>} />
+              <Route path="/scanner" element={<ProtectedRoute><RedesignGate redesignRoute="/scanner-redesign"><ScannerPage /></RedesignGate></ProtectedRoute>} />
               <Route path="/kitchen" element={<ProtectedRoute><RedesignGate redesignRoute="/kitchen-redesign"><KitchenPage /></RedesignGate></ProtectedRoute>} />
-              <Route path="/console" element={<ProtectedRoute><ConsolePage /></ProtectedRoute>} />
-              <Route path="/media-library" element={<ProtectedRoute><MediaPage /></ProtectedRoute>} />
+              <Route path="/console" element={<ProtectedRoute><RedesignGate redesignRoute="/superadmin-redesign"><ConsolePage /></RedesignGate></ProtectedRoute>} />
+              <Route path="/media-library" element={<ProtectedRoute><RedesignGate redesignRoute="/superadmin-redesign"><MediaPage /></RedesignGate></ProtectedRoute>} />
               <Route path="/help" element={<ProtectedRoute paidOnly><RedesignGate redesignRoute="/help-redesign"><HelpPage /></RedesignGate></ProtectedRoute>} />
               <Route path="*" element={<Navigate to="/" replace />} />
             </Routes>

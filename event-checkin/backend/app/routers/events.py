@@ -5,13 +5,14 @@ import os
 import re
 import secrets
 import uuid as _uuid
+import httpx
 from fastapi import APIRouter, BackgroundTasks, Depends, File, HTTPException, UploadFile
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import delete, select, update
+from sqlalchemy import delete, func, select, update
 from ..database import get_db
-from ..models import BroadcastLog, Event, EventUser, EventUserSection, ExperienceStep, ExperienceWorkflow, FestioMeOutbox, Guest, Membership, Organization, Payment, RSVPQuestion, TableGroup, User
+from ..models import BroadcastLog, Event, EventUser, EventUserSection, ExperienceStep, ExperienceWorkflow, FestioMeOutbox, Guest, MenuCategory, MenuItem, Membership, MessageTemplate, Organization, Payment, RSVPQuestion, TableGroup, TicketType, User
 from ..schemas import (
-    EventCreate, EventUpdate, EventOut, EventMemberOut, AssignUserRequest,
+    EventCreate, EventDuplicateIn, EventUpdate, EventOut, EventMemberOut, AssignUserRequest,
     OrgMemberInvite, OrgMemberOut, MemberRoleUpdate, UserOut, EventSourceUpdate,
     InviteSettingsUpdate, RSVPQuestionCreate, RSVPQuestionUpdate, RSVPQuestionOut,
     BroadcastRequest, BroadcastResult,
@@ -247,6 +248,24 @@ async def create_event(
     )
     if not org_id:
         raise HTTPException(403, "You don't belong to an organization")
+    # Free-plan gate: an org that has never paid for an Event Pass may create
+    # only its first event free; creating additional events requires paying
+    # for at least one Event Pass first. Once an org has any paid event, the
+    # cap never applies again — each new event still starts unpaid/draft as
+    # usual, it just isn't blocked. Superadmins bypass this (QA/demo orgs).
+    if not current_user.is_platform_superadmin:
+        has_paid_event = await db.scalar(
+            select(Event.id).where(Event.org_id == org_id, Event.is_paid.is_(True)).limit(1)
+        )
+        if not has_paid_event:
+            existing_event_count = await db.scalar(
+                select(func.count()).select_from(Event).where(Event.org_id == org_id)
+            )
+            if existing_event_count:
+                raise HTTPException(
+                    402,
+                    "Free accounts can create 1 event. Buy an Event Pass on your existing event to create additional events.",
+                )
     payload = data.model_dump()
     payload["checkin_base_url"] = _normalize_public_base_url(payload.get("checkin_base_url"))
     # notify_sms/notify_whatsapp are non-nullable columns (default True) — drop
@@ -284,6 +303,206 @@ async def create_event(
         org.name if org else "", current_user.name, current_user.email,
     )
     return event
+
+
+# Configuration/template fields safe to carry into a duplicate. Deliberately
+# an allowlist, not a denylist — this model has 150+ columns including
+# billing state, credit counters, cached FestioMe links, and live sync
+# tokens, none of which a "reusable template" duplicate should inherit.
+# Identity fields (org_id/name/dates/timezone/venue/etc.) are handled
+# separately below via the same construction create_event() uses.
+_DUPLICATE_TEMPLATE_FIELDS = [
+    # feature toggles — each is still gated by entitlements at request time,
+    # so copying the flag doesn't grant anything the new event hasn't paid for
+    "seating_enabled", "menu_enabled", "logistics_enabled", "registry_enabled", "registry_message",
+    "venue_access_enabled", "experience_enabled", "live_program_enabled", "planner_enabled",
+    "festiome_addon_enabled", "partner_pairing_enabled",
+    "enforce_table_groups", "seating_term", "section_mode_enabled",
+    "manual_checkin_enabled", "self_checkin_enabled", "checkout_enabled", "walk_in_enabled",
+    # notifications — includes platform-superadmin blocks, which must carry
+    # over so duplication can't be used to dodge a compliance/abuse block
+    "notify_email", "notify_mms", "channel_policy",
+    "blocked_messaging_channels", "blocked_comm_features", "notify_rsvp_responses",
+    "post_event_thankyou_enabled", "post_event_thankyou_delay_hours", "post_event_thankyou_audience",
+    # RSVP / invite configuration
+    "rsvp_enabled", "invite_theme", "invite_message", "invite_cover_image",
+    "rsvp_collect_phone", "rsvp_collect_email", "rsvp_email_required", "rsvp_phone_required",
+    "rsvp_invitee_email_required", "rsvp_invitee_phone_required", "rsvp_allow_duplicate_emails",
+    "invite_mode", "event_time_tbd", "rsvp_require_approval",
+    "rsvp_multi_invitee_enabled", "rsvp_multi_invitee_limit", "rsvp_multi_invitee_limit_rules",
+    "rsvp_category_seating_rules", "rsvp_invitee_type_options", "rsvp_invitee_age_options",
+    "rsvp_invitee_contact_exempt_types",
+    "invite_countdown_enabled", "invite_capacity_bar_enabled", "invite_share_enabled",
+    "invite_add_to_calendar_enabled", "rsvp_confetti_enabled",
+]
+
+DESIGN_URL = os.getenv("DESIGN_SERVICE_URL", "http://design-service:8010").rstrip("/")
+DESIGN_TOKEN = os.getenv("DESIGN_INTERNAL_TOKEN", "")
+
+
+async def _clone_design(source_event_id: str, new_event_id: str, org_id: str) -> None:
+    """Best-effort: copy Design Studio branding (theme/wording/asset/page
+    config) onto the new event and publish it immediately, so the duplicate
+    looks identical out of the box instead of starting on the stock default.
+    Never raises — a design-service hiccup must not fail the duplicate
+    itself, same policy as design_proxy.py's degrade-gracefully approach."""
+    headers = {"X-Internal-Token": DESIGN_TOKEN}
+    try:
+        async with httpx.AsyncClient(timeout=httpx.Timeout(20.0, connect=5.0)) as client:
+            source = await client.get(f"{DESIGN_URL}/api/v1/design/events/{source_event_id}", headers=headers)
+            if source.status_code != 200:
+                return
+            data = source.json()
+            was_published = bool(data.get("is_published"))
+            body = {
+                "selected_template_id": data.get("selected_template_id"),
+                "selected_flyer_template_id": data.get("selected_flyer_template_id"),
+                "theme_config": data.get("theme_config") or {},
+                "wording_config": data.get("wording_config") or {},
+                "asset_config": data.get("asset_config") or {},
+                "page_config": data.get("page_config") or {},
+            }
+            put = await client.put(f"{DESIGN_URL}/api/v1/design/events/{new_event_id}", json=body,
+                                    headers={**headers, "X-Org-Id": org_id})
+            if put.status_code == 200 and was_published:
+                await client.post(f"{DESIGN_URL}/api/v1/design/events/{new_event_id}/publish", headers=headers)
+    except httpx.RequestError:
+        logging.getLogger(__name__).warning("Design clone skipped for duplicate of %s (design-service unreachable)", source_event_id)
+
+
+@router.post("/{event_id}/duplicate", response_model=EventOut, status_code=201)
+async def duplicate_event(
+    event_id: str,
+    body: EventDuplicateIn,
+    background_tasks: BackgroundTasks,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_event_admin),
+):
+    """Clone an event's configuration (RSVP settings, invite display, custom
+    questions, ticket types, menu, table groups, message-template overrides,
+    branding) into a brand-new event on the same org. Guests, RSVPs, scan
+    history, orders, and billing state never carry over — this creates a
+    reusable template, not a copy of the live event."""
+    source = await db.get(Event, event_id)
+    if not source:
+        raise HTTPException(404, "Event not found")
+
+    org_id = source.org_id
+    if not current_user.is_platform_superadmin:
+        has_paid_event = await db.scalar(
+            select(Event.id).where(Event.org_id == org_id, Event.is_paid.is_(True)).limit(1)
+        )
+        if not has_paid_event:
+            existing_event_count = await db.scalar(
+                select(func.count()).select_from(Event).where(Event.org_id == org_id)
+            )
+            if existing_event_count:
+                raise HTTPException(
+                    402,
+                    "Free accounts can create 1 event. Buy an Event Pass on your existing event to create additional events.",
+                )
+
+    new_event = Event(
+        org_id=org_id,
+        name=(body.name or f"{source.name} (Copy)").strip()[:255],
+        couples_name=source.couples_name,
+        event_type=source.event_type,
+        event_date=body.event_date,
+        event_end_date=body.event_end_date,
+        timezone=source.timezone or "UTC",
+        description=source.description,
+        checkin_base_url=source.checkin_base_url,
+        venue_name=source.venue_name, venue_address=source.venue_address,
+        hotel_name=source.hotel_name, hotel_address=source.hotel_address,
+        admission_note=source.admission_note,
+        notify_sms=source.notify_sms, notify_whatsapp=source.notify_whatsapp,
+        rsvp_capacity=source.rsvp_capacity,
+    )
+    for field in _DUPLICATE_TEMPLATE_FIELDS:
+        setattr(new_event, field, getattr(source, field))
+    new_event.event_code = await unique_event_code(db)
+    new_event.rsvp_token = str(_uuid.uuid4())
+    db.add(new_event)
+    await db.flush()
+    db.add(EventUser(event_id=new_event.id, user_id=current_user.id))
+
+    # RSVP questions — self-referential depends_on_question_id must be
+    # remapped to the *new* question ids, not carried over from the source.
+    questions = (await db.execute(
+        select(RSVPQuestion).where(RSVPQuestion.event_id == event_id).order_by(RSVPQuestion.sort_order)
+    )).scalars().all()
+    id_map: dict[str, RSVPQuestion] = {}
+    pairs = []
+    for q in questions:
+        new_q = RSVPQuestion(
+            event_id=new_event.id, question=q.question, question_type=q.question_type,
+            options=q.options, is_required=q.is_required, sort_order=q.sort_order,
+            depends_on_value=q.depends_on_value,
+        )
+        db.add(new_q)
+        id_map[q.id] = new_q
+        pairs.append((q, new_q))
+    await db.flush()
+    for old_q, new_q in pairs:
+        if old_q.depends_on_question_id and old_q.depends_on_question_id in id_map:
+            new_q.depends_on_question_id = id_map[old_q.depends_on_question_id].id
+
+    # Ticket types — allowed_zone_ids references Venue Access zones, which are
+    # event-scoped and not duplicated here, so it's cleared rather than left
+    # dangling; the organizer re-picks zones on the new event if needed.
+    ticket_types = (await db.execute(
+        select(TicketType).where(TicketType.event_id == event_id)
+    )).scalars().all()
+    for t in ticket_types:
+        db.add(TicketType(
+            event_id=new_event.id, name=t.name, color=t.color, description=t.description,
+            capacity=t.capacity, allowed_zone_ids=None, sort_order=t.sort_order, is_active=t.is_active,
+        ))
+
+    # Menu categories + items
+    categories = (await db.execute(
+        select(MenuCategory).where(MenuCategory.event_id == event_id)
+    )).scalars().all()
+    for c in categories:
+        new_c = MenuCategory(
+            event_id=new_event.id, name=c.name, day_label=c.day_label, display_only=c.display_only,
+            sort_order=c.sort_order, selection_type=c.selection_type, min_selections=c.min_selections,
+            max_selections=c.max_selections, is_required=c.is_required,
+        )
+        db.add(new_c)
+        await db.flush()
+        items = (await db.execute(select(MenuItem).where(MenuItem.category_id == c.id))).scalars().all()
+        for item in items:
+            db.add(MenuItem(category_id=new_c.id, event_id=new_event.id, name=item.name, description=item.description))
+
+    # Table groups — structure/labels only; physical table↔group assignments
+    # are venue-specific and usually don't carry over to a new venue.
+    groups = (await db.execute(
+        select(TableGroup).where(TableGroup.event_id == event_id).order_by(TableGroup.sort_order)
+    )).scalars().all()
+    for g in groups:
+        db.add(TableGroup(event_id=new_event.id, name=g.name, tag=g.tag, description=g.description, sort_order=g.sort_order))
+
+    # Per-event message template overrides
+    templates = (await db.execute(
+        select(MessageTemplate).where(MessageTemplate.event_id == event_id)
+    )).scalars().all()
+    for t in templates:
+        db.add(MessageTemplate(
+            event_id=new_event.id, template_key=t.template_key, subject=t.subject,
+            email_body=t.email_body, sms_body=t.sms_body, whatsapp_body=t.whatsapp_body, mms_body=t.mms_body,
+        ))
+
+    await db.commit()
+    await db.refresh(new_event)
+
+    org = await db.get(Organization, org_id)
+    background_tasks.add_task(
+        _notify_operators_new_event, new_event.id, new_event.name,
+        org.name if org else "", current_user.name, current_user.email,
+    )
+    await _clone_design(event_id, new_event.id, org_id)
+    return new_event
 
 
 @router.get("", response_model=list[EventOut])
@@ -484,6 +703,12 @@ async def list_members(
             can_view_dashboard=eu.can_view_dashboard,
             can_view_guests=eu.can_view_guests,
             can_manage_guests=eu.can_manage_guests,
+            can_view_planner=eu.can_view_planner,
+            can_manage_planner_tasks=eu.can_manage_planner_tasks,
+            can_manage_planner_budget=eu.can_manage_planner_budget,
+            can_manage_planner_vendors=eu.can_manage_planner_vendors,
+            can_manage_planner_documents=eu.can_manage_planner_documents,
+            can_manage_planner_runsheet=eu.can_manage_planner_runsheet,
             event_role=eu.event_role,
             access_level=eu.access_level,
             section_group_ids=sections_by_eu.get(eu.id, []),
@@ -535,6 +760,12 @@ async def assign_member(
         can_view_dashboard=eu.can_view_dashboard,
         can_view_guests=eu.can_view_guests,
         can_manage_guests=eu.can_manage_guests,
+        can_view_planner=eu.can_view_planner,
+        can_manage_planner_tasks=eu.can_manage_planner_tasks,
+        can_manage_planner_budget=eu.can_manage_planner_budget,
+        can_manage_planner_vendors=eu.can_manage_planner_vendors,
+        can_manage_planner_documents=eu.can_manage_planner_documents,
+        can_manage_planner_runsheet=eu.can_manage_planner_runsheet,
         event_role=eu.event_role,
         access_level=eu.access_level,
         updated_at=eu.updated_at,
@@ -771,7 +1002,7 @@ async def toggle_features(
     for feature in (
         "seating_enabled", "menu_enabled", "logistics_enabled", "registry_enabled",
         "venue_access_enabled", "partner_pairing_enabled", "experience_enabled", "live_program_enabled",
-        "section_mode_enabled", "festiome_addon_enabled",
+        "section_mode_enabled", "festiome_addon_enabled", "planner_enabled",
     ):
         if body.get(feature):
             assert_feature_allowed(event, feature)
@@ -811,6 +1042,8 @@ async def toggle_features(
         # link state (festiome_enabled/id/url) is left intact so re-enabling
         # does not require re-provisioning through the FestioMe service.
         event.festiome_addon_enabled = bool(body["festiome_addon_enabled"])
+    if "planner_enabled" in body:
+        event.planner_enabled = bool(body["planner_enabled"])
     if "partner_pairing_enabled" in body:
         event.partner_pairing_enabled = bool(body["partner_pairing_enabled"])
     if "registry_enabled" in body:

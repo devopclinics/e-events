@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test'
-import { expectQaEventLoaded, signIn } from './helpers.js'
+import { axeSeriousViolations, expectQaEventLoaded, formatAxeViolations, signIn } from './helpers.js'
 
 test.describe.configure({ mode: 'serial' })
 
@@ -45,6 +45,11 @@ test.describe('Stage B team task CRUD — isolated staging fixture', () => {
     await openTasks(page).catch(() => {})
     await removeTaskIfPresent(page, editedTitle).catch(() => {})
     await removeTaskIfPresent(page, originalTitle).catch(() => {})
+  })
+
+  test('redesign team/tasks page has no serious/critical accessibility violations', async ({ page }) => {
+    const violations = await axeSeriousViolations(page)
+    expect(violations, formatAxeViolations(violations)).toEqual([])
   })
 
   test('create, update status, add/complete a subtask, edit, and delete a synthetic task', async ({ page }) => {

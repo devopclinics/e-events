@@ -6,6 +6,7 @@ import { isNativePushSupported, registerNativePush, unregisterNativePush } from 
 import { parseUtc, fmtEventDateRange } from '../timeutil'
 import { seatingTerm } from '../seatingTerm'
 import './GuestHubThemes.css'
+import PublicTicketCheckout from '../components/PublicTicketCheckout'
 
 // ── Invite page helpers ───────────────────────────────────────────────────────
 
@@ -2227,6 +2228,7 @@ export default function InvitePage() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const [confirmed, setConfirmed] = useState(null)
+  const [paidTicketsAvailable, setPaidTicketsAvailable] = useState(null)
   const isStudioPreview = new URLSearchParams(window.location.search).get('studio-preview') === '1'
 
   // Anonymous shared/open links can't know who you are on load, so we remember a
@@ -2380,6 +2382,8 @@ export default function InvitePage() {
   // token from — show the Hub anyway, with GuestHub's own preview-mock data,
   // so a hub_style choice is actually visible before publishing.
   const hasGuestHub = !!guestHubToken || isStudioPreview
+  const primaryTarget = hasGuestHub ? 'guest-hub' : paidTicketsAvailable ? 'tickets' : 'rsvp'
+  const primaryLabel = hasGuestHub ? 'Open FestioHub' : paidTicketsAvailable ? 'Get Tickets' : 'Confirm My RSVP'
 
   let rsvpPanel
   if (confirmed) {
@@ -2525,9 +2529,9 @@ export default function InvitePage() {
                   type="button"
                   className="gh-cta"
                   style={dColors.accent ? { background: dColors.accent } : undefined}
-                  onClick={() => document.getElementById(hasGuestHub ? 'guest-hub' : 'rsvp')?.scrollIntoView({ behavior: 'smooth' })}
+                  onClick={() => document.getElementById(primaryTarget)?.scrollIntoView({ behavior: 'smooth' })}
                 >
-                  {hasGuestHub ? 'Open FestioHub' : 'Confirm My RSVP'}
+                  {primaryLabel}
                 </PrimaryButton>
                 <SecondaryButton
                   type="button"
@@ -2588,9 +2592,9 @@ export default function InvitePage() {
                   type="button"
                   className="gh-cta"
                   style={dColors.accent ? { background: dColors.accent } : undefined}
-                  onClick={() => document.getElementById(hasGuestHub ? 'guest-hub' : 'rsvp')?.scrollIntoView({ behavior: 'smooth' })}
+                  onClick={() => document.getElementById(primaryTarget)?.scrollIntoView({ behavior: 'smooth' })}
                 >
-                  {hasGuestHub ? 'Open FestioHub' : 'Confirm My RSVP'}
+                  {primaryLabel}
                 </PrimaryButton>
                 <SecondaryButton
                   type="button"
@@ -2727,7 +2731,9 @@ export default function InvitePage() {
           </section>
         )}
 
-        {rsvpPanel && (
+        <PublicTicketCheckout eventId={event.id} tone={tone} onAvailabilityChange={setPaidTicketsAvailable} />
+
+        {rsvpPanel && (paidTicketsAvailable === false || tokenMode) && (
           <section id="rsvp" className="scroll-mt-6 py-9">
             <div className="mx-auto w-full max-w-[680px] rounded-[1.65rem] border border-white/15 bg-white p-5 text-slate-950 shadow-2xl shadow-black/30 sm:p-8">
               {rsvpPanel}

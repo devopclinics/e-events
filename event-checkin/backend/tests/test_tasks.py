@@ -5,7 +5,7 @@ from datetime import datetime, timedelta
 import pytest
 from sqlalchemy import select
 
-from app.models import Event, EventUser, Subtask, TaskActivity
+from app.models import Event, EventUser, Membership, Subtask, TaskActivity
 from app.routers import tasks as tasks_mod
 from conftest import _Session
 
@@ -66,6 +66,50 @@ async def test_task_requires_nonempty_title(ctx):
     ev = ctx.ids["event_a"]
     r = await ctx.client.post(f"/api/events/{ev}/tasks", json={"title": "   "})
     assert r.status_code == 400
+
+
+@pytest.mark.asyncio
+async def test_planner_task_metadata_and_capability_are_enforced(ctx):
+    ev = ctx.ids["event_a"]
+    teammate = ctx.ids["user_b"]
+    async with _Session() as s:
+        s.add(Membership(org_id=ctx.ids["org_a"], user_id=teammate.id, role="member"))
+        assignment = EventUser(
+            event_id=ev, user_id=teammate.id, can_view_planner=True,
+            can_manage_planner_tasks=False,
+        )
+        s.add(assignment)
+        await s.commit()
+
+    ctx.login(teammate)
+    # Ordinary team tasks retain their existing collaborative access.
+    ordinary = await ctx.client.post(f"/api/events/{ev}/tasks", json={"title": "Team task"})
+    assert ordinary.status_code == 201
+    # Planner-linked work follows the narrower planner capability.
+    denied = await ctx.client.post(f"/api/events/{ev}/tasks", json={
+        "title": "Planner task", "planner_milestone_id": "milestone-1", "priority": "high",
+    })
+    assert denied.status_code == 403
+
+    async with _Session() as s:
+        assignment = (await s.execute(select(EventUser).where(
+            EventUser.event_id == ev, EventUser.user_id == teammate.id,
+        ))).scalar_one()
+        assignment.can_manage_planner_tasks = True
+        await s.commit()
+
+    accepted = await ctx.client.post(f"/api/events/{ev}/tasks", json={
+        "title": "Planner task", "planner_milestone_id": "milestone-1",
+        "planner_vendor_id": "vendor-1", "priority": "high",
+    })
+    assert accepted.status_code == 201, accepted.text
+    assert accepted.json()["planner_milestone_id"] == "milestone-1"
+    assert accepted.json()["planner_vendor_id"] == "vendor-1"
+    assert accepted.json()["priority"] == "high"
+
+    assignees = await ctx.client.get(f"/api/events/{ev}/tasks/assignees")
+    assert assignees.status_code == 200
+    assert {person["id"] for person in assignees.json()} == {teammate.id}
 
 
 @pytest.mark.asyncio

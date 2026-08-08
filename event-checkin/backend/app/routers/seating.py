@@ -680,6 +680,18 @@ async def update_member_permissions(
         eu.can_manage_guests = bool(body["can_manage_guests"])
         if eu.can_manage_guests:
             eu.can_view_guests = True
+    planner_fields = (
+        "can_view_planner", "can_manage_planner_tasks", "can_manage_planner_budget",
+        "can_manage_planner_vendors", "can_manage_planner_documents", "can_manage_planner_runsheet",
+    )
+    for field in planner_fields:
+        if field in body:
+            setattr(eu, field, bool(body[field]))
+    if any(getattr(eu, field) for field in planner_fields[1:]):
+        eu.can_view_planner = True
+    if not eu.can_view_planner:
+        for field in planner_fields[1:]:
+            setattr(eu, field, False)
     if "event_role" in body:
         role = str(body["event_role"] or "staff")
         if role not in ("staff", "manager"):
@@ -690,6 +702,9 @@ async def update_member_permissions(
             eu.can_view_dashboard = True
             eu.can_view_guests = True
             eu.can_manage_guests = True
+            eu.can_view_planner = True
+            for field in planner_fields[1:]:
+                setattr(eu, field, True)
         else:
             eu.access_level = "edit"
     if "access_level" in body:

@@ -8,7 +8,7 @@ from sqlalchemy import select
 from ..database import get_db
 from ..models import Event, User, Membership, EventUser
 from ..schemas import UserOut
-from ..auth import get_current_user, require_superadmin
+from ..auth import get_current_user, require_superadmin, _org_role
 from ..services.festiome_client import FestioMeClient, FestioMeUnavailable, get_festiome_client
 
 router = APIRouter()
@@ -80,13 +80,116 @@ async def festiome_token(
     return {"token": token, "expires_in": 900}
 
 
+@router.post("/planner-token")
+async def planner_token(
+    event_id: str,
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Mint a short-lived scoped token for the standalone planner-service —
+    same token-exchange pattern as /festiome-token. The frontend calls this
+    once per planner session and then talks to planner-service directly."""
+    from ..config import settings
+    if not settings.planner_internal_token:
+        raise HTTPException(503, "Planner is not configured")
+    event = await db.get(Event, event_id)
+    if not event:
+        raise HTTPException(404, "Event not found")
+    subject = user.firebase_uid or user.id
+    role: str | None = None
+    capabilities: list[str] = []
+    if user.is_platform_superadmin:
+        role = "admin"
+    else:
+        org_role = await _org_role(user, event.org_id, db)
+        if org_role in ("owner", "admin"):
+            role = "admin"
+        else:
+            eu = await db.scalar(select(EventUser).where(
+                EventUser.event_id == event_id, EventUser.user_id == user.id
+            ))
+            if eu:
+                if eu.event_role == "manager":
+                    role = "admin"
+                elif eu.can_view_planner:
+                    role = "member"
+                    capabilities = [
+                        name for allowed, name in (
+                            (eu.can_manage_planner_tasks, "tasks"),
+                            (eu.can_manage_planner_budget, "budget"),
+                            (eu.can_manage_planner_vendors, "vendors"),
+                            (eu.can_manage_planner_documents, "documents"),
+                            (eu.can_manage_planner_runsheet, "runsheet"),
+                        ) if allowed
+                    ]
+    if role is None:
+        raise HTTPException(404, "Event not found")
+    if role == "admin":
+        capabilities = ["tasks", "budget", "vendors", "documents", "runsheet"]
+    now = datetime.now(timezone.utc)
+    token = jwt.encode({
+        "sub": subject,
+        "email": user.email,
+        "name": user.name,
+        "event_id": event.id,
+        "org_id": event.org_id,
+        "role": role,
+        "capabilities": capabilities,
+        "is_platform_superadmin": bool(user.is_platform_superadmin),
+        "iss": "guesthub",
+        "aud": "planner",
+        "iat": now,
+        "exp": now + timedelta(minutes=15),
+    }, settings.planner_internal_token, algorithm="HS256")
+    return {"token": token, "expires_in": 900}
+
+
+@router.post("/ticketing-token")
+async def ticketing_token(
+    event_id: str,
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Mint a short-lived, event-scoped admin token for ticketing-service."""
+    from ..config import settings
+    if not settings.ticketing_internal_token:
+        raise HTTPException(503, "Ticketing is not configured")
+    event = await db.get(Event, event_id)
+    if not event:
+        raise HTTPException(404, "Event not found")
+    role = "admin" if user.is_platform_superadmin else await _org_role(user, event.org_id, db)
+    if role not in ("owner", "admin"):
+        raise HTTPException(404, "Event not found")
+    now = datetime.now(timezone.utc)
+    token = jwt.encode({
+        "sub": user.firebase_uid or user.id,
+        "email": user.email,
+        "name": user.name,
+        "event_id": event.id,
+        "org_id": event.org_id,
+        "role": role,
+        "iss": "guesthub",
+        "aud": "ticketing",
+        "iat": now,
+        "exp": now + timedelta(minutes=15),
+    }, settings.ticketing_internal_token, algorithm="HS256")
+    return {"token": token, "expires_in": 900}
+
+
 @router.get("/me", response_model=UserOut)
 async def me(user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
-    # Effective role reflects org membership so the UI gates on org standing, not
-    # the legacy global role: org owner/admin (or superadmin) => "admin".
+    # Effective role reflects org membership. A user is considered an org admin
+    # only if they are owner/admin in an org that has at least one event. This
+    # prevents staff members (who auto-get an empty personal org on registration)
+    # from being treated as admins when they're really staff at another org.
+    # New organizers are safe because RegisterPage always redirects to /setup
+    # directly, bypassing role-based routing.
     is_org_admin = bool(await db.scalar(
-        select(Membership.id).where(
-            Membership.user_id == user.id, Membership.role.in_(["owner", "admin"])
+        select(Membership.id)
+        .join(Event, Event.org_id == Membership.org_id)
+        .where(
+            Membership.user_id == user.id,
+            Membership.role.in_(["owner", "admin"]),
         ).limit(1)
     ))
     is_event_manager = bool(await db.scalar(

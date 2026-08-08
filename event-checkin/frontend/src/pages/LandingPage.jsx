@@ -831,6 +831,12 @@ export default function LandingPage() {
             <Link to="/pricing" className="text-sm font-bold text-slate-300 transition hover:text-white">Pricing</Link>
             <a href="#demo" className="text-sm font-bold text-slate-300 transition hover:text-white">Demo</a>
           </nav>
+          <Link
+            to="/"
+            className="hidden items-center gap-1.5 rounded-full border border-teal-400/30 bg-teal-400/10 px-3 py-1.5 text-xs font-extrabold text-teal-300 transition hover:border-teal-300/60 hover:bg-teal-400/20 sm:inline-flex"
+          >
+            View current site
+          </Link>
           <button onClick={toggle} className="rounded-lg p-2 text-slate-300 transition hover:bg-white/10 hover:text-white" aria-label="Toggle theme">
             {dark ? <SunIcon /> : <MoonIcon />}
           </button>

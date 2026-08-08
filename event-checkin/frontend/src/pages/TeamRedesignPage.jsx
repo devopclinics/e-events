@@ -29,6 +29,13 @@ const PERMS = [
   { key: 'menu', label: 'Menu', icon: 'card' },
   { key: 'dashboard', label: 'Dashboard', icon: 'barchart' },
 ]
+const PLANNER_PERMS = [
+  { key: 'can_manage_planner_tasks', label: 'Tasks' },
+  { key: 'can_manage_planner_budget', label: 'Budget' },
+  { key: 'can_manage_planner_vendors', label: 'Vendors' },
+  { key: 'can_manage_planner_documents', label: 'Documents' },
+  { key: 'can_manage_planner_runsheet', label: 'Runsheet' },
+]
 
 const STATUS_LABEL = { open: 'Open', in_progress: 'In progress', done: 'Done' }
 const BOARD_COLUMNS = ['open', 'in_progress', 'done']
@@ -471,6 +478,9 @@ function TeamTab({ eventId, notify, onRequestDelete }) {
                     {eventRole === 'manager' && <><label className="rd-field-label">Administrative access</label><select className="rr-select" value={editingMember.access_level || 'edit'} onChange={(e) => updatePermissions(editingMember, { access_level: e.target.value }, `${editingMember.user.name} access updated`)}>{ACCESS_LEVEL_OPTIONS.map((access) => <option key={access} value={access}>{access === 'edit' ? 'Can edit' : 'View only'}</option>)}</select></>}
                     <label className="rd-field-label">Guest list access</label>
                     <select className="rr-select" value={guestAccessOf(editingMember)} onChange={(e) => updatePermissions(editingMember, e.target.value === 'manage' ? { can_view_guests: true, can_manage_guests: true } : e.target.value === 'view' ? { can_view_guests: true, can_manage_guests: false } : { can_view_guests: false, can_manage_guests: false }, `${editingMember.user.name} guest access updated`)}>{GUEST_ACCESS_OPTIONS.map((access) => <option key={access} value={access}>{access === 'none' ? 'No access' : access === 'view' ? 'View guests' : 'Manage guests'}</option>)}</select>
+                    <label className="rd-field-label">Planner access</label>
+                    <select className="rr-select" value={eventRole === 'manager' ? 'manage' : editingMember.can_view_planner ? 'view' : 'none'} disabled={eventRole === 'manager'} onChange={(e) => updatePermissions(editingMember, { can_view_planner: e.target.value !== 'none' }, `${editingMember.user.name} planner access updated`)}><option value="none">No planner access</option><option value="view">View planner</option><option value="manage">Full access (event admins)</option></select>
+                    {(eventRole === 'manager' || editingMember.can_view_planner) && <div className="tm-editor-section"><strong>Planner permissions</strong><p>Grant only the areas this person is responsible for. Viewing does not allow edits.</p><div className="tm-editor-options">{PLANNER_PERMS.map((permission) => { const on = eventRole === 'manager' || !!editingMember[permission.key]; return <button key={permission.key} disabled={eventRole === 'manager'} className={on ? 'on' : ''} onClick={() => updatePermissions(editingMember, { [permission.key]: !on }, `${permission.label} ${on ? 'revoked' : 'granted'} for ${editingMember.user.name}`)}><Icon name="check" size={13}/><span>{permission.label}<small>{on ? 'Can manage' : 'View only'}</small></span><i>{on ? '✓' : '+'}</i></button> })}</div></div>}
                     {eventRole === 'manager' && <div className="tm-editor-section"><strong>Operational permissions</strong><div className="tm-editor-options">{PERMS.map((permission) => { const on = permOn(editingMember, permission.key); return <button key={permission.key} className={on ? 'on' : ''} onClick={() => updatePermissions(editingMember, { [permission.key === 'seats' ? 'can_reassign_seats' : permission.key === 'menu' ? 'can_manage_menu' : 'can_view_dashboard']: !on }, `${permission.label} ${on ? 'revoked' : 'granted'} for ${editingMember.user.name}`)}><Icon name={permission.icon} size={13}/><span>{permission.label}<small>{on ? 'Allowed' : 'Not allowed'}</small></span><i>{on ? '✓' : '+'}</i></button> })}</div></div>}
                     {groups.length > 0 && <div className="tm-editor-section"><strong>Scanner sections</strong><p>Choose where this person can scan. All sections is the default.</p><div className="tm-perm-row"><button className={`tm-perm-chip ${sections.length === 0 ? 'on' : ''}`} onClick={() => updateSections(editingMember, [])}>All sections</button>{groups.map((group) => <button key={group.id} className={`tm-perm-chip ${sections.includes(group.id) ? 'on' : ''}`} onClick={() => updateSections(editingMember, sections.includes(group.id) ? sections.filter((id) => id !== group.id) : [...sections, group.id])}>{group.name}</button>)}</div></div>}
                   </div>

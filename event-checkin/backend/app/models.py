@@ -25,7 +25,12 @@ class Organization(Base):
     # One of: legacy_only | redesign_opt_in | redesign_internal | redesign_cohort
     # | redesign_default | legacy_retired. Platform superadmins can always reach
     # the redesign regardless of this value (see User.is_platform_superadmin).
-    redesign_cohort: Mapped[str] = mapped_column(String(20), default="legacy_only")
+    # Default flipped to redesign_default as of the 2026-08-06 cutover -- new
+    # orgs land on the redesign by default; legacy stays reachable via each
+    # RedesignGate's "Switch to legacy UI" escape hatch (?ui=legacy). This
+    # intentionally does NOT retroactively migrate existing orgs (see
+    # db_migrate.py note) -- only new rows pick this up.
+    redesign_cohort: Mapped[str] = mapped_column(String(20), default="redesign_default")
     # Org-level recurring subscription (separate axis from the per-event one-time
     # Event.is_paid/plan_tier purchases) — gates org-wide paid features like
     # read-write API access. `plan` above doubles as the current subscription's
@@ -170,6 +175,15 @@ class EventUser(Base):
     # Guest operations (add/edit/remove, approvals, invitations, imports) without
     # granting access to event setup, Team & Settings, or other admin modules.
     can_manage_guests: Mapped[bool] = mapped_column(Boolean, default=False)
+    # Planner access is deliberately split by sensitive domain. Staff receive
+    # no planner access by default; event managers and org admins are granted
+    # all capabilities when the scoped planner token is minted.
+    can_view_planner: Mapped[bool] = mapped_column(Boolean, default=False)
+    can_manage_planner_tasks: Mapped[bool] = mapped_column(Boolean, default=False)
+    can_manage_planner_budget: Mapped[bool] = mapped_column(Boolean, default=False)
+    can_manage_planner_vendors: Mapped[bool] = mapped_column(Boolean, default=False)
+    can_manage_planner_documents: Mapped[bool] = mapped_column(Boolean, default=False)
+    can_manage_planner_runsheet: Mapped[bool] = mapped_column(Boolean, default=False)
     # Event-scoped role: "staff" (default scanner/day-of) or "manager"
     # (event owner/admin for this assigned event only).
     event_role: Mapped[str] = mapped_column(String(30), default="staff")
@@ -249,6 +263,16 @@ class Event(Base):
     # offered for this event at all; distinct from festiome_enabled below, which
     # only caches the remote service link state.
     festiome_addon_enabled: Mapped[bool] = mapped_column(Boolean, default=False)
+    # Gates the Planner module (budget/vendors/timeline/runsheet/documents),
+    # a standalone microservice — see planner-service/. Off by default like
+    # the other paid add-ons; the nav link and page both hide/upsell until set.
+    planner_enabled: Mapped[bool] = mapped_column(Boolean, default=False)
+    # Add-on purchase ledger: keys from PricingPlan(kind="addon") this event has
+    # bought (e.g. "addon_seating"). Independent of the *_enabled runtime toggles
+    # above -- purchasing grants the entitlement, the *_enabled flags are the
+    # on/off switch an admin can still flip freely once purchased. None/[] = none
+    # bought. See entitlements.FEATURE_ADDON for the feature -> addon mapping.
+    purchased_addons: Mapped[list | None] = mapped_column(JSON, nullable=True)
     # Cached integration state only; FestioMe data remains service-owned.
     festiome_enabled: Mapped[bool] = mapped_column(Boolean, default=False)
     festiome_id: Mapped[str | None] = mapped_column(String(36), nullable=True)
@@ -425,10 +449,19 @@ class Event(Base):
     # invitee row in multi-invitee RSVP. None = no age-group field is shown.
     rsvp_invitee_age_options: Mapped[list | None] = mapped_column(JSON, nullable=True)
     # Guest-type values (drawn from rsvp_invitee_type_options) exempt from
-    # rsvp_invitee_email_required/rsvp_invitee_phone_required -- e.g. a child
+    # rsvp_invitee_email_required/rsvp_invitee_phone_required — e.g. a child
     # doesn't need their own contact info when the submitting parent's is
     # already collected. None/empty = no exemptions, existing behavior.
     rsvp_invitee_contact_exempt_types: Mapped[list | None] = mapped_column(JSON, nullable=True)
+
+    # ── Invite page display controls ─────────────────────────────────────────
+    # Each flag gates a UI widget on the public invite/confirmation page.
+    # All default to True so existing events automatically get the new features.
+    invite_countdown_enabled: Mapped[bool] = mapped_column(Boolean, default=True)
+    invite_capacity_bar_enabled: Mapped[bool] = mapped_column(Boolean, default=True)
+    invite_share_enabled: Mapped[bool] = mapped_column(Boolean, default=True)
+    invite_add_to_calendar_enabled: Mapped[bool] = mapped_column(Boolean, default=True)
+    rsvp_confetti_enabled: Mapped[bool] = mapped_column(Boolean, default=True)
 
     # ── Per-event entitlements (Phase 2) — what an Event Pass unlocks ─────────
     # plan_tier: "free" | "tier50" | "tier150" | "tier300" | "unlimited" | "comp"
@@ -850,6 +883,12 @@ class Task(Base):
     event_id: Mapped[str] = mapped_column(String(36), ForeignKey("events.id"), index=True)
     title: Mapped[str] = mapped_column(String(255))
     notes: Mapped[str | None] = mapped_column(Text, nullable=True)
+    # Planner metadata lives on the canonical task so Timeline, My Tasks and
+    # the team task board all operate on the same record.  Milestone/vendor
+    # ids are opaque because those entities live in the planner service.
+    planner_milestone_id: Mapped[str | None] = mapped_column(String(36), nullable=True, index=True)
+    planner_vendor_id: Mapped[str | None] = mapped_column(String(36), nullable=True)
+    priority: Mapped[str] = mapped_column(String(10), default="normal")
     assignee_user_id: Mapped[str | None] = mapped_column(String(36), ForeignKey("users.id"), nullable=True)
     due_date: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     status: Mapped[str] = mapped_column(String(20), default="open")  # open | in_progress | done
@@ -1144,6 +1183,10 @@ class Guest(Base):
     rsvp_relationship: Mapped[str | None] = mapped_column(String(120), nullable=True)
     rsvp_guest_type: Mapped[str | None] = mapped_column(String(120), nullable=True)
     rsvp_notes: Mapped[str | None] = mapped_column(Text, nullable=True)
+    # Stable linkage to the staging ticketing-service order. The order lives in
+    # a separate database, so this is intentionally indexed rather than an FK.
+    paid_ticket_order_id: Mapped[str | None] = mapped_column(String(36), nullable=True, index=True)
+    paid_ticket_pass_design: Mapped[dict | None] = mapped_column(JSON, nullable=True)
 
     # Shipping address for the logistics add-on. One address per guest, reused
     # across shipments. Phone (above) doubles as the shipping contact number.

@@ -281,6 +281,8 @@ async def fulfill_paid_order(body: PaidOrderFulfillment, background_tasks: Backg
         )
         db.add(guest); created.append(guest)
     await db.commit()
+    from ..services.marketing_client import ingest_org_lifecycle
+    await ingest_org_lifecycle(db, event.org_id, stage="customer", event_type=event.event_type)
     for guest in created:
         await db.refresh(guest)
     delivery_allowed = not body.delivery_settings.get("email_enabled", True) or recipient_allowed("email", body.buyer_email)

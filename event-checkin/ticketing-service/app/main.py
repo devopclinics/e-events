@@ -43,13 +43,15 @@ async def shutdown():
 
 @app.get("/health")
 def health():
+    test_mode = settings.environment.lower() != "production"
     return {"status": "ok", "service": "ticketing-service", "enabled": settings.service_enabled,
-            "environment": settings.environment, "test_mode": True}
+            "environment": settings.environment, "test_mode": test_mode}
 
 
 @app.get("/api/ticketing/status")
 def public_status():
-    return {"enabled": settings.service_enabled, "environment": settings.environment, "test_mode": True}
+    return {"enabled": settings.service_enabled, "environment": settings.environment,
+            "test_mode": settings.environment.lower() != "production"}
 
 
 def product_out(p):
@@ -57,8 +59,9 @@ def product_out(p):
 
 
 def provider_ready(name: str) -> bool:
-    return name == "fake" or (name == "stripe" and settings.stripe_secret_key.startswith("sk_test_")) or \
-        (name == "paystack" and settings.paystack_secret_key.startswith("sk_test_"))
+    prefix = "sk_live_" if settings.environment.lower() == "production" else "sk_test_"
+    return name == "fake" or (name == "stripe" and settings.stripe_secret_key.startswith(prefix)) or \
+        (name == "paystack" and settings.paystack_secret_key.startswith(prefix))
 
 
 def secure_token_matches(expected: str | None, supplied: str | None) -> bool:
@@ -70,7 +73,8 @@ async def provider_readiness(name: str) -> dict:
     result = {"provider": name, "credentials_configured": provider_ready(name),
               "account_verified": False, "webhook_configured": False, "action_required": []}
     if not result["credentials_configured"]:
-        result["action_required"].append(f"Add the {name.title()} test secret key to staging")
+        result["action_required"].append(
+            f"Add the {name.title()} {'live' if settings.environment.lower() == 'production' else 'test'} secret key")
         return result
     webhook_url = f"{settings.public_base_url}/api/ticketing/webhooks/{name}"
     try:
@@ -95,7 +99,7 @@ async def provider_readiness(name: str) -> dict:
         result["action_required"].append("Provider API could not be reached; retry the readiness check")
         return result
     if not result["account_verified"]:
-        result["action_required"].append("The configured test key was rejected by the provider")
+        result["action_required"].append("The configured provider key was rejected")
     if not result["webhook_configured"]:
         result["action_required"].append(
             "Set the Paystack dashboard webhook URL, then confirm it here" if name == "paystack"
@@ -104,18 +108,18 @@ async def provider_readiness(name: str) -> dict:
 
 
 async def ensure_stripe_webhook() -> dict:
-    """Idempotently create the staging Stripe webhook endpoint.
+    """Idempotently create the Stripe webhook endpoint for this environment.
 
     Stripe only returns the signing secret at creation. The caller must place it in
     the secret store and restart the service; it is never persisted in this DB.
     """
     state = await provider_readiness("stripe")
     if not state["credentials_configured"] or not state["account_verified"]:
-        raise HTTPException(503, "Stripe test credentials are not valid")
+        raise HTTPException(503, "Stripe credentials are not valid for this environment")
     if state["webhook_configured"]:
         return {**state, "created": False, "signing_secret": None}
     url = f"{settings.public_base_url}/api/ticketing/webhooks/stripe"
-    data = [("url", url), ("description", "Festio staging ticket payments")]
+    data = [("url", url), ("description", f"Festio {settings.environment} ticket payments")]
     for event in ("checkout.session.completed", "charge.dispute.created", "charge.refunded",
                   "refund.created", "refund.updated", "refund.failed"):
         data.append(("enabled_events[]", event))
@@ -127,7 +131,7 @@ async def ensure_stripe_webhook() -> dict:
     payload = response.json()
     return {**state, "webhook_configured": True, "created": True,
             "endpoint_id": payload.get("id"), "signing_secret": payload.get("secret"),
-            "next_action": "Store signing_secret as TICKETING_STRIPE_TEST_WEBHOOK_SECRET and restart staging"}
+            "next_action": "Store signing_secret as STRIPE_WEBHOOK_SECRET and restart ticketing-service"}
 
 
 def safe_refund_retry(status: str, attempts: int) -> bool:
@@ -404,7 +408,8 @@ async def public_tickets(event_id: str, db: AsyncSession = Depends(get_db)):
         (TicketProduct.sale_starts_at.is_(None) | (TicketProduct.sale_starts_at <= now)),
         (TicketProduct.sale_ends_at.is_(None) | (TicketProduct.sale_ends_at >= now)),
     ).order_by(TicketProduct.sort_order, TicketProduct.name))).scalars().all()
-    return {"enabled": True, "currency": cfg.currency, "test_mode": True,
+    return {"enabled": True, "currency": cfg.currency,
+            "test_mode": settings.environment.lower() != "production",
             "tax": {"enabled": cfg.tax_enabled, "bps": cfg.tax_bps, "paid_by": cfg.tax_paid_by},
             "checkout_fields": cfg.checkout_fields or [],
             "tickets": [{**product_out(p), "available": max(0, p.capacity - p.sold)} for p in rows]}
@@ -896,7 +901,8 @@ async def create_order(event_id: str, body: OrderIn, db: AsyncSession = Depends(
     order.provider_reference, order.checkout_url = reference, url
     await db.commit()
     return {"order_id": order.id, "status": order.status, "checkout_url": url,
-            "expires_at": order.hold_expires_at, "test_mode": True}
+            "expires_at": order.hold_expires_at,
+            "test_mode": settings.environment.lower() != "production"}
 
 
 @app.get("/api/ticketing/public/orders/{order_id}", dependencies=[Depends(require_service_enabled)])

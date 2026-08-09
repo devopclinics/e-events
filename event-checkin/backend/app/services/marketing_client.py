@@ -7,32 +7,19 @@ import jwt
 from ..config import settings
 
 
+def _service_token() -> str:
+    timestamp = datetime.now(timezone.utc)
+    return jwt.encode({
+        "sub": "festio-backend", "email": "system@festio.events", "name": "Festio",
+        "is_platform_superadmin": True, "iss": "guesthub", "aud": "marketing",
+        "iat": timestamp, "exp": timestamp + timedelta(minutes=2),
+    }, settings.planner_internal_token, algorithm="HS256")
+
+
 async def ingest_marketing_lead(user, **fields) -> None:
     if not settings.planner_internal_token or not settings.marketing_service_url:
         return
-
-
-async def ingest_marketing_delivery(email: str | None, event: str, provider_id: str | None = None) -> None:
-    """Mirror Resend outcomes into the lead timeline without coupling databases."""
-    if not email or not settings.planner_internal_token or not settings.marketing_service_url:
-        return
-    timestamp = datetime.now(timezone.utc)
-    token = jwt.encode({
-        "sub": "festio-backend", "email": "system@festio.events", "name": "Festio",
-        "is_platform_superadmin": True, "iss": "guesthub", "aud": "marketing",
-        "iat": timestamp, "exp": timestamp + timedelta(minutes=2),
-    }, settings.planner_internal_token, algorithm="HS256")
-    try:
-        async with httpx.AsyncClient(timeout=2.0) as client:
-            await client.post(f"{settings.marketing_service_url.rstrip('/')}/api/marketing/internal/delivery", json={"email": email, "event": event, "provider_id": provider_id}, headers={"Authorization": f"Bearer {token}"})
-    except Exception:
-        return
-    timestamp = datetime.now(timezone.utc)
-    token = jwt.encode({
-        "sub": "festio-backend", "email": "system@festio.events", "name": "Festio",
-        "is_platform_superadmin": True, "iss": "guesthub", "aud": "marketing",
-        "iat": timestamp, "exp": timestamp + timedelta(minutes=2),
-    }, settings.planner_internal_token, algorithm="HS256")
+    token = _service_token()
     payload = {"festio_user_id": user.firebase_uid or user.id, "email": user.email, "name": user.name, **fields}
     try:
         async with httpx.AsyncClient(timeout=2.0) as client:
@@ -40,3 +27,29 @@ async def ingest_marketing_delivery(email: str | None, event: str, provider_id: 
     except Exception:
         # Marketing must never block authentication or event creation.
         return
+
+
+async def ingest_marketing_delivery(email: str | None, event: str, provider_id: str | None = None) -> None:
+    """Mirror Resend outcomes into the lead timeline without coupling databases."""
+    if not email or not settings.planner_internal_token or not settings.marketing_service_url:
+        return
+    token = _service_token()
+    try:
+        async with httpx.AsyncClient(timeout=2.0) as client:
+            await client.post(f"{settings.marketing_service_url.rstrip('/')}/api/marketing/internal/delivery", json={"email": email, "event": event, "provider_id": provider_id}, headers={"Authorization": f"Bearer {token}"})
+    except Exception:
+        return
+
+
+async def ingest_org_lifecycle(db, org_id: str, *, stage: str, **fields) -> None:
+    """Attribute organization revenue and ticket milestones to its owner."""
+    from sqlalchemy import select
+    from ..models import Membership, User
+    membership = await db.scalar(select(Membership).where(Membership.org_id == org_id).order_by(
+        (Membership.role == "owner").desc(), Membership.created_at.asc()
+    ).limit(1))
+    if not membership:
+        return
+    user = await db.get(User, membership.user_id)
+    if user:
+        await ingest_marketing_lead(user, stage=stage, **fields)

@@ -252,6 +252,8 @@ async def _fulfill(db: AsyncSession, provider: str, reference: str, event_id: st
             tier_key=tier_key, amount=0, currency="", status="paid",
         ))
     await db.commit()
+    from ..services.marketing_client import ingest_org_lifecycle
+    await ingest_org_lifecycle(db, event.org_id, stage="paid", event_type=event.event_type)
     logger.info("billing: applied %s to event %s via %s", tier_key, event.id, provider)
 
 

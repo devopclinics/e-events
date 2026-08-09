@@ -20,14 +20,25 @@ class Settings(BaseSettings):
     operations_interval_seconds: int = 60
 
     def assert_safe_environment(self) -> None:
-        if self.environment.lower() != "staging":
-            raise RuntimeError("ticketing-service is staging-only")
-        if "staging" not in self.public_base_url and "localhost" not in self.public_base_url:
-            raise RuntimeError("ticketing public URL must be staging or localhost")
-        if self.stripe_secret_key.startswith("sk_live_"):
-            raise RuntimeError("Stripe live keys are forbidden in staging ticketing-service")
-        if self.paystack_secret_key.startswith("sk_live_"):
-            raise RuntimeError("Paystack live keys are forbidden in staging ticketing-service")
+        environment = self.environment.lower()
+        if environment not in {"staging", "production"}:
+            raise RuntimeError("ticketing environment must be staging or production")
+        if not self.internal_service_token:
+            raise RuntimeError("ticketing internal service token is required")
+        if environment == "production":
+            if self.public_base_url.rstrip("/") != "https://festio.events":
+                raise RuntimeError("production ticketing URL must be https://festio.events")
+            if self.service_enabled and self.stripe_secret_key and not self.stripe_secret_key.startswith("sk_live_"):
+                raise RuntimeError("production Stripe credential must be a live key")
+            if self.service_enabled and self.paystack_secret_key and not self.paystack_secret_key.startswith("sk_live_"):
+                raise RuntimeError("production Paystack credential must be a live key")
+        else:
+            if "staging" not in self.public_base_url and "localhost" not in self.public_base_url:
+                raise RuntimeError("staging ticketing URL must be staging or localhost")
+            if self.stripe_secret_key.startswith("sk_live_"):
+                raise RuntimeError("Stripe live keys are forbidden in staging")
+            if self.paystack_secret_key.startswith("sk_live_"):
+                raise RuntimeError("Paystack live keys are forbidden in staging")
 
 
 settings = Settings()

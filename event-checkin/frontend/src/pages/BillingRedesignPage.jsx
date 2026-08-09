@@ -39,7 +39,7 @@ function catalogLabel(entry) {
   return typeof entry === 'string' ? entry : entry?.label || 'Capability'
 }
 
-function BillingTab({ notify, eventId, onBuyPass, onBuyCredits }) {
+function BillingTab({ notify, eventId, onBuyPass, onBuyCredits, onBuyAddon }) {
   const navigate = useNavigate()
   const { data: billing, loading: billingLoading, error: billingError, refresh: loadBilling } = useBilling(eventId)
   const [currencyBusy, setCurrencyBusy] = useState(false)
@@ -64,6 +64,8 @@ function BillingTab({ notify, eventId, onBuyPass, onBuyCredits }) {
 
   const tierRows = billing.tiers || []
   const packRows = billing.packs || []
+  const addonRows = billing.addon_plans || []
+  const purchasedAddons = new Set(billing.purchased_addons || [])
   const ledgerRows = billing.ledger?.rows || []
   const channelSummary = new Map((billing.ledger?.summary || []).map((row) => [row.channel, row]))
   const activeTier = tierRows.find((tier) => tier.key === billing.plan_tier)
@@ -157,6 +159,24 @@ function BillingTab({ notify, eventId, onBuyPass, onBuyCredits }) {
             <button data-plan-key={p.key} className="rr-btn secondary" disabled={!billing.configured || !billing.is_paid} style={{ width: '100%', justifyContent: 'center' }} onClick={() => onBuyCredits(p)}>Buy credits</button>
           </div>
         ))}
+      </div>
+
+      <div className="rr-section-title">
+        <div><h2>Event add-ons</h2><p>One-time modules for this event; access is enabled after successful payment</p></div>
+      </div>
+      <div className="rr-grid3">
+        {addonRows.length === 0 ? <EmptyState icon="grid" title="No add-ons available" message="The billing catalogue has no active add-ons for this currency." /> : addonRows.map((addon) => {
+          const purchased = purchasedAddons.has(addon.key)
+          return <div className="rr-panel bl-tier-card" key={addon.key}>
+            <strong>{addon.name || addon.label}</strong>
+            <div className="bl-tier-price">{billingMoney(addon.amount, addon.currency || billing.currency)}</div>
+            {addon.description && <p className="rd-hint">{addon.description}</p>}
+            <button data-plan-key={addon.key} className={`rr-btn ${purchased ? 'secondary' : 'primary'}`} style={{ width: '100%', justifyContent: 'center' }}
+              disabled={!billing.configured || !billing.is_paid || purchased} onClick={() => onBuyAddon(addon)}>
+              {purchased ? 'Enabled for this event' : 'Buy add-on'}
+            </button>
+          </div>
+        })}
       </div>
 
       <div className="rr-section-title">
@@ -977,7 +997,11 @@ export default function BillingRedesignPage() {
     setCheckoutError('')
     try {
       const info = await api.getBillingTiers(eventId)
-      const candidates = type === 'credits' ? info.packs || [] : info.tiers || []
+      const candidates = type === 'credits'
+        ? info.packs || []
+        : type === 'addon'
+          ? info.addon_plans || []
+          : info.tiers || []
       const plan = candidates.find((entry) => entry.key === selectedPlan?.key)
       if (!plan) throw new Error('This item is no longer available in the current billing catalogue.')
       setCheckout({
@@ -1013,7 +1037,7 @@ export default function BillingRedesignPage() {
   }
 
   const checkoutModal = checkout && (
-    <Modal title={checkout.type === 'pass' ? `Buy ${checkout.item}` : `Buy credits — ${checkout.item}`} onClose={() => setCheckout(null)} width={420}>
+    <Modal title={checkout.type === 'pass' ? `Buy ${checkout.item}` : checkout.type === 'addon' ? `Add ${checkout.item}` : `Buy credits — ${checkout.item}`} onClose={() => setCheckout(null)} width={420}>
       <p style={{ fontSize: '0.85rem', marginBottom: 10 }}>{checkout.item} · <strong>{checkout.price}</strong></p>
       <p className="rd-hint">
         Continue to {checkout.provider?.toUpperCase()} secure checkout. Card details are entered only on the provider's hosted page and never pass through Festio.
@@ -1058,7 +1082,7 @@ export default function BillingRedesignPage() {
       </div>
 
       <TabsStrip tab={tab} goTab={goTab} />
-      <BillingTab notify={notify} eventId={eventId} onBuyPass={(plan) => openCheckout('pass', plan)} onBuyCredits={(plan) => openCheckout('credits', plan)} />
+      <BillingTab notify={notify} eventId={eventId} onBuyPass={(plan) => openCheckout('pass', plan)} onBuyCredits={(plan) => openCheckout('credits', plan)} onBuyAddon={(plan) => openCheckout('addon', plan)} />
 
       {toast && <div className="rd-toast"><Icon name="check" />{toast}</div>}
       {checkoutModal}

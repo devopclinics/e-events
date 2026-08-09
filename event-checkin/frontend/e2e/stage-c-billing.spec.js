@@ -141,4 +141,50 @@ test.describe('Stage C billing — provider-safe hosted handoff', () => {
     expect(submittedBody).toEqual({ event_id: eventId, tier: selectedPack.key })
     await expect(page).toHaveURL(new RegExp(`provider=${billing.provider}`))
   })
+
+  test('add-on purchase uses the live add-on catalog and hosted checkout', async ({ page }) => {
+    const eventId = requiredEnv('E2E_EVENT_ID')
+    await signIn(page)
+
+    const tiersReady = page.waitForResponse((response) =>
+      response.url().includes(`/api/billing/tiers/${eventId}`) && response.status() === 200
+    )
+    await page.goto('/billing-redesign')
+    await expectQaEventLoaded(page)
+    const billing = await (await tiersReady).json()
+    test.skip(!billing.is_paid, 'Add-ons require an active Event Pass')
+    const selectedAddon = billing.addon_plans?.find((addon) => !(billing.purchased_addons || []).includes(addon.key))
+    test.skip(!selectedAddon, 'The isolated QA event has no unpurchased active add-on')
+
+    const hostedOrigin = billing.provider === 'stripe' ? 'https://checkout.stripe.com' : 'https://checkout.paystack.com'
+    const hostedUrl = `${hostedOrigin}/e2e-safe-handoff?provider=${billing.provider}&kind=addon`
+    let submittedBody
+    await page.route('**/api/billing/checkout', async (route) => {
+      submittedBody = route.request().postDataJSON()
+      await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ provider: billing.provider, url: hostedUrl }) })
+    })
+    await page.route(`${hostedOrigin}/**`, async (route) => {
+      await route.fulfill({ status: 200, contentType: 'text/html', body: '<title>Provider-safe E2E handoff</title><h1>Hosted checkout</h1>' })
+    })
+
+    const buyButton = page.locator(`button[data-plan-key="${selectedAddon.key}"]`).filter({ hasText: 'Buy add-on' })
+    await expect(buyButton).toBeVisible()
+    if (!billing.configured) {
+      await expect(buyButton).toBeDisabled()
+      test.skip(true, `${billing.provider} is not configured on isolated staging; hosted checkout is correctly unavailable.`)
+    }
+    await buyButton.click()
+
+    const modalSubmit = page.getByTestId('hosted-checkout-submit')
+    await expect(modalSubmit).toHaveAttribute('data-plan-key', selectedAddon.key)
+    await expect(page.locator('.rr-modal')).toContainText(`Add ${selectedAddon.name || selectedAddon.label}`)
+
+    await Promise.all([
+      page.waitForURL(new RegExp(`${hostedOrigin.replaceAll('.', '\\.')}\\/e2e-safe-handoff\\?`)),
+      modalSubmit.click(),
+    ])
+
+    expect(submittedBody).toEqual({ event_id: eventId, tier: selectedAddon.key })
+    await expect(page).toHaveURL(new RegExp('kind=addon'))
+  })
 })

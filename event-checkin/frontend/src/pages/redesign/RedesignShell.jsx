@@ -163,7 +163,7 @@ const TOP_LINKS = [
   {
     id: 'ticketing', label: 'Ticket sales', to: '/ticketing-redesign', icon: 'ticket',
     gate: ({ user, ticketingMaster }) => ticketingMaster && user?.role === 'admin' && typeof window !== 'undefined' &&
-      (window.location.hostname === 'staging.festio.events' || window.location.hostname === 'localhost'),
+      ['festio.events', 'staging.festio.events', 'localhost'].includes(window.location.hostname),
   },
   { id: 'mytasks', label: 'My Tasks', to: '/team-redesign?tab=mytasks', icon: 'file' },
   {
@@ -237,7 +237,7 @@ export default function RedesignShell({ topActive, withEventSidebar = false, eve
   const [ticketingMaster, setTicketingMaster] = useState(false)
 
   useEffect(() => {
-    if (!['staging.festio.events', 'localhost'].includes(window.location.hostname)) return
+    if (!['festio.events', 'staging.festio.events', 'localhost'].includes(window.location.hostname)) return
     fetch('/api/ticketing/status', { cache: 'no-store' }).then(r => r.ok ? r.json() : null)
       .then(data => setTicketingMaster(!!data?.enabled)).catch(() => setTicketingMaster(false))
   }, [])

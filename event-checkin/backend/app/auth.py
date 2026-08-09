@@ -132,8 +132,16 @@ async def get_current_user(
     except (ValueError, TypeError):
         attribution = {}
     allowed_attribution = {key: attribution.get(key) for key in ("source", "medium", "campaign", "referrer", "landing_page") if attribution.get(key)}
+    # Consent is accepted only as an explicit boolean from the authenticated
+    # registration request. Missing values always remain opted out.
+    if attribution.get("consent_email") is True:
+        allowed_attribution["consent_email"] = True
     from .services.marketing_client import ingest_marketing_lead
-    asyncio.create_task(ingest_marketing_lead(user, stage="registered", source="website", **allowed_attribution))
+    asyncio.create_task(ingest_marketing_lead(
+        user, stage="registered", source="website",
+        registered_at=user.created_at.isoformat() if user.created_at else None,
+        **allowed_attribution,
+    ))
 
     return user
 

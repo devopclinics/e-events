@@ -7,6 +7,7 @@ main Festio backend or reads its database.
 import json
 import os
 import smtplib
+import threading
 import uuid
 from datetime import datetime, timedelta, timezone
 from email.message import EmailMessage
@@ -16,7 +17,7 @@ import jwt
 from fastapi import Depends, FastAPI, Header, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, ConfigDict, EmailStr, Field
-from sqlalchemy import JSON, Boolean, DateTime, ForeignKey, Integer, String, Text, create_engine, func, select
+from sqlalchemy import JSON, Boolean, DateTime, ForeignKey, Integer, String, Text, create_engine, func, inspect, select, text
 from sqlalchemy.orm import DeclarativeBase, Mapped, Session, mapped_column, sessionmaker
 
 
@@ -67,6 +68,7 @@ class Lead(Base):
     consent_email: Mapped[bool] = mapped_column(Boolean, default=False)
     consent_sms: Mapped[bool] = mapped_column(Boolean, default=False)
     unsubscribed: Mapped[bool] = mapped_column(Boolean, default=False)
+    registered_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now, index=True)
     last_active_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     next_follow_up_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now)
@@ -100,6 +102,13 @@ class ModuleRecord(Base):
 
 Base.metadata.create_all(engine)
 
+# Lightweight additive migration for the service-owned SQLite database. This
+# keeps upgrades independent from the main Festio schema and preserves leads.
+if "registered_at" not in {column["name"] for column in inspect(engine).get_columns("marketing_leads")}:
+    with engine.begin() as connection:
+        connection.execute(text("ALTER TABLE marketing_leads ADD COLUMN registered_at DATETIME"))
+        connection.execute(text("UPDATE marketing_leads SET registered_at = created_at WHERE registered_at IS NULL"))
+
 
 def seed_defaults() -> None:
     defaults = [
@@ -120,13 +129,20 @@ def seed_defaults() -> None:
         ("content", "Weekly organizer education", "draft", {"channel": "linkedin", "pillar": "education", "cadence": "weekly"}),
         ("content", "Ticket Sales product demo", "draft", {"channel": "instagram", "pillar": "product_demo", "format": "short_video"}),
         ("content", "Planner product demo", "draft", {"channel": "linkedin", "pillar": "product_demo", "format": "carousel"}),
+        ("content", "Social publishing workflow", "active", {"channels": ["linkedin", "instagram", "facebook"], "cadence": {"tuesday": "organizer education", "thursday": "product demo", "saturday": "customer story"}, "workflow": ["draft", "review", "approved", "published"], "owner": "muritala@festio.events"}),
+        ("content", "Campaign tracking conventions", "active", {"utm_source": "lowercase platform or partner name", "utm_medium": ["email", "organic_social", "paid_social", "partner", "referral"], "utm_campaign": "yyyy-mm-campaign-name", "utm_content": "creative-or-cta-variant", "example": "utm_source=linkedin&utm_medium=organic_social&utm_campaign=2026-08-addon-promotion&utm_content=planner-carousel"}),
+        ("tasks", "New lead response SLA", "active", {"owner": "muritala@festio.events", "target_minutes": 60, "applies_to": ["registered", "demo_booked"], "business_hours": "Monday-Friday, 09:00-17:00 America/Chicago"}),
         ("experiments", "Registration CTA test", "draft", {"metric": "sign_up_rate", "variants": ["Create free event", "Plan your event free"]}),
     ]
     with SessionLocal() as db:
-        if db.scalar(select(func.count(ModuleRecord.id))) == 0:
-            for module, name, status, payload in defaults:
+        existing = set(db.scalars(select(ModuleRecord.name)).all())
+        for module, name, status, payload in defaults:
+            if name not in existing:
                 db.add(ModuleRecord(module=module, name=name, status=status, payload=payload, created_by="system@festio.events"))
-            db.commit()
+        promotion = db.scalar(select(ModuleRecord).where(ModuleRecord.name == "Six-month paid add-on promotion"))
+        if promotion and not promotion.payload.get("starts_at"):
+            promotion.payload = {**promotion.payload, "starts_at": "2026-08-07", "ends_at": "2027-02-07", "eligibility": "paid_events_only", "offer": "all add-ons included at no extra charge"}
+        db.commit()
 
 
 seed_defaults()
@@ -182,9 +198,9 @@ def record_out(row: ModuleRecord) -> dict:
     return {c.name: getattr(row, c.name) for c in row.__table__.columns}
 
 
-def send_follow_up(lead: Lead, sequence: ModuleRecord) -> str:
+def send_follow_up(lead: Lead, sequence: ModuleRecord, step_index: int = 0) -> str:
     steps = sequence.payload.get("steps") or []
-    step = steps[0] if steps else {"subject": sequence.name, "cta": "Open Festio"}
+    step = steps[min(step_index, len(steps) - 1)] if steps else {"subject": sequence.name, "cta": "Open Festio"}
     host, user, password = os.getenv("SMTP_HOST", ""), os.getenv("SMTP_USER", ""), os.getenv("SMTP_PASSWORD", "")
     if not host or not user or not password:
         return "queued"
@@ -226,6 +242,7 @@ class LeadIn(BaseModel):
     tags: list[str] = Field(default_factory=list)
     consent_email: bool = False
     consent_sms: bool = False
+    registered_at: datetime | None = None
 
 
 class RecordIn(BaseModel):
@@ -256,7 +273,11 @@ def ingest(body: dict, identity: Identity = Depends(decode_identity), db: Sessio
     if not email: raise HTTPException(400, "Email is required")
     row = db.scalar(select(Lead).where((Lead.festio_user_id == subject) | (Lead.email == email)))
     if not row:
-        row = Lead(email=email, festio_user_id=subject or None, name=body.get("name") or "", source=body.get("source") or "website", stage=body.get("stage") or "registered", last_active_at=now(), next_follow_up_at=now() + timedelta(days=1))
+        registered_at = body.get("registered_at")
+        if isinstance(registered_at, str):
+            try: registered_at = datetime.fromisoformat(registered_at.replace("Z", "+00:00"))
+            except ValueError: registered_at = None
+        row = Lead(email=email, festio_user_id=subject or None, name=body.get("name") or "", source=body.get("source") or "website", stage=body.get("stage") or "registered", owner_email=os.getenv("MARKETING_DEFAULT_OWNER", "muritala@festio.events"), registered_at=registered_at or now(), last_active_at=now(), next_follow_up_at=now() + timedelta(hours=1))
         db.add(row); db.flush(); db.add(Activity(lead_id=row.id, kind="registered", summary="Festio account registered", actor="festio"))
     else:
         row.last_active_at = now()
@@ -265,6 +286,11 @@ def ingest(body: dict, identity: Identity = Depends(decode_identity), db: Sessio
         if body.get("event_type"): row.event_type = body["event_type"]
         if body.get("guest_count") is not None: row.guest_count = body["guest_count"]
         if body.get("stage") == "event_created": row.score = max(row.score, 30)
+        if body.get("registered_at"):
+            try: row.registered_at = datetime.fromisoformat(str(body["registered_at"]).replace("Z", "+00:00"))
+            except ValueError: pass
+    if body.get("consent_email") is True and not row.unsubscribed:
+        row.consent_email = True
     for field in ("source", "medium", "campaign", "referrer", "landing_page"):
         if body.get(field): setattr(row, field, body[field])
     db.commit(); db.refresh(row); return lead_out(row)
@@ -276,7 +302,12 @@ def dashboard(identity: Identity = Depends(decode_identity), db: Session = Depen
     modules = dict(db.execute(select(ModuleRecord.module, func.count(ModuleRecord.id)).group_by(ModuleRecord.module)).all())
     due = db.scalar(select(func.count(Lead.id)).where(Lead.next_follow_up_at <= now())) or 0
     consented = db.scalar(select(func.count(Lead.id)).where(Lead.consent_email.is_(True), Lead.unsubscribed.is_(False))) or 0
-    return {"total_leads": sum(stages.values()), "stages": stages, "modules": modules, "follow_ups_due": due, "email_marketable": consented}
+    total = sum(stages.values())
+    event_created = sum(stages.get(stage, 0) for stage in ("event_created", "activated", "qualified", "demo_booked", "paid", "customer"))
+    paid = stages.get("paid", 0) + stages.get("customer", 0)
+    unowned = db.scalar(select(func.count(Lead.id)).where(Lead.owner_email.is_(None))) or 0
+    sla_overdue = db.scalar(select(func.count(Lead.id)).where(Lead.stage == "registered", Lead.registered_at <= now() - timedelta(hours=1))) or 0
+    return {"total_leads": total, "stages": stages, "modules": modules, "follow_ups_due": due, "email_marketable": consented, "unowned": unowned, "sla_overdue": sla_overdue, "conversion": {"registered": total, "event_created": event_created, "paid": paid, "event_creation_rate": round(event_created * 100 / total, 1) if total else 0, "paid_rate": round(paid * 100 / total, 1) if total else 0}}
 
 
 @app.get("/api/marketing/access")
@@ -387,13 +418,36 @@ def run_automation(identity: Identity = Depends(require_manager), db: Session = 
     for lead in leads:
         matching = next((s for s in sequences if not s.payload.get("stage") or s.payload.get("stage") == lead.stage), None)
         if not matching: continue
-        try: delivery = send_follow_up(lead, matching)
+        sent_count = db.scalar(select(func.count(Activity.id)).where(Activity.lead_id == lead.id, Activity.data["sequence_id"].as_string() == matching.id)) or 0
+        steps = matching.payload.get("steps") or []
+        if steps and sent_count >= len(steps):
+            lead.next_follow_up_at = None
+            continue
+        try: delivery = send_follow_up(lead, matching, sent_count)
         except Exception: delivery = "failed"
-        db.add(Activity(lead_id=lead.id, kind=f"email_{delivery}", summary=f"Follow-up {delivery} from {matching.name}", actor=identity.email, data={"sequence_id": matching.id}))
-        lead.next_follow_up_at = now() + timedelta(days=int(matching.payload.get("cadence_days", 3)))
+        db.add(Activity(lead_id=lead.id, kind=f"email_{delivery}", summary=f"Follow-up {delivery} from {matching.name}", actor=identity.email, data={"sequence_id": matching.id, "step_index": sent_count}))
+        lead.next_follow_up_at = now() + timedelta(hours=int((steps[sent_count].get("next_delay_hours") if steps and sent_count < len(steps) else None) or int(matching.payload.get("cadence_days", 3)) * 24))
         queued += 1
     db.commit()
     return {"queued": queued, "eligible": len(leads), "active_sequences": len(sequences)}
+
+
+def scheduled_automation() -> None:
+    """Run consent-safe follow-ups every 15 minutes without a separate worker."""
+    while True:
+        threading.Event().wait(900)
+        try:
+            with SessionLocal() as db:
+                identity = Identity(subject="scheduler", email="automation@festio.events", name="Festio Automation", is_superadmin=True, role="superadmin")
+                run_automation(identity=identity, db=db)
+        except Exception:
+            # A delivery outage must not terminate the scheduler.
+            continue
+
+
+@app.on_event("startup")
+def start_scheduler():
+    threading.Thread(target=scheduled_automation, name="marketing-automation", daemon=True).start()
 
 
 @app.post("/api/marketing/unsubscribe/{lead_id}")

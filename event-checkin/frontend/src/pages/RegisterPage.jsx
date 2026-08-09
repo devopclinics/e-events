@@ -50,7 +50,7 @@ export default function RegisterPage() {
   // orgs default to legacy_only). Every other entry point into /register
   // omits this and keeps today's behavior.
   const goToRedesign = params.get('redesign') === '1'
-  const [form, setForm] = useState({ name: '', email: '', password: '' })
+  const [form, setForm] = useState({ name: '', email: '', password: '', marketingConsent: false })
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
   const [pickerRole, setPickerRole] = useState(null)
@@ -81,7 +81,10 @@ export default function RegisterPage() {
       await updateProfile(cred.user, { displayName: form.name })
       // Sync with backend (creates the DB record)
       const token = await cred.user.getIdToken()
-      await fetch('/api/auth/me', { headers: { Authorization: `Bearer ${token}` } })
+      await fetch('/api/auth/me', { headers: {
+        Authorization: `Bearer ${token}`,
+        'X-Festio-Attribution': encodeURIComponent(JSON.stringify({ consent_email: form.marketingConsent })),
+      } })
       setPickerRole('official')
     } catch (err) {
       setError(friendlyError(err.code))
@@ -164,6 +167,10 @@ export default function RegisterPage() {
             <label htmlFor="register-password" className="block text-xs font-semibold text-gray-600 dark:text-slate-300 mb-1">Password</label>
             <input id="register-password" className={field} type="password" value={form.password} onChange={set('password')} required autoComplete="new-password" placeholder="Min. 6 characters" />
           </div>
+          <label className="flex items-start gap-3 text-xs leading-5 text-gray-600 dark:text-slate-300">
+            <input className="mt-1" type="checkbox" checked={form.marketingConsent} onChange={e=>setForm(f=>({...f,marketingConsent:e.target.checked}))}/>
+            <span>Email me practical event-planning tips, product updates, and occasional Festio offers. Optional. You can unsubscribe at any time.</span>
+          </label>
           {error && <p className="text-red-600 text-sm">{error}</p>}
           <button type="submit" disabled={loading}
             className="w-full bg-indigo-600 text-white py-2.5 rounded-lg font-semibold text-sm hover:bg-indigo-700 disabled:opacity-50 transition-colors">

@@ -51,6 +51,7 @@ def test_feature_gate_raises_402_for_insufficient_tier():
 
 def test_addon_override_precedence_preserves_purchase_history():
     event = _event(
+        is_paid=True,
         org_id="org-1",
         purchased_addons=["addon_seating"],
         platform_addon_overrides={"addon_seating": False, "addon_menu": False},
@@ -66,6 +67,7 @@ def test_addon_override_precedence_preserves_purchase_history():
 
 def test_global_addon_promotion_grants_access_but_explicit_denies_win():
     event = _event(
+        is_paid=True,
         purchased_addons=[],
         addon_promo_until=datetime.utcnow() + timedelta(days=180),
         platform_addon_overrides={"addon_seating": False},
@@ -75,6 +77,17 @@ def test_global_addon_promotion_grants_access_but_explicit_denies_win():
     assert event_allows(event, "seating_enabled") is False
     event.addon_overrides = {"addon_seating": True}
     assert event_allows(event, "seating_enabled") is True
+
+
+def test_free_event_cannot_use_addons_even_with_promo_purchase_or_override():
+    event = _event(
+        is_paid=False,
+        purchased_addons=["addon_seating"],
+        addon_promo_until=datetime.utcnow() + timedelta(days=180),
+        addon_overrides={"addon_seating": True},
+        org_addon_overrides={"addon_seating": True},
+    )
+    assert event_allows(event, "seating_enabled") is False
 
 
 def test_credit_metering_decrements_then_blocks():

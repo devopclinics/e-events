@@ -132,6 +132,11 @@ def event_allows(event: Event, feature: str) -> bool:
 
 
 def event_allows_addon(event: Event, addon: str) -> bool:
+    # Add-ons supplement an Event Pass; they never turn a free event into a
+    # paid event. This hard gate intentionally wins over every operator override
+    # and promotional grant below.
+    if not event.is_paid:
+        return False
     event_override = (event.addon_overrides or {}).get(addon)
     if event_override is not None:
         return bool(event_override)

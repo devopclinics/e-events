@@ -363,7 +363,11 @@ def update_lead(lead_id: str, body: dict, identity: Identity = Depends(decode_id
     if not row: raise HTTPException(404, "Lead not found")
     allowed = {c.name for c in Lead.__table__.columns} - {"id", "created_at", "updated_at", "festio_user_id"}
     for key, value in body.items():
-        if key in allowed: setattr(row, key, value)
+        if key in allowed:
+            if key in {"registered_at", "last_active_at", "next_follow_up_at"} and isinstance(value, str):
+                try: value = datetime.fromisoformat(value.replace("Z", "+00:00"))
+                except ValueError: raise HTTPException(400, f"Invalid {key}")
+            setattr(row, key, value)
     db.add(Activity(lead_id=row.id, kind="updated", summary="Lead updated", actor=identity.email, data={"fields": list(body)})); db.commit(); db.refresh(row)
     return lead_out(row)
 

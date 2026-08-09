@@ -1213,6 +1213,11 @@ const ADDON_FEATURE_KEY = {
   orders: 'menu_enabled', logistics: 'logistics_enabled', registry: 'registry_enabled',
   experience: 'experience_enabled', festiome: 'festiome_addon_enabled', planner: 'planner_enabled',
 }
+const ADDON_PLAN_KEY = {
+  venueAccess: 'addon_venue_access', seating: 'addon_seating', partnerPairing: 'addon_seating',
+  orders: 'addon_menu', logistics: 'addon_logistics', registry: 'addon_registry',
+  experience: 'addon_experience', festiome: 'addon_festiome', planner: 'addon_planner',
+}
 const CHANNEL_FEATURE_KEY = { email: 'notify_email', sms: 'notify_sms', whatsapp: 'notify_whatsapp' }
 const THANKYOU_AUDIENCE_KEY = { 'Checked in': 'admitted', 'Confirmed': 'confirmed', 'All guests': 'all' }
 
@@ -1231,6 +1236,7 @@ function SettingsTab({ notify, eventId, event, onEventChanged }) {
   const [thankYouDelay, setThankYouDelay] = useState(24)
   const [routingBusy, setRoutingBusy] = useState(false)
   const [featureBusy, setFeatureBusy] = useState('')
+  const [purchasedAddons, setPurchasedAddons] = useState(new Set())
 
   // Check-in behavior — ported from AdminPage.jsx's CheckoutToggle/WalkInToggle.
   const [checkoutEnabled, setCheckoutEnabled] = useState(false)
@@ -1279,6 +1285,9 @@ function SettingsTab({ notify, eventId, event, onEventChanged }) {
   useEffect(() => {
     if (!eventId) { setTableGroups([]); return }
     api.listTableGroups(eventId).then(setTableGroups).catch(() => setTableGroups([]))
+    api.getBillingTiers(eventId)
+      .then((billing) => setPurchasedAddons(new Set(billing.purchased_addons || [])))
+      .catch(() => setPurchasedAddons(new Set(event?.purchased_addons || [])))
   }, [eventId])
 
   useEffect(() => {
@@ -1427,24 +1436,30 @@ function SettingsTab({ notify, eventId, event, onEventChanged }) {
   }
 
   async function saveFeature(key, body, revert) {
-    if (!eventId || featureBusy) return
+    if (!eventId || featureBusy) return false
     setFeatureBusy(key)
     try {
       await api.toggleFeatures(eventId, body)
       await onEventChanged?.()
+      return true
     } catch (e) {
       revert()
       notify(e.message || 'This change could not be saved', true)
+      return false
     } finally {
       setFeatureBusy('')
     }
   }
 
-  function toggleAddon(key, label) {
+  async function toggleAddon(key, label) {
     const next = !addons[key]
+    if (next && !purchasedAddons.has(ADDON_PLAN_KEY[key])) {
+      notify(`${label} requires a separate add-on purchase`, true)
+      return
+    }
     setAddons((prev) => ({ ...prev, [key]: next }))
-    saveFeature(key, { [ADDON_FEATURE_KEY[key]]: next }, () => setAddons((prev) => ({ ...prev, [key]: !next })))
-    notify(`${label} ${next ? 'enabled' : 'disabled'}`)
+    const saved = await saveFeature(key, { [ADDON_FEATURE_KEY[key]]: next }, () => setAddons((prev) => ({ ...prev, [key]: !next })))
+    if (saved) notify(`${label} ${next ? 'enabled' : 'disabled'}`)
   }
 
   function toggleChannel(key, label) {
@@ -1529,13 +1544,15 @@ function SettingsTab({ notify, eventId, event, onEventChanged }) {
       </div>
 
       <div className="rr-grid3 cm-toggle-grid">
-        {ADDON_TOGGLES.map((a) => (
-          <div className="rr-panel cm-toggle-card" key={a.key}>
+        {ADDON_TOGGLES.map((a) => {
+          const purchased = purchasedAddons.has(ADDON_PLAN_KEY[a.key])
+          return <div className="rr-panel cm-toggle-card" key={a.key}>
             <div className="cm-toggle-top">
               <strong>{a.label}</strong>
-              <Switch checked={!!addons[a.key]} onChange={() => toggleAddon(a.key, a.label)} />
+              <Switch checked={!!addons[a.key]} disabled={!!featureBusy || (!addons[a.key] && !purchased)} onChange={() => toggleAddon(a.key, a.label)} />
             </div>
             <p>{a.desc}</p>
+            {!purchased && !addons[a.key] && <Link className="rr-link-btn" to="/billing-redesign?tab=billing">Buy add-on <Icon name="arrow" size={10} /></Link>}
             {!!addons[a.key] && (
               <div className="gr-actions" aria-label={`${a.label} settings`}>
                 {a.settings?.map(([label, to]) => (
@@ -1544,7 +1561,7 @@ function SettingsTab({ notify, eventId, event, onEventChanged }) {
               </div>
             )}
           </div>
-        ))}
+        })}
       </div>
 
       <div className="rr-section-title">

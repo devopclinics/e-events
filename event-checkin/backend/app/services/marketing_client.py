@@ -53,3 +53,13 @@ async def ingest_org_lifecycle(db, org_id: str, *, stage: str, **fields) -> None
     user = await db.get(User, membership.user_id)
     if user:
         await ingest_marketing_lead(user, stage=stage, **fields)
+
+
+async def marketing_preferences(email: str, body: dict | None = None) -> dict:
+    if not settings.planner_internal_token or not settings.marketing_service_url:
+        raise RuntimeError("Marketing is not configured")
+    url = f"{settings.marketing_service_url.rstrip('/')}/api/marketing/internal/preferences/{email.lower()}"
+    async with httpx.AsyncClient(timeout=5.0) as client:
+        response = await client.request("PUT" if body is not None else "GET", url, json=body, headers={"Authorization": f"Bearer {_service_token()}"})
+    response.raise_for_status()
+    return response.json()

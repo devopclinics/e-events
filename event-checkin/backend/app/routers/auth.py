@@ -169,6 +169,24 @@ async def marketing_token(user: User = Depends(get_current_user)):
     return {"token": token, "expires_in": 900}
 
 
+@router.get("/marketing-preferences")
+async def get_marketing_preferences(user: User = Depends(get_current_user)):
+    from ..services.marketing_client import marketing_preferences
+    try:
+        return await marketing_preferences(user.email)
+    except Exception:
+        raise HTTPException(503, "Communication preferences are temporarily unavailable")
+
+
+@router.put("/marketing-preferences")
+async def save_marketing_preferences(body: dict, user: User = Depends(get_current_user)):
+    from ..services.marketing_client import marketing_preferences
+    try:
+        return await marketing_preferences(user.email, body)
+    except Exception:
+        raise HTTPException(503, "Communication preferences could not be saved")
+
+
 @router.post("/ticketing-token")
 async def ticketing_token(
     event_id: str,

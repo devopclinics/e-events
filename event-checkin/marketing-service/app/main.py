@@ -296,6 +296,14 @@ class RecordIn(BaseModel):
     scheduled_at: datetime | None = None
 
 
+class SocialPublishIn(BaseModel):
+    platform: str
+    message: str = Field(min_length=1, max_length=3000)
+    link_url: str | None = None
+    image_url: str | None = None
+    dry_run: bool = False
+
+
 app = FastAPI(title="Festio Marketing Service", version="1.0.0")
 app.add_middleware(CORSMiddleware, allow_origins=["https://festio.events", "http://localhost:5173"], allow_methods=["*"], allow_headers=["*"])
 
@@ -424,6 +432,16 @@ def update_lead(lead_id: str, body: dict, identity: Identity = Depends(decode_id
             setattr(row, key, value)
     db.add(Activity(lead_id=row.id, kind="updated", summary="Lead updated", actor=identity.email, data={"fields": list(body)})); audit(db, identity, "lead.updated", "lead", row.id, fields=list(body)); db.commit(); db.refresh(row)
     return lead_out(row)
+
+
+@app.delete("/api/marketing/leads/{lead_id}", status_code=204)
+def delete_lead(lead_id:str, identity:Identity=Depends(require_manager), db:Session=Depends(db_session)):
+    row=db.get(Lead,lead_id)
+    if not row: raise HTTPException(404,"Lead not found")
+    # SQLite does not enforce ORM cascades here, so remove owned timeline data
+    # explicitly and retain a non-PII audit record of the cleanup.
+    db.query(Activity).filter(Activity.lead_id==lead_id).delete(synchronize_session=False)
+    audit(db,identity,"lead.deleted","lead",lead_id);db.delete(row);db.commit()
 
 
 @app.get("/api/marketing/leads/{lead_id}/activity")
@@ -558,9 +576,56 @@ def set_preferences(body:dict,identity:Identity=Depends(decode_identity),db:Sess
     db.add(Activity(lead_id=row.id,kind="consent_changed",summary="Communication preferences updated",actor=identity.email,data={"email":row.consent_email,"sms":row.consent_sms}));audit(db,identity,"consent.changed","lead",row.id,email=row.consent_email,sms=row.consent_sms);db.commit();return {"ok":True}
 
 
+@app.get("/api/marketing/internal/preferences/{email}")
+def internal_preferences(email:str,identity:Identity=Depends(decode_identity),db:Session=Depends(db_session)):
+    if not identity.is_superadmin: raise HTTPException(403,"Internal preference access requires platform authority")
+    row=db.scalar(select(Lead).where(Lead.email==email.lower()))
+    return {"email":email.lower(),"consent_email":bool(row and row.consent_email),"consent_sms":bool(row and row.consent_sms),"unsubscribed":bool(row and row.unsubscribed)}
+
+
+@app.put("/api/marketing/internal/preferences/{email}")
+def internal_set_preferences(email:str,body:dict,identity:Identity=Depends(decode_identity),db:Session=Depends(db_session)):
+    if not identity.is_superadmin: raise HTTPException(403,"Internal preference access requires platform authority")
+    row=db.scalar(select(Lead).where(Lead.email==email.lower()))
+    if not row:
+        row=Lead(email=email.lower(),source="account_preferences",registered_at=now());db.add(row);db.flush()
+    row.consent_email=bool(body.get("consent_email"));row.consent_sms=bool(body.get("consent_sms"));row.unsubscribed=not row.consent_email
+    db.add(Activity(lead_id=row.id,kind="consent_changed",summary="Account communication preferences updated",actor=email.lower(),data={"email":row.consent_email,"sms":row.consent_sms}));audit(db,email.lower(),"consent.changed","lead",row.id,email=row.consent_email,sms=row.consent_sms);db.commit()
+    return {"email":email.lower(),"consent_email":row.consent_email,"consent_sms":row.consent_sms,"unsubscribed":row.unsubscribed}
+
+
 @app.get("/api/marketing/providers")
 def provider_readiness(identity:Identity=Depends(decode_identity)):
-    return {"email":{"provider":"resend","configured":bool(os.getenv("RESEND_API_KEY"))},"sms":{"provider":"bird","configured":bool(os.getenv("BIRD_ACCESS_KEY") and os.getenv("BIRD_WORKSPACE_ID") and os.getenv("BIRD_SMS_CHANNEL_ID"))},"social":{"linkedin":bool(os.getenv("LINKEDIN_ACCESS_TOKEN")),"facebook":bool(os.getenv("META_ACCESS_TOKEN")),"instagram":bool(os.getenv("META_ACCESS_TOKEN"))}}
+    return {"email":{"provider":"resend","configured":bool(os.getenv("RESEND_API_KEY"))},"sms":{"provider":"bird","configured":bool(os.getenv("BIRD_ACCESS_KEY") and os.getenv("BIRD_WORKSPACE_ID") and os.getenv("BIRD_SMS_CHANNEL_ID"))},"social":{"linkedin":bool(os.getenv("LINKEDIN_ACCESS_TOKEN") and os.getenv("LINKEDIN_AUTHOR_URN")),"facebook":bool(os.getenv("META_ACCESS_TOKEN") and os.getenv("META_FACEBOOK_PAGE_ID")),"instagram":bool(os.getenv("META_ACCESS_TOKEN") and os.getenv("META_INSTAGRAM_USER_ID"))}}
+
+
+@app.post("/api/marketing/social/publish")
+async def publish_social(body:SocialPublishIn, identity:Identity=Depends(require_manager), db:Session=Depends(db_session)):
+    platform=body.platform.lower()
+    if platform not in {"linkedin","facebook","instagram"}: raise HTTPException(400,"Unsupported social platform")
+    if body.dry_run:
+        audit(db,identity,"social.validated","content",None,platform=platform);db.commit();return {"status":"validated","platform":platform,"dry_run":True}
+    async with httpx.AsyncClient(timeout=30) as client:
+        if platform=="linkedin":
+            token,author=os.getenv("LINKEDIN_ACCESS_TOKEN",""),os.getenv("LINKEDIN_AUTHOR_URN","")
+            if not token or not author: raise HTTPException(503,"Connect a LinkedIn organization before publishing")
+            payload={"author":author,"commentary":body.message,"visibility":"PUBLIC","distribution":{"feedDistribution":"MAIN_FEED","targetEntities":[],"thirdPartyDistributionChannels":[]},"lifecycleState":"PUBLISHED","isReshareDisabledByAuthor":False}
+            response=await client.post("https://api.linkedin.com/rest/posts",headers={"Authorization":f"Bearer {token}","LinkedIn-Version":os.getenv("LINKEDIN_API_VERSION","202601"),"X-Restli-Protocol-Version":"2.0.0"},json=payload)
+        elif platform=="facebook":
+            token,page=os.getenv("META_ACCESS_TOKEN",""),os.getenv("META_FACEBOOK_PAGE_ID","")
+            if not token or not page: raise HTTPException(503,"Connect a Facebook Page before publishing")
+            response=await client.post(f"https://graph.facebook.com/v23.0/{page}/feed",data={"message":body.message,"link":body.link_url or "","access_token":token})
+        else:
+            token,user=os.getenv("META_ACCESS_TOKEN",""),os.getenv("META_INSTAGRAM_USER_ID","")
+            if not token or not user: raise HTTPException(503,"Connect an Instagram business account before publishing")
+            if not body.image_url: raise HTTPException(400,"Instagram publishing requires a public image URL")
+            created=await client.post(f"https://graph.facebook.com/v23.0/{user}/media",data={"image_url":body.image_url,"caption":body.message,"access_token":token})
+            if created.status_code>=400: raise HTTPException(502,"Instagram could not create the media post")
+            response=await client.post(f"https://graph.facebook.com/v23.0/{user}/media_publish",data={"creation_id":created.json().get("id"),"access_token":token})
+    if response.status_code>=400: raise HTTPException(502,f"{platform.title()} rejected the post")
+    result=response.json() if response.content else {};provider_id=result.get("id") or response.headers.get("x-restli-id")
+    audit(db,identity,"social.published","content",provider_id,platform=platform);db.commit()
+    return {"status":"published","platform":platform,"provider_id":provider_id}
 
 
 @app.post("/api/marketing/leads/{lead_id}/sms")

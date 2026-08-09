@@ -5,17 +5,21 @@ attribution, consent, staff grants, tasks, and reporting. It never imports the
 main Festio backend or reads its database.
 """
 import json
+import csv
+import io
 import os
 import smtplib
 import threading
 import uuid
+from html import escape
 from datetime import datetime, timedelta, timezone
 from email.message import EmailMessage
 from typing import Any
 
 import jwt
 import httpx
-from fastapi import Depends, FastAPI, Header, HTTPException, Query
+from fastapi import Depends, FastAPI, Header, HTTPException, Query, Request, UploadFile, File
+from fastapi.responses import StreamingResponse
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, ConfigDict, EmailStr, Field
 from sqlalchemy import JSON, Boolean, DateTime, ForeignKey, Integer, String, Text, create_engine, func, inspect, select, text
@@ -99,6 +103,27 @@ class ModuleRecord(Base):
     created_by: Mapped[str] = mapped_column(String(240))
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now)
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now, onupdate=now)
+
+
+class SavedView(Base):
+    __tablename__ = "marketing_saved_views"
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=uid)
+    name: Mapped[str] = mapped_column(String(160))
+    owner_email: Mapped[str] = mapped_column(String(240), index=True)
+    filters: Mapped[dict] = mapped_column(JSON, default=dict)
+    shared: Mapped[bool] = mapped_column(Boolean, default=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now)
+
+
+class AuditLog(Base):
+    __tablename__ = "marketing_audit_log"
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=uid)
+    actor: Mapped[str] = mapped_column(String(240), index=True)
+    action: Mapped[str] = mapped_column(String(80), index=True)
+    target_type: Mapped[str] = mapped_column(String(50))
+    target_id: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    data: Mapped[dict] = mapped_column(JSON, default=dict)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now, index=True)
 
 
 Base.metadata.create_all(engine)
@@ -197,9 +222,11 @@ def lead_out(row: Lead) -> dict:
     return {c.name: getattr(row, c.name) for c in row.__table__.columns}
 def record_out(row: ModuleRecord) -> dict:
     return {c.name: getattr(row, c.name) for c in row.__table__.columns}
+def audit(db: Session, identity: Identity | str, action: str, target_type: str, target_id: str | None = None, **data):
+    db.add(AuditLog(actor=identity if isinstance(identity, str) else identity.email, action=action, target_type=target_type, target_id=target_id, data=data))
 
 
-def send_follow_up(lead: Lead, sequence: ModuleRecord, step_index: int = 0) -> str:
+def send_follow_up(lead: Lead, sequence: ModuleRecord, step_index: int = 0) -> dict:
     steps = sequence.payload.get("steps") or []
     step = steps[min(step_index, len(steps) - 1)] if steps else {"subject": sequence.name, "cta": "Open Festio"}
     message = EmailMessage()
@@ -213,24 +240,29 @@ def send_follow_up(lead: Lead, sequence: ModuleRecord, step_index: int = 0) -> s
         f"You are receiving this because you registered for Festio. Unsubscribe: "
         f"https://festio.events/api/marketing/unsubscribe/{lead.id}\n"
     )
+    subject = str(step.get("subject") or sequence.name)
+    body = str(step.get("body") or "Your Festio event is ready for the next step.")
+    cta = str(step.get("cta") or "Open Festio")
+    unsubscribe_url = f"https://festio.events/api/marketing/unsubscribe/{lead.id}"
+    message.add_alternative(f"""<!doctype html><html><body style="margin:0;background:#f5f1e9;font-family:Arial,sans-serif;color:#172033"><table role="presentation" width="100%" cellspacing="0" cellpadding="0"><tr><td align="center" style="padding:36px 16px"><table role="presentation" width="600" style="max-width:600px;background:#fff;border-radius:18px;overflow:hidden"><tr><td style="padding:20px 32px;background:#075b5d;color:#fff;font-size:20px;font-weight:700">Festio</td></tr><tr><td style="padding:36px 32px"><p style="font-size:17px">Hi {escape(first_name)},</p><h1 style="font-size:28px;line-height:1.2">{escape(subject)}</h1><p style="font-size:16px;line-height:1.7;color:#526070">{escape(body)}</p><p style="margin:28px 0"><a href="https://festio.events/admin-redesign" style="display:inline-block;background:#a85d32;color:#fff;text-decoration:none;padding:13px 20px;border-radius:10px;font-weight:700">{escape(cta)}</a></p><p style="font-size:13px;color:#78828f">You received this because you asked Festio for event updates. <a href="{unsubscribe_url}">Unsubscribe</a>.</p></td></tr></table></td></tr></table></body></html>""", subtype="html")
     resend_key = os.getenv("RESEND_API_KEY", "")
     if resend_key:
         response = httpx.post(
             "https://api.resend.com/emails",
             headers={"Authorization": f"Bearer {resend_key}"},
-            json={"from": message["From"], "to": [lead.email], "subject": message["Subject"], "text": message.get_content()},
+            json={"from": message["From"], "to": [lead.email], "subject": message["Subject"], "text": message.get_body(preferencelist=("plain",)).get_content(), "html": message.get_body(preferencelist=("html",)).get_content()},
             timeout=20,
         )
         response.raise_for_status()
-        return "sent"
+        return {"status": "sent", "provider": "resend", "provider_id": response.json().get("id")}
     host, user, password = os.getenv("SMTP_HOST", ""), os.getenv("SMTP_USER", ""), os.getenv("SMTP_PASSWORD", "")
     if not host or not user or not password:
-        return "queued"
+        return {"status": "queued", "provider": "none", "provider_id": None}
     port = int(os.getenv("SMTP_PORT", "587"))
     with smtplib.SMTP(host, port, timeout=15) as smtp:
         if os.getenv("SMTP_TLS", "true").lower() in {"1", "true", "yes"}: smtp.starttls()
         smtp.login(user, password); smtp.send_message(message)
-    return "sent"
+    return {"status": "sent", "provider": "smtp", "provider_id": None}
 
 
 class LeadIn(BaseModel):
@@ -317,7 +349,9 @@ def dashboard(identity: Identity = Depends(decode_identity), db: Session = Depen
     event_created = sum(stages.get(stage, 0) for stage in ("event_created", "activated", "qualified", "demo_booked", "paid", "customer"))
     paid = stages.get("paid", 0) + stages.get("customer", 0)
     unowned = db.scalar(select(func.count(Lead.id)).where(Lead.owner_email.is_(None))) or 0
-    sla_overdue = db.scalar(select(func.count(Lead.id)).where(Lead.stage == "registered", Lead.registered_at <= now() - timedelta(hours=1))) or 0
+    # SLA measures scheduled work that is actually due. Historical registrations
+    # without a follow-up date no longer appear as thousands of false breaches.
+    sla_overdue = db.scalar(select(func.count(Lead.id)).where(Lead.stage == "registered", Lead.next_follow_up_at.is_not(None), Lead.next_follow_up_at <= now())) or 0
     return {"total_leads": total, "stages": stages, "modules": modules, "follow_ups_due": due, "email_marketable": consented, "unowned": unowned, "sla_overdue": sla_overdue, "conversion": {"registered": total, "event_created": event_created, "paid": paid, "event_creation_rate": round(event_created * 100 / total, 1) if total else 0, "paid_rate": round(paid * 100 / total, 1) if total else 0}}
 
 
@@ -339,21 +373,30 @@ def grant_access(body: GrantIn, identity: Identity = Depends(require_superadmin)
     row = db.scalar(select(AccessGrant).where(AccessGrant.email == email))
     if row: row.active, row.role, row.name = True, body.role, body.name
     else: row = AccessGrant(email=email, name=body.name, role=body.role, granted_by=identity.email); db.add(row)
-    db.commit(); db.refresh(row)
+    db.flush(); audit(db, identity, "access.granted", "access_grant", row.id, email=email, role=body.role); db.commit(); db.refresh(row)
     return {c.name: getattr(row, c.name) for c in row.__table__.columns}
 
 
 @app.delete("/api/marketing/access/{grant_id}", status_code=204)
-def revoke_access(grant_id: str, _: Identity = Depends(require_superadmin), db: Session = Depends(db_session)):
+def revoke_access(grant_id: str, identity: Identity = Depends(require_superadmin), db: Session = Depends(db_session)):
     row = db.get(AccessGrant, grant_id)
-    if row: row.active = False; db.commit()
+    if row: row.active = False; audit(db, identity, "access.revoked", "access_grant", row.id, email=row.email); db.commit()
 
 
 @app.get("/api/marketing/leads")
-def list_leads(stage: str | None = None, q: str | None = None, identity: Identity = Depends(decode_identity), db: Session = Depends(db_session)):
+def list_leads(stage: str | None = None, q: str | None = None, owner: str | None = None, source: str | None = None, campaign: str | None = None, consent: bool | None = None, follow_up: str | None = None, date_from: datetime | None = None, date_to: datetime | None = None, tag: str | None = None, identity: Identity = Depends(decode_identity), db: Session = Depends(db_session)):
     stmt = select(Lead)
     if stage: stmt = stmt.where(Lead.stage == stage)
     if q: stmt = stmt.where((Lead.email.ilike(f"%{q}%")) | (Lead.name.ilike(f"%{q}%")) | (Lead.organization.ilike(f"%{q}%")))
+    if owner: stmt = stmt.where(Lead.owner_email == owner)
+    if source: stmt = stmt.where(Lead.source == source)
+    if campaign: stmt = stmt.where(Lead.campaign == campaign)
+    if consent is not None: stmt = stmt.where(Lead.consent_email.is_(consent))
+    if follow_up == "due": stmt = stmt.where(Lead.next_follow_up_at <= now())
+    if follow_up == "scheduled": stmt = stmt.where(Lead.next_follow_up_at > now())
+    if date_from: stmt = stmt.where(Lead.registered_at >= date_from)
+    if date_to: stmt = stmt.where(Lead.registered_at <= date_to)
+    if tag: stmt = stmt.where(Lead.tags.contains(tag))
     return [lead_out(r) for r in db.scalars(stmt.order_by(Lead.updated_at.desc()).limit(500)).all()]
 
 
@@ -364,7 +407,7 @@ def create_lead(body: LeadIn, identity: Identity = Depends(decode_identity), db:
     values = body.model_dump()
     values["email"] = body.email.lower()
     row = Lead(**values); db.add(row); db.flush()
-    db.add(Activity(lead_id=row.id, kind="created", summary="Lead created", actor=identity.email)); db.commit(); db.refresh(row)
+    db.add(Activity(lead_id=row.id, kind="created", summary="Lead created", actor=identity.email)); audit(db, identity, "lead.created", "lead", row.id, consent_email=row.consent_email, consent_sms=row.consent_sms); db.commit(); db.refresh(row)
     return lead_out(row)
 
 
@@ -379,7 +422,7 @@ def update_lead(lead_id: str, body: dict, identity: Identity = Depends(decode_id
                 try: value = datetime.fromisoformat(value.replace("Z", "+00:00"))
                 except ValueError: raise HTTPException(400, f"Invalid {key}")
             setattr(row, key, value)
-    db.add(Activity(lead_id=row.id, kind="updated", summary="Lead updated", actor=identity.email, data={"fields": list(body)})); db.commit(); db.refresh(row)
+    db.add(Activity(lead_id=row.id, kind="updated", summary="Lead updated", actor=identity.email, data={"fields": list(body)})); audit(db, identity, "lead.updated", "lead", row.id, fields=list(body)); db.commit(); db.refresh(row)
     return lead_out(row)
 
 
@@ -408,7 +451,7 @@ def list_records(module: str, identity: Identity = Depends(decode_identity), db:
 @app.post("/api/marketing/modules/{module}")
 def create_record(module: str, body: RecordIn, identity: Identity = Depends(decode_identity), db: Session = Depends(db_session)):
     if module not in MODULES: raise HTTPException(404, "Module not found")
-    row = ModuleRecord(module=module, created_by=identity.email, **body.model_dump()); db.add(row); db.commit(); db.refresh(row); return record_out(row)
+    row = ModuleRecord(module=module, created_by=identity.email, **body.model_dump()); db.add(row); db.flush(); audit(db, identity, "module.created", module, row.id, name=row.name); db.commit(); db.refresh(row); return record_out(row)
 
 
 @app.patch("/api/marketing/modules/{module}/{record_id}")
@@ -417,13 +460,133 @@ def update_record(module: str, record_id: str, body: dict, identity: Identity = 
     if not row or row.module != module: raise HTTPException(404, "Record not found")
     for key in ("name", "status", "owner_email", "payload", "scheduled_at"):
         if key in body: setattr(row, key, body[key])
-    db.commit(); db.refresh(row); return record_out(row)
+    audit(db, identity, "module.updated", module, row.id, fields=list(body)); db.commit(); db.refresh(row); return record_out(row)
 
 
 @app.delete("/api/marketing/modules/{module}/{record_id}", status_code=204)
 def delete_record(module: str, record_id: str, identity: Identity = Depends(require_manager), db: Session = Depends(db_session)):
     row = db.get(ModuleRecord, record_id)
-    if row and row.module == module: db.delete(row); db.commit()
+    if row and row.module == module: audit(db, identity, "module.deleted", module, row.id, name=row.name); db.delete(row); db.commit()
+
+
+@app.post("/api/marketing/leads/bulk")
+def bulk_leads(body: dict, identity: Identity = Depends(require_manager), db: Session = Depends(db_session)):
+    ids = list(dict.fromkeys(body.get("ids") or []))[:500]
+    action, value = body.get("action"), body.get("value")
+    rows = db.scalars(select(Lead).where(Lead.id.in_(ids))).all() if ids else []
+    for row in rows:
+        if action == "assign": row.owner_email = value or None
+        elif action == "stage" and value in {"registered","event_created","activated","qualified","demo_booked","paid","customer","inactive","lost"}: row.stage = value
+        elif action == "tag" and value: row.tags = list(dict.fromkeys([*(row.tags or []), str(value)]))
+        elif action == "schedule": row.next_follow_up_at = now()
+        else: raise HTTPException(400, "Unsupported bulk action")
+        db.add(Activity(lead_id=row.id, kind="bulk_updated", summary=f"Bulk {action}", actor=identity.email, data={"value": value}))
+    audit(db, identity, f"leads.bulk_{action}", "lead", data_count=len(rows), value=value); db.commit()
+    return {"updated": len(rows)}
+
+
+@app.get("/api/marketing/saved-views")
+def list_saved_views(identity: Identity = Depends(decode_identity), db: Session = Depends(db_session)):
+    rows=db.scalars(select(SavedView).where((SavedView.owner_email==identity.email)|(SavedView.shared.is_(True))).order_by(SavedView.created_at)).all()
+    return [{c.name:getattr(row,c.name) for c in row.__table__.columns} for row in rows]
+
+
+@app.post("/api/marketing/saved-views")
+def create_saved_view(body: dict, identity: Identity = Depends(decode_identity), db: Session = Depends(db_session)):
+    row=SavedView(name=str(body.get("name") or "My view")[:160],owner_email=identity.email,filters=body.get("filters") or {},shared=bool(body.get("shared")));db.add(row);audit(db,identity,"view.created","saved_view",row.id);db.commit();db.refresh(row)
+    return {c.name:getattr(row,c.name) for c in row.__table__.columns}
+
+
+@app.delete("/api/marketing/saved-views/{view_id}",status_code=204)
+def delete_saved_view(view_id:str,identity:Identity=Depends(decode_identity),db:Session=Depends(db_session)):
+    row=db.get(SavedView,view_id)
+    if not row or (row.owner_email!=identity.email and not identity.is_superadmin): raise HTTPException(404,"View not found")
+    db.delete(row);audit(db,identity,"view.deleted","saved_view",view_id);db.commit()
+
+
+@app.get("/api/marketing/audit")
+def audit_history(limit:int=100,identity:Identity=Depends(require_manager),db:Session=Depends(db_session)):
+    rows=db.scalars(select(AuditLog).order_by(AuditLog.created_at.desc()).limit(min(limit,500))).all()
+    return [{c.name:getattr(row,c.name) for c in row.__table__.columns} for row in rows]
+
+
+@app.get("/api/marketing/export/leads.csv")
+def export_leads(identity:Identity=Depends(decode_identity),db:Session=Depends(db_session)):
+    fields=["email","name","organization","phone","registered_at","stage","score","owner_email","source","medium","campaign","tags","consent_email","consent_sms","unsubscribed"]
+    output=io.StringIO(); writer=csv.DictWriter(output,fieldnames=fields);writer.writeheader()
+    for row in db.scalars(select(Lead).order_by(Lead.registered_at.desc())).all():
+        data=lead_out(row);data["tags"]="|".join(data.get("tags") or []);writer.writerow({key:data.get(key) for key in fields})
+    return StreamingResponse(iter([output.getvalue()]),media_type="text/csv",headers={"Content-Disposition":"attachment; filename=festio-marketing-leads.csv"})
+
+
+@app.post("/api/marketing/import/leads.csv")
+async def import_leads(file:UploadFile=File(...),identity:Identity=Depends(require_manager),db:Session=Depends(db_session)):
+    rows=list(csv.DictReader(io.StringIO((await file.read()).decode("utf-8-sig"))))[:5000];created=updated=0
+    for item in rows:
+        email=(item.get("email") or "").strip().lower()
+        if not email or "@" not in email: continue
+        row=db.scalar(select(Lead).where(Lead.email==email))
+        if not row: row=Lead(email=email,name=item.get("name") or "",source=item.get("source") or "csv_import",owner_email=item.get("owner_email") or None,tags=[v for v in (item.get("tags") or "").split("|") if v]);db.add(row);created+=1
+        else: updated+=1
+    audit(db,identity,"leads.imported","lead",data_count=len(rows),created=created,updated=updated);db.commit();return {"processed":len(rows),"created":created,"updated":updated}
+
+
+@app.get("/api/marketing/analytics")
+def analytics(days:int=30,identity:Identity=Depends(decode_identity),db:Session=Depends(db_session)):
+    since=now()-timedelta(days=max(1,min(days,365)))
+    leads=db.scalars(select(Lead).where(Lead.registered_at>=since)).all()
+    by_source:dict[str,int]={};by_campaign:dict[str,int]={};daily:dict[str,int]={}
+    for lead in leads:
+        by_source[lead.source or "direct"]=by_source.get(lead.source or "direct",0)+1
+        by_campaign[lead.campaign or "unattributed"]=by_campaign.get(lead.campaign or "unattributed",0)+1
+        day=(lead.registered_at or lead.created_at).date().isoformat();daily[day]=daily.get(day,0)+1
+    events=db.scalars(select(Activity).where(Activity.created_at>=since,Activity.kind.like("email_%"))).all();delivery={}
+    for event in events: delivery[event.kind]=delivery.get(event.kind,0)+1
+    return {"days":days,"total":len(leads),"sources":by_source,"campaigns":by_campaign,"daily":daily,"delivery":delivery}
+
+
+@app.get("/api/marketing/preferences/me")
+def get_preferences(identity:Identity=Depends(decode_identity),db:Session=Depends(db_session)):
+    row=db.scalar(select(Lead).where(Lead.email==identity.email));return {"email":identity.email,"consent_email":bool(row and row.consent_email),"consent_sms":bool(row and row.consent_sms),"unsubscribed":bool(row and row.unsubscribed)}
+
+
+@app.put("/api/marketing/preferences/me")
+def set_preferences(body:dict,identity:Identity=Depends(decode_identity),db:Session=Depends(db_session)):
+    row=db.scalar(select(Lead).where(Lead.email==identity.email))
+    if not row: raise HTTPException(404,"Marketing profile not found")
+    row.consent_email=bool(body.get("consent_email"));row.consent_sms=bool(body.get("consent_sms"));row.unsubscribed=not row.consent_email
+    db.add(Activity(lead_id=row.id,kind="consent_changed",summary="Communication preferences updated",actor=identity.email,data={"email":row.consent_email,"sms":row.consent_sms}));audit(db,identity,"consent.changed","lead",row.id,email=row.consent_email,sms=row.consent_sms);db.commit();return {"ok":True}
+
+
+@app.get("/api/marketing/providers")
+def provider_readiness(identity:Identity=Depends(decode_identity)):
+    return {"email":{"provider":"resend","configured":bool(os.getenv("RESEND_API_KEY"))},"sms":{"provider":"bird","configured":bool(os.getenv("BIRD_ACCESS_KEY") and os.getenv("BIRD_WORKSPACE_ID") and os.getenv("BIRD_SMS_CHANNEL_ID"))},"social":{"linkedin":bool(os.getenv("LINKEDIN_ACCESS_TOKEN")),"facebook":bool(os.getenv("META_ACCESS_TOKEN")),"instagram":bool(os.getenv("META_ACCESS_TOKEN"))}}
+
+
+@app.post("/api/marketing/leads/{lead_id}/sms")
+async def send_lead_sms(lead_id:str, body:dict, identity:Identity=Depends(decode_identity), db:Session=Depends(db_session)):
+    row=db.get(Lead,lead_id); message=str(body.get("message") or "").strip()
+    if not row: raise HTTPException(404,"Lead not found")
+    if not row.phone: raise HTTPException(400,"Lead has no phone number")
+    if not row.consent_sms: raise HTTPException(409,"SMS consent is required")
+    if not message: raise HTTPException(400,"Message is required")
+    key,workspace,channel=os.getenv("BIRD_ACCESS_KEY",""),os.getenv("BIRD_WORKSPACE_ID",""),os.getenv("BIRD_SMS_CHANNEL_ID","")
+    if not all((key,workspace,channel)): raise HTTPException(503,"Bird SMS is not configured")
+    final=f"{message[:1450]}\nReply STOP to opt out."
+    async with httpx.AsyncClient(timeout=20) as client:
+        response=await client.post(f"https://api.bird.com/workspaces/{workspace}/channels/{channel}/messages",headers={"Authorization":f"AccessKey {key}"},json={"receiver":{"contacts":[{"identifierValue":row.phone,"identifierKey":"phonenumber"}]},"body":{"type":"text","text":{"text":final}}})
+    if response.status_code>=400: raise HTTPException(502,"Bird could not send this message")
+    data=response.json() if response.content else {};db.add(Activity(lead_id=row.id,kind="sms_sent",summary="Marketing SMS sent",actor=identity.email,data={"provider":"bird","provider_id":data.get("id")}));audit(db,identity,"sms.sent","lead",row.id);db.commit();return {"status":"sent","provider_id":data.get("id")}
+
+
+@app.post("/api/marketing/internal/delivery")
+def ingest_delivery(body:dict, identity:Identity=Depends(decode_identity), db:Session=Depends(db_session)):
+    if not identity.is_superadmin: raise HTTPException(403, "Internal delivery ingest requires platform authority")
+    email=(body.get("email") or "").lower(); row=db.scalar(select(Lead).where(Lead.email==email))
+    if not row: return {"recorded":False}
+    event=str(body.get("event") or "delivered").replace("email.", "")
+    db.add(Activity(lead_id=row.id,kind=f"email_{event}",summary=f"Email {event}",actor="resend",data={"provider":"resend","provider_id":body.get("provider_id")}));db.commit()
+    return {"recorded":True}
 
 
 @app.post("/api/marketing/automation/run")
@@ -441,8 +604,8 @@ def run_automation(identity: Identity = Depends(require_manager), db: Session = 
             lead.next_follow_up_at = None
             continue
         try: delivery = send_follow_up(lead, matching, sent_count)
-        except Exception: delivery = "failed"
-        db.add(Activity(lead_id=lead.id, kind=f"email_{delivery}", summary=f"Follow-up {delivery} from {matching.name}", actor=identity.email, data={"sequence_id": matching.id, "step_index": sent_count}))
+        except Exception: delivery = {"status":"failed","provider":"resend","provider_id":None}
+        db.add(Activity(lead_id=lead.id, kind=f"email_{delivery['status']}", summary=f"Follow-up {delivery['status']} from {matching.name}", actor=identity.email, data={"sequence_id": matching.id, "step_index": sent_count, **delivery}))
         lead.next_follow_up_at = now() + timedelta(hours=int((steps[sent_count].get("next_delay_hours") if steps and sent_count < len(steps) else None) or int(matching.payload.get("cadence_days", 3)) * 24))
         queued += 1
     db.commit()

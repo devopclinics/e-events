@@ -10,6 +10,23 @@ from ..config import settings
 async def ingest_marketing_lead(user, **fields) -> None:
     if not settings.planner_internal_token or not settings.marketing_service_url:
         return
+
+
+async def ingest_marketing_delivery(email: str | None, event: str, provider_id: str | None = None) -> None:
+    """Mirror Resend outcomes into the lead timeline without coupling databases."""
+    if not email or not settings.planner_internal_token or not settings.marketing_service_url:
+        return
+    timestamp = datetime.now(timezone.utc)
+    token = jwt.encode({
+        "sub": "festio-backend", "email": "system@festio.events", "name": "Festio",
+        "is_platform_superadmin": True, "iss": "guesthub", "aud": "marketing",
+        "iat": timestamp, "exp": timestamp + timedelta(minutes=2),
+    }, settings.planner_internal_token, algorithm="HS256")
+    try:
+        async with httpx.AsyncClient(timeout=2.0) as client:
+            await client.post(f"{settings.marketing_service_url.rstrip('/')}/api/marketing/internal/delivery", json={"email": email, "event": event, "provider_id": provider_id}, headers={"Authorization": f"Bearer {token}"})
+    except Exception:
+        return
     timestamp = datetime.now(timezone.utc)
     token = jwt.encode({
         "sub": "festio-backend", "email": "system@festio.events", "name": "Festio",

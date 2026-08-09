@@ -635,7 +635,7 @@ async def update_event(
 async def delete_event(
     event_id: str,
     db: AsyncSession = Depends(get_db),
-    _: User = Depends(require_event_admin),
+    current_user: User = Depends(require_event_admin),
 ):
     event = await db.get(Event, event_id)
     if not event:
@@ -1010,7 +1010,7 @@ async def toggle_features(
     event_id: str,
     body: dict,
     db: AsyncSession = Depends(get_db),
-    _: User = Depends(require_event_admin),
+    current_user: User = Depends(require_event_admin),
 ):
     event = await db.get(Event, event_id)
     if not event:
@@ -1110,6 +1110,9 @@ async def toggle_features(
         event.seating_term = term or None
     await db.commit()
     await db.refresh(event)
+    if any(bool(body.get(feature)) for feature in ("seating_enabled", "menu_enabled", "logistics_enabled", "registry_enabled", "venue_access_enabled", "experience_enabled", "festiome_addon_enabled", "planner_enabled")):
+        from ..services.marketing_client import ingest_marketing_lead
+        await ingest_marketing_lead(current_user, stage="activated", event_type=event.event_type)
     return event
 
 

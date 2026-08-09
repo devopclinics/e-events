@@ -209,4 +209,6 @@ async def receive_resend_webhook(
         data.get("to"),
         guest_id,
     )
+    from ..services.marketing_client import ingest_marketing_delivery
+    await ingest_marketing_delivery(recipient, event_type, data.get("email_id") or data.get("id"))
     return {"ok": True}

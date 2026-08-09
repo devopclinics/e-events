@@ -288,6 +288,21 @@ async function marketingReq(method, path, body) {
   return res.status === 204 ? null : res.json()
 }
 
+async function marketingDownload(path, filename) {
+  await marketingReq('GET', '/me')
+  const res = await fetch(`${BASE}/marketing${path}`, { headers: { Authorization: `Bearer ${marketingSession.token}` } })
+  if (!res.ok) throw new Error('Marketing export could not be downloaded')
+  const url = URL.createObjectURL(await res.blob()); const a = document.createElement('a'); a.href = url; a.download = filename; document.body.appendChild(a); a.click(); a.remove(); URL.revokeObjectURL(url)
+}
+
+async function marketingUpload(path, file) {
+  await marketingReq('GET', '/me')
+  const form = new FormData(); form.append('file', file)
+  const res = await fetch(`${BASE}/marketing${path}`, { method: 'POST', headers: { Authorization: `Bearer ${marketingSession.token}` }, body: form })
+  if (!res.ok) { const data = await res.json().catch(() => ({})); throw new Error(data.detail || 'Marketing import failed') }
+  return res.json()
+}
+
 let ticketingSession = null
 async function ticketingReq(eventId, method, path, body) {
   const now = Date.now()
@@ -1334,9 +1349,21 @@ export const api = {
   marketingUpdateLead: (id, body) => marketingReq('PATCH', `/leads/${id}`, body),
   marketingLeadActivity: (id) => marketingReq('GET', `/leads/${id}/activity`),
   marketingAddActivity: (id, body) => marketingReq('POST', `/leads/${id}/activity`, body),
+  marketingSendSms: (id, body) => marketingReq('POST', `/leads/${id}/sms`, body),
   marketingModule: (module) => marketingReq('GET', `/modules/${module}`),
   marketingCreateRecord: (module, body) => marketingReq('POST', `/modules/${module}`, body),
   marketingUpdateRecord: (module, id, body) => marketingReq('PATCH', `/modules/${module}/${id}`, body),
   marketingDeleteRecord: (module, id) => marketingReq('DELETE', `/modules/${module}/${id}`),
   marketingRunAutomation: () => marketingReq('POST', '/automation/run', {}),
+  marketingBulkLeads: (body) => marketingReq('POST', '/leads/bulk', body),
+  marketingSavedViews: () => marketingReq('GET', '/saved-views'),
+  marketingCreateSavedView: (body) => marketingReq('POST', '/saved-views', body),
+  marketingDeleteSavedView: (id) => marketingReq('DELETE', `/saved-views/${id}`),
+  marketingAudit: () => marketingReq('GET', '/audit'),
+  marketingAnalytics: (days=30) => marketingReq('GET', `/analytics?days=${days}`),
+  marketingProviders: () => marketingReq('GET', '/providers'),
+  marketingPreferences: () => marketingReq('GET', '/preferences/me'),
+  marketingSavePreferences: (body) => marketingReq('PUT', '/preferences/me', body),
+  marketingExportLeads: () => marketingDownload('/export/leads.csv', 'festio-marketing-leads.csv'),
+  marketingImportLeads: (file) => marketingUpload('/import/leads.csv', file),
 }

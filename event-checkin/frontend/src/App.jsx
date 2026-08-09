@@ -388,9 +388,9 @@ function AppRoutes() {
       <Route path="/privacy" element={<PrivacyPage />} />
       <Route path="/terms" element={<TermsPage />} />
       <Route path="/sms-policy" element={<SmsPolicyPage />} />
-      {(window.location.hostname === 'staging.festio.events' || window.location.hostname === 'localhost') &&
+      {(['festio.events', 'staging.festio.events', 'localhost'].includes(window.location.hostname)) &&
         <Route path="/tickets/orders/:orderId" element={<TicketOrderPage />} />}
-      {(window.location.hostname === 'staging.festio.events' || window.location.hostname === 'localhost') && <>
+      {(['festio.events', 'staging.festio.events', 'localhost'].includes(window.location.hostname)) && <>
         <Route path="/tickets" element={<PublicTicketsPage />} />
         <Route path="/tickets/e/:eventId" element={<PublicTicketsPage />} />
         <Route path="/tickets/transfers/:token" element={<TicketTransferPage />} />
@@ -423,7 +423,7 @@ function AppRoutes() {
       <Route path="/festiome-redesign" element={<ProtectedRoute><FestioMeRedesignPage /></ProtectedRoute>} />
       <Route path="/planner-redesign" element={<ProtectedRoute><PlannerRedesignPage /></ProtectedRoute>} />
       <Route path="/vendor-portal/:token" element={<VendorPortalPage />} />
-      {(window.location.hostname === 'staging.festio.events' || window.location.hostname === 'localhost') &&
+      {(['festio.events', 'staging.festio.events', 'localhost'].includes(window.location.hostname)) &&
         <Route path="/ticketing-redesign" element={<ProtectedRoute adminOnly><TicketingRedesignPage /></ProtectedRoute>} />}
       <Route path="/help-redesign" element={<ProtectedRoute paidOnly><HelpRedesignPage /></ProtectedRoute>} />
       <Route path="/scanner-redesign" element={<ProtectedRoute><ScannerRedesignPage /></ProtectedRoute>} />

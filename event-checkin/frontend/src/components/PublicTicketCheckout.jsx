@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 
-const staging = typeof window !== 'undefined' && ['staging.festio.events', 'localhost'].includes(window.location.hostname)
+const ticketingAvailable = typeof window !== 'undefined' && ['festio.events', 'staging.festio.events', 'localhost'].includes(window.location.hostname)
 const cash = (n, c) => new Intl.NumberFormat(undefined, { style: 'currency', currency: c }).format(Number(n || 0) / 100)
 
 export default function PublicTicketCheckout({ eventId, tone, onAvailabilityChange }) {
@@ -16,7 +16,7 @@ export default function PublicTicketCheckout({ eventId, tone, onAvailabilityChan
   const [customAnswers, setCustomAnswers] = useState({})
   const [donationAmounts, setDonationAmounts] = useState({})
   useEffect(() => {
-    if (!staging || !eventId) { onAvailabilityChange?.(false); return }
+    if (!ticketingAvailable || !eventId) { onAvailabilityChange?.(false); return }
     fetch(`/api/ticketing/public/events/${encodeURIComponent(eventId)}/tickets`, { cache: 'no-store' })
       .then(r => r.ok ? r.json() : null).then(async data => { setCatalog(data); onAvailabilityChange?.(!!data?.enabled && !!data?.tickets?.length); const token=new URLSearchParams(window.location.search).get('offer'); if(token){const response=await fetch(`/api/ticketing/public/waitlist/offers/${encodeURIComponent(token)}`);if(response.ok){const value=await response.json();if(value.event_id===eventId){const parts=value.name.trim().split(/\s+/);setOffer({...value,token});setBuyer({firstName:parts.shift()||'',lastName:parts.join(' '),email:value.email,phone:''});setLines({[value.product_id]:value.quantity});setNames({[value.product_id]:Array.from({length:value.quantity},()=>({first_name:'',last_name:'',email:''}))})}}} })
       .catch(() => { setCatalog(null); onAvailabilityChange?.(false) })

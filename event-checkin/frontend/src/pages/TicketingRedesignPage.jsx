@@ -232,14 +232,14 @@ export default function TicketingRedesignPage() {
     catch (e) { setError(e.message); setBusy(false) }
   }
 
-  return <RedesignShell title="Ticket sales" subtitle="Test-mode paid admission — staging only">
+  return <RedesignShell title="Ticket sales" subtitle={config?.test_mode ? 'Test-mode paid admission' : 'Live paid admission'}>
     <header className="tk-hero">
       <div><span className="tk-eyebrow">Festio Tickets</span><h1>Turn your guest list into a box office.</h1><p>Create several ticket types, route payouts to the organizer, and follow every order from payment to check-in.</p></div>
       <div className="tk-hero-tools"><label className="tk-event-picker"><span>Managing event</span><select value={eventId || ''} onChange={(e) => setEventId(e.target.value)}><option value="" disabled>Choose an event…</option>{events.map((event) => <option key={event.id} value={event.id}>{event.name}</option>)}</select></label><div className="tk-mode"><span></span>Test mode<strong>No live charges</strong></div></div>
     </header>
     {error && <div className="tk-error">{error}</div>}
     {!eventId ? <div className="rr-panel">Select an event first.</div> : config && !config.service_enabled ?
-      <div className="rr-panel"><h2>Ticketing is switched off</h2><p>The staging master switch hides ticket sales everywhere and rejects checkout requests.</p></div> : <>
+      <div className="rr-panel"><h2>Ticketing is switched off</h2><p>The ticketing master switch hides ticket sales everywhere and rejects checkout requests.</p></div> : <>
       <section className="rr-panel tk-switch"><div><span className="tk-step">01 · Availability</span><h2>Sell tickets for this event</h2><p>Turn this off anytime to remove checkout from the guest page immediately.</p></div><button disabled={busy} className={config?.config?.enabled ? 'on' : ''} onClick={() => saveConfig(!config?.config?.enabled)}><i></i>{config?.config?.enabled ? 'On' : 'Off'}</button></section>
       {config?.config?.enabled && <>
         <section className="rr-panel tk-section"><div className="tk-section-head"><div><span className="tk-step">02 · Payouts</span><h2>Connect the organizer’s account</h2><p>Connect once, then reuse the verified payout account on any event.</p></div><span className="tk-saved">Test environment</span></div>

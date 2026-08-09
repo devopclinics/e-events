@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { Navigate } from 'react-router-dom'
+import { Link, Navigate } from 'react-router-dom'
 import { api } from '../api'
 import { useAuth } from '../context/AuthContext'
 
@@ -1275,7 +1275,7 @@ export default function ConsolePage() {
 
   return (
     <div className="max-w-5xl mx-auto px-4 py-8 space-y-5">
-      <h1 className="text-2xl font-bold dark:text-white">Operator Console</h1>
+      <div className="flex items-center justify-between gap-3"><h1 className="text-2xl font-bold dark:text-white">Operator Console</h1><Link to="/marketing" className="rounded-lg bg-teal-700 px-4 py-2 text-sm font-bold text-white">Open Marketing</Link></div>
       <div className="flex gap-2 border-b dark:border-slate-700">
         {TABS.map((t) => (
           <button key={t.id} onClick={() => setTab(t.id)}

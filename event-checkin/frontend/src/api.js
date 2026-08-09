@@ -1,5 +1,18 @@
 import { auth } from './firebase'
 
+const ATTRIBUTION_KEY = 'festioMarketingAttribution'
+try {
+  const params = new URLSearchParams(window.location.search)
+  const source = params.get('utm_source')
+  if (source || params.get('utm_campaign') || params.get('ref')) {
+    localStorage.setItem(ATTRIBUTION_KEY, JSON.stringify({
+      source: source || (params.get('ref') ? 'referral' : 'website'),
+      medium: params.get('utm_medium'), campaign: params.get('utm_campaign'),
+      referrer: document.referrer || null, landing_page: window.location.href,
+    }))
+  }
+} catch { /* Storage can be unavailable in private browsing. */ }
+
 const BASE = '/api'
 // Public base for guest-facing links. Prefer a build-time override, otherwise
 // use the domain the app is actually served from (so staging emits staging
@@ -28,6 +41,7 @@ async function req(method, path, body) {
     method,
     headers: {
       ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      ...(() => { try { const value = localStorage.getItem(ATTRIBUTION_KEY); return value ? { 'X-Festio-Attribution': encodeURIComponent(value) } : {} } catch { return {} } })(),
       ...(body ? { 'Content-Type': 'application/json' } : {}),
     },
   }
@@ -245,6 +259,33 @@ async function plannerDownload(eventId, path, filename) {
   anchor.click()
   anchor.remove()
   URL.revokeObjectURL(url)
+}
+
+let marketingSession = null
+async function marketingReq(method, path, body) {
+  const now = Date.now()
+  if (!marketingSession?.token || marketingSession.expiresAt < now + 30000) {
+    const firebaseToken = await getToken()
+    if (!firebaseToken) throw new Error('Your Festio session is still loading. Please try again.')
+    const authRes = await fetch(`${BASE}/auth/marketing-token`, {
+      method: 'POST', headers: { Authorization: `Bearer ${firebaseToken}` }, signal: AbortSignal.timeout(10000),
+    })
+    if (!authRes.ok) {
+      const data = await authRes.json().catch(() => ({})); const error = new Error(data.detail || 'Marketing is not available.')
+      error.status = authRes.status; throw error
+    }
+    const data = await authRes.json()
+    marketingSession = { token: data.token, expiresAt: now + Number(data.expires_in || 900) * 1000 }
+  }
+  const res = await fetch(`${BASE}/marketing${path}`, {
+    method, headers: { Authorization: `Bearer ${marketingSession.token}`, ...(body ? { 'Content-Type': 'application/json' } : {}) },
+    ...(body ? { body: JSON.stringify(body) } : {}), signal: AbortSignal.timeout(15000),
+  })
+  if (!res.ok) {
+    const data = await res.json().catch(() => ({})); const error = new Error(data.detail || res.statusText)
+    error.status = res.status; throw error
+  }
+  return res.status === 204 ? null : res.json()
 }
 
 let ticketingSession = null
@@ -1283,4 +1324,19 @@ export const api = {
   getSetupRecommendations: (eventType) => req('GET', `/setup/recommendations?event_type=${encodeURIComponent(eventType || '')}`),
   getSetupProgress: (eventId) => req('GET', `/setup/progress?event_id=${eventId}`),
   setSetupProgress: (eventId, stepKey, status) => req('POST', `/setup/progress`, { event_id: eventId, step_key: stepKey, status }),
+  marketingMe: () => marketingReq('GET', '/me'),
+  marketingDashboard: () => marketingReq('GET', '/dashboard'),
+  marketingAccess: () => marketingReq('GET', '/access'),
+  marketingGrantAccess: (body) => marketingReq('POST', '/access', body),
+  marketingRevokeAccess: (id) => marketingReq('DELETE', `/access/${id}`),
+  marketingLeads: (params = '') => marketingReq('GET', `/leads${params ? `?${params}` : ''}`),
+  marketingCreateLead: (body) => marketingReq('POST', '/leads', body),
+  marketingUpdateLead: (id, body) => marketingReq('PATCH', `/leads/${id}`, body),
+  marketingLeadActivity: (id) => marketingReq('GET', `/leads/${id}/activity`),
+  marketingAddActivity: (id, body) => marketingReq('POST', `/leads/${id}/activity`, body),
+  marketingModule: (module) => marketingReq('GET', `/modules/${module}`),
+  marketingCreateRecord: (module, body) => marketingReq('POST', `/modules/${module}`, body),
+  marketingUpdateRecord: (module, id, body) => marketingReq('PATCH', `/modules/${module}/${id}`, body),
+  marketingDeleteRecord: (module, id) => marketingReq('DELETE', `/modules/${module}/${id}`),
+  marketingRunAutomation: () => marketingReq('POST', '/automation/run', {}),
 }

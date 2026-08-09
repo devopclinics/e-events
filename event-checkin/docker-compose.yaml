@@ -19,6 +19,7 @@ services:
       - support-service
       - setup-service
       - dashboard-service
+      - marketing-service
     restart: unless-stopped
 
   # ── React frontend ─────────────────────────────────────────────────────────
@@ -40,6 +41,7 @@ services:
       FESTIOME_INTERNAL_TOKEN: ${FESTIOME_INTERNAL_SERVICE_TOKEN:-}
       PLANNER_SERVICE_URL: http://planner-service:8040
       PLANNER_INTERNAL_TOKEN: ${PLANNER_INTERNAL_SERVICE_TOKEN:-}
+      MARKETING_SERVICE_URL: http://marketing-service:8050
     depends_on:
       db:
         condition: service_healthy
@@ -371,6 +373,22 @@ services:
       retries: 5
     restart: unless-stopped
 
+  marketing-service:
+    build: ./marketing-service
+    image: dclinics/events:marketing-1.0.0
+    env_file: ./backend/.env
+    environment:
+      MARKETING_INTERNAL_TOKEN: ${PLANNER_INTERNAL_SERVICE_TOKEN:-}
+      MARKETING_DATABASE_URL: sqlite:////data/marketing.db
+    volumes:
+      - marketing-data:/data
+    healthcheck:
+      test: ["CMD-SHELL", "python -c \"import urllib.request; urllib.request.urlopen('http://localhost:8050/health', timeout=3).read()\""]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
   # ── Chatwoot: self-hosted support widget + agent inbox (vendor software,
   # own DB/Redis — support-service is our code, this is not) ────────────────
   chatwoot:
@@ -596,3 +614,5 @@ volumes:
     name: event-checkin_support-alertmanager-data
   support-grafana-data:
     name: event-checkin_support-grafana-data
+  marketing-data:
+    name: event-checkin_marketing-data

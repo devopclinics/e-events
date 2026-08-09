@@ -308,6 +308,11 @@ async def create_event(
         _notify_operators_new_event, event.id, event.name,
         org.name if org else "", current_user.name, current_user.email,
     )
+    from ..services.marketing_client import ingest_marketing_lead
+    background_tasks.add_task(
+        ingest_marketing_lead, current_user, stage="event_created",
+        event_type=event.event_type, guest_count=event.guest_cap,
+    )
     return event
 
 
@@ -587,7 +592,7 @@ async def update_event(
     event_id: str,
     data: EventUpdate,
     db: AsyncSession = Depends(get_db),
-    _: User = Depends(require_event_admin),
+    current_user: User = Depends(require_event_admin),
 ):
     event = await db.get(Event, event_id)
     if not event:
@@ -618,6 +623,11 @@ async def update_event(
         )
     await db.commit()
     await db.refresh(event)
+    from ..services.marketing_client import ingest_marketing_lead
+    await ingest_marketing_lead(
+        current_user, stage="event_created", event_type=event.event_type,
+        guest_count=event.guest_cap,
+    )
     return event
 
 

@@ -2,6 +2,7 @@ import asyncio
 import hashlib
 import json
 import secrets
+from urllib.parse import unquote
 from datetime import datetime
 import firebase_admin
 from firebase_admin import credentials, auth as firebase_auth
@@ -64,6 +65,7 @@ def delete_firebase_user(firebase_uid: str | None) -> None:
 
 
 async def get_current_user(
+    request: Request,
     creds: HTTPAuthorizationCredentials = Depends(bearer),
     db: AsyncSession = Depends(get_db),
 ) -> User:
@@ -124,10 +126,20 @@ async def get_current_user(
     if not user.is_active:
         raise HTTPException(403, "This account has been suspended. Contact support.")
 
+    attribution = {}
+    try:
+        attribution = json.loads(unquote(request.headers.get("x-festio-attribution", "")))
+    except (ValueError, TypeError):
+        attribution = {}
+    allowed_attribution = {key: attribution.get(key) for key in ("source", "medium", "campaign", "referrer", "landing_page") if attribution.get(key)}
+    from .services.marketing_client import ingest_marketing_lead
+    asyncio.create_task(ingest_marketing_lead(user, stage="registered", source="website", **allowed_attribution))
+
     return user
 
 
 async def get_current_user_optional(
+    request: Request,
     creds: HTTPAuthorizationCredentials = Depends(bearer),
     db: AsyncSession = Depends(get_db),
 ) -> User | None:
@@ -139,7 +151,7 @@ async def get_current_user_optional(
     if not creds:
         return None
     try:
-        return await get_current_user(creds, db)
+        return await get_current_user(request=request, creds=creds, db=db)
     except HTTPException:
         return None
 

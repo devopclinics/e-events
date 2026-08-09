@@ -32,6 +32,7 @@ class Settings(BaseSettings):
     # shared-secret pattern as FestioMe/design above.
     planner_service_url: str = "http://planner-service:8030"
     planner_internal_token: str = ""
+    marketing_service_url: str = "http://marketing-service:8050"
     # Staging-only paid admission service. The service itself refuses to boot
     # outside staging; this shared secret authenticates token exchange and
     # idempotent fulfillment callbacks.

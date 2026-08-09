@@ -144,6 +144,31 @@ async def planner_token(
     return {"token": token, "expires_in": 900}
 
 
+@router.post("/marketing-token")
+async def marketing_token(user: User = Depends(get_current_user)):
+    """Mint identity-only access for the isolated Marketing service.
+
+    Marketing owns staff grants and performs the final authorization check.
+    Reusing the internal service secret avoids introducing another operational
+    secret while the JWT audience prevents a planner token being replayed.
+    """
+    from ..config import settings
+    if not settings.planner_internal_token:
+        raise HTTPException(503, "Marketing is not configured")
+    timestamp = datetime.now(timezone.utc)
+    token = jwt.encode({
+        "sub": user.firebase_uid or user.id,
+        "email": user.email,
+        "name": user.name,
+        "is_platform_superadmin": bool(user.is_platform_superadmin),
+        "iss": "guesthub",
+        "aud": "marketing",
+        "iat": timestamp,
+        "exp": timestamp + timedelta(minutes=15),
+    }, settings.planner_internal_token, algorithm="HS256")
+    return {"token": token, "expires_in": 900}
+
+
 @router.post("/ticketing-token")
 async def ticketing_token(
     event_id: str,

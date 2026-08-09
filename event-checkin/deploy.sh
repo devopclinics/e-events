@@ -206,6 +206,14 @@ if $DO_BUILD; then
     "${SCRIPT_DIR}/dashboard-service"
   ok "Dashboard service built → ${REGISTRY}:dashboard-${VERSION}"
 
+  info "Building marketing-service..."
+  docker build $NO_CACHE \
+    "${BUILD_ARGS[@]}" \
+    --tag "${REGISTRY}:marketing-${VERSION}" \
+    --tag "${REGISTRY}:marketing-latest" \
+    "${SCRIPT_DIR}/marketing-service"
+  ok "Marketing service built → ${REGISTRY}:marketing-${VERSION}"
+
   # ── PHASE 2 — Push to Docker Hub ────────────────────────────────────────────
   step "2/6  Pushing images to Docker Hub"
 
@@ -233,7 +241,9 @@ if $DO_BUILD; then
     "${REGISTRY}:setup-${VERSION}" \
     "${REGISTRY}:setup-latest" \
     "${REGISTRY}:dashboard-${VERSION}" \
-    "${REGISTRY}:dashboard-latest"; do
+    "${REGISTRY}:dashboard-latest" \
+    "${REGISTRY}:marketing-${VERSION}" \
+    "${REGISTRY}:marketing-latest"; do
     info "Pushing ${tag}..."
     docker push "$tag"
     ok "Pushed ${tag}"
@@ -323,6 +333,7 @@ if $DO_BUILD; then
   prune_service_tags "support"
   prune_service_tags "setup"
   prune_service_tags "dashboard"
+  prune_service_tags "marketing"
 
   # Remove the dangling local build cache (optional, frees disk)
   info "Pruning dangling local image layers..."
@@ -345,7 +356,7 @@ if $DO_DEPLOY; then
 
   # ── Phase 4a — Pull new images ──────────────────────────────────────────────
   step "4/6  Pulling images from Docker Hub"
-  APP_VERSION="$VERSION" docker compose -f "$PROD_COMPOSE" pull backend frontend messaging-service design-service festiome-service planner-service ticketing-service support-service setup-service dashboard-service chatwoot chatwoot-sidekiq
+  APP_VERSION="$VERSION" docker compose -f "$PROD_COMPOSE" pull backend frontend messaging-service design-service festiome-service planner-service ticketing-service support-service setup-service dashboard-service marketing-service chatwoot chatwoot-sidekiq
   ok "Images pulled"
 
   # ── Phase 4b — Run DB migration in a one-off container ──────────────────────

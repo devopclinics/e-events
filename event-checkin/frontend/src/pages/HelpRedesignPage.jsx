@@ -42,20 +42,25 @@ function highlight(text, query) {
 }
 
 function TopicAccordion({ topic, query }) {
+  const hasBoth = topic.steps?.length > 0 && topic.capabilities?.length > 0
   return (
     <details className="rd-path hp-topic">
       <summary>
         <span className="rd-path-icon"><Icon name={TOPIC_ICON[topic.id] || 'help'} size={13} /></span>
         <span style={{ flex: 1 }}>
-          <span className="rd-path-title">
-            {highlight(topic.title, query)}
-            {topic.badge && <span className="hp-badge">{topic.badge}</span>}
-          </span>
+          <span className="rd-path-title">{highlight(topic.title, query)}</span>
           <div className="rd-path-sub">{topic.intro}</div>
         </span>
+        {topic.badge && <span className="hp-badge"><i /> {topic.badge}</span>}
       </summary>
       <div className="rd-path-body">
         <div className="rd-path-body-inner">
+          {topic.image && (
+            <a className="hp-shot" href={topic.image} target="_blank" rel="noreferrer">
+              <img src={topic.image} alt={`${topic.title} screenshot`} loading="lazy" />
+            </a>
+          )}
+          {hasBoth && <div className="hp-eyebrow">Setup <span>— follow in order</span></div>}
           {topic.steps && topic.steps.length > 0 && (
             <ol className="hp-steps">
               {topic.steps.map((s, i) => <li key={i}>{highlight(s, query)}</li>)}
@@ -63,7 +68,7 @@ function TopicAccordion({ topic, query }) {
           )}
           {topic.capabilities && topic.capabilities.length > 0 && (
             <>
-              <div className="hp-cap-label">Use anytime, in any order</div>
+              <div className="hp-eyebrow">Capabilities <span>— use anytime, in any order</span></div>
               <div className="hp-capabilities">
                 {topic.capabilities.map((c, i) => (
                   <div className="hp-cap-card" key={i}>
@@ -74,13 +79,8 @@ function TopicAccordion({ topic, query }) {
               </div>
             </>
           )}
-          {topic.tip && <div className="hp-callout tip"><Icon name="info" size={12} /> {topic.tip}</div>}
-          {topic.warn && <div className="hp-callout warn"><Icon name="info" size={12} /> {topic.warn}</div>}
-          {topic.image && (
-            <button className="hp-image-btn" onClick={() => window.open(topic.image, '_blank')}>
-              <Icon name="image" size={14} /> View screenshot
-            </button>
-          )}
+          {topic.tip && <div className="hp-callout tip"><Icon name="info" size={13} /> <div>{topic.tip}</div></div>}
+          {topic.warn && <div className="hp-callout warn"><Icon name="info" size={13} /> <div>{topic.warn}</div></div>}
         </div>
       </div>
     </details>

@@ -9,6 +9,7 @@ export const CONTENT = {
     topics: [
       {
         id: 'org-start', icon: '🚀', title: 'Get started',
+        img: '/media/help2-org-start.png',
         intro: 'Everything begins with a free account — no credit card required.',
         steps: [
           'Go to festio.events and click Get Started.',
@@ -22,6 +23,7 @@ export const CONTENT = {
       },
       {
         id: 'org-rsvp-only', icon: '⚡', title: 'Just need RSVPs? Start here',
+        img: '/media/help2-org-rsvp-only.png',
         intro: 'Only collecting RSVPs — no tickets, seating, or check-in? This is the shortest path, and it runs on the free plan. You only ever touch two tabs.',
         steps: [
           'Create your event: Event Setup → New Event → enter a name and date. Leave every paid add-on (Seating, Orders, Venue Access, Deliveries, Gift list) OFF — for RSVP-only you don\'t need any of them, and they stay hidden from your sidebar.',
@@ -216,10 +218,11 @@ export const CONTENT = {
       {
         id: 'org-sections', icon: '🚪', title: 'Section scanning (multi-entrance seating)',
         badge: 'Paid',
+        img: '/media/help2-org-sections.png',
         intro: 'For events where each entrance serves a part of the room — e.g. men\'s / women\'s sides, or marquee A / marquee B — route walk-ins and ungrouped check-ins to the right section automatically, per staff member.',
         steps: [
           'Set up your sections as table groups first (Seating tab) — a section is simply a table group.',
-          'Guests tab → Walk-in guests → turn on Section scanning. It needs at least one table group, and can\'t be used together with Venue Access.',
+          'Sidebar → Features & messaging → Check-in behavior: once a table group exists, a "Section scanning" toggle appears there. Turn it on — it can\'t be used together with Venue Access.',
           'Team tab → open the staffer → Scanner sections: assign each staff member their section. A staffer pinned to one section is routed there automatically; give them two or more and they pick their section on the scanner.',
           'At the door: walk-ins and ungrouped manual check-ins handled by that staffer are seated in their section. Admins/owners aren\'t pinned — they pick a section on the scanner.',
           'A guest who already belongs to a different group keeps their own group — a section never overrides a guest\'s explicit assignment.',
@@ -229,6 +232,7 @@ export const CONTENT = {
       {
         id: 'org-experience', icon: '🧭', title: 'Experience workflows: consent, souvenirs, rooms & sessions',
         badge: 'Paid',
+        img: '/media/help2-org-experience.png',
         intro: 'Use Experience when an event has an operational journey after admission: consent, badge pickup, souvenir handoff, room/table assignment, session attendance, certificates, or checkout.',
         steps: [
           'Sidebar → Features & messaging → turn on Experience. This adds the Experience workspace for the selected event.',
@@ -301,6 +305,7 @@ export const CONTENT = {
       },
       {
         id: 'org-community', icon: '💬', title: 'Guest Hub & FestioMe community',
+        img: '/media/help2-org-community.png',
         intro: 'Every guest gets a personal hub, and your event can host its own private community for announcements, groups, and chat.',
         steps: [
           'Guest Hub: every guest\'s pass includes a personal FestioHub link — their QR code, seating details, order choices, event updates, and a message thread to your team, on any device. It\'s sent automatically with their ticket; nothing to configure.',
@@ -314,6 +319,7 @@ export const CONTENT = {
       },
       {
         id: 'org-guest-communication', icon: '📨', title: 'Guest communication controls',
+        img: '/media/help2-org-guest-comm.png',
         intro: 'Event Updates, Guest Chat, Message Host, and FestioMe groups are separate surfaces. Enable only the conversations your event needs.',
         steps: [
           'Open Guest Communication for the selected event. Review Event Updates, Guest Chat, Guest posting, Message Host, and any attending-only option one at a time.',
@@ -330,6 +336,7 @@ export const CONTENT = {
       },
       {
         id: 'org-tasks', icon: '✅', title: 'Tasks: run your to-do list as a team',
+        img: '/media/help2-org-tasks.png',
         intro: 'A per-event Kanban board for coordination work that isn\'t guest data — "confirm florist," "print name badges," "brief the door staff." Any team member on the event can see and work the board, not just owners/admins.',
         steps: [
           'Open the event\'s Tasks tab (or My Tasks in the top nav to see every task assigned to you across all events at once).',
@@ -445,6 +452,7 @@ export const CONTENT = {
       },
       {
         id: 'org-calendars', icon: '🗓️', title: 'Event Calendars: curated listing pages',
+        img: '/media/help2-org-calendars.png',
         intro: 'A Calendar is a single page that lists several of your events together — public (one shared link, anyone can view) or private (a personalized link per contact, with pre-filled RSVP and status tracking). This is organisation-wide, not per-event — find it under Org Settings → Calendars.',
         steps: [
           'Go to Org Settings → Calendars → "+ New calendar". Give it a title, choose Public or Private, and click Create.',
@@ -461,6 +469,7 @@ export const CONTENT = {
       },
       {
         id: 'org-export', icon: '⬇️', title: 'Export & post-event',
+        img: '/media/help2-org-export.png',
         steps: [
           'Guests tab: review RSVP status, check-in time, seat, order choices, and any custom question answers.',
           'Seating tab: use the seating chart and table assignment list for on-site reference.',
@@ -503,6 +512,7 @@ export const CONTENT = {
     topics: [
       {
         id: 'staff-join', icon: '🔑', title: 'Get set up before the event',
+        img: '/media/help2-staff-scanner.png',
         steps: [
           'Your organiser adds you by email in the event\'s Team tab. Make sure they use your exact sign-in email.',
           'Sign in at festio.events with that email. Your account links to their organisation automatically.',
@@ -532,6 +542,7 @@ export const CONTENT = {
       },
       {
         id: 'staff-results', icon: 'ℹ️', title: 'Understanding scan results',
+        img: '/media/help2-staff-scanner.png',
         steps: [
           '✅ Green — "Welcome, [Name]!" — admitted successfully. Guest may proceed.',
           '⚠️ Yellow — "Already admitted" — this QR was scanned before. Ask when and where — it\'s usually fine if they\'re moving between zones.',
@@ -609,6 +620,7 @@ export const CONTENT = {
       },
       {
         id: 'guest-rsvp', icon: '📝', title: 'RSVP',
+        img: '/media/help2-guest-rsvp.png',
         steps: [
           'Fill in your name and any questions the host has set (dietary preference, item choice, t-shirt size, etc.). Fields marked * are required; the rest are optional.',
           'If the form asks for an Invitation category (schools, ceremonies, conventions): pick the category that describes you first — it sets how many additional guests you may register and where your party will be seated.',

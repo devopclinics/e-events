@@ -14,6 +14,7 @@ from email.message import EmailMessage
 from typing import Any
 
 import jwt
+import httpx
 from fastapi import Depends, FastAPI, Header, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, ConfigDict, EmailStr, Field
@@ -201,9 +202,6 @@ def record_out(row: ModuleRecord) -> dict:
 def send_follow_up(lead: Lead, sequence: ModuleRecord, step_index: int = 0) -> str:
     steps = sequence.payload.get("steps") or []
     step = steps[min(step_index, len(steps) - 1)] if steps else {"subject": sequence.name, "cta": "Open Festio"}
-    host, user, password = os.getenv("SMTP_HOST", ""), os.getenv("SMTP_USER", ""), os.getenv("SMTP_PASSWORD", "")
-    if not host or not user or not password:
-        return "queued"
     message = EmailMessage()
     message["From"] = os.getenv("EMAIL_FROM", "Festio <events@festio.events>")
     message["To"] = lead.email
@@ -215,6 +213,19 @@ def send_follow_up(lead: Lead, sequence: ModuleRecord, step_index: int = 0) -> s
         f"You are receiving this because you registered for Festio. Unsubscribe: "
         f"https://festio.events/api/marketing/unsubscribe/{lead.id}\n"
     )
+    resend_key = os.getenv("RESEND_API_KEY", "")
+    if resend_key:
+        response = httpx.post(
+            "https://api.resend.com/emails",
+            headers={"Authorization": f"Bearer {resend_key}"},
+            json={"from": message["From"], "to": [lead.email], "subject": message["Subject"], "text": message.get_content()},
+            timeout=20,
+        )
+        response.raise_for_status()
+        return "sent"
+    host, user, password = os.getenv("SMTP_HOST", ""), os.getenv("SMTP_USER", ""), os.getenv("SMTP_PASSWORD", "")
+    if not host or not user or not password:
+        return "queued"
     port = int(os.getenv("SMTP_PORT", "587"))
     with smtplib.SMTP(host, port, timeout=15) as smtp:
         if os.getenv("SMTP_TLS", "true").lower() in {"1", "true", "yes"}: smtp.starttls()

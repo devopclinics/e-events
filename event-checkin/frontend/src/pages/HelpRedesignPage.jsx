@@ -11,6 +11,25 @@ import './HelpRedesignPage.css'
 // existing TOC / category-header layout below needs no structural changes.
 const ROLE_ICON = { organizer: 'calendar', staff: 'users', guest: 'ticket', operator: 'shield' }
 
+// Per-topic icon, drawn from RedesignShell's existing icon set (no new glyphs).
+// Falls back to 'help' for any topic id not listed here.
+const TOPIC_ICON = {
+  'org-start': 'calendar', 'org-rsvp-only': 'send', 'org-create': 'calendar', 'org-guests': 'users',
+  'org-rsvp': 'mail', 'org-design-studio': 'palette', 'org-categories': 'layers', 'org-send': 'send',
+  'org-track': 'eye', 'org-broadcast': 'bell', 'org-templates': 'file', 'org-seating': 'chair',
+  'org-access': 'ticket', 'org-sections': 'grid', 'org-experience': 'barchart', 'org-logistics': 'upload',
+  'org-registry': 'image', 'org-ticketing': 'ticket', 'org-community': 'chat', 'org-guest-communication': 'message',
+  'org-tasks': 'file', 'org-planner': 'book', 'org-team': 'team', 'org-checkin': 'ticket',
+  'org-dashboard': 'barchart', 'org-upgrade': 'card', 'org-api': 'api', 'org-calendars': 'calendar',
+  'org-export': 'download', 'org-troubleshoot': 'info',
+  'staff-join': 'lock', 'staff-scan': 'search', 'staff-results': 'check', 'staff-experience': 'barchart',
+  'staff-zones': 'grid', 'staff-tips': 'info',
+  'guest-open': 'mail', 'guest-rsvp': 'send', 'guest-ticket': 'ticket', 'guest-tickets': 'card', 'guest-meal': 'chair',
+  'guest-experience': 'barchart', 'guest-address': 'upload', 'guest-registry': 'image', 'guest-faq': 'help',
+  'op-open': 'shield', 'op-grant': 'card', 'op-trials': 'ticket', 'op-accounts': 'users',
+  'op-pricing': 'card', 'op-addons': 'grid', 'op-platform': 'trend', 'op-operators': 'shield',
+}
+
 function highlight(text, query) {
   if (!query.trim()) return text
   const idx = text.toLowerCase().indexOf(query.trim().toLowerCase())
@@ -26,18 +45,34 @@ function TopicAccordion({ topic, query }) {
   return (
     <details className="rd-path hp-topic">
       <summary>
-        <span className="rd-path-icon"><Icon name="help" size={13} /></span>
+        <span className="rd-path-icon"><Icon name={TOPIC_ICON[topic.id] || 'help'} size={13} /></span>
         <span style={{ flex: 1 }}>
-          <span className="rd-path-title">{highlight(topic.title, query)}</span>
+          <span className="rd-path-title">
+            {highlight(topic.title, query)}
+            {topic.badge && <span className="hp-badge">{topic.badge}</span>}
+          </span>
           <div className="rd-path-sub">{topic.intro}</div>
         </span>
       </summary>
       <div className="rd-path-body">
         <div className="rd-path-body-inner">
-          {topic.steps && (
+          {topic.steps && topic.steps.length > 0 && (
             <ol className="hp-steps">
               {topic.steps.map((s, i) => <li key={i}>{highlight(s, query)}</li>)}
             </ol>
+          )}
+          {topic.capabilities && topic.capabilities.length > 0 && (
+            <>
+              <div className="hp-cap-label">Use anytime, in any order</div>
+              <div className="hp-capabilities">
+                {topic.capabilities.map((c, i) => (
+                  <div className="hp-cap-card" key={i}>
+                    <div className="hp-cap-title">{highlight(c.title, query)}</div>
+                    <p>{highlight(c.body, query)}</p>
+                  </div>
+                ))}
+              </div>
+            </>
           )}
           {topic.tip && <div className="hp-callout tip"><Icon name="info" size={12} /> {topic.tip}</div>}
           {topic.warn && <div className="hp-callout warn"><Icon name="info" size={12} /> {topic.warn}</div>}
@@ -95,7 +130,9 @@ export default function HelpRedesignPage() {
         id: t.id,
         title: t.title,
         intro: t.intro,
+        badge: t.badge,
         steps: t.steps || [],
+        capabilities: t.capabilities || [],
         tip: t.tip,
         warn: t.warn,
         image: t.img || (t.imgs && t.imgs[0]) || null,

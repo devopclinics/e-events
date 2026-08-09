@@ -32,7 +32,7 @@ export default function PrivacyPage() {
 
           <h2 className="font-semibold text-slate-900 dark:text-white">SMS / text messaging</h2>
           <p>
-            If a guest provides a mobile number and consents, we send transactional event SMS — an
+            If a guest provides a mobile number and consents, we send transactional event SMS, an
             invitation/ticket link and a check-in confirmation (and occasionally a seat update) for
             the specific event they were invited to. Message frequency varies by event. Message and
             data rates may apply. Reply <strong>STOP</strong> to opt out at any time, or

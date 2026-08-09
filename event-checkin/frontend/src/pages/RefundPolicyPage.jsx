@@ -31,7 +31,7 @@ export default function RefundPolicyPage() {
             Email <a href="mailto:events@festio.events" className="text-teal-600 hover:underline">events@festio.events</a> from
             the account email used for the purchase, including the event name and approximate
             purchase date. Approved refunds are returned to the original payment method within
-            5–10 business days.
+            5 to 10 business days.
           </p>
           <h2 className="font-semibold text-slate-900 dark:text-white">Taxes</h2>
           <p>

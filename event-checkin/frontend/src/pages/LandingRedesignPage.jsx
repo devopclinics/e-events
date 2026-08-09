@@ -84,6 +84,25 @@ const COMMUNITY_CARDS = [
   { initials: 'LG', title: 'Logistics', sub: 'Add-on', body: 'Gift shipment packed for 214 guests. Vendor pickup list is ready.' },
 ]
 
+const BUSINESS_FEATURES = [
+  {
+    label: 'Ticket Sales',
+    title: 'Sell tickets from your own event page',
+    body: 'Publish ticket types, take secure payments, issue unique QR tickets, manage promo codes, and handle refunds from one organizer workspace.',
+    points: ['Public event listings', 'Secure checkout', 'QR ticket delivery', 'Sales and payout reporting'],
+    to: '/tickets',
+    cta: 'Browse ticketed events',
+  },
+  {
+    label: 'Planner',
+    title: 'Keep the plan beside the guest list',
+    body: 'Track budgets, vendors, timelines, documents, and the work behind the event without moving between spreadsheets and group chats.',
+    points: ['Budget tracking', 'Vendor workspace', 'Timeline and run sheet', 'Shared documents'],
+    to: '/pricing',
+    cta: 'See plans and add-ons',
+  },
+]
+
 const PRICING_TIERS = [
   { tier: 'Free', title: 'Explore Festio', body: 'For testing the guest experience and planning small gatherings.', cta: 'Create free event', to: '/register?redesign=1' },
   { tier: 'Essential', title: 'Run your event', body: 'Invitations, passes, messaging, and check-in for complete guest management.', cta: 'See pricing', to: '/pricing', featured: true },
@@ -287,6 +306,27 @@ export default function LandingRedesignPage() {
 
       <section className="lr-events">
         <div className="lr-shell"><div className="lr-events-head"><div><span className="lr-eyebrow"><i /> Festio Tickets</span><h2>Find your next event.</h2><p>Official event pages, secure tickets and unique QR admission.</p></div><Link className="lr-btn ghost" to="/tickets">Find events →</Link></div>{publicEvents.length>0&&<div className="lr-events-grid">{publicEvents.map(event=><Link className="lr-event-card" to={`/tickets/e/${event.id}`} key={event.id}><div style={event.cover_image?{backgroundImage:`linear-gradient(180deg,transparent,rgba(9,29,27,.75)),url("${event.cover_image}")`}:{}}><span>{event.timing==='current'?'Happening now':'Upcoming'}</span></div><section><small>{new Date(event.event_date).toLocaleDateString(undefined,{month:'short',day:'numeric',year:'numeric'})}</small><h3>{event.name}</h3><p>{event.venue_name||event.venue_address||'Details from the organizer'}</p></section></Link>)}</div>}</div>
+      </section>
+
+      <section className="lr-section lr-business-features">
+        <div className="lr-shell">
+          <div className="lr-section-head center">
+            <span className="lr-eyebrow" style={{ justifyContent: 'center' }}><i /> Sell and plan in Festio</span>
+            <h2>More than invitations and check-in.</h2>
+            <p>Sell admission, organize the work, and keep every operational detail connected to the event.</p>
+          </div>
+          <div className="lr-business-grid">
+            {BUSINESS_FEATURES.map((feature) => (
+              <article className="lr-business-card" key={feature.label}>
+                <span>{feature.label}</span>
+                <h3>{feature.title}</h3>
+                <p>{feature.body}</p>
+                <ul>{feature.points.map((point) => <li key={point}>{point}</li>)}</ul>
+                <Link to={feature.to}>{feature.cta} <b>&#8599;</b></Link>
+              </article>
+            ))}
+          </div>
+        </div>
       </section>
 
       <section className="lr-section" id="journey">

@@ -11,7 +11,7 @@ from sqlalchemy import desc, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..database import get_db
-from ..models import Event, Membership, MessageCreditLedger, Organization, Payment, User
+from ..models import Event, Membership, MessageCreditLedger, Organization, Payment, PlatformSettings, User
 from ..schemas import CheckoutRequest, CheckoutOut, CurrencyRequest
 from ..auth import get_current_user, get_current_user_optional, _org_role
 from ..billing import (
@@ -160,6 +160,12 @@ async def public_pricing(
     # collide with that existing consumer.
     catalog["addon_plans"] = addons
     catalog["addon_plans_unlocked"] = unlocked
+    platform_policy = await db.get(PlatformSettings, "singleton")
+    catalog["addon_promo_until"] = (
+        platform_policy.addon_promo_until.isoformat()
+        if platform_policy and platform_policy.addon_promo_until
+        else None
+    )
     return catalog
 
 

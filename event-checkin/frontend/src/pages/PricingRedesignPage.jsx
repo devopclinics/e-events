@@ -71,7 +71,7 @@ function AddonCard({ addon, unlocked, eventId }) {
   )
 }
 
-// Same real comparison/FAQ copy as the legacy PricingPage — the plan cards and
+// Same real comparison/FAQ copy as the legacy PricingPage. The plan cards and
 // packs below come from the live api.getPricing() contract, not hardcoded.
 const compareRows = [
   ['Events per free account', '1', 'Unlimited', 'Unlimited', 'Unlimited', 'Unlimited', 'Unlimited'],
@@ -140,6 +140,8 @@ export default function PricingRedesignPage() {
   const addonsUnlocked = !!data?.addon_plans_unlocked
   const free = data?.free
   const enterprise = data?.enterprise
+  const promoUntil = data?.addon_promo_until ? new Date(data.addon_promo_until) : null
+  const addonPromoActive = promoUntil && promoUntil > new Date()
 
   return (
     <div className="pricing-redesign">
@@ -184,6 +186,17 @@ export default function PricingRedesignPage() {
         </div>
 
         {err && <div className="pr-error">{err}</div>}
+
+        {addonPromoActive && (
+          <div className="pr-promo-banner">
+            <div>
+              <span>Limited-time offer for paid events</span>
+              <strong>All add-ons are included at no extra charge for six months.</strong>
+              <p>Activate an Event Pass and use Seating, Venue Access, Orders, Logistics, Registry, Experience, Planner, and FestioMe through {promoUntil.toLocaleDateString(undefined, { month: 'long', day: 'numeric', year: 'numeric' })}.</p>
+            </div>
+            <Link className="pr-btn primary" to="/register?redesign=1">Create a paid event</Link>
+          </div>
+        )}
 
         {data && (
           <>
@@ -239,7 +252,7 @@ export default function PricingRedesignPage() {
               <div className="pr-section-head">
                 <div>
                   <h2>Add-ons</h2>
-                  <p>Build the event you're actually running. Buy only the modules your event needs, on top of any paid tier, at their own price.</p>
+                  <p>{addonPromoActive ? 'Every add-on is included with paid Event Passes during the six-month promotion. Free events cannot use add-ons.' : "Build the event you're actually running. Buy only the modules your paid event needs."}</p>
                 </div>
               </div>
               <div className="pr-addon-grid">
@@ -247,7 +260,7 @@ export default function PricingRedesignPage() {
                   <AddonCard key={addon.key} addon={addon} unlocked={addonsUnlocked} />
                 ))}
               </div>
-              <p className="pr-addon-note">Advanced messaging (MMS/rich media) isn't its own add-on. It's included once you're on any paid tier, and billed the same way SMS/WhatsApp already is: by message credits, not a separate fee.</p>
+              <p className="pr-addon-note">Advanced messaging (MMS and rich media) is not a separate add-on. It is available on paid tiers and uses message credits, just like SMS and WhatsApp.</p>
             </section>
 
             <section className="pr-section">

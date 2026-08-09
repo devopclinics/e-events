@@ -117,11 +117,11 @@ const trustChips = [
 
 const problemCards = [
   ['Guest lists get messy', 'Three spreadsheets, two WhatsApp exports, and nobody knows which one is current.'],
-  ['RSVPs are hard to track', 'Confirmations arrive as texts, calls, and "my cousin said yes" — the headcount is a guess.'],
+  ['RSVPs are hard to track', 'Confirmations arrive as texts, calls, and "my cousin said yes," so the headcount is a guess.'],
   ['Invite links get forwarded', 'One shared link and suddenly there are 40 extra names at the door.'],
   ['Tables and seats cause confusion', 'Seat changes live on paper printouts that are stale before the doors open.'],
   ['Staff keep calling the organizer', 'Every "where does she sit?" interrupts the one person who should be hosting.'],
-  ['No live view of attendance or access', 'You find out how many people actually came days later — if you count wristbands.'],
+  ['No live view of attendance or access', 'You find out how many people actually came days later, if you count wristbands.'],
 ]
 
 const pillars = [
@@ -162,12 +162,12 @@ const pillars = [
   },
   {
     title: 'Event Calendars',
-    copy: 'One curated page listing several of your events — public with a shared link, or private with a personalized link per contact that pre-fills RSVPs and tracks status.',
+    copy: 'One curated page listing several of your events. Make it public with a shared link or private with a personalized link that pre-fills RSVPs and tracks status.',
     items: ['Public or private listing pages', 'Reusable contact lists (CSV import)', 'Embeddable on your own site'],
   },
   {
     title: 'Tasks & My Tasks',
-    copy: 'A Kanban board for the coordination work that is not guest data — assign it, due-date it, discuss it, attach files, and check it off as a team.',
+    copy: 'A Kanban board for coordination work. Assign it, set a due date, discuss it, attach files, and check it off as a team.',
     items: ['Open / In progress / Done board', 'Comments, subtasks & file attachments', '"My Tasks" view across every event'],
   },
 ]
@@ -214,7 +214,7 @@ const detailSections = [
     id: 'rsvp',
     eyebrow: 'Invite & RSVP',
     title: 'RSVPs that match how your event actually works.',
-    copy: 'Import or sync your guest list, run open or private RSVPs with per-category guest allowances, approve who gets in, and message everyone by email, SMS, or WhatsApp — every reply lands on the same live guest record.',
+    copy: 'Import or sync your guest list, run open or private RSVPs with per-category guest allowances, approve who gets in, and message everyone by email, SMS, or WhatsApp. Every reply lands on the same live guest record.',
     points: ['Open or personal invite links', 'Invitation categories & guest limits', 'Approval before tickets go out', 'CSV/XLSX & Google Sheets import', 'Email, SMS & WhatsApp templates'],
     screenshot: '/media/help2-invites-rsvp.png',
     alt: 'Festio invitation and RSVP setup screen',
@@ -232,7 +232,7 @@ const detailSections = [
     id: 'analytics',
     eyebrow: 'Scan & track live',
     title: 'Know what is happening while it is happening.',
-    copy: 'Phone-camera scanning with instant admit/deny, walk-ins, zones and gates for real venues, and a live dashboard of arrivals, occupancy, and per-table status — no app installs.',
+    copy: 'Use phone-camera scanning for instant admission decisions, walk-ins, zones, and gates. A live dashboard tracks arrivals, occupancy, and table status with no app to install.',
     points: ['QR scanning in any browser', 'Zones, gates & VIP rules', 'Duplicate-scan protection', 'Live arrivals & occupancy', 'Per-table & catering reports'],
     screenshot: '/media/help2-results.png',
     alt: 'Festio live event dashboard and attendance analytics',
@@ -246,7 +246,7 @@ const eventTypes = [
   ['Community & religious events', 'Handle large guest lists, RSVPs, self check-in, volunteers, seating sections, and announcements.'],
   ['Corporate events', 'Control registrations, access, teams, check-in records, messaging, and event reporting with operational clarity.'],
   ['Private parties', 'Create a polished invite, collect RSVPs, send QR passes, message guests, and avoid door confusion.'],
-  ['Investor & relationship events', 'Curated invite-only rooms — LP dinners, executive briefings, and portfolio forums — with discreet approvals, VIP handling, and clean post-event attendance records.'],
+  ['Investor & relationship events', 'Curated invite-only rooms such as LP dinners, executive briefings, and portfolio forums, with discreet approvals, VIP handling, and clean post-event attendance records.'],
 ]
 
 const faqs = [
@@ -1131,7 +1131,7 @@ export default function LandingPage() {
             </Reveal>
             <div className="mt-12 grid gap-5 md:grid-cols-3">
               {[
-                ['One live guest record', 'RSVP, seat, meal, pass, messages, and check-in history live on the same record — staff and hosts always see the same truth.'],
+                ['One live guest record', 'RSVP, seat, meal, pass, messages, and check-in history live on the same record, so staff and hosts always see the same information.'],
                 ['Built for the door', 'Scanning works in any phone browser, walk-ins are handled, duplicates are blocked, and denied scans say exactly why.'],
                 ['Security and control', 'Unique QR passes, role-based access, staff permissions, private links, audit history, and exportable records.'],
               ].map(([title, copy]) => (

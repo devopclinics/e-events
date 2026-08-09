@@ -350,7 +350,9 @@ def list_leads(stage: str | None = None, q: str | None = None, identity: Identit
 def create_lead(body: LeadIn, identity: Identity = Depends(decode_identity), db: Session = Depends(db_session)):
     row = db.scalar(select(Lead).where(Lead.email == body.email.lower()))
     if row: raise HTTPException(409, "Lead already exists")
-    row = Lead(**body.model_dump(), email=body.email.lower()); db.add(row); db.flush()
+    values = body.model_dump()
+    values["email"] = body.email.lower()
+    row = Lead(**values); db.add(row); db.flush()
     db.add(Activity(lead_id=row.id, kind="created", summary="Lead created", actor=identity.email)); db.commit(); db.refresh(row)
     return lead_out(row)
 

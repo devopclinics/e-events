@@ -46,6 +46,10 @@ class Organization(Base):
     # yet. Consumed (applied + cleared) by the next event the org creates.
     trial_tier: Mapped[str | None] = mapped_column(String(50), nullable=True)
     trial_credits: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    # Operator entitlement overrides: {"addon_seating": true/false}. Missing
+    # keys inherit the platform-wide catalog setting. Event overrides take
+    # precedence over these organization defaults.
+    addon_overrides: Mapped[dict | None] = mapped_column(JSON, nullable=True)
     # Partner referral program: which org's referral link/code this one signed
     # up through. `slug` doubles as the referral code — set once, at signup,
     # never overwritten (an org can't be re-attributed later).
@@ -273,6 +277,13 @@ class Event(Base):
     # on/off switch an admin can still flip freely once purchased. None/[] = none
     # bought. See entitlements.FEATURE_ADDON for the feature -> addon mapping.
     purchased_addons: Mapped[list | None] = mapped_column(JSON, nullable=True)
+    # Operator entitlement overrides: {"addon_seating": true/false}. These do
+    # not modify purchase history and take precedence over org/global policy.
+    addon_overrides: Mapped[dict | None] = mapped_column(JSON, nullable=True)
+    # Materialized organization/platform policies keep entitlement checks
+    # deterministic across backend replicas without a per-request DB lookup.
+    org_addon_overrides: Mapped[dict | None] = mapped_column(JSON, nullable=True)
+    platform_addon_overrides: Mapped[dict | None] = mapped_column(JSON, nullable=True)
     # Cached integration state only; FestioMe data remains service-owned.
     festiome_enabled: Mapped[bool] = mapped_column(Boolean, default=False)
     festiome_id: Mapped[str | None] = mapped_column(String(36), nullable=True)

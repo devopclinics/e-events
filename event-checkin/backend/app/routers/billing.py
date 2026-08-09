@@ -18,6 +18,7 @@ from ..billing import (
     get_plan, plan_amount, apply_purchase, tiers_public, packs_public, addons_public, public_catalog,
 )
 from ..config import settings
+from ..entitlements import event_allows_addon, FEATURE_ADDON
 from services import payments
 from . import org_billing
 
@@ -61,6 +62,7 @@ async def list_tiers(event_id: str, user: User = Depends(get_current_user), db: 
         "plan_tier": event.plan_tier,
         "message_credits": event.message_credits,
         "purchased_addons": event.purchased_addons or [],
+        "available_addons": [key for key in sorted(set(FEATURE_ADDON.values())) if event_allows_addon(event, key)],
         "tiers": tiers,
         "packs": packs,
         "addon_plans": addons,

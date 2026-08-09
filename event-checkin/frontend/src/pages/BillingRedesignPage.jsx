@@ -65,7 +65,7 @@ function BillingTab({ notify, eventId, onBuyPass, onBuyCredits, onBuyAddon }) {
   const tierRows = billing.tiers || []
   const packRows = billing.packs || []
   const addonRows = billing.addon_plans || []
-  const purchasedAddons = new Set(billing.purchased_addons || [])
+  const purchasedAddons = new Set(billing.available_addons || billing.purchased_addons || [])
   const ledgerRows = billing.ledger?.rows || []
   const channelSummary = new Map((billing.ledger?.summary || []).map((row) => [row.channel, row]))
   const activeTier = tierRows.find((tier) => tier.key === billing.plan_tier)

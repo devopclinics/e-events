@@ -47,6 +47,21 @@ def test_feature_gate_raises_402_for_insufficient_tier():
     assert getattr(exc.value, "status_code", None) == 402
 
 
+def test_addon_override_precedence_preserves_purchase_history():
+    event = _event(
+        org_id="org-1",
+        purchased_addons=["addon_seating"],
+        platform_addon_overrides={"addon_seating": False, "addon_menu": False},
+        org_addon_overrides={"addon_seating": True, "addon_menu": False},
+        addon_overrides={"addon_menu": True},
+    )
+    assert event_allows(event, "seating_enabled") is True  # org allow beats global deny
+    assert event_allows(event, "menu_enabled") is True  # event allow beats org/global deny
+    event.addon_overrides = {"addon_seating": False}
+    assert event_allows(event, "seating_enabled") is False  # event deny beats purchase + org
+    assert event.purchased_addons == ["addon_seating"]  # operator policy never mutates purchase history
+
+
 def test_credit_metering_decrements_then_blocks():
     # Default SMS weight is 2 credits/send (see DEFAULT_CHANNEL_WEIGHTS).
     e = _event(is_paid=True, paid_channels=True, message_credits=4)

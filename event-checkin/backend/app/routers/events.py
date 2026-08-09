@@ -10,7 +10,7 @@ from fastapi import APIRouter, BackgroundTasks, Depends, File, HTTPException, Up
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import delete, func, select, update
 from ..database import get_db
-from ..models import BroadcastLog, Event, EventUser, EventUserSection, ExperienceStep, ExperienceWorkflow, FestioMeOutbox, Guest, MenuCategory, MenuItem, Membership, MessageTemplate, Organization, Payment, RSVPQuestion, TableGroup, TicketType, User
+from ..models import BroadcastLog, Event, EventUser, EventUserSection, ExperienceStep, ExperienceWorkflow, FestioMeOutbox, Guest, MenuCategory, MenuItem, Membership, MessageTemplate, Organization, Payment, PricingPlan, RSVPQuestion, TableGroup, TicketType, User
 from ..schemas import (
     EventCreate, EventDuplicateIn, EventUpdate, EventOut, EventMemberOut, AssignUserRequest,
     OrgMemberInvite, OrgMemberOut, MemberRoleUpdate, UserOut, EventSourceUpdate,
@@ -285,6 +285,10 @@ async def create_event(
     # Consume a pending trial grant (from an approved TrialRequest made before
     # the org had any event) — apply it to this first event, then clear it.
     org = await db.get(Organization, org_id)
+    if org:
+        event.org_addon_overrides = dict(org.addon_overrides or {}) or None
+    addon_plans = (await db.execute(select(PricingPlan).where(PricingPlan.kind == "addon"))).scalars().all()
+    event.platform_addon_overrides = {plan.key: bool(plan.active) for plan in addon_plans} or None
     if org and (org.trial_tier or org.trial_credits):
         from ..billing import get_plan, apply_purchase
         if org.trial_tier:

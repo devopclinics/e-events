@@ -371,6 +371,83 @@ class EventControls(BaseModel):
     blocked_comm_features: list[Literal["guest_hub", "guest_chat", "host_messages", "announcements", "festiome"]] = Field(default_factory=list)
 
 
+class AddonOverrides(BaseModel):
+    overrides: dict[str, bool] = Field(default_factory=dict)
+
+
+_ADDON_KEYS = sorted(set(entitlements.FEATURE_ADDON.values()))
+
+
+def _clean_addon_overrides(value: dict) -> dict[str, bool]:
+    unknown = sorted(set(value) - set(_ADDON_KEYS))
+    if unknown:
+        raise HTTPException(400, f"Unknown add-on: {', '.join(unknown)}")
+    return {key: bool(enabled) for key, enabled in value.items()}
+
+
+@router.get("/addons/policy")
+async def addon_policy(_: User = Depends(require_superadmin), db: AsyncSession = Depends(get_db)):
+    plans = (await db.execute(select(PricingPlan).where(PricingPlan.kind == "addon").order_by(PricingPlan.sort_order))).scalars().all()
+    return {"addons": [{"key": p.key, "label": p.label, "active": p.active} for p in plans]}
+
+
+@router.put("/addons/policy")
+async def set_addon_policy(body: AddonOverrides, _: User = Depends(require_superadmin), db: AsyncSession = Depends(get_db)):
+    values = _clean_addon_overrides(body.overrides)
+    plans = (await db.execute(select(PricingPlan).where(PricingPlan.kind == "addon"))).scalars().all()
+    for plan in plans:
+        if plan.key in values:
+            plan.active = values[plan.key]
+    events = (await db.execute(select(Event))).scalars().all()
+    for event in events:
+        policy = dict(event.platform_addon_overrides or {})
+        policy.update(values)
+        event.platform_addon_overrides = policy or None
+    await db.commit()
+    await entitlements.reload_addon_policy_cache(db)
+    return {"ok": True, "overrides": values}
+
+
+@router.get("/orgs/{org_id}/addon-overrides")
+async def get_org_addon_overrides(org_id: str, _: User = Depends(require_superadmin), db: AsyncSession = Depends(get_db)):
+    org = await db.get(Organization, org_id)
+    if not org:
+        raise HTTPException(404, "Organization not found")
+    return {"overrides": org.addon_overrides or {}, "addons": _ADDON_KEYS}
+
+
+@router.put("/orgs/{org_id}/addon-overrides")
+async def set_org_addon_overrides(org_id: str, body: AddonOverrides, _: User = Depends(require_superadmin), db: AsyncSession = Depends(get_db)):
+    org = await db.get(Organization, org_id)
+    if not org:
+        raise HTTPException(404, "Organization not found")
+    org.addon_overrides = _clean_addon_overrides(body.overrides) or None
+    events = (await db.execute(select(Event).where(Event.org_id == org_id))).scalars().all()
+    for event in events:
+        event.org_addon_overrides = dict(org.addon_overrides or {}) or None
+    await db.commit()
+    await entitlements.reload_addon_policy_cache(db)
+    return {"overrides": org.addon_overrides or {}, "addons": _ADDON_KEYS}
+
+
+@router.get("/events/{event_id}/addon-overrides")
+async def get_event_addon_overrides(event_id: str, _: User = Depends(require_superadmin), db: AsyncSession = Depends(get_db)):
+    event = await db.get(Event, event_id)
+    if not event:
+        raise HTTPException(404, "Event not found")
+    return {"overrides": event.addon_overrides or {}, "addons": _ADDON_KEYS}
+
+
+@router.put("/events/{event_id}/addon-overrides")
+async def set_event_addon_overrides(event_id: str, body: AddonOverrides, _: User = Depends(require_superadmin), db: AsyncSession = Depends(get_db)):
+    event = await db.get(Event, event_id)
+    if not event:
+        raise HTTPException(404, "Event not found")
+    event.addon_overrides = _clean_addon_overrides(body.overrides) or None
+    await db.commit()
+    return {"overrides": event.addon_overrides or {}, "addons": _ADDON_KEYS}
+
+
 @router.get("/events/{event_id}/controls")
 async def get_event_controls(event_id: str, _: User = Depends(require_superadmin), db: AsyncSession = Depends(get_db)):
     event = await db.get(Event, event_id)
@@ -629,6 +706,14 @@ async def upsert_plan(key: str, body: PlanUpsert, _: User = Depends(require_supe
     plan.active = body.active
     plan.sort_order = body.sort_order
     await db.commit()
+    if plan.kind == "addon":
+        events = (await db.execute(select(Event))).scalars().all()
+        for event in events:
+            policy = dict(event.platform_addon_overrides or {})
+            policy[plan.key] = bool(plan.active)
+            event.platform_addon_overrides = policy
+        await db.commit()
+        await entitlements.reload_addon_policy_cache(db)
     return {"ok": True}
 
 

@@ -50,6 +50,7 @@ async def lifespan(app: FastAPI):
     # take_email_credit see them without an async db call on every send.
     async with AsyncSessionLocal() as db:
         await entitlements.reload_credit_rate_cache(db)
+        await entitlements.reload_addon_policy_cache(db)
 
     # Run the guest-list sync poller inside the web process for single-host
     # deploys (default). When scaling out, set RUN_IN_APP_POLLER=false on the

@@ -190,6 +190,7 @@ function OverviewTab() {
         <div key={o.id} className="bg-white dark:bg-slate-800 rounded-xl shadow p-4 border dark:border-slate-700">
           <div className="flex items-center justify-between">
             <div className="font-semibold dark:text-white">{o.name} <span className="text-xs text-slate-400">· {o.region}/{o.currency} · {o.events.length} event(s)</span></div>
+            <AddonOverrideEditor scope="org" id={o.id} label="Organization add-ons" />
           </div>
           <div className="mt-2 divide-y divide-gray-100 dark:divide-slate-700">
             {o.events.map((e) => <EventRow key={e.id} ev={e} plans={plans} onGrant={grant} />)}
@@ -203,6 +204,52 @@ function OverviewTab() {
 
 const MESSAGING_CHANNELS = [['email', 'Email'], ['sms', 'SMS'], ['whatsapp', 'WhatsApp'], ['mms', 'MMS']]
 const COMM_FEATURES = [['guest_hub', 'FestioHub'], ['guest_chat', 'Guest Chat'], ['host_messages', 'Message Host'], ['announcements', 'Announcements'], ['festiome', 'FestioMe']]
+
+const ADDON_LABELS = {
+  addon_registry: 'Registry', addon_menu: 'Menu & Orders', addon_planner: 'Event Planner',
+  addon_logistics: 'Logistics', addon_festiome: 'FestioMe Community', addon_seating: 'Seating & Floor Plans',
+  addon_experience: 'Experience Workflows', addon_venue_access: 'Venue Access Intelligence',
+}
+
+function AddonOverrideEditor({ scope, id, label }) {
+  const [data, setData] = useState(null)
+  const [open, setOpen] = useState(false)
+  const [saving, setSaving] = useState(false)
+  const load = async () => setData(scope === 'org' ? await api.adminOrgAddonOverrides(id) : await api.adminEventAddonOverrides(id))
+  async function toggle() {
+    if (!open && !data) { try { await load() } catch (e) { alert(e.message); return } }
+    setOpen((value) => !value)
+  }
+  function setValue(key, value) {
+    setData((current) => {
+      const overrides = { ...(current?.overrides || {}) }
+      if (value === null) delete overrides[key]
+      else overrides[key] = value
+      return { ...current, overrides }
+    })
+  }
+  async function saveAll(value) {
+    const overrides = Object.fromEntries((data?.addons || Object.keys(ADDON_LABELS)).map((key) => [key, value]))
+    setData((current) => ({ ...current, overrides }))
+    await save(overrides)
+  }
+  async function save(overrides = data?.overrides || {}) {
+    setSaving(true)
+    try {
+      const next = scope === 'org' ? await api.adminSetOrgAddonOverrides(id, overrides) : await api.adminSetEventAddonOverrides(id, overrides)
+      setData(next)
+    } catch (e) { alert(e.message) }
+    finally { setSaving(false) }
+  }
+  return <div className="relative">
+    <button className="text-xs font-semibold text-teal-700 dark:text-teal-300" onClick={toggle}>{label}</button>
+    {open && data && <div className="absolute right-0 z-20 mt-2 w-[430px] rounded-xl border bg-white p-3 shadow-xl dark:border-slate-600 dark:bg-slate-800">
+      <div className="mb-3 flex items-center justify-between"><strong className="text-sm dark:text-white">{label}</strong><div className="flex gap-1"><button className="rounded bg-teal-600 px-2 py-1 text-xs text-white" disabled={saving} onClick={() => saveAll(true)}>Allow all</button><button className="rounded bg-rose-600 px-2 py-1 text-xs text-white" disabled={saving} onClick={() => saveAll(false)}>Disallow all</button></div></div>
+      <div className="space-y-2">{(data.addons || Object.keys(ADDON_LABELS)).map((key) => <div key={key} className="flex items-center justify-between gap-2 text-xs dark:text-slate-200"><span>{ADDON_LABELS[key] || key}</span><div className="flex rounded border dark:border-slate-600">{[[null, 'Inherit'], [true, 'Allow'], [false, 'Disallow']].map(([value, text]) => { const selected = value === null ? !(key in (data.overrides || {})) : data.overrides?.[key] === value; return <button key={text} className={`px-2 py-1 ${selected ? 'bg-teal-600 text-white' : ''}`} onClick={() => setValue(key, value)}>{text}</button> })}</div></div>)}</div>
+      <div className="mt-3 flex justify-end gap-2"><button className="rounded border px-3 py-1 text-xs dark:border-slate-600" onClick={() => setOpen(false)}>Close</button><button className="rounded bg-teal-600 px-3 py-1 text-xs text-white" disabled={saving} onClick={() => save()}>{saving ? 'Saving…' : 'Save'}</button></div>
+    </div>}
+  </div>
+}
 
 function EventRow({ ev, plans, onGrant }) {
   const [tier, setTier] = useState('')
@@ -278,6 +325,7 @@ function EventRow({ ev, plans, onGrant }) {
         Apply
       </button>
       <div className="flex gap-2">
+        <AddonOverrideEditor scope="event" id={ev.id} label="Event add-ons" />
         <button onClick={previewReport} disabled={!!reportBusy}
           className="border border-indigo-300 text-indigo-700 dark:border-indigo-700 dark:text-indigo-300 px-3 py-1.5 rounded text-xs font-semibold disabled:opacity-40 hover:bg-indigo-50 dark:hover:bg-indigo-950/30">
           {reportBusy === 'preview' ? 'Generating…' : 'Readiness report'}
@@ -810,6 +858,15 @@ function PricingTab() {
       setMsg(`Saved ${p.key}.`); setTimeout(() => setMsg(''), 2500)
     } catch (e) { setMsg(e.message) }
   }
+  async function setAllAddons(active) {
+    setMsg('')
+    try {
+      const addons = plans.filter((plan) => plan.kind === 'addon')
+      await api.adminSetAddonPolicy(Object.fromEntries(addons.map((plan) => [plan.key, active])))
+      setPlans((current) => current.map((plan) => plan.kind === 'addon' ? { ...plan, active } : plan))
+      setMsg(`All add-ons ${active ? 'allowed' : 'disallowed'} globally.`)
+    } catch (e) { setMsg(e.message) }
+  }
   function edit(i, k, v) { setPlans((prev) => prev.map((p, idx) => idx === i ? { ...p, [k]: v } : p)) }
 
   if (!plans) return <div className="text-sm text-slate-500">Loading…</div>
@@ -818,6 +875,7 @@ function PricingTab() {
       <div className="space-y-2">
         {msg && <div className="text-sm text-teal-600">{msg}</div>}
         <p className="text-xs text-slate-500 dark:text-slate-400">Prices are in the smallest unit — USD cents, NGN kobo. Changes reflect on the live pricing page and checkout.</p>
+        <div className="flex gap-2"><button className="rounded bg-teal-600 px-3 py-1.5 text-xs font-semibold text-white" onClick={() => setAllAddons(true)}>Allow all add-ons globally</button><button className="rounded bg-rose-600 px-3 py-1.5 text-xs font-semibold text-white" onClick={() => setAllAddons(false)}>Disallow all add-ons globally</button></div>
         <div className="overflow-x-auto">
           <table className="w-full text-xs">
             <thead className="text-left text-slate-500 dark:text-slate-400">

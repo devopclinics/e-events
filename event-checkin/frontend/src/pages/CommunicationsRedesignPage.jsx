@@ -1286,7 +1286,7 @@ function SettingsTab({ notify, eventId, event, onEventChanged }) {
     if (!eventId) { setTableGroups([]); return }
     api.listTableGroups(eventId).then(setTableGroups).catch(() => setTableGroups([]))
     api.getBillingTiers(eventId)
-      .then((billing) => setPurchasedAddons(new Set(billing.purchased_addons || [])))
+      .then((billing) => setPurchasedAddons(new Set(billing.available_addons || billing.purchased_addons || [])))
       .catch(() => setPurchasedAddons(new Set(event?.purchased_addons || [])))
   }, [eventId])
 

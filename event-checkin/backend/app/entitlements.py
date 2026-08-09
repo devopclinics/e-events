@@ -8,9 +8,10 @@ import math
 import os
 import uuid
 from fastapi import HTTPException
+from sqlalchemy import select
 from sqlalchemy.orm import object_session
 
-from .models import Event, MessageCreditLedger
+from .models import Event, MessageCreditLedger, Organization, PricingPlan
 
 # Free events: email-only invites, capped guest list, Festio branding.
 FREE_GUEST_CAP = 25
@@ -126,7 +127,34 @@ def event_allows(event: Event, feature: str) -> bool:
     addon = FEATURE_ADDON.get(feature)
     if not addon:
         return True
+    return event_allows_addon(event, addon)
+
+
+def event_allows_addon(event: Event, addon: str) -> bool:
+    event_override = (event.addon_overrides or {}).get(addon)
+    if event_override is not None:
+        return bool(event_override)
+    org_override = (event.org_addon_overrides or {}).get(addon)
+    if org_override is not None:
+        return bool(org_override)
+    platform_override = (event.platform_addon_overrides or {}).get(addon)
+    if platform_override is not None and not platform_override:
+        return False
     return addon in (event.purchased_addons or [])
+
+
+_org_addon_override_cache: dict[str, dict[str, bool]] = {}
+_global_addon_active_cache: dict[str, bool] = {}
+
+
+async def reload_addon_policy_cache(db) -> None:
+    """Reload operator-controlled org overrides and global availability."""
+    orgs = (await db.execute(select(Organization.id, Organization.addon_overrides))).all()
+    plans = (await db.execute(select(PricingPlan.key, PricingPlan.active).where(PricingPlan.kind == "addon"))).all()
+    _org_addon_override_cache.clear()
+    _org_addon_override_cache.update({org_id: dict(overrides or {}) for org_id, overrides in orgs})
+    _global_addon_active_cache.clear()
+    _global_addon_active_cache.update({key: bool(active) for key, active in plans})
 
 
 def assert_feature_allowed(event: Event, feature: str) -> None:

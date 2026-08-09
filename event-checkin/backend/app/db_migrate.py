@@ -66,6 +66,8 @@ SCHEMA_PATCHES: list[str] = [
     "ALTER TABLE events ADD COLUMN IF NOT EXISTS addon_overrides JSONB",
     "ALTER TABLE events ADD COLUMN IF NOT EXISTS org_addon_overrides JSONB",
     "ALTER TABLE events ADD COLUMN IF NOT EXISTS platform_addon_overrides JSONB",
+    "ALTER TABLE events ADD COLUMN IF NOT EXISTS addon_promo_until TIMESTAMP",
+    "ALTER TABLE platform_settings ADD COLUMN IF NOT EXISTS addon_promo_until TIMESTAMP",
     # Guarded: only touches the table while the constraint still exists.
     "DO $$ BEGIN "
     "IF EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'uq_guest_category') THEN "

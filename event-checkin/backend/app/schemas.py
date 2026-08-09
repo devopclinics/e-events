@@ -446,10 +446,13 @@ class PlatformSettingsOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
     support_chat_enabled: bool
+    addon_promo_until: Optional[datetime] = None
 
 
 class PlatformSettingsUpdate(BaseModel):
-    support_chat_enabled: bool
+    support_chat_enabled: Optional[bool] = None
+    addon_promo_until: Optional[datetime] = None
+    clear_addon_promo: bool = False
 
 
 class ReferredOrgOut(BaseModel):

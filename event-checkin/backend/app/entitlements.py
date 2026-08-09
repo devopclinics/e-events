@@ -7,6 +7,7 @@ change feature gates.
 import math
 import os
 import uuid
+from datetime import datetime
 from fastapi import HTTPException
 from sqlalchemy import select
 from sqlalchemy.orm import object_session
@@ -137,6 +138,8 @@ def event_allows_addon(event: Event, addon: str) -> bool:
     org_override = (event.org_addon_overrides or {}).get(addon)
     if org_override is not None:
         return bool(org_override)
+    if event.addon_promo_until and event.addon_promo_until > datetime.utcnow():
+        return True
     platform_override = (event.platform_addon_overrides or {}).get(addon)
     if platform_override is not None and not platform_override:
         return False

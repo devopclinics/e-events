@@ -4,7 +4,8 @@ from fastapi import APIRouter, Depends
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..database import get_db
-from ..models import PlatformSettings, User
+from ..models import Event, PlatformSettings, User
+from sqlalchemy import select
 from ..schemas import PlatformSettingsOut, PlatformSettingsUpdate
 from ..auth import get_current_user, require_superadmin
 
@@ -38,7 +39,16 @@ async def update_platform_settings(
     _: User = Depends(require_superadmin),
 ):
     row = await _get_or_create(db)
-    row.support_chat_enabled = body.support_chat_enabled
+    if body.support_chat_enabled is not None:
+        row.support_chat_enabled = body.support_chat_enabled
+    if body.clear_addon_promo:
+        row.addon_promo_until = None
+    elif body.addon_promo_until is not None:
+        row.addon_promo_until = body.addon_promo_until.replace(tzinfo=None)
+    if body.clear_addon_promo or body.addon_promo_until is not None:
+        events = (await db.execute(select(Event))).scalars().all()
+        for event in events:
+            event.addon_promo_until = row.addon_promo_until
     await db.commit()
     await db.refresh(row)
     return row

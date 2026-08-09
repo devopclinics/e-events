@@ -1,4 +1,6 @@
 """Entitlement enforcement: guest cap, paid-channel gating, credit metering."""
+from datetime import datetime, timedelta
+
 import pytest
 from sqlalchemy import select
 
@@ -60,6 +62,19 @@ def test_addon_override_precedence_preserves_purchase_history():
     event.addon_overrides = {"addon_seating": False}
     assert event_allows(event, "seating_enabled") is False  # event deny beats purchase + org
     assert event.purchased_addons == ["addon_seating"]  # operator policy never mutates purchase history
+
+
+def test_global_addon_promotion_grants_access_but_explicit_denies_win():
+    event = _event(
+        purchased_addons=[],
+        addon_promo_until=datetime.utcnow() + timedelta(days=180),
+        platform_addon_overrides={"addon_seating": False},
+    )
+    assert event_allows(event, "seating_enabled") is True
+    event.org_addon_overrides = {"addon_seating": False}
+    assert event_allows(event, "seating_enabled") is False
+    event.addon_overrides = {"addon_seating": True}
+    assert event_allows(event, "seating_enabled") is True
 
 
 def test_credit_metering_decrements_then_blocks():

@@ -843,9 +843,13 @@ function OrgCreditRatesPanel() {
 
 function PricingTab() {
   const [plans, setPlans] = useState(null)
+  const [platformSettings, setPlatformSettings] = useState(null)
   const [msg, setMsg] = useState('')
   function load() { api.adminListPlans().then(setPlans).catch((e) => setMsg(e.message)) }
-  useEffect(() => { load() }, [])
+  useEffect(() => {
+    load()
+    api.platformSettings().then(setPlatformSettings).catch((e) => setMsg(e.message))
+  }, [])
 
   async function save(p) {
     setMsg('')
@@ -867,6 +871,24 @@ function PricingTab() {
       setMsg(`All add-ons ${active ? 'allowed' : 'disallowed'} globally.`)
     } catch (e) { setMsg(e.message) }
   }
+  async function openAddonPromotion() {
+    setMsg('')
+    try {
+      const until = new Date()
+      until.setMonth(until.getMonth() + 6)
+      const updated = await api.updatePlatformSettings({ addon_promo_until: until.toISOString() })
+      setPlatformSettings(updated)
+      setMsg(`All add-ons are open until ${new Date(updated.addon_promo_until).toLocaleString()}.`)
+    } catch (e) { setMsg(e.message) }
+  }
+  async function endAddonPromotion() {
+    setMsg('')
+    try {
+      const updated = await api.updatePlatformSettings({ clear_addon_promo: true })
+      setPlatformSettings(updated)
+      setMsg('The global add-on promotion has ended.')
+    } catch (e) { setMsg(e.message) }
+  }
   function edit(i, k, v) { setPlans((prev) => prev.map((p, idx) => idx === i ? { ...p, [k]: v } : p)) }
 
   if (!plans) return <div className="text-sm text-slate-500">Loading…</div>
@@ -874,6 +896,21 @@ function PricingTab() {
     <div className="space-y-8">
       <div className="space-y-2">
         {msg && <div className="text-sm text-teal-600">{msg}</div>}
+        <div className="rounded-lg border border-amber-200 bg-amber-50 p-4 dark:border-amber-800 dark:bg-amber-950/30">
+          <h3 className="text-sm font-bold text-slate-800 dark:text-slate-100">Global add-on promotion</h3>
+          <p className="mt-1 text-xs text-slate-600 dark:text-slate-300">
+            Opens every add-on at no charge for all current and future events. Explicit event or organization disallows still take precedence.
+          </p>
+          <p className="mt-2 text-xs font-semibold text-slate-700 dark:text-slate-200">
+            {platformSettings?.addon_promo_until && new Date(platformSettings.addon_promo_until) > new Date()
+              ? `Active until ${new Date(platformSettings.addon_promo_until).toLocaleString()}`
+              : 'Not active'}
+          </p>
+          <div className="mt-3 flex flex-wrap gap-2">
+            <button className="rounded bg-amber-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-amber-700" onClick={openAddonPromotion}>Open all add-ons for 6 months</button>
+            <button className="rounded border border-slate-300 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-50 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100" onClick={endAddonPromotion}>End promotion now</button>
+          </div>
+        </div>
         <p className="text-xs text-slate-500 dark:text-slate-400">Prices are in the smallest unit — USD cents, NGN kobo. Changes reflect on the live pricing page and checkout.</p>
         <div className="flex gap-2"><button className="rounded bg-teal-600 px-3 py-1.5 text-xs font-semibold text-white" onClick={() => setAllAddons(true)}>Allow all add-ons globally</button><button className="rounded bg-rose-600 px-3 py-1.5 text-xs font-semibold text-white" onClick={() => setAllAddons(false)}>Disallow all add-ons globally</button></div>
         <div className="overflow-x-auto">

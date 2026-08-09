@@ -284,6 +284,7 @@ class Event(Base):
     # deterministic across backend replicas without a per-request DB lookup.
     org_addon_overrides: Mapped[dict | None] = mapped_column(JSON, nullable=True)
     platform_addon_overrides: Mapped[dict | None] = mapped_column(JSON, nullable=True)
+    addon_promo_until: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     # Cached integration state only; FestioMe data remains service-owned.
     festiome_enabled: Mapped[bool] = mapped_column(Boolean, default=False)
     festiome_id: Mapped[str | None] = mapped_column(String(36), nullable=True)
@@ -1844,6 +1845,7 @@ class PlatformSettings(Base):
 
     id: Mapped[str] = mapped_column(String(20), primary_key=True, default=lambda: "singleton")
     support_chat_enabled: Mapped[bool] = mapped_column(Boolean, default=False)
+    addon_promo_until: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
 

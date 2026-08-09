@@ -10,7 +10,7 @@ from fastapi import APIRouter, BackgroundTasks, Depends, File, HTTPException, Up
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import delete, func, select, update
 from ..database import get_db
-from ..models import BroadcastLog, Event, EventUser, EventUserSection, ExperienceStep, ExperienceWorkflow, FestioMeOutbox, Guest, MenuCategory, MenuItem, Membership, MessageTemplate, Organization, Payment, PricingPlan, RSVPQuestion, TableGroup, TicketType, User
+from ..models import BroadcastLog, Event, EventUser, EventUserSection, ExperienceStep, ExperienceWorkflow, FestioMeOutbox, Guest, MenuCategory, MenuItem, Membership, MessageTemplate, Organization, Payment, PlatformSettings, PricingPlan, RSVPQuestion, TableGroup, TicketType, User
 from ..schemas import (
     EventCreate, EventDuplicateIn, EventUpdate, EventOut, EventMemberOut, AssignUserRequest,
     OrgMemberInvite, OrgMemberOut, MemberRoleUpdate, UserOut, EventSourceUpdate,
@@ -289,6 +289,8 @@ async def create_event(
         event.org_addon_overrides = dict(org.addon_overrides or {}) or None
     addon_plans = (await db.execute(select(PricingPlan).where(PricingPlan.kind == "addon"))).scalars().all()
     event.platform_addon_overrides = {plan.key: bool(plan.active) for plan in addon_plans} or None
+    platform_policy = await db.get(PlatformSettings, "singleton")
+    event.addon_promo_until = platform_policy.addon_promo_until if platform_policy else None
     if org and (org.trial_tier or org.trial_credits):
         from ..billing import get_plan, apply_purchase
         if org.trial_tier:

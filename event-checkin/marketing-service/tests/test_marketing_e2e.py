@@ -57,3 +57,39 @@ def test_preferences_delivery_and_social_validation(tmp_path):
 
     social = client.post("/api/marketing/social/publish", headers=headers, json={"platform": "linkedin", "message": "Provider-safe E2E", "dry_run": True})
     assert social.json() == {"status": "validated", "platform": "linkedin", "dry_run": True}
+
+
+def test_unsubscribe_bounce_and_sms_stop(tmp_path):
+    client, headers = load_app(tmp_path)
+    created = client.post("/api/marketing/leads", headers=headers, json={
+        "email": "consent@example.com", "name": "Consent Test", "phone": "+15551234567",
+        "consent_email": True, "consent_sms": True,
+    }).json()
+    unsubscribed = client.get(f"/api/marketing/unsubscribe/{created['id']}")
+    assert unsubscribed.status_code == 200
+    assert "You've been unsubscribed" in unsubscribed.text
+    lead = client.get("/api/marketing/leads?q=consent", headers=headers).json()[0]
+    assert lead["consent_email"] is False and lead["unsubscribed"] is True
+
+    client.patch(f"/api/marketing/leads/{created['id']}", headers=headers, json={"consent_email": True, "unsubscribed": False})
+    client.post("/api/marketing/internal/delivery", headers=headers, json={"email": "consent@example.com", "event": "email.bounced", "bounce_type": "soft"})
+    assert client.get("/api/marketing/leads?q=consent", headers=headers).json()[0]["consent_email"] is True
+    client.post("/api/marketing/internal/delivery", headers=headers, json={"email": "consent@example.com", "event": "email.complained"})
+    assert client.get("/api/marketing/leads?q=consent", headers=headers).json()[0]["consent_email"] is False
+
+    stopped = client.post("/api/marketing/sms/webhook", json={"payload": {"sender": {"contact": {"identifierValue": "+15551234567"}}, "body": {"text": {"text": "STOP"}}}})
+    assert stopped.json() == {"recorded": True, "unsubscribed": True}
+    assert client.get("/api/marketing/leads?q=consent", headers=headers).json()[0]["consent_sms"] is False
+
+
+def test_campaign_segment_dry_run_and_automation_preview(tmp_path):
+    client, headers = load_app(tmp_path)
+    client.post("/api/marketing/leads", headers=headers, json={"email": "paid@example.com", "name": "Paid", "stage": "paid", "consent_email": True})
+    client.post("/api/marketing/leads", headers=headers, json={"email": "free@example.com", "name": "Free", "stage": "registered", "consent_email": True})
+    segment = client.post("/api/marketing/modules/segments", headers=headers, json={"name": "Paid only", "status": "active", "payload": {"field": "stage", "operator": "equals", "value": "paid"}}).json()
+    campaign = client.post("/api/marketing/modules/campaigns", headers=headers, json={"name": "Paid launch", "status": "draft", "payload": {"segment_id": segment["id"], "subject": "Paid event offer", "body": "Your paid event includes add-ons.", "cta_url": "https://festio.events"}}).json()
+    result = client.post(f"/api/marketing/campaigns/{campaign['id']}/execute?dry_run=true", headers=headers).json()
+    assert result["eligible"] == 1
+    assert result["recipients"][0]["email"] == "paid@example.com"
+    automation = client.post("/api/marketing/automation/run?dry_run=true", headers=headers).json()
+    assert automation["dry_run"] is True

@@ -318,19 +318,18 @@ export default function LandingRedesignPage() {
   const appHome = user ? redesignHome(user.role) : null
   const [publicEvents, setPublicEvents] = useState([])
   const [heroIndex, setHeroIndex] = useState(0)
-  const [heroPaused, setHeroPaused] = useState(false)
   const heroSlide = HERO_SLIDES[heroIndex]
   useEffect(() => {
     fetch('/api/ticketing/public/events', {cache:'no-store'}).then(r=>r.ok?r.json():Promise.reject())
       .then(data=>setPublicEvents((data.events||[]).slice(0,6))).catch(()=>setPublicEvents([]))
   }, [])
   useEffect(() => {
-    if (heroPaused || window.matchMedia('(prefers-reduced-motion: reduce)').matches) return undefined
+    if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return undefined
     const timer = window.setInterval(() => {
       if (!document.hidden) setHeroIndex((current) => (current + 1) % HERO_SLIDES.length)
-    }, 4000)
+    }, 2000)
     return () => window.clearInterval(timer)
-  }, [heroPaused])
+  }, [])
 
   return (
     <div className="landing-redesign">
@@ -361,9 +360,7 @@ export default function LandingRedesignPage() {
         </div>
       </nav>
 
-      <header className="lr-hero" id="top" onMouseEnter={() => setHeroPaused(true)} onMouseLeave={() => setHeroPaused(false)} onFocus={() => setHeroPaused(true)} onBlur={(event) => {
-        if (!event.currentTarget.contains(event.relatedTarget)) setHeroPaused(false)
-      }}>
+      <header className="lr-hero" id="top">
         <div className="lr-shell lr-hero-grid">
           <div className="lr-hero-copy" key={heroSlide.eyebrow}>
             <span className="lr-eyebrow"><i /> {heroSlide.eyebrow}</span>
@@ -387,7 +384,6 @@ export default function LandingRedesignPage() {
           {HERO_SLIDES.map((slide, index) => (
             <button type="button" key={slide.eyebrow} className={index === heroIndex ? 'active' : ''} onClick={() => setHeroIndex(index)} aria-label={`Show ${slide.eyebrow}`} aria-current={index === heroIndex ? 'true' : undefined} />
           ))}
-          <span>{heroPaused ? 'Paused' : heroIndex === HERO_SLIDES.length - 1 ? 'Returning to start in 4s' : 'Next capability in 4s'}</span>
         </div>
       </header>
 

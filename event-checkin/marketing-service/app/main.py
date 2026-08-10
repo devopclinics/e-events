@@ -1114,7 +1114,12 @@ def ingest_delivery(body:dict, identity:Identity=Depends(decode_identity), db:Se
 def run_automation(dry_run: bool = Query(False), identity: Identity = Depends(require_manager), db: Session = Depends(db_session)):
     """Enroll due leads and queue consent-safe follow-ups from active sequences."""
     sequences = db.scalars(select(ModuleRecord).where(ModuleRecord.module == "sequences", ModuleRecord.status == "active")).all()
-    leads = db.scalars(select(Lead).where(Lead.consent_email.is_(True), Lead.unsubscribed.is_(False), Lead.next_follow_up_at <= now())).all()
+    lead_stmt = select(Lead).where(Lead.unsubscribed.is_(False), Lead.next_follow_up_at <= now())
+    # MARKETING_SKIP_CONSENT_CHECK must never be set outside local/staging envs — it lets
+    # automation email leads without consent_email, which is a CAN-SPAM/GDPR violation in prod.
+    if not os.getenv("MARKETING_SKIP_CONSENT_CHECK"):
+        lead_stmt = lead_stmt.where(Lead.consent_email.is_(True))
+    leads = db.scalars(lead_stmt).all()
     queued = 0
     for lead in leads:
         matching = next((s for s in sequences if not s.payload.get("stage") or s.payload.get("stage") == lead.stage), None)

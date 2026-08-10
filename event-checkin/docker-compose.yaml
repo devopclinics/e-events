@@ -380,6 +380,9 @@ services:
     environment:
       MARKETING_INTERNAL_TOKEN: ${PLANNER_INTERNAL_SERVICE_TOKEN:-}
       MARKETING_DATABASE_URL: sqlite:////data/marketing.db
+      # Staging-only: lets Run automation email leads without consent_email so the
+      # send pipeline can be tested end-to-end. Must NEVER be set in festio-infra/prod.
+      MARKETING_SKIP_CONSENT_CHECK: "true"
     volumes:
       - marketing-data:/data
     healthcheck:

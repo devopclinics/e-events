@@ -93,3 +93,37 @@ def test_campaign_segment_dry_run_and_automation_preview(tmp_path):
     assert result["recipients"][0]["email"] == "paid@example.com"
     automation = client.post("/api/marketing/automation/run?dry_run=true", headers=headers).json()
     assert automation["dry_run"] is True
+
+
+def test_forms_merge_tags_demo_and_gdpr(tmp_path):
+    client, headers = load_app(tmp_path)
+    first = client.post("/api/marketing/leads", headers=headers, json={"email":"primary@example.com","name":"Primary","tags":["vip"],"consent_email":True}).json()
+    duplicate = client.post("/api/marketing/leads", headers=headers, json={"email":"duplicate@example.com","phone":"+15550001111","tags":["duplicate"]}).json()
+    merged = client.post("/api/marketing/leads/merge", headers=headers, json={"target_id":first["id"],"source_id":duplicate["id"]})
+    assert merged.status_code == 200
+    assert merged.json()["phone"] == "+15550001111"
+    assert set(merged.json()["tags"]) == {"vip","duplicate"}
+    assert client.patch("/api/marketing/tags/vip", headers=headers, json={"name":"priority"}).json()["updated"] == 1
+    assert {row["name"] for row in client.get("/api/marketing/tags", headers=headers).json()} == {"priority","duplicate"}
+    demo = client.post(f"/api/marketing/leads/{first['id']}/demo", headers=headers, json={"starts_at":"2026-08-12T15:00:00Z","duration_minutes":45})
+    assert demo.status_code == 200 and "calendar.google.com" in demo.json()["calendar_url"]
+    deletion = client.post(f"/api/marketing/leads/{first['id']}/gdpr-delete", headers=headers)
+    assert deletion.json()["scheduled"] is True
+
+    form = client.post("/api/marketing/modules/forms", headers=headers, json={"name":"Partner lead form","status":"active","payload":{"fields":["name","email"]}}).json()
+    token = form["payload"]["public_token"]
+    assert client.get(f"/api/marketing/forms/{token}").status_code == 200
+    # Public capture fails closed when Turnstile is not configured.
+    assert client.post(f"/api/marketing/forms/{token}/submit", json={"name":"Bot","email":"bot@example.com"}).status_code == 503
+
+
+def test_owner_scoped_access_only_sees_assigned_leads(tmp_path):
+    client, headers = load_app(tmp_path)
+    client.post("/api/marketing/leads", headers=headers, json={"email":"mine@example.com","owner_email":"sales@example.com"})
+    hidden = client.post("/api/marketing/leads", headers=headers, json={"email":"hidden@example.com","owner_email":"other@example.com"}).json()
+    client.post("/api/marketing/access", headers=headers, json={"email":"sales@example.com","role":"marketer","owner_scoped":True})
+    token = jwt.encode({"sub":"sales-user","email":"sales@example.com","name":"Sales","iss":"guesthub","aud":"marketing","iat":datetime.now(timezone.utc),"exp":datetime.now(timezone.utc)+timedelta(minutes=10)},"test-secret",algorithm="HS256")
+    sales_headers={"Authorization":f"Bearer {token}"}
+    rows=client.get("/api/marketing/leads",headers=sales_headers).json()
+    assert [row["email"] for row in rows] == ["mine@example.com"]
+    assert client.get(f"/api/marketing/leads/{hidden['id']}/activity",headers=sales_headers).status_code == 404

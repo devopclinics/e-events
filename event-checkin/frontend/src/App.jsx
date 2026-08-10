@@ -35,6 +35,7 @@ const SmsPolicyPage = lazy(() => import('./pages/SmsPolicyPage'))
 const DesignStudioPage = lazy(() => import('./pages/DesignStudioPage'))
 const ConsolePage = lazy(() => import('./pages/ConsolePage'))
 const MarketingPage = lazy(() => import('./pages/MarketingPage'))
+const MarketingLeadFormPage = lazy(() => import('./pages/MarketingLeadFormPage'))
 const KitchenPage = lazy(() => import('./pages/KitchenPage'))
 const HelpPage = lazy(() => import('./pages/HelpPage'))
 const MediaPage = lazy(() => import('./pages/MediaPage'))
@@ -420,6 +421,7 @@ function AppRoutes() {
       <Route path="/checkin-redesign" element={<ProtectedRoute><CheckinRedesignPage /></ProtectedRoute>} />
       <Route path="/superadmin-redesign" element={<ProtectedRoute platformSuperadminOnly><SuperadminRedesignPage /></ProtectedRoute>} />
       <Route path="/marketing" element={<ProtectedRoute><MarketingPage /></ProtectedRoute>} />
+      <Route path="/lead-form/:token" element={<MarketingLeadFormPage />} />
       <Route path="/design-studio-redesign" element={<ProtectedRoute adminOnly paidOnly><DesignStudioRedesignPage /></ProtectedRoute>} />
       <Route path="/event-results-redesign" element={<ProtectedRoute><EventResultsRedesignPage /></ProtectedRoute>} />
       <Route path="/festiome-redesign" element={<ProtectedRoute><FestioMeRedesignPage /></ProtectedRoute>} />

@@ -12,10 +12,13 @@ import smtplib
 import threading
 import uuid
 import logging
+import asyncio
+import secrets
 from html import escape
 from datetime import datetime, timedelta, timezone
 from email.message import EmailMessage
 from typing import Any
+from urllib.parse import quote
 
 import jwt
 import httpx
@@ -48,6 +51,7 @@ class AccessGrant(Base):
     name: Mapped[str] = mapped_column(String(200), default="")
     role: Mapped[str] = mapped_column(String(30), default="marketer")
     active: Mapped[bool] = mapped_column(Boolean, default=True)
+    owner_scoped: Mapped[bool] = mapped_column(Boolean, default=False)
     granted_by: Mapped[str] = mapped_column(String(240))
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now)
 
@@ -70,6 +74,9 @@ class Lead(Base):
     deal_value: Mapped[int | None] = mapped_column(Integer, nullable=True)
     probability: Mapped[int | None] = mapped_column(Integer, nullable=True)
     close_date: Mapped[str | None] = mapped_column(String(30), nullable=True)
+    demo_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    calendar_url: Mapped[str | None] = mapped_column(Text, nullable=True)
+    deletion_requested_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     owner_email: Mapped[str | None] = mapped_column(String(240), nullable=True)
     source: Mapped[str] = mapped_column(String(100), default="website")
     medium: Mapped[str | None] = mapped_column(String(100), nullable=True)
@@ -133,6 +140,20 @@ class AuditLog(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now, index=True)
 
 
+class AutomationLease(Base):
+    __tablename__ = "marketing_automation_leases"
+    name: Mapped[str] = mapped_column(String(80), primary_key=True)
+    holder: Mapped[str] = mapped_column(String(80))
+    expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), index=True)
+
+
+class FormRateLimit(Base):
+    __tablename__ = "marketing_form_rate_limits"
+    key: Mapped[str] = mapped_column(String(200), primary_key=True)
+    window_started_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now)
+    count: Mapped[int] = mapped_column(Integer, default=0)
+
+
 Base.metadata.create_all(engine)
 
 # Lightweight additive migration for the service-owned SQLite database. This
@@ -149,6 +170,9 @@ with engine.begin() as connection:
         "deal_value": "INTEGER",
         "probability": "INTEGER",
         "close_date": "VARCHAR(30)",
+        "demo_at": "DATETIME",
+        "calendar_url": "TEXT",
+        "deletion_requested_at": "DATETIME",
     }.items():
         if column not in lead_columns:
             connection.execute(text(f"ALTER TABLE marketing_leads ADD COLUMN {column} {definition}"))
@@ -161,6 +185,11 @@ with engine.begin() as connection:
             connection.execute(text("UPDATE marketing_activities SET lead_id=:keep WHERE lead_id=:duplicate"), {"keep": keep_id, "duplicate": duplicate_id})
             connection.execute(text("DELETE FROM marketing_leads WHERE id=:duplicate"), {"duplicate": duplicate_id})
     connection.execute(text("CREATE UNIQUE INDEX IF NOT EXISTS uq_marketing_leads_email_normalized ON marketing_leads(lower(email))"))
+
+access_columns = {column["name"] for column in inspect(engine).get_columns("marketing_access_grants")}
+if "owner_scoped" not in access_columns:
+    with engine.begin() as connection:
+        connection.execute(text("ALTER TABLE marketing_access_grants ADD COLUMN owner_scoped BOOLEAN DEFAULT 0"))
 
 
 def seed_defaults() -> None:
@@ -207,6 +236,7 @@ class Identity(BaseModel):
     name: str
     is_superadmin: bool = False
     role: str = "viewer"
+    owner_scoped: bool = False
 
 
 def db_session():
@@ -232,6 +262,7 @@ def decode_identity(authorization: str | None = Header(default=None), db: Sessio
         grant.name = identity.name
         db.commit()
     identity.role = grant.role
+    identity.owner_scoped = bool(grant.owner_scoped)
     return identity
 
 
@@ -251,6 +282,13 @@ def record_out(row: ModuleRecord) -> dict:
     return {c.name: getattr(row, c.name) for c in row.__table__.columns}
 def audit(db: Session, identity: Identity | str, action: str, target_type: str, target_id: str | None = None, **data):
     db.add(AuditLog(actor=identity if isinstance(identity, str) else identity.email, action=action, target_type=target_type, target_id=target_id, data=data))
+
+
+def visible_lead(db: Session, lead_id: str, identity: Identity) -> Lead:
+    row = db.get(Lead, lead_id)
+    if not row or (identity.owner_scoped and row.owner_email != identity.email):
+        raise HTTPException(404, "Lead not found")
+    return row
 
 
 def sequence_steps(record: ModuleRecord) -> list[dict]:
@@ -356,6 +394,44 @@ app.add_middleware(CORSMiddleware, allow_origins=["https://festio.events", "http
 def health(): return {"status": "ok", "service": "marketing-service"}
 
 
+def enforce_form_rate_limit(db: Session, token: str, remote_ip: str) -> None:
+    key = f"{token}:{remote_ip}"[:200]; window = now() - timedelta(minutes=10)
+    row = db.get(FormRateLimit, key)
+    if not row: db.add(FormRateLimit(key=key, count=1)); db.flush(); return
+    if row.window_started_at.replace(tzinfo=timezone.utc) < window: row.window_started_at, row.count = now(), 1
+    else:
+        row.count += 1
+        if row.count > int(os.getenv("MARKETING_FORM_RATE_LIMIT", "8")): raise HTTPException(429, "Too many submissions. Please try again later.")
+
+
+@app.get("/api/marketing/forms/{public_token}")
+def public_form(public_token: str, db: Session = Depends(db_session)):
+    row = db.scalar(select(ModuleRecord).where(ModuleRecord.module=="forms", ModuleRecord.status=="active", ModuleRecord.payload["public_token"].as_string()==public_token))
+    if not row: raise HTTPException(404,"Form not found")
+    return {"name":row.name,"title":row.payload.get("title") or row.name,"description":row.payload.get("description") or "","fields":row.payload.get("fields") or ["name","email","organization","event_type"],"turnstile_site_key":os.getenv("TURNSTILE_SITE_KEY","")}
+
+
+@app.post("/api/marketing/forms/{public_token}/submit")
+async def submit_public_form(public_token: str, body: dict, request: Request, db: Session = Depends(db_session)):
+    row = db.scalar(select(ModuleRecord).where(ModuleRecord.module=="forms", ModuleRecord.status=="active", ModuleRecord.payload["public_token"].as_string()==public_token))
+    if not row: raise HTTPException(404,"Form not found")
+    enforce_form_rate_limit(db, public_token, request.client.host if request.client else "unknown")
+    captcha_secret=os.getenv("TURNSTILE_SECRET_KEY","");captcha_token=str(body.pop("captcha_token","") or body.pop("cf-turnstile-response", ""))
+    if not captcha_secret: raise HTTPException(503,"Lead capture CAPTCHA is not configured")
+    async with httpx.AsyncClient(timeout=10) as client:
+        verification=await client.post("https://challenges.cloudflare.com/turnstile/v0/siteverify",data={"secret":captcha_secret,"response":captcha_token,"remoteip":request.client.host if request.client else ""})
+    if not verification.json().get("success"): raise HTTPException(400,"CAPTCHA verification failed")
+    email=str(body.get("email") or "").strip().lower()
+    if not email or "@" not in email: raise HTTPException(400,"A valid email is required")
+    lead=db.scalar(select(Lead).where(Lead.email==email))
+    if not lead:
+        allowed={"name","phone","organization","event_type","event_date","guest_count","country","source","medium","campaign","referrer","landing_page"}
+        values={key:value for key,value in body.items() if key in allowed};values["source"]=values.get("source") or f"form:{row.name}"
+        lead=Lead(email=email,owner_email=row.owner_email or os.getenv("MARKETING_DEFAULT_OWNER","muritala@festio.events"),registered_at=now(),**values);db.add(lead);db.flush()
+    db.add(Activity(lead_id=lead.id,kind="form_submitted",summary=f"Submitted {row.name}",actor="public_form",data={"form_id":row.id}))
+    audit(db,"public_form","form.submitted","lead",lead.id,form_id=row.id);db.commit();return {"ok":True,"message":row.payload.get("success_message") or "Thanks. Our team will follow up shortly."}
+
+
 @app.get("/api/marketing/me")
 def me(identity: Identity = Depends(decode_identity)): return identity.model_dump()
 
@@ -421,6 +497,7 @@ class GrantIn(BaseModel):
     email: EmailStr
     name: str = ""
     role: str = "marketer"
+    owner_scoped: bool = False
 
 
 @app.post("/api/marketing/access")
@@ -428,9 +505,9 @@ def grant_access(body: GrantIn, identity: Identity = Depends(require_superadmin)
     if body.role not in {"viewer", "marketer", "manager"}: raise HTTPException(400, "Invalid role")
     email = body.email.lower()
     row = db.scalar(select(AccessGrant).where(AccessGrant.email == email))
-    if row: row.active, row.role, row.name = True, body.role, body.name
-    else: row = AccessGrant(email=email, name=body.name, role=body.role, granted_by=identity.email); db.add(row)
-    db.flush(); audit(db, identity, "access.granted", "access_grant", row.id, email=email, role=body.role); db.commit(); db.refresh(row)
+    if row: row.active, row.role, row.name, row.owner_scoped = True, body.role, body.name, body.owner_scoped
+    else: row = AccessGrant(email=email, name=body.name, role=body.role, owner_scoped=body.owner_scoped, granted_by=identity.email); db.add(row)
+    db.flush(); audit(db, identity, "access.granted", "access_grant", row.id, email=email, role=body.role, owner_scoped=body.owner_scoped); db.commit(); db.refresh(row)
     return {c.name: getattr(row, c.name) for c in row.__table__.columns}
 
 
@@ -443,6 +520,7 @@ def revoke_access(grant_id: str, identity: Identity = Depends(require_superadmin
 @app.get("/api/marketing/leads")
 def list_leads(stage: str | None = None, q: str | None = None, owner: str | None = None, source: str | None = None, campaign: str | None = None, consent: bool | None = None, follow_up: str | None = None, date_from: datetime | None = None, date_to: datetime | None = None, tag: str | None = None, identity: Identity = Depends(decode_identity), db: Session = Depends(db_session)):
     stmt = select(Lead)
+    if identity.owner_scoped: stmt = stmt.where(Lead.owner_email == identity.email)
     if stage: stmt = stmt.where(Lead.stage == stage)
     if q: stmt = stmt.where((Lead.email.ilike(f"%{q}%")) | (Lead.name.ilike(f"%{q}%")) | (Lead.organization.ilike(f"%{q}%")))
     if owner: stmt = stmt.where(Lead.owner_email == owner)
@@ -463,6 +541,7 @@ def create_lead(body: LeadIn, identity: Identity = Depends(decode_identity), db:
     if row: raise HTTPException(409, "Lead already exists")
     values = body.model_dump()
     values["email"] = body.email.lower()
+    if identity.owner_scoped: values["owner_email"] = identity.email
     row = Lead(**values)
     if row.consent_email:
         row.next_follow_up_at = now() + timedelta(minutes=int(os.getenv("MARKETING_INITIAL_DELAY_MINUTES", "60")))
@@ -476,11 +555,11 @@ def create_lead(body: LeadIn, identity: Identity = Depends(decode_identity), db:
 
 @app.patch("/api/marketing/leads/{lead_id}")
 def update_lead(lead_id: str, body: dict, identity: Identity = Depends(decode_identity), db: Session = Depends(db_session)):
-    row = db.get(Lead, lead_id)
-    if not row: raise HTTPException(404, "Lead not found")
+    row = visible_lead(db, lead_id, identity)
     allowed = {c.name for c in Lead.__table__.columns} - {"id", "created_at", "updated_at", "festio_user_id", "stage_changed_at"}
     previous_stage, previous_score = row.stage, row.score
     for key, value in body.items():
+        if identity.owner_scoped and key == "owner_email": continue
         if key in allowed:
             if key in {"registered_at", "last_active_at", "next_follow_up_at"} and isinstance(value, str):
                 try: value = datetime.fromisoformat(value.replace("Z", "+00:00"))
@@ -502,8 +581,7 @@ def update_lead(lead_id: str, body: dict, identity: Identity = Depends(decode_id
 
 @app.delete("/api/marketing/leads/{lead_id}", status_code=204)
 def delete_lead(lead_id:str, identity:Identity=Depends(require_manager), db:Session=Depends(db_session)):
-    row=db.get(Lead,lead_id)
-    if not row: raise HTTPException(404,"Lead not found")
+    row=visible_lead(db,lead_id,identity)
     # SQLite does not enforce ORM cascades here, so remove owned timeline data
     # explicitly and retain a non-PII audit record of the cleanup.
     db.query(Activity).filter(Activity.lead_id==lead_id).delete(synchronize_session=False)
@@ -512,18 +590,29 @@ def delete_lead(lead_id:str, identity:Identity=Depends(require_manager), db:Sess
 
 @app.get("/api/marketing/leads/{lead_id}/activity")
 def activities(lead_id: str, identity: Identity = Depends(decode_identity), db: Session = Depends(db_session)):
+    visible_lead(db, lead_id, identity)
     rows = db.scalars(select(Activity).where(Activity.lead_id == lead_id).order_by(Activity.created_at.desc())).all()
     return [{c.name: getattr(r, c.name) for c in r.__table__.columns} for r in rows]
 
 
 @app.post("/api/marketing/leads/{lead_id}/activity")
 def add_activity(lead_id: str, body: dict, identity: Identity = Depends(decode_identity), db: Session = Depends(db_session)):
-    if not db.get(Lead, lead_id): raise HTTPException(404, "Lead not found")
+    visible_lead(db, lead_id, identity)
     row = Activity(lead_id=lead_id, kind=body.get("kind", "note"), summary=body.get("summary", ""), actor=identity.email, data=body.get("data", {})); db.add(row); db.commit(); db.refresh(row)
     return {c.name: getattr(row, c.name) for c in row.__table__.columns}
 
 
-MODULES = {"segments", "sequences", "campaigns", "content", "referrals", "tasks", "experiments"}
+@app.post("/api/marketing/leads/{lead_id}/demo")
+def schedule_demo(lead_id:str, body:dict, identity:Identity=Depends(decode_identity), db:Session=Depends(db_session)):
+    row=visible_lead(db,lead_id,identity)
+    try: start=datetime.fromisoformat(str(body.get("starts_at") or "").replace("Z","+00:00"))
+    except ValueError: raise HTTPException(400,"A valid demo start time is required")
+    duration=max(15,min(180,int(body.get("duration_minutes") or 30)));end=start+timedelta(minutes=duration);title=f"Festio demo with {row.name or row.organization or row.email}";details=str(body.get("notes") or "Festio event planning demo")
+    calendar_url=f"https://calendar.google.com/calendar/render?action=TEMPLATE&text={quote(title)}&dates={start.astimezone(timezone.utc).strftime('%Y%m%dT%H%M%SZ')}/{end.astimezone(timezone.utc).strftime('%Y%m%dT%H%M%SZ')}&details={quote(details)}"
+    row.demo_at=start;row.calendar_url=calendar_url;row.stage="demo_booked";row.stage_changed_at=now();db.add(Activity(lead_id=row.id,kind="demo_booked",summary="Demo booked",actor=identity.email,data={"starts_at":start.isoformat(),"duration_minutes":duration,"calendar_url":calendar_url}));audit(db,identity,"demo.booked","lead",row.id,starts_at=start.isoformat());db.commit();return {"starts_at":start,"ends_at":end,"calendar_url":calendar_url}
+
+
+MODULES = {"segments", "sequences", "campaigns", "content", "referrals", "tasks", "experiments", "forms"}
 
 
 @app.get("/api/marketing/modules/{module}")
@@ -535,7 +624,9 @@ def list_records(module: str, identity: Identity = Depends(decode_identity), db:
 @app.post("/api/marketing/modules/{module}")
 def create_record(module: str, body: RecordIn, identity: Identity = Depends(decode_identity), db: Session = Depends(db_session)):
     if module not in MODULES: raise HTTPException(404, "Module not found")
-    row = ModuleRecord(module=module, created_by=identity.email, **body.model_dump()); db.add(row); db.flush(); audit(db, identity, "module.created", module, row.id, name=row.name); db.commit(); db.refresh(row); return record_out(row)
+    values = body.model_dump()
+    if module == "forms": values["payload"] = {**values.get("payload", {}), "public_token": values.get("payload", {}).get("public_token") or secrets.token_urlsafe(24)}
+    row = ModuleRecord(module=module, created_by=identity.email, **values); db.add(row); db.flush(); audit(db, identity, "module.created", module, row.id, name=row.name); db.commit(); db.refresh(row); return record_out(row)
 
 
 @app.patch("/api/marketing/modules/{module}/{record_id}")
@@ -551,6 +642,49 @@ def update_record(module: str, record_id: str, body: dict, identity: Identity = 
 def delete_record(module: str, record_id: str, identity: Identity = Depends(require_manager), db: Session = Depends(db_session)):
     row = db.get(ModuleRecord, record_id)
     if row and row.module == module: audit(db, identity, "module.deleted", module, row.id, name=row.name); db.delete(row); db.commit()
+
+
+@app.post("/api/marketing/leads/merge")
+def merge_leads(body: dict, identity: Identity = Depends(require_manager), db: Session = Depends(db_session)):
+    target = visible_lead(db, str(body.get("target_id") or ""), identity)
+    source = visible_lead(db, str(body.get("source_id") or ""), identity)
+    if target.id == source.id: raise HTTPException(400, "Choose two different leads")
+    for field in ("name","phone","organization","event_type","event_date","guest_count","country","owner_email","medium","campaign","referrer","landing_page","deal_value","probability","close_date","demo_at","calendar_url"):
+        if not getattr(target, field, None) and getattr(source, field, None): setattr(target, field, getattr(source, field))
+    target.tags = list(dict.fromkeys([*(target.tags or []), *(source.tags or [])]))
+    target.consent_email = target.consent_email or source.consent_email
+    target.consent_sms = target.consent_sms or source.consent_sms
+    db.query(Activity).filter(Activity.lead_id == source.id).update({Activity.lead_id: target.id}, synchronize_session=False)
+    audit(db, identity, "lead.merged", "lead", target.id, source_id=source.id); db.delete(source); db.commit(); db.refresh(target)
+    return lead_out(target)
+
+
+@app.get("/api/marketing/tags")
+def tag_taxonomy(identity: Identity = Depends(decode_identity), db: Session = Depends(db_session)):
+    counts: dict[str,int] = {}
+    stmt = select(Lead)
+    if identity.owner_scoped: stmt = stmt.where(Lead.owner_email == identity.email)
+    for lead in db.scalars(stmt).all():
+        for tag in lead.tags or []: counts[str(tag)] = counts.get(str(tag), 0) + 1
+    return [{"name": name, "count": count} for name,count in sorted(counts.items(), key=lambda item:(-item[1],item[0].lower()))]
+
+
+@app.patch("/api/marketing/tags/{tag_name}")
+def rename_tag(tag_name: str, body: dict, identity: Identity = Depends(require_manager), db: Session = Depends(db_session)):
+    replacement = str(body.get("name") or "").strip()
+    if not replacement: raise HTTPException(400, "New tag name is required")
+    changed=0
+    for lead in db.scalars(select(Lead)).all():
+        if tag_name in (lead.tags or []): lead.tags=list(dict.fromkeys(replacement if tag==tag_name else tag for tag in lead.tags)); changed+=1
+    audit(db,identity,"tag.renamed","tag",tag_name,new_name=replacement,count=changed);db.commit();return {"updated":changed}
+
+
+@app.delete("/api/marketing/tags/{tag_name}")
+def remove_tag(tag_name: str, identity: Identity = Depends(require_manager), db: Session = Depends(db_session)):
+    changed=0
+    for lead in db.scalars(select(Lead)).all():
+        if tag_name in (lead.tags or []): lead.tags=[tag for tag in lead.tags if tag!=tag_name];changed+=1
+    audit(db,identity,"tag.deleted","tag",tag_name,count=changed);db.commit();return {"updated":changed}
 
 
 def lead_matches_segment(lead: Lead, segment: ModuleRecord) -> bool:
@@ -615,7 +749,9 @@ def preview_campaign(campaign_id: str, identity: Identity = Depends(require_mana
 def bulk_leads(body: dict, identity: Identity = Depends(require_manager), db: Session = Depends(db_session)):
     ids = list(dict.fromkeys(body.get("ids") or []))[:500]
     action, value = body.get("action"), body.get("value")
-    rows = db.scalars(select(Lead).where(Lead.id.in_(ids))).all() if ids else []
+    stmt=select(Lead).where(Lead.id.in_(ids))
+    if identity.owner_scoped: stmt=stmt.where(Lead.owner_email==identity.email)
+    rows = db.scalars(stmt).all() if ids else []
     for row in rows:
         if action == "assign": row.owner_email = value or None
         elif action == "stage" and value in {"registered","event_created","activated","qualified","demo_booked","paid","customer","inactive","lost"}: row.stage = value
@@ -656,7 +792,9 @@ def audit_history(limit:int=100,identity:Identity=Depends(require_manager),db:Se
 def export_leads(identity:Identity=Depends(decode_identity),db:Session=Depends(db_session)):
     fields=["email","name","organization","phone","registered_at","stage","score","owner_email","source","medium","campaign","tags","consent_email","consent_sms","unsubscribed"]
     output=io.StringIO(); writer=csv.DictWriter(output,fieldnames=fields);writer.writeheader()
-    for row in db.scalars(select(Lead).order_by(Lead.registered_at.desc())).all():
+    stmt=select(Lead)
+    if identity.owner_scoped: stmt=stmt.where(Lead.owner_email==identity.email)
+    for row in db.scalars(stmt.order_by(Lead.registered_at.desc())).all():
         data=lead_out(row);data["tags"]="|".join(data.get("tags") or []);writer.writerow({key:data.get(key) for key in fields})
     return StreamingResponse(iter([output.getvalue()]),media_type="text/csv",headers={"Content-Disposition":"attachment; filename=festio-marketing-leads.csv"})
 
@@ -727,7 +865,29 @@ def internal_set_preferences(email:str,body:dict,identity:Identity=Depends(decod
 
 @app.get("/api/marketing/providers")
 def provider_readiness(identity:Identity=Depends(decode_identity)):
-    return {"email":{"provider":"resend","configured":bool(os.getenv("RESEND_API_KEY"))},"sms":{"provider":"bird","configured":bool(os.getenv("BIRD_ACCESS_KEY") and os.getenv("BIRD_WORKSPACE_ID") and os.getenv("BIRD_SMS_CHANNEL_ID"))},"social":{"linkedin":bool(os.getenv("LINKEDIN_ACCESS_TOKEN") and os.getenv("LINKEDIN_AUTHOR_URN")),"facebook":bool(os.getenv("META_ACCESS_TOKEN") and os.getenv("META_FACEBOOK_PAGE_ID")),"instagram":bool(os.getenv("META_ACCESS_TOKEN") and os.getenv("META_INSTAGRAM_USER_ID"))}}
+    return {"email":{"provider":"resend","configured":bool(os.getenv("RESEND_API_KEY"))},"sms":{"provider":"signalhouse","configured":bool(os.getenv("SIGNALHOUSE_API_KEY") and os.getenv("SIGNALHOUSE_FROM_NUMBER"))},"whatsapp":{"provider":"bird","configured":bool(os.getenv("BIRD_ACCESS_KEY") and os.getenv("BIRD_WORKSPACE_ID") and os.getenv("BIRD_WHATSAPP_CHANNEL_ID"))},"social":{"linkedin":bool(os.getenv("LINKEDIN_ACCESS_TOKEN") and os.getenv("LINKEDIN_AUTHOR_URN")),"facebook":bool(os.getenv("META_ACCESS_TOKEN") and os.getenv("META_FACEBOOK_PAGE_ID")),"instagram":bool(os.getenv("META_ACCESS_TOKEN") and os.getenv("META_INSTAGRAM_USER_ID"))}}
+
+
+async def refreshed_social_token(platform: str) -> str:
+    if platform == "linkedin" and all(os.getenv(key) for key in ("LINKEDIN_REFRESH_TOKEN","LINKEDIN_CLIENT_ID","LINKEDIN_CLIENT_SECRET")):
+        async with httpx.AsyncClient(timeout=20) as client:
+            response=await client.post("https://www.linkedin.com/oauth/v2/accessToken",data={"grant_type":"refresh_token","refresh_token":os.getenv("LINKEDIN_REFRESH_TOKEN"),"client_id":os.getenv("LINKEDIN_CLIENT_ID"),"client_secret":os.getenv("LINKEDIN_CLIENT_SECRET")})
+        if response.status_code < 400: return response.json().get("access_token") or os.getenv("LINKEDIN_ACCESS_TOKEN","")
+    if platform in {"facebook","instagram"} and all(os.getenv(key) for key in ("META_ACCESS_TOKEN","META_APP_ID","META_APP_SECRET")):
+        async with httpx.AsyncClient(timeout=20) as client:
+            response=await client.get("https://graph.facebook.com/v23.0/oauth/access_token",params={"grant_type":"fb_exchange_token","client_id":os.getenv("META_APP_ID"),"client_secret":os.getenv("META_APP_SECRET"),"fb_exchange_token":os.getenv("META_ACCESS_TOKEN")})
+        if response.status_code < 400: return response.json().get("access_token") or os.getenv("META_ACCESS_TOKEN","")
+    return os.getenv("LINKEDIN_ACCESS_TOKEN" if platform=="linkedin" else "META_ACCESS_TOKEN","")
+
+
+@app.post("/api/marketing/providers/{platform}/refresh")
+async def refresh_provider(platform: str, identity:Identity=Depends(require_manager), db:Session=Depends(db_session)):
+    if platform not in {"linkedin","facebook","instagram"}: raise HTTPException(400,"Unsupported provider")
+    refresh_ready = all(os.getenv(key) for key in (("LINKEDIN_REFRESH_TOKEN","LINKEDIN_CLIENT_ID","LINKEDIN_CLIENT_SECRET") if platform=="linkedin" else ("META_ACCESS_TOKEN","META_APP_ID","META_APP_SECRET")))
+    if not refresh_ready: raise HTTPException(503,f"{platform.title()} OAuth refresh credentials are not configured")
+    token=await refreshed_social_token(platform)
+    if not token: raise HTTPException(503,f"{platform.title()} OAuth refresh is not configured")
+    audit(db,identity,"provider.token_refreshed","provider",platform);db.commit();return {"platform":platform,"refreshed":True}
 
 
 @app.post("/api/marketing/social/publish")
@@ -738,16 +898,16 @@ async def publish_social(body:SocialPublishIn, identity:Identity=Depends(require
         audit(db,identity,"social.validated","content",None,platform=platform);db.commit();return {"status":"validated","platform":platform,"dry_run":True}
     async with httpx.AsyncClient(timeout=30) as client:
         if platform=="linkedin":
-            token,author=os.getenv("LINKEDIN_ACCESS_TOKEN",""),os.getenv("LINKEDIN_AUTHOR_URN","")
+            token,author=await refreshed_social_token("linkedin"),os.getenv("LINKEDIN_AUTHOR_URN","")
             if not token or not author: raise HTTPException(503,"Connect a LinkedIn organization before publishing")
             payload={"author":author,"commentary":body.message,"visibility":"PUBLIC","distribution":{"feedDistribution":"MAIN_FEED","targetEntities":[],"thirdPartyDistributionChannels":[]},"lifecycleState":"PUBLISHED","isReshareDisabledByAuthor":False}
             response=await client.post("https://api.linkedin.com/rest/posts",headers={"Authorization":f"Bearer {token}","LinkedIn-Version":os.getenv("LINKEDIN_API_VERSION","202601"),"X-Restli-Protocol-Version":"2.0.0"},json=payload)
         elif platform=="facebook":
-            token,page=os.getenv("META_ACCESS_TOKEN",""),os.getenv("META_FACEBOOK_PAGE_ID","")
+            token,page=await refreshed_social_token("facebook"),os.getenv("META_FACEBOOK_PAGE_ID","")
             if not token or not page: raise HTTPException(503,"Connect a Facebook Page before publishing")
             response=await client.post(f"https://graph.facebook.com/v23.0/{page}/feed",data={"message":body.message,"link":body.link_url or "","access_token":token})
         else:
-            token,user=os.getenv("META_ACCESS_TOKEN",""),os.getenv("META_INSTAGRAM_USER_ID","")
+            token,user=await refreshed_social_token("instagram"),os.getenv("META_INSTAGRAM_USER_ID","")
             if not token or not user: raise HTTPException(503,"Connect an Instagram business account before publishing")
             if not body.image_url: raise HTTPException(400,"Instagram publishing requires a public image URL")
             created=await client.post(f"https://graph.facebook.com/v23.0/{user}/media",data={"image_url":body.image_url,"caption":body.message,"access_token":token})
@@ -761,18 +921,17 @@ async def publish_social(body:SocialPublishIn, identity:Identity=Depends(require
 
 @app.post("/api/marketing/leads/{lead_id}/sms")
 async def send_lead_sms(lead_id:str, body:dict, identity:Identity=Depends(decode_identity), db:Session=Depends(db_session)):
-    row=db.get(Lead,lead_id); message=str(body.get("message") or "").strip()
-    if not row: raise HTTPException(404,"Lead not found")
+    row=visible_lead(db,lead_id,identity); message=str(body.get("message") or "").strip()
     if not row.phone: raise HTTPException(400,"Lead has no phone number")
     if not row.consent_sms: raise HTTPException(409,"SMS consent is required")
     if not message: raise HTTPException(400,"Message is required")
-    key,workspace,channel=os.getenv("BIRD_ACCESS_KEY",""),os.getenv("BIRD_WORKSPACE_ID",""),os.getenv("BIRD_SMS_CHANNEL_ID","")
-    if not all((key,workspace,channel)): raise HTTPException(503,"Bird SMS is not configured")
+    key,from_number=os.getenv("SIGNALHOUSE_API_KEY",""),os.getenv("SIGNALHOUSE_FROM_NUMBER","")
+    if not all((key,from_number)): raise HTTPException(503,"SignalHouse SMS is not configured")
     final=f"{message[:1450]}\nReply STOP to opt out."
     async with httpx.AsyncClient(timeout=20) as client:
-        response=await client.post(f"https://api.bird.com/workspaces/{workspace}/channels/{channel}/messages",headers={"Authorization":f"AccessKey {key}"},json={"receiver":{"contacts":[{"identifierValue":row.phone,"identifierKey":"phonenumber"}]},"body":{"type":"text","text":{"text":final}}})
-    if response.status_code>=400: raise HTTPException(502,"Bird could not send this message")
-    data=response.json() if response.content else {};db.add(Activity(lead_id=row.id,kind="sms_sent",summary="Marketing SMS sent",actor=identity.email,data={"provider":"bird","provider_id":data.get("id")}));audit(db,identity,"sms.sent","lead",row.id);db.commit();return {"status":"sent","provider_id":data.get("id")}
+        response=await client.post(f"{os.getenv('SIGNALHOUSE_API_BASE','https://v2.signalhouse.io').rstrip('/')}/message/sms",headers={"Authorization":f"Bearer {key}"},json={"senderPhoneNumber":from_number,"recipientPhoneNumber":[row.phone],"messageBody":final,"enableShortlink":False,"statusCallbackUrl":os.getenv("SIGNALHOUSE_STATUS_CALLBACK_URL","")})
+    if response.status_code>=400: raise HTTPException(502,"SignalHouse could not send this message")
+    data=response.json() if response.content else {};provider_id=data.get("messageId") or data.get("id") or data.get("groupId");db.add(Activity(lead_id=row.id,kind="sms_sent",summary="Marketing SMS sent",actor=identity.email,data={"provider":"signalhouse","provider_id":provider_id}));audit(db,identity,"sms.sent","lead",row.id);db.commit();return {"status":"sent","provider":"signalhouse","provider_id":provider_id}
 
 
 @app.post("/api/marketing/internal/delivery")
@@ -827,6 +986,39 @@ def run_automation(dry_run: bool = Query(False), identity: Identity = Depends(re
     return {"queued": queued, "eligible": len(leads), "active_sequences": len(sequences), "dry_run": dry_run}
 
 
+@app.post("/api/marketing/leads/{lead_id}/gdpr-delete")
+def request_gdpr_deletion(lead_id:str, identity:Identity=Depends(require_manager), db:Session=Depends(db_session)):
+    row=visible_lead(db,lead_id,identity);row.deletion_requested_at=now();row.consent_email=False;row.consent_sms=False;row.unsubscribed=True;row.next_follow_up_at=None
+    audit(db,identity,"gdpr.deletion_requested","lead",row.id);db.commit();return {"scheduled":True,"purge_after_days":int(os.getenv("MARKETING_GDPR_GRACE_DAYS","30"))}
+
+
+def run_gdpr_retention(db:Session, identity:Identity) -> int:
+    grace=int(os.getenv("MARKETING_GDPR_GRACE_DAYS","30"));cutoff=now()-timedelta(days=max(0,grace));rows=db.scalars(select(Lead).where(Lead.deletion_requested_at.is_not(None),Lead.deletion_requested_at<=cutoff)).all()
+    for row in rows:
+        db.query(Activity).filter(Activity.lead_id==row.id).delete(synchronize_session=False)
+        audit(db,identity,"gdpr.lead_purged","lead",row.id);db.delete(row)
+    db.commit();return len(rows)
+
+
+def acquire_lease(db:Session,name:str,seconds:int=840) -> bool:
+    holder=f"{os.getpid()}-{uuid.uuid4()}";expiry=now()+timedelta(seconds=seconds);row=db.get(AutomationLease,name)
+    if row and row.expires_at.replace(tzinfo=timezone.utc)>now(): return False
+    if row: row.holder,row.expires_at=holder,expiry
+    else: db.add(AutomationLease(name=name,holder=holder,expires_at=expiry))
+    try: db.commit();return True
+    except IntegrityError: db.rollback();return False
+
+
+async def run_scheduled_social(db:Session, identity:Identity) -> int:
+    rows=db.scalars(select(ModuleRecord).where(ModuleRecord.module=="content",ModuleRecord.status=="scheduled",ModuleRecord.scheduled_at.is_not(None),ModuleRecord.scheduled_at<=now())).all();published=0
+    for row in rows:
+        try:
+            await publish_social(SocialPublishIn(platform=row.payload.get("channel") or "",message=row.payload.get("caption") or row.name,link_url=row.payload.get("link_url"),image_url=row.payload.get("image_url")),identity=identity,db=db);row.status="complete";published+=1
+        except Exception as exc:
+            audit(db,identity,"social.schedule_failed","content",row.id,error=str(exc)[:300])
+    db.commit();return published
+
+
 def scheduled_automation() -> None:
     """Run consent-safe follow-ups every 15 minutes without a separate worker."""
     while True:
@@ -834,7 +1026,10 @@ def scheduled_automation() -> None:
         try:
             with SessionLocal() as db:
                 identity = Identity(subject="scheduler", email="automation@festio.events", name="Festio Automation", is_superadmin=True, role="superadmin")
+                if not acquire_lease(db,"marketing-scheduler"): continue
                 run_automation(dry_run=False, identity=identity, db=db)
+                asyncio.run(run_scheduled_social(db,identity))
+                run_gdpr_retention(db,identity)
         except Exception as exc:
             # A delivery outage must not terminate the scheduler.
             logger.exception("Marketing automation scheduler failed")
@@ -875,25 +1070,25 @@ h1{font-size:24px}p{color:#526070;line-height:1.6}a{color:#075b5d}</style></head
 
 
 @app.post("/api/marketing/sms/webhook")
-def bird_sms_webhook(body: dict, x_webhook_token: str | None = Header(default=None), db: Session = Depends(db_session)):
-    """Record Bird inbound opt-out replies in Festio's own consent ledger."""
-    configured_token = os.getenv("BIRD_WEBHOOK_TOKEN", "")
+def signalhouse_sms_webhook(body: dict, x_webhook_token: str | None = Header(default=None), db: Session = Depends(db_session)):
+    """Record SignalHouse inbound opt-out replies in Festio's consent ledger."""
+    configured_token = os.getenv("SIGNALHOUSE_WEBHOOK_TOKEN", "")
     if configured_token and x_webhook_token != configured_token:
-        raise HTTPException(401, "Invalid Bird webhook token")
+        raise HTTPException(401, "Invalid SignalHouse webhook token")
     payload = body.get("payload") or body
     sender = payload.get("sender") or {}
     contact = sender.get("contact") or {}
-    phone = str(contact.get("identifierValue") or payload.get("phone") or "").strip()
+    phone = str(contact.get("identifierValue") or payload.get("phone") or payload.get("senderPhoneNumber") or payload.get("from") or "").strip()
     text_body = ((payload.get("body") or {}).get("text") or {})
-    message = str(text_body.get("text") or payload.get("text") or "").strip().upper()
+    message = str(text_body.get("text") or payload.get("text") or payload.get("messageBody") or payload.get("body") or "").strip().upper()
     if not phone or not message: return {"recorded": False}
     row = db.scalar(select(Lead).where(Lead.phone == phone))
     if not row: return {"recorded": False}
     keyword = message.split()[0]
     if keyword in {"STOP", "STOPALL", "END", "QUIT", "UNSUBSCRIBE", "CANCEL"}:
         row.consent_sms = False
-        db.add(Activity(lead_id=row.id, kind="sms_unsubscribed", summary="SMS opt-out received", actor="bird", data={"keyword": keyword}))
-        audit(db, "bird", "consent.sms_opt_out", "lead", row.id, keyword=keyword); db.commit()
+        db.add(Activity(lead_id=row.id, kind="sms_unsubscribed", summary="SMS opt-out received", actor="signalhouse", data={"keyword": keyword}))
+        audit(db, "signalhouse", "consent.sms_opt_out", "lead", row.id, keyword=keyword); db.commit()
         return {"recorded": True, "unsubscribed": True}
-    db.add(Activity(lead_id=row.id, kind="sms_received", summary="SMS reply received", actor="bird", data={"message": message[:500]})); db.commit()
+    db.add(Activity(lead_id=row.id, kind="sms_received", summary="SMS reply received", actor="signalhouse", data={"message": message[:500]})); db.commit()
     return {"recorded": True, "unsubscribed": False}

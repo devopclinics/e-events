@@ -1,5 +1,5 @@
-import { useEffect, useMemo, useState } from "react";
-import { Link } from "react-router-dom";
+import { Component, useEffect, useMemo, useState } from "react";
+import { Link, useSearchParams } from "react-router-dom";
 import { api } from "../api";
 import "./MarketingPage.css";
 import "./MarketingReadable.css";
@@ -12,6 +12,7 @@ const MODULE_TABS = [
   ["referrals", "Referrals"],
   ["tasks", "Tasks"],
   ["experiments", "Experiments"],
+  ["forms", "Lead forms"],
 ];
 const STAGES = [
   "registered",
@@ -52,6 +53,10 @@ const MODULE_META = {
   experiments: [
     "Experiment lab",
     "Test positioning, calls to action, and journeys with a clear success metric.",
+  ],
+  forms: [
+    "Lead capture forms",
+    "Create CAPTCHA-protected forms for landing pages and partner sites.",
   ],
 };
 
@@ -132,6 +137,12 @@ const FORM_FIELDS = {
     ["variant_a", "Variant A"],
     ["variant_b", "Variant B"],
   ],
+  forms: [
+    ["title", "Public title"],
+    ["description", "Description"],
+    ["fields", "Fields"],
+    ["success_message", "Success message"],
+  ],
 };
 function ModuleFields({ module, value, onChange }) {
   const payload = value || {};
@@ -164,13 +175,12 @@ function ModuleFields({ module, value, onChange }) {
               onChange={(e) =>
                 onChange({
                   ...payload,
-                  [key]:
-                    key === "channels"
-                      ? e.target.value
-                          .split(",")
-                          .map((v) => v.trim())
-                          .filter(Boolean)
-                      : e.target.value,
+                  [key]: ["channels", "fields"].includes(key)
+                    ? e.target.value
+                        .split(",")
+                        .map((v) => v.trim())
+                        .filter(Boolean)
+                    : e.target.value,
                 })
               }
             />
@@ -210,7 +220,12 @@ function LeadProfileFields({ lead, setLead, save }) {
         onChange={(event) =>
           setLead((current) => ({
             ...current,
-            [key]: type === "number" ? (event.target.value === "" ? null : Number(event.target.value)) : event.target.value,
+            [key]:
+              type === "number"
+                ? event.target.value === ""
+                  ? null
+                  : Number(event.target.value)
+                : event.target.value,
           }))
         }
         onBlur={() => save({ [key]: lead[key] ?? null })}
@@ -220,15 +235,60 @@ function LeadProfileFields({ lead, setLead, save }) {
   return (
     <>
       <div className="mk-profile-grid">
-        <label>Stage<select value={lead.stage} onChange={(event) => save({ stage: event.target.value })}>{STAGES.map((stage) => <option key={stage}>{stage}</option>)}</select></label>
+        <label>
+          Stage
+          <select
+            value={lead.stage}
+            onChange={(event) => save({ stage: event.target.value })}
+          >
+            {STAGES.map((stage) => (
+              <option key={stage}>{stage}</option>
+            ))}
+          </select>
+        </label>
         {textField("score", "Score", "number")}
         {textField("owner_email", "Owner")}
-        <label>Email consent<input type="checkbox" checked={lead.consent_email} onChange={(event) => save({ consent_email: event.target.checked })} /></label>
-        <label>SMS consent<input type="checkbox" checked={lead.consent_sms} onChange={(event) => save({ consent_sms: event.target.checked })} /></label>
-        {textField("phone", "Phone")}{textField("organization", "Organization")}{textField("country", "Country")}
+        <label>
+          Email consent
+          <input
+            type="checkbox"
+            checked={lead.consent_email}
+            onChange={(event) => save({ consent_email: event.target.checked })}
+          />
+        </label>
+        <label>
+          SMS consent
+          <input
+            type="checkbox"
+            checked={lead.consent_sms}
+            onChange={(event) => save({ consent_sms: event.target.checked })}
+          />
+        </label>
+        {textField("phone", "Phone")}
+        {textField("organization", "Organization")}
+        {textField("country", "Country")}
       </div>
-      <details className="mk-profile-section"><summary>Event intent and opportunity</summary><div className="mk-profile-grid">{textField("event_type", "Event type")}{textField("event_date", "Event date", "date")}{textField("guest_count", "Guest count", "number")}{textField("deal_value", "Deal value", "number")}{textField("probability", "Probability %", "number")}{textField("close_date", "Expected close date", "date")}</div></details>
-      <details className="mk-profile-section"><summary>Campaign attribution</summary><div className="mk-profile-grid">{textField("source", "Source")}{textField("medium", "Medium")}{textField("campaign", "Campaign")}{textField("referrer", "Referrer")}{textField("landing_page", "Landing page")}</div></details>
+      <details className="mk-profile-section">
+        <summary>Event intent and opportunity</summary>
+        <div className="mk-profile-grid">
+          {textField("event_type", "Event type")}
+          {textField("event_date", "Event date", "date")}
+          {textField("guest_count", "Guest count", "number")}
+          {textField("deal_value", "Deal value", "number")}
+          {textField("probability", "Probability %", "number")}
+          {textField("close_date", "Expected close date", "date")}
+        </div>
+      </details>
+      <details className="mk-profile-section">
+        <summary>Campaign attribution</summary>
+        <div className="mk-profile-grid">
+          {textField("source", "Source")}
+          {textField("medium", "Medium")}
+          {textField("campaign", "Campaign")}
+          {textField("referrer", "Referrer")}
+          {textField("landing_page", "Landing page")}
+        </div>
+      </details>
     </>
   );
 }
@@ -243,6 +303,8 @@ const NAV_ICONS = {
   referrals: "⌁",
   tasks: "✓",
   experiments: "⚗",
+  forms: "▤",
+  tags: "#",
   access: "♙",
 };
 
@@ -759,14 +821,16 @@ function LegacyLeads() {
 }
 
 function Leads() {
+  const [searchParams, setSearchParams] = useSearchParams();
   const [rows, setRows] = useState([]),
     [filters, setFilters] = useState({
-      q: "",
-      stage: "",
-      owner: "",
-      source: "",
-      consent: "",
+      q: searchParams.get("q") || "",
+      stage: searchParams.get("stage") || "",
+      owner: searchParams.get("owner") || "",
+      source: searchParams.get("source") || "",
+      consent: searchParams.get("consent") || "",
     }),
+    [viewMode, setViewMode] = useState(searchParams.get("view") || "table"),
     [selected, setSelected] = useState(null),
     [checked, setChecked] = useState([]),
     [activity, setActivity] = useState([]),
@@ -788,6 +852,14 @@ function Leads() {
       .map(([k, v]) => `${k}=${encodeURIComponent(v)}`)
       .join("&");
   const load = () => api.marketingLeads(query()).then(setRows);
+  function applyFilters() {
+    const next = Object.fromEntries(
+      Object.entries(filters).filter(([, value]) => value !== ""),
+    );
+    if (viewMode !== "table") next.view = viewMode;
+    setSearchParams(next);
+    load();
+  }
   useEffect(() => {
     load();
     api.marketingSavedViews().then(setViews);
@@ -895,7 +967,19 @@ function Leads() {
           <option value="true">Email ready</option>
           <option value="false">Not opted in</option>
         </select>
-        <button onClick={load}>Apply</button>
+        <button onClick={applyFilters}>Apply</button>
+        <button
+          onClick={() => {
+            const next = viewMode === "table" ? "kanban" : "table";
+            setViewMode(next);
+            setSearchParams({
+              ...Object.fromEntries(searchParams),
+              view: next,
+            });
+          }}
+        >
+          {viewMode === "table" ? "Kanban view" : "Table view"}
+        </button>
         <button onClick={saveView}>Save view</button>
         <select
           onChange={(e) => {
@@ -940,75 +1024,116 @@ function Leads() {
           </button>
         </div>
       )}
-      <div className="mk-table-shell">
-        <table>
-          <thead>
-            <tr>
-              <th>
-                <input
-                  type="checkbox"
-                  checked={checked.length === rows.length && rows.length > 0}
-                  onChange={(e) =>
-                    setChecked(e.target.checked ? rows.map((r) => r.id) : [])
-                  }
-                />
-              </th>
-              <th>Lead</th>
-              <th>Date registered</th>
-              <th>Stage</th>
-              <th>Owner</th>
-              <th>Source</th>
-              <th>Score</th>
-              <th>Consent</th>
-            </tr>
-          </thead>
-          <tbody>
-            {rows.map((r) => (
-              <tr key={r.id}>
-                <td>
+      {viewMode === "kanban" ? (
+        <div className="mk-kanban">
+          {STAGES.map((stage) => (
+            <section
+              key={stage}
+              onDragOver={(event) => event.preventDefault()}
+              onDrop={async (event) => {
+                const id = event.dataTransfer.getData("text/lead-id");
+                if (id) {
+                  await api.marketingUpdateLead(id, { stage });
+                  load();
+                }
+              }}
+            >
+              <header>
+                <b>{stage.replaceAll("_", " ")}</b>
+                <span>
+                  {rows.filter((lead) => lead.stage === stage).length}
+                </span>
+              </header>
+              {rows
+                .filter((lead) => lead.stage === stage)
+                .map((lead) => (
+                  <article
+                    key={lead.id}
+                    draggable
+                    onDragStart={(event) =>
+                      event.dataTransfer.setData("text/lead-id", lead.id)
+                    }
+                    onClick={() => open(lead)}
+                  >
+                    <b>{lead.name || lead.email}</b>
+                    <small>{lead.organization || lead.email}</small>
+                    <span>Score {lead.score}</span>
+                  </article>
+                ))}
+            </section>
+          ))}
+        </div>
+      ) : (
+        <div className="mk-table-shell">
+          <table>
+            <thead>
+              <tr>
+                <th>
                   <input
                     type="checkbox"
-                    checked={checked.includes(r.id)}
+                    checked={checked.length === rows.length && rows.length > 0}
                     onChange={(e) =>
-                      setChecked((v) =>
-                        e.target.checked
-                          ? [...v, r.id]
-                          : v.filter((id) => id !== r.id),
-                      )
+                      setChecked(e.target.checked ? rows.map((r) => r.id) : [])
                     }
                   />
-                </td>
-                <td onClick={() => open(r)}>
-                  <b>{r.name || r.email}</b>
-                  <small>{r.email}</small>
-                </td>
-                <td>
-                  {new Date(r.registered_at || r.created_at).toLocaleString()}
-                </td>
-                <td>
-                  <span className="mk-stage-pill">
-                    {r.stage.replaceAll("_", " ")}
-                  </span>
-                </td>
-                <td>{r.owner_email || "Unassigned"}</td>
-                <td>{r.source}</td>
-                <td>
-                  <b className="mk-score">{r.score}</b>
-                </td>
-                <td>
-                  <span
-                    className={`mk-consent ${r.consent_email && !r.unsubscribed ? "yes" : ""}`}
-                  >
-                    {r.consent_email && !r.unsubscribed
-                      ? "● Email ready"
-                      : "○ Not opted in"}
-                  </span>
-                </td>
+                </th>
+                <th>Lead</th>
+                <th>Date registered</th>
+                <th>Stage</th>
+                <th>Owner</th>
+                <th>Source</th>
+                <th>Score</th>
+                <th>Consent</th>
               </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
+            </thead>
+            <tbody>
+              {rows.map((r) => (
+                <tr key={r.id}>
+                  <td>
+                    <input
+                      type="checkbox"
+                      checked={checked.includes(r.id)}
+                      onChange={(e) =>
+                        setChecked((v) =>
+                          e.target.checked
+                            ? [...v, r.id]
+                            : v.filter((id) => id !== r.id),
+                        )
+                      }
+                    />
+                  </td>
+                  <td onClick={() => open(r)}>
+                    <b>{r.name || r.email}</b>
+                    <small>{r.email}</small>
+                  </td>
+                  <td>
+                    {new Date(r.registered_at || r.created_at).toLocaleString()}
+                  </td>
+                  <td>
+                    <span className="mk-stage-pill">
+                      {r.stage.replaceAll("_", " ")}
+                    </span>
+                  </td>
+                  <td>{r.owner_email || "Unassigned"}</td>
+                  <td>{r.source}</td>
+                  <td>
+                    <b className="mk-score">{r.score}</b>
+                  </td>
+                  <td>
+                    <span
+                      className={`mk-consent ${r.consent_email && !r.unsubscribed ? "yes" : ""}`}
+                    >
+                      {r.consent_email && !r.unsubscribed
+                        ? "● Email ready"
+                        : "○ Not opted in"}
+                    </span>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
       {selected && (
         <div className="mk-drawer-backdrop" onClick={() => setSelected(null)}>
           <aside className="mk-drawer" onClick={(e) => e.stopPropagation()}>
@@ -1020,7 +1145,11 @@ function Leads() {
               </div>
               <button onClick={() => setSelected(null)}>Close</button>
             </header>
-            <LeadProfileFields lead={selected} setLead={setSelected} save={update} />
+            <LeadProfileFields
+              lead={selected}
+              setLead={setSelected}
+              save={update}
+            />
             <section className="mk-timeline">
               <h3>Relationship history</h3>
               {activity.map((a) => (
@@ -1042,6 +1171,65 @@ function Leads() {
                 onChange={(e) => setNote(e.target.value)}
               />
               <button onClick={addNote}>Save note</button>
+            </div>
+            <div className="mk-drawer-actions">
+              <button
+                onClick={async () => {
+                  const email = prompt(
+                    "Email of the duplicate lead to merge into this profile",
+                  );
+                  const source = rows.find(
+                    (lead) =>
+                      lead.email.toLowerCase() ===
+                      String(email || "").toLowerCase(),
+                  );
+                  if (!source)
+                    return setNotice(
+                      "Duplicate lead not found in the current view",
+                    );
+                  const merged = await api.marketingMergeLeads({
+                    target_id: selected.id,
+                    source_id: source.id,
+                  });
+                  setSelected(merged);
+                  setNotice("Duplicate merged");
+                  load();
+                }}
+              >
+                Merge duplicate
+              </button>
+              <button
+                onClick={async () => {
+                  const startsAt = prompt("Demo start time (YYYY-MM-DD HH:MM)");
+                  if (!startsAt) return;
+                  const result = await api.marketingScheduleDemo(selected.id, {
+                    starts_at: new Date(startsAt).toISOString(),
+                    duration_minutes: 30,
+                  });
+                  window.open(result.calendar_url, "_blank", "noopener");
+                  setNotice("Demo booked and calendar opened");
+                  load();
+                }}
+              >
+                Book demo
+              </button>
+              <button
+                className="danger"
+                onClick={async () => {
+                  if (
+                    confirm("Schedule this lead for permanent GDPR deletion?")
+                  ) {
+                    const result = await api.marketingGdprDelete(selected.id);
+                    setNotice(
+                      `Deletion scheduled after ${result.purge_after_days} days`,
+                    );
+                    setSelected(null);
+                    load();
+                  }
+                }}
+              >
+                GDPR deletion
+              </button>
             </div>
           </aside>
         </div>
@@ -1347,12 +1535,13 @@ function LegacyModule({ module }) {
 function Module({ module }) {
   const [rows, setRows] = useState([]),
     [editing, setEditing] = useState(null),
-    [notice, setNotice] = useState("");
+    [notice, setNotice] = useState(""),
+    [loading,setLoading]=useState(true);
   const meta = MODULE_META[module] || [
     "Growth module",
     "Manage this workspace.",
   ];
-  const load = () => api.marketingModule(module).then(setRows);
+  const load = () => {setLoading(true);return api.marketingModule(module).then(setRows).finally(()=>setLoading(false))};
   useEffect(() => {
     load();
   }, [module]);
@@ -1372,6 +1561,7 @@ function Module({ module }) {
       status: editing.status,
       owner_email: editing.owner_email || null,
       payload: editing.payload,
+      scheduled_at: editing.scheduled_at || null,
     };
     if (editing.isNew) await api.marketingCreateRecord(module, body);
     else await api.marketingUpdateRecord(module, editing.id, body);
@@ -1408,6 +1598,7 @@ function Module({ module }) {
         action={create}
       />
       {notice && <div className="mk-notice">{notice}</div>}
+      {loading&&<div className="mk-loading-grid"><i/><i/><i/><i/></div>}
       <div className="mk-module-grid">
         {rows.map((r, index) => (
           <article className="mk-module-card" key={r.id}>
@@ -1451,19 +1642,40 @@ function Module({ module }) {
                 </>
               )}
               {module === "content" && (
-                <button
+                <>
+                  <button
+                    onClick={async () => {
+                      const result = await api.marketingPublishSocial({
+                        platform: r.payload.channel,
+                        message: r.payload.caption || r.name,
+                        link_url: r.payload.link_url,
+                        image_url: r.payload.image_url,
+                      });
+                      setNotice(`${result.platform} post published`);
+                    }}
+                  >
+                    Publish now
+                  </button>
+                  {r.status === "scheduled" && (
+                    <small>
+                      Scheduled{" "}
+                      {r.scheduled_at
+                        ? new Date(r.scheduled_at).toLocaleString()
+                        : "time not set"}
+                    </small>
+                  )}
+                </>
+              )}
+              {module === "forms" && r.payload.public_token && (
+                <><button
                   onClick={async () => {
-                    const result = await api.marketingPublishSocial({
-                      platform: r.payload.channel,
-                      message: r.payload.caption || r.name,
-                      link_url: r.payload.link_url,
-                      image_url: r.payload.image_url,
-                    });
-                    setNotice(`${result.platform} post published`);
+                    const url = `${window.location.origin}/lead-form/${r.payload.public_token}`;
+                    await navigator.clipboard.writeText(url);
+                    setNotice("Public form link copied");
                   }}
                 >
-                  Publish now
-                </button>
+                  Copy form link
+                </button><button onClick={async()=>{const url=`${window.location.origin}/lead-form/${r.payload.public_token}`;await navigator.clipboard.writeText(`<iframe src="${url}" title="${r.name}" width="100%" height="760" style="border:0"></iframe>`);setNotice("Embed code copied")}}>Copy embed code</button></>
               )}
               <button
                 onClick={async () => {
@@ -1537,6 +1749,28 @@ function Module({ module }) {
               value={editing.payload}
               onChange={(payload) => setEditing((v) => ({ ...v, payload }))}
             />
+            {module === "content" && (
+              <label className="mk-schedule-field">
+                Publish date and time
+                <input
+                  type="datetime-local"
+                  value={
+                    editing.scheduled_at
+                      ? String(editing.scheduled_at).slice(0, 16)
+                      : ""
+                  }
+                  onChange={(event) =>
+                    setEditing((value) => ({
+                      ...value,
+                      scheduled_at: event.target.value
+                        ? new Date(event.target.value).toISOString()
+                        : null,
+                      status: event.target.value ? "scheduled" : value.status,
+                    }))
+                  }
+                />
+              </label>
+            )}
             <div className="mk-modal-actions">
               <button type="button" onClick={() => setEditing(null)}>
                 Cancel
@@ -1546,6 +1780,62 @@ function Module({ module }) {
           </form>
         </div>
       )}
+    </div>
+  );
+}
+
+function Tags() {
+  const [rows, setRows] = useState([]),
+    [notice, setNotice] = useState("");
+  const load = () => api.marketingTags().then(setRows);
+  useEffect(() => {
+    load();
+  }, []);
+  return (
+    <div className="mk-workspace">
+      <SectionIntro
+        eyebrow="TAG TAXONOMY"
+        title="One shared language for every lead."
+        copy="Review usage, rename inconsistent tags, and remove tags that no longer belong."
+        count={rows.length}
+      />
+      {notice && <div className="mk-notice">{notice}</div>}
+      <div className="mk-tag-grid">
+        {rows.map((tag) => (
+          <article key={tag.name}>
+            <div>
+              <b>{tag.name}</b>
+              <small>{tag.count} lead(s)</small>
+            </div>
+            <button
+              onClick={async () => {
+                const name = prompt("New tag name", tag.name);
+                if (name && name !== tag.name) {
+                  const result = await api.marketingRenameTag(tag.name, {
+                    name,
+                  });
+                  setNotice(`${result.updated} lead(s) updated`);
+                  load();
+                }
+              }}
+            >
+              Rename
+            </button>
+            <button
+              className="danger"
+              onClick={async () => {
+                if (confirm(`Remove ${tag.name} from every lead?`)) {
+                  const result = await api.marketingDeleteTag(tag.name);
+                  setNotice(`${result.updated} lead(s) updated`);
+                  load();
+                }
+              }}
+            >
+              Delete
+            </button>
+          </article>
+        ))}
+      </div>
     </div>
   );
 }
@@ -1612,13 +1902,29 @@ function Analytics() {
               <b>{providers?.email?.configured ? "Ready" : "Setup needed"}</b>
             </span>
             <span className={providers?.sms?.configured ? "ready" : ""}>
-              SMS · Bird{" "}
+              SMS · SignalHouse{" "}
               <b>{providers?.sms?.configured ? "Ready" : "Setup needed"}</b>
+            </span>
+            <span className={providers?.whatsapp?.configured ? "ready" : ""}>
+              WhatsApp · Bird{" "}
+              <b>
+                {providers?.whatsapp?.configured ? "Ready" : "Setup needed"}
+              </b>
             </span>
             {Object.entries(providers?.social || {}).map(([name, ready]) => (
               <span className={ready ? "ready" : ""} key={name}>
                 {name}
                 <b>{ready ? "Connected" : "Connect account"}</b>
+                {ready && (
+                  <button
+                    onClick={async () => {
+                      await api.marketingRefreshProvider(name);
+                      setProviders(await api.marketingProviders());
+                    }}
+                  >
+                    Refresh OAuth
+                  </button>
+                )}
               </span>
             ))}
           </div>
@@ -1715,7 +2021,8 @@ function Preferences() {
 function Access() {
   const [rows, setRows] = useState([]),
     [email, setEmail] = useState(""),
-    [role, setRole] = useState("marketer");
+    [role, setRole] = useState("marketer"),
+    [ownerScoped, setOwnerScoped] = useState(false);
   const load = () => api.marketingAccess().then(setRows);
   useEffect(() => {
     load();
@@ -1737,7 +2044,11 @@ function Access() {
         <form
           onSubmit={async (e) => {
             e.preventDefault();
-            await api.marketingGrantAccess({ email, role });
+            await api.marketingGrantAccess({
+              email,
+              role,
+              owner_scoped: ownerScoped,
+            });
             setEmail("");
             load();
           }}
@@ -1759,6 +2070,14 @@ function Access() {
             <option>marketer</option>
             <option>manager</option>
           </select>
+          <label className="mk-owner-scope">
+            <input
+              type="checkbox"
+              checked={ownerScoped}
+              onChange={(event) => setOwnerScoped(event.target.checked)}
+            />{" "}
+            Only assigned leads
+          </label>
           <button>Grant access →</button>
         </form>
       </section>
@@ -1779,7 +2098,10 @@ function Access() {
                 <b>{r.name || r.email}</b>
                 <small>{r.email}</small>
               </div>
-              <em>{r.role}</em>
+              <em>
+                {r.role}
+                {r.owner_scoped ? " · assigned only" : ""}
+              </em>
               <button
                 onClick={async () => {
                   await api.marketingRevokeAccess(r.id);
@@ -1805,8 +2127,32 @@ function Access() {
   );
 }
 
+class MarketingErrorBoundary extends Component {
+  constructor(props) {
+    super(props);
+    this.state = { error: null };
+  }
+  static getDerivedStateFromError(error) {
+    return { error };
+  }
+  render() {
+    return this.state.error ? (
+      <div className="mk-module-empty">
+        <h3>This section could not load</h3>
+        <p>{this.state.error.message}</p>
+        <button onClick={() => this.setState({ error: null })}>
+          Try again
+        </button>
+      </div>
+    ) : (
+      this.props.children
+    );
+  }
+}
+
 export default function MarketingPage() {
-  const [tab, setTab] = useState("dashboard"),
+  const [pageParams, setPageParams] = useSearchParams();
+  const [tab, setTabState] = useState(pageParams.get("tab") || "dashboard"),
     [me, setMe] = useState(null),
     [dash, setDash] = useState(null),
     [error, setError] = useState(""),
@@ -1825,6 +2171,7 @@ export default function MarketingPage() {
     () => [
       ["dashboard", "Dashboard"],
       ["leads", "Leads"],
+      ["tags", "Tags"],
       ...MODULE_TABS,
       ["analytics", "Analytics"],
       ["preferences", "Preferences"],
@@ -1838,6 +2185,10 @@ export default function MarketingPage() {
     ],
     [me],
   );
+  const setTab = (next) => {
+    setTabState(next);
+    setPageParams({ tab: next });
+  };
   if (error)
     return (
       <div className="mx-auto mt-20 max-w-lg rounded-xl border bg-white p-8 text-center">
@@ -1898,32 +2249,36 @@ export default function MarketingPage() {
           </div>
         </header>
         <div className="mk-content">
-          {tab === "dashboard" ? (
-            <Dashboard
-              data={dash}
-              message={message}
-              navigate={setTab}
-              run={async () => {
-                const r = await api.marketingRunAutomation();
-                setMessage(`${r.queued} follow-up(s) queued`);
-                setDash(await api.marketingDashboard());
-              }}
-            />
-          ) : tab === "leads" ? (
-            <Leads />
-          ) : tab === "access" ? (
-            <Access />
-          ) : tab === "analytics" ? (
-            <Analytics />
-          ) : tab === "audit" ? (
-            <Audit />
-          ) : tab === "preferences" ? (
-            <Preferences />
-          ) : tab === "help" ? (
-            <MarketingHelp />
-          ) : (
-            <Module module={tab} />
-          )}
+          <MarketingErrorBoundary key={tab}>
+            {tab === "dashboard" ? (
+              <Dashboard
+                data={dash}
+                message={message}
+                navigate={setTab}
+                run={async () => {
+                  const r = await api.marketingRunAutomation();
+                  setMessage(`${r.queued} follow-up(s) queued`);
+                  setDash(await api.marketingDashboard());
+                }}
+              />
+            ) : tab === "leads" ? (
+              <Leads />
+            ) : tab === "access" ? (
+              <Access />
+            ) : tab === "tags" ? (
+              <Tags />
+            ) : tab === "analytics" ? (
+              <Analytics />
+            ) : tab === "audit" ? (
+              <Audit />
+            ) : tab === "preferences" ? (
+              <Preferences />
+            ) : tab === "help" ? (
+              <MarketingHelp />
+            ) : (
+              <Module module={tab} />
+            )}
+          </MarketingErrorBoundary>
         </div>
       </main>
     </div>

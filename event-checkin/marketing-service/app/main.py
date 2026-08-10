@@ -21,7 +21,10 @@ from typing import Any
 from urllib.parse import quote
 
 import jwt
+import base64
+import hashlib
 import httpx
+from cryptography.fernet import Fernet, InvalidToken
 from fastapi import Depends, FastAPI, Header, HTTPException, Query, Request, UploadFile, File
 from fastapi.responses import HTMLResponse, StreamingResponse
 from fastapi.middleware.cors import CORSMiddleware
@@ -116,6 +119,14 @@ class ModuleRecord(Base):
     scheduled_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     created_by: Mapped[str] = mapped_column(String(240))
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now, onupdate=now)
+
+
+class SocialConnection(Base):
+    __tablename__ = "marketing_social_connections"
+    platform: Mapped[str] = mapped_column(String(30), primary_key=True)
+    encrypted_credentials: Mapped[str] = mapped_column(Text, default="")
+    updated_by: Mapped[str] = mapped_column(String(240), default="")
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now, onupdate=now)
 
 
@@ -241,6 +252,42 @@ class Identity(BaseModel):
 
 def db_session():
     with SessionLocal() as db: yield db
+
+
+SOCIAL_FIELDS = {
+    "linkedin": ("access_token", "refresh_token", "client_id", "client_secret", "author_urn"),
+    "facebook": ("access_token", "app_id", "app_secret", "page_id"),
+    "instagram": ("access_token", "app_id", "app_secret", "user_id"),
+}
+SOCIAL_ENV = {
+    "linkedin": {"access_token":"LINKEDIN_ACCESS_TOKEN", "refresh_token":"LINKEDIN_REFRESH_TOKEN", "client_id":"LINKEDIN_CLIENT_ID", "client_secret":"LINKEDIN_CLIENT_SECRET", "author_urn":"LINKEDIN_AUTHOR_URN"},
+    "facebook": {"access_token":"META_ACCESS_TOKEN", "app_id":"META_APP_ID", "app_secret":"META_APP_SECRET", "page_id":"META_FACEBOOK_PAGE_ID"},
+    "instagram": {"access_token":"META_ACCESS_TOKEN", "app_id":"META_APP_ID", "app_secret":"META_APP_SECRET", "user_id":"META_INSTAGRAM_USER_ID"},
+}
+
+
+def credential_cipher() -> Fernet:
+    if not TOKEN_SECRET: raise HTTPException(503, "Credential encryption is not configured")
+    return Fernet(base64.urlsafe_b64encode(hashlib.sha256(TOKEN_SECRET.encode()).digest()))
+
+
+def saved_social_credentials(db: Session, platform: str) -> dict[str, str]:
+    row = db.get(SocialConnection, platform)
+    if not row or not row.encrypted_credentials: return {}
+    try: return json.loads(credential_cipher().decrypt(row.encrypted_credentials.encode()).decode())
+    except (InvalidToken, ValueError, json.JSONDecodeError):
+        logger.exception("Could not decrypt %s social credentials", platform); return {}
+
+
+def social_credentials(db: Session, platform: str) -> dict[str, str]:
+    saved = saved_social_credentials(db, platform)
+    return {field: saved.get(field) or os.getenv(SOCIAL_ENV[platform][field], "") for field in SOCIAL_FIELDS[platform]}
+
+
+def social_connection_out(db: Session, platform: str) -> dict:
+    credentials = social_credentials(db, platform); saved = saved_social_credentials(db, platform); row = db.get(SocialConnection, platform)
+    identifiers = {key: value for key, value in credentials.items() if key in {"client_id","author_urn","app_id","page_id","user_id"}}
+    return {"platform":platform, "configured_fields":{key:bool(value) for key,value in credentials.items()}, "saved_in_festio":bool(saved), "identifiers":identifiers, "updated_by":row.updated_by if row else None, "updated_at":row.updated_at if row else None}
 
 
 def decode_identity(authorization: str | None = Header(default=None), db: Session = Depends(db_session)) -> Identity:
@@ -864,28 +911,64 @@ def internal_set_preferences(email:str,body:dict,identity:Identity=Depends(decod
 
 
 @app.get("/api/marketing/providers")
-def provider_readiness(identity:Identity=Depends(decode_identity)):
-    return {"email":{"provider":"resend","configured":bool(os.getenv("RESEND_API_KEY"))},"sms":{"provider":"signalhouse","configured":bool(os.getenv("SIGNALHOUSE_API_KEY") and os.getenv("SIGNALHOUSE_FROM_NUMBER"))},"whatsapp":{"provider":"bird","configured":bool(os.getenv("BIRD_ACCESS_KEY") and os.getenv("BIRD_WORKSPACE_ID") and os.getenv("BIRD_WHATSAPP_CHANNEL_ID"))},"social":{"linkedin":bool(os.getenv("LINKEDIN_ACCESS_TOKEN") and os.getenv("LINKEDIN_AUTHOR_URN")),"facebook":bool(os.getenv("META_ACCESS_TOKEN") and os.getenv("META_FACEBOOK_PAGE_ID")),"instagram":bool(os.getenv("META_ACCESS_TOKEN") and os.getenv("META_INSTAGRAM_USER_ID"))},"oauth_refresh":{"linkedin":all(os.getenv(key) for key in ("LINKEDIN_REFRESH_TOKEN","LINKEDIN_CLIENT_ID","LINKEDIN_CLIENT_SECRET")),"facebook":all(os.getenv(key) for key in ("META_ACCESS_TOKEN","META_APP_ID","META_APP_SECRET")),"instagram":all(os.getenv(key) for key in ("META_ACCESS_TOKEN","META_APP_ID","META_APP_SECRET"))}}
+def provider_readiness(identity:Identity=Depends(decode_identity), db:Session=Depends(db_session)):
+    social={platform:social_credentials(db,platform) for platform in SOCIAL_FIELDS}
+    return {"email":{"provider":"resend","configured":bool(os.getenv("RESEND_API_KEY"))},"sms":{"provider":"signalhouse","configured":bool(os.getenv("SIGNALHOUSE_API_KEY") and os.getenv("SIGNALHOUSE_FROM_NUMBER"))},"whatsapp":{"provider":"bird","configured":bool(os.getenv("BIRD_ACCESS_KEY") and os.getenv("BIRD_WORKSPACE_ID") and os.getenv("BIRD_WHATSAPP_CHANNEL_ID"))},"social":{"linkedin":bool(social["linkedin"]["access_token"] and social["linkedin"]["author_urn"]),"facebook":bool(social["facebook"]["access_token"] and social["facebook"]["page_id"]),"instagram":bool(social["instagram"]["access_token"] and social["instagram"]["user_id"])},"oauth_refresh":{"linkedin":all(social["linkedin"].get(key) for key in ("refresh_token","client_id","client_secret")),"facebook":all(social["facebook"].get(key) for key in ("access_token","app_id","app_secret")),"instagram":all(social["instagram"].get(key) for key in ("access_token","app_id","app_secret"))}}
 
 
-async def refreshed_social_token(platform: str) -> str:
-    if platform == "linkedin" and all(os.getenv(key) for key in ("LINKEDIN_REFRESH_TOKEN","LINKEDIN_CLIENT_ID","LINKEDIN_CLIENT_SECRET")):
+@app.get("/api/marketing/social-connections")
+def list_social_connections(identity:Identity=Depends(require_superadmin), db:Session=Depends(db_session)):
+    return [social_connection_out(db, platform) for platform in SOCIAL_FIELDS]
+
+
+@app.put("/api/marketing/social-connections/{platform}")
+def save_social_connection(platform:str, body:dict, identity:Identity=Depends(require_superadmin), db:Session=Depends(db_session)):
+    if platform not in SOCIAL_FIELDS: raise HTTPException(404,"Social platform not found")
+    credentials=saved_social_credentials(db,platform)
+    for field in SOCIAL_FIELDS[platform]:
+        value=str(body.get(field) or "").strip()
+        if value: credentials[field]=value
+    for field in body.get("clear_fields",[]):
+        if field in SOCIAL_FIELDS[platform]: credentials.pop(field,None)
+    row=db.get(SocialConnection,platform) or SocialConnection(platform=platform)
+    row.encrypted_credentials=credential_cipher().encrypt(json.dumps(credentials).encode()).decode();row.updated_by=identity.email;db.add(row)
+    audit(db,identity,"social.credentials_updated","provider",platform,fields=[key for key in body if key!="clear_fields"],cleared=body.get("clear_fields",[]));db.commit();db.refresh(row)
+    return social_connection_out(db,platform)
+
+
+@app.post("/api/marketing/social-connections/{platform}/test")
+async def test_social_connection(platform:str, identity:Identity=Depends(require_superadmin), db:Session=Depends(db_session)):
+    if platform not in SOCIAL_FIELDS: raise HTTPException(404,"Social platform not found")
+    credentials=social_credentials(db,platform);token=credentials.get("access_token")
+    if not token: raise HTTPException(400,"Save an access token before testing")
+    async with httpx.AsyncClient(timeout=20) as client:
+        if platform=="linkedin": response=await client.get("https://api.linkedin.com/v2/userinfo",headers={"Authorization":f"Bearer {token}"})
+        else: response=await client.get("https://graph.facebook.com/v23.0/me",params={"fields":"id,name","access_token":token})
+    if response.status_code>=400: raise HTTPException(502,f"{platform.title()} rejected these credentials")
+    audit(db,identity,"social.connection_tested","provider",platform);db.commit()
+    details=response.json();return {"platform":platform,"connected":True,"account":details.get("name") or details.get("localizedFirstName") or details.get("sub") or details.get("id")}
+
+
+async def refreshed_social_token(platform: str, db: Session) -> str:
+    credentials=social_credentials(db,platform)
+    if platform == "linkedin" and all(credentials.get(key) for key in ("refresh_token","client_id","client_secret")):
         async with httpx.AsyncClient(timeout=20) as client:
-            response=await client.post("https://www.linkedin.com/oauth/v2/accessToken",data={"grant_type":"refresh_token","refresh_token":os.getenv("LINKEDIN_REFRESH_TOKEN"),"client_id":os.getenv("LINKEDIN_CLIENT_ID"),"client_secret":os.getenv("LINKEDIN_CLIENT_SECRET")})
-        if response.status_code < 400: return response.json().get("access_token") or os.getenv("LINKEDIN_ACCESS_TOKEN","")
-    if platform in {"facebook","instagram"} and all(os.getenv(key) for key in ("META_ACCESS_TOKEN","META_APP_ID","META_APP_SECRET")):
+            response=await client.post("https://www.linkedin.com/oauth/v2/accessToken",data={"grant_type":"refresh_token","refresh_token":credentials["refresh_token"],"client_id":credentials["client_id"],"client_secret":credentials["client_secret"]})
+        if response.status_code < 400: return response.json().get("access_token") or credentials["access_token"]
+    if platform in {"facebook","instagram"} and all(credentials.get(key) for key in ("access_token","app_id","app_secret")):
         async with httpx.AsyncClient(timeout=20) as client:
-            response=await client.get("https://graph.facebook.com/v23.0/oauth/access_token",params={"grant_type":"fb_exchange_token","client_id":os.getenv("META_APP_ID"),"client_secret":os.getenv("META_APP_SECRET"),"fb_exchange_token":os.getenv("META_ACCESS_TOKEN")})
-        if response.status_code < 400: return response.json().get("access_token") or os.getenv("META_ACCESS_TOKEN","")
-    return os.getenv("LINKEDIN_ACCESS_TOKEN" if platform=="linkedin" else "META_ACCESS_TOKEN","")
+            response=await client.get("https://graph.facebook.com/v23.0/oauth/access_token",params={"grant_type":"fb_exchange_token","client_id":credentials["app_id"],"client_secret":credentials["app_secret"],"fb_exchange_token":credentials["access_token"]})
+        if response.status_code < 400: return response.json().get("access_token") or credentials["access_token"]
+    return credentials.get("access_token","")
 
 
 @app.post("/api/marketing/providers/{platform}/refresh")
 async def refresh_provider(platform: str, identity:Identity=Depends(require_manager), db:Session=Depends(db_session)):
     if platform not in {"linkedin","facebook","instagram"}: raise HTTPException(400,"Unsupported provider")
-    refresh_ready = all(os.getenv(key) for key in (("LINKEDIN_REFRESH_TOKEN","LINKEDIN_CLIENT_ID","LINKEDIN_CLIENT_SECRET") if platform=="linkedin" else ("META_ACCESS_TOKEN","META_APP_ID","META_APP_SECRET")))
+    credentials=social_credentials(db,platform)
+    refresh_ready = all(credentials.get(key) for key in (("refresh_token","client_id","client_secret") if platform=="linkedin" else ("access_token","app_id","app_secret")))
     if not refresh_ready: raise HTTPException(503,f"{platform.title()} OAuth refresh credentials are not configured")
-    token=await refreshed_social_token(platform)
+    token=await refreshed_social_token(platform,db)
     if not token: raise HTTPException(503,f"{platform.title()} OAuth refresh is not configured")
     audit(db,identity,"provider.token_refreshed","provider",platform);db.commit();return {"platform":platform,"refreshed":True}
 
@@ -898,16 +981,16 @@ async def publish_social(body:SocialPublishIn, identity:Identity=Depends(require
         audit(db,identity,"social.validated","content",None,platform=platform);db.commit();return {"status":"validated","platform":platform,"dry_run":True}
     async with httpx.AsyncClient(timeout=30) as client:
         if platform=="linkedin":
-            token,author=await refreshed_social_token("linkedin"),os.getenv("LINKEDIN_AUTHOR_URN","")
+            credentials=social_credentials(db,"linkedin");token,author=await refreshed_social_token("linkedin",db),credentials["author_urn"]
             if not token or not author: raise HTTPException(503,"Connect a LinkedIn organization before publishing")
             payload={"author":author,"commentary":body.message,"visibility":"PUBLIC","distribution":{"feedDistribution":"MAIN_FEED","targetEntities":[],"thirdPartyDistributionChannels":[]},"lifecycleState":"PUBLISHED","isReshareDisabledByAuthor":False}
             response=await client.post("https://api.linkedin.com/rest/posts",headers={"Authorization":f"Bearer {token}","LinkedIn-Version":os.getenv("LINKEDIN_API_VERSION","202601"),"X-Restli-Protocol-Version":"2.0.0"},json=payload)
         elif platform=="facebook":
-            token,page=await refreshed_social_token("facebook"),os.getenv("META_FACEBOOK_PAGE_ID","")
+            credentials=social_credentials(db,"facebook");token,page=await refreshed_social_token("facebook",db),credentials["page_id"]
             if not token or not page: raise HTTPException(503,"Connect a Facebook Page before publishing")
             response=await client.post(f"https://graph.facebook.com/v23.0/{page}/feed",data={"message":body.message,"link":body.link_url or "","access_token":token})
         else:
-            token,user=await refreshed_social_token("instagram"),os.getenv("META_INSTAGRAM_USER_ID","")
+            credentials=social_credentials(db,"instagram");token,user=await refreshed_social_token("instagram",db),credentials["user_id"]
             if not token or not user: raise HTTPException(503,"Connect an Instagram business account before publishing")
             if not body.image_url: raise HTTPException(400,"Instagram publishing requires a public image URL")
             created=await client.post(f"https://graph.facebook.com/v23.0/{user}/media",data={"image_url":body.image_url,"caption":body.message,"access_token":token})

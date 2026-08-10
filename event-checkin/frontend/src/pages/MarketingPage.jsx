@@ -1962,6 +1962,47 @@ function Analytics() {
   );
 }
 
+const SOCIAL_CONNECTION_FIELDS = {
+  linkedin: [
+    ["access_token", "Access token", true], ["refresh_token", "Refresh token", true],
+    ["client_id", "Client ID"], ["client_secret", "Client secret", true], ["author_urn", "Organization author URN"],
+  ],
+  facebook: [
+    ["access_token", "Page access token", true], ["app_id", "Meta app ID"],
+    ["app_secret", "Meta app secret", true], ["page_id", "Facebook Page ID"],
+  ],
+  instagram: [
+    ["access_token", "Access token", true], ["app_id", "Meta app ID"],
+    ["app_secret", "Meta app secret", true], ["user_id", "Instagram business account ID"],
+  ],
+};
+
+function SocialSettings() {
+  const [connections, setConnections] = useState([]), [drafts, setDrafts] = useState({}),
+    [busy, setBusy] = useState(""), [notice, setNotice] = useState("");
+  const load = () => api.marketingSocialConnections().then(setConnections);
+  useEffect(() => { load(); }, []);
+  const change = (platform, field, value) => setDrafts((all) => ({...all, [platform]: {...(all[platform] || {}), [field]: value}}));
+  return <div className="mk-workspace">
+    <SectionIntro eyebrow="SOCIAL CONNECTIONS" title="Connect every publishing channel." copy="Securely manage LinkedIn, Facebook, and Instagram credentials. Existing secrets stay masked and are never returned to the browser." />
+    {notice && <div className="mk-notice" role="status">{notice}</div>}
+    <div className="mk-social-settings">
+      {connections.map((connection) => <form key={connection.platform} onSubmit={async (event) => {
+        event.preventDefault(); setBusy(connection.platform); setNotice("");
+        try { await api.marketingSaveSocialConnection(connection.platform, drafts[connection.platform] || {}); setDrafts((all) => ({...all, [connection.platform]: {}})); await load(); setNotice(`${connection.platform[0].toUpperCase() + connection.platform.slice(1)} credentials saved.`); }
+        catch (error) { setNotice(error.message); } finally { setBusy(""); }
+      }}>
+        <header><div><span>{connection.platform.slice(0, 2).toUpperCase()}</span><h3>{connection.platform}</h3></div><b className={Object.values(connection.configured_fields).some(Boolean) ? "ready" : ""}>{Object.values(connection.configured_fields).some(Boolean) ? "Configured" : "Setup needed"}</b></header>
+        <div className="mk-social-fields">
+          {SOCIAL_CONNECTION_FIELDS[connection.platform].map(([field, label, secret]) => <label key={field}><span>{label}</span><input type={secret ? "password" : "text"} autoComplete="off" value={drafts[connection.platform]?.[field] || ""} onChange={(event) => change(connection.platform, field, event.target.value)} placeholder={connection.configured_fields[field] ? (connection.identifiers?.[field] || "Saved securely ••••••••") : `Enter ${label.toLowerCase()}`} /><small>{connection.configured_fields[field] ? "Saved. Leave blank to keep the current value." : "Not configured"}</small></label>)}
+        </div>
+        <footer><button disabled={busy === connection.platform}>{busy === connection.platform ? "Saving..." : "Save credentials"}</button><button type="button" className="secondary" disabled={!!busy || !connection.configured_fields.access_token} onClick={async () => { setBusy(connection.platform); setNotice(""); try { const result = await api.marketingTestSocialConnection(connection.platform); setNotice(`${connection.platform[0].toUpperCase() + connection.platform.slice(1)} connected${result.account ? ` as ${result.account}` : ""}.`); } catch (error) { setNotice(error.message); } finally { setBusy(""); } }}>Test connection</button></footer>
+        {connection.updated_at && <p className="mk-social-updated">Last changed by {connection.updated_by} on {new Date(connection.updated_at).toLocaleString()}</p>}
+      </form>)}
+    </div>
+  </div>;
+}
+
 function Audit() {
   const [rows, setRows] = useState([]);
   useEffect(() => {
@@ -2206,6 +2247,7 @@ export default function MarketingPage() {
       ["help", "Help"],
       ...(me?.role === "superadmin"
         ? [
+            ["social-settings", "Social settings"],
             ["access", "Staff access"],
             ["audit", "Audit history"],
           ]
@@ -2297,6 +2339,8 @@ export default function MarketingPage() {
               <Tags />
             ) : tab === "analytics" ? (
               <Analytics />
+            ) : tab === "social-settings" ? (
+              <SocialSettings />
             ) : tab === "audit" ? (
               <Audit />
             ) : tab === "preferences" ? (

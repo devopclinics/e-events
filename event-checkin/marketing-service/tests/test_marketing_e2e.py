@@ -59,6 +59,24 @@ def test_preferences_delivery_and_social_validation(tmp_path):
     assert social.json() == {"status": "validated", "platform": "linkedin", "dry_run": True}
 
 
+def test_superadmin_can_manage_masked_social_credentials(tmp_path):
+    client, headers = load_app(tmp_path)
+    saved = client.put("/api/marketing/social-connections/linkedin", headers=headers, json={
+        "access_token": "secret-access", "refresh_token": "secret-refresh",
+        "client_id": "client-123", "client_secret": "secret-client", "author_urn": "urn:li:organization:123",
+    })
+    assert saved.status_code == 200
+    payload = saved.json()
+    assert payload["configured_fields"]["access_token"] is True
+    assert payload["identifiers"]["client_id"] == "client-123"
+    assert "secret-access" not in saved.text and "secret-client" not in saved.text
+    assert client.get("/api/marketing/providers", headers=headers).json()["social"]["linkedin"] is True
+
+    client.post("/api/marketing/access", headers=headers, json={"email":"manager@example.com","role":"manager"})
+    manager_token = jwt.encode({"sub":"manager","email":"manager@example.com","name":"Manager","iss":"guesthub","aud":"marketing","iat":datetime.now(timezone.utc),"exp":datetime.now(timezone.utc)+timedelta(minutes=10)},"test-secret",algorithm="HS256")
+    assert client.get("/api/marketing/social-connections", headers={"Authorization":f"Bearer {manager_token}"}).status_code == 403
+
+
 def test_unsubscribe_bounce_and_sms_stop(tmp_path):
     client, headers = load_app(tmp_path)
     created = client.post("/api/marketing/leads", headers=headers, json={

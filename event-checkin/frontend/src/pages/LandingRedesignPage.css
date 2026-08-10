@@ -83,6 +83,17 @@
 .lr-trust-row { display: flex; gap: 16px; flex-wrap: wrap; font-size: 11.5px; font-weight: 700; color: var(--muted); }
 .lr-trust-row span { display: flex; align-items: center; gap: 6px; }
 .lr-trust-row span::before { content: "✓"; color: var(--success); font-weight: 800; }
+.lr-hero-copy, .lr-stage { animation: lr-hero-enter .42s ease both; }
+@keyframes lr-hero-enter {
+  from { opacity: 0; transform: translateY(7px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+.lr-hero-pagination { display: flex; align-items: center; justify-content: center; gap: 8px; min-height: 24px; margin: -88px auto 0; padding: 0 24px; }
+.lr-hero-pagination button { width: 9px; height: 9px; padding: 0; border: 0; border-radius: 999px; background: color-mix(in srgb, var(--faint) 32%, transparent); cursor: pointer; transition: width .2s ease, background .2s ease; }
+.lr-hero-pagination button.active { width: 30px; background: var(--accent); }
+.lr-hero-pagination button:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
+.lr-hero-pagination span { min-width: 142px; margin-left: 12px; color: var(--muted); font-size: 10.5px; font-weight: 700; }
+@media (max-width: 980px) { .lr-hero-pagination { margin-top: 22px; flex-wrap: wrap; } }
 
 /* product panel */
 .lr-stage { position: relative; margin-bottom: 130px; }
@@ -112,6 +123,7 @@
 @media (max-width: 980px) { .lr-pass-float { position: static; margin: 16px auto 0; } }
 .lr-pf-top { display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px; }
 .lr-pf-brand { font-size: 9px; font-weight: 800; color: var(--faint); text-transform: uppercase; letter-spacing: .06em; }
+.lr-pf-menu { font-size: 9px; color: var(--faint); }
 .lr-pf-name { font-size: 12px; font-weight: 800; margin-bottom: 1px; }
 .lr-pf-sub { font-size: 9.5px; color: var(--muted); margin-bottom: 9px; }
 .lr-pf-qr { display: grid; grid-template-columns: repeat(8, 1fr); gap: 1.5px; width: 100%; aspect-ratio: 1; background: var(--accent-soft);
@@ -120,6 +132,12 @@
 .lr-pf-qr i.off { background: transparent; }
 .lr-pf-meta { display: flex; justify-content: space-between; font-size: 8.5px; color: var(--faint); font-weight: 700; }
 .lr-pf-meta b { display: block; font-size: 11px; color: var(--ink); font-weight: 800; }
+.lr-pf-seat { text-align: right; }
+
+@media (prefers-reduced-motion: reduce) {
+  .lr-hero-copy, .lr-stage { animation: none; }
+  .lr-hero-pagination button { transition: none; }
+}
 
 /* ── proof strip ─────────────────────────────────────────────── */
 .lr-strip { border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); background: var(--surface-2); padding: 30px 0; margin-top: 40px; }

@@ -1,4 +1,4 @@
-import { Component, useEffect, useMemo, useState } from "react";
+import React, { Component, useEffect, useMemo, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { api } from "../api";
 import "./MarketingPage.css";
@@ -2229,13 +2229,13 @@ function emailPreviewHtml({ firstName = 'there', subject, body, cta, ctaUrl }) {
   return `<!doctype html><html><body style="margin:0;background:#f5f1e9;font-family:Arial,sans-serif;color:#172033">
 <table role="presentation" width="100%" cellspacing="0" cellpadding="0"><tr><td align="center" style="padding:36px 16px">
 <table role="presentation" width="600" style="max-width:600px;background:#fff;border-radius:18px;overflow:hidden">
-<tr><td style="padding:20px 32px;background:#075b5d;color:#fff;font-size:20px;font-weight:700">Festio</td></tr>
+<tr><td style="padding:20px 32px;background:#075b5d"><a href="https://festio.events" style="color:#fff;text-decoration:none;font-size:20px;font-weight:700">Festio</a></td></tr>
 <tr><td style="padding:36px 32px">
 <p style="font-size:17px;margin:0 0 12px">Hi ${esc(firstName)},</p>
 <h1 style="font-size:26px;line-height:1.25;margin:0 0 16px">${esc(subject || '(no subject)')}</h1>
 <p style="font-size:16px;line-height:1.7;color:#526070;margin:0 0 24px">${esc(body || 'Your Festio event is ready for the next step.')}</p>
 <p style="margin:0 0 28px"><a href="${esc(ctaUrl || DEFAULT_CTA_URL)}" style="display:inline-block;background:#a85d32;color:#fff;text-decoration:none;padding:13px 20px;border-radius:10px;font-weight:700">${esc(cta || 'Open Festio')}</a></p>
-<p style="font-size:13px;color:#78828f">You received this because you registered for Festio. <a href="#" style="color:#526070">Unsubscribe</a>.</p>
+<p style="font-size:13px;color:#78828f">You received this because you asked Festio for event updates. <a href="#" style="color:#526070">Unsubscribe</a>.</p>
 </td></tr></table></td></tr></table></body></html>`
 }
 

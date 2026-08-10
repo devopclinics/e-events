@@ -206,14 +206,14 @@ if "owner_scoped" not in access_columns:
 def seed_defaults() -> None:
     defaults = [
         ("sequences", "New registration welcome", "active", {"stage": "registered", "cadence_days": 2, "cta_url": "https://festio.events/setup-redesign", "steps": [
-            {"delay_hours": 0,   "subject": "Welcome to Festio", "body": "You've just joined thousands of event organizers who use Festio to manage invitations, check-ins, and the moments that make events memorable.\n\nYour account is ready — let's create your first event.", "cta": "Create your first event", "cta_url": "https://festio.events/setup-redesign"},
+            {"delay_hours": 0,   "subject": "Welcome to Festio", "body": "You've just joined thousands of event organizers who use Festio to manage invitations, check-ins, and the moments that make events memorable.\n\nYour account is ready. Let's create your first event.", "cta": "Create your first event", "cta_url": "https://festio.events/setup-redesign"},
             {"delay_hours": 24,  "subject": "Let us help with your event setup", "body": "Setting up an event on Festio takes about 10 minutes. Add your event details, upload a cover image, and you'll have a shareable event page ready to go.\n\nWe're here if you get stuck.", "cta": "Continue setup", "cta_url": "https://festio.events/setup-redesign"},
-            {"delay_hours": 72,  "subject": "What kind of event are you planning?", "body": "Whether it's a wedding, a corporate conference, or a birthday celebration — Festio adapts to how you work.\n\nThousands of organizers trust us for everything from a 20-person dinner to a 5,000-person festival. We'd love to hear about yours.", "cta": "Tell us about your event", "cta_url": "mailto:hello@festio.events?subject=My%20event%20type"},
-            {"delay_hours": 168, "subject": "Would a 15-minute setup call help?", "body": "Sometimes a quick conversation makes all the difference. One of our team will walk through your event with you, answer any questions, and make sure Festio is set up exactly the way you need it.\n\nNo commitment — just a helpful call.", "cta": "Book a free call", "cta_url": "https://festio.events/admin-redesign"},
+            {"delay_hours": 72,  "subject": "What kind of event are you planning?", "body": "Whether it's a wedding, a corporate conference, or a birthday celebration, Festio adapts to how you work.\n\nThousands of organizers trust us for everything from a 20-person dinner to a 5,000-person festival. We'd love to hear about yours.", "cta": "Tell us about your event", "cta_url": "mailto:hello@festio.events?subject=My%20event%20type"},
+            {"delay_hours": 168, "subject": "Would a 15-minute setup call help?", "body": "Sometimes a quick conversation makes all the difference. One of our team will walk through your event with you, answer any questions, and make sure Festio is set up exactly the way you need it.\n\nNo commitment, just a helpful call.", "cta": "Book a free call", "cta_url": "https://festio.events/#contact"},
         ]}),
         ("sequences", "Event created onboarding", "active", {"stage": "event_created", "cadence_days": 3, "cta_url": "https://festio.events/admin-redesign", "steps": [
-            {"delay_hours": 0,   "subject": "Your Festio event is ready for setup", "body": "Great news — your event is live on Festio.\n\nThe next step is adding your guest list and customizing your invitation. It only takes a few minutes and your guests will receive a beautiful, branded invite.", "cta": "Add guests", "cta_url": "https://festio.events/admin-redesign"},
-            {"delay_hours": 48,  "subject": "Invite, sell tickets, or start planning", "body": "Your event dashboard is ready for everything — import your guest list, set up ticket types, configure check-in, and manage meals or seating.\n\nMost organizers get fully set up in under an hour.", "cta": "Open your event", "cta_url": "https://festio.events/admin-redesign"},
+            {"delay_hours": 0,   "subject": "Your Festio event is ready for setup", "body": "Your event is now live on Festio.\n\nThe next step is adding your guest list and customizing your invitation. It only takes a few minutes and your guests will receive a beautiful, branded invite.", "cta": "Add guests", "cta_url": "https://festio.events/admin-redesign"},
+            {"delay_hours": 48,  "subject": "Invite, sell tickets, or start planning", "body": "Your event dashboard is ready: import your guest list, set up ticket types, configure check-in, and manage meals or seating.\n\nMost organizers get fully set up in under an hour.", "cta": "Open your event", "cta_url": "https://festio.events/admin-redesign"},
             {"delay_hours": 120, "subject": "See what your event still needs", "body": "A quick checklist can save a lot of day-of stress.\n\nHead to your event setup to make sure invitations are sent, RSVPs are tracking, and your check-in team is ready. Need help? We're one message away.", "cta": "Review your setup", "cta_url": "https://festio.events/admin-redesign"},
         ]}),
         ("segments", "Registered without an event", "active", {"rules": [{"field": "stage", "operator": "equals", "value": "registered"}]}),
@@ -245,17 +245,29 @@ seed_defaults()
 # with no body text (deployed before 2026-08-10 copy update).
 _STEP_BODY_BACKFILL = {
     "New registration welcome": [
-        "You've just joined thousands of event organizers who use Festio to manage invitations, check-ins, and the moments that make events memorable.\n\nYour account is ready — let's create your first event.",
+        "You've just joined thousands of event organizers who use Festio to manage invitations, check-ins, and the moments that make events memorable.\n\nYour account is ready. Let's create your first event.",
         "Setting up an event on Festio takes about 10 minutes. Add your event details, upload a cover image, and you'll have a shareable event page ready to go.\n\nWe're here if you get stuck.",
-        "Whether it's a wedding, a corporate conference, or a birthday celebration — Festio adapts to how you work.\n\nThousands of organizers trust us for everything from a 20-person dinner to a 5,000-person festival. We'd love to hear about yours.",
-        "Sometimes a quick conversation makes all the difference. One of our team will walk through your event with you, answer any questions, and make sure Festio is set up exactly the way you need it.\n\nNo commitment — just a helpful call.",
+        "Whether it's a wedding, a corporate conference, or a birthday celebration, Festio adapts to how you work.\n\nThousands of organizers trust us for everything from a 20-person dinner to a 5,000-person festival. We'd love to hear about yours.",
+        "Sometimes a quick conversation makes all the difference. One of our team will walk through your event with you, answer any questions, and make sure Festio is set up exactly the way you need it.\n\nNo commitment, just a helpful call.",
     ],
     "Event created onboarding": [
-        "Great news — your event is live on Festio.\n\nThe next step is adding your guest list and customizing your invitation. It only takes a few minutes and your guests will receive a beautiful, branded invite.",
-        "Your event dashboard is ready for everything — import your guest list, set up ticket types, configure check-in, and manage meals or seating.\n\nMost organizers get fully set up in under an hour.",
+        "Your event is now live on Festio.\n\nThe next step is adding your guest list and customizing your invitation. It only takes a few minutes and your guests will receive a beautiful, branded invite.",
+        "Your event dashboard is ready: import your guest list, set up ticket types, configure check-in, and manage meals or seating.\n\nMost organizers get fully set up in under an hour.",
         "A quick checklist can save a lot of day-of stress.\n\nHead to your event setup to make sure invitations are sent, RSVPs are tracking, and your check-in team is ready. Need help? We're one message away.",
     ],
 }
+# Patch already-deployed sequences: remove em-dashes and fix Book-a-call cta_url.
+_STEP_CORRECTIONS = [
+    ("New registration welcome", 0, "body", "ready \u2014 let's create your first event.", "ready. Let's create your first event."),
+    ("New registration welcome", 0, "cta_url", None, "https://festio.events/setup-redesign"),
+    ("New registration welcome", 1, "cta_url", None, "https://festio.events/setup-redesign"),
+    ("New registration welcome", 2, "body", "celebration \u2014 Festio adapts", "celebration, Festio adapts"),
+    ("New registration welcome", 2, "cta_url", None, "mailto:hello@festio.events?subject=My%20event%20type"),
+    ("New registration welcome", 3, "body", "No commitment \u2014 just a helpful call.", "No commitment, just a helpful call."),
+    ("New registration welcome", 3, "cta_url", None, "https://festio.events/#contact"),
+    ("Event created onboarding", 0, "body", "Great news \u2014 your event is live on Festio.", "Your event is now live on Festio."),
+    ("Event created onboarding", 1, "body", "ready for everything \u2014 import", "ready for everything: import"),
+]
 with SessionLocal() as _db:
     for seq_name, bodies in _STEP_BODY_BACKFILL.items():
         _seq = _db.scalar(select(ModuleRecord).where(ModuleRecord.name == seq_name, ModuleRecord.module == "sequences"))
@@ -268,6 +280,20 @@ with SessionLocal() as _db:
                     changed = True
             if changed:
                 _seq.payload = {**_seq.payload, "steps": steps}
+    for seq_name, step_i, field, old_val, new_val in _STEP_CORRECTIONS:
+        _seq = _db.scalar(select(ModuleRecord).where(ModuleRecord.name == seq_name, ModuleRecord.module == "sequences"))
+        if _seq:
+            steps = list(_seq.payload.get("steps") or [])
+            if step_i < len(steps):
+                current = steps[step_i].get(field)
+                if old_val is None:
+                    # Backfill: set field when it is missing
+                    if not current:
+                        steps[step_i] = {**steps[step_i], field: new_val}
+                        _seq.payload = {**_seq.payload, "steps": steps}
+                elif current and old_val in current:
+                    steps[step_i] = {**steps[step_i], field: current.replace(old_val, new_val)}
+                    _seq.payload = {**_seq.payload, "steps": steps}
     _db.commit()
 
 
@@ -403,7 +429,7 @@ def send_follow_up(lead: Lead, sequence: ModuleRecord, step_index: int = 0) -> d
     subject = str(step.get("subject") or sequence.name)
     body = str(step.get("body") or "Your Festio event is ready for the next step.")
     cta = str(step.get("cta") or "Open Festio")
-    message.add_alternative(f"""<!doctype html><html><body style="margin:0;background:#f5f1e9;font-family:Arial,sans-serif;color:#172033"><table role="presentation" width="100%" cellspacing="0" cellpadding="0"><tr><td align="center" style="padding:36px 16px"><table role="presentation" width="600" style="max-width:600px;background:#fff;border-radius:18px;overflow:hidden"><tr><td style="padding:20px 32px;background:#075b5d;color:#fff;font-size:20px;font-weight:700">Festio</td></tr><tr><td style="padding:36px 32px"><p style="font-size:17px">Hi {escape(first_name)},</p><h1 style="font-size:28px;line-height:1.2">{escape(subject)}</h1><p style="font-size:16px;line-height:1.7;color:#526070">{escape(body)}</p><p style="margin:28px 0"><a href="{escape(cta_url)}" style="display:inline-block;background:#a85d32;color:#fff;text-decoration:none;padding:13px 20px;border-radius:10px;font-weight:700">{escape(cta)}</a></p><p style="font-size:13px;color:#78828f">You received this because you asked Festio for event updates. <a href="{unsubscribe_url}">Unsubscribe</a>.</p></td></tr></table></td></tr></table></body></html>""", subtype="html")
+    message.add_alternative(f"""<!doctype html><html><body style="margin:0;background:#f5f1e9;font-family:Arial,sans-serif;color:#172033"><table role="presentation" width="100%" cellspacing="0" cellpadding="0"><tr><td align="center" style="padding:36px 16px"><table role="presentation" width="600" style="max-width:600px;background:#fff;border-radius:18px;overflow:hidden"><tr><td style="padding:20px 32px;background:#075b5d"><a href="https://festio.events" style="color:#fff;text-decoration:none;font-size:20px;font-weight:700">Festio</a></td></tr><tr><td style="padding:36px 32px"><p style="font-size:17px">Hi {escape(first_name)},</p><h1 style="font-size:28px;line-height:1.2">{escape(subject)}</h1><p style="font-size:16px;line-height:1.7;color:#526070">{escape(body)}</p><p style="margin:28px 0"><a href="{escape(cta_url)}" style="display:inline-block;background:#a85d32;color:#fff;text-decoration:none;padding:13px 20px;border-radius:10px;font-weight:700">{escape(cta)}</a></p><p style="font-size:13px;color:#78828f">You received this because you asked Festio for event updates. <a href="{unsubscribe_url}">Unsubscribe</a>.</p></td></tr></table></td></tr></table></body></html>""", subtype="html")
     resend_key = os.getenv("RESEND_API_KEY", "")
     if resend_key:
         response = httpx.post(

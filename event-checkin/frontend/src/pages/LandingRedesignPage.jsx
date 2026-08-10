@@ -327,7 +327,7 @@ export default function LandingRedesignPage() {
     if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return undefined
     const timer = window.setInterval(() => {
       if (!document.hidden) setHeroIndex((current) => (current + 1) % HERO_SLIDES.length)
-    }, 2000)
+    }, 5000)
     return () => window.clearInterval(timer)
   }, [])
 

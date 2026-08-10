@@ -2493,7 +2493,9 @@ export default function MarketingPage() {
     [me, setMe] = useState(null),
     [dash, setDash] = useState(null),
     [error, setError] = useState(""),
-    [message, setMessage] = useState("");
+    [message, setMessage] = useState(""),
+    [automationQueue, setAutomationQueue] = useState(null),
+    [automationRunning, setAutomationRunning] = useState(false);
   useEffect(() => {
     api
       .marketingMe()
@@ -2594,9 +2596,8 @@ export default function MarketingPage() {
                 message={message}
                 navigate={setTab}
                 run={async () => {
-                  const r = await api.marketingRunAutomation();
-                  setMessage(`${r.queued} follow-up(s) queued`);
-                  setDash(await api.marketingDashboard());
+                  const leads = await api.marketingLeads('follow_up=due&consent=true');
+                  setAutomationQueue(leads);
                 }}
               />
             ) : tab === "leads" ? (
@@ -2623,6 +2624,64 @@ export default function MarketingPage() {
           </MarketingErrorBoundary>
         </div>
       </main>
+      {automationQueue !== null && (
+        <div className="mk-drawer-backdrop" onClick={() => !automationRunning && setAutomationQueue(null)}>
+          <aside className="mk-drawer" style={{maxWidth:'560px'}} onClick={(e) => e.stopPropagation()}>
+            <header>
+              <div>
+                <span className="mk-drawer-eyebrow">AUTOMATION PREVIEW</span>
+                <h2>Ready to send</h2>
+                <p>{automationQueue.length === 0 ? 'No leads are due right now.' : `${automationQueue.length} lead${automationQueue.length !== 1 ? 's' : ''} will receive a follow-up email.`}</p>
+              </div>
+              <button onClick={() => !automationRunning && setAutomationQueue(null)}>Close</button>
+            </header>
+            {automationQueue.length > 0 && (
+              <div style={{overflowX:'auto',margin:'0 0 1rem'}}>
+                <table style={{width:'100%',fontSize:'0.82rem',borderCollapse:'collapse'}}>
+                  <thead>
+                    <tr style={{borderBottom:'1px solid #e2e8f0',textAlign:'left',color:'#64748b'}}>
+                      <th style={{padding:'6px 8px'}}>Lead</th>
+                      <th style={{padding:'6px 8px'}}>Stage</th>
+                      <th style={{padding:'6px 8px'}}>Next follow-up</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {automationQueue.map((lead) => (
+                      <tr key={lead.id} style={{borderBottom:'1px solid #f1f5f9'}}>
+                        <td style={{padding:'7px 8px'}}>
+                          <b style={{display:'block'}}>{lead.name || lead.email}</b>
+                          {lead.name && <small style={{color:'#94a3b8'}}>{lead.email}</small>}
+                        </td>
+                        <td style={{padding:'7px 8px'}}><span className="mk-stage-pill">{lead.stage.replaceAll('_',' ')}</span></td>
+                        <td style={{padding:'7px 8px',color:'#94a3b8',fontSize:'0.78rem'}}>{lead.next_follow_up_at ? new Date(lead.next_follow_up_at).toLocaleString() : '—'}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+            <div className="mk-drawer-actions">
+              <button
+                disabled={automationRunning || automationQueue.length === 0}
+                onClick={async () => {
+                  setAutomationRunning(true);
+                  try {
+                    const r = await api.marketingRunAutomation();
+                    setMessage(`${r.queued} follow-up(s) queued`);
+                    setDash(await api.marketingDashboard());
+                  } finally {
+                    setAutomationRunning(false);
+                    setAutomationQueue(null);
+                  }
+                }}
+              >
+                {automationRunning ? 'Sending…' : `Confirm — send ${automationQueue.length} email${automationQueue.length !== 1 ? 's' : ''}`}
+              </button>
+              <button onClick={() => !automationRunning && setAutomationQueue(null)}>Cancel</button>
+            </div>
+          </aside>
+        </div>
+      )}
     </div>
   );
 }

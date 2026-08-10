@@ -866,12 +866,20 @@ function Leads() {
   }, []);
   async function open(row) {
     setSelected(row);
-    setActivity(await api.marketingLeadActivity(row.id));
+    try {
+      setActivity(await api.marketingLeadActivity(row.id));
+    } catch (error) {
+      setNotice(error.message);
+    }
   }
   async function update(body) {
-    const row = await api.marketingUpdateLead(selected.id, body);
-    setSelected(row);
-    load();
+    try {
+      const row = await api.marketingUpdateLead(selected.id, body);
+      setSelected(row);
+      load();
+    } catch (error) {
+      setNotice(error.message);
+    }
   }
   async function bulk(e) {
     e.preventDefault();
@@ -903,37 +911,53 @@ function Leads() {
   }
   async function saveView() {
     const name = `View ${views.length + 1}`;
-    const row = await api.marketingCreateSavedView({ name, filters });
-    setViews((v) => [...v, row]);
-    setNotice(`${name} saved`);
+    try {
+      const row = await api.marketingCreateSavedView({ name, filters });
+      setViews((v) => [...v, row]);
+      setNotice(`${name} saved`);
+    } catch (error) {
+      setNotice(error.message);
+    }
   }
   async function importCsv(file) {
     if (!file) return;
-    const result = await api.marketingImportLeads(file);
-    setNotice(`${result.created} created, ${result.updated} matched`);
-    load();
+    try {
+      const result = await api.marketingImportLeads(file);
+      setNotice(`${result.created} created, ${result.updated} matched`);
+      load();
+    } catch (error) {
+      setNotice(error.message);
+    }
   }
   async function create(e) {
     e.preventDefault();
-    await api.marketingCreateLead(draft);
-    setCreating(false);
-    setDraft({
-      name: "",
-      email: "",
-      organization: "",
-      source: "website",
-      consent_email: false,
-    });
-    load();
+    try {
+      await api.marketingCreateLead(draft);
+      setCreating(false);
+      setDraft({
+        name: "",
+        email: "",
+        organization: "",
+        source: "website",
+        consent_email: false,
+      });
+      load();
+    } catch (error) {
+      setNotice(error.message);
+    }
   }
   async function addNote() {
     if (!note.trim()) return;
-    await api.marketingAddActivity(selected.id, {
-      kind: "note",
-      summary: note,
-    });
-    setNote("");
-    setActivity(await api.marketingLeadActivity(selected.id));
+    try {
+      await api.marketingAddActivity(selected.id, {
+        kind: "note",
+        summary: note,
+      });
+      setNote("");
+      setActivity(await api.marketingLeadActivity(selected.id));
+    } catch (error) {
+      setNotice(error.message);
+    }
   }
   return (
     <div className="mk-workspace mk-leads">
@@ -1588,29 +1612,37 @@ function Module({ module }) {
       payload: editing.payload,
       scheduled_at: editing.scheduled_at || null,
     };
-    if (editing.isNew) await api.marketingCreateRecord(module, body);
-    else await api.marketingUpdateRecord(module, editing.id, body);
-    setEditing(null);
-    load();
+    try {
+      if (editing.isNew) await api.marketingCreateRecord(module, body);
+      else await api.marketingUpdateRecord(module, editing.id, body);
+      setEditing(null);
+      load();
+    } catch (error) {
+      setNotice(error.message);
+    }
   }
   async function campaignAction(row, action) {
-    if (action === "audience") {
-      const result = await api.marketingExecuteCampaign(row.id, true);
-      setNotice(
-        `${result.eligible} consented recipient(s) match this campaign`,
-      );
-    }
-    if (action === "preview") {
-      const result = await api.marketingPreviewCampaign(row.id);
-      setNotice(`Preview ${result.status} to your email`);
-    }
-    if (
-      action === "launch" &&
-      confirm(`Send ${row.name} to its consented audience?`)
-    ) {
-      const result = await api.marketingExecuteCampaign(row.id);
-      setNotice(`${result.sent} sent, ${result.failed} failed`);
-      load();
+    try {
+      if (action === "audience") {
+        const result = await api.marketingExecuteCampaign(row.id, true);
+        setNotice(
+          `${result.eligible} consented recipient(s) match this campaign`,
+        );
+      }
+      if (action === "preview") {
+        const result = await api.marketingPreviewCampaign(row.id);
+        setNotice(`Preview ${result.status} to your email`);
+      }
+      if (
+        action === "launch" &&
+        confirm(`Send ${row.name} to its consented audience?`)
+      ) {
+        const result = await api.marketingExecuteCampaign(row.id);
+        setNotice(`${result.sent} sent, ${result.failed} failed`);
+        load();
+      }
+    } catch (error) {
+      setNotice(error.message);
     }
   }
   return (
@@ -2334,13 +2366,17 @@ function SequenceStudio() {
   async function createSequence() {
     const name = prompt('Sequence name (e.g. "New registration welcome")')
     if (!name) return
-    await api.marketingCreateRecord('sequences', {
-      name, status: 'draft',
-      payload: { stage: 'registered', cadence_days: 2, steps: [
-        { delay_hours: 0, subject: '', body: '', cta: 'Open Festio', cta_url: DEFAULT_CTA_URL }
-      ]}
-    })
-    load()
+    try {
+      await api.marketingCreateRecord('sequences', {
+        name, status: 'draft',
+        payload: { stage: 'registered', cadence_days: 2, steps: [
+          { delay_hours: 0, subject: '', body: '', cta: 'Open Festio', cta_url: DEFAULT_CTA_URL }
+        ]}
+      })
+      load()
+    } catch (error) {
+      setNotice(error.message)
+    }
   }
 
   function openEditor(row) {
@@ -2382,14 +2418,19 @@ function SequenceStudio() {
   }
 
   async function save() {
-    await api.marketingUpdateRecord('sequences', editing.id, {
-      name: editing.name,
-      status: editing.status,
-      owner_email: editing.owner_email,
-      payload: editing.payload,
-    })
-    setEditing(null)
-    load()
+    try {
+      await api.marketingUpdateRecord('sequences', editing.id, {
+        name: editing.name,
+        status: editing.status,
+        owner_email: editing.owner_email,
+        payload: editing.payload,
+      })
+      setEditing(null)
+      load()
+    } catch (error) {
+      setNotice(error.message)
+      throw error
+    }
   }
 
   async function sendPreview(stepIndex) {

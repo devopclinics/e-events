@@ -881,8 +881,16 @@ function Leads() {
       action: bulkEdit.action,
       value: bulkEdit.value,
     });
+    const label = bulkEdit.action === "assign" ? `Owner set to ${bulkEdit.value}` : bulkEdit.action === "stage" ? `Stage changed to ${bulkEdit.value}` : `Tag "${bulkEdit.value}" added`;
+    setNotice(`${checked.length} lead${checked.length !== 1 ? "s" : ""} updated — ${label}`);
     setChecked([]);
     setBulkEdit(null);
+    load();
+  }
+  async function scheduleNow() {
+    await api.marketingBulkLeads({ ids: checked, action: "schedule", value: "now" });
+    setNotice(`${checked.length} lead${checked.length !== 1 ? "s" : ""} queued — go to Dashboard and click Run automation`);
+    setChecked([]);
     load();
   }
   async function saveView() {
@@ -1021,6 +1029,9 @@ function Leads() {
           </button>
           <button onClick={() => setBulkEdit({ action: "tag", value: "" })}>
             Add tag
+          </button>
+          <button onClick={scheduleNow}>
+            ↗ Start automation
           </button>
         </div>
       )}

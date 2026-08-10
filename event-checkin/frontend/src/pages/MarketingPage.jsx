@@ -1536,12 +1536,18 @@ function Module({ module }) {
   const [rows, setRows] = useState([]),
     [editing, setEditing] = useState(null),
     [notice, setNotice] = useState(""),
-    [loading,setLoading]=useState(true);
+    [loading, setLoading] = useState(true);
   const meta = MODULE_META[module] || [
     "Growth module",
     "Manage this workspace.",
   ];
-  const load = () => {setLoading(true);return api.marketingModule(module).then(setRows).finally(()=>setLoading(false))};
+  const load = () => {
+    setLoading(true);
+    return api
+      .marketingModule(module)
+      .then(setRows)
+      .finally(() => setLoading(false));
+  };
   useEffect(() => {
     load();
   }, [module]);
@@ -1598,7 +1604,14 @@ function Module({ module }) {
         action={create}
       />
       {notice && <div className="mk-notice">{notice}</div>}
-      {loading&&<div className="mk-loading-grid"><i/><i/><i/><i/></div>}
+      {loading && (
+        <div className="mk-loading-grid">
+          <i />
+          <i />
+          <i />
+          <i />
+        </div>
+      )}
       <div className="mk-module-grid">
         {rows.map((r, index) => (
           <article className="mk-module-card" key={r.id}>
@@ -1667,15 +1680,28 @@ function Module({ module }) {
                 </>
               )}
               {module === "forms" && r.payload.public_token && (
-                <><button
-                  onClick={async () => {
-                    const url = `${window.location.origin}/lead-form/${r.payload.public_token}`;
-                    await navigator.clipboard.writeText(url);
-                    setNotice("Public form link copied");
-                  }}
-                >
-                  Copy form link
-                </button><button onClick={async()=>{const url=`${window.location.origin}/lead-form/${r.payload.public_token}`;await navigator.clipboard.writeText(`<iframe src="${url}" title="${r.name}" width="100%" height="760" style="border:0"></iframe>`);setNotice("Embed code copied")}}>Copy embed code</button></>
+                <>
+                  <button
+                    onClick={async () => {
+                      const url = `${window.location.origin}/lead-form/${r.payload.public_token}`;
+                      await navigator.clipboard.writeText(url);
+                      setNotice("Public form link copied");
+                    }}
+                  >
+                    Copy form link
+                  </button>
+                  <button
+                    onClick={async () => {
+                      const url = `${window.location.origin}/lead-form/${r.payload.public_token}`;
+                      await navigator.clipboard.writeText(
+                        `<iframe src="${url}" title="${r.name}" width="100%" height="760" style="border:0"></iframe>`,
+                      );
+                      setNotice("Embed code copied");
+                    }}
+                  >
+                    Copy embed code
+                  </button>
+                </>
               )}
               <button
                 onClick={async () => {
@@ -1915,7 +1941,7 @@ function Analytics() {
               <span className={ready ? "ready" : ""} key={name}>
                 {name}
                 <b>{ready ? "Connected" : "Connect account"}</b>
-                {ready && (
+                {ready && providers?.oauth_refresh?.[name] ? (
                   <button
                     onClick={async () => {
                       await api.marketingRefreshProvider(name);
@@ -1924,7 +1950,9 @@ function Analytics() {
                   >
                     Refresh OAuth
                   </button>
-                )}
+                ) : ready ? (
+                  <small>Static token</small>
+                ) : null}
               </span>
             ))}
           </div>

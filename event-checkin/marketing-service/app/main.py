@@ -963,12 +963,20 @@ def bulk_leads(body: dict, identity: Identity = Depends(require_manager), db: Se
         elif action == "stage" and value in {"registered","event_created","activated","qualified","demo_booked","paid","customer","inactive","lost"}: row.stage = value
         elif action == "tag" and value: row.tags = list(dict.fromkeys([*(row.tags or []), str(value)]))
         elif action == "schedule": row.next_follow_up_at = now()
+        elif action == "consent" and value == "granted":
+            # Skip anyone who explicitly unsubscribed — a bulk grant must never
+            # override a prior opt-out.
+            if not row.unsubscribed:
+                row.consent_email = True
+                row.next_follow_up_at = now()
         else: raise HTTPException(400, "Unsupported bulk action")
         db.add(Activity(lead_id=row.id, kind="bulk_updated", summary=f"Bulk {action}", actor=identity.email, data={"value": value}))
     audit(db, identity, f"leads.bulk_{action}", "lead", data_count=len(rows), value=value); db.commit()
     result = {"updated": len(rows)}
     if action == "schedule":
         result["no_consent"] = sum(1 for row in rows if not row.consent_email or row.unsubscribed)
+    if action == "consent":
+        result["already_unsubscribed"] = sum(1 for row in rows if row.unsubscribed)
     return result
 
 

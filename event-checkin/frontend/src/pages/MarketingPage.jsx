@@ -1002,6 +1002,28 @@ function Leads() {
       setNotice(error.message);
     }
   }
+  async function grantConsent() {
+    if (
+      !confirm(
+        `Grant email consent to ${checked.length} lead${checked.length !== 1 ? "s" : ""}? Only do this if you have a real basis for treating them as opted in.`,
+      )
+    )
+      return;
+    try {
+      const result = await api.marketingBulkLeads({ ids: checked, action: "consent", value: "granted" });
+      const skipped = result.already_unsubscribed || 0;
+      const granted = checked.length - skipped;
+      setNotice(
+        skipped > 0
+          ? `Consent granted for ${granted} lead${granted !== 1 ? "s" : ""} (${skipped} skipped — already unsubscribed)`
+          : `Consent granted for ${granted} lead${granted !== 1 ? "s" : ""} — eligible for automation now`,
+      );
+      setChecked([]);
+      load();
+    } catch (error) {
+      setNotice(error.message);
+    }
+  }
   async function saveView() {
     const name = `View ${views.length + 1}`;
     try {
@@ -1154,6 +1176,9 @@ function Leads() {
           </button>
           <button onClick={() => setBulkEdit({ action: "tag", value: "" })}>
             Add tag
+          </button>
+          <button onClick={grantConsent}>
+            Grant email consent
           </button>
           <button onClick={scheduleNow}>
             ↗ Start automation

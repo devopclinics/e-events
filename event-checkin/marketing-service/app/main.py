@@ -633,7 +633,11 @@ def ingest(body: dict, identity: Identity = Depends(decode_identity), db: Sessio
         if isinstance(registered_at, str):
             try: registered_at = datetime.fromisoformat(registered_at.replace("Z", "+00:00"))
             except ValueError: registered_at = None
-        row = Lead(email=email, festio_user_id=subject or None, name=body.get("name") or "", source=body.get("source") or "website", stage=body.get("stage") or "registered", owner_email=os.getenv("MARKETING_DEFAULT_OWNER", "muritala@festio.events"), registered_at=registered_at or now(), last_active_at=now(), next_follow_up_at=now() + timedelta(hours=1), consent_email=True)
+        # consent_email intentionally left at its False default — no checkbox or other
+        # affirmative opt-in feeds this ingest call, so auto-consenting every signup to
+        # marketing email is not a defensible basis under GDPR/CAN-SPAM. Leads need a
+        # real opt-in path (e.g. a preferences page) before automation can reach them.
+        row = Lead(email=email, festio_user_id=subject or None, name=body.get("name") or "", source=body.get("source") or "website", stage=body.get("stage") or "registered", owner_email=os.getenv("MARKETING_DEFAULT_OWNER", "muritala@festio.events"), registered_at=registered_at or now(), last_active_at=now(), next_follow_up_at=now() + timedelta(hours=1))
         db.add(row); db.flush(); db.add(Activity(lead_id=row.id, kind="registered", summary="Festio account registered", actor="festio"))
     else:
         row.last_active_at = now()

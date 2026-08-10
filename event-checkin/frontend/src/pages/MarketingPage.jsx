@@ -601,6 +601,68 @@ function Dashboard({ data, run, message, navigate }) {
           </footer>
         </aside>
       </div>
+      <section className="mk-automation-panel">
+        <div className="mk-automation-panel-head">
+          <div>
+            <span>SEQUENCE AUTOMATION</span>
+            <h3>Where every lead stands</h3>
+          </div>
+          <button onClick={run}>Run automation →</button>
+        </div>
+        <div className="mk-automation-summary">
+          <div>
+            <strong>{data?.automation?.active_sequences || 0}</strong>
+            <span>Active sequences</span>
+          </div>
+          <div>
+            <strong>{data?.automation?.enrolled || 0}</strong>
+            <span>In progress</span>
+          </div>
+          <div>
+            <strong>{data?.automation?.completed || 0}</strong>
+            <span>Completed</span>
+          </div>
+          <div>
+            <strong>{data?.automation?.sent_7d || 0}</strong>
+            <span>Sent, last 7d</span>
+          </div>
+          <div>
+            <strong>{(data?.automation?.failed_7d || 0) + (data?.automation?.bounced_7d || 0)}</strong>
+            <span>Failed/bounced, 7d</span>
+          </div>
+        </div>
+        {data?.automation?.sequences?.length ? (
+          data.automation.sequences.map((seq) => (
+            <div className="mk-automation-seq" key={seq.id}>
+              <div className="mk-automation-seq-head">
+                <b>{seq.name}</b>
+                <small>{seq.stage ? seq.stage.replaceAll("_", " ") : "any stage"}</small>
+              </div>
+              <div className="mk-automation-steps">
+                {Array.from({ length: seq.total_steps }, (_, i) => (
+                  <div className="mk-automation-step-chip" key={i}>
+                    <b>{seq.step_counts?.[i] || 0}</b>
+                    <span>Step {i + 1}</span>
+                  </div>
+                ))}
+                <div className="mk-automation-step-chip complete">
+                  <b>{seq.completed}</b>
+                  <span>Done</span>
+                </div>
+              </div>
+              <div className="mk-automation-health">
+                <span><b>{seq.sent_7d}</b> sent (7d)</span>
+                {seq.failed_7d > 0 && <span className="warn">{seq.failed_7d} failed (7d)</span>}
+                {seq.bounced_7d > 0 && <span className="warn">{seq.bounced_7d} bounced (7d)</span>}
+              </div>
+            </div>
+          ))
+        ) : (
+          <p className="mk-automation-empty">
+            No active sequences yet — build one in Follow-ups to start automating.
+          </p>
+        )}
+      </section>
     </div>
   );
 }
@@ -1135,6 +1197,7 @@ function Leads() {
                 <th>Source</th>
                 <th>Score</th>
                 <th>Consent</th>
+                <th>Automation</th>
               </tr>
             </thead>
             <tbody>
@@ -1179,6 +1242,25 @@ function Leads() {
                         : "○ Not opted in"}
                     </span>
                   </td>
+                  <td>
+                    {r.automation ? (
+                      <span
+                        className={`mk-automation-pill ${r.automation.complete ? "done" : ""}`}
+                        title={
+                          r.automation.last_touch_status
+                            ? `Last touch: ${r.automation.last_touch_status}`
+                            : "No touches sent yet"
+                        }
+                      >
+                        {r.automation.complete
+                          ? "Sequence complete"
+                          : `Step ${r.automation.step}/${r.automation.total_steps}`}
+                        <small>{r.automation.sequence_name}</small>
+                      </span>
+                    ) : (
+                      <span className="mk-automation-pill none">Not enrolled</span>
+                    )}
+                  </td>
                 </tr>
               ))}
             </tbody>
@@ -1201,6 +1283,38 @@ function Leads() {
               setLead={setSelected}
               save={update}
             />
+            <section className="mk-automation-status">
+              <h3>Automation</h3>
+              {selected.automation ? (
+                <>
+                  <div className="mk-automation-status-row">
+                    <span>{selected.automation.sequence_name}</span>
+                    <b>
+                      {selected.automation.complete
+                        ? "Complete"
+                        : `Step ${selected.automation.step}/${selected.automation.total_steps}`}
+                    </b>
+                  </div>
+                  <div className="mk-automation-status-track">
+                    <i
+                      style={{
+                        width: `${selected.automation.total_steps ? Math.min(100, (selected.automation.step / selected.automation.total_steps) * 100) : 0}%`,
+                      }}
+                    />
+                  </div>
+                  <p>
+                    {selected.automation.last_touch_at
+                      ? `Last touch: ${selected.automation.last_touch_status} · ${new Date(selected.automation.last_touch_at).toLocaleString()}`
+                      : "No touches sent yet"}
+                    {selected.next_follow_up_at && !selected.automation.complete
+                      ? ` · Next: ${new Date(selected.next_follow_up_at).toLocaleString()}`
+                      : ""}
+                  </p>
+                </>
+              ) : (
+                <p>Not enrolled in an active sequence for this stage.</p>
+              )}
+            </section>
             <section className="mk-timeline">
               <h3>Relationship history</h3>
               {activity.map((a) => (
@@ -2664,8 +2778,12 @@ export default function MarketingPage() {
                 message={message}
                 navigate={setTab}
                 run={async () => {
-                  const leads = await api.marketingLeads('follow_up=due&consent=true');
-                  setAutomationQueue(leads);
+                  try {
+                    const leads = await api.marketingLeads('follow_up=due&consent=true');
+                    setAutomationQueue(leads);
+                  } catch (error) {
+                    setMessage(error.message);
+                  }
                 }}
               />
             ) : tab === "leads" ? (
@@ -2710,6 +2828,7 @@ export default function MarketingPage() {
                     <tr style={{borderBottom:'1px solid #e2e8f0',textAlign:'left',color:'#64748b'}}>
                       <th style={{padding:'6px 8px'}}>Lead</th>
                       <th style={{padding:'6px 8px'}}>Stage</th>
+                      <th style={{padding:'6px 8px'}}>Sending next</th>
                       <th style={{padding:'6px 8px'}}>Next follow-up</th>
                     </tr>
                   </thead>
@@ -2721,6 +2840,11 @@ export default function MarketingPage() {
                           {lead.name && <small style={{color:'#94a3b8'}}>{lead.email}</small>}
                         </td>
                         <td style={{padding:'7px 8px'}}><span className="mk-stage-pill">{lead.stage.replaceAll('_',' ')}</span></td>
+                        <td style={{padding:'7px 8px',color:'#64748b',fontSize:'0.78rem'}}>
+                          {lead.automation
+                            ? `Step ${lead.automation.step + 1} of ${lead.automation.total_steps} — ${lead.automation.sequence_name}`
+                            : '—'}
+                        </td>
                         <td style={{padding:'7px 8px',color:'#94a3b8',fontSize:'0.78rem'}}>{lead.next_follow_up_at ? new Date(lead.next_follow_up_at).toLocaleString() : '—'}</td>
                       </tr>
                     ))}
@@ -2737,6 +2861,8 @@ export default function MarketingPage() {
                     const r = await api.marketingRunAutomation();
                     setMessage(`${r.queued} follow-up(s) queued`);
                     setDash(await api.marketingDashboard());
+                  } catch (error) {
+                    setMessage(error.message);
                   } finally {
                     setAutomationRunning(false);
                     setAutomationQueue(null);

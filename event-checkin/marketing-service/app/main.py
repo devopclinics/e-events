@@ -403,6 +403,88 @@ def sequence_steps(record: ModuleRecord) -> list[dict]:
     return []
 
 
+# Only these kinds represent an actual send attempt for a sequence step. Delivery-status
+# webhooks (email_delivered/email_bounced/email_opened/...) copy the same sequence_id onto
+# their own Activity row, so counting every kind would double up a lead's step progress.
+EMAIL_ATTEMPT_KINDS = {"email_sent", "email_failed"}
+
+
+def lead_automation_map(db: Session, leads: list[Lead]) -> dict[str, dict | None]:
+    """Where each lead stands in its matching active sequence: step reached, out of how
+    many, whether it's finished, and the status/time of its most recent touch."""
+    sequences = db.scalars(select(ModuleRecord).where(ModuleRecord.module == "sequences", ModuleRecord.status == "active")).all()
+    lead_ids = [lead.id for lead in leads]
+    touches = db.scalars(select(Activity).where(Activity.lead_id.in_(lead_ids), Activity.kind.in_(EMAIL_ATTEMPT_KINDS))).all() if lead_ids else []
+    counts: dict[tuple[str, str], int] = {}
+    last_touch: dict[tuple[str, str], Activity] = {}
+    for touch in touches:
+        sequence_id = (touch.data or {}).get("sequence_id")
+        if not sequence_id: continue
+        key = (touch.lead_id, sequence_id)
+        counts[key] = counts.get(key, 0) + 1
+        if key not in last_touch or touch.created_at > last_touch[key].created_at:
+            last_touch[key] = touch
+    result: dict[str, dict | None] = {}
+    for lead in leads:
+        matching = next((s for s in sequences if not s.payload.get("stage") or s.payload.get("stage") == lead.stage), None)
+        if not matching:
+            result[lead.id] = None
+            continue
+        steps = sequence_steps(matching)
+        max_touches = max(1, int(matching.payload.get("max_touches") or len(steps))) if steps else 0
+        sent = counts.get((lead.id, matching.id), 0)
+        touch = last_touch.get((lead.id, matching.id))
+        result[lead.id] = {
+            "sequence_id": matching.id,
+            "sequence_name": matching.name,
+            "step": min(sent, len(steps)),
+            "total_steps": len(steps),
+            "complete": bool(steps) and sent >= min(len(steps), max_touches),
+            "last_touch_status": (((touch.data or {}).get("status")) or touch.kind.split("_", 1)[1]) if touch else None,
+            "last_touch_at": touch.created_at if touch else None,
+        }
+    return result
+
+
+def automation_dashboard_stats(db: Session) -> dict:
+    """Per-sequence rollup: how many leads sit at each step, how many finished, and
+    recent send/failure/bounce volume — the detail the dashboard's funnel view can't show."""
+    sequences = db.scalars(select(ModuleRecord).where(ModuleRecord.module == "sequences", ModuleRecord.status == "active")).all()
+    leads = db.scalars(select(Lead)).all()
+    snapshot = lead_automation_map(db, leads)
+    since = now() - timedelta(days=7)
+    sequence_stats = []
+    for seq in sequences:
+        entries = [entry for entry in snapshot.values() if entry and entry["sequence_id"] == seq.id]
+        completed = sum(1 for entry in entries if entry["complete"])
+        step_counts: dict[int, int] = {}
+        for entry in entries:
+            if not entry["complete"]:
+                step_counts[entry["step"]] = step_counts.get(entry["step"], 0) + 1
+        recent = {
+            kind: db.scalar(select(func.count(Activity.id)).where(
+                Activity.kind == kind, Activity.created_at >= since, Activity.data["sequence_id"].as_string() == seq.id,
+            )) or 0
+            for kind in ("email_sent", "email_failed", "email_bounced")
+        }
+        sequence_stats.append({
+            "id": seq.id, "name": seq.name, "stage": seq.payload.get("stage"),
+            "total_steps": len(sequence_steps(seq)),
+            "enrolled": len(entries) - completed, "completed": completed,
+            "step_counts": step_counts,
+            "sent_7d": recent["email_sent"], "failed_7d": recent["email_failed"], "bounced_7d": recent["email_bounced"],
+        })
+    return {
+        "active_sequences": len(sequences),
+        "enrolled": sum(s["enrolled"] for s in sequence_stats),
+        "completed": sum(s["completed"] for s in sequence_stats),
+        "sent_7d": sum(s["sent_7d"] for s in sequence_stats),
+        "failed_7d": sum(s["failed_7d"] for s in sequence_stats),
+        "bounced_7d": sum(s["bounced_7d"] for s in sequence_stats),
+        "sequences": sequence_stats,
+    }
+
+
 def safe_cta_url(value: Any) -> str:
     url = str(value or "https://festio.events/admin-redesign").strip()
     return url if url.startswith(("https://", "http://")) else "https://festio.events/admin-redesign"
@@ -588,7 +670,8 @@ def dashboard(identity: Identity = Depends(decode_identity), db: Session = Depen
     # without a follow-up date no longer appear as thousands of false breaches.
     sla_overdue = db.scalar(select(func.count(Lead.id)).where(Lead.stage == "registered", Lead.next_follow_up_at.is_not(None), Lead.next_follow_up_at <= now())) or 0
     pipeline_value = db.scalar(select(func.sum(Lead.deal_value * func.coalesce(Lead.probability, 0) / 100.0))) or 0
-    return {"total_leads": total, "stages": stages, "modules": modules, "follow_ups_due": due, "email_marketable": consented, "unowned": unowned, "sla_overdue": sla_overdue, "expected_pipeline_value": round(float(pipeline_value), 2), "conversion": {"registered": total, "event_created": event_created, "paid": paid, "event_creation_rate": round(event_created * 100 / total, 1) if total else 0, "paid_rate": round(paid * 100 / total, 1) if total else 0}}
+    automation = automation_dashboard_stats(db)
+    return {"total_leads": total, "stages": stages, "modules": modules, "follow_ups_due": due, "email_marketable": consented, "unowned": unowned, "sla_overdue": sla_overdue, "expected_pipeline_value": round(float(pipeline_value), 2), "conversion": {"registered": total, "event_created": event_created, "paid": paid, "event_creation_rate": round(event_created * 100 / total, 1) if total else 0, "paid_rate": round(paid * 100 / total, 1) if total else 0}, "automation": automation}
 
 
 @app.get("/api/marketing/access")
@@ -635,7 +718,9 @@ def list_leads(stage: str | None = None, q: str | None = None, owner: str | None
     if date_from: stmt = stmt.where(Lead.registered_at >= date_from)
     if date_to: stmt = stmt.where(Lead.registered_at <= date_to)
     if tag: stmt = stmt.where(Lead.tags.contains(tag))
-    return [lead_out(r) for r in db.scalars(stmt.order_by(Lead.updated_at.desc()).limit(500)).all()]
+    rows = db.scalars(stmt.order_by(Lead.updated_at.desc()).limit(500)).all()
+    automation = lead_automation_map(db, rows)
+    return [{**lead_out(r), "automation": automation.get(r.id)} for r in rows]
 
 
 @app.post("/api/marketing/leads")
@@ -679,7 +764,7 @@ def update_lead(lead_id: str, body: dict, identity: Identity = Depends(decode_id
     if any(key in body for key in ("consent_email", "consent_sms", "unsubscribed")):
         audit(db, identity, "consent.changed", "lead", row.id, consent_email=row.consent_email, consent_sms=row.consent_sms, unsubscribed=row.unsubscribed)
     db.add(Activity(lead_id=row.id, kind="updated", summary="Lead updated", actor=identity.email, data={"fields": list(body)})); audit(db, identity, "lead.updated", "lead", row.id, fields=list(body)); db.commit(); db.refresh(row)
-    return lead_out(row)
+    return {**lead_out(row), "automation": lead_automation_map(db, [row])[row.id]}
 
 
 @app.delete("/api/marketing/leads/{lead_id}", status_code=204)
@@ -1124,7 +1209,7 @@ def run_automation(dry_run: bool = Query(False), identity: Identity = Depends(re
     for lead in leads:
         matching = next((s for s in sequences if not s.payload.get("stage") or s.payload.get("stage") == lead.stage), None)
         if not matching: continue
-        sent_count = db.scalar(select(func.count(Activity.id)).where(Activity.lead_id == lead.id, Activity.data["sequence_id"].as_string() == matching.id)) or 0
+        sent_count = db.scalar(select(func.count(Activity.id)).where(Activity.lead_id == lead.id, Activity.kind.in_(EMAIL_ATTEMPT_KINDS), Activity.data["sequence_id"].as_string() == matching.id)) or 0
         steps = sequence_steps(matching)
         if not steps:
             # Sequence has no steps defined — skip to avoid infinite follow-up loop

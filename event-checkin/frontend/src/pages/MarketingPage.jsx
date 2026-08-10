@@ -876,22 +876,30 @@ function Leads() {
   async function bulk(e) {
     e.preventDefault();
     if (!bulkEdit?.value) return;
-    await api.marketingBulkLeads({
-      ids: checked,
-      action: bulkEdit.action,
-      value: bulkEdit.value,
-    });
-    const label = bulkEdit.action === "assign" ? `Owner set to ${bulkEdit.value}` : bulkEdit.action === "stage" ? `Stage changed to ${bulkEdit.value}` : `Tag "${bulkEdit.value}" added`;
-    setNotice(`${checked.length} lead${checked.length !== 1 ? "s" : ""} updated — ${label}`);
-    setChecked([]);
-    setBulkEdit(null);
-    load();
+    try {
+      await api.marketingBulkLeads({
+        ids: checked,
+        action: bulkEdit.action,
+        value: bulkEdit.value,
+      });
+      const label = bulkEdit.action === "assign" ? `Owner set to ${bulkEdit.value}` : bulkEdit.action === "stage" ? `Stage changed to ${bulkEdit.value}` : `Tag "${bulkEdit.value}" added`;
+      setNotice(`${checked.length} lead${checked.length !== 1 ? "s" : ""} updated — ${label}`);
+      setChecked([]);
+      setBulkEdit(null);
+      load();
+    } catch (error) {
+      setNotice(error.message);
+    }
   }
   async function scheduleNow() {
-    await api.marketingBulkLeads({ ids: checked, action: "schedule", value: "now" });
-    setNotice(`${checked.length} lead${checked.length !== 1 ? "s" : ""} queued — go to Dashboard and click Run automation`);
-    setChecked([]);
-    load();
+    try {
+      await api.marketingBulkLeads({ ids: checked, action: "schedule", value: "now" });
+      setNotice(`${checked.length} lead${checked.length !== 1 ? "s" : ""} queued — go to Dashboard and click Run automation`);
+      setChecked([]);
+      load();
+    } catch (error) {
+      setNotice(error.message);
+    }
   }
   async function saveView() {
     const name = `View ${views.length + 1}`;

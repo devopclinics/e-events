@@ -862,6 +862,7 @@ def preview_sequence(sequence_id: str, step: int = Query(0, ge=0), identity: Ide
 
 
 
+@app.post("/api/marketing/leads/bulk")
 def bulk_leads(body: dict, identity: Identity = Depends(require_manager), db: Session = Depends(db_session)):
     ids = list(dict.fromkeys(body.get("ids") or []))[:500]
     action, value = body.get("action"), body.get("value")

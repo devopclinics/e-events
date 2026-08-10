@@ -25,12 +25,14 @@
 .su-toggle-item input { display: none; }
 
 .su-feature-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 8px; }
+.su-attendance-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 .su-feature-item { display: flex; align-items: flex-start; gap: 10px; padding: 10px 12px; border: 1.5px solid var(--rr-border); border-radius: 10px; cursor: pointer; transition: all 0.15s; }
 .su-feature-item.checked { border-color: var(--rr-accent); background: #f0fdf4; }
 .dark .su-feature-item.checked { background: #064e3b; }
 .su-feature-item input { margin-top: 2px; flex-shrink: 0; }
 .su-feature-item strong { display: block; font-size: 0.88rem; color: var(--rr-text); }
 .su-feature-item small { font-size: 0.75rem; color: var(--rr-sub); }
+.su-workspace-link { display: inline-flex; margin-top: 10px; }
 .su-create-btn { margin-top: 12px; justify-content: center; }
 
 /* Recommended plan sidebar */

@@ -7,10 +7,10 @@ from types import SimpleNamespace
 
 from app.routers.budget import _rollup
 from app.routers.documents import _safe_filename
-from app.routers.timeline import _milestone_out
+from app.routers.timeline import _milestone_out, _starter_sections
 from app.routers.runsheet import _conflict_map
 from app.auth import Identity, ensure_capability
-from app.schemas import BudgetIn, BudgetItemIn, ChangeOrderIn, QuoteSelectionIn, RunsheetItemIn, VendorQuoteIn, VendorUpdate
+from app.schemas import BudgetIn, BudgetItemIn, ChangeOrderIn, QuoteSelectionIn, RunsheetItemIn, StarterPlanIn, VendorQuoteIn, VendorUpdate
 from app.routers.procurement import _token_hash
 from fastapi import HTTPException
 from pydantic import ValidationError
@@ -66,6 +66,23 @@ class MilestoneCompletionTests(unittest.TestCase):
     def test_no_tasks_is_zero_percent_not_a_crash(self):
         out = _milestone_out(_milestone([]))
         self.assertEqual(out.completion_pct, 0)
+
+
+class StarterPlanTests(unittest.TestCase):
+    def test_ticketed_plan_launches_sales_and_links_ticketing(self):
+        plan = _starter_sections(StarterPlanIn(
+            event_name="Summit", event_type="Conference", attendance_mode="ticketed",
+            event_date="2026-12-10",
+        ))
+        launch_tasks = plan[1][2]
+        self.assertEqual(launch_tasks[0][0], "Launch ticket sales")
+        self.assertEqual(launch_tasks[0][1], "/ticketing-redesign")
+
+    def test_rsvp_plan_uses_invitation_launch(self):
+        plan = _starter_sections(StarterPlanIn(
+            event_name="Wedding", attendance_mode="rsvp", event_date="2026-12-10",
+        ))
+        self.assertIn("RSVP", plan[1][2][0][0])
 
 
 class SafeFilenameTests(unittest.TestCase):

@@ -13,6 +13,12 @@ const EVENT_TYPES = [
 const TIMEZONES = ['Africa/Lagos', 'Africa/Nairobi', 'Europe/London', 'America/New_York', 'Asia/Dubai']
 // The billing API currently supports Paystack/NGN and Stripe/USD.
 const CURRENCIES = ['NGN — Nigerian Naira', 'USD — US Dollar']
+const ATTENDANCE_MODES = [
+  { id: 'rsvp', label: 'Invitation / RSVP', desc: 'Invite named guests and collect responses.' },
+  { id: 'ticketed', label: 'Paid tickets', desc: 'Sell tickets and create guest records from paid orders.' },
+  { id: 'hybrid', label: 'Tickets + invitations', desc: 'Combine public sales with a managed invite list.' },
+  { id: 'private', label: 'Internal / private list', desc: 'Control admission from a private guest list.' },
+]
 
 const CHANNELS = [
   { id: 'email', label: 'Email' },
@@ -30,6 +36,7 @@ const FEATURES = [
   { id: 'festiome', label: 'FestioMe guest app', desc: 'Guest-side experience hub' },
   { id: 'experience', label: 'Experience program', desc: 'Session-based event content' },
   { id: 'selfcheckin', label: 'Self check-in kiosk', desc: 'Guests check themselves in' },
+  { id: 'planner', label: 'Event planner', desc: 'Budget, vendors, milestones, and run of show' },
 ]
 
 const GUIDED_STEPS = [
@@ -49,12 +56,22 @@ const GUIDED_STEPS = [
     ],
   },
   {
+    id: 'ticketing', label: 'Configure ticket sales',
+    desc: 'Create ticket products, prices, sale windows, and payment settings.',
+    fields: [], modes: ['ticketed', 'hybrid'], href: '/ticketing-redesign', linkLabel: 'Open ticket sales',
+  },
+  {
     id: 'rsvp', label: 'Create RSVP questions',
     desc: 'Collect custom answers from your guests on the RSVP form.',
     fields: [
       { label: 'Question', placeholder: 'e.g. Dietary preference?' },
       { label: 'Type', type: 'select', options: ['Short text', 'Multiple choice', 'Yes / No'] },
     ],
+  },
+  {
+    id: 'planner', label: 'Build your event plan',
+    desc: 'Generate countdown milestones for the budget, guest launch, vendors, run of show, and check-in.',
+    fields: [], href: '/planner-redesign', linkLabel: 'Open planner',
   },
   {
     id: 'multiinvitee', label: 'Multi-invitee',
@@ -115,9 +132,10 @@ const GUIDED_STEPS = [
 function WizardPhase({ onComplete, notify }) {
   const [form, setForm] = useState({
     name: '', type: 'Conference / seminar', host: '', date: '', timezone: 'Africa/Lagos',
+    attendanceMode: 'rsvp',
     multiDay: false, endDate: '', baseUrl: '', venue: '', venueAddress: '',
     guestCount: '', currency: 'NGN — Nigerian Naira',
-    channels: new Set(['email']), features: new Set(['rsvp']),
+    channels: new Set(['email']), features: new Set(['rsvp', 'planner']),
   })
   const [recommendation, setRecommendation] = useState(null)
   const [recommendationLoading, setRecommendationLoading] = useState(false)
@@ -226,6 +244,23 @@ function WizardPhase({ onComplete, notify }) {
             <input className="rd-field" value={form.venueAddress} placeholder="Plot 1415, Adetokunbo Ademola, VI" onChange={(e) => setForm({ ...form, venueAddress: e.target.value })} />
           </div>
         </div>
+        <p className="su-section-label">How will guests attend?</p>
+        <div className="su-feature-grid su-attendance-grid">
+          {ATTENDANCE_MODES.map((mode) => (
+            <label key={mode.id} className={`su-feature-item${form.attendanceMode === mode.id ? ' checked' : ''}`}>
+              <input type="radio" name="attendance-mode" checked={form.attendanceMode === mode.id} onChange={() => setForm((current) => ({
+                ...current,
+                attendanceMode: mode.id,
+                features: new Set([
+                  ...Array.from(current.features).filter((feature) => !['rsvp', 'access'].includes(feature)),
+                  ...(['ticketed', 'hybrid'].includes(mode.id) ? ['access'] : []),
+                  ...(['rsvp', 'hybrid'].includes(mode.id) ? ['rsvp'] : []),
+                ]),
+              }))} />
+              <div><strong>{mode.label}</strong><small>{mode.desc}</small></div>
+            </label>
+          ))}
+        </div>
         <p className="su-section-label">Finance</p>
         <div className="su-field-row">
           <div>
@@ -270,6 +305,7 @@ function WizardPhase({ onComplete, notify }) {
                 name: form.name.trim(),
                 couples_name: form.host.trim(),
                 event_type: form.type,
+                attendance_mode: form.attendanceMode,
                 event_date: `${form.date}T12:00:00`,
                 event_end_date: form.multiDay && form.endDate ? `${form.endDate}T12:00:00` : null,
                 timezone: form.timezone,
@@ -289,6 +325,7 @@ function WizardPhase({ onComplete, notify }) {
                   venue_access_enabled: form.features.has('access'),
                   festiome_addon_enabled: form.features.has('festiome'),
                   experience_enabled: form.features.has('experience'),
+                  planner_enabled: form.features.has('planner'),
                   notify_email: form.channels.has('email'),
                 }),
                 api.updateInviteSettings(event.id, { rsvp_enabled: form.features.has('rsvp') }),
@@ -296,6 +333,15 @@ function WizardPhase({ onComplete, notify }) {
                 api.setSelfCheckin(event.id, form.features.has('selfcheckin')),
               ])
               const failedSettings = optionalResults.filter((result) => result.status === 'rejected').length
+              if (form.features.has('planner') && optionalResults[0].status === 'fulfilled') {
+                await api.plannerCreateStarterPlan(event.id, {
+                  event_name: event.name,
+                  event_type: event.event_type,
+                  attendance_mode: event.attendance_mode,
+                  event_date: form.date,
+                  venue_name: form.venue.trim() || null,
+                }).catch(() => null)
+              }
               notify(
                 failedSettings
                   ? `Event “${event.name}” was created, but ${failedSettings} optional setting${failedSettings === 1 ? '' : 's'} could not be enabled. Review Guided setup.`
@@ -340,6 +386,7 @@ function WizardPhase({ onComplete, notify }) {
 }
 
 function GuidedSetupPhase({ eventId, notify }) {
+  const [event, setEvent] = useState(null)
   const [states, setStates] = useState(() =>
     Object.fromEntries(GUIDED_STEPS.map((s) => [s.id, 'pending']))
   )
@@ -366,7 +413,17 @@ function GuidedSetupPhase({ eventId, notify }) {
     }
   }
 
-  useEffect(() => { loadProgress() }, [eventId])
+  useEffect(() => {
+    loadProgress()
+    if (eventId) api.listEvents().then((events) => setEvent(events.find((row) => row.id === eventId) || null)).catch(() => setEvent(null))
+  }, [eventId])
+
+  const mode = event?.attendance_mode || 'rsvp'
+  const steps = GUIDED_STEPS.filter((step) => !step.modes || step.modes.includes(mode)).filter((step) => {
+    if (step.id === 'rsvp') return ['rsvp', 'hybrid'].includes(mode)
+    if (step.id === 'multiinvitee') return ['rsvp', 'hybrid'].includes(mode)
+    return true
+  })
 
   function setStepState(id, state) {
     setStates((prev) => ({ ...prev, [id]: state }))
@@ -419,6 +476,15 @@ function GuidedSetupPhase({ eventId, notify }) {
       await api.toggleFeatures(eventId, { festiome_addon_enabled: true })
     } else if (stepId === 'experience') {
       await api.toggleFeatures(eventId, { experience_enabled: true })
+    } else if (stepId === 'ticketing') {
+      const products = await api.ticketingProducts(eventId)
+      if (!products.length) throw new Error('Create at least one ticket product before completing this step')
+    } else if (stepId === 'planner') {
+      await api.toggleFeatures(eventId, { planner_enabled: true })
+      if (event) await api.plannerCreateStarterPlan(eventId, {
+        event_name: event.name, event_type: event.event_type,
+        attendance_mode: mode, event_date: event.event_date.slice(0, 10), venue_name: event.venue_name,
+      })
     } else if (stepId === 'review') {
       await api.changeStatus(eventId, 'active')
     }
@@ -432,9 +498,9 @@ function GuidedSetupPhase({ eventId, notify }) {
       if (saved === false) return
       await api.setSetupProgress(eventId, stepId, 'completed')
       setStepState(stepId, 'completed')
-      notify(`${GUIDED_STEPS.find((s) => s.id === stepId)?.label || 'Step'} saved`)
-      const idx = GUIDED_STEPS.findIndex((s) => s.id === stepId)
-      const next = GUIDED_STEPS[idx + 1]
+      notify(`${steps.find((s) => s.id === stepId)?.label || 'Step'} saved`)
+      const idx = steps.findIndex((s) => s.id === stepId)
+      const next = steps[idx + 1]
       if (next) setOpen(next.id)
     } catch (e) {
       notify(e.message || 'Setup step could not be saved', true)
@@ -449,8 +515,8 @@ function GuidedSetupPhase({ eventId, notify }) {
     try {
       await api.setSetupProgress(eventId, stepId, 'skipped')
       setStepState(stepId, 'skipped')
-      const idx = GUIDED_STEPS.findIndex((s) => s.id === stepId)
-      const next = GUIDED_STEPS[idx + 1]
+      const idx = steps.findIndex((s) => s.id === stepId)
+      const next = steps[idx + 1]
       if (next) setOpen(next.id)
     } catch (e) {
       notify(e.message || 'Setup step could not be skipped', true)
@@ -459,7 +525,7 @@ function GuidedSetupPhase({ eventId, notify }) {
     }
   }
 
-  const completedCount = Object.values(states).filter((v) => v === 'completed').length
+  const completedCount = steps.filter((step) => states[step.id] === 'completed').length
 
   if (!eventId) return <div className="rr-panel"><div className="rd-panel-body">Create or select an event before starting guided setup.</div></div>
   if (loading) return <div className="rr-panel"><div className="rd-panel-body"><LoadingSkeleton rows={6} /></div></div>
@@ -470,14 +536,14 @@ function GuidedSetupPhase({ eventId, notify }) {
       <div className="su-guided-header">
         <div>
           <h2>Guided setup</h2>
-          <p className="su-subtitle">{completedCount} of {GUIDED_STEPS.length} steps complete</p>
+          <p className="su-subtitle">{ATTENDANCE_MODES.find((item) => item.id === mode)?.label} workflow · {completedCount} of {steps.length} steps complete</p>
         </div>
         <div className="su-progress-bar-wrap">
-          <div className="su-progress-bar" style={{ width: `${(completedCount / GUIDED_STEPS.length) * 100}%` }} />
+          <div className="su-progress-bar" style={{ width: `${(completedCount / steps.length) * 100}%` }} />
         </div>
       </div>
       <div className="su-steps">
-        {GUIDED_STEPS.map((step, i) => {
+        {steps.map((step, i) => {
           const state = states[step.id]
           const isOpen = open === step.id
           return (
@@ -499,7 +565,7 @@ function GuidedSetupPhase({ eventId, notify }) {
                   {step.id === 'review' ? (
                     <div className="su-review">
                       <div className="su-review-grid">
-                        {GUIDED_STEPS.filter((s) => s.id !== 'review').map((s) => (
+                        {steps.filter((s) => s.id !== 'review').map((s) => (
                           <div key={s.id} className="su-review-row">
                             <span className={`su-review-icon ${states[s.id] === 'completed' ? 'done' : states[s.id] === 'skipped' ? 'skipped' : 'pending'}`}>
                               {states[s.id] === 'completed' ? '✅' : states[s.id] === 'skipped' ? '⏭' : '⏳'}
@@ -528,6 +594,7 @@ function GuidedSetupPhase({ eventId, notify }) {
                           )}
                         </div>
                       ))}
+                      {step.href && <a className="rr-link-btn su-workspace-link" href={step.href}>{step.linkLabel} →</a>}
                       <div className="su-step-actions">
                         <button className="rr-btn primary" disabled={!!busy} onClick={() => handleSave(step.id)}>{busy === step.id ? 'Saving…' : 'Save & continue'}</button>
                         <button className="rr-btn secondary" disabled={!!busy} onClick={() => handleSkip(step.id)}>Skip</button>

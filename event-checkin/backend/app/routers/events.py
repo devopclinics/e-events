@@ -420,6 +420,7 @@ async def duplicate_event(
         name=(body.name or f"{source.name} (Copy)").strip()[:255],
         couples_name=source.couples_name,
         event_type=source.event_type,
+        attendance_mode=source.attendance_mode,
         event_date=body.event_date,
         event_end_date=body.event_end_date,
         timezone=source.timezone or "UTC",

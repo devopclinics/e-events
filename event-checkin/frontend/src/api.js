@@ -1274,6 +1274,7 @@ export const api = {
   plannerVendorAcknowledgeChange: (token, changeId) => req('POST', `/planner/vendor-portal/${encodeURIComponent(token)}/change-orders/${changeId}/acknowledge`),
   plannerDownloadDocument: (eventId, path, filename) => plannerDownload(eventId, path, filename),
   plannerListMilestones: (eventId) => plannerReq(eventId, 'GET', '/milestones'),
+  plannerCreateStarterPlan: (eventId, body) => plannerReq(eventId, 'POST', '/starter-plan', body),
   plannerCreateMilestone: (eventId, body) => plannerReq(eventId, 'POST', '/milestones', body),
   plannerUpdateMilestone: (eventId, msId, body) => plannerReq(eventId, 'PATCH', `/milestones/${msId}`, body),
   plannerDeleteMilestone: (eventId, msId) => plannerReq(eventId, 'DELETE', `/milestones/${msId}`),

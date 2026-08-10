@@ -232,6 +232,9 @@ class Event(Base):
     # What kind of event this is (Wedding, Graduation, Conference, …). Chosen
     # from a preset list at creation; nullable for pre-existing events.
     event_type: Mapped[str | None] = mapped_column(String(80), nullable=True)
+    # How guests enter the event. This is lifecycle intent, not a paid-feature
+    # toggle: setup, ticketing and planner all branch from this single value.
+    attendance_mode: Mapped[str] = mapped_column(String(20), default="rsvp")
     event_date: Mapped[datetime] = mapped_column(DateTime)
     # Optional end date/time for events that span multiple days (e.g. a 3-day
     # conference or a wedding weekend). NULL for the vast majority of (single-day)

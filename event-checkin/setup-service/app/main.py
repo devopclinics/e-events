@@ -94,6 +94,7 @@ class Event(Base):
     org_id: Mapped[str] = mapped_column(String(36), ForeignKey("organizations.id"))
     name: Mapped[str] = mapped_column(String(255))
     event_type: Mapped[str | None] = mapped_column(String(80))
+    attendance_mode: Mapped[str] = mapped_column(String(20), default="rsvp")
     event_date: Mapped[datetime] = mapped_column(DateTime)
     timezone: Mapped[str | None] = mapped_column(String(80))
     is_paid: Mapped[bool] = mapped_column(Boolean, default=False)

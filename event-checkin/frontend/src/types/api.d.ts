@@ -413,6 +413,7 @@ export interface EventControls {
 
 export interface EventCreate {
   admission_note?: (string) | null
+  attendance_mode?: 'rsvp' | 'ticketed' | 'hybrid' | 'private'
   checkin_base_url: string
   couples_name?: (string) | null
   description?: (string) | null
@@ -463,6 +464,7 @@ export interface EventMemberOut {
 
 export interface EventOut {
   admission_note?: (string) | null
+  attendance_mode?: 'rsvp' | 'ticketed' | 'hybrid' | 'private'
   blocked_comm_features?: ((string)[]) | null
   blocked_messaging_channels?: ((string)[]) | null
   channel_policy?: (Record<string, unknown>) | null
@@ -577,6 +579,7 @@ export interface EventSourceUpdate {
 }
 
 export interface EventUpdate {
+  attendance_mode?: ('rsvp' | 'ticketed' | 'hybrid' | 'private') | null
   admission_note?: (string) | null
   checkin_base_url?: (string) | null
   couples_name?: (string) | null

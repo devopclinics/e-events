@@ -369,6 +369,20 @@ class MilestoneOut(BaseModel):
     model_config = {"from_attributes": True}
 
 
+class StarterPlanIn(BaseModel):
+    event_name: str = Field(min_length=1, max_length=255)
+    event_type: Optional[str] = Field(default=None, max_length=80)
+    attendance_mode: Literal["rsvp", "ticketed", "hybrid", "private"] = "rsvp"
+    event_date: date
+    venue_name: Optional[str] = Field(default=None, max_length=255)
+
+
+class StarterPlanOut(BaseModel):
+    created: bool
+    milestones_created: int
+    tasks_created: int
+
+
 # ── Runsheet ─────────────────────────────────────────────────────────────────
 
 class RunsheetItemIn(BaseModel):

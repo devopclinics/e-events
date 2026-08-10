@@ -62,6 +62,7 @@ def _guarded_drop_column(table: str, column: str) -> str:
 
 
 SCHEMA_PATCHES: list[str] = [
+    "ALTER TABLE events ADD COLUMN IF NOT EXISTS attendance_mode VARCHAR(20) NOT NULL DEFAULT 'rsvp'",
     "ALTER TABLE organizations ADD COLUMN IF NOT EXISTS addon_overrides JSONB",
     "ALTER TABLE events ADD COLUMN IF NOT EXISTS addon_overrides JSONB",
     "ALTER TABLE events ADD COLUMN IF NOT EXISTS org_addon_overrides JSONB",

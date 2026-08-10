@@ -1,4 +1,5 @@
 """Timeline: milestones and their tasks."""
+from datetime import timedelta
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -10,6 +11,72 @@ from ..auth import Identity, current_identity, ensure_capability
 from ..database import get_db
 
 router = APIRouter(prefix="/api/planner", tags=["planner-timeline"])
+STARTER_MARKER = "festio-starter-plan:v1"
+
+
+def _starter_sections(payload: schemas.StarterPlanIn):
+    day = payload.event_date
+    attendance = payload.attendance_mode
+    launch_title = "Launch ticket sales" if attendance in {"ticketed", "hybrid"} else "Open invitations and RSVP"
+    launch_link = "/ticketing-redesign" if attendance in {"ticketed", "hybrid"} else "/guests-redesign"
+    guest_title = "Reconcile purchasers and guest access" if attendance == "ticketed" else "Confirm guest list and RSVP deadline"
+    sections = [
+        ("Foundation", day - timedelta(days=90), [
+            ("Confirm event brief, venue and schedule", "/event-settings-redesign", "high"),
+            ("Set the working budget and vendor categories", "/planner-redesign?tab=Budget", "normal"),
+        ]),
+        ("Guest launch", day - timedelta(days=60), [
+            (launch_title, launch_link, "high"),
+            (guest_title, "/guests-redesign", "high"),
+        ]),
+        ("Guest experience", day - timedelta(days=21), [
+            ("Finalize seating and access rules", "/seating-redesign", "normal"),
+            ("Finalize menu and catering counts", "/menu-redesign", "normal"),
+            ("Publish the run of show", "/planner-redesign?tab=Run%20of%20show", "high"),
+        ]),
+        ("Event readiness", day - timedelta(days=3), [
+            ("Test check-in devices and staff permissions", "/checkin-redesign", "high"),
+            ("Run final guest and admission reconciliation", launch_link, "high"),
+        ]),
+    ]
+    if attendance == "private":
+        sections[1][2][0] = ("Confirm the private invite list", "/guests-redesign", "high")
+    return sections
+
+
+@router.post("/{event_id}/starter-plan", response_model=schemas.StarterPlanOut)
+async def create_starter_plan(
+    event_id: str,
+    payload: schemas.StarterPlanIn,
+    identity: Identity = Depends(current_identity),
+    db: AsyncSession = Depends(get_db),
+) -> schemas.StarterPlanOut:
+    if identity.event_id != event_id:
+        raise HTTPException(403, "Not authorized for this event")
+    ensure_capability(identity, "tasks")
+    existing = (await db.execute(select(models.PlannerMilestone).where(
+        models.PlannerMilestone.event_id == event_id,
+        models.PlannerMilestone.description.like(f"%{STARTER_MARKER}%"),
+    ).limit(1))).scalar_one_or_none()
+    if existing:
+        return schemas.StarterPlanOut(created=False, milestones_created=0, tasks_created=0)
+    task_count = 0
+    for order, (title, due_at, tasks) in enumerate(_starter_sections(payload)):
+        milestone = models.PlannerMilestone(
+            event_id=event_id, title=title, due_at=due_at, sort_order=order,
+            description=f"{STARTER_MARKER} · Generated for {payload.attendance_mode} attendance.",
+        )
+        db.add(milestone)
+        await db.flush()
+        for task_title, link, priority in tasks:
+            db.add(models.PlannerTask(
+                event_id=event_id, milestone_id=milestone.id, title=task_title,
+                due_at=due_at, priority=priority,
+                notes=f"Open the owning workspace: {link}",
+            ))
+            task_count += 1
+    await db.commit()
+    return schemas.StarterPlanOut(created=True, milestones_created=4, tasks_created=task_count)
 
 
 async def _get_milestone(db: AsyncSession, event_id: str, ms_id: str) -> models.PlannerMilestone:

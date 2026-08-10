@@ -59,6 +59,7 @@ class EventCreate(BaseModel):
     couples_name: Optional[str] = ""
     # Preset event kind (Wedding, Graduation, Conference, …).
     event_type: Optional[str] = None
+    attendance_mode: Literal["rsvp", "ticketed", "hybrid", "private"] = "rsvp"
     event_date: datetime
     # Optional end date/time for events spanning multiple days (e.g. a 3-day
     # conference). When set, must not be before event_date.
@@ -122,6 +123,7 @@ class EventUpdate(BaseModel):
     name: Optional[str] = None
     couples_name: Optional[str] = None
     event_type: Optional[str] = None
+    attendance_mode: Optional[Literal["rsvp", "ticketed", "hybrid", "private"]] = None
     event_date: Optional[datetime] = None
     event_end_date: Optional[datetime] = None
     timezone: Optional[str] = Field(default=None, max_length=80)
@@ -168,6 +170,7 @@ class EventOut(BaseModel):
     name: str
     couples_name: str
     event_type: Optional[str] = None
+    attendance_mode: str = "rsvp"
     event_date: datetime
     event_end_date: Optional[datetime] = None
     timezone: Optional[str] = None

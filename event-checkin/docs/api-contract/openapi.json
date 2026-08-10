@@ -104,6 +104,19 @@
         "title": "ActiveToggle",
         "type": "object"
       },
+      "AddonOverrides": {
+        "properties": {
+          "overrides": {
+            "additionalProperties": {
+              "type": "boolean"
+            },
+            "title": "Overrides",
+            "type": "object"
+          }
+        },
+        "title": "AddonOverrides",
+        "type": "object"
+      },
       "AffiliateStoreIn": {
         "properties": {
           "active": {
@@ -553,6 +566,17 @@
             "title": "Channels",
             "type": "array"
           },
+          "experience_step_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Experience Step Id"
+          },
           "extra_recipients": {
             "default": [],
             "items": {
@@ -573,6 +597,17 @@
             "title": "Message",
             "type": "string"
           },
+          "message_type": {
+            "default": "general",
+            "enum": [
+              "general",
+              "thank_you",
+              "feedback",
+              "experience_stage"
+            ],
+            "title": "Message Type",
+            "type": "string"
+          },
           "mms_media_url": {
             "anyOf": [
               {
@@ -584,6 +619,17 @@
             ],
             "title": "Mms Media Url"
           },
+          "subject": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Subject"
+          },
           "target": {
             "default": "all",
             "enum": [
@@ -593,6 +639,7 @@
               "confirmed",
               "declined",
               "no_reply",
+              "feedback_nonresponders",
               "none"
             ],
             "title": "Target",
@@ -2163,6 +2210,62 @@
         "title": "EventCreate",
         "type": "object"
       },
+      "EventDuplicateIn": {
+        "description": "New date (required \u2014 the one thing that can never be copied verbatim)\nand an optional name override; everything else is cloned from the source\nevent's configuration by the duplicate endpoint.",
+        "properties": {
+          "event_date": {
+            "format": "date-time",
+            "title": "Event Date",
+            "type": "string"
+          },
+          "event_end_date": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Event End Date"
+          },
+          "name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Name"
+          }
+        },
+        "required": [
+          "event_date"
+        ],
+        "title": "EventDuplicateIn",
+        "type": "object"
+      },
+      "EventLookup": {
+        "properties": {
+          "event_ids": {
+            "items": {
+              "type": "string"
+            },
+            "maxItems": 500,
+            "minItems": 1,
+            "title": "Event Ids",
+            "type": "array"
+          }
+        },
+        "required": [
+          "event_ids"
+        ],
+        "title": "EventLookup",
+        "type": "object"
+      },
       "EventMemberOut": {
         "properties": {
           "access_level": {
@@ -2185,6 +2288,31 @@
             "title": "Can Manage Menu",
             "type": "boolean"
           },
+          "can_manage_planner_budget": {
+            "default": false,
+            "title": "Can Manage Planner Budget",
+            "type": "boolean"
+          },
+          "can_manage_planner_documents": {
+            "default": false,
+            "title": "Can Manage Planner Documents",
+            "type": "boolean"
+          },
+          "can_manage_planner_runsheet": {
+            "default": false,
+            "title": "Can Manage Planner Runsheet",
+            "type": "boolean"
+          },
+          "can_manage_planner_tasks": {
+            "default": false,
+            "title": "Can Manage Planner Tasks",
+            "type": "boolean"
+          },
+          "can_manage_planner_vendors": {
+            "default": false,
+            "title": "Can Manage Planner Vendors",
+            "type": "boolean"
+          },
           "can_reassign_seats": {
             "title": "Can Reassign Seats",
             "type": "boolean"
@@ -2197,6 +2325,11 @@
           "can_view_guests": {
             "default": false,
             "title": "Can View Guests",
+            "type": "boolean"
+          },
+          "can_view_planner": {
+            "default": false,
+            "title": "Can View Planner",
             "type": "boolean"
           },
           "event_role": {
@@ -2366,6 +2499,11 @@
               }
             ],
             "title": "Event End Date"
+          },
+          "event_time_tbd": {
+            "default": false,
+            "title": "Event Time Tbd",
+            "type": "boolean"
           },
           "event_type": {
             "anyOf": [
@@ -2615,6 +2753,11 @@
             "title": "Plan Tier",
             "type": "string"
           },
+          "planner_enabled": {
+            "default": false,
+            "title": "Planner Enabled",
+            "type": "boolean"
+          },
           "post_event_thankyou_audience": {
             "default": "admitted",
             "title": "Post Event Thankyou Audience",
@@ -2641,6 +2784,20 @@
               }
             ],
             "title": "Post Event Thankyou Sent At"
+          },
+          "purchased_addons": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Purchased Addons"
           },
           "registry_enabled": {
             "default": false,
@@ -2719,6 +2876,34 @@
             "title": "Rsvp Enabled",
             "type": "boolean"
           },
+          "rsvp_invitee_age_options": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Rsvp Invitee Age Options"
+          },
+          "rsvp_invitee_contact_exempt_types": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Rsvp Invitee Contact Exempt Types"
+          },
           "rsvp_invitee_email_required": {
             "default": false,
             "title": "Rsvp Invitee Email Required",
@@ -2728,6 +2913,20 @@
             "default": false,
             "title": "Rsvp Invitee Phone Required",
             "type": "boolean"
+          },
+          "rsvp_invitee_type_options": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Rsvp Invitee Type Options"
           },
           "rsvp_multi_invitee_enabled": {
             "default": false,
@@ -5513,6 +5712,18 @@
             ],
             "title": "Mms Provider"
           },
+          "paid_ticket_pass_design": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Paid Ticket Pass Design"
+          },
           "phone": {
             "anyOf": [
               {
@@ -6649,6 +6860,11 @@
             ],
             "title": "Event End Date"
           },
+          "event_time_tbd": {
+            "default": false,
+            "title": "Event Time Tbd",
+            "type": "boolean"
+          },
           "experience_enabled": {
             "default": false,
             "title": "Experience Enabled",
@@ -6695,6 +6911,21 @@
             "title": "Id",
             "type": "string"
           },
+          "invite_add_to_calendar_enabled": {
+            "default": true,
+            "title": "Invite Add To Calendar Enabled",
+            "type": "boolean"
+          },
+          "invite_capacity_bar_enabled": {
+            "default": true,
+            "title": "Invite Capacity Bar Enabled",
+            "type": "boolean"
+          },
+          "invite_countdown_enabled": {
+            "default": true,
+            "title": "Invite Countdown Enabled",
+            "type": "boolean"
+          },
           "invite_cover_image": {
             "anyOf": [
               {
@@ -6721,6 +6952,11 @@
             "default": "open",
             "title": "Invite Mode",
             "type": "string"
+          },
+          "invite_share_enabled": {
+            "default": true,
+            "title": "Invite Share Enabled",
+            "type": "boolean"
           },
           "invite_theme": {
             "title": "Invite Theme",
@@ -6783,6 +7019,11 @@
             "title": "Rsvp Collect Phone",
             "type": "boolean"
           },
+          "rsvp_confetti_enabled": {
+            "default": true,
+            "title": "Rsvp Confetti Enabled",
+            "type": "boolean"
+          },
           "rsvp_count": {
             "default": 0,
             "title": "Rsvp Count",
@@ -6809,6 +7050,34 @@
             "title": "Rsvp Enabled",
             "type": "boolean"
           },
+          "rsvp_invitee_age_options": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Rsvp Invitee Age Options"
+          },
+          "rsvp_invitee_contact_exempt_types": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Rsvp Invitee Contact Exempt Types"
+          },
           "rsvp_invitee_email_required": {
             "default": false,
             "title": "Rsvp Invitee Email Required",
@@ -6818,6 +7087,20 @@
             "default": false,
             "title": "Rsvp Invitee Phone Required",
             "type": "boolean"
+          },
+          "rsvp_invitee_type_options": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Rsvp Invitee Type Options"
           },
           "rsvp_multi_invitee_enabled": {
             "default": false,
@@ -6846,6 +7129,11 @@
           "rsvp_phone_required": {
             "default": false,
             "title": "Rsvp Phone Required",
+            "type": "boolean"
+          },
+          "rsvp_require_approval": {
+            "default": false,
+            "title": "Rsvp Require Approval",
             "type": "boolean"
           },
           "rsvp_token": {
@@ -6932,6 +7220,50 @@
       },
       "InviteSettingsUpdate": {
         "properties": {
+          "event_time_tbd": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Event Time Tbd"
+          },
+          "invite_add_to_calendar_enabled": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Invite Add To Calendar Enabled"
+          },
+          "invite_capacity_bar_enabled": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Invite Capacity Bar Enabled"
+          },
+          "invite_countdown_enabled": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Invite Countdown Enabled"
+          },
           "invite_cover_image": {
             "anyOf": [
               {
@@ -6968,6 +7300,17 @@
               }
             ],
             "title": "Invite Mode"
+          },
+          "invite_share_enabled": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Invite Share Enabled"
           },
           "invite_theme": {
             "anyOf": [
@@ -7055,6 +7398,17 @@
             ],
             "title": "Rsvp Collect Phone"
           },
+          "rsvp_confetti_enabled": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Rsvp Confetti Enabled"
+          },
           "rsvp_deadline": {
             "anyOf": [
               {
@@ -7089,6 +7443,34 @@
             ],
             "title": "Rsvp Enabled"
           },
+          "rsvp_invitee_age_options": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Rsvp Invitee Age Options"
+          },
+          "rsvp_invitee_contact_exempt_types": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Rsvp Invitee Contact Exempt Types"
+          },
           "rsvp_invitee_email_required": {
             "anyOf": [
               {
@@ -7110,6 +7492,20 @@
               }
             ],
             "title": "Rsvp Invitee Phone Required"
+          },
+          "rsvp_invitee_type_options": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Rsvp Invitee Type Options"
           },
           "rsvp_multi_invitee_enabled": {
             "anyOf": [
@@ -8137,6 +8533,33 @@
             "title": "Overdue",
             "type": "boolean"
           },
+          "planner_milestone_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Planner Milestone Id"
+          },
+          "planner_vendor_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Planner Vendor Id"
+          },
+          "priority": {
+            "default": "normal",
+            "title": "Priority",
+            "type": "string"
+          },
           "sort_order": {
             "default": 0,
             "title": "Sort Order",
@@ -8360,6 +8783,173 @@
         "title": "OutboxStatus",
         "type": "object"
       },
+      "PaidAttendee": {
+        "properties": {
+          "access_ticket_type_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Access Ticket Type Id"
+          },
+          "email": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Email"
+          },
+          "first_name": {
+            "maxLength": 120,
+            "minLength": 1,
+            "title": "First Name",
+            "type": "string"
+          },
+          "is_donation": {
+            "default": false,
+            "title": "Is Donation",
+            "type": "boolean"
+          },
+          "last_name": {
+            "default": "",
+            "maxLength": 120,
+            "title": "Last Name",
+            "type": "string"
+          },
+          "phone": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Phone"
+          },
+          "product_name": {
+            "maxLength": 120,
+            "title": "Product Name",
+            "type": "string"
+          }
+        },
+        "required": [
+          "first_name",
+          "product_name"
+        ],
+        "title": "PaidAttendee",
+        "type": "object"
+      },
+      "PaidOrderDelivery": {
+        "properties": {
+          "buyer_email": {
+            "title": "Buyer Email",
+            "type": "string"
+          },
+          "delivery_settings": {
+            "additionalProperties": true,
+            "title": "Delivery Settings",
+            "type": "object"
+          }
+        },
+        "required": [
+          "buyer_email"
+        ],
+        "title": "PaidOrderDelivery",
+        "type": "object"
+      },
+      "PaidOrderFulfillment": {
+        "properties": {
+          "attendees": {
+            "items": {
+              "$ref": "#/components/schemas/PaidAttendee"
+            },
+            "maxItems": 500,
+            "minItems": 1,
+            "title": "Attendees",
+            "type": "array"
+          },
+          "buyer_email": {
+            "title": "Buyer Email",
+            "type": "string"
+          },
+          "delivery_settings": {
+            "additionalProperties": true,
+            "title": "Delivery Settings",
+            "type": "object"
+          },
+          "event_id": {
+            "title": "Event Id",
+            "type": "string"
+          },
+          "order_id": {
+            "maxLength": 80,
+            "minLength": 1,
+            "title": "Order Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "order_id",
+          "event_id",
+          "buyer_email",
+          "attendees"
+        ],
+        "title": "PaidOrderFulfillment",
+        "type": "object"
+      },
+      "PaidTicketTransfer": {
+        "properties": {
+          "guest_id": {
+            "title": "Guest Id",
+            "type": "string"
+          },
+          "order_id": {
+            "title": "Order Id",
+            "type": "string"
+          },
+          "recipient_email": {
+            "title": "Recipient Email",
+            "type": "string"
+          },
+          "recipient_name": {
+            "maxLength": 200,
+            "minLength": 1,
+            "title": "Recipient Name",
+            "type": "string"
+          }
+        },
+        "required": [
+          "order_id",
+          "guest_id",
+          "recipient_name",
+          "recipient_email"
+        ],
+        "title": "PaidTicketTransfer",
+        "type": "object"
+      },
+      "PaidTicketVoid": {
+        "properties": {
+          "guest_ids": {
+            "items": {
+              "type": "string"
+            },
+            "maxItems": 500,
+            "title": "Guest Ids",
+            "type": "array"
+          }
+        },
+        "title": "PaidTicketVoid",
+        "type": "object"
+      },
       "PairRequest": {
         "properties": {
           "partner_email": {
@@ -8460,7 +9050,8 @@
           "kind": {
             "enum": [
               "tier",
-              "pack"
+              "pack",
+              "addon"
             ],
             "title": "Kind",
             "type": "string"
@@ -8494,6 +9085,18 @@
       },
       "PlatformSettingsOut": {
         "properties": {
+          "addon_promo_until": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Addon Promo Until"
+          },
           "support_chat_enabled": {
             "title": "Support Chat Enabled",
             "type": "boolean"
@@ -8507,14 +9110,35 @@
       },
       "PlatformSettingsUpdate": {
         "properties": {
-          "support_chat_enabled": {
-            "title": "Support Chat Enabled",
+          "addon_promo_until": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Addon Promo Until"
+          },
+          "clear_addon_promo": {
+            "default": false,
+            "title": "Clear Addon Promo",
             "type": "boolean"
+          },
+          "support_chat_enabled": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Support Chat Enabled"
           }
         },
-        "required": [
-          "support_chat_enabled"
-        ],
         "title": "PlatformSettingsUpdate",
         "type": "object"
       },
@@ -10378,6 +11002,17 @@
       },
       "RSVPInviteeSubmit": {
         "properties": {
+          "age_group": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Age Group"
+          },
           "email": {
             "anyOf": [
               {
@@ -11048,6 +11683,24 @@
       },
       "RegistryClaimCreate": {
         "properties": {
+          "action": {
+            "anyOf": [
+              {
+                "enum": [
+                  "reserved",
+                  "purchased",
+                  "contributed",
+                  "pledged",
+                  "used_external_registry"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Action"
+          },
           "amount_minor": {
             "anyOf": [
               {
@@ -11075,6 +11728,17 @@
             "title": "Claimer Name",
             "type": "string"
           },
+          "claimer_phone": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Claimer Phone"
+          },
           "message": {
             "anyOf": [
               {
@@ -11090,6 +11754,44 @@
             "default": 1,
             "title": "Quantity",
             "type": "integer"
+          },
+          "reference": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reference"
+          },
+          "relationship": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Relationship"
+          },
+          "thank_you_channel": {
+            "anyOf": [
+              {
+                "enum": [
+                  "email",
+                  "sms",
+                  "none"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Thank You Channel"
           }
         },
         "required": [
@@ -11100,6 +11802,11 @@
       },
       "RegistryClaimOut": {
         "properties": {
+          "action": {
+            "default": "reserved",
+            "title": "Action",
+            "type": "string"
+          },
           "amount_minor": {
             "anyOf": [
               {
@@ -11126,6 +11833,17 @@
             "title": "Claimer Name",
             "type": "string"
           },
+          "claimer_phone": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Claimer Phone"
+          },
           "created_at": {
             "anyOf": [
               {
@@ -11138,12 +11856,20 @@
             ],
             "title": "Created At"
           },
+          "currency": {
+            "title": "Currency",
+            "type": "string"
+          },
           "id": {
             "title": "Id",
             "type": "string"
           },
           "item_id": {
             "title": "Item Id",
+            "type": "string"
+          },
+          "item_kind": {
+            "title": "Item Kind",
             "type": "string"
           },
           "item_title": {
@@ -11164,12 +11890,52 @@
           "quantity": {
             "title": "Quantity",
             "type": "integer"
+          },
+          "reference": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reference"
+          },
+          "relationship": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Relationship"
+          },
+          "thank_you_channel": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Thank You Channel"
+          },
+          "thank_you_status": {
+            "default": "not_requested",
+            "title": "Thank You Status",
+            "type": "string"
           }
         },
         "required": [
           "id",
           "item_id",
           "item_title",
+          "item_kind",
+          "currency",
           "claimer_name",
           "quantity"
         ],
@@ -12685,6 +13451,11 @@
             "title": "Rules",
             "type": "string"
           },
+          "staff_only": {
+            "default": false,
+            "title": "Staff Only",
+            "type": "boolean"
+          },
           "visibility": {
             "default": "listed",
             "enum": [
@@ -13223,6 +13994,38 @@
             ],
             "title": "Notes"
           },
+          "planner_milestone_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Planner Milestone Id"
+          },
+          "planner_vendor_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Planner Vendor Id"
+          },
+          "priority": {
+            "default": "normal",
+            "enum": [
+              "low",
+              "normal",
+              "high"
+            ],
+            "title": "Priority",
+            "type": "string"
+          },
           "sort_order": {
             "anyOf": [
               {
@@ -13321,6 +14124,33 @@
             "default": false,
             "title": "Overdue",
             "type": "boolean"
+          },
+          "planner_milestone_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Planner Milestone Id"
+          },
+          "planner_vendor_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Planner Vendor Id"
+          },
+          "priority": {
+            "default": "normal",
+            "title": "Priority",
+            "type": "string"
           },
           "sort_order": {
             "default": 0,
@@ -13485,6 +14315,43 @@
           "to"
         ],
         "title": "TemplateTestSendRequest",
+        "type": "object"
+      },
+      "TicketSalesReportDelivery": {
+        "properties": {
+          "csv_content": {
+            "maxLength": 5000000,
+            "title": "Csv Content",
+            "type": "string"
+          },
+          "filename": {
+            "default": "ticket-sales-report.csv",
+            "maxLength": 200,
+            "title": "Filename",
+            "type": "string"
+          },
+          "html_body": {
+            "maxLength": 100000,
+            "title": "Html Body",
+            "type": "string"
+          },
+          "recipient": {
+            "title": "Recipient",
+            "type": "string"
+          },
+          "subject": {
+            "maxLength": 300,
+            "title": "Subject",
+            "type": "string"
+          }
+        },
+        "required": [
+          "recipient",
+          "subject",
+          "html_body",
+          "csv_content"
+        ],
+        "title": "TicketSalesReportDelivery",
         "type": "object"
       },
       "TicketTypeCreate": {
@@ -14193,6 +15060,45 @@
         "title": "VendorPageOut",
         "type": "object"
       },
+      "WaitlistOfferDelivery": {
+        "properties": {
+          "email": {
+            "title": "Email",
+            "type": "string"
+          },
+          "expires_at": {
+            "format": "date-time",
+            "title": "Expires At",
+            "type": "string"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "offer_url": {
+            "title": "Offer Url",
+            "type": "string"
+          },
+          "reminder": {
+            "default": false,
+            "title": "Reminder",
+            "type": "boolean"
+          },
+          "ticket_name": {
+            "title": "Ticket Name",
+            "type": "string"
+          }
+        },
+        "required": [
+          "email",
+          "name",
+          "ticket_name",
+          "offer_url",
+          "expires_at"
+        ],
+        "title": "WaitlistOfferDelivery",
+        "type": "object"
+      },
       "WalkInRegister": {
         "properties": {
           "email": {
@@ -14700,6 +15606,72 @@
         ]
       }
     },
+    "/api/admin/addons/policy": {
+      "get": {
+        "operationId": "addon_policy_api_admin_addons_policy_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Addon Policy",
+        "tags": [
+          "admin"
+        ]
+      },
+      "put": {
+        "operationId": "set_addon_policy_api_admin_addons_policy_put",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AddonOverrides"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Set Addon Policy",
+        "tags": [
+          "admin"
+        ]
+      }
+    },
     "/api/admin/affiliate-stores": {
       "get": {
         "operationId": "list_affiliate_stores_api_admin_affiliate_stores_get",
@@ -15145,6 +16117,104 @@
           }
         ],
         "summary": "Upsert Org Credit Rate",
+        "tags": [
+          "admin"
+        ]
+      }
+    },
+    "/api/admin/events/{event_id}/addon-overrides": {
+      "get": {
+        "operationId": "get_event_addon_overrides_api_admin_events__event_id__addon_overrides_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "event_id",
+            "required": true,
+            "schema": {
+              "title": "Event Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Get Event Addon Overrides",
+        "tags": [
+          "admin"
+        ]
+      },
+      "put": {
+        "operationId": "set_event_addon_overrides_api_admin_events__event_id__addon_overrides_put",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "event_id",
+            "required": true,
+            "schema": {
+              "title": "Event Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AddonOverrides"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Set Event Addon Overrides",
         "tags": [
           "admin"
         ]
@@ -15907,6 +16977,104 @@
         ]
       }
     },
+    "/api/admin/orgs/{org_id}/addon-overrides": {
+      "get": {
+        "operationId": "get_org_addon_overrides_api_admin_orgs__org_id__addon_overrides_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "org_id",
+            "required": true,
+            "schema": {
+              "title": "Org Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Get Org Addon Overrides",
+        "tags": [
+          "admin"
+        ]
+      },
+      "put": {
+        "operationId": "set_org_addon_overrides_api_admin_orgs__org_id__addon_overrides_put",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "org_id",
+            "required": true,
+            "schema": {
+              "title": "Org Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AddonOverrides"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Set Org Addon Overrides",
+        "tags": [
+          "admin"
+        ]
+      }
+    },
     "/api/admin/orgs/{org_id}/members/{user_id}": {
       "delete": {
         "description": "Remove a user from an org. Their account itself is untouched.",
@@ -16506,6 +17674,99 @@
         ]
       }
     },
+    "/api/auth/marketing-preferences": {
+      "get": {
+        "operationId": "get_marketing_preferences_api_auth_marketing_preferences_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Get Marketing Preferences",
+        "tags": [
+          "auth"
+        ]
+      },
+      "put": {
+        "operationId": "save_marketing_preferences_api_auth_marketing_preferences_put",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "additionalProperties": true,
+                "title": "Body",
+                "type": "object"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Save Marketing Preferences",
+        "tags": [
+          "auth"
+        ]
+      }
+    },
+    "/api/auth/marketing-token": {
+      "post": {
+        "description": "Mint identity-only access for the isolated Marketing service.\n\nMarketing owns staff grants and performs the final authorization check.\nReusing the internal service secret avoids introducing another operational\nsecret while the JWT audience prevents a planner token being replayed.",
+        "operationId": "marketing_token_api_auth_marketing_token_post",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Marketing Token",
+        "tags": [
+          "auth"
+        ]
+      }
+    },
     "/api/auth/me": {
       "get": {
         "operationId": "me_api_auth_me_get",
@@ -16527,6 +17788,98 @@
           }
         ],
         "summary": "Me",
+        "tags": [
+          "auth"
+        ]
+      }
+    },
+    "/api/auth/planner-token": {
+      "post": {
+        "description": "Mint a short-lived scoped token for the standalone planner-service \u2014\nsame token-exchange pattern as /festiome-token. The frontend calls this\nonce per planner session and then talks to planner-service directly.",
+        "operationId": "planner_token_api_auth_planner_token_post",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "event_id",
+            "required": true,
+            "schema": {
+              "title": "Event Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Planner Token",
+        "tags": [
+          "auth"
+        ]
+      }
+    },
+    "/api/auth/ticketing-token": {
+      "post": {
+        "description": "Mint a short-lived, event-scoped admin token for ticketing-service.",
+        "operationId": "ticketing_token_api_auth_ticketing_token_post",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "event_id",
+            "required": true,
+            "schema": {
+              "title": "Event Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Ticketing Token",
         "tags": [
           "auth"
         ]
@@ -16764,7 +18117,7 @@
     },
     "/api/billing/pricing": {
       "get": {
-        "description": "Public pricing catalogue for the marketing page (no auth).",
+        "description": "Public pricing catalogue for the marketing page. Auth is optional --\nbase tier/pack pricing is always public; add-on prices only reveal once\nthe viewer has a paid event (see _viewer_has_paid_event). The real\nenforcement is in /checkout (kind=\"addon\" requires event.is_paid), this\nis a display-only gate, not a security boundary.",
         "operationId": "public_pricing_api_billing_pricing_get",
         "parameters": [
           {
@@ -16798,6 +18151,11 @@
             "description": "Validation Error"
           }
         },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
         "summary": "Public Pricing",
         "tags": [
           "billing"
@@ -18134,6 +19492,64 @@
         "summary": "Render Flyer",
         "tags": [
           "design"
+        ]
+      }
+    },
+    "/api/events/{event_id}/duplicate": {
+      "post": {
+        "description": "Clone an event's configuration (RSVP settings, invite display, custom\nquestions, ticket types, menu, table groups, message-template overrides,\nbranding) into a brand-new event on the same org. Guests, RSVPs, scan\nhistory, orders, and billing state never carry over \u2014 this creates a\nreusable template, not a copy of the live event.",
+        "operationId": "duplicate_event_api_events__event_id__duplicate_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "event_id",
+            "required": true,
+            "schema": {
+              "title": "Event Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/EventDuplicateIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EventOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Duplicate Event",
+        "tags": [
+          "events"
         ]
       }
     },
@@ -27965,6 +29381,52 @@
         ]
       }
     },
+    "/api/events/{event_id}/tasks/assignees": {
+      "get": {
+        "description": "Small event-scoped directory for assignment pickers.\n\nUnlike the team administration endpoint this intentionally works for every\nevent member; it exposes only the id/name/email needed to assign work.",
+        "operationId": "list_task_assignees_api_events__event_id__tasks_assignees_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "event_id",
+            "required": true,
+            "schema": {
+              "title": "Event Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "List Task Assignees",
+        "tags": [
+          "tasks"
+        ]
+      }
+    },
     "/api/events/{event_id}/tasks/{task_id}": {
       "delete": {
         "operationId": "delete_task_api_events__event_id__tasks__task_id__delete",
@@ -30152,6 +31614,541 @@
           }
         },
         "summary": "Health"
+      }
+    },
+    "/api/internal/ticketing/anonymize/{event_id}/{order_id}": {
+      "post": {
+        "description": "Erase attendee PII while retaining the minimum financial/order linkage.",
+        "operationId": "anonymize_paid_order_api_internal_ticketing_anonymize__event_id___order_id__post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "event_id",
+            "required": true,
+            "schema": {
+              "title": "Event Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "order_id",
+            "required": true,
+            "schema": {
+              "title": "Order Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-internal-token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Internal-Token"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Anonymize Paid Order",
+        "tags": [
+          "ticketing-internal"
+        ]
+      }
+    },
+    "/api/internal/ticketing/delivery/{event_id}/{order_id}": {
+      "post": {
+        "operationId": "resend_paid_order_api_internal_ticketing_delivery__event_id___order_id__post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "event_id",
+            "required": true,
+            "schema": {
+              "title": "Event Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "order_id",
+            "required": true,
+            "schema": {
+              "title": "Order Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-internal-token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Internal-Token"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PaidOrderDelivery"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Resend Paid Order",
+        "tags": [
+          "ticketing-internal"
+        ]
+      }
+    },
+    "/api/internal/ticketing/events": {
+      "post": {
+        "operationId": "ticketed_events_api_internal_ticketing_events_post",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "x-internal-token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Internal-Token"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/EventLookup"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Ticketed Events",
+        "tags": [
+          "ticketing-internal"
+        ]
+      }
+    },
+    "/api/internal/ticketing/fulfill": {
+      "post": {
+        "operationId": "fulfill_paid_order_api_internal_ticketing_fulfill_post",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "x-internal-token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Internal-Token"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PaidOrderFulfillment"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Fulfill Paid Order",
+        "tags": [
+          "ticketing-internal"
+        ]
+      }
+    },
+    "/api/internal/ticketing/sales-report/{event_id}": {
+      "post": {
+        "operationId": "deliver_ticket_sales_report_api_internal_ticketing_sales_report__event_id__post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "event_id",
+            "required": true,
+            "schema": {
+              "title": "Event Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-internal-token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Internal-Token"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TicketSalesReportDelivery"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Deliver Ticket Sales Report",
+        "tags": [
+          "ticketing-internal"
+        ]
+      }
+    },
+    "/api/internal/ticketing/transfer/{event_id}": {
+      "post": {
+        "operationId": "transfer_paid_ticket_api_internal_ticketing_transfer__event_id__post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "event_id",
+            "required": true,
+            "schema": {
+              "title": "Event Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-internal-token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Internal-Token"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PaidTicketTransfer"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Transfer Paid Ticket",
+        "tags": [
+          "ticketing-internal"
+        ]
+      }
+    },
+    "/api/internal/ticketing/void/{event_id}/{order_id}": {
+      "post": {
+        "operationId": "void_paid_order_api_internal_ticketing_void__event_id___order_id__post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "event_id",
+            "required": true,
+            "schema": {
+              "title": "Event Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "order_id",
+            "required": true,
+            "schema": {
+              "title": "Order Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-internal-token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Internal-Token"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "anyOf": [
+                  {
+                    "$ref": "#/components/schemas/PaidTicketVoid"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "title": "Body"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Void Paid Order",
+        "tags": [
+          "ticketing-internal"
+        ]
+      }
+    },
+    "/api/internal/ticketing/waitlist-offer/{event_id}": {
+      "post": {
+        "operationId": "deliver_waitlist_offer_api_internal_ticketing_waitlist_offer__event_id__post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "event_id",
+            "required": true,
+            "schema": {
+              "title": "Event Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-internal-token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Internal-Token"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/WaitlistOfferDelivery"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Deliver Waitlist Offer",
+        "tags": [
+          "ticketing-internal"
+        ]
       }
     },
     "/api/invite/link/{rsvp_token}": {

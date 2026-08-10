@@ -335,7 +335,7 @@ const HELP_GUIDES = [
   ],
   [
     "Send an SMS safely",
-    "A lead needs a phone number and explicit SMS consent. Festio uses Bird and automatically adds opt-out language. If either requirement is missing, the send is blocked.",
+    "A lead needs a phone number and explicit SMS consent. Festio uses SignalHouse and automatically adds opt-out language. If either requirement is missing, the send is blocked.",
   ],
   [
     "Measure results",
@@ -2219,6 +2219,275 @@ class MarketingErrorBoundary extends Component {
   }
 }
 
+// ---------------------------------------------------------------------------
+// SequenceStudio — step-by-step email sequence editor with live preview
+// ---------------------------------------------------------------------------
+const STAGES = ['registered','event_created','activated','qualified','demo_booked','paid','customer','inactive','lost']
+const DEFAULT_CTA_URL = 'https://festio.events/admin-redesign'
+
+function emailPreviewHtml({ firstName = 'there', subject, body, cta, ctaUrl }) {
+  const esc = (s) => String(s || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;')
+  return `<!doctype html><html><body style="margin:0;background:#f5f1e9;font-family:Arial,sans-serif;color:#172033">
+<table role="presentation" width="100%" cellspacing="0" cellpadding="0"><tr><td align="center" style="padding:36px 16px">
+<table role="presentation" width="600" style="max-width:600px;background:#fff;border-radius:18px;overflow:hidden">
+<tr><td style="padding:20px 32px;background:#075b5d;color:#fff;font-size:20px;font-weight:700">Festio</td></tr>
+<tr><td style="padding:36px 32px">
+<p style="font-size:17px;margin:0 0 12px">Hi ${esc(firstName)},</p>
+<h1 style="font-size:26px;line-height:1.25;margin:0 0 16px">${esc(subject || '(no subject)')}</h1>
+<p style="font-size:16px;line-height:1.7;color:#526070;margin:0 0 24px">${esc(body || 'Your Festio event is ready for the next step.')}</p>
+<p style="margin:0 0 28px"><a href="${esc(ctaUrl || DEFAULT_CTA_URL)}" style="display:inline-block;background:#a85d32;color:#fff;text-decoration:none;padding:13px 20px;border-radius:10px;font-weight:700">${esc(cta || 'Open Festio')}</a></p>
+<p style="font-size:13px;color:#78828f">You received this because you registered for Festio. <a href="#" style="color:#526070">Unsubscribe</a>.</p>
+</td></tr></table></td></tr></table></body></html>`
+}
+
+function StepRow({ step, index, total, onChange, onRemove, onMoveUp, onMoveDown, onPreview, previewLoading }) {
+  const [open, setOpen] = React.useState(index === 0)
+  const delayLabel = index === 0 ? 'Send immediately' : `+${step.delay_hours}h after previous`
+  return (
+    <div className="mk-step-row">
+      <div className="mk-step-header" onClick={() => setOpen(v => !v)}>
+        <span className="mk-step-num">{String(index + 1).padStart(2, '0')}</span>
+        <div className="mk-step-summary">
+          <strong>{step.subject || <em style={{color:'#aaa'}}>No subject</em>}</strong>
+          <small>{delayLabel}</small>
+        </div>
+        <div className="mk-step-tools">
+          {index > 0 && <button type="button" title="Move up" onClick={e=>{e.stopPropagation();onMoveUp()}}>↑</button>}
+          {index < total - 1 && <button type="button" title="Move down" onClick={e=>{e.stopPropagation();onMoveDown()}}>↓</button>}
+          <button type="button" title="Remove step" className="mk-step-remove" onClick={e=>{e.stopPropagation();onRemove()}}>✕</button>
+        </div>
+        <span className="mk-step-chevron">{open ? '▲' : '▼'}</span>
+      </div>
+      {open && (
+        <div className="mk-step-body">
+          <div className="mk-step-fields">
+            {index > 0 && (
+              <label>
+                Delay after previous step (hours)
+                <input type="number" min="1" value={step.delay_hours || ''} onChange={e => onChange({ ...step, delay_hours: parseInt(e.target.value) || 0 })} />
+              </label>
+            )}
+            <label>
+              Subject line
+              <input type="text" placeholder="e.g. Welcome to Festio" value={step.subject || ''} onChange={e => onChange({ ...step, subject: e.target.value })} />
+            </label>
+            <label>
+              Message body
+              <textarea rows={4} placeholder="Write the email body here…" value={step.body || ''} onChange={e => onChange({ ...step, body: e.target.value })} />
+            </label>
+            <div className="mk-step-cta-row">
+              <label>
+                CTA button label
+                <input type="text" placeholder="Open Festio" value={step.cta || ''} onChange={e => onChange({ ...step, cta: e.target.value })} />
+              </label>
+              <label>
+                CTA destination URL
+                <input type="url" placeholder={DEFAULT_CTA_URL} value={step.cta_url || ''} onChange={e => onChange({ ...step, cta_url: e.target.value })} />
+              </label>
+            </div>
+          </div>
+          <div className="mk-step-preview-wrap">
+            <div className="mk-step-preview-label">Live preview</div>
+            <iframe
+              className="mk-email-preview"
+              srcDoc={emailPreviewHtml({ subject: step.subject, body: step.body, cta: step.cta, ctaUrl: step.cta_url })}
+              sandbox="allow-same-origin"
+              title={`Step ${index + 1} preview`}
+            />
+            <button type="button" className="mk-preview-send-btn" disabled={previewLoading} onClick={() => onPreview(index)}>
+              {previewLoading ? 'Sending…' : '✉ Send preview to my email'}
+            </button>
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
+
+function SequenceStudio() {
+  const [rows, setRows] = React.useState([])
+  const [editing, setEditing] = React.useState(null)
+  const [notice, setNotice] = React.useState('')
+  const [previewLoading, setPreviewLoading] = React.useState(false)
+
+  const load = () => api.marketingModule('sequences').then(setRows)
+  React.useEffect(() => { load() }, [])
+
+  async function createSequence() {
+    const name = prompt('Sequence name (e.g. "New registration welcome")')
+    if (!name) return
+    await api.marketingCreateRecord('sequences', {
+      name, status: 'draft',
+      payload: { stage: 'registered', cadence_days: 2, steps: [
+        { delay_hours: 0, subject: '', body: '', cta: 'Open Festio', cta_url: DEFAULT_CTA_URL }
+      ]}
+    })
+    load()
+  }
+
+  function openEditor(row) {
+    setEditing({ ...row, payload: { ...row.payload, steps: [...(row.payload?.steps || [])] } })
+    setNotice('')
+  }
+
+  function updateStep(i, newStep) {
+    setEditing(v => {
+      const steps = [...v.payload.steps]
+      steps[i] = newStep
+      return { ...v, payload: { ...v.payload, steps } }
+    })
+  }
+
+  function removeStep(i) {
+    setEditing(v => {
+      const steps = v.payload.steps.filter((_, idx) => idx !== i)
+      return { ...v, payload: { ...v.payload, steps } }
+    })
+  }
+
+  function moveStep(i, dir) {
+    setEditing(v => {
+      const steps = [...v.payload.steps]
+      const j = i + dir
+      if (j < 0 || j >= steps.length) return v;
+      [steps[i], steps[j]] = [steps[j], steps[i]]
+      return { ...v, payload: { ...v.payload, steps } }
+    })
+  }
+
+  function addStep() {
+    setEditing(v => {
+      const steps = [...(v.payload.steps || [])]
+      steps.push({ delay_hours: 24, subject: '', body: '', cta: 'Open Festio', cta_url: DEFAULT_CTA_URL })
+      return { ...v, payload: { ...v.payload, steps } }
+    })
+  }
+
+  async function save() {
+    await api.marketingUpdateRecord('sequences', editing.id, {
+      name: editing.name,
+      status: editing.status,
+      owner_email: editing.owner_email,
+      payload: editing.payload,
+    })
+    setEditing(null)
+    load()
+  }
+
+  async function sendPreview(stepIndex) {
+    if (!editing?.id) return
+    setPreviewLoading(true)
+    try {
+      await save()
+      const result = await api.marketingPreviewSequence(editing.id, stepIndex)
+      setNotice(`Step ${stepIndex + 1} preview ${result.status} via ${result.provider}`)
+    } catch (e) {
+      setNotice(`Preview failed: ${e.message}`)
+    } finally {
+      setPreviewLoading(false)
+    }
+  }
+
+  const stepsCount = (r) => (r.payload?.steps || []).length
+
+  return (
+    <div className="mk-workspace mk-module">
+      <SectionIntro
+        eyebrow="FOLLOW-UPS"
+        title="Automated email sequences"
+        copy="Build step-by-step journeys that send when a lead reaches a lifecycle stage. Preview any step before going live."
+        count={rows.length}
+        action={createSequence}
+      />
+      {notice && <div className="mk-notice">{notice}</div>}
+      <div className="mk-module-grid">
+        {rows.map((r, index) => (
+          <article className="mk-module-card" key={r.id}>
+            <div className="mk-card-index">{String(index + 1).padStart(2, '0')}</div>
+            <div>
+              <span className="mk-card-type">sequence</span>
+              <h3>{r.name}</h3>
+              <p>{r.payload?.stage || 'any stage'} · {stepsCount(r)} step{stepsCount(r) !== 1 ? 's' : ''} · cadence {r.payload?.cadence_days || 3}d</p>
+            </div>
+            <span className={`mk-status ${r.status}`}>{r.status}</span>
+            <div className="mk-card-preview">
+              {(r.payload?.steps || []).slice(0, 3).map((s, i) => (
+                <span key={i}><small>Step {i + 1}</small><b>{s.subject || '(no subject)'}</b></span>
+              ))}
+            </div>
+            <div className="mk-card-actions">
+              <button onClick={() => openEditor(r)}>Open studio →</button>
+              <button className="text-xs text-red-600" onClick={async () => { if (confirm('Delete this sequence?')) { await api.marketingDeleteRecord('sequences', r.id); load() } }}>Delete</button>
+            </div>
+          </article>
+        ))}
+      </div>
+      {!rows.length && (
+        <div className="mk-module-empty">
+          <i>↗</i>
+          <h3>No sequences yet</h3>
+          <p>Create a sequence to start sending automated onboarding emails.</p>
+          <button onClick={createSequence}>Create the first one</button>
+        </div>
+      )}
+
+      {editing && (
+        <div className="mk-modal-backdrop">
+          <div className="mk-sequence-studio">
+            <div className="mk-seq-studio-header">
+              <div>
+                <span className="mk-drawer-eyebrow">SEQUENCE STUDIO</span>
+                <input className="mk-seq-name-input" value={editing.name} onChange={e => setEditing(v => ({ ...v, name: e.target.value }))} />
+              </div>
+              <div className="mk-seq-studio-controls">
+                <label>
+                  Stage
+                  <select value={editing.payload.stage || 'registered'} onChange={e => setEditing(v => ({ ...v, payload: { ...v.payload, stage: e.target.value } }))}>
+                    {STAGES.map(s => <option key={s} value={s}>{s.replace(/_/g, ' ')}</option>)}
+                  </select>
+                </label>
+                <label>
+                  Status
+                  <select value={editing.status} onChange={e => setEditing(v => ({ ...v, status: e.target.value }))}>
+                    {['draft', 'active', 'paused', 'complete'].map(s => <option key={s}>{s}</option>)}
+                  </select>
+                </label>
+                <label>
+                  Fallback cadence (days)
+                  <input type="number" min="1" value={editing.payload.cadence_days || 3} onChange={e => setEditing(v => ({ ...v, payload: { ...v.payload, cadence_days: parseInt(e.target.value) || 3 } }))} />
+                </label>
+              </div>
+            </div>
+
+            <div className="mk-seq-steps">
+              {(editing.payload.steps || []).map((step, i) => (
+                <StepRow
+                  key={i}
+                  step={step}
+                  index={i}
+                  total={editing.payload.steps.length}
+                  onChange={s => updateStep(i, s)}
+                  onRemove={() => removeStep(i)}
+                  onMoveUp={() => moveStep(i, -1)}
+                  onMoveDown={() => moveStep(i, 1)}
+                  onPreview={sendPreview}
+                  previewLoading={previewLoading}
+                />
+              ))}
+              <button type="button" className="mk-add-step-btn" onClick={addStep}>+ Add step</button>
+            </div>
+
+            <div className="mk-modal-actions">
+              <button type="button" onClick={() => setEditing(null)}>Cancel</button>
+              <button type="button" className="mk-btn-primary" onClick={save}>Save sequence</button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
+
 export default function MarketingPage() {
   const [pageParams, setPageParams] = useSearchParams();
   const [tab, setTabState] = useState(pageParams.get("tab") || "dashboard"),
@@ -2347,6 +2616,8 @@ export default function MarketingPage() {
               <Preferences />
             ) : tab === "help" ? (
               <MarketingHelp />
+            ) : tab === "sequences" ? (
+              <SequenceStudio />
             ) : (
               <Module module={tab} />
             )}

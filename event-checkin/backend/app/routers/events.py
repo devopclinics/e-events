@@ -257,7 +257,9 @@ async def create_event(
         has_paid_event = await db.scalar(
             select(Event.id).where(Event.org_id == org_id, Event.is_paid.is_(True)).limit(1)
         )
-        if not has_paid_event:
+        org = await db.get(Organization, org_id)
+        has_pending_trial = bool(org and (org.trial_tier or org.trial_credits))
+        if not has_paid_event and not has_pending_trial:
             existing_event_count = await db.scalar(
                 select(func.count()).select_from(Event).where(Event.org_id == org_id)
             )

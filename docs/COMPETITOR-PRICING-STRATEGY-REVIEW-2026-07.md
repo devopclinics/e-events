@@ -354,3 +354,30 @@ Owner suggestions for next step:
 - Finance: validate unit economics and floor margins.
 - Sales: confirm objection handling and discount policy.
 - Marketing: align positioning and pricing page narrative.
+
+## 11) Reconciliation with Pricing Restructure Plan v1 (2026-08-02)
+This section connects this review's recommendations (§5–§9) to the concrete packaging that was actually drafted afterward in `team-docs/index.html` ("Festio Pricing Restructure — Plan v1"), whose own §7 open decisions were locked on 2026-08-02. Purpose: confirm the recommendations below didn't just stay theoretical.
+
+| This review's recommendation | Status in Pricing Restructure Plan v1 | Note |
+|---|---|---|
+| Three-lane model (self-serve / growth / enterprise) | Adopted, expanded to five paid tiers | §1: Free, Starter ($49), Standard ($99), Pro ($199), Scale ($399), Enterprise (custom) — same self-serve → enterprise shape, more granular ladder. |
+| Publish what's included vs. add-on clearly | Adopted | §1 "Includes" column per tier + separate §4 Add-ons table + §4 "Service charges" subsection (Deliveries/Gift/FestioMe/Guest Communication now flat per-event fees, no longer bundled). |
+| Explicit, auditable messaging economics | Adopted, gone further than "explicit" | §2/§2c define a cost-ratio-to-SMS-anchor formula per channel, a worked mixed-channel example, and a customer-facing abstraction (§2b: plain "credits," no channel/rate ever shown) — resolves this review's "understandable in under 60 seconds" checklist item (§8) via the credits abstraction rather than raw rate transparency. |
+| Enterprise lane anchored by published reference ranges, not pure black-box quoting | Partially adopted | Enterprise stays custom-quote (§1), consistent with Cvent/Bizzabo/Splash all being quote-led per §3.1 of this review. Staffing (§5 of the restructure doc) *is* published at fixed day-rates (60% margin, no quote needed) — a step further than "anchored ranges," actual fixed pricing for services. |
+| Canonical pricing calculator (§10.1 of this review) | **Not yet built** | Nothing in the restructure doc plans this; still an open gap. Closest existing piece is the pre-send cost estimate (§2b/§7 of the restructure doc — dollar amount + recipient count before a broadcast), which only covers messaging, not a full attendee/add-on TCO calculator. |
+| Transparent add-on policy page, not "contact sales" only (§10.3 of this review) | **Blocked on §4b build** | Add-on prices are now fully published in the restructure doc's §4, but §4b's code audit found *no add-on is actually wired to real billing* — every paid feature is still a flat `plan_tier`-rank gate (`FEATURE_MIN_PLAN` in `entitlements.py`). Publishing the page is safe today; selling individual add-ons independent of tier upgrade is not, until §4b ships. |
+| Quarterly competitor re-benchmark cadence (§10.4 of this review) | Not yet scheduled | See changelog below — this is the first entry in that cadence. |
+
+### 11.1 Competitor pricing changelog
+Track re-benchmark snapshots here each quarter, per §10.4's recommended cadence.
+
+| Date captured | Change vs. prior snapshot | Action taken |
+|---|---|---|
+| 2026-07-24 | Initial snapshot (§3.1 above). | Baseline for all competitor comparisons in this doc. |
+| 2026-08-02 | No re-fetch performed this pass — this entry only reconciles internal pricing decisions against the 2026-07-24 snapshot; competitor pages were not re-crawled. | Next re-benchmark due **2026-10-24** (90 days out, aligned with §7's 90-Day Pricing Validation Plan decision gate). |
+
+### 11.2 Still open from this review
+- Canonical pricing calculator (attendees + channel mix + add-ons → total/effective cost) — not started.
+- Add-on billing architecture (`kind = "addon"` / `EventAddon` table / entitlement OR-check) — sized in the restructure doc's §4b and §8 as "Large," not started.
+- First scheduled competitor re-benchmark — due 2026-10-24.
+

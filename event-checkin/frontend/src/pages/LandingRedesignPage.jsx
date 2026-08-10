@@ -304,8 +304,75 @@ export default function LandingRedesignPage() {
         </div>
       </div>
 
+      {/* ── Platform capability ticker ─────────────────────────────────── */}
+      <div className="lr-ticker-wrap" aria-label="Platform capabilities">
+        <div className="lr-ticker-track">
+          {[
+            { n: '01', title: 'Create & manage events', icon: '📅' },
+            { n: '02', title: 'Invite & RSVP', icon: '✉️' },
+            { n: '03', title: 'Guest management', icon: '👥' },
+            { n: '04', title: 'Seating & access', icon: '🪑' },
+            { n: '05', title: 'Messaging & FestioHub', icon: '💬' },
+            { n: '06', title: 'Check-in & live ops', icon: '🎟️' },
+            { n: '07', title: 'Meals, gifts & logistics', icon: '🍽️' },
+            { n: '08', title: 'Event calendars', icon: '📆' },
+            { n: '09', title: 'Design studio', icon: '🎨' },
+            { n: '10', title: 'Results & analytics', icon: '📊' },
+          /* duplicate for seamless loop */
+            { n: '01', title: 'Create & manage events', icon: '📅' },
+            { n: '02', title: 'Invite & RSVP', icon: '✉️' },
+            { n: '03', title: 'Guest management', icon: '👥' },
+            { n: '04', title: 'Seating & access', icon: '🪑' },
+            { n: '05', title: 'Messaging & FestioHub', icon: '💬' },
+            { n: '06', title: 'Check-in & live ops', icon: '🎟️' },
+            { n: '07', title: 'Meals, gifts & logistics', icon: '🍽️' },
+            { n: '08', title: 'Event calendars', icon: '📆' },
+            { n: '09', title: 'Design studio', icon: '🎨' },
+            { n: '10', title: 'Results & analytics', icon: '📊' },
+          ].map((item, i) => (
+            <span className="lr-ticker-item" key={i}>
+              <span className="lr-ticker-num">{item.n}</span>
+              <span className="lr-ticker-icon">{item.icon}</span>
+              <span className="lr-ticker-label">{item.title}</span>
+            </span>
+          ))}
+        </div>
+      </div>
+
       <section className="lr-events">
         <div className="lr-shell"><div className="lr-events-head"><div><span className="lr-eyebrow"><i /> Festio Tickets</span><h2>Find your next event.</h2><p>Official event pages, secure tickets and unique QR admission.</p></div><Link className="lr-btn ghost" to="/tickets">Find events →</Link></div>{publicEvents.length>0&&<div className="lr-events-grid">{publicEvents.map(event=><Link className="lr-event-card" to={`/tickets/e/${event.id}`} key={event.id}><div style={event.cover_image?{backgroundImage:`linear-gradient(180deg,transparent,rgba(9,29,27,.75)),url("${event.cover_image}")`}:{}}><span>{event.timing==='current'?'Happening now':'Upcoming'}</span></div><section><small>{new Date(event.event_date).toLocaleDateString(undefined,{month:'short',day:'numeric',year:'numeric'})}</small><h3>{event.name}</h3><p>{event.venue_name||event.venue_address||'Details from the organizer'}</p></section></Link>)}</div>}</div>
+      </section>
+
+      {/* ── Platform overview grid ────────────────────────────────────── */}
+      <section className="lr-section lr-platform-overview" id="platform">
+        <div className="lr-shell">
+          <div className="lr-section-head center">
+            <span className="lr-eyebrow" style={{ justifyContent: 'center' }}><i /> Platform overview</span>
+            <h2>One platform for the full guest journey.</h2>
+            <p className="lr-lead-sm">Plan, invite, seat, message, admit, serve, and track every guest — without stitching together five separate tools.</p>
+          </div>
+          <div className="lr-overview-grid">
+            {[
+              { n: '01', title: 'Create & Manage Events', body: 'Create events, manage lifecycle, configure details, and control feature toggles.', tags: ['Multi-event workspace', 'Draft, Active, Ended, Reopen', 'Venue and host details'] },
+              { n: '02', title: 'Invite & RSVP', body: 'Public/private RSVP pages, personal links, deadlines, limits, approvals, and questions.', tags: ['Open or closed RSVP', 'Capacity controls', 'Approval workflows'] },
+              { n: '03', title: 'Guest Management', body: 'Manual entry, CSV/XLSX upload, sync, duplicate handling, tags, profiles, and status.', tags: ['Import templates', 'Guest profiles', 'RSVP answers'] },
+              { n: '04', title: 'Seating & Access', body: 'Tables, seats, sections, auto-assignment, partner pairing, zones, gates, and VIP rules.', tags: ['Table groups', 'Zone permissions', 'Capacity rules'] },
+              { n: '05', title: 'Messaging & FestioHub', body: 'Templates, email/SMS/WhatsApp/MMS, broadcasts, announcements, guest chat, and inbox.', tags: ['Multi-channel sends', 'Broadcast & schedule', 'Guest hub'] },
+              { n: '06', title: 'Check-In & Live Ops', body: 'QR scanning, search, walk-ins, self check-in, denied reasons, and live occupancy.', tags: ['Instant QR scan', 'Self check-in kiosk', 'Live dashboard'] },
+              { n: '07', title: 'Meals, Gifts & Logistics', body: 'Menu selections, kitchen views, table totals, registry, shipments, vendors, and exports.', tags: ['Kitchen display', 'Gift registry', 'Delivery tracking'] },
+              { n: '08', title: 'Design Studio', body: 'Brand your event pass, guest hub, flyer, and invite page with real-time preview and publish.', tags: ['10+ hub themes', 'Custom flyers', 'One-click publish'] },
+            ].map((f) => (
+              <article className="lr-overview-card" key={f.n}>
+                <span className="lr-overview-num">{f.n}</span>
+                <h3>{f.title}</h3>
+                <p>{f.body}</p>
+                <div className="lr-overview-tags">
+                  {f.tags.map((t) => <span key={t}>{t}</span>)}
+                </div>
+              </article>
+            ))}
+          </div>
+        </div>
       </section>
 
       <section className="lr-section lr-business-features">

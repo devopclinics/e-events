@@ -1364,6 +1364,7 @@ export const api = {
   marketingRunAutomation: (dryRun=false) => marketingReq('POST', `/automation/run?dry_run=${dryRun}`, {}),
   marketingExecuteCampaign: (id, dryRun=false) => marketingReq('POST', `/campaigns/${id}/execute?dry_run=${dryRun}`, {}),
   marketingPreviewCampaign: (id) => marketingReq('POST', `/campaigns/${id}/preview`, {}),
+  marketingPreviewSequence: (id, step=0) => marketingReq('POST', `/sequences/${id}/preview?step=${step}`, {}),
   marketingBulkLeads: (body) => marketingReq('POST', '/leads/bulk', body),
   marketingSavedViews: () => marketingReq('GET', '/saved-views'),
   marketingCreateSavedView: (body) => marketingReq('POST', '/saved-views', body),

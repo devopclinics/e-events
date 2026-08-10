@@ -205,16 +205,16 @@ if "owner_scoped" not in access_columns:
 
 def seed_defaults() -> None:
     defaults = [
-        ("sequences", "New registration welcome", "active", {"stage": "registered", "cadence_days": 2, "steps": [
-            {"delay_hours": 0, "subject": "Welcome to Festio", "cta": "Create your first event"},
-            {"delay_hours": 24, "subject": "Let us help with your event setup", "cta": "Continue setup"},
-            {"delay_hours": 72, "subject": "What kind of event are you planning?", "cta": "Reply to Festio"},
-            {"delay_hours": 168, "subject": "Would a 15-minute setup call help?", "cta": "Book a demo"},
+        ("sequences", "New registration welcome", "active", {"stage": "registered", "cadence_days": 2, "cta_url": "https://festio.events/setup-redesign", "steps": [
+            {"delay_hours": 0,   "subject": "Welcome to Festio", "body": "You've just joined thousands of event organizers who use Festio to manage invitations, check-ins, and the moments that make events memorable.\n\nYour account is ready — let's create your first event.", "cta": "Create your first event", "cta_url": "https://festio.events/setup-redesign"},
+            {"delay_hours": 24,  "subject": "Let us help with your event setup", "body": "Setting up an event on Festio takes about 10 minutes. Add your event details, upload a cover image, and you'll have a shareable event page ready to go.\n\nWe're here if you get stuck.", "cta": "Continue setup", "cta_url": "https://festio.events/setup-redesign"},
+            {"delay_hours": 72,  "subject": "What kind of event are you planning?", "body": "Whether it's a wedding, a corporate conference, or a birthday celebration — Festio adapts to how you work.\n\nThousands of organizers trust us for everything from a 20-person dinner to a 5,000-person festival. We'd love to hear about yours.", "cta": "Tell us about your event", "cta_url": "mailto:hello@festio.events?subject=My%20event%20type"},
+            {"delay_hours": 168, "subject": "Would a 15-minute setup call help?", "body": "Sometimes a quick conversation makes all the difference. One of our team will walk through your event with you, answer any questions, and make sure Festio is set up exactly the way you need it.\n\nNo commitment — just a helpful call.", "cta": "Book a free call", "cta_url": "https://festio.events/admin-redesign"},
         ]}),
-        ("sequences", "Event created onboarding", "active", {"stage": "event_created", "cadence_days": 3, "steps": [
-            {"delay_hours": 0, "subject": "Your Festio event is ready for setup", "cta": "Add guests"},
-            {"delay_hours": 48, "subject": "Invite, sell tickets, or start planning", "cta": "Open your event"},
-            {"delay_hours": 120, "subject": "See what your event still needs", "cta": "Review setup"},
+        ("sequences", "Event created onboarding", "active", {"stage": "event_created", "cadence_days": 3, "cta_url": "https://festio.events/admin-redesign", "steps": [
+            {"delay_hours": 0,   "subject": "Your Festio event is ready for setup", "body": "Great news — your event is live on Festio.\n\nThe next step is adding your guest list and customizing your invitation. It only takes a few minutes and your guests will receive a beautiful, branded invite.", "cta": "Add guests", "cta_url": "https://festio.events/admin-redesign"},
+            {"delay_hours": 48,  "subject": "Invite, sell tickets, or start planning", "body": "Your event dashboard is ready for everything — import your guest list, set up ticket types, configure check-in, and manage meals or seating.\n\nMost organizers get fully set up in under an hour.", "cta": "Open your event", "cta_url": "https://festio.events/admin-redesign"},
+            {"delay_hours": 120, "subject": "See what your event still needs", "body": "A quick checklist can save a lot of day-of stress.\n\nHead to your event setup to make sure invitations are sent, RSVPs are tracking, and your check-in team is ready. Need help? We're one message away.", "cta": "Review your setup", "cta_url": "https://festio.events/admin-redesign"},
         ]}),
         ("segments", "Registered without an event", "active", {"rules": [{"field": "stage", "operator": "equals", "value": "registered"}]}),
         ("segments", "Paid event promotion audience", "active", {"rules": [{"field": "stage", "operator": "in", "value": ["paid", "customer"]}]}),
@@ -241,7 +241,37 @@ def seed_defaults() -> None:
 seed_defaults()
 
 
-class Identity(BaseModel):
+# Live migration: backfill body copy on existing seeded sequences that have steps
+# with no body text (deployed before 2026-08-10 copy update).
+_STEP_BODY_BACKFILL = {
+    "New registration welcome": [
+        "You've just joined thousands of event organizers who use Festio to manage invitations, check-ins, and the moments that make events memorable.\n\nYour account is ready — let's create your first event.",
+        "Setting up an event on Festio takes about 10 minutes. Add your event details, upload a cover image, and you'll have a shareable event page ready to go.\n\nWe're here if you get stuck.",
+        "Whether it's a wedding, a corporate conference, or a birthday celebration — Festio adapts to how you work.\n\nThousands of organizers trust us for everything from a 20-person dinner to a 5,000-person festival. We'd love to hear about yours.",
+        "Sometimes a quick conversation makes all the difference. One of our team will walk through your event with you, answer any questions, and make sure Festio is set up exactly the way you need it.\n\nNo commitment — just a helpful call.",
+    ],
+    "Event created onboarding": [
+        "Great news — your event is live on Festio.\n\nThe next step is adding your guest list and customizing your invitation. It only takes a few minutes and your guests will receive a beautiful, branded invite.",
+        "Your event dashboard is ready for everything — import your guest list, set up ticket types, configure check-in, and manage meals or seating.\n\nMost organizers get fully set up in under an hour.",
+        "A quick checklist can save a lot of day-of stress.\n\nHead to your event setup to make sure invitations are sent, RSVPs are tracking, and your check-in team is ready. Need help? We're one message away.",
+    ],
+}
+with SessionLocal() as _db:
+    for seq_name, bodies in _STEP_BODY_BACKFILL.items():
+        _seq = _db.scalar(select(ModuleRecord).where(ModuleRecord.name == seq_name, ModuleRecord.module == "sequences"))
+        if _seq:
+            steps = list(_seq.payload.get("steps") or [])
+            changed = False
+            for i, body_text in enumerate(bodies):
+                if i < len(steps) and not steps[i].get("body"):
+                    steps[i] = {**steps[i], "body": body_text}
+                    changed = True
+            if changed:
+                _seq.payload = {**_seq.payload, "steps": steps}
+    _db.commit()
+
+
+
     subject: str
     email: str
     name: str
@@ -495,7 +525,7 @@ def ingest(body: dict, identity: Identity = Depends(decode_identity), db: Sessio
         if isinstance(registered_at, str):
             try: registered_at = datetime.fromisoformat(registered_at.replace("Z", "+00:00"))
             except ValueError: registered_at = None
-        row = Lead(email=email, festio_user_id=subject or None, name=body.get("name") or "", source=body.get("source") or "website", stage=body.get("stage") or "registered", owner_email=os.getenv("MARKETING_DEFAULT_OWNER", "muritala@festio.events"), registered_at=registered_at or now(), last_active_at=now(), next_follow_up_at=now() + timedelta(hours=1))
+        row = Lead(email=email, festio_user_id=subject or None, name=body.get("name") or "", source=body.get("source") or "website", stage=body.get("stage") or "registered", owner_email=os.getenv("MARKETING_DEFAULT_OWNER", "muritala@festio.events"), registered_at=registered_at or now(), last_active_at=now(), next_follow_up_at=now() + timedelta(hours=1), consent_email=True)
         db.add(row); db.flush(); db.add(Activity(lead_id=row.id, kind="registered", summary="Festio account registered", actor="festio"))
     else:
         row.last_active_at = now()
@@ -792,7 +822,20 @@ def preview_campaign(campaign_id: str, identity: Identity = Depends(require_mana
     return delivery
 
 
-@app.post("/api/marketing/leads/bulk")
+@app.post("/api/marketing/sequences/{sequence_id}/preview")
+def preview_sequence(sequence_id: str, step: int = Query(0, ge=0), identity: Identity = Depends(require_manager), db: Session = Depends(db_session)):
+    """Send a test email for a specific sequence step to the requesting manager."""
+    seq = db.get(ModuleRecord, sequence_id)
+    if not seq or seq.module != "sequences": raise HTTPException(404, "Sequence not found")
+    steps = sequence_steps(seq)
+    if not steps: raise HTTPException(400, "Add at least one step with a subject before previewing")
+    preview_lead = Lead(id=uid(), email=identity.email, name=identity.name or "Festio teammate")
+    delivery = send_follow_up(preview_lead, seq, min(step, len(steps) - 1))
+    audit(db, identity, "sequence.previewed", "sequences", seq.id, step=step, provider=delivery.get("provider")); db.commit()
+    return delivery
+
+
+
 def bulk_leads(body: dict, identity: Identity = Depends(require_manager), db: Session = Depends(db_session)):
     ids = list(dict.fromkeys(body.get("ids") or []))[:500]
     action, value = body.get("action"), body.get("value")

@@ -128,6 +128,20 @@ def event_allows(event: Event, feature: str) -> bool:
     addon = FEATURE_ADDON.get(feature)
     if not addon:
         return True
+    # Events created before the add-on purchase ledger was introduced have a
+    # NULL value. Preserve the feature set included in their original pass;
+    # an explicit empty list opts into the new add-on model with no purchases.
+    if event.is_paid and event.purchased_addons is None:
+        legacy_enabled = {
+            "floor_plan": "seating_enabled",
+            "consent_forms": "experience_enabled",
+            "scanner_confirmation": "experience_enabled",
+            "souvenir_confirmation": "experience_enabled",
+        }.get(feature, feature)
+        if bool(getattr(event, legacy_enabled, False)):
+            return True
+        minimum_plan = FEATURE_MIN_PLAN.get(feature)
+        return minimum_plan is not None and event_plan_rank(event) >= plan_rank(minimum_plan)
     return event_allows_addon(event, addon)
 
 
@@ -169,6 +183,13 @@ def assert_feature_allowed(event: Event, feature: str) -> None:
     if event_allows(event, feature):
         return
     addon = FEATURE_ADDON.get(feature)
+    if addon and event.purchased_addons is None:
+        required = min_plan_for_feature(feature) or "tier50"
+        raise HTTPException(
+            402,
+            f"{feature.replace('_', ' ').title()} requires at least the {plan_label(required)}.",
+            headers={"X-Required-Plan": required},
+        )
     if addon:
         raise HTTPException(
             402,

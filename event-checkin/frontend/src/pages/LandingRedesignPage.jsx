@@ -39,19 +39,12 @@ function MoonIcon() {
   )
 }
 
-const PASS_QR_ON = [
-  true, true, false, true, false, false, true, true, true, true, false, false, true, false, true, true,
-  false, false, true, false, false, true, false, false, true, false, false, true, true, false, true, false,
-  false, true, false, true, true, false, false, true, false, false, true, false, false, true, false, false,
-  true, false, false, true, true, false, true, false, false, true, true, true, true, false, false, true,
-  false, true, true,
-]
-
 const HERO_SLIDES = [
   {
-    eyebrow: 'Create with confidence', title: <>Every detail, <em>perfectly in place.</em></>,
-    body: 'Create events, shape the schedule, coordinate the team, and keep the plan moving from first idea to event day.',
-    primary: 'Create your event free', primaryTo: '/register?redesign=1', secondary: 'See how it works', secondaryTo: '#journey',
+    eyebrow: 'Plan with confidence', title: <>Every detail, <em>perfectly in place.</em></>,
+    body: 'Build timelines, manage vendors, track budgets, and keep your whole team moving together—from first idea to event day.',
+    primary: 'Start planning free', primaryTo: '/register?redesign=1', secondary: 'Explore planning', secondaryTo: '/planner-redesign',
+    visual: ['01-create-manage-events.png', 780, 158, 587, 441],
     url: 'festio.events/admin', label: 'Founders Weekend', sublabel: 'Convention · Day 2',
     metrics: [['Events', '12'], ['Tasks done', '28 / 42'], ['Days to go', '14']],
     rows: [['Run of show', 'On track'], ['Vendor arrivals', '9 confirmed'], ['Team assignments', '6 active']],
@@ -60,14 +53,16 @@ const HERO_SLIDES = [
     eyebrow: 'Invite with style', title: <>Every invitation <em>feels personal.</em></>,
     body: 'Create beautiful invitations, collect RSVPs, manage plus-ones, and give every guest one private link for their whole journey.',
     primary: 'Create your invitation', primaryTo: '/register?redesign=1', secondary: 'See RSVP tools', secondaryTo: '/guests-redesign?tab=invite',
+    visual: ['02-invite-rsvp.png', 734, 161, 696, 431],
     url: 'festio.events/invitations', label: 'Invitation campaign', sublabel: 'Founders Weekend',
     metrics: [['Delivered', '824'], ['Opened', '731'], ['RSVP yes', '618']],
     rows: [['Awaiting reply', '106'], ['Additional guests', '84'], ['Approval queue', '12']],
   },
   {
     eyebrow: 'Know every guest', title: <>Every guest, <em>beautifully organized.</em></>,
-    body: 'Keep guests, households, RSVP answers, invitation status, seating groups, and admission state together in one operational record.',
+    body: 'Keep profiles, households, preferences, notes, and attendance history together—so your team always knows who needs what.',
     primary: 'Manage your guests', primaryTo: '/guests-redesign', secondary: 'Explore guest tools', secondaryTo: '#platform',
+    visual: ['03-guest-management.png', 734, 161, 696, 441],
     url: 'festio.events/guests', label: 'Guest management', sublabel: '842 guest records',
     metrics: [['Guests', '842'], ['Invited', '824'], ['Admitted', '618']],
     rows: [['Households', '286'], ['Table groups', '18'], ['Pending approval', '12']],
@@ -76,6 +71,7 @@ const HERO_SLIDES = [
     eyebrow: 'Seat with clarity', title: <>Every seat, <em>thoughtfully placed.</em></>,
     body: 'Design tables, assign guests, manage sections, and control venue access with a live view your whole team can trust.',
     primary: 'Build your floor plan', primaryTo: '/floorplan-redesign', secondary: 'Explore access tools', secondaryTo: '/checkin-redesign',
+    visual: ['04-seating-access.png', 724, 160, 706, 448],
     url: 'festio.events/floor-plan', label: 'Main Hall', sublabel: 'Live seating & access',
     metrics: [['Tables', '42'], ['Assigned', '618'], ['Sections', '4']],
     rows: [['Main Hall', '312 / 400'], ['Exhibit Floor', '204 / 260'], ['VIP Lounge', '48 / 60']],
@@ -84,6 +80,7 @@ const HERO_SLIDES = [
     eyebrow: 'Stay close', title: <>Every message reaches <em>the right person.</em></>,
     body: 'Send invitations, updates, reminders, and private FestioHub conversations across email, SMS, and WhatsApp.',
     primary: 'Start a conversation', primaryTo: '/communications-redesign', secondary: 'Explore messaging', secondaryTo: '#community',
+    visual: ['05-messaging-festiohub.png', 639, 159, 805, 452],
     url: 'festio.events/communications', label: 'Communications', sublabel: 'Email · SMS · WhatsApp',
     metrics: [['Sent', '24,680'], ['Delivered', '23,842'], ['Opened', '12,985']],
     rows: [['Arrival reminder', 'Delivered'], ['Speaker update', 'Sending'], ['Volunteer channel', '12 new']],
@@ -92,6 +89,7 @@ const HERO_SLIDES = [
     eyebrow: 'Run it live', title: <>Every arrival <em>feels effortless.</em></>,
     body: 'Scan passes in seconds, monitor occupancy live, resolve exceptions, and keep every entrance moving with confidence.',
     primary: 'Open live operations', primaryTo: '/checkin-redesign', secondary: 'See check-in tools', secondaryTo: '#ops', pass: true,
+    visual: ['06-checkin-live-operations.png', 586, 164, 857, 447],
     url: 'festio.events/live-ops', label: 'Convention · Day 2', sublabel: 'Live operations',
     metrics: [['Registered', '842'], ['Checked in', '618'], ['Occupancy', '73%']],
     rows: [['Main Hall', '312 in'], ['Exhibit Floor', '204 in'], ['Exceptions', '3 open']],
@@ -100,6 +98,7 @@ const HERO_SLIDES = [
     eyebrow: 'Sell with confidence', title: <>Every ticket, <em>from sale to scan.</em></>,
     body: 'Create ticket types, accept secure payments, deliver passes, manage refunds, and follow every order through check-in.',
     primary: 'Start selling tickets', primaryTo: '/tickets', secondary: 'Explore ticketing', secondaryTo: '#business', pass: true,
+    visual: ['01-ticketing.png', 665, 153, 828, 469],
     url: 'festio.events/ticketing', label: 'Ticketing overview', sublabel: 'Sales update live',
     metrics: [['Gross collected', '$124.8K'], ['Tickets sold', '2,341'], ['Refunds', '$3,912']],
     rows: [['Organizer proceeds', '$98,642'], ['General admission', '1,254 sold'], ['Recent orders', '48 today']],
@@ -108,6 +107,7 @@ const HERO_SLIDES = [
     eyebrow: 'Plan every detail', title: <>Every moving part, <em>under control.</em></>,
     body: 'Manage budgets, vendors, milestones, timelines, run sheets, documents, quotes, and change orders in one shared workspace.',
     primary: 'Open your planner', primaryTo: '/planner-redesign', secondary: 'Explore planning', secondaryTo: '#business',
+    visual: ['02-planner.png', 658, 142, 742, 510],
     url: 'festio.events/planner', label: 'Event planner', sublabel: 'Budget · vendors · run sheet',
     metrics: [['Allocated', '$98,642'], ['Actual', '$88,214'], ['Used', '89.4%']],
     rows: [['Final guest count', 'In 2 days'], ['Vendor quotes', '3 received'], ['Run sheet', '12 items']],
@@ -116,6 +116,7 @@ const HERO_SLIDES = [
     eyebrow: 'Serve without guesswork', title: <>Every order, ready <em>at the right moment.</em></>,
     body: 'Collect guest meal choices, organize preparation by item and table, and mark each course served from a live kitchen queue.',
     primary: 'Open menu orders', primaryTo: '/kitchen-redesign', secondary: 'See kitchen tools', secondaryTo: '#platform',
+    visual: ['03-menu-orders.png', 657, 142, 741, 510],
     url: 'festio.events/menu-orders', label: 'Kitchen order queue', sublabel: 'By order · tally · table',
     metrics: [['Orders', '618'], ['Ready', '126'], ['Served', '442']],
     rows: [['Starters outstanding', '14'], ['Mains outstanding', '11'], ['Desserts outstanding', '9']],
@@ -124,6 +125,7 @@ const HERO_SLIDES = [
     eyebrow: 'Delight every guest', title: <>Every gift, <em>packed and delivered.</em></>,
     body: 'Organize gift bags and merchandise, build vendor-ready packing lists, and track fulfillment from preparation to delivery.',
     primary: 'Plan guest gifts', primaryTo: '/addons-redesign?tab=logistics', secondary: 'Explore fulfillment', secondaryTo: '#platform',
+    visual: ['04-gifts-fulfillment.png', 595, 151, 804, 508],
     url: 'festio.events/logistics', label: 'Gifts & fulfillment', sublabel: 'Packing and shipments',
     metrics: [['Batches', '12'], ['Packed', '214'], ['Delivered', '168']],
     rows: [['Welcome gift bags', 'Ready to pack'], ['Speaker kits', 'Packed'], ['VIP merchandise', 'Shipped']],
@@ -132,6 +134,7 @@ const HERO_SLIDES = [
     eyebrow: 'Celebrate together', title: <>Every gift, remembered <em>with gratitude.</em></>,
     body: 'Create gift items, cash funds, and external registry links—then track reservations, purchases, pledges, and thank-you status.',
     primary: 'Create your gift list', primaryTo: '/addons-redesign?tab=registry', secondary: 'Explore registry', secondaryTo: '#platform',
+    visual: ['05-gift-registry.png', 595, 140, 817, 523],
     url: 'festio.events/gift-list', label: 'Gift list', sublabel: 'Record-only registry',
     metrics: [['Items', '12'], ['Claimed', '7'], ['Cash raised', '$2,050']],
     rows: [['Honeymoon fund', '41% funded'], ['Gift activity', '18 records'], ['Thank-you sent', '6']],
@@ -139,35 +142,18 @@ const HERO_SLIDES = [
 ]
 
 function HeroProductPanel({ slide }) {
+  const [file, x, y, width, height] = slide.visual
+  const cropStyle = {
+    '--crop-x': x,
+    '--crop-y': y,
+    '--crop-width': width,
+    '--crop-height': height,
+  }
   return (
-    <div className="lr-stage" key={slide.url}>
-      <div className="lr-panel">
-        <div className="lr-panel-bar">
-          <span className="lr-panel-dot" /><span className="lr-panel-dot" /><span className="lr-panel-dot" />
-          <span className="lr-panel-url">{slide.url}</span>
-        </div>
-        <div className="lr-panel-body">
-          <div className="lr-panel-head">
-            <div><small>{slide.sublabel}</small><strong>{slide.label}</strong></div>
-            <span className="lr-pill live"><i /> Live</span>
-          </div>
-          <div className="lr-kpis">
-            {slide.metrics.map(([label, value]) => <div className="lr-kpi" key={label}><span>{label}</span><strong>{value}</strong></div>)}
-          </div>
-          {slide.rows.map(([label, value]) => (
-            <div className="lr-zone-row" key={label}><span className="lr-z-name"><i /> {label}</span><span className="lr-z-count">{value}</span></div>
-          ))}
-          <div className="lr-bars">
-            {[38, 52, 44, 66, 60, 78, 70, 90, 84, 100].map((height, index) => <i key={index} style={{ height: `${height}%` }} />)}
-          </div>
-        </div>
+    <div className="lr-stage" key={file}>
+      <div className="lr-product-crop" style={cropStyle}>
+        <img src={`/hero-mockups/${file}`} alt={`${slide.eyebrow} product interface`} />
       </div>
-      {slide.pass && <div className="lr-pass-float">
-        <div className="lr-pf-top"><span className="lr-pf-brand">Festio Pass</span><span className="lr-pf-menu">••••</span></div>
-        <div className="lr-pf-name">Amara Solaru</div><div className="lr-pf-sub">Invited Guest · Table 14</div>
-        <div className="lr-pf-qr">{PASS_QR_ON.map((on, index) => <i key={index} className={on ? '' : 'off'} />)}</div>
-        <div className="lr-pf-meta"><span>PASS<b>FST-2841</b></span><span className="lr-pf-seat">SEAT<b>14C</b></span></div>
-      </div>}
     </div>
   )
 }

@@ -25,6 +25,28 @@ const STAGES = [
   "inactive",
   "lost",
 ];
+
+function useTick(intervalMs = 30000) {
+  const [now, setNow] = useState(() => new Date());
+  useEffect(() => {
+    const id = setInterval(() => setNow(new Date()), intervalMs);
+    return () => clearInterval(id);
+  }, [intervalMs]);
+  return now;
+}
+
+function formatCountdown(target, now) {
+  if (!target) return null;
+  const diff = new Date(target).getTime() - now.getTime();
+  if (diff <= 0) return "Due now";
+  const minutes = Math.round(diff / 60000);
+  if (minutes < 60) return `in ${minutes}m`;
+  const hours = Math.floor(minutes / 60);
+  if (hours < 24) return `in ${hours}h ${minutes % 60}m`;
+  const days = Math.floor(hours / 24);
+  return `in ${days}d ${hours % 24}h`;
+}
+
 const MODULE_META = {
   segments: [
     "Audience intelligence",
@@ -908,6 +930,7 @@ function Leads() {
     [bulkEdit, setBulkEdit] = useState(null),
     [views, setViews] = useState([]),
     [notice, setNotice] = useState("");
+  const now = useTick();
   const query = () =>
     Object.entries(filters)
       .filter(([, v]) => v !== "")
@@ -1254,8 +1277,16 @@ function Leads() {
                       >
                         {r.automation.complete
                           ? "Sequence complete"
-                          : `Step ${r.automation.step}/${r.automation.total_steps}`}
+                          : `Ongoing · Step ${r.automation.step}/${r.automation.total_steps}`}
                         <small>{r.automation.sequence_name}</small>
+                        {!r.automation.complete && (
+                          <small className="mk-automation-next">
+                            Next: step {r.automation.step + 1}
+                            {formatCountdown(r.next_follow_up_at, now)
+                              ? ` — ${formatCountdown(r.next_follow_up_at, now)}`
+                              : ""}
+                          </small>
+                        )}
                       </span>
                     ) : (
                       <span className="mk-automation-pill none">Not enrolled</span>
@@ -1292,7 +1323,7 @@ function Leads() {
                     <b>
                       {selected.automation.complete
                         ? "Complete"
-                        : `Step ${selected.automation.step}/${selected.automation.total_steps}`}
+                        : `Ongoing · Step ${selected.automation.step}/${selected.automation.total_steps}`}
                     </b>
                   </div>
                   <div className="mk-automation-status-track">
@@ -1306,10 +1337,16 @@ function Leads() {
                     {selected.automation.last_touch_at
                       ? `Last touch: ${selected.automation.last_touch_status} · ${new Date(selected.automation.last_touch_at).toLocaleString()}`
                       : "No touches sent yet"}
-                    {selected.next_follow_up_at && !selected.automation.complete
-                      ? ` · Next: ${new Date(selected.next_follow_up_at).toLocaleString()}`
-                      : ""}
                   </p>
+                  {!selected.automation.complete && (
+                    <p>
+                      Next: step {selected.automation.step + 1} of{" "}
+                      {selected.automation.total_steps}
+                      {selected.next_follow_up_at
+                        ? ` — ${formatCountdown(selected.next_follow_up_at, now)} (${new Date(selected.next_follow_up_at).toLocaleString()})`
+                        : ""}
+                    </p>
+                  )}
                 </>
               ) : (
                 <p>Not enrolled in an active sequence for this stage.</p>
@@ -2678,6 +2715,7 @@ export default function MarketingPage() {
     [message, setMessage] = useState(""),
     [automationQueue, setAutomationQueue] = useState(null),
     [automationRunning, setAutomationRunning] = useState(false);
+  const now = useTick();
   useEffect(() => {
     api
       .marketingMe()
@@ -2845,7 +2883,11 @@ export default function MarketingPage() {
                             ? `Step ${lead.automation.step + 1} of ${lead.automation.total_steps} — ${lead.automation.sequence_name}`
                             : '—'}
                         </td>
-                        <td style={{padding:'7px 8px',color:'#94a3b8',fontSize:'0.78rem'}}>{lead.next_follow_up_at ? new Date(lead.next_follow_up_at).toLocaleString() : '—'}</td>
+                        <td style={{padding:'7px 8px',color:'#94a3b8',fontSize:'0.78rem'}}>
+                          {lead.next_follow_up_at
+                            ? `${formatCountdown(lead.next_follow_up_at, now)} · ${new Date(lead.next_follow_up_at).toLocaleString()}`
+                            : '—'}
+                        </td>
                       </tr>
                     ))}
                   </tbody>

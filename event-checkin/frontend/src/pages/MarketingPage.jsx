@@ -901,8 +901,16 @@ function Leads() {
   }
   async function scheduleNow() {
     try {
-      await api.marketingBulkLeads({ ids: checked, action: "schedule", value: "now" });
-      setNotice(`${checked.length} lead${checked.length !== 1 ? "s" : ""} queued — go to Dashboard and click Run automation`);
+      const result = await api.marketingBulkLeads({ ids: checked, action: "schedule", value: "now" });
+      const noConsent = result.no_consent || 0;
+      const eligible = checked.length - noConsent;
+      if (noConsent > 0 && eligible === 0) {
+        setNotice(`${noConsent} lead${noConsent !== 1 ? "s" : ""} not queued — no email consent on file, so automation can't reach ${noConsent !== 1 ? "them" : "this lead"}`);
+      } else if (noConsent > 0) {
+        setNotice(`${eligible} of ${checked.length} leads queued (${noConsent} skipped — no email consent) — go to Dashboard and click Run automation`);
+      } else {
+        setNotice(`${checked.length} lead${checked.length !== 1 ? "s" : ""} queued — go to Dashboard and click Run automation`);
+      }
       setChecked([]);
       load();
     } catch (error) {

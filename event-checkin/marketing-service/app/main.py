@@ -877,7 +877,10 @@ def bulk_leads(body: dict, identity: Identity = Depends(require_manager), db: Se
         else: raise HTTPException(400, "Unsupported bulk action")
         db.add(Activity(lead_id=row.id, kind="bulk_updated", summary=f"Bulk {action}", actor=identity.email, data={"value": value}))
     audit(db, identity, f"leads.bulk_{action}", "lead", data_count=len(rows), value=value); db.commit()
-    return {"updated": len(rows)}
+    result = {"updated": len(rows)}
+    if action == "schedule":
+        result["no_consent"] = sum(1 for row in rows if not row.consent_email or row.unsubscribed)
+    return result
 
 
 @app.get("/api/marketing/saved-views")

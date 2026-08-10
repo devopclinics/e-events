@@ -2222,7 +2222,6 @@ class MarketingErrorBoundary extends Component {
 // ---------------------------------------------------------------------------
 // SequenceStudio — step-by-step email sequence editor with live preview
 // ---------------------------------------------------------------------------
-const STAGES = ['registered','event_created','activated','qualified','demo_booked','paid','customer','inactive','lost']
 const DEFAULT_CTA_URL = 'https://festio.events/admin-redesign'
 
 function emailPreviewHtml({ firstName = 'there', subject, body, cta, ctaUrl }) {

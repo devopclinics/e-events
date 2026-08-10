@@ -271,7 +271,7 @@ with SessionLocal() as _db:
     _db.commit()
 
 
-
+class Identity(BaseModel):
     subject: str
     email: str
     name: str

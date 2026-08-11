@@ -1362,7 +1362,7 @@ export const api = {
   marketingCreateRecord: (module, body) => marketingReq('POST', `/modules/${module}`, body),
   marketingUpdateRecord: (module, id, body) => marketingReq('PATCH', `/modules/${module}/${id}`, body),
   marketingDeleteRecord: (module, id) => marketingReq('DELETE', `/modules/${module}/${id}`),
-  marketingRunAutomation: (dryRun=false) => marketingReq('POST', `/automation/run?dry_run=${dryRun}`, {}),
+  marketingRunAutomation: (dryRun=false, leadId=null) => marketingReq('POST', `/automation/run?dry_run=${dryRun}${leadId ? `&lead_id=${encodeURIComponent(leadId)}` : ''}`, {}),
   marketingExecuteCampaign: (id, dryRun=false) => marketingReq('POST', `/campaigns/${id}/execute?dry_run=${dryRun}`, {}),
   marketingPreviewCampaign: (id) => marketingReq('POST', `/campaigns/${id}/preview`, {}),
   marketingPreviewSequence: (id, step=0) => marketingReq('POST', `/sequences/${id}/preview?step=${step}`, {}),

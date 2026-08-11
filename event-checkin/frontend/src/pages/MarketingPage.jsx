@@ -1024,6 +1024,24 @@ function Leads() {
       setNotice(error.message);
     }
   }
+  async function sendLeadNow(lead) {
+    try {
+      const bulk = await api.marketingBulkLeads({ ids: [lead.id], action: "schedule", value: "now" });
+      if (bulk.no_consent) {
+        setNotice(`${lead.name || lead.email} has no email consent on file — automation can't reach them`);
+        return;
+      }
+      const result = await api.marketingRunAutomation(false, lead.id);
+      setNotice(
+        result.queued > 0
+          ? `Sent next step to ${lead.name || lead.email}`
+          : `Nothing sent to ${lead.name || lead.email} — no active sequence matches their stage`,
+      );
+      load();
+    } catch (error) {
+      setNotice(error.message);
+    }
+  }
   async function saveView() {
     const name = `View ${views.length + 1}`;
     try {
@@ -1123,9 +1141,10 @@ function Leads() {
           <option value="false">Not opted in</option>
         </select>
         <button onClick={applyFilters}>Apply</button>
-        <button
-          onClick={() => {
-            const next = viewMode === "table" ? "kanban" : "table";
+        <select
+          value={viewMode}
+          onChange={(e) => {
+            const next = e.target.value;
             setViewMode(next);
             setSearchParams({
               ...Object.fromEntries(searchParams),
@@ -1133,8 +1152,10 @@ function Leads() {
             });
           }}
         >
-          {viewMode === "table" ? "Kanban view" : "Table view"}
-        </button>
+          <option value="table">Table view</option>
+          <option value="kanban">Stage board</option>
+          <option value="automation">Automation board</option>
+        </select>
         <button onClick={saveView}>Save view</button>
         <select
           onChange={(e) => {
@@ -1223,6 +1244,62 @@ function Leads() {
                 ))}
             </section>
           ))}
+        </div>
+      ) : viewMode === "automation" ? (
+        <div className="mk-kanban mk-automation-board">
+          {(() => {
+            const maxSteps = Math.max(0, ...rows.map((r) => r.automation?.total_steps || 0));
+            const columns = [
+              { key: "none", label: "Not enrolled" },
+              ...Array.from({ length: maxSteps }, (_, i) => ({ key: i, label: `Step ${i + 1}` })),
+              { key: "complete", label: "Complete" },
+            ];
+            const bucketOf = (lead) => {
+              if (!lead.automation) return "none";
+              if (lead.automation.complete) return "complete";
+              return lead.automation.step;
+            };
+            return columns.map((col) => (
+              <section key={col.key}>
+                <header>
+                  <b>{col.label}</b>
+                  <span>{rows.filter((lead) => bucketOf(lead) === col.key).length}</span>
+                </header>
+                {rows
+                  .filter((lead) => bucketOf(lead) === col.key)
+                  .map((lead) => (
+                    <article key={lead.id} className="mk-automation-card">
+                      <div onClick={() => open(lead)}>
+                        <b>{lead.name || lead.email}</b>
+                        <small>
+                          {lead.automation
+                            ? lead.automation.sequence_name
+                            : "No active sequence matches this lead's stage"}
+                        </small>
+                        {lead.automation && !lead.automation.complete && (
+                          <span className="mk-automation-next">
+                            {lead.next_follow_up_at
+                              ? `Next: ${formatCountdown(lead.next_follow_up_at, now)}`
+                              : "Not scheduled"}
+                          </span>
+                        )}
+                      </div>
+                      {lead.automation && !lead.automation.complete && (
+                        <button
+                          type="button"
+                          onClick={(event) => {
+                            event.stopPropagation();
+                            sendLeadNow(lead);
+                          }}
+                        >
+                          Send now
+                        </button>
+                      )}
+                    </article>
+                  ))}
+              </section>
+            ));
+          })()}
         </div>
       ) : (
         <div className="mk-table-shell">

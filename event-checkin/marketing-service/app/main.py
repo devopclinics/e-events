@@ -1208,10 +1208,15 @@ def ingest_delivery(body:dict, identity:Identity=Depends(decode_identity), db:Se
 
 
 @app.post("/api/marketing/automation/run")
-def run_automation(dry_run: bool = Query(False), identity: Identity = Depends(require_manager), db: Session = Depends(db_session)):
-    """Enroll due leads and queue consent-safe follow-ups from active sequences."""
+def run_automation(dry_run: bool = Query(False), lead_id: str | None = Query(None), identity: Identity = Depends(require_manager), db: Session = Depends(db_session)):
+    """Enroll due leads and queue consent-safe follow-ups from active sequences.
+    lead_id scopes this to a single lead (used by the per-card "send now" trigger)
+    instead of every due lead platform-wide — without it, clicking one card could
+    also fire real sends to unrelated leads that happened to already be due."""
     sequences = db.scalars(select(ModuleRecord).where(ModuleRecord.module == "sequences", ModuleRecord.status == "active")).all()
     lead_stmt = select(Lead).where(Lead.unsubscribed.is_(False), Lead.next_follow_up_at <= now())
+    if lead_id:
+        lead_stmt = lead_stmt.where(Lead.id == lead_id)
     # MARKETING_SKIP_CONSENT_CHECK must never be set outside local/staging envs — it lets
     # automation email leads without consent_email, which is a CAN-SPAM/GDPR violation in prod.
     if not os.getenv("MARKETING_SKIP_CONSENT_CHECK"):

@@ -225,6 +225,7 @@ async def update_line(event_id: str, sid: str, gid: str, data: GuestShipmentUpda
                       db: AsyncSession = Depends(get_db),
                       _: User = Depends(require_paid_event_admin)):
     ev = await _logi_event(event_id, db)
+    messaging.set_event_context(ev.id)
     shipment = await _get_shipment(event_id, sid, db)
     line = await db.scalar(
         select(GuestShipment).where(GuestShipment.shipment_id == sid, GuestShipment.guest_id == gid)

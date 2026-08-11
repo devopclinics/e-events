@@ -17,6 +17,7 @@ in routers iterates enabled channels per event and dispatches in parallel.
 import asyncio
 import logging
 import re
+from contextvars import ContextVar
 from datetime import datetime
 
 import httpx
@@ -30,6 +31,20 @@ logger = logging.getLogger(__name__)
 
 _BIRD_BASE = "https://api.bird.com"
 _SMS_FOOTER = "Reply HELP for help, STOP to opt out. Message and data rates may apply."
+
+# One-off per-event SMS provider override (see sms_override_* in app/config.py).
+# Set once per request/background-task chain by set_event_context() in whichever
+# router loaded the event, read by _send_sms() at the bottom of every SMS path —
+# avoids threading event_id through every send_* function and call site for what
+# is meant to be a single event's temporary override.
+_event_context: ContextVar[str | None] = ContextVar("_event_context", default=None)
+
+
+def set_event_context(event_id: str | None) -> None:
+    """Mark the event whose SMS should use its own provider override, if configured.
+    Call once, early, in any router handler that may trigger this event's SMS —
+    BackgroundTasks scheduled afterward inherit the same context automatically."""
+    _event_context.set(event_id)
 
 # Any of these force SMS out of GSM-7 into UCS-2 encoding, which roughly
 # halves how much text fits per segment (~153 -> ~67 chars) — a single emoji
@@ -377,6 +392,41 @@ async def _clicksend_mms(phone: str, body: str, media_url: str) -> dict | None:
         return {"provider": "clicksend", "status": "failed"}
 
 
+async def _clicksend_sms(phone: str, body: str, *, username: str, api_key: str, from_number: str) -> dict | None:
+    """Plain SMS via ClickSend, using explicitly-passed credentials rather than
+    the platform's own settings.clicksend_* (those are the shared MMS provider —
+    this is only used for the per-event override, see _event_context above)."""
+    import base64
+    auth = base64.b64encode(f"{username}:{api_key}".encode()).decode()
+    payload = {
+        "messages": [{
+            "source": "python",
+            "from": from_number or None,
+            "to": phone,
+            "body": body or " ",
+        }],
+    }
+    try:
+        async with httpx.AsyncClient(timeout=20) as c:
+            r = await c.post("https://rest.clicksend.com/v3/sms/send",
+                             headers={"Authorization": f"Basic {auth}", "Content-Type": "application/json"},
+                             json=payload)
+            if r.status_code >= 400:
+                logger.warning("ClickSend SMS (event override) → HTTP %s: %s", r.status_code, r.text[:300])
+                return {"provider": "clicksend", "status": "failed"}
+            data = r.json() if r.content else {}
+            messages = data.get("data", {}).get("messages", []) if isinstance(data, dict) else []
+            first = messages[0] if messages else {}
+            return {
+                "provider": "clicksend",
+                "provider_message_id": first.get("message_id") or first.get("messageid") or first.get("id"),
+                "status": first.get("status") or data.get("response_code") or "queued",
+            }
+    except Exception:
+        logger.exception("ClickSend SMS (event override) request failed")
+        return {"provider": "clicksend", "status": "failed"}
+
+
 def _twilio_mms_sync(to_addr: str, body: str, media_url: str) -> dict | None:
     try:
         from twilio.rest import Client
@@ -641,6 +691,22 @@ async def _send_sms_xwireless(phone: str, body: str) -> dict | None:
 
 
 async def _send_sms(phone: str, body: str) -> dict | None:
+    # One-off per-event override takes precedence over everything else, including
+    # the Nigeria/xwireless overlay below — see _event_context above.
+    current_event_id = _event_context.get()
+    if (
+        current_event_id
+        and settings.sms_override_event_id
+        and current_event_id == settings.sms_override_event_id
+        and settings.sms_override_clicksend_api_key
+    ):
+        return await _clicksend_sms(
+            phone, body,
+            username=settings.sms_override_clicksend_username,
+            api_key=settings.sms_override_clicksend_api_key,
+            from_number=settings.sms_override_clicksend_from,
+        )
+
     # Nigeria overlay: +234 numbers always go through xwireless when configured.
     if _is_nigeria_number(phone) and settings.xwireless_api_key and settings.xwireless_client_id:
         return await _send_sms_xwireless(phone, body)

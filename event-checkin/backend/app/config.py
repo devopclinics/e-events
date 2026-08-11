@@ -134,6 +134,17 @@ class Settings(BaseSettings):
     clicksend_api_key: str = ""
     clicksend_from: str = ""
 
+    # One-off: route a single event's SMS through its own ClickSend account
+    # instead of the platform's shared provider. Deliberately separate from
+    # clicksend_* above (which is the platform's own MMS provider) — reusing
+    # those fields would silently reroute every other event's MMS through this
+    # one organizer's account too. Only takes effect when sms_override_event_id
+    # matches; remove once the event is over.
+    sms_override_event_id: str = ""
+    sms_override_clicksend_username: str = ""
+    sms_override_clicksend_api_key: str = ""
+    sms_override_clicksend_from: str = ""
+
     # ── Staging rollout flags — three-surface redesign. Default True since the
     # v2 behavior is already live on staging; set False to instantly fall back
     # to the pre-redesign response shape without a code revert/redeploy.

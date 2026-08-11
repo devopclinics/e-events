@@ -1019,6 +1019,8 @@ async def perform_admission(guest, event, background_tasks, db) -> ScanResult:
     """Admit a guest — seat assignment (incl. table-group rules), admitted flags,
     notifications, and SSE broadcast. Shared by QR scan and manual check-in.
     Caller must have already validated the event + access (see checkin_guard)."""
+    if event:
+        messaging.set_event_context(event.id)
     if guest.rsvp_status == "declined":
         return ScanResult(
             status="denied",

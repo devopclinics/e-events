@@ -235,6 +235,7 @@ async def test_send_template(event_id: str, key: str, data: TemplateTestSendRequ
     event = await db.get(Event, event_id)
     if not event:
         raise HTTPException(404, "Event not found")
+    messaging.set_event_context(event.id)
 
     if data.channel == "mms":
         # The MMS card needs a specific guest's QR, so it can't be test-sent in

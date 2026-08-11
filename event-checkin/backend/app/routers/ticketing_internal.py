@@ -82,6 +82,7 @@ def _pass_url(event: Event, guest: Guest) -> str:
 def _queue_ticket_delivery(background_tasks: BackgroundTasks, event: Event, order_id: str,
                            buyer_email: str, guests: list[Guest], delivery_settings: dict | None = None,
                            donation_count: int = 0) -> int:
+    messaging.set_event_context(event.id)
     settings_row = delivery_settings or {}
     def render(value: str, guest: Guest | None = None, pass_url: str = "") -> str:
         values = {"event_name": event.name, "order_id": order_id[:8].upper(),

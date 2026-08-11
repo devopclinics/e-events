@@ -947,6 +947,7 @@ async def send_test_message(
     event = await db.get(Event, event_id)
     if not event:
         raise HTTPException(404, "Event not found")
+    messaging.set_event_context(event.id)
     channel = (body.get("channel") or "").lower()
     if channel not in ("sms", "whatsapp"):
         raise HTTPException(400, "channel must be 'sms' or 'whatsapp'")
@@ -1359,6 +1360,7 @@ async def broadcast_message(
     event = await db.get(Event, event_id)
     if not event:
         raise HTTPException(404, "Event not found")
+    messaging.set_event_context(event.id)
 
     if not data.message.strip():
         raise HTTPException(400, "message cannot be empty")
@@ -1813,6 +1815,7 @@ async def send_manual_invites(
     event = await db.get(Event, event_id)
     if not event:
         raise HTTPException(404, "Event not found")
+    messaging.set_event_context(event.id)
     if not data.recipients:
         raise HTTPException(400, "No recipients provided")
 

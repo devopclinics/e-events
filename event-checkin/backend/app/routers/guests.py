@@ -920,6 +920,7 @@ def _dispatch_invite(background_tasks: BackgroundTasks, event: Event, guest: Gue
 
     Returns True if at least one channel was dispatched, False if the guest had no
     reachable channel (used to set invite_status sent/failed)."""
+    messaging.set_event_context(event.id)
     if event.invite_mode == "closed":
         return _dispatch_rsvp_invite(background_tasks, event, guest, overrides, rsvp_template_key)
 
@@ -1028,6 +1029,7 @@ def _dispatch_rsvp_invite(background_tasks: BackgroundTasks, event: Event, guest
     one-per-guest invite_token on first send (mutation persisted by the caller's
     commit). No ticket/QR yet — that's issued when they confirm. Returns True if
     at least one channel fired."""
+    messaging.set_event_context(event.id)
     if not guest.invite_token:
         guest.invite_token = str(uuid.uuid4())
     invite_url = f"{event.checkin_base_url.rstrip('/')}/r/{guest.invite_token}"
@@ -1132,6 +1134,7 @@ def _dispatch_rsvp_invite(background_tasks: BackgroundTasks, event: Event, guest
 def dispatch_approval_accepted(background_tasks: BackgroundTasks, event: Event, guest: Guest,
                                overrides: dict | None = None) -> bool:
     """Send approval-accepted notices with the guest's issued ticket link."""
+    messaging.set_event_context(event.id)
     ticket_url = f"{event.checkin_base_url.rstrip('/')}/scan/{guest.qr_token}"
     overrides = overrides or {}
     ctx = build_template_context(event, guest, extras={"ticket_link": ticket_url, "qr_code": ticket_url})
@@ -1202,6 +1205,7 @@ def dispatch_simple_notice(background_tasks: BackgroundTasks, event: Event, gues
     """Send a simple notification template to a guest — used for
     decline/rejected confirmations. Gated by the event's channel flags; uses the
     event override or the registry default. Returns True if anything was scheduled."""
+    messaging.set_event_context(event.id)
     ctx = build_template_context(event, guest, extras=extras or {})
     sent = False
     # Approval notices route under "approval"; RSVP lifecycle notices under "reminder".

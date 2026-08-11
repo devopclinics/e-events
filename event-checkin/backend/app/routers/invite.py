@@ -253,6 +253,7 @@ def _send_rsvp_invite(
     """Fan out invite notifications across the channels enabled on this event.
     SMS/WhatsApp require a paid event and consume one message credit each;
     email is always allowed. Caller must commit to persist credit decrements."""
+    messaging.set_event_context(event.id)
     ticket_url = f"{event.checkin_base_url.rstrip('/')}/scan/{guest.qr_token}"
     hub_url = (
         f"{event.checkin_base_url.rstrip('/')}/r/{guest.invite_token}#guest-hub"

@@ -112,6 +112,7 @@ async def send_to_guest(event: Event, guest: Guest, db: AsyncSession, *, overrid
     post_event_thankyou_sent_at, since that's the automatic trigger's own
     once-per-event idempotency guard, not a per-guest record.
     """
+    messaging.set_event_context(event.id)
     if overrides is None:
         overrides = await load_overrides(event.id, db)
     email_blocked = "email" in (event.blocked_messaging_channels or [])

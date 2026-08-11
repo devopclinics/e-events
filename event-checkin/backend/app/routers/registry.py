@@ -217,6 +217,7 @@ async def send_registry_message(
 ):
     """Send the gift-list link to confirmed guests through enabled channels."""
     ev = await _registry_event(event_id, db)
+    messaging.set_event_context(ev.id)
     token = await ensure_registry_token(ev, db)
     requested = body.get("channels") or ["email", "sms", "whatsapp"]
     channels = [c for c in requested if c in {"email", "sms", "whatsapp"}]
@@ -412,6 +413,7 @@ async def claim_item(token: str, item_id: str, data: RegistryClaimCreate,
                      background_tasks: BackgroundTasks,
                      db: AsyncSession = Depends(get_db)):
     ev = await _event_by_token(token, db)
+    messaging.set_event_context(ev.id)
     item = await db.get(RegistryItem, item_id)
     if not item or item.event_id != ev.id or not item.is_active:
         raise HTTPException(404, "Registry item not found")

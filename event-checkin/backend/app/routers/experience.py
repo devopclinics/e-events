@@ -2177,6 +2177,7 @@ async def send_feedback_reminders_cascade(
     public API's write endpoint — real sends (spends message credits via
     take_message_credit, queues background_tasks), so both callers share the
     exact same accounting rather than risking drift between two copies."""
+    messaging.set_event_context(event.id)
     channels = [str(c).lower() for c in (channels_raw or ["email"]) if str(c).lower() in {"email", "sms", "whatsapp"}]
     if not channels:
         raise HTTPException(422, "Choose at least one reminder channel")

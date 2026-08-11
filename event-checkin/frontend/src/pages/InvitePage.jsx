@@ -375,7 +375,7 @@ function externalUrl(value) {
 }
 
 const DEFAULT_PAGE_CONFIG = {
-  hero: { showWelcomeLabel: true, showTitle: true, showHost: true, overlayOpacity: 55, focusX: 50, focusY: 20 },
+  hero: { showWelcomeLabel: true, showTitle: true, showHost: true, overlayOpacity: 55, focusX: 50, focusY: 20, imageSize: 480 },
   organizer: { show: true, label: 'Organized by' },
   details: { showVenue: true, showHotel: true, showHost: true, showAdmission: true },
   about: { show: true, ctaLabel: '' },
@@ -2507,8 +2507,9 @@ export default function InvitePage() {
         <section className="mx-auto max-w-[1180px] px-5 py-10 sm:px-6 sm:py-16">
           <div className="flex flex-col items-center gap-8 sm:flex-row sm:items-center">
             <div
-              className="w-full max-w-[480px] flex-none overflow-hidden rounded-2xl shadow-2xl"
+              className="w-full flex-none overflow-hidden rounded-2xl shadow-2xl"
               style={{
+                maxWidth: `${page.hero.imageSize ?? 480}px`,
                 aspectRatio: '4 / 5',
                 backgroundSize: 'cover',
                 backgroundPosition: `${page.hero.focusX ?? 50}% ${page.hero.focusY ?? 20}%`,

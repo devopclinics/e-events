@@ -684,7 +684,7 @@ const CROP_SLIDERS = [
 // There is no "seating preview" or "FestioHub live feed" section in that contract —
 // those never had a real effect and are not offered here.
 const DEFAULT_PAGE_SECTIONS = {
-  hero: { showWelcomeLabel: true, showTitle: true, showHost: true, overlayOpacity: 55, focusX: 50, focusY: 20 },
+  hero: { showWelcomeLabel: true, showTitle: true, showHost: true, overlayOpacity: 55, focusX: 50, focusY: 20, imageSize: 480 },
   organizer: { show: true, label: 'Organized by' },
   details: { showVenue: true, showHotel: true, showHost: true, showAdmission: true },
   about: { show: true, ctaLabel: '', ctaUrl: '' },
@@ -915,6 +915,7 @@ export default function DesignStudioRedesignPage() {
   }
 
   const activeTemplate = templates.find((t) => t.selected)
+  const isSidecardHero = HUB_STYLES.find((s) => s.id === hubStyle)?.heroLayout === 'sidecard'
 
   function buildDraftTheme() {
     // template_id/layout/button_style only matter to the Event Page/Flyer/Pass
@@ -1433,6 +1434,13 @@ export default function DesignStudioRedesignPage() {
                 <input type="range" min={0} max={100} value={pageSections.hero.focusY ?? 20} className="ds-slider" onChange={(e) => setPageSection('hero', 'focusY', Number(e.target.value))} />
                 <p className="rd-hint" style={{ marginTop: 4 }}>Your cover photo fills the hero banner edge-to-edge and crops to fit — these move which part of the photo stays in frame (e.g. lower the vertical value to keep faces higher up in frame).</p>
               </div>
+              {isSidecardHero && (
+                <div style={{ marginTop: 10 }}>
+                  <label className="rd-field-label">Cover image size ({pageSections.hero.imageSize ?? 480}px)</label>
+                  <input type="range" min={240} max={640} step={10} value={pageSections.hero.imageSize ?? 480} className="ds-slider" onChange={(e) => setPageSection('hero', 'imageSize', Number(e.target.value))} />
+                  <p className="rd-hint" style={{ marginTop: 4 }}>How big the cover photo box sits beside your title on this style's hero. Larger takes more of the page; the text column shrinks to match.</p>
+                </div>
+              )}
 
               <label className="rd-field-label" style={{ marginTop: 12 }}>Organizer</label>
               <div className="rd-toggle-row"><span style={{ fontSize: 12, fontWeight: 600 }}>Show organizer line</span><label className="rd-switch"><input type="checkbox" checked={pageSections.organizer.show} onChange={(e) => setPageSection('organizer', 'show', e.target.checked)} /><span className="track" /><span className="knob" /></label></div>

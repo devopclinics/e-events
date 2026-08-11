@@ -2507,7 +2507,7 @@ export default function InvitePage() {
         <section className="mx-auto max-w-[1180px] px-5 py-10 sm:px-6 sm:py-16">
           <div className="flex flex-col items-center gap-8 sm:flex-row sm:items-center">
             <div
-              className="w-full max-w-[240px] flex-none overflow-hidden rounded-2xl shadow-2xl"
+              className="w-full max-w-[380px] flex-none overflow-hidden rounded-2xl shadow-2xl"
               style={{
                 aspectRatio: '4 / 5',
                 backgroundSize: 'cover',

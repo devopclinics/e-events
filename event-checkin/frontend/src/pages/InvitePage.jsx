@@ -2484,7 +2484,7 @@ export default function InvitePage() {
             : <span />}
           <div className="flex flex-col items-end gap-1">
             <span className="rounded-full border px-4 py-2 text-sm font-bold" style={{ background: tone.chip, borderColor: tone.border, color: tone.text }}>Powered by Festio</span>
-            {flyerLedHero && page.organizer.show && host && (hostWebsite
+            {flyerLedHero && !isSidecardHero && page.organizer.show && host && (hostWebsite
               ? <a href={hostWebsite} target="_blank" rel="noopener noreferrer" className="text-[11px] font-semibold underline underline-offset-2 hover:opacity-80" style={{ color: tone.muted }}>{page.organizer.label || 'Organized by'} {host}</a>
               : <span className="text-[11px] font-semibold" style={{ color: tone.muted }}>{page.organizer.label || 'Organized by'} {host}</span>)}
           </div>
@@ -2517,11 +2517,16 @@ export default function InvitePage() {
               }}
             />
             <div className="flex-1 text-center sm:text-left">
-              {flyerLedHero || !page.hero.showTitle ? <h1 className="sr-only">{title}</h1> : <>
+              {/* Unlike the full-bleed hero below, a flyer image here sits in a small
+                  side-card box and gets cropped to a 4:5 box — its baked-in title/host
+                  text is often cut off, so (unlike full-bleed) always show the real
+                  text title/host here rather than assuming the flyer already reads
+                  fine on its own. */}
+              {!page.hero.showTitle ? <h1 className="sr-only">{title}</h1> : <>
                 {page.hero.showWelcomeLabel && <div className="text-sm font-extrabold uppercase tracking-[0.24em]" style={{ color: tone.accent }}>{dWording.heroInviteLabel || "You're invited"}</div>}
                 <h1 className="mt-3 text-3xl font-extrabold leading-[1.08] sm:text-5xl" style={{ color: tone.text }}>{title}</h1>
               </>}
-              {!flyerLedHero && page.hero.showHost && host && (hostWebsite
+              {page.hero.showHost && host && (hostWebsite
                 ? <a href={hostWebsite} target="_blank" rel="noopener noreferrer" className="mt-4 inline-block text-lg font-semibold underline decoration-2 underline-offset-4 hover:opacity-80" style={{ color: tone.text }}>{host}</a>
                 : <p className="mt-4 text-lg font-semibold" style={{ color: tone.text }}>{host}</p>)}
               {(heroWhen || venue) && <p className="mt-4 text-base font-semibold" style={{ color: tone.muted }}>{[heroWhen, venue].filter(Boolean).join(' · ')}</p>}

@@ -6,7 +6,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 
 from ..database import get_db
-from ..models import Event, User, Membership, EventUser
+from ..models import Event, User, Membership, EventUser, Organization
 from ..schemas import UserOut
 from ..auth import get_current_user, require_superadmin, _org_role
 from ..services.festiome_client import FestioMeClient, FestioMeUnavailable, get_festiome_client
@@ -243,12 +243,31 @@ async def me(user: User = Depends(get_current_user), db: AsyncSession = Depends(
     ))
     effective_admin = is_org_admin or user.is_platform_superadmin
     role = "admin" if effective_admin else "event_manager" if is_event_manager else "official"
+    # Redesign cohort of the org the user owns/admins — deliberately NOT
+    # gated on that org having an event (unlike is_org_admin above), so a
+    # brand-new organizer with zero events still gets their org's real
+    # cohort instead of the RedesignGate's zero-event "legacy_only" fallback.
+    redesign_cohort = "legacy_only"
+    owned_org_id = await db.scalar(
+        select(Membership.org_id)
+        .where(
+            Membership.user_id == user.id,
+            Membership.role.in_(["owner", "admin"]),
+        )
+        .order_by(Membership.created_at)
+        .limit(1)
+    )
+    if owned_org_id:
+        redesign_cohort = await db.scalar(
+            select(Organization.redesign_cohort).where(Organization.id == owned_org_id)
+        ) or "legacy_only"
     return UserOut(
         id=user.id, name=user.name, email=user.email,
         role=role,
         created_at=user.created_at,
         is_platform_superadmin=user.is_platform_superadmin,
         is_org_admin=is_org_admin,
+        redesign_cohort=redesign_cohort,
     )
 
 

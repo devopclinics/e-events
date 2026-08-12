@@ -43,6 +43,9 @@ class UserOut(BaseModel):
     # Org-aware flags (populated for the current user by /auth/me).
     is_platform_superadmin: bool = False
     is_org_admin: bool = False
+    # Redesign cohort of the org the user owns/admins (see Organization.redesign_cohort).
+    # Used by RedesignGate as a fallback when no event is selected yet.
+    redesign_cohort: str = "legacy_only"
 
 
 class TokenResponse(BaseModel):

@@ -43,9 +43,16 @@ export default function RedesignGate({ redesignRoute, children }) {
 
   useEffect(() => {
     let cancelled = false
-    if (!user || !currentEventId) {
-      // No event selected — stay on legacy (no event context to gate on).
+    if (!user) {
       setCohort('legacy_only')
+      return
+    }
+    if (!currentEventId) {
+      // No event selected (e.g. a brand-new organizer with zero events) —
+      // fall back to the org's own cohort from /auth/me rather than assuming
+      // legacy_only, so new redesign_default orgs aren't stuck on the old
+      // "New Event" flow before their first event exists to read a cohort from.
+      setCohort(user.redesign_cohort ?? 'legacy_only')
       return
     }
     api.listEvents()

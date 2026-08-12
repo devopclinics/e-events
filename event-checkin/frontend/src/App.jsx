@@ -7,6 +7,7 @@ import { ThemeProvider, useTheme } from './context/ThemeContext'
 import ProtectedRoute from './components/ProtectedRoute'
 import SupportWidget from './components/SupportWidget'
 import RedesignGate from './pages/redesign/RedesignGate'
+import { setUiPreference } from './pages/redesign/uiPreference'
 
 // Route pages are intentionally lazy: declaring both legacy and redesign routes
 // must not make users download both implementations at startup.
@@ -192,6 +193,16 @@ function Nav({ hasMenu, eventName, canUseDesignStudio, hasFestioMe, canManageCur
 
           {/* Theme toggle */}
           <ThemeToggle className="text-slate-500 hover:text-slate-950 hover:bg-slate-100 dark:text-slate-300 dark:hover:text-white dark:hover:bg-white/5" />
+
+          {/* Legacy is superadmin-only now (RedesignGate) — once here via a
+              persisted ?ui=legacy preference, there was no way back short of
+              typing ?ui=redesign in the URL. This is that way back. */}
+          {user?.is_platform_superadmin && (
+            <button onClick={() => { setUiPreference('redesign'); navigate('/admin-redesign') }}
+              className="hidden sm:block text-teal-700 dark:text-teal-300 hover:underline text-xs font-semibold px-2 py-1 rounded hover:bg-teal-50 dark:hover:bg-teal-900/20 transition-colors">
+              Switch to redesign UI
+            </button>
+          )}
 
           {/* Sign out — desktop */}
           {user && (

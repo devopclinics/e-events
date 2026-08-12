@@ -185,7 +185,7 @@ function ExternalIcon({ className = '' }) {
   )
 }
 
-function AssetCard({ asset }) {
+export function AssetCard({ asset }) {
   return (
     <div className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl p-4 shadow-sm">
       <div className="flex items-start justify-between gap-3">
@@ -211,7 +211,7 @@ function AssetCard({ asset }) {
   )
 }
 
-function ScreenshotCard({ asset }) {
+export function ScreenshotCard({ asset }) {
   return (
     <div className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl overflow-hidden shadow-sm">
       <a href={asset.href} target="_blank" rel="noreferrer" className="block bg-slate-100 dark:bg-slate-900">
@@ -236,7 +236,7 @@ function ScreenshotCard({ asset }) {
   )
 }
 
-function InternalDocCard({ asset }) {
+export function InternalDocCard({ asset }) {
   function openDocument(download = false) {
     const blob = new Blob([asset.content], { type: 'text/plain;charset=utf-8' })
     const url = URL.createObjectURL(blob)
@@ -270,7 +270,7 @@ function InternalDocCard({ asset }) {
   )
 }
 
-function MediaReviewComments() {
+export function MediaReviewComments() {
   const [reviewEvents, setReviewEvents] = useState([])
   const [reviewEventId, setReviewEventId] = useState('')
   const [reviewTask, setReviewTask] = useState(null)

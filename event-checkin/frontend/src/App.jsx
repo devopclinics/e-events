@@ -56,6 +56,7 @@ const TeamRedesignPage = lazy(() => import('./pages/TeamRedesignPage'))
 const ExperienceRedesignPage = lazy(() => import('./pages/ExperienceRedesignPage'))
 const CheckinRedesignPage = lazy(() => import('./pages/CheckinRedesignPage'))
 const SuperadminRedesignPage = lazy(() => import('./pages/SuperadminRedesignPage'))
+const MediaRedesignPage = lazy(() => import('./pages/MediaRedesignPage'))
 const DesignStudioRedesignPage = lazy(() => import('./pages/DesignStudioRedesignPage'))
 const EventResultsRedesignPage = lazy(() => import('./pages/EventResultsRedesignPage'))
 const FestioMeRedesignPage = lazy(() => import('./pages/FestioMeRedesignPage'))
@@ -431,6 +432,7 @@ function AppRoutes() {
       <Route path="/experience-redesign" element={<ProtectedRoute><ExperienceRedesignPage /></ProtectedRoute>} />
       <Route path="/checkin-redesign" element={<ProtectedRoute><CheckinRedesignPage /></ProtectedRoute>} />
       <Route path="/superadmin-redesign" element={<ProtectedRoute platformSuperadminOnly><SuperadminRedesignPage /></ProtectedRoute>} />
+      <Route path="/media-redesign" element={<ProtectedRoute platformSuperadminOnly><MediaRedesignPage /></ProtectedRoute>} />
       <Route path="/marketing" element={<ProtectedRoute><MarketingPage /></ProtectedRoute>} />
       <Route path="/lead-form/:token" element={<MarketingLeadFormPage />} />
       <Route path="/design-studio-redesign" element={<ProtectedRoute adminOnly paidOnly><DesignStudioRedesignPage /></ProtectedRoute>} />
@@ -475,7 +477,7 @@ function AppRoutes() {
               <Route path="/scanner" element={<ProtectedRoute><RedesignGate redesignRoute="/scanner-redesign"><ScannerPage /></RedesignGate></ProtectedRoute>} />
               <Route path="/kitchen" element={<ProtectedRoute><RedesignGate redesignRoute="/kitchen-redesign"><KitchenPage /></RedesignGate></ProtectedRoute>} />
               <Route path="/console" element={<ProtectedRoute><RedesignGate redesignRoute="/superadmin-redesign"><ConsolePage /></RedesignGate></ProtectedRoute>} />
-              <Route path="/media-library" element={<ProtectedRoute><RedesignGate redesignRoute="/superadmin-redesign"><MediaPage /></RedesignGate></ProtectedRoute>} />
+              <Route path="/media-library" element={<ProtectedRoute><RedesignGate redesignRoute="/media-redesign"><MediaPage /></RedesignGate></ProtectedRoute>} />
               <Route path="/help" element={<ProtectedRoute paidOnly><RedesignGate redesignRoute="/help-redesign"><HelpPage /></RedesignGate></ProtectedRoute>} />
               <Route path="*" element={<Navigate to="/" replace />} />
             </Routes>

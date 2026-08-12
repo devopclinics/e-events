@@ -185,7 +185,7 @@ const TOP_LINKS = [
     gate: ({ user }) => !!user?.is_platform_superadmin,
   },
   {
-    id: 'media', label: 'Media', to: '/superadmin-redesign?tab=media', icon: 'file',
+    id: 'media', label: 'Media', to: '/media-redesign', icon: 'file',
     gate: ({ user }) => !!user?.is_platform_superadmin,
   },
   {

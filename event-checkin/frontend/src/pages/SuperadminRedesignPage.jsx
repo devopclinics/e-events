@@ -1,35 +1,25 @@
-import { Navigate, useSearchParams } from 'react-router-dom'
+import { Link } from 'react-router-dom'
 import RedesignShell from './redesign/RedesignShell'
 import ConsolePage from './ConsolePage'
 import './SuperadminRedesignPage.css'
 
+// ConsolePage owns the real API contracts for every console section.
+// Media Library used to live behind a ?tab=media punt to legacy — it now has
+// its own real redesign page (MediaRedesignPage) linked directly below.
 export default function SuperadminRedesignPage() {
-  const [params, setParams] = useSearchParams()
-  const tab = params.get('tab') === 'media' ? 'media' : 'console'
-
-  // ConsolePage owns the real API contracts for every console section.
-  if (tab === 'console') {
-    return (
-      <RedesignShell topActive="console" withEventSidebar={false}>
-        <div className="rr-pagehead">
-          <div>
-            <div className="rr-title-row"><h1>Superadmin</h1><span className="rr-pill locked">Platform staff only</span></div>
-            <div className="rr-meta">Live platform console</div>
-          </div>
+  return (
+    <RedesignShell topActive="console" withEventSidebar={false}>
+      <div className="rr-pagehead">
+        <div>
+          <div className="rr-title-row"><h1>Superadmin</h1><span className="rr-pill locked">Platform staff only</span></div>
+          <div className="rr-meta">Live platform console</div>
         </div>
-        <div className="rr-tabs">
-          <button className="active" onClick={() => setParams({ tab: 'console' })}>Console</button>
-          <button onClick={() => setParams({ tab: 'media' })}>Media Library</button>
-        </div>
-        <ConsolePage />
-      </RedesignShell>
-    )
-  }
-
-  // The existing media library is the production-backed implementation.
-  // Use a one-shot nav-state bypass, not ?ui=legacy — that query param
-  // persists a global "always show legacy" preference (it's the real
-  // Switch to legacy UI escape hatch in RedesignShell) and would silently
-  // opt the user out of the redesign on every other route too.
-  return <Navigate to="/media-library" state={{ forceLegacy: true }} replace />
+      </div>
+      <div className="rr-tabs">
+        <button className="active">Console</button>
+        <Link to="/media-redesign">Media Library</Link>
+      </div>
+      <ConsolePage />
+    </RedesignShell>
+  )
 }

@@ -138,26 +138,46 @@ export const HTML_ASSETS = [
   },
 ]
 
-// Refreshed 2026-07-15 against the live 2.0.69 app — includes features that
-// shipped after the July-14 set (per-field RSVP requirements, invitation
-// categories & auto-seating, multi-day display-only menus, FestioHub).
-// SAME filenames as guideContent.mjs (Help guide) reuse this exact set, so
-// keeping this list current keeps the in-app guide current too.
+// Refreshed 2026-08-12 to resync with guideContent.mjs (Help guide) — this
+// list is meant to mirror that file's screenshots exactly (same filenames)
+// so keeping it current keeps the in-app guide's screenshot set current too.
+// 17 screenshots added covering: onboarding paths (org-start, RSVP-only),
+// Design Studio, message templates, Venue Access, section scanning,
+// Experience workflows, Ticket sales, Guest Hub/FestioMe community, guest
+// communication controls, Tasks, Planner, public API, Event Calendars,
+// export/post-event, staff scanner, and guest RSVP.
 export const SCREENSHOTS = [
   ['Event setup', '/media/help2-event-setup.png'],
+  ['Get started', '/media/help2-org-start.png'],
+  ['Just need RSVPs? Start here', '/media/help2-org-rsvp-only.png'],
   ['Guests', '/media/help2-guests.png'],
   ['Invites and RSVP', '/media/help2-invites-rsvp.png'],
   ['RSVP form fields (per-field required/optional)', '/media/help2-rsvp-fields.png'],
   ['Invitation categories & auto-seating', '/media/help2-categories.png'],
   ['Seating', '/media/help2-seating.png'],
+  ['Design Studio: brand your invite, pass & GuestHub', '/media/help2-design-studio.png'],
+  ['Customize your message templates', '/media/help2-templates.png'],
+  ['Venue Access: zones & ticket rules', '/media/help2-venue-access.png'],
+  ['Section scanning (multi-entrance seating)', '/media/help2-org-sections.png'],
+  ['Experience workflows: consent, souvenirs, rooms & sessions', '/media/help2-org-experience.png'],
+  ['Sell paid tickets (Ticket sales)', '/media/help2-ticketing.png'],
   ['Orders: multi-day menu (day + display-only)', '/media/help2-menu-fields.png'],
   ['Orders', '/media/help2-orders.png'],
   ['Entry areas', '/media/help2-entry-areas.png'],
+  ['Guest Hub & FestioMe community', '/media/help2-org-community.png'],
+  ['Guest communication controls', '/media/help2-org-guest-comm.png'],
   ['Team', '/media/help2-team.png'],
+  ['Tasks: run your to-do list as a team', '/media/help2-org-tasks.png'],
+  ['Planner (early access): budget, vendors & runsheet', '/media/help2-planner.png'],
   ['Check-in', '/media/help2-checkin.png'],
+  ['Staff scanner', '/media/help2-staff-scanner.png'],
   ['Results', '/media/help2-results.png'],
   ['Event Pass', '/media/help2-event-pass.png'],
+  ['Public API & developer access', '/media/help2-org-api.png'],
+  ['Event Calendars: curated listing pages', '/media/help2-org-calendars.png'],
+  ['Export & post-event', '/media/help2-org-export.png'],
   ['Guest invite (RSVP page)', '/media/help2-guest-invite.png'],
+  ['Guest RSVP', '/media/help2-guest-rsvp.png'],
   ['Festio Pass — ticket with day-tabbed menu', '/media/help2-festio-pass.png'],
   ['FestioHub — Live Program, activity, food menu', '/media/help2-festiohub.png'],
   ['Deliveries', '/media/help2-deliveries.png'],
@@ -458,13 +478,15 @@ export default function MediaPage() {
           Operator-only links for viewing and downloading Festio PDFs, HTML tours, and product screenshots.
         </p>
         <p className="mt-1 text-xs text-slate-400 dark:text-slate-500">
-          Screenshots, the Introductory Guide, the Getting Started tour, and the pitch deck last refreshed
-          2026-07-15 against live 2.0.69. Only the one-pager still needs a redesign pass — see its card.
+          Screenshots resynced 2026-08-12 with guideContent.mjs (Help guide) — 17 screenshots added covering
+          onboarding paths, Design Studio, message templates, Venue Access, section scanning, Experience
+          workflows, Ticket sales, Guest Hub/FestioMe, guest communication, Tasks, Planner, the public API,
+          and Event Calendars. The Introductory Guide, Getting Started tour, and pitch deck are still from
+          2026-07-15. Only the one-pager still needs a redesign pass — see its card.
         </p>
         <p className="mt-1 text-xs text-amber-600 dark:text-amber-400">
-          ⚠ Not yet reflected in the screenshots/tour/pitch deck below: Event Calendars, Contact Lists, or
-          Task attachments (shipped 2026-07-25, staging only) — see the new KT doc for what's not yet in
-          the sales/marketing assets.
+          ⚠ Not yet reflected in the tour/pitch deck below: Contact Lists or Task attachments (shipped
+          2026-07-25, staging only) — see the new KT doc for what's not yet in the sales/marketing assets.
         </p>
       </div>
 

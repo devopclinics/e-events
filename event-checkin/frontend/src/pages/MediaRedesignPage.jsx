@@ -18,6 +18,12 @@ export default function MediaRedesignPage() {
           <div className="rr-meta">Operator-only links for viewing and downloading Festio PDFs, HTML tours, and product screenshots</div>
         </div>
       </div>
+      <p className="rd-hint" style={{ margin: '-10px 0 4px' }}>
+        Screenshots resynced 2026-08-12 with guideContent.mjs (Help guide) — 17 screenshots added covering
+        onboarding paths, Design Studio, message templates, Venue Access, section scanning, Experience
+        workflows, Ticket sales, Guest Hub/FestioMe, guest communication, Tasks, Planner, the public API,
+        and Event Calendars.
+      </p>
 
       <div className="rr-section-title"><div><h2>Internal documentation</h2></div></div>
       <div className="rr-grid3">

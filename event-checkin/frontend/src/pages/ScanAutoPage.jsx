@@ -841,7 +841,19 @@ export default function ScanAutoPage() {
           className="bg-slate-950 px-6 pt-8 pb-10 text-center relative overflow-hidden"
           style={{ background: coverImage ? undefined : `linear-gradient(145deg, ${colors.background || '#020617'}, ${colors.surface || '#0f172a'})` }}
         >
-          {coverImage && <div className="absolute inset-0 bg-cover bg-center opacity-45" style={{ backgroundImage: `url(${coverImage})` }} />}
+          {coverImage && (
+            // Blurred, not just faded — cover photos are frequently flyers with
+            // the event title already baked into the artwork (as text), and at
+            // this card's width that text lands right behind the real <h1>
+            // title below, creating a confusing double-exposure that reads as
+            // a cut-off or garbled name even though the actual title text is
+            // complete. Blur removes the competing text while keeping the
+            // photo's color/mood as a backdrop.
+            <div
+              className="absolute inset-0 bg-cover bg-center opacity-45"
+              style={{ backgroundImage: `url(${coverImage})`, filter: 'blur(10px)', transform: 'scale(1.15)' }}
+            />
+          )}
           <div className="absolute inset-0 bg-slate-950/55" />
           <div className="absolute top-4 right-4 left-4 flex justify-center">
             <StatusBadge status={status} />

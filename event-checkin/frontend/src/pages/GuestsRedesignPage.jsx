@@ -7,6 +7,7 @@ import { useEventDetails } from '../hooks/useEventDetails'
 import { useGuests } from '../hooks/useGuests'
 import { api } from '../api'
 import { INVITE_THEMES, RSVP_QUESTION_PRESETS } from './AdminPage'
+import { seatingTerm } from '../seatingTerm'
 import './GuestsRedesignPage.css'
 
 const STAT_TILES = [
@@ -1309,7 +1310,7 @@ export default function GuestsRedesignPage() {
   const [householdsLoading, setHouseholdsLoading] = useState(true)
   const [householdTarget, setHouseholdTarget] = useState(null)
   const [householdDeleteTarget, setHouseholdDeleteTarget] = useState(null)
-  const [householdForm, setHouseholdForm] = useState({ name: '', description: '' })
+  const [householdForm, setHouseholdForm] = useState({ name: '', description: '', default_table_group_id: '', default_table_id: '' })
   const [editForm, setEditForm] = useState({ first_name: '', last_name: '', email: '', phone: '', is_vip: false, table_id: '', seat_number: '', ticket_type_id: '', messaging_consent: false })
   const [mutationBusy, setMutationBusy] = useState(false)
   const tab = searchParams.get('tab') === 'invite' ? 'invite' : 'guests'
@@ -1529,7 +1530,7 @@ export default function GuestsRedesignPage() {
       </div>
 
       {tab === 'guests'
-        ? <GuestsTab notify={notify} onView={setViewTarget} onEdit={setEditTarget} onRemove={setRemoveTarget} onApproveRsvp={setApproveTarget} onRejectRsvp={setRejectTarget} onApproveAll={(n) => setApproveAllCount(n)} onSendSelected={(ids) => { setSendGuestIds(ids); setSendResult(null); setSendCount(ids.length); setSendStep('audience') }} eventId={eventId} guests={guests} guestsLoading={guestsLoading} guestsError={guestsError} onRetryGuests={loadGuests} households={households} householdsLoading={householdsLoading} tableGroups={tableGroups} onAddHousehold={() => { setHouseholdTarget('new'); setHouseholdForm({ name: '', description: '' }) }} onEditHousehold={(h) => { setHouseholdTarget(h); setHouseholdForm({ name: h.raw.name, description: h.raw.description || '' }) }} onDeleteHousehold={setHouseholdDeleteTarget} onBulkAssignHousehold={async (guestIds, householdId) => {
+        ? <GuestsTab notify={notify} onView={setViewTarget} onEdit={setEditTarget} onRemove={setRemoveTarget} onApproveRsvp={setApproveTarget} onRejectRsvp={setRejectTarget} onApproveAll={(n) => setApproveAllCount(n)} onSendSelected={(ids) => { setSendGuestIds(ids); setSendResult(null); setSendCount(ids.length); setSendStep('audience') }} eventId={eventId} guests={guests} guestsLoading={guestsLoading} guestsError={guestsError} onRetryGuests={loadGuests} households={households} householdsLoading={householdsLoading} tableGroups={tableGroups} onAddHousehold={() => { setHouseholdTarget('new'); setHouseholdForm({ name: '', description: '', default_table_group_id: '', default_table_id: '' }) }} onEditHousehold={(h) => { setHouseholdTarget(h); setHouseholdForm({ name: h.raw.name, description: h.raw.description || '', default_table_group_id: h.raw.default_table_group_id || '', default_table_id: h.raw.default_table_id || '' }) }} onDeleteHousehold={setHouseholdDeleteTarget} onBulkAssignHousehold={async (guestIds, householdId) => {
           try { await api.bulkAssignHousehold(eventId, guestIds, householdId); await Promise.all([loadGuests(), loadHouseholds()]); notify('Household assignment updated') }
           catch (e) { notify(e.message || 'Household assignment could not be updated', true) }
         }} onBulkAssignTableGroup={async (guestIds, tableGroupId) => {
@@ -1704,12 +1705,35 @@ export default function GuestsRedesignPage() {
           <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
             <div><label className="rd-field-label">Household name *</label><input className="rd-field" value={householdForm.name} onChange={(e) => setHouseholdForm((v) => ({ ...v, name: e.target.value }))} /></div>
             <div><label className="rd-field-label">Description</label><textarea className="rr-textarea" value={householdForm.description} onChange={(e) => setHouseholdForm((v) => ({ ...v, description: e.target.value }))} /></div>
+            {!!event?.seating_enabled && (
+              <div className="rd-row2">
+                <div>
+                  <label className="rd-field-label">Default {seatingTerm(event, { lower: true })} group</label>
+                  <select className="rd-field" value={householdForm.default_table_group_id} onChange={(e) => setHouseholdForm((v) => ({ ...v, default_table_group_id: e.target.value }))}>
+                    <option value="">None</option>
+                    {tableGroups.map((g) => <option key={g.id} value={g.id}>{g.name}</option>)}
+                  </select>
+                </div>
+                <div>
+                  <label className="rd-field-label">Default {seatingTerm(event, { lower: true })}</label>
+                  <select className="rd-field" value={householdForm.default_table_id} onChange={(e) => setHouseholdForm((v) => ({ ...v, default_table_id: e.target.value }))}>
+                    <option value="">None</option>
+                    {tables.map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}
+                  </select>
+                </div>
+              </div>
+            )}
             <div className="rd-row2">
               <button className="rr-btn secondary" onClick={() => setHouseholdTarget(null)}>Cancel</button>
               <button className="rr-btn primary" disabled={!householdForm.name.trim() || mutationBusy} onClick={async () => {
                 setMutationBusy(true)
                 try {
-                  const payload = { name: householdForm.name.trim(), description: householdForm.description.trim() || null }
+                  const payload = {
+                    name: householdForm.name.trim(),
+                    description: householdForm.description.trim() || null,
+                    default_table_group_id: householdForm.default_table_group_id || null,
+                    default_table_id: householdForm.default_table_id || null,
+                  }
                   if (householdTarget === 'new') await api.createHousehold(eventId, payload)
                   else await api.updateHousehold(eventId, householdTarget.id, payload)
                   setHouseholdTarget(null)

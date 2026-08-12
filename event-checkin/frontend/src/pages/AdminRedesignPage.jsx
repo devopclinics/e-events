@@ -20,7 +20,13 @@ const RESET_OPTIONS = [
   { key: 'tables', label: 'Tables', hint: 'Removes all table and seat definitions' },
 ]
 
-const TIMEZONES_SHORT = ['Africa/Lagos', 'Africa/Nairobi', 'Europe/London', 'America/New_York']
+// Full IANA zone list where the browser supports it — a truncated list
+// blocks organizers outside a handful of cities from correcting their
+// event's timezone after creation.
+const TIMEZONES_SHORT =
+  typeof Intl.supportedValuesOf === 'function'
+    ? Intl.supportedValuesOf('timeZone')
+    : ['Africa/Lagos', 'Africa/Nairobi', 'Europe/London', 'America/New_York', 'Asia/Dubai', 'UTC']
 const EVENT_TYPES_SHORT = ['Conference', 'Gala / Award', 'Wedding', 'Birthday', 'Other']
 
 // Mirrors OnboardingChecklist's real required/optional step logic
@@ -104,6 +110,8 @@ export default function AdminRedesignPage() {
   const [sourceSaveBusy, setSourceSaveBusy] = useState(false)
   const [syncBusy, setSyncBusy] = useState(false)
   const [syncResult, setSyncResult] = useState('')
+  const [selfCheckinBusy, setSelfCheckinBusy] = useState(false)
+  const [selfCheckinCopied, setSelfCheckinCopied] = useState(false)
   const [checklistDismissed, setChecklistDismissed] = useState(false)
   const [manageOpen, setManageOpen] = useState(false)
   const [editOpen, setEditOpen] = useState(false)
@@ -117,7 +125,7 @@ export default function AdminRedesignPage() {
     type: 'Conference', host: '',
     date: '', timezone: 'Africa/Lagos',
     multiDay: false, endDate: '', baseUrl: '',
-    venue: '', venueAddress: '',
+    venue: '', venueAddress: '', hotel: '', hotelAddress: '',
     admissionNote: '', description: '',
   })
   const manageRef = useRef(null)
@@ -170,6 +178,8 @@ export default function AdminRedesignPage() {
       baseUrl: event.checkin_base_url || '',
       venue: event.venue_name || '',
       venueAddress: event.venue_address || '',
+      hotel: event.hotel_name || '',
+      hotelAddress: event.hotel_address || '',
       admissionNote: event.admission_note || '',
       description: event.description || '',
     })
@@ -193,6 +203,8 @@ export default function AdminRedesignPage() {
         checkin_base_url: eventForm.baseUrl.trim(),
         venue_name: eventForm.venue.trim() || null,
         venue_address: eventForm.venueAddress.trim() || null,
+        hotel_name: eventForm.hotel.trim() || null,
+        hotel_address: eventForm.hotelAddress.trim() || null,
         admission_note: eventForm.admissionNote.trim() || null,
         description: eventForm.description.trim() || null,
       })
@@ -276,6 +288,37 @@ export default function AdminRedesignPage() {
       notify(`Synced: ${result.added} added, ${result.skipped} skipped`)
     } catch (e) { notify(e.message || 'Sync failed', true) }
     finally { setSyncBusy(false) }
+  }
+
+  async function toggleSelfCheckin() {
+    if (!event?.id) return
+    setSelfCheckinBusy(true)
+    try {
+      const updated = await api.setSelfCheckin(event.id, !event.self_checkin_enabled)
+      setEvent(updated)
+      notify(`Self check-in ${updated.self_checkin_enabled ? 'enabled' : 'disabled'}`)
+    } catch (e) { notify(e.message || 'Self check-in could not be updated', true) }
+    finally { setSelfCheckinBusy(false) }
+  }
+
+  async function copySelfCheckinLink() {
+    if (!event?.event_code) return
+    await navigator.clipboard.writeText(api.selfCheckinUrl(event.event_code, event))
+    setSelfCheckinCopied(true)
+    window.setTimeout(() => setSelfCheckinCopied(false), 1800)
+  }
+
+  async function downloadSelfCheckinQR() {
+    if (!event?.event_code) return
+    try {
+      const resp = await fetch(api.selfCheckinQrUrl(event.event_code))
+      const blob = await resp.blob()
+      const a = document.createElement('a')
+      a.href = URL.createObjectURL(blob)
+      a.download = `self-checkin-qr-${event.event_code}.png`
+      document.body.appendChild(a); a.click(); a.remove()
+      URL.revokeObjectURL(a.href)
+    } catch (e) { notify(e.message || 'QR download failed', true) }
   }
 
   const currentStep = journeySteps.find((s) => !s.done)
@@ -575,6 +618,39 @@ export default function AdminRedesignPage() {
         </div>
       </div>
 
+      <div className="rr-section-title">
+        <div><h2>Self check-in</h2><p>One event QR guests scan to find themselves and check in without staff</p></div>
+      </div>
+      <div className="rd-panel" style={{ maxWidth: 620 }}>
+        <div className="rd-panel-body" style={{ paddingTop: 16 }}>
+          <div className="rd-toggle-row">
+            <span style={{ fontSize: 13, fontWeight: 600 }}>Self check-in</span>
+            <label className="rd-switch">
+              <input type="checkbox" checked={!!event?.self_checkin_enabled} disabled={selfCheckinBusy} onChange={toggleSelfCheckin}/>
+              <span className="track"/><span className="knob"/>
+            </label>
+          </div>
+          {event?.self_checkin_enabled && event?.event_code && (
+            <div className="rd-path-body-inner" style={{ marginTop: 12, display: 'grid', gap: 12, gridTemplateColumns: '1fr auto' }}>
+              <div style={{ minWidth: 0 }}>
+                <label className="rd-field-label">Event code</label>
+                <div style={{ fontSize: 20, fontWeight: 800, letterSpacing: '0.08em', color: 'var(--ink)' }}>{event.event_code}</div>
+                <div className="rd-row2" style={{ marginTop: 8 }}>
+                  <input className="rd-field" readOnly value={api.selfCheckinUrl(event.event_code, event)}/>
+                  <button className="rr-btn secondary" style={{ justifyContent: 'center', height: 34 }} onClick={copySelfCheckinLink}>{selfCheckinCopied ? 'Copied' : 'Copy'}</button>
+                </div>
+              </div>
+              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6 }}>
+                <a href={api.selfCheckinQrUrl(event.event_code)} target="_blank" rel="noopener noreferrer" style={{ background: '#fff', padding: 6, borderRadius: 8 }}>
+                  <img src={api.selfCheckinQrUrl(event.event_code)} alt="Self check-in QR code" style={{ width: 100, height: 100 }}/>
+                </a>
+                <button className="rr-link-btn" onClick={downloadSelfCheckinQR}>Download QR</button>
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
+
       {toast && <div className="rd-toast"><Icon name="check"/>{toast}</div>}
 
       {/* Edit event modal */}
@@ -598,6 +674,10 @@ export default function AdminRedesignPage() {
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
               <div><label className="rd-field-label">Venue</label><input className="rd-field" value={eventForm.venue} onChange={(e) => setEventForm({ ...eventForm, venue: e.target.value })} /></div>
               <div><label className="rd-field-label">Venue address</label><input className="rd-field" value={eventForm.venueAddress} onChange={(e) => setEventForm({ ...eventForm, venueAddress: e.target.value })} /></div>
+            </div>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+              <div><label className="rd-field-label">Hotel</label><input className="rd-field" value={eventForm.hotel} onChange={(e) => setEventForm({ ...eventForm, hotel: e.target.value })} /></div>
+              <div><label className="rd-field-label">Hotel address</label><input className="rd-field" value={eventForm.hotelAddress} onChange={(e) => setEventForm({ ...eventForm, hotelAddress: e.target.value })} /></div>
             </div>
             <div><label className="rd-field-label">Admission note</label><input className="rd-field" value={eventForm.admissionNote} onChange={(e) => setEventForm({ ...eventForm, admissionNote: e.target.value })} /></div>
             <div><label className="rd-field-label">Description</label><textarea className="rd-field" rows="3" value={eventForm.description} onChange={(e) => setEventForm({ ...eventForm, description: e.target.value })} /></div>

@@ -3,6 +3,7 @@ import RedesignShell, { Icon } from './redesign/RedesignShell'
 import { ErrorRetryState, LoadingSkeleton } from './redesign/RedesignPrimitives'
 import { useCurrentEvent } from '../hooks/useCurrentEvent'
 import { api } from '../api'
+import { zonedWallTimeToUtcISOString } from '../timeutil'
 import './SetupRedesignPage.css'
 
 const EVENT_TYPES = [
@@ -10,7 +11,14 @@ const EVENT_TYPES = [
   'Gala / banquet', 'Conference / seminar', 'Community / religious event',
   'Corporate event', 'Concert / show', 'Private party', 'Other',
 ]
-const TIMEZONES = ['Africa/Lagos', 'Africa/Nairobi', 'Europe/London', 'America/New_York', 'Asia/Dubai']
+// Full IANA zone list where the browser supports it, else a small curated
+// set — matches SetupWizardPage's legacy list exactly (event times render
+// in the chosen zone, so a truncated list blocks most of the world).
+const TIMEZONES =
+  typeof Intl.supportedValuesOf === 'function'
+    ? Intl.supportedValuesOf('timeZone')
+    : ['Africa/Lagos', 'Europe/Zurich', 'Europe/London', 'America/New_York', 'America/Chicago', 'America/Los_Angeles', 'Asia/Dubai', 'Asia/Kolkata', 'UTC']
+const DETECTED_TZ = Intl.DateTimeFormat().resolvedOptions().timeZone || ''
 // The billing API currently supports Paystack/NGN and Stripe/USD.
 const CURRENCIES = ['NGN — Nigerian Naira', 'USD — US Dollar']
 const ATTENDANCE_MODES = [
@@ -211,14 +219,16 @@ function WizardPhase({ onComplete, notify }) {
         </div>
         <div className="su-field-row">
           <div>
-            <label className="rd-field-label">Date *</label>
-            <input className="rd-field" type="date" value={form.date} onChange={(e) => setForm({ ...form, date: e.target.value })} />
+            <label className="rd-field-label">Date and time *</label>
+            <input className="rd-field" type="datetime-local" value={form.date} onChange={(e) => setForm({ ...form, date: e.target.value })} />
           </div>
           <div>
             <label className="rd-field-label">Timezone *</label>
             <select className="rd-field" value={form.timezone} onChange={(e) => setForm({ ...form, timezone: e.target.value })}>
+              {DETECTED_TZ && <option value={DETECTED_TZ}>{DETECTED_TZ} (detected)</option>}
               {TIMEZONES.map((t) => <option key={t}>{t}</option>)}
             </select>
+            <span className="rd-hint">All invite and guest times display in this zone.</span>
           </div>
         </div>
         <label className="gr-required-check su-multiday-check">
@@ -228,8 +238,8 @@ function WizardPhase({ onComplete, notify }) {
         {form.multiDay && (
           <div className="su-field-row">
             <div>
-              <label className="rd-field-label">End date</label>
-              <input className="rd-field" type="date" value={form.endDate} onChange={(e) => setForm({ ...form, endDate: e.target.value })} />
+              <label className="rd-field-label">End date and time</label>
+              <input className="rd-field" type="datetime-local" value={form.endDate} onChange={(e) => setForm({ ...form, endDate: e.target.value })} />
             </div>
           </div>
         )}
@@ -299,6 +309,12 @@ function WizardPhase({ onComplete, notify }) {
           className="rr-btn primary su-create-btn"
           disabled={!form.name || !form.date}
           onClick={async () => {
+            const startUtc = zonedWallTimeToUtcISOString(form.date, form.timezone)
+            const endUtc = form.multiDay && form.endDate ? zonedWallTimeToUtcISOString(form.endDate, form.timezone) : null
+            if (form.multiDay && form.endDate && new Date(endUtc) < new Date(startUtc)) {
+              notify('End date must be on or after the start date.', true)
+              return
+            }
             let event = null
             try {
               event = await api.createEvent({
@@ -306,8 +322,8 @@ function WizardPhase({ onComplete, notify }) {
                 couples_name: form.host.trim(),
                 event_type: form.type,
                 attendance_mode: form.attendanceMode,
-                event_date: `${form.date}T12:00:00`,
-                event_end_date: form.multiDay && form.endDate ? `${form.endDate}T12:00:00` : null,
+                event_date: startUtc,
+                event_end_date: endUtc,
                 timezone: form.timezone,
                 checkin_base_url: form.baseUrl.trim() || window.location.origin,
                 venue_name: form.venue.trim() || null,

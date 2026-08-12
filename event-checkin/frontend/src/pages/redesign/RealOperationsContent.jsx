@@ -226,7 +226,12 @@ export function RealSeatingContent({ eventId, event, notify, onFloorLayout }) {
         description: clean(groupForm.description).trim() || null,
         sort_order: Number(groupForm.sort_order) || 0,
         table_ids: tableIds,
-        table_orders: Object.fromEntries(tableIds.map((id, index) => [id, index])),
+        // Use each table's edited/pre-filled order rather than a blind
+        // positional index — sort_order is global (shared with tables
+        // outside this group and with sequential seat-fill order), so
+        // recomputing it from array position on every save would renumber
+        // and collide with tables that aren't even in this group.
+        table_orders: Object.fromEntries(tableIds.map((id) => [id, Number(groupForm.table_orders?.[id] ?? tables.find((t) => t.id === id)?.sort_order ?? 0)])),
       }
       if (groupForm.id) await api.updateTableGroup(eventId, groupForm.id, payload)
       else await api.createTableGroup(eventId, payload)
@@ -248,21 +253,32 @@ export function RealSeatingContent({ eventId, event, notify, onFloorLayout }) {
   }
 
   function editGroup(group) {
+    const tableIds = rows(group.table_ids).length
+      ? rows(group.table_ids)
+      : rows(group.tables).map((table) => table?.id || table).filter(Boolean)
     setGroupForm({
       ...group,
       name: clean(group.name),
       tag: clean(group.tag),
       description: clean(group.description),
-      table_ids: rows(group.table_ids).length
-        ? rows(group.table_ids)
-        : rows(group.tables).map((table) => table?.id || table).filter(Boolean),
+      table_ids: tableIds,
+      // Pre-fill from each table's current sort_order so an unchanged save
+      // is a no-op instead of silently renumbering every member table to
+      // 0..n-1 (that sort_order also drives the global table listing and
+      // sequential seat-fill order, shared with tables outside this group).
+      table_orders: Object.fromEntries(tableIds.map((id) => [id, tables.find((t) => t.id === id)?.sort_order ?? 0])),
     })
   }
 
   function toggleGroupTable(id) {
     setGroupForm((current) => {
       const selected = rows(current.table_ids)
-      return { ...current, table_ids: selected.includes(id) ? selected.filter((value) => value !== id) : [...selected, id] }
+      const nowSelected = selected.includes(id) ? selected.filter((value) => value !== id) : [...selected, id]
+      const orders = { ...current.table_orders }
+      if (!selected.includes(id) && !(id in orders)) {
+        orders[id] = tables.find((t) => t.id === id)?.sort_order ?? 0
+      }
+      return { ...current, table_ids: nowSelected, table_orders: orders }
     })
   }
 
@@ -415,7 +431,7 @@ export function RealSeatingContent({ eventId, event, notify, onFloorLayout }) {
       )}
 
       <div className="rr-section-title"><div><h2>Table Groups</h2><p>Group tables and restrict grouped guests to the correct seating area.</p></div>
-        <button className="rr-btn primary" disabled={working} onClick={() => setGroupForm({ name: '', tag: '', description: '', sort_order: groups.length, table_ids: [] })}><Icon name="plus" size={14}/> Table Group</button></div>
+        <button className="rr-btn primary" disabled={working} onClick={() => setGroupForm({ name: '', tag: '', description: '', sort_order: groups.length, table_ids: [], table_orders: {} })}><Icon name="plus" size={14}/> Table Group</button></div>
       {!groups.length ? <EmptyState icon="users" title="No table groups" body="Create a group such as VIP, Family, or Staff." /> :
         <div className="rr-grid2">{groups.map((g) => <div className="rr-panel ad-group-card" key={g.id}>
           <div className="ad-group-head"><div><strong>{clean(g.name, 'Unnamed group')}</strong><span className="ad-group-order">order {Number(g.sort_order) || 0}</span></div>
@@ -425,8 +441,24 @@ export function RealSeatingContent({ eventId, event, notify, onFloorLayout }) {
       {groupForm && <form className="rr-panel rd-panel-body" onSubmit={saveGroup}>
         <div className="rd-row2"><input className="rr-input" aria-label="Group name" required value={groupForm.name} onChange={(e) => setGroupForm({ ...groupForm, name: e.target.value })} placeholder="Group name"/>
           <input className="rr-input" aria-label="Group tag" value={groupForm.tag || ''} onChange={(e) => setGroupForm({ ...groupForm, tag: e.target.value })} placeholder="Guest tag"/></div>
+        <label style={{ display: 'block', marginTop: 6 }}><span style={{ fontSize: 12, fontWeight: 600 }}>Order</span> <input className="rr-input" style={{ width: 80 }} aria-label="Group order" type="number" min="0" value={groupForm.sort_order ?? 0} onChange={(e) => setGroupForm({ ...groupForm, sort_order: e.target.value })} title="Lower numbers come first"/></label>
         <textarea className="rr-input" aria-label="Group description" value={groupForm.description || ''} onChange={(e) => setGroupForm({ ...groupForm, description: e.target.value })} placeholder="Description"/>
         <div className="ad-group-tables"><strong>Tables</strong>{tables.map((table) => <label key={table.id} style={{ display: 'block', marginTop: 6 }}><input type="checkbox" checked={rows(groupForm.table_ids).includes(table.id)} onChange={() => toggleGroupTable(table.id)}/> {clean(table.name, 'Unnamed table')}</label>)}</div>
+        {rows(groupForm.table_ids).length > 0 && (
+          <div className="ad-group-tables" style={{ marginTop: 6 }}>
+            <strong>Order of tables in this group</strong>
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 10, marginTop: 6 }}>
+              {rows(groupForm.table_ids).map((id) => (
+                <label key={id} style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 12 }}>
+                  {clean(tables.find((table) => table.id === id)?.name, id)}
+                  <input className="rr-input" style={{ width: 56 }} type="number" min="0"
+                    value={groupForm.table_orders?.[id] ?? 0}
+                    onChange={(e) => setGroupForm({ ...groupForm, table_orders: { ...groupForm.table_orders, [id]: e.target.value } })}/>
+                </label>
+              ))}
+            </div>
+          </div>
+        )}
         <div className="ad-actions"><button type="button" className="rr-btn secondary" onClick={() => setGroupForm(null)}>Cancel</button><button className="rr-btn primary" disabled={working}>{working ? 'Saving…' : 'Save group'}</button></div>
       </form>}
       {pendingDelete && <ConfirmDialog title="Delete table" message={`Delete "${clean(pendingDelete.name, 'this table')}"? Assigned guests will be unassigned.`} confirmLabel="Delete" onConfirm={removeTable} onCancel={() => setPendingDelete(null)}/>}

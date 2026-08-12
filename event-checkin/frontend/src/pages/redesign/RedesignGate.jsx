@@ -1,90 +1,57 @@
-import { useEffect, useState } from 'react'
+import { useState } from 'react'
 import { Navigate, useLocation } from 'react-router-dom'
-import { api } from '../../api'
 import { useAuth } from '../../context/AuthContext'
-import { useCurrentEvent } from '../../hooks/useCurrentEvent'
 import { getUiPreference, preferenceFromSearch, setUiPreference } from './uiPreference'
-import { logFeatureFlagCohort } from './redesignTelemetry'
+import { logFallbackToLegacy } from './redesignTelemetry'
 
 // ── RedesignGate ──────────────────────────────────────────────────────────────
-// Wraps a legacy route element. If the user's organisation is on the
-// 'redesign_default' or 'legacy_retired' cohort, silently redirects to the
-// given redesignRoute instead of rendering the legacy page.
+// Wraps a legacy route element. Legacy is now retired for everyone except
+// platform superadmins — non-superadmins are always redirected to the
+// redesign route, full stop.
+//
+// This used to be decided per-org/per-event via a "redesign_cohort" fetched
+// from api.listEvents(), but that chain had a standing gap: a brand-new
+// organizer with zero events (or a stale/invalid currentEventId left over in
+// localStorage) had no event to resolve a cohort from, and silently fell
+// back to legacy — repeatedly locking new signups out of the redesign UI.
+// Rather than keep patching edge cases in that resolution chain, legacy is
+// now unreachable for regular users regardless of cohort/event state.
 //
 // Rules:
-//  - Superadmins follow cohort like any other user — no standing exemption.
-//    Anyone (including staff) who wants legacy can use the explicit
-//    "Switch to legacy UI" link (?ui=legacy), which always wins.
-//  - While the event list is loading a minimal spinner is shown — the legacy
-//    page never flashes before the redirect fires.
-//  - If the event list call fails the legacy page is shown (safe fallback).
+//  - Non-superadmins: always redirected to redesignRoute. No escape hatch —
+//    ?ui=legacy and the stored UI preference no longer apply to them.
+//  - Superadmins: default to redesign too, but can still reach legacy via
+//    ?ui=legacy (persisted) or ?ui=redesign to switch back — this is the
+//    operational/debug path for comparing the two UIs.
+//  - The one-shot `location.state.forceLegacy` punt (a redesign page
+//    deliberately sending a user to a legacy page for a feature not yet
+//    ported) still works for everyone — it's not a user-facing loophole,
+//    it's how incomplete redesign stages stay usable during the migration.
 //
 // Usage in App.jsx:
 //   <RedesignGate redesignRoute="/admin-redesign"><AdminPage /></RedesignGate>
 
-const AUTO_REDIRECT_COHORTS = new Set(['redesign_default', 'legacy_retired'])
-
 export default function RedesignGate({ redesignRoute, children }) {
-  const { user } = useAuth()
+  const { user, loading } = useAuth()
   const location = useLocation()
-  const [currentEventId] = useCurrentEvent()
   const requestedPreference = preferenceFromSearch(location.search)
-  const [uiPreference, setLocalUiPreference] = useState(
-    () => requestedPreference || getUiPreference(),
-  )
-  // null = still loading, string = resolved cohort
-  const [cohort, setCohort] = useState(null)
-
-  useEffect(() => {
-    if (!requestedPreference) return
-    setUiPreference(requestedPreference)
-    setLocalUiPreference(requestedPreference)
-  }, [requestedPreference])
-
-  useEffect(() => {
-    let cancelled = false
-    if (!user) {
-      setCohort('legacy_only')
-      return
+  const [uiPreference] = useState(() => {
+    if (requestedPreference) {
+      setUiPreference(requestedPreference)
+      return requestedPreference
     }
-    if (!currentEventId) {
-      // No event selected (e.g. a brand-new organizer with zero events) —
-      // fall back to the org's own cohort from /auth/me rather than assuming
-      // legacy_only, so new redesign_default orgs aren't stuck on the old
-      // "New Event" flow before their first event exists to read a cohort from.
-      setCohort(user.redesign_cohort ?? 'legacy_only')
-      return
-    }
-    api.listEvents()
-      .then((evs) => {
-        if (cancelled) return
-        const ev = evs.find((e) => e.id === currentEventId)
-        const resolved = ev?.my_redesign_cohort ?? 'legacy_only'
-        setCohort(resolved)
-        logFeatureFlagCohort({ orgId: ev?.organization_id, eventId: currentEventId, cohort: resolved })
-      })
-      .catch(() => {
-        if (!cancelled) setCohort('legacy_only')
-      })
-    return () => { cancelled = true }
-  }, [user, currentEventId])
+    return getUiPreference()
+  })
 
   // One-shot bypass for a single navigation (e.g. a redesign page punting to
-  // its not-yet-built legacy counterpart). Unlike ?ui=legacy this is never
-  // persisted to the global UI preference — it only applies to this visit.
+  // its not-yet-built legacy counterpart). Never persisted, applies to
+  // everyone regardless of superadmin status.
   if (location.state?.forceLegacy) {
     return children
   }
 
-  // An explicit legacy choice always wins over cohort defaults. This is the
-  // operational rollback path exposed by the redesign shell.
-  if (uiPreference === 'legacy' || requestedPreference === 'legacy') {
-    return children
-  }
-
-  // Still resolving — show a minimal inline loader rather than mounting the
-  // legacy page (avoids a visible flash before redirect).
-  if (cohort === null) {
+  // Still resolving auth — avoid a flash of legacy before we know who's asking.
+  if (loading) {
     return (
       <div
         role="status"
@@ -96,15 +63,15 @@ export default function RedesignGate({ redesignRoute, children }) {
     )
   }
 
-  // An explicit "redesign" preference (e.g. visiting once with ?ui=redesign)
-  // always redirects, regardless of cohort.
-  if (uiPreference === 'redesign' || requestedPreference === 'redesign') {
+  if (!user?.is_platform_superadmin) {
     return <Navigate to={redesignRoute} replace />
   }
 
-  if (AUTO_REDIRECT_COHORTS.has(cohort)) {
-    return <Navigate to={redesignRoute} replace />
+  // Superadmin from here on — explicit legacy preference wins.
+  if (uiPreference === 'legacy') {
+    logFallbackToLegacy({ route: location.pathname, reason: 'superadmin_ui_preference' })
+    return children
   }
 
-  return children
+  return <Navigate to={redesignRoute} replace />
 }

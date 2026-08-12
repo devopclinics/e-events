@@ -397,26 +397,27 @@ export default function RedesignShell({ topActive, withEventSidebar = false, eve
         </main>
       </div>
 
-      <RedesignStatusBanner cohort={event?.my_redesign_cohort} location={location} />
+      <RedesignStatusBanner isSuperadmin={!!user?.is_platform_superadmin} location={location} />
     </div>
     </RedesignShellBoundary>
   )
 }
 
-// ── Cohort-aware status banner ────────────────────────────────────────────────
-// Shown at the bottom of every redesign page so users always know which UI
-// they're on and — for auto-redirected cohorts — how to get back to legacy.
-function RedesignStatusBanner({ cohort, location }) {
-  const AUTO_REDIRECT = cohort === 'redesign_default' || cohort === 'legacy_retired'
+// ── Status banner ─────────────────────────────────────────────────────────────
+// Shown at the bottom of every redesign page. Legacy is retired for regular
+// users (see RedesignGate), so the "switch to legacy" escape hatch only
+// renders for platform superadmins — showing it to everyone else would be a
+// dead link back to a page RedesignGate immediately bounces them out of.
+function RedesignStatusBanner({ isSuperadmin, location }) {
   const legacyPath = REDESIGN_TO_LEGACY[location.pathname] || '/admin'
   const legacyHref = `${legacyPath}?ui=legacy`
 
   return (
-    <div className={`rd-mockflag ${AUTO_REDIRECT ? 'rd-mockflag-default' : ''}`}>
-      {AUTO_REDIRECT ? (
+    <div className={`rd-mockflag ${isSuperadmin ? 'rd-mockflag-default' : ''}`}>
+      {isSuperadmin ? (
         <>
-          <b>New interface</b> — your organisation is on the redesign preview.{' '}
-          <a href={legacyHref} className="rr-link-btn" style={{ fontWeight: 600 }} onClick={() => logFallbackToLegacy({ route: location.pathname, module: 'shell', reason: 'user_escape_hatch' })}>
+          <b>New interface</b> — this is the redesign preview.{' '}
+          <a href={legacyHref} className="rr-link-btn" style={{ fontWeight: 600 }} onClick={() => logFallbackToLegacy({ route: location.pathname, module: 'shell', reason: 'superadmin_escape_hatch' })}>
             Switch to legacy UI →
           </a>
         </>

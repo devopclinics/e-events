@@ -25,6 +25,16 @@ export default function MediaRedesignPage() {
         and Event Calendars.
       </p>
 
+      <div className="rr-section-title"><div><h2>Knowledge base</h2></div></div>
+      <div className="rr-panel" style={{ padding: 18, display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
+        <div>
+          <div style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.03em', color: 'var(--accent)' }}>Live in-app guide</div>
+          <strong style={{ fontSize: 14 }}>Customer Help Guide</strong>
+          <p className="rd-hint" style={{ marginTop: 4 }}>The live, browsable version of the guide content below — what customers actually see.</p>
+        </div>
+        <a href="/help-redesign" target="_blank" rel="noreferrer" className="rr-btn primary">Open Help Guide</a>
+      </div>
+
       <div className="rr-section-title"><div><h2>Internal documentation</h2></div></div>
       <div className="rr-grid3">
         {INTERNAL_DOCS.map((asset) => <InternalDocCard key={asset.filename} asset={asset} />)}

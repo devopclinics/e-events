@@ -491,6 +491,22 @@ export default function MediaPage() {
       </div>
 
       <section>
+        <h2 className="text-sm font-bold uppercase tracking-wide text-slate-500 dark:text-slate-400 mb-3">Knowledge base</h2>
+        <div className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl p-4 shadow-sm flex items-start justify-between gap-3 flex-wrap">
+          <div>
+            <div className="text-xs font-bold uppercase tracking-wide text-teal-700 dark:text-teal-300">Live in-app guide</div>
+            <h3 className="mt-1 font-semibold text-slate-950 dark:text-white">Customer Help Guide</h3>
+            <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">The live, browsable version of the guide content below — what customers actually see.</p>
+          </div>
+          <a href="/help" target="_blank" rel="noreferrer"
+            className="inline-flex items-center gap-1.5 rounded-lg bg-teal-600 px-3 py-2 text-sm font-semibold text-white hover:bg-teal-700 shrink-0">
+            <ExternalIcon className="h-4 w-4" />
+            Open Help Guide
+          </a>
+        </div>
+      </section>
+
+      <section>
         <h2 className="text-sm font-bold uppercase tracking-wide text-slate-500 dark:text-slate-400 mb-3">Internal documentation</h2>
         <div className="grid md:grid-cols-3 gap-4">
           {INTERNAL_DOCS.map((asset) => <InternalDocCard key={asset.filename} asset={asset} />)}

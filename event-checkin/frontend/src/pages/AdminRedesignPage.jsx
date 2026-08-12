@@ -9,6 +9,7 @@ import { useTasks } from '../hooks/useEventResources'
 import { api } from '../api'
 import { useAuth } from '../context/AuthContext'
 import { zonedWallTimeToUtcISOString, utcToZonedInput } from '../timeutil'
+import { EVENT_TYPES } from './SetupRedesignPage'
 import './AdminRedesignPage.css'
 
 const RESET_OPTIONS = [
@@ -27,7 +28,6 @@ const TIMEZONES_SHORT =
   typeof Intl.supportedValuesOf === 'function'
     ? Intl.supportedValuesOf('timeZone')
     : ['Africa/Lagos', 'Africa/Nairobi', 'Europe/London', 'America/New_York', 'Asia/Dubai', 'UTC']
-const EVENT_TYPES_SHORT = ['Conference', 'Gala / Award', 'Wedding', 'Birthday', 'Other']
 
 // Mirrors OnboardingChecklist's real required/optional step logic
 // (AdminPage.jsx:8720-8730) — same fields, same completion rules.
@@ -105,6 +105,8 @@ export default function AdminRedesignPage() {
   const [qrBusy, setQrBusy] = useState(false)
   const [importBusy, setImportBusy] = useState(false)
   const importFileRef = useRef(null)
+  const [sheetUrl, setSheetUrl] = useState('')
+  const [importUrlBusy, setImportUrlBusy] = useState(false)
   const [sourceUrl, setSourceUrl] = useState('')
   const [sourceInterval, setSourceInterval] = useState(60)
   const [sourceSaveBusy, setSourceSaveBusy] = useState(false)
@@ -255,6 +257,18 @@ export default function AdminRedesignPage() {
       notify(`${result.added ?? result.imported ?? 0} guest${(result.added ?? result.imported) === 1 ? '' : 's'} imported`)
     } catch (e) { notify(e.message || 'Import failed', true) }
     finally { setImportBusy(false); if (importFileRef.current) importFileRef.current.value = '' }
+  }
+
+  async function handleImportUrl() {
+    if (!sheetUrl.trim() || !event?.id) return
+    setImportUrlBusy(true)
+    try {
+      const result = await api.importGuestsFromUrl(event.id, sheetUrl.trim())
+      await refreshGuests()
+      notify(`${result.added ?? result.imported ?? 0} guest${(result.added ?? result.imported) === 1 ? '' : 's'} imported`)
+      setSheetUrl('')
+    } catch (e) { notify(e.message || 'Import failed', true) }
+    finally { setImportUrlBusy(false) }
   }
 
   async function saveSource(nextUrl, nextInterval) {
@@ -556,6 +570,28 @@ export default function AdminRedesignPage() {
             </div>
           </details>
 
+          <details className="rd-path">
+            <summary>
+              <span className="rd-path-icon"><Icon name="external" size={14}/></span>
+              <span style={{ flex: 1 }}>
+                <span className="rd-path-title">Import from a link</span>
+                <div className="rd-path-sub">One-time — paste a Google Sheets, OneDrive/Excel, or Dropbox link</div>
+              </span>
+            </summary>
+            <div className="rd-path-body">
+              <div className="rd-path-body-inner">
+                <label className="rd-field-label">Share link</label>
+                <div className="rd-row2">
+                  <input className="rd-field" type="url" value={sheetUrl} onChange={(e) => setSheetUrl(e.target.value)} placeholder="Paste Google Sheets, OneDrive/Excel, or Dropbox share link…"/>
+                  <button className="rr-btn secondary" style={{ justifyContent: 'center', height: 34 }} disabled={importUrlBusy || !sheetUrl.trim() || !event?.id} onClick={handleImportUrl}>{importUrlBusy ? 'Importing…' : 'Import'}</button>
+                </div>
+                <div className="rd-hint" style={{ marginTop: 8 }}>
+                  Google Sheets: share with "Anyone with link can view". OneDrive/Excel: use Share → Copy link, not the browser address bar URL. Needs first_name, last_name — email and phone optional.
+                </div>
+              </div>
+            </div>
+          </details>
+
           <details className="rd-path" open={!!event?.source_url}>
             <summary>
               <span className="rd-path-icon"><Icon name="cloud" size={14}/></span>
@@ -659,7 +695,7 @@ export default function AdminRedesignPage() {
           <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
               <div><label className="rd-field-label">Event name *</label><input className="rd-field" value={eventForm.name} onChange={(e) => setEventForm({ ...eventForm, name: e.target.value })} /></div>
-              <div><label className="rd-field-label">Type</label><select className="rd-field" value={eventForm.type} onChange={(e) => setEventForm({ ...eventForm, type: e.target.value })}>{EVENT_TYPES_SHORT.map((t) => <option key={t}>{t}</option>)}</select></div>
+              <div><label className="rd-field-label">Type</label><select className="rd-field" value={eventForm.type} onChange={(e) => setEventForm({ ...eventForm, type: e.target.value })}>{[...new Set([...EVENT_TYPES, eventForm.type])].filter(Boolean).map((t) => <option key={t}>{t}</option>)}</select></div>
             </div>
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
               <div><label className="rd-field-label">Host</label><input className="rd-field" value={eventForm.host} onChange={(e) => setEventForm({ ...eventForm, host: e.target.value })} /></div>

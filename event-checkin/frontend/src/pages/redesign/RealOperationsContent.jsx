@@ -5,6 +5,7 @@ import { Icon, ConfirmDialog, Modal } from './RedesignShell'
 
 const clean = (value, fallback = '') => value == null ? fallback : String(value)
 const rows = (value) => Array.isArray(value) ? value.filter(Boolean) : []
+const TABLE_CATEGORIES = ['General', 'Male', 'Female', 'Kids', 'Youth', 'Couples', 'VIP', 'Family', 'Staff']
 
 function ReserveSeatModal({ slot, guests, busy, query, onQuery, onPick, onAddVvip, onClose }) {
   const [mode, setMode] = useState('search') // 'search' | 'vvip'
@@ -76,7 +77,8 @@ function TableEditor({ form, setForm, saveTable, working }) {
     <form className="ad-inline-table-editor" onSubmit={saveTable}>
       <div className="ad-inline-table-fields">
         <label><span>Table name</span><input className="rr-input" aria-label="Table name" required value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} placeholder="Table name"/></label>
-        <label><span>Category</span><input className="rr-input" aria-label="Category" value={form.category || ''} onChange={(e) => setForm({ ...form, category: e.target.value })} placeholder="Category"/></label>
+        <label><span>Category</span><input className="rr-input" aria-label="Category" list="ad-table-category-suggestions" value={form.category || ''} onChange={(e) => setForm({ ...form, category: e.target.value })} placeholder="Category"/></label>
+        <datalist id="ad-table-category-suggestions">{TABLE_CATEGORIES.map((c) => <option key={c} value={c}/>)}</datalist>
         <label><span>Capacity</span><input className="rr-input" aria-label="Capacity" required type="number" min="1" value={form.capacity} onChange={(e) => setForm({ ...form, capacity: e.target.value })}/></label>
         <label><span>Table order</span><input className="rr-input" aria-label="Table order" type="number" value={form.sort_order ?? 0} onChange={(e) => setForm({ ...form, sort_order: e.target.value })}/></label>
       </div>

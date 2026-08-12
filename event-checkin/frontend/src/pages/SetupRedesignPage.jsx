@@ -6,7 +6,7 @@ import { api } from '../api'
 import { zonedWallTimeToUtcISOString } from '../timeutil'
 import './SetupRedesignPage.css'
 
-const EVENT_TYPES = [
+export const EVENT_TYPES = [
   'Wedding', 'Nikkah / Aqd', 'Graduation ceremony', 'Birthday party',
   'Gala / banquet', 'Conference / seminar', 'Community / religious event',
   'Corporate event', 'Concert / show', 'Private party', 'Other',

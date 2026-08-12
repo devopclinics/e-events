@@ -4,6 +4,7 @@ import RedesignShell, { Icon, Modal, ConfirmDialog } from './redesign/RedesignSh
 import { LoadingSkeleton, ErrorRetryState, EmptyState } from './redesign/RedesignPrimitives'
 import { useCurrentEvent } from '../hooks/useCurrentEvent'
 import { useBilling } from '../hooks/useEventResources'
+import { useAuth } from '../context/AuthContext'
 import { api } from '../api'
 import './BillingRedesignPage.css'
 
@@ -37,6 +38,132 @@ const CATALOG_DESTINATIONS = {
 
 function catalogLabel(entry) {
   return typeof entry === 'string' ? entry : entry?.label || 'Capability'
+}
+
+function TrialCreditsPanel({ notify }) {
+  const { user } = useAuth()
+  const [tiers, setTiers] = useState([])
+  const [requests, setRequests] = useState(null)   // null = loading
+  const [showForm, setShowForm] = useState(false)
+  const [form, setForm] = useState({ contact_name: '', phone: '', event_name: '', guest_count: '', use_case: '' })
+  const [busy, setBusy] = useState(false)
+
+  useEffect(() => {
+    api.getPricing().then((d) => setTiers(d.tiers || [])).catch(() => {})
+    api.myTrialRequests().then(setRequests).catch(() => setRequests([]))
+  }, [])
+
+  useEffect(() => {
+    if (user?.name) setForm((f) => ({ ...f, contact_name: f.contact_name || user.name }))
+  }, [user])
+
+  if (requests === null) return null
+  const pending = requests.find((r) => r.status === 'pending')
+  const approved = requests.find((r) => r.status === 'approved')
+
+  async function submit() {
+    setBusy(true)
+    try {
+      await api.submitTrialRequest({
+        contact_name: form.contact_name,
+        phone: form.phone || null,
+        event_name: form.event_name || null,
+        guest_count: form.guest_count ? Number(form.guest_count) : null,
+        use_case: form.use_case || null,
+      })
+      setRequests(await api.myTrialRequests())
+      setShowForm(false)
+      notify('Trial request sent')
+    } catch (e) { notify(e.message || 'Trial request could not be sent', true) }
+    finally { setBusy(false) }
+  }
+
+  return (
+    <div className="rr-panel" style={{ padding: 18, display: 'flex', flexDirection: 'column', gap: 12 }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 12, flexWrap: 'wrap' }}>
+        <div>
+          <strong style={{ fontSize: 14 }}>Not ready to pay yet?</strong>
+          <p className="rd-hint" style={{ marginTop: 4, maxWidth: 480 }}>
+            Request trial credits to try Design Studio, QR check-in, SMS/WhatsApp, seating, access rules, logistics, registry, or Experience before activating an Event Pass.
+          </p>
+        </div>
+        {approved ? (
+          <span className="rd-status-chip" style={{ background: 'var(--success-soft, #dcfce7)', color: 'var(--success, #16a34a)' }}>Trial approved — check your events</span>
+        ) : pending ? (
+          <span className="rd-status-chip">Trial request received — we'll be in touch</span>
+        ) : (
+          <button className="rr-btn secondary" onClick={() => setShowForm((v) => !v)}>Request trial credits</button>
+        )}
+      </div>
+      {tiers.length > 0 && (
+        <div className="rr-grid3">
+          {tiers.map((t) => (
+            <div className="rr-panel" style={{ padding: 12 }} key={t.key}>
+              <div style={{ fontWeight: 600, fontSize: 13 }}>{t.name || t.label}</div>
+              <div style={{ fontSize: 18, fontWeight: 800, color: 'var(--accent)' }}>{billingMoney(t.amount, t.currency)}</div>
+              <div className="rd-hint">{t.guest_cap ? `Up to ${Number(t.guest_cap).toLocaleString()} guests` : 'Custom guest volume'} · {Number(t.credits || 0).toLocaleString()} credits</div>
+            </div>
+          ))}
+        </div>
+      )}
+      <a href="/pricing" target="_blank" rel="noopener noreferrer" className="rr-link-btn">See full pricing →</a>
+      {showForm && !pending && (
+        <div className="rd-path-body-inner" style={{ display: 'grid', gap: 10, gridTemplateColumns: '1fr 1fr' }}>
+          <div><label className="rd-field-label">Your name</label><input className="rd-field" value={form.contact_name} onChange={(e) => setForm((f) => ({ ...f, contact_name: e.target.value }))} placeholder="Jane Doe"/></div>
+          <div><label className="rd-field-label">Phone</label><input className="rd-field" value={form.phone} onChange={(e) => setForm((f) => ({ ...f, phone: e.target.value }))} placeholder="+1 832 555 0100"/></div>
+          <div><label className="rd-field-label">Event</label><input className="rd-field" value={form.event_name} onChange={(e) => setForm((f) => ({ ...f, event_name: e.target.value }))} placeholder="e.g. Spring Gala"/></div>
+          <div><label className="rd-field-label">Expected guests</label><input className="rd-field" type="number" min="0" value={form.guest_count} onChange={(e) => setForm((f) => ({ ...f, guest_count: e.target.value }))} placeholder="120"/></div>
+          <div style={{ gridColumn: '1 / -1' }}><label className="rd-field-label">What do you want to try?</label><input className="rd-field" value={form.use_case} onChange={(e) => setForm((f) => ({ ...f, use_case: e.target.value }))} placeholder="SMS invites, check-in, venue zones…"/></div>
+          <div className="rd-row2" style={{ gridColumn: '1 / -1' }}>
+            <button className="rr-btn primary" disabled={busy || !form.contact_name.trim()} onClick={submit}>{busy ? 'Sending…' : 'Send request'}</button>
+            <button className="rr-btn secondary" onClick={() => setShowForm(false)}>Cancel</button>
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
+
+function ReferralPanel({ notify }) {
+  const [info, setInfo] = useState(null)
+  const [copied, setCopied] = useState(false)
+
+  useEffect(() => { api.myReferral().then(setInfo).catch(() => setInfo(null)) }, [])
+
+  if (!info) return null
+
+  function copyLink() {
+    navigator.clipboard.writeText(info.referral_link).catch(() => {})
+    setCopied(true)
+    window.setTimeout(() => setCopied(false), 1800)
+  }
+
+  return (
+    <div className="rr-panel" style={{ padding: 18, display: 'flex', flexDirection: 'column', gap: 10 }}>
+      <div>
+        <strong style={{ fontSize: 14 }}>Partner referrals</strong>
+        <p className="rd-hint" style={{ marginTop: 4 }}>Share your link — organizations that sign up through it are credited to you.</p>
+      </div>
+      <div className="rd-row2">
+        <input className="rd-field" readOnly value={info.referral_link}/>
+        <button className="rr-btn secondary" style={{ justifyContent: 'center', height: 34 }} onClick={copyLink}>{copied ? 'Copied!' : 'Copy link'}</button>
+      </div>
+      <div style={{ display: 'flex', gap: 20, fontSize: 13 }}>
+        <span><b style={{ color: 'var(--ink)' }}>{info.referred_count}</b> referred</span>
+        <span><b style={{ color: 'var(--ink)' }}>{info.converted_count}</b> converted to a paid Event Pass</span>
+      </div>
+      {info.referred_orgs?.length > 0 && (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 0 }}>
+          {info.referred_orgs.map((r, i) => (
+            <div key={i} style={{ display: 'flex', justifyContent: 'space-between', padding: '6px 0', borderTop: i ? '1px solid var(--line-soft, var(--rr-border))' : 'none', fontSize: 13 }}>
+              <span>{r.name}</span>
+              <span style={{ color: r.converted ? 'var(--success, #16a34a)' : 'var(--muted)', fontWeight: 600, fontSize: 11.5 }}>{r.converted ? 'Converted' : 'Signed up'}</span>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  )
 }
 
 function BillingTab({ notify, eventId, onBuyPass, onBuyCredits, onBuyAddon }) {
@@ -127,6 +254,8 @@ function BillingTab({ notify, eventId, onBuyPass, onBuyCredits, onBuyAddon }) {
         </div>
       </div>
       {currencyError && <p className="rp-field-error">{currencyError}</p>}
+
+      {!billing.is_paid && <TrialCreditsPanel notify={notify} />}
 
       <div className="rr-section-title">
         <div><h2>Event Passes</h2><p>One-time access for this event; benefits apply after successful payment</p></div>
@@ -678,7 +807,7 @@ function OrgTab({ notify, eventId }) {
         <div className="rr-panel bl-org-toolbar">
           <div><strong>Organization settings</strong><span>People, integrations, billing, and shared resources</span></div>
           <nav aria-label="Organization settings sections">
-            <a href="#org-team">Team</a><a href="#org-api">API</a><a href="#org-subscription">Plan</a><a href="#org-webhooks">Webhooks</a><a href="#org-collections">Collections</a>
+            <a href="#org-team">Team</a><a href="#org-api">API</a><a href="#org-subscription">Plan</a><a href="#org-referral">Referrals</a><a href="#org-webhooks">Webhooks</a><a href="#org-collections">Collections</a>
           </nav>
         </div>
       </div>
@@ -860,6 +989,8 @@ function OrgTab({ notify, eventId }) {
           )}
         </div>
       </div>
+
+      <div id="org-referral"><ReferralPanel notify={notify} /></div>
 
       <div className="rr-panel bl-org-section bl-org-webhooks" id="org-webhooks">
         <div className="rd-panel-head bl-panel-head-row">

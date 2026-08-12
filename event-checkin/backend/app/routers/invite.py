@@ -241,6 +241,7 @@ async def _invite_page_out(event: Event, db: AsyncSession) -> InvitePageOut:
         registry_enabled=event.registry_enabled,
         registry_token=event.registry_token,
         seating_term=event.seating_term,
+        seat_term=event.seat_term,
     )
 
 

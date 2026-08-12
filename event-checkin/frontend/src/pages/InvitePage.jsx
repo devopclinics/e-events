@@ -4,7 +4,7 @@ import { useParams } from 'react-router-dom'
 import { api } from '../api'
 import { isNativePushSupported, registerNativePush, unregisterNativePush } from '../push/fcmPush'
 import { parseUtc, fmtEventDateRange } from '../timeutil'
-import { seatingTerm } from '../seatingTerm'
+import { seatingTerm, seatTerm } from '../seatingTerm'
 import './GuestHubThemes.css'
 import PublicTicketCheckout from '../components/PublicTicketCheckout'
 
@@ -1610,7 +1610,7 @@ function GuestHub({ event, accessToken, designTheme, previewMock = false }) {
       : { label: 'Not checked in yet', icon: '◷' }
   const passCells = [
     hub?.guest?.table_name && { l: seatingTerm(event), v: hub.guest.table_name, ic: '🪑' },
-    hub?.guest?.seat_number && { l: 'Seat', v: hub.guest.seat_number, ic: '🎟️' },
+    hub?.guest?.seat_number && { l: seatTerm(event), v: hub.guest.seat_number, ic: '🎟️' },
     { l: 'Status', v: hub?.guest?.admitted ? 'Admitted' : 'Not yet', ic: hub?.guest?.admitted ? '🟢' : '⚪' },
     event?.venue_name && { l: 'Venue', v: event.venue_name, ic: '📍' },
   ].filter(Boolean)

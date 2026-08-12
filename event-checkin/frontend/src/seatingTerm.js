@@ -6,3 +6,10 @@ export function seatingTerm(event, { plural = false, lower = false } = {}) {
   if (plural) term = term.endsWith('s') ? term : `${term}s`
   return lower ? term.toLowerCase() : term
 }
+
+// Same idea, for the individual seat within a table (e.g. "Bunk", "Chair").
+export function seatTerm(event, { plural = false, lower = false } = {}) {
+  let term = (event?.seat_term || '').trim() || 'Seat'
+  if (plural) term = term.endsWith('s') ? term : `${term}s`
+  return lower ? term.toLowerCase() : term
+}

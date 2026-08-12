@@ -330,7 +330,7 @@ _DUPLICATE_TEMPLATE_FIELDS = [
     "seating_enabled", "menu_enabled", "logistics_enabled", "registry_enabled", "registry_message",
     "venue_access_enabled", "experience_enabled", "live_program_enabled", "planner_enabled",
     "festiome_addon_enabled", "partner_pairing_enabled",
-    "enforce_table_groups", "seating_term", "section_mode_enabled",
+    "enforce_table_groups", "seating_term", "seat_term", "section_mode_enabled",
     "manual_checkin_enabled", "self_checkin_enabled", "checkout_enabled", "walk_in_enabled",
     # notifications — includes platform-superadmin blocks, which must carry
     # over so duplication can't be used to dodge a compliance/abuse block
@@ -1112,6 +1112,11 @@ async def toggle_features(
         if len(term) > 30:
             raise HTTPException(400, "seating_term must be 30 characters or fewer")
         event.seating_term = term or None
+    if "seat_term" in body:
+        term = (body["seat_term"] or "").strip()
+        if len(term) > 30:
+            raise HTTPException(400, "seat_term must be 30 characters or fewer")
+        event.seat_term = term or None
     await db.commit()
     await db.refresh(event)
     if any(bool(body.get(feature)) for feature in ("seating_enabled", "menu_enabled", "logistics_enabled", "registry_enabled", "venue_access_enabled", "experience_enabled", "festiome_addon_enabled", "planner_enabled")):

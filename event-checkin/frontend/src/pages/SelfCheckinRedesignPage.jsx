@@ -72,7 +72,7 @@ function ConfirmStep({ guest, busy, error, onConfirm, onBack }) {
 
 function OutcomeStep({ result, onReset }) {
   const info = OUTCOMES[result.status] || OUTCOMES.invalid
-  const seat = [result.table_name && `${result.seating_term || 'Table'} ${result.table_name}`, result.seat_number && `Seat ${result.seat_number}`].filter(Boolean).join(', ')
+  const seat = [result.table_name && `${result.seating_term || 'Table'} ${result.table_name}`, result.seat_number && `${result.seat_term || 'Seat'} ${result.seat_number}`].filter(Boolean).join(', ')
   return <div className={`ki-outcome-step ki-tone-${info.tone}`} role="status">
     <div className="ki-outcome-icon">{info.icon}</div><h2 className="ki-outcome-title">{info.label}</h2>
     <p className="ki-outcome-sub">{result.message || info.sub}</p>

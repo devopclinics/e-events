@@ -22,7 +22,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..auth import require_paid_event_admin, require_paid_event_member
 from ..entitlements import assert_feature_allowed
-from ..seating_terms import seating_term as _seating_term
+from ..seating_terms import seating_term as _seating_term, seat_term as _seat_term
 from ..config import settings
 from ..database import get_db
 from .. import storage
@@ -87,6 +87,7 @@ async def _build_plan_out(event: Event, plan: FloorPlan, db: AsyncSession, *, ed
     return FloorPlanOut(
         event_id=event.id, event_name=event.name,
         seating_term=_seating_term(event),
+        seat_term=_seat_term(event),
         width=plan.width, height=plan.height,
         bg_image_url=plan.bg_image_url, bg_opacity=plan.bg_opacity,
         editable=editable,

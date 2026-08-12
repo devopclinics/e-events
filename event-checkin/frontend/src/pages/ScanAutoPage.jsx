@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import { useParams } from 'react-router-dom'
 import { api } from '../api'
 import { parseUtc } from '../timeutil'
-import { seatingTerm } from '../seatingTerm'
+import { seatingTerm, seatTerm } from '../seatingTerm'
 import FeedbackForms from '../components/FeedbackForms'
 
 function passThemeColors(theme) {
@@ -935,7 +935,7 @@ export default function ScanAutoPage() {
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z" />
                 </svg>
                 {passOpts.showTable && table_name}
-                {passOpts.showSeat && seat_number && <span className="text-indigo-400">{passOpts.showTable && table_name ? '· ' : ''}Seat {seat_number}</span>}
+                {passOpts.showSeat && seat_number && <span className="text-indigo-400">{passOpts.showTable && table_name ? '· ' : ''}{seatTerm(event)} {seat_number}</span>}
               </span>
             </div>
           )}

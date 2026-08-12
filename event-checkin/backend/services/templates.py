@@ -25,7 +25,7 @@ PLACEHOLDERS = [
     "event_name", "event_date", "event_time", "organizer_name",
     "rsvp_link", "ticket_link", "festiome_link", "qr_code",
     "venue_name", "venue_address", "event_location",
-    "table_name", "table_group", "seating_term", "ticket_type",
+    "table_name", "table_group", "seating_term", "seat_term", "ticket_type",
     "experience_steps", "experience_steps_text",
     "experience_step_title", "experience_step_message",
     "session_topic", "session_date", "session_time", "session_room", "session_speaker",
@@ -641,6 +641,7 @@ def build_context(event, guest=None, *, extras: dict | None = None) -> dict:
         ctx["venue_name"] = getattr(event, "venue_name", "") or ""
         ctx["venue_address"] = getattr(event, "venue_address", "") or ""
         ctx["seating_term"] = (getattr(event, "seating_term", None) or "Table").strip() or "Table"
+        ctx["seat_term"] = (getattr(event, "seat_term", None) or "Seat").strip() or "Seat"
     if guest is not None:
         first = getattr(guest, "first_name", "") or ""
         last = getattr(guest, "last_name", "") or ""

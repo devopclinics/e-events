@@ -114,7 +114,7 @@ export default function SelfCheckinPage() {
           {(checkin.table_name || checkin.seat_number) && (
             <div className="mt-3 flex justify-center gap-2 text-xs">
               {checkin.table_name && <span className="rounded-full bg-white/60 dark:bg-white/10 px-3 py-1">{checkin.seating_term || 'Table'} {checkin.table_name}</span>}
-              {checkin.seat_number && <span className="rounded-full bg-white/60 dark:bg-white/10 px-3 py-1">Seat {checkin.seat_number}</span>}
+              {checkin.seat_number && <span className="rounded-full bg-white/60 dark:bg-white/10 px-3 py-1">{checkin.seat_term || 'Seat'} {checkin.seat_number}</span>}
             </div>
           )}
         </StatusCard>

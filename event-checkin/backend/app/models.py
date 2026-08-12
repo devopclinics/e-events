@@ -360,6 +360,9 @@ class Event(Base):
     # banquet tables. NULL/blank = "Table" everywhere, unchanged. Does not
     # affect the underlying SeatingTable/TableGroup data model at all.
     seating_term: Mapped[str | None] = mapped_column(String(30), nullable=True)
+    # Same idea as seating_term, but for the individual seat within a table —
+    # e.g. "Bunk" for a cabin, "Chair" for a formal dinner. NULL/blank = "Seat".
+    seat_term: Mapped[str | None] = mapped_column(String(30), nullable=True)
     # Section-based scanning add-on: when True, each scanner device picks one
     # table group ("section", e.g. men's/women's entrance) per session. Walk-ins
     # and group-less manual check-ins at that device route to the active section

@@ -1637,6 +1637,37 @@ function SeatingLabelPanel({ event, onChanged, onFlash }) {
   )
 }
 
+function SeatLabelPanel({ event, onChanged, onFlash }) {
+  const [value, setValue] = useState(event.seat_term || '')
+  const [saving, setSaving] = useState(false)
+
+  async function save() {
+    setSaving(true)
+    try {
+      onChanged(await api.toggleFeatures(event.id, { seat_term: value }))
+      onFlash?.(value ? `Now shown as "${value}" instead of "Seat".` : 'Reset to "Seat".')
+    } catch (e) { onFlash?.(e.message, true) }
+    finally { setSaving(false) }
+  }
+
+  return (
+    <div className="bg-white dark:bg-slate-800 dark:border dark:border-slate-700/60 rounded-xl shadow p-6 space-y-2">
+      <h2 className="font-semibold text-base dark:text-white">What should we call an individual seat?</h2>
+      <p className="text-xs text-gray-400 dark:text-slate-500">
+        Same idea, one level down — only the word "Seat" changes, everywhere a guest or staff member sees it (pass, check-in, messages). Leave blank for the default.
+      </p>
+      <div className="flex flex-wrap items-center gap-2 pt-1">
+        <input type="text" value={value} onChange={(e) => setValue(e.target.value)} placeholder="Seat" maxLength={30}
+          className="w-48 rounded border border-gray-300 dark:border-slate-600 dark:bg-slate-900 px-2 py-1.5 text-sm" />
+        <button onClick={save} disabled={saving || value === (event.seat_term || '')}
+          className="rounded bg-teal-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-teal-700 disabled:opacity-50">
+          {saving ? 'Saving…' : 'Save'}
+        </button>
+      </div>
+    </div>
+  )
+}
+
 function WalkInToggle({ event, onChanged, onFlash }) {
   const [groups, setGroups] = useState([])
   const [loading, setLoading] = useState(false)
@@ -10629,6 +10660,7 @@ export default function AdminPage() {
 
           {activeTab === 'seating' && event.seating_enabled && <>
             <SeatingLabelPanel event={event} onChanged={updateEvent} onFlash={flash} />
+            <SeatLabelPanel event={event} onChanged={updateEvent} onFlash={flash} />
             <SeatingPanel eventId={selectedId} seatingLabel={seatingTerm(event)} />
             <TableGroupsPanel eventId={selectedId} seatingLabel={seatingTerm(event)} />
             <WalkInToggle event={event} onChanged={updateEvent} onFlash={flash} />

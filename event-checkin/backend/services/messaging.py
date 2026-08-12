@@ -86,14 +86,14 @@ async def send_invite_sms(*, phone: str, first_name: str, event_name: str, ticke
     return await _send_sms(phone, branded)
 
 
-async def send_admission_sms(*, phone: str, first_name: str, event_name: str, admitted_at, table_name: str | None, seat_number: str | None, event_timezone: str | None = None, seating_term: str = "Table") -> dict | None:
+async def send_admission_sms(*, phone: str, first_name: str, event_name: str, admitted_at, table_name: str | None, seat_number: str | None, event_timezone: str | None = None, seating_term: str = "Table", seat_term: str = "Seat") -> dict | None:
     if not _channel_ready("sms", phone):
         return
     parts = [f"Welcome {first_name}!", f"Checked in: {event_name}."]
     if admitted_at:
         parts.append(f"Time: {local_hhmm(admitted_at, event_timezone)}.")
     if table_name:
-        seat_bit = f" seat {seat_number}" if seat_number else ""
+        seat_bit = f" {seat_term.lower()} {seat_number}" if seat_number else ""
         parts.append(f"{seating_term}: {table_name}{seat_bit}.")
     branded = _brand_sms_ng(" ".join(parts)) if _is_nigeria_number(phone) else _brand_sms(" ".join(parts))
     return await _send_sms(phone, branded)

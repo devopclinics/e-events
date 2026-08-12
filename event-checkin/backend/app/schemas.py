@@ -217,6 +217,7 @@ class EventOut(BaseModel):
     default_guest_table_group_id: Optional[str] = None
     enforce_table_groups: bool = True
     seating_term: Optional[str] = None
+    seat_term: Optional[str] = None
     section_mode_enabled: bool = False
     manual_checkin_enabled: bool = False
     self_checkin_enabled: bool = False
@@ -1070,6 +1071,7 @@ class FloorPlanOut(BaseModel):
     event_id: str
     event_name: str
     seating_term: str = "Table"
+    seat_term: str = "Seat"
     width: int = 1200
     height: int = 800
     bg_image_url: Optional[str] = None
@@ -1283,6 +1285,7 @@ class SelfCheckinResult(BaseModel):
     seat_number: Optional[str] = None
     admitted_at: Optional[datetime] = None
     seating_term: Optional[str] = None
+    seat_term: Optional[str] = None
 
 
 # ── Superadmin: reset event data ────────────────────────────────────────────────
@@ -1841,6 +1844,7 @@ class EventBrief(BaseModel):
     festiome_addon_enabled: bool = False
     festiome_enabled: bool = False
     seating_term: Optional[str] = None
+    seat_term: Optional[str] = None
 
 
 class PartnerInfo(BaseModel):
@@ -2150,6 +2154,7 @@ class InvitePageOut(BaseModel):
     registry_enabled: bool = False
     registry_token: Optional[str] = None
     seating_term: Optional[str] = None
+    seat_term: Optional[str] = None
     # Invite page display toggles (all default True)
     invite_countdown_enabled: bool = True
     invite_capacity_bar_enabled: bool = True

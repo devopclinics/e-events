@@ -14,7 +14,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from ..database import get_db
 from ..models import Event, Guest
 from ..ratelimit import rate_limit
-from ..seating_terms import seating_term as _seating_term
+from ..seating_terms import seating_term as _seating_term, seat_term as _seat_term
 from ..schemas import SelfCheckinSearch, SelfCheckinResult, SelfCheckinGuest
 from .scanner import perform_admission
 from services.qr_service import generate_qr_for_url
@@ -107,6 +107,7 @@ async def self_checkin_admit(
         seat_number=res.seat_number,
         admitted_at=guest.admitted_at,
         seating_term=_seating_term(ev),
+        seat_term=_seat_term(ev),
     )
 
 

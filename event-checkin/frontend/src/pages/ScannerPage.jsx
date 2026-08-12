@@ -3,7 +3,7 @@ import { Html5Qrcode } from 'html5-qrcode'
 import { Capacitor } from '@capacitor/core'
 import { api } from '../api'
 import { parseUtc } from '../timeutil'
-import { seatingTerm } from '../seatingTerm'
+import { seatingTerm, seatTerm } from '../seatingTerm'
 import { useCurrentEvent } from '../hooks/useCurrentEvent'
 import {
   drainExperienceQueue,
@@ -195,7 +195,7 @@ function ResultCard({ result, onReset, onStepComplete, stepActionLoading, timezo
           )}
           {result.seat_number && (
             <span className="bg-white/20 px-3 py-1 rounded-full">
-              Seat: <strong>{result.seat_number}</strong>
+              {result.seat_term || 'Seat'}: <strong>{result.seat_number}</strong>
             </span>
           )}
         </div>
@@ -484,7 +484,7 @@ function extractScanPayload(raw) {
   return { token: extractToken(value), action: null }
 }
 
-function ManualCheckin({ eventId, onResult, manualEnabled, checkoutEnabled, walkInEnabled, sectionMode, sectionId, sectionPickable, timezone, seatingLabel = 'Table' }) {
+function ManualCheckin({ eventId, onResult, manualEnabled, checkoutEnabled, walkInEnabled, sectionMode, sectionId, sectionPickable, timezone, seatingLabel = 'Table', seatLabel = 'Seat' }) {
   const [q, setQ] = useState('')
   const [results, setResults] = useState([])
   const [searching, setSearching] = useState(false)
@@ -562,7 +562,7 @@ function ManualCheckin({ eventId, onResult, manualEnabled, checkoutEnabled, walk
         {(confirm.table_name || confirm.seat_number) && (
           <p className="text-sm text-gray-500 dark:text-slate-400">
             {confirm.table_name && <>{seatingLabel} <strong>{confirm.table_name}</strong></>}
-            {confirm.seat_number && <> · Seat <strong>{confirm.seat_number}</strong></>}
+            {confirm.seat_number && <> · {seatLabel} <strong>{confirm.seat_number}</strong></>}
           </p>
         )}
         {err && <p className="text-sm text-red-500">{err}</p>}
@@ -657,7 +657,7 @@ function ManualCheckin({ eventId, onResult, manualEnabled, checkoutEnabled, walk
               </div>
               <div className="text-xs text-gray-500 dark:text-slate-400 truncate">
                 {g.phone_masked || 'no phone'}
-                {g.table_name ? ` · ${seatingLabel} ${g.table_name}${g.seat_number ? ` seat ${g.seat_number}` : ''}` : ''}
+                {g.table_name ? ` · ${seatingLabel} ${g.table_name}${g.seat_number ? ` ${seatLabel.toLowerCase()} ${g.seat_number}` : ''}` : ''}
               </div>
             </div>
             {g.admitted
@@ -1350,7 +1350,7 @@ export default function ScannerPage() {
               <ManualCheckin eventId={eventId} manualEnabled={manualEnabled} checkoutEnabled={normalCheckoutEnabled}
                 walkInEnabled={walkInEnabled || manualEnabled}
                 sectionMode={sectionMode} sectionId={sectionId} sectionPickable={tableGroups.length > 1}
-                timezone={selectedEvent?.timezone} seatingLabel={seatingTerm(selectedEvent)}
+                timezone={selectedEvent?.timezone} seatingLabel={seatingTerm(selectedEvent)} seatLabel={seatTerm(selectedEvent)}
                 onResult={(res) => setResult(res)} />
             ) : (
               <>

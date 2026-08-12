@@ -10,3 +10,10 @@ def seating_term(event, *, plural: bool = False, lower: bool = False) -> str:
     if plural:
         term = term if term.endswith("s") else f"{term}s"
     return term.lower() if lower else term
+
+
+def seat_term(event, *, plural: bool = False, lower: bool = False) -> str:
+    term = (getattr(event, "seat_term", None) or "Seat").strip() or "Seat"
+    if plural:
+        term = term if term.endswith("s") else f"{term}s"
+    return term.lower() if lower else term

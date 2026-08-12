@@ -54,6 +54,7 @@ SAMPLE_VALUES = {
     "sessionTime": "6:00 PM",
     "sessionRoom": "Main Hall",
     "message": "Doors open at 5:30 PM. Please bring your pass.",
+    "roomAssignment": "Cabin: Hilltop A",
 }
 
 
@@ -130,6 +131,22 @@ TEMPLATES: list[TemplateDef] = [
         "Hi {{firstName}}, you are checked in to {{eventName}}. "
         "Table: {{tableName}}. Seat: {{seatNumber}}. You are all set.",
         ("firstName", "eventName", "tableName", "seatNumber"),
+    ),
+    # MBF Summit 2026 (Masjid-ul Mumineen) — its own check-in wording, scoped to
+    # this one event only via group="mbf_summit" (see --groups). {{roomAssignment}}
+    # is a single pre-formatted "<Table label>: <table name>" string (e.g. "Cabin:
+    # Hilltop A") rather than separate table/seat vars — this event doesn't surface
+    # individual seat numbers at check-in, just the cabin assignment.
+    TemplateDef(
+        "MBF Summit 2026 check-in",
+        "festio_mbf_summit_2026_checkin",
+        "Salaam Alaykum {{firstName}},\n\n"
+        "You have been successfully checked in to Masjid-ul Mumineen 2026 MBF Summit.\n\n"
+        "Your Assigned Room is:\n\n"
+        "{{roomAssignment}}\n\n"
+        "Enjoy the event!",
+        ("firstName", "roomAssignment"),
+        group="mbf_summit",
     ),
     # Link-based alternative to the inline template above. No seating/room/seat
     # wording baked into the approved copy — the actual details live in the
@@ -464,7 +481,7 @@ def main() -> int:
     parser.add_argument("--workspace-id", default=os.getenv("BIRD_WORKSPACE_ID") or os.getenv("bird_workspace_id", ""))
     parser.add_argument("--access-key", default=os.getenv("BIRD_ACCESS_KEY") or os.getenv("bird_access_key", ""))
     parser.add_argument("--platform", choices=["whatsapp", "rcs"], default="whatsapp")
-    parser.add_argument("--groups", choices=["standard", "experience", "all"], default="all")
+    parser.add_argument("--groups", choices=["standard", "experience", "mbf_summit", "all"], default="all")
     parser.add_argument("--channel-group-id", default=os.getenv("BIRD_WHATSAPP_CHANNEL_GROUP_ID", ""))
     parser.add_argument("--submit", action="store_true", help="Actually call Bird. Omit for dry-run.")
     args = parser.parse_args()

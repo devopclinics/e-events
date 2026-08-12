@@ -221,33 +221,19 @@ async def ticketing_token(
 
 @router.get("/me", response_model=UserOut)
 async def me(user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
-    # Effective role reflects org membership. A user is considered an org admin
-    # only if they are owner/admin in an org that has at least one event. This
-    # prevents staff members (who auto-get an empty personal org on registration)
-    # from being treated as admins when they're really staff at another org.
-    # New organizers are safe because RegisterPage always redirects to /setup
-    # directly, bypassing role-based routing.
-    is_org_admin = bool(await db.scalar(
-        select(Membership.id)
-        .join(Event, Event.org_id == Membership.org_id)
-        .where(
-            Membership.user_id == user.id,
-            Membership.role.in_(["owner", "admin"]),
-        ).limit(1)
-    ))
-    is_event_manager = bool(await db.scalar(
-        select(EventUser.id).where(
-            EventUser.user_id == user.id,
-            EventUser.event_role == "manager",
-        ).limit(1)
-    ))
-    effective_admin = is_org_admin or user.is_platform_superadmin
-    role = "admin" if effective_admin else "event_manager" if is_event_manager else "official"
-    # Redesign cohort of the org the user owns/admins — deliberately NOT
-    # gated on that org having an event (unlike is_org_admin above), so a
-    # brand-new organizer with zero events still gets their org's real
-    # cohort instead of the RedesignGate's zero-event "legacy_only" fallback.
-    redesign_cohort = "legacy_only"
+    # Effective role reflects org membership: a user is an org admin whenever
+    # they are owner/admin of ANY org, regardless of whether that org has an
+    # event yet. This used to also require the org to already have an event,
+    # on the theory that staff members auto-get an empty personal org on
+    # registration and shouldn't be treated as admins on it — but the actual
+    # staff-invite flow (routers/events.py invite_org_member) never creates
+    # that membership; it adds the invitee directly to the host org's real
+    # membership list. So the event-join was gating a scenario that can't
+    # happen, while blocking every brand-new organizer from ever reaching
+    # /setup (ProtectedRoute's setupOnly requires role in admin/event_manager)
+    # until after they'd already created their first event some other way —
+    # a chicken-and-egg lockout. See auth.py's get_current_user for the one
+    # place a personal org + owner Membership is actually provisioned.
     owned_org_id = await db.scalar(
         select(Membership.org_id)
         .where(
@@ -257,6 +243,16 @@ async def me(user: User = Depends(get_current_user), db: AsyncSession = Depends(
         .order_by(Membership.created_at)
         .limit(1)
     )
+    is_org_admin = owned_org_id is not None
+    is_event_manager = bool(await db.scalar(
+        select(EventUser.id).where(
+            EventUser.user_id == user.id,
+            EventUser.event_role == "manager",
+        ).limit(1)
+    ))
+    effective_admin = is_org_admin or user.is_platform_superadmin
+    role = "admin" if effective_admin else "event_manager" if is_event_manager else "official"
+    redesign_cohort = "legacy_only"
     if owned_org_id:
         redesign_cohort = await db.scalar(
             select(Organization.redesign_cohort).where(Organization.id == owned_org_id)

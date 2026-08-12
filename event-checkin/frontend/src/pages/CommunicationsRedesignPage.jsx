@@ -1248,6 +1248,8 @@ function SettingsTab({ notify, eventId, event, onEventChanged }) {
   const [walkInBusy, setWalkInBusy] = useState(false)
   const [seatingTermValue, setSeatingTermValue] = useState('')
   const [seatingTermSaving, setSeatingTermSaving] = useState(false)
+  const [seatTermValue, setSeatTermValue] = useState('')
+  const [seatTermSaving, setSeatTermSaving] = useState(false)
   const [channelTestBusy, setChannelTestBusy] = useState('')
   const [thankYouBusy, setThankYouBusy] = useState('')
   const [thankYouTestGuestId, setThankYouTestGuestId] = useState('')
@@ -1280,6 +1282,7 @@ function SettingsTab({ notify, eventId, event, onEventChanged }) {
     setDefaultGuestGroupId(event.default_guest_table_group_id || '')
     setSectionModeEnabled(!!event.section_mode_enabled)
     setSeatingTermValue(event.seating_term || '')
+    setSeatTermValue(event.seat_term || '')
   }, [event])
 
   useEffect(() => {
@@ -1378,6 +1381,20 @@ function SettingsTab({ notify, eventId, event, onEventChanged }) {
       notify(e.message || 'Could not save', true)
     } finally {
       setSeatingTermSaving(false)
+    }
+  }
+
+  async function saveSeatTerm() {
+    if (!eventId || seatTermSaving) return
+    setSeatTermSaving(true)
+    try {
+      await api.toggleFeatures(eventId, { seat_term: seatTermValue })
+      await onEventChanged?.()
+      notify(seatTermValue ? `Now shown as "${seatTermValue}" instead of "Seat".` : 'Reset to "Seat".')
+    } catch (e) {
+      notify(e.message || 'Could not save', true)
+    } finally {
+      setSeatTermSaving(false)
     }
   }
 
@@ -1672,6 +1689,17 @@ function SettingsTab({ notify, eventId, event, onEventChanged }) {
           <input className="rr-input" disabled={!event} value={seatingTermValue} onChange={(e) => setSeatingTermValue(e.target.value)} placeholder="Table" maxLength={30} />
           <button className="rr-btn primary" disabled={!event || seatingTermSaving || seatingTermValue === (event.seating_term || '')} onClick={saveSeatingTerm}>
             {seatingTermSaving ? 'Saving…' : 'Save'}
+          </button>
+        </div>
+      </div>
+
+      <div className="rr-panel cm-settings-card" style={{ marginBottom: 14 }}>
+        <strong>What should we call an individual seat?</strong>
+        <p>Same idea, one level down — only the word "Seat" changes, everywhere a guest or staff member sees it (pass, check-in, messages). Leave blank for the default.</p>
+        <div className="rd-row2" style={{ maxWidth: 320 }}>
+          <input className="rr-input" disabled={!event} value={seatTermValue} onChange={(e) => setSeatTermValue(e.target.value)} placeholder="Seat" maxLength={30} />
+          <button className="rr-btn primary" disabled={!event || seatTermSaving || seatTermValue === (event.seat_term || '')} onClick={saveSeatTerm}>
+            {seatTermSaving ? 'Saving…' : 'Save'}
           </button>
         </div>
       </div>

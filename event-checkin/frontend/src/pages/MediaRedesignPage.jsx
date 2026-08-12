@@ -34,6 +34,14 @@ export default function MediaRedesignPage() {
         </div>
         <a href="/help-redesign" target="_blank" rel="noreferrer" className="rr-btn primary">Open Help Guide</a>
       </div>
+      <div className="rr-panel" style={{ padding: 18, display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
+        <div>
+          <div style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.03em', color: 'var(--accent)' }}>Password-protected</div>
+          <strong style={{ fontSize: 14 }}>Festio Knowledge Transfer</strong>
+          <p className="rd-hint" style={{ marginTop: 4 }}>Product ecosystem maps, guest-journey flows, and step-by-step feature guides for onboarding new team members.</p>
+        </div>
+        <a href="/knowledge-transfer/" target="_blank" rel="noreferrer" className="rr-btn secondary">Open Knowledge Transfer</a>
+      </div>
 
       <div className="rr-section-title"><div><h2>Internal documentation</h2></div></div>
       <div className="rr-grid3">

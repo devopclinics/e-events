@@ -504,6 +504,18 @@ export default function MediaPage() {
             Open Help Guide
           </a>
         </div>
+        <div className="mt-3 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl p-4 shadow-sm flex items-start justify-between gap-3 flex-wrap">
+          <div>
+            <div className="text-xs font-bold uppercase tracking-wide text-amber-600 dark:text-amber-400">Password-protected</div>
+            <h3 className="mt-1 font-semibold text-slate-950 dark:text-white">Festio Knowledge Transfer</h3>
+            <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">Product ecosystem maps, guest-journey flows, and step-by-step feature guides for onboarding new team members.</p>
+          </div>
+          <a href="/knowledge-transfer/" target="_blank" rel="noreferrer"
+            className="inline-flex items-center gap-1.5 rounded-lg border border-slate-300 dark:border-slate-600 px-3 py-2 text-sm font-semibold text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-700 shrink-0">
+            <ExternalIcon className="h-4 w-4" />
+            Open Knowledge Transfer
+          </a>
+        </div>
       </section>
 
       <section>

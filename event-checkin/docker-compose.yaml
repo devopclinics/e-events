@@ -9,6 +9,8 @@ services:
       - ./proxy.conf:/etc/nginx/conf.d/default.conf:ro
       - ./team-docs:/usr/share/nginx/team-docs:ro
       - ./proxy-htpasswd-team-docs:/etc/nginx/.htpasswd-team-docs:ro
+      - ./knowledge-transfer:/usr/share/nginx/knowledge-transfer:ro
+      - ./proxy-htpasswd-knowledge-transfer:/etc/nginx/.htpasswd-knowledge-transfer:ro
     depends_on:
       - frontend
       - backend

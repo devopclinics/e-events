@@ -17,3 +17,4 @@ frontend/test-results/
 **/__pycache__/
 **/*.pyc
 **/*.pyo
+proxy-htpasswd-knowledge-transfer

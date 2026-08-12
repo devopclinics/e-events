@@ -363,6 +363,14 @@ class Event(Base):
     # Same idea as seating_term, but for the individual seat within a table —
     # e.g. "Bunk" for a cabin, "Chair" for a formal dinner. NULL/blank = "Seat".
     seat_term: Mapped[str | None] = mapped_column(String(30), nullable=True)
+    # Order candidate tables are tried in during automatic seat assignment
+    # (assign_next_seat) — "sequential" (default) fills tables in sort_order/name
+    # order before moving to the next; "random" shuffles the candidate list per
+    # assignment call, spreading walk-ins/unassigned guests across tables rather
+    # than always packing the first one first. Table-group filtering (which
+    # tables are even candidates) is unaffected — this only reorders within
+    # whatever set is already eligible.
+    seat_assignment_order: Mapped[str] = mapped_column(String(20), default="sequential")
     # Section-based scanning add-on: when True, each scanner device picks one
     # table group ("section", e.g. men's/women's entrance) per session. Walk-ins
     # and group-less manual check-ins at that device route to the active section

@@ -1250,6 +1250,7 @@ function SettingsTab({ notify, eventId, event, onEventChanged }) {
   const [seatingTermSaving, setSeatingTermSaving] = useState(false)
   const [seatTermValue, setSeatTermValue] = useState('')
   const [seatTermSaving, setSeatTermSaving] = useState(false)
+  const [seatOrderValue, setSeatOrderValue] = useState('sequential')
   const [channelTestBusy, setChannelTestBusy] = useState('')
   const [thankYouBusy, setThankYouBusy] = useState('')
   const [thankYouTestGuestId, setThankYouTestGuestId] = useState('')
@@ -1283,6 +1284,7 @@ function SettingsTab({ notify, eventId, event, onEventChanged }) {
     setSectionModeEnabled(!!event.section_mode_enabled)
     setSeatingTermValue(event.seating_term || '')
     setSeatTermValue(event.seat_term || '')
+    setSeatOrderValue(event.seat_assignment_order || 'sequential')
   }, [event])
 
   useEffect(() => {
@@ -1360,6 +1362,19 @@ function SettingsTab({ notify, eventId, event, onEventChanged }) {
     } catch (e) {
       setDefaultGuestGroupId(event?.default_guest_table_group_id || '')
       notify(e.message || 'Default guest group could not be saved', true)
+    }
+  }
+
+  async function changeSeatOrder(order) {
+    const previous = seatOrderValue
+    setSeatOrderValue(order)
+    try {
+      await api.toggleFeatures(eventId, { seat_assignment_order: order })
+      await onEventChanged?.()
+      notify(order === 'random' ? 'Now spreading guests across tables' : 'Now filling tables in order')
+    } catch (e) {
+      setSeatOrderValue(previous)
+      notify(e.message || 'Assignment order could not be saved', true)
     }
   }
 
@@ -1734,12 +1749,25 @@ function SettingsTab({ notify, eventId, event, onEventChanged }) {
           <div className="cm-toggle-top">
             <strong>Invited guests without an assignment</strong>
           </div>
-          <p>At check-in, route known guests who have no table or group into this group. Tables fill in order before the next table is used.</p>
+          <p>At check-in, route known guests who have no table or group into this group. {seatOrderValue === 'random' ? `${seatingTerm(event, { plural: true })} are picked in random order` : `${seatingTerm(event, { plural: true })} fill in order before the next ${seatingTerm(event, { lower: true })} is used`} — see {seatingTerm(event)} fill order below.</p>
           <div style={{ marginTop: 8 }}>
             <label className="rd-field-label">Default {seatingTerm(event, { lower: true })} group</label>
             <select className="rr-select gr-inline-select" value={defaultGuestGroupId} onChange={(e) => changeDefaultGuestGroup(e.target.value)}>
               <option value="">— none (seat anywhere) —</option>
               {tableGroups.map((g) => <option key={g.id} value={g.id}>{g.name}</option>)}
+            </select>
+          </div>
+        </div>
+
+        <div className="rr-panel cm-toggle-card cm-settings-card">
+          <div className="cm-toggle-top">
+            <strong>{seatingTerm(event)} fill order</strong>
+          </div>
+          <p>How candidate {seatingTerm(event, { lower: true, plural: true })} are tried during automatic assignment — walk-ins, unassigned guests routed to a group, and admission-time seating. Table-group restrictions (which {seatingTerm(event, { lower: true, plural: true })} are eligible at all) are unaffected either way.</p>
+          <div style={{ marginTop: 8 }}>
+            <select className="rr-select gr-inline-select" value={seatOrderValue} onChange={(e) => changeSeatOrder(e.target.value)}>
+              <option value="sequential">Sequential — fill each {seatingTerm(event, { lower: true })} before the next</option>
+              <option value="random">Random — spread guests across {seatingTerm(event, { lower: true, plural: true })}</option>
             </select>
           </div>
         </div>

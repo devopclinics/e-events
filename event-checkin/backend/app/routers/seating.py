@@ -1,3 +1,4 @@
+import random
 from datetime import datetime
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -126,19 +127,27 @@ async def assign_next_seat(guest: Guest, db: AsyncSession) -> str | None:
     if not tables:
         return None  # no tables configured; admit without seat (seating unused)
 
+    event = await db.get(Event, guest.event_id)
+
     # Table Groups: if this guest is assigned to a group and the event enforces
     # it, restrict the candidate tables to that group's tables. All downstream
     # FCFS/partner/held-seat/capacity logic then operates on this subset, so the
     # existing rules are preserved unchanged. Guests with no group are unaffected.
-    if guest.assigned_table_group_id:
-        event = await db.get(Event, guest.event_id)
-        if event is None or event.enforce_table_groups:
-            allowed_ids = await group_table_ids(guest.assigned_table_group_id, db)
-            tables = [t for t in tables if t.id in allowed_ids]
-            if not tables:
-                grp = await db.get(TableGroup, guest.assigned_table_group_id)
-                gname = grp.name if grp else "their table group"
-                return f"Table group '{gname}' is full — no seat available."
+    if guest.assigned_table_group_id and (event is None or event.enforce_table_groups):
+        allowed_ids = await group_table_ids(guest.assigned_table_group_id, db)
+        tables = [t for t in tables if t.id in allowed_ids]
+        if not tables:
+            grp = await db.get(TableGroup, guest.assigned_table_group_id)
+            gname = grp.name if grp else "their table group"
+            return f"Table group '{gname}' is full — no seat available."
+
+    # Fill order within whatever set is eligible above (all tables, or the
+    # guest's group). "sequential" (default) keeps sort_order/name — spread
+    # via "random" only reorders candidates, it never changes which tables
+    # are eligible.
+    if event is not None and event.seat_assignment_order == "random":
+        tables = list(tables)
+        random.shuffle(tables)
 
     partner = await db.get(Guest, guest.partner_guest_id) if guest.partner_guest_id else None
 

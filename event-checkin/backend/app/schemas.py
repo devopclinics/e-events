@@ -218,6 +218,7 @@ class EventOut(BaseModel):
     enforce_table_groups: bool = True
     seating_term: Optional[str] = None
     seat_term: Optional[str] = None
+    seat_assignment_order: str = "sequential"
     section_mode_enabled: bool = False
     manual_checkin_enabled: bool = False
     self_checkin_enabled: bool = False

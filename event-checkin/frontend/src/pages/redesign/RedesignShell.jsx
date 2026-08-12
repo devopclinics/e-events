@@ -141,11 +141,12 @@ export function Icon({ name, size = 18, className }) {
   return <svg className={className} width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">{paths[name]}</svg>
 }
 
-// Mirrors the real top nav (App.jsx Nav, :85-203). Destinations point at the
-// mockup routes closest to each real page; where the real link goes to a
-// different surface entirely (Check-in -> /scanner live camera tool,
-// Orders -> /kitchen live fulfillment display) we point at the admin-side
-// management mockup instead, since the live field tools aren't in scope here.
+// Mirrors the real top nav (App.jsx Nav, :85-203). Destinations point
+// directly at each item's redesign page — Check-in and Orders used to
+// route through their legacy URLs (/scanner, /kitchen) on the theory that
+// those live field tools weren't in scope yet, but ScannerRedesignPage and
+// KitchenRedesignPage are both fully wired now, so linking through legacy
+// only added a pointless RedesignGate redirect hop.
 //
 // `gate(ctx)` mirrors the exact visibility rules in the real Nav component
 // (App.jsx :104-136) — ctx is { user, event }. No gate = always shown.
@@ -174,7 +175,7 @@ const TOP_LINKS = [
     id: 'festiome', label: 'FestioMe', to: '/festiome-redesign', icon: 'chat',
     gate: ({ event }) => !!event?.festiome_addon_enabled && !(event?.blocked_comm_features || []).includes('festiome'),
   },
-  { id: 'checkin', label: 'Check-in', to: '/scanner', icon: 'ticket' },
+  { id: 'checkin', label: 'Check-in', to: '/scanner-redesign', icon: 'ticket' },
   {
     id: 'orders', label: 'Orders', to: '/kitchen-redesign', icon: 'card',
     gate: ({ event }) => !!event?.menu_enabled,

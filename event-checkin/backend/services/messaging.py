@@ -126,9 +126,24 @@ async def send_experience_invite_whatsapp(*, phone: str, first_name: str, event_
     )
 
 
-async def send_admission_whatsapp(*, phone: str, first_name: str, event_name: str, table_name: str | None, seat_number: str | None, seating_term: str = "Table", hub_url: str | None = None) -> dict | None:
+async def send_admission_whatsapp(*, phone: str, first_name: str, event_name: str, table_name: str | None, seat_number: str | None, seating_term: str = "Table", hub_url: str | None = None, event_id: str | None = None) -> dict | None:
     if not _channel_ready("whatsapp", phone):
         return
+    # One-off per-event override — see whatsapp_checkin_override_* in
+    # app/config.py. Takes precedence over both paths below: this event gets
+    # its own approved copy regardless of whether the link-based template is
+    # configured platform-wide.
+    if (
+        event_id
+        and settings.whatsapp_checkin_override_event_id
+        and event_id == settings.whatsapp_checkin_override_event_id
+        and settings.whatsapp_checkin_override_template
+    ):
+        room = f"{seating_term}: {table_name}" if table_name else "—"
+        return await _bird_whatsapp_send(
+            phone, settings.whatsapp_checkin_override_template,
+            [first_name, room], ["firstName", "roomAssignment"],
+        )
     # Prefer the link-based template once configured: its approved copy only
     # has firstName/eventName/hubLink variables, so any future wording change
     # (seating label, extra fields, restyled Hub, ...) needs zero Meta
@@ -751,6 +766,29 @@ def _bird_whatsapp_template_for(kind: str) -> str:
     }.get(kind, "")
 
 
+async def _bird_whatsapp_send(phone: str, template: str, params: list[str],
+                              var_keys: list[str] | None = None) -> dict | None:
+    """POST a WhatsApp template message via Bird given an explicit template
+    reference (config's "projectId:version" string — version optional, Bird
+    uses the active version when omitted). Factored out of _send_whatsapp_template
+    so a caller with its own resolved template (e.g. a per-event override) can
+    send without going through the kind -> settings lookup below."""
+    project_id, _, version = template.partition(":")
+    keys = var_keys or [str(i + 1) for i in range(len(params))]
+    parameters = [{"type": "string", "key": k, "value": v} for k, v in zip(keys, params)]
+    template_ref: dict = {
+        "projectId": project_id.strip(),
+        "locale": settings.bird_whatsapp_locale or "en",
+        "parameters": parameters,
+    }
+    if version.strip():
+        template_ref["version"] = version.strip()
+    return await _bird_post(settings.bird_whatsapp_channel_id, {
+        "receiver": _bird_recipient(phone),
+        "template": template_ref,
+    })
+
+
 async def _send_whatsapp_template(*, phone: str, kind: str, params: list[str],
                                   var_keys: list[str] | None = None) -> dict | None:
     """Pick a provider template for a WhatsApp lifecycle message.
@@ -763,23 +801,7 @@ async def _send_whatsapp_template(*, phone: str, kind: str, params: list[str],
         if not template:
             logger.warning("Bird WhatsApp %s template not set — skipping", kind)
             return
-        # Bird references a WhatsApp template by its project id + version (both
-        # UUIDs), NOT by name. Config holds "projectId:version" (version optional;
-        # Bird uses the active version when omitted).
-        project_id, _, version = template.partition(":")
-        keys = var_keys or [str(i + 1) for i in range(len(params))]
-        parameters = [{"type": "string", "key": k, "value": v} for k, v in zip(keys, params)]
-        template_ref: dict = {
-            "projectId": project_id.strip(),
-            "locale": settings.bird_whatsapp_locale or "en",
-            "parameters": parameters,
-        }
-        if version.strip():
-            template_ref["version"] = version.strip()
-        return await _bird_post(settings.bird_whatsapp_channel_id, {
-            "receiver": _bird_recipient(phone),
-            "template": template_ref,
-        })
+        return await _bird_whatsapp_send(phone, template, params, var_keys)
     elif provider == "twilio":
         sid = (
             settings.twilio_whatsapp_invite_template_sid if kind == "invite"

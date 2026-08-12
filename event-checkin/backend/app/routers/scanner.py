@@ -1210,6 +1210,7 @@ async def perform_admission(guest, event, background_tasks, db) -> ScanResult:
             table_name=table_name, seat_number=guest.seat_number,
             seating_term=_seating_term(event) if event else "Table",
             hub_url=hub_url,
+            event_id=event.id if event else None,
         )
     # MMS (image ticket card) — super-admin-enabled per event. Sends the styled
     # admitted card fetched directly from /api/scan/{token}/card.jpg.

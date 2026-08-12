@@ -2403,11 +2403,28 @@ function Access() {
   const [rows, setRows] = useState([]),
     [email, setEmail] = useState(""),
     [role, setRole] = useState("marketer"),
-    [ownerScoped, setOwnerScoped] = useState(false);
+    [ownerScoped, setOwnerScoped] = useState(false),
+    [defaultOwner, setDefaultOwner] = useState(""),
+    [savingDefaultOwner, setSavingDefaultOwner] = useState(false),
+    [notice, setNotice] = useState("");
   const load = () => api.marketingAccess().then(setRows);
   useEffect(() => {
     load();
+    api.marketingSettings().then((s) => setDefaultOwner(s.default_owner_email || ""));
   }, []);
+  async function saveDefaultOwner(e) {
+    e.preventDefault();
+    setSavingDefaultOwner(true);
+    try {
+      const result = await api.marketingUpdateSettings({ default_owner_email: defaultOwner });
+      setDefaultOwner(result.default_owner_email);
+      setNotice("Default owner saved");
+    } catch (error) {
+      setNotice(error.message);
+    } finally {
+      setSavingDefaultOwner(false);
+    }
+  }
   return (
     <div className="mk-workspace mk-access space-y-4">
       <SectionIntro
@@ -2416,6 +2433,35 @@ function Access() {
         copy="Grant focused Marketing access without exposing the Operator Console, organizations, or event administration."
         count={rows.filter((r) => r.active).length}
       />
+      {notice && <div className="mk-notice">{notice}</div>}
+      <section className="mk-panel">
+        <div className="mk-panel-head">
+          <div>
+            <span>DEFAULT OWNERSHIP</span>
+            <h3>New lead default owner</h3>
+          </div>
+        </div>
+        <form
+          style={{ display: "flex", gap: 10, marginTop: 14 }}
+          onSubmit={saveDefaultOwner}
+        >
+          <input
+            style={{ flex: 1, minHeight: 40, padding: "0 12px", border: "1px solid var(--line)", borderRadius: 8 }}
+            type="email"
+            required
+            placeholder="owner@festio.events"
+            value={defaultOwner}
+            onChange={(e) => setDefaultOwner(e.target.value)}
+          />
+          <button className="mk-btn-primary" disabled={savingDefaultOwner}>
+            {savingDefaultOwner ? "Saving…" : "Save default owner"}
+          </button>
+        </form>
+        <p style={{ marginTop: 10, color: "#96a3a1", fontSize: 10 }}>
+          New leads that register on festio.events (with no more specific
+          form-level default) are automatically assigned to this owner.
+        </p>
+      </section>
       <section className="mk-access-grant">
         <div>
           <span>INVITE A TEAM MEMBER</span>

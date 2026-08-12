@@ -44,6 +44,9 @@ logger = logging.getLogger("festio.marketing")
 class Base(DeclarativeBase): pass
 def uid(): return str(uuid.uuid4())
 def now(): return datetime.now(timezone.utc)
+def default_owner_email(db: Session) -> str:
+    row = db.get(MarketingSettings, "singleton")
+    return (row.default_owner_email if row else None) or os.getenv("MARKETING_DEFAULT_OWNER", "muritala@festio.events")
 
 
 class AccessGrant(Base):
@@ -57,6 +60,17 @@ class AccessGrant(Base):
     owner_scoped: Mapped[bool] = mapped_column(Boolean, default=False)
     granted_by: Mapped[str] = mapped_column(String(240))
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now)
+
+
+class MarketingSettings(Base):
+    """Singleton row (id='singleton') for workspace-wide settings editable from
+    the UI — currently just the default owner assigned to newly-ingested leads,
+    which previously only had an env-var fallback (MARKETING_DEFAULT_OWNER)."""
+    __tablename__ = "marketing_settings"
+    id: Mapped[str] = mapped_column(String(20), primary_key=True, default=lambda: "singleton")
+    default_owner_email: Mapped[str | None] = mapped_column(String(240), nullable=True)
+    updated_by: Mapped[str | None] = mapped_column(String(240), nullable=True)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now, onupdate=now)
 
 
 class Lead(Base):
@@ -612,7 +626,7 @@ async def submit_public_form(public_token: str, body: dict, request: Request, db
     if not lead:
         allowed={"name","phone","organization","event_type","event_date","guest_count","country","source","medium","campaign","referrer","landing_page"}
         values={key:value for key,value in body.items() if key in allowed};values["source"]=values.get("source") or f"form:{row.name}"
-        lead=Lead(email=email,owner_email=row.owner_email or os.getenv("MARKETING_DEFAULT_OWNER","muritala@festio.events"),registered_at=now(),**values);db.add(lead);db.flush()
+        lead=Lead(email=email,owner_email=row.owner_email or default_owner_email(db),registered_at=now(),**values);db.add(lead);db.flush()
     db.add(Activity(lead_id=lead.id,kind="form_submitted",summary=f"Submitted {row.name}",actor="public_form",data={"form_id":row.id}))
     audit(db,"public_form","form.submitted","lead",lead.id,form_id=row.id);db.commit();return {"ok":True,"message":row.payload.get("success_message") or "Thanks. Our team will follow up shortly."}
 
@@ -637,7 +651,7 @@ def ingest(body: dict, identity: Identity = Depends(decode_identity), db: Sessio
         # affirmative opt-in feeds this ingest call, so auto-consenting every signup to
         # marketing email is not a defensible basis under GDPR/CAN-SPAM. Leads need a
         # real opt-in path (e.g. a preferences page) before automation can reach them.
-        row = Lead(email=email, festio_user_id=subject or None, name=body.get("name") or "", source=body.get("source") or "website", stage=body.get("stage") or "registered", owner_email=os.getenv("MARKETING_DEFAULT_OWNER", "muritala@festio.events"), registered_at=registered_at or now(), last_active_at=now(), next_follow_up_at=now() + timedelta(hours=1))
+        row = Lead(email=email, festio_user_id=subject or None, name=body.get("name") or "", source=body.get("source") or "website", stage=body.get("stage") or "registered", owner_email=default_owner_email(db), registered_at=registered_at or now(), last_active_at=now(), next_follow_up_at=now() + timedelta(hours=1))
         db.add(row); db.flush(); db.add(Activity(lead_id=row.id, kind="registered", summary="Festio account registered", actor="festio"))
     else:
         row.last_active_at = now()
@@ -705,6 +719,27 @@ def grant_access(body: GrantIn, identity: Identity = Depends(require_superadmin)
 def revoke_access(grant_id: str, identity: Identity = Depends(require_superadmin), db: Session = Depends(db_session)):
     row = db.get(AccessGrant, grant_id)
     if row: row.active = False; audit(db, identity, "access.revoked", "access_grant", row.id, email=row.email); db.commit()
+
+
+@app.get("/api/marketing/settings")
+def get_marketing_settings(identity: Identity = Depends(require_manager), db: Session = Depends(db_session)):
+    return {"default_owner_email": default_owner_email(db)}
+
+
+class MarketingSettingsIn(BaseModel):
+    default_owner_email: EmailStr
+
+
+@app.put("/api/marketing/settings")
+def update_marketing_settings(body: MarketingSettingsIn, identity: Identity = Depends(require_manager), db: Session = Depends(db_session)):
+    row = db.get(MarketingSettings, "singleton")
+    if not row:
+        row = MarketingSettings(id="singleton"); db.add(row)
+    row.default_owner_email = body.default_owner_email.lower()
+    row.updated_by = identity.email
+    audit(db, identity, "settings.default_owner_changed", "marketing_settings", "singleton", default_owner_email=row.default_owner_email)
+    db.commit(); db.refresh(row)
+    return {"default_owner_email": row.default_owner_email}
 
 
 @app.get("/api/marketing/leads")

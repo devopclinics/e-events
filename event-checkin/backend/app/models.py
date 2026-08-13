@@ -50,11 +50,50 @@ class Organization(Base):
     # keys inherit the platform-wide catalog setting. Event overrides take
     # precedence over these organization defaults.
     addon_overrides: Mapped[dict | None] = mapped_column(JSON, nullable=True)
+    purchased_addons: Mapped[list | None] = mapped_column(JSON, nullable=True)
+    # Event Pass v2 is organization-scoped. These additive fields deliberately
+    # coexist with event-level billing during the staging rollout.
+    event_pass_tier: Mapped[str | None] = mapped_column(String(50), nullable=True)
+    event_pass_status: Mapped[str] = mapped_column(String(20), default="free")
+    event_pass_started_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    event_pass_expires_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    event_pass_guest_cap: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    addon_promo_expires_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    free_event_used: Mapped[bool] = mapped_column(Boolean, default=False)
+    # Integer tenths of one message credit: email costs 1 unit (0.1 credit).
+    message_credit_units: Mapped[int] = mapped_column(Integer, default=100)
     # Partner referral program: which org's referral link/code this one signed
     # up through. `slug` doubles as the referral code — set once, at signup,
     # never overwritten (an org can't be re-attributed later).
     referred_by_org_id: Mapped[str | None] = mapped_column(
         String(36), ForeignKey("organizations.id"), nullable=True)
+
+
+class OrganizationEntitlementAudit(Base):
+    """Immutable operator audit trail for Event Pass and wallet changes."""
+    __tablename__ = "organization_entitlement_audits"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+    org_id: Mapped[str] = mapped_column(String(36), ForeignKey("organizations.id"), index=True)
+    actor_user_id: Mapped[str] = mapped_column(String(36), ForeignKey("users.id"), index=True)
+    action: Mapped[str] = mapped_column(String(50))
+    reason: Mapped[str] = mapped_column(Text)
+    before: Mapped[dict | None] = mapped_column(JSON, nullable=True)
+    after: Mapped[dict | None] = mapped_column(JSON, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, index=True)
+
+
+class OrganizationPassNotice(Base):
+    """Deduplicates pass-expiry emails for each organization and milestone."""
+    __tablename__ = "organization_pass_notices"
+    __table_args__ = (UniqueConstraint("org_id", "expires_at", "days_before", name="uq_org_pass_notice"),)
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+    org_id: Mapped[str] = mapped_column(String(36), ForeignKey("organizations.id"), index=True)
+    expires_at: Mapped[datetime] = mapped_column(DateTime)
+    days_before: Mapped[int] = mapped_column(Integer)
+    recipient: Mapped[str] = mapped_column(String(255))
+    sent_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
 
 
 class Membership(Base):
@@ -346,6 +385,14 @@ class Event(Base):
     # String (no FK) to avoid an extra Event↔TableGroup mapper relationship.
     walk_in_enabled: Mapped[bool] = mapped_column(Boolean, default=False)
     walk_in_table_group_id: Mapped[str | None] = mapped_column(String(36), nullable=True)
+    # When True, staff registering a walk-in may pick ANY of the event's table
+    # groups for that guest instead of always landing in walk_in_table_group_id.
+    # Off by default so existing events keep today's single-default behavior
+    # unchanged; only meaningful for events with more than one table group.
+    # Ignored while section_mode_enabled is on (that flow already resolves the
+    # group from the staffer's assigned section, by design — see
+    # _resolve_section_group in routers/guests.py).
+    walk_in_group_choice_enabled: Mapped[bool] = mapped_column(Boolean, default=False)
     # Existing invited guests who reach check-in without a table or group can
     # be routed into a configured default group. This is intentionally separate
     # from walk_in_table_group_id: they are known guests, not door walk-ins.
@@ -748,6 +795,10 @@ class MessageCreditLedger(Base):
     reason: Mapped[str | None] = mapped_column(String(120), nullable=True)
     provider: Mapped[str | None] = mapped_column(String(60), nullable=True)
     provider_message_id: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    idempotency_key: Mapped[str | None] = mapped_column(String(255), nullable=True, unique=True, index=True)
+    credit_units: Mapped[int] = mapped_column(Integer, default=0)
+    unit_delta: Mapped[int] = mapped_column(Integer, default=0)
+    unit_balance_after: Mapped[int] = mapped_column(Integer, default=0)
     units: Mapped[int] = mapped_column(Integer, default=1)
     unit_weight: Mapped[int] = mapped_column(Integer, default=1)
     credits: Mapped[int] = mapped_column(Integer, default=0)

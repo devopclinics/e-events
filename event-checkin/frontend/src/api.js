@@ -754,6 +754,8 @@ export const api = {
     req('PATCH', `/events/${eventId}/walk-in-group`, {
       table_group_id: tableGroupId,
     }),
+  setWalkInGroupChoice: (eventId, enabled) =>
+    req('PATCH', `/events/${eventId}/walk-in-group-choice`, { enabled }),
   setDefaultGuestGroup: (eventId, tableGroupId) =>
     req('PATCH', `/events/${eventId}/default-guest-group`, {
       table_group_id: tableGroupId,
@@ -1047,6 +1049,7 @@ export const api = {
   // Billing (Event Pass)
   getBillingTiers: (eventId) => req('GET', `/billing/tiers/${eventId}`),
   getCreditLedger: (eventId) => req('GET', `/billing/credits/${eventId}`),
+  getEventPass: (eventId) => req('GET', `/billing/event-pass/${eventId}`),
   checkout: (eventId, tier) => req('POST', '/billing/checkout', { event_id: eventId, tier }),
   setBillingCurrency: (eventId, currency) => req('POST', '/billing/currency', { event_id: eventId, currency }),
   // Public marketing pricing. Auth is optional: signed in with a paid event
@@ -1078,6 +1081,8 @@ export const api = {
   adminListAccounts: () => req('GET', '/admin/accounts'),
   adminSetOrgActive: (orgId, active) => req('PATCH', `/admin/orgs/${orgId}/active`, { active }),
   adminSetOrgRedesignCohort: (orgId, redesign_cohort) => req('PATCH', `/admin/orgs/${orgId}/redesign-cohort`, { redesign_cohort }),
+  adminGetOrgEventPass: (orgId) => req('GET', `/admin/orgs/${orgId}/event-pass`),
+  adminUpdateOrgEventPass: (orgId, body) => req('PATCH', `/admin/orgs/${orgId}/event-pass`, body),
   adminDeleteOrg: (orgId) => req('DELETE', `/admin/orgs/${orgId}`),
   adminSetMemberRole: (orgId, userId, role) => req('PATCH', `/admin/orgs/${orgId}/members/${userId}`, { role }),
   adminRemoveMember: (orgId, userId) => req('DELETE', `/admin/orgs/${orgId}/members/${userId}`),

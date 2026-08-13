@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { api } from '../api'
+import { seatingTerm } from '../seatingTerm'
 import { useCurrentEvent } from '../hooks/useCurrentEvent'
 import { useEventDetails } from '../hooks/useEventDetails'
 import QrCameraScanner from '../components/QrCameraScanner'
@@ -215,6 +216,18 @@ function ManualMode({ event, sections, onResult }) {
   const [walkin, setWalkin] = useState(false)
   const [form, setForm] = useState({ first_name: '', last_name: '', email: '', phone: '' })
   const [sectionId, setSectionId] = useState(sections.length === 1 ? sections[0].id : '')
+  const [tableGroups, setTableGroups] = useState([])
+  const [walkinGroupId, setWalkinGroupId] = useState('')
+  const groupChoiceEnabled = !!event?.walk_in_group_choice_enabled && !event?.section_mode_enabled
+
+  useEffect(() => {
+    if (!event?.id || !groupChoiceEnabled) { setTableGroups([]); return }
+    api.listTableGroups(event.id).then(setTableGroups).catch(() => setTableGroups([]))
+  }, [event?.id, groupChoiceEnabled])
+
+  useEffect(() => {
+    setWalkinGroupId(event?.walk_in_table_group_id || '')
+  }, [event?.walk_in_table_group_id])
 
   useEffect(() => {
     if (!event?.id || (!event.manual_checkin_enabled && !event.checkout_enabled) || query.trim().length < 2) { setResults([]); return }
@@ -257,7 +270,7 @@ function ManualMode({ event, sections, onResult }) {
         ...form,
         email: form.email.trim() || null,
         phone: form.phone.trim() || null,
-        table_group_id: event.section_mode_enabled ? sectionId || null : null,
+        table_group_id: event.section_mode_enabled ? (sectionId || null) : groupChoiceEnabled ? (walkinGroupId || null) : null,
       })
       onResult(response); setWalkin(false); setForm({ first_name: '', last_name: '', email: '', phone: '' })
     } catch (err) { setError(err.message); onResult({ status: 'invalid', message: err.message }) }
@@ -305,6 +318,15 @@ function ManualMode({ event, sections, onResult }) {
         <label className="rd-field-label">Last name</label><input className="rd-field" value={form.last_name} onChange={(e) => setForm({ ...form, last_name: e.target.value })}/>
         <label className="rd-field-label">Email</label><input className="rd-field" type="email" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })}/>
         <label className="rd-field-label">Phone</label><input className="rd-field" type="tel" value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })}/>
+        {groupChoiceEnabled && tableGroups.length > 0 && (
+          <>
+            <label className="rd-field-label">{seatingTerm(event)} group</label>
+            <select className="rd-field" value={walkinGroupId} onChange={(e) => setWalkinGroupId(e.target.value)}>
+              <option value="">— none (seat anywhere) —</option>
+              {tableGroups.map((g) => <option key={g.id} value={g.id}>{g.name}</option>)}
+            </select>
+          </>
+        )}
         <p className="sc-empty">Contact details are optional and saved to the guest record.</p>
         <button className="rr-btn primary" disabled={!form.first_name.trim() || busyId === 'walkin'}>{busyId === 'walkin' ? 'Registering…' : 'Register & check in'}</button>
       </form>}

@@ -217,6 +217,7 @@ class EventOut(BaseModel):
     post_event_thankyou_sent_at: Optional[datetime] = None
     walk_in_enabled: bool = False
     walk_in_table_group_id: Optional[str] = None
+    walk_in_group_choice_enabled: bool = False
     default_guest_table_group_id: Optional[str] = None
     enforce_table_groups: bool = True
     seating_term: Optional[str] = None
@@ -326,6 +327,15 @@ class MemberRoleUpdate(BaseModel):
 class GrantRequest(BaseModel):
     tier: Optional[str] = None          # comp this event onto a tier
     add_credits: Optional[int] = None   # add message credits
+
+
+class OrganizationEntitlementUpdate(BaseModel):
+    reason: str
+    tier: Optional[str] = None
+    guest_cap: Optional[int] = None
+    extend_pass_days: Optional[int] = None
+    extend_addon_promo_days: Optional[int] = None
+    credit_delta_units: Optional[int] = None
 
 
 # ── Guest tags & gates (tag-based zone access) ───────────────────────────────

@@ -21,7 +21,8 @@ from ..schemas import (
 from ..schemas import ActiveToggle
 from ..auth import require_admin, require_event_admin, get_current_user, _org_role
 from ..config import settings
-from ..entitlements import assert_feature_allowed, can_use_paid_channels, grant_message_credits, last_credit_ledger_id, record_free_send, take_message_credit
+from ..organization_entitlements import assert_can_create_event, assert_event_configuration_allowed, pass_is_active, snapshot_new_event
+from ..entitlements import assert_feature_allowed, can_use_paid_channels, grant_message_credits, last_credit_ledger_id, record_free_send, reserve_message_credit
 from .guests import import_from_source_url, import_warning_summary, _normalize_phone
 from services import messaging
 from services.credit_ledger import send_with_credit_ledger
@@ -248,12 +249,17 @@ async def create_event(
     )
     if not org_id:
         raise HTTPException(403, "You don't belong to an organization")
-    # Free-plan gate: an org that has never paid for an Event Pass may create
-    # only its first event free; creating additional events requires paying
-    # for at least one Event Pass first. Once an org has any paid event, the
-    # cap never applies again — each new event still starts unpaid/draft as
-    # usual, it just isn't blocked. Superadmins bypass this (QA/demo orgs).
-    if not current_user.is_platform_superadmin:
+    org = await db.scalar(select(Organization).where(Organization.id == org_id).with_for_update())
+    if not org:
+        raise HTTPException(404, "Organization not found")
+    # V2 uses the current organization pass; the legacy historical-paid-event
+    # rule remains available only while the staging rollout flag is disabled.
+    if settings.organization_entitlements_v2:
+        existing_event_count = await db.scalar(
+            select(func.count()).select_from(Event).where(Event.org_id == org_id)
+        ) or 0
+        assert_can_create_event(org, int(existing_event_count), is_superadmin=current_user.is_platform_superadmin)
+    elif not current_user.is_platform_superadmin:
         has_paid_event = await db.scalar(
             select(Event.id).where(Event.org_id == org_id, Event.is_paid.is_(True)).limit(1)
         )
@@ -277,6 +283,11 @@ async def create_event(
         if payload.get(key) is None:
             payload.pop(key, None)
     event = Event(**payload, org_id=org_id)
+    if settings.organization_entitlements_v2:
+        snapshot_new_event(event, org)
+        assert_event_configuration_allowed(event, org)
+        if not current_user.is_platform_superadmin and not org.event_pass_tier:
+            org.free_event_used = True
     event.event_code = await unique_event_code(db)
     event.rsvp_token = event.rsvp_token or str(_uuid.uuid4())
     db.add(event)
@@ -286,7 +297,6 @@ async def create_event(
 
     # Consume a pending trial grant (from an approved TrialRequest made before
     # the org had any event) — apply it to this first event, then clear it.
-    org = await db.get(Organization, org_id)
     if org:
         event.org_addon_overrides = dict(org.addon_overrides or {}) or None
     addon_plans = (await db.execute(select(PricingPlan).where(PricingPlan.kind == "addon"))).scalars().all()
@@ -401,7 +411,15 @@ async def duplicate_event(
         raise HTTPException(404, "Event not found")
 
     org_id = source.org_id
-    if not current_user.is_platform_superadmin:
+    org = await db.scalar(select(Organization).where(Organization.id == org_id).with_for_update())
+    if not org:
+        raise HTTPException(404, "Organization not found")
+    if settings.organization_entitlements_v2:
+        existing_event_count = await db.scalar(
+            select(func.count()).select_from(Event).where(Event.org_id == org_id)
+        ) or 0
+        assert_can_create_event(org, int(existing_event_count), is_superadmin=current_user.is_platform_superadmin)
+    elif not current_user.is_platform_superadmin:
         has_paid_event = await db.scalar(
             select(Event.id).where(Event.org_id == org_id, Event.is_paid.is_(True)).limit(1)
         )
@@ -432,6 +450,10 @@ async def duplicate_event(
         notify_sms=source.notify_sms, notify_whatsapp=source.notify_whatsapp,
         rsvp_capacity=source.rsvp_capacity,
     )
+    if settings.organization_entitlements_v2:
+        snapshot_new_event(new_event, org)
+        if not current_user.is_platform_superadmin and not org.event_pass_tier:
+            org.free_event_used = True
     for field in _DUPLICATE_TEMPLATE_FIELDS:
         setattr(new_event, field, getattr(source, field))
     new_event.event_code = await unique_event_code(db)
@@ -611,6 +633,19 @@ async def update_event(
             payload.pop(required_field, None)
     if "checkin_base_url" in payload:
         payload["checkin_base_url"] = _normalize_public_base_url(payload.get("checkin_base_url"))
+    if settings.organization_entitlements_v2:
+        org = await db.get(Organization, event.org_id)
+        proposed_capacity = payload.get("rsvp_capacity", event.rsvp_capacity)
+        proposed_sms = payload.get("notify_sms", event.notify_sms)
+        proposed_whatsapp = payload.get("notify_whatsapp", event.notify_whatsapp)
+        prospective = type("EventConfiguration", (), {
+            "rsvp_capacity": proposed_capacity,
+            "notify_sms": proposed_sms,
+            "notify_whatsapp": proposed_whatsapp,
+        })()
+        for field, value in payload.items():
+            setattr(prospective, field, value)
+        assert_event_configuration_allowed(prospective, org)
     for field, value in payload.items():
         setattr(event, field, value)
     if event.event_date != previous_date or event.venue_name != previous_venue:
@@ -667,6 +702,9 @@ async def change_status(
     event = await db.get(Event, event_id)
     if not event:
         raise HTTPException(404, "Event not found")
+    if settings.organization_entitlements_v2 and new_status == "active":
+        org = await db.get(Organization, event.org_id)
+        assert_event_configuration_allowed(event, org, activating=True)
 
     # Optional optimistic-concurrency guard: the redesign UI sends back the
     # updated_at it last saw, so a second operator's stale status change
@@ -1019,6 +1057,10 @@ async def toggle_features(
     event = await db.get(Event, event_id)
     if not event:
         raise HTTPException(404, "Event not found")
+    if settings.organization_entitlements_v2 and (body.get("notify_sms") or body.get("notify_whatsapp")):
+        org = await db.get(Organization, event.org_id)
+        if not org or not pass_is_active(org):
+            raise HTTPException(402, "Free events are email-only. Buy an Event Pass to enable SMS or WhatsApp.")
     for feature in (
         "seating_enabled", "menu_enabled", "logistics_enabled", "registry_enabled",
         "venue_access_enabled", "partner_pairing_enabled", "experience_enabled", "live_program_enabled",
@@ -1157,6 +1199,19 @@ async def set_walk_in_group(event_id: str, body: dict, db: AsyncSession = Depend
         if not grp or grp.event_id != event_id:
             raise HTTPException(404, "Table group not found for this event")
     event.walk_in_table_group_id = gid
+    await db.commit()
+    await db.refresh(event)
+    return event
+
+
+@router.patch("/{event_id}/walk-in-group-choice", response_model=EventOut)
+async def set_walk_in_group_choice(event_id: str, body: dict, db: AsyncSession = Depends(get_db), _: User = Depends(require_event_admin)):
+    """Toggle whether staff can pick any table group per walk-in, instead of
+    always using the single default. Body: {enabled: bool}."""
+    event = await db.get(Event, event_id)
+    if not event:
+        raise HTTPException(404, "Event not found")
+    event.walk_in_group_choice_enabled = bool(body.get("enabled"))
     await db.commit()
     await db.refresh(event)
     return event
@@ -1565,7 +1620,7 @@ async def broadcast_message(
                 channel_counts["sms"]["skipped_no_contact"] += 1
             elif not guest.sms_consent:
                 channel_counts["sms"]["skipped_no_consent"] += 1
-            elif take_message_credit(event, "sms", reason="broadcast", guest_id=guest.id):
+            elif await reserve_message_credit(event, "sms", db=db, reason="broadcast", guest_id=guest.id):
                 sms_text = channel_text(overrides, "broadcast", "sms", _ctx(guest, guest_message))
                 if sms_text is not None:
                     background_tasks.add_task(send_with_credit_ledger, last_credit_ledger_id(event), messaging.send_custom_sms, phone=guest.phone, body=sms_text)
@@ -1589,7 +1644,7 @@ async def broadcast_message(
                 channel_counts["whatsapp"]["skipped_no_contact"] += 1
             elif not guest.whatsapp_consent:
                 channel_counts["whatsapp"]["skipped_no_consent"] += 1
-            elif take_message_credit(event, "whatsapp", reason="broadcast", guest_id=guest.id):
+            elif await reserve_message_credit(event, "whatsapp", db=db, reason="broadcast", guest_id=guest.id):
                 wa_text = channel_text(overrides, "broadcast", "whatsapp", _ctx(guest, guest_message))
                 # Freeform content can only initiate WhatsApp via an approved
                 # generic announcement template; falls back to free text
@@ -1615,7 +1670,7 @@ async def broadcast_message(
                 channel_counts["mms"]["skipped_no_contact"] += 1
             elif not guest.sms_consent:
                 channel_counts["mms"]["skipped_no_consent"] += 1
-            elif take_message_credit(event, "mms", reason="broadcast", guest_id=guest.id):
+            elif await reserve_message_credit(event, "mms", db=db, reason="broadcast", guest_id=guest.id):
                 mms_text = channel_text_or_default(overrides, "broadcast", "mms", _ctx(guest, guest_message))
                 background_tasks.add_task(
                     send_with_credit_ledger, last_credit_ledger_id(event), messaging.send_mms,
@@ -1671,7 +1726,7 @@ async def broadcast_message(
         if "sms" in data.channels:
             if not phone:
                 channel_counts["sms"]["skipped_no_contact"] += 1
-            elif take_message_credit(event, "sms", reason="broadcast"):
+            elif await reserve_message_credit(event, "sms", db=db, reason="broadcast"):
                 sms_text = channel_text(overrides, "broadcast", "sms", ctx)
                 if sms_text is not None:
                     background_tasks.add_task(send_with_credit_ledger, last_credit_ledger_id(event), messaging.send_custom_sms, phone=phone, body=sms_text)
@@ -1689,7 +1744,7 @@ async def broadcast_message(
         if "whatsapp" in data.channels:
             if not phone:
                 channel_counts["whatsapp"]["skipped_no_contact"] += 1
-            elif take_message_credit(event, "whatsapp", reason="broadcast"):
+            elif await reserve_message_credit(event, "whatsapp", db=db, reason="broadcast"):
                 wa_text = channel_text(overrides, "broadcast", "whatsapp", ctx)
                 background_tasks.add_task(
                     send_with_credit_ledger, last_credit_ledger_id(event), messaging.send_announcement_whatsapp,
@@ -1706,7 +1761,7 @@ async def broadcast_message(
         if "mms" in data.channels:
             if not phone:
                 channel_counts["mms"]["skipped_no_contact"] += 1
-            elif take_message_credit(event, "mms", reason="broadcast"):
+            elif await reserve_message_credit(event, "mms", db=db, reason="broadcast"):
                 mms_text = channel_text_or_default(overrides, "broadcast", "mms", ctx)
                 background_tasks.add_task(
                     send_with_credit_ledger, last_credit_ledger_id(event), messaging.send_mms,
@@ -1861,7 +1916,7 @@ async def send_manual_invites(
             if phone is None:
                 errors.append(f"{name}: invalid phone '{r.phone}'")
             else:
-                if "sms" in data.channels and take_message_credit(event, "sms", reason="manual_invite"):
+                if "sms" in data.channels and await reserve_message_credit(event, "sms", db=db, reason="manual_invite"):
                     background_tasks.add_task(
                         send_with_credit_ledger,
                         last_credit_ledger_id(event),
@@ -1872,7 +1927,7 @@ async def send_manual_invites(
                         invite_url=invite_url,
                     )
                     dispatched = True
-                if "whatsapp" in data.channels and take_message_credit(event, "whatsapp", reason="manual_invite"):
+                if "whatsapp" in data.channels and await reserve_message_credit(event, "whatsapp", db=db, reason="manual_invite"):
                     background_tasks.add_task(
                         send_with_credit_ledger,
                         last_credit_ledger_id(event),

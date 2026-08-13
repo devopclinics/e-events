@@ -484,7 +484,7 @@ function extractScanPayload(raw) {
   return { token: extractToken(value), action: null }
 }
 
-function ManualCheckin({ eventId, onResult, manualEnabled, checkoutEnabled, walkInEnabled, sectionMode, sectionId, sectionPickable, timezone, seatingLabel = 'Table', seatLabel = 'Seat' }) {
+function ManualCheckin({ eventId, onResult, manualEnabled, checkoutEnabled, walkInEnabled, sectionMode, sectionId, sectionPickable, groupChoiceEnabled, tableGroups = [], defaultGroupId = '', timezone, seatingLabel = 'Table', seatLabel = 'Seat' }) {
   const [q, setQ] = useState('')
   const [results, setResults] = useState([])
   const [searching, setSearching] = useState(false)
@@ -493,6 +493,9 @@ function ManualCheckin({ eventId, onResult, manualEnabled, checkoutEnabled, walk
   const [err, setErr] = useState('')
   const [walkIn, setWalkIn] = useState(false)
   const [wf, setWf] = useState({ first_name: '', last_name: '', email: '', phone: '' })
+  const [walkInGroupId, setWalkInGroupId] = useState(defaultGroupId)
+
+  useEffect(() => { setWalkInGroupId(defaultGroupId) }, [defaultGroupId])
 
   async function doRegisterWalkIn(e) {
     e.preventDefault()
@@ -501,7 +504,7 @@ function ManualCheckin({ eventId, onResult, manualEnabled, checkoutEnabled, walk
       onResult(await api.registerWalkIn(eventId, {
         first_name: wf.first_name.trim(), last_name: wf.last_name.trim(),
         email: wf.email.trim() || null, phone: wf.phone.trim() || null,
-        table_group_id: sectionMode ? (sectionId || null) : null,
+        table_group_id: sectionMode ? (sectionId || null) : groupChoiceEnabled ? (walkInGroupId || null) : null,
       }))
     } catch (e) { setErr(e.message); setBusy(false) }
   }
@@ -603,6 +606,12 @@ function ManualCheckin({ eventId, onResult, manualEnabled, checkoutEnabled, walk
           placeholder="Email (optional)" className={inputCls} />
         <input type="tel" value={wf.phone} onChange={(e) => setWf((f) => ({ ...f, phone: e.target.value }))}
           placeholder="Phone (optional)" className={inputCls} />
+        {groupChoiceEnabled && tableGroups.length > 0 && (
+          <select value={walkInGroupId} onChange={(e) => setWalkInGroupId(e.target.value)} className={inputCls}>
+            <option value="">{seatingLabel} group — none (seat anywhere)</option>
+            {tableGroups.map((g) => <option key={g.id} value={g.id}>{g.name}</option>)}
+          </select>
+        )}
         <p className="text-xs text-gray-500 dark:text-slate-400">Contact details are saved to the guest record.</p>
         {err && <p className="text-sm text-red-500">{err}</p>}
         <div className="flex gap-2">
@@ -1350,6 +1359,8 @@ export default function ScannerPage() {
               <ManualCheckin eventId={eventId} manualEnabled={manualEnabled} checkoutEnabled={normalCheckoutEnabled}
                 walkInEnabled={walkInEnabled || manualEnabled}
                 sectionMode={sectionMode} sectionId={sectionId} sectionPickable={tableGroups.length > 1}
+                groupChoiceEnabled={!!selectedEvent?.walk_in_group_choice_enabled && !sectionMode}
+                tableGroups={tableGroups} defaultGroupId={selectedEvent?.walk_in_table_group_id || ''}
                 timezone={selectedEvent?.timezone} seatingLabel={seatingTerm(selectedEvent)} seatLabel={seatTerm(selectedEvent)}
                 onResult={(res) => setResult(res)} />
             ) : (

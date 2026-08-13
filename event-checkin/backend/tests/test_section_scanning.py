@@ -98,6 +98,47 @@ async def test_walk_in_falls_back_when_section_mode_off(ctx):
 
 
 @pytest.mark.asyncio
+async def test_walk_in_honors_explicit_group_when_choice_enabled(ctx):
+    """Section mode OFF, but walk_in_group_choice_enabled ON → staff's explicit
+    table_group_id wins over the single default."""
+    await _prep(ctx.ids["event_a"], section_mode=False)
+    ctx.login(ctx.ids["superadmin"])
+    ev = ctx.ids["event_a"]
+    default_grp = await _group(ctx, ev, "Default")
+    chosen = await _group(ctx, ev, "Chosen")
+    async with _Session() as s:
+        event = await s.get(Event, ev)
+        event.walk_in_table_group_id = default_grp
+        event.walk_in_group_choice_enabled = True
+        await s.commit()
+
+    r = await ctx.client.post(f"/api/events/{ev}/guests/walk-in",
+                              json={"first_name": "Walk", "table_group_id": chosen})
+    assert r.status_code == 200
+    assert await _group_of(r.json()["guest"]["id"]) == chosen
+
+    # Leaving the picker unset still falls back to the configured default.
+    r2 = await ctx.client.post(f"/api/events/{ev}/guests/walk-in",
+                               json={"first_name": "Walk2"})
+    assert r2.status_code == 200
+    assert await _group_of(r2.json()["guest"]["id"]) == default_grp
+
+
+@pytest.mark.asyncio
+async def test_walk_in_rejects_unknown_group_when_choice_enabled(ctx):
+    await _prep(ctx.ids["event_a"], section_mode=False)
+    ctx.login(ctx.ids["superadmin"])
+    ev = ctx.ids["event_a"]
+    async with _Session() as s:
+        (await s.get(Event, ev)).walk_in_group_choice_enabled = True
+        await s.commit()
+
+    r = await ctx.client.post(f"/api/events/{ev}/guests/walk-in",
+                              json={"first_name": "Walk", "table_group_id": "no-such-group"})
+    assert r.status_code == 404
+
+
+@pytest.mark.asyncio
 async def test_manual_checkin_assigns_section_to_ungrouped(ctx):
     await _prep(ctx.ids["event_a"], section_mode=True)
     ctx.login(ctx.ids["superadmin"])

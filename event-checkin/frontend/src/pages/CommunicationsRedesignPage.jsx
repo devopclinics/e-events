@@ -1242,6 +1242,8 @@ function SettingsTab({ notify, eventId, event, onEventChanged }) {
   const [checkoutEnabled, setCheckoutEnabled] = useState(false)
   const [walkInEnabled, setWalkInEnabled] = useState(false)
   const [walkInGroupId, setWalkInGroupId] = useState('')
+  const [walkInGroupChoiceEnabled, setWalkInGroupChoiceEnabled] = useState(false)
+  const [walkInGroupChoiceBusy, setWalkInGroupChoiceBusy] = useState(false)
   const [defaultGuestGroupId, setDefaultGuestGroupId] = useState('')
   const [sectionModeEnabled, setSectionModeEnabled] = useState(false)
   const [tableGroups, setTableGroups] = useState([])
@@ -1280,6 +1282,7 @@ function SettingsTab({ notify, eventId, event, onEventChanged }) {
     setCheckoutEnabled(!!event.checkout_enabled)
     setWalkInEnabled(!!event.walk_in_enabled)
     setWalkInGroupId(event.walk_in_table_group_id || '')
+    setWalkInGroupChoiceEnabled(!!event.walk_in_group_choice_enabled)
     setDefaultGuestGroupId(event.default_guest_table_group_id || '')
     setSectionModeEnabled(!!event.section_mode_enabled)
     setSeatingTermValue(event.seating_term || '')
@@ -1349,6 +1352,21 @@ function SettingsTab({ notify, eventId, event, onEventChanged }) {
       await onEventChanged?.()
     } catch (e) {
       notify(e.message || 'Walk-in group could not be saved', true)
+    }
+  }
+
+  async function toggleWalkInGroupChoice() {
+    if (walkInGroupChoiceBusy) return
+    setWalkInGroupChoiceBusy(true)
+    try {
+      const updated = await api.setWalkInGroupChoice(eventId, !walkInGroupChoiceEnabled)
+      setWalkInGroupChoiceEnabled(!!updated.walk_in_group_choice_enabled)
+      await onEventChanged?.()
+      notify(`Staff ${updated.walk_in_group_choice_enabled ? 'can now pick' : 'can no longer pick'} a ${seatingTerm(event, { lower: true })} group per walk-in`)
+    } catch (e) {
+      notify(e.message || 'Setting could not be saved', true)
+    } finally {
+      setWalkInGroupChoiceBusy(false)
     }
   }
 
@@ -1742,6 +1760,15 @@ function SettingsTab({ notify, eventId, event, onEventChanged }) {
                 {tableGroups.map((g) => <option key={g.id} value={g.id}>{g.name}</option>)}
               </select>
             </div>
+          )}
+          {walkInEnabled && !sectionModeEnabled && tableGroups.length > 1 && (
+            <div className="cm-toggle-top" style={{ marginTop: 10 }}>
+              <span style={{ fontSize: 13 }}>Let staff pick the {seatingTerm(event, { lower: true })} group per walk-in</span>
+              <Switch checked={walkInGroupChoiceEnabled} onChange={toggleWalkInGroupChoice} disabled={walkInGroupChoiceBusy} />
+            </div>
+          )}
+          {walkInEnabled && !sectionModeEnabled && walkInGroupChoiceEnabled && tableGroups.length > 1 && (
+            <p style={{ marginTop: 4 }}>Staff registering a walk-in (Scanner: Manual / Walk-in tab) will see a {seatingTerm(event, { lower: true })} group picker, defaulting to the auto-assign group above.</p>
           )}
         </div>
 

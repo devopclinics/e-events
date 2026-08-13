@@ -43,7 +43,7 @@ from ..models import (
 )
 from ..schemas import GuestOut, GuestCreate, GuestUpdate, BulkAssignGroupRequest, ScanResult, WalkInRegister, HouseholdOut, HouseholdCreate, BulkAssignHouseholdRequest
 from ..auth import require_guest_manage_access, require_guest_view_access, require_official
-from ..entitlements import assert_within_guest_cap, guest_limit, can_use_paid_channels, last_credit_ledger_id, take_message_credit
+from ..entitlements import assert_within_guest_cap, guest_limit, can_use_paid_channels, last_credit_ledger_id, reserve_message_credit
 from ..channels import channels_for_flow
 from services.qr_service import generate_qr_bytes
 from services.email_service import send_invite_email, send_manual_invite_email, send_simple_email, build_calendar_attachment
@@ -905,7 +905,7 @@ async def upload_guests(event_id: str, file: UploadFile = File(...), db: AsyncSe
     return await _process_csv(text, event_id, db)
 
 
-def _dispatch_invite(background_tasks: BackgroundTasks, event: Event, guest: Guest,
+async def _dispatch_invite(background_tasks: BackgroundTasks, event: Event, guest: Guest, db: AsyncSession,
                      overrides: dict | None = None,
                      rsvp_template_key: str = "rsvp_invitation") -> bool:
     """Fan out an invite across enabled channels for this event. Channel modules
@@ -922,7 +922,7 @@ def _dispatch_invite(background_tasks: BackgroundTasks, event: Event, guest: Gue
     reachable channel (used to set invite_status sent/failed)."""
     messaging.set_event_context(event.id)
     if event.invite_mode == "closed":
-        return _dispatch_rsvp_invite(background_tasks, event, guest, overrides, rsvp_template_key)
+        return await _dispatch_rsvp_invite(background_tasks, event, guest, db, overrides, rsvp_template_key)
 
     ticket_url = f"{event.checkin_base_url.rstrip('/')}/scan/{guest.qr_token}"
     paid_channels = can_use_paid_channels(event)
@@ -958,7 +958,7 @@ def _dispatch_invite(background_tasks: BackgroundTasks, event: Event, guest: Gue
         )
         dispatched = True
 
-    if "sms" in chosen and take_message_credit(event, "sms", guest_id=guest.id):
+    if "sms" in chosen and await reserve_message_credit(event, "sms", db=db, guest_id=guest.id):
         sms_text = (
             template_channel_or_default(overrides, "experience_invitation", "sms", ctx)
             if event.experience_enabled
@@ -976,7 +976,7 @@ def _dispatch_invite(background_tasks: BackgroundTasks, event: Event, guest: Gue
             )
         dispatched = True
 
-    if "whatsapp" in chosen and take_message_credit(event, "whatsapp", guest_id=guest.id):
+    if "whatsapp" in chosen and await reserve_message_credit(event, "whatsapp", db=db, guest_id=guest.id):
         # WhatsApp can only OPEN a conversation with an approved template — free
         # text 15003s with "no active session". So the invite always goes via a
         # template; a rendered/custom override can't initiate and is not used here.
@@ -1000,7 +1000,7 @@ def _dispatch_invite(background_tasks: BackgroundTasks, event: Event, guest: Gue
 
     # MMS (ticket card) at invite time — super-admin-enabled per event.
     if ("mms" in chosen and messaging.mms_ready() and event.checkin_base_url
-            and take_message_credit(event, "mms", guest_id=guest.id)):
+            and await reserve_message_credit(event, "mms", db=db, guest_id=guest.id)):
         mms_key = "experience_invitation" if event.experience_enabled else "mms_invitation"
         mms_text = (template_channel_or_default(overrides, mms_key, "mms", ctx)
                     or f"Hi {guest.first_name}! You're invited to {event.name}.")
@@ -1022,7 +1022,7 @@ def _invite_recipients_allowed(event: Event, guest: Guest, *, reminder: bool = F
     return True
 
 
-def _dispatch_rsvp_invite(background_tasks: BackgroundTasks, event: Event, guest: Guest,
+async def _dispatch_rsvp_invite(background_tasks: BackgroundTasks, event: Event, guest: Guest, db: AsyncSession,
                           overrides: dict | None = None,
                           template_key: str = "rsvp_invitation") -> bool:
     """Closed-mode invite: send the guest their personal RSVP link. Generates a
@@ -1078,7 +1078,7 @@ def _dispatch_rsvp_invite(background_tasks: BackgroundTasks, event: Event, guest
             )
         dispatched = True
 
-    if "sms" in chosen and take_message_credit(event, "sms", guest_id=guest.id):
+    if "sms" in chosen and await reserve_message_credit(event, "sms", db=db, guest_id=guest.id):
         if template_key == "rsvp_invitation":
             sms_text = template_channel_text(overrides, template_key, "sms", ctx)
         else:
@@ -1095,7 +1095,7 @@ def _dispatch_rsvp_invite(background_tasks: BackgroundTasks, event: Event, guest
             )
         dispatched = True
 
-    if "whatsapp" in chosen and take_message_credit(event, "whatsapp", guest_id=guest.id):
+    if "whatsapp" in chosen and await reserve_message_credit(event, "whatsapp", db=db, guest_id=guest.id):
         # WhatsApp initiates → approved template only (free-text overrides 15003).
         if template_key == "rsvp_reminder":
             background_tasks.add_task(
@@ -1119,7 +1119,7 @@ def _dispatch_rsvp_invite(background_tasks: BackgroundTasks, event: Event, guest
     # when the event opts in. The card renders from the guest's qr_token (present at
     # creation; the ticket is only *activated* after RSVP). Mirrors the open-mode path.
     if ("mms" in chosen and messaging.mms_ready() and event.checkin_base_url and guest.qr_token
-            and take_message_credit(event, "mms", guest_id=guest.id)):
+            and await reserve_message_credit(event, "mms", db=db, guest_id=guest.id)):
         mms_key = "experience_invitation" if event.experience_enabled else "mms_invitation"
         mms_text = (template_channel_or_default(overrides, mms_key, "mms", ctx)
                     or f"Your {event.name} pass is attached — show it at check-in.")
@@ -1131,7 +1131,7 @@ def _dispatch_rsvp_invite(background_tasks: BackgroundTasks, event: Event, guest
     return dispatched
 
 
-def dispatch_approval_accepted(background_tasks: BackgroundTasks, event: Event, guest: Guest,
+async def dispatch_approval_accepted(background_tasks: BackgroundTasks, event: Event, guest: Guest, db: AsyncSession,
                                overrides: dict | None = None) -> bool:
     """Send approval-accepted notices with the guest's issued ticket link."""
     messaging.set_event_context(event.id)
@@ -1180,13 +1180,13 @@ def dispatch_approval_accepted(background_tasks: BackgroundTasks, event: Event, 
             )
             sent = True
 
-    if "sms" in chosen and take_message_credit(event, "sms"):
+    if "sms" in chosen and await reserve_message_credit(event, "sms", db=db):
         sms = template_channel_or_default(overrides, "approval_accepted", "sms", ctx)
         if sms:
             background_tasks.add_task(send_with_credit_ledger, last_credit_ledger_id(event), messaging.send_custom_sms, phone=guest.phone, body=sms)
             sent = True
 
-    if "whatsapp" in chosen and take_message_credit(event, "whatsapp"):
+    if "whatsapp" in chosen and await reserve_message_credit(event, "whatsapp", db=db):
         # WhatsApp initiates → approved template only (free-text overrides 15003).
         background_tasks.add_task(
             send_with_credit_ledger,
@@ -1200,7 +1200,7 @@ def dispatch_approval_accepted(background_tasks: BackgroundTasks, event: Event, 
     return sent
 
 
-def dispatch_simple_notice(background_tasks: BackgroundTasks, event: Event, guest: Guest,
+async def dispatch_simple_notice(background_tasks: BackgroundTasks, event: Event, guest: Guest, db: AsyncSession,
                            key: str, overrides: dict, extras: dict | None = None) -> bool:
     """Send a simple notification template to a guest — used for
     decline/rejected confirmations. Gated by the event's channel flags; uses the
@@ -1221,7 +1221,7 @@ def dispatch_simple_notice(background_tasks: BackgroundTasks, event: Event, gues
                 attachments = [attachment] if attachment else None
             background_tasks.add_task(send_simple_email, guest.email, subj or event.name, body, event.id, attachments, guest.id, key)
             sent = True
-    if "sms" in chosen and take_message_credit(event, "sms"):
+    if "sms" in chosen and await reserve_message_credit(event, "sms", db=db):
         sms = template_channel_or_default(overrides, key, "sms", ctx)
         if sms:
             background_tasks.add_task(send_with_credit_ledger, last_credit_ledger_id(event), messaging.send_custom_sms, phone=guest.phone, body=sms)
@@ -1229,7 +1229,7 @@ def dispatch_simple_notice(background_tasks: BackgroundTasks, event: Event, gues
     # WhatsApp initiates → approved template only (free-text overrides 15003), so
     # the custom-copy override is ignored for WhatsApp here.
     if (key in {"rsvp_decline", "approval_pending", "rsvp_confirmation", "approval_rejected"}) and (
-            "whatsapp" in chosen and take_message_credit(event, "whatsapp")):
+            "whatsapp" in chosen and await reserve_message_credit(event, "whatsapp", db=db)):
         if key == "rsvp_decline":
             background_tasks.add_task(
                 send_with_credit_ledger,
@@ -1293,14 +1293,14 @@ async def _promote_from_waitlist(
     guest.rsvp_responded_at = guest.rsvp_responded_at or datetime.utcnow()
     if needs_approval:
         if event.notify_rsvp_responses:
-            dispatch_simple_notice(background_tasks, event, guest, "approval_pending", overrides)
+            await dispatch_simple_notice(background_tasks, event, guest, db, "approval_pending", overrides)
     else:
         now = datetime.utcnow()
         guest.qr_generated_at = guest.qr_generated_at or now
         guest.invite_sent_at = now
         if event.notify_rsvp_responses:
-            dispatch_simple_notice(background_tasks, event, guest, "waitlist_promoted", overrides)
-        ok = _dispatch_invite(background_tasks, event, guest, overrides)
+            await dispatch_simple_notice(background_tasks, event, guest, db, "waitlist_promoted", overrides)
+        ok = await _dispatch_invite(background_tasks, event, guest, db, overrides)
         guest.invite_status = "sent" if ok else "failed"
     queue_guest_sync(db, guest, event=event)
     return guest
@@ -1875,10 +1875,19 @@ async def _member_section(event, user, section_id, db) -> str | None:
 
 
 async def _resolve_section_group(event, user, section_id, db) -> str | None:
-    """Walk-in routing. Section mode ON → the staffer's assigned/active section;
-    OFF → the event's single walk_in_table_group_id (unchanged legacy behavior)."""
+    """Walk-in routing. Section mode ON → the staffer's assigned/active section
+    (an explicit group choice is not offered here, by design — see
+    _member_section). OFF → an explicit table-group choice when
+    walk_in_group_choice_enabled allows it, else the event's single
+    walk_in_table_group_id (legacy behavior, still the default when the toggle
+    is on but staff leave the picker unset)."""
     if event.section_mode_enabled:
         return await _member_section(event, user, section_id, db)
+    if event.walk_in_group_choice_enabled and section_id:
+        grp = await db.get(TableGroup, section_id)
+        if not grp or grp.event_id != event.id:
+            raise HTTPException(404, "Table group not found for this event")
+        return section_id
     return event.walk_in_table_group_id or None
 
 
@@ -2084,7 +2093,7 @@ async def send_invites(event_id: str, background_tasks: BackgroundTasks, db: Asy
 
     overrides = await load_overrides(event_id, db)
     for guest in guests:
-        ok = _dispatch_invite(background_tasks, event, guest, overrides)
+        ok = await _dispatch_invite(background_tasks, event, guest, db, overrides)
         guest.invite_sent_at = datetime.utcnow()
         guest.invite_status = "sent" if ok else "failed"
 
@@ -2147,7 +2156,7 @@ async def send_invites_batch(
             if event.invite_mode == "closed" and force and guest.invite_sent_at and guest.rsvp_status == "invited"
             else "rsvp_invitation"
         )
-        ok = _dispatch_invite(background_tasks, event, guest, overrides, rsvp_template_key)
+        ok = await _dispatch_invite(background_tasks, event, guest, db, overrides, rsvp_template_key)
         guest.invite_sent_at = now
         guest.invite_status = "sent" if ok else "failed"
         queued += 1
@@ -2170,7 +2179,7 @@ async def resend_invite(event_id: str, guest_id: str, background_tasks: Backgrou
     if not _invite_recipients_allowed(event, guest):
         raise HTTPException(403, "Recipient blocked by the environment outbound-safety policy")
 
-    ok = _dispatch_invite(background_tasks, event, guest, await load_overrides(event_id, db))
+    ok = await _dispatch_invite(background_tasks, event, guest, db, await load_overrides(event_id, db))
     guest.invite_sent_at = datetime.utcnow()
     guest.invite_status = "sent" if ok else "failed"
     queue_guest_sync(db, guest, event=event)
@@ -2206,7 +2215,7 @@ async def resend_guest_email(
     if kind == "invitation":
         if event.invite_mode != "closed" and not guest.qr_generated_at:
             raise HTTPException(400, "Generate QR codes first before sending invites")
-        ok = _dispatch_invite(background_tasks, event, guest, overrides)
+        ok = await _dispatch_invite(background_tasks, event, guest, db, overrides)
         guest.invite_sent_at = datetime.utcnow()
         guest.invite_status = "sent" if ok else "failed"
         await db.commit()
@@ -2243,9 +2252,9 @@ async def approve_rsvp(event_id: str, guest_id: str, background_tasks: Backgroun
         guest.qr_generated_at = now
     guest.invite_sent_at = now
     overrides = await load_overrides(event_id, db)
-    ok = dispatch_approval_accepted(background_tasks, event, guest, overrides)
+    ok = await dispatch_approval_accepted(background_tasks, event, guest, db, overrides)
     if not ok:
-        ok = _dispatch_invite(background_tasks, event, guest, overrides)
+        ok = await _dispatch_invite(background_tasks, event, guest, db, overrides)
     guest.invite_status = "sent" if ok else "failed"
     queue_guest_sync(db, guest, event=event)
     await db.commit()
@@ -2263,7 +2272,7 @@ async def reject_rsvp(event_id: str, guest_id: str, background_tasks: Background
     guest.rsvp_status = "declined"
     guest.rsvp_responded_at = datetime.utcnow()
     if event and event.notify_rsvp_responses:
-        dispatch_simple_notice(background_tasks, event, guest, "approval_rejected",
+        await dispatch_simple_notice(background_tasks, event, guest, db, "approval_rejected",
                                await load_overrides(event_id, db))
     queue_guest_sync(db, guest, event=event)
     if event:

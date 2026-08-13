@@ -1689,6 +1689,16 @@ function WalkInToggle({ event, onChanged, onFlash }) {
     } catch (e) { onFlash?.(e.message, true) }
   }
 
+  async function toggleGroupChoice() {
+    setLoading(true)
+    try {
+      const updated = await api.setWalkInGroupChoice(event.id, !event.walk_in_group_choice_enabled)
+      onChanged(updated)
+      onFlash?.(`Staff ${updated.walk_in_group_choice_enabled ? 'can now pick' : 'can no longer pick'} a ${seatingTerm(event, { lower: true })} group per walk-in.`)
+    } catch (e) { onFlash?.(e.message, true) }
+    finally { setLoading(false) }
+  }
+
   async function setDefaultGuestGroup(gid) {
     try {
       onChanged(await api.setDefaultGuestGroup(event.id, gid || null))
@@ -1736,6 +1746,24 @@ function WalkInToggle({ event, onChanged, onFlash }) {
             {groups.map((g) => <option key={g.id} value={g.id}>{g.name}</option>)}
           </select>
         </div>
+      )}
+      {event.walk_in_enabled && !event.section_mode_enabled && groups.length > 1 && (
+        <div className="flex items-center justify-between gap-3 flex-wrap">
+          <span className="text-xs font-semibold text-gray-600 dark:text-slate-300">Let staff pick the {seatingTerm(event, { lower: true })} group per walk-in</span>
+          <button onClick={toggleGroupChoice} disabled={loading}
+            className={`px-3 py-1.5 rounded-lg text-xs font-semibold border transition-colors disabled:opacity-50 ${
+              event.walk_in_group_choice_enabled
+                ? 'bg-amber-500 text-white border-amber-500 hover:bg-amber-600'
+                : 'bg-white dark:bg-slate-700 text-gray-700 dark:text-slate-200 border-gray-300 dark:border-slate-600 hover:bg-gray-50 dark:hover:bg-slate-600'
+            }`}>
+            {event.walk_in_group_choice_enabled ? 'ON' : 'OFF'}
+          </button>
+        </div>
+      )}
+      {event.walk_in_enabled && !event.section_mode_enabled && event.walk_in_group_choice_enabled && groups.length > 1 && (
+        <p className="text-xs text-gray-400 dark:text-slate-500">
+          Staff registering a walk-in will see a {seatingTerm(event, { lower: true })} group picker, defaulting to the auto-assign group above.
+        </p>
       )}
 
       <div className="border-t border-gray-100 dark:border-slate-700/60 pt-3">

@@ -112,3 +112,40 @@ async def test_accounts_dashboard_aggregates_per_org(ctx):
     assert b["paid_event_count"] == 0
     assert b["event_types"] == []
     assert b["message_credits_spent"] == 0
+
+
+@pytest.mark.asyncio
+async def test_operator_grant_v2_lands_on_org_wallet(ctx, monkeypatch):
+    """Regression: POST /admin/events/{id}/grant is the operator "comp" tool —
+    the exact no-payment path that produced a live-prod bug where a comped
+    event showed is_paid=True with credits, but add-ons stayed locked because
+    apply_purchase() wrote only the legacy event fields and never touched the
+    org's v2 entitlement columns that entitlements.event_allows_addon() reads
+    once organization_entitlements_v2 is on."""
+    from app.config import settings
+    from app.models import Organization, PricingPlan
+    from app import entitlements
+
+    monkeypatch.setattr(settings, "organization_entitlements_v2", True)
+    ev = ctx.ids["event_a"]
+    async with _Session() as s:
+        s.add(PricingPlan(key="tier300", kind="tier", label="Tier 300", guest_cap=300, credits=1800))
+        await s.commit()
+
+    ctx.login(ctx.ids["superadmin"])
+    r = await ctx.client.post(f"/api/admin/events/{ev}/grant", json={
+        "tier": "tier300", "add_credits": 50,
+    })
+    assert r.status_code == 200
+
+    async with _Session() as s:
+        org = await s.get(Organization, ctx.ids["org_a"])
+        obj = await s.get(Event, ev)
+        assert org.event_pass_status == "active"
+        assert org.event_pass_tier == "tier300"
+        assert org.message_credit_units >= 500  # 50 credits * 10 units/credit
+        assert obj.is_paid is True
+        assert obj.guest_cap == 300
+
+        await entitlements.reload_addon_policy_cache(s)
+        assert entitlements.event_allows_addon(obj, "addon_seating") is True

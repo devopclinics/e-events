@@ -303,18 +303,35 @@ async def create_event(
     event.platform_addon_overrides = {plan.key: bool(plan.active) for plan in addon_plans} or None
     platform_policy = await db.get(PlatformSettings, "singleton")
     event.addon_promo_until = platform_policy.addon_promo_until if platform_policy else None
+    trial_granted_to_org = False
     if org and (org.trial_tier or org.trial_credits):
-        from ..billing import get_plan, apply_purchase
+        from ..billing import get_plan, apply_purchase, apply_organization_purchase
+        from ..organization_entitlements import grant_message_units
         if org.trial_tier:
             plan = await get_plan(db, org.trial_tier)
             if plan:
-                apply_purchase(event, plan)
+                if settings.organization_entitlements_v2:
+                    apply_organization_purchase(org, plan)
+                    trial_granted_to_org = True
+                else:
+                    apply_purchase(event, plan)
         if org.trial_credits:
-            grant_message_credits(event, int(org.trial_credits), reason="trial_grant")
+            if settings.organization_entitlements_v2:
+                grant_message_units(org, int(org.trial_credits))
+                trial_granted_to_org = True
+            else:
+                grant_message_credits(event, int(org.trial_credits), reason="trial_grant")
         org.trial_tier = None
         org.trial_credits = None
+        if trial_granted_to_org:
+            # Re-snapshot: the org pass activated after the initial snapshot
+            # above, so the event's legacy fallback fields must catch up too.
+            snapshot_new_event(event, org)
 
     await db.commit()
+    if trial_granted_to_org:
+        from .. import entitlements
+        await entitlements.reload_addon_policy_cache(db)
     await db.refresh(event)
     background_tasks.add_task(
         _notify_operators_new_event, event.id, event.name,

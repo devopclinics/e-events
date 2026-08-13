@@ -3,7 +3,7 @@
 All endpoints require platform superadmin. Lets operators run the business
 without code: see all tenants, comp/credit events, manage operators, edit pricing.
 """
-from datetime import datetime
+from datetime import datetime, timedelta
 
 from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks, Body
 from fastapi.responses import HTMLResponse
@@ -11,17 +11,19 @@ from sqlalchemy import select, desc, func, text, delete, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..database import get_db
-from ..models import (Organization, Event, User, Membership, PricingPlan, OrgPlan, AffiliateStore, TrialRequest,
+from ..models import (Organization, OrganizationEntitlementAudit, Event, User, Membership, PricingPlan, OrgPlan, AffiliateStore, TrialRequest,
                       MessageCreditLedger, MessagingCreditRate,
                       Guest, ScanEvent, GuestTagLink, GuestShipment, GuestMenuChoice, RSVPAnswer,
                       SeatingTable, TableGroup, TableGroupTable)
 from ..schemas import (GrantRequest, OperatorInvite, PlanUpsert, OrgPlanUpsert, CreditRateUpsert, UserOut,
                        AffiliateStoreIn, AffiliateStoreOut, TrialRequestOut, TrialResolve,
                        AccountOrgOut, AccountMemberOut, ActiveToggle, MemberRole, EventResetRequest,
-                       RedesignCohortUpdate)
+                       RedesignCohortUpdate, OrganizationEntitlementUpdate)
 from ..auth import require_superadmin, set_firebase_disabled, delete_firebase_user
-from ..billing import get_plan, apply_purchase
+from ..billing import get_plan, apply_purchase, apply_organization_purchase
 from .. import entitlements
+from ..config import settings
+from ..organization_entitlements import activate_pass, entitlement_snapshot, grant_message_units, snapshot_new_event
 from ..entitlements import assert_feature_allowed, grant_message_credits, channel_weight, DEFAULT_CHANNEL_WEIGHTS, DEFAULT_EMAIL_CREDITS_PER_EMAIL
 from services.email_service import send_simple_email
 from services.readiness_report import build_readiness, render_readiness_html
@@ -121,6 +123,70 @@ async def overview(_: User = Depends(require_superadmin), db: AsyncSession = Dep
         }
         for o in orgs
     ]
+
+
+@router.get("/orgs/{org_id}/event-pass")
+async def get_org_event_pass(org_id: str, _: User = Depends(require_superadmin), db: AsyncSession = Depends(get_db)):
+    org = await db.get(Organization, org_id)
+    if not org:
+        raise HTTPException(404, "Organization not found")
+    return entitlement_snapshot(org)
+
+
+@router.patch("/orgs/{org_id}/event-pass")
+async def update_org_event_pass(
+    org_id: str,
+    body: OrganizationEntitlementUpdate,
+    actor: User = Depends(require_superadmin),
+    db: AsyncSession = Depends(get_db),
+):
+    """Audited, transactional operator controls for pass, promo and credits."""
+    reason = body.reason.strip()
+    if len(reason) < 5:
+        raise HTTPException(400, "A reason of at least 5 characters is required")
+    org = await db.scalar(select(Organization).where(Organization.id == org_id).with_for_update())
+    if not org:
+        raise HTTPException(404, "Organization not found")
+    before = entitlement_snapshot(org)
+    actions: list[str] = []
+    if body.tier:
+        try:
+            activate_pass(org, body.tier, guest_limit=body.guest_cap)
+        except ValueError as exc:
+            raise HTTPException(400, str(exc)) from exc
+        actions.append("activate_pass")
+    elif body.guest_cap is not None:
+        if body.guest_cap < 1:
+            raise HTTPException(400, "guest_cap must be positive")
+        org.event_pass_guest_cap = body.guest_cap
+        actions.append("change_guest_cap")
+    if body.extend_pass_days is not None:
+        if not 1 <= body.extend_pass_days <= 730:
+            raise HTTPException(400, "extend_pass_days must be between 1 and 730")
+        org.event_pass_expires_at = max(org.event_pass_expires_at or datetime.utcnow(), datetime.utcnow()) + timedelta(days=body.extend_pass_days)
+        org.event_pass_status = "active"
+        actions.append("extend_pass")
+    if body.extend_addon_promo_days is not None:
+        if not 1 <= body.extend_addon_promo_days <= 365:
+            raise HTTPException(400, "extend_addon_promo_days must be between 1 and 365")
+        org.addon_promo_expires_at = max(org.addon_promo_expires_at or datetime.utcnow(), datetime.utcnow()) + timedelta(days=body.extend_addon_promo_days)
+        actions.append("extend_addon_promo")
+    if body.credit_delta_units is not None:
+        new_balance = int(org.message_credit_units or 0) + body.credit_delta_units
+        if new_balance < 0:
+            raise HTTPException(400, "Credit adjustment cannot make the balance negative")
+        org.message_credit_units = new_balance
+        actions.append("adjust_credits")
+    if not actions:
+        raise HTTPException(400, "No entitlement change requested")
+    after = entitlement_snapshot(org)
+    db.add(OrganizationEntitlementAudit(
+        org_id=org.id, actor_user_id=actor.id, action=",".join(actions),
+        reason=reason, before=before, after=after,
+    ))
+    await db.commit()
+    await entitlements.reload_addon_policy_cache(db)
+    return {"ok": True, **after}
 
 
 @router.get("/accounts/summary")
@@ -480,14 +546,26 @@ async def grant(event_id: str, body: GrantRequest, _: User = Depends(require_sup
     event = await db.get(Event, event_id)
     if not event:
         raise HTTPException(404, "Event not found")
+    org = await db.get(Organization, event.org_id) if settings.organization_entitlements_v2 else None
     if body.tier:
         plan = await get_plan(db, body.tier)
         if not plan:
             raise HTTPException(400, "Unknown tier")
-        apply_purchase(event, plan)
+        if org:
+            apply_organization_purchase(org, plan)
+            # Sync the event's legacy fallback fields (guest_limit() still
+            # reads event.is_paid/guest_cap even when the org pass is active).
+            snapshot_new_event(event, org)
+        else:
+            apply_purchase(event, plan)
     if body.add_credits:
-        grant_message_credits(event, int(body.add_credits), reason="operator_grant")
+        if org:
+            grant_message_units(org, int(body.add_credits))
+        else:
+            grant_message_credits(event, int(body.add_credits), reason="operator_grant")
     await db.commit()
+    if org:
+        await entitlements.reload_addon_policy_cache(db)
     await db.refresh(event)
     return {
         "ok": True, "plan_tier": event.plan_tier, "is_paid": event.is_paid,
@@ -1081,6 +1159,7 @@ async def resolve_trial_request(req_id: str, body: TrialResolve,
         raise HTTPException(409, "This request has already been resolved.")
 
     granted_desc = ""
+    comp_org = None
     if body.action == "approve":
         plan = None
         if body.tier:
@@ -1092,10 +1171,19 @@ async def resolve_trial_request(req_id: str, body: TrialResolve,
             event = await db.get(Event, body.event_id)
             if not event or event.org_id != req.org_id:
                 raise HTTPException(400, "Event not found in this organization.")
+            if settings.organization_entitlements_v2:
+                comp_org = await db.get(Organization, event.org_id)
             if plan:
-                apply_purchase(event, plan)
+                if comp_org:
+                    apply_organization_purchase(comp_org, plan)
+                    snapshot_new_event(event, comp_org)
+                else:
+                    apply_purchase(event, plan)
             if body.add_credits:
-                grant_message_credits(event, int(body.add_credits), reason="trial_request_grant")
+                if comp_org:
+                    grant_message_units(comp_org, int(body.add_credits))
+                else:
+                    grant_message_credits(event, int(body.add_credits), reason="trial_request_grant")
             granted_desc = f"applied to “{event.name}”"
         elif body.tier or body.add_credits:
             # No event yet — stash on the org; consumed by their next event.
@@ -1115,6 +1203,8 @@ async def resolve_trial_request(req_id: str, body: TrialResolve,
     req.resolved_by = operator.id
     req.resolution_note = (body.note or "").strip() or None
     await db.commit()
+    if comp_org:
+        await entitlements.reload_addon_policy_cache(db)
     await db.refresh(req)
 
     # Email the requester the outcome (best-effort).

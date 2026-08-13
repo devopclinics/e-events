@@ -505,12 +505,12 @@ function CommandResultPanel({ result, onStepComplete, stepBusy }) {
 }
 
 function LiveScannerCommandCenter({
-  event, online, mode, setMode, result, zones, gates, sections, offlineManifest,
+  event, attendance, online, mode, setMode, result, zones, gates, sections, offlineManifest,
   queuedAdmissions, queuedActions, recentResults, stepBusy, onManifestChange,
   onQueueChange, onRefreshManifest, onResult, onStepComplete,
 }) {
-  const expected = Number(event?.guest_count || 0)
-  const checkedIn = Number(event?.admitted_count || 0)
+  const expected = Number(attendance?.expected || 0)
+  const checkedIn = Number(attendance?.checked_in || 0)
   const remaining = Math.max(expected - checkedIn, 0)
   const progress = expected ? Math.round((checkedIn / expected) * 100) : 0
   const pendingSync = queuedAdmissions + queuedActions
@@ -611,12 +611,27 @@ export default function ScannerRedesignPage() {
   const [queuedActions, setQueuedActions] = useState(() => experienceQueueCount())
   const [stepBusy, setStepBusy] = useState(false)
   const [recentResults, setRecentResults] = useState([])
+  const [attendance, setAttendance] = useState(null)
 
   useEffect(() => {
     if (!event?.id) return
     if (event.venue_access_enabled) Promise.all([api.listZones(event.id), api.listGates(event.id)]).then(([nextZones, nextGates]) => { setZones(nextZones); setGates(nextGates) }).catch((err) => setLoadError(err.message))
     if (event.section_mode_enabled) api.myEventSections(event.id).then((data) => setSections(data.sections || [])).catch(() => setSections([]))
   }, [event?.id, event?.venue_access_enabled, event?.section_mode_enabled])
+
+  // Expected/checked-in/on-site counts for the header tiles — same composite
+  // endpoint the Results command-center uses. Refreshed on a timer (not just
+  // after a local scan) since other stations' scans move these numbers too.
+  useEffect(() => {
+    if (!event?.id) return
+    let cancelled = false
+    function load() {
+      api.resultsCommandCenter(event.id).then((data) => { if (!cancelled) setAttendance(data.attendance || null) }).catch(() => {})
+    }
+    load()
+    const timer = window.setInterval(load, 30000)
+    return () => { cancelled = true; window.clearInterval(timer) }
+  }, [event?.id, result])
 
   async function refreshOfflineManifest() {
     if (!eventId || !navigator.onLine) return
@@ -729,6 +744,7 @@ export default function ScannerRedesignPage() {
         {!eventId ? <div className="sc-empty">Select an event before scanning.</div> : (loadError || eventError) ? <div className="sc-empty">{loadError || eventError}</div> : !event ? <div className="sc-empty">Loading scanner configuration…</div> : (
           <LiveScannerCommandCenter
             event={event}
+            attendance={attendance}
             online={online}
             mode={mode}
             setMode={setMode}

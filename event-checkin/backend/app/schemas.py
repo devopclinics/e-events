@@ -222,6 +222,17 @@ class EventOut(BaseModel):
     enforce_table_groups: bool = True
     seating_term: Optional[str] = None
     seat_term: Optional[str] = None
+    # Invite page display toggles (all default True) — were missing here even
+    # though they're real Event columns already exposed on InviteSettingsUpdate
+    # (write) and InvitePageOut (public read); GuestsRedesignPage's settings
+    # screen read them off this schema and got undefined for all 5, which its
+    # `!== false` checks silently treated as "on" — including writing that
+    # wrong "on" back to the server on the next unrelated settings save.
+    invite_countdown_enabled: bool = True
+    invite_capacity_bar_enabled: bool = True
+    invite_share_enabled: bool = True
+    invite_add_to_calendar_enabled: bool = True
+    rsvp_confetti_enabled: bool = True
     seat_assignment_order: str = "sequential"
     section_mode_enabled: bool = False
     manual_checkin_enabled: bool = False

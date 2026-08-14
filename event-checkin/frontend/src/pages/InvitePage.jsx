@@ -19,6 +19,12 @@ function daysUntil(isoDate) {
   return diff
 }
 
+/** A share-safe event URL that never includes a guest's capability token. */
+function publicInviteUrl(event) {
+  if (!event?.id || typeof window === 'undefined') return ''
+  return `${window.location.origin}/invite/${encodeURIComponent(event.id)}`
+}
+
 /** Google Calendar deeplink for an event. */
 function googleCalUrl(event) {
   const fmt = (d) => parseUtc(d).toISOString().replace(/[-:]/g, '').replace('.000', '')
@@ -45,7 +51,7 @@ function downloadICS(event) {
     `SUMMARY:${event.name.replace(/,/g, '\\,')}`,
     loc ? `LOCATION:${loc.replace(/,/g, '\\,')}` : '',
     event.description ? `DESCRIPTION:${event.description.slice(0, 500).replace(/\n/g, '\\n').replace(/,/g, '\\,')}` : '',
-    `URL:${window.location.href}`,
+    `URL:${publicInviteUrl(event)}`,
     `UID:festio-${event.id}@festio.events`,
     'END:VEVENT', 'END:VCALENDAR',
   ].filter(Boolean).join('\r\n')
@@ -889,6 +895,7 @@ function ConfirmView({ confirm, event }) {
   // tied to the guest server-side, so it opens their Hub on any browser/device.
   const hubPath = confirm.invite_token ? `/r/${confirm.invite_token}#guest-hub` : ''
   const hubUrl = hubPath && typeof window !== 'undefined' ? `${window.location.origin}${hubPath}` : ''
+  const shareUrl = publicInviteUrl(event)
   const [copied, setCopied] = useState(false)
   const [rsvpLinkCopied, setRsvpLinkCopied] = useState(false)
 
@@ -909,7 +916,8 @@ function ConfirmView({ confirm, event }) {
   }
 
   const copyRsvpLink = async () => {
-    try { await navigator.clipboard.writeText(window.location.href); setRsvpLinkCopied(true); setTimeout(() => setRsvpLinkCopied(false), 2000) } catch { /* ignore */ }
+    if (!shareUrl) return
+    try { await navigator.clipboard.writeText(shareUrl); setRsvpLinkCopied(true); setTimeout(() => setRsvpLinkCopied(false), 2000) } catch { /* ignore */ }
   }
 
   return (
@@ -947,6 +955,7 @@ function ConfirmView({ confirm, event }) {
           <div className="mt-2 text-sm font-semibold text-slate-600">
             Message the host, read announcements, and see your table — from any device. Save this personal link to come back anytime:
           </div>
+          <div className="mt-2 text-xs font-bold text-amber-700">Keep this link private—it opens your personal pass and assignments.</div>
           <div className="mt-3 flex flex-col gap-2 sm:flex-row">
             <a href={hubPath} className="inline-flex min-h-11 flex-1 items-center justify-center rounded-xl bg-cyan-600 px-4 py-2 text-sm font-bold text-white transition hover:bg-cyan-500">Open my FestioHub</a>
             <button type="button" onClick={copyHub} className="inline-flex min-h-11 items-center justify-center rounded-xl border border-cyan-300 bg-white px-4 py-2 text-sm font-bold text-cyan-700 transition hover:bg-cyan-100">
@@ -960,7 +969,7 @@ function ConfirmView({ confirm, event }) {
         <button type="button" onClick={() => window.print()} className="inline-flex min-h-11 items-center justify-center rounded-xl border border-slate-200 px-4 py-2 text-sm font-bold text-slate-700 transition hover:bg-slate-50">Save Ticket</button>
         <button
           type="button"
-          onClick={() => navigator.share?.({ title: eventTitle(event), url: window.location.href })}
+          onClick={() => navigator.share?.({ title: eventTitle(event), url: shareUrl })}
           className="inline-flex min-h-11 items-center justify-center rounded-xl border border-slate-200 px-4 py-2 text-sm font-bold text-slate-700 transition hover:bg-slate-50"
         >
           Share Invitation
@@ -989,7 +998,7 @@ function ConfirmView({ confirm, event }) {
           <div className="mb-2 text-xs font-extrabold uppercase tracking-[0.18em] text-teal-700">Know someone who should come?</div>
           <div className="flex flex-wrap gap-2">
             <a
-              href={whatsappShareUrl(`You're invited to ${event.name}!\nRSVP here: ${window.location.href}`)}
+              href={whatsappShareUrl(`You're invited to ${event.name}!\nView event details: ${shareUrl}`)}
               target="_blank" rel="noopener noreferrer"
               className="inline-flex min-h-9 items-center gap-1.5 rounded-lg bg-[#25D366] px-3 py-1.5 text-xs font-bold text-white transition hover:opacity-90"
             >
@@ -2364,6 +2373,7 @@ export default function InvitePage() {
       : 'Bring your personal QR code for check-in and event activity tracking.'
   )
   const heroWhen = [dateLabel, timeLabel].filter(Boolean).join(' · ')
+  const shareUrl = publicInviteUrl(event)
   const capacityLabel = event.rsvp_capacity != null ? `${event.rsvp_count} / ${event.rsvp_capacity} spots claimed` : ''
   const capacityPct = event.rsvp_capacity ? Math.min(100, Math.round((event.rsvp_count / event.rsvp_capacity) * 100)) : 0
   const daysLeft = daysUntil(event.event_date)
@@ -2696,7 +2706,7 @@ export default function InvitePage() {
               {event.invite_share_enabled !== false && (
                 <>
                   <a
-                    href={whatsappShareUrl(`You're invited to ${event.name}!\nRSVP here: ${window.location.href}`)}
+                    href={whatsappShareUrl(`You're invited to ${event.name}!\nView event details: ${shareUrl}`)}
                     target="_blank" rel="noopener noreferrer"
                     className="inline-flex min-h-10 items-center gap-2 rounded-xl px-4 py-2 text-sm font-bold text-white transition hover:opacity-90"
                     style={{ background: '#25D366' }}
@@ -2705,7 +2715,7 @@ export default function InvitePage() {
                   </a>
                   <button
                     type="button"
-                    onClick={() => { navigator.clipboard?.writeText(window.location.href); }}
+                    onClick={() => { navigator.clipboard?.writeText(shareUrl); }}
                     className="inline-flex min-h-10 items-center gap-2 rounded-xl border px-4 py-2 text-sm font-bold transition hover:opacity-80"
                     style={{ borderColor: tone.border, background: tone.chip, color: tone.text }}
                   >

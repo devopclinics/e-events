@@ -324,7 +324,10 @@ details[open] .rd-chev { transform: rotate(90deg); }
   .rr-topbar-event { max-width: none; padding: 6px; }
   .rr-topbar-event-trigger { max-width: 0; padding: 0; }
   .rr-topbar-event-trigger > span { display: none; }
-  .rr-topbar-event-menu { left: auto; right: 0; width: min(320px, 88vw); }
+  /* Anchor from the left, matching where .rr-topbar-event actually sits
+     (right after the logo) — right:0 here pushed the panel off-screen to
+     the left instead of opening it toward the visible right side. */
+  .rr-topbar-event-menu { width: min(320px, calc(100vw - 24px)); }
   .rd-channels { grid-template-columns: 1fr 1fr; }
   .rr-topbar-inner { padding-inline: 12px; }
   .rr-topbar-brand { font-size: 15px; }

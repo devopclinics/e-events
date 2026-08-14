@@ -381,7 +381,7 @@ function externalUrl(value) {
 }
 
 const DEFAULT_PAGE_CONFIG = {
-  hero: { showWelcomeLabel: true, showTitle: true, showHost: true, overlayOpacity: 55, focusX: 50, focusY: 20, imageSize: 480 },
+  hero: { showWelcomeLabel: true, showTitle: true, showHost: true, overlayOpacity: 55, focusX: 50, focusY: 20, imageSize: 480, imageFit: 'cover' },
   organizer: { show: true, label: 'Organized by' },
   details: { showVenue: true, showHotel: true, showHost: true, showAdmission: true },
   about: { show: true, ctaLabel: '' },
@@ -2521,7 +2521,9 @@ export default function InvitePage() {
               style={{
                 maxWidth: `${page.hero.imageSize ?? 480}px`,
                 aspectRatio: '4 / 5',
-                backgroundSize: 'cover',
+                backgroundSize: page.hero.imageFit === 'contain' ? 'contain' : 'cover',
+                backgroundRepeat: 'no-repeat',
+                backgroundColor: dColors.background,
                 backgroundPosition: `${page.hero.focusX ?? 50}% ${page.hero.focusY ?? 20}%`,
                 ...(dCover ? { backgroundImage: `url(${dCover})` } : heroFallbackBackground(dColors)),
               }}
@@ -2577,7 +2579,7 @@ export default function InvitePage() {
             // default crop toward the top third (where a flyer's subject/
             // header usually sits), and let the organizer fine-tune the crop
             // via page.hero.focusX/focusY (Event Page tab, Design Studio).
-            <div className="absolute inset-0" style={{ backgroundImage: `url(${dCover})`, backgroundSize: 'cover', backgroundPosition: `${page.hero.focusX ?? 50}% ${page.hero.focusY ?? 20}%` }} />
+            <div className="absolute inset-0" style={{ backgroundImage: `url(${dCover})`, backgroundSize: page.hero.imageFit === 'contain' ? 'contain' : 'cover', backgroundRepeat: 'no-repeat', backgroundColor: dColors.background, backgroundPosition: `${page.hero.focusX ?? 50}% ${page.hero.focusY ?? 20}%` }} />
           )}
           <div className="gh-hero-scrim absolute inset-0" />
           <div className="relative mx-auto max-w-[820px] text-center">

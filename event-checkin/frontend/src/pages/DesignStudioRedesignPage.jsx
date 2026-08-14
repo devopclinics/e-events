@@ -684,7 +684,7 @@ const CROP_SLIDERS = [
 // There is no "seating preview" or "FestioHub live feed" section in that contract —
 // those never had a real effect and are not offered here.
 const DEFAULT_PAGE_SECTIONS = {
-  hero: { showWelcomeLabel: true, showTitle: true, showHost: true, overlayOpacity: 55, focusX: 50, focusY: 20, imageSize: 480 },
+  hero: { showWelcomeLabel: true, showTitle: true, showHost: true, overlayOpacity: 55, focusX: 50, focusY: 20, imageSize: 480, imageFit: 'cover' },
   organizer: { show: true, label: 'Organized by' },
   details: { showVenue: true, showHotel: true, showHost: true, showAdmission: true },
   about: { show: true, ctaLabel: '', ctaUrl: '' },
@@ -1559,6 +1559,11 @@ export default function DesignStudioRedesignPage() {
               <div style={{ marginTop: 10 }}>
                 <label className="rd-field-label">Photo vertical position ({pageSections.hero.focusY ?? 20}%)</label>
                 <input type="range" min={0} max={100} value={pageSections.hero.focusY ?? 20} className="ds-slider" onChange={(e) => setPageSection('hero', 'focusY', Number(e.target.value))} />
+                <label className="rd-field-label">Cover image fit</label>
+                <select className="rr-select" value={pageSections.hero.imageFit || 'cover'} onChange={(e) => setPageSection('hero', 'imageFit', e.target.value)}>
+                  <option value="cover">Fill frame (crop edges)</option>
+                  <option value="contain">Show whole flyer</option>
+                </select>
                 <p className="rd-hint" style={{ marginTop: 4 }}>Your cover photo fills the hero banner edge-to-edge and crops to fit — these move which part of the photo stays in frame (e.g. lower the vertical value to keep faces higher up in frame).</p>
               </div>
               {isSidecardHero && (

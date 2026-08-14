@@ -169,6 +169,9 @@ class Settings(BaseSettings):
     stripe_secret_key: str = ""        # sk_live_... / sk_test_...
     stripe_webhook_secret: str = ""    # whsec_...
     paystack_secret_key: str = ""      # sk_live_... / sk_test_...
+    # Academy is private by default. Members of these organization slugs are
+    # internal staff; external organization owners require an explicit grant.
+    training_internal_org_slugs: str = "vsgs,festio"
     # Enable Stripe Tax on checkout (requires Stripe Tax activated in dashboard).
     stripe_tax_enabled: bool = False
 

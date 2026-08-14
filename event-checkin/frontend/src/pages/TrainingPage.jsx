@@ -17,6 +17,7 @@ export default function TrainingPage() {
   const [evidence, setEvidence] = useState('')
   const [audit, setAudit] = useState([])
   const [releases, setReleases] = useState([])
+  const [accessGrants, setAccessGrants] = useState([])
   const lessons = useMemo(() => flatten(data?.course), [data])
 
   async function load() {
@@ -25,7 +26,7 @@ export default function TrainingPage() {
       setData(next)
       if (!selected) setSelected(flatten(next.course).find(x => !next.progress[x.key]) || flatten(next.course)[0])
       if (next.can_manage) { setManage(await api.trainingPeople(next.organization.id)); setAudit(await api.trainingAudit(next.organization.id)) }
-      if (user?.is_platform_superadmin) setReleases(await api.trainingReleases())
+      if (user?.is_platform_superadmin) { setReleases(await api.trainingReleases()); setAccessGrants(await api.trainingAccessGrants()) }
     } catch (error) { setMessage(error.message) }
   }
   useEffect(() => { load() }, []) // eslint-disable-line react-hooks/exhaustive-deps
@@ -118,6 +119,7 @@ export default function TrainingPage() {
       <h2>Practical reviews</h2>{manage?.pending_practicals.length ? manage.pending_practicals.map(item => <div className="review-card" key={item.id}><div><strong>{manage.people.find(p => p.id === item.user_id)?.name}</strong><span>{lessons.find(x => x.key === item.lesson_key)?.title}</span><p>{item.evidence.note}</p></div><div><button disabled={busy} onClick={() => review(item.id, 'rejected')}>Needs work</button><button className="primary" disabled={busy} onClick={() => review(item.id, 'approved')}>Approve</button></div></div>) : <p className="empty">No practical submissions awaiting review.</p>}
       <h2>Training audit</h2><div className="audit-list">{audit.length ? audit.slice(0,50).map(item => <div key={item.id}><strong>{item.actor}</strong><span>{item.action.replaceAll('_',' ')}</span><time>{new Date(item.created_at).toLocaleString()}</time></div>) : <p className="empty">No training activity yet.</p>}</div>
       {user?.is_platform_superadmin && <section className="release-admin"><h2>Course releases</h2><p>Create an immutable draft snapshot before changing curriculum. Publishing preserves prior versions.</p><button onClick={async () => { const title = prompt('Release title'); if (title) { await api.trainingCreateRelease(title); await load() } }}>Create draft snapshot</button>{releases.map(release => <div key={release.id}><strong>Version {release.version}: {release.title}</strong><span>{release.status}</span>{release.status === 'draft' && <button onClick={async () => { await api.trainingPublishRelease(release.id); await load() }}>Publish</button>}</div>)}</section>}
+      {user?.is_platform_superadmin && <section className="release-admin"><h2>External owner access</h2><p>Customers cannot open the Academy unless you explicitly grant access to their organization owner.</p><button onClick={async () => { const email = prompt("Organization owner's Festio email"); if (!email) return; const reason = prompt('Reason for access (optional)') || null; try { await api.trainingGrantAccess({ email, reason }); setMessage(`Academy access granted to ${email}.`); await load() } catch (error) { setMessage(error.message) } }}>Grant owner access</button>{accessGrants.length ? accessGrants.map(grant => <div key={grant.id}><strong>{grant.name}<small>{grant.email} · {grant.organization}</small></strong><span>{grant.reason || 'No reason recorded'}</span><button onClick={async () => { if (confirm(`Revoke Academy access for ${grant.email}?`)) { await api.trainingRevokeAccess(grant.id); await load() } }}>Revoke</button></div>) : <p className="empty">No external owners currently have Academy access.</p>}</section>}
     </section>}
     {data.certificate_pending_practical && <div className="training-message">All lessons are complete. Your certificate will be issued after a manager approves one practical submission.</div>}
     {data.certificate && <section className="certificate"><span>Certificate of completion</span><h2>{data.certificate.name}</h2><p>Completed {data.course.title}</p><strong>{data.certificate.id}</strong><button onClick={() => window.print()}>Print certificate</button></section>}

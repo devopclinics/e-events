@@ -210,6 +210,18 @@ class TrainingCourseRelease(Base):
     published_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
 
 
+class TrainingAccessGrant(Base):
+    __tablename__ = "training_access_grants"
+    __table_args__ = (UniqueConstraint("org_id", "user_id", name="uq_training_access_grant"),)
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+    org_id: Mapped[str] = mapped_column(String(36), ForeignKey("organizations.id"), index=True)
+    user_id: Mapped[str] = mapped_column(String(36), ForeignKey("users.id"), index=True)
+    granted_by_user_id: Mapped[str] = mapped_column(String(36), ForeignKey("users.id"))
+    reason: Mapped[str | None] = mapped_column(Text, nullable=True)
+    granted_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    revoked_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+
+
 class ApiKey(Base):
     """A programmatic-access credential for an org's public API integrations.
     Only the SHA-256 hash is stored; the full key is shown to the org once,

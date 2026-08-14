@@ -1404,4 +1404,7 @@ export const api = {
   trainingReleases: () => req('GET', '/training/admin/releases'),
   trainingCreateRelease: (title) => req('POST', '/training/admin/releases', { title }),
   trainingPublishRelease: (id) => req('POST', `/training/admin/releases/${id}/publish`, {}),
+  trainingAccessGrants: () => req('GET', '/training/admin/access'),
+  trainingGrantAccess: (body) => req('POST', '/training/admin/access', body),
+  trainingRevokeAccess: (id) => req('DELETE', `/training/admin/access/${id}`),
 }

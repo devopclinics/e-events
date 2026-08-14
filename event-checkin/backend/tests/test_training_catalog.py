@@ -2,6 +2,7 @@ from types import SimpleNamespace
 
 from app.routers.training import _manager, _safe_course
 from app.training_catalog import COURSE_VERSION, lessons, published_course
+from app.config import settings
 import pytest
 
 
@@ -32,7 +33,8 @@ def test_training_manager_permissions_are_org_role_scoped():
 
 
 @pytest.mark.asyncio
-async def test_training_assignment_quiz_sequence_and_tenant_isolation(ctx):
+async def test_training_assignment_quiz_sequence_and_tenant_isolation(ctx, monkeypatch):
+    monkeypatch.setattr(settings, "training_internal_org_slugs", "org-a")
     ctx.login(ctx.ids["user_a"])
     response = await ctx.client.get("/api/training/me")
     assert response.status_code == 200
@@ -59,7 +61,8 @@ async def test_training_assignment_quiz_sequence_and_tenant_isolation(ctx):
 
 
 @pytest.mark.asyncio
-async def test_manager_due_date_audit_and_release_permissions(ctx):
+async def test_manager_due_date_audit_and_release_permissions(ctx, monkeypatch):
+    monkeypatch.setattr(settings, "training_internal_org_slugs", "org-a")
     ctx.login(ctx.ids["user_a"])
     await ctx.client.post("/api/training/manage/assignments", json={
         "org_id": ctx.ids["org_a"], "user_ids": [ctx.ids["user_a"].id]
@@ -81,3 +84,28 @@ async def test_manager_due_date_audit_and_release_permissions(ctx):
     release_id = response.json()["id"]
     response = await ctx.client.post(f"/api/training/admin/releases/{release_id}/publish")
     assert response.json()["status"] == "published"
+
+
+@pytest.mark.asyncio
+async def test_customer_owner_is_denied_until_superadmin_grants_access(ctx, monkeypatch):
+    monkeypatch.setattr(settings, "training_internal_org_slugs", "org-a")
+    ctx.login(ctx.ids["user_b"])
+    assert (await ctx.client.get("/api/training/me")).status_code == 403
+
+    ctx.login(ctx.ids["superadmin"])
+    response = await ctx.client.post("/api/training/admin/access", json={
+        "email": ctx.ids["user_b"].email, "reason": "Approved partner training",
+    })
+    assert response.status_code == 200
+    grant_id = response.json()["id"]
+
+    ctx.login(ctx.ids["user_b"])
+    response = await ctx.client.get("/api/training/me")
+    assert response.status_code == 200
+    assert response.json()["can_manage"] is False
+    assert (await ctx.client.get("/api/training/manage/people")).status_code == 403
+
+    ctx.login(ctx.ids["superadmin"])
+    assert (await ctx.client.delete(f"/api/training/admin/access/{grant_id}")).status_code == 204
+    ctx.login(ctx.ids["user_b"])
+    assert (await ctx.client.get("/api/training/me")).status_code == 403

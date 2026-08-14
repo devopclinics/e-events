@@ -6,6 +6,8 @@ from sqlalchemy import select
 from app.database import AsyncSessionLocal
 from app.entitlements import refund_message_credit
 from app.models import Event, MessageCreditLedger
+from app.config import settings
+from app.organization_entitlements import refund_message_units
 
 logger = logging.getLogger(__name__)
 
@@ -44,7 +46,9 @@ async def send_with_credit_ledger(
             ledger.provider_message_id = str(provider_message_id)
         if status in {"failed", "undelivered", "rejected", "error"}:
             event = await db.get(Event, ledger.event_id)
-            if event:
+            if settings.organization_entitlements_v2:
+                await refund_message_units(db, ledger, reason=f"provider_{status}")
+            elif event:
                 refund_message_credit(event, ledger, reason=f"provider_{status}")
         elif status:
             ledger.status = status
@@ -59,9 +63,12 @@ async def refund_ledger_by_id(ledger_id: str | None, *, reason: str) -> bool:
         if not ledger:
             return False
         event = await db.get(Event, ledger.event_id)
-        if not event:
+        if settings.organization_entitlements_v2:
+            await refund_message_units(db, ledger, reason=reason)
+        elif event:
+            refund_message_credit(event, ledger, reason=reason)
+        else:
             return False
-        refund_message_credit(event, ledger, reason=reason)
         await db.commit()
         return True
 
@@ -89,7 +96,9 @@ async def reconcile_provider_status(
             ledger.reason = f"{ledger.reason or 'message'}:{error_code}"
         if status_key in {"failed", "undelivered", "rejected", "error"}:
             event = await db.get(Event, ledger.event_id)
-            if event:
+            if settings.organization_entitlements_v2:
+                await refund_message_units(db, ledger, reason=f"delivery_{status_key}")
+            elif event:
                 refund_message_credit(event, ledger, reason=f"delivery_{status_key}")
         elif status_key:
             ledger.status = status_key

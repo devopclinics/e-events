@@ -8,6 +8,9 @@ class Settings(BaseSettings):
     # Must match dashboard-service's own DATABASE_URL password.
     dashboard_ro_db_password: str = "dashboard_ro"
     frontend_url: str = "http://localhost:5173"
+    # Organization-scoped Event Pass rollout. Keep false in production until
+    # staging migration, reconciliation and acceptance checks have passed.
+    organization_entitlements_v2: bool = False
     # Extra CORS origins (comma-separated) on top of frontend_url + the Capacitor
     # native WebView origins. Set to add e.g. a staging URL.
     cors_extra_origins: str = ""

@@ -402,6 +402,26 @@ function AccountsTab({ me }) {
     catch (e) { setErr(e.message) }
   }
 
+  async function managePass(o) {
+    const current = await api.adminGetOrgEventPass(o.id)
+    const tier = window.prompt('Event Pass tier (tier50, tier150, tier300, scale). Leave blank to only extend/adjust.', current.tier || '')
+    if (tier === null) return
+    const extend = window.prompt('Additional pass days (blank for none)', '')
+    if (extend === null) return
+    const promo = window.prompt('Additional add-on promo days (blank for none)', '')
+    if (promo === null) return
+    const credits = window.prompt('Credit adjustment in units (email costs 1 unit; blank for none)', '')
+    if (credits === null) return
+    const reason = window.prompt('Required audit reason', '')
+    if (reason === null) return
+    const body = { reason }
+    if (tier.trim()) body.tier = tier.trim()
+    if (extend.trim()) body.extend_pass_days = Number(extend)
+    if (promo.trim()) body.extend_addon_promo_days = Number(promo)
+    if (credits.trim()) body.credit_delta_units = Number(credits)
+    return api.adminUpdateOrgEventPass(o.id, body)
+  }
+
   if (!orgs) return <div className="text-sm text-slate-500">Loading…</div>
   return (
     <div className="space-y-4">
@@ -420,6 +440,10 @@ function AccountsTab({ me }) {
               <span className="text-xs text-slate-400 font-normal">· {o.event_count} event(s) · {o.members.length} member(s)</span>
             </div>
             <div className="flex items-center gap-2">
+              <button onClick={() => run(() => managePass(o), 'Event Pass updated and audited.')}
+                className="text-xs font-semibold px-3 py-1.5 rounded border border-teal-300 dark:border-teal-700 text-teal-700 dark:text-teal-300">
+                Event Pass
+              </button>
               <label className="text-[11px] text-slate-400 flex items-center gap-1.5">
                 Redesign
                 <select value={o.redesign_cohort} onChange={(e) => run(() => api.adminSetOrgRedesignCohort(o.id, e.target.value), 'Redesign cohort updated.')}

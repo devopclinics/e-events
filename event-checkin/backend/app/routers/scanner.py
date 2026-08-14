@@ -12,7 +12,7 @@ from ..models import ConsentForm, ConsentSignature, Guest, Event, EventUser, Use
 from ..schemas import ConsentSignatureCreate, ExperienceNextStepOut, ExperienceStepOut, GuestExperienceProgressOut, PublicConsentOut, SendConsentCopyOut, ScanResult, GuestOut, TicketView, EventBrief, MenuCategoryOut, MenuItemOut, MenuCombinationOut, MenuCombinationItemOut, GuestMenuSubmit, PartnerInfo, PairRequest, ScanZoneRequest, ScanZoneResult
 from ..auth import require_official, _org_role
 from .access import zone_occupancy, ticket_allows
-from ..entitlements import can_use_paid_channels, last_credit_ledger_id, take_message_credit
+from ..entitlements import can_use_paid_channels, last_credit_ledger_id, reserve_message_credit
 from ..seating_terms import seating_term as _seating_term, seat_term as _seat_term
 from ..channels import channels_for_flow
 from services.email_service import send_admission_email, send_simple_email
@@ -1182,7 +1182,7 @@ async def perform_admission(guest, event, background_tasks, db) -> ScanResult:
         event, guest, extras={"table_name": table_name or "", "ticket_link": ticket_url or "", "qr_code": ticket_url or ""}
     )
     chosen = channels_for_flow(event, guest, "admission", paid_ok=paid)
-    if "sms" in chosen and take_message_credit(event, "sms"):
+    if "sms" in chosen and await reserve_message_credit(event, "sms", db=db):
         sms_text = _template_channel_for_event(overrides, event, "admission_confirmation", "experience_admission_confirmation", "sms", tmpl_ctx)
         if sms_text is not None:
             background_tasks.add_task(send_with_credit_ledger, last_credit_ledger_id(event), messaging.send_custom_sms, phone=guest.phone, body=sms_text)
@@ -1199,7 +1199,7 @@ async def perform_admission(guest, event, background_tasks, db) -> ScanResult:
                 seating_term=_seating_term(event) if event else "Table",
                 seat_term=_seat_term(event) if event else "Seat",
             )
-    if "whatsapp" in chosen and take_message_credit(event, "whatsapp"):
+    if "whatsapp" in chosen and await reserve_message_credit(event, "whatsapp", db=db):
         # WhatsApp initiates → approved template only (free-text overrides 15003).
         background_tasks.add_task(
             send_with_credit_ledger,
@@ -1214,7 +1214,7 @@ async def perform_admission(guest, event, background_tasks, db) -> ScanResult:
         )
     # MMS (image ticket card) — super-admin-enabled per event. Sends the styled
     # admitted card fetched directly from /api/scan/{token}/card.jpg.
-    if ("mms" in chosen and messaging.mms_ready() and event.checkin_base_url and take_message_credit(event, "mms")):
+    if ("mms" in chosen and messaging.mms_ready() and event.checkin_base_url and await reserve_message_credit(event, "mms", db=db)):
         mms_text = (_template_channel_for_event(overrides, event, "admission_confirmation", "experience_admission_confirmation", "mms", tmpl_ctx)
                     or _template_channel_for_event(overrides, event, "admission_confirmation", "experience_admission_confirmation", "sms", tmpl_ctx)
                     or f"Welcome {guest.first_name}! You're checked in to {event.name}.")

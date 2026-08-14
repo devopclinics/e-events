@@ -726,7 +726,7 @@ export default function DesignStudioRedesignPage() {
   const [tplStyle, setTplStyle] = useState('All styles')
   const [tplQuery, setTplQuery] = useState('')
   const [previewTpl, setPreviewTpl] = useState(null)
-  const [toast, setToast] = useState('')
+  const [toast, setToast] = useState(null)
   const [passHasPass, setPassHasPass] = useState(true)
   const [emailType, setEmailType] = useState(EMAIL_TYPES[0])
   const [pageSections, setPageSections] = useState(DEFAULT_PAGE_SECTIONS)
@@ -736,6 +736,11 @@ export default function DesignStudioRedesignPage() {
   const [design, setDesign] = useState(null)
   const [outputs, setOutputs] = useState([])
   const [designBusy, setDesignBusy] = useState(false)
+  const [saveStatus, setSaveStatus] = useState('loading') // loading | saved | unsaved | saving | error
+  const [saveError, setSaveError] = useState('')
+  const [uploadError, setUploadError] = useState('')
+  const autosaveTimerRef = useRef(null)
+  const lastSavedPayloadRef = useRef('')
 
   // Flyer / Festio Pass — real design-service fields, hydrated from `design`
   // in loadDesignStudio() below and saved back via saveFlyerSettings()/renderFlyer().
@@ -811,13 +816,26 @@ export default function DesignStudioRedesignPage() {
 
   useEffect(() => { loadDesignStudio() }, [eventId])
 
+  useEffect(() => {
+    lastSavedPayloadRef.current = ''
+    setSaveStatus('loading')
+    setSaveError('')
+  }, [eventId])
+
   // a5/a4 are print-only sizes (design-service serves them as PDF, never
   // PNG) — there's no honest way to show those inline, so the live preview
   // only covers the three PNG-native sizes and says so for the other two.
   const flyerPreviewSupported = ['square', 'story', 'portrait'].includes(flyerSettings.size)
+  const artworkOnly = !!flyerSettings.artworkOnly
 
   useEffect(() => {
     if (tab !== 'Flyer' || !eventId || !flyerPreviewSupported) return undefined
+    if (artworkOnly) {
+      setFlyerPreviewError('')
+      setFlyerPreviewLoading(false)
+      setFlyerPreviewUrl(design?.asset_config?.cover_image_url || '')
+      return undefined
+    }
     clearTimeout(flyerPreviewTimerRef.current)
     flyerPreviewTimerRef.current = setTimeout(async () => {
       setFlyerPreviewLoading(true)
@@ -850,13 +868,13 @@ export default function DesignStudioRedesignPage() {
     return () => clearTimeout(flyerPreviewTimerRef.current)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [tab, eventId, flyerPreviewSupported, flyerSettings.size, flyerSettings.qr, flyerSettings.qrPosition, flyerSettings.rsvpLink,
-      selectedFlyerTplId, colors, wording, imagePosition, flyerTextScale, design?.asset_config?.cover_image_url])
+      selectedFlyerTplId, colors, wording, imagePosition, flyerTextScale, artworkOnly, design?.asset_config?.cover_image_url])
 
   useEffect(() => () => { if (flyerPreviewObjectUrlRef.current) URL.revokeObjectURL(flyerPreviewObjectUrlRef.current) }, [])
 
-  function notify(msg) {
-    setToast(msg)
-    window.setTimeout(() => setToast(''), 2600)
+  function notify(msg, error = false) {
+    setToast({ message: msg, error })
+    window.setTimeout(() => setToast(null), error ? 8000 : 2600)
   }
 
   async function selectTemplate(template) {
@@ -916,6 +934,63 @@ export default function DesignStudioRedesignPage() {
 
   const activeTemplate = templates.find((t) => t.selected)
   const isSidecardHero = HUB_STYLES.find((s) => s.id === hubStyle)?.heroLayout === 'sidecard'
+
+  function currentDesignPayload() {
+    return {
+      selected_template_id: design?.selected_template_id || activeTemplate?.id || null,
+      selected_flyer_template_id: selectedFlyerTplId || null,
+      theme_config: { ...(design?.theme_config || {}), colors, fontPairing, passOptions, hubStyle },
+      wording_config: wordingOverridesOnly(wording),
+      asset_config: {
+        ...(design?.asset_config || {}),
+        flyer_text_scale: flyerTextScale,
+        flyer_settings: flyerSettings,
+        image_position: imagePosition,
+      },
+      page_config: pageSections,
+    }
+  }
+
+  const currentPayloadSignature = design ? JSON.stringify(currentDesignPayload()) : ''
+
+  // Every editor change is persisted after a short quiet period. The first
+  // hydrated render establishes the baseline and is not treated as an edit.
+  useEffect(() => {
+    if (!design || !eventId || designBusy) return undefined
+    if (!lastSavedPayloadRef.current) {
+      lastSavedPayloadRef.current = currentPayloadSignature
+      setSaveStatus('saved')
+      return undefined
+    }
+    if (currentPayloadSignature === lastSavedPayloadRef.current) return undefined
+    setSaveStatus('unsaved')
+    clearTimeout(autosaveTimerRef.current)
+    autosaveTimerRef.current = window.setTimeout(async () => {
+      setSaveStatus('saving')
+      setSaveError('')
+      try {
+        const saved = await api.saveEventDesign(eventId, currentDesignPayload())
+        lastSavedPayloadRef.current = currentPayloadSignature
+        setDesign(saved)
+        setSaveStatus('saved')
+      } catch (error) {
+        setSaveError(error.message || 'Changes could not be saved. Check your connection and retry.')
+        setSaveStatus('error')
+      }
+    }, 900)
+    return () => clearTimeout(autosaveTimerRef.current)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [currentPayloadSignature, eventId, designBusy])
+
+  useEffect(() => {
+    const warnBeforeLeaving = (event) => {
+      if (!['unsaved', 'saving', 'error'].includes(saveStatus)) return
+      event.preventDefault()
+      event.returnValue = ''
+    }
+    window.addEventListener('beforeunload', warnBeforeLeaving)
+    return () => window.removeEventListener('beforeunload', warnBeforeLeaving)
+  }, [saveStatus])
 
   function buildDraftTheme() {
     // template_id/layout/button_style only matter to the Event Page/Flyer/Pass
@@ -1073,6 +1148,7 @@ export default function DesignStudioRedesignPage() {
   async function uploadFlyerPhoto(file) {
     if (!file || !eventId) return
     setCoverBusy(true)
+    setUploadError('')
     try {
       const meta = await api.uploadDesignAsset(eventId, file)
       const saved = await api.saveEventDesign(eventId, {
@@ -1080,7 +1156,11 @@ export default function DesignStudioRedesignPage() {
       })
       setDesign(saved)
       notify('Photo uploaded')
-    } catch (e) { notify(e.message || 'Photo could not be uploaded') }
+    } catch (e) {
+      const message = e.message || 'Photo could not be uploaded'
+      setUploadError(message)
+      notify(message, true)
+    }
     finally { setCoverBusy(false); if (coverFileRef.current) coverFileRef.current.value = '' }
   }
 
@@ -1093,6 +1173,17 @@ export default function DesignStudioRedesignPage() {
     if (!eventId || renderBusy) return
     setRenderBusy(true)
     try {
+      if (artworkOnly) {
+        const artworkUrl = design?.asset_config?.cover_image_url
+        if (!artworkUrl) throw new Error('Upload the finished flyer image first.')
+        const saved = await api.saveEventDesign(eventId, {
+          asset_config: { ...(design?.asset_config || {}), flyer_settings: flyerSettings, flyer_image_url: artworkUrl },
+        })
+        setDesign(saved)
+        if (useAsCover) await api.updateInviteSettings(eventId, { invite_cover_image: artworkUrl })
+        notify(useAsCover ? 'Uploaded artwork applied directly — no template overlay' : 'Uploaded artwork saved as the flyer')
+        return
+      }
       await api.saveEventDesign(eventId, {
         wording_config: wordingOverridesOnly(wording),
         asset_config: { ...(design?.asset_config || {}), image_position: imagePosition, flyer_text_scale: flyerTextScale },
@@ -1131,11 +1222,34 @@ export default function DesignStudioRedesignPage() {
     setPublishState('publishing')
     setPublishError('')
     try {
+      // Publish must include what is currently visible in the editor. Previously
+      // this route snapshotted only the last server save, despite the confirmation
+      // dialog promising to save the current design, so unsaved wording/page
+      // edits silently disappeared.
+      clearTimeout(autosaveTimerRef.current)
+      setSaveStatus('saving')
+      const payload = currentDesignPayload()
+      const saved = await api.saveEventDesign(eventId, payload)
       const result = await api.publishEventDesign(eventId)
-      setDesign((current) => ({ ...current, ...result }))
+      const live = await api.publicDesignTheme(eventId, {
+        experience_enabled: !!event?.experience_enabled,
+        live_program_enabled: !!event?.live_program_enabled,
+        festiome_enabled: !!event?.festiome_enabled,
+      })
+      const expectedWording = payload.wording_config || {}
+      const wordingMismatch = Object.entries(expectedWording).some(([key, value]) => live?.wording?.[key] !== value)
+      const colorMismatch = Object.entries(colors).some(([key, value]) => live?.colors?.[key]?.toLowerCase() !== value?.toLowerCase())
+      if (wordingMismatch || colorMismatch || live?.hub_style !== hubStyle) {
+        throw new Error('The design was saved, but the live verification did not match. Nothing was reported as published; please retry.')
+      }
+      lastSavedPayloadRef.current = JSON.stringify(payload)
+      setDesign({ ...saved, ...result })
+      setSaveStatus('saved')
       setPublishState('success')
       setOutputs(await api.designOutputs(eventId).catch(() => outputs))
     } catch (e) {
+      setSaveStatus('error')
+      setSaveError(e.message || 'Design could not be published')
       setPublishError(e.message || 'Design could not be published')
       setPublishState('error')
     }
@@ -1165,6 +1279,14 @@ export default function DesignStudioRedesignPage() {
         <div>
           <div className="rr-title-row"><h1>Design Studio</h1></div>
           <div className="rr-meta"><Icon name="calendar" size={13} /> {event?.name || (eventId ? 'Loading…' : 'No event selected')} <span className="rr-dot">·</span> Template: {activeTemplate?.name || 'None'}</div>
+        </div>
+        <div className={`ds-save-state ${saveStatus}`} role={saveStatus === 'error' ? 'alert' : 'status'}>
+          <span />
+          {saveStatus === 'loading' && 'Loading design…'}
+          {saveStatus === 'unsaved' && 'Unsaved changes'}
+          {saveStatus === 'saving' && 'Saving…'}
+          {saveStatus === 'saved' && 'All changes saved'}
+          {saveStatus === 'error' && (saveError || 'Save failed')}
         </div>
       </div>
 
@@ -1333,6 +1455,10 @@ export default function DesignStudioRedesignPage() {
                 <div className="rd-toggle-row" style={{ marginTop: 8 }}><span style={{ fontSize: 12, fontWeight: 600 }}>Show QR code</span>
                   <label className="rd-switch"><input type="checkbox" checked={flyerSettings.qr} onChange={(e) => setFlyerSettings((v) => ({ ...v, qr: e.target.checked }))} /><span className="track" /><span className="knob" /></label>
                 </div>
+                <div className="rd-toggle-row" style={{ marginTop: 8 }}>
+                  <span style={{ fontSize: 12, fontWeight: 600 }}>Use uploaded image as complete flyer<br /><small style={{ fontWeight: 400 }}>No template shapes or text overlay</small></span>
+                  <label className="rd-switch"><input type="checkbox" checked={artworkOnly} onChange={(e) => setFlyerSettings((v) => ({ ...v, artworkOnly: e.target.checked }))} /><span className="track" /><span className="knob" /></label>
+                </div>
                 <div className="rd-toggle-row"><span style={{ fontSize: 12, fontWeight: 600 }}>Show RSVP link text</span>
                   <label className="rd-switch"><input type="checkbox" checked={flyerSettings.rsvpLink} onChange={(e) => setFlyerSettings((v) => ({ ...v, rsvpLink: e.target.checked }))} /><span className="track" /><span className="knob" /></label>
                 </div>
@@ -1344,10 +1470,11 @@ export default function DesignStudioRedesignPage() {
             </div>
 
             <div className="rd-panel">
-              <div className="rd-panel-head"><h3>Photo</h3><p>Upload and position your cover photo</p></div>
+                <div className="rd-panel-head"><h3>{artworkOnly ? 'Complete flyer artwork' : 'Photo'}</h3><p>{artworkOnly ? 'Upload the finished image exactly as guests should see it' : 'Upload and position your cover photo inside the selected template'}</p></div>
               <div className="rd-panel-body">
                 <input ref={coverFileRef} type="file" accept="image/jpeg,image/png,image/webp,image/gif" hidden onChange={(e) => uploadFlyerPhoto(e.target.files?.[0])} />
                 <button className="rr-btn secondary" disabled={coverBusy} onClick={() => coverFileRef.current?.click()}><Icon name="upload" size={13} /> {coverBusy ? 'Uploading…' : 'Upload photo'}</button>
+                {uploadError && <div className="rd-banner-err ds-upload-error" role="alert"><Icon name="warning" /> <span>{uploadError}</span></div>}
                 {CROP_SLIDERS.map((s) => (
                   <div key={s.key} style={{ marginTop: 10 }}>
                     <label className="rd-field-label">{s.label}</label>
@@ -1746,7 +1873,7 @@ export default function DesignStudioRedesignPage() {
                 {' '}{design?.updated_at ? `Saved ${new Date(design.updated_at).toLocaleString()}` : 'Not saved yet'}
                 {design?.published_version ? ` · Published version ${design.published_version}` : ' · Never published'}
               </div>
-              <button disabled={!eventId || designBusy || publishState === 'publishing'} className="rr-btn primary" style={{ width: '100%', justifyContent: 'center', marginTop: 14 }} onClick={() => setPublishState('confirm')}>
+              <button disabled={!eventId || designBusy || saveStatus === 'saving' || saveStatus === 'error' || publishState === 'publishing'} className="rr-btn primary" style={{ width: '100%', justifyContent: 'center', marginTop: 14 }} onClick={() => setPublishState('confirm')}>
                 {publishState === 'publishing' ? 'Publishing…' : design?.is_published ? 'Publish new version' : 'Publish design'}
               </button>
               {publishState === 'confirm' && (
@@ -1793,7 +1920,7 @@ export default function DesignStudioRedesignPage() {
         </div>
       )}
 
-      {toast && <div className="rd-toast"><Icon name="check" />{toast}</div>}
+      {toast && <div className={`rd-toast${toast.error ? ' error' : ''}`} role={toast.error ? 'alert' : 'status'}><Icon name={toast.error ? 'warning' : 'check'} />{toast.message}</div>}
     </RedesignShell>
   )
 }

@@ -176,6 +176,7 @@ const TOP_LINKS = [
     gate: ({ event }) => !!event?.festiome_addon_enabled && !(event?.blocked_comm_features || []).includes('festiome'),
   },
   { id: 'checkin', label: 'Check-in', to: '/scanner-redesign', icon: 'ticket' },
+  { id: 'academy', label: 'Academy', to: '/training', icon: 'book' },
   {
     id: 'orders', label: 'Orders', to: '/kitchen-redesign', icon: 'card',
     gate: ({ event }) => !!event?.menu_enabled,

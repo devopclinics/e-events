@@ -75,6 +75,7 @@ const SetupRedesignPage = lazy(() => import('./pages/SetupRedesignPage'))
 const ApiExplorerRedesignPage = lazy(() => import('./pages/ApiExplorerRedesignPage'))
 const PublicPagesRedesignPage = lazy(() => import('./pages/PublicPagesRedesignPage'))
 const LayoutOptionsPage = lazy(() => import('./pages/LayoutOptionsPage'))
+const TrainingPage = lazy(() => import('./pages/TrainingPage'))
 
 // ── Preferred-view helpers ────────────────────────────────────────────────────
 
@@ -142,6 +143,7 @@ function Nav({ hasMenu, eventName, canUseDesignStudio, hasFestioMe, canManageCur
     ...(user?.role === 'admin' ? [{ to: '/org-settings', label: 'Org Settings' }] : []),
     ...(hasFestioMe ? [{ to: '/festiome', label: 'FestioMe' }] : []),
     { to: '/scanner', label: 'Check-in' },
+    { to: '/training', label: 'Academy' },
     ...(hasMenu ? [{ to: '/kitchen', label: 'Orders' }] : []),
     ...(user?.is_platform_superadmin ? [{ to: '/console', label: 'Console' }] : []),
     ...(user?.is_platform_superadmin ? [{ to: '/media-library', label: 'Media' }] : []),
@@ -452,6 +454,7 @@ function AppRoutes() {
       <Route path="/setup-redesign" element={<ProtectedRoute setupOnly><SetupRedesignPage /></ProtectedRoute>} />
       <Route path="/api-explorer-redesign" element={<ProtectedRoute><ApiExplorerRedesignPage /></ProtectedRoute>} />
       <Route path="/public-pages-redesign" element={<PublicPagesRedesignPage />} />
+      <Route path="/training" element={<ProtectedRoute><TrainingPage /></ProtectedRoute>} />
       <Route path="/layout-options" element={<ProtectedRoute><LayoutOptionsPage /></ProtectedRoute>} />
 
       {/* Authenticated app with Nav */}

@@ -38,6 +38,17 @@ UPLOADS_DIR = "/app/uploads"
 ALLOWED_IMAGE_TYPES = {"image/jpeg", "image/png", "image/webp", "image/gif"}
 MAX_IMAGE_SIZE = 10 * 1024 * 1024  # 10 MB
 
+_IMAGE_SIGNATURES = {
+    "image/jpeg": lambda value: value.startswith(b"\xff\xd8\xff"),
+    "image/png": lambda value: value.startswith(b"\x89PNG\r\n\x1a\n"),
+    "image/webp": lambda value: len(value) >= 12 and value.startswith(b"RIFF") and value[8:12] == b"WEBP",
+    "image/gif": lambda value: value.startswith((b"GIF87a", b"GIF89a")),
+}
+
+
+def _detected_image_type(data: bytes) -> str | None:
+    return next((mime for mime, matches in _IMAGE_SIGNATURES.items() if matches(data)), None)
+
 router = APIRouter()
 
 # Event-code alphabet: uppercase, no confusable characters (0 O 1 I L).
@@ -1985,6 +1996,18 @@ async def upload_cover_image(
     data = await file.read()
     if len(data) > MAX_IMAGE_SIZE:
         raise HTTPException(413, "Image too large — maximum 10 MB.")
+
+    detected_type = _detected_image_type(data)
+    if detected_type != file.content_type:
+        if detected_type:
+            actual = detected_type.removeprefix("image/").replace("jpeg", "jpg")
+            supplied = (file.filename or "the selected file").rsplit(".", 1)[-1].lower()
+            raise HTTPException(
+                400,
+                f"This file contains {actual.upper()} image data but is named .{supplied}. "
+                f"Rename or export it as .{actual} and try again.",
+            )
+        raise HTTPException(400, "This is not a valid JPEG, PNG, WebP, or GIF image. Export it again and retry.")
 
     # Derive extension from content type
     ext = {"image/jpeg": "jpg", "image/png": "png", "image/webp": "webp", "image/gif": "gif"}.get(file.content_type, "jpg")

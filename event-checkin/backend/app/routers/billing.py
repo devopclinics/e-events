@@ -15,15 +15,31 @@ from ..models import Event, Membership, MessageCreditLedger, Organization, Payme
 from ..schemas import CheckoutRequest, CheckoutOut, CurrencyRequest
 from ..auth import get_current_user, get_current_user_optional, _org_role
 from ..billing import (
-    get_plan, plan_amount, apply_purchase, tiers_public, packs_public, addons_public, public_catalog,
+    get_plan, plan_amount, apply_purchase, apply_organization_purchase, tiers_public, packs_public, addons_public, public_catalog,
 )
 from ..config import settings
 from ..entitlements import event_allows_addon, FEATURE_ADDON
+from ..organization_entitlements import entitlement_snapshot
 from services import payments
 from . import org_billing
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
+
+
+@router.get("/event-pass/{event_id}")
+async def event_pass_status(event_id: str, user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
+    event = await _require_event_admin(event_id, user, db)
+    org = await db.get(Organization, event.org_id)
+    if not org:
+        raise HTTPException(404, "Organization not found")
+    snapshot = entitlement_snapshot(org)
+    snapshot.update({
+        "credit_balance": snapshot["message_credit_units"] / 10,
+        "email_messages_remaining": snapshot["message_credit_units"],
+        "purchased_addons": org.purchased_addons or [],
+    })
+    return snapshot
 
 
 def _provider_for(currency: str) -> str:
@@ -60,7 +76,7 @@ async def list_tiers(event_id: str, user: User = Depends(get_current_user), db: 
         "configured": _provider_enabled(provider),
         "is_paid": event.is_paid,
         "plan_tier": event.plan_tier,
-        "message_credits": event.message_credits,
+        "message_credits": (org.message_credit_units / 10) if settings.organization_entitlements_v2 and org else event.message_credits,
         "purchased_addons": event.purchased_addons or [],
         "available_addons": [key for key in sorted(set(FEATURE_ADDON.values())) if event_allows_addon(event, key)],
         "tiers": tiers,
@@ -188,11 +204,16 @@ async def checkout(body: CheckoutRequest, user: User = Depends(get_current_user)
     plan = await get_plan(db, body.tier)
     if not plan or not plan.active:
         raise HTTPException(400, "Unknown or inactive item")
-    if plan.kind == "pack" and not event.is_paid:
-        raise HTTPException(400, "Buy an Event Pass before topping up message credits.")
-    if plan.kind == "addon" and not event.is_paid:
-        raise HTTPException(400, "Buy an Event Pass before adding this add-on.")
     org = await db.get(Organization, event.org_id)
+    if settings.organization_entitlements_v2:
+        from ..organization_entitlements import pass_is_active
+        has_pass = bool(org and pass_is_active(org))
+    else:
+        has_pass = bool(event.is_paid)
+    if plan.kind == "pack" and not has_pass:
+        raise HTTPException(400, "Buy or renew an Event Pass before topping up message credits.")
+    if plan.kind == "addon" and not has_pass:
+        raise HTTPException(400, "Buy or renew an Event Pass before adding this add-on.")
     currency = (org.currency if org else "USD").upper()
     provider = _provider_for(currency)
     if not _provider_enabled(provider):
@@ -242,7 +263,14 @@ async def _fulfill(db: AsyncSession, provider: str, reference: str, event_id: st
     if not plan:
         logger.warning("billing: fulfill for unknown plan key=%s ref=%s", tier_key, reference)
         return
-    apply_purchase(event, plan)
+    if settings.organization_entitlements_v2:
+        org = await db.scalar(select(Organization).where(Organization.id == event.org_id).with_for_update())
+        if not org:
+            logger.warning("billing: fulfill for unknown org event=%s", event.id)
+            return
+        apply_organization_purchase(org, plan)
+    else:
+        apply_purchase(event, plan)
     if payment:
         payment.status = "paid"
     else:
@@ -252,6 +280,9 @@ async def _fulfill(db: AsyncSession, provider: str, reference: str, event_id: st
             tier_key=tier_key, amount=0, currency="", status="paid",
         ))
     await db.commit()
+    if settings.organization_entitlements_v2:
+        from .. import entitlements
+        await entitlements.reload_addon_policy_cache(db)
     from ..services.marketing_client import ingest_org_lifecycle
     await ingest_org_lifecycle(db, event.org_id, stage="paid", event_type=event.event_type)
     logger.info("billing: applied %s to event %s via %s", tier_key, event.id, provider)

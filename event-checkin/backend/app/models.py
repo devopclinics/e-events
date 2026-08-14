@@ -109,6 +109,107 @@ class Membership(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
 
 
+class TrainingAssignment(Base):
+    __tablename__ = "training_assignments"
+    __table_args__ = (UniqueConstraint("org_id", "user_id", "course_key", "course_version", name="uq_training_assignment"),)
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+    org_id: Mapped[str] = mapped_column(String(36), ForeignKey("organizations.id"), index=True)
+    user_id: Mapped[str] = mapped_column(String(36), ForeignKey("users.id"), index=True)
+    course_key: Mapped[str] = mapped_column(String(100), index=True)
+    course_version: Mapped[int] = mapped_column(Integer, default=1)
+    assigned_by_user_id: Mapped[str | None] = mapped_column(String(36), ForeignKey("users.id"), nullable=True)
+    due_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    status: Mapped[str] = mapped_column(String(20), default="assigned")
+    assigned_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    completed_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+
+
+class TrainingProgress(Base):
+    __tablename__ = "training_progress"
+    __table_args__ = (UniqueConstraint("org_id", "user_id", "course_key", "course_version", "lesson_key", name="uq_training_progress"),)
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+    org_id: Mapped[str] = mapped_column(String(36), ForeignKey("organizations.id"), index=True)
+    user_id: Mapped[str] = mapped_column(String(36), ForeignKey("users.id"), index=True)
+    course_key: Mapped[str] = mapped_column(String(100))
+    course_version: Mapped[int] = mapped_column(Integer, default=1)
+    lesson_key: Mapped[str] = mapped_column(String(100))
+    status: Mapped[str] = mapped_column(String(20), default="in_progress")
+    best_score: Mapped[int] = mapped_column(Integer, default=0)
+    started_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    completed_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+
+class TrainingQuizAttempt(Base):
+    __tablename__ = "training_quiz_attempts"
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+    org_id: Mapped[str] = mapped_column(String(36), ForeignKey("organizations.id"), index=True)
+    user_id: Mapped[str] = mapped_column(String(36), ForeignKey("users.id"), index=True)
+    course_key: Mapped[str] = mapped_column(String(100))
+    course_version: Mapped[int] = mapped_column(Integer, default=1)
+    lesson_key: Mapped[str] = mapped_column(String(100))
+    score: Mapped[int] = mapped_column(Integer)
+    passed: Mapped[bool] = mapped_column(Boolean, default=False)
+    answers: Mapped[list] = mapped_column(JSON, default=list)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+
+
+class TrainingPractical(Base):
+    __tablename__ = "training_practicals"
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+    org_id: Mapped[str] = mapped_column(String(36), ForeignKey("organizations.id"), index=True)
+    user_id: Mapped[str] = mapped_column(String(36), ForeignKey("users.id"), index=True)
+    course_key: Mapped[str] = mapped_column(String(100))
+    course_version: Mapped[int] = mapped_column(Integer, default=1)
+    lesson_key: Mapped[str] = mapped_column(String(100))
+    evidence: Mapped[dict] = mapped_column(JSON, default=dict)
+    status: Mapped[str] = mapped_column(String(20), default="pending")
+    reviewer_user_id: Mapped[str | None] = mapped_column(String(36), ForeignKey("users.id"), nullable=True)
+    reviewer_notes: Mapped[str | None] = mapped_column(Text, nullable=True)
+    submitted_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    reviewed_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+
+
+class TrainingAuditLog(Base):
+    __tablename__ = "training_audit_logs"
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+    org_id: Mapped[str] = mapped_column(String(36), ForeignKey("organizations.id"), index=True)
+    actor_user_id: Mapped[str] = mapped_column(String(36), ForeignKey("users.id"), index=True)
+    target_user_id: Mapped[str | None] = mapped_column(String(36), ForeignKey("users.id"), nullable=True)
+    action: Mapped[str] = mapped_column(String(60))
+    course_key: Mapped[str] = mapped_column(String(100))
+    lesson_key: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    details: Mapped[dict | None] = mapped_column(JSON, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, index=True)
+
+
+class TrainingCertificate(Base):
+    __tablename__ = "training_certificates"
+    __table_args__ = (UniqueConstraint("org_id", "user_id", "course_key", "course_version", name="uq_training_certificate"),)
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+    certificate_number: Mapped[str] = mapped_column(String(80), unique=True, index=True)
+    org_id: Mapped[str] = mapped_column(String(36), ForeignKey("organizations.id"), index=True)
+    user_id: Mapped[str] = mapped_column(String(36), ForeignKey("users.id"), index=True)
+    course_key: Mapped[str] = mapped_column(String(100))
+    course_version: Mapped[int] = mapped_column(Integer)
+    issued_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+
+
+class TrainingCourseRelease(Base):
+    """Immutable curriculum snapshots; publishing never rewrites prior training."""
+    __tablename__ = "training_course_releases"
+    __table_args__ = (UniqueConstraint("course_key", "version", name="uq_training_course_release"),)
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+    course_key: Mapped[str] = mapped_column(String(100), index=True)
+    version: Mapped[int] = mapped_column(Integer)
+    title: Mapped[str] = mapped_column(String(255))
+    status: Mapped[str] = mapped_column(String(20), default="draft")
+    content: Mapped[dict] = mapped_column(JSON)
+    created_by_user_id: Mapped[str] = mapped_column(String(36), ForeignKey("users.id"))
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    published_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+
+
 class ApiKey(Base):
     """A programmatic-access credential for an org's public API integrations.
     Only the SHA-256 hash is stored; the full key is shown to the org once,

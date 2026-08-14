@@ -66,7 +66,15 @@ def save_upload(event_id: str, filename: str, data: bytes, asset_type: str = "im
     if len(data) > max_bytes:
         raise UploadError(f"file too large (max {settings.upload_max_mb} MB)")
     if not _signature_ok(data, ext):
-        raise UploadError("file content does not match its type")
+        detected = next((kind for kind in ("png", "jpg", "webp") if _signature_ok(data, kind)), None)
+        if detected:
+            expected = "jpeg" if ext in ("jpg", "jpeg") else ext
+            actual = "jpeg" if detected == "jpg" else detected
+            raise UploadError(
+                f"This file contains {actual.upper()} image data but is named .{ext}. "
+                f"Rename or export it as .{actual} and try again."
+            )
+        raise UploadError("The selected file's contents do not match its image extension. Export it again as JPEG, PNG, or WebP and retry.")
 
     # Decode with Pillow — this is what actually rejects disguised/corrupt files.
     try:

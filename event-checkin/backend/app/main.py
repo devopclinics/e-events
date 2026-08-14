@@ -27,6 +27,7 @@ from .routers import shortlinks as shortlinks_router
 from .routers import xwireless_webhooks as xwireless_webhooks_router
 from .routers import ticketing_internal as ticketing_internal_router
 from .routers import redesign_telemetry as redesign_telemetry_router
+from .routers import training as training_router
 from . import sync_poller, db_migrate, entitlements
 from .services import festiome_outbox, webhook_outbox
 from . import routers
@@ -184,6 +185,7 @@ app.include_router(calendars_router.public_router, prefix="/api/calendars", tags
 app.include_router(shortlinks_router.router, prefix="/api/s", tags=["shortlinks"])
 app.include_router(redesign_telemetry_router.router, prefix="/api/telemetry/redesign", tags=["telemetry"])
 app.include_router(ticketing_internal_router.router, prefix="/api/internal/ticketing", tags=["ticketing-internal"])
+app.include_router(training_router.router, prefix="/api/training", tags=["training"])
 
 # Serve uploaded files (cover images, etc.). When S3 is configured, stream from
 # the bucket so any replica can serve any file; otherwise serve from local disk.

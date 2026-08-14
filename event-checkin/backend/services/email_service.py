@@ -336,14 +336,24 @@ async def _charge_email_credit(msg: MIMEMultipart) -> bool:
     if not event_id or not guest_id:
         return True
     from app.database import AsyncSessionLocal
-    from app.entitlements import take_email_credit
+    from app.config import settings
+    from app.entitlements import channel_weight, take_email_credit
+    from app.organization_entitlements import reserve_message_units
     from app.models import Event
     try:
         async with AsyncSessionLocal() as db:
             event = await db.get(Event, event_id)
             if not event:
                 return True
-            allowed = take_email_credit(event, guest_id=guest_id)
+            if settings.organization_entitlements_v2:
+                ledger = await reserve_message_units(
+                    db, event, "email", credits_per_message=channel_weight("email", org_id=event.org_id),
+                    reason="email", guest_id=guest_id,
+                    idempotency_key=f"email:{event_id}:{guest_id}:{msg.get('Message-Id') or ''}",
+                )
+                allowed = ledger is not None
+            else:
+                allowed = take_email_credit(event, guest_id=guest_id)
             await db.commit()
             return allowed
     except Exception:

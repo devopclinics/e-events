@@ -29,7 +29,7 @@ from services.credit_ledger import send_with_credit_ledger
 from services.email_service import send_invite_email
 from ..template_resolve import load_overrides
 from .guests import _normalize_phone
-from ..entitlements import assert_within_guest_cap, can_use_paid_channels, last_credit_ledger_id, take_message_credit
+from ..entitlements import assert_within_guest_cap, can_use_paid_channels, last_credit_ledger_id, reserve_message_credit
 from ..services.festiome_outbox import queue_guest_sync
 from ..services.webhook_outbox import queue_webhook_event
 
@@ -245,10 +245,11 @@ async def _invite_page_out(event: Event, db: AsyncSession) -> InvitePageOut:
     )
 
 
-def _send_rsvp_invite(
+async def _send_rsvp_invite(
     background_tasks: BackgroundTasks,
     event: Event,
     guest: Guest,
+    db: AsyncSession,
     overrides: dict | None = None,
 ) -> None:
     """Fan out invite notifications across the channels enabled on this event.
@@ -280,7 +281,7 @@ def _send_rsvp_invite(
             event_end_date=event.event_end_date,
         )
 
-    if paid_channels and event.notify_sms and guest.phone and guest.sms_consent and take_message_credit(event, "sms"):
+    if paid_channels and event.notify_sms and guest.phone and guest.sms_consent and await reserve_message_credit(event, "sms", db=db):
         background_tasks.add_task(
             send_with_credit_ledger,
             last_credit_ledger_id(event),
@@ -290,7 +291,7 @@ def _send_rsvp_invite(
             event_date=event.event_date, event_timezone=event.timezone,
         )
 
-    if paid_channels and event.notify_whatsapp and guest.phone and guest.whatsapp_consent and take_message_credit(event, "whatsapp"):
+    if paid_channels and event.notify_whatsapp and guest.phone and guest.whatsapp_consent and await reserve_message_credit(event, "whatsapp", db=db):
         background_tasks.add_task(
             send_with_credit_ledger,
             last_credit_ledger_id(event),
@@ -669,7 +670,7 @@ async def _submit_multi_invitee_rsvp(
         if event.notify_rsvp_responses:
             from .guests import dispatch_simple_notice
             for guest in created:
-                dispatch_simple_notice(background_tasks, event, guest, "waitlisted", overrides)
+                await dispatch_simple_notice(background_tasks, event, guest, db, "waitlisted", overrides)
             await db.commit()
         return RSVPConfirm(
             id=created[0].id,
@@ -685,7 +686,7 @@ async def _submit_multi_invitee_rsvp(
         if event.notify_rsvp_responses:
             from .guests import dispatch_simple_notice
             for guest in created:
-                dispatch_simple_notice(background_tasks, event, guest, "approval_pending", overrides)
+                await dispatch_simple_notice(background_tasks, event, guest, db, "approval_pending", overrides)
             await db.commit()
         return RSVPConfirm(
             id=created[0].id,
@@ -701,8 +702,8 @@ async def _submit_multi_invitee_rsvp(
         await db.refresh(guest)
         if event.notify_rsvp_responses:
             from .guests import dispatch_simple_notice
-            dispatch_simple_notice(background_tasks, event, guest, "rsvp_confirmation", overrides)
-        _send_rsvp_invite(background_tasks, event, guest, overrides)
+            await dispatch_simple_notice(background_tasks, event, guest, db, "rsvp_confirmation", overrides)
+        await _send_rsvp_invite(background_tasks, event, guest, db, overrides)
     await db.commit()
     return RSVPConfirm(
         id=created[0].id,
@@ -857,8 +858,8 @@ async def submit_rsvp(
     if is_waitlisted:
         if event.notify_rsvp_responses:
             from .guests import dispatch_simple_notice
-            dispatch_simple_notice(
-                background_tasks, event, guest,
+            await dispatch_simple_notice(
+                background_tasks, event, guest, db,
                 "waitlisted", await load_overrides(event.id, db),
             )
             await db.commit()
@@ -875,8 +876,8 @@ async def submit_rsvp(
     if needs_approval:
         if event.notify_rsvp_responses:
             from .guests import dispatch_simple_notice
-            dispatch_simple_notice(
-                background_tasks, event, guest,
+            await dispatch_simple_notice(
+                background_tasks, event, guest, db,
                 "approval_pending", await load_overrides(event.id, db),
             )
             await db.commit()
@@ -893,11 +894,11 @@ async def submit_rsvp(
     # Approved automatically — fire the ticket in the background.
     if event.notify_rsvp_responses:
         from .guests import dispatch_simple_notice
-        dispatch_simple_notice(
-            background_tasks, event, guest,
-            "rsvp_confirmation", await load_overrides(event.id, db),
+        await dispatch_simple_notice(
+                background_tasks, event, guest, db,
+                "rsvp_confirmation", await load_overrides(event.id, db),
         )
-    _send_rsvp_invite(background_tasks, event, guest, await load_overrides(event.id, db))
+    await _send_rsvp_invite(background_tasks, event, guest, db, await load_overrides(event.id, db))
     await queue_webhook_event(db, org_id=event.org_id, event_type="rsvp.confirmed", payload={
         "guest_id": guest.id, "event_id": event.id,
         "first_name": guest.first_name, "last_name": guest.last_name,
@@ -1012,12 +1013,12 @@ async def submit_invite_token_rsvp(
         await db.refresh(guest)
         if event.notify_rsvp_responses:
             from .guests import dispatch_simple_notice
-            dispatch_simple_notice(
-                background_tasks, event, guest,
+            await dispatch_simple_notice(
+                background_tasks, event, guest, db,
                 "rsvp_confirmation", await load_overrides(event.id, db),
             )
         # Issue the ticket now that they've confirmed.
-        _send_rsvp_invite(background_tasks, event, guest, await load_overrides(event.id, db))
+        await _send_rsvp_invite(background_tasks, event, guest, db, await load_overrides(event.id, db))
         await queue_webhook_event(db, org_id=event.org_id, event_type="rsvp.confirmed", payload={
             "guest_id": guest.id, "event_id": event.id,
             "first_name": guest.first_name, "last_name": guest.last_name,
@@ -1029,7 +1030,7 @@ async def submit_invite_token_rsvp(
         # but only if the organizer opted in (off by default → stays silent).
         if event.notify_rsvp_responses:
             from .guests import dispatch_simple_notice
-            dispatch_simple_notice(background_tasks, event, guest, "rsvp_decline", await load_overrides(event.id, db))
+            await dispatch_simple_notice(background_tasks, event, guest, db, "rsvp_decline", await load_overrides(event.id, db))
         from .guests import _promote_from_waitlist
         await _promote_from_waitlist(background_tasks, event, db)
         await db.commit()

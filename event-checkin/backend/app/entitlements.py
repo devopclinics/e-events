@@ -13,6 +13,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import object_session
 
 from .models import Event, MessageCreditLedger, Organization, PricingPlan
+from .config import settings
 
 # Free events: email-only invites, capped guest list, Festio branding.
 FREE_GUEST_CAP = 25
@@ -95,6 +96,14 @@ FEATURE_ADDON = {
 
 def guest_limit(event: Event) -> int | None:
     """Max guests for this event. None = unlimited."""
+    if settings.organization_entitlements_v2:
+        policy = _org_entitlement_cache.get(event.org_id)
+        if policy and not (
+            policy.get("status") == "active" and policy.get("expires_at")
+            and policy["expires_at"] > datetime.utcnow()
+        ):
+            # Expired paid events preserve data but cannot add guests.
+            return 0 if event.is_paid else FREE_GUEST_CAP
     if event.is_paid:
         return event.guest_cap  # None = unlimited for paid/comp tiers
     return FREE_GUEST_CAP
@@ -149,6 +158,19 @@ def event_allows_addon(event: Event, addon: str) -> bool:
     # Add-ons supplement an Event Pass; they never turn a free event into a
     # paid event. This hard gate intentionally wins over every operator override
     # and promotional grant below.
+    if settings.organization_entitlements_v2:
+        policy = _org_entitlement_cache.get(event.org_id, {})
+        active = policy.get("status") == "active" and policy.get("expires_at") and policy["expires_at"] > datetime.utcnow()
+        if not active:
+            return False
+        org_override = _org_addon_override_cache.get(event.org_id, {}).get(addon)
+        if org_override is not None:
+            return bool(org_override)
+        promo = policy.get("promo_expires_at")
+        if promo and promo > datetime.utcnow():
+            return True
+        if addon in policy.get("purchased_addons", []):
+            return True
     if not event.is_paid:
         return False
     event_override = (event.addon_overrides or {}).get(addon)
@@ -167,14 +189,21 @@ def event_allows_addon(event: Event, addon: str) -> bool:
 
 _org_addon_override_cache: dict[str, dict[str, bool]] = {}
 _global_addon_active_cache: dict[str, bool] = {}
+_org_entitlement_cache: dict[str, dict] = {}
 
 
 async def reload_addon_policy_cache(db) -> None:
     """Reload operator-controlled org overrides and global availability."""
-    orgs = (await db.execute(select(Organization.id, Organization.addon_overrides))).all()
+    orgs = (await db.execute(select(Organization))).scalars().all()
     plans = (await db.execute(select(PricingPlan.key, PricingPlan.active).where(PricingPlan.kind == "addon"))).all()
     _org_addon_override_cache.clear()
-    _org_addon_override_cache.update({org_id: dict(overrides or {}) for org_id, overrides in orgs})
+    _org_addon_override_cache.update({org.id: dict(org.addon_overrides or {}) for org in orgs})
+    _org_entitlement_cache.clear()
+    _org_entitlement_cache.update({org.id: {
+        "status": org.event_pass_status, "expires_at": org.event_pass_expires_at,
+        "promo_expires_at": org.addon_promo_expires_at,
+        "purchased_addons": list(org.purchased_addons or []),
+    } for org in orgs})
     _global_addon_active_cache.clear()
     _global_addon_active_cache.update({key: bool(active) for key, active in plans})
 
@@ -204,6 +233,9 @@ def assert_feature_allowed(event: Event, feature: str) -> None:
 
 def can_use_paid_channels(event: Event) -> bool:
     """Whether SMS/WhatsApp may be sent for this event (email is always allowed)."""
+    if settings.organization_entitlements_v2:
+        policy = _org_entitlement_cache.get(event.org_id, {})
+        return bool(policy.get("status") == "active" and policy.get("expires_at") and policy["expires_at"] > datetime.utcnow())
     return bool(event.is_paid and event.paid_channels)
 
 
@@ -416,10 +448,11 @@ def _spend_channel_credit(
     return True
 
 
-def take_message_credit(
+async def reserve_message_credit(
     event: Event,
     channel: str = "sms",
     *,
+    db=None,
     reason: str = "message",
     guest_id: str | None = None,
     provider: str | None = None,
@@ -429,6 +462,34 @@ def take_message_credit(
     _spend_channel_credit). The balance remains on `events.message_credits`;
     this appends a matching ledger row. Existing callers can still use the
     old boolean API."""
+    if settings.organization_entitlements_v2:
+        if db is None:
+            raise RuntimeError("db is required for organization credit reservations")
+        from .organization_entitlements import reserve_message_units
+        row = await reserve_message_units(
+            db, event, channel, credits_per_message=channel_weight(channel, org_id=event.org_id),
+            reason=reason, guest_id=guest_id, idempotency_key=provider_message_id,
+        )
+        if row:
+            event._last_credit_ledger_id = row.id
+            return True
+        return False
+    return take_message_credit(
+        event, channel, reason=reason, guest_id=guest_id,
+        provider=provider, provider_message_id=provider_message_id,
+    )
+
+
+def take_message_credit(
+    event: Event,
+    channel: str = "sms",
+    *,
+    reason: str = "message",
+    guest_id: str | None = None,
+    provider: str | None = None,
+    provider_message_id: str | None = None,
+) -> bool:
+    """Legacy synchronous event-wallet API, retained for flag-off compatibility."""
     # Platform-superadmin hard block (console-only) wins over everything — no
     # paid send on a blocked channel, regardless of credits or notify_* flags.
     if channel in (event.blocked_messaging_channels or []):

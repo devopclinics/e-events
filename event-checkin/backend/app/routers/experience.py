@@ -58,7 +58,7 @@ from ..services.experience import (
     unpublish_workflow,
 )
 from ..entitlements import assert_feature_allowed
-from ..entitlements import can_use_paid_channels, last_credit_ledger_id, take_message_credit
+from ..entitlements import can_use_paid_channels, last_credit_ledger_id, reserve_message_credit
 from ..ratelimit import rate_limit
 from ..timeutil import EVENT_TZ
 from services.email_service import send_simple_email
@@ -2195,12 +2195,12 @@ async def send_feedback_reminders_cascade(
             background_tasks.add_task(send_simple_email, guest.email, subject, body, event.id, None, guest.id, "feedback_reminder")
             queued["email"] += 1
         if "sms" in channels and paid and event.notify_sms and guest.phone and guest.sms_consent:
-            if take_message_credit(event, "sms", reason="feedback_reminder", guest_id=guest.id):
+            if await reserve_message_credit(event, "sms", db=db, reason="feedback_reminder", guest_id=guest.id):
                 background_tasks.add_task(send_with_credit_ledger, last_credit_ledger_id(event), messaging.send_broadcast_sms,
                     phone=guest.phone, first_name=guest.first_name, message=personalized)
                 queued["sms"] += 1
         if "whatsapp" in channels and paid and event.notify_whatsapp and guest.phone and guest.whatsapp_consent:
-            if take_message_credit(event, "whatsapp", reason="feedback_reminder", guest_id=guest.id):
+            if await reserve_message_credit(event, "whatsapp", db=db, reason="feedback_reminder", guest_id=guest.id):
                 background_tasks.add_task(send_with_credit_ledger, last_credit_ledger_id(event), messaging.send_broadcast_whatsapp,
                     phone=guest.phone, first_name=guest.first_name, message=personalized)
                 queued["whatsapp"] += 1

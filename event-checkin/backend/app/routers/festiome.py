@@ -17,7 +17,7 @@ from ..services.festiome_client import (
     get_festiome_client,
 )
 from ..services.festiome_outbox import guest_is_festiome_eligible, queue_announcement, queue_guest_sync
-from ..entitlements import can_use_paid_channels, last_credit_ledger_id, take_message_credit
+from ..entitlements import can_use_paid_channels, last_credit_ledger_id, reserve_message_credit
 from services import messaging
 from services.credit_ledger import send_with_credit_ledger
 from services.email_service import send_broadcast_email
@@ -335,14 +335,14 @@ async def publish_festiome_announcement(
             if not guest.phone:
                 continue
             if "sms" in data.escalation_channels and guest.sms_consent:
-                if take_message_credit(event, "sms", reason="festiome_urgent", guest_id=guest.id):
+                if await reserve_message_credit(event, "sms", db=db, reason="festiome_urgent", guest_id=guest.id):
                     background_tasks.add_task(
                         send_with_credit_ledger, last_credit_ledger_id(event),
                         messaging.send_custom_sms, phone=guest.phone, body=escalation_text,
                     )
                     escalation_queued += 1
             if "mms" in data.escalation_channels and guest.sms_consent:
-                if take_message_credit(event, "mms", reason="festiome_urgent", guest_id=guest.id):
+                if await reserve_message_credit(event, "mms", db=db, reason="festiome_urgent", guest_id=guest.id):
                     background_tasks.add_task(
                         send_with_credit_ledger, last_credit_ledger_id(event),
                         messaging.send_mms, phone=guest.phone, body=escalation_text,
@@ -350,7 +350,7 @@ async def publish_festiome_announcement(
                     )
                     escalation_queued += 1
             if "whatsapp" in data.escalation_channels and guest.whatsapp_consent:
-                if take_message_credit(event, "whatsapp", reason="festiome_urgent", guest_id=guest.id):
+                if await reserve_message_credit(event, "whatsapp", db=db, reason="festiome_urgent", guest_id=guest.id):
                     # Freeform urgent notice → approved announcement template
                     # (falls back to session-only free text if unconfigured).
                     background_tasks.add_task(

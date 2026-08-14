@@ -30,7 +30,7 @@ from ..schemas import (
     RegistryUnfurlRequest, RegistryUnfurlOut,
 )
 from ..auth import require_paid_event_admin, require_paid_event_member
-from ..entitlements import can_use_paid_channels, last_credit_ledger_id, take_message_credit
+from ..entitlements import can_use_paid_channels, last_credit_ledger_id, reserve_message_credit
 from ..channels import messaging_channel_blocked
 from ..template_resolve import load_overrides, channel_text as template_channel_text, channel_text_or_default, email_or_default
 from services import messaging
@@ -251,7 +251,7 @@ async def send_registry_message(
 
         if ("sms" in channels and can_use_paid_channels(ev) and ev.notify_sms
                 and guest.phone and guest.sms_consent):
-            if take_message_credit(ev, "sms", reason="registry_message", guest_id=guest.id):
+            if await reserve_message_credit(ev, "sms", db=db, reason="registry_message", guest_id=guest.id):
                 sms = channel_text_or_default(overrides, "registry_message", "sms", ctx)
                 if sms:
                     background_tasks.add_task(send_with_credit_ledger, last_credit_ledger_id(ev), messaging.send_custom_sms, phone=guest.phone, body=sms)
@@ -261,7 +261,7 @@ async def send_registry_message(
 
         if ("whatsapp" in channels and can_use_paid_channels(ev) and ev.notify_whatsapp
                 and guest.phone and guest.whatsapp_consent):
-            if take_message_credit(ev, "whatsapp", reason="registry_message", guest_id=guest.id):
+            if await reserve_message_credit(ev, "whatsapp", db=db, reason="registry_message", guest_id=guest.id):
                 # WhatsApp initiates → approved template only (free-text 15003s).
                 background_tasks.add_task(
                     send_with_credit_ledger,
@@ -485,7 +485,7 @@ async def claim_item(token: str, item_id: str, data: RegistryClaimCreate,
             claim.thank_you_status = "missing_contact"
     elif requested_channel == "sms":
         if claim.claimer_phone and ev.notify_sms and can_use_paid_channels(ev):
-            if take_message_credit(ev, "sms", reason="registry_thank_you"):
+            if await reserve_message_credit(ev, "sms", db=db, reason="registry_thank_you"):
                 body = channel_text_or_default(overrides, "registry_thank_you", "sms", ctx)
                 if body:
                     background_tasks.add_task(

@@ -8,6 +8,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from .models import Event, Organization, PricingPlan
 from .entitlements import grant_message_credits, plan_label
+from .organization_entitlements import activate_pass
 
 # Which currency each region pays in (and thus which provider is used).
 REGION_CURRENCY = {"US": "USD", "NG": "NGN"}
@@ -154,6 +155,18 @@ def apply_purchase(event: Event, plan: PricingPlan) -> None:
             purchased.append(plan.key)
         event.purchased_addons = purchased
     grant_message_credits(event, plan.credits or 0, reason=f"purchase:{plan.key}")
+
+
+def apply_organization_purchase(org: Organization, plan: PricingPlan) -> None:
+    """Apply v2 purchases to the organization. Caller holds its row lock."""
+    if plan.kind == "tier":
+        activate_pass(org, plan.key, guest_limit=plan.guest_cap)
+    elif plan.kind == "addon":
+        purchased = list(org.purchased_addons or [])
+        if plan.key not in purchased:
+            purchased.append(plan.key)
+        org.purchased_addons = purchased
+    org.message_credit_units = int(org.message_credit_units or 0) + int(plan.credits or 0) * 10
 
 
 def public_catalog(currency: str, tiers: list[dict], packs: list[dict]) -> dict:

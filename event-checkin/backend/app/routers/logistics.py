@@ -26,7 +26,7 @@ from ..schemas import (
     GuestShipmentOut, GuestShipmentUpdate, ShippingAddressUpdate, VendorPageOut,
 )
 from ..auth import require_paid_event_admin, require_paid_event_member
-from ..entitlements import can_use_paid_channels, last_credit_ledger_id, take_message_credit
+from ..entitlements import can_use_paid_channels, last_credit_ledger_id, reserve_message_credit
 from ..channels import channels_for_flow
 from ..template_resolve import load_overrides, channel_text as template_channel_text, channel_text_or_default, email_or_default
 from services import messaging
@@ -253,11 +253,11 @@ async def update_line(event_id: str, sid: str, gid: str, data: GuestShipmentUpda
                     email_service.send_simple_email,
                     g.email, subj or f"Shipping update — {ev.name}", body, ev.id,
                 )
-        if "sms" in chosen and take_message_credit(ev, "sms"):
+        if "sms" in chosen and await reserve_message_credit(ev, "sms", db=db):
             sms = channel_text_or_default(overrides, "logistics_notification", "sms", ctx)
             if sms:
                 background_tasks.add_task(send_with_credit_ledger, last_credit_ledger_id(ev), messaging.send_custom_sms, phone=g.phone, body=sms)
-        if "whatsapp" in chosen and take_message_credit(ev, "whatsapp"):
+        if "whatsapp" in chosen and await reserve_message_credit(ev, "whatsapp", db=db):
             # WhatsApp initiates the conversation → approved template only; a
             # custom free-text override can't open a session (fails 15003).
             background_tasks.add_task(

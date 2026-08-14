@@ -27,7 +27,7 @@ from datetime import datetime, timedelta
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from ..entitlements import can_use_paid_channels, last_credit_ledger_id, take_message_credit
+from ..entitlements import can_use_paid_channels, last_credit_ledger_id, reserve_message_credit
 from ..models import Event, Guest
 from ..template_resolve import channel_text_or_default, email_or_default, load_overrides
 from services import messaging
@@ -136,7 +136,7 @@ async def send_to_guest(event: Event, guest: Guest, db: AsyncSession, *, overrid
     if not (guest.phone and paid_ok):
         return sent
 
-    if event.notify_sms and guest.sms_consent and take_message_credit(event, "sms", reason=TEMPLATE_KEY, guest_id=guest.id):
+    if event.notify_sms and guest.sms_consent and await reserve_message_credit(event, "sms", db=db, reason=TEMPLATE_KEY, guest_id=guest.id):
         sms_text = channel_text_or_default(overrides, TEMPLATE_KEY, "sms", ctx)
         if sms_text:
             await send_with_credit_ledger(
@@ -145,7 +145,7 @@ async def send_to_guest(event: Event, guest: Guest, db: AsyncSession, *, overrid
             )
             sent += 1
 
-    if event.notify_whatsapp and guest.whatsapp_consent and take_message_credit(event, "whatsapp", reason=TEMPLATE_KEY, guest_id=guest.id):
+    if event.notify_whatsapp and guest.whatsapp_consent and await reserve_message_credit(event, "whatsapp", db=db, reason=TEMPLATE_KEY, guest_id=guest.id):
         wa_text = channel_text_or_default(overrides, TEMPLATE_KEY, "whatsapp", ctx)
         if wa_text:
             await send_with_credit_ledger(

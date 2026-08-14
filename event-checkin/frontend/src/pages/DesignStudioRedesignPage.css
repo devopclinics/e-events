@@ -95,6 +95,15 @@
   place-items: center; flex: none; color: var(--success); }
 .ds-check-row.done .ds-check-dot { background: var(--success-soft); border-color: var(--success-soft); }
 .ds-publish-status { font-size: 11px; color: var(--muted); margin-top: 12px; display: flex; align-items: center; gap: 8px; }
+.ds-save-state { display:flex; align-items:center; gap:8px; max-width:min(440px,100%); padding:8px 11px; border:1px solid var(--line); border-radius:999px; background:var(--surface); color:var(--muted); font-size:11px; font-weight:700; }
+.ds-save-state span { width:8px; height:8px; flex:none; border-radius:50%; background:#94a3b8; }
+.ds-save-state.saved span { background:#16a34a; }
+.ds-save-state.unsaved span { background:#d97706; }
+.ds-save-state.saving span { background:#0ea5e9; animation:dsSavePulse .8s ease-in-out infinite alternate; }
+.ds-save-state.error { border-color:#fecaca; border-radius:10px; color:#991b1b; background:#fef2f2; }
+.ds-save-state.error span { background:#dc2626; }
+.ds-upload-error { display:flex; align-items:flex-start; gap:7px; margin-top:10px; line-height:1.45; }
+@keyframes dsSavePulse { to { opacity:.3; transform:scale(.78); } }
 .ds-gate-hint { font-size: 10.5px; color: var(--faint); margin-top: 10px; text-align: center; }
 .ds-gate-hint a { color: var(--teal); text-decoration: none; font-weight: 600; }
 

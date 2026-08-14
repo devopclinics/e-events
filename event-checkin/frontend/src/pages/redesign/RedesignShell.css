@@ -44,13 +44,32 @@
   text-decoration: none; white-space: nowrap; flex: none; }
 .rr-topbar-links a:hover { background: var(--surface-2); color: var(--ink); }
 .rr-topbar-links a.active { background: var(--teal-soft); color: var(--teal); }
-.rr-topbar-event { margin-left: 10px; flex: none; display: flex; align-items: center; gap: 5px; font-size: 10.5px;
-  font-weight: 700; color: var(--teal); background: var(--teal-soft); border-radius: 100px; padding: 5px 11px;
-  text-decoration: none; max-width: 190px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.rr-topbar-event-select { background: transparent; border: none; color: inherit; font: inherit; font-weight: 700;
-  max-width: 165px; overflow: hidden; text-overflow: ellipsis; cursor: pointer; appearance: none; padding: 0; }
-.rr-topbar-event-select:focus { outline: none; }
-.rr-topbar-event-select option { color: var(--ink); background: var(--surface); font-weight: 500; }
+.rr-topbar-event { position: relative; margin-left: 10px; flex: none; display: flex; align-items: center; gap: 5px;
+  font-size: 10.5px; font-weight: 700; color: var(--teal); background: var(--teal-soft); border-radius: 100px;
+  padding: 5px 11px; max-width: 190px; }
+.rr-topbar-event-trigger { display: flex; align-items: center; gap: 5px; background: transparent; border: none;
+  color: inherit; font: inherit; font-weight: 700; max-width: 165px; padding: 0; cursor: pointer; }
+.rr-topbar-event-trigger > span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.rr-topbar-event-trigger svg { flex: none; transition: transform .15s ease; }
+.rr-topbar-event-trigger[aria-expanded="true"] svg { transform: rotate(180deg); }
+.rr-topbar-event-menu { position: absolute; top: calc(100% + 8px); left: 0; width: max(260px, min(360px, 90vw));
+  max-height: min(360px, 70vh); display: flex; flex-direction: column; border: 1px solid var(--line);
+  border-radius: 11px; background: var(--surface); box-shadow: 0 18px 45px rgba(22,45,42,.24); overflow: hidden;
+  z-index: 40; }
+.rr-topbar-event-search { display: flex; align-items: center; gap: 7px; padding: 9px 11px; border-bottom: 1px solid var(--line); flex: none; }
+.rr-topbar-event-search svg { flex: none; color: var(--muted); }
+.rr-topbar-event-search input { flex: 1; min-width: 0; border: none; background: transparent; color: var(--ink);
+  font: inherit; font-size: 12px; font-weight: 500; }
+.rr-topbar-event-search input:focus { outline: none; }
+.rr-topbar-event-list { overflow-y: auto; padding: 6px; }
+.rr-topbar-event-list button { width: 100%; min-height: 36px; padding: 8px 10px; border: 0; border-radius: 7px;
+  background: transparent; color: var(--ink); display: flex; align-items: center; justify-content: space-between;
+  gap: 10px; font: inherit; font-size: 11.5px; font-weight: 600; text-align: left; cursor: pointer; }
+.rr-topbar-event-list button > span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.rr-topbar-event-list button:hover { background: var(--surface-2); color: var(--teal); }
+.rr-topbar-event-list button.active { background: var(--teal-soft); color: var(--teal); font-weight: 800; }
+.rr-topbar-event-list button svg { flex: none; }
+.rr-topbar-event-empty { padding: 14px 10px; font-size: 11px; color: var(--muted); text-align: center; }
 .rr-topbar-right { margin-left: auto; display: flex; align-items: center; gap: 8px; flex: none; }
 .rr-topbar-user { display: flex; align-items: center; gap: 8px; }
 .rr-topbar-user > div:first-child { display: flex; flex-direction: column; text-align: right; line-height: 1.25; }
@@ -298,7 +317,14 @@ details[open] .rd-chev { transform: rotate(90deg); }
   .rr-sidebar-mobile-global { display: block; margin-bottom: 10px; padding-bottom: 10px; border-bottom: 1px solid var(--line); }
   .rr-sidebar-mobile-global a { margin-bottom: 2px; }
   .rr-main, .rr-main-wide { padding: 16px 15px 60px; }
-  .rr-topbar-event, .rr-topbar-user > div:first-child { display: none; }
+  .rr-topbar-user > div:first-child { display: none; }
+  /* Collapse to an icon-only trigger instead of hiding the switcher outright —
+     it used to disappear below this width, taking the search/filter fix with
+     it on the phones that needed it most. */
+  .rr-topbar-event { max-width: none; padding: 6px; }
+  .rr-topbar-event-trigger { max-width: 0; padding: 0; }
+  .rr-topbar-event-trigger > span { display: none; }
+  .rr-topbar-event-menu { left: auto; right: 0; width: min(320px, 88vw); }
   .rd-channels { grid-template-columns: 1fr 1fr; }
   .rr-topbar-inner { padding-inline: 12px; }
   .rr-topbar-brand { font-size: 15px; }

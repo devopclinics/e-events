@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { Link, useLocation } from 'react-router-dom'
 import { useTheme } from '../../context/ThemeContext'
 import { useAuth } from '../../context/AuthContext'
@@ -230,6 +230,88 @@ function ThemeToggle() {
   )
 }
 
+// Searchable event switcher for the topbar. Replaces a plain <select> —
+// native selects render as an OS picker on mobile (iOS wheel / Android list)
+// with no type-to-filter, so on phones there was no way to narrow a long
+// event list the way desktop's browser-native type-ahead allows.
+function EventSwitcher({ events, currentEventId, onChange }) {
+  const [open, setOpen] = useState(false)
+  const [query, setQuery] = useState('')
+  const wrapRef = useRef(null)
+  const inputRef = useRef(null)
+  const current = events.find((e) => e.id === currentEventId)
+
+  useEffect(() => {
+    if (!open) return undefined
+    setQuery('')
+    const focusTimer = setTimeout(() => inputRef.current?.focus(), 0)
+    function closeOnOutsideClick(e) {
+      if (!wrapRef.current?.contains(e.target)) setOpen(false)
+    }
+    function closeOnEscape(e) {
+      if (e.key === 'Escape') setOpen(false)
+    }
+    document.addEventListener('mousedown', closeOnOutsideClick)
+    window.addEventListener('keydown', closeOnEscape)
+    return () => {
+      clearTimeout(focusTimer)
+      document.removeEventListener('mousedown', closeOnOutsideClick)
+      window.removeEventListener('keydown', closeOnEscape)
+    }
+  }, [open])
+
+  const q = query.trim().toLowerCase()
+  const filtered = q ? events.filter((e) => e.name.toLowerCase().includes(q)) : events
+
+  return (
+    <div className="rr-topbar-event" ref={wrapRef}>
+      <Icon name="calendar" size={12} />
+      <button
+        type="button"
+        className="rr-topbar-event-trigger"
+        title="Switch event"
+        aria-haspopup="listbox"
+        aria-expanded={open}
+        onClick={() => setOpen((o) => !o)}
+      >
+        <span>{current?.name || 'Choose an event…'}</span>
+        <Icon name="chevrondown" size={12} />
+      </button>
+      {open && (
+        <div className="rr-topbar-event-menu" role="listbox" aria-label="Events">
+          <div className="rr-topbar-event-search">
+            <Icon name="search" size={12} />
+            <input
+              ref={inputRef}
+              type="text"
+              inputMode="search"
+              placeholder="Search events…"
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+            />
+          </div>
+          <div className="rr-topbar-event-list">
+            {filtered.length === 0 && <div className="rr-topbar-event-empty">No events match "{query}"</div>}
+            {filtered.map((e) => (
+              <button
+                type="button"
+                role="option"
+                aria-selected={e.id === currentEventId}
+                className={e.id === currentEventId ? 'active' : ''}
+                key={e.id}
+                onClick={() => { onChange(e.id); setOpen(false) }}
+              >
+                <span>{e.name}</span>
+                {e.id === currentEventId && <Icon name="check" size={12} />}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
+
 export default function RedesignShell({ topActive, withEventSidebar = false, eventScoped = withEventSidebar, eventActive, children }) {
   const location = useLocation()
   const { user, logout } = useAuth()
@@ -310,17 +392,7 @@ export default function RedesignShell({ topActive, withEventSidebar = false, eve
 
           {eventScoped && (
             events.length > 0 ? (
-              <label className="rr-topbar-event" title="Switch event">
-                <Icon name="calendar" size={12} />
-                <select
-                  className="rr-topbar-event-select"
-                  value={currentEventId || ''}
-                  onChange={(e) => setCurrentEventId(e.target.value)}
-                >
-                  {!currentEventId && <option value="">Choose an event…</option>}
-                  {events.map((e) => <option key={e.id} value={e.id}>{e.name}</option>)}
-                </select>
-              </label>
+              <EventSwitcher events={events} currentEventId={currentEventId} onChange={setCurrentEventId} />
             ) : (
               <span className="rr-topbar-event">
                 <Icon name="calendar" size={12} /> <span>{eventName}</span>

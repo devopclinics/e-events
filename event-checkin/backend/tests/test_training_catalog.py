@@ -87,6 +87,19 @@ async def test_manager_due_date_audit_and_release_permissions(ctx, monkeypatch):
 
 
 @pytest.mark.asyncio
+async def test_manage_orgs_lists_only_orgs_the_caller_can_actually_manage(ctx, monkeypatch):
+    monkeypatch.setattr(settings, "training_internal_org_slugs", "org-a")
+    ctx.login(ctx.ids["user_a"])
+    response = await ctx.client.get("/api/training/manage/orgs")
+    assert response.status_code == 200
+    assert [org["id"] for org in response.json()] == [ctx.ids["org_a"]]
+
+    # user_b owns org-b, which isn't in the internal slug list, so they can't manage its academy.
+    ctx.login(ctx.ids["user_b"])
+    assert (await ctx.client.get("/api/training/manage/orgs")).json() == []
+
+
+@pytest.mark.asyncio
 async def test_customer_owner_is_denied_until_superadmin_grants_access(ctx, monkeypatch):
     monkeypatch.setattr(settings, "training_internal_org_slugs", "org-a")
     ctx.login(ctx.ids["user_b"])

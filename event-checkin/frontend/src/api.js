@@ -1394,6 +1394,7 @@ export const api = {
   trainingMe: (orgId='') => req('GET', `/training/me${orgId ? `?org_id=${encodeURIComponent(orgId)}` : ''}`),
   trainingQuiz: (lessonKey, answers, orgId='') => req('POST', `/training/quiz/${lessonKey}${orgId ? `?org_id=${encodeURIComponent(orgId)}` : ''}`, { answers }),
   trainingPractical: (lessonKey, body, orgId='') => req('POST', `/training/practicals/${lessonKey}${orgId ? `?org_id=${encodeURIComponent(orgId)}` : ''}`, body),
+  trainingManageOrgs: () => req('GET', '/training/manage/orgs'),
   trainingPeople: (orgId='') => req('GET', `/training/manage/people${orgId ? `?org_id=${encodeURIComponent(orgId)}` : ''}`),
   trainingAssign: (body) => req('POST', '/training/manage/assignments', body),
   trainingReview: (id, body, orgId='') => req('POST', `/training/manage/practicals/${id}/review${orgId ? `?org_id=${encodeURIComponent(orgId)}` : ''}`, body),

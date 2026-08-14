@@ -239,6 +239,15 @@ async def submit_practical(lesson_key: str, body: PracticalRequest, org_id: str 
     return {"id": item.id, "status": item.status}
 
 
+@router.get("/manage/orgs")
+async def manage_orgs(user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
+    rows = (await db.execute(
+        select(Membership, Organization).join(Organization, Organization.id == Membership.org_id)
+        .where(Membership.user_id == user.id).order_by(Membership.created_at)
+    )).all()
+    return [{"id": org.id, "name": org.name} for membership, org in rows if _training_manager(user, membership, org)]
+
+
 @router.get("/manage/people")
 async def manage_people(org_id: str | None = None, user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
     membership, org = await _context(db, user, org_id)

@@ -103,8 +103,8 @@ def _manager(user: User, membership: Membership) -> bool:
     return user.is_platform_superadmin or membership.role in ("owner", "admin")
 
 
-def _safe_course():
-    course = published_course()
+def _safe_course(role=None):
+    course = published_course(role)
     for module in course["modules"]:
         for lesson in module["lessons"]:
             lesson["quiz"] = [{"question": q["question"], "options": q["options"]} for q in lesson["quiz"]]
@@ -136,8 +136,9 @@ async def my_training(org_id: str | None = None, user: User = Depends(get_curren
         TrainingPractical.org_id == org.id, TrainingPractical.user_id == user.id,
         TrainingPractical.course_key == COURSE_KEY,
     ).order_by(TrainingPractical.submitted_at.desc()))).scalars().all()
-    completed = [p for p in progress if p.status == "completed"]
-    course = _safe_course()
+    course = _safe_course(membership.role)
+    course_lesson_keys = {lesson["key"] for module in course["modules"] for lesson in module["lessons"]}
+    completed = [p for p in progress if p.status == "completed" and p.lesson_key in course_lesson_keys]
     approved = (await db.execute(select(TrainingPractical).where(
         TrainingPractical.org_id == org.id, TrainingPractical.user_id == user.id,
         TrainingPractical.course_key == COURSE_KEY, TrainingPractical.status == "approved",
@@ -171,25 +172,24 @@ async def my_training(org_id: str | None = None, user: User = Depends(get_curren
 @router.post("/quiz/{lesson_key}")
 async def submit_quiz(lesson_key: str, body: QuizSubmission, org_id: str | None = None,
                       user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
-    _, org = await _context(db, user, org_id)
+    membership, org = await _context(db, user, org_id)
     await _require_academy_access(db, user, org)
-    catalog = lessons()
+    catalog = lessons(membership.role)
     index = next((i for i, item in enumerate(catalog) if item["key"] == lesson_key), None)
     if index is None:
         raise HTTPException(404, "Lesson not found")
-    if index:
-        previous = catalog[index - 1]["key"]
-        previous_progress = (await db.execute(select(TrainingProgress).where(
-            TrainingProgress.org_id == org.id, TrainingProgress.user_id == user.id,
-            TrainingProgress.course_key == COURSE_KEY, TrainingProgress.course_version == COURSE_VERSION,
-            TrainingProgress.lesson_key == previous, TrainingProgress.status == "completed",
-        ))).scalar_one_or_none()
-        if not previous_progress:
-            raise HTTPException(409, f"Complete '{catalog[index - 1]['title']}' first")
+    # Lessons are presented in a suggested order, but any of them can be attempted
+    # directly -- an experienced hire can "test out" of a lesson by passing its
+    # quiz cold, without being forced through earlier lessons first.
     lesson = catalog[index]
     if len(body.answers) != len(lesson["quiz"]):
         raise HTTPException(422, "Answer every question before submitting")
-    correct = sum(answer == question["correct"] for answer, question in zip(body.answers, lesson["quiz"]))
+    results = [
+        {"question": question["question"], "options": question["options"],
+         "your_answer": answer, "correct_answer": question["correct"], "correct": answer == question["correct"]}
+        for answer, question in zip(body.answers, lesson["quiz"])
+    ]
+    correct = sum(r["correct"] for r in results)
     score = round(correct * 100 / len(lesson["quiz"]))
     passed = score >= published_course()["passing_score"]
     db.add(TrainingQuizAttempt(org_id=org.id, user_id=user.id, course_key=COURSE_KEY,
@@ -209,26 +209,27 @@ async def submit_quiz(lesson_key: str, body: QuizSubmission, org_id: str | None 
     if passed:
         p.status, p.completed_at = "completed", p.completed_at or now
     assignment = await _assignment(db, org.id, user.id)
-    completed_count = len((await db.execute(select(TrainingProgress).where(
+    scoped_keys = {item["key"] for item in catalog}
+    completed_count = len([row for row in (await db.execute(select(TrainingProgress.lesson_key).where(
         TrainingProgress.org_id == org.id, TrainingProgress.user_id == user.id,
         TrainingProgress.course_key == COURSE_KEY, TrainingProgress.course_version == COURSE_VERSION,
         TrainingProgress.status == "completed",
-    ))).scalars().all())
+    ))).scalars().all() if row in scoped_keys])
     if assignment:
-        assignment.status = "awaiting_practical" if passed and index == len(catalog) - 1 else "in_progress"
+        assignment.status = "awaiting_practical" if passed and completed_count == len(catalog) else "in_progress"
     db.add(TrainingAuditLog(org_id=org.id, actor_user_id=user.id, target_user_id=user.id,
                             action="quiz_passed" if passed else "quiz_failed", course_key=COURSE_KEY,
                             lesson_key=lesson_key, details={"score": score}))
     await db.commit()
-    return {"score": score, "passed": passed, "best_score": p.best_score, "completed_count": completed_count}
+    return {"score": score, "passed": passed, "best_score": p.best_score, "completed_count": completed_count, "results": results}
 
 
 @router.post("/practicals/{lesson_key}")
 async def submit_practical(lesson_key: str, body: PracticalRequest, org_id: str | None = None,
                            user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
-    _, org = await _context(db, user, org_id)
+    membership, org = await _context(db, user, org_id)
     await _require_academy_access(db, user, org)
-    if lesson_key not in {x["key"] for x in lessons()}: raise HTTPException(404, "Lesson not found")
+    if lesson_key not in {x["key"] for x in lessons(membership.role)}: raise HTTPException(404, "Lesson not found")
     item = TrainingPractical(org_id=org.id, user_id=user.id, course_key=COURSE_KEY,
                              course_version=COURSE_VERSION, lesson_key=lesson_key,
                              evidence={"note": body.note, "link": body.link})
@@ -256,12 +257,15 @@ async def manage_people(org_id: str | None = None, user: User = Depends(get_curr
     result = []
     for m, person in rows:
         assignment = await _assignment(db, org.id, person.id)
+        person_lesson_keys = {item["key"] for item in lessons(m.role)}
         progress = (await db.execute(select(TrainingProgress).where(
             TrainingProgress.org_id == org.id, TrainingProgress.user_id == person.id,
             TrainingProgress.course_key == COURSE_KEY, TrainingProgress.status == "completed",
         ))).scalars().all()
+        completed = [p for p in progress if p.lesson_key in person_lesson_keys]
         result.append({"id": person.id, "name": person.name, "email": person.email, "role": m.role,
-                       "completed_count": len(progress), "assignment": _assignment_json(assignment)})
+                       "completed_count": len(completed), "lesson_count": len(person_lesson_keys),
+                       "assignment": _assignment_json(assignment)})
     practicals = (await db.execute(select(TrainingPractical).where(TrainingPractical.org_id == org.id, TrainingPractical.status == "pending"))).scalars().all()
     return {"organization": {"id": org.id, "name": org.name}, "lesson_count": len(lessons()), "people": result,
             "pending_practicals": [{"id": p.id, "user_id": p.user_id, "lesson_key": p.lesson_key, "evidence": p.evidence, "submitted_at": p.submitted_at} for p in practicals]}

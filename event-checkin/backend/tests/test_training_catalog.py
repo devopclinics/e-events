@@ -17,6 +17,15 @@ def test_published_course_is_complete_ordered_and_unique():
     assert all(item["image_url"].startswith("/knowledge-transfer/assets/") for item in items)
 
 
+def test_staff_track_is_a_contiguously_ordered_subset_of_the_full_course():
+    staff_items = lessons("staff")
+    assert len(staff_items) == 11
+    assert [item["order"] for item in staff_items] == list(range(1, 12))
+    staff_keys = {item["key"] for item in staff_items}
+    all_keys = {item["key"] for item in lessons()}
+    assert staff_keys < all_keys  # a proper subset, not the whole course
+
+
 def test_client_catalog_never_exposes_answer_key():
     for module in _safe_course()["modules"]:
         for lesson in module["lessons"]:
@@ -45,9 +54,13 @@ async def test_training_assignment_quiz_sequence_and_tenant_isolation(ctx, monke
     })
     assert response.status_code == 200
 
-    # Lesson two is locked until lesson one is passed.
+    # Lessons can be attempted out of order -- an experienced hire can test out
+    # of a later lesson's quiz without completing earlier ones first.
     response = await ctx.client.post("/api/training/quiz/audience", json={"answers": [0, 0]})
-    assert response.status_code == 409
+    assert response.status_code == 200
+    assert response.json()["passed"] is True
+    assert len(response.json()["results"]) == 2
+
     response = await ctx.client.post("/api/training/quiz/platform-overview", json={"answers": [0, 0]})
     assert response.status_code == 200
     assert response.json()["passed"] is True
@@ -84,6 +97,46 @@ async def test_manager_due_date_audit_and_release_permissions(ctx, monkeypatch):
     release_id = response.json()["id"]
     response = await ctx.client.post(f"/api/training/admin/releases/{release_id}/publish")
     assert response.json()["status"] == "published"
+
+
+@pytest.mark.asyncio
+async def test_quiz_result_reveals_correct_answer_only_for_missed_questions(ctx, monkeypatch):
+    monkeypatch.setattr(settings, "training_internal_org_slugs", "org-a")
+    ctx.login(ctx.ids["user_a"])
+    response = await ctx.client.post("/api/training/quiz/platform-overview", json={"answers": [1, 1]})
+    assert response.status_code == 200
+    body = response.json()
+    assert body["passed"] is False
+    assert len(body["results"]) == 2
+    for result in body["results"]:
+        assert result["correct"] is False
+        assert result["your_answer"] == 1
+        assert result["correct_answer"] == 0
+
+
+@pytest.mark.asyncio
+async def test_course_is_scoped_by_org_role(ctx, monkeypatch):
+    monkeypatch.setattr(settings, "training_internal_org_slugs", "org-a")
+    ctx.login(ctx.ids["user_a"])
+    response = await ctx.client.post(f"/api/events/{ctx.ids['event_a']}/org-members", json={
+        "email": "carol@a.com", "role": "staff",
+    })
+    assert response.status_code == 201
+    staff = response.json()["user"]
+
+    ctx.login(SimpleNamespace(id=staff["id"], email=staff["email"], name=staff["name"], is_platform_superadmin=False))
+    response = await ctx.client.get("/api/training/me")
+    assert response.status_code == 200
+    body = response.json()
+    assert body["role"] == "staff"
+    assert body["course"]["lesson_count"] == 11
+    staff_keys = {lesson["key"] for module in body["course"]["modules"] for lesson in module["lessons"]}
+    assert "planner" not in staff_keys
+    assert "checkin-scanner" in staff_keys
+
+    # A staff learner can't quiz a lesson outside their track, even by key.
+    response = await ctx.client.post("/api/training/quiz/planner", json={"answers": [0, 0]})
+    assert response.status_code == 404
 
 
 @pytest.mark.asyncio

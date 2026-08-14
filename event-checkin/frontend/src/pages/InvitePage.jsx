@@ -2357,7 +2357,9 @@ export default function InvitePage() {
     ? fmtEventDateRange(event.event_date, event.event_end_date, event.timezone)
     : fmtDate(event.event_date, event.timezone))
   const timeLabel = event.event_time_tbd ? 'Time to be announced' : (dWording.time || fmtTime(event.event_date, event.timezone))
-  const venue = [dWording.venue, dWording.address].filter(Boolean).join(' · ') || venueText(event)
+  const heroVenue = dWording.venue || event.venue_name || ''
+  const heroAddress = dWording.address || event.venue_address || ''
+  const venue = [heroVenue, heroAddress].filter(Boolean).join(' · ') || venueText(event)
   const host = dWording.hostName || hostText(event)
   const hostWebsite = externalUrl(dWording.hostWebsite)
   const aboutWebsite = externalUrl(page.about.ctaUrl || dWording.aboutWebsite)
@@ -2541,7 +2543,11 @@ export default function InvitePage() {
               {page.hero.showHost && host && (hostWebsite
                 ? <a href={hostWebsite} target="_blank" rel="noopener noreferrer" className="mt-4 inline-block text-lg font-semibold underline decoration-2 underline-offset-4 hover:opacity-80" style={{ color: tone.text }}>{host}</a>
                 : <p className="mt-4 text-lg font-semibold" style={{ color: tone.text }}>{host}</p>)}
-              {(heroWhen || venue) && <p className="mt-4 text-base font-semibold" style={{ color: tone.muted }}>{[heroWhen, venue].filter(Boolean).join(' · ')}</p>}
+              {(heroWhen || heroVenue || heroAddress) && <div className="mt-4 space-y-1 text-base font-semibold" style={{ color: tone.muted }}>
+                {heroWhen && <div>{heroWhen}</div>}
+                {heroVenue && <div>{heroVenue}</div>}
+                {heroAddress && <div>{heroAddress}</div>}
+              </div>}
               <div className="mt-8 flex flex-col justify-center gap-3 sm:flex-row sm:justify-start">
                 <PrimaryButton
                   type="button"
@@ -2604,7 +2610,11 @@ export default function InvitePage() {
               {!flyerLedHero && page.hero.showHost && host && (hostWebsite
                 ? <a href={hostWebsite} target="_blank" rel="noopener noreferrer" className="mt-4 inline-block text-lg font-semibold text-white underline decoration-2 underline-offset-4 hover:opacity-80">{host}</a>
                 : <p className="mt-4 text-lg font-semibold text-white">{host}</p>)}
-              {(heroWhen || venue) && <p className="mt-4 text-base font-semibold text-white/85">{[heroWhen, venue].filter(Boolean).join(' · ')}</p>}
+              {(heroWhen || heroVenue || heroAddress) && <div className="mt-4 space-y-1 text-base font-semibold text-white/85">
+                {heroWhen && <div>{heroWhen}</div>}
+                {heroVenue && <div>{heroVenue}</div>}
+                {heroAddress && <div>{heroAddress}</div>}
+              </div>}
               <div className="mt-8 flex flex-col justify-center gap-3 sm:flex-row">
                 <PrimaryButton
                   type="button"

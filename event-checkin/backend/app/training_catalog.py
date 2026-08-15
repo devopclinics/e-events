@@ -60,6 +60,7 @@ _modules.append(("setup", "4. Capability setup guides", [
 LESSON_CONTENT = {
     # ---- 1. Platform foundations ----------------------------------------
     "platform-overview": {
+        "icon": "🏛️",
         "objective": "Explain what Festio is, the ways an organizer can run guests through it (free RSVP, paid Ticket sales, and Check-in), and where each part of the product lives.",
         "why_it_matters": "Every other lesson in this course assumes you already know the shape of the product -- this is the map everything else hangs off of.",
         "steps": [
@@ -88,6 +89,7 @@ LESSON_CONTENT = {
         ],
     },
     "audience": {
+        "icon": "🎯",
         "roles": _MANAGER_ROLES,
         "objective": "Identify the main categories of organizer Festio serves and how their priority features differ, so you can point a customer to the right tools quickly.",
         "why_it_matters": "Support and onboarding conversations go faster when you already know whether you're talking to a wedding planner, a conference organizer, or a school -- their priority features are different.",
@@ -114,6 +116,7 @@ LESSON_CONTENT = {
         ],
     },
     "outcomes": {
+        "icon": "📈",
         "roles": _MANAGER_ROLES,
         "objective": "Describe the concrete operational outcomes Festio delivers -- accurate headcounts, no double-booked seats, live event-day visibility -- in terms a customer cares about, not just feature names.",
         "why_it_matters": "Customers buy outcomes, not feature lists. Framing training and support around outcomes keeps every other lesson grounded in why it matters.",
@@ -141,6 +144,7 @@ LESSON_CONTENT = {
         ],
     },
     "use-cases": {
+        "icon": "💡",
         "roles": _MANAGER_ROLES,
         "objective": "Match real event scenarios to the specific Festio configuration that fits them.",
         "why_it_matters": "Worked examples make the feature set click in a way abstract feature lists don't.",
@@ -170,6 +174,7 @@ LESSON_CONTENT = {
 
     # ---- 2. Operations flow ----------------------------------------------
     "event-operations": {
+        "icon": "🔄",
         "roles": _MANAGER_ROLES,
         "objective": "Walk the full operational sequence of a Festio event from creation to archive, in the correct order.",
         "why_it_matters": "Skipping or reordering a stage -- like sending invites before RSVP settings are configured -- causes real customer-facing problems: wrong-looking invites, guests unable to RSVP, or check-in refusing scans.",
@@ -199,6 +204,7 @@ LESSON_CONTENT = {
         ],
     },
     "guest-journey": {
+        "icon": "🚶",
         "objective": "Trace what a guest actually experiences end to end -- invite, RSVP, ticket/QR, arrival, and post-admission steps.",
         "why_it_matters": "Most support questions are really 'what is the guest seeing right now' questions. Knowing the guest-side journey lets you diagnose from a guest's description alone.",
         "steps": [
@@ -225,6 +231,7 @@ LESSON_CONTENT = {
         ],
     },
     "event-day": {
+        "icon": "🎪",
         "objective": "Identify which staff role uses which screen on the day of the event, and how those screens stay in sync in real time.",
         "why_it_matters": "On event day several people work different screens at once -- door staff, kitchen, organizer desk. Knowing what each one sees prevents the classic 'the organizer's screen disagrees with the door' confusion.",
         "steps": [
@@ -252,6 +259,7 @@ LESSON_CONTENT = {
         ],
     },
     "roles": {
+        "icon": "🪪",
         "objective": "Name each Festio role -- Owner, Admin, Staff, and per-staffer permissions -- and what each can and can't do.",
         "why_it_matters": "Getting roles wrong either locks a teammate out of something they need, or over-exposes settings and financial data they shouldn't be able to touch -- both are common support tickets.",
         "steps": [
@@ -279,6 +287,7 @@ LESSON_CONTENT = {
 
     # ---- 3. Product capabilities ------------------------------------------
     "ecosystem": {
+        "icon": "🧩",
         "roles": _MANAGER_ROLES,
         "objective": "Describe how Festio's modules connect to each other -- shared table groups, tags, and ticket types -- rather than treating each add-on as isolated.",
         "why_it_matters": "Most real configuration mistakes come from treating add-ons as silos when they actually share data across Seating, Venue Access, Section scanning, and Experience.",
@@ -304,6 +313,7 @@ LESSON_CONTENT = {
         ],
     },
     "capability-landscape": {
+        "icon": "🗺️",
         "roles": _MANAGER_ROLES,
         "objective": "Locate any given Festio capability in its correct category -- core/free, paid Event Pass add-on, paid Ticket sales, or org-wide subscription -- without needing to look it up.",
         "why_it_matters": "This lesson is the reference map for the rest of the course -- once you can categorize a capability correctly, you know which settings area and billing model it falls under before you even open it.",
@@ -329,6 +339,7 @@ LESSON_CONTENT = {
         ],
     },
     "packages": {
+        "icon": "💳",
         "roles": _MANAGER_ROLES,
         "objective": "Explain the free-to-paid upgrade path a typical organizer takes, and what unlocks at each step.",
         "why_it_matters": "Customers ask what they get if they upgrade constantly -- answering precisely, without over- or under-selling, is a core support and sales skill.",
@@ -356,6 +367,7 @@ LESSON_CONTENT = {
         ],
     },
     "security": {
+        "icon": "🔒",
         "objective": "State the platform's core security practices you're responsible for reinforcing with customers: API key handling, payment webhook verification, and data privacy requests.",
         "why_it_matters": "Staff are often the first line a customer describes a security concern to -- knowing the correct, safe answer prevents both bad advice and unnecessary panic.",
         "steps": [
@@ -382,6 +394,7 @@ LESSON_CONTENT = {
         ],
     },
     "app-explainer": {
+        "icon": "📱",
         "objective": "Correctly explain that Festio runs in the browser with nothing to install, for organizers, staff, and guests alike, and what that means for device requirements.",
         "why_it_matters": "'Do I need to download an app' is one of the most common questions from every audience, and the answer -- no -- has real implications for device setup on event day.",
         "steps": [
@@ -410,6 +423,7 @@ LESSON_CONTENT = {
 
     # ---- 4. Capability setup guides ---------------------------------------
     "event-setup": {
+        "icon": "📅",
         "roles": _MANAGER_ROLES,
         "objective": "Create a new Festio event with the correct details (timezone, currency, type) and turn on only the add-ons this event actually needs.",
         "why_it_matters": "Every downstream feature -- invite times, ticket display, check-in -- depends on the timezone and add-ons chosen here; fixing a wrong timezone after guests are invited is disruptive.",
@@ -437,6 +451,7 @@ LESSON_CONTENT = {
         ],
     },
     "planner": {
+        "icon": "📋",
         "roles": _MANAGER_ROLES,
         "objective": "Use Planner's budget, vendor, procurement, timeline, and runsheet tools for one event, and know when to use Tasks instead.",
         "why_it_matters": "Planner and Tasks look similar but serve different jobs -- using the wrong one means assignments, comments, or notifications silently don't reach the right person.",
@@ -463,6 +478,7 @@ LESSON_CONTENT = {
         ],
     },
     "ticketing": {
+        "icon": "💵",
         "roles": _MANAGER_ROLES,
         "objective": "Set up paid Ticket sales for an event: enable it, connect a payout account, create ticket types, and read the live sales report.",
         "why_it_matters": "Ticket sales is a different revenue model from Event Pass -- money moves through a real payment processor, so getting payouts, fees, and ticket types right the first time avoids refund and payout disputes.",
@@ -489,6 +505,7 @@ LESSON_CONTENT = {
         ],
     },
     "festiopass": {
+        "icon": "🎫",
         "roles": _MANAGER_ROLES,
         "objective": "Explain what a Festio Pass is, how a guest receives it, and how to customize its wording and preview it before an event goes live.",
         "why_it_matters": "The Festio Pass is the single artifact that gets a guest through the door -- knowing exactly how and when it's delivered lets you resolve 'I never got my ticket' reports quickly.",
@@ -515,6 +532,7 @@ LESSON_CONTENT = {
         ],
     },
     "guest-management": {
+        "icon": "👥",
         "roles": _MANAGER_ROLES,
         "objective": "Add guests to an event by import, live sync, or one at a time, and use the Guests tab to track RSVP status and details.",
         "why_it_matters": "Guest data is the foundation every other module reads from -- seating, tags, ticket types, and check-in all depend on it being accurate and imported correctly.",
@@ -542,6 +560,7 @@ LESSON_CONTENT = {
         ],
     },
     "guest-communication": {
+        "icon": "📨",
         "roles": _MANAGER_ROLES,
         "objective": "Distinguish Event Updates, Guest Chat, Message Host, and FestioMe groups, and enable only the ones an event needs.",
         "why_it_matters": "These four channels have different audiences and privacy expectations -- mixing them up can leak a private guest message into a public group, which is a real trust problem, not just a UX slip.",
@@ -568,6 +587,7 @@ LESSON_CONTENT = {
         ],
     },
     "festiohub": {
+        "icon": "💬",
         "objective": "Explain what FestioHub is, what's on it automatically, and how the separate FestioMe community layer connects to it.",
         "why_it_matters": "Guests and organizers often confuse the always-on personal FestioHub with the optional FestioMe community -- knowing the difference prevents promising a feature that isn't turned on.",
         "steps": [
@@ -594,6 +614,7 @@ LESSON_CONTENT = {
         ],
     },
     "public-pages": {
+        "icon": "🌐",
         "roles": _MANAGER_ROLES,
         "objective": "Identify Festio's public-facing pages -- event page, vendor packing list, gift registry, calendar -- and where each is configured.",
         "why_it_matters": "Public pages are what guests, vendors, and outside contacts see with no login -- getting the right page linked to the right audience matters for a professional impression.",
@@ -621,6 +642,7 @@ LESSON_CONTENT = {
         ],
     },
     "design-studio": {
+        "icon": "🎨",
         "roles": _MANAGER_ROLES,
         "objective": "Navigate every tab in Design Studio and know which guest-facing surface each one controls.",
         "why_it_matters": "Design Studio is where branding gets set once and reused everywhere -- knowing the tab boundaries prevents time wasted looking for a setting in the wrong place.",
@@ -648,6 +670,7 @@ LESSON_CONTENT = {
         ],
     },
     "seating-floor-plan": {
+        "icon": "🍽️",
         "roles": _MANAGER_ROLES,
         "objective": "Create tables, group them, and use the Floor Plan editor and auto-assignment to seat guests without double-booking anyone.",
         "why_it_matters": "A double-booked seat or an over-filled table is one of the most visible on-the-day failures -- Festio blocks it structurally, but only if tables and groups are set up correctly beforehand.",
@@ -675,6 +698,7 @@ LESSON_CONTENT = {
         ],
     },
     "gifts": {
+        "icon": "📦",
         "roles": _MANAGER_ROLES,
         "objective": "Set up a Deliveries shipment for merch, aso-ebi, or gifts, and generate the vendor packing list.",
         "why_it_matters": "Fulfillment vendors need a clean, no-login packing list -- getting shipment items and guest addresses right the first time avoids a vendor chasing missing information mid-fulfillment.",
@@ -702,6 +726,7 @@ LESSON_CONTENT = {
         ],
     },
     "registry": {
+        "icon": "🎁",
         "roles": _MANAGER_ROLES,
         "objective": "Set up a Gift list with items and cash funds, and explain that no money moves through Festio.",
         "why_it_matters": "Guests and organizers sometimes assume the registry processes payments -- being clear it's a coordination tool only, not a payment system, avoids a real misunderstanding about where money goes.",
@@ -729,6 +754,7 @@ LESSON_CONTENT = {
         ],
     },
     "checkin-scanner": {
+        "icon": "🎟️",
         "objective": "Run day-of check-in correctly: activate the event, assign staff, scan guests, and read every scan result color correctly.",
         "why_it_matters": "Check-in is the single highest-stakes, most time-pressured screen in the whole product -- a misread result color at a busy door creates a line and a frustrated guest.",
         "steps": [
@@ -755,6 +781,7 @@ LESSON_CONTENT = {
         ],
     },
     "guest-experience": {
+        "icon": "🧭",
         "objective": "Build a post-admission Experience workflow with dependent steps -- consent, souvenir, room assignment, sessions -- and run a guest through it.",
         "why_it_matters": "Experience adds real operational complexity after check-in -- getting step dependencies wrong either blocks guests who should be able to proceed, or lets a step happen out of order, such as a souvenir handed out before consent is signed.",
         "steps": [
@@ -781,6 +808,7 @@ LESSON_CONTENT = {
         ],
     },
     "task-management": {
+        "icon": "✅",
         "objective": "Use the per-event Tasks board and My Tasks to run team coordination work, distinct from guest data.",
         "why_it_matters": "Tasks is where non-guest-data coordination lives -- knowing it, and My Tasks, exists keeps that work out of ad-hoc channels like text messages that no one else on the team can see.",
         "steps": [
@@ -807,6 +835,7 @@ LESSON_CONTENT = {
         ],
     },
     "team-management": {
+        "icon": "🧑‍🤝‍🧑",
         "roles": _MANAGER_ROLES,
         "objective": "Add teammates with the correct role and per-staffer permissions, and verify access changes actually take effect.",
         "why_it_matters": "Getting a teammate's role or permissions wrong is a routine support issue -- verifying the change, not just saving it, is what actually catches it before the event instead of during it.",
@@ -834,6 +863,7 @@ LESSON_CONTENT = {
         ],
     },
     "live-command-center": {
+        "icon": "📡",
         "roles": _MANAGER_ROLES,
         "objective": "Use the Results page as a live, auto-refreshing command center during an active event to monitor arrivals, occupancy, and orders in real time.",
         "why_it_matters": "During the event itself, Results is the one screen that tells the organizer desk what's actually happening right now -- knowing it needs no manual refresh, and what each live widget means, is what makes it usable under pressure.",
@@ -861,6 +891,7 @@ LESSON_CONTENT = {
         ],
     },
     "kitchen-logistics": {
+        "icon": "🍳",
         "objective": "Set up Orders items and use the Kitchen view's three tabs to run event-day meal or item fulfillment.",
         "why_it_matters": "Kitchen is the fulfillment team's only screen on the day -- if it's not opened on the right device, or a mark-served happens before check-in, the caterer's counts go wrong.",
         "steps": [
@@ -887,6 +918,7 @@ LESSON_CONTENT = {
         ],
     },
     "reporting-results": {
+        "icon": "📊",
         "roles": _MANAGER_ROLES,
         "objective": "Pull the post-event data an organizer needs -- guest status, seating, orders, deliveries -- and archive the event correctly.",
         "why_it_matters": "Once an event is archived, the organizer's active list gets cleaner, but the data must still be reachable -- knowing what's on-screen versus exportable prevents 'we lost our post-event data' tickets.",
@@ -914,6 +946,7 @@ LESSON_CONTENT = {
         ],
     },
     "platform-api": {
+        "icon": "🔌",
         "roles": _MANAGER_ROLES,
         "objective": "Explain the difference between a read-only and read-write API key, where to find documentation, and how to debug a failing integration.",
         "why_it_matters": "API access is org-wide and can modify real guest and event data -- knowing the read/write boundary and where to look when something fails prevents both accidental data changes and unnecessary escalations.",
@@ -960,7 +993,7 @@ def published_course(role=None):
             order += 1
             is_setup = module_key == "setup"
             lessons.append({
-                "key": key, "title": title, "order": order,
+                "key": key, "title": title, "order": order, "icon": content["icon"],
                 "duration_minutes": content.get("duration_minutes", 8 if is_setup else 6),
                 "image_url": f"/knowledge-transfer/assets/{image}",
                 "objective": content["objective"],

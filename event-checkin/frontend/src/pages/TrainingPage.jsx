@@ -144,28 +144,28 @@ export default function TrainingPage() {
         {catalogModules.map(module => <section key={module.key}><h2>{module.title}</h2>{module.lessons.map((lesson, i) => {
           const done = data.progress[lesson.key]?.status === 'completed'
           const globalIndex = lessons.findIndex(x => x.key === lesson.key)
-          const locked = globalIndex > 0 && data.progress[lessons[globalIndex - 1].key]?.status !== 'completed'
+          const upcoming = globalIndex > 0 && data.progress[lessons[globalIndex - 1].key]?.status !== 'completed'
           return <button key={lesson.key} className={`${selected?.key === lesson.key ? 'selected' : ''} ${done ? 'done' : ''}`} onClick={() => { setSelected(lesson); setAnswers([]); setEvidence(''); setQuizResult(null); setMessage('') }}>
-            <span>{done ? '✓' : locked ? '🔒' : lesson.order}</span><div><strong>{lesson.title}</strong><small>{lesson.duration_minutes} min</small></div>
+            <span className={`lesson-icon ${upcoming ? 'upcoming' : ''}`}>{lesson.icon}{done && <b className="check-badge">✓</b>}</span><div><strong>{lesson.title}</strong><small>{lesson.duration_minutes} min</small></div>
           </button>
         })}</section>)}
       </aside>
       <article className="training-lesson">
         <div className="lesson-meta">{selected.moduleTitle || data.course.modules.find(m => m.lessons.some(x => x.key === selected.key))?.title} · Lesson {selected.order}</div>
-        <h2>{selected.title}</h2>
+        <h2><span className="lesson-icon-lg">{selected.icon}</span>{selected.title}</h2>
         <p className="lesson-objective">{selected.objective}</p>
         <img src={selected.image_url} alt={`${selected.title} training guide`} />
-        <section><h3>Why it matters</h3><p>{selected.why_it_matters}</p></section>
-        <section><h3>Before you begin</h3><ul>{selected.prerequisites.map(x => <li key={x}>{x}</li>)}</ul></section>
-        <section><h3>Guided workflow</h3><ol>{selected.steps.map(x => <li key={x}>{x}</li>)}</ol></section>
-        <section className="lesson-warning"><h3>Common mistakes</h3><ul>{selected.common_mistakes.map(x => <li key={x}>{x}</li>)}</ul></section>
-        <section><h3>Knowledge check</h3>
+        <section className="section-card card-why"><h3><span>💡</span>Why it matters</h3><p>{selected.why_it_matters}</p></section>
+        <section className="section-card card-before"><h3><span>🧾</span>Before you begin</h3><ul>{selected.prerequisites.map(x => <li key={x}>{x}</li>)}</ul></section>
+        <section className="section-card card-workflow"><h3><span>🛠️</span>Guided workflow</h3><ol>{selected.steps.map(x => <li key={x}>{x}</li>)}</ol></section>
+        <section className="section-card lesson-warning"><h3><span>⚠️</span>Common mistakes</h3><ul>{selected.common_mistakes.map(x => <li key={x}>{x}</li>)}</ul></section>
+        <section className="section-card card-check"><h3><span>📝</span>Knowledge check</h3>
           {!previousDone && <p className="locked-note">Tip: earlier lessons cover background for this one — but if you already know it, go ahead and take the assessment now.</p>}
           {selected.quiz.map((q, qi) => <fieldset key={q.question}><legend>{qi + 1}. {q.question}</legend>{q.options.map((option, oi) => <label key={option}><input type="radio" name={`q-${qi}`} checked={answers[qi] === oi} onChange={() => setAnswers(old => { const next = [...old]; next[qi] = oi; return next })}/>{option}</label>)}</fieldset>)}
           <button className="primary" disabled={busy || answers.filter(x => x !== undefined).length !== selected.quiz.length} onClick={submitQuiz}>{data.progress[selected.key]?.status === 'completed' ? 'Retake quiz' : 'Submit assessment'}</button>
           {quizResult?.lessonKey === selected.key && <div className="quiz-review">{quizResult.results.map((r, ri) => <div key={ri} className={`quiz-review-item ${r.correct ? 'right' : 'wrong'}`}><strong>{r.correct ? '✓' : '✗'} {r.question}</strong><p>Your answer: {r.options[r.your_answer]}</p>{!r.correct && <p>Correct answer: {r.options[r.correct_answer]}</p>}</div>)}</div>}
         </section>
-        <section className="practice"><h3>Practical exercise</h3><p>{selected.practical}</p><textarea value={evidence} onChange={e => setEvidence(e.target.value)} placeholder="Describe what you practiced, the result, and any evidence link…"/><button disabled={busy || evidence.trim().length < 3} onClick={submitEvidence}>Submit evidence</button></section>
+        <section className="section-card practice"><h3><span>🧪</span>Practical exercise</h3><p>{selected.practical}</p><textarea value={evidence} onChange={e => setEvidence(e.target.value)} placeholder="Describe what you practiced, the result, and any evidence link…"/><button disabled={busy || evidence.trim().length < 3} onClick={submitEvidence}>Submit evidence</button></section>
         {data.progress[selected.key]?.status === 'completed' && selectedIndex < lessons.length - 1 && <button className="next" onClick={() => { setSelected(lessons[selectedIndex + 1]); setAnswers([]); setEvidence(''); setQuizResult(null); window.scrollTo({ top: 0, behavior: 'smooth' }) }}>Next lesson →</button>}
       </article>
     </div> : <section className="training-manager">

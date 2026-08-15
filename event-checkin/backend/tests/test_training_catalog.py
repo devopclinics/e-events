@@ -15,6 +15,7 @@ def test_published_course_is_complete_ordered_and_unique():
     assert [item["order"] for item in items] == list(range(1, 34))
     assert len({item["key"] for item in items}) == 33
     assert all(item["image_url"].startswith("/knowledge-transfer/assets/") for item in items)
+    assert len({item["icon"] for item in items}) == 33  # every lesson has its own, non-repeated icon
 
 
 def test_staff_track_is_a_contiguously_ordered_subset_of_the_full_course():

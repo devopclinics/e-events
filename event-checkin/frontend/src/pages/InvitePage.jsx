@@ -141,6 +141,27 @@ const THEMES = {
     border: 'border-emerald-200 dark:border-emerald-800',
     badge: 'bg-emerald-50 text-emerald-800 dark:bg-emerald-900/30 dark:text-emerald-200',
   },
+  'iedpu-green-gold': {
+    bg: 'bg-gradient-to-br from-emerald-50 to-amber-50 dark:from-emerald-950 dark:to-stone-950',
+    card: 'bg-white/95 dark:bg-emerald-950/90',
+    header: 'bg-amber-400 text-slate-950',
+    accent: 'text-amber-700 dark:text-amber-300',
+    btn: 'bg-amber-400 text-slate-950 hover:bg-amber-300',
+    border: 'border-amber-200 dark:border-amber-700',
+    badge: 'bg-amber-50 text-amber-900 dark:bg-amber-400/15 dark:text-amber-200',
+  },
+}
+
+const EVENT_PALETTES = {
+  // The IEDPU cover is deep green with gold ornamentation. Carry those two
+  // colors through the page so controls stand apart from the green artwork.
+  '8882c06c-9cd4-425d-902c-ac5833121454': {
+    primary: '#064e3b',
+    secondary: '#0b3327',
+    accent: '#e3b341',
+    background: '#061f18',
+    surface: '#0b3327',
+  },
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -237,8 +258,12 @@ function scrollToRsvp() {
   document.getElementById('rsvp')?.scrollIntoView({ behavior: 'smooth', block: 'start' })
 }
 
-function designColors(theme) {
-  return theme?.colors || {}
+function designColors(theme, event) {
+  return { ...(theme?.colors || {}), ...(EVENT_PALETTES[event?.id] || {}) }
+}
+
+function inviteTheme(event) {
+  return EVENT_PALETTES[event?.id] ? 'iedpu-green-gold' : (event?.invite_theme || 'default')
 }
 
 // font_pairing has been a real, saveable field since the original template
@@ -1609,7 +1634,7 @@ function GuestHub({ event, accessToken, designTheme, previewMock = false }) {
   }
 
   if (!accessToken || hidden) return null
-  const colors = designColors(designTheme)
+  const colors = designColors(designTheme, event)
   const tone = readableTone(colors)
   const hasRsvp = event?.rsvp_enabled !== false
   const passStatus = hub?.guest?.checked_out
@@ -2336,8 +2361,8 @@ export default function InvitePage() {
     </div>
   )
 
-  const theme = event.invite_theme || 'default'
-  const dColors = designColors(designTheme)
+  const theme = inviteTheme(event)
+  const dColors = designColors(designTheme, event)
   const tone = readableTone(dColors)
   const dWording = designTheme?.wording || {}
   const page = publicPageConfig(designTheme?.page_config)

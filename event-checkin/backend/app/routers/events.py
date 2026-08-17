@@ -6,7 +6,7 @@ import re
 import secrets
 import uuid as _uuid
 import httpx
-from fastapi import APIRouter, BackgroundTasks, Depends, File, HTTPException, UploadFile
+from fastapi import APIRouter, BackgroundTasks, Depends, File, HTTPException, Query, UploadFile
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import delete, func, select, update
 from ..database import get_db
@@ -149,15 +149,20 @@ def _normalize_public_base_url(value: str | None) -> str:
     return base
 
 
-VALID_STATUSES = {"draft", "active", "ended"}
+VALID_STATUSES = {"draft", "active", "ended", "archived"}
 STATUS_TRANSITIONS = {
-    "draft":  {"active"},
+    "draft":  {"active", "archived"},
     # Draft is the planning / RSVP state.  It deliberately keeps public RSVP
     # available while every staff and self check-in route stays disabled.
-    "active": {"draft", "ended"},
+    "active": {"draft", "ended", "archived"},
     # A final end closes public RSVP, but an admin can reopen the event if a
     # status was chosen by mistake or post-event work is still required.
-    "ended":  {"draft", "active"},
+    "ended":  {"draft", "active", "archived"},
+    # Archived is purely an organizer-side declutter state — it adds no new
+    # gating on any public/guest surface (ticketing, FestioHub, RSVP, etc.);
+    # those already gate on "ended" independently where that matters. The
+    # only way out is back to draft, mirroring how ended -> draft works.
+    "archived": {"draft"},
 }
 
 
@@ -571,14 +576,24 @@ async def duplicate_event(
 
 @router.get("", response_model=list[EventOut])
 async def list_events(
+    status: str | None = Query(None),
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
+    # `status` is optional and additive — omitted, this returns every event
+    # exactly as before (the topbar EventSwitcher relies on that). Passed, it
+    # filters server-side rather than shipping every event to the browser
+    # (the Events list page's tabs use this).
+    if status is not None and status not in VALID_STATUSES:
+        raise HTTPException(400, f"status must be one of: {', '.join(VALID_STATUSES)}")
     # Platform superadmin sees everything; everyone else only their org's events.
     if current_user.is_platform_superadmin:
-        result = await db.execute(select(Event).order_by(Event.created_at.desc()))
+        q = select(Event).order_by(Event.created_at.desc())
+        if status is not None:
+            q = q.where(Event.status == status)
+        result = await db.execute(q)
     else:
-        managed = (await db.execute(
+        managed_q = (
             select(Event)
             .join(Membership, Membership.org_id == Event.org_id)
             .join(Organization, Organization.id == Event.org_id)
@@ -588,14 +603,19 @@ async def list_events(
                 Organization.is_active.is_(True),
             )
             .order_by(Event.created_at.desc())
-        )).scalars().all()
-        assigned = (await db.execute(
+        )
+        assigned_q = (
             select(Event)
             .join(EventUser, EventUser.event_id == Event.id)
             .join(Organization, Organization.id == Event.org_id)
             .where(EventUser.user_id == current_user.id, Organization.is_active.is_(True))
             .order_by(Event.created_at.desc())
-        )).scalars().all()
+        )
+        if status is not None:
+            managed_q = managed_q.where(Event.status == status)
+            assigned_q = assigned_q.where(Event.status == status)
+        managed = (await db.execute(managed_q)).scalars().all()
+        assigned = (await db.execute(assigned_q)).scalars().all()
         seen, rows = set(), []
         for event in [*managed, *assigned]:
             if event.id not in seen:

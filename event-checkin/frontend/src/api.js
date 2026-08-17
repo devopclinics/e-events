@@ -354,7 +354,7 @@ export const api = {
   submitDemoRequest: (body) => req('POST', '/demo-requests', body),
 
   // Events
-  listEvents: () => req('GET', '/events'),
+  listEvents: (status) => req('GET', status ? `/events?status=${encodeURIComponent(status)}` : '/events'),
   createEvent: (data) => req('POST', '/events', data),
   updateEvent: (id, data) => req('PUT', `/events/${id}`, data),
   deleteEvent: (id) => req('DELETE', `/events/${id}`),

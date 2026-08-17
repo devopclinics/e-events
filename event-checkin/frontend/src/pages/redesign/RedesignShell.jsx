@@ -152,6 +152,7 @@ export function Icon({ name, size = 18, className }) {
 // (App.jsx :104-136) — ctx is { user, event }. No gate = always shown.
 const TOP_LINKS = [
   { id: 'setup', label: 'Event Setup', to: '/admin-redesign', icon: 'calendar' },
+  { id: 'events', label: 'Events', to: '/events-redesign', icon: 'calendar' },
   {
     id: 'design', label: 'Design Studio', to: '/design-studio-redesign', icon: 'palette',
     gate: ({ user, event }) => user?.role === 'admin' && !!event?.is_paid,

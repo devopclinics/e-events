@@ -1,0 +1,23 @@
+.ev-tab-count { margin-left: 6px; font-size: 9px; font-weight: 700; color: var(--faint); }
+
+.ev-row { display: flex; align-items: center; gap: 12px; padding: 13px 18px; border-bottom: 1px solid var(--line-soft); }
+.ev-row:last-child { border-bottom: 0; }
+.ev-row-icon { width: 34px; height: 34px; border-radius: 9px; background: var(--surface-3); color: var(--faint);
+  display: grid; place-items: center; flex: none; }
+.ev-row-main { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.ev-row-main strong { font-size: 12.5px; color: var(--ink); }
+.ev-row-main span { font-size: 10.5px; color: var(--muted); }
+
+.ev-row-menu-wrap { position: relative; flex: none; }
+.ev-row-menu-btn { height: 32px; font-size: 10.5px; padding: 0 10px; }
+.ev-row-menu { position: absolute; right: 0; top: calc(100% + 6px); min-width: 150px; padding: 6px;
+  background: var(--surface); border: 1px solid var(--line); border-radius: 10px; box-shadow: var(--shadow-lg, var(--shadow)); z-index: 5; }
+.ev-row-menu button { display: block; width: 100%; text-align: left; padding: 8px 10px; border: 0; background: none;
+  border-radius: 7px; font-size: 11.5px; font-weight: 600; color: var(--ink); cursor: pointer; }
+.ev-row-menu button:hover { background: var(--surface-2); }
+.ev-row-menu button.ev-danger { color: var(--danger); }
+
+@media (max-width: 640px) {
+  .ev-row { flex-wrap: wrap; }
+  .ev-row-main { order: 3; width: 100%; }
+}

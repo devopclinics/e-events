@@ -55,11 +55,12 @@ const STEP_ROUTE = {
   'Turn on your event extras': '/addons-redesign',
 }
 
-const STATUS_OPTIONS = ['Draft', 'Active', 'Ended']
+const STATUS_OPTIONS = ['Draft', 'Active', 'Ended', 'Archived']
 const STATUS_HELP = {
   Draft: 'Only you can see this event. Guests can\'t RSVP or receive invites yet.',
   Active: 'Live — invites, RSVP, and check-in are all working normally.',
   Ended: 'Check-in is closed. Guests can still view their pass and RSVP history.',
+  Archived: 'Hidden from your Active/Draft/Ended views. Guest-facing pages are unaffected — this only declutters your own event list. Unarchive any time by setting it back to Draft.',
 }
 
 function JourneyIllustration() {
@@ -350,7 +351,7 @@ export default function AdminRedesignPage() {
           <div className="rr-title-row">
             <h1>{event?.name || (currentEventId ? 'Loading…' : 'No event selected')}</h1>
             <div className="rr-status-wrap">
-              <button className={`rr-pill ${status === 'Active' ? 'live' : status === 'Ended' ? 'locked' : ''}`} onClick={() => setStatusOpen((v) => !v)}>
+              <button className={`rr-pill ${status === 'Active' ? 'live' : status === 'Ended' || status === 'Archived' ? 'locked' : ''}`} onClick={() => setStatusOpen((v) => !v)}>
                 <i/> {status} <Icon name="chevrondown" size={11}/>
               </button>
               {statusOpen && (

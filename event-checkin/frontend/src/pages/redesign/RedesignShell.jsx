@@ -483,24 +483,17 @@ export default function RedesignShell({ topActive, withEventSidebar = false, eve
 // renders for platform superadmins — showing it to everyone else would be a
 // dead link back to a page RedesignGate immediately bounces them out of.
 function RedesignStatusBanner({ isSuperadmin, location }) {
+  if (!isSuperadmin) return null
+
   const legacyPath = REDESIGN_TO_LEGACY[location.pathname] || '/admin'
   const legacyHref = `${legacyPath}?ui=legacy`
 
   return (
-    <div className={`rd-mockflag ${isSuperadmin ? 'rd-mockflag-default' : ''}`}>
-      {isSuperadmin ? (
-        <>
-          <b>New interface</b> — this is the redesign preview.{' '}
-          <a href={legacyHref} className="rr-link-btn" style={{ fontWeight: 600 }} onClick={() => logFallbackToLegacy({ route: location.pathname, module: 'shell', reason: 'superadmin_escape_hatch' })}>
-            Switch to legacy UI →
-          </a>
-        </>
-      ) : (
-        <>
-          <b>Redesign preview</b> — connected to your real account and selected event.
-          Route: {location.pathname}{location.search}
-        </>
-      )}
+    <div className="rd-mockflag rd-mockflag-default">
+      <b>New interface</b> — this is the redesign preview.{' '}
+      <a href={legacyHref} className="rr-link-btn" style={{ fontWeight: 600 }} onClick={() => logFallbackToLegacy({ route: location.pathname, module: 'shell', reason: 'superadmin_escape_hatch' })}>
+        Switch to legacy UI →
+      </a>
     </div>
   )
 }

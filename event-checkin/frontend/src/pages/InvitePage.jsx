@@ -1612,6 +1612,13 @@ function GuestHub({ event, accessToken, designTheme, previewMock = false, confir
   // is a per-event opt-in for organizers who want it visible earlier (matching
   // how the ticketing site always shows it, since that's a pre-purchase context).
   const speakersVisible = event?.speaker_enabled && (confirmed || event?.speaker_show_before_rsvp)
+  // A guest who hasn't RSVP'd yet (and has no prior token) has no accessToken
+  // at all — the early-return below would otherwise hide the whole Hub, speakers
+  // included, regardless of this opt-in. Land them straight on the Speakers tab
+  // since the rest of the Hub (pass/activity/messages) has nothing to show them yet.
+  useEffect(() => {
+    if (!accessToken && speakersVisible) setHubTab('speakers')
+  }, [accessToken, speakersVisible])
   useEffect(() => {
     if (!speakersVisible || !event?.speaker_token) { setSpeakers(null); return }
     api.getSpeakerPage(event.speaker_token).then((d) => setSpeakers(d.speakers)).catch(() => setSpeakers(null))
@@ -1649,7 +1656,7 @@ function GuestHub({ event, accessToken, designTheme, previewMock = false, confir
     }
   }
 
-  if (!accessToken || hidden) return null
+  if ((!accessToken && !speakersVisible) || hidden) return null
   const colors = designColors(designTheme, event)
   const tone = readableTone(colors)
   const hasRsvp = event?.rsvp_enabled !== false

@@ -147,11 +147,15 @@ services:
       DATABASE_URL: postgresql+asyncpg://planner:${PLANNER_DB_PASSWORD:-planner}@planner-db:5432/planner
       INTERNAL_SERVICE_TOKEN: ${PLANNER_INTERNAL_SERVICE_TOKEN:-}
       UPLOAD_DIR: /data/planner-uploads
+      DESIGN_SERVICE_URL: http://design-service:8010
+      DESIGN_INTERNAL_TOKEN: ${DESIGN_INTERNAL_TOKEN:-}
     volumes:
       - planner-uploads:/data/planner-uploads
     depends_on:
       planner-db:
         condition: service_healthy
+      design-service:
+        condition: service_started
     healthcheck:
       test: ["CMD-SHELL", "python -c \"import urllib.request; urllib.request.urlopen('http://localhost:8040/health', timeout=3).read()\""]
       interval: 15s

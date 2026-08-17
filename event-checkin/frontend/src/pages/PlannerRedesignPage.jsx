@@ -1,11 +1,12 @@
 import { useEffect, useState } from 'react'
 import RedesignShell, { Icon, Modal, ConfirmDialog } from './redesign/RedesignShell'
+import { EmptyState } from './redesign/RedesignPrimitives'
 import { useCurrentEvent } from '../hooks/useCurrentEvent'
 import { useEventDetails } from '../hooks/useEventDetails'
 import { api } from '../api'
 import './PlannerRedesignPage.css'
 
-const TABS = ['Portfolio', 'Dashboard', 'Budget', 'Vendors', 'Procurement', 'Timeline', 'Runsheet', 'Documents']
+const TABS = ['Portfolio', 'Dashboard', 'Budget', 'Vendors', 'Procurement', 'Contracts', 'Timeline', 'Runsheet', 'Documents']
 
 const VENDOR_STATUSES = ['prospect', 'shortlisted', 'contracted', 'paid', 'cancelled']
 const BUDGET_ITEM_STATUSES = ['pending', 'paid', 'cancelled']
@@ -102,7 +103,9 @@ export default function PlannerRedesignPage() {
   const [documents, setDocuments] = useState([])
   const [uploadForm, setUploadForm] = useState({ file: null, name: '', type: 'contract', vendor_id: '', expires_at: '' })
   const [quoteDraft, setQuoteDraft] = useState({ vendor: '', price: '' })
-  const tabCapability = { Budget: 'budget', Vendors: 'vendors', Procurement: 'vendors', Timeline: 'tasks', Runsheet: 'runsheet', Documents: 'documents' }[tab]
+  const [contracts, setContracts] = useState([])
+  const [contractForm, setContractForm] = useState({ vendor_id: '', title: '', terms: '' })
+  const tabCapability = { Budget: 'budget', Vendors: 'vendors', Procurement: 'vendors', Contracts: 'vendors', Timeline: 'tasks', Runsheet: 'runsheet', Documents: 'documents' }[tab]
   const canManageTab = !tabCapability || plannerAccess?.role === 'admin' || (plannerAccess?.capabilities || []).includes(tabCapability)
 
   function notify(msg) {
@@ -231,6 +234,14 @@ export default function PlannerRedesignPage() {
     finally { setLoading(false) }
   }
 
+  async function loadContracts() {
+    if (!eventId) return
+    setLoading(true)
+    try { setContracts(await api.plannerListContracts(eventId)); setError('') }
+    catch (e) { fail(e, 'Contracts could not be loaded') }
+    finally { setLoading(false) }
+  }
+
   async function loadDocuments() {
     if (!eventId) return
     setLoading(true)
@@ -247,6 +258,7 @@ export default function PlannerRedesignPage() {
     else if (tab === 'Budget') { loadBudget(); if (!vendorsLoaded) loadVendors() }
     else if (tab === 'Vendors') loadVendorsList()
     else if (tab === 'Procurement') loadProcurement()
+    else if (tab === 'Contracts') { loadContracts(); if (!vendorsLoaded) loadVendors() }
     else if (tab === 'Timeline') loadMilestones()
     else if (tab === 'Runsheet') loadRunsheet()
     else if (tab === 'Documents') { loadDocuments(); if (!vendorsLoaded) loadVendors() }
@@ -524,6 +536,26 @@ export default function PlannerRedesignPage() {
     catch (e) { notify(e.message || 'Quote decision failed') }
   }
 
+  async function submitContract() {
+    const { id, vendor_id, title, terms } = modal.draft
+    if (!vendor_id || !title?.trim() || !terms?.trim()) { notify('Vendor, title, and terms are required'); return }
+    try {
+      if (id) await api.plannerUpdateContract(eventId, id, { title: title.trim(), terms: terms.trim() })
+      else await api.plannerCreateContract(eventId, vendor_id, { title: title.trim(), terms: terms.trim() })
+      await loadContracts(); closeModal(); notify(id ? 'Contract updated' : 'Contract saved as draft')
+    } catch (e) { notify(e.message || 'Contract could not be saved') }
+  }
+
+  async function sendContract(contract) {
+    if (!window.confirm(`Send "${contract.title}" to ${contract.vendor_name}? It becomes read-only once sent.`)) return
+    try { await api.plannerSendContract(eventId, contract.id); await loadContracts(); notify('Contract sent — visible in the vendor portal now') }
+    catch (e) { notify(e.message || 'Contract could not be sent') }
+  }
+
+  function confirmDeleteContract(contract) {
+    askDelete('Delete draft contract?', `Delete "${contract.title}"?`, async () => { await api.plannerDeleteContract(eventId, contract.id); await loadContracts() }, 'Contract deleted')
+  }
+
   async function selectQuoteItem(groupName, itemKey, itemMeta, quote, line, quantity) {
     try {
       await api.plannerSelectQuoteItem(eventId, {
@@ -580,6 +612,7 @@ export default function PlannerRedesignPage() {
     if (modal.type === 'task') return submitTask()
     if (modal.type === 'runsheet') return submitRunsheet()
     if (modal.type === 'document') return submitDocumentEdit()
+    if (modal.type === 'contract') return submitContract()
     return undefined
   }
 
@@ -1068,6 +1101,41 @@ export default function PlannerRedesignPage() {
     )
   }
 
+  function renderContracts() {
+    return (
+      <>
+        <div className="ad-toolbar">
+          <button className="rr-btn primary" onClick={() => openModal('contract', { vendor_id: '', title: '', terms: '' })}><Icon name="plus" size={14} /> New contract</button>
+        </div>
+        {!contracts.length ? (
+          <EmptyState icon="check" title="No contracts yet" message="Send a contract to a vendor to get started." />
+        ) : (
+          <table className="rr-table">
+            <thead><tr><th>Vendor</th><th>Title</th><th>Status</th><th /></tr></thead>
+            <tbody>
+              {contracts.map((c) => (
+                <tr key={c.id}>
+                  <td>{c.vendor_name || '—'}</td>
+                  <td>{c.pdf_url ? <button className="rr-link-btn pl-document-download" onClick={() => api.plannerDownloadContractPdf(eventId, c.pdf_url, c.title).catch((e) => notify(e.message || 'Download failed'))}>{c.title}</button> : c.title}</td>
+                  <td>
+                    <Badge value={c.status} />
+                    {c.status === 'signed' && c.signature && <small style={{ display: 'block', marginTop: 2 }}>Signed by {c.signature.signer_name} · {fmtDate(c.signature.signed_at)}</small>}
+                    {c.status === 'sent' && <small style={{ display: 'block', marginTop: 2 }}>Awaiting signature</small>}
+                  </td>
+                  <td className="gr-actions">
+                    {c.status === 'draft' && <button className="rr-link-btn" onClick={() => openModal('contract', { id: c.id, vendor_id: c.vendor_id, title: c.title, terms: c.terms })}>Edit</button>}
+                    {c.status === 'draft' && <button className="rr-link-btn" onClick={() => sendContract(c)}>Send</button>}
+                    {c.status === 'draft' && <button className="rr-link-btn gr-danger-link" onClick={() => confirmDeleteContract(c)}>Delete</button>}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
+      </>
+    )
+  }
+
   function renderDocuments() {
     return (
       <>
@@ -1384,6 +1452,23 @@ export default function PlannerRedesignPage() {
         </Modal>
       )
     }
+    if (type === 'contract') {
+      return (
+        <Modal title={draft.id ? 'Edit contract' : 'New contract'} onClose={closeModal}>
+          <label className="rd-field-label">Vendor *</label>
+          <select className="rd-field" value={draft.vendor_id} disabled={!!draft.id} onChange={(e) => setDraft({ vendor_id: e.target.value })}>
+            <option value="">Select a vendor…</option>
+            {vendors.map((v) => <option key={v.id} value={v.id}>{v.name}</option>)}
+          </select>
+          <label className="rd-field-label">Title *</label>
+          <input className="rd-field" placeholder="Service Agreement" value={draft.title} onChange={(e) => setDraft({ title: e.target.value })} />
+          <label className="rd-field-label">Terms *</label>
+          <textarea className="rr-textarea" rows={8} placeholder={'1. Scope of services…\n\n2. Payment terms…'} value={draft.terms} onChange={(e) => setDraft({ terms: e.target.value })} />
+          <p className="rd-hint">Saved as a draft first — nothing is visible to the vendor until you hit Send from the Contracts list.</p>
+          <button className="rr-btn primary" style={{ width: '100%', justifyContent: 'center' }} onClick={submitModal}>Save draft</button>
+        </Modal>
+      )
+    }
     return null
   }
 
@@ -1429,6 +1514,7 @@ export default function PlannerRedesignPage() {
         {tab === 'Budget' && renderBudget()}
         {tab === 'Vendors' && renderVendors()}
         {tab === 'Procurement' && renderProcurement()}
+        {tab === 'Contracts' && renderContracts()}
         {tab === 'Timeline' && renderTimeline()}
         {tab === 'Runsheet' && renderRunsheet()}
         {tab === 'Documents' && renderDocuments()}

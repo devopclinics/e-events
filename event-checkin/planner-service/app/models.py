@@ -264,6 +264,47 @@ class PlannerRunsheetItem(Base):
     sort_order: Mapped[int] = mapped_column(default=0)
 
 
+# ── Contracts (e-signature) ─────────────────────────────────────────────────
+# Distinct from PlannerDocument below (a general upload-and-track file vault
+# with a manually-edited status label) — a Contract is organizer-authored
+# terms that get rendered to PDF and actually signed through the vendor
+# portal, not a status label an admin sets by hand. On signing, a matching
+# PlannerDocument row is created too, so it also shows up in the general
+# Documents list without duplicating that feature's own upload/list UI.
+
+class PlannerContract(Base):
+    __tablename__ = "planner_contracts"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=_uuid)
+    event_id: Mapped[str] = mapped_column(String(64), index=True)
+    vendor_id: Mapped[str] = mapped_column(ForeignKey("planner_vendors.id", ondelete="CASCADE"), index=True)
+    title: Mapped[str] = mapped_column(String(200))
+    # Plain text as the organizer typed it — kept so a draft can be re-edited
+    # (terms_html below is a one-way escape, not reversible into the textarea).
+    terms: Mapped[str] = mapped_column(Text)
+    # Safe HTML rendered server-side from `terms` (see _terms_to_html in
+    # routers/procurement.py) — never raw admin-supplied HTML — used for the PDF.
+    terms_html: Mapped[str] = mapped_column(Text)
+    pdf_url: Mapped[str | None] = mapped_column(Text, nullable=True)
+    status: Mapped[str] = mapped_column(String(20), default="draft")  # draft|sent|signed
+    created_by: Mapped[str] = mapped_column(String(200))
+    sent_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    signed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=datetime.utcnow)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=datetime.utcnow, onupdate=datetime.utcnow)
+
+
+class PlannerContractSignature(Base):
+    __tablename__ = "planner_contract_signatures"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=_uuid)
+    contract_id: Mapped[str] = mapped_column(ForeignKey("planner_contracts.id", ondelete="CASCADE"), unique=True, index=True)
+    signer_name: Mapped[str] = mapped_column(String(200))
+    ip_address: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    user_agent: Mapped[str | None] = mapped_column(Text, nullable=True)
+    signed_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=datetime.utcnow)
+
+
 # ── Documents ────────────────────────────────────────────────────────────────
 
 class PlannerDocument(Base):

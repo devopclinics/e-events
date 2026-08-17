@@ -1332,6 +1332,16 @@ export const api = {
   plannerVendorRequestChange: (token, body) => req('POST', `/planner/vendor-portal/${encodeURIComponent(token)}/change-orders`, body),
   plannerVendorAcknowledgeChange: (token, changeId) => req('POST', `/planner/vendor-portal/${encodeURIComponent(token)}/change-orders/${changeId}/acknowledge`),
   plannerDownloadDocument: (eventId, path, filename) => plannerDownload(eventId, path, filename),
+  // Contracts (e-signature) — admin side
+  plannerListContracts: (eventId) => plannerReq(eventId, 'GET', '/contracts'),
+  plannerCreateContract: (eventId, vendorId, body) => plannerReq(eventId, 'POST', `/vendors/${vendorId}/contracts`, body),
+  plannerUpdateContract: (eventId, contractId, body) => plannerReq(eventId, 'PATCH', `/contracts/${contractId}`, body),
+  plannerSendContract: (eventId, contractId) => plannerReq(eventId, 'POST', `/contracts/${contractId}/send`),
+  plannerDeleteContract: (eventId, contractId) => plannerReq(eventId, 'DELETE', `/contracts/${contractId}`),
+  plannerDownloadContractPdf: (eventId, path, filename) => plannerDownload(eventId, path, filename),
+  // Contracts — vendor portal side (no Festio login, token-authed)
+  plannerVendorSignContract: (token, contractId, signerName) =>
+    req('POST', `/planner/vendor-portal/${encodeURIComponent(token)}/contracts/${contractId}/sign`, { signer_name: signerName }),
   plannerListMilestones: (eventId) => plannerReq(eventId, 'GET', '/milestones'),
   plannerCreateStarterPlan: (eventId, body) => plannerReq(eventId, 'POST', '/starter-plan', body),
   plannerCreateMilestone: (eventId, body) => plannerReq(eventId, 'POST', '/milestones', body),

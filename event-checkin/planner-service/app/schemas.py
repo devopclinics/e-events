@@ -471,6 +471,49 @@ class RunsheetReorderIn(BaseModel):
     items: list[RunsheetReorderEntry]
 
 
+# ── Contracts (e-signature) ─────────────────────────────────────────────────
+
+class ContractIn(BaseModel):
+    title: str = Field(min_length=1, max_length=200)
+    terms: str = Field(min_length=1, max_length=20_000)
+
+
+class ContractUpdate(BaseModel):
+    title: Optional[str] = Field(default=None, min_length=1, max_length=200)
+    terms: Optional[str] = Field(default=None, min_length=1, max_length=20_000)
+
+
+class ContractSignIn(BaseModel):
+    signer_name: str = Field(min_length=1, max_length=200)
+
+
+class ContractSignatureOut(BaseModel):
+    signer_name: str
+    signed_at: datetime
+
+    model_config = {"from_attributes": True}
+
+
+class ContractOut(BaseModel):
+    id: str
+    event_id: str
+    vendor_id: str
+    vendor_name: Optional[str] = None
+    title: str
+    terms: str
+    terms_html: str
+    pdf_url: Optional[str] = None
+    status: str
+    created_by: str
+    sent_at: Optional[datetime] = None
+    signed_at: Optional[datetime] = None
+    created_at: datetime
+    updated_at: datetime
+    signature: Optional[ContractSignatureOut] = None
+
+    model_config = {"from_attributes": True}
+
+
 # ── Documents ────────────────────────────────────────────────────────────────
 
 class DocumentUpdate(BaseModel):

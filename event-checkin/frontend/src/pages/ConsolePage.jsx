@@ -209,6 +209,7 @@ const ADDON_LABELS = {
   addon_registry: 'Registry', addon_menu: 'Menu & Orders', addon_planner: 'Event Planner',
   addon_logistics: 'Logistics', addon_festiome: 'FestioMe Community', addon_seating: 'Seating & Floor Plans',
   addon_experience: 'Experience Workflows', addon_venue_access: 'Venue Access Intelligence',
+  addon_speakers: 'Speakers', addon_partners: 'Partners',
 }
 
 function AddonOverrideEditor({ scope, id, label }) {

@@ -92,6 +92,8 @@ FEATURE_ADDON = {
     "souvenir_confirmation": "addon_experience",
     "festiome_addon_enabled": "addon_festiome",
     "planner_enabled": "addon_planner",
+    "speaker_enabled": "addon_speakers",
+    "partner_enabled": "addon_partners",
 }
 
 def guest_limit(event: Event) -> int | None:

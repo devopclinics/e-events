@@ -108,6 +108,8 @@ export function useEntitlements(event, loading = false) {
       experience: !!event?.experience_enabled,
       festiome: !!event?.festiome_addon_enabled,
       planner: !!event?.planner_enabled,
+      speakers: !!event?.speaker_enabled,
+      partners: !!event?.partner_enabled,
     },
   }
 }

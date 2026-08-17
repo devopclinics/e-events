@@ -12,13 +12,15 @@ import './AddonsRedesignPage.css'
 // Sidebar nav ids differ slightly from the ?tab= values (RedesignShell.jsx
 // SIDEBAR_NAV: Orders row uses id "menu" even though its link is ?tab=orders),
 // so eventActive needs its own small map rather than reusing the tab id.
-const EVENT_ACTIVE_MAP = { seating: 'seating', orders: 'menu', logistics: 'logistics', registry: 'registry' }
+const EVENT_ACTIVE_MAP = { seating: 'seating', orders: 'menu', logistics: 'logistics', registry: 'registry', speakers: 'speakers', partners: 'partners' }
 
 const TABS = [
   { id: 'seating', label: 'Seating' },
   { id: 'orders', label: 'Orders' },
   { id: 'logistics', label: 'Deliveries' },
   { id: 'registry', label: 'Gift list' },
+  { id: 'speakers', label: 'Speakers' },
+  { id: 'partners', label: 'Partners' },
 ]
 
 const TAB_META = {
@@ -45,6 +47,18 @@ const TAB_META = {
     icon: 'image',
     desc: 'A mark-only gift registry — guests mark what they are bringing, no payments move through Festio.',
     pitch: 'Give guests a wishlist and a cash fund to choose from, and see who claimed what as it happens.',
+  },
+  speakers: {
+    title: 'Speakers',
+    icon: 'users',
+    desc: 'Showcase your guest speakers with bios, photos and social links on a public page.',
+    pitch: 'Highlight your featured speakers and help attendees connect with them through social media.',
+  },
+  partners: {
+    title: 'Partners',
+    icon: 'users',
+    desc: 'Showcase your sponsors and partners, grouped into your own categories, on a public page.',
+    pitch: "Give sponsors and partners the recognition they're paying for, organized into categories you control.",
   },
 }
 
@@ -488,6 +502,219 @@ function RealRegistryContent({ eventId, notify }) {
   </>
 }
 
+const SOCIAL_PLATFORMS = ['LinkedIn', 'Twitter/X', 'Instagram', 'Website']
+
+function RealSpeakersContent({ eventId, notify }) {
+  const blank = { name: '', title: '', bio: '', photo_url: '', social_links: [] }
+  const [speakers, setSpeakers] = useState(null)
+  const [settings, setSettings] = useState({ speaker_token: null })
+  const [error, setError] = useState('')
+  const [editing, setEditing] = useState(null)
+  const [form, setForm] = useState(blank)
+  const [deleteTarget, setDeleteTarget] = useState(null)
+  const [busy, setBusy] = useState(false)
+
+  async function load() {
+    if (!eventId) { setSpeakers([]); return }
+    setError('')
+    try {
+      const [nextSpeakers, nextSettings] = await Promise.all([api.listSpeakers(eventId), api.getSpeakerSettings(eventId)])
+      setSpeakers(nextSpeakers); setSettings(nextSettings)
+    } catch (e) { setError(e.message || 'Speakers could not be loaded') }
+  }
+  useEffect(() => { load() }, [eventId])
+
+  function openEditor(item = null) {
+    setEditing(item || 'new')
+    setForm(item ? {
+      name: item.name || '', title: item.title || '', bio: item.bio || '',
+      photo_url: item.photo_url || '', social_links: item.social_links || [],
+    } : blank)
+  }
+
+  function addLink() {
+    setForm((v) => ({ ...v, social_links: [...v.social_links, { platform: 'LinkedIn', url: '' }] }))
+  }
+  function updateLink(i, field, value) {
+    setForm((v) => ({ ...v, social_links: v.social_links.map((l, idx) => idx === i ? { ...l, [field]: value } : l) }))
+  }
+  function removeLink(i) {
+    setForm((v) => ({ ...v, social_links: v.social_links.filter((_, idx) => idx !== i) }))
+  }
+
+  async function save() {
+    if (!form.name.trim() || busy) return
+    setBusy(true)
+    try {
+      const payload = {
+        name: form.name.trim(), title: form.title || null, bio: form.bio || null,
+        photo_url: form.photo_url || null,
+        social_links: form.social_links.filter((l) => l.url.trim()),
+      }
+      if (editing === 'new') await api.createSpeaker(eventId, payload)
+      else await api.updateSpeaker(eventId, editing.id, payload)
+      setEditing(null); await load(); notify(`Speaker ${editing === 'new' ? 'added' : 'updated'}`)
+    } catch (e) { notify(e.message || 'Speaker could not be saved', true) }
+    finally { setBusy(false) }
+  }
+
+  if (!eventId) return <EmptyState icon="users" title="Select an event" message="Choose an event before adding speakers." />
+  if (speakers === null) return <div className="rr-panel"><div className="rd-panel-body"><LoadingSkeleton rows={5} /></div></div>
+  if (error) return <div className="rr-panel"><div className="rd-panel-body"><ErrorRetryState message={error} onRetry={load} /></div></div>
+  return <>
+    <div className="ad-toolbar">
+      <button className="rr-btn primary" onClick={() => openEditor()}><Icon name="plus" size={14} /> Add speaker</button>
+      {settings.speaker_token && <a className="rr-btn secondary" href={`/speakers/${settings.speaker_token}`} target="_blank" rel="noreferrer">Preview page →</a>}
+    </div>
+    <div className="rr-panel"><div className="rd-panel-head"><h3>Guest Speaker Showcase</h3><p>{speakers.length} speaker{speakers.length === 1 ? '' : 's'}</p></div><div className="rd-panel-body">
+      {speakers.length === 0 ? <EmptyState icon="users" title="No guest speakers found" message="Add your first guest speaker to get started." /> : speakers.map((s) => (
+        <div className="ad-registry-item" key={s.id}>
+          <div className="ad-registry-item-top"><span>{s.photo_url && <img src={s.photo_url} alt="" className="ad-registry-thumb" />} {s.name}{s.title && <small> · {s.title}</small>}</span></div>
+          <div className="gr-actions"><button className="rr-link-btn" onClick={() => openEditor(s)}>Edit</button><button className="rr-link-btn gr-danger-link" onClick={() => setDeleteTarget(s)}>Delete</button></div>
+        </div>
+      ))}
+    </div></div>
+    {editing && <Modal title={editing === 'new' ? 'Add guest speaker' : `Edit ${editing.name}`} onClose={() => setEditing(null)} width={500}>
+      <label className="rd-field-label">Name *</label><input className="rd-field" value={form.name} onChange={(e) => setForm((v) => ({ ...v, name: e.target.value }))} />
+      <label className="rd-field-label">Title / role</label><input className="rd-field" value={form.title} onChange={(e) => setForm((v) => ({ ...v, title: e.target.value }))} placeholder="CEO, Acme" />
+      <label className="rd-field-label">Bio</label><textarea className="rr-textarea" value={form.bio} onChange={(e) => setForm((v) => ({ ...v, bio: e.target.value }))} />
+      <label className="rd-field-label">Photo URL</label><input className="rd-field" type="url" value={form.photo_url} onChange={(e) => setForm((v) => ({ ...v, photo_url: e.target.value }))} />
+      <label className="rd-field-label">Social links</label>
+      {form.social_links.map((l, i) => (
+        <div className="rd-row2" key={i}>
+          <select className="rd-field" style={{ flex: 'none', width: 120 }} value={l.platform} onChange={(e) => updateLink(i, 'platform', e.target.value)}>
+            {SOCIAL_PLATFORMS.map((p) => <option key={p} value={p}>{p}</option>)}
+          </select>
+          <input className="rd-field" type="url" placeholder="https://…" value={l.url} onChange={(e) => updateLink(i, 'url', e.target.value)} />
+          <button type="button" className="rr-link-btn gr-danger-link" onClick={() => removeLink(i)}>Remove</button>
+        </div>
+      ))}
+      <button type="button" className="rr-btn secondary" onClick={addLink}><Icon name="plus" size={12} /> Add link</button>
+      <div className="rd-row2" style={{ marginTop: 14 }}><button className="rr-btn secondary" onClick={() => setEditing(null)}>Cancel</button><button className="rr-btn primary" disabled={busy || !form.name.trim()} onClick={save}>{busy ? 'Saving…' : 'Save speaker'}</button></div>
+    </Modal>}
+    {deleteTarget && <ConfirmDialog title="Delete speaker" message={`Delete “${deleteTarget.name}”?`} confirmLabel="Delete" onCancel={() => setDeleteTarget(null)} onConfirm={async () => {
+      try { await api.deleteSpeaker(eventId, deleteTarget.id); setDeleteTarget(null); await load(); notify('Speaker deleted') }
+      catch (e) { notify(e.message || 'Speaker could not be deleted', true) }
+    }} />}
+  </>
+}
+
+function RealPartnersContent({ eventId, notify }) {
+  const blank = { name: '', category_id: '', logo_url: '', description: '', website_url: '' }
+  const [partners, setPartners] = useState(null)
+  const [categories, setCategories] = useState([])
+  const [settings, setSettings] = useState({ partner_token: null })
+  const [error, setError] = useState('')
+  const [editing, setEditing] = useState(null)
+  const [form, setForm] = useState(blank)
+  const [deleteTarget, setDeleteTarget] = useState(null)
+  const [categoriesOpen, setCategoriesOpen] = useState(false)
+  const [newCategory, setNewCategory] = useState('')
+  const [busy, setBusy] = useState(false)
+
+  async function load() {
+    if (!eventId) { setPartners([]); return }
+    setError('')
+    try {
+      const [nextPartners, nextCategories, nextSettings] = await Promise.all([
+        api.listPartners(eventId), api.listPartnerCategories(eventId), api.getPartnerSettings(eventId),
+      ])
+      setPartners(nextPartners); setCategories(nextCategories); setSettings(nextSettings)
+    } catch (e) { setError(e.message || 'Partners could not be loaded') }
+  }
+  useEffect(() => { load() }, [eventId])
+
+  function openEditor(item = null) {
+    setEditing(item || 'new')
+    setForm(item ? {
+      name: item.name || '', category_id: item.category_id || '', logo_url: item.logo_url || '',
+      description: item.description || '', website_url: item.website_url || '',
+    } : blank)
+  }
+
+  async function save() {
+    if (!form.name.trim() || busy) return
+    setBusy(true)
+    try {
+      const payload = {
+        name: form.name.trim(), category_id: form.category_id || null, logo_url: form.logo_url || null,
+        description: form.description || null, website_url: form.website_url || null,
+      }
+      if (editing === 'new') await api.createPartner(eventId, payload)
+      else await api.updatePartner(eventId, editing.id, payload)
+      setEditing(null); await load(); notify(`Partner ${editing === 'new' ? 'added' : 'updated'}`)
+    } catch (e) { notify(e.message || 'Partner could not be saved', true) }
+    finally { setBusy(false) }
+  }
+
+  async function addCategory() {
+    if (!newCategory.trim() || busy) return
+    setBusy(true)
+    try {
+      await api.createPartnerCategory(eventId, { name: newCategory.trim(), sort_order: categories.length })
+      setNewCategory(''); await load()
+    } catch (e) { notify(e.message || 'Category could not be added', true) }
+    finally { setBusy(false) }
+  }
+
+  async function removeCategory(category) {
+    if (!window.confirm(`Delete category "${category.name}"? Partners in it become uncategorized.`)) return
+    setBusy(true)
+    try { await api.deletePartnerCategory(eventId, category.id); await load() }
+    catch (e) { notify(e.message || 'Category could not be deleted', true) }
+    finally { setBusy(false) }
+  }
+
+  if (!eventId) return <EmptyState icon="users" title="Select an event" message="Choose an event before adding partners." />
+  if (partners === null) return <div className="rr-panel"><div className="rd-panel-body"><LoadingSkeleton rows={5} /></div></div>
+  if (error) return <div className="rr-panel"><div className="rd-panel-body"><ErrorRetryState message={error} onRetry={load} /></div></div>
+  return <>
+    <div className="ad-toolbar">
+      <button className="rr-btn secondary" onClick={() => setCategoriesOpen(true)}>Create categories</button>
+      <button className="rr-btn primary" onClick={() => openEditor()}><Icon name="plus" size={14} /> Add partner</button>
+      {settings.partner_token && <a className="rr-btn secondary" href={`/partners/${settings.partner_token}`} target="_blank" rel="noreferrer">Preview page →</a>}
+    </div>
+    <div className="rr-panel"><div className="rd-panel-head"><h3>Partner Showcase</h3><p>{partners.length} partner{partners.length === 1 ? '' : 's'}</p></div><div className="rd-panel-body">
+      {partners.length === 0 ? <EmptyState icon="users" title="No partners found" message="Add your first partner to get started." /> : partners.map((p) => (
+        <div className="ad-registry-item" key={p.id}>
+          <div className="ad-registry-item-top"><span>{p.logo_url && <img src={p.logo_url} alt="" className="ad-registry-thumb" />} {p.name}{p.category_name && <small> · {p.category_name}</small>}</span></div>
+          <div className="gr-actions"><button className="rr-link-btn" onClick={() => openEditor(p)}>Edit</button><button className="rr-link-btn gr-danger-link" onClick={() => setDeleteTarget(p)}>Delete</button></div>
+        </div>
+      ))}
+    </div></div>
+    {editing && <Modal title={editing === 'new' ? 'Add partner' : `Edit ${editing.name}`} onClose={() => setEditing(null)} width={500}>
+      <label className="rd-field-label">Name *</label><input className="rd-field" value={form.name} onChange={(e) => setForm((v) => ({ ...v, name: e.target.value }))} />
+      <label className="rd-field-label">Category</label>
+      <select className="rd-field" value={form.category_id} onChange={(e) => setForm((v) => ({ ...v, category_id: e.target.value }))}>
+        <option value="">Uncategorized</option>
+        {categories.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
+      </select>
+      <label className="rd-field-label">Description</label><textarea className="rr-textarea" value={form.description} onChange={(e) => setForm((v) => ({ ...v, description: e.target.value }))} />
+      <label className="rd-field-label">Logo URL</label><input className="rd-field" type="url" value={form.logo_url} onChange={(e) => setForm((v) => ({ ...v, logo_url: e.target.value }))} />
+      <label className="rd-field-label">Website URL</label><input className="rd-field" type="url" value={form.website_url} onChange={(e) => setForm((v) => ({ ...v, website_url: e.target.value }))} />
+      <div className="rd-row2" style={{ marginTop: 14 }}><button className="rr-btn secondary" onClick={() => setEditing(null)}>Cancel</button><button className="rr-btn primary" disabled={busy || !form.name.trim()} onClick={save}>{busy ? 'Saving…' : 'Save partner'}</button></div>
+    </Modal>}
+    {categoriesOpen && <Modal title="Partner categories" onClose={() => setCategoriesOpen(false)} width={420}>
+      {categories.length === 0 && <p className="rd-hint">No categories yet — partners without one show as uncategorized.</p>}
+      {categories.map((c) => (
+        <div className="rd-row2" key={c.id} style={{ alignItems: 'center' }}>
+          <span style={{ flex: 1 }}>{c.name}</span>
+          <button className="rr-link-btn gr-danger-link" disabled={busy} onClick={() => removeCategory(c)}>Delete</button>
+        </div>
+      ))}
+      <div className="rd-row2" style={{ marginTop: 10 }}>
+        <input className="rd-field" placeholder="New category name" value={newCategory} onChange={(e) => setNewCategory(e.target.value)} />
+        <button className="rr-btn secondary" disabled={busy || !newCategory.trim()} onClick={addCategory}>Add</button>
+      </div>
+      <div className="rd-row2" style={{ marginTop: 14 }}><button className="rr-btn primary" onClick={() => setCategoriesOpen(false)}>Done</button></div>
+    </Modal>}
+    {deleteTarget && <ConfirmDialog title="Delete partner" message={`Delete “${deleteTarget.name}”?`} confirmLabel="Delete" onCancel={() => setDeleteTarget(null)} onConfirm={async () => {
+      try { await api.deletePartner(eventId, deleteTarget.id); setDeleteTarget(null); await load(); notify('Partner deleted') }
+      catch (e) { notify(e.message || 'Partner could not be deleted', true) }
+    }} />}
+  </>
+}
+
 export default function AddonsRedesignPage() {
   const [searchParams, setSearchParams] = useSearchParams()
   const navigate = useNavigate()
@@ -539,6 +766,8 @@ export default function AddonsRedesignPage() {
           )}
           {tab === 'logistics' && <RealLogisticsContent eventId={eventId} notify={notify} />}
           {tab === 'registry' && <RealRegistryContent eventId={eventId} notify={notify} />}
+          {tab === 'speakers' && <RealSpeakersContent eventId={eventId} notify={notify} />}
+          {tab === 'partners' && <RealPartnersContent eventId={eventId} notify={notify} />}
         </>
       )}
 

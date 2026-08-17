@@ -1046,6 +1046,30 @@ export const api = {
   getRegistryPage: (token) => req('GET', `/registry/${token}`),
   claimRegistryItem: (token, itemId, data) => req('POST', `/registry/${token}/items/${itemId}/claim`, data),
 
+  // Speaker Showcase (admin)
+  listSpeakers: (eventId) => req('GET', `/events/${eventId}/speakers`),
+  createSpeaker: (eventId, data) => req('POST', `/events/${eventId}/speakers`, data),
+  updateSpeaker: (eventId, id, data) => req('PUT', `/events/${eventId}/speakers/${id}`, data),
+  deleteSpeaker: (eventId, id) => req('DELETE', `/events/${eventId}/speakers/${id}`),
+  getSpeakerSettings: (eventId) => req('GET', `/events/${eventId}/speakers/settings`),
+
+  // Public speaker page (no auth) — resolved by unguessable token
+  getSpeakerPage: (token) => req('GET', `/speakers/${token}`),
+
+  // Partner Showcase (admin)
+  listPartners: (eventId) => req('GET', `/events/${eventId}/partners`),
+  createPartner: (eventId, data) => req('POST', `/events/${eventId}/partners`, data),
+  updatePartner: (eventId, id, data) => req('PUT', `/events/${eventId}/partners/${id}`, data),
+  deletePartner: (eventId, id) => req('DELETE', `/events/${eventId}/partners/${id}`),
+  getPartnerSettings: (eventId) => req('GET', `/events/${eventId}/partners/settings`),
+  listPartnerCategories: (eventId) => req('GET', `/events/${eventId}/partner-categories`),
+  createPartnerCategory: (eventId, data) => req('POST', `/events/${eventId}/partner-categories`, data),
+  updatePartnerCategory: (eventId, id, data) => req('PUT', `/events/${eventId}/partner-categories/${id}`, data),
+  deletePartnerCategory: (eventId, id) => req('DELETE', `/events/${eventId}/partner-categories/${id}`),
+
+  // Public partner page (no auth) — resolved by unguessable token
+  getPartnerPage: (token) => req('GET', `/partners/${token}`),
+
   // Billing (Event Pass)
   getBillingTiers: (eventId) => req('GET', `/billing/tiers/${eventId}`),
   getCreditLedger: (eventId) => req('GET', `/billing/credits/${eventId}`),

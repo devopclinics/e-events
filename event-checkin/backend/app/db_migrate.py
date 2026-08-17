@@ -179,6 +179,8 @@ SCHEMA_PATCHES: list[str] = [
             ("addon_seating",       "Seating & Floor Plans",        7900, 7900000, 6),
             ("addon_experience",    "Experience Workflows",         7900, 7900000, 7),
             ("addon_venue_access",  "Venue Access Intelligence",    9900, 9900000, 8),
+            ("addon_speakers",      "Speakers",                    2900, 2900000, 9),
+            ("addon_partners",      "Partners",                    2900, 2900000, 10),
         ]
     ],
     # Keep add-on pricing aligned with current packaging (idempotent, same
@@ -191,6 +193,8 @@ SCHEMA_PATCHES: list[str] = [
     "UPDATE pricing_plans SET label='Seating & Floor Plans', usd=7900, ngn=7900000, active=TRUE, sort_order=6 WHERE key='addon_seating'",
     "UPDATE pricing_plans SET label='Experience Workflows', usd=7900, ngn=7900000, active=TRUE, sort_order=7 WHERE key='addon_experience'",
     "UPDATE pricing_plans SET label='Venue Access Intelligence', usd=9900, ngn=9900000, active=TRUE, sort_order=8 WHERE key='addon_venue_access'",
+    "UPDATE pricing_plans SET label='Speakers', usd=2900, ngn=2900000, active=TRUE, sort_order=9 WHERE key='addon_speakers'",
+    "UPDATE pricing_plans SET label='Partners', usd=2900, ngn=2900000, active=TRUE, sort_order=10 WHERE key='addon_partners'",
 
     # 7c) Grandfather existing events: any event that already has a formerly
     # tier-gated feature switched on keeps it, recorded as a purchased add-on,

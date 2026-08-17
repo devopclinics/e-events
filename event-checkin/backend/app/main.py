@@ -6,7 +6,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from .database import engine
 from .config import settings
-from .routers import events, guests, scanner, dashboard, seating, menu, logistics, registry, access, trials, demo, classify, messaging, meta_whatsapp, resend_webhooks, templates as templates_router, self_checkin, experience, tasks
+from .routers import events, guests, scanner, dashboard, seating, menu, logistics, registry, speakers, partners, access, trials, demo, classify, messaging, meta_whatsapp, resend_webhooks, templates as templates_router, self_checkin, experience, tasks
 from .routers import auth as auth_router
 from .routers import invite as invite_router
 from .routers import billing as billing_router
@@ -153,6 +153,10 @@ app.include_router(logistics.router,   prefix="/api/events", tags=["logistics"])
 app.include_router(logistics.vendor_router, prefix="/api/vendor", tags=["vendor"])
 app.include_router(registry.router,    prefix="/api/events", tags=["registry"])
 app.include_router(registry.registry_router, prefix="/api/registry", tags=["registry-public"])
+app.include_router(speakers.router,    prefix="/api/events", tags=["speakers"])
+app.include_router(speakers.speaker_router, prefix="/api/speakers", tags=["speakers-public"])
+app.include_router(partners.router,    prefix="/api/events", tags=["partners"])
+app.include_router(partners.partner_router, prefix="/api/partners", tags=["partners-public"])
 app.include_router(access.router,      prefix="/api/events", tags=["access"])
 app.include_router(classify.router,    prefix="/api/events", tags=["classify"])
 app.include_router(scanner.router,     prefix="/api/scan",   tags=["scanner"])

@@ -210,6 +210,8 @@ const SIDEBAR_NAV = [
   ['card', 'Orders', '/kitchen-redesign', 'menu', null, 'orders'],
   ['upload', 'Deliveries', '/addons-redesign?tab=logistics', 'logistics', null, 'logistics'],
   ['image', 'Gift list', '/addons-redesign?tab=registry', 'registry', null, 'registry'],
+  ['users', 'Speakers', '/addons-redesign?tab=speakers', 'speakers', null, 'speakers'],
+  ['users', 'Partners', '/addons-redesign?tab=partners', 'partners', null, 'partners'],
   ['chat', 'FestioMe', '/festiome-redesign', 'festiome', null, 'festiome'],
   ['grp', 'Team & Settings'],
   ['team', 'Team', '/team-redesign?tab=team', 'team'],
@@ -358,8 +360,10 @@ export default function RedesignShell({ topActive, withEventSidebar = false, eve
     festiome: !!event?.festiome_addon_enabled && !(event?.blocked_comm_features || []).includes('festiome'),
     experience: !!event?.experience_enabled,
     planner: !!event?.planner_enabled,
+    speakers: !!event?.speaker_enabled,
+    partners: !!event?.partner_enabled,
   }
-  flags.anyAddon = flags.venueAccess || flags.seating || flags.orders || flags.logistics || flags.registry || flags.festiome
+  flags.anyAddon = flags.venueAccess || flags.seating || flags.orders || flags.logistics || flags.registry || flags.festiome || flags.speakers || flags.partners
 
   const eventName = event?.name || (currentEventId ? 'Loading…' : 'No event selected')
   const visibleTopLinks = TOP_LINKS.filter((l) => !l.gate || l.gate({ user, event, ticketingMaster }))

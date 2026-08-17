@@ -41,6 +41,8 @@ const FEATURES = [
   { id: 'access', label: 'Venue access', desc: 'Configure zones, gates, and ticket access' },
   { id: 'logistics', label: 'Deliveries / Packing list', desc: 'Vendor shipment tracking' },
   { id: 'registry', label: 'Gift registry', desc: 'Accept gifts and contributions' },
+  { id: 'speakers', label: 'Speaker showcase', desc: 'Public page for guest speakers' },
+  { id: 'partners', label: 'Partner showcase', desc: 'Public page for sponsors and partners' },
   { id: 'festiome', label: 'FestioMe guest app', desc: 'Guest-side experience hub' },
   { id: 'experience', label: 'Experience program', desc: 'Session-based event content' },
   { id: 'selfcheckin', label: 'Self check-in kiosk', desc: 'Guests check themselves in' },
@@ -118,6 +120,21 @@ const GUIDED_STEPS = [
     fields: [
       { label: 'Category', placeholder: 'Décor' },
       { label: 'Expected delivery date', type: 'date' },
+    ],
+  },
+  {
+    id: 'speakers', label: 'Add a guest speaker',
+    desc: 'Add your first speaker — manage the full lineup and public page from Add-ons.',
+    fields: [
+      { label: 'Speaker name', placeholder: 'Jane Doe' },
+      { label: 'Title / role (optional)', placeholder: 'CEO, Acme' },
+    ],
+  },
+  {
+    id: 'partners', label: 'Add a partner',
+    desc: 'Add your first partner or sponsor — manage the full list and categories from Add-ons.',
+    fields: [
+      { label: 'Partner name', placeholder: 'Grand Hall Catering' },
     ],
   },
   {
@@ -338,6 +355,8 @@ function WizardPhase({ onComplete, notify }) {
                   menu_enabled: form.features.has('orders'),
                   logistics_enabled: form.features.has('logistics'),
                   registry_enabled: form.features.has('registry'),
+                  speaker_enabled: form.features.has('speakers'),
+                  partner_enabled: form.features.has('partners'),
                   venue_access_enabled: form.features.has('access'),
                   festiome_addon_enabled: form.features.has('festiome'),
                   experience_enabled: form.features.has('experience'),
@@ -495,6 +514,12 @@ function GuidedSetupPhase({ eventId, notify, onEventUnavailable }) {
     } else if (stepId === 'logistics') {
       if (!value(0)) throw new Error('Enter a delivery category')
       await api.createShipment(eventId, { name: value(0), phase: 'pre', notes: value(1) ? `Expected delivery: ${value(1)}` : null })
+    } else if (stepId === 'speakers') {
+      if (!value(0)) throw new Error('Enter a speaker name')
+      await api.createSpeaker(eventId, { name: value(0), title: value(1) || null, social_links: [] })
+    } else if (stepId === 'partners') {
+      if (!value(0)) throw new Error('Enter a partner name')
+      await api.createPartner(eventId, { name: value(0) })
     } else if (stepId === 'festiome') {
       await api.toggleFeatures(eventId, { festiome_addon_enabled: true })
     } else if (stepId === 'experience') {

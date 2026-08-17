@@ -426,6 +426,18 @@ class Event(Base):
     # a standalone microservice — see planner-service/. Off by default like
     # the other paid add-ons; the nav link and page both hide/upsell until set.
     planner_enabled: Mapped[bool] = mapped_column(Boolean, default=False)
+    # Guest Speaker Showcase add-on. Off by default; same shape as registry
+    # (bool + lazily-minted unguessable public token) below.
+    speaker_enabled: Mapped[bool] = mapped_column(Boolean, default=False)
+    speaker_token: Mapped[str | None] = mapped_column(
+        String(36), unique=True, nullable=True, default=lambda: str(uuid.uuid4())
+    )
+    # Partner/Sponsor Showcase add-on. Distinct from partner_pairing_enabled
+    # (guest seating partner) below — unrelated feature, similar name.
+    partner_enabled: Mapped[bool] = mapped_column(Boolean, default=False)
+    partner_token: Mapped[str | None] = mapped_column(
+        String(36), unique=True, nullable=True, default=lambda: str(uuid.uuid4())
+    )
     # Add-on purchase ledger: keys from PricingPlan(kind="addon") this event has
     # bought (e.g. "addon_seating"). Independent of the *_enabled runtime toggles
     # above -- purchasing grants the entitlement, the *_enabled flags are the
@@ -1812,6 +1824,53 @@ class AffiliateStore(Base):
     param_value: Mapped[str] = mapped_column(String(255)) # your affiliate id
     active: Mapped[bool] = mapped_column(Boolean, default=True)
     sort_order: Mapped[int] = mapped_column(Integer, default=0)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+
+
+class GuestSpeaker(Base):
+    """One entry on an event's public Speaker Showcase. No category grouping
+    (unlike Partner below) — the reference this add-on is modeled on shows no
+    speaker category filter, just a flat searchable list."""
+    __tablename__ = "guest_speakers"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+    event_id: Mapped[str] = mapped_column(String(36), ForeignKey("events.id"), index=True)
+    name: Mapped[str] = mapped_column(String(255))
+    title: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    bio: Mapped[str | None] = mapped_column(Text, nullable=True)
+    photo_url: Mapped[str | None] = mapped_column(String(1000), nullable=True)
+    # [{"platform": "linkedin", "url": "https://..."}, ...]
+    social_links: Mapped[list | None] = mapped_column(JSON, nullable=True)
+    sort_order: Mapped[int] = mapped_column(Integer, default=0)
+    is_active: Mapped[bool] = mapped_column(Boolean, default=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+
+
+class PartnerCategory(Base):
+    """Admin-managed category for Partner Showcase entries (e.g. "Sponsors",
+    "Vendors") — a real table, not a free-text field, because organizers create
+    and reorder their own categories (unlike GuestSpeaker, which has none)."""
+    __tablename__ = "partner_categories"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+    event_id: Mapped[str] = mapped_column(String(36), ForeignKey("events.id"), index=True)
+    name: Mapped[str] = mapped_column(String(100))
+    sort_order: Mapped[int] = mapped_column(Integer, default=0)
+
+
+class Partner(Base):
+    """One entry on an event's public Partner/Sponsor Showcase."""
+    __tablename__ = "partners"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+    event_id: Mapped[str] = mapped_column(String(36), ForeignKey("events.id"), index=True)
+    category_id: Mapped[str | None] = mapped_column(String(36), ForeignKey("partner_categories.id"), nullable=True)
+    name: Mapped[str] = mapped_column(String(255))
+    logo_url: Mapped[str | None] = mapped_column(String(1000), nullable=True)
+    description: Mapped[str | None] = mapped_column(Text, nullable=True)
+    website_url: Mapped[str | None] = mapped_column(String(1000), nullable=True)
+    sort_order: Mapped[int] = mapped_column(Integer, default=0)
+    is_active: Mapped[bool] = mapped_column(Boolean, default=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
 
 

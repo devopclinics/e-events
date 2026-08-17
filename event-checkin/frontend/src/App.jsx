@@ -24,6 +24,8 @@ const PricingRedesignPage = lazy(() => import('./pages/PricingRedesignPage'))
 const InvitePage = lazy(() => import('./pages/InvitePage'))
 const VendorPage = lazy(() => import('./pages/VendorPage'))
 const RegistryPage = lazy(() => import('./pages/RegistryPage'))
+const SpeakersPublicPage = lazy(() => import('./pages/SpeakersPublicPage'))
+const PartnersPublicPage = lazy(() => import('./pages/PartnersPublicPage'))
 const CalendarPage = lazy(() => import('./pages/CalendarPage'))
 const FloorPlanPage = lazy(() => import('./pages/FloorPlanPage'))
 const PricingPage = lazy(() => import('./pages/PricingPage'))
@@ -392,6 +394,9 @@ function AppRoutes() {
       <Route path="/vendor/:token" element={<VendorPage />} />
       {/* Public gift registry — no auth required (unguessable token) */}
       <Route path="/registry/:token" element={<RegistryPage />} />
+      {/* Public speaker/partner showcases — no auth required (unguessable token) */}
+      <Route path="/speakers/:token" element={<SpeakersPublicPage />} />
+      <Route path="/partners/:token" element={<PartnersPublicPage />} />
       {/* Public/private Event Calendar — no auth required; the backend
           resolves either a public share_token or a private per-contact token */}
       <Route path="/calendar/:token" element={<CalendarPage />} />

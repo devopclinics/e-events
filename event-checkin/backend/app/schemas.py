@@ -189,6 +189,8 @@ class EventOut(BaseModel):
     live_program_enabled: bool = False
     festiome_addon_enabled: bool = False
     planner_enabled: bool = False
+    speaker_enabled: bool = False
+    partner_enabled: bool = False
     purchased_addons: Optional[list[str]] = None
     festiome_enabled: bool = False
     festiome_id: Optional[str] = None
@@ -1561,6 +1563,114 @@ class RegistryPageOut(BaseModel):
     couples_name: Optional[str] = None
     registry_message: Optional[str] = None
     items: list[RegistryItemOut] = []
+
+
+# ── Speaker Showcase ───────────────────────────────────────────────────────────
+
+class SocialLink(BaseModel):
+    platform: str
+    url: str
+
+
+class GuestSpeakerCreate(BaseModel):
+    name: str
+    title: Optional[str] = None
+    bio: Optional[str] = None
+    photo_url: Optional[str] = None
+    social_links: list[SocialLink] = []
+    sort_order: int = 0
+
+
+class GuestSpeakerUpdate(BaseModel):
+    name: Optional[str] = None
+    title: Optional[str] = None
+    bio: Optional[str] = None
+    photo_url: Optional[str] = None
+    social_links: Optional[list[SocialLink]] = None
+    sort_order: Optional[int] = None
+    is_active: Optional[bool] = None
+
+
+class GuestSpeakerOut(BaseModel):
+    id: str
+    event_id: str
+    name: str
+    title: Optional[str] = None
+    bio: Optional[str] = None
+    photo_url: Optional[str] = None
+    social_links: list[SocialLink] = []
+    sort_order: int
+    is_active: bool
+
+
+class SpeakerSettingsOut(BaseModel):
+    speaker_token: Optional[str] = None
+
+
+class SpeakerPageOut(BaseModel):
+    event_name: str
+    speakers: list[GuestSpeakerOut] = []
+
+
+# ── Partner Showcase ───────────────────────────────────────────────────────────
+
+class PartnerCategoryCreate(BaseModel):
+    name: str
+    sort_order: int = 0
+
+
+class PartnerCategoryUpdate(BaseModel):
+    name: Optional[str] = None
+    sort_order: Optional[int] = None
+
+
+class PartnerCategoryOut(BaseModel):
+    id: str
+    event_id: str
+    name: str
+    sort_order: int
+
+
+class PartnerCreate(BaseModel):
+    name: str
+    category_id: Optional[str] = None
+    logo_url: Optional[str] = None
+    description: Optional[str] = None
+    website_url: Optional[str] = None
+    sort_order: int = 0
+
+
+class PartnerUpdate(BaseModel):
+    name: Optional[str] = None
+    category_id: Optional[str] = None
+    logo_url: Optional[str] = None
+    description: Optional[str] = None
+    website_url: Optional[str] = None
+    sort_order: Optional[int] = None
+    is_active: Optional[bool] = None
+
+
+class PartnerOut(BaseModel):
+    id: str
+    event_id: str
+    name: str
+    category_id: Optional[str] = None
+    category_name: Optional[str] = None
+    logo_url: Optional[str] = None
+    description: Optional[str] = None
+    website_url: Optional[str] = None
+    sort_order: int
+    is_active: bool
+
+
+class PartnerSettingsOut(BaseModel):
+    partner_token: Optional[str] = None
+
+
+class PartnerPageOut(BaseModel):
+    event_name: str
+    categories: list[PartnerCategoryOut] = []
+    partners: list[PartnerOut] = []
 
 
 # ── Venue Access Intelligence ─────────────────────────────────────────────────

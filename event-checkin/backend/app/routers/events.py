@@ -367,7 +367,7 @@ _DUPLICATE_TEMPLATE_FIELDS = [
     # so copying the flag doesn't grant anything the new event hasn't paid for
     "seating_enabled", "menu_enabled", "logistics_enabled", "registry_enabled", "registry_message",
     "venue_access_enabled", "experience_enabled", "live_program_enabled", "planner_enabled",
-    "festiome_addon_enabled", "partner_pairing_enabled",
+    "festiome_addon_enabled", "partner_pairing_enabled", "speaker_enabled", "partner_enabled",
     "enforce_table_groups", "seating_term", "seat_term", "seat_assignment_order", "section_mode_enabled",
     "manual_checkin_enabled", "self_checkin_enabled", "checkout_enabled", "walk_in_enabled",
     # notifications — includes platform-superadmin blocks, which must carry
@@ -1093,6 +1093,7 @@ async def toggle_features(
         "seating_enabled", "menu_enabled", "logistics_enabled", "registry_enabled",
         "venue_access_enabled", "partner_pairing_enabled", "experience_enabled", "live_program_enabled",
         "section_mode_enabled", "festiome_addon_enabled", "planner_enabled",
+        "speaker_enabled", "partner_enabled",
     ):
         if body.get(feature):
             assert_feature_allowed(event, feature)
@@ -1141,6 +1142,14 @@ async def toggle_features(
         # Mint the public registry token on first enable.
         if event.registry_enabled and not event.registry_token:
             event.registry_token = str(_uuid.uuid4())
+    if "speaker_enabled" in body:
+        event.speaker_enabled = bool(body["speaker_enabled"])
+        if event.speaker_enabled and not event.speaker_token:
+            event.speaker_token = str(_uuid.uuid4())
+    if "partner_enabled" in body:
+        event.partner_enabled = bool(body["partner_enabled"])
+        if event.partner_enabled and not event.partner_token:
+            event.partner_token = str(_uuid.uuid4())
     if "section_mode_enabled" in body:
         enable = bool(body["section_mode_enabled"])
         if enable:
@@ -1194,7 +1203,7 @@ async def toggle_features(
         event.seat_assignment_order = order
     await db.commit()
     await db.refresh(event)
-    if any(bool(body.get(feature)) for feature in ("seating_enabled", "menu_enabled", "logistics_enabled", "registry_enabled", "venue_access_enabled", "experience_enabled", "festiome_addon_enabled", "planner_enabled")):
+    if any(bool(body.get(feature)) for feature in ("seating_enabled", "menu_enabled", "logistics_enabled", "registry_enabled", "venue_access_enabled", "experience_enabled", "festiome_addon_enabled", "planner_enabled", "speaker_enabled", "partner_enabled")):
         from ..services.marketing_client import ingest_marketing_lead
         await ingest_marketing_lead(current_user, stage="activated", event_type=event.event_type)
     return event

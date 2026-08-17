@@ -35,6 +35,8 @@ PLAN_DESCRIPTIONS = {
     "addon_seating": "Assign tables, design your floor layout, and seat couples or plus-ones together automatically.",
     "addon_experience": "Multi-step guest journeys beyond check-in: consent forms, scanner confirmations, souvenir handoff, live program.",
     "addon_venue_access": "Multi-zone in/out scanning, live occupancy, and section-based routing for events with more than one entrance.",
+    "addon_speakers": "A public page showcasing your event's guest speakers, with bios, photos, and social links.",
+    "addon_partners": "A public page showcasing your event's sponsors and partners, grouped into your own categories.",
 }
 
 ADDON_CAPABILITIES = {
@@ -46,6 +48,8 @@ ADDON_CAPABILITIES = {
     "addon_seating": ["Table & seat assignment", "Floor plan editor + sharing", "Partner/plus-one pairing"],
     "addon_experience": ["Workflow builder", "Consent forms & signatures", "Scanner & souvenir confirmation"],
     "addon_venue_access": ["Zones, tags & entry rules", "Occupancy / flow / peak analytics", "Section-based scanning"],
+    "addon_speakers": ["Guest speaker profiles", "Public speaker page"],
+    "addon_partners": ["Partner/sponsor profiles", "Admin-managed categories", "Public partner page"],
 }
 
 ADD_ON_CATALOG = {

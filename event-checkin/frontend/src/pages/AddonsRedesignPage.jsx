@@ -507,14 +507,27 @@ const SOCIAL_PLATFORMS = ['LinkedIn', 'Twitter/X', 'Instagram', 'Website']
 function RealSpeakersContent({ eventId, notify }) {
   const blank = { name: '', title: '', bio: '', photo_url: '', social_links: [] }
   const [speakers, setSpeakers] = useState(null)
-  const [settings, setSettings] = useState({ speaker_token: null })
+  const [settings, setSettings] = useState({ speaker_token: null, speaker_show_before_rsvp: false })
   const [error, setError] = useState('')
   const [editing, setEditing] = useState(null)
   const [form, setForm] = useState(blank)
   const [deleteTarget, setDeleteTarget] = useState(null)
   const [busy, setBusy] = useState(false)
   const [photoBusy, setPhotoBusy] = useState(false)
+  const [visibilityBusy, setVisibilityBusy] = useState(false)
   const photoFileRef = useRef(null)
+
+  async function toggleShowBeforeRsvp() {
+    if (visibilityBusy) return
+    const next = !settings.speaker_show_before_rsvp
+    setVisibilityBusy(true)
+    try {
+      await api.toggleFeatures(eventId, { speaker_show_before_rsvp: next })
+      setSettings((v) => ({ ...v, speaker_show_before_rsvp: next }))
+      notify(next ? 'Speakers now visible before RSVP' : 'Speakers now hidden until RSVP is confirmed')
+    } catch (e) { notify(e.message || 'Setting could not be saved', true) }
+    finally { setVisibilityBusy(false) }
+  }
 
   async function uploadPhoto(file) {
     if (!file || !eventId) return
@@ -578,6 +591,20 @@ function RealSpeakersContent({ eventId, notify }) {
       <button className="rr-btn primary" onClick={() => openEditor()}><Icon name="plus" size={14} /> Add speaker</button>
       {settings.speaker_token && <a className="rr-btn secondary" href={`/speakers/${settings.speaker_token}`} target="_blank" rel="noreferrer">Preview page →</a>}
     </div>
+    <div className="rr-panel"><div className="rd-panel-head"><h3>Speaker visibility</h3></div><div className="rd-panel-body">
+      <div className="rd-toggle-row">
+        <span>Show speakers on the invite page before a guest confirms RSVP</span>
+        <label className="rd-switch">
+          <input type="checkbox" checked={settings.speaker_show_before_rsvp} disabled={visibilityBusy} onChange={toggleShowBeforeRsvp} />
+          <span className="track" /><span className="knob" />
+        </label>
+      </div>
+      <p className="rd-hint">
+        {settings.speaker_show_before_rsvp
+          ? 'Speakers are visible to anyone who opens the invite link, even before they RSVP — same as the ticketing site.'
+          : 'Default: speakers stay hidden until a guest confirms their RSVP, then appear in their FestioHub.'}
+      </p>
+    </div></div>
     <div className="rr-panel"><div className="rd-panel-head"><h3>Guest Speaker Showcase</h3><p>{speakers.length} speaker{speakers.length === 1 ? '' : 's'}</p></div><div className="rd-panel-body">
       {speakers.length === 0 ? <EmptyState icon="users" title="No guest speakers found" message="Add your first guest speaker to get started." /> : speakers.map((s) => (
         <div className="ad-registry-item" key={s.id}>

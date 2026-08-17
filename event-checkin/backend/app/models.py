@@ -432,6 +432,12 @@ class Event(Base):
     speaker_token: Mapped[str | None] = mapped_column(
         String(36), unique=True, nullable=True, default=lambda: str(uuid.uuid4())
     )
+    # Default is to reveal the Speaker Showcase only after RSVP confirmation
+    # (inside FestioHub) — not on the public invite/RSVP landing page itself.
+    # Some organizers want speakers visible before RSVP too (as a draw to get
+    # people to confirm, matching how the ticketing site always shows them
+    # pre-purchase); this is that per-event opt-in.
+    speaker_show_before_rsvp: Mapped[bool] = mapped_column(Boolean, default=False)
     # Partner/Sponsor Showcase add-on. Distinct from partner_pairing_enabled
     # (guest seating partner) below — unrelated feature, similar name.
     partner_enabled: Mapped[bool] = mapped_column(Boolean, default=False)

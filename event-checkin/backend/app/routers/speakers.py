@@ -135,7 +135,7 @@ async def get_speaker_settings(event_id: str, db: AsyncSession = Depends(get_db)
                                _: User = Depends(require_paid_event_member)):
     ev = await _speaker_event(event_id, db)
     token = await ensure_speaker_token(ev, db)
-    return SpeakerSettingsOut(speaker_token=token)
+    return SpeakerSettingsOut(speaker_token=token, speaker_show_before_rsvp=ev.speaker_show_before_rsvp)
 
 
 # ── Public speaker page (no auth, by unguessable token) ────────────────────────

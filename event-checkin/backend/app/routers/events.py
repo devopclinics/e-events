@@ -1166,6 +1166,8 @@ async def toggle_features(
         event.speaker_enabled = bool(body["speaker_enabled"])
         if event.speaker_enabled and not event.speaker_token:
             event.speaker_token = str(_uuid.uuid4())
+    if "speaker_show_before_rsvp" in body:
+        event.speaker_show_before_rsvp = bool(body["speaker_show_before_rsvp"])
     if "partner_enabled" in body:
         event.partner_enabled = bool(body["partner_enabled"])
         if event.partner_enabled and not event.partner_token:

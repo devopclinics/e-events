@@ -1300,7 +1300,7 @@ const PREVIEW_JOURNEY = {
   },
 }
 
-function GuestHub({ event, accessToken, designTheme, previewMock = false }) {
+function GuestHub({ event, accessToken, designTheme, previewMock = false, confirmed = true }) {
   const [hub, setHub] = useState(null)
   const [error, setError] = useState('')
   const [hidden, setHidden] = useState(false)
@@ -1607,11 +1607,15 @@ function GuestHub({ event, accessToken, designTheme, previewMock = false }) {
   }, [event?.id, accessToken, previewMock])
 
   // Speaker Showcase cross-link — same public token endpoint the ticketing
-  // carousel and standalone page use, not a separate implementation.
+  // carousel and standalone page use, not a separate implementation. Default
+  // is to reveal speakers only after RSVP confirmation; speaker_show_before_rsvp
+  // is a per-event opt-in for organizers who want it visible earlier (matching
+  // how the ticketing site always shows it, since that's a pre-purchase context).
+  const speakersVisible = event?.speaker_enabled && (confirmed || event?.speaker_show_before_rsvp)
   useEffect(() => {
-    if (!event?.speaker_enabled || !event?.speaker_token) { setSpeakers(null); return }
+    if (!speakersVisible || !event?.speaker_token) { setSpeakers(null); return }
     api.getSpeakerPage(event.speaker_token).then((d) => setSpeakers(d.speakers)).catch(() => setSpeakers(null))
-  }, [event?.speaker_enabled, event?.speaker_token])
+  }, [speakersVisible, event?.speaker_token])
 
   async function sendMessage(e) {
     e.preventDefault()
@@ -1689,7 +1693,7 @@ function GuestHub({ event, accessToken, designTheme, previewMock = false }) {
           <div className={`mt-5 flex gap-1 rounded-2xl border p-1 fh-hub-tabs fh-hub-tabs-${hubStyle}`} style={{ background: tone.panel, borderColor: tone.border }} role="tablist" aria-label="FestioHub sections">
             {hubTabOrder.map((key) => HUB_TAB_META[key])
               .filter(([key]) => key !== 'program' || (journey?.program?.enabled && hubModuleVisible('live_program')))
-              .filter(([key]) => key !== 'speakers' || event?.speaker_enabled)
+              .filter(([key]) => key !== 'speakers' || speakersVisible)
               .filter(([key]) => key !== 'messages' || (hubModuleVisible('messages') && (hub?.capabilities?.direct_host_messages || hub?.capabilities?.guest_chat)))
               .map(([key, label, icon]) => (
                 <button key={key} type="button" role="tab" aria-selected={hubTab === key} onClick={() => setHubTab(key)}
@@ -1790,7 +1794,7 @@ function GuestHub({ event, accessToken, designTheme, previewMock = false }) {
           </div>}
         </div>}
 
-        {tabActive('speakers') && event?.speaker_enabled && (
+        {tabActive('speakers') && speakersVisible && (
           <div className="mt-6 rounded-2xl border p-4" style={{ background: tone.panel, borderColor: tone.border }}>
             <h3 className="text-lg font-extrabold">Speakers</h3>
             {speakers === null ? (
@@ -2709,7 +2713,7 @@ export default function InvitePage() {
 
         {hasGuestHub && (
           <section id="guest-hub" className="scroll-mt-6 py-6">
-            <GuestHub event={event} accessToken={guestHubToken || (isStudioPreview ? 'preview' : '')} designTheme={designTheme} previewMock={isStudioPreview} />
+            <GuestHub event={event} accessToken={guestHubToken || (isStudioPreview ? 'preview' : '')} designTheme={designTheme} previewMock={isStudioPreview} confirmed />
           </section>
         )}
 
@@ -2832,7 +2836,7 @@ export default function InvitePage() {
           </section>
         )}
 
-        {!hasGuestHub && <GuestHub event={event} accessToken={guestHubToken} designTheme={designTheme} />}
+        {!hasGuestHub && <GuestHub event={event} accessToken={guestHubToken} designTheme={designTheme} confirmed={false} />}
       </main>
 
       {!event.is_paid && (

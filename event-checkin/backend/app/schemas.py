@@ -190,6 +190,7 @@ class EventOut(BaseModel):
     festiome_addon_enabled: bool = False
     planner_enabled: bool = False
     speaker_enabled: bool = False
+    speaker_show_before_rsvp: bool = False
     partner_enabled: bool = False
     purchased_addons: Optional[list[str]] = None
     festiome_enabled: bool = False
@@ -1605,6 +1606,7 @@ class GuestSpeakerOut(BaseModel):
 
 class SpeakerSettingsOut(BaseModel):
     speaker_token: Optional[str] = None
+    speaker_show_before_rsvp: bool = False
 
 
 class SpeakerPageOut(BaseModel):
@@ -2292,6 +2294,7 @@ class InvitePageOut(BaseModel):
     # a Speakers tab, and the ticketing/standalone pages fetch the same list.
     speaker_enabled: bool = False
     speaker_token: Optional[str] = None
+    speaker_show_before_rsvp: bool = False
     seating_term: Optional[str] = None
     seat_term: Optional[str] = None
     # Invite page display toggles (all default True)

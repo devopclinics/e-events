@@ -401,7 +401,7 @@ function WizardPhase({ onComplete, notify }) {
   )
 }
 
-function GuidedSetupPhase({ eventId, notify }) {
+function GuidedSetupPhase({ eventId, notify, onEventUnavailable }) {
   const [event, setEvent] = useState(null)
   const [states, setStates] = useState(() =>
     Object.fromEntries(GUIDED_STEPS.map((s) => [s.id, 'pending']))
@@ -423,6 +423,13 @@ function GuidedSetupPhase({ eventId, notify }) {
       const result = await api.getSetupProgress(eventId)
       setStates((prev) => ({ ...prev, ...(result.steps || {}) }))
     } catch (e) {
+      // A stale eventId left in localStorage from a previous account/org (see
+      // useCurrentEvent.js) 404s here rather than loading — send the user back
+      // to step 1 instead of stranding them on a "Try again" that can never work.
+      if (e.status === 404) {
+        onEventUnavailable()
+        return
+      }
       setError(e.message || 'Setup progress could not be loaded')
     } finally {
       setLoading(false)
@@ -652,7 +659,17 @@ export default function SetupRedesignPage() {
         </div>
 
         {phase === 'wizard' && <WizardPhase notify={notify} onComplete={(event) => { setCurrentEvent(event.id); setPhase('guided') }} />}
-        {phase === 'guided' && <GuidedSetupPhase eventId={eventId} notify={notify} />}
+        {phase === 'guided' && (
+          <GuidedSetupPhase
+            eventId={eventId}
+            notify={notify}
+            onEventUnavailable={() => {
+              setCurrentEvent('')
+              setPhase('wizard')
+              notify("That event isn't available on this account — create a new one to continue.", true)
+            }}
+          />
+        )}
       </div>
       {toast && <div className="rd-toast" style={toast.error ? { background: 'var(--danger)' } : undefined}><Icon name={toast.error ? 'info' : 'check'} />{toast.message}</div>}
     </RedesignShell>

@@ -7,10 +7,11 @@ Two routers:
 """
 import uuid
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from .. import storage
 from ..database import get_db
 from ..models import Event, Partner, PartnerCategory, User
 from ..schemas import (
@@ -19,6 +20,9 @@ from ..schemas import (
     PartnerSettingsOut, PartnerPageOut,
 )
 from ..auth import require_paid_event_admin, require_paid_event_member
+# Same image-upload validation used for event cover images — no separate
+# copy of the magic-byte signature checks to drift out of sync.
+from .events import ALLOWED_IMAGE_TYPES, MAX_IMAGE_SIZE, _detected_image_type
 
 router = APIRouter()
 partner_router = APIRouter()
@@ -154,6 +158,28 @@ async def create_partner(event_id: str, data: PartnerCreate, db: AsyncSession = 
     await db.refresh(partner)
     names = await _category_names(event_id, db)
     return _partner_out(partner, names)
+
+
+@router.post("/{event_id}/partners/upload-logo")
+async def upload_partner_logo(
+    event_id: str,
+    file: UploadFile = File(...),
+    db: AsyncSession = Depends(get_db),
+    _: User = Depends(require_paid_event_admin),
+):
+    await _partner_event(event_id, db)
+    if file.content_type not in ALLOWED_IMAGE_TYPES:
+        raise HTTPException(400, f"Unsupported file type '{file.content_type}'. Use JPEG, PNG, WebP or GIF.")
+    data = await file.read()
+    if len(data) > MAX_IMAGE_SIZE:
+        raise HTTPException(413, "Image too large — maximum 10 MB.")
+    detected_type = _detected_image_type(data)
+    if detected_type != file.content_type:
+        raise HTTPException(400, "This is not a valid JPEG, PNG, WebP, or GIF image. Export it again and retry.")
+    ext = {"image/jpeg": "jpg", "image/png": "png", "image/webp": "webp", "image/gif": "gif"}.get(file.content_type, "jpg")
+    filename = f"{event_id}-partner-{uuid.uuid4().hex[:8]}.{ext}"
+    url = storage.save(f"partners/{filename}", data, file.content_type)
+    return {"url": url}
 
 
 @router.put("/{event_id}/partners/{partner_id}", response_model=PartnerOut)

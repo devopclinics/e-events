@@ -1055,6 +1055,21 @@ export const api = {
 
   // Public speaker page (no auth) — resolved by unguessable token
   getSpeakerPage: (token) => req('GET', `/speakers/${token}`),
+  uploadSpeakerPhoto: async (eventId, file) => {
+    const token = await getToken()
+    const fd = new FormData()
+    fd.append('file', file)
+    const res = await fetch(`${BASE}/events/${eventId}/speakers/upload-photo`, {
+      method: 'POST',
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
+      body: fd,
+    })
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({ detail: res.statusText }))
+      throw new Error(err.detail || res.statusText)
+    }
+    return res.json()
+  },
 
   // Partner Showcase (admin)
   listPartners: (eventId) => req('GET', `/events/${eventId}/partners`),
@@ -1069,6 +1084,21 @@ export const api = {
 
   // Public partner page (no auth) — resolved by unguessable token
   getPartnerPage: (token) => req('GET', `/partners/${token}`),
+  uploadPartnerLogo: async (eventId, file) => {
+    const token = await getToken()
+    const fd = new FormData()
+    fd.append('file', file)
+    const res = await fetch(`${BASE}/events/${eventId}/partners/upload-logo`, {
+      method: 'POST',
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
+      body: fd,
+    })
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({ detail: res.statusText }))
+      throw new Error(err.detail || res.statusText)
+    }
+    return res.json()
+  },
 
   // Billing (Event Pass)
   getBillingTiers: (eventId) => req('GET', `/billing/tiers/${eventId}`),

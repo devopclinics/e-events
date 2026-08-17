@@ -1,4 +1,4 @@
-import { Fragment, useEffect, useState } from 'react'
+import { Fragment, useEffect, useRef, useState } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import RedesignShell, { Icon, Modal, ConfirmDialog } from './redesign/RedesignShell'
 import { EmptyState, ErrorRetryState, LoadingSkeleton } from './redesign/RedesignPrimitives'
@@ -513,6 +513,18 @@ function RealSpeakersContent({ eventId, notify }) {
   const [form, setForm] = useState(blank)
   const [deleteTarget, setDeleteTarget] = useState(null)
   const [busy, setBusy] = useState(false)
+  const [photoBusy, setPhotoBusy] = useState(false)
+  const photoFileRef = useRef(null)
+
+  async function uploadPhoto(file) {
+    if (!file || !eventId) return
+    setPhotoBusy(true)
+    try {
+      const result = await api.uploadSpeakerPhoto(eventId, file)
+      setForm((v) => ({ ...v, photo_url: result.url }))
+    } catch (e) { notify(e.message || 'Photo could not be uploaded', true) }
+    finally { setPhotoBusy(false) }
+  }
 
   async function load() {
     if (!eventId) { setSpeakers([]); return }
@@ -578,7 +590,13 @@ function RealSpeakersContent({ eventId, notify }) {
       <label className="rd-field-label">Name *</label><input className="rd-field" value={form.name} onChange={(e) => setForm((v) => ({ ...v, name: e.target.value }))} />
       <label className="rd-field-label">Title / role</label><input className="rd-field" value={form.title} onChange={(e) => setForm((v) => ({ ...v, title: e.target.value }))} placeholder="CEO, Acme" />
       <label className="rd-field-label">Bio</label><textarea className="rr-textarea" value={form.bio} onChange={(e) => setForm((v) => ({ ...v, bio: e.target.value }))} />
-      <label className="rd-field-label">Photo URL</label><input className="rd-field" type="url" value={form.photo_url} onChange={(e) => setForm((v) => ({ ...v, photo_url: e.target.value }))} />
+      <label className="rd-field-label">Photo</label>
+      {form.photo_url && <img src={form.photo_url} alt="" className="ad-registry-thumb" style={{ width: 56, height: 56, marginBottom: 6 }} />}
+      <input ref={photoFileRef} type="file" accept="image/jpeg,image/png,image/webp,image/gif" hidden onChange={(e) => uploadPhoto(e.target.files?.[0])} />
+      <div className="rd-row2">
+        <button type="button" className="rr-btn secondary" disabled={photoBusy} onClick={() => photoFileRef.current?.click()}>{photoBusy ? 'Uploading…' : form.photo_url ? 'Replace photo' : 'Upload photo'}</button>
+        <input className="rd-field" type="url" placeholder="or paste an image URL" value={form.photo_url} onChange={(e) => setForm((v) => ({ ...v, photo_url: e.target.value }))} />
+      </div>
       <label className="rd-field-label">Social links</label>
       {form.social_links.map((l, i) => (
         <div className="rd-row2" key={i}>
@@ -611,6 +629,18 @@ function RealPartnersContent({ eventId, notify }) {
   const [categoriesOpen, setCategoriesOpen] = useState(false)
   const [newCategory, setNewCategory] = useState('')
   const [busy, setBusy] = useState(false)
+  const [logoBusy, setLogoBusy] = useState(false)
+  const logoFileRef = useRef(null)
+
+  async function uploadLogo(file) {
+    if (!file || !eventId) return
+    setLogoBusy(true)
+    try {
+      const result = await api.uploadPartnerLogo(eventId, file)
+      setForm((v) => ({ ...v, logo_url: result.url }))
+    } catch (e) { notify(e.message || 'Logo could not be uploaded', true) }
+    finally { setLogoBusy(false) }
+  }
 
   async function load() {
     if (!eventId) { setPartners([]); return }
@@ -690,7 +720,13 @@ function RealPartnersContent({ eventId, notify }) {
         {categories.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
       </select>
       <label className="rd-field-label">Description</label><textarea className="rr-textarea" value={form.description} onChange={(e) => setForm((v) => ({ ...v, description: e.target.value }))} />
-      <label className="rd-field-label">Logo URL</label><input className="rd-field" type="url" value={form.logo_url} onChange={(e) => setForm((v) => ({ ...v, logo_url: e.target.value }))} />
+      <label className="rd-field-label">Logo</label>
+      {form.logo_url && <img src={form.logo_url} alt="" className="ad-registry-thumb" style={{ width: 56, height: 56, marginBottom: 6 }} />}
+      <input ref={logoFileRef} type="file" accept="image/jpeg,image/png,image/webp,image/gif" hidden onChange={(e) => uploadLogo(e.target.files?.[0])} />
+      <div className="rd-row2">
+        <button type="button" className="rr-btn secondary" disabled={logoBusy} onClick={() => logoFileRef.current?.click()}>{logoBusy ? 'Uploading…' : form.logo_url ? 'Replace logo' : 'Upload logo'}</button>
+        <input className="rd-field" type="url" placeholder="or paste an image URL" value={form.logo_url} onChange={(e) => setForm((v) => ({ ...v, logo_url: e.target.value }))} />
+      </div>
       <label className="rd-field-label">Website URL</label><input className="rd-field" type="url" value={form.website_url} onChange={(e) => setForm((v) => ({ ...v, website_url: e.target.value }))} />
       <div className="rd-row2" style={{ marginTop: 14 }}><button className="rr-btn secondary" onClick={() => setEditing(null)}>Cancel</button><button className="rr-btn primary" disabled={busy || !form.name.trim()} onClick={save}>{busy ? 'Saving…' : 'Save partner'}</button></div>
     </Modal>}

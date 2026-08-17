@@ -441,6 +441,9 @@ def _session_config(step: ExperienceStep) -> dict:
         "end_time": raw.get("end_time") or raw.get("endTime") or raw.get("end") or "",
         "room": raw.get("room") or raw.get("location") or raw.get("venue") or "",
         "speaker": raw.get("speaker") or raw.get("host") or raw.get("presenter") or "",
+        # Soft reference into GuestSpeaker (main backend) — see experience.py's
+        # _session_config() for why this needs no DB lookup/fallback here.
+        "speaker_id": raw.get("speaker_id") or None,
         "capacity": raw.get("capacity"),
     }
     return session
@@ -552,6 +555,7 @@ async def program_sessions(db: AsyncSession, event: Event, day: str | None = Non
             "end_time": local_end.strftime("%-I:%M %p") if local_end else None,
             "room": session.get("room") or None,
             "speaker": session.get("speaker") or None,
+            "speaker_id": session.get("speaker_id") or None,
             "capacity": session.get("capacity"),
             "start_at": start.isoformat() if start else None,
             "end_at": end.isoformat() if end else None,
@@ -575,6 +579,11 @@ async def get_program(
         "upcoming_count": sum(1 for s in sessions if s["state"] == "upcoming"),
         "ended_count": sum(1 for s in sessions if s["state"] == "ended"),
         "attendance_tracked_count": sum(1 for s in sessions if s["attendance_tracked"]),
+        # Lets a session's speaker (speaker_id, above) render as a link — every
+        # session belongs to the same event, so this is carried once here
+        # rather than duplicated onto each session row.
+        "speaker_enabled": event.speaker_enabled,
+        "speaker_token": event.speaker_token if event.speaker_enabled else None,
     }
 
 

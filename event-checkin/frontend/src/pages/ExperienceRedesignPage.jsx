@@ -60,7 +60,7 @@ function blankStepForm() {
   return {
     id: null, key: '', type: 'custom', title: '', description: '', sort_order: 0, required: true, enabled: true, depends_on: '',
     guest_message: '', staff_prompt: '', completion_message: '',
-    session_topic: '', session_date: '', session_start_time: '', session_end_time: '', session_room: '', session_speaker: '', session_capacity: '', session_checkin_window_minutes: '',
+    session_topic: '', session_date: '', session_start_time: '', session_end_time: '', session_room: '', session_speaker: '', session_speaker_id: '', session_capacity: '', session_checkin_window_minutes: '',
     room_assignment_mode: 'global', room_assignment_scope: '', room_assignment_room: '', room_assignment_table_group: '',
     feedback_audience: 'all', feedback_session_step_id: '', feedback_anonymous: false, feedback_status: 'open',
     feedback_opens_at: '', feedback_closes_at: '', feedback_allow_edit: true, feedback_questions: [],
@@ -95,6 +95,9 @@ function normalizeSessionConfig(config = {}) {
     topic: source.topic || source.title || source.name || '', date: source.date || source.session_date || '',
     start_time: source.start_time || source.startTime || source.start || '', end_time: source.end_time || source.endTime || source.end || '',
     room: source.room || source.location || source.venue || '', speaker: source.speaker || source.host || source.presenter || '',
+    // Soft reference (see Speaker Showcase's cross-link plan) — no FK, just a key
+    // alongside the free-text `speaker` name it was resolved from at save time.
+    speaker_id: source.speaker_id || '',
     capacity: source.capacity ?? '', checkin_window_minutes: source.checkin_window_minutes ?? source.checkInWindowMinutes ?? source.checkin_window ?? '',
   }
 }
@@ -216,7 +219,21 @@ function ExperienceStepEditor({ form, setForm, steps, busy, onClose, onSave }) {
             <StepField label="End time"><input className="rr-input" type="time" value={form.session_end_time} onChange={(event) => patch({ session_end_time: event.target.value })}/></StepField>
             <StepField label="Room / location"><input className="rr-input" value={form.session_room} onChange={(event) => patch({ session_room: event.target.value })}/></StepField>
             <StepField label="Check-in opens (minutes before)" hint="Leave blank for no time gate."><input className="rr-input" type="number" min="0" value={form.session_checkin_window_minutes} onChange={(event) => patch({ session_checkin_window_minutes: event.target.value })}/></StepField>
-            <StepField label="Speaker / host" wide><input className="rr-input" value={form.session_speaker} onChange={(event) => patch({ session_speaker: event.target.value })}/></StepField>
+            {realEvent?.speaker_enabled && eventSpeakers.length > 0 ? (
+              <StepField label="Speaker / host" wide hint="From your Speaker Showcase — manage the full list from Add-ons.">
+                <select className="rr-select" value={form.session_speaker_id} onChange={(event) => {
+                  const id = event.target.value
+                  const picked = eventSpeakers.find((s) => s.id === id)
+                  patch({ session_speaker_id: id, session_speaker: picked ? picked.name : form.session_speaker })
+                }}>
+                  <option value="">Type a name instead…</option>
+                  {eventSpeakers.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
+                </select>
+                {!form.session_speaker_id && <input className="rr-input" style={{ marginTop: 8 }} placeholder="Speaker or host name" value={form.session_speaker} onChange={(event) => patch({ session_speaker: event.target.value })}/>}
+              </StepField>
+            ) : (
+              <StepField label="Speaker / host" wide><input className="rr-input" value={form.session_speaker} onChange={(event) => patch({ session_speaker: event.target.value })}/></StepField>
+            )}
           </div>
         </section>}
 
@@ -304,6 +321,13 @@ export default function ExperienceRedesignPage() {
   const [confirmStepDelete, setConfirmStepDelete] = useState(null)
   const [sessionImportOpen, setSessionImportOpen] = useState(false)
   const [sessionImportText, setSessionImportText] = useState('')
+  // Speaker Showcase cross-link: only fetched when the add-on is on, so this
+  // is a no-op for every event not using it.
+  const [eventSpeakers, setEventSpeakers] = useState([])
+  useEffect(() => {
+    if (!currentEventId || !realEvent?.speaker_enabled) { setEventSpeakers([]); return }
+    api.listSpeakers(currentEventId).then(setEventSpeakers).catch(() => setEventSpeakers([]))
+  }, [currentEventId, realEvent?.speaker_enabled])
   const { guests: realGuests, loading: guestsLoading } = useGuests(currentEventId)
   const [selectedGuestId, setSelectedGuestId] = useState('')
   const [guestJourney, setGuestJourney] = useState(null)
@@ -594,6 +618,7 @@ export default function ExperienceRedesignPage() {
       completion_message: messages.complete || config.completion_message || '',
       session_topic: session.topic || '', session_date: session.date || '', session_start_time: session.start_time || '',
       session_end_time: session.end_time || '', session_room: session.room || '', session_speaker: session.speaker || '',
+      session_speaker_id: session.speaker_id || '',
       session_capacity: session.capacity ?? '', session_checkin_window_minutes: session.checkin_window_minutes ?? '',
       room_assignment_mode: assignment.mode === 'scoped' ? 'scoped' : 'global',
       room_assignment_scope: assignment.scope || '', room_assignment_room: assignment.room || '',
@@ -680,7 +705,13 @@ export default function ExperienceRedesignPage() {
         start_time: stepForm.session_start_time.trim() || jsonSession.start_time || '',
         end_time: stepForm.session_end_time.trim() || jsonSession.end_time || '',
         room: stepForm.session_room.trim() || jsonSession.room || '',
-        speaker: stepForm.session_speaker.trim() || jsonSession.speaker || '',
+        // If a real speaker is picked, its name is the source of truth for the
+        // free-text field too (kept alongside speaker_id so ProgramTab.jsx and
+        // any older reader that only knows the `speaker` key still show a name).
+        speaker: stepForm.session_speaker_id
+          ? (eventSpeakers.find((s) => s.id === stepForm.session_speaker_id)?.name || stepForm.session_speaker.trim())
+          : (stepForm.session_speaker.trim() || jsonSession.speaker || ''),
+        speaker_id: stepForm.session_speaker_id || null,
         capacity: stepForm.session_capacity === '' ? (jsonSession.capacity ?? null) : Number(stepForm.session_capacity),
         checkin_window_minutes: stepForm.session_checkin_window_minutes === '' ? (jsonSession.checkin_window_minutes ?? null) : Number(stepForm.session_checkin_window_minutes),
       }

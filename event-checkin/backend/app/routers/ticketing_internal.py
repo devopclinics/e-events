@@ -179,7 +179,13 @@ async def ticketed_events(body: EventLookup, x_internal_token: str | None = Head
                         "event_date": event.event_date, "event_end_date": event.event_end_date,
                         "timezone": event.timezone, "venue_name": event.venue_name,
                         "venue_address": event.venue_address,
-                        "cover_image": event.invite_cover_image} for event in events]}
+                        "cover_image": event.invite_cover_image,
+                        # Speaker/Partner Showcase cross-link — these tokens are
+                        # public-promotional, not secrets like an invite link, so
+                        # surfacing them on the already-public ticket page is fine.
+                        "speaker_enabled": event.speaker_enabled, "speaker_token": event.speaker_token if event.speaker_enabled else None,
+                        "partner_enabled": event.partner_enabled, "partner_token": event.partner_token if event.partner_enabled else None,
+                        } for event in events]}
 
 
 @router.post("/transfer/{event_id}")

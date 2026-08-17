@@ -504,6 +504,11 @@ def _session_config(step: ExperienceStep) -> dict:
         "end_time": raw.get("end_time") or raw.get("endTime") or raw.get("end") or "",
         "room": raw.get("room") or raw.get("location") or raw.get("venue") or "",
         "speaker": raw.get("speaker") or raw.get("host") or raw.get("presenter") or "",
+        # Soft reference into GuestSpeaker — the display name above is already
+        # resolved and frozen at save time, so this doesn't need a DB lookup
+        # (or a fallback for a since-deleted speaker) to stay correct; it's
+        # only used to decide whether the name should link to the Showcase.
+        "speaker_id": raw.get("speaker_id") or None,
         "capacity": raw.get("capacity"),
         "checkin_window_minutes": raw.get("checkin_window_minutes") or raw.get("checkInWindowMinutes") or raw.get("checkin_window"),
     }

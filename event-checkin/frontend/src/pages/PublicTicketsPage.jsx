@@ -1,6 +1,9 @@
 import { useEffect, useState } from 'react'
 import { useParams } from 'react-router-dom'
 import PublicTicketCheckout from '../components/PublicTicketCheckout'
+import { SpeakerCarousel } from '../components/SpeakerShowcase'
+import { PartnerCarousel } from '../components/PartnerShowcase'
+import { api } from '../api'
 import './PublicTicketsPage.css'
 
 const tone={panelStrong:'#ffffff',border:'#d8e1df',text:'#102c2a',muted:'#657674',accent:'#d89b45'}
@@ -15,8 +18,20 @@ export default function PublicTicketsPage({embed=false}) {
   const {eventId}=useParams()
   const [events,setEvents]=useState(null)
   const [query,setQuery]=useState('')
+  const [speakers,setSpeakers]=useState(null)
+  const [partners,setPartners]=useState(null)
   useEffect(()=>{fetch('/api/ticketing/public/events',{cache:'no-store'}).then(r=>r.ok?r.json():Promise.reject()).then(d=>setEvents(d.events||[])).catch(()=>setEvents([]))},[])
   const event=eventId ? events?.find(item=>item.id===eventId) : null
+  // Speaker/Partner Showcase cross-link — same public token endpoints the
+  // standalone pages and FestioHub's Speakers tab use, not a separate copy.
+  useEffect(()=>{
+    if(event?.speaker_enabled&&event?.speaker_token) api.getSpeakerPage(event.speaker_token).then(d=>setSpeakers(d.speakers)).catch(()=>setSpeakers(null))
+    else setSpeakers(null)
+  },[event?.speaker_token])
+  useEffect(()=>{
+    if(event?.partner_enabled&&event?.partner_token) api.getPartnerPage(event.partner_token).then(d=>setPartners(d.partners)).catch(()=>setPartners(null))
+    else setPartners(null)
+  },[event?.partner_token])
   useEffect(()=>{
     if(!event)return
     document.title=`${event.name} Tickets | Festio`
@@ -27,6 +42,16 @@ export default function PublicTicketsPage({embed=false}) {
   if(eventId) return <main className={`pt-store ${embed?'embed':''}`}>
     {!embed&&<nav><a href="/" className="pt-brand"><i>F</i> Festio</a><a href="/tickets">Find events</a></nav>}
     {!embed&&(events===null?<div className="pt-loading">Loading event...</div>:event?<header className="pt-event-hero" style={event.cover_image?{backgroundImage:`linear-gradient(90deg,rgba(6,20,19,.92),rgba(6,20,19,.35)),url("${event.cover_image}")`}:{}}><div><span className="pt-live">{event.timing==='current'?'Happening now':'Upcoming event'}</span><h1>{event.name}</h1><p className="pt-description">{event.description||'Join us for an unforgettable experience.'}</p><div className="pt-facts"><span><b>{date(event.event_date,{weekday:'long'})}</b>{event.event_end_date&&event.event_end_date!==event.event_date?` to ${date(event.event_end_date)}`:''}</span><span><b>{event.venue_name||'Venue'}</b>{event.venue_address||'Details provided by the organizer'}</span><span><b>Official tickets</b>Secure checkout and unique QR admission</span></div><a href="#tickets" className="pt-primary">Choose tickets</a></div></header>:<div className="pt-not-found"><h1>Event tickets unavailable</h1><p>This event is not currently published for ticket sales.</p><a href="/tickets">Browse events</a></div>)}
+    {!embed&&event&&(speakers?.length>0||partners?.length>0)&&<div style={{maxWidth:1080,margin:'0 auto',padding:'0 20px 8px'}}>
+      {speakers?.length>0&&<section style={{marginBottom:28}}>
+        <h2 style={{fontSize:15,fontWeight:800,margin:'0 0 12px',color:tone.text}}>Meet our speakers</h2>
+        <SpeakerCarousel speakers={speakers}/>
+      </section>}
+      {partners?.length>0&&<section style={{marginBottom:8}}>
+        <h2 style={{fontSize:15,fontWeight:800,margin:'0 0 12px',color:tone.text}}>Meet our partners</h2>
+        <PartnerCarousel partners={partners}/>
+      </section>}
+    </div>}
     <div className="pt-checkout"><PublicTicketCheckout eventId={eventId} tone={tone}/></div>
     {!embed&&event&&<footer className="pt-footer"><span>Powered by <b>Festio</b></span><span>Secure checkout · Unique QR tickets · Mobile entry</span></footer>}
   </main>

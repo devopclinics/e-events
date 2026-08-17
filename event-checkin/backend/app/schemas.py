@@ -2288,6 +2288,10 @@ class InvitePageOut(BaseModel):
     shipping: Optional[InviteShippingOut] = None
     registry_enabled: bool = False
     registry_token: Optional[str] = None
+    # Speaker Showcase cross-link — lets FestioHub decide whether to include
+    # a Speakers tab, and the ticketing/standalone pages fetch the same list.
+    speaker_enabled: bool = False
+    speaker_token: Optional[str] = None
     seating_term: Optional[str] = None
     seat_term: Optional[str] = None
     # Invite page display toggles (all default True)

@@ -48,7 +48,7 @@ function SessionStateBadge({ state }) {
   )
 }
 
-function SessionRow({ s }) {
+function SessionRow({ s, speakerToken }) {
   return (
     <div className="er-checkin-row" style={{ alignItems: 'flex-start' }}>
       <span>
@@ -62,7 +62,11 @@ function SessionRow({ s }) {
           {s.start_time && <span>{s.start_time}{s.end_time ? `–${s.end_time}` : ''}</span>}
           {s.category && <span style={{ textTransform: 'capitalize' }}>{s.category}</span>}
           {s.room && <span>{s.room}</span>}
-          {s.speaker && <span>{s.speaker}</span>}
+          {s.speaker && (
+            s.speaker_id && speakerToken
+              ? <a href={`/speakers/${speakerToken}`} target="_blank" rel="noreferrer" style={{ color: 'var(--teal)', fontWeight: 600 }}>{s.speaker} ↗</a>
+              : <span>{s.speaker}</span>
+          )}
           {s.attendance_tracked && <span style={{ fontWeight: 600, color: 'var(--teal)' }}>Attendance tracked</span>}
         </div>
       </span>
@@ -172,7 +176,7 @@ export default function ProgramTab({ eventId, day }) {
                 {programDay === 'Unscheduled' ? programDay : fmtDay(programDay)}
               </h4>
               <div>
-                {sessions.map((s) => <SessionRow key={s.step_id} s={s} />)}
+                {sessions.map((s) => <SessionRow key={s.step_id} s={s} speakerToken={program.speaker_token} />)}
               </div>
             </section>
           ))}

@@ -75,6 +75,10 @@ class Event(Base):
     experience_enabled: Mapped[bool] = mapped_column(Boolean, default=False)
     message_credits: Mapped[int] = mapped_column(Integer, default=0)
     plan_tier: Mapped[str] = mapped_column(String(20), default="free")
+    # Speaker Showcase cross-link: lets program_sessions() tell the Program
+    # tab whether/where to link a session's speaker.
+    speaker_enabled: Mapped[bool] = mapped_column(Boolean, default=False)
+    speaker_token: Mapped[str | None] = mapped_column(String(36), nullable=True)
 
 
 class Guest(Base):

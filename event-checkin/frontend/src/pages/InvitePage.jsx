@@ -1251,12 +1251,16 @@ const HUB_SIDECARD_STYLES = new Set([
   'heritage-navy', 'ivory-ledger', 'graphite-tech', 'meadow-community', 'parchment-classic',
 ])
 const HUB_TAB_ORDER = {
-  'story-feed': ['activity', 'messages', 'program', 'pass'],
+  'story-feed': ['activity', 'messages', 'program', 'speakers', 'pass'],
 }
 const HUB_TAB_META = {
   pass: ['pass', 'Pass', '🎫'],
   activity: ['activity', 'Activity', '✅'],
   program: ['program', 'Program', '📅'],
+  // Speaker Showcase cross-link — filtered out below unless the event has
+  // speaker_enabled on, same "always in the order list, conditionally
+  // rendered" pattern already used for program/messages.
+  speakers: ['speakers', 'Speakers', '🎤'],
   messages: ['messages', 'Messages', '💬'],
 }
 const PREVIEW_QR_DATA_URI = 'data:image/svg+xml;utf8,' + encodeURIComponent(
@@ -1304,6 +1308,7 @@ function GuestHub({ event, accessToken, designTheme, previewMock = false }) {
   const [chatMessage, setChatMessage] = useState('')
   const [programDay, setProgramDay] = useState('')
   const [hubTab, setHubTab] = useState('pass')
+  const [speakers, setSpeakers] = useState(null)
   const [showAllActivity, setShowAllActivity] = useState(false)
   const [sending, setSending] = useState(false)
   const [sendingChat, setSendingChat] = useState(false)
@@ -1349,7 +1354,7 @@ function GuestHub({ event, accessToken, designTheme, previewMock = false }) {
   const tabbed = guestHubV2 && HUB_TABBED_STYLES.has(hubStyle)
   const tabActive = (key) => !tabbed || hubTab === key
   const tabsActive = (keys) => !tabbed || keys.includes(hubTab)
-  const hubTabOrder = HUB_TAB_ORDER[hubStyle] || ['pass', 'activity', 'program', 'messages']
+  const hubTabOrder = HUB_TAB_ORDER[hubStyle] || ['pass', 'activity', 'program', 'speakers', 'messages']
 
   // Design Studio's preview iframe loads with #guest-hub in the URL, but this
   // section doesn't exist in the DOM until the async event/theme fetch above
@@ -1601,6 +1606,13 @@ function GuestHub({ event, accessToken, designTheme, previewMock = false }) {
     return () => { cancelled = true; clearInterval(id) }
   }, [event?.id, accessToken, previewMock])
 
+  // Speaker Showcase cross-link — same public token endpoint the ticketing
+  // carousel and standalone page use, not a separate implementation.
+  useEffect(() => {
+    if (!event?.speaker_enabled || !event?.speaker_token) { setSpeakers(null); return }
+    api.getSpeakerPage(event.speaker_token).then((d) => setSpeakers(d.speakers)).catch(() => setSpeakers(null))
+  }, [event?.speaker_enabled, event?.speaker_token])
+
   async function sendMessage(e) {
     e.preventDefault()
     if (!message.trim()) return
@@ -1677,6 +1689,7 @@ function GuestHub({ event, accessToken, designTheme, previewMock = false }) {
           <div className={`mt-5 flex gap-1 rounded-2xl border p-1 fh-hub-tabs fh-hub-tabs-${hubStyle}`} style={{ background: tone.panel, borderColor: tone.border }} role="tablist" aria-label="FestioHub sections">
             {hubTabOrder.map((key) => HUB_TAB_META[key])
               .filter(([key]) => key !== 'program' || (journey?.program?.enabled && hubModuleVisible('live_program')))
+              .filter(([key]) => key !== 'speakers' || event?.speaker_enabled)
               .filter(([key]) => key !== 'messages' || (hubModuleVisible('messages') && (hub?.capabilities?.direct_host_messages || hub?.capabilities?.guest_chat)))
               .map(([key, label, icon]) => (
                 <button key={key} type="button" role="tab" aria-selected={hubTab === key} onClick={() => setHubTab(key)}
@@ -1776,6 +1789,31 @@ function GuestHub({ event, accessToken, designTheme, previewMock = false }) {
             </div>
           </div>}
         </div>}
+
+        {tabActive('speakers') && event?.speaker_enabled && (
+          <div className="mt-6 rounded-2xl border p-4" style={{ background: tone.panel, borderColor: tone.border }}>
+            <h3 className="text-lg font-extrabold">Speakers</h3>
+            {speakers === null ? (
+              <p className="mt-2 text-sm" style={{ color: tone.muted }}>Loading speakers…</p>
+            ) : speakers.length === 0 ? (
+              <p className="mt-2 text-sm" style={{ color: tone.muted }}>Speakers will appear here once announced.</p>
+            ) : (
+              <div className="mt-4 grid gap-3 sm:grid-cols-2">
+                {speakers.map((s) => (
+                  <div key={s.id} className="flex items-center gap-3 rounded-xl border p-3" style={{ background: tone.chip, borderColor: tone.border }}>
+                    {s.photo_url
+                      ? <img src={s.photo_url} alt="" className="h-11 w-11 shrink-0 rounded-full object-cover" />
+                      : <div className="h-11 w-11 shrink-0 rounded-full grid place-items-center text-lg" style={{ background: tone.panel }}>🎤</div>}
+                    <div className="min-w-0">
+                      <div className="font-extrabold truncate">{s.name}</div>
+                      {s.title && <div className="text-xs truncate" style={{ color: tone.muted }}>{s.title}</div>}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
 
         {tabActive('activity') && hubModuleVisible('activity_progress') && journey?.experience_enabled && journey.steps?.length > 0 && (() => {
           const visible = journey.steps.filter((s) => s.status !== 'skipped')

@@ -1,6 +1,7 @@
 import { useState, useEffect, useMemo } from 'react'
 import { useParams } from 'react-router-dom'
 import { api } from '../api'
+import { PartnerGrid } from '../components/PartnerShowcase'
 
 // Public, no-auth partner/sponsor showcase — read-only, no guest interaction.
 export default function PartnersPublicPage() {
@@ -70,20 +71,7 @@ export default function PartnersPublicPage() {
             {data.partners.length === 0 ? 'Partners are being announced — check back soon.' : 'Try another search term or switch to a different category.'}
           </p>
         ) : (
-          <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-5">
-            {filtered.map((p) => (
-              <a key={p.id} href={p.website_url || undefined} target={p.website_url ? '_blank' : undefined} rel="noreferrer"
-                className="bg-white border border-slate-200 rounded-xl p-4 flex items-center gap-3 shadow-sm hover:border-amber-300">
-                {p.logo_url
-                  ? <img src={p.logo_url} alt="" className="w-12 h-12 rounded-lg object-cover flex-none" />
-                  : <div className="w-12 h-12 rounded-lg bg-slate-100 grid place-items-center text-xl flex-none">🤝</div>}
-                <div className="min-w-0">
-                  <div className="font-semibold truncate">{p.name}</div>
-                  {p.category_name && <div className="text-[11px] font-semibold uppercase tracking-wide text-amber-600 mt-0.5">{p.category_name}</div>}
-                </div>
-              </a>
-            ))}
-          </div>
+          <PartnerGrid partners={filtered} />
         )}
 
         <p className="text-xs text-slate-400 text-center mt-10">Powered by Festio</p>

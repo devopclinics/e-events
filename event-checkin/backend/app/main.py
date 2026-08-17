@@ -53,6 +53,12 @@ async def lifespan(app: FastAPI):
         await entitlements.reload_credit_rate_cache(db)
         await entitlements.reload_addon_policy_cache(db)
 
+    # Unlike the pollers below, this one must run on every replica (each pod
+    # holds its own copy of the caches above) — keeps org-level entitlement/
+    # rate changes from a Console save on one pod from going stale on the
+    # others until they happen to restart.
+    cache_refresh_task = asyncio.create_task(entitlements.run_cache_refresher())
+
     # Run the guest-list sync poller inside the web process for single-host
     # deploys (default). When scaling out, set RUN_IN_APP_POLLER=false on the
     # web pods and run exactly one dedicated poller (`python -m app.sync_poller`)
@@ -75,6 +81,11 @@ async def lifespan(app: FastAPI):
         yield
     finally:
         await routers.stop_sse_subscriber()
+        cache_refresh_task.cancel()
+        try:
+            await cache_refresh_task
+        except asyncio.CancelledError:
+            pass
         if poller_task is not None:
             poller_task.cancel()
             try:

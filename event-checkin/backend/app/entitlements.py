@@ -4,6 +4,8 @@ The database stores pricing as editable rows, but the product packaging is code
 metadata for now so existing deployments do not need a schema migration just to
 change feature gates.
 """
+import asyncio
+import logging
 import math
 import os
 import uuid
@@ -14,6 +16,8 @@ from sqlalchemy.orm import object_session
 
 from .models import Event, MessageCreditLedger, Organization, PricingPlan
 from .config import settings
+
+logger = logging.getLogger("entitlements")
 
 # Free events: email-only invites, capped guest list, Festio branding.
 FREE_GUEST_CAP = 25
@@ -267,6 +271,30 @@ async def reload_credit_rate_cache(db) -> None:
     _rate_cache.clear()
     for row in rows:
         _rate_cache[(row.org_id, row.channel)] = row.credits_per_unit
+
+
+async def run_cache_refresher(interval_seconds: int = 30) -> None:
+    """Keep this process's copy of the above caches in sync with the DB.
+
+    Both caches are refreshed on save from whichever replica handles the
+    admin/Console request that changed them — fine on a single web process,
+    but with multiple replicas every other pod keeps serving its stale
+    startup snapshot until it happens to restart. Rather than thread an
+    async db session through every event_allows_addon()/channel_weight()
+    call site (they're plain sync functions on purpose — see the _rate_cache
+    docstring above), every replica just re-polls the DB on a short timer so
+    a Console change reaches all of them within one interval, not just the
+    pod that served the request.
+    """
+    from .database import AsyncSessionLocal
+    while True:
+        try:
+            async with AsyncSessionLocal() as db:
+                await reload_addon_policy_cache(db)
+                await reload_credit_rate_cache(db)
+        except Exception:
+            logger.exception("cache refresh failed; will retry next tick")
+        await asyncio.sleep(interval_seconds)
 
 
 def channel_weight(channel: str | None, *, org_id: str | None = None) -> float:

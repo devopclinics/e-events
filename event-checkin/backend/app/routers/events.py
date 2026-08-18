@@ -672,6 +672,7 @@ async def update_event(
         raise HTTPException(404, "Event not found")
     previous_date = event.event_date
     previous_venue = event.venue_name
+    previous_timezone = event.timezone
     # Preserve explicit nulls for nullable fields so the editor can clear a
     # previously saved end date, venue, hotel, note, or description.  Omitted
     # fields remain unchanged.
@@ -696,6 +697,9 @@ async def update_event(
         assert_event_configuration_allowed(prospective, org)
     for field, value in payload.items():
         setattr(event, field, value)
+    if event.event_date != previous_date or event.timezone != previous_timezone:
+        from ..services.reminders import recompute_fire_times
+        await recompute_fire_times(event, db)
     if event.event_date != previous_date or event.venue_name != previous_venue:
         when = event.event_date.strftime("%A, %B %d at %I:%M %p")
         venue = f" at {event.venue_name}" if event.venue_name else ""

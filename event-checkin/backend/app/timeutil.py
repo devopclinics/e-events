@@ -5,7 +5,7 @@ Each event carries an IANA `timezone` (required at creation). Pass the event (or
 its tz) into these helpers so emails/SMS/OG render in the event's zone, not the
 server's or the viewer's. Legacy events with no timezone fall back to UTC until
 they are backfilled."""
-from datetime import datetime
+from datetime import date, datetime
 from zoneinfo import ZoneInfo
 
 # Fallback for events created before per-event timezones existed. Such events
@@ -49,3 +49,13 @@ def local_hhmm(dt: datetime | None, tz=None) -> str:
     """Format a UTC-stored datetime as HH:MM in the event's zone. '' on None."""
     local = to_event_local(dt, tz)
     return local.strftime("%H:%M") if local else ""
+
+
+def event_local_to_utc(local_date: date, hhmm: str, tz=None) -> datetime:
+    """Inverse of local_hhmm: given a calendar date, an 'HH:MM' local time, and
+    an event timezone (ZoneInfo/IANA name/None -> UTC), return the equivalent
+    naive-UTC datetime for storage (every stored timestamp in this codebase
+    is naive-UTC -- see module docstring)."""
+    hour, minute = (int(part) for part in hhmm.split(":"))
+    aware = datetime(local_date.year, local_date.month, local_date.day, hour, minute, tzinfo=resolve_tz(tz))
+    return aware.astimezone(_UTC).replace(tzinfo=None)

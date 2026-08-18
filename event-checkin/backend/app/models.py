@@ -444,6 +444,9 @@ class Event(Base):
     partner_token: Mapped[str | None] = mapped_column(
         String(36), unique=True, nullable=True, default=lambda: str(uuid.uuid4())
     )
+    # Automated Reminders add-on. No public token — unlike Speakers/Partners/
+    # Registry, reminders have no guest-facing page, purely outbound automation.
+    reminders_enabled: Mapped[bool] = mapped_column(Boolean, default=False)
     # Add-on purchase ledger: keys from PricingPlan(kind="addon") this event has
     # bought (e.g. "addon_seating"). Independent of the *_enabled runtime toggles
     # above -- purchasing grants the entitlement, the *_enabled flags are the
@@ -2055,6 +2058,74 @@ class MessageTemplateAudit(Base):
     changed_by: Mapped[str | None] = mapped_column(String(36), ForeignKey("users.id"), nullable=True)
     changed_by_email: Mapped[str | None] = mapped_column(String(255), nullable=True)
     changed_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, index=True)
+
+
+class EventReminder(Base):
+    """Organizer-defined reminder step ("7 days before", "morning of", …).
+    Audience (rsvp_status filter) is evaluated fresh at fire time -- see
+    services/reminder_send.py -- not captured at creation, so a guest who
+    confirms between reminder #1 and #2 stops matching a "please RSVP"
+    reminder's audience automatically. Dedup is at the ROW level: fired_at
+    set once, claimed via SKIP LOCKED (services/reminder_outbox.py) -- never
+    per-guest (see EventReminderSend for the separate per-guest send log,
+    which exists for crash-resume safety and the delivery audit trail, not
+    dedup)."""
+    __tablename__ = "event_reminders"
+    __table_args__ = (Index("ix_event_reminders_due", "enabled", "fired_at", "fire_at_utc"),)
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+    event_id: Mapped[str] = mapped_column(String(36), ForeignKey("events.id"), index=True)
+    label: Mapped[str] = mapped_column(String(120))
+
+    # Timing -- offset in whole days before the event, fired at a local
+    # wall-clock time in the event's own timezone (Event.timezone, falls
+    # back to UTC if null -- see timeutil.py).
+    offset_days: Mapped[int] = mapped_column(Integer, default=1)  # 0 = day-of
+    send_time_local: Mapped[str] = mapped_column(String(5), default="09:00")  # "HH:MM"
+    # Denormalized UTC instant, recomputed whenever this row or the parent
+    # event's date/timezone changes (services/reminders.py::recompute_fire_times)
+    # -- keeps the scheduler's due-query a plain indexed comparison instead of
+    # redoing timezone math on every tick for every not-yet-fired reminder.
+    fire_at_utc: Mapped[datetime] = mapped_column(DateTime, index=True)
+
+    channels: Mapped[list] = mapped_column(JSON, default=list)  # subset of ["email","sms","whatsapp"]
+    audience_rsvp_statuses: Mapped[list | None] = mapped_column(JSON, nullable=True)  # None = all guests
+
+    subject: Mapped[str | None] = mapped_column(Text, nullable=True)  # email only
+    email_body: Mapped[str | None] = mapped_column(Text, nullable=True)
+    sms_body: Mapped[str | None] = mapped_column(Text, nullable=True)
+    whatsapp_body: Mapped[str | None] = mapped_column(Text, nullable=True)
+
+    enabled: Mapped[bool] = mapped_column(Boolean, default=True)
+    status: Mapped[str] = mapped_column(String(20), default="pending")  # pending|sending|sent|failed
+    claimed_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    fired_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    guests_targeted: Mapped[int] = mapped_column(Integer, default=0)
+    guests_sent: Mapped[int] = mapped_column(Integer, default=0)
+    last_error: Mapped[str | None] = mapped_column(Text, nullable=True)
+
+    sort_order: Mapped[int] = mapped_column(Integer, default=0)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    updated_by: Mapped[str | None] = mapped_column(String(36), ForeignKey("users.id"), nullable=True)
+
+
+class EventReminderSend(Base):
+    """Per-guest delivery log for one reminder's fire event. NOT the dedup
+    guard (that's EventReminder.status/fired_at) -- this is what lets a
+    crashed-mid-fanout reminder resume without double-sending to guests it
+    already reached, plus the organizer-facing delivery audit trail."""
+    __tablename__ = "event_reminder_sends"
+    __table_args__ = (
+        UniqueConstraint("reminder_id", "guest_id", name="uq_reminder_send_guest"),
+        Index("ix_reminder_sends_reminder", "reminder_id"),
+    )
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+    reminder_id: Mapped[str] = mapped_column(String(36), ForeignKey("event_reminders.id"), index=True)
+    guest_id: Mapped[str] = mapped_column(String(36), ForeignKey("guests.id"), index=True)
+    channels_sent: Mapped[list] = mapped_column(JSON, default=list)
+    error: Mapped[str | None] = mapped_column(Text, nullable=True)
+    sent_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
 
 
 class QaChecklistSubmission(Base):

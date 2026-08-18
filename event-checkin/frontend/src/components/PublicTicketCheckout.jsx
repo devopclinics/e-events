@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 
 const ticketingAvailable = typeof window !== 'undefined' && ['festio.events', 'staging.festio.events', 'localhost'].includes(window.location.hostname)
+const isStagingHost = typeof window !== 'undefined' && ['staging.festio.events', 'localhost'].includes(window.location.hostname)
 const cash = (n, c) => new Intl.NumberFormat(undefined, { style: 'currency', currency: c }).format(Number(n || 0) / 100)
 
 export default function PublicTicketCheckout({ eventId, tone, onAvailabilityChange }) {
@@ -94,9 +95,9 @@ export default function PublicTicketCheckout({ eventId, tone, onAvailabilityChan
   return <section className="scroll-mt-6 py-9" id="tickets" aria-labelledby="ticket-checkout-title">
     <div className="rounded-3xl border p-6 shadow-xl sm:p-8" style={{ background: tone.panelStrong, borderColor: tone.border, color: tone.text }}>
       <div className="mb-5">
-        {hasSellableTickets && <span className="text-xs font-extrabold uppercase tracking-[.18em]" style={{ color: tone.accent }}>Staging test mode</span>}
+        {hasSellableTickets && <span className="text-xs font-extrabold uppercase tracking-[.18em]" style={{ color: tone.accent }}>{isStagingHost ? 'Staging test mode' : 'Secure checkout'}</span>}
         <h2 id="ticket-checkout-title" className="mt-1 text-3xl font-extrabold">{hasSellableTickets ? 'Buy tickets' : 'Registration'}</h2>
-        <p id="checkout-help" style={{ color: tone.muted }}>{hasSellableTickets ? `Secure checkout through ${catalog.currency === 'NGN' ? 'Paystack' : 'Stripe'}. No live charge will be made.` : 'Registration is handled on the organizer’s own site — pricing shown here for reference.'}</p>
+        <p id="checkout-help" style={{ color: tone.muted }}>{hasSellableTickets ? `Secure checkout through ${catalog.currency === 'NGN' ? 'Paystack' : 'Stripe'}.${isStagingHost ? ' No live charge will be made.' : ''}` : 'Registration is handled on the organizer’s own site — pricing shown here for reference.'}</p>
       </div>
       <form onSubmit={checkout} className="space-y-5">
         {hasSellableTickets && <div className="grid gap-3 sm:grid-cols-2"><input required className="rounded-xl border bg-transparent px-4 py-3" style={{ borderColor: tone.border }} placeholder="First name" value={buyer.firstName} onChange={e => setBuyer({...buyer,firstName:e.target.value})}/><input required className="rounded-xl border bg-transparent px-4 py-3" style={{ borderColor: tone.border }} placeholder="Last name" value={buyer.lastName} onChange={e => setBuyer({...buyer,lastName:e.target.value})}/><input required type="email" className="rounded-xl border bg-transparent px-4 py-3" style={{ borderColor: tone.border }} placeholder="Email" value={buyer.email} onChange={e => setBuyer({...buyer,email:e.target.value})}/><input className="rounded-xl border bg-transparent px-4 py-3" style={{ borderColor: tone.border }} placeholder="Phone (optional)" value={buyer.phone} onChange={e => setBuyer({...buyer,phone:e.target.value})}/></div>}

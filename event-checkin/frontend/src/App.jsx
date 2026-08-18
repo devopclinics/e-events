@@ -68,6 +68,7 @@ const VendorPortalPage = lazy(() => import('./pages/VendorPortalPage'))
 const TicketingRedesignPage = lazy(() => import('./pages/TicketingRedesignPage'))
 const TicketOrderPage = lazy(() => import('./pages/TicketOrderPage'))
 const PublicTicketsPage = lazy(() => import('./pages/PublicTicketsPage'))
+const HajjPage = lazy(() => import('./pages/HajjPage'))
 const TicketTransferPage = lazy(() => import('./pages/TicketTransferPage'))
 const HelpRedesignPage = lazy(() => import('./pages/HelpRedesignPage'))
 const ScannerRedesignPage = lazy(() => import('./pages/ScannerRedesignPage'))
@@ -415,8 +416,8 @@ function AppRoutes() {
       {(['festio.events', 'staging.festio.events', 'localhost'].includes(window.location.hostname)) && <>
         <Route path="/tickets" element={<PublicTicketsPage />} />
         <Route path="/tickets/e/:eventId" element={<PublicTicketsPage />} />
-        {/* Vanity short link for the Festio Hajj & Umrah 2027 package. */}
-        <Route path="/hajj" element={<Navigate to="/tickets/e/81603ff8-8d33-4422-b2cf-ed4d40e44f85" replace />} />
+        {/* Dedicated campaign page for the Festio Hajj & Umrah 2027 package. */}
+        <Route path="/hajj" element={<HajjPage />} />
         <Route path="/tickets/transfers/:token" element={<TicketTransferPage />} />
         <Route path="/embed/tickets/:eventId" element={<PublicTicketsPage embed />} />
       </>}

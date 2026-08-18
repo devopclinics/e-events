@@ -1604,6 +1604,78 @@ class GuestSpeakerOut(BaseModel):
     is_active: bool
 
 
+ReminderChannel = Literal["email", "sms", "whatsapp"]
+ReminderAudienceStatus = Literal["invited", "confirmed", "declined", "pending", "waitlisted"]
+
+
+class EventReminderCreate(BaseModel):
+    label: str
+    offset_days: int = Field(ge=0, le=90, default=1)
+    send_time_local: str = Field(pattern=r"^\d{2}:\d{2}$", default="09:00")
+    channels: list[ReminderChannel] = []
+    audience_rsvp_statuses: Optional[list[ReminderAudienceStatus]] = None
+    subject: Optional[str] = None
+    email_body: Optional[str] = None
+    sms_body: Optional[str] = None
+    whatsapp_body: Optional[str] = None
+    enabled: bool = True
+    sort_order: int = 0
+
+
+class EventReminderUpdate(BaseModel):
+    label: Optional[str] = None
+    offset_days: Optional[int] = Field(default=None, ge=0, le=90)
+    send_time_local: Optional[str] = Field(default=None, pattern=r"^\d{2}:\d{2}$")
+    channels: Optional[list[ReminderChannel]] = None
+    audience_rsvp_statuses: Optional[list[ReminderAudienceStatus]] = None
+    subject: Optional[str] = None
+    email_body: Optional[str] = None
+    sms_body: Optional[str] = None
+    whatsapp_body: Optional[str] = None
+    enabled: Optional[bool] = None
+    sort_order: Optional[int] = None
+
+
+class EventReminderOut(BaseModel):
+    id: str
+    event_id: str
+    label: str
+    offset_days: int
+    send_time_local: str
+    fire_at_utc: datetime
+    channels: list[str] = []
+    audience_rsvp_statuses: Optional[list[str]] = None
+    subject: Optional[str] = None
+    email_body: Optional[str] = None
+    sms_body: Optional[str] = None
+    whatsapp_body: Optional[str] = None
+    enabled: bool
+    status: str
+    fired_at: Optional[datetime] = None
+    guests_targeted: int = 0
+    guests_sent: int = 0
+    last_error: Optional[str] = None
+    sort_order: int = 0
+
+
+class ReminderPreviewRequest(BaseModel):
+    channel: ReminderChannel
+    subject: Optional[str] = None
+    body: str = ""
+
+
+class ReminderPreviewOut(BaseModel):
+    subject: Optional[str] = None
+    body: str
+
+
+class ReminderTestSendRequest(BaseModel):
+    channel: ReminderChannel
+    to: str
+    subject: Optional[str] = None
+    body: str = ""
+
+
 class SpeakerSettingsOut(BaseModel):
     speaker_token: Optional[str] = None
     speaker_show_before_rsvp: bool = False

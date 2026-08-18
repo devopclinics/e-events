@@ -37,6 +37,7 @@ PLAN_DESCRIPTIONS = {
     "addon_venue_access": "Multi-zone in/out scanning, live occupancy, and section-based routing for events with more than one entrance.",
     "addon_speakers": "A public page showcasing your event's guest speakers, with bios, photos, and social links.",
     "addon_partners": "A public page showcasing your event's sponsors and partners, grouped into your own categories.",
+    "addon_reminders": "Automated pre-event reminder series — schedule email/SMS/WhatsApp nudges by day offset, each targeted to a specific RSVP audience.",
 }
 
 ADDON_CAPABILITIES = {
@@ -50,6 +51,7 @@ ADDON_CAPABILITIES = {
     "addon_venue_access": ["Zones, tags & entry rules", "Occupancy / flow / peak analytics", "Section-based scanning"],
     "addon_speakers": ["Guest speaker profiles", "Public speaker page"],
     "addon_partners": ["Partner/sponsor profiles", "Admin-managed categories", "Public partner page"],
+    "addon_reminders": ["Multi-step reminder series", "Per-channel, per-audience content", "Merge-field personalization"],
 }
 
 ADD_ON_CATALOG = {

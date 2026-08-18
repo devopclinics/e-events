@@ -98,6 +98,7 @@ FEATURE_ADDON = {
     "planner_enabled": "addon_planner",
     "speaker_enabled": "addon_speakers",
     "partner_enabled": "addon_partners",
+    "reminders_enabled": "addon_reminders",
 }
 
 def guest_limit(event: Event) -> int | None:

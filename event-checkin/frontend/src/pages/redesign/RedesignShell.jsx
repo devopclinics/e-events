@@ -213,6 +213,7 @@ const SIDEBAR_NAV = [
   ['image', 'Gift list', '/addons-redesign?tab=registry', 'registry', null, 'registry'],
   ['users', 'Speakers', '/addons-redesign?tab=speakers', 'speakers', null, 'speakers'],
   ['users', 'Partners', '/addons-redesign?tab=partners', 'partners', null, 'partners'],
+  ['clock', 'Reminders', '/addons-redesign?tab=reminders', 'reminders', null, 'reminders'],
   ['chat', 'FestioMe', '/festiome-redesign', 'festiome', null, 'festiome'],
   ['grp', 'Team & Settings'],
   ['team', 'Team', '/team-redesign?tab=team', 'team'],
@@ -363,8 +364,9 @@ export default function RedesignShell({ topActive, withEventSidebar = false, eve
     planner: !!event?.planner_enabled,
     speakers: !!event?.speaker_enabled,
     partners: !!event?.partner_enabled,
+    reminders: !!event?.reminders_enabled,
   }
-  flags.anyAddon = flags.venueAccess || flags.seating || flags.orders || flags.logistics || flags.registry || flags.festiome || flags.speakers || flags.partners
+  flags.anyAddon = flags.venueAccess || flags.seating || flags.orders || flags.logistics || flags.registry || flags.festiome || flags.speakers || flags.partners || flags.reminders
 
   const eventName = event?.name || (currentEventId ? 'Loading…' : 'No event selected')
   const visibleTopLinks = TOP_LINKS.filter((l) => !l.gate || l.gate({ user, event, ticketingMaster }))

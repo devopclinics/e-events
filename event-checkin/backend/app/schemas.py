@@ -192,6 +192,7 @@ class EventOut(BaseModel):
     speaker_enabled: bool = False
     speaker_show_before_rsvp: bool = False
     partner_enabled: bool = False
+    reminders_enabled: bool = False
     purchased_addons: Optional[list[str]] = None
     festiome_enabled: bool = False
     festiome_id: Optional[str] = None

@@ -110,6 +110,7 @@ export function useEntitlements(event, loading = false) {
       planner: !!event?.planner_enabled,
       speakers: !!event?.speaker_enabled,
       partners: !!event?.partner_enabled,
+      reminders: !!event?.reminders_enabled,
     },
   }
 }

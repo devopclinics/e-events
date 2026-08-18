@@ -12,7 +12,7 @@ import './AddonsRedesignPage.css'
 // Sidebar nav ids differ slightly from the ?tab= values (RedesignShell.jsx
 // SIDEBAR_NAV: Orders row uses id "menu" even though its link is ?tab=orders),
 // so eventActive needs its own small map rather than reusing the tab id.
-const EVENT_ACTIVE_MAP = { seating: 'seating', orders: 'menu', logistics: 'logistics', registry: 'registry', speakers: 'speakers', partners: 'partners' }
+const EVENT_ACTIVE_MAP = { seating: 'seating', orders: 'menu', logistics: 'logistics', registry: 'registry', speakers: 'speakers', partners: 'partners', reminders: 'reminders' }
 
 const TABS = [
   { id: 'seating', label: 'Seating' },
@@ -21,6 +21,7 @@ const TABS = [
   { id: 'registry', label: 'Gift list' },
   { id: 'speakers', label: 'Speakers' },
   { id: 'partners', label: 'Partners' },
+  { id: 'reminders', label: 'Reminders' },
 ]
 
 const TAB_META = {
@@ -59,6 +60,12 @@ const TAB_META = {
     icon: 'users',
     desc: 'Showcase your sponsors and partners, grouped into your own categories, on a public page.',
     pitch: "Give sponsors and partners the recognition they're paying for, organized into categories you control.",
+  },
+  reminders: {
+    title: 'Reminders',
+    icon: 'clock',
+    desc: 'Schedule a series of email/SMS/WhatsApp reminders before your event, each targeted by RSVP status.',
+    pitch: 'Automatically nudge non-responders and remind confirmed guests as the date approaches — no manual resends.',
   },
 }
 
@@ -778,6 +785,240 @@ function RealPartnersContent({ eventId, notify }) {
   </>
 }
 
+const REMINDER_PRESETS = [
+  { label: '7 days before', offset_days: 7, send_time_local: '09:00' },
+  { label: '1 day before', offset_days: 1, send_time_local: '18:00' },
+  { label: 'Morning of', offset_days: 0, send_time_local: '08:00' },
+]
+const REMINDER_AUDIENCE_PRESETS = [
+  { id: 'non-responders', label: 'Non-responders', hint: "haven't RSVP'd", statuses: ['invited', 'pending'] },
+  { id: 'confirmed', label: 'Confirmed only', hint: 'guests attending', statuses: ['confirmed'] },
+  { id: 'everyone', label: 'Everyone', hint: 'no filter', statuses: null },
+]
+const REMINDER_CHANNELS = [
+  { id: 'email', label: 'Email', icon: 'mail' },
+  { id: 'sms', label: 'SMS', icon: 'message' },
+  { id: 'whatsapp', label: 'WhatsApp', icon: 'whatsapp' },
+]
+
+function audiencePresetId(statuses) {
+  const match = REMINDER_AUDIENCE_PRESETS.find((p) =>
+    p.statuses === null ? !statuses || statuses.length === 0
+      : statuses && p.statuses.length === statuses.length && p.statuses.every((s) => statuses.includes(s))
+  )
+  return match ? match.id : 'non-responders'
+}
+
+function RealRemindersContent({ eventId, event, notify }) {
+  const blank = {
+    label: '7 days before', offset_days: 7, send_time_local: '09:00',
+    channels: ['email', 'sms'], audience: 'non-responders',
+    subject: 'Reminder: {{event_name}}', email_body: '', sms_body: '', whatsapp_body: '',
+  }
+  const [reminders, setReminders] = useState(null)
+  const [error, setError] = useState('')
+  const [editing, setEditing] = useState(null)
+  const [form, setForm] = useState(blank)
+  const [deleteTarget, setDeleteTarget] = useState(null)
+  const [busy, setBusy] = useState(false)
+  const [preview, setPreview] = useState(null)
+  const [previewBusy, setPreviewBusy] = useState(false)
+  const [testTo, setTestTo] = useState('')
+  const [testChannel, setTestChannel] = useState('email')
+  const [testBusy, setTestBusy] = useState(false)
+
+  async function load() {
+    if (!eventId) { setReminders([]); return }
+    setError('')
+    try { setReminders(await api.listReminders(eventId)) }
+    catch (e) { setError(e.message || 'Reminders could not be loaded') }
+  }
+  useEffect(() => { load() }, [eventId])
+
+  function openEditor(item = null) {
+    setPreview(null)
+    setEditing(item || 'new')
+    setForm(item ? {
+      label: item.label, offset_days: item.offset_days, send_time_local: item.send_time_local,
+      channels: item.channels || [], audience: audiencePresetId(item.audience_rsvp_statuses),
+      subject: item.subject || '', email_body: item.email_body || '',
+      sms_body: item.sms_body || '', whatsapp_body: item.whatsapp_body || '',
+    } : blank)
+  }
+
+  function applyPreset(preset) {
+    setForm((v) => ({ ...v, label: preset.label, offset_days: preset.offset_days, send_time_local: preset.send_time_local }))
+  }
+
+  function toggleChannel(id) {
+    setForm((v) => ({ ...v, channels: v.channels.includes(id) ? v.channels.filter((c) => c !== id) : [...v.channels, id] }))
+  }
+
+  async function save() {
+    if (!form.label.trim() || form.channels.length === 0 || busy) return
+    setBusy(true)
+    try {
+      const audiencePreset = REMINDER_AUDIENCE_PRESETS.find((p) => p.id === form.audience)
+      const payload = {
+        label: form.label.trim(), offset_days: Number(form.offset_days) || 0,
+        send_time_local: form.send_time_local, channels: form.channels,
+        audience_rsvp_statuses: audiencePreset?.statuses ?? null,
+        subject: form.subject || null, email_body: form.email_body || null,
+        sms_body: form.sms_body || null, whatsapp_body: form.whatsapp_body || null,
+      }
+      if (editing === 'new') await api.createReminder(eventId, payload)
+      else await api.updateReminder(eventId, editing.id, payload)
+      setEditing(null); await load(); notify(`Reminder ${editing === 'new' ? 'scheduled' : 'updated'}`)
+    } catch (e) { notify(e.message || 'Reminder could not be saved', true) }
+    finally { setBusy(false) }
+  }
+
+  async function runPreview() {
+    if (editing === 'new') return
+    setPreviewBusy(true)
+    try {
+      const body = testChannel === 'email' ? form.email_body : testChannel === 'sms' ? form.sms_body : form.whatsapp_body
+      const result = await api.previewReminder(eventId, editing.id, {
+        channel: testChannel, subject: testChannel === 'email' ? form.subject : null, body,
+      })
+      setPreview(result)
+    } catch (e) { notify(e.message || 'Preview failed', true) }
+    finally { setPreviewBusy(false) }
+  }
+
+  async function sendTest() {
+    if (editing === 'new' || !testTo.trim() || testBusy) return
+    setTestBusy(true)
+    try {
+      const body = testChannel === 'email' ? form.email_body : testChannel === 'sms' ? form.sms_body : form.whatsapp_body
+      await api.testSendReminder(eventId, editing.id, {
+        channel: testChannel, to: testTo.trim(), subject: testChannel === 'email' ? form.subject : null, body,
+      })
+      notify(`Test ${testChannel} sent`)
+    } catch (e) { notify(e.message || 'Test send failed', true) }
+    finally { setTestBusy(false) }
+  }
+
+  if (!eventId) return <EmptyState icon="clock" title="Select an event" message="Choose an event before scheduling reminders." />
+  if (reminders === null) return <div className="rr-panel"><div className="rd-panel-body"><LoadingSkeleton rows={5} /></div></div>
+  if (error) return <div className="rr-panel"><div className="rd-panel-body"><ErrorRetryState message={error} onRetry={load} /></div></div>
+  return <>
+    <div className="ad-toolbar">
+      <button className="rr-btn primary" onClick={() => openEditor()}><Icon name="plus" size={14} /> New reminder</button>
+    </div>
+    <div className="rr-panel"><div className="rd-panel-head"><h3>Reminder series</h3><p>{reminders.length} reminder{reminders.length === 1 ? '' : 's'}</p></div><div className="rd-panel-body">
+      {reminders.length === 0 ? <EmptyState icon="clock" title="No reminders scheduled" message="Add a reminder to start nudging guests before your event." /> : reminders.map((r) => (
+        <div className="ad-registry-item" key={r.id}>
+          <div className="ad-registry-item-top">
+            <span>
+              <Icon name="clock" size={14} /> {r.label}
+              {' · '}{new Date(r.fire_at_utc).toLocaleString()}
+              {' · '}{(r.channels || []).map((c) => REMINDER_CHANNELS.find((rc) => rc.id === c)?.label || c).join(', ')}
+              {' · '}{REMINDER_AUDIENCE_PRESETS.find((p) => p.id === audiencePresetId(r.audience_rsvp_statuses))?.label}
+              {r.status === 'sent' && <small> · Sent to {r.guests_sent}/{r.guests_targeted}</small>}
+              {r.status === 'failed' && <small style={{ color: 'var(--danger)' }}> · Failed: {r.last_error}</small>}
+            </span>
+          </div>
+          <div className="gr-actions">
+            {r.fired_at ? (
+              <button className="rr-link-btn" onClick={() => openEditor({ ...r, id: 'new' })}>Duplicate</button>
+            ) : (
+              <>
+                <button className="rr-link-btn" onClick={() => openEditor(r)}>Edit</button>
+                <button className="rr-link-btn gr-danger-link" onClick={() => setDeleteTarget(r)}>Delete</button>
+              </>
+            )}
+          </div>
+        </div>
+      ))}
+    </div></div>
+    {editing && <Modal title={editing === 'new' ? 'New reminder' : `Edit ${editing.label}`} onClose={() => setEditing(null)} width={620}>
+      <label className="rd-field-label">Quick start</label>
+      <div className="rd-row2" style={{ marginBottom: 14, flexWrap: 'wrap' }}>
+        {REMINDER_PRESETS.map((p) => (
+          <button key={p.label} type="button" className="rr-btn secondary" onClick={() => applyPreset(p)}>{p.label}</button>
+        ))}
+      </div>
+      <label className="rd-field-label">Label *</label>
+      <input className="rd-field" value={form.label} onChange={(e) => setForm((v) => ({ ...v, label: e.target.value }))} />
+      <label className="rd-field-label">Send</label>
+      <div className="rd-row2">
+        <input className="rd-field" type="number" min={0} max={90} value={form.offset_days}
+          onChange={(e) => setForm((v) => ({ ...v, offset_days: e.target.value }))} placeholder="Days before" />
+        <input className="rd-field" type="time" value={form.send_time_local}
+          onChange={(e) => setForm((v) => ({ ...v, send_time_local: e.target.value }))} />
+      </div>
+      <p className="rd-hint">Days before the event, at this local time ({event?.timezone || 'UTC'}). 0 = day-of.</p>
+
+      <label className="rd-field-label" style={{ marginTop: 12 }}>Channels</label>
+      <div className="rd-row2" style={{ flexWrap: 'wrap' }}>
+        {REMINDER_CHANNELS.map((c) => (
+          <label key={c.id} style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, fontWeight: 600 }}>
+            <input type="checkbox" checked={form.channels.includes(c.id)} onChange={() => toggleChannel(c.id)} />
+            <Icon name={c.icon} size={13} /> {c.label}
+          </label>
+        ))}
+      </div>
+
+      <label className="rd-field-label" style={{ marginTop: 12 }}>Audience</label>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+        {REMINDER_AUDIENCE_PRESETS.map((p) => (
+          <label key={p.id} style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12, fontWeight: 600 }}>
+            <input type="radio" name="reminder-audience" checked={form.audience === p.id} onChange={() => setForm((v) => ({ ...v, audience: p.id }))} />
+            {p.label} <small style={{ fontWeight: 400, color: 'var(--muted)' }}>— {p.hint}</small>
+          </label>
+        ))}
+      </div>
+
+      {form.channels.includes('email') && <>
+        <label className="rd-field-label" style={{ marginTop: 12 }}>Email subject</label>
+        <input className="rd-field" value={form.subject} onChange={(e) => setForm((v) => ({ ...v, subject: e.target.value }))} />
+        <label className="rd-field-label">Email body</label>
+        <textarea className="rr-textarea" value={form.email_body} onChange={(e) => setForm((v) => ({ ...v, email_body: e.target.value }))} />
+      </>}
+      {form.channels.includes('sms') && <>
+        <label className="rd-field-label" style={{ marginTop: 12 }}>SMS body</label>
+        <textarea className="rr-textarea" value={form.sms_body} onChange={(e) => setForm((v) => ({ ...v, sms_body: e.target.value }))} />
+      </>}
+      {form.channels.includes('whatsapp') && <>
+        <label className="rd-field-label" style={{ marginTop: 12 }}>WhatsApp body</label>
+        <textarea className="rr-textarea" value={form.whatsapp_body} onChange={(e) => setForm((v) => ({ ...v, whatsapp_body: e.target.value }))} />
+      </>}
+      <p className="rd-hint">Placeholders: {'{{guest_first_name}} {{guest_full_name}} {{event_name}} {{event_date}} {{rsvp_link}}'}</p>
+
+      {editing !== 'new' && form.channels.length > 0 && (
+        <div className="rr-panel" style={{ marginTop: 14 }}><div className="rd-panel-body">
+          <div className="rd-row2" style={{ alignItems: 'center' }}>
+            <select className="rd-field" style={{ flex: 'none', width: 130 }} value={testChannel} onChange={(e) => { setTestChannel(e.target.value); setPreview(null) }}>
+              {form.channels.map((c) => <option key={c} value={c}>{REMINDER_CHANNELS.find((rc) => rc.id === c)?.label}</option>)}
+            </select>
+            <button type="button" className="rr-btn secondary" disabled={previewBusy} onClick={runPreview}>{previewBusy ? 'Rendering…' : 'Preview'}</button>
+            <input className="rd-field" placeholder="Send test to…" value={testTo} onChange={(e) => setTestTo(e.target.value)} />
+            <button type="button" className="rr-btn secondary" disabled={testBusy || !testTo.trim()} onClick={sendTest}>{testBusy ? 'Sending…' : 'Send test'}</button>
+          </div>
+          {preview && (
+            <div style={{ marginTop: 10, padding: 10, borderRadius: 9, background: 'var(--surface-2)', border: '1px solid var(--line)' }}>
+              {preview.subject && <div style={{ fontWeight: 700, marginBottom: 4 }}>{preview.subject}</div>}
+              <div style={{ whiteSpace: 'pre-wrap', fontSize: 12 }}>{preview.body}</div>
+            </div>
+          )}
+        </div></div>
+      )}
+
+      <div className="rd-row2" style={{ marginTop: 14 }}>
+        <button className="rr-btn secondary" onClick={() => setEditing(null)}>Cancel</button>
+        <button className="rr-btn primary" disabled={busy || !form.label.trim() || form.channels.length === 0} onClick={save}>
+          {busy ? 'Saving…' : editing === 'new' ? 'Schedule reminder' : 'Save changes'}
+        </button>
+      </div>
+    </Modal>}
+    {deleteTarget && <ConfirmDialog title="Delete reminder" message={`Delete “${deleteTarget.label}”?`} confirmLabel="Delete" onCancel={() => setDeleteTarget(null)} onConfirm={async () => {
+      try { await api.deleteReminder(eventId, deleteTarget.id); setDeleteTarget(null); await load(); notify('Reminder deleted') }
+      catch (e) { notify(e.message || 'Reminder could not be deleted', true) }
+    }} />}
+  </>
+}
+
 export default function AddonsRedesignPage() {
   const [searchParams, setSearchParams] = useSearchParams()
   const navigate = useNavigate()
@@ -831,6 +1072,7 @@ export default function AddonsRedesignPage() {
           {tab === 'registry' && <RealRegistryContent eventId={eventId} notify={notify} />}
           {tab === 'speakers' && <RealSpeakersContent eventId={eventId} notify={notify} />}
           {tab === 'partners' && <RealPartnersContent eventId={eventId} notify={notify} />}
+          {tab === 'reminders' && <RealRemindersContent eventId={eventId} event={event} notify={notify} />}
         </>
       )}
 

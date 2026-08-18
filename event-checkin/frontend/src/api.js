@@ -1100,6 +1100,14 @@ export const api = {
     return res.json()
   },
 
+  // Automated Reminders (admin) — no public page, outbound-only automation
+  listReminders: (eventId) => req('GET', `/events/${eventId}/reminders`),
+  createReminder: (eventId, data) => req('POST', `/events/${eventId}/reminders`, data),
+  updateReminder: (eventId, id, data) => req('PUT', `/events/${eventId}/reminders/${id}`, data),
+  deleteReminder: (eventId, id) => req('DELETE', `/events/${eventId}/reminders/${id}`),
+  previewReminder: (eventId, id, data) => req('POST', `/events/${eventId}/reminders/${id}/preview`, data),
+  testSendReminder: (eventId, id, data) => req('POST', `/events/${eventId}/reminders/${id}/test-send`, data),
+
   // Billing (Event Pass)
   getBillingTiers: (eventId) => req('GET', `/billing/tiers/${eventId}`),
   getCreditLedger: (eventId) => req('GET', `/billing/credits/${eventId}`),

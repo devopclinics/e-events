@@ -585,11 +585,19 @@ async def initialize_progress(event_id: str, workflow_id: str, db: AsyncSession)
                 "progress_metadata": metadata,
             })
 
-    if to_insert:
+    # Postgres/asyncpg hard-cap query parameters at 32767. Each row here binds
+    # 11 (8 explicit fields + the id/created_at/updated_at defaults SQLAlchemy
+    # evaluates per row), so a single statement starts failing once guests *
+    # steps crosses roughly 3000 rows -- comfortably reachable by a real event
+    # (e.g. 117 guests * 33 steps already blew past it). Chunk the insert so
+    # publishing never depends on how big the guest list or workflow is.
+    CHUNK_SIZE = 2000
+    for start in range(0, len(to_insert), CHUNK_SIZE):
+        chunk = to_insert[start:start + CHUNK_SIZE]
         # A concurrent call (double-click, client retry) can compute the same
         # rows before either commits — ON CONFLICT DO NOTHING makes a retried
         # publish a safe no-op instead of an unhandled UniqueViolationError.
-        stmt = pg_insert(GuestExperienceProgress).values(to_insert).on_conflict_do_nothing(
+        stmt = pg_insert(GuestExperienceProgress).values(chunk).on_conflict_do_nothing(
             index_elements=["guest_id", "step_id"]
         )
         await db.execute(stmt)

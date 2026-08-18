@@ -193,6 +193,9 @@ const COMMUNITY_CARDS = [
   { initials: 'FW', title: 'Volunteers channel', sub: 'Private group', body: 'Registration desk needs two more hands for the 9am rush tomorrow.' },
   { initials: 'RG', title: 'Gift registry', sub: 'Add-on', body: '3 items marked as taken. Guests can still add cash gifts from their hub.' },
   { initials: 'LG', title: 'Logistics', sub: 'Add-on', body: 'Gift shipment packed for 214 guests. Vendor pickup list is ready.' },
+  { initials: 'SP', title: 'Speaker showcase', sub: 'Add-on', body: 'A public page for your guest speakers — bios, photos, and social links, linked from your ticket page and each guest’s hub.' },
+  { initials: 'PT', title: 'Partner showcase', sub: 'Add-on', body: 'Give sponsors and partners their own page, grouped into your own categories, linked from your ticket page.' },
+  { initials: 'RM', title: 'Automated reminders', sub: 'Add-on', body: 'Schedule a series of email, SMS, and WhatsApp reminders by day offset, each targeted to a specific RSVP audience — no manual resends.' },
 ]
 
 const BUSINESS_FEATURES = [
@@ -208,7 +211,7 @@ const BUSINESS_FEATURES = [
     label: 'Planner',
     title: 'Keep the plan beside the guest list',
     body: 'Track budgets, vendors, timelines, documents, and the work behind the event without moving between spreadsheets and group chats.',
-    points: ['Budget tracking', 'Vendor workspace', 'Timeline and run sheet', 'Shared documents'],
+    points: ['Budget tracking', 'Vendor workspace', 'Timeline and run sheet', 'Shared documents', 'Vendor e-signature contracts'],
     to: '/pricing',
     cta: 'See plans and add-ons',
   },
@@ -445,7 +448,7 @@ export default function LandingRedesignPage() {
           </div>
           <div className="lr-overview-grid">
             {[
-              { n: '01', title: 'Create & Manage Events', body: 'Create events, manage lifecycle, configure details, and control feature toggles.', tags: ['Multi-event workspace', 'Draft, Active, Ended, Reopen', 'Venue and host details'] },
+              { n: '01', title: 'Create & Manage Events', body: 'Create events, manage lifecycle, configure details, and control feature toggles.', tags: ['Multi-event workspace', 'Draft, Active, Ended, Archived', 'Venue and host details'] },
               { n: '02', title: 'Invite & RSVP', body: 'Public/private RSVP pages, personal links, deadlines, limits, approvals, and questions.', tags: ['Open or closed RSVP', 'Capacity controls', 'Approval workflows'] },
               { n: '03', title: 'Guest Management', body: 'Manual entry, CSV/XLSX upload, sync, duplicate handling, tags, profiles, and status.', tags: ['Import templates', 'Guest profiles', 'RSVP answers'] },
               { n: '04', title: 'Seating & Access', body: 'Tables, seats, sections, auto-assignment, partner pairing, zones, gates, and VIP rules.', tags: ['Table groups', 'Zone permissions', 'Capacity rules'] },

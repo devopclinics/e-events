@@ -43,6 +43,7 @@ const ADDON_ICON = {
   addon_registry: '✦', addon_menu: '◐', addon_planner: '▦',
   addon_logistics: '⇄', addon_festiome: '✷',
   addon_seating: '▦', addon_experience: '◎', addon_venue_access: '⚡',
+  addon_speakers: '◈', addon_partners: '❖', addon_reminders: '◷',
 }
 
 function AddonCard({ addon, unlocked, eventId }) {

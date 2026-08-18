@@ -1242,6 +1242,11 @@ const HUB_TABBED_STYLES = new Set([
   'wallet-pass', 'story-feed',
   // new tabbed themes
   'noir-couture', 'electric-rave', 'celestial-midnight', 'haze',
+  // The side-card hero (HUB_SIDECARD_STYLES) and tabbed FestioHub navigation
+  // are independent choices -- nothing about a side-card hero requires
+  // stacked, non-tabbed sections. Every side-card style gets tabs too.
+  'heritage-navy', 'ivory-ledger', 'graphite-tech', 'meadow-community', 'parchment-classic',
+  'sacred-pilgrimage',
 ])
 // Page-level hero layout: the cover photo sits beside the title (like the
 // original default look) instead of full-bleed above it. Design Studio's

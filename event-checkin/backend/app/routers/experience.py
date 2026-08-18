@@ -1106,27 +1106,9 @@ async def delete_workflow(
     workflow = await _load_scoped_workflow(event_id, workflow_id, db)
     if workflow.status != "draft":
         raise HTTPException(409, "Only draft workflows can be deleted. Archive published or historical workflows instead.")
-    event = await db.get(Event, event_id)
     await db.execute(delete(GuestExperienceProgress).where(GuestExperienceProgress.workflow_id == workflow.id))
     await db.execute(delete(ExperienceEvent).where(ExperienceEvent.workflow_id == workflow.id))
     await db.delete(workflow)
-    remaining_runtime_workflow = await db.scalar(
-        select(ExperienceWorkflow.id)
-        .where(
-            ExperienceWorkflow.event_id == event_id,
-            ExperienceWorkflow.id != workflow.id,
-            (
-                (ExperienceWorkflow.status == "published")
-                | (
-                    (ExperienceWorkflow.is_default.is_(True))
-                    & (ExperienceWorkflow.status != "archived")
-                )
-            ),
-        )
-        .limit(1)
-    )
-    if event and not remaining_runtime_workflow:
-        event.experience_enabled = False
     await db.commit()
 
 

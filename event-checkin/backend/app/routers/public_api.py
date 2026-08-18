@@ -571,17 +571,6 @@ async def remove_experience_workflow(
     await db.execute(sa_delete(GuestExperienceProgress).where(GuestExperienceProgress.workflow_id == workflow.id))
     await db.execute(sa_delete(ExperienceEvent).where(ExperienceEvent.workflow_id == workflow.id))
     await db.delete(workflow)
-    remaining_runtime_workflow = await db.scalar(
-        select(ExperienceWorkflow.id).where(
-            ExperienceWorkflow.event_id == event.id, ExperienceWorkflow.id != workflow.id,
-            (
-                (ExperienceWorkflow.status == "published")
-                | ((ExperienceWorkflow.is_default.is_(True)) & (ExperienceWorkflow.status != "archived"))
-            ),
-        ).limit(1)
-    )
-    if not remaining_runtime_workflow:
-        event.experience_enabled = False
     await db.commit()
 
 

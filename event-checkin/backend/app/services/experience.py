@@ -338,7 +338,6 @@ async def create_default_workflow(event: Event, db: AsyncSession, *, actor_user_
         source="admin",
         payload={"kind": "default"},
     ))
-    event.experience_enabled = True
     await db.flush()
     await initialize_progress(event.id, workflow.id, db)
     await db.commit()
@@ -439,7 +438,6 @@ async def clone_workflow(
 
 async def publish_workflow(workflow: ExperienceWorkflow, event: Event, db: AsyncSession, *, actor_user_id: str | None):
     workflow.status = "published"
-    event.experience_enabled = True
     db.add(ExperienceEvent(
         event_id=workflow.event_id,
         workflow_id=workflow.id,
@@ -465,17 +463,6 @@ async def unpublish_workflow(workflow: ExperienceWorkflow, event: Event, db: Asy
         source="admin",
         payload={"version": workflow.version},
     ))
-    still_published = await db.scalar(
-        select(ExperienceWorkflow.id)
-        .where(
-            ExperienceWorkflow.event_id == workflow.event_id,
-            ExperienceWorkflow.id != workflow.id,
-            ExperienceWorkflow.status == "published",
-        )
-        .limit(1)
-    )
-    if not still_published:
-        event.experience_enabled = False
     await db.commit()
     loaded = await load_workflow(workflow.id, db)
     return loaded or workflow
@@ -492,8 +479,6 @@ async def archive_workflow(workflow: ExperienceWorkflow, event: Event, db: Async
         source="admin",
         payload={"version": workflow.version, "was_published": was_published},
     ))
-    if was_published:
-        event.experience_enabled = False
     await db.commit()
     loaded = await load_workflow(workflow.id, db)
     return loaded or workflow

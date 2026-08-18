@@ -8,7 +8,10 @@ import './HajjPage.css'
 // every organizer's ticket page uses, just re-themed to match here.
 const EVENT_ID = '81603ff8-8d33-4422-b2cf-ed4d40e44f85'
 const TONE = { panelStrong: '#1c1815', border: 'rgba(201,162,74,.35)', text: '#f6f0e2', muted: '#cabfa8', accent: '#e4c876' }
-const money = (n, c) => new Intl.NumberFormat(undefined, { style: 'currency', currency: c, maximumFractionDigits: 0 }).format(Number(n || 0) / 100)
+// Pinned to en-NG (not the visitor's own locale) so NGN renders as the
+// naira symbol -- this page's audience is specifically Nigerian, and the
+// approved design shows "₦9,000,000", not the ISO fallback "NGN 9,000,000".
+const money = (n, c) => new Intl.NumberFormat('en-NG', { style: 'currency', currency: c, maximumFractionDigits: 0 }).format(Number(n || 0) / 100)
 
 function scrollToTickets() {
   document.getElementById('tickets')?.scrollIntoView({ behavior: 'smooth' })

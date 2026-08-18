@@ -2840,7 +2840,15 @@ export default function InvitePage() {
           </section>
         )}
 
-        <PublicTicketCheckout eventId={event.id} tone={tone} onAvailabilityChange={setPaidTicketsAvailable} />
+        {/* Ticket/registration listings are for people who haven't confirmed
+            yet -- a guest who already has hub access (RSVP'd, on the
+            imported list, or returning with a saved confirmation) doesn't
+            need a prompt to go register externally on their own page. The
+            public /tickets marketplace and the direct ticket link are
+            untouched -- this only affects this personal confirmation view. */}
+        {!hasGuestHub && (
+          <PublicTicketCheckout eventId={event.id} tone={tone} onAvailabilityChange={setPaidTicketsAvailable} />
+        )}
 
         {rsvpPanel && (paidTicketsAvailable === false || tokenMode) && (
           <section id="rsvp" className="scroll-mt-6 py-9">

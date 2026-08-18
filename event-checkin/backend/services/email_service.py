@@ -3,7 +3,7 @@ import html as _html
 import logging
 import re
 from datetime import datetime, timedelta, timezone
-from email.utils import getaddresses, parseaddr
+from email.utils import getaddresses, make_msgid, parseaddr
 from email.mime.application import MIMEApplication
 from email.mime.image import MIMEImage
 from email.mime.multipart import MIMEMultipart
@@ -552,6 +552,14 @@ async def send_simple_email(
     msg["Subject"] = subject
     msg["From"] = settings.email_from
     msg["To"] = to_email
+    # _charge_email_credit's idempotency_key is keyed off this header (falls
+    # back to "" when absent) -- without it, every automatic email to the
+    # same guest for the same event collapses onto one shared idempotency
+    # key, so only the FIRST such email ever gets metered and every
+    # subsequent one (e.g. every later reminder) silently reuses that first
+    # reservation instead of charging its own. Found live on staging: a
+    # guest's second automatic email produced no new ledger row at all.
+    msg["Message-Id"] = make_msgid()
     _set_delivery_context(msg, event_id=event_id, guest_id=guest_id, message_kind=message_kind)
     theme = await _design_email_theme(event_id)
     wrapped = _festio_email_shell(

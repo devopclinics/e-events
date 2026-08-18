@@ -801,6 +801,44 @@ const REMINDER_CHANNELS = [
   { id: 'whatsapp', label: 'WhatsApp', icon: 'whatsapp' },
 ]
 
+// Calendar-only math -- no UTC-instant conversion needed for display, just
+// "what local calendar date is N days before the event's local date". Pull
+// the event's own local Y/M/D via Intl (timeZone-aware, matches the
+// backend's to_event_local() since event.event_date is naive-UTC), subtract
+// days using UTC-epoch arithmetic so day boundaries can't drift across a
+// DST change, then format with the chosen send_time_local + zone name as
+// plain display text (the actual UTC fire_at_utc instant is computed
+// server-side by services/reminders.py::compute_fire_at and is what
+// actually schedules the send -- this is a preview, not a second source of
+// truth for it).
+function computeFiresLabel(event, offsetDays, sendTimeLocal) {
+  if (!event?.event_date) return ''
+  const tz = event.timezone || 'UTC'
+  const days = Number(offsetDays)
+  if (!Number.isFinite(days)) return ''
+  try {
+    // event_date is serialized naive (no trailing Z/offset) -- the backend
+    // convention is that every stored timestamp is UTC (see timeutil.py's
+    // module docstring), so force UTC parsing here rather than letting the
+    // browser interpret the bare string as its own local time.
+    const iso = /[zZ]|[+-]\d\d:\d\d$/.test(event.event_date) ? event.event_date : `${event.event_date}Z`
+    const parts = new Intl.DateTimeFormat('en-CA', { timeZone: tz, year: 'numeric', month: '2-digit', day: '2-digit' })
+      .formatToParts(new Date(iso))
+    const y = Number(parts.find((p) => p.type === 'year')?.value)
+    const m = Number(parts.find((p) => p.type === 'month')?.value)
+    const d = Number(parts.find((p) => p.type === 'day')?.value)
+    const localMidnightUtc = Date.UTC(y, m - 1, d)
+    const fireDate = new Date(localMidnightUtc - days * 86400000)
+    const dateLabel = new Intl.DateTimeFormat('en-US', { timeZone: 'UTC', weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' }).format(fireDate)
+    const [hh, mm] = (sendTimeLocal || '09:00').split(':')
+    const hour12 = ((Number(hh) + 11) % 12) + 1
+    const ampm = Number(hh) >= 12 ? 'PM' : 'AM'
+    return `Fires ${dateLabel} at ${hour12}:${mm} ${ampm} (${tz})`
+  } catch {
+    return ''
+  }
+}
+
 function audiencePresetId(statuses) {
   const match = REMINDER_AUDIENCE_PRESETS.find((p) =>
     p.statuses === null ? !statuses || statuses.length === 0
@@ -943,12 +981,18 @@ function RealRemindersContent({ eventId, event, notify }) {
       <input className="rd-field" value={form.label} onChange={(e) => setForm((v) => ({ ...v, label: e.target.value }))} />
       <label className="rd-field-label">Send</label>
       <div className="rd-row2">
-        <input className="rd-field" type="number" min={0} max={90} value={form.offset_days}
-          onChange={(e) => setForm((v) => ({ ...v, offset_days: e.target.value }))} placeholder="Days before" />
-        <input className="rd-field" type="time" value={form.send_time_local}
-          onChange={(e) => setForm((v) => ({ ...v, send_time_local: e.target.value }))} />
+        <div style={{ flex: 1 }}>
+          <label className="rd-field-label" style={{ fontWeight: 400, textTransform: 'none', letterSpacing: 0, fontSize: 11 }}>Days before event</label>
+          <input className="rd-field" type="number" min={0} max={90} value={form.offset_days}
+            onChange={(e) => setForm((v) => ({ ...v, offset_days: e.target.value }))} />
+        </div>
+        <div style={{ flex: 1 }}>
+          <label className="rd-field-label" style={{ fontWeight: 400, textTransform: 'none', letterSpacing: 0, fontSize: 11 }}>Time (local)</label>
+          <input className="rd-field" type="time" value={form.send_time_local}
+            onChange={(e) => setForm((v) => ({ ...v, send_time_local: e.target.value }))} />
+        </div>
       </div>
-      <p className="rd-hint">Days before the event, at this local time ({event?.timezone || 'UTC'}). 0 = day-of.</p>
+      <p className="rd-hint">0 = day-of. {computeFiresLabel(event, form.offset_days, form.send_time_local)}</p>
 
       <label className="rd-field-label" style={{ marginTop: 12 }}>Channels</label>
       <div className="rd-row2" style={{ flexWrap: 'wrap' }}>

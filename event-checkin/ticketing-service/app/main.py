@@ -832,6 +832,13 @@ async def create_order(event_id: str, body: OrderIn, db: AsyncSession = Depends(
         p = products.get(line.product_id)
         if not p or not p.active or p.currency != cfg.currency:
             raise HTTPException(400, "A selected ticket is unavailable")
+        # external products are informational-only (see ProductIn docstring) --
+        # never sold through Festio checkout, regardless of what the frontend
+        # does or doesn't render. This is the actual enforcement point; the
+        # public page's own link-out-instead-of-add-to-cart behavior is UX,
+        # not the safety boundary.
+        if p.product_type == "external":
+            raise HTTPException(400, f"{p.name} is not sold through Festio — use the registration link instead.")
         if line.custom_amount is not None:
             if p.product_type != "donation" or not p.allow_custom_amount:
                 raise HTTPException(400, f"{p.name} does not accept a custom amount")
@@ -1296,6 +1303,8 @@ async def complimentary_order(event_id: str, body: ComplimentaryOrderIn,
     cfg = await db.get(EventConfig, event_id)
     if not cfg or not product_row or product_row.event_id != event_id or not product_row.active:
         raise HTTPException(404, "Ticket not found")
+    if product_row.product_type == "external":
+        raise HTTPException(400, f"{product_row.name} is an external-registration listing and can't be issued as a complimentary Festio order.")
     if product_row.sold + body.quantity > product_row.capacity:
         raise HTTPException(409, "Not enough ticket inventory")
     order = Order(id=uid(), event_id=event_id, org_id=ident.org_id, buyer_name=body.buyer_name,

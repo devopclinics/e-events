@@ -82,8 +82,14 @@ class TicketProduct(Base):
     # "ticket" (default) grants admission; "donation" is payment-only — see
     # ProductIn for the full contract. allow_custom_amount only applies when
     # product_type="donation": price becomes a floor, not a fixed amount.
+    # "external": informational listing only -- price/name/description display
+    # normally, but checkout is refused server-side (see create_order) and the
+    # public page links out to external_url instead of adding to cart. For
+    # organizers who take payment on their own registration site but still
+    # want their pricing to show on Festio.
     product_type: Mapped[str] = mapped_column(String(20), default="ticket")
     allow_custom_amount: Mapped[bool] = mapped_column(Boolean, default=False)
+    external_url: Mapped[str | None] = mapped_column(String(500), nullable=True)
 
 
 class PromoCode(Base):

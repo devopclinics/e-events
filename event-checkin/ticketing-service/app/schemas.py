@@ -53,8 +53,14 @@ class ProductIn(BaseModel):
     # is a payment-only line — fulfillment records the payment but never
     # creates a guest/pass for it. allow_custom_amount is donation-only:
     # `price` becomes the minimum, and the buyer may pledge more at checkout.
-    product_type: str = Field(default="ticket", pattern="^(ticket|donation)$")
+    # "external" is informational-only: price/description display normally
+    # but checkout is refused (see create_order) -- the public page links to
+    # external_url instead. price/currency/capacity are still required so it
+    # displays consistently with real tickets; capacity/sold aren't
+    # meaningfully enforced since nothing is ever purchased through Festio.
+    product_type: str = Field(default="ticket", pattern="^(ticket|donation|external)$")
     allow_custom_amount: bool = False
+    external_url: str | None = Field(default=None, max_length=500)
 
     @model_validator(mode="after")
     def limits(self):
@@ -62,6 +68,13 @@ class ProductIn(BaseModel):
             raise ValueError("max_per_order must be >= min_per_order")
         if self.allow_custom_amount and self.product_type != "donation":
             raise ValueError("allow_custom_amount only applies to donation products")
+        if self.product_type == "external":
+            if not self.external_url or not self.external_url.strip():
+                raise ValueError("external_url is required for external-registration products")
+            if not self.external_url.startswith(("http://", "https://")):
+                raise ValueError("external_url must be a full http(s) URL")
+        elif self.external_url:
+            raise ValueError("external_url only applies to external-registration products")
         return self
 
 

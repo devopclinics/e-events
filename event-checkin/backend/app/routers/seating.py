@@ -346,10 +346,19 @@ async def _group_out(group: TableGroup, db: AsyncSession) -> TableGroupOut:
     assigned = await db.scalar(
         select(func.count(Guest.id)).where(Guest.assigned_table_group_id == group.id)
     ) or 0
+    seated = 0
+    if table_ids:
+        seated = await db.scalar(
+            select(func.count(Guest.id)).where(
+                Guest.assigned_table_group_id == group.id,
+                Guest.table_id.in_(table_ids),
+            )
+        ) or 0
     return TableGroupOut(
         id=group.id, event_id=group.event_id, name=group.name, tag=group.tag,
         description=group.description, sort_order=group.sort_order or 0, table_ids=table_ids,
-        assigned_guest_count=int(assigned), total_seats=int(total_seats),
+        assigned_guest_count=int(assigned), seated_guest_count=int(seated),
+        total_seats=int(total_seats),
         remaining_seats=int(total_seats) - int(assigned),
         over_capacity=int(assigned) > int(total_seats),
     )

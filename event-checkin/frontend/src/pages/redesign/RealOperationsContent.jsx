@@ -7,6 +7,21 @@ const clean = (value, fallback = '') => value == null ? fallback : String(value)
 const rows = (value) => Array.isArray(value) ? value.filter(Boolean) : []
 const TABLE_CATEGORIES = ['General', 'Male', 'Female', 'Kids', 'Youth', 'Couples', 'VIP', 'Family', 'Staff']
 
+// Color/state is driven by everyone belonging to the group (assigned_guest_count)
+// vs. its total seats -- NOT by how many already have a specific table. A group
+// stays "full" even after some members get individually seated, because the
+// people still waiting for a seat haven't gone anywhere; seated_guest_count is
+// shown separately as an uncolored progress detail instead.
+function groupOccupancyState(g) {
+  const total = Number(g.total_seats) || 0
+  const assigned = Number(g.assigned_guest_count) || 0
+  if (total === 0) return assigned > 0 ? 'full' : 'ok'
+  const pct = assigned / total
+  if (pct >= 1) return 'full'
+  if (pct >= 0.8) return 'warn'
+  return 'ok'
+}
+
 function ReserveSeatModal({ slot, guests, busy, query, onQuery, onPick, onAddVvip, onClose }) {
   const [mode, setMode] = useState('search') // 'search' | 'vvip'
   const [vvip, setVvip] = useState({ first_name: '', last_name: '', email: '', phone: '' })
@@ -434,12 +449,40 @@ export function RealSeatingContent({ eventId, event, notify, onFloorLayout }) {
 
       <div className="rr-section-title"><div><h2>Table Groups</h2><p>Group tables and restrict grouped guests to the correct seating area.</p></div>
         <button className="rr-btn primary" disabled={working} onClick={() => setGroupForm({ name: '', tag: '', description: '', sort_order: groups.length, table_ids: [], table_orders: {} })}><Icon name="plus" size={14}/> Table Group</button></div>
+      {!!groups.length && (
+        <div className="ad-occ-legend">
+          <span><i className="ad-occ-dot ok" /> Under 80% of capacity — room to spare</span>
+          <span><i className="ad-occ-dot warn" /> 80–99% — filling up</span>
+          <span><i className="ad-occ-dot full" /> 100%+ — group is oversold vs. its tables</span>
+        </div>
+      )}
       {!groups.length ? <EmptyState icon="users" title="No table groups" body="Create a group such as VIP, Family, or Staff." /> :
-        <div className="rr-grid2">{groups.map((g) => <div className="rr-panel ad-group-card" key={g.id}>
-          <div className="ad-group-head"><div><strong>{clean(g.name, 'Unnamed group')}</strong><span className="ad-group-order">order {Number(g.sort_order) || 0}</span></div>
-            <div className="ad-actions"><button className="rr-link-btn" onClick={() => editGroup(g)}>Edit</button><button className="rr-link-btn" disabled={working} onClick={() => removeGroup(g)}>Delete</button></div></div>
-          <span className="ad-group-slug">{clean(g.tag)}</span><div className="ad-group-tables">{rows(g.table_ids).map((id) => clean(tables.find((table) => table.id === id)?.name, id)).join(', ') || 'No tables assigned'}</div>
-        </div>)}</div>}
+        <div className="rr-grid2">{groups.map((g) => {
+          const state = groupOccupancyState(g)
+          const total = Number(g.total_seats) || 0
+          const assigned = Number(g.assigned_guest_count) || 0
+          const seated = Number(g.seated_guest_count) || 0
+          const pct = total > 0 ? Math.round((assigned / total) * 100) : (assigned > 0 ? 100 : 0)
+          return (
+            <div className={`rr-panel ad-group-card ${state}`} key={g.id}>
+              <div className="ad-group-head"><div><strong>{clean(g.name, 'Unnamed group')}</strong><span className="ad-group-order">order {Number(g.sort_order) || 0}</span></div>
+                <div className="ad-actions"><button className="rr-link-btn" onClick={() => editGroup(g)}>Edit</button><button className="rr-link-btn" disabled={working} onClick={() => removeGroup(g)}>Delete</button></div></div>
+              <span className="ad-group-slug">{clean(g.tag)}</span>
+              <div className="ad-group-tables">{rows(g.table_ids).map((id) => clean(tables.find((table) => table.id === id)?.name, id)).join(', ') || 'No tables assigned'}</div>
+              <div className="ad-occ-row">
+                <span className={`ad-occ-badge ${state}`}>{assigned} in group / {total} seat{total === 1 ? '' : 's'}</span>
+                <span className="ad-occ-pct">{pct}%</span>
+              </div>
+              <div className="ad-occ-track"><div className={`ad-occ-fill ${state}`} style={{ width: `${Math.min(100, pct)}%` }} /></div>
+              {total === 0
+                ? <div className="ad-occ-note full">No tables assigned to this group yet.</div>
+                : assigned > total
+                  ? <div className="ad-occ-note full">{assigned - total} can never fit here — add a table or move guests to another group.</div>
+                  : <div className="ad-occ-note">{total - assigned} seat{total - assigned === 1 ? '' : 's'} left for this group.</div>}
+              <div className="ad-occ-seated">🪑 <b>{seated}</b> of those {assigned} already seated at a specific table</div>
+            </div>
+          )
+        })}</div>}
       {groupForm && <form className="rr-panel rd-panel-body" onSubmit={saveGroup}>
         <div className="rd-row2"><input className="rr-input" aria-label="Group name" required value={groupForm.name} onChange={(e) => setGroupForm({ ...groupForm, name: e.target.value })} placeholder="Group name"/>
           <input className="rr-input" aria-label="Group tag" value={groupForm.tag || ''} onChange={(e) => setGroupForm({ ...groupForm, tag: e.target.value })} placeholder="Guest tag"/></div>

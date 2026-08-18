@@ -1145,6 +1145,11 @@ class TableGroupOut(BaseModel):
     sort_order: int = 0
     table_ids: list[str] = []
     assigned_guest_count: int = 0
+    # Of assigned_guest_count, how many already have a specific table within
+    # this group's tables (vs. just belonging to the group with no seat yet).
+    # A distinct, uncolored progress detail -- assigned_guest_count is still
+    # the number that should drive any capacity/over-capacity display.
+    seated_guest_count: int = 0
     total_seats: int = 0
     remaining_seats: int = 0
     over_capacity: bool = False

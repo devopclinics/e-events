@@ -97,6 +97,37 @@
 .ad-group-stat span { color: var(--muted); font-weight: 500; }
 .ad-group-stat.over { color: var(--danger); }
 .ad-group-stat.over span { color: var(--danger); }
+
+/* ── table-group occupancy audit: badge + bar + legend ──────────────────── */
+.ad-occ-legend { display: flex; gap: 16px; flex-wrap: wrap; margin-bottom: 14px; padding: 11px 14px; background: var(--surface); border: 1px solid var(--line); border-radius: 11px; font-size: 11px; color: var(--muted); font-weight: 600; }
+.ad-occ-legend span { display: inline-flex; align-items: center; gap: 7px; }
+.ad-occ-dot { width: 9px; height: 9px; border-radius: 50%; flex: none; display: inline-block; }
+.ad-occ-dot.ok { background: var(--success); }
+.ad-occ-dot.warn { background: var(--warning); }
+.ad-occ-dot.full { background: var(--danger); }
+
+.ad-group-card { border-left: 3px solid var(--line); }
+.ad-group-card.ok { border-left-color: var(--success); }
+.ad-group-card.warn { border-left-color: var(--warning); }
+.ad-group-card.full { border-left-color: var(--danger); }
+
+.ad-occ-row { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-top: 2px; }
+.ad-occ-badge { display: inline-flex; align-items: center; gap: 6px; padding: 4px 10px; border-radius: 100px; font-size: 11px; font-weight: 800; white-space: nowrap; }
+.ad-occ-badge.ok { background: var(--success-soft); color: var(--success); }
+.ad-occ-badge.warn { background: var(--warning-soft); color: var(--warning); }
+.ad-occ-badge.full { background: var(--danger-soft); color: var(--danger); }
+.ad-occ-pct { font-size: 10px; font-weight: 700; color: var(--faint); }
+
+.ad-occ-track { height: 7px; border-radius: 100px; background: var(--surface-3); overflow: hidden; }
+.ad-occ-fill { height: 100%; border-radius: 100px; transition: width .3s ease; }
+.ad-occ-fill.ok { background: var(--success); }
+.ad-occ-fill.warn { background: var(--warning); }
+.ad-occ-fill.full { background: var(--danger); }
+
+.ad-occ-note { font-size: 10.5px; color: var(--faint); margin-top: -2px; }
+.ad-occ-note.full { color: var(--danger); font-weight: 700; }
+.ad-occ-seated { font-size: 10.5px; color: var(--muted); display: flex; align-items: center; gap: 5px; }
+.ad-occ-seated b { color: var(--ink); font-weight: 700; }
 .ad-warning { display: flex; align-items: center; gap: 6px; font-size: 10.5px; color: var(--danger); background: var(--danger-soft);
   border-radius: 8px; padding: 7px 10px; margin-top: 6px; line-height: 1.4; }
 

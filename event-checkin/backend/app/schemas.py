@@ -1941,6 +1941,10 @@ class GuestCreate(BaseModel):
     is_vip: bool = False
     assigned_table_group_id: Optional[str] = None
     is_walk_in: bool = False   # added at the door, not on the original list
+    # When a same-name guest already exists, add_guest() 409s with the match
+    # instead of creating a second record -- set True to create anyway (the
+    # admin confirmed these are genuinely two different people).
+    confirm_duplicate: bool = False
 
 
 class GuestUpdate(BaseModel):

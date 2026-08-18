@@ -63,6 +63,20 @@ _E164_RE = re.compile(r'^\+[1-9]\d{6,14}$')
 # Strip everything except digits and leading '+'.
 _PHONE_STRIP = re.compile(r'[^\d+]')
 
+# Leading honorific/title, stripped repeatedly so a stacked "Shaykh Dr. X"
+# normalizes the same as a plain "Dr. X" or "X" -- used only for the manual
+# add-guest duplicate check below, not for display or storage.
+_HONORIFIC_RE = re.compile(r'^(shaykh|sheikh|dr\.?|mr\.?|mrs\.?|ms\.?|prof\.?|rev\.?)\s+', re.IGNORECASE)
+
+
+def _norm_person_name(s: str) -> str:
+    s = re.sub(r'\s+', ' ', (s or '').strip())
+    prev = None
+    while prev != s:
+        prev = s
+        s = _HONORIFIC_RE.sub('', s)
+    return s.lower()
+
 
 def _normalize_phone(raw: str, default_country_code: str = "1") -> str | None:
     """Coerce a freeform phone string into E.164.
@@ -1423,6 +1437,35 @@ async def add_guest(event_id: str, data: GuestCreate, db: AsyncSession = Depends
     last = data.last_name.strip()
     if not first or not last:
         raise HTTPException(400, "first_name and last_name are required")
+
+    # Manual add has no dedup by design (VVIP walk-ins genuinely aren't on the
+    # imported list) -- but that's also exactly how a guest already brought in
+    # by CSV/sheet import gets silently duplicated if someone re-types their
+    # name slightly differently (an honorific added, etc.). The importer's own
+    # dedup catches exact-name re-syncs; this catches the manual-add gap on
+    # the same class of near-miss, without blocking two genuinely different
+    # people who happen to share a name -- it warns once, and confirm_duplicate
+    # goes ahead.
+    if not data.confirm_duplicate:
+        norm_first, norm_last = _norm_person_name(first), _norm_person_name(last)
+        candidates = (await db.execute(
+            select(Guest.id, Guest.first_name, Guest.last_name, Guest.email, Guest.phone)
+            .where(Guest.event_id == event_id)
+        )).all()
+        match = next(
+            (c for c in candidates if _norm_person_name(c.first_name) == norm_first and _norm_person_name(c.last_name) == norm_last),
+            None,
+        )
+        if match:
+            raise HTTPException(409, detail={
+                "code": "possible_duplicate",
+                "message": f"A guest named “{match.first_name} {match.last_name}” already exists on this event's list.",
+                "existing_guest": {
+                    "id": match.id, "first_name": match.first_name, "last_name": match.last_name,
+                    "email": match.email, "phone": match.phone,
+                },
+            })
+
     email = (data.email or "").strip().lower()
     phone_raw = (data.phone or "").strip()
     phone = _normalize_phone(phone_raw) if phone_raw else None

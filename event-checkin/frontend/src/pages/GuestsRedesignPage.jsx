@@ -1322,6 +1322,7 @@ export default function GuestsRedesignPage() {
   const openedGuestRef = useRef('')
   const [removeTarget, setRemoveTarget] = useState(null)
   const [addForm, setAddForm] = useState({ first: '', last: '', email: '', phone: '', vip: false, ticket_type_id: '', sendInvite: false })
+  const [dupWarning, setDupWarning] = useState(null) // { existing_guest, message } from a 409 possible_duplicate
   const [importOpen, setImportOpen] = useState(false)
   const [importStep, setImportStep] = useState('upload') // upload | mapping | validating | result
   const [importProgress, setImportProgress] = useState(0)
@@ -1509,6 +1510,45 @@ export default function GuestsRedesignPage() {
     }
   }
 
+  async function submitAddGuest(confirmDuplicate) {
+    setMutationBusy(true)
+    try {
+      const created = await api.addGuest(eventId, {
+        first_name: addForm.first.trim(),
+        last_name: addForm.last.trim(),
+        email: addForm.email.trim() || null,
+        phone: addForm.phone.trim() || null,
+        is_vip: addForm.vip,
+        confirm_duplicate: confirmDuplicate,
+      })
+      if (addForm.ticket_type_id) await api.assignTicketType(eventId, created.id, addForm.ticket_type_id)
+      const shouldSendInvite = addForm.sendInvite
+      setAddOpen(false)
+      setDupWarning(null)
+      setAddForm({ first: '', last: '', email: '', phone: '', vip: false, ticket_type_id: '', sendInvite: false })
+      await loadGuests()
+      if (shouldSendInvite) {
+        try {
+          await api.sendInvitesBatch(eventId, [created.id], true)
+          await loadGuests()
+          notify(`${created.first_name} ${created.last_name || ''} added and invite queued`)
+        } catch (sendError) {
+          notify(`${created.first_name} was added, but the invite was not queued: ${sendError.message}`, true)
+        }
+      } else {
+        notify(`${created.first_name} ${created.last_name || ''} added`)
+      }
+    } catch (e) {
+      if (e.status === 409 && e.detail?.code === 'possible_duplicate') {
+        setDupWarning(e.detail)
+      } else {
+        notify(e.message || 'Guest could not be added', true)
+      }
+    } finally {
+      setMutationBusy(false)
+    }
+  }
+
   return (
     <RedesignShell topActive="setup" withEventSidebar eventActive={tab === 'invite' ? 'invite' : 'guests'}>
       <div className="rr-pagehead">
@@ -1555,37 +1595,26 @@ export default function GuestsRedesignPage() {
             <label className="gr-required-check"><input type="checkbox" checked={addForm.sendInvite} onChange={(e) => setAddForm({ ...addForm, sendInvite: e.target.checked })} /> Send invite immediately</label>
             <div className="rd-row2" style={{ marginTop: 4 }}>
               <button className="rr-btn secondary" style={{ flex: 1, justifyContent: 'center' }} onClick={() => setAddOpen(false)}>Cancel</button>
-              <button className="rr-btn primary" style={{ flex: 1, justifyContent: 'center' }} disabled={!addForm.first || mutationBusy} onClick={async () => {
-                setMutationBusy(true)
-                try {
-                  const created = await api.addGuest(eventId, {
-                    first_name: addForm.first.trim(),
-                    last_name: addForm.last.trim(),
-                    email: addForm.email.trim() || null,
-                    phone: addForm.phone.trim() || null,
-                    is_vip: addForm.vip,
-                  })
-                  if (addForm.ticket_type_id) await api.assignTicketType(eventId, created.id, addForm.ticket_type_id)
-                  const shouldSendInvite = addForm.sendInvite
-                  setAddOpen(false)
-                  setAddForm({ first: '', last: '', email: '', phone: '', vip: false, ticket_type_id: '', sendInvite: false })
-                  await loadGuests()
-                  if (shouldSendInvite) {
-                    try {
-                      await api.sendInvitesBatch(eventId, [created.id], true)
-                      await loadGuests()
-                      notify(`${created.first_name} ${created.last_name || ''} added and invite queued`)
-                    } catch (sendError) {
-                      notify(`${created.first_name} was added, but the invite was not queued: ${sendError.message}`, true)
-                    }
-                  } else {
-                    notify(`${created.first_name} ${created.last_name || ''} added`)
-                  }
-                } catch (e) { notify(e.message || 'Guest could not be added', true) } finally { setMutationBusy(false) }
-              }}>{mutationBusy ? 'Adding…' : 'Add guest'}</button>
+              <button className="rr-btn primary" style={{ flex: 1, justifyContent: 'center' }} disabled={!addForm.first || mutationBusy} onClick={() => submitAddGuest(false)}>{mutationBusy ? 'Adding…' : 'Add guest'}</button>
             </div>
           </div>
         </Modal>
+      )}
+
+      {dupWarning && (
+        <ConfirmDialog
+          title="Possible duplicate guest"
+          message={
+            `${dupWarning.message} `
+            + (dupWarning.existing_guest?.email || dupWarning.existing_guest?.phone
+              ? `(${[dupWarning.existing_guest.email, dupWarning.existing_guest.phone].filter(Boolean).join(' · ')}) `
+              : '')
+            + 'If this is a different person with the same name, add them anyway. Otherwise cancel and check the existing guest first.'
+          }
+          confirmLabel={mutationBusy ? 'Adding…' : 'Add anyway'}
+          onCancel={() => { if (!mutationBusy) setDupWarning(null) }}
+          onConfirm={() => submitAddGuest(true)}
+        />
       )}
 
       {editTarget && (

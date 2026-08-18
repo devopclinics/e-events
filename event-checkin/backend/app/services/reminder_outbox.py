@@ -68,6 +68,17 @@ async def process_claimed(reminder_id: str) -> None:
             reminder.last_error = "Parent event no longer exists"
             await db.commit()
             return
+        # Re-check the add-on gate at fire time, not just at creation -- same
+        # discipline the public Speaker/Registry read paths already apply
+        # (re-checking *_enabled rather than trusting it stayed true since
+        # creation). Terminal state, not a retry: an organizer who disables
+        # Reminders shouldn't have it silently keep firing in the background,
+        # nor should a disabled reminder tick forever waiting to be re-enabled.
+        if not event.reminders_enabled:
+            reminder.status = "failed"
+            reminder.last_error = "Reminders add-on was disabled before this reminder fired"
+            await db.commit()
+            return
         try:
             targeted, sent = await send_reminder(event, reminder, db)
         except Exception as exc:

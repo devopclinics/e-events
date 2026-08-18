@@ -29,7 +29,7 @@ from .routers import ticketing_internal as ticketing_internal_router
 from .routers import redesign_telemetry as redesign_telemetry_router
 from .routers import training as training_router
 from . import sync_poller, db_migrate, entitlements
-from .services import festiome_outbox, webhook_outbox
+from .services import festiome_outbox, webhook_outbox, reminder_outbox
 from . import routers
 from . import storage
 from .database import AsyncSessionLocal
@@ -73,6 +73,10 @@ async def lifespan(app: FastAPI):
     # Same SKIP LOCKED-safe multi-replica pattern as the FestioMe outbox, own switch.
     run_webhook_outbox = os.environ.get("RUN_IN_APP_WEBHOOK_OUTBOX", "true").lower() not in ("false", "0", "no")
     webhook_task = asyncio.create_task(webhook_outbox.run()) if run_webhook_outbox else None
+    # Reminders scheduler -- same SKIP LOCKED-safe multi-replica claim shape,
+    # own switch.
+    run_reminder_outbox = os.environ.get("RUN_IN_APP_REMINDER_OUTBOX", "true").lower() not in ("false", "0", "no")
+    reminder_outbox_task = asyncio.create_task(reminder_outbox.run()) if run_reminder_outbox else None
 
     # Start the Redis SSE fan-in subscriber (no-op unless REDIS_URL is set) so
     # dashboard events published by any replica reach the connections on this one.
@@ -102,6 +106,12 @@ async def lifespan(app: FastAPI):
             webhook_task.cancel()
             try:
                 await webhook_task
+            except asyncio.CancelledError:
+                pass
+        if reminder_outbox_task is not None:
+            reminder_outbox_task.cancel()
+            try:
+                await reminder_outbox_task
             except asyncio.CancelledError:
                 pass
 

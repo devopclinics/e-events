@@ -504,6 +504,12 @@ async def reserve_message_credit(
             event._last_credit_ledger_id = row.id
             return True
         return False
+    # Email has its own free-quota-then-paid metering (see take_email_credit
+    # below) -- route it there instead of the generic per-message spend, so
+    # legacy-mode orgs get the same free-tier behavior the v2 path above
+    # already gets via reserve_message_units' channel="email" handling.
+    if channel == "email":
+        return take_email_credit(event, reason=reason, guest_id=guest_id)
     return take_message_credit(
         event, channel, reason=reason, guest_id=guest_id,
         provider=provider, provider_message_id=provider_message_id,

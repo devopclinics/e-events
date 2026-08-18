@@ -139,7 +139,7 @@ function StepField({ label, hint, children, wide = false }) {
   return <label className={`ex-editor-field${wide ? ' wide' : ''}`}><span>{label}</span>{children}{hint && <small>{hint}</small>}</label>
 }
 
-function ExperienceStepEditor({ form, setForm, steps, busy, onClose, onSave }) {
+function ExperienceStepEditor({ form, setForm, steps, busy, onClose, onSave, speakerEnabled, eventSpeakers }) {
   const dependencyChoices = steps.filter((step) => step.id !== form.id && step.key !== form.key)
   const sessionChoices = steps.filter((step) => step.type === 'session_attendance')
   const feedbackChoices = steps.filter((step) => step.type === 'feedback' && step.id !== form.id)
@@ -219,7 +219,7 @@ function ExperienceStepEditor({ form, setForm, steps, busy, onClose, onSave }) {
             <StepField label="End time"><input className="rr-input" type="time" value={form.session_end_time} onChange={(event) => patch({ session_end_time: event.target.value })}/></StepField>
             <StepField label="Room / location"><input className="rr-input" value={form.session_room} onChange={(event) => patch({ session_room: event.target.value })}/></StepField>
             <StepField label="Check-in opens (minutes before)" hint="Leave blank for no time gate."><input className="rr-input" type="number" min="0" value={form.session_checkin_window_minutes} onChange={(event) => patch({ session_checkin_window_minutes: event.target.value })}/></StepField>
-            {realEvent?.speaker_enabled && eventSpeakers.length > 0 ? (
+            {speakerEnabled && eventSpeakers.length > 0 ? (
               <StepField label="Speaker / host" wide hint="From your Speaker Showcase — manage the full list from Add-ons.">
                 <select className="rr-select" value={form.session_speaker_id} onChange={(event) => {
                   const id = event.target.value
@@ -1207,6 +1207,8 @@ export default function ExperienceRedesignPage() {
                     busy={actionKey.startsWith('step:')}
                     onClose={() => setStepForm(null)}
                     onSave={saveStepForm}
+                    speakerEnabled={!!realEvent?.speaker_enabled}
+                    eventSpeakers={eventSpeakers}
                   />}
                 </div>
               </>

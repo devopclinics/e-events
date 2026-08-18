@@ -2022,6 +2022,15 @@ class GuestOut(BaseModel):
     rsvp_notes: Optional[str] = None
 
 
+class GuestDuplicateGroup(BaseModel):
+    normalized_name: str
+    guests: list[GuestOut]
+
+
+class MergeDuplicatesRequest(BaseModel):
+    duplicate_ids: list[str]
+
+
 # ── Scanner ──────────────────────────────────────────────────────────────────
 
 class ScanResult(BaseModel):

@@ -4,6 +4,7 @@ import io
 import re
 import uuid
 import httpx
+from collections import defaultdict
 from datetime import datetime
 from urllib.parse import urlparse
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, BackgroundTasks, Response, Body
@@ -41,7 +42,7 @@ from ..models import (
     EventUser,
     EventUserSection,
 )
-from ..schemas import GuestOut, GuestCreate, GuestUpdate, BulkAssignGroupRequest, ScanResult, WalkInRegister, HouseholdOut, HouseholdCreate, BulkAssignHouseholdRequest
+from ..schemas import GuestOut, GuestCreate, GuestUpdate, BulkAssignGroupRequest, ScanResult, WalkInRegister, HouseholdOut, HouseholdCreate, BulkAssignHouseholdRequest, GuestDuplicateGroup, MergeDuplicatesRequest
 from ..auth import require_guest_manage_access, require_guest_view_access, require_official
 from ..entitlements import assert_within_guest_cap, guest_limit, can_use_paid_channels, last_credit_ledger_id, reserve_message_credit
 from ..channels import channels_for_flow
@@ -1516,6 +1517,86 @@ async def list_guests(event_id: str, db: AsyncSession = Depends(get_db), _: User
         g.household_name = household_names.get(g.household_id)
     await _attach_message_status(guests, event_id, db)
     return guests
+
+
+@router.get("/{event_id}/guests/duplicates", response_model=list[GuestDuplicateGroup])
+async def list_guest_duplicates(event_id: str, db: AsyncSession = Depends(get_db), _: User = Depends(require_guest_view_access)):
+    """Existing guests that collide under the same name-normalization
+    add_guest() checks at creation time (honorifics stripped, case/whitespace
+    insensitive) -- this retroactively surfaces duplicates that predate that
+    check, or were created another way (e.g. two separate CSV imports with a
+    slightly different spelling). Read-only; see merge_guest_duplicates for
+    resolving a group."""
+    guests = (await db.execute(select(Guest).where(Guest.event_id == event_id))).scalars().all()
+    names = dict((await db.execute(
+        select(TableGroup.id, TableGroup.name).where(TableGroup.event_id == event_id)
+    )).all())
+    grouped: dict[tuple[str, str], list[Guest]] = defaultdict(list)
+    for g in guests:
+        grouped[(_norm_person_name(g.first_name), _norm_person_name(g.last_name))].append(g)
+    result = []
+    for (norm_first, norm_last), members in grouped.items():
+        if len(members) < 2:
+            continue
+        for m in members:
+            m.table_group_name = names.get(m.assigned_table_group_id)
+        # Most-recently-updated first -- usually the more complete/likely-correct
+        # record to default to keeping, but the caller still picks explicitly.
+        members.sort(key=lambda g: g.updated_at, reverse=True)
+        label = f"{members[0].first_name} {members[0].last_name}".strip() or f"{norm_first} {norm_last}".strip()
+        result.append(GuestDuplicateGroup(normalized_name=label, guests=[GuestOut.model_validate(m) for m in members]))
+    return result
+
+
+@router.post("/{event_id}/guests/{keep_id}/merge-duplicates", response_model=GuestOut)
+async def merge_guest_duplicates(
+    event_id: str, keep_id: str, data: MergeDuplicatesRequest,
+    background_tasks: BackgroundTasks, db: AsyncSession = Depends(get_db),
+    _: User = Depends(require_guest_manage_access),
+):
+    """Fold one or more duplicate guest records into `keep_id`, then delete
+    the duplicates via the same cascade-delete used everywhere else (so their
+    RSVP answers, messages, scans, etc. are cleaned up the normal way -- this
+    does not attempt to merge that history onto the keeper, only the small
+    set of fields that caused real operational problems: contact info, table
+    group, and seat). Only fills fields the keeper is missing -- never
+    overwrites something already on the keeper, so the caller's choice of
+    which record to keep is always respected."""
+    keeper = await db.get(Guest, keep_id)
+    if not keeper or keeper.event_id != event_id:
+        raise HTTPException(404, "Guest not found")
+    dup_ids = [d for d in data.duplicate_ids if d != keep_id]
+    if not dup_ids:
+        raise HTTPException(400, "No duplicate ids to merge (can't merge a guest into itself)")
+
+    for dup_id in dup_ids:
+        dup = await db.get(Guest, dup_id)
+        if not dup or dup.event_id != event_id:
+            continue
+        if not keeper.email and dup.email:
+            keeper.email = dup.email
+        if not keeper.phone and dup.phone:
+            keeper.phone = dup.phone
+        if not keeper.assigned_table_group_id and dup.assigned_table_group_id:
+            keeper.assigned_table_group_id = dup.assigned_table_group_id
+        if dup.is_vip:
+            keeper.is_vip = True
+        if not keeper.table_id and dup.table_id:
+            # Free the duplicate's seat first and flush -- briefly holding the
+            # same (table_id, seat_number) on two guest rows at once would
+            # collide with the partial unique index (uq_guest_table_seat).
+            new_table_id, new_seat = dup.table_id, dup.seat_number
+            dup.table_id = None
+            dup.seat_number = None
+            await db.flush()
+            keeper.table_id = new_table_id
+            keeper.seat_number = new_seat
+            await db.flush()
+        await delete_guest_cascade(event_id, dup_id, background_tasks, db)
+
+    await db.commit()
+    await db.refresh(keeper)
+    return keeper
 
 
 @router.get("/{event_id}/guests/{guest_id}/rsvp-answers")

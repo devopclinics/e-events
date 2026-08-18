@@ -382,6 +382,8 @@ export const api = {
     ),
   importGuestsFromUrl: (eventId, url) => req('POST', `/events/${eventId}/guests/import-url`, { url }),
   addGuest: (eventId, data) => req('POST', `/events/${eventId}/guests`, data),
+  listGuestDuplicates: (eventId) => req('GET', `/events/${eventId}/guests/duplicates`),
+  mergeGuestDuplicates: (eventId, keepId, duplicateIds) => req('POST', `/events/${eventId}/guests/${keepId}/merge-duplicates`, { duplicate_ids: duplicateIds }),
 
   // Design Studio (templates read direct from design-service; the rest via the
   // core-backend proxy which enforces auth + event ownership).

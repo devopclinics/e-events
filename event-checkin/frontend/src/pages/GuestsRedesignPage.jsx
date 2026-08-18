@@ -1323,6 +1323,10 @@ export default function GuestsRedesignPage() {
   const [removeTarget, setRemoveTarget] = useState(null)
   const [addForm, setAddForm] = useState({ first: '', last: '', email: '', phone: '', vip: false, ticket_type_id: '', sendInvite: false })
   const [dupWarning, setDupWarning] = useState(null) // { existing_guest, message } from a 409 possible_duplicate
+  const [dupCheckOpen, setDupCheckOpen] = useState(false)
+  const [dupGroups, setDupGroups] = useState(null) // null = loading, [] = none found
+  const [dupKeepChoice, setDupKeepChoice] = useState({}) // normalized_name -> chosen keeper guest id
+  const [dupMergingKey, setDupMergingKey] = useState('')
   const [importOpen, setImportOpen] = useState(false)
   const [importStep, setImportStep] = useState('upload') // upload | mapping | validating | result
   const [importProgress, setImportProgress] = useState(0)
@@ -1549,6 +1553,36 @@ export default function GuestsRedesignPage() {
     }
   }
 
+  async function openDuplicateCheck() {
+    setDupCheckOpen(true)
+    setDupGroups(null)
+    try {
+      const found = await api.listGuestDuplicates(eventId)
+      setDupGroups(found)
+      setDupKeepChoice(Object.fromEntries(found.map((grp) => [grp.normalized_name, grp.guests[0].id])))
+    } catch (e) {
+      setDupCheckOpen(false)
+      notify(e.message || 'Could not check for duplicates', true)
+    }
+  }
+
+  async function mergeDuplicateGroup(group) {
+    const keepId = dupKeepChoice[group.normalized_name]
+    const otherIds = group.guests.map((g) => g.id).filter((id) => id !== keepId)
+    if (!keepId || otherIds.length === 0) return
+    setDupMergingKey(group.normalized_name)
+    try {
+      await api.mergeGuestDuplicates(eventId, keepId, otherIds)
+      setDupGroups((prev) => prev.filter((g) => g.normalized_name !== group.normalized_name))
+      await loadGuests()
+      notify(`${group.normalized_name}: merged into one guest`)
+    } catch (e) {
+      notify(e.message || 'Could not merge these guests', true)
+    } finally {
+      setDupMergingKey('')
+    }
+  }
+
   return (
     <RedesignShell topActive="setup" withEventSidebar eventActive={tab === 'invite' ? 'invite' : 'guests'}>
       <div className="rr-pagehead">
@@ -1559,6 +1593,7 @@ export default function GuestsRedesignPage() {
           <div className="rr-meta"><Icon name="users" size={13} /> {guests.length} guests <span className="rr-dot">·</span> <Icon name="send" size={13} /> {guests.filter((g) => g.invited !== '—').length} invited</div>
         </div>
         <div className="rr-head-actions">
+          <button className="rr-btn secondary" onClick={openDuplicateCheck}><Icon name="users" size={15} /> Check duplicates</button>
           <button className="rr-btn secondary" onClick={() => { setImportStep('upload'); setImportResult(null); setImportProgress(0); setImportOpen(true) }}><Icon name="upload" size={15} /> Import guests</button>
           <button className="rr-btn primary" onClick={() => setAddOpen(true)}><Icon name="plus" size={14} /> Add guest</button>
         </div>
@@ -1615,6 +1650,56 @@ export default function GuestsRedesignPage() {
           onCancel={() => { if (!mutationBusy) setDupWarning(null) }}
           onConfirm={() => submitAddGuest(true)}
         />
+      )}
+
+      {dupCheckOpen && (
+        <Modal title="Possible duplicate guests" onClose={() => setDupCheckOpen(false)} width={640}>
+          {dupGroups === null ? (
+            <div className="rd-hint">Checking guest list…</div>
+          ) : dupGroups.length === 0 ? (
+            <div className="rd-hint">No likely duplicates found — every guest has a distinct name.</div>
+          ) : (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+              <p className="rd-hint" style={{ margin: 0 }}>
+                Same name found on {dupGroups.length} group{dupGroups.length === 1 ? '' : 's'} of guests (honorifics like "Dr."/"Shaykh" ignored).
+                Pick which record to keep — the other guest's email, phone, table group, and seat (whichever the kept
+                one is missing) get copied over before it's removed. RSVP/message history on the removed guest is not preserved.
+              </p>
+              {dupGroups.map((group) => (
+                <div key={group.normalized_name} className="rr-panel" style={{ padding: 12 }}>
+                  <strong style={{ fontSize: 12.5 }}>{group.normalized_name}</strong>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginTop: 8 }}>
+                    {group.guests.map((g) => (
+                      <label key={g.id} style={{ display: 'flex', alignItems: 'flex-start', gap: 8, fontSize: 11.5, padding: 8, borderRadius: 8, background: dupKeepChoice[group.normalized_name] === g.id ? 'var(--surface-2)' : 'transparent', border: '1px solid var(--line)' }}>
+                        <input
+                          type="radio"
+                          name={`dup-keep-${group.normalized_name}`}
+                          checked={dupKeepChoice[group.normalized_name] === g.id}
+                          onChange={() => setDupKeepChoice((prev) => ({ ...prev, [group.normalized_name]: g.id }))}
+                          style={{ marginTop: 2 }}
+                        />
+                        <span>
+                          <strong>{g.first_name} {g.last_name}</strong>{g.is_vip && ' · VIP'}<br />
+                          <span style={{ color: 'var(--muted)' }}>
+                            {[g.email, g.phone].filter(Boolean).join(' · ') || 'no contact info'}
+                            {' · '}{g.table_group_name || 'no group'}
+                            {g.table_id ? ` · seated (${g.seat_number ? `seat ${g.seat_number}` : 'table only'})` : ' · not seated'}
+                            {' · '}{g.rsvp_status}
+                          </span>
+                        </span>
+                      </label>
+                    ))}
+                  </div>
+                  <div style={{ marginTop: 10, display: 'flex', justifyContent: 'flex-end' }}>
+                    <button className="rr-btn primary" disabled={dupMergingKey === group.normalized_name} onClick={() => mergeDuplicateGroup(group)}>
+                      {dupMergingKey === group.normalized_name ? 'Merging…' : 'Merge into selected'}
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </Modal>
       )}
 
       {editTarget && (

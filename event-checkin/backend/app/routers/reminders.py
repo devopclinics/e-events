@@ -131,7 +131,11 @@ async def preview_reminder(event_id: str, reminder_id: str, data: ReminderPrevie
     templates.py's preview_template uses, not a second preview implementation."""
     event = await _reminder_event(event_id, db)
     await _get_reminder(event_id, reminder_id, db)
-    ctx = sample_context(event)
+    # guest_hub_link isn't one of templates.py's standard PLACEHOLDERS (it's
+    # reminder-specific, see services/reminder_send.py::_reminder_extras),
+    # so sample_context() doesn't know about it -- add a sample value here
+    # rather than growing the shared placeholder list for every template.
+    ctx = {**sample_context(event), "guest_hub_link": "https://events.example/r/sample#guest-hub"}
     return ReminderPreviewOut(
         subject=render(data.subject, ctx) if data.subject else None,
         body=render(data.body, ctx),
@@ -153,7 +157,7 @@ async def test_send_reminder(event_id: str, reminder_id: str, data: ReminderTest
     if not recipient_allowed(data.channel, data.to):
         raise HTTPException(403, "Recipient blocked by the environment outbound-safety policy")
     messaging.set_event_context(event.id)
-    ctx = sample_context(event)
+    ctx = {**sample_context(event), "guest_hub_link": "https://events.example/r/sample#guest-hub"}
     body = render(data.body, ctx)
     if data.channel == "email":
         subject = render(data.subject, ctx) if data.subject else f"Test reminder — {event.name}"

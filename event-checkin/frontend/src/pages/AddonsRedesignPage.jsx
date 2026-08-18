@@ -800,43 +800,76 @@ const REMINDER_CHANNELS = [
   { id: 'sms', label: 'SMS', icon: 'message' },
   { id: 'whatsapp', label: 'WhatsApp', icon: 'whatsapp' },
 ]
+// guest_hub_link/ticket_link aren't in templates.py's shared PLACEHOLDERS
+// list (they're populated by services/reminder_send.py's own extras, not
+// build_context()'s defaults) -- listed here for the editor's chip palette.
+const REMINDER_PLACEHOLDERS = [
+  'guest_first_name', 'guest_full_name', 'event_name', 'event_date', 'venue_name',
+  'rsvp_link', 'guest_hub_link', 'ticket_link',
+]
 
 // Calendar-only math -- no UTC-instant conversion needed for display, just
 // "what local calendar date is N days before the event's local date". Pull
 // the event's own local Y/M/D via Intl (timeZone-aware, matches the
-// backend's to_event_local() since event.event_date is naive-UTC), subtract
-// days using UTC-epoch arithmetic so day boundaries can't drift across a
-// DST change, then format with the chosen send_time_local + zone name as
-// plain display text (the actual UTC fire_at_utc instant is computed
-// server-side by services/reminders.py::compute_fire_at and is what
-// actually schedules the send -- this is a preview, not a second source of
-// truth for it).
-function computeFiresLabel(event, offsetDays, sendTimeLocal) {
-  if (!event?.event_date) return ''
-  const tz = event.timezone || 'UTC'
-  const days = Number(offsetDays)
-  if (!Number.isFinite(days)) return ''
+// backend's to_event_local() since event.event_date is naive-UTC), then do
+// day arithmetic via UTC-epoch anchors so day boundaries can't drift across
+// a DST change. The actual UTC fire_at_utc instant that schedules the send
+// is computed server-side by services/reminders.py::compute_fire_at -- all
+// of this is a preview/editing convenience, not a second source of truth.
+function eventLocalYmd(event) {
+  if (!event?.event_date) return null
   try {
     // event_date is serialized naive (no trailing Z/offset) -- the backend
     // convention is that every stored timestamp is UTC (see timeutil.py's
     // module docstring), so force UTC parsing here rather than letting the
     // browser interpret the bare string as its own local time.
     const iso = /[zZ]|[+-]\d\d:\d\d$/.test(event.event_date) ? event.event_date : `${event.event_date}Z`
-    const parts = new Intl.DateTimeFormat('en-CA', { timeZone: tz, year: 'numeric', month: '2-digit', day: '2-digit' })
+    const parts = new Intl.DateTimeFormat('en-CA', { timeZone: event.timezone || 'UTC', year: 'numeric', month: '2-digit', day: '2-digit' })
       .formatToParts(new Date(iso))
-    const y = Number(parts.find((p) => p.type === 'year')?.value)
-    const m = Number(parts.find((p) => p.type === 'month')?.value)
-    const d = Number(parts.find((p) => p.type === 'day')?.value)
-    const localMidnightUtc = Date.UTC(y, m - 1, d)
-    const fireDate = new Date(localMidnightUtc - days * 86400000)
-    const dateLabel = new Intl.DateTimeFormat('en-US', { timeZone: 'UTC', weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' }).format(fireDate)
-    const [hh, mm] = (sendTimeLocal || '09:00').split(':')
-    const hour12 = ((Number(hh) + 11) % 12) + 1
-    const ampm = Number(hh) >= 12 ? 'PM' : 'AM'
-    return `Fires ${dateLabel} at ${hour12}:${mm} ${ampm} (${tz})`
+    return {
+      y: Number(parts.find((p) => p.type === 'year')?.value),
+      m: Number(parts.find((p) => p.type === 'month')?.value),
+      d: Number(parts.find((p) => p.type === 'day')?.value),
+    }
   } catch {
-    return ''
+    return null
   }
+}
+
+// UTC-anchored Date standing in for a calendar day (not a real instant) --
+// offsetDays before the event's own local calendar date.
+function fireDateAnchor(event, offsetDays) {
+  const ymd = eventLocalYmd(event)
+  const days = Number(offsetDays)
+  if (!ymd || !Number.isFinite(days)) return null
+  return new Date(Date.UTC(ymd.y, ymd.m - 1, ymd.d) - days * 86400000)
+}
+
+// "YYYY-MM-DD" for <input type="date">'s value.
+function fireDateInputValue(event, offsetDays) {
+  const anchor = fireDateAnchor(event, offsetDays)
+  return anchor ? anchor.toISOString().slice(0, 10) : ''
+}
+
+// Inverse: given a date picked in <input type="date">, how many days before
+// the event's own local date is that?
+function offsetDaysFromPickedDate(event, pickedYmd) {
+  const ymd = eventLocalYmd(event)
+  if (!ymd || !pickedYmd) return null
+  const eventAnchor = Date.UTC(ymd.y, ymd.m - 1, ymd.d)
+  const [py, pm, pd] = pickedYmd.split('-').map(Number)
+  const pickedAnchor = Date.UTC(py, pm - 1, pd)
+  return Math.round((eventAnchor - pickedAnchor) / 86400000)
+}
+
+function computeFiresLabel(event, offsetDays, sendTimeLocal) {
+  const anchor = fireDateAnchor(event, offsetDays)
+  if (!anchor) return ''
+  const dateLabel = new Intl.DateTimeFormat('en-US', { timeZone: 'UTC', weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' }).format(anchor)
+  const [hh, mm] = (sendTimeLocal || '09:00').split(':')
+  const hour12 = ((Number(hh) + 11) % 12) + 1
+  const ampm = Number(hh) >= 12 ? 'PM' : 'AM'
+  return `Fires ${dateLabel} at ${hour12}:${mm} ${ampm} (${event?.timezone || 'UTC'})`
 }
 
 function audiencePresetId(statuses) {
@@ -845,6 +878,35 @@ function audiencePresetId(statuses) {
       : statuses && p.statuses.length === statuses.length && p.statuses.every((s) => statuses.includes(s))
   )
   return match ? match.id : 'non-responders'
+}
+
+// Renders a preview the way the guest will actually see it, not a plain
+// text box -- an email-shell card for email, a chat bubble for SMS/WhatsApp.
+function ReminderPreviewFrame({ channel, preview }) {
+  if (channel === 'email') {
+    return (
+      <div style={{ marginTop: 10, borderRadius: 11, background: 'var(--surface-2)', border: '1px solid var(--line)', padding: 14 }}>
+        <div style={{ fontSize: 10, color: 'var(--faint)', borderBottom: '1px dashed var(--line)', paddingBottom: 8, marginBottom: 10 }}>
+          <div>To: guest@example.com</div>
+          <div>From: {'{{organizer_name}}'}</div>
+        </div>
+        <div style={{ fontWeight: 800, fontSize: 13, marginBottom: 8 }}>{preview.subject || '(no subject)'}</div>
+        <div style={{ whiteSpace: 'pre-wrap', fontSize: 12, lineHeight: 1.6 }}>{preview.body}</div>
+      </div>
+    )
+  }
+  const isWhatsapp = channel === 'whatsapp'
+  return (
+    <div style={{ marginTop: 10, borderRadius: 11, background: 'var(--surface-2)', border: '1px solid var(--line)', padding: 14 }}>
+      <div style={{
+        display: 'inline-block', maxWidth: '92%', borderRadius: '14px 14px 14px 3px', padding: '10px 12px',
+        fontSize: 12, lineHeight: 1.5, whiteSpace: 'pre-wrap',
+        background: isWhatsapp ? 'var(--success-soft)' : 'var(--teal)',
+        color: isWhatsapp ? 'var(--ink)' : 'var(--teal-ink)',
+        border: isWhatsapp ? '1px solid var(--success)' : 'none',
+      }}>{preview.body}</div>
+    </div>
+  )
 }
 
 function RealRemindersContent({ eventId, event, notify }) {
@@ -982,6 +1044,14 @@ function RealRemindersContent({ eventId, event, notify }) {
       <label className="rd-field-label">Send</label>
       <div className="rd-row2">
         <div style={{ flex: 1 }}>
+          <label className="rd-field-label" style={{ fontWeight: 400, textTransform: 'none', letterSpacing: 0, fontSize: 11 }}>Date</label>
+          <input className="rd-field" type="date" value={fireDateInputValue(event, form.offset_days)}
+            onChange={(e) => {
+              const days = offsetDaysFromPickedDate(event, e.target.value)
+              if (days !== null) setForm((v) => ({ ...v, offset_days: Math.min(90, Math.max(0, days)) }))
+            }} />
+        </div>
+        <div style={{ flex: 1 }}>
           <label className="rd-field-label" style={{ fontWeight: 400, textTransform: 'none', letterSpacing: 0, fontSize: 11 }}>Days before event</label>
           <input className="rd-field" type="number" min={0} max={90} value={form.offset_days}
             onChange={(e) => setForm((v) => ({ ...v, offset_days: e.target.value }))} />
@@ -992,7 +1062,7 @@ function RealRemindersContent({ eventId, event, notify }) {
             onChange={(e) => setForm((v) => ({ ...v, send_time_local: e.target.value }))} />
         </div>
       </div>
-      <p className="rd-hint">0 = day-of. {computeFiresLabel(event, form.offset_days, form.send_time_local)}</p>
+      <p className="rd-hint">Pick a date or a day-offset — they stay in sync. 0 = day-of. Can't be after the event. {computeFiresLabel(event, form.offset_days, form.send_time_local)}</p>
 
       <label className="rd-field-label" style={{ marginTop: 12 }}>Channels</label>
       <div className="rd-row2" style={{ flexWrap: 'wrap' }}>
@@ -1028,7 +1098,13 @@ function RealRemindersContent({ eventId, event, notify }) {
         <label className="rd-field-label" style={{ marginTop: 12 }}>WhatsApp body</label>
         <textarea className="rr-textarea" value={form.whatsapp_body} onChange={(e) => setForm((v) => ({ ...v, whatsapp_body: e.target.value }))} />
       </>}
-      <p className="rd-hint">Placeholders: {'{{guest_first_name}} {{guest_full_name}} {{event_name}} {{event_date}} {{rsvp_link}}'}</p>
+      <div className="rd-field-label" style={{ marginTop: 4 }}>Placeholders</div>
+      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginBottom: 4 }}>
+        {REMINDER_PLACEHOLDERS.map((p) => (
+          <span key={p} style={{ background: 'var(--surface-3)', color: 'var(--muted)', borderRadius: 100, padding: '3px 9px', fontSize: 10, fontWeight: 700, fontFamily: 'ui-monospace, monospace' }}>{`{{${p}}}`}</span>
+        ))}
+      </div>
+      <p className="rd-hint">{'guest_hub_link'} points a confirmed guest straight to their FestioHub; {'ticket_link'} only resolves once they're confirmed (blank before then).</p>
 
       {editing !== 'new' && form.channels.length > 0 && (
         <div className="rr-panel" style={{ marginTop: 14 }}><div className="rd-panel-body">
@@ -1040,12 +1116,7 @@ function RealRemindersContent({ eventId, event, notify }) {
             <input className="rd-field" placeholder="Send test to…" value={testTo} onChange={(e) => setTestTo(e.target.value)} />
             <button type="button" className="rr-btn secondary" disabled={testBusy || !testTo.trim()} onClick={sendTest}>{testBusy ? 'Sending…' : 'Send test'}</button>
           </div>
-          {preview && (
-            <div style={{ marginTop: 10, padding: 10, borderRadius: 9, background: 'var(--surface-2)', border: '1px solid var(--line)' }}>
-              {preview.subject && <div style={{ fontWeight: 700, marginBottom: 4 }}>{preview.subject}</div>}
-              <div style={{ whiteSpace: 'pre-wrap', fontSize: 12 }}>{preview.body}</div>
-            </div>
-          )}
+          {preview && <ReminderPreviewFrame channel={testChannel} preview={preview} />}
         </div></div>
       )}
 

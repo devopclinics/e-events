@@ -56,12 +56,27 @@ async def send_reminder(event: Event, reminder: EventReminder, db: AsyncSession)
     return targeted, sent
 
 
-def _rsvp_link(event: Event, guest: Guest) -> str:
+def _reminder_extras(event: Event, guest: Guest) -> dict:
+    """Merge-field extras beyond build_context()'s defaults: rsvp_link (the
+    guest's personal /r/{token} link -- pre-confirmation this shows the RSVP
+    form, post-confirmation it shows FestioHub, same URL either way),
+    guest_hub_link (an explicit alias for the same link that deep-links
+    straight to the Hub section, for reminders composed for guests who've
+    already confirmed -- clearer to write than "rsvp_link" when there's
+    nothing left to RSVP for), and ticket_link (the scannable ticket URL,
+    only meaningful once a guest is actually confirmed -- qr_token exists on
+    every guest row from creation, but isn't a real ticket until then, same
+    gating build_context() already applies to festiome_link)."""
     if not guest.invite_token:
         guest.invite_token = str(uuid.uuid4())
-    if not event.checkin_base_url:
-        return ""
-    return f"{event.checkin_base_url.rstrip('/')}/r/{guest.invite_token}"
+    base = event.checkin_base_url.rstrip('/') if event.checkin_base_url else ""
+    extras = {
+        "rsvp_link": f"{base}/r/{guest.invite_token}" if base else "",
+        "guest_hub_link": f"{base}/r/{guest.invite_token}#guest-hub" if base else "",
+    }
+    if guest.rsvp_status == "confirmed" and guest.qr_token and base:
+        extras["ticket_link"] = f"{base}/scan/{guest.qr_token}"
+    return extras
 
 
 async def _send_to_guest(event: Event, reminder: EventReminder, guest: Guest, db: AsyncSession) -> list[str]:
@@ -73,7 +88,7 @@ async def _send_to_guest(event: Event, reminder: EventReminder, guest: Guest, db
     -- it's already enforced one layer down inside messaging._channel_ready()
     and email_service's own send path, same as every other automatic send."""
     blocked = set(event.blocked_messaging_channels or [])
-    ctx = build_context(event, guest, extras={"rsvp_link": _rsvp_link(event, guest)})
+    ctx = build_context(event, guest, extras=_reminder_extras(event, guest))
     fired: list[str] = []
 
     if (

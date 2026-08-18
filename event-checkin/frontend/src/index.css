@@ -1096,3 +1096,7 @@ textarea:focus {
 .gh-page-style-parchment-classic h2 { font-style: italic; }
 .gh-page-style-champagne-minimal .gh-cta,
 .gh-page-style-parchment-classic .gh-cta { border-radius: 999px; }
+
+.gh-page-style-sacred-pilgrimage .gh-panel { border-radius: 8px; }
+.gh-page-style-sacred-pilgrimage h2 { font-style: italic; }
+.gh-page-style-sacred-pilgrimage .gh-cta { border-radius: 999px; }

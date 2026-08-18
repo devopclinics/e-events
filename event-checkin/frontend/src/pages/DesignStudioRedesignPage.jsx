@@ -171,8 +171,16 @@ const HUB_STYLES = [
     heroLayout: 'sidecard',
     colorPreset: { background: '#f8f3e9', surface: '#ffffff', accent: '#7a2e2e', primary: '#3a1414', text: '#2b2118' },
   },
+  {
+    id: 'sacred-pilgrimage', name: 'Sacred Pilgrimage', category: 'Sacred',
+    tagline: 'Black & gold — reverent, side-card hero',
+    bestFor: 'Hajj, Umrah, and other sacred-journey events.',
+    fontSuggestion: 'elegant-serif',
+    heroLayout: 'sidecard',
+    colorPreset: { background: '#0c0b0a', surface: '#1c1815', accent: '#c9a24a', primary: '#c9a24a', text: '#f6f0e2' },
+  },
 ]
-const HUB_STYLE_CATEGORIES = ['All', 'Layout', 'Luxury', 'Warm', 'Vibrant', 'Dark', 'Nature', 'Editorial', 'Classic', 'Corporate', 'Tech', 'Community', 'Formal']
+const HUB_STYLE_CATEGORIES = ['All', 'Layout', 'Luxury', 'Warm', 'Vibrant', 'Dark', 'Nature', 'Editorial', 'Classic', 'Corporate', 'Tech', 'Community', 'Formal', 'Sacred']
 
 // GuestHub tab: same 10 visual themes as FestioHub's "Apply palette" (still
 // reachable there for fine-tuning just the card), presented as whole-

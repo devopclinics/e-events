@@ -415,6 +415,8 @@ function AppRoutes() {
       {(['festio.events', 'staging.festio.events', 'localhost'].includes(window.location.hostname)) && <>
         <Route path="/tickets" element={<PublicTicketsPage />} />
         <Route path="/tickets/e/:eventId" element={<PublicTicketsPage />} />
+        {/* Vanity short link for the Festio Hajj & Umrah 2027 package. */}
+        <Route path="/hajj" element={<Navigate to="/tickets/e/81603ff8-8d33-4422-b2cf-ed4d40e44f85" replace />} />
         <Route path="/tickets/transfers/:token" element={<TicketTransferPage />} />
         <Route path="/embed/tickets/:eventId" element={<PublicTicketsPage embed />} />
       </>}

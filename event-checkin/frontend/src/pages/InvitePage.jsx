@@ -1236,6 +1236,7 @@ const HUB_STYLES = new Set([
   // HUB_SIDECARD_STYLES below)
   'classic-navy', 'ivory-formal', 'slate-professional', 'sage-community', 'champagne-minimal',
   'heritage-navy', 'ivory-ledger', 'graphite-tech', 'meadow-community', 'parchment-classic',
+  'sacred-pilgrimage',
 ])
 const HUB_TABBED_STYLES = new Set([
   'wallet-pass', 'story-feed',
@@ -1249,6 +1250,7 @@ const HUB_TABBED_STYLES = new Set([
 // since design-service's public-theme payload only exposes the hub_style id.
 const HUB_SIDECARD_STYLES = new Set([
   'heritage-navy', 'ivory-ledger', 'graphite-tech', 'meadow-community', 'parchment-classic',
+  'sacred-pilgrimage',
 ])
 const HUB_TAB_ORDER = {
   'story-feed': ['activity', 'messages', 'program', 'speakers', 'pass'],

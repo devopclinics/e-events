@@ -55,9 +55,17 @@ STYLES: dict[str, dict] = {
         "layout": {"eventPage": "photo-hero", "flyer": "full-photo", "guestHub": "photo-header", "pass": "photo-qr-card", "email": "photo-header"},
         "free": False,
     },
+    "sacred": {
+        "label": "Sacred / Pilgrimage",
+        "colors": {"background": "#0C0B0A", "surface": "#1C1815", "primary": "#C9A24A", "accent": "#0E4636", "text": "#F6F0E2"},
+        "fontPairing": "elegant-serif",
+        "buttonStyle": "pill",
+        "layout": {"eventPage": "split-hero", "flyer": "framed-center-card", "guestHub": "reverent-card", "pass": "sacred-qr-card", "email": "branded-card"},
+        "free": False,
+    },
 }
 # Human-friendly leading adjective per style, used to name each family.
-STYLE_NAME = {"luxury": "Luxury", "minimal": "Modern Minimal", "festive": "Festive", "classic": "Classic", "photo-first": "Photo"}
+STYLE_NAME = {"luxury": "Luxury", "minimal": "Modern Minimal", "festive": "Festive", "classic": "Classic", "photo-first": "Photo", "sacred": "Sacred"}
 
 BIRTHDAY_FLYER_NAMES = {
     "luxury": ("birthday-luxury-gold", "Luxury Gold Birthday"),
@@ -73,6 +81,7 @@ FLYER_LAYOUT_BY_STYLE = {
     "minimal": "playful-photo-badge",
     "classic": "framed-center-card",
     "photo-first": "full-bleed-photo",
+    "sacred": "framed-center-card",
 }
 
 FLYER_LAYER_SETS = {
@@ -443,7 +452,7 @@ def _flyer_definition(cat_key: str, cat: dict, style_key: str, colors: dict) -> 
         "decorations": {
             "balloons": cat_key in {"birthday", "baby-shower", "naming-ceremony"},
             "confetti": style_key in {"festive", "minimal"},
-            "ornaments": style_key in {"luxury", "classic"},
+            "ornaments": style_key in {"luxury", "classic", "sacred"},
             "softScrim": style_key == "photo-first",
         },
         "editableZones": [
@@ -514,6 +523,7 @@ CURATED_FAMILIES = (
     ("modern", "Modern", "minimal", "Best for clean, information-led events."),
     ("celebration", "Celebration", "festive", "Best for lively community and family events."),
     ("formal", "Formal", "classic", "Best for ceremonies, banquets, and formal programs."),
+    ("pilgrimage", "Pilgrimage", "sacred", "Best for Hajj, Umrah, and other sacred journeys."),
 )
 
 _REQUIRED_SURFACES = frozenset(SURFACES)

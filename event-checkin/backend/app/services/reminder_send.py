@@ -82,7 +82,20 @@ async def _send_to_guest(event: Event, reminder: EventReminder, guest: Guest, db
     ):
         subject = render(reminder.subject, ctx) or f"Reminder — {event.name}"
         body = render(reminder.email_body, ctx)
-        if body and await reserve_message_credit(event, "email", db=db, reason=f"reminder:{reminder.id}", guest_id=guest.id):
+        if body:
+            # No explicit reserve_message_credit() call here: send_simple_email
+            # already meters every guest-facing email through its own
+            # _charge_email_credit() (email_service.py:329), keyed off the
+            # event_id/guest_id passed below -- same as post_event_message.py's
+            # email branch. Calling reserve_message_credit() ourselves on top
+            # of that isn't just redundant double-charging, it deadlocks: our
+            # own db session would hold the Organization row's FOR UPDATE lock
+            # (uncommitted, since we haven't returned from send_simple_email
+            # yet) while _charge_email_credit's own fresh session blocks
+            # forever trying to acquire that same lock. Confirmed live via
+            # pg_stat_activity during staging verification -- one session
+            # "idle in transaction" holding the lock, the other stuck on
+            # wait_event_type=Lock for the same row.
             await send_simple_email(guest.email, subject, body, event.id, None, guest.id, f"reminder:{reminder.id}")
             fired.append("email")
 

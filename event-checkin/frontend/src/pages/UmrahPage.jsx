@@ -2,27 +2,23 @@ import { useEffect, useState } from 'react'
 import PublicTicketCheckout from '../components/PublicTicketCheckout'
 import './PilgrimagePage.css'
 
-// One-off campaign landing page for the Festio Hajj & Umrah 2027 package --
-// not a generic template. Real ticket data (price/currency) comes from the
-// live event; the real Paystack purchase flow is the same PublicTicketCheckout
-// every organizer's ticket page uses, just re-themed to match here.
-const EVENT_ID = '81603ff8-8d33-4422-b2cf-ed4d40e44f85'
+// One-off campaign landing page for the Festio Umrah 2027 (Ramadan) package --
+// same pattern and shared CSS as HajjPage.jsx, different content/data.
+const EVENT_ID = '3b24c063-d0c3-4704-8eb2-59d4e7abfae5'
 const TONE = { panelStrong: '#1c1815', border: 'rgba(201,162,74,.35)', text: '#f6f0e2', muted: '#cabfa8', accent: '#e4c876' }
-// Pinned to en-NG (not the visitor's own locale) so NGN renders as the
-// naira symbol -- this page's audience is specifically Nigerian, and the
-// approved design shows "₦9,000,000", not the ISO fallback "NGN 9,000,000".
+// Pinned to en-NG (not the visitor's own locale) so NGN renders as the naira symbol.
 const money = (n, c) => new Intl.NumberFormat('en-NG', { style: 'currency', currency: c, maximumFractionDigits: 0 }).format(Number(n || 0) / 100)
 
 function scrollToTickets() {
   document.getElementById('tickets')?.scrollIntoView({ behavior: 'smooth' })
 }
 
-export default function HajjPage() {
+export default function UmrahPage() {
   const [event, setEvent] = useState(null)
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
-    document.title = 'Festio Hajj & Umrah 2027'
+    document.title = 'Festio Umrah 2027'
     fetch('/api/ticketing/public/events', { cache: 'no-store' })
       .then(r => r.ok ? r.json() : Promise.reject())
       .then(d => setEvent((d.events || []).find(e => e.id === EVENT_ID) || null))
@@ -47,9 +43,9 @@ export default function HajjPage() {
       <section className="hj-hero">
         <div className="hj-star-field" aria-hidden="true"></div>
         <div className="hj-wrap" style={{ position: 'relative' }}>
-          <span className="hj-eyebrow">2027 · Sponsored Group Departure</span>
-          <h1>Answer the call,<br /><em>fully guided</em>, start to finish.</h1>
-          <p className="hj-lede">One all-inclusive package covering accommodation, feeding, transport, rites guidance, and preparation — for pilgrims across all 21 local government areas.</p>
+          <span className="hj-eyebrow">2027 / 1448 A.H. · Ramadan Umrah</span>
+          <h1>The Lesser Hajj,<br /><em>fully guided</em>, start to finish.</h1>
+          <p className="hj-lede">One all-inclusive Ramadan Umrah package — accommodation close to the Haram, daily feeding, guided ziyarah, and spiritual guidance throughout.</p>
           <div className="hj-price-badge"><span className="hj-amt">{price}</span><span className="hj-sub">all-inclusive<br />per pilgrim</span></div>
           <div className="hj-cta-row">
             <button className="hj-btn hj-btn-primary" onClick={scrollToTickets}>Reserve Your Place</button>
@@ -74,42 +70,27 @@ export default function HajjPage() {
           <div className="hj-groups">
             <div className="hj-group">
               <div className="hj-gnum">01</div>
-              <h3>Travel &amp; Stay</h3>
+              <h3>Stay &amp; Travel</h3>
               <ul>
-                <li><span className="hj-dot"></span><span><b>Accommodation</b> in Madinah and Makkah</span></li>
-                <li><span className="hj-dot"></span><span><b>Return transport</b> — flights and ground transfers</span></li>
-                <li><span className="hj-dot"></span><span><b>Luggage allowance</b> — two 23kg bags, one 8kg bag, and a sling bag</span></li>
+                <li><span className="hj-dot"></span><span><b>Accommodation</b> closer to the Haram</span></li>
+                <li><span className="hj-dot"></span><span><b>Comfortable local transportation</b> throughout</span></li>
+                <li><span className="hj-dot"></span><span><b>Daily feeding</b> — breakfast and dinner in local delicacies</span></li>
               </ul>
             </div>
             <div className="hj-group">
               <div className="hj-gnum">02</div>
-              <h3>Rites &amp; Guidance</h3>
+              <h3>Guidance &amp; Care</h3>
               <ul>
-                <li><span className="hj-dot"></span><span>Complete <b>guidance through every Hajj rite</b></span></li>
-                <li><span className="hj-dot"></span><span>Guided visits to <b>historical sites</b></span></li>
-                <li><span className="hj-dot"></span><span><b>Sacrificial ram (Hady)</b> arranged and covered</span></li>
-              </ul>
-            </div>
-            <div className="hj-group">
-              <div className="hj-gnum">03</div>
-              <h3>Provisions &amp; Comfort</h3>
-              <ul>
-                <li><span className="hj-dot"></span><span><b>Full feeding</b> throughout the journey</span></li>
-                <li><span className="hj-dot"></span><span><b>Ihram cloth</b> cost refunded</span></li>
-                <li><span className="hj-dot"></span><span><b>Free medical screening</b> before departure</span></li>
-                <li><span className="hj-dot"></span><span><b>$500 BTA</b> (Basic Travel Allowance)</span></li>
-                <li><span className="hj-dot"></span><span><b>12 yards of uniform Ankara</b> — two designs, 6 yards each</span></li>
-              </ul>
-            </div>
-            <div className="hj-group">
-              <div className="hj-gnum">04</div>
-              <h3>Community &amp; Preparation</h3>
-              <ul>
-                <li><span className="hj-dot"></span><span><b>Pre-departure lectures</b> — four weekends, across all 21 local government areas</span></li>
-                <li><span className="hj-dot"></span><span>A <b>Grand Seminar &amp; send-forth celebration</b>, one day before departure</span></li>
+                <li><span className="hj-dot"></span><span><b>Ziyarah</b> — guided visits to historical sites in Makkah and Madinah</span></li>
+                <li><span className="hj-dot"></span><span><b>Spiritual counseling &amp; guidance</b> throughout the journey</span></li>
+                <li><span className="hj-dot"></span><span><b>Medical and health benefits</b> for every pilgrim</span></li>
               </ul>
             </div>
           </div>
+          <p style={{ maxWidth: 560, margin: '40px auto 0', textAlign: 'center', fontStyle: 'italic', color: 'var(--cream-dim)', fontFamily: 'var(--serif)', fontSize: 16, lineHeight: 1.7 }}>
+            "Indeed, as-Safa and al-Marwa are among the symbols of Allah. So, whoever makes Hajj to the House or performs Umrah — there is no blame upon him for walking between them. And whoever volunteers good — then indeed Allah is appreciative and knowing."
+            <br /><span style={{ fontStyle: 'normal', color: 'var(--gold-dim)', fontSize: 13 }}>Qur'an 2:158</span>
+          </p>
         </div>
       </section>
 
@@ -120,8 +101,8 @@ export default function HajjPage() {
             <h2>Tell us when you'd like to go.</h2>
           </div>
           <div className="hj-dates-card">
-            <p className="hj-note">Hajj travel is coordinated around flight and visa allocations each season, so exact dates can't be promised — but tell us your preferred window when you reserve below and our team will do everything possible to secure it.</p>
-            <div className="hj-best-effort">Best-effort confirmation during the Hajj season</div>
+            <p className="hj-note">Ramadan Umrah travel is coordinated around flight and visa allocations each season, so exact dates can't be promised — but tell us your preferred window when you reserve below and our team will do everything possible to secure it.</p>
+            <div className="hj-best-effort">Best-effort confirmation during the Ramadan season</div>
             <div className="hj-arrow-down" onClick={scrollToTickets}>↓ Enter your dates below</div>
           </div>
         </div>

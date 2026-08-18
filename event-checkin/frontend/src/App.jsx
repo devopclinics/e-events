@@ -69,11 +69,15 @@ const TicketingRedesignPage = lazy(() => import('./pages/TicketingRedesignPage')
 const TicketOrderPage = lazy(() => import('./pages/TicketOrderPage'))
 const PublicTicketsPage = lazy(() => import('./pages/PublicTicketsPage'))
 const HajjPage = lazy(() => import('./pages/HajjPage'))
+const UmrahPage = lazy(() => import('./pages/UmrahPage'))
 // A handful of events have their own dedicated campaign page instead of the
 // generic ticket-checkout template. Keyed by event id so the canonical
 // /tickets/e/:eventId URL (what the marketplace and every sales_url link to)
 // shows the same page as any vanity short link for that event.
-const DEDICATED_TICKET_PAGES = { '81603ff8-8d33-4422-b2cf-ed4d40e44f85': HajjPage }
+const DEDICATED_TICKET_PAGES = {
+  '81603ff8-8d33-4422-b2cf-ed4d40e44f85': HajjPage,
+  '3b24c063-d0c3-4704-8eb2-59d4e7abfae5': UmrahPage,
+}
 function TicketsEventRoute() {
   const { eventId } = useParams()
   const Dedicated = DEDICATED_TICKET_PAGES[eventId]
@@ -428,6 +432,7 @@ function AppRoutes() {
         <Route path="/tickets/e/:eventId" element={<TicketsEventRoute />} />
         {/* Vanity short link — the real page lives at /tickets/e/:eventId above. */}
         <Route path="/hajj" element={<Navigate to="/tickets/e/81603ff8-8d33-4422-b2cf-ed4d40e44f85" replace />} />
+        <Route path="/umrah" element={<Navigate to="/tickets/e/3b24c063-d0c3-4704-8eb2-59d4e7abfae5" replace />} />
         <Route path="/tickets/transfers/:token" element={<TicketTransferPage />} />
         <Route path="/embed/tickets/:eventId" element={<PublicTicketsPage embed />} />
       </>}

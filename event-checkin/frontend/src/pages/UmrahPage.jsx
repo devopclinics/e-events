@@ -41,6 +41,7 @@ export default function UmrahPage() {
       </div>
 
       <section className="hj-hero">
+        <div className="hj-hero-photo" style={{ backgroundImage: 'url(/pilgrimage/umrah-hero.jpg)' }} aria-hidden="true"></div>
         <div className="hj-star-field" aria-hidden="true"></div>
         <div className="hj-wrap" style={{ position: 'relative' }}>
           <span className="hj-eyebrow">2027 / 1448 A.H. · Ramadan Umrah</span>
@@ -139,7 +140,7 @@ export default function UmrahPage() {
         <PublicTicketCheckout eventId={EVENT_ID} tone={TONE} requirePhone />
       </section>
 
-      <footer className="hj-footer">Powered by <a href="/">Festio</a> · Secure checkout · Documentation prepared by our team</footer>
+      <footer className="hj-footer">Powered by <a href="/">Festio</a> · Secure checkout · Documentation prepared by our team<br /><span className="hj-photo-credit">Masjid an-Nabawi photo via Unsplash</span></footer>
     </main>
   )
 }

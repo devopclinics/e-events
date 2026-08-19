@@ -45,6 +45,7 @@ export default function HajjPage() {
       </div>
 
       <section className="hj-hero">
+        <div className="hj-hero-photo" style={{ backgroundImage: 'url(/pilgrimage/hajj-hero.jpg)' }} aria-hidden="true"></div>
         <div className="hj-star-field" aria-hidden="true"></div>
         <div className="hj-wrap" style={{ position: 'relative' }}>
           <span className="hj-eyebrow">2027 · Sponsored Group Departure</span>
@@ -158,7 +159,7 @@ export default function HajjPage() {
         <PublicTicketCheckout eventId={EVENT_ID} tone={TONE} requirePhone />
       </section>
 
-      <footer className="hj-footer">Powered by <a href="/">Festio</a> · Secure checkout · Documentation prepared by our team</footer>
+      <footer className="hj-footer">Powered by <a href="/">Festio</a> · Secure checkout · Documentation prepared by our team<br /><span className="hj-photo-credit">Masjid al-Haram photo via Unsplash</span></footer>
     </main>
   )
 }

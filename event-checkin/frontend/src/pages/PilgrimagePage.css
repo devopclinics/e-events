@@ -21,6 +21,15 @@
 
 .hj-hero{position:relative; overflow:hidden; padding:88px 0 64px; text-align:center;}
 .hj-star-field{position:absolute; inset:0; pointer-events:none; background-image:radial-gradient(circle at 20% 22%, rgba(201,162,74,.16), transparent 38%), radial-gradient(circle at 82% 70%, rgba(201,162,74,.10), transparent 42%);}
+.hj-hero-photo{
+  position:absolute; inset:0; pointer-events:none; background-size:cover; background-repeat:no-repeat;
+  background-position:center 30%;
+}
+.hj-hero-photo::after{
+  content:''; position:absolute; inset:0;
+  background:
+    linear-gradient(180deg, rgba(12,11,10,.94) 0%, rgba(12,11,10,.55) 32%, rgba(12,11,10,.72) 78%, var(--ink) 100%);
+}
 .hj-eyebrow{display:inline-block; font-size:12px; letter-spacing:.3em; text-transform:uppercase; color:var(--gold-bright); margin-bottom:22px; font-weight:600;}
 .hj-hero h1{font-family:var(--serif); font-weight:400; font-size:clamp(36px,6vw,64px); line-height:1.08; margin:0 0 22px; color:var(--cream); text-wrap:balance;}
 .hj-hero h1 em{font-style:italic; color:var(--gold-bright);}
@@ -78,6 +87,7 @@
 .hj-checkout-shell .hj-block-head{margin-bottom:28px;}
 
 .hj-footer{text-align:center; padding:46px 0 60px; color:var(--gold-dim); font-size:12.5px;}
+.hj-photo-credit{display:inline-block; margin-top:6px; font-size:11px; opacity:.65;}
 .hj-footer a{color:var(--gold-bright); font-weight:700;}
 
 @media (max-width:680px){

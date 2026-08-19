@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 
 const ticketingAvailable = typeof window !== 'undefined' && ['festio.events', 'staging.festio.events', 'localhost'].includes(window.location.hostname)
 const isStagingHost = typeof window !== 'undefined' && ['staging.festio.events', 'localhost'].includes(window.location.hostname)
@@ -16,6 +16,8 @@ export default function PublicTicketCheckout({ eventId, tone, onAvailabilityChan
   const [promoCode, setPromoCode] = useState('')
   const [customAnswers, setCustomAnswers] = useState({})
   const [donationAmounts, setDonationAmounts] = useState({})
+  const [pageIndex, setPageIndex] = useState(0)
+  const formRef = useRef(null)
   useEffect(() => {
     if (!ticketingAvailable || !eventId) { onAvailabilityChange?.(false); return }
     fetch(`/api/ticketing/public/events/${encodeURIComponent(eventId)}/tickets`, { cache: 'no-store' })
@@ -32,6 +34,30 @@ export default function PublicTicketCheckout({ eventId, tone, onAvailabilityChan
   // (checkout would always fail with "choose at least one ticket") and the
   // copy promising a live Stripe/Paystack charge would be actively wrong.
   const hasSellableTickets = catalog.tickets.some(t => t.product_type !== 'external')
+
+  // Optional multi-step checkout: fields carry an optional `step` label (set
+  // in the checkout-form builder). Fields sharing a step page together,
+  // navigated with Next/Back; fields with no step land on the first page
+  // alongside ticket selection and buyer info, same as before this existed.
+  // When nothing sets `step`, `pages` is null and the form renders exactly
+  // as a single page -- every existing organizer's checkout is unaffected.
+  const allFields = catalog.checkout_fields || []
+  const stepNames = [...new Set(allFields.filter(f => f.step).map(f => f.step))]
+  const pages = stepNames.length ? ['__main', ...stepNames, '__review'] : null
+  const currentPage = pages ? pages[Math.min(pageIndex, pages.length - 1)] : null
+  const fieldsForPage = (step) => allFields.filter(f => (f.step || null) === step)
+
+  function goNext() {
+    if (formRef.current && !formRef.current.reportValidity()) return
+    setPageIndex(i => Math.min(i + 1, pages.length - 1))
+  }
+  function goBack() {
+    setPageIndex(i => Math.max(i - 1, 0))
+  }
+
+  function renderField(field) {
+    return <label key={field.id} className="block"><span className="mb-1 block text-sm font-bold">{field.label}{field.required?' *':''}</span>{field.type==='textarea'?<textarea required={field.required} className="w-full rounded-xl border bg-transparent px-4 py-3" style={{borderColor:tone.border}} value={customAnswers[field.id]||''} onChange={e=>setCustomAnswers({...customAnswers,[field.id]:e.target.value})}/>:field.type==='select'?<select required={field.required} className="w-full rounded-xl border bg-transparent px-4 py-3" style={{borderColor:tone.border}} value={customAnswers[field.id]||''} onChange={e=>setCustomAnswers({...customAnswers,[field.id]:e.target.value})}><option value="">Choose…</option>{field.options.map(x=><option key={x}>{x}</option>)}</select>:field.type==='checkbox'?<input type="checkbox" required={field.required} checked={!!customAnswers[field.id]} onChange={e=>setCustomAnswers({...customAnswers,[field.id]:e.target.checked})}/>:field.type==='date'?<input type="date" required={field.required} className="w-full rounded-xl border bg-transparent px-4 py-3" style={{borderColor:tone.border,colorScheme:'light'}} value={customAnswers[field.id]||''} onChange={e=>setCustomAnswers({...customAnswers,[field.id]:e.target.value})}/>:<input required={field.required} className="w-full rounded-xl border bg-transparent px-4 py-3" style={{borderColor:tone.border}} value={customAnswers[field.id]||''} onChange={e=>setCustomAnswers({...customAnswers,[field.id]:e.target.value})}/>}</label>
+  }
 
   function changeQuantity(ticketId, raw) {
     const quantity = Math.max(0, Number(raw) || 0)
@@ -99,22 +125,38 @@ export default function PublicTicketCheckout({ eventId, tone, onAvailabilityChan
         <h2 id="ticket-checkout-title" className="mt-1 text-3xl font-extrabold">{hasSellableTickets ? 'Buy tickets' : 'Registration'}</h2>
         <p id="checkout-help" style={{ color: tone.muted }}>{hasSellableTickets ? `Secure checkout through ${catalog.currency === 'NGN' ? 'Paystack' : 'Stripe'}.${isStagingHost ? ' No live charge will be made.' : ''}` : 'Registration is handled on the organizer’s own site — pricing shown here for reference.'}</p>
       </div>
-      <form onSubmit={checkout} className="space-y-5">
-        {hasSellableTickets && <div className="grid gap-3 sm:grid-cols-2"><input required className="rounded-xl border bg-transparent px-4 py-3" style={{ borderColor: tone.border }} placeholder="First name" value={buyer.firstName} onChange={e => setBuyer({...buyer,firstName:e.target.value})}/><input required className="rounded-xl border bg-transparent px-4 py-3" style={{ borderColor: tone.border }} placeholder="Last name" value={buyer.lastName} onChange={e => setBuyer({...buyer,lastName:e.target.value})}/><input required type="email" className="rounded-xl border bg-transparent px-4 py-3" style={{ borderColor: tone.border }} placeholder="Email" value={buyer.email} onChange={e => setBuyer({...buyer,email:e.target.value})}/><input required={requirePhone} className="rounded-xl border bg-transparent px-4 py-3" style={{ borderColor: tone.border }} placeholder={requirePhone ? 'Phone' : 'Phone (optional)'} value={buyer.phone} onChange={e => setBuyer({...buyer,phone:e.target.value})}/></div>}
-        {catalog.tickets.map(t => t.product_type==='external' ? <div key={t.id} className="grid gap-3 rounded-2xl border p-4 sm:grid-cols-[1fr_140px]" style={{ borderColor: tone.border }}>
-          <div><strong className="text-lg">{t.name}</strong><p style={{ color: tone.muted }}>{t.description}</p><b style={{ color: tone.accent }}>{cash(t.price,t.currency)}</b></div>
-          <a href={t.external_url} target="_blank" rel="noreferrer" className="flex min-h-11 items-center justify-center rounded-xl px-3 py-2 text-center font-bold" style={{background:tone.accent,color:'#07111f'}}>Register externally ↗</a>
-        </div> : t.product_type==='donation' ? <div key={t.id} className="grid gap-3 rounded-2xl border p-4 sm:grid-cols-[1fr_140px]" style={{ borderColor: tone.border }}>
-          <div><strong className="text-lg">{t.name} 🎁</strong><p style={{ color: tone.muted }}>{t.description}</p><b style={{ color: tone.accent }}>{t.allow_custom_amount?`${cash(t.price,t.currency)} minimum`:cash(t.price,t.currency)}</b>{!t.allow_custom_amount && ` · ${t.available} available`}</div>
-          {t.allow_custom_amount
-            ? <input aria-label={`${t.name} amount`} type="number" min={t.price/100} step="0.01" placeholder={(t.price/100).toFixed(2)} value={donationAmounts[t.id]||''} onChange={e=>changeDonationAmount(t,e.target.value)} className="rounded-xl border bg-transparent px-3 py-2" style={{ borderColor:tone.border }}/>
-            : (t.available>0?<input aria-label={`${t.name} quantity`} type="number" min="0" max={Math.min(t.available,t.max_per_order)} value={lines[t.id] || 0} onChange={e => changeQuantity(t.id,e.target.value)} className="rounded-xl border bg-transparent px-3 py-2" style={{ borderColor:tone.border }}/>:<span className="rounded-xl px-3 py-2 font-bold text-center" style={{color:tone.muted}}>Sold out</span>)}
-        </div> : <div key={t.id} className="grid gap-3 rounded-2xl border p-4 sm:grid-cols-[1fr_100px]" style={{ borderColor: tone.border }}><div><strong className="text-lg">{t.name}</strong><p style={{ color: tone.muted }}>{t.description}</p><b style={{ color: tone.accent }}>{cash(t.price,t.currency)}</b> · {t.available} available</div>{t.available>0?<input aria-label={`${t.name} quantity`} type="number" min="0" max={Math.min(t.available,t.max_per_order)} value={lines[t.id] || 0} onChange={e => changeQuantity(t.id,e.target.value)} className="rounded-xl border bg-transparent px-3 py-2" style={{ borderColor:tone.border }}/>:<button type="button" onClick={()=>joinWaitlist(t)} disabled={waitlisted[t.id]} className="rounded-xl px-3 py-2 font-bold" style={{background:tone.accent,color:'#07111f'}}>{waitlisted[t.id]?'Joined':'Waitlist'}</button>}{Number(lines[t.id]||0)>0 && <div className="space-y-2 sm:col-span-2"><p className="text-xs font-bold uppercase tracking-wider" style={{color:tone.muted}}>Attendee details are optional · every ticket still gets a unique QR</p>{(names[t.id]||[]).map((attendee,index)=><div key={index} className="grid gap-2 sm:grid-cols-3"><input className="rounded-xl border bg-transparent px-4 py-3" style={{borderColor:tone.border}} placeholder={`Ticket ${index+1} first name`} value={attendee.first_name} onChange={e=>changeAttendee(t.id,index,'first_name',e.target.value)}/><input className="rounded-xl border bg-transparent px-4 py-3" style={{borderColor:tone.border}} placeholder="Last name" value={attendee.last_name} onChange={e=>changeAttendee(t.id,index,'last_name',e.target.value)}/><input type="email" className="rounded-xl border bg-transparent px-4 py-3" style={{borderColor:tone.border}} placeholder="Individual email (optional)" value={attendee.email} onChange={e=>changeAttendee(t.id,index,'email',e.target.value)}/></div>)}</div>}</div>)}
-        {hasSellableTickets && (catalog.checkout_fields||[]).map(field=><label key={field.id} className="block"><span className="mb-1 block text-sm font-bold">{field.label}{field.required?' *':''}</span>{field.type==='textarea'?<textarea required={field.required} className="w-full rounded-xl border bg-transparent px-4 py-3" style={{borderColor:tone.border}} value={customAnswers[field.id]||''} onChange={e=>setCustomAnswers({...customAnswers,[field.id]:e.target.value})}/>:field.type==='select'?<select required={field.required} className="w-full rounded-xl border bg-transparent px-4 py-3" style={{borderColor:tone.border}} value={customAnswers[field.id]||''} onChange={e=>setCustomAnswers({...customAnswers,[field.id]:e.target.value})}><option value="">Choose…</option>{field.options.map(x=><option key={x}>{x}</option>)}</select>:field.type==='checkbox'?<input type="checkbox" required={field.required} checked={!!customAnswers[field.id]} onChange={e=>setCustomAnswers({...customAnswers,[field.id]:e.target.checked})}/>:field.type==='date'?<input type="date" required={field.required} className="w-full rounded-xl border bg-transparent px-4 py-3" style={{borderColor:tone.border,colorScheme:'light'}} value={customAnswers[field.id]||''} onChange={e=>setCustomAnswers({...customAnswers,[field.id]:e.target.value})}/>:<input required={field.required} className="w-full rounded-xl border bg-transparent px-4 py-3" style={{borderColor:tone.border}} value={customAnswers[field.id]||''} onChange={e=>setCustomAnswers({...customAnswers,[field.id]:e.target.value})}/>}</label>)}
-        {hasSellableTickets && catalog.tax?.enabled&&<p className="rounded-xl border p-3 text-sm" style={{borderColor:tone.border,color:tone.muted}}>{(catalog.tax.bps/100).toFixed(2)}% event tax {catalog.tax.paid_by==='buyer'?'will be added to the customer total at checkout.':'is included in the listed price and paid by the organizer.'}</p>}
-        {hasSellableTickets && <label className="block max-w-md"><span className="mb-1 block text-sm font-bold">Promo code <small style={{color:tone.muted}}>(optional)</small></span><input className="w-full rounded-xl border bg-transparent px-4 py-3 uppercase" style={{borderColor:tone.border}} maxLength="40" autoComplete="off" placeholder="Enter discount code" value={promoCode} onChange={e=>setPromoCode(e.target.value)}/></label>}
+      {pages && <div className="mb-4 flex items-center gap-2 text-xs font-bold uppercase tracking-wider" style={{ color: tone.muted }}>
+        {pages.map((p, i) => <span key={p} style={{ color: i <= pageIndex ? tone.accent : tone.muted, opacity: i <= pageIndex ? 1 : .5 }}>
+          {i > 0 && <span style={{ margin: '0 6px' }}>›</span>}
+          {p === '__main' ? 'Tickets' : p === '__review' ? 'Review' : p}
+        </span>)}
+      </div>}
+      <form onSubmit={checkout} className="space-y-5" ref={formRef}>
+        {(!pages || currentPage === '__main') && <>
+          {hasSellableTickets && <div className="grid gap-3 sm:grid-cols-2"><input required className="rounded-xl border bg-transparent px-4 py-3" style={{ borderColor: tone.border }} placeholder="First name" value={buyer.firstName} onChange={e => setBuyer({...buyer,firstName:e.target.value})}/><input required className="rounded-xl border bg-transparent px-4 py-3" style={{ borderColor: tone.border }} placeholder="Last name" value={buyer.lastName} onChange={e => setBuyer({...buyer,lastName:e.target.value})}/><input required type="email" className="rounded-xl border bg-transparent px-4 py-3" style={{ borderColor: tone.border }} placeholder="Email" value={buyer.email} onChange={e => setBuyer({...buyer,email:e.target.value})}/><input required={requirePhone} className="rounded-xl border bg-transparent px-4 py-3" style={{ borderColor: tone.border }} placeholder={requirePhone ? 'Phone' : 'Phone (optional)'} value={buyer.phone} onChange={e => setBuyer({...buyer,phone:e.target.value})}/></div>}
+          {catalog.tickets.map(t => t.product_type==='external' ? <div key={t.id} className="grid gap-3 rounded-2xl border p-4 sm:grid-cols-[1fr_140px]" style={{ borderColor: tone.border }}>
+            <div><strong className="text-lg">{t.name}</strong><p style={{ color: tone.muted }}>{t.description}</p><b style={{ color: tone.accent }}>{cash(t.price,t.currency)}</b></div>
+            <a href={t.external_url} target="_blank" rel="noreferrer" className="flex min-h-11 items-center justify-center rounded-xl px-3 py-2 text-center font-bold" style={{background:tone.accent,color:'#07111f'}}>Register externally ↗</a>
+          </div> : t.product_type==='donation' ? <div key={t.id} className="grid gap-3 rounded-2xl border p-4 sm:grid-cols-[1fr_140px]" style={{ borderColor: tone.border }}>
+            <div><strong className="text-lg">{t.name} 🎁</strong><p style={{ color: tone.muted }}>{t.description}</p><b style={{ color: tone.accent }}>{t.allow_custom_amount?`${cash(t.price,t.currency)} minimum`:cash(t.price,t.currency)}</b>{!t.allow_custom_amount && ` · ${t.available} available`}</div>
+            {t.allow_custom_amount
+              ? <input aria-label={`${t.name} amount`} type="number" min={t.price/100} step="0.01" placeholder={(t.price/100).toFixed(2)} value={donationAmounts[t.id]||''} onChange={e=>changeDonationAmount(t,e.target.value)} className="rounded-xl border bg-transparent px-3 py-2" style={{ borderColor:tone.border }}/>
+              : (t.available>0?<input aria-label={`${t.name} quantity`} type="number" min="0" max={Math.min(t.available,t.max_per_order)} value={lines[t.id] || 0} onChange={e => changeQuantity(t.id,e.target.value)} className="rounded-xl border bg-transparent px-3 py-2" style={{ borderColor:tone.border }}/>:<span className="rounded-xl px-3 py-2 font-bold text-center" style={{color:tone.muted}}>Sold out</span>)}
+          </div> : <div key={t.id} className="grid gap-3 rounded-2xl border p-4 sm:grid-cols-[1fr_100px]" style={{ borderColor: tone.border }}><div><strong className="text-lg">{t.name}</strong><p style={{ color: tone.muted }}>{t.description}</p><b style={{ color: tone.accent }}>{cash(t.price,t.currency)}</b> · {t.available} available</div>{t.available>0?<input aria-label={`${t.name} quantity`} type="number" min="0" max={Math.min(t.available,t.max_per_order)} value={lines[t.id] || 0} onChange={e => changeQuantity(t.id,e.target.value)} className="rounded-xl border bg-transparent px-3 py-2" style={{ borderColor:tone.border }}/>:<button type="button" onClick={()=>joinWaitlist(t)} disabled={waitlisted[t.id]} className="rounded-xl px-3 py-2 font-bold" style={{background:tone.accent,color:'#07111f'}}>{waitlisted[t.id]?'Joined':'Waitlist'}</button>}{Number(lines[t.id]||0)>0 && <div className="space-y-2 sm:col-span-2"><p className="text-xs font-bold uppercase tracking-wider" style={{color:tone.muted}}>Attendee details are optional · every ticket still gets a unique QR</p>{(names[t.id]||[]).map((attendee,index)=><div key={index} className="grid gap-2 sm:grid-cols-3"><input className="rounded-xl border bg-transparent px-4 py-3" style={{borderColor:tone.border}} placeholder={`Ticket ${index+1} first name`} value={attendee.first_name} onChange={e=>changeAttendee(t.id,index,'first_name',e.target.value)}/><input className="rounded-xl border bg-transparent px-4 py-3" style={{borderColor:tone.border}} placeholder="Last name" value={attendee.last_name} onChange={e=>changeAttendee(t.id,index,'last_name',e.target.value)}/><input type="email" className="rounded-xl border bg-transparent px-4 py-3" style={{borderColor:tone.border}} placeholder="Individual email (optional)" value={attendee.email} onChange={e=>changeAttendee(t.id,index,'email',e.target.value)}/></div>)}</div>}</div>)}
+          {hasSellableTickets && fieldsForPage(null).map(renderField)}
+        </>}
+        {pages && stepNames.includes(currentPage) && hasSellableTickets && <div className="space-y-4">{fieldsForPage(currentPage).map(renderField)}</div>}
+        {(!pages || currentPage === '__review') && <>
+          {hasSellableTickets && catalog.tax?.enabled&&<p className="rounded-xl border p-3 text-sm" style={{borderColor:tone.border,color:tone.muted}}>{(catalog.tax.bps/100).toFixed(2)}% event tax {catalog.tax.paid_by==='buyer'?'will be added to the customer total at checkout.':'is included in the listed price and paid by the organizer.'}</p>}
+          {hasSellableTickets && <label className="block max-w-md"><span className="mb-1 block text-sm font-bold">Promo code <small style={{color:tone.muted}}>(optional)</small></span><input className="w-full rounded-xl border bg-transparent px-4 py-3 uppercase" style={{borderColor:tone.border}} maxLength="40" autoComplete="off" placeholder="Enter discount code" value={promoCode} onChange={e=>setPromoCode(e.target.value)}/></label>}
+        </>}
         {error && <p id="checkout-error" role="alert" className="rounded-xl bg-red-500/15 p-3 font-semibold text-red-300">{error}</p>}
-        {hasSellableTickets && <button disabled={busy} aria-busy={busy} className="min-h-12 rounded-2xl px-7 py-3 font-extrabold focus:outline-none focus:ring-4" style={{ background:tone.accent,color:'#07111f' }}>{busy ? 'Opening secure checkout…' : 'Continue to secure checkout'}</button>}
+        {hasSellableTickets && <div className="flex items-center gap-3">
+          {pages && pageIndex > 0 && <button type="button" onClick={goBack} className="rounded-2xl border px-6 py-3 font-bold" style={{ borderColor: tone.border, color: tone.text }}>Back</button>}
+          {pages && pageIndex < pages.length - 1
+            ? <button type="button" onClick={goNext} className="min-h-12 rounded-2xl px-7 py-3 font-extrabold focus:outline-none focus:ring-4" style={{ background:tone.accent,color:'#07111f' }}>Next</button>
+            : <button disabled={busy} aria-busy={busy} className="min-h-12 rounded-2xl px-7 py-3 font-extrabold focus:outline-none focus:ring-4" style={{ background:tone.accent,color:'#07111f' }}>{busy ? 'Opening secure checkout…' : 'Continue to secure checkout'}</button>}
+        </div>}
       </form>
     </div>
   </section>

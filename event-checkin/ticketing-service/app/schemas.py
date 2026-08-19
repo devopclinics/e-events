@@ -9,6 +9,12 @@ class CheckoutFieldIn(BaseModel):
     type: Literal["text", "textarea", "select", "checkbox", "date"] = "text"
     required: bool = False
     options: list[str] = Field(default_factory=list, max_length=50)
+    # Optional step/section name. Fields sharing a step render together as one
+    # page of a multi-step checkout, navigated with Next/Back; fields with no
+    # step (the default) all land on a single implicit step, so existing
+    # single-page forms are unaffected. Step order follows first appearance
+    # in the fields list.
+    step: str | None = Field(default=None, max_length=80)
 
     @model_validator(mode="after")
     def select_options(self):

@@ -136,10 +136,10 @@ export default function UmrahPage() {
             <h2>Secure checkout.</h2>
           </div>
         </div>
-        <PublicTicketCheckout eventId={EVENT_ID} tone={TONE} />
+        <PublicTicketCheckout eventId={EVENT_ID} tone={TONE} requirePhone />
       </section>
 
-      <footer className="hj-footer">Powered by <a href="/">Festio</a> · Secure checkout · Unique QR admission</footer>
+      <footer className="hj-footer">Powered by <a href="/">Festio</a> · Secure checkout · Documentation prepared by our team</footer>
     </main>
   )
 }

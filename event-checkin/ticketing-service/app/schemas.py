@@ -6,7 +6,7 @@ from pydantic import BaseModel, EmailStr, Field, model_validator
 class CheckoutFieldIn(BaseModel):
     id: str = Field(min_length=1, max_length=50, pattern="^[A-Za-z0-9_-]+$")
     label: str = Field(min_length=1, max_length=120)
-    type: Literal["text", "textarea", "select", "checkbox"] = "text"
+    type: Literal["text", "textarea", "select", "checkbox", "date"] = "text"
     required: bool = False
     options: list[str] = Field(default_factory=list, max_length=50)
 

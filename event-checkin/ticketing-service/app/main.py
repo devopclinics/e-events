@@ -902,12 +902,26 @@ async def create_order(event_id: str, body: OrderIn, db: AsyncSession = Depends(
     await db.flush()
     if offer:
         offer.status = "claimed"
-    reference, url = await provider(cfg.provider).create_checkout(order_id=order.id,
-        access_token=order.access_token, email=order.buyer_email, amount=order.total, currency=order.currency,
-        account_id=cfg.provider_account_id, fee=order.platform_fee)
-    order.provider_reference, order.checkout_url = reference, url
-    await db.commit()
-    return {"order_id": order.id, "status": order.status, "checkout_url": url,
+    # Nothing to charge -- a genuinely free ticket product, or a promo code
+    # that discounted a paid one down to zero. Stripe/Paystack both reject a
+    # $0 payment-mode Checkout Session, so there's no provider to hand this
+    # to; complete the order directly instead of erroring out at checkout.
+    if order.total == 0:
+        order.status, order.paid_at = "paid", datetime.utcnow()
+        for line in body.lines:
+            products[line.product_id].sold += line.quantity
+        if promo:
+            promo.uses += 1
+        order.checkout_url = f"{settings.public_base_url}/tickets/orders/{order.id}?token={order.access_token}&checkout=success"
+        await db.commit()
+        await fulfill(db, order)
+    else:
+        reference, url = await provider(cfg.provider).create_checkout(order_id=order.id,
+            access_token=order.access_token, email=order.buyer_email, amount=order.total, currency=order.currency,
+            account_id=cfg.provider_account_id, fee=order.platform_fee)
+        order.provider_reference, order.checkout_url = reference, url
+        await db.commit()
+    return {"order_id": order.id, "status": order.status, "checkout_url": order.checkout_url,
             "expires_at": order.hold_expires_at,
             "test_mode": settings.environment.lower() != "production"}
 

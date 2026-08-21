@@ -1207,6 +1207,22 @@ export const api = {
     return res.json()
   },
   deleteCoverImage: (eventId) => req('DELETE', `/events/${eventId}/upload-cover`),
+  uploadLogo: async (eventId, file) => {
+    const token = await getToken()
+    const fd = new FormData()
+    fd.append('file', file)
+    const res = await fetch(`${BASE}/events/${eventId}/upload-logo`, {
+      method: 'POST',
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
+      body: fd,
+    })
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({ detail: res.statusText }))
+      throw new Error(err.detail || res.statusText)
+    }
+    return res.json()
+  },
+  deleteLogo: (eventId) => req('DELETE', `/events/${eventId}/upload-logo`),
   // Invite page public URL helper (no auth needed)
   inviteUrl: (eventOrId) => {
     if (eventOrId && typeof eventOrId === 'object') {

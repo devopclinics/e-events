@@ -265,6 +265,7 @@ class EventOut(BaseModel):
     rsvp_allow_duplicate_emails: bool = False
     rsvp_capacity: Optional[int] = None
     invite_cover_image: Optional[str] = None
+    logo_url: Optional[str] = None
     invite_mode: str = "open"
     rsvp_deadline: Optional[datetime] = None
     event_time_tbd: bool = False
@@ -2296,6 +2297,7 @@ class InviteSettingsUpdate(BaseModel):
     rsvp_allow_duplicate_emails: Optional[bool] = None
     rsvp_capacity: Optional[int] = None
     invite_cover_image: Optional[str] = None
+    logo_url: Optional[str] = None
     invite_mode: Optional[Literal["open", "closed"]] = None
     rsvp_deadline: Optional[datetime] = None
     event_time_tbd: Optional[bool] = None
@@ -2362,6 +2364,7 @@ class InvitePageOut(BaseModel):
     rsvp_allow_duplicate_emails: bool = False
     rsvp_capacity: Optional[int]
     invite_cover_image: Optional[str] = None
+    logo_url: Optional[str] = None
     invite_mode: str = "open"
     rsvp_deadline: Optional[datetime] = None
     event_time_tbd: bool = False
@@ -2957,6 +2960,7 @@ class PublicCalendarEventOut(BaseModel):
     name: str
     event_date: datetime
     invite_cover_image: Optional[str] = None
+    logo_url: Optional[str] = None
     invite_message: Optional[str] = None
     rsvp_status: Optional[str] = None
     admitted: Optional[bool] = None

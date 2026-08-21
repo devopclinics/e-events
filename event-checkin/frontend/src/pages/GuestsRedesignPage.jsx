@@ -707,8 +707,10 @@ function InviteTab({ notify, onSendInvites, onSendGuests, onPreviewInvite, event
   const [inviteMessage, setInviteMessage] = useState('')
   const [saving, setSaving] = useState(false)
   const [coverBusy, setCoverBusy] = useState(false)
+  const [logoBusy, setLogoBusy] = useState(false)
   const [regenerateLink, setRegenerateLink] = useState(false)
   const coverFileRef = useRef(null)
+  const logoFileRef = useRef(null)
   // The Design Studio Flyer tab has its own separate cover_image_url (and a
   // flyer_image_url, which can be a real rendered flyer or just a template's
   // stock preview picked without ever rendering — see designCover() in
@@ -796,6 +798,28 @@ function InviteTab({ notify, onSendInvites, onSendGuests, onPreviewInvite, event
       notify('Cover image removed')
     } catch (e) { notify(e.message || 'Cover image could not be removed', true) }
     finally { setCoverBusy(false) }
+  }
+
+  async function uploadLogo(file) {
+    if (!file || !eventId) return
+    setLogoBusy(true)
+    try {
+      await api.uploadLogo(eventId, file)
+      await onEventChanged()
+      notify('Logo uploaded')
+    } catch (e) { notify(e.message || 'Logo could not be uploaded', true) }
+    finally { setLogoBusy(false); if (logoFileRef.current) logoFileRef.current.value = '' }
+  }
+
+  async function removeLogo() {
+    if (!eventId) return
+    setLogoBusy(true)
+    try {
+      await api.deleteLogo(eventId)
+      await onEventChanged()
+      notify('Logo removed')
+    } catch (e) { notify(e.message || 'Logo could not be removed', true) }
+    finally { setLogoBusy(false) }
   }
 
   const rsvpCounts = useMemo(() => {
@@ -990,6 +1014,21 @@ function InviteTab({ notify, onSendInvites, onSendGuests, onPreviewInvite, event
                 )}
               </div>
             )}
+
+            <label className="rd-field-label" style={{ marginTop: 14 }}>Logo</label>
+            <div className="gr-logo-row">
+              <div className="gr-logo-preview">
+                {event?.logo_url
+                  ? <img src={event.logo_url} alt="Logo" />
+                  : <Icon name="image" size={20} />}
+              </div>
+              <div>
+                <input ref={logoFileRef} type="file" accept="image/jpeg,image/png,image/webp,image/gif" hidden onChange={(e) => uploadLogo(e.target.files?.[0])} />
+                <button className="rr-btn secondary" disabled={logoBusy} onClick={() => logoFileRef.current?.click()}>{logoBusy ? 'Working…' : event?.logo_url ? 'Replace logo' : 'Upload logo'}</button>
+                {event?.logo_url && <button className="rr-link-btn gr-danger-link" style={{ marginLeft: 8 }} disabled={logoBusy} onClick={removeLogo}>Remove</button>}
+                <p className="rd-hint" style={{ marginTop: 6 }}>Shown as a small badge on the invite page header. A square or circular image with a transparent background works best.</p>
+              </div>
+            </div>
 
             {rsvpEnabled && <><div className="rd-toggle-row" style={{ marginTop: 16 }}>
               <span style={{ fontSize: 12, fontWeight: 600 }}>

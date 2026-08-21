@@ -2074,3 +2074,63 @@ async def delete_cover_image(
         await db.commit()
         await db.refresh(event)
     return event
+
+
+@router.post("/{event_id}/upload-logo")
+async def upload_logo(
+    event_id: str,
+    file: UploadFile = File(...),
+    db: AsyncSession = Depends(get_db),
+    _: User = Depends(require_event_admin),
+):
+    """Upload a small organizer/community logo badge for the invite page header --
+    distinct from the full cover photo. Stored in /app/uploads/."""
+    event = await db.get(Event, event_id)
+    if not event:
+        raise HTTPException(404, "Event not found")
+
+    if file.content_type not in ALLOWED_IMAGE_TYPES:
+        raise HTTPException(400, f"Unsupported file type '{file.content_type}'. Use JPEG, PNG, WebP or GIF.")
+
+    data = await file.read()
+    if len(data) > MAX_IMAGE_SIZE:
+        raise HTTPException(413, "Image too large — maximum 10 MB.")
+
+    detected_type = _detected_image_type(data)
+    if detected_type != file.content_type:
+        if detected_type:
+            actual = detected_type.removeprefix("image/").replace("jpeg", "jpg")
+            supplied = (file.filename or "the selected file").rsplit(".", 1)[-1].lower()
+            raise HTTPException(
+                400,
+                f"This file contains {actual.upper()} image data but is named .{supplied}. "
+                f"Rename or export it as .{actual} and try again.",
+            )
+        raise HTTPException(400, "This is not a valid JPEG, PNG, WebP, or GIF image. Export it again and retry.")
+
+    ext = {"image/jpeg": "jpg", "image/png": "png", "image/webp": "webp", "image/gif": "gif"}.get(file.content_type, "jpg")
+    filename = f"{event_id}-logo-{_uuid.uuid4().hex[:8]}.{ext}"
+
+    url = storage.save(f"events/{filename}", data, file.content_type)
+    event.logo_url = url
+    await db.commit()
+    await db.refresh(event)
+    return {"url": url, "event": event}
+
+
+@router.delete("/{event_id}/upload-logo", response_model=EventOut)
+async def delete_logo(
+    event_id: str,
+    db: AsyncSession = Depends(get_db),
+    _: User = Depends(require_event_admin),
+):
+    """Remove the logo badge from an event."""
+    event = await db.get(Event, event_id)
+    if not event:
+        raise HTTPException(404, "Event not found")
+    if event.logo_url:
+        storage.delete(storage.subpath_from_url(event.logo_url))
+        event.logo_url = None
+        await db.commit()
+        await db.refresh(event)
+    return event

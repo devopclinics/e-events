@@ -215,6 +215,7 @@ async def _invite_page_out(event: Event, db: AsyncSession) -> InvitePageOut:
         invite_theme=event.invite_theme,
         invite_message=event.invite_message,
         invite_cover_image=event.invite_cover_image,
+        logo_url=event.logo_url,
         rsvp_enabled=event.rsvp_enabled,
         experience_enabled=event.experience_enabled,
         live_program_enabled=event.live_program_enabled,

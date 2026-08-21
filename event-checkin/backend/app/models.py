@@ -620,6 +620,9 @@ class Event(Base):
     rsvp_capacity: Mapped[int | None] = mapped_column(Integer, nullable=True)
     # Cover image URL — served from /api/uploads/
     invite_cover_image: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    # Small organizer/community logo badge, distinct from the cover photo —
+    # rendered on the public invite page header. Served from /api/uploads/.
+    logo_url: Mapped[str | None] = mapped_column(String(500), nullable=True)
     # Invite distribution mode:
     #   "open"   — shared /e/{event_id} link; anyone with it can RSVP.
     #   "closed" — invitation-only; each guest gets a unique /r/{invite_token}

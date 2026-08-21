@@ -2572,9 +2572,18 @@ export default function InvitePage() {
     >
       <header className="px-5 py-6 sm:px-6">
         <div className="mx-auto flex max-w-[1180px] items-center justify-between">
-          {page.hero.showWelcomeLabel
-            ? <span className="text-sm font-extrabold uppercase tracking-[0.24em]" style={{ color: tone.accent }}>{dWording.inviteLabel || 'Welcome to'}</span>
-            : <span />}
+          <div className="flex items-center gap-3">
+            {event.logo_url && (
+              <img
+                src={event.logo_url} alt=""
+                className="h-11 w-11 flex-none rounded-full object-cover sm:h-12 sm:w-12"
+                style={{ border: `1px solid ${tone.border}`, background: tone.chip }}
+              />
+            )}
+            {page.hero.showWelcomeLabel && (
+              <span className="text-sm font-extrabold uppercase tracking-[0.24em]" style={{ color: tone.accent }}>{dWording.inviteLabel || 'Welcome to'}</span>
+            )}
+          </div>
           <div className="flex flex-col items-end gap-1">
             <span className="rounded-full border px-4 py-2 text-sm font-bold" style={{ background: tone.chip, borderColor: tone.border, color: tone.text }}>Powered by Festio</span>
             {flyerLedHero && !isSidecardHero && page.organizer.show && host && (hostWebsite

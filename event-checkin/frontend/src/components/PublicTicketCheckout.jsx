@@ -34,6 +34,13 @@ export default function PublicTicketCheckout({ eventId, tone, onAvailabilityChan
   // (checkout would always fail with "choose at least one ticket") and the
   // copy promising a live Stripe/Paystack charge would be actively wrong.
   const hasSellableTickets = catalog.tickets.some(t => t.product_type !== 'external')
+  // A $0 order completes instantly server-side (see ticketing-service's
+  // create_order) -- no Stripe/Paystack round-trip happens at all, so
+  // copy promising "secure checkout through Stripe" would be wrong. True
+  // when every sellable product on this event is free, regardless of
+  // what's currently selected (the copy renders before any selection).
+  const sellableTickets = catalog.tickets.filter(t => t.product_type !== 'external')
+  const allFree = sellableTickets.length > 0 && sellableTickets.every(t => !t.price)
 
   // Optional multi-step checkout: fields carry an optional `step` label (set
   // in the checkout-form builder). Fields sharing a step page together,
@@ -121,9 +128,9 @@ export default function PublicTicketCheckout({ eventId, tone, onAvailabilityChan
   return <section className="scroll-mt-6 py-9" id="tickets" aria-labelledby="ticket-checkout-title">
     <div className="rounded-3xl border p-6 shadow-xl sm:p-8" style={{ background: tone.panelStrong, borderColor: tone.border, color: tone.text }}>
       <div className="mb-5">
-        {hasSellableTickets && <span className="text-xs font-extrabold uppercase tracking-[.18em]" style={{ color: tone.accent }}>{isStagingHost ? 'Staging test mode' : 'Secure checkout'}</span>}
-        <h2 id="ticket-checkout-title" className="mt-1 text-3xl font-extrabold">{hasSellableTickets ? 'Buy tickets' : 'Registration'}</h2>
-        <p id="checkout-help" style={{ color: tone.muted }}>{hasSellableTickets ? `Secure checkout through ${catalog.currency === 'NGN' ? 'Paystack' : 'Stripe'}.${isStagingHost ? ' No live charge will be made.' : ''}` : 'Registration is handled on the organizer’s own site — pricing shown here for reference.'}</p>
+        {hasSellableTickets && !allFree && <span className="text-xs font-extrabold uppercase tracking-[.18em]" style={{ color: tone.accent }}>{isStagingHost ? 'Staging test mode' : 'Secure checkout'}</span>}
+        <h2 id="ticket-checkout-title" className="mt-1 text-3xl font-extrabold">{!hasSellableTickets ? 'Registration' : allFree ? 'Reserve your place' : 'Buy tickets'}</h2>
+        <p id="checkout-help" style={{ color: tone.muted }}>{!hasSellableTickets ? 'Registration is handled on the organizer’s own site — pricing shown here for reference.' : allFree ? 'No payment required — you’ll get your pass immediately.' : `Secure checkout through ${catalog.currency === 'NGN' ? 'Paystack' : 'Stripe'}.${isStagingHost ? ' No live charge will be made.' : ''}`}</p>
       </div>
       {pages && <div className="mb-4 flex items-center gap-2 text-xs font-bold uppercase tracking-wider" style={{ color: tone.muted }}>
         {pages.map((p, i) => <span key={p} style={{ color: i <= pageIndex ? tone.accent : tone.muted, opacity: i <= pageIndex ? 1 : .5 }}>
@@ -155,7 +162,7 @@ export default function PublicTicketCheckout({ eventId, tone, onAvailabilityChan
           {pages && pageIndex > 0 && <button type="button" onClick={goBack} className="rounded-2xl border px-6 py-3 font-bold" style={{ borderColor: tone.border, color: tone.text }}>Back</button>}
           {pages && pageIndex < pages.length - 1
             ? <button type="button" onClick={goNext} className="min-h-12 rounded-2xl px-7 py-3 font-extrabold focus:outline-none focus:ring-4" style={{ background:tone.accent,color:'#07111f' }}>Next</button>
-            : <button disabled={busy} aria-busy={busy} className="min-h-12 rounded-2xl px-7 py-3 font-extrabold focus:outline-none focus:ring-4" style={{ background:tone.accent,color:'#07111f' }}>{busy ? 'Opening secure checkout…' : 'Continue to secure checkout'}</button>}
+            : <button disabled={busy} aria-busy={busy} className="min-h-12 rounded-2xl px-7 py-3 font-extrabold focus:outline-none focus:ring-4" style={{ background:tone.accent,color:'#07111f' }}>{busy ? (allFree ? 'Completing registration…' : 'Opening secure checkout…') : allFree ? 'Complete registration' : 'Continue to secure checkout'}</button>}
         </div>}
       </form>
     </div>

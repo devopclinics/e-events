@@ -1707,6 +1707,9 @@ function GuestHub({ event, accessToken, designTheme, previewMock = false, confir
       nextStep = { icon: '📝', label: 'Action required', text: `Sign ${consent.form?.title || 'your consent form'} before check-in.`, urgent: true }
     } else if (wantsMeal) {
       nextStep = { icon: '🍽️', label: 'Next step', text: 'Choose your food order on your Festio Pass.', urgent: false }
+    } else if (journey?.program?.current_segments?.[0]) {
+      const live = journey.program.current_segments[0]
+      nextStep = { icon: '●', label: 'Happening now', text: `${live.title}${live.category ? ` · ${live.category}` : ''} — show your Pass at the entrance.`, urgent: false }
     } else if (passNextStep) {
       nextStep = { icon: '🎁', label: 'Next step', text: `After entry · ${passNextStep.title}`, urgent: false }
     } else if (hub?.guest?.admitted) {
@@ -1914,7 +1917,13 @@ function GuestHub({ event, accessToken, designTheme, previewMock = false, confir
                   {selectedProgramDay.segments.map((segment) => (
                     <div key={segment.step_id} className="flex gap-3 py-2.5 first:pt-0">
                       <div className="w-20 shrink-0 text-xs font-extrabold" style={{ color: segment.active ? tone.accent : tone.label }}>{fmtTime(segment.starts_at, event?.timezone)}</div>
-                      <div className="min-w-0"><div className="font-bold">{segment.title}</div>{segment.description && <div className="text-xs" style={{ color: tone.muted }}>{segment.description}</div>}</div>
+                      <div className="min-w-0">
+                        <div className="flex flex-wrap items-center gap-2 font-bold">
+                          {segment.title}
+                          {segment.active && <span className="rounded-full px-2 py-0.5 text-[10px] font-extrabold uppercase" style={{ background: `${tone.accent}22`, color: tone.accent }}>Now</span>}
+                        </div>
+                        {segment.description && <div className="text-xs" style={{ color: tone.muted }}>{segment.description}</div>}
+                      </div>
                     </div>
                   ))}
                 </div>

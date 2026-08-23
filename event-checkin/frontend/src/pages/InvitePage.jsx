@@ -1720,6 +1720,13 @@ function GuestHub({ event, accessToken, designTheme, previewMock = false, confir
     const rawSteps = (journey?.steps || []).filter((s) => s.status !== 'skipped')
     const sessionSteps = rawSteps.filter((s) => s.type === 'session_attendance')
     const otherSteps = rawSteps.filter((s) => !['session_attendance', 'consent', 'meal_selection'].includes(s.type))
+    // Whether there's any real Experience-driven content to show — computed
+    // independently of the "Registration completed"/"Pass ready" baseline
+    // rows below, since events without RSVP enabled (attendance_mode !==
+    // "rsvp", e.g. invite-only) never get a "Registration completed" row at
+    // all. Gating on journeyRows.length alone previously hid a real 33-step
+    // published program on exactly this kind of event.
+    const hasJourneyContent = !!(otherSteps.length || sessionSteps.length || consent?.required || journey?.menu_selectable || feedbackForms.length)
     const journeyRows = []
     if (hasRsvp) journeyRows.push({ done: true, label: 'Registration completed' })
     if (hub?.guest?.qr_token) journeyRows.push({ done: true, label: 'Festio Pass ready' })
@@ -1817,7 +1824,7 @@ function GuestHub({ event, accessToken, designTheme, previewMock = false, confir
               (see experience.py's early-return path) — gate on having more
               than the baseline registration+pass rows, not on the module flag,
               so a consent- or menu-only event still gets its journey shown. */}
-          {journeyRows.length > 2 && (
+          {hasJourneyContent && (
             <div className="mt-3 rounded-2xl border p-4" style={{ background: tone.panel, borderColor: tone.border }}>
               <button type="button" onClick={() => setShowAllActivity((v) => !v)} className="flex w-full items-center justify-between gap-3 text-left">
                 <span className="text-xs font-extrabold uppercase tracking-[0.14em]" style={{ color: tone.label }}>Your Event Journey</span>

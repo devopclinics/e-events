@@ -37,8 +37,9 @@ async def list_qna(activity_id: str, identity: Identity = Depends(current_identi
     )).scalars().all()
     upvoted_ids: set[str] = set()
     if identity.identity_kind == "guest" and rows:
+        column = ActivityParticipant.anon_id if identity.is_anonymous else ActivityParticipant.guest_id
         participant = await db.scalar(
-            select(ActivityParticipant).where(ActivityParticipant.activity_id == activity_id, ActivityParticipant.guest_id == identity.subject)
+            select(ActivityParticipant).where(ActivityParticipant.activity_id == activity_id, column == identity.subject)
         )
         if participant:
             upvoted_ids = set((await db.execute(
@@ -63,7 +64,7 @@ async def submit_qna(activity_id: str, body: QnaSubmitIn, identity: Identity = D
         raise HTTPException(409, "This activity doesn't accept Q&A submissions")
     if activity.status not in ("live", "paused"):
         raise HTTPException(409, "This Q&A isn't open right now")
-    participant = await _get_or_create_participant(activity_id, identity.subject, identity.name, db)
+    participant = await _get_or_create_participant(activity_id, identity, db)
     qna = EngagementQnaQuestion(activity_id=activity_id, participant_id=participant.id, text=body.text.strip())
     db.add(qna)
     await db.commit()
@@ -76,7 +77,7 @@ async def submit_qna(activity_id: str, body: QnaSubmitIn, identity: Identity = D
 async def upvote_qna(qna_id: str, identity: Identity = Depends(current_identity), db: AsyncSession = Depends(get_db)):
     require_guest(identity)
     qna = await _get_owned_qna(qna_id, identity, db)
-    participant = await _get_or_create_participant(qna.activity_id, identity.subject, identity.name, db)
+    participant = await _get_or_create_participant(qna.activity_id, identity, db)
     try:
         db.add(EngagementQnaUpvote(qna_question_id=qna_id, participant_id=participant.id))
         await db.flush()

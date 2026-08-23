@@ -1485,6 +1485,18 @@ export const api = {
   // Festio Live — guest participation (no Firebase login; the guest's own
   // pass token is exchanged for a scoped session first).
   liveGuestSession: (eventId, passToken) => getLiveGuestSession(eventId, passToken),
+  // Broadcast/QR join — no guest pass needed. anonId is a device-persisted
+  // id (see LiveGuestPage's localStorage use) so reopening the page resumes
+  // the same participant instead of re-joining as a new one each time.
+  liveAnonSession: (eventId, displayName, anonId) => fetch(`${BASE}/events/${encodeURIComponent(eventId)}/live/anon-token`, {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ display_name: displayName || '', anon_id: anonId || '' }),
+    signal: AbortSignal.timeout(10000),
+  }).then(async (res) => {
+    if (!res.ok) { const d = await res.json().catch(() => ({})); throw new Error(d.detail || "This event isn't available right now.") }
+    return res.json() // { token, expires_in, anon_id }
+  }),
+  liveJoinQrUrl: (eventId) => `${BASE}/events/${eventId}/live/join-qr.png`,
   liveGuestActivities: (guestToken) => liveGuestReq(guestToken, 'GET', '/v1/activities/live'),
   liveGuestParticipate: (guestToken, activityId) => liveGuestReq(guestToken, 'GET', `/v1/activities/${activityId}/participate`),
   liveGuestRespond: (guestToken, activityId, body) => liveGuestReq(guestToken, 'POST', `/v1/activities/${activityId}/respond`, body),

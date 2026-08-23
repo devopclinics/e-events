@@ -265,21 +265,55 @@ function ActivityView({ guestToken, activityId, onBack }) {
   )
 }
 
+function AnonJoinForm({ eventId, onJoined }) {
+  const [name, setName] = useState('')
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState('')
+
+  async function join() {
+    setBusy(true); setError('')
+    let anonId = ''
+    try { anonId = localStorage.getItem(`festio_live_anon:${eventId}`) || '' } catch { /* private browsing */ }
+    try {
+      const session = await api.liveAnonSession(eventId, name.trim(), anonId)
+      try { localStorage.setItem(`festio_live_anon:${eventId}`, session.anon_id) } catch { /* private browsing */ }
+      onJoined(session.token)
+    } catch (e) { setError(e.message) } finally { setBusy(false) }
+  }
+
+  return (
+    <div className="rounded-2xl border border-slate-200 bg-white p-5 dark:border-slate-700 dark:bg-slate-900">
+      <div className="text-sm font-extrabold text-slate-900 dark:text-white">What should we call you?</div>
+      <p className="mt-1 text-xs text-slate-400">Optional — helps your name show up on the leaderboard.</p>
+      <input value={name} onChange={(e) => setName(e.target.value)} placeholder="Your name (optional)"
+        className="mt-3 w-full rounded-xl border-2 border-slate-200 bg-white p-3 text-sm dark:border-slate-700 dark:bg-slate-950 dark:text-white"
+        onKeyDown={(e) => { if (e.key === 'Enter') join() }} />
+      {error && <div className="mt-2 text-xs font-bold text-rose-600 dark:text-rose-300">{error}</div>}
+      <button type="button" disabled={busy} onClick={join}
+        className="mt-3 min-h-12 w-full rounded-xl bg-teal-400 px-4 py-2.5 text-sm font-extrabold text-slate-950 disabled:opacity-50">
+        {busy ? 'Joining…' : 'Join'}
+      </button>
+    </div>
+  )
+}
+
 export default function LiveGuestPage() {
   const params = useQueryParams()
   const eventId = params.get('event') || ''
   const passToken = params.get('pass') || ''
+  const broadcastMode = !passToken // no personal pass token → QR/broadcast join
   const [guestToken, setGuestToken] = useState(null)
   const [error, setError] = useState('')
   const [activities, setActivities] = useState(null)
   const [activityId, setActivityId] = useState(null)
 
   useEffect(() => {
-    if (!eventId || !passToken) { setError('This link is missing information — open Festio Live from your Guest Hub.'); return }
+    if (!eventId) { setError('This link is missing information — open Festio Live from your Guest Hub.'); return }
+    if (broadcastMode) return // handled by AnonJoinForm below instead
     api.liveGuestSession(eventId, passToken)
       .then((s) => setGuestToken(s.token))
       .catch((e) => setError(e.message))
-  }, [eventId, passToken])
+  }, [eventId, passToken, broadcastMode])
 
   const loadActivities = useCallback(async () => {
     if (!guestToken) return
@@ -300,7 +334,8 @@ export default function LiveGuestPage() {
           <div className="text-xs font-extrabold uppercase tracking-[0.2em] text-teal-500">Festio Live</div>
         </div>
         {error && <div className="mb-4 rounded-xl bg-rose-50 p-3 text-sm font-bold text-rose-700 dark:bg-rose-950 dark:text-rose-200">{error}</div>}
-        {!error && !guestToken && <p className="text-center text-sm text-slate-400">Connecting…</p>}
+        {!error && broadcastMode && !guestToken && eventId && <AnonJoinForm eventId={eventId} onJoined={setGuestToken} />}
+        {!error && !broadcastMode && !guestToken && <p className="text-center text-sm text-slate-400">Connecting…</p>}
         {guestToken && !activityId && (
           <div className="grid gap-3">
             {activities === null ? <p className="text-center text-sm text-slate-400">Loading…</p> : activities.length === 0 ? (

@@ -11,7 +11,7 @@ from datetime import datetime, timedelta, timezone
 from typing import Literal
 
 import jwt
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Response
 from pydantic import BaseModel, Field
 from sqlalchemy import or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -20,6 +20,7 @@ from ..auth import get_current_user, _org_role
 from ..database import get_db
 from ..models import Event, EventUser, Guest, User
 from ..ratelimit import rate_limit
+from services.qr_service import generate_qr_for_url
 
 router = APIRouter(tags=["engagement"])
 
@@ -84,6 +85,69 @@ async def live_guest_token(
         "exp": now + timedelta(hours=6),
     }, settings.engagement_internal_token, algorithm="HS256")
     return LiveGuestSession(token=token, expires_in=21600)
+
+
+class LiveAnonJoinIn(BaseModel):
+    display_name: str = Field(default="", max_length=80)
+    # Client-persisted device id (e.g. localStorage), so reopening the page
+    # resumes the same participant instead of minting a new one every time.
+    # A fresh one is generated and returned if the client doesn't have one yet.
+    anon_id: str = Field(default="", max_length=64)
+
+
+class LiveAnonJoinOut(BaseModel):
+    token: str
+    expires_in: int
+    anon_id: str
+
+
+@router.post("/{event_id}/live/anon-token", response_model=LiveAnonJoinOut)
+async def live_anon_token(
+    event_id: str,
+    data: LiveAnonJoinIn,
+    db: AsyncSession = Depends(get_db),
+    _: None = Depends(rate_limit(limit=120, window=60, scope="engagement_anon_token", key="event_id")),
+):
+    """Broadcast/QR join — no Guest record required, for a keynote-style
+    audience where distributing per-guest Hub links isn't practical. Anyone
+    with the join link or QR code gets a scoped session; the resulting
+    ActivityParticipant is tracked by anon_id, never guest_id (see
+    engagement-service's Identity.is_anonymous)."""
+    from ..config import settings
+    if not settings.engagement_internal_token:
+        raise HTTPException(503, "Festio Live is not configured")
+    event = await db.get(Event, event_id)
+    if not event or not event.engagement_enabled:
+        raise HTTPException(404, "Festio Live is not available for this event")
+    anon_id = data.anon_id.strip() or secrets.token_urlsafe(16)
+    now = datetime.now(timezone.utc)
+    token = jwt.encode({
+        "sub": anon_id,
+        "name": data.display_name.strip() or "Guest",
+        "event_id": event.id,
+        "org_id": event.org_id,
+        "role": "guest",
+        "identity_kind": "guest",
+        "anon": True,
+        "iss": "guesthub",
+        "aud": "engagement",
+        "iat": now,
+        "exp": now + timedelta(hours=12),
+    }, settings.engagement_internal_token, algorithm="HS256")
+    return LiveAnonJoinOut(token=token, expires_in=43200, anon_id=anon_id)
+
+
+@router.get("/{event_id}/live/join-qr.png")
+async def live_join_qr(event_id: str, db: AsyncSession = Depends(get_db)):
+    """Public — QR code for the broadcast join link, meant to be put on a
+    screen/slide so anyone in the room can scan in without a personal Hub link."""
+    from ..config import settings
+    event = await db.get(Event, event_id)
+    if not event or not event.engagement_enabled:
+        return Response(status_code=404)
+    base_url = settings.public_base_url or "https://festio.events"
+    join_url = f"{base_url.rstrip('/')}/live/guest?event={event_id}"
+    return Response(content=generate_qr_for_url(join_url), media_type="image/png")
 
 
 class LiveShareLinkIn(BaseModel):

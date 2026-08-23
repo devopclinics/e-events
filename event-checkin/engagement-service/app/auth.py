@@ -23,6 +23,10 @@ class Identity:
     name: str = ""
     email: str = ""
     guest_admitted: bool = False
+    # True for a broadcast/QR join (no Guest record) — minted by the main
+    # backend's POST /api/events/{id}/live/anon-token. Such participants are
+    # tracked by ActivityParticipant.anon_id instead of .guest_id.
+    is_anonymous: bool = False
 
 
 async def current_identity(authorization: str | None = Header(default=None)) -> Identity:
@@ -52,6 +56,7 @@ async def current_identity(authorization: str | None = Header(default=None)) -> 
         name=decoded.get("name") or "",
         email=(decoded.get("email") or "").lower(),
         guest_admitted=bool(decoded.get("guest_admitted")),
+        is_anonymous=bool(decoded.get("anon")),
     )
 
 

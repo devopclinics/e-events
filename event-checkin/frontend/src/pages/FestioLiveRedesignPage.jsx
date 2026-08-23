@@ -471,6 +471,33 @@ export default function FestioLiveRedesignPage() {
       )}
 
       {tab === 'Settings' && (
+        <div className="rr-panel" style={{ marginBottom: 18 }}>
+          <div className="rd-panel-head"><h3>Broadcast Join</h3><p>Let a whole room join without a personal Guest Hub link</p></div>
+          <div className="rd-panel-body">
+            <p className="rd-hint" style={{ marginBottom: 14 }}>
+              Guests normally reach Festio Live through their own Guest Hub — no setup needed. For a keynote or
+              conference session where you'd rather put one link or QR code on screen, this join link works for
+              anyone, no guest record required. It always shows whatever's live right now.
+            </p>
+            <div style={{ display: 'flex', gap: 20, alignItems: 'flex-start', flexWrap: 'wrap' }}>
+              <img src={api.liveJoinQrUrl(eventId)} alt="QR code to join Festio Live" width={140} height={140}
+                style={{ border: '1px solid var(--rr-line, #e6e2d3)', borderRadius: 10 }} />
+              <div style={{ flex: 1, minWidth: 220 }}>
+                <label className="rd-field-label">Join link</label>
+                <div style={{ display: 'flex', gap: 8 }}>
+                  <input className="rr-input" readOnly value={`${window.location.origin}/live/guest?event=${eventId}`} style={{ flex: 1, fontSize: 12 }} onFocus={(e) => e.target.select()} />
+                  <button className="rr-btn secondary" onClick={() => navigator.clipboard?.writeText(`${window.location.origin}/live/guest?event=${eventId}`)}>Copy</button>
+                </div>
+                <p className="rd-hint" style={{ marginTop: 8 }}>
+                  Anonymous participants show up as "Guest" (or whatever name they type in) on results and the leaderboard.
+                </p>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {tab === 'Settings' && (
         <div className="rr-panel">
           <div className="rd-panel-head"><h3>Share Links</h3><p>Hand off Live Control or Q&A moderation without a Festio login</p></div>
           <div className="rd-panel-body">

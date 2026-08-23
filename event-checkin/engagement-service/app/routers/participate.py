@@ -32,13 +32,19 @@ async def _load_activity(activity_id: str, event_id: str, db: AsyncSession) -> E
     return activity
 
 
-async def _get_or_create_participant(activity_id: str, guest_id: str, display_name: str, db: AsyncSession) -> ActivityParticipant:
+async def _get_or_create_participant(activity_id: str, identity: Identity, db: AsyncSession) -> ActivityParticipant:
+    """Identified guests are tracked by guest_id; a broadcast/QR join (no
+    Guest record — see auth.py's Identity.is_anonymous) is tracked by anon_id
+    instead. Both columns have their own unique(activity_id, col) constraint,
+    so the two never collide even though only one is ever set per row."""
+    column = ActivityParticipant.anon_id if identity.is_anonymous else ActivityParticipant.guest_id
     participant = await db.scalar(
-        select(ActivityParticipant).where(ActivityParticipant.activity_id == activity_id, ActivityParticipant.guest_id == guest_id)
+        select(ActivityParticipant).where(ActivityParticipant.activity_id == activity_id, column == identity.subject)
     )
     if participant:
         return participant
-    participant = ActivityParticipant(activity_id=activity_id, guest_id=guest_id, display_name=display_name or None)
+    kwargs = {"anon_id": identity.subject} if identity.is_anonymous else {"guest_id": identity.subject}
+    participant = ActivityParticipant(activity_id=activity_id, display_name=identity.name or None, **kwargs)
     db.add(participant)
     await db.flush()
     return participant
@@ -116,7 +122,7 @@ async def get_participation_state(activity_id: str, identity: Identity = Depends
     activity = await _load_activity(activity_id, identity.event_id, db)
     if activity.status not in ("live", "paused") and not activity.config.get("allow_guest_participation", True):
         raise HTTPException(403, "This activity isn't open right now")
-    participant = await _get_or_create_participant(activity_id, identity.subject, identity.name, db)
+    participant = await _get_or_create_participant(activity_id, identity, db)
     await db.commit()
     answered = (await db.execute(
         select(ParticipantResponse.question_id).where(ParticipantResponse.participant_id == participant.id)
@@ -134,7 +140,7 @@ async def respond(activity_id: str, body: RespondIn, identity: Identity = Depend
     if not question:
         raise HTTPException(404, "Question not found")
 
-    participant = await _get_or_create_participant(activity_id, identity.subject, identity.name, db)
+    participant = await _get_or_create_participant(activity_id, identity, db)
 
     # Idempotent re-submission: same participant+question+idempotency_key
     # returns the original response instead of erroring or double-counting —

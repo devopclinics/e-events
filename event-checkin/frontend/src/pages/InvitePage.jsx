@@ -1261,7 +1261,7 @@ const HUB_TAB_ORDER = {
   'story-feed': ['activity', 'messages', 'program', 'speakers', 'pass'],
 }
 const HUB_TAB_META = {
-  pass: ['pass', 'Pass', '🎫'],
+  pass: ['pass', 'Pass', '▤'],
   activity: ['activity', 'Activity', '✅'],
   program: ['program', 'Program', '📅'],
   // Speaker Showcase cross-link — filtered out below unless the event has
@@ -1790,7 +1790,7 @@ function GuestHub({ event, accessToken, designTheme, previewMock = false, confir
                 {hub?.guest?.qr_token && (
                   <div className="mt-4 grid gap-2">
                     <a href={`/scan/${hub.guest.qr_token}`} style={colors.accent ? { background: colors.accent } : undefined} className="inline-flex min-h-12 w-full items-center justify-center gap-2 rounded-xl bg-teal-400 px-5 py-3 text-base font-extrabold text-slate-950 shadow-sm hover:bg-teal-300">
-                      🎫 View Full Pass
+                      View Full Pass
                     </a>
                     {hubModuleVisible('festiome') && hub?.capabilities?.festiome && (
                       <a href={`/festiome/guest?event=${encodeURIComponent(event.id)}&pass=${encodeURIComponent(hub.guest.qr_token)}`} className="inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-xl border-2 bg-slate-50 px-5 py-2.5 text-sm font-extrabold text-slate-800 dark:bg-slate-800 dark:text-white" style={{ borderColor: colors.accent || undefined }}>
@@ -2568,7 +2568,7 @@ function GuestHub({ event, accessToken, designTheme, previewMock = false, confir
             {hub?.guest?.qr_token && (
               <div className="mt-4 grid gap-2">
                 <a href={`/scan/${hub.guest.qr_token}`} style={colors.accent ? { background: colors.accent } : undefined} className="inline-flex min-h-12 w-full items-center justify-center gap-2 rounded-xl bg-teal-400 px-5 py-3 text-base font-extrabold text-slate-950 shadow-sm hover:bg-teal-300">
-                  🎫 View Festio Pass
+                  View Festio Pass
                 </a>
                 {hubModuleVisible('festiome') && hub?.capabilities?.festiome && (
                   <a

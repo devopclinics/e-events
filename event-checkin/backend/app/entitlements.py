@@ -96,6 +96,7 @@ FEATURE_ADDON = {
     "souvenir_confirmation": "addon_experience",
     "festiome_addon_enabled": "addon_festiome",
     "planner_enabled": "addon_planner",
+    "engagement_enabled": "addon_engagement",
     "speaker_enabled": "addon_speakers",
     "partner_enabled": "addon_partners",
     "reminders_enabled": "addon_reminders",

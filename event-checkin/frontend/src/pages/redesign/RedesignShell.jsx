@@ -137,6 +137,7 @@ export function Icon({ name, size = 18, className }) {
     sun: <><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></>,
     moon: <path d="M20 14.5A8.5 8.5 0 1 1 9.5 4a7 7 0 0 0 10.5 10.5Z"/>,
     lock: <><rect x="4" y="10" width="16" height="11" rx="2"/><path d="M8 10V7a4 4 0 0 1 8 0v3"/></>,
+    mic: <><rect x="9" y="2" width="6" height="12" rx="3"/><path d="M5 10a7 7 0 0 0 14 0"/><path d="M12 19v3M8 22h8"/></>,
   }
   return <svg className={className} width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">{paths[name]}</svg>
 }
@@ -205,6 +206,7 @@ const SIDEBAR_NAV = [
   ['card', 'Billing', '/billing-redesign?tab=billing', 'billing'],
   ['grp', 'Planning'],
   ['book', 'Planner', '/planner-redesign', 'planner', null, 'planner'],
+  ['mic', 'Festio Live', '/live-redesign', 'live', null, 'festioLive'],
   ['grp', 'Add-ons', null, null, null, 'anyAddon'],
   ['ticket', 'Venue Access', '/checkin-redesign?tab=zones', 'access', null, 'venueAccess'],
   ['chair', 'Seating', '/addons-redesign?tab=seating', 'seating', null, 'seating'],
@@ -362,6 +364,7 @@ export default function RedesignShell({ topActive, withEventSidebar = false, eve
     festiome: !!event?.festiome_addon_enabled && !(event?.blocked_comm_features || []).includes('festiome'),
     experience: !!event?.experience_enabled,
     planner: !!event?.planner_enabled,
+    festioLive: !!event?.engagement_enabled,
     speakers: !!event?.speaker_enabled,
     partners: !!event?.partner_enabled,
     reminders: !!event?.reminders_enabled,

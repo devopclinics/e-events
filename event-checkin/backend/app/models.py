@@ -426,6 +426,11 @@ class Event(Base):
     # a standalone microservice — see planner-service/. Off by default like
     # the other paid add-ons; the nav link and page both hide/upsell until set.
     planner_enabled: Mapped[bool] = mapped_column(Boolean, default=False)
+    # Festio Live add-on (live quizzes/polls/surveys/feedback) — gates the
+    # standalone engagement-service the same way planner_enabled gates
+    # planner-service above: off by default, no dependency the rest of the
+    # platform relies on, nav link + page both hide/upsell until set.
+    engagement_enabled: Mapped[bool] = mapped_column(Boolean, default=False)
     # Guest Speaker Showcase add-on. Off by default; same shape as registry
     # (bool + lazily-minted unguessable public token) below.
     speaker_enabled: Mapped[bool] = mapped_column(Boolean, default=False)

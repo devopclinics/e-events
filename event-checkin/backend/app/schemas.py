@@ -189,6 +189,7 @@ class EventOut(BaseModel):
     live_program_enabled: bool = False
     festiome_addon_enabled: bool = False
     planner_enabled: bool = False
+    engagement_enabled: bool = False
     speaker_enabled: bool = False
     speaker_show_before_rsvp: bool = False
     partner_enabled: bool = False

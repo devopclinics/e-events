@@ -1,0 +1,166 @@
+"""Festio Live (engagement-service) data model — live quizzes, polls, surveys,
+ratings, and feedback for events.
+
+Every table is keyed by event_id/org_id/guest_id (opaque UUID strings owned by
+the main backend) with no foreign keys crossing service boundaries — this DB
+has zero knowledge of the main backend's schema, and vice versa. See the
+architecture doc's §D for why the shape here deviates from the original spec's
+suggested entity list (no separate ResponseAnswer table, no ActivityRule table
+yet, Question Bank items are copied into activities, not referenced live).
+"""
+import uuid
+from datetime import datetime
+
+from sqlalchemy import Boolean, DateTime, ForeignKey, Integer, String, Text, UniqueConstraint
+from sqlalchemy.dialects.postgresql import JSONB
+from sqlalchemy.orm import Mapped, mapped_column, relationship
+
+from .database import Base
+
+
+def _uuid() -> str:
+    return str(uuid.uuid4())
+
+
+# ── Activities ───────────────────────────────────────────────────────────────
+
+class EngagementActivity(Base):
+    __tablename__ = "engagement_activities"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=_uuid)
+    org_id: Mapped[str] = mapped_column(String(64), index=True)
+    event_id: Mapped[str] = mapped_column(String(64), index=True)
+    session_id: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    type: Mapped[str] = mapped_column(String(20))  # quiz | poll | survey | feedback | rating | q_and_a | word_cloud | voting
+    title: Mapped[str] = mapped_column(String(255))
+    description: Mapped[str | None] = mapped_column(Text, nullable=True)
+    status: Mapped[str] = mapped_column(String(20), default="draft")  # draft|scheduled|live|paused|closed|completed|archived
+    # anonymous, allow_guest_participation, allow_multiple_submissions,
+    # allow_answer_changes, leaderboard_enabled, live_results_enabled,
+    # auto_open, auto_close, moderation_enabled — see schemas.ActivityConfig
+    config: Mapped[dict] = mapped_column(JSONB, default=dict)
+    created_by: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=datetime.utcnow)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    # passive_deletes=True: the DB's own ON DELETE CASCADE (see migrations/
+    # 0001_init.sql) removes children, so SQLAlchemy never needs to lazy-load
+    # this collection to process the cascade -- required in an async session,
+    # since an implicit lazy load isn't awaitable outside a greenlet and
+    # raises MissingGreenlet.
+    questions: Mapped[list["ActivityQuestion"]] = relationship(
+        back_populates="activity", cascade="all, delete-orphan", passive_deletes=True, order_by="ActivityQuestion.sequence",
+    )
+
+
+class ActivityQuestion(Base):
+    __tablename__ = "engagement_activity_questions"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=_uuid)
+    activity_id: Mapped[str] = mapped_column(String(36), ForeignKey("engagement_activities.id", ondelete="CASCADE"), index=True)
+    # single_choice|multiple_choice|true_false|yes_no|short_text|long_text|
+    # rating_5|rating_10|nps|number|word_cloud|ranking
+    question_type: Mapped[str] = mapped_column(String(20))
+    prompt: Mapped[str] = mapped_column(Text)
+    description: Mapped[str | None] = mapped_column(Text, nullable=True)
+    sequence: Mapped[int] = mapped_column(Integer, default=0)
+    required: Mapped[bool] = mapped_column(Boolean, default=True)
+    time_limit_seconds: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    # correct_answer, points, allow_multiple, show_results, show_correct_answer,
+    # anonymous, branching — type-specific, never forced onto rows that don't use them
+    config: Mapped[dict] = mapped_column(JSONB, default=dict)
+    status: Mapped[str] = mapped_column(String(20), default="active")
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=datetime.utcnow)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    activity: Mapped["EngagementActivity"] = relationship(back_populates="questions")
+    options: Mapped[list["QuestionOption"]] = relationship(
+        back_populates="question", cascade="all, delete-orphan", passive_deletes=True, order_by="QuestionOption.sequence",
+    )
+
+
+class QuestionOption(Base):
+    __tablename__ = "engagement_question_options"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=_uuid)
+    question_id: Mapped[str] = mapped_column(String(36), ForeignKey("engagement_activity_questions.id", ondelete="CASCADE"), index=True)
+    label: Mapped[str] = mapped_column(String(500))
+    sequence: Mapped[int] = mapped_column(Integer, default=0)
+    is_correct: Mapped[bool | None] = mapped_column(Boolean, nullable=True)
+    config: Mapped[dict] = mapped_column(JSONB, default=dict)
+
+    question: Mapped["ActivityQuestion"] = relationship(back_populates="options")
+
+
+# ── Question Bank ────────────────────────────────────────────────────────────
+
+class QuestionBankItem(Base):
+    """Org-scoped reusable question template. Importing into an activity COPIES
+    these fields into a new ActivityQuestion row rather than referencing this
+    row live — editing a bank template must never silently change a question
+    inside an activity that already ran or is currently live."""
+    __tablename__ = "engagement_question_bank_items"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=_uuid)
+    org_id: Mapped[str] = mapped_column(String(64), index=True)
+    question_type: Mapped[str] = mapped_column(String(20))
+    prompt: Mapped[str] = mapped_column(Text)
+    description: Mapped[str | None] = mapped_column(Text, nullable=True)
+    config: Mapped[dict] = mapped_column(JSONB, default=dict)
+    options: Mapped[list] = mapped_column(JSONB, default=list)  # [{label, is_correct, sequence}]
+    category: Mapped[str | None] = mapped_column(String(120), nullable=True)
+    tags: Mapped[list] = mapped_column(JSONB, default=list)
+    created_by: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    usage_count: Mapped[int] = mapped_column(Integer, default=0)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=datetime.utcnow)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=datetime.utcnow, onupdate=datetime.utcnow)
+
+
+# ── Participation ────────────────────────────────────────────────────────────
+
+class ActivityParticipant(Base):
+    """Identified (guest_id, an opaque external reference) or anonymous
+    (anon_id, a device-persisted token) — never both required."""
+    __tablename__ = "engagement_activity_participants"
+    __table_args__ = (
+        UniqueConstraint("activity_id", "guest_id", name="uq_engagement_participant_guest"),
+        UniqueConstraint("activity_id", "anon_id", name="uq_engagement_participant_anon"),
+    )
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=_uuid)
+    activity_id: Mapped[str] = mapped_column(String(36), ForeignKey("engagement_activities.id", ondelete="CASCADE"), index=True)
+    guest_id: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    anon_id: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    display_name: Mapped[str | None] = mapped_column(String(120), nullable=True)
+    joined_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=datetime.utcnow)
+
+
+class ParticipantResponse(Base):
+    """One row per participant per question. idempotency_key is unique per
+    (activity_id, question_id, participant_id) so a retried submission (weak
+    venue Wi-Fi) never creates a second vote."""
+    __tablename__ = "engagement_participant_responses"
+    __table_args__ = (
+        UniqueConstraint("activity_id", "question_id", "participant_id", "idempotency_key", name="uq_engagement_response_idem"),
+    )
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=_uuid)
+    activity_id: Mapped[str] = mapped_column(String(36), ForeignKey("engagement_activities.id", ondelete="CASCADE"), index=True)
+    question_id: Mapped[str] = mapped_column(String(36), ForeignKey("engagement_activity_questions.id", ondelete="CASCADE"), index=True)
+    participant_id: Mapped[str] = mapped_column(String(36), ForeignKey("engagement_activity_participants.id", ondelete="CASCADE"), index=True)
+    answer_value: Mapped[dict | None] = mapped_column(JSONB, nullable=True)  # text/number/rating — null for pure choice questions
+    response_time_ms: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    score: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    idempotency_key: Mapped[str] = mapped_column(String(80))
+    submitted_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=datetime.utcnow)
+
+    selections: Mapped[list["ResponseOptionSelection"]] = relationship(cascade="all, delete-orphan", passive_deletes=True)
+
+
+class ResponseOptionSelection(Base):
+    """Join row, populated only for choice-type questions."""
+    __tablename__ = "engagement_response_option_selections"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=_uuid)
+    response_id: Mapped[str] = mapped_column(String(36), ForeignKey("engagement_participant_responses.id", ondelete="CASCADE"), index=True)
+    option_id: Mapped[str] = mapped_column(String(36), ForeignKey("engagement_question_options.id", ondelete="CASCADE"), index=True)

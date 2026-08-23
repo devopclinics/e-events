@@ -174,6 +174,7 @@ SCHEMA_PATCHES: list[str] = [
             ("addon_registry",      "Registry",                    3900, 3900000, 1),
             ("addon_menu",          "Menu & Orders",                3900, 3900000, 2),
             ("addon_planner",       "Event Planner",                3900, 3900000, 3),
+            ("addon_engagement",    "Festio Live",                  4900, 4900000, 12),
             ("addon_logistics",     "Logistics",                    5900, 5900000, 4),
             ("addon_festiome",      "FestioMe Community",           5900, 5900000, 5),
             ("addon_seating",       "Seating & Floor Plans",        7900, 7900000, 6),
@@ -197,6 +198,7 @@ SCHEMA_PATCHES: list[str] = [
     "UPDATE pricing_plans SET label='Speakers', usd=2900, ngn=2900000, active=TRUE, sort_order=9 WHERE key='addon_speakers'",
     "UPDATE pricing_plans SET label='Partners', usd=2900, ngn=2900000, active=TRUE, sort_order=10 WHERE key='addon_partners'",
     "UPDATE pricing_plans SET label='Automated Reminders', usd=2900, ngn=2900000, active=TRUE, sort_order=11 WHERE key='addon_reminders'",
+    "UPDATE pricing_plans SET label='Festio Live', usd=4900, ngn=4900000, active=TRUE, sort_order=12 WHERE key='addon_engagement'",
 
     # 7c) Grandfather existing events: any event that already has a formerly
     # tier-gated feature switched on keeps it, recorded as a purchased add-on,

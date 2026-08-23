@@ -144,6 +144,58 @@ async def planner_token(
     return {"token": token, "expires_in": 900}
 
 
+@router.post("/live-token")
+async def live_token(
+    event_id: str,
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Mint a short-lived scoped staff token for Festio Live (engagement-
+    service) — same token-exchange pattern as /planner-token. MVP role model:
+    org owner/admin get role="admin" (full access); everyone else is denied
+    for now. A capability-flag layer (Presenter/Moderator/Analyst, mirroring
+    EventUser's planner capability booleans) is a real follow-up, not shipped
+    in this pass — see the architecture doc's §I role table."""
+    from ..config import settings
+    if not settings.engagement_internal_token:
+        raise HTTPException(503, "Festio Live is not configured")
+    event = await db.get(Event, event_id)
+    if not event:
+        raise HTTPException(404, "Event not found")
+    if not event.engagement_enabled:
+        raise HTTPException(402, "Festio Live needs the Festio Live add-on. Buy it for this event to unlock it.", headers={"X-Required-Addon": "addon_engagement"})
+    subject = user.firebase_uid or user.id
+    role: str | None = None
+    if user.is_platform_superadmin:
+        role = "admin"
+    else:
+        org_role = await _org_role(user, event.org_id, db)
+        if org_role in ("owner", "admin"):
+            role = "admin"
+        else:
+            eu = await db.scalar(select(EventUser).where(EventUser.event_id == event_id, EventUser.user_id == user.id))
+            if eu and eu.event_role == "manager":
+                role = "admin"
+    if role is None:
+        raise HTTPException(403, "You don't have access to Festio Live for this event")
+    now = datetime.now(timezone.utc)
+    token = jwt.encode({
+        "sub": subject,
+        "email": user.email,
+        "name": user.name,
+        "event_id": event.id,
+        "org_id": event.org_id,
+        "role": role,
+        "capabilities": [],
+        "identity_kind": "staff",
+        "iss": "guesthub",
+        "aud": "engagement",
+        "iat": now,
+        "exp": now + timedelta(minutes=15),
+    }, settings.engagement_internal_token, algorithm="HS256")
+    return {"token": token, "expires_in": 900}
+
+
 @router.post("/marketing-token")
 async def marketing_token(user: User = Depends(get_current_user)):
     """Mint identity-only access for the isolated Marketing service.

@@ -261,6 +261,78 @@ async function plannerDownload(eventId, path, filename) {
   URL.revokeObjectURL(url)
 }
 
+let liveSession = null // { token, expiresAt, eventId }
+
+async function getLiveSession(eventId, force = false) {
+  const now = Date.now()
+  if (!force && liveSession?.token && liveSession.eventId === eventId && liveSession.expiresAt > now + 30000) {
+    return liveSession.token
+  }
+  const firebaseToken = await getToken()
+  if (!firebaseToken) throw new Error('Your Festio session is still loading. Please try again.')
+  const res = await fetch(`${BASE}/auth/live-token?event_id=${encodeURIComponent(eventId)}`, {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${firebaseToken}` },
+    signal: AbortSignal.timeout(10000),
+  })
+  if (!res.ok) {
+    const data = await res.json().catch(() => ({}))
+    const error = new Error(data.detail || 'Festio Live is temporarily unavailable.')
+    error.status = res.status
+    throw error
+  }
+  const data = await res.json()
+  liveSession = { token: data.token, expiresAt: now + Number(data.expires_in || 900) * 1000, eventId }
+  return data.token
+}
+
+async function liveReq(eventId, method, path, body, options = {}) {
+  const token = await getLiveSession(eventId)
+  const opts = {
+    method,
+    headers: { Authorization: `Bearer ${token}`, ...(body ? { 'Content-Type': 'application/json' } : {}) },
+  }
+  if (body) opts.body = JSON.stringify(body)
+  const res = await fetch(`${BASE}/engagement${path}`, opts)
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ detail: res.statusText }))
+    const detail = Array.isArray(err.detail) ? err.detail.map((d) => d.msg || JSON.stringify(d)).join('; ') : err.detail
+    throw new Error((typeof detail === 'string' && detail) || res.statusText)
+  }
+  return res.status === 204 ? null : res.json()
+}
+
+// Guest-facing: exchange the guest's own pass token (from their Guest Hub
+// link) for a Festio Live participation session — no Firebase login involved,
+// same shape as festiome's guest-token exchange.
+async function getLiveGuestSession(eventId, passToken) {
+  const res = await fetch(`${BASE}/events/${encodeURIComponent(eventId)}/live/guest-token`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ pass_token: passToken }),
+    signal: AbortSignal.timeout(10000),
+  })
+  if (!res.ok) {
+    const data = await res.json().catch(() => ({}))
+    throw new Error(data.detail || "This activity isn't available right now.")
+  }
+  return res.json() // { token, expires_in }
+}
+
+async function liveGuestReq(guestToken, method, path, body) {
+  const opts = {
+    method,
+    headers: { Authorization: `Bearer ${guestToken}`, ...(body ? { 'Content-Type': 'application/json' } : {}) },
+  }
+  if (body) opts.body = JSON.stringify(body)
+  const res = await fetch(`${BASE}/engagement${path}`, opts)
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ detail: res.statusText }))
+    throw new Error(err.detail || res.statusText)
+  }
+  return res.status === 204 ? null : res.json()
+}
+
 let marketingSession = null
 async function marketingReq(method, path, body) {
   const now = Date.now()
@@ -1385,6 +1457,28 @@ export const api = {
   plannerUploadDocument: (eventId, formData) => plannerReq(eventId, 'POST', '/documents/upload', formData, { isForm: true }),
   plannerUpdateDocument: (eventId, docId, body) => plannerReq(eventId, 'PATCH', `/documents/${docId}`, body),
   plannerDeleteDocument: (eventId, docId) => plannerReq(eventId, 'DELETE', `/documents/${docId}`),
+
+  // Festio Live (standalone engagement-service) — staff/admin.
+  liveActivities: (eventId) => liveReq(eventId, 'GET', '/v1/activities'),
+  liveCreateActivity: (eventId, body) => liveReq(eventId, 'POST', '/v1/activities', body),
+  liveGetActivity: (eventId, activityId) => liveReq(eventId, 'GET', `/v1/activities/${activityId}`),
+  liveUpdateActivity: (eventId, activityId, body) => liveReq(eventId, 'PATCH', `/v1/activities/${activityId}`, body),
+  liveDeleteActivity: (eventId, activityId) => liveReq(eventId, 'DELETE', `/v1/activities/${activityId}`),
+  liveAddQuestion: (eventId, activityId, body) => liveReq(eventId, 'POST', `/v1/activities/${activityId}/questions`, body),
+  liveUpdateQuestion: (eventId, questionId, body) => liveReq(eventId, 'PATCH', `/v1/questions/${questionId}`, body),
+  liveDeleteQuestion: (eventId, questionId) => liveReq(eventId, 'DELETE', `/v1/questions/${questionId}`),
+  liveQuestionBank: (eventId, category) => liveReq(eventId, 'GET', `/v1/question-bank${category ? `?category=${encodeURIComponent(category)}` : ''}`),
+  liveCreateBankItem: (eventId, body) => liveReq(eventId, 'POST', '/v1/question-bank', body),
+  liveDeleteBankItem: (eventId, itemId) => liveReq(eventId, 'DELETE', `/v1/question-bank/${itemId}`),
+  liveImportBankItem: (eventId, activityId, itemId) => liveReq(eventId, 'POST', `/v1/activities/${activityId}/questions/import/${itemId}`),
+  liveResults: (eventId, activityId) => liveReq(eventId, 'GET', `/v1/activities/${activityId}/results`),
+
+  // Festio Live — guest participation (no Firebase login; the guest's own
+  // pass token is exchanged for a scoped session first).
+  liveGuestSession: (eventId, passToken) => getLiveGuestSession(eventId, passToken),
+  liveGuestParticipate: (guestToken, activityId) => liveGuestReq(guestToken, 'GET', `/v1/activities/${activityId}/participate`),
+  liveGuestRespond: (guestToken, activityId, body) => liveGuestReq(guestToken, 'POST', `/v1/activities/${activityId}/respond`, body),
+  liveGuestResults: (guestToken, activityId) => liveGuestReq(guestToken, 'GET', `/v1/activities/${activityId}/results`),
 
   // Paid admission (standalone staging-only ticketing-service).
   ticketingConfig: (eventId) => ticketingReq(eventId, 'GET', `/events/${eventId}/config`),

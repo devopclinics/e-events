@@ -35,6 +35,11 @@ class Settings(BaseSettings):
     # shared-secret pattern as FestioMe/design above.
     planner_service_url: str = "http://planner-service:8030"
     planner_internal_token: str = ""
+    # Festio Live (engagement-service) — standalone live quiz/poll/survey
+    # microservice. Backend only ever mints a scoped token for it (see
+    # /auth/live-token, /events/{id}/live/guest-token); it never calls the
+    # service itself, so unlike the others above there's no *_service_url.
+    engagement_internal_token: str = ""
     marketing_service_url: str = "http://marketing-service:8050"
     # Staging-only paid admission service. The service itself refuses to boot
     # outside staging; this shared secret authenticates token exchange and

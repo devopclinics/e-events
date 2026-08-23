@@ -98,7 +98,7 @@ echo -e "\n${BOLD}EventQR Deployment Pipeline${NC}"
 echo    "  Version  : ${VERSION}"
 echo    "  Registry : ${REGISTRY}"
 echo    "  Compose  : ${PROD_COMPOSE}"
-echo    "  Services : backend, frontend, messaging, design, festiome, planner, support, setup"
+echo    "  Services : backend, frontend, messaging, design, festiome, planner, engagement, support, setup"
 echo    "  Keep tags: last ${KEEP_VERSIONS} per service"
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -174,6 +174,14 @@ if $DO_BUILD; then
     "${SCRIPT_DIR}/planner-service"
   ok "Planner service built → ${REGISTRY}:planner-${VERSION}"
 
+  info "Building engagement-service..."
+  docker build $NO_CACHE \
+    "${BUILD_ARGS[@]}" \
+    --tag "${REGISTRY}:engagement-${VERSION}" \
+    --tag "${REGISTRY}:engagement-latest" \
+    "${SCRIPT_DIR}/engagement-service"
+  ok "Engagement service built → ${REGISTRY}:engagement-${VERSION}"
+
   info "Building ticketing-service (staging only)..."
   docker build $NO_CACHE \
     "${BUILD_ARGS[@]}" \
@@ -234,6 +242,8 @@ if $DO_BUILD; then
     "${REGISTRY}:festiome-latest" \
     "${REGISTRY}:planner-${VERSION}" \
     "${REGISTRY}:planner-latest" \
+    "${REGISTRY}:engagement-${VERSION}" \
+    "${REGISTRY}:engagement-latest" \
     "${REGISTRY}:ticketing-${VERSION}" \
     "${REGISTRY}:ticketing-latest" \
     "${REGISTRY}:support-${VERSION}" \
@@ -330,6 +340,7 @@ if $DO_BUILD; then
   prune_service_tags "festiome"
   prune_service_tags "ticketing"
   prune_service_tags "planner"
+  prune_service_tags "engagement"
   prune_service_tags "support"
   prune_service_tags "setup"
   prune_service_tags "dashboard"
@@ -356,7 +367,7 @@ if $DO_DEPLOY; then
 
   # ── Phase 4a — Pull new images ──────────────────────────────────────────────
   step "4/6  Pulling images from Docker Hub"
-  APP_VERSION="$VERSION" docker compose -f "$PROD_COMPOSE" pull backend frontend messaging-service design-service festiome-service planner-service ticketing-service support-service setup-service dashboard-service marketing-service chatwoot chatwoot-sidekiq
+  APP_VERSION="$VERSION" docker compose -f "$PROD_COMPOSE" pull backend frontend messaging-service design-service festiome-service planner-service engagement-service ticketing-service support-service setup-service dashboard-service marketing-service chatwoot chatwoot-sidekiq
   ok "Images pulled"
 
   # ── Phase 4b — Run DB migration in a one-off container ──────────────────────

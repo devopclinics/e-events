@@ -48,6 +48,7 @@ const ADDON_TOGGLES = [
   { key: 'reminders', label: 'Reminders', desc: 'Automated pre-event reminder series.', on: false, settings: [['Reminder settings', '/addons-redesign?tab=reminders']] },
   { key: 'experience', label: 'Experience', desc: 'Operational guest journeys, sessions, consent, and feedback.', on: false, settings: [['Experience settings', '/experience-redesign']] },
   { key: 'planner', label: 'Planner', desc: 'Budget, vendors, timeline, runsheet and documents for planning this event.', on: false, settings: [['Open planner', '/planner-redesign']] },
+  { key: 'festioLive', label: 'Festio Live', desc: 'Live quizzes, polls, surveys and feedback guests join from their phone, with a presenter screen and TV display.', on: false, settings: [['Open Festio Live', '/live-redesign']] },
   { key: 'festiome', label: 'FestioMe', desc: 'Community chat space for this event\'s guests.', on: true, settings: [['Open FestioMe', '/festiome-redesign']] },
 ]
 
@@ -1216,12 +1217,14 @@ const ADDON_FEATURE_KEY = {
   orders: 'menu_enabled', logistics: 'logistics_enabled', registry: 'registry_enabled',
   speakers: 'speaker_enabled', partners: 'partner_enabled', reminders: 'reminders_enabled',
   experience: 'experience_enabled', festiome: 'festiome_addon_enabled', planner: 'planner_enabled',
+  festioLive: 'engagement_enabled',
 }
 const ADDON_PLAN_KEY = {
   venueAccess: 'addon_venue_access', seating: 'addon_seating', partnerPairing: 'addon_seating',
   orders: 'addon_menu', logistics: 'addon_logistics', registry: 'addon_registry',
   speakers: 'addon_speakers', partners: 'addon_partners', reminders: 'addon_reminders',
   experience: 'addon_experience', festiome: 'addon_festiome', planner: 'addon_planner',
+  festioLive: 'addon_engagement',
 }
 const CHANNEL_FEATURE_KEY = { email: 'notify_email', sms: 'notify_sms', whatsapp: 'notify_whatsapp' }
 const THANKYOU_AUDIENCE_KEY = { 'Checked in': 'admitted', 'Confirmed': 'confirmed', 'All guests': 'all' }

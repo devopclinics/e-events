@@ -64,6 +64,7 @@ const DesignStudioRedesignPage = lazy(() => import('./pages/DesignStudioRedesign
 const EventResultsRedesignPage = lazy(() => import('./pages/EventResultsRedesignPage'))
 const FestioMeRedesignPage = lazy(() => import('./pages/FestioMeRedesignPage'))
 const PlannerRedesignPage = lazy(() => import('./pages/PlannerRedesignPage'))
+const FestioLiveRedesignPage = lazy(() => import('./pages/FestioLiveRedesignPage'))
 const VendorPortalPage = lazy(() => import('./pages/VendorPortalPage'))
 const TicketingRedesignPage = lazy(() => import('./pages/TicketingRedesignPage'))
 const TicketOrderPage = lazy(() => import('./pages/TicketOrderPage'))
@@ -469,6 +470,7 @@ function AppRoutes() {
       <Route path="/event-results-redesign" element={<ProtectedRoute><EventResultsRedesignPage /></ProtectedRoute>} />
       <Route path="/festiome-redesign" element={<ProtectedRoute><FestioMeRedesignPage /></ProtectedRoute>} />
       <Route path="/planner-redesign" element={<ProtectedRoute><PlannerRedesignPage /></ProtectedRoute>} />
+      <Route path="/live-redesign" element={<ProtectedRoute><FestioLiveRedesignPage /></ProtectedRoute>} />
       <Route path="/vendor-portal/:token" element={<VendorPortalPage />} />
       {(['festio.events', 'staging.festio.events', 'localhost'].includes(window.location.hostname)) &&
         <Route path="/ticketing-redesign" element={<ProtectedRoute adminOnly><TicketingRedesignPage /></ProtectedRoute>} />}

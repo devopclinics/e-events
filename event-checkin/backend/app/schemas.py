@@ -2357,6 +2357,7 @@ class InvitePageOut(BaseModel):
     live_program_enabled: bool = False
     festiome_addon_enabled: bool = False
     festiome_enabled: bool = False
+    engagement_enabled: bool = False
     guest_hub_v2: bool = True
     guest_hub_layout: Optional[str] = None
     rsvp_collect_phone: bool

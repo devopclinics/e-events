@@ -1472,13 +1472,41 @@ export const api = {
   liveDeleteBankItem: (eventId, itemId) => liveReq(eventId, 'DELETE', `/v1/question-bank/${itemId}`),
   liveImportBankItem: (eventId, activityId, itemId) => liveReq(eventId, 'POST', `/v1/activities/${activityId}/questions/import/${itemId}`),
   liveResults: (eventId, activityId) => liveReq(eventId, 'GET', `/v1/activities/${activityId}/results`),
+  liveLeaderboard: (eventId, activityId) => liveReq(eventId, 'GET', `/v1/activities/${activityId}/leaderboard`),
+  liveSetStatus: (eventId, activityId, status) => liveReq(eventId, 'POST', `/v1/activities/${activityId}/status`, { status }),
+  liveAdvance: (eventId, activityId, questionId) => liveReq(eventId, 'POST', `/v1/activities/${activityId}/advance`, { question_id: questionId }),
+  liveWordCloud: (eventId, questionId) => liveReq(eventId, 'GET', `/v1/questions/${questionId}/word-cloud`),
+  liveAiAnalysis: (eventId, questionId) => liveReq(eventId, 'POST', `/v1/questions/${questionId}/ai-analysis`),
+  liveQnaList: (eventId, activityId) => liveReq(eventId, 'GET', `/v1/activities/${activityId}/qna`),
+  liveQnaModerate: (eventId, qnaId, status) => liveReq(eventId, 'PATCH', `/v1/qna/${qnaId}`, { status }),
+  liveShareLink: (eventId, role, hours) => req('POST', `/events/${eventId}/live/share-link`, { role, hours }),
+  liveRealtimeTicket: (eventId, activityId) => liveReq(eventId, 'GET', `/v1/activities/${activityId}/realtime-ticket`),
 
   // Festio Live — guest participation (no Firebase login; the guest's own
   // pass token is exchanged for a scoped session first).
   liveGuestSession: (eventId, passToken) => getLiveGuestSession(eventId, passToken),
+  liveGuestActivities: (guestToken) => liveGuestReq(guestToken, 'GET', '/v1/activities/live'),
   liveGuestParticipate: (guestToken, activityId) => liveGuestReq(guestToken, 'GET', `/v1/activities/${activityId}/participate`),
   liveGuestRespond: (guestToken, activityId, body) => liveGuestReq(guestToken, 'POST', `/v1/activities/${activityId}/respond`, body),
   liveGuestResults: (guestToken, activityId) => liveGuestReq(guestToken, 'GET', `/v1/activities/${activityId}/results`),
+  liveGuestLeaderboard: (guestToken, activityId) => liveGuestReq(guestToken, 'GET', `/v1/activities/${activityId}/leaderboard`),
+  liveGuestQnaList: (guestToken, activityId) => liveGuestReq(guestToken, 'GET', `/v1/activities/${activityId}/qna`),
+  liveGuestQnaSubmit: (guestToken, activityId, text) => liveGuestReq(guestToken, 'POST', `/v1/activities/${activityId}/qna`, { text }),
+  liveGuestQnaUpvote: (guestToken, qnaId) => liveGuestReq(guestToken, 'POST', `/v1/qna/${qnaId}/upvote`),
+  liveGuestRealtimeTicket: (guestToken, activityId) => liveGuestReq(guestToken, 'GET', `/v1/activities/${activityId}/realtime-ticket`),
+
+  // Festio Live — presenter/moderator share-link console (no Festio login;
+  // a capability-scoped token from Settings → Share Links, see auth.js's
+  // require_capability). Reuses the same raw-bearer-token request shape as
+  // guest calls above -- the token's own embedded role/capabilities are what
+  // the server actually enforces, not which of these methods gets called.
+  liveControlActivities: (token) => liveGuestReq(token, 'GET', '/v1/activities/live'),
+  liveControlActivity: (token, activityId) => liveGuestReq(token, 'GET', `/v1/activities/${activityId}`),
+  liveControlSetStatus: (token, activityId, status) => liveGuestReq(token, 'POST', `/v1/activities/${activityId}/status`, { status }),
+  liveControlAdvance: (token, activityId, questionId) => liveGuestReq(token, 'POST', `/v1/activities/${activityId}/advance`, { question_id: questionId }),
+  liveControlResults: (token, activityId) => liveGuestReq(token, 'GET', `/v1/activities/${activityId}/results`),
+  liveControlQnaList: (token, activityId) => liveGuestReq(token, 'GET', `/v1/activities/${activityId}/qna`),
+  liveControlQnaModerate: (token, qnaId, status) => liveGuestReq(token, 'PATCH', `/v1/qna/${qnaId}`, { status }),
 
   // Paid admission (standalone staging-only ticketing-service).
   ticketingConfig: (eventId) => ticketingReq(eventId, 'GET', `/events/${eventId}/config`),

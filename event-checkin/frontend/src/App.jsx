@@ -65,6 +65,9 @@ const EventResultsRedesignPage = lazy(() => import('./pages/EventResultsRedesign
 const FestioMeRedesignPage = lazy(() => import('./pages/FestioMeRedesignPage'))
 const PlannerRedesignPage = lazy(() => import('./pages/PlannerRedesignPage'))
 const FestioLiveRedesignPage = lazy(() => import('./pages/FestioLiveRedesignPage'))
+const LiveGuestPage = lazy(() => import('./pages/LiveGuestPage'))
+const LiveDisplayPage = lazy(() => import('./pages/LiveDisplayPage'))
+const LiveControlPage = lazy(() => import('./pages/LiveControlPage'))
 const VendorPortalPage = lazy(() => import('./pages/VendorPortalPage'))
 const TicketingRedesignPage = lazy(() => import('./pages/TicketingRedesignPage'))
 const TicketOrderPage = lazy(() => import('./pages/TicketOrderPage'))
@@ -409,6 +412,12 @@ function AppRoutes() {
       <Route path="/r/:token" element={<InvitePage />} />
       {/* Confirmed guests exchange their Festio pass for a scoped FestioMe session. */}
       <Route path="/festiome/guest" element={<FestioMePage />} />
+      {/* Confirmed guests exchange their Festio pass for a scoped Festio Live session. */}
+      <Route path="/live/guest" element={<LiveGuestPage />} />
+      {/* TV/projector display — public except by the activity's own display_token. */}
+      <Route path="/live-display/:activityId" element={<LiveDisplayPage />} />
+      {/* Presenter/Moderator share-link console — no Festio login, capability-scoped token. */}
+      <Route path="/live-control" element={<LiveControlPage />} />
       {/* Public vendor packing list — no auth required */}
       <Route path="/vendor/:token" element={<VendorPage />} />
       {/* Public gift registry — no auth required (unguessable token) */}

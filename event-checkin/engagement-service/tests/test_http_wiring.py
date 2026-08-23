@@ -33,6 +33,39 @@ class AuthRequiredTests(unittest.TestCase):
         resp = client.post("/api/engagement/v1/activities/x/respond", json={"question_id": "q", "idempotency_key": "k"})
         self.assertEqual(resp.status_code, 401)
 
+    def test_live_activities_requires_auth(self):
+        self.assertEqual(client.get("/api/engagement/v1/activities/live").status_code, 401)
+
+    def test_leaderboard_requires_auth(self):
+        self.assertEqual(client.get("/api/engagement/v1/activities/x/leaderboard").status_code, 401)
+
+    def test_qna_list_requires_auth(self):
+        self.assertEqual(client.get("/api/engagement/v1/activities/x/qna").status_code, 401)
+
+    def test_qna_submit_requires_auth(self):
+        self.assertEqual(client.post("/api/engagement/v1/activities/x/qna", json={"text": "hi"}).status_code, 401)
+
+    def test_word_cloud_requires_auth(self):
+        self.assertEqual(client.get("/api/engagement/v1/questions/x/word-cloud").status_code, 401)
+
+    def test_ai_analysis_requires_auth(self):
+        self.assertEqual(client.post("/api/engagement/v1/questions/x/ai-analysis").status_code, 401)
+
+    def test_advance_requires_auth(self):
+        self.assertEqual(client.post("/api/engagement/v1/activities/x/advance", json={}).status_code, 401)
+
+    def test_status_requires_auth(self):
+        self.assertEqual(client.post("/api/engagement/v1/activities/x/status", json={"status": "live"}).status_code, 401)
+
+    def test_realtime_ticket_requires_auth(self):
+        self.assertEqual(client.get("/api/engagement/v1/activities/x/realtime-ticket").status_code, 401)
+
+    # The TV/projector display endpoints (unauthenticated except by their own
+    # display_token) touch the database on every call, unlike everything else
+    # in this file -- there's no test DB fixture here, so that "wrong token
+    # -> 404, not 401" behavior is instead verified live against staging
+    # (see the E2E pass this was built and checked in).
+
 
 if __name__ == "__main__":
     unittest.main()

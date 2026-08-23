@@ -10,6 +10,8 @@ class Settings(BaseSettings):
     # verifies this token's signature + claims on every request.
     internal_service_token: str = ""
     cors_origins: str = "https://festio.events,http://localhost:4000"
+    redis_url: str = "redis://engagement-redis:6379/0"
+    local_ai_url: str = "http://local-ai:8080"
 
 
 settings = Settings()

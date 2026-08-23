@@ -77,6 +77,14 @@ class ActivityUpdate(BaseModel):
     config: dict[str, Any] | None = None
 
 
+class ActivityStatusIn(BaseModel):
+    status: ActivityStatus
+
+
+class ActivityAdvanceIn(BaseModel):
+    question_id: str | None = None
+
+
 class ActivityOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)
     id: str
@@ -162,3 +170,35 @@ class ActivityResultsOut(BaseModel):
     participant_count: int
     response_count: int
     questions: list[QuestionResultOut]
+
+
+class QnaSubmitIn(BaseModel):
+    text: str = Field(max_length=2000)
+
+
+class QnaModerateIn(BaseModel):
+    status: Literal["pending", "answered", "dismissed", "featured"]
+
+
+class QnaQuestionOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+    id: str
+    activity_id: str
+    text: str
+    status: str
+    upvote_count: int
+    created_at: datetime
+    upvoted_by_me: bool = False
+
+
+class WordCloudEntry(BaseModel):
+    word: str
+    count: int
+
+
+class AiAnalysisOut(BaseModel):
+    question_id: str
+    response_count: int
+    summary: str
+    themes: list[str] = Field(default_factory=list)
+    sentiment: str | None = None

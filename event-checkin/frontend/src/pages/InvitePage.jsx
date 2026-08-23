@@ -1348,6 +1348,7 @@ function GuestHub({ event, accessToken, designTheme, previewMock = false, confir
     { key: 'activity_progress', visible: true },
     { key: 'live_program', visible: true },
     { key: 'festiome', visible: true },
+    { key: 'live', visible: true },
     { key: 'messages', visible: true },
   ]
   // Staging rollout flag: when off, fall back to the pre-tab layout — every
@@ -1800,6 +1801,11 @@ function GuestHub({ event, accessToken, designTheme, previewMock = false, confir
                         💬 Open FestioMe
                       </a>
                     )}
+                    {hubModuleVisible('live') && event?.engagement_enabled && (
+                      <a href={`/live/guest?event=${encodeURIComponent(event.id)}&pass=${encodeURIComponent(hub.guest.qr_token)}`} className="inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-xl border-2 bg-slate-50 px-5 py-2.5 text-sm font-extrabold text-slate-800 dark:bg-slate-800 dark:text-white" style={{ borderColor: colors.accent || undefined }}>
+                        Join Festio Live
+                      </a>
+                    )}
                   </div>
                 )}
                 {event?.registry_enabled && event?.registry_token && (
@@ -2144,6 +2150,9 @@ function GuestHub({ event, accessToken, designTheme, previewMock = false, confir
               )
               if (module.key === 'festiome' && hub?.capabilities?.festiome && hub?.guest?.qr_token) return (
                 <a key={module.key} href={`/festiome/guest?event=${encodeURIComponent(event.id)}&pass=${encodeURIComponent(hub.guest.qr_token)}`} className="flex min-h-16 items-center justify-between rounded-2xl border p-4" style={{ background: tone.panel, borderColor: tone.border, color: tone.text }}><span><strong className="block">FestioMe community</strong><span className="mt-1 block text-sm" style={{ color: tone.muted }}>Announcements, groups and conversations</span></span><span aria-hidden="true">›</span></a>
+              )
+              if (module.key === 'live' && event?.engagement_enabled && hub?.guest?.qr_token) return (
+                <a key={module.key} href={`/live/guest?event=${encodeURIComponent(event.id)}&pass=${encodeURIComponent(hub.guest.qr_token)}`} className="flex min-h-16 items-center justify-between rounded-2xl border p-4" style={{ background: tone.panel, borderColor: tone.border, color: tone.text }}><span><strong className="block">Festio Live</strong><span className="mt-1 block text-sm" style={{ color: tone.muted }}>Live quizzes, polls & Q&A</span></span><span aria-hidden="true">›</span></a>
               )
               if (module.key === 'messages' && (hub?.capabilities?.direct_host_messages || hub?.capabilities?.guest_chat)) return (
                 <button key={module.key} type="button" onClick={() => setHubTab('messages')} className="flex min-h-16 items-center justify-between rounded-2xl border p-4 text-left" style={{ background: tone.panel, borderColor: tone.border, color: tone.text }}><span><strong className="block">Messages</strong><span className="mt-1 block text-sm" style={{ color: tone.muted }}>{hub?.direct_messages?.length ? `${hub.direct_messages.length} message${hub.direct_messages.length === 1 ? '' : 's'}` : 'Contact your event team'}</span></span><span aria-hidden="true">›</span></button>
@@ -2586,6 +2595,15 @@ function GuestHub({ event, accessToken, designTheme, previewMock = false, confir
                     style={{ background: tone.chip, borderColor: colors.accent || tone.text, color: tone.text }}
                   >
                     💬 Open FestioMe
+                  </a>
+                )}
+                {hubModuleVisible('live') && event?.engagement_enabled && (
+                  <a
+                    href={`/live/guest?event=${encodeURIComponent(event.id)}&pass=${encodeURIComponent(hub.guest.qr_token)}`}
+                    className="inline-flex min-h-12 w-full items-center justify-center gap-2 rounded-xl border-2 px-5 py-3 text-base font-extrabold transition hover:opacity-90"
+                    style={{ background: tone.chip, borderColor: colors.accent || tone.text, color: tone.text }}
+                  >
+                    Join Festio Live
                   </a>
                 )}
               </div>

@@ -1,14 +1,27 @@
+import secrets
+
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
-from ..auth import Identity, current_identity, require_admin, require_staff
+from ..auth import Identity, current_identity, require_admin, require_capability, require_staff
 from ..database import get_db
 from ..models import ActivityQuestion, EngagementActivity, ParticipantResponse, QuestionOption
-from ..schemas import ActivityCreate, ActivityOut, ActivitySummary, ActivityUpdate, QuestionCreate, QuestionOut, QuestionUpdate
+from ..realtime import publish
+from ..schemas import ActivityAdvanceIn, ActivityCreate, ActivityOut, ActivityStatusIn, ActivitySummary, ActivityUpdate, QuestionCreate, QuestionOut, QuestionUpdate
 
 router = APIRouter(prefix="/api/engagement/v1", tags=["engagement-activities"])
+
+VALID_STATUS_TRANSITIONS = {
+    "draft": {"scheduled", "live", "archived"},
+    "scheduled": {"live", "draft", "archived"},
+    "live": {"paused", "closed"},
+    "paused": {"live", "closed"},
+    "closed": {"completed", "live", "archived"},
+    "completed": {"archived"},
+    "archived": set(),
+}
 
 
 # Session.get(Model, pk, options=[...]) silently ignores `options` and returns
@@ -68,12 +81,25 @@ async def list_activities(identity: Identity = Depends(current_identity), db: As
     return out
 
 
+@router.get("/activities/live", response_model=list[ActivitySummary])
+async def list_live_activities(identity: Identity = Depends(current_identity), db: AsyncSession = Depends(get_db)):
+    """Guest-visible discovery — what's open to join right now. Staff can hit
+    this too (it's just a filtered view of the admin listing above)."""
+    rows = (await db.execute(
+        select(EngagementActivity)
+        .where(EngagementActivity.event_id == identity.event_id, EngagementActivity.status.in_(("live", "paused")))
+        .order_by(EngagementActivity.created_at.desc())
+    )).scalars().all()
+    return [ActivitySummary.model_validate(a) for a in rows]
+
+
 @router.post("/activities", response_model=ActivityOut, status_code=201)
 async def create_activity(body: ActivityCreate, identity: Identity = Depends(current_identity), db: AsyncSession = Depends(get_db)):
     require_admin(identity)
+    config = {**body.config, "display_token": secrets.token_urlsafe(16)}
     activity = EngagementActivity(
         org_id=identity.org_id, event_id=identity.event_id, session_id=body.session_id,
-        type=body.type, title=body.title, description=body.description, config=body.config,
+        type=body.type, title=body.title, description=body.description, config=config,
         created_by=identity.subject,
     )
     db.add(activity)
@@ -100,6 +126,38 @@ async def update_activity(activity_id: str, body: ActivityUpdate, identity: Iden
     if body.config is not None:
         activity.config = {**activity.config, **body.config}
     await db.commit()
+    if body.status is not None:
+        await publish(activity_id, "activity.status_changed", {"status": activity.status})
+    return await _fetch_activity(activity_id, db)
+
+
+@router.post("/activities/{activity_id}/status", response_model=ActivityOut)
+async def set_activity_status(activity_id: str, body: ActivityStatusIn, identity: Identity = Depends(current_identity), db: AsyncSession = Depends(get_db)):
+    """Presenter-capability status control — a narrower, transition-guarded
+    sibling of the admin-only PATCH above, for the Live Control screen and
+    any Presenter share-link (see the backend's /live/share-link)."""
+    require_capability(identity, "control")
+    activity = await _get_owned_activity(activity_id, identity, db)
+    allowed = VALID_STATUS_TRANSITIONS.get(activity.status, set())
+    if body.status not in allowed:
+        raise HTTPException(409, f"Can't move from {activity.status} to {body.status}")
+    activity.status = body.status
+    await db.commit()
+    await publish(activity_id, "activity.status_changed", {"status": activity.status})
+    return await _fetch_activity(activity_id, db)
+
+
+@router.post("/activities/{activity_id}/advance", response_model=ActivityOut)
+async def advance_question(activity_id: str, body: ActivityAdvanceIn, identity: Identity = Depends(current_identity), db: AsyncSession = Depends(get_db)):
+    """Sets (or clears) the activity's "current question" pointer that the
+    Live Control screen and the TV/projector display both follow."""
+    require_capability(identity, "control")
+    activity = await _get_owned_activity(activity_id, identity, db)
+    if body.question_id is not None and not any(q.id == body.question_id for q in activity.questions):
+        raise HTTPException(404, "Question not found on this activity")
+    activity.config = {**activity.config, "current_question_id": body.question_id}
+    await db.commit()
+    await publish(activity_id, "question.changed", {"question_id": body.question_id})
     return await _fetch_activity(activity_id, db)
 
 

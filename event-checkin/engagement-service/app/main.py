@@ -5,10 +5,10 @@ Never imports the main backend or its database. Trusts only the scoped JWT
 minted by the main backend's POST /api/auth/live-token (staff) or
 POST /api/events/{id}/live/guest-token (guest) — see app/auth.py.
 
-MVP scope shipped here: activity + question CRUD, question bank, guest
-participation with idempotent responses, basic tallied results. Real-time
-(SSE/Redis), presenter control, TV display, and leaderboard scoring are a
-later, separately-verified pass — see the architecture doc's phased plan.
+Activity + question CRUD, question bank, guest participation with idempotent
+responses, leaderboard, Q&A, word cloud, AI feedback analysis, and live
+updates (SSE over engagement-service's own Redis) — see the architecture
+doc's phased plan for what's still deliberately out of scope.
 Runs on port 8060.
 """
 import logging
@@ -17,7 +17,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from .config import settings
-from .routers import activities, bank, participate
+from .routers import activities, analytics, bank, participate, qna, realtime
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s engagement-service %(message)s")
 logger = logging.getLogger("engagement-service")
@@ -35,6 +35,9 @@ app.add_middleware(
 app.include_router(activities.router)
 app.include_router(bank.router)
 app.include_router(participate.router)
+app.include_router(qna.router)
+app.include_router(analytics.router)
+app.include_router(realtime.router)
 
 
 @app.on_event("startup")

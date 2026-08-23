@@ -1,4 +1,4 @@
-from collections import Counter
+from collections import Counter, defaultdict
 
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy import select
@@ -12,15 +12,20 @@ from ..models import (
     ActivityParticipant, ActivityQuestion, EngagementActivity, ParticipantResponse,
     QuestionOption, ResponseOptionSelection,
 )
+from ..realtime import publish
 from ..schemas import ActivityResultsOut, ParticipateStateOut, QuestionResultOut, RespondIn, RespondOut
 
 router = APIRouter(prefix="/api/engagement/v1", tags=["engagement-participate"])
 
 
 async def _load_activity(activity_id: str, event_id: str, db: AsyncSession) -> EngagementActivity:
-    activity = await db.get(
-        EngagementActivity, activity_id,
-        options=[selectinload(EngagementActivity.questions).selectinload(ActivityQuestion.options)],
+    # Explicit select().options(), not db.get(..., options=...) -- see
+    # activities.py's _fetch_activity docstring for why db.get() silently
+    # skips eager-load hints when the row is already in the identity map.
+    activity = await db.scalar(
+        select(EngagementActivity)
+        .where(EngagementActivity.id == activity_id)
+        .options(selectinload(EngagementActivity.questions).selectinload(ActivityQuestion.options))
     )
     if not activity or activity.event_id != event_id:
         raise HTTPException(404, "Activity not found")
@@ -37,6 +42,72 @@ async def _get_or_create_participant(activity_id: str, guest_id: str, display_na
     db.add(participant)
     await db.flush()
     return participant
+
+
+async def _compute_results(activity: EngagementActivity, db: AsyncSession) -> ActivityResultsOut:
+    responses = (await db.execute(
+        select(ParticipantResponse).where(ParticipantResponse.activity_id == activity.id)
+        .options(selectinload(ParticipantResponse.selections))
+    )).scalars().all()
+    participant_count = len({r.participant_id for r in responses})
+
+    questions_out = []
+    for question in sorted(activity.questions, key=lambda q: q.sequence):
+        q_responses = [r for r in responses if r.question_id == question.id]
+        option_counts: Counter[str] = Counter()
+        for r in q_responses:
+            for sel in r.selections:
+                option_counts[sel.option_id] += 1
+        ratings = [r.answer_value for r in q_responses if isinstance(r.answer_value, (int, float))]
+        text_samples = [str(r.answer_value) for r in q_responses if isinstance(r.answer_value, str)][:20]
+        questions_out.append(QuestionResultOut(
+            question_id=question.id, question_type=question.question_type, prompt=question.prompt,
+            response_count=len(q_responses), option_counts=dict(option_counts),
+            average_rating=(sum(ratings) / len(ratings)) if ratings else None,
+            text_samples=text_samples,
+        ))
+
+    return ActivityResultsOut(
+        activity_id=activity.id, participant_count=participant_count,
+        response_count=len(responses), questions=questions_out,
+    )
+
+
+async def _compute_leaderboard(activity: EngagementActivity, db: AsyncSession, limit: int = 20) -> list[dict]:
+    responses = (await db.execute(
+        select(ParticipantResponse.participant_id, ParticipantResponse.score)
+        .where(ParticipantResponse.activity_id == activity.id, ParticipantResponse.score.isnot(None))
+    )).all()
+    totals: dict[str, int] = defaultdict(int)
+    for participant_id, score in responses:
+        totals[participant_id] += score or 0
+    if not totals:
+        return []
+    participants = (await db.execute(
+        select(ActivityParticipant).where(ActivityParticipant.id.in_(totals.keys()))
+    )).scalars().all()
+    names = {p.id: (p.display_name or "Guest") for p in participants}
+    ranked = sorted(totals.items(), key=lambda kv: kv[1], reverse=True)[:limit]
+    return [
+        {"rank": i + 1, "participant_id": pid, "display_name": names.get(pid, "Guest"), "score": score}
+        for i, (pid, score) in enumerate(ranked)
+    ]
+
+
+async def _display_payload(activity: EngagementActivity, db: AsyncSession) -> dict:
+    results = await _compute_results(activity, db)
+    leaderboard = await _compute_leaderboard(activity, db) if activity.config.get("leaderboard_enabled") else []
+    return {
+        "activity_id": activity.id,
+        "title": activity.title,
+        "type": activity.type,
+        "status": activity.status,
+        "current_question_id": activity.config.get("current_question_id"),
+        "participant_count": results.participant_count,
+        "response_count": results.response_count,
+        "questions": [q.model_dump() for q in results.questions],
+        "leaderboard": leaderboard,
+    }
 
 
 @router.get("/activities/{activity_id}/participate", response_model=ParticipateStateOut)
@@ -136,6 +207,7 @@ async def respond(activity_id: str, body: RespondIn, identity: Identity = Depend
             return RespondOut(response_id=existing.id, score=existing.score, correct=None)
         raise HTTPException(409, "This response could not be recorded — please try again")
 
+    await publish(activity_id, "response.submitted", {"question_id": body.question_id})
     return RespondOut(response_id=response.id, score=score, correct=correct)
 
 
@@ -146,30 +218,14 @@ async def get_results(activity_id: str, identity: Identity = Depends(current_ide
         require_guest(identity)
         if not activity.config.get("live_results_enabled", True):
             raise HTTPException(403, "Results aren't available for this activity")
+    return await _compute_results(activity, db)
 
-    responses = (await db.execute(
-        select(ParticipantResponse).where(ParticipantResponse.activity_id == activity_id)
-        .options(selectinload(ParticipantResponse.selections))
-    )).scalars().all()
-    participant_count = len({r.participant_id for r in responses})
 
-    questions_out = []
-    for question in sorted(activity.questions, key=lambda q: q.sequence):
-        q_responses = [r for r in responses if r.question_id == question.id]
-        option_counts: Counter[str] = Counter()
-        for r in q_responses:
-            for sel in r.selections:
-                option_counts[sel.option_id] += 1
-        ratings = [r.answer_value for r in q_responses if isinstance(r.answer_value, (int, float))]
-        text_samples = [str(r.answer_value) for r in q_responses if isinstance(r.answer_value, str)][:20]
-        questions_out.append(QuestionResultOut(
-            question_id=question.id, question_type=question.question_type, prompt=question.prompt,
-            response_count=len(q_responses), option_counts=dict(option_counts),
-            average_rating=(sum(ratings) / len(ratings)) if ratings else None,
-            text_samples=text_samples,
-        ))
-
-    return ActivityResultsOut(
-        activity_id=activity_id, participant_count=participant_count,
-        response_count=len(responses), questions=questions_out,
-    )
+@router.get("/activities/{activity_id}/leaderboard")
+async def get_leaderboard(activity_id: str, identity: Identity = Depends(current_identity), db: AsyncSession = Depends(get_db)):
+    activity = await _load_activity(activity_id, identity.event_id, db)
+    if identity.identity_kind != "staff":
+        require_guest(identity)
+        if not activity.config.get("leaderboard_enabled", False):
+            raise HTTPException(403, "The leaderboard isn't available for this activity")
+    return {"entries": await _compute_leaderboard(activity, db)}

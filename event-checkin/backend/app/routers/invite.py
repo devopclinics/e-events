@@ -221,6 +221,7 @@ async def _invite_page_out(event: Event, db: AsyncSession) -> InvitePageOut:
         live_program_enabled=event.live_program_enabled,
         festiome_addon_enabled=event.festiome_addon_enabled,
         festiome_enabled=event.festiome_enabled,
+        engagement_enabled=event.engagement_enabled,
         guest_hub_v2=settings.guest_hub_v2,
         guest_hub_layout=event.guest_hub_layout,
         rsvp_collect_phone=event.rsvp_collect_phone,

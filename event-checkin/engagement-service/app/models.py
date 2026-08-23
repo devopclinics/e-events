@@ -164,3 +164,34 @@ class ResponseOptionSelection(Base):
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=_uuid)
     response_id: Mapped[str] = mapped_column(String(36), ForeignKey("engagement_participant_responses.id", ondelete="CASCADE"), index=True)
     option_id: Mapped[str] = mapped_column(String(36), ForeignKey("engagement_question_options.id", ondelete="CASCADE"), index=True)
+
+
+# ── Q&A ──────────────────────────────────────────────────────────────────────
+
+class EngagementQnaQuestion(Base):
+    """A guest-submitted question on a type="q_and_a" activity — separate from
+    ActivityQuestion, which is staff-authored. Upvote count is denormalized
+    onto the row (kept in sync in the upvote endpoint's own transaction) so
+    ranking the feed never needs a join+count on every read."""
+    __tablename__ = "engagement_qna_questions"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=_uuid)
+    activity_id: Mapped[str] = mapped_column(String(36), ForeignKey("engagement_activities.id", ondelete="CASCADE"), index=True)
+    participant_id: Mapped[str] = mapped_column(String(36), ForeignKey("engagement_activity_participants.id", ondelete="CASCADE"))
+    text: Mapped[str] = mapped_column(Text)
+    status: Mapped[str] = mapped_column(String(20), default="pending")  # pending|answered|dismissed|featured
+    upvote_count: Mapped[int] = mapped_column(Integer, default=0)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=datetime.utcnow)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=datetime.utcnow, onupdate=datetime.utcnow)
+
+
+class EngagementQnaUpvote(Base):
+    __tablename__ = "engagement_qna_upvotes"
+    __table_args__ = (
+        UniqueConstraint("qna_question_id", "participant_id", name="uq_engagement_qna_upvote"),
+    )
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=_uuid)
+    qna_question_id: Mapped[str] = mapped_column(String(36), ForeignKey("engagement_qna_questions.id", ondelete="CASCADE"), index=True)
+    participant_id: Mapped[str] = mapped_column(String(36), ForeignKey("engagement_activity_participants.id", ondelete="CASCADE"))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=datetime.utcnow)

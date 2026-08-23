@@ -1805,7 +1805,11 @@ function GuestHub({ event, accessToken, designTheme, previewMock = false, confir
           </div>
 
           {/* Your Event Journey — only when Experience is actually enabled */}
-          {journey?.experience_enabled && journeyRows.length > 0 && (
+          {/* consent/menu populate journeyRows even when full Experience is off
+              (see experience.py's early-return path) — gate on having more
+              than the baseline registration+pass rows, not on the module flag,
+              so a consent- or menu-only event still gets its journey shown. */}
+          {journeyRows.length > 2 && (
             <div className="mt-3 rounded-2xl border p-4" style={{ background: tone.panel, borderColor: tone.border }}>
               <button type="button" onClick={() => setShowAllActivity((v) => !v)} className="flex w-full items-center justify-between gap-3 text-left">
                 <span className="text-xs font-extrabold uppercase tracking-[0.14em]" style={{ color: tone.label }}>Your Event Journey</span>

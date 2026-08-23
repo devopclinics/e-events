@@ -694,6 +694,7 @@ function InviteTab({ notify, onSendInvites, onSendGuests, onPreviewInvite, event
   const [showShare, setShowShare] = useState(true)
   const [showCalendar, setShowCalendar] = useState(true)
   const [showConfetti, setShowConfetti] = useState(true)
+  const [hubLayout, setHubLayout] = useState('classic')
   const [categorySeating, setCategorySeating] = useState({})
   const [newCategory, setNewCategory] = useState('')
   const [inviteeTypeOptions, setInviteeTypeOptions] = useState([])
@@ -867,6 +868,7 @@ function InviteTab({ notify, onSendInvites, onSendGuests, onPreviewInvite, event
     setShowShare(event.invite_share_enabled !== false)
     setShowCalendar(event.invite_add_to_calendar_enabled !== false)
     setShowConfetti(event.rsvp_confetti_enabled !== false)
+    setHubLayout(event.guest_hub_layout === 'companion' ? 'companion' : 'classic')
   }, [event])
 
   function copyLink() {
@@ -909,6 +911,7 @@ function InviteTab({ notify, onSendInvites, onSendGuests, onPreviewInvite, event
         invite_share_enabled: showShare,
         invite_add_to_calendar_enabled: showCalendar,
         rsvp_confetti_enabled: showConfetti,
+        guest_hub_layout: hubLayout,
       })
       await onEventChanged()
       notify('RSVP settings saved')
@@ -1097,6 +1100,22 @@ function InviteTab({ notify, onSendInvites, onSendGuests, onPreviewInvite, event
                 </label>
               </div>
             ))}
+            <div className="rr-section-title" style={{ margin: '18px 0 8px' }}>
+              <div><h2 style={{ fontSize: 12 }}>Guest Hub layout</h2><p>Which FestioHub your guests see after they RSVP</p></div>
+            </div>
+            <div style={{ display: 'flex', gap: 8 }}>
+              {[
+                ['classic', 'Classic', 'The tabbed FestioHub — unchanged, and still the default.'],
+                ['companion', 'Companion', 'Redesigned single-scroll layout: Pass and next step first, one Event Details block, only the modules this event uses.'],
+              ].map(([val, label, desc]) => (
+                <button key={val} type="button" onClick={() => setHubLayout(val)}
+                  className="rr-btn secondary"
+                  style={{ flex: 1, textAlign: 'left', display: 'block', height: 'auto', padding: '10px 12px', ...(hubLayout === val ? { borderColor: 'var(--rr-accent, #0b3b2e)', boxShadow: '0 0 0 1px var(--rr-accent, #0b3b2e)' } : {}) }}>
+                  <div style={{ fontWeight: 700, fontSize: 13 }}>{hubLayout === val ? '● ' : '○ '}{label}</div>
+                  <div style={{ fontSize: 11, opacity: 0.7, marginTop: 3, fontWeight: 400 }}>{desc}</div>
+                </button>
+              ))}
+            </div>
             <button className="rr-btn primary" disabled={saving} style={{ marginTop: 14 }} onClick={saveSettings}>{saving ? 'Saving…' : 'Save display settings'}</button>
           </div>
         </div>

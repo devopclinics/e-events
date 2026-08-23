@@ -193,6 +193,7 @@ class EventOut(BaseModel):
     speaker_show_before_rsvp: bool = False
     partner_enabled: bool = False
     reminders_enabled: bool = False
+    guest_hub_layout: Optional[str] = None
     purchased_addons: Optional[list[str]] = None
     festiome_enabled: bool = False
     festiome_id: Optional[str] = None
@@ -2298,6 +2299,7 @@ class InviteSettingsUpdate(BaseModel):
     rsvp_capacity: Optional[int] = None
     invite_cover_image: Optional[str] = None
     logo_url: Optional[str] = None
+    guest_hub_layout: Optional[Literal["classic", "companion"]] = None
     invite_mode: Optional[Literal["open", "closed"]] = None
     rsvp_deadline: Optional[datetime] = None
     event_time_tbd: Optional[bool] = None
@@ -2355,6 +2357,7 @@ class InvitePageOut(BaseModel):
     festiome_addon_enabled: bool = False
     festiome_enabled: bool = False
     guest_hub_v2: bool = True
+    guest_hub_layout: Optional[str] = None
     rsvp_collect_phone: bool
     rsvp_collect_email: bool
     rsvp_email_required: bool = True

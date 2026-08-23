@@ -222,6 +222,7 @@ async def _invite_page_out(event: Event, db: AsyncSession) -> InvitePageOut:
         festiome_addon_enabled=event.festiome_addon_enabled,
         festiome_enabled=event.festiome_enabled,
         guest_hub_v2=settings.guest_hub_v2,
+        guest_hub_layout=event.guest_hub_layout,
         rsvp_collect_phone=event.rsvp_collect_phone,
         rsvp_collect_email=event.rsvp_collect_email,
         rsvp_allow_duplicate_emails=event.rsvp_allow_duplicate_emails,

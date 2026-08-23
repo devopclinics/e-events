@@ -623,6 +623,12 @@ class Event(Base):
     # Small organizer/community logo badge, distinct from the cover photo —
     # rendered on the public invite page header. Served from /api/uploads/.
     logo_url: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    # Which Guest Hub information architecture this event's guests see.
+    # None/"classic" = today's tabbed FestioHub card, unchanged. "companion"
+    # = the redesigned single-scroll layout (Pass/Next Step/Journey first,
+    # one consolidated Event Details block, conditional modules). Per-event
+    # and organizer-selectable so existing events are never silently switched.
+    guest_hub_layout: Mapped[str | None] = mapped_column(String(20), nullable=True)
     # Invite distribution mode:
     #   "open"   — shared /e/{event_id} link; anyone with it can RSVP.
     #   "closed" — invitation-only; each guest gets a unique /r/{invite_token}

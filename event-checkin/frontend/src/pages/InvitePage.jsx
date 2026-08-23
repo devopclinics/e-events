@@ -1362,6 +1362,10 @@ function GuestHub({ event, accessToken, designTheme, previewMock = false, confir
   const tabActive = (key) => !tabbed || hubTab === key
   const tabsActive = (keys) => !tabbed || keys.includes(hubTab)
   const hubTabOrder = HUB_TAB_ORDER[hubStyle] || ['pass', 'activity', 'program', 'speakers', 'messages']
+  // Per-event, organizer-selectable — never on by default, so no existing
+  // event's Hub changes shape unless someone explicitly picks it in Guests →
+  // Invites & RSVP. See CompanionGuestHub below for the redesigned layout.
+  const companionLayout = event?.guest_hub_layout === 'companion'
 
   // Design Studio's preview iframe loads with #guest-hub in the URL, but this
   // section doesn't exist in the DOM until the async event/theme fetch above
@@ -1684,6 +1688,368 @@ function GuestHub({ event, accessToken, designTheme, previewMock = false, confir
     || programDays.find((day) => day.segments?.some((segment) => segment.active))
     || programDays.find((day) => day.segments?.some((segment) => new Date(segment.ends_at) > new Date()))
     || programDays[0]
+
+  if (companionLayout) {
+    const isConfirmed = !hasRsvp || hub?.guest?.rsvp_status === 'confirmed'
+    const consent = journey?.consent
+    const needsConsent = !!(consent?.required && !consent.signed)
+    const wantsMeal = journey?.menu_selectable && !journey?.menu_has_choices
+    // Single highest-priority action, in the order a guest actually needs to
+    // resolve them — never a queue of competing "do this" cards.
+    let nextStep = { icon: '→', label: 'Next step', text: 'Present your Festio Pass at check-in.', urgent: false }
+    if (hasRsvp && hub?.guest?.rsvp_status && hub.guest.rsvp_status !== 'confirmed') {
+      nextStep = hub.guest.rsvp_status === 'pending'
+        ? { icon: '⏳', label: 'Next step', text: "We'll notify you once your registration is reviewed.", urgent: false }
+        : hub.guest.rsvp_status === 'waitlisted'
+          ? { icon: '⏳', label: 'Next step', text: "We'll notify you if a spot opens up.", urgent: false }
+          : { icon: '💬', label: 'Next step', text: 'Contact the host if this doesn’t look right.', urgent: false }
+    } else if (needsConsent) {
+      nextStep = { icon: '📝', label: 'Action required', text: `Sign ${consent.form?.title || 'your consent form'} before check-in.`, urgent: true }
+    } else if (wantsMeal) {
+      nextStep = { icon: '🍽️', label: 'Next step', text: 'Choose your food order on your Festio Pass.', urgent: false }
+    } else if (passNextStep) {
+      nextStep = { icon: '🎁', label: 'Next step', text: `After entry · ${passNextStep.title}`, urgent: false }
+    } else if (hub?.guest?.admitted) {
+      nextStep = { icon: '✓', label: "You're all set", text: 'Enjoy the event.', urgent: false }
+    }
+
+    // Journey checklist: every self-contained step rolls up as its own line,
+    // except session_attendance (usually dozens of entries — check-in is
+    // staff-scanned, not a guest action, so they collapse into one count)
+    // and consent/meal, which already have a richer real-time source above.
+    const rawSteps = (journey?.steps || []).filter((s) => s.status !== 'skipped')
+    const sessionSteps = rawSteps.filter((s) => s.type === 'session_attendance')
+    const otherSteps = rawSteps.filter((s) => !['session_attendance', 'consent', 'meal_selection'].includes(s.type))
+    const journeyRows = []
+    if (hasRsvp) journeyRows.push({ done: true, label: 'Registration completed' })
+    if (hub?.guest?.qr_token) journeyRows.push({ done: true, label: 'Festio Pass ready' })
+    if (consent?.required) journeyRows.push({ done: consent.signed, now: needsConsent, label: consent.signed ? 'Consent signed' : `Sign ${consent.form?.title || 'consent form'}` })
+    if (journey?.menu_selectable) journeyRows.push({ done: journey.menu_has_choices, now: wantsMeal, label: journey.menu_has_choices ? 'Food order selected' : 'Choose your food order' })
+    otherSteps.forEach((s) => journeyRows.push({ done: ['completed', 'overridden'].includes(s.status), now: s.actionable, label: s.title }))
+    if (sessionSteps.length) {
+      const sDone = sessionSteps.filter((s) => ['completed', 'overridden'].includes(s.status)).length
+      journeyRows.push({ done: sDone === sessionSteps.length, label: `Attend your scheduled sessions — ${sDone}/${sessionSteps.length}` })
+    }
+    if (feedbackForms.length) journeyRows.push({ done: feedbackForms.every((f) => f.submitted), now: feedbackForms.some((f) => !f.submitted), label: 'Share event feedback' })
+    let firstNow = false
+    journeyRows.forEach((r) => { if (r.now) { if (firstNow) r.now = false; firstNow = true } })
+    const journeyDone = journeyRows.filter((r) => r.done).length
+
+    const dateLabel = event?.event_date
+      ? `${fmtDate(event.event_date, event.timezone)}${event.event_end_date ? ` – ${fmtDate(event.event_end_date, event.timezone)}` : ''}`
+        + (event?.event_time_tbd ? '' : ` · ${fmtTime(event.event_date, event.timezone)}`)
+      : ''
+    const consolidatedVenue = [event?.venue_name, event?.venue_address].filter(Boolean).join(' · ')
+    const hasExperienceModules = !!(passCells.some((c) => c.l === seatingTerm(event) || c.l === seatTerm(event)) || consent?.required || journey?.menu_enabled)
+
+    return (
+      <section className="py-2">
+        <div className={`mx-auto w-full max-w-[560px] rounded-[1.65rem] border p-5 shadow-2xl backdrop-blur sm:p-6 fh-hub-style-${hubStyle}`}
+          style={{ background: `linear-gradient(145deg, ${tone.background}, ${tone.surface})`, borderColor: tone.border, color: tone.text, boxShadow: `0 22px 48px ${tone.shadow}` }}>
+          <div className="flex items-center justify-between gap-3">
+            <div>
+              <h2 className="text-2xl font-extrabold">FestioHub</h2>
+              {hasRsvp && hub?.guest?.rsvp_status && (
+                <span className="mt-1 inline-block rounded-full px-2.5 py-0.5 text-[11px] font-extrabold uppercase tracking-wide" style={{ background: `${tone.accent}22`, color: tone.text }}>
+                  {hub.guest.rsvp_status === 'confirmed' ? 'Attending' : hub.guest.rsvp_status}
+                </span>
+              )}
+            </div>
+          </div>
+
+          {error && <div className="mt-4 rounded-2xl border border-amber-300/25 bg-amber-300/10 px-4 py-3 text-sm text-amber-50">{error}</div>}
+
+          {/* Pass — primary tier: elevated, larger radius/shadow than every other card */}
+          {isConfirmed ? (
+            <div className="mt-5 rounded-[1.4rem] border-2 p-5 text-center" style={{ background: tone.panelStrong, borderColor: `${tone.accent}66`, boxShadow: `0 0 40px -10px ${tone.accent}55` }}>
+              <span className="inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-extrabold" style={{ background: `${tone.accent}22`, color: tone.accent }}>
+                <span aria-hidden="true">{passStatus.icon}</span>{passStatus.label}
+              </span>
+              <div className="mt-3 text-sm font-semibold" style={{ color: tone.muted }}>Welcome,</div>
+              <div className="text-xl font-extrabold">{hub?.guest?.name || 'Guest'}</div>
+              {hub?.guest?.qr_token && (
+                <div className="relative mx-auto mt-4 max-w-[240px] rounded-2xl bg-white p-3">
+                  <img src={previewMock ? PREVIEW_QR_DATA_URI : `/api/scan/${hub.guest.qr_token}/qr.png`} alt="Your QR pass code" className="mx-auto h-48 w-48" />
+                </div>
+              )}
+              {hub?.guest?.qr_token && <div className="mt-3 text-xs font-bold" style={{ color: tone.label }}>Your Festio Pass · show this at check-in</div>}
+              {hub?.guest?.qr_token && (
+                <div className="mt-4 grid gap-2">
+                  <a href={`/scan/${hub.guest.qr_token}`} style={colors.accent ? { background: colors.accent } : undefined} className="inline-flex min-h-12 w-full items-center justify-center gap-2 rounded-xl bg-teal-400 px-5 py-3 text-base font-extrabold text-slate-950 shadow-sm hover:bg-teal-300">
+                    🎫 View Full Pass
+                  </a>
+                  {hubModuleVisible('festiome') && hub?.capabilities?.festiome && (
+                    <a href={`/festiome/guest?event=${encodeURIComponent(event.id)}&pass=${encodeURIComponent(hub.guest.qr_token)}`} className="inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-xl border-2 px-5 py-2.5 text-sm font-extrabold" style={{ background: tone.chip, borderColor: colors.accent || tone.text, color: tone.text }}>
+                      💬 Open FestioMe
+                    </a>
+                  )}
+                </div>
+              )}
+              {event?.registry_enabled && event?.registry_token && (
+                <a href={`/registry/${event.registry_token}`} className="mt-2 flex min-h-10 items-center justify-center gap-2 rounded-xl border px-4 py-2 text-sm font-extrabold" style={{ background: tone.chip, borderColor: tone.border, color: tone.text }}>
+                  🎁 View gift list
+                </a>
+              )}
+            </div>
+          ) : (
+            <div className="mt-5 rounded-[1.4rem] border-2 p-6 text-center" style={{ background: tone.panelStrong, borderColor: tone.border }}>
+              <span className="inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-extrabold" style={{ background: `${tone.accent}22`, color: tone.accent }}>{passStatus.icon} {hub?.guest?.rsvp_status || 'Pending'}</span>
+              <p className="mt-3 text-sm" style={{ color: tone.muted }}>Your Festio Pass appears here once you're confirmed.</p>
+            </div>
+          )}
+
+          {/* Next step — primary tier */}
+          <div className="mt-3 flex items-start gap-3 rounded-2xl border p-4" style={{ background: nextStep.urgent ? `${tone.accent}18` : tone.panel, borderColor: nextStep.urgent ? tone.accent : tone.border }}>
+            <span className="grid h-9 w-9 shrink-0 place-items-center rounded-xl text-base" style={{ background: tone.accent, color: tone.background }} aria-hidden="true">{nextStep.icon}</span>
+            <div><div className="text-[11px] font-extrabold uppercase tracking-wide" style={{ color: tone.accent }}>{nextStep.label}</div><div className="mt-0.5 font-bold">{nextStep.text}</div></div>
+          </div>
+
+          {/* Your Event Journey — only when Experience is actually enabled */}
+          {journey?.experience_enabled && journeyRows.length > 0 && (
+            <div className="mt-3 rounded-2xl border p-4" style={{ background: tone.panel, borderColor: tone.border }}>
+              <button type="button" onClick={() => setShowAllActivity((v) => !v)} className="flex w-full items-center justify-between gap-3 text-left">
+                <span className="text-xs font-extrabold uppercase tracking-[0.14em]" style={{ color: tone.label }}>Your Event Journey</span>
+                <span className="text-xs font-extrabold" style={{ color: tone.accent }}>{journeyDone}/{journeyRows.length} {showAllActivity ? '▾' : '▸'}</span>
+              </button>
+              <div className="mt-2 h-1.5 overflow-hidden rounded-full" style={{ background: `${tone.accent}22` }}>
+                <div className="h-full rounded-full" style={{ width: `${Math.round(100 * journeyDone / journeyRows.length)}%`, background: tone.accent }} />
+              </div>
+              {showAllActivity && (
+                <ol className="mt-3 space-y-2">
+                  {journeyRows.map((r, i) => (
+                    <li key={i} className="flex items-center gap-2.5 text-sm">
+                      <span className="grid h-5 w-5 shrink-0 place-items-center rounded-full text-[10px] font-extrabold" style={{ background: r.done ? tone.accent : r.now ? `${tone.accent}55` : `${tone.accent}18`, color: r.done ? tone.background : tone.text }}>{r.done ? '✓' : i + 1}</span>
+                      <span style={{ color: r.done && !r.now ? tone.muted : tone.text, fontWeight: r.now ? 700 : 500 }}>{r.label}</span>
+                    </li>
+                  ))}
+                </ol>
+              )}
+            </div>
+          )}
+
+          {/* Event Details — one consolidated block; hotel folds in here too */}
+          <div className="mt-3 rounded-2xl border p-4" style={{ background: tone.panel, borderColor: tone.border }}>
+            <div className="text-xs font-extrabold uppercase tracking-[0.14em]" style={{ color: tone.label }}>Event Details</div>
+            <div className="mt-3 space-y-2.5 text-sm">
+              {dateLabel && <div className="flex items-center gap-2.5"><span aria-hidden="true">📅</span><span className="font-bold">{dateLabel}</span></div>}
+              {consolidatedVenue && <div className="flex items-start gap-2.5"><span aria-hidden="true" className="mt-0.5">📍</span><a href={event.venue_address ? mapUrl(event.venue_address) : undefined} target="_blank" rel="noopener noreferrer" className="font-bold underline decoration-2 underline-offset-2" style={{ color: tone.accent }}>{consolidatedVenue}</a></div>}
+              {(event?.hotel_name || event?.hotel_address) && <div className="flex items-start gap-2.5"><span aria-hidden="true" className="mt-0.5">🏨</span><a href={event.hotel_address ? mapUrl(event.hotel_address) : undefined} target="_blank" rel="noopener noreferrer" className="font-bold underline decoration-2 underline-offset-2" style={{ color: tone.accent }}>{[event.hotel_name, event.hotel_address].filter(Boolean).join(' · ')}</a></div>}
+            </div>
+          </div>
+
+          {/* Your Experience — only the modules this event actually uses */}
+          {hasExperienceModules && (
+            <div className="mt-3 rounded-2xl border p-4" style={{ background: tone.panel, borderColor: tone.border }}>
+              <div className="text-xs font-extrabold uppercase tracking-[0.14em]" style={{ color: tone.label }}>Your Experience</div>
+              <div className="mt-3 grid grid-cols-2 gap-2">
+                {passCells.filter((c) => c.l !== 'Status' && c.l !== 'Venue').map((cell) => (
+                  <div key={cell.l} className="rounded-xl border p-2.5" style={{ background: tone.panelStrong, borderColor: tone.border }}>
+                    <div className="flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-wide" style={{ color: tone.label }}><span aria-hidden="true">{cell.ic}</span>{cell.l}</div>
+                    <div className="mt-0.5 text-sm font-extrabold">{cell.v}</div>
+                  </div>
+                ))}
+                {consent?.required && (
+                  <div className="rounded-xl border p-2.5" style={{ background: tone.panelStrong, borderColor: tone.border }}>
+                    <div className="text-[10px] font-bold uppercase tracking-wide" style={{ color: tone.label }}>Consent</div>
+                    <div className="mt-0.5 text-sm font-extrabold" style={{ color: consent.signed ? tone.text : tone.accent }}>{consent.signed ? 'Signed ✓' : 'Action needed'}</div>
+                  </div>
+                )}
+                {journey?.menu_enabled && (
+                  <div className="rounded-xl border p-2.5" style={{ background: tone.panelStrong, borderColor: tone.border }}>
+                    <div className="text-[10px] font-bold uppercase tracking-wide" style={{ color: tone.label }}>Food order</div>
+                    <div className="mt-0.5 text-sm font-extrabold">{journey.menu_has_choices ? 'Selected' : journey.menu_selectable ? 'Not yet' : 'Provided'}</div>
+                  </div>
+                )}
+              </div>
+              {consent?.form && !consent.signed && (
+                <form onSubmit={submitConsent} className="mt-3 flex flex-col gap-2 sm:flex-row">
+                  <input value={signName} onChange={(e) => setSignName(e.target.value)} maxLength={255} placeholder={`Type your full name to sign ${consent.form.title}`}
+                    className="min-h-11 flex-1 rounded-xl border px-4 py-2 text-sm placeholder-slate-400" style={{ background: tone.panel, borderColor: tone.border, color: tone.text }} />
+                  <button disabled={signing || !signName.trim()} style={colors.accent ? { background: colors.accent } : undefined} className="min-h-11 rounded-xl bg-teal-400 px-5 py-2 text-sm font-extrabold text-slate-950 disabled:opacity-50">{signing ? 'Signing...' : 'Sign & agree'}</button>
+                </form>
+              )}
+              {signError && <p className="mt-2 text-sm text-amber-400">{signError}</p>}
+              {journey?.menu_selectable && hub?.guest?.qr_token && (
+                <a href={`/scan/${encodeURIComponent(hub.guest.qr_token)}#orders`} className="mt-3 inline-flex min-h-11 w-full items-center justify-center rounded-xl px-4 py-2 text-sm font-extrabold text-slate-950" style={{ background: tone.accent }}>
+                  {journey.menu_locked ? 'View order details' : journey.menu_has_choices ? 'View or change order' : 'Choose your order'}
+                </a>
+              )}
+            </div>
+          )}
+
+          {/* Your Schedule */}
+          {hubModuleVisible('live_program') && journey?.program?.enabled && (
+            <div className="mt-3 rounded-2xl border p-4" style={{ background: tone.panel, borderColor: tone.border }}>
+              <div className="text-xs font-extrabold uppercase tracking-[0.14em]" style={{ color: tone.label }}>Your Schedule</div>
+              {!!programDays.length && (
+                <div className="mt-3 flex flex-wrap gap-2">
+                  {programDays.map((day) => <button key={day.date} type="button" onClick={() => setProgramDay(day.date)} className="rounded-full px-3 py-1.5 text-xs font-extrabold" style={{ background: selectedProgramDay?.date === day.date ? tone.accent : tone.chip, color: selectedProgramDay?.date === day.date ? tone.background : tone.text }}>{day.label}</button>)}
+                </div>
+              )}
+              {selectedProgramDay && (
+                <div className="mt-3 divide-y" style={{ borderColor: tone.border }}>
+                  {selectedProgramDay.segments.map((segment) => (
+                    <div key={segment.step_id} className="flex gap-3 py-2.5 first:pt-0">
+                      <div className="w-20 shrink-0 text-xs font-extrabold" style={{ color: segment.active ? tone.accent : tone.label }}>{fmtTime(segment.starts_at, event?.timezone)}</div>
+                      <div className="min-w-0"><div className="font-bold">{segment.title}</div>{segment.description && <div className="text-xs" style={{ color: tone.muted }}>{segment.description}</div>}</div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Speakers — horizontal strip, not one card per person */}
+          {speakersVisible && speakers?.length > 0 && (
+            <div className="mt-3 rounded-2xl border p-4" style={{ background: tone.panel, borderColor: tone.border }}>
+              <div className="text-xs font-extrabold uppercase tracking-[0.14em]" style={{ color: tone.label }}>Featured Speakers</div>
+              <div className="mt-3 flex gap-3 overflow-x-auto pb-1">
+                {speakers.slice(0, 6).map((s) => (
+                  <div key={s.id} className="w-16 shrink-0 text-center">
+                    {s.photo_url ? <img src={s.photo_url} alt="" className="mx-auto h-12 w-12 rounded-full object-cover" /> : <div className="mx-auto grid h-12 w-12 place-items-center rounded-full text-base" style={{ background: tone.chip }}>🎤</div>}
+                    <div className="mt-1.5 truncate text-[10.5px] font-bold">{s.name}</div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Event Updates — only when there's something real to show */}
+          {!!hub?.announcements?.length && (
+            <div className="mt-3 rounded-2xl border p-4" style={{ background: tone.panel, borderColor: tone.border }}>
+              <div className="text-xs font-extrabold uppercase tracking-[0.14em]" style={{ color: tone.label }}>Event Updates</div>
+              <div className="mt-3 space-y-2.5">
+                {hub.announcements.slice(0, 3).map((a) => (
+                  <div key={a.id} className="rounded-xl border p-3" style={{ background: tone.chip, borderColor: tone.border }}>
+                    <div className="text-sm font-bold">{a.title}</div>
+                    <p className="mt-1 text-xs leading-6" style={{ color: tone.muted }}><LinkifiedText text={a.body} color={tone.accent} /></p>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Need Help — Message Host + Guest Chat folded under one card */}
+          <div className="mt-3 rounded-2xl border p-4" style={{ background: tone.panel, borderColor: tone.border }}>
+            <div className="text-xs font-extrabold uppercase tracking-[0.14em]" style={{ color: tone.label }}>Need Help?</div>
+            {hub?.capabilities?.direct_host_messages ? (
+              <>
+                <div className="mt-3 max-h-40 space-y-2 overflow-auto">
+                  {hub?.direct_messages?.length ? hub.direct_messages.map((m) => (
+                    <div key={m.id} className={`rounded-xl px-3 py-2 text-sm ${m.sender_type === 'guest' ? 'ml-auto max-w-[85%]' : 'mr-auto max-w-[85%]'}`} style={{ background: m.sender_type === 'guest' ? `${tone.accent}22` : tone.chip, color: tone.text }}>{m.body}</div>
+                  )) : <p className="text-sm" style={{ color: tone.label }}>Have a question for the organizer? Ask below.</p>}
+                </div>
+                <form onSubmit={sendMessage} className="mt-3 flex flex-col gap-2 sm:flex-row">
+                  <input value={message} onChange={(e) => setMessage(e.target.value)} maxLength={1000} placeholder="Ask the host a question..." className="min-h-11 flex-1 rounded-xl border px-4 py-2 text-sm" style={{ background: tone.panelStrong, borderColor: tone.border, color: tone.text }} />
+                  <button disabled={sending || !message.trim()} style={colors.accent ? { background: colors.accent } : undefined} className="min-h-11 rounded-xl bg-teal-400 px-5 py-2 text-sm font-extrabold text-slate-950 disabled:opacity-50">{sending ? 'Sending...' : 'Send'}</button>
+                </form>
+              </>
+            ) : (
+              <p className="mt-2 text-sm" style={{ color: tone.label }}>Message Host isn't enabled for this event.</p>
+            )}
+            {hub?.capabilities?.guest_chat && (
+              <>
+                <div className="mt-4 border-t pt-3" style={{ borderColor: tone.border }}>
+                  <div className="text-xs font-extrabold uppercase tracking-wide" style={{ color: tone.label }}>Guest Chat</div>
+                  <div className="mt-2 max-h-40 space-y-2 overflow-auto">
+                    {hub?.chat_messages?.length ? hub.chat_messages.map((m) => (
+                      <div key={m.id} className={`rounded-xl px-3 py-2 text-sm ${m.guest_id === hub?.guest?.id ? 'ml-auto max-w-[85%]' : 'mr-auto max-w-[85%]'}`} style={{ background: m.guest_id === hub?.guest?.id ? `${tone.accent}22` : tone.chip, color: tone.text }}>{m.body}</div>
+                    )) : <p className="text-sm" style={{ color: tone.label }}>A shared space for attending guests — no messages yet.</p>}
+                  </div>
+                  {hub?.capabilities?.guest_chat_posting && (
+                    <form onSubmit={sendChat} className="mt-2 flex flex-col gap-2 sm:flex-row">
+                      <input value={chatMessage} onChange={(e) => setChatMessage(e.target.value)} maxLength={1000} placeholder="Send a message to guests..." className="min-h-11 flex-1 rounded-xl border px-4 py-2 text-sm" style={{ background: tone.panelStrong, borderColor: tone.border, color: tone.text }} />
+                      <button disabled={sendingChat || !chatMessage.trim()} className="min-h-11 rounded-xl bg-white px-5 py-2 text-sm font-extrabold text-slate-950 disabled:opacity-50">{sendingChat ? 'Sending...' : 'Send'}</button>
+                    </form>
+                  )}
+                </div>
+              </>
+            )}
+            {showInstallDialog && (
+              <div className="mt-4 rounded-xl border p-3" style={{ background: tone.panelStrong, borderColor: tone.accent }}>
+                <div className="text-sm font-extrabold">Install FestioHub</div>
+                <p className="mt-1 text-xs" style={{ color: tone.muted }}>Keep your Pass on your home screen for quick access.</p>
+                <div className="mt-2 flex gap-2"><button type="button" onClick={installPass} className="min-h-9 rounded-lg px-3 py-1.5 text-xs font-extrabold text-slate-950" style={{ background: tone.accent }}>Install</button><button type="button" onClick={dismissInstall} className="min-h-9 rounded-lg border px-3 py-1.5 text-xs font-bold" style={{ borderColor: tone.border, color: tone.text }}>Not now</button></div>
+              </div>
+            )}
+            <div className="mt-4 flex flex-wrap items-center gap-2 border-t pt-3 text-xs" style={{ borderColor: tone.border, color: tone.label }}>
+              {installPrompt && <button type="button" onClick={installPass} className="font-bold underline" style={{ color: tone.accent }}>Add to Home Screen</button>}
+              {pushConfig && pushState !== 'enabled' && pushState !== 'blocked' && <button type="button" onClick={enablePush} disabled={pushBusy} className="font-bold underline" style={{ color: tone.accent }}>{pushBusy ? 'Enabling…' : 'Enable notifications'}</button>}
+              {pushError && <span className="text-amber-400">{pushError}</span>}
+            </div>
+          </div>
+
+          {feedbackForms.map((form, formIndex) => (
+            <div id={formIndex === 0 ? 'feedback' : undefined} key={form.step_id} className="mt-3 rounded-2xl border p-4" style={{ background: tone.panel, borderColor: tone.border }}>
+              <div className="flex items-start justify-between gap-3">
+                <div>
+                  <h3 className="text-sm font-extrabold">{form.title}</h3>
+                  {form.description && <p className="mt-1 text-xs" style={{ color: tone.muted }}>{form.description}</p>}
+                </div>
+                {form.submitted && <span className="rounded-full px-2.5 py-1 text-xs font-bold" style={{ background: `${tone.accent}22`, color: tone.text }}>Completed</span>}
+              </div>
+              {form.questions.length === 0 && form.external_url ? (
+                form.embed_enabled ? (
+                  <div className="mt-4 overflow-hidden rounded-xl border" style={{ borderColor: tone.border }}>
+                    <iframe src={form.external_url} title={form.title} className="h-[70vh] w-full" style={{ border: 0 }} />
+                  </div>
+                ) : (
+                  <a href={form.external_url} target="_blank" rel="noreferrer"
+                    className="mt-4 inline-flex min-h-11 items-center rounded-xl px-5 py-2 text-sm font-extrabold"
+                    style={{ background: tone.accent, color: tone.background }}>
+                    Open feedback form ↗
+                  </a>
+                )
+              ) : form.submitted && editingFeedback !== form.step_id ? (
+                <div className="mt-4 rounded-xl border p-3 text-sm" style={{ background: tone.chip, borderColor: tone.border, color: tone.muted }}><p>Thank you—your feedback has been recorded.</p>{form.can_edit && <button type="button" onClick={() => setEditingFeedback(form.step_id)} className="mt-2 font-bold underline">Edit response</button>}</div>
+              ) : (
+                <form onSubmit={(e) => submitFeedback(e, form)} className="mt-4 space-y-4">
+                  {form.questions.map((question) => {
+                    const answers = feedbackAnswers[form.step_id] || {}
+                    const value = answers[question.id] ?? ''
+                    const setAnswer = (next) => setFeedbackAnswers((all) => ({ ...all, [form.step_id]: { ...(all[form.step_id] || {}), [question.id]: next } }))
+                    const condition = question.show_if
+                    const sourceValue = condition ? answers[condition.question_id] : undefined
+                    if (condition && !(Array.isArray(sourceValue) ? sourceValue.map(String).includes(String(condition.value)) : String(sourceValue ?? '').toLowerCase() === String(condition.value).toLowerCase())) return null
+                    return (
+                      <label key={question.id} className="block rounded-xl border p-3" style={{ background: tone.chip, borderColor: tone.border }}>
+                        <span className="block text-sm font-bold">{question.prompt}{question.required ? ' *' : ''}</span>
+                        {question.help_text && <span className="mt-1 block text-xs" style={{ color: tone.muted }}>{question.help_text}</span>}
+                        {question.type === 'text' && <textarea rows={3} value={value} onChange={(e) => setAnswer(e.target.value)} className="mt-2 w-full rounded-lg border px-3 py-2 text-sm" style={{ background: tone.panelStrong, borderColor: tone.border, color: tone.text }} />}
+                        {(question.type === 'rating' || question.type === 'nps') && (
+                          <div className="mt-2 flex flex-wrap gap-2">
+                            {Array.from({ length: question.type === 'rating' ? 5 : 11 }, (_, i) => question.type === 'rating' ? i + 1 : i).map((score) => (
+                              <button key={score} type="button" onClick={() => setAnswer(score)}
+                                className="h-10 min-w-10 rounded-lg border px-2 text-sm font-bold"
+                                style={{ background: Number(value) === score ? tone.accent : tone.panelStrong, borderColor: tone.border, color: Number(value) === score ? tone.background : tone.text }}>{score}</button>
+                            ))}
+                          </div>
+                        )}
+                        {question.type === 'single_choice' && (
+                          <select value={value} onChange={(e) => setAnswer(e.target.value)} className="mt-2 min-h-11 w-full rounded-lg border px-3 py-2 text-sm" style={{ background: tone.panelStrong, borderColor: tone.border, color: tone.text }}>
+                            <option value="">Select an answer</option>
+                            {(question.options || []).map((option) => <option key={option} value={option}>{option}</option>)}
+                          </select>
+                        )}
+                        {question.type === 'multi_choice' && <div className="mt-2 grid gap-2">{(question.options || []).map((option) => <label key={option} className="flex items-center gap-2 text-sm"><input type="checkbox" checked={(Array.isArray(value) ? value : []).includes(option)} onChange={(e) => setAnswer(e.target.checked ? [...(Array.isArray(value) ? value : []), option] : (Array.isArray(value) ? value : []).filter((v) => v !== option))} /> {option}</label>)}</div>}
+                        {question.type === 'yes_no' && (
+                          <div className="mt-2 flex gap-2">{['yes', 'no'].map((choice) => <button key={choice} type="button" onClick={() => setAnswer(choice)} className="rounded-lg border px-4 py-2 text-sm font-bold capitalize" style={{ background: value === choice ? tone.accent : tone.panelStrong, borderColor: tone.border, color: value === choice ? tone.background : tone.text }}>{choice}</button>)}</div>
+                        )}
+                      </label>
+                    )
+                  })}
+                  {feedbackError && <p className="text-sm text-amber-300">{feedbackError}</p>}
+                  <button disabled={feedbackBusy === form.step_id} className="min-h-11 rounded-xl px-5 py-2 text-sm font-extrabold" style={{ background: tone.accent, color: tone.background }}>
+                    {feedbackBusy === form.step_id ? 'Submitting…' : form.submitted ? 'Save changes' : 'Submit feedback'}
+                  </button>
+                </form>
+              )}
+            </div>
+          ))}
+        </div>
+      </section>
+    )
+  }
 
   return (
     <section className="py-2">

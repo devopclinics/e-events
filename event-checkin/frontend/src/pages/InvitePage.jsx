@@ -1897,7 +1897,11 @@ function GuestHub({ event, accessToken, designTheme, previewMock = false, confir
           )}
 
           {/* Your Schedule */}
-          {hubModuleVisible('live_program') && journey?.program?.enabled && (
+          {/* program.enabled can be true with zero days -- e.g. an event whose
+              Experience steps are plain session_attendance items rather than
+              timed is_segment ones. Gate on real content, not just the flag,
+              same fix as the journey card above. */}
+          {hubModuleVisible('live_program') && journey?.program?.enabled && programDays.length > 0 && (
             <div className="mt-3 rounded-2xl border p-4" style={{ background: tone.panel, borderColor: tone.border }}>
               <div className="text-xs font-extrabold uppercase tracking-[0.14em]" style={{ color: tone.label }}>Your Schedule</div>
               {!!programDays.length && (

@@ -1759,42 +1759,50 @@ function GuestHub({ event, accessToken, designTheme, previewMock = false, confir
 
           {error && <div className="mt-4 rounded-2xl border border-amber-300/25 bg-amber-300/10 px-4 py-3 text-sm text-amber-50">{error}</div>}
 
-          {/* Pass — primary tier: elevated, larger radius/shadow than every other card */}
+          {/* Pass — primary tier. Fixed white/near-black card (viewer light/dark
+              mode, not the organizer's Design Studio palette) so the QR and
+              status stay legible regardless of theme — the same choice the
+              existing /scan pass view already makes (ScanAutoPage.jsx:837),
+              not a new pattern. Accent color still shows through on the
+              buttons and border glow, just not the whole card body. */}
           {isConfirmed ? (
-            <div className="mt-5 rounded-[1.4rem] border-2 p-5 text-center" style={{ background: tone.panelStrong, borderColor: `${tone.accent}66`, boxShadow: `0 0 40px -10px ${tone.accent}55` }}>
-              <span className="inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-extrabold" style={{ background: `${tone.accent}22`, color: tone.accent }}>
-                <span aria-hidden="true">{passStatus.icon}</span>{passStatus.label}
-              </span>
-              <div className="mt-3 text-sm font-semibold" style={{ color: tone.muted }}>Welcome,</div>
-              <div className="text-xl font-extrabold">{hub?.guest?.name || 'Guest'}</div>
-              {hub?.guest?.qr_token && (
-                <div className="relative mx-auto mt-4 max-w-[240px] rounded-2xl bg-white p-3">
-                  <img src={previewMock ? PREVIEW_QR_DATA_URI : `/api/scan/${hub.guest.qr_token}/qr.png`} alt="Your QR pass code" className="mx-auto h-48 w-48" />
-                </div>
-              )}
-              {hub?.guest?.qr_token && <div className="mt-3 text-xs font-bold" style={{ color: tone.label }}>Your Festio Pass · show this at check-in</div>}
-              {hub?.guest?.qr_token && (
-                <div className="mt-4 grid gap-2">
-                  <a href={`/scan/${hub.guest.qr_token}`} style={colors.accent ? { background: colors.accent } : undefined} className="inline-flex min-h-12 w-full items-center justify-center gap-2 rounded-xl bg-teal-400 px-5 py-3 text-base font-extrabold text-slate-950 shadow-sm hover:bg-teal-300">
-                    🎫 View Full Pass
-                  </a>
-                  {hubModuleVisible('festiome') && hub?.capabilities?.festiome && (
-                    <a href={`/festiome/guest?event=${encodeURIComponent(event.id)}&pass=${encodeURIComponent(hub.guest.qr_token)}`} className="inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-xl border-2 px-5 py-2.5 text-sm font-extrabold" style={{ background: tone.chip, borderColor: colors.accent || tone.text, color: tone.text }}>
-                      💬 Open FestioMe
+            <div className="mt-5 overflow-hidden rounded-[1.4rem] border border-slate-200 bg-white text-center shadow-2xl dark:border-slate-800 dark:bg-slate-900"
+              style={{ boxShadow: `0 0 40px -14px ${colors.accent || tone.accent}70` }}>
+              <div className="p-5">
+                <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-50 px-3 py-1 text-xs font-extrabold text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300">
+                  <span aria-hidden="true">{passStatus.icon}</span>{passStatus.label}
+                </span>
+                <div className="mt-3 text-sm font-semibold text-slate-500 dark:text-slate-400">Welcome,</div>
+                <div className="text-xl font-extrabold text-slate-900 dark:text-white">{hub?.guest?.name || 'Guest'}</div>
+                {hub?.guest?.qr_token && (
+                  <div className="relative mx-auto mt-4 max-w-[240px] rounded-2xl border border-slate-200 bg-white p-3 dark:border-slate-700">
+                    <img src={previewMock ? PREVIEW_QR_DATA_URI : `/api/scan/${hub.guest.qr_token}/qr.png`} alt="Your QR pass code" className="mx-auto h-48 w-48" />
+                  </div>
+                )}
+                {hub?.guest?.qr_token && <div className="mt-3 text-xs font-bold text-slate-400">Your Festio Pass · show this at check-in</div>}
+                {hub?.guest?.qr_token && (
+                  <div className="mt-4 grid gap-2">
+                    <a href={`/scan/${hub.guest.qr_token}`} style={colors.accent ? { background: colors.accent } : undefined} className="inline-flex min-h-12 w-full items-center justify-center gap-2 rounded-xl bg-teal-400 px-5 py-3 text-base font-extrabold text-slate-950 shadow-sm hover:bg-teal-300">
+                      🎫 View Full Pass
                     </a>
-                  )}
-                </div>
-              )}
-              {event?.registry_enabled && event?.registry_token && (
-                <a href={`/registry/${event.registry_token}`} className="mt-2 flex min-h-10 items-center justify-center gap-2 rounded-xl border px-4 py-2 text-sm font-extrabold" style={{ background: tone.chip, borderColor: tone.border, color: tone.text }}>
-                  🎁 View gift list
-                </a>
-              )}
+                    {hubModuleVisible('festiome') && hub?.capabilities?.festiome && (
+                      <a href={`/festiome/guest?event=${encodeURIComponent(event.id)}&pass=${encodeURIComponent(hub.guest.qr_token)}`} className="inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-xl border-2 bg-slate-50 px-5 py-2.5 text-sm font-extrabold text-slate-800 dark:bg-slate-800 dark:text-white" style={{ borderColor: colors.accent || undefined }}>
+                        💬 Open FestioMe
+                      </a>
+                    )}
+                  </div>
+                )}
+                {event?.registry_enabled && event?.registry_token && (
+                  <a href={`/registry/${event.registry_token}`} className="mt-2 flex min-h-10 items-center justify-center gap-2 rounded-xl border border-slate-200 bg-slate-50 px-4 py-2 text-sm font-extrabold text-slate-800 dark:border-slate-700 dark:bg-slate-800 dark:text-white">
+                    🎁 View gift list
+                  </a>
+                )}
+              </div>
             </div>
           ) : (
-            <div className="mt-5 rounded-[1.4rem] border-2 p-6 text-center" style={{ background: tone.panelStrong, borderColor: tone.border }}>
-              <span className="inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-extrabold" style={{ background: `${tone.accent}22`, color: tone.accent }}>{passStatus.icon} {hub?.guest?.rsvp_status || 'Pending'}</span>
-              <p className="mt-3 text-sm" style={{ color: tone.muted }}>Your Festio Pass appears here once you're confirmed.</p>
+            <div className="mt-5 rounded-[1.4rem] border border-slate-200 bg-white p-6 text-center shadow-2xl dark:border-slate-800 dark:bg-slate-900">
+              <span className="inline-flex items-center gap-1.5 rounded-full bg-slate-100 px-3 py-1 text-xs font-extrabold text-slate-600 dark:bg-slate-800 dark:text-slate-300">{passStatus.icon} {hub?.guest?.rsvp_status || 'Pending'}</span>
+              <p className="mt-3 text-sm text-slate-500 dark:text-slate-400">Your Festio Pass appears here once you're confirmed.</p>
             </div>
           )}
 

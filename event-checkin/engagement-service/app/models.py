@@ -11,7 +11,7 @@ yet, Question Bank items are copied into activities, not referenced live).
 import uuid
 from datetime import datetime
 
-from sqlalchemy import Boolean, DateTime, ForeignKey, Integer, String, Text, UniqueConstraint
+from sqlalchemy import BigInteger, Boolean, DateTime, ForeignKey, Index, Integer, String, Text, UniqueConstraint
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -53,6 +53,62 @@ class EngagementActivity(Base):
     )
 
 
+class ProgramSession(Base):
+    """Read-only snapshot of an Experience program/session.
+
+    `source_step_id` is an opaque core identifier, not a cross-database foreign
+    key. Experience owns these fields; Live only attaches its own activities
+    and displays through their existing session_id columns.
+    """
+    __tablename__ = "engagement_program_sessions"
+    __table_args__ = (
+        UniqueConstraint("org_id", "event_id", "source_step_id", name="uq_engagement_program_session_source"),
+        Index("ix_engagement_program_sessions_event_order", "event_id", "sort_order"),
+    )
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=_uuid)
+    org_id: Mapped[str] = mapped_column(String(64), index=True)
+    event_id: Mapped[str] = mapped_column(String(64), index=True)
+    source_workflow_id: Mapped[str] = mapped_column(String(64), index=True)
+    source_step_id: Mapped[str] = mapped_column(String(64), index=True)
+    source_key: Mapped[str] = mapped_column(String(120))
+    source_version: Mapped[int] = mapped_column(BigInteger)
+    title: Mapped[str] = mapped_column(String(255))
+    description: Mapped[str | None] = mapped_column(Text, nullable=True)
+    starts_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    ends_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    timezone: Mapped[str] = mapped_column(String(80), default="UTC")
+    room: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    speaker: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    speaker_id: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    capacity: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    category: Mapped[str | None] = mapped_column(String(120), nullable=True)
+    sort_order: Mapped[int] = mapped_column(Integer, default=0)
+    status: Mapped[str] = mapped_column(String(20), default="published", index=True)
+    event_name: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    synced_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=datetime.utcnow)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=datetime.utcnow)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=datetime.utcnow, onupdate=datetime.utcnow)
+
+
+class ProgramSyncInbox(Base):
+    """Idempotent destination ledger for core outbox deliveries."""
+    __tablename__ = "engagement_program_sync_inbox"
+    __table_args__ = (Index("ix_engagement_program_sync_inbox_source", "event_id", "source_id"),)
+
+    delivery_id: Mapped[str] = mapped_column(String(64), primary_key=True)
+    org_id: Mapped[str] = mapped_column(String(64), index=True)
+    event_id: Mapped[str] = mapped_column(String(64), index=True)
+    source_id: Mapped[str] = mapped_column(String(64), index=True)
+    source_version: Mapped[int] = mapped_column(BigInteger)
+    event_type: Mapped[str] = mapped_column(String(80))
+    status: Mapped[str] = mapped_column(String(20), default="processed")
+    payload: Mapped[dict] = mapped_column(JSONB, default=dict)
+    received_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=datetime.utcnow)
+    processed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    error: Mapped[str | None] = mapped_column(Text, nullable=True)
+
+
 class ActivityQuestion(Base):
     __tablename__ = "engagement_activity_questions"
 
@@ -70,6 +126,7 @@ class ActivityQuestion(Base):
     # anonymous, branching — type-specific, never forced onto rows that don't use them
     config: Mapped[dict] = mapped_column(JSONB, default=dict)
     status: Mapped[str] = mapped_column(String(20), default="active")
+    live_state: Mapped[str] = mapped_column(String(24), default="pending")
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=datetime.utcnow)
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=datetime.utcnow, onupdate=datetime.utcnow)
 
@@ -112,6 +169,7 @@ class QuestionBankItem(Base):
     tags: Mapped[list] = mapped_column(JSONB, default=list)
     created_by: Mapped[str | None] = mapped_column(String(64), nullable=True)
     usage_count: Mapped[int] = mapped_column(Integer, default=0)
+    archived: Mapped[bool] = mapped_column(Boolean, default=False)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=datetime.utcnow)
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=datetime.utcnow, onupdate=datetime.utcnow)
 
@@ -141,7 +199,7 @@ class ParticipantResponse(Base):
     venue Wi-Fi) never creates a second vote."""
     __tablename__ = "engagement_participant_responses"
     __table_args__ = (
-        UniqueConstraint("activity_id", "question_id", "participant_id", "idempotency_key", name="uq_engagement_response_idem"),
+        UniqueConstraint("activity_id", "question_id", "participant_id", name="uq_engagement_response_participant_question"),
     )
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=_uuid)
@@ -164,6 +222,34 @@ class ResponseOptionSelection(Base):
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=_uuid)
     response_id: Mapped[str] = mapped_column(String(36), ForeignKey("engagement_participant_responses.id", ondelete="CASCADE"), index=True)
     option_id: Mapped[str] = mapped_column(String(36), ForeignKey("engagement_question_options.id", ondelete="CASCADE"), index=True)
+    sequence: Mapped[int] = mapped_column(Integer, default=0)
+
+
+class ModerationItem(Base):
+    """Durable review record for guest-authored text.
+
+    The original response remains the source of truth. This record controls
+    whether that text may be reused on public displays, word clouds, or AI
+    summaries. Retaining both records lets organizers reject unsafe public
+    content without deleting the guest's private response.
+    """
+    __tablename__ = "engagement_moderation_items"
+    __table_args__ = (
+        UniqueConstraint("response_id", name="uq_engagement_moderation_response"),
+    )
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=_uuid)
+    activity_id: Mapped[str] = mapped_column(String(36), ForeignKey("engagement_activities.id", ondelete="CASCADE"), index=True)
+    question_id: Mapped[str] = mapped_column(String(36), ForeignKey("engagement_activity_questions.id", ondelete="CASCADE"), index=True)
+    response_id: Mapped[str] = mapped_column(String(36), ForeignKey("engagement_participant_responses.id", ondelete="CASCADE"), unique=True)
+    content_type: Mapped[str] = mapped_column(String(24), default="open_text")
+    content: Mapped[str] = mapped_column(Text)
+    status: Mapped[str] = mapped_column(String(20), default="pending")  # pending|approved|rejected
+    flagged: Mapped[bool] = mapped_column(Boolean, default=False)
+    flag_reason: Mapped[str | None] = mapped_column(String(120), nullable=True)
+    reviewed_by: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=datetime.utcnow)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=datetime.utcnow, onupdate=datetime.utcnow)
 
 
 # ── Q&A ──────────────────────────────────────────────────────────────────────
@@ -195,3 +281,65 @@ class EngagementQnaUpvote(Base):
     qna_question_id: Mapped[str] = mapped_column(String(36), ForeignKey("engagement_qna_questions.id", ondelete="CASCADE"), index=True)
     participant_id: Mapped[str] = mapped_column(String(36), ForeignKey("engagement_activity_participants.id", ondelete="CASCADE"))
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=datetime.utcnow)
+
+
+# ── Displays, branching, and asynchronous analysis ──────────────────────────
+
+class EngagementEventSettings(Base):
+    """Event-wide defaults for newly created activities and public content."""
+    __tablename__ = "engagement_event_settings"
+    __table_args__ = (UniqueConstraint("event_id", name="uq_engagement_event_settings_event"),)
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=_uuid)
+    org_id: Mapped[str] = mapped_column(String(64), index=True)
+    event_id: Mapped[str] = mapped_column(String(64), index=True)
+    settings: Mapped[dict] = mapped_column(JSONB, default=dict)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=datetime.utcnow)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=datetime.utcnow, onupdate=datetime.utcnow)
+
+class LiveDisplay(Base):
+    __tablename__ = "engagement_live_displays"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=_uuid)
+    org_id: Mapped[str] = mapped_column(String(64), index=True)
+    event_id: Mapped[str] = mapped_column(String(64), index=True)
+    name: Mapped[str] = mapped_column(String(120))
+    display_code: Mapped[str] = mapped_column(String(64), unique=True, index=True)
+    access_token: Mapped[str] = mapped_column(String(128), unique=True)
+    assigned_session_id: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    assigned_activity_id: Mapped[str | None] = mapped_column(String(36), ForeignKey("engagement_activities.id", ondelete="SET NULL"), nullable=True)
+    scene: Mapped[str] = mapped_column(String(32), default="welcome")
+    status: Mapped[str] = mapped_column(String(20), default="active")
+    settings: Mapped[dict] = mapped_column(JSONB, default=dict)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=datetime.utcnow)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=datetime.utcnow, onupdate=datetime.utcnow)
+
+
+class ActivityRule(Base):
+    __tablename__ = "engagement_activity_rules"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=_uuid)
+    activity_id: Mapped[str] = mapped_column(String(36), ForeignKey("engagement_activities.id", ondelete="CASCADE"), index=True)
+    source_question_id: Mapped[str] = mapped_column(String(36), ForeignKey("engagement_activity_questions.id", ondelete="CASCADE"))
+    operator: Mapped[str] = mapped_column(String(24))
+    comparison_value: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
+    target_question_id: Mapped[str] = mapped_column(String(36), ForeignKey("engagement_activity_questions.id", ondelete="CASCADE"))
+    action: Mapped[str] = mapped_column(String(20), default="show")
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=datetime.utcnow)
+
+
+class FeedbackAnalysis(Base):
+    __tablename__ = "engagement_feedback_analyses"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=_uuid)
+    org_id: Mapped[str] = mapped_column(String(64), index=True)
+    event_id: Mapped[str] = mapped_column(String(64), index=True)
+    question_id: Mapped[str] = mapped_column(String(36), ForeignKey("engagement_activity_questions.id", ondelete="CASCADE"), index=True)
+    status: Mapped[str] = mapped_column(String(20), default="queued", index=True)
+    response_count: Mapped[int] = mapped_column(Integer, default=0)
+    result: Mapped[dict] = mapped_column(JSONB, default=dict)
+    error: Mapped[str | None] = mapped_column(Text, nullable=True)
+    attempts: Mapped[int] = mapped_column(Integer, default=0)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=datetime.utcnow)
+    started_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)

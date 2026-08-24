@@ -711,6 +711,10 @@ async def update_event(
             kind="schedule",
             source_ref=f"event-schedule:{datetime.utcnow().isoformat(timespec='microseconds')}",
         )
+    if any(field in payload for field in ("name", "event_date", "event_end_date", "timezone", "venue_name")):
+        # Asynchronous outbox only; this never calls or waits for Festio Live.
+        from ..services.engagement_sync_outbox import queue_active_program_sync
+        await queue_active_program_sync(db, event)
     await db.commit()
     await db.refresh(event)
     from ..services.marketing_client import ingest_marketing_lead

@@ -68,6 +68,11 @@ SCHEMA_PATCHES: list[str] = [
     "ALTER TABLE events ADD COLUMN IF NOT EXISTS org_addon_overrides JSONB",
     "ALTER TABLE events ADD COLUMN IF NOT EXISTS platform_addon_overrides JSONB",
     "ALTER TABLE events ADD COLUMN IF NOT EXISTS addon_promo_until TIMESTAMP",
+    # The ORM auto-patcher adds engagement_join_code to existing databases;
+    # this partial unique index supplies the uniqueness guarantee that an ADD
+    # COLUMN cannot express without locking every pre-existing row.
+    "CREATE UNIQUE INDEX IF NOT EXISTS ix_events_engagement_join_code "
+    "ON events (engagement_join_code) WHERE engagement_join_code IS NOT NULL",
     "ALTER TABLE platform_settings ADD COLUMN IF NOT EXISTS addon_promo_until TIMESTAMP",
     # Guarded: only touches the table while the constraint still exists.
     "DO $$ BEGIN "

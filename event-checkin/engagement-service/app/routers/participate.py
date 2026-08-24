@@ -1,24 +1,63 @@
 from collections import Counter, defaultdict
+import hashlib
+import hmac
+from datetime import datetime, timedelta, timezone
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request
 from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
-from ..auth import Identity, current_identity, require_guest
+from ..auth import Identity, current_identity, require_activity_session, require_guest
 from ..database import get_db
+from ..config import settings
 from ..models import (
-    ActivityParticipant, ActivityQuestion, EngagementActivity, ParticipantResponse,
-    QuestionOption, ResponseOptionSelection,
+    ActivityParticipant, ActivityQuestion, ActivityRule, EngagementActivity,
+    EngagementQnaQuestion, FeedbackAnalysis, ModerationItem, ParticipantResponse, QuestionOption,
+    ResponseOptionSelection,
 )
+from ..moderation import flag_public_text
 from ..realtime import publish
-from ..schemas import ActivityResultsOut, ParticipateStateOut, QuestionResultOut, RespondIn, RespondOut
+from ..ratelimit import enforce_rate_limit
+from ..metrics import RESPONSES
+from ..scoring import score_choice_response
+from ..schemas import ActivityOut, ActivityResultsOut, ParticipateStateOut, QuestionResultOut, RespondIn, RespondOut
+from ..wordcloud import word_cloud
 
 router = APIRouter(prefix="/api/engagement/v1", tags=["engagement-participate"])
 
 
-async def _load_activity(activity_id: str, event_id: str, db: AsyncSession) -> EngagementActivity:
+def _rule_matches(operator: str, actual, expected) -> bool:
+    if operator == "answered": return actual is not None
+    if operator == "not_answered": return actual is None
+    if operator == "equals": return actual == expected
+    if operator == "not_equals": return actual != expected
+    if operator == "contains": return expected in actual if isinstance(actual, (str, list, dict)) else False
+    try:
+        if operator == "greater_than": return actual > expected
+        if operator == "less_than": return actual < expected
+    except TypeError:
+        return False
+    return False
+
+
+async def _visible_question_ids(activity: EngagementActivity, participant_id: str, db: AsyncSession) -> set[str]:
+    rules = (await db.execute(select(ActivityRule).where(ActivityRule.activity_id == activity.id))).scalars().all()
+    if not rules: return {q.id for q in activity.questions if q.status == "active"}
+    responses = (await db.execute(select(ParticipantResponse).where(ParticipantResponse.participant_id == participant_id, ParticipantResponse.activity_id == activity.id).options(selectinload(ParticipantResponse.selections)))).scalars().all()
+    by_question = {response.question_id: response for response in responses}
+    visible = {q.id for q in activity.questions if q.status == "active"}
+    for rule in rules:
+        response = by_question.get(rule.source_question_id)
+        actual = response.answer_value if response else None
+        if response and response.selections: actual = [selection.option_id for selection in response.selections]
+        matches = _rule_matches(rule.operator, actual, rule.comparison_value)
+        if (rule.action == "show" and not matches) or (rule.action == "hide" and matches): visible.discard(rule.target_question_id)
+    return visible
+
+
+async def _load_activity(activity_id: str, event_id: str, org_id: str, db: AsyncSession) -> EngagementActivity:
     # Explicit select().options(), not db.get(..., options=...) -- see
     # activities.py's _fetch_activity docstring for why db.get() silently
     # skips eager-load hints when the row is already in the identity map.
@@ -27,27 +66,52 @@ async def _load_activity(activity_id: str, event_id: str, db: AsyncSession) -> E
         .where(EngagementActivity.id == activity_id)
         .options(selectinload(EngagementActivity.questions).selectinload(ActivityQuestion.options))
     )
-    if not activity or activity.event_id != event_id:
+    if not activity or activity.event_id != event_id or (org_id and activity.org_id != org_id):
         raise HTTPException(404, "Activity not found")
     return activity
 
 
-async def _get_or_create_participant(activity_id: str, identity: Identity, db: AsyncSession) -> ActivityParticipant:
+async def _get_or_create_participant(activity_id: str, identity: Identity, db: AsyncSession, truly_anonymous: bool = False) -> ActivityParticipant:
     """Identified guests are tracked by guest_id; a broadcast/QR join (no
     Guest record — see auth.py's Identity.is_anonymous) is tracked by anon_id
     instead. Both columns have their own unique(activity_id, col) constraint,
     so the two never collide even though only one is ever set per row."""
-    column = ActivityParticipant.anon_id if identity.is_anonymous else ActivityParticipant.guest_id
+    column, subject = _participant_locator(activity_id, identity, truly_anonymous)
     participant = await db.scalar(
-        select(ActivityParticipant).where(ActivityParticipant.activity_id == activity_id, column == identity.subject)
+        select(ActivityParticipant).where(ActivityParticipant.activity_id == activity_id, column == subject)
     )
     if participant:
         return participant
-    kwargs = {"anon_id": identity.subject} if identity.is_anonymous else {"guest_id": identity.subject}
-    participant = ActivityParticipant(activity_id=activity_id, display_name=identity.name or None, **kwargs)
-    db.add(participant)
-    await db.flush()
-    return participant
+    kwargs = {"anon_id": subject} if (identity.is_anonymous or truly_anonymous) else {"guest_id": subject}
+    participant = ActivityParticipant(activity_id=activity_id, display_name=None if truly_anonymous else (identity.name or None), **kwargs)
+    try:
+        # A savepoint makes simultaneous first requests from the same device
+        # converge on the database uniqueness constraint without poisoning the
+        # outer response transaction.
+        async with db.begin_nested():
+            db.add(participant)
+            await db.flush()
+        return participant
+    except IntegrityError:
+        existing = await db.scalar(
+            select(ActivityParticipant).where(ActivityParticipant.activity_id == activity_id, column == subject)
+        )
+        if existing:
+            return existing
+        raise
+
+
+def _participant_locator(activity_id: str, identity: Identity, truly_anonymous: bool = False):
+    """Return the participant identity column/value used by every guest path.
+
+    Keeping reads and writes on the same locator is important for anonymous
+    activities: identified Guest records are deliberately represented by a
+    one-way activity-specific anon id there.
+    """
+    if truly_anonymous:
+        subject = hmac.new(settings.internal_service_token.encode(), f"{activity_id}:{identity.subject}".encode(), hashlib.sha256).hexdigest()[:48]
+        return ActivityParticipant.anon_id, subject
+    return (ActivityParticipant.anon_id if identity.is_anonymous else ActivityParticipant.guest_id), identity.subject
 
 
 async def _compute_results(activity: EngagementActivity, db: AsyncSession) -> ActivityResultsOut:
@@ -66,17 +130,37 @@ async def _compute_results(activity: EngagementActivity, db: AsyncSession) -> Ac
                 option_counts[sel.option_id] += 1
         ratings = [r.answer_value for r in q_responses if isinstance(r.answer_value, (int, float))]
         text_samples = [str(r.answer_value) for r in q_responses if isinstance(r.answer_value, str)][:20]
+        ranking_scores: Counter[str] = Counter()
+        if question.question_type == "ranking":
+            option_count = len(question.options)
+            for response in q_responses:
+                for selection in response.selections:
+                    ranking_scores[selection.option_id] += max(1, option_count - selection.sequence)
         questions_out.append(QuestionResultOut(
             question_id=question.id, question_type=question.question_type, prompt=question.prompt,
             response_count=len(q_responses), option_counts=dict(option_counts),
             average_rating=(sum(ratings) / len(ratings)) if ratings else None,
             text_samples=text_samples,
+            ranking_scores=dict(ranking_scores),
         ))
 
     return ActivityResultsOut(
         activity_id=activity.id, participant_count=participant_count,
         response_count=len(responses), questions=questions_out,
     )
+
+
+def _leaderboard_name(activity_id: str, participant_id: str, name: str, privacy: str, anonymous: bool) -> str:
+    if anonymous or privacy in ("anonymous", "anonymous_alias"):
+        return f"Guest {hashlib.sha256(f'{activity_id}:{participant_id}'.encode()).hexdigest()[:4].upper()}"
+    parts = name.split()
+    if privacy == "initials":
+        return "".join(part[:1].upper() for part in parts[:2]) or "Guest"
+    if privacy == "first_name":
+        return parts[0] if parts else "Guest"
+    if privacy == "first_last_initial":
+        return (parts[0] + (f" {parts[-1][0].upper()}." if len(parts) > 1 and parts[-1] else "")) if parts else "Guest"
+    return parts[0] if parts else "Guest"
 
 
 async def _compute_leaderboard(activity: EngagementActivity, db: AsyncSession, limit: int = 20) -> list[dict]:
@@ -93,6 +177,11 @@ async def _compute_leaderboard(activity: EngagementActivity, db: AsyncSession, l
         select(ActivityParticipant).where(ActivityParticipant.id.in_(totals.keys()))
     )).scalars().all()
     names = {p.id: (p.display_name or "Guest") for p in participants}
+    privacy = activity.config.get("leaderboard_privacy", "first_name")
+    names = {
+        pid: _leaderboard_name(activity.id, pid, name, privacy, bool(activity.config.get("anonymous")))
+        for pid, name in names.items()
+    }
     ranked = sorted(totals.items(), key=lambda kv: kv[1], reverse=True)[:limit]
     return [
         {"rank": i + 1, "participant_id": pid, "display_name": names.get(pid, "Guest"), "score": score}
@@ -102,45 +191,175 @@ async def _compute_leaderboard(activity: EngagementActivity, db: AsyncSession, l
 
 async def _display_payload(activity: EngagementActivity, db: AsyncSession) -> dict:
     results = await _compute_results(activity, db)
+    participant_ids = list((await db.execute(select(ActivityParticipant.id).where(ActivityParticipant.activity_id == activity.id))).scalars().all())
+    joined_count = len(participant_ids)
+    participant_count = max(joined_count, results.participant_count)
     leaderboard = await _compute_leaderboard(activity, db) if activity.config.get("leaderboard_enabled") else []
+    current_source = next((q for q in activity.questions if q.id == activity.config.get("current_question_id")), None)
+    current_result = next((q for q in results.questions if q.question_id == activity.config.get("current_question_id")), None)
+
+    featured_qna = await db.scalar(
+        select(EngagementQnaQuestion).where(
+            EngagementQnaQuestion.activity_id == activity.id,
+            EngagementQnaQuestion.status.in_(("featured", "answered")),
+        ).order_by(
+            (EngagementQnaQuestion.status == "featured").desc(),
+            EngagementQnaQuestion.upvote_count.desc(),
+            EngagementQnaQuestion.created_at.asc(),
+        )
+    )
+    analysis = None
+    if current_source:
+        analysis = await db.scalar(select(FeedbackAnalysis).where(
+            FeedbackAnalysis.question_id == current_source.id,
+            FeedbackAnalysis.status == "completed",
+        ).order_by(FeedbackAnalysis.completed_at.desc()).limit(1))
+
+    participation = round((current_result.response_count / participant_count) * 100) if current_result and participant_count else 0
+    option_total = sum(current_result.option_counts.values()) if current_result else 0
+    consensus = round((max(current_result.option_counts.values(), default=0) / option_total) * 100) if option_total else 0
+    energy = min(100, round(participation * .8 + min(results.response_count, 40) * .5))
+    team_scores = [0, 0]
+    team_players = [0, 0]
+    for participant_id in participant_ids:
+        team_players[int(hashlib.sha256(participant_id.encode()).hexdigest(), 16) % 2] += 1
+    for index, entry in enumerate(leaderboard):
+        team_index = int(hashlib.sha256(entry["participant_id"].encode()).hexdigest(), 16) % 2
+        team_scores[team_index] += entry["score"]
+
+    safe_config_keys = {
+        "event_name", "event_venue", "start_at", "join_code", "leaderboard_enabled",
+        "display_scene", "moderation_enabled", "live_results_enabled",
+    }
     return {
+        "event_id": activity.event_id,
         "activity_id": activity.id,
         "title": activity.title,
+        "description": activity.description,
         "type": activity.type,
         "status": activity.status,
         "current_question_id": activity.config.get("current_question_id"),
-        "participant_count": results.participant_count,
+        "participant_count": participant_count,
         "response_count": results.response_count,
-        "questions": [q.model_dump() for q in results.questions],
+        "display_config": {key: activity.config.get(key) for key in safe_config_keys if key in activity.config},
+        "questions": [
+            {
+                **q.model_dump(),
+                "option_labels": {o.id: o.label for source in activity.questions if source.id == q.question_id for o in source.options},
+                "correct_option_ids": [
+                    o.id for source in activity.questions if source.id == q.question_id
+                    for o in source.options if o.is_correct and source.live_state == "answer_revealed"
+                ],
+                "explanation": next((source.config.get("explanation") for source in activity.questions if source.id == q.question_id and source.live_state == "answer_revealed"), None),
+                "time_limit_seconds": next((source.time_limit_seconds for source in activity.questions if source.id == q.question_id), None),
+                "opened_at": next((source.config.get("opened_at") for source in activity.questions if source.id == q.question_id), None),
+                # Open text never reaches a public display without a future,
+                # explicit moderation record. Counts remain safe to show.
+                "text_samples": [],
+                "live_state": next((source.live_state for source in activity.questions if source.id == q.question_id), "pending"),
+            }
+            for q in results.questions
+        ],
         "leaderboard": leaderboard,
+        "featured_qna": ({"id": featured_qna.id, "text": featured_qna.text, "upvote_count": featured_qna.upvote_count, "status": featured_qna.status} if featured_qna else None),
+        "word_cloud": await _approved_word_cloud(activity.id, current_source.id, db) if current_source and current_source.question_type == "word_cloud" else [],
+        "ai_insight": analysis.result if analysis else None,
+        "room_pulse": {
+            "energy": energy,
+            "participation_percent": participation,
+            "consensus_percent": consensus,
+            "sentiment": (analysis.result or {}).get("sentiment") if analysis else None,
+            "responses": current_result.response_count if current_result else results.response_count,
+        },
+        "teams": [
+            {"name": "Team Aurora", "score": team_scores[0], "players": team_players[0]},
+            {"name": "Team Pulse", "score": team_scores[1], "players": team_players[1]},
+        ],
     }
+
+
+async def _approved_word_cloud(activity_id: str, question_id: str, db: AsyncSession) -> list[dict]:
+    texts = list((await db.execute(select(ModerationItem.content).where(
+        ModerationItem.activity_id == activity_id,
+        ModerationItem.question_id == question_id,
+        ModerationItem.status == "approved",
+    ))).scalars().all())
+    return word_cloud(texts)
 
 
 @router.get("/activities/{activity_id}/participate", response_model=ParticipateStateOut)
 async def get_participation_state(activity_id: str, identity: Identity = Depends(current_identity), db: AsyncSession = Depends(get_db)):
     require_guest(identity)
-    activity = await _load_activity(activity_id, identity.event_id, db)
-    if activity.status not in ("live", "paused") and not activity.config.get("allow_guest_participation", True):
+    activity = await _load_activity(activity_id, identity.event_id, identity.org_id, db)
+    require_activity_session(identity, activity.session_id, activity.config)
+    if activity.status not in ("live", "paused") or not activity.config.get("allow_guest_participation", True):
         raise HTTPException(403, "This activity isn't open right now")
-    participant = await _get_or_create_participant(activity_id, identity, db)
+    participant = await _get_or_create_participant(activity_id, identity, db, bool(activity.config.get("anonymous")))
     await db.commit()
     answered = (await db.execute(
         select(ParticipantResponse.question_id).where(ParticipantResponse.participant_id == participant.id)
     )).scalars().all()
-    return ParticipateStateOut(activity=activity, already_responded_question_ids=list(answered), participant_id=participant.id)
+    safe_activity = ActivityOut.model_validate(activity)
+    visible_ids = await _visible_question_ids(activity, participant.id, db)
+    safe_activity.questions = [question for question in safe_activity.questions if question.id in visible_ids]
+    for question in safe_activity.questions:
+        question.config.pop("correct_answer", None)
+        question.config.pop("explanation", None)
+        for option in question.options:
+            option.is_correct = None
+    return ParticipateStateOut(activity=safe_activity, already_responded_question_ids=list(answered), participant_id=participant.id)
 
 
 @router.post("/activities/{activity_id}/respond", response_model=RespondOut)
-async def respond(activity_id: str, body: RespondIn, identity: Identity = Depends(current_identity), db: AsyncSession = Depends(get_db)):
+async def respond(activity_id: str, body: RespondIn, request: Request, identity: Identity = Depends(current_identity), db: AsyncSession = Depends(get_db)):
     require_guest(identity)
-    activity = await _load_activity(activity_id, identity.event_id, db)
-    if activity.status not in ("live", "paused"):
+    await enforce_rate_limit(request, "respond", f"{activity_id}:{identity.subject}", 30)
+    activity = await _load_activity(activity_id, identity.event_id, identity.org_id, db)
+    require_activity_session(identity, activity.session_id, activity.config)
+    if activity.status != "live":
         raise HTTPException(409, "This activity isn't accepting responses right now")
-    question = next((q for q in activity.questions if q.id == body.question_id), None)
+    question = next((q for q in activity.questions if q.id == body.question_id and q.status == "active"), None)
     if not question:
         raise HTTPException(404, "Question not found")
+    if question.live_state != "open" or activity.config.get("current_question_id") != question.id:
+        raise HTTPException(409, "This question isn't open for responses")
+    if question.time_limit_seconds and question.config.get("opened_at"):
+        try:
+            opened_at = datetime.fromisoformat(question.config["opened_at"])
+            if datetime.now(timezone.utc) > opened_at + timedelta(seconds=question.time_limit_seconds + 2):
+                raise HTTPException(409, "Time is up for this question")
+        except ValueError:
+            pass
 
-    participant = await _get_or_create_participant(activity_id, identity, db)
+    participant = await _get_or_create_participant(activity_id, identity, db, bool(activity.config.get("anonymous")))
+
+    option_types = {"single_choice", "multiple_choice", "true_false", "yes_no", "ranking"}
+    selected = list(dict.fromkeys(body.selected_option_ids))
+    valid_option_ids = {o.id for o in question.options}
+    if question.question_type in option_types:
+        if not selected and question.required:
+            raise HTTPException(422, "Select an answer")
+        if any(option_id not in valid_option_ids for option_id in selected):
+            raise HTTPException(422, "One or more options do not belong to this question")
+        if question.question_type in {"single_choice", "true_false", "yes_no"} and len(selected) > 1:
+            raise HTTPException(422, "Select only one answer")
+        if question.question_type == "ranking" and question.required and set(selected) != valid_option_ids:
+            raise HTTPException(422, "Rank every option before submitting")
+    elif selected:
+        raise HTTPException(422, "This question does not accept option selections")
+    if question.question_type in {"short_text", "long_text", "word_cloud"}:
+        if not isinstance(body.answer_value, str) or (question.required and not body.answer_value.strip()):
+            raise HTTPException(422, "Enter a response")
+        if len(body.answer_value) > (280 if question.question_type == "word_cloud" else 5000):
+            raise HTTPException(422, "Response is too long")
+    if question.question_type in {"rating_5", "rating_10", "nps", "number"}:
+        if not isinstance(body.answer_value, (int, float)) or isinstance(body.answer_value, bool):
+            raise HTTPException(422, "Enter a numeric response")
+        limits = {"rating_5": (1, 5), "rating_10": (1, 10), "nps": (0, 10)}
+        if question.question_type in limits:
+            low, high = limits[question.question_type]
+            if not low <= body.answer_value <= high:
+                raise HTTPException(422, f"Response must be between {low} and {high}")
 
     # Idempotent re-submission: same participant+question+idempotency_key
     # returns the original response instead of erroring or double-counting —
@@ -154,39 +373,35 @@ async def respond(activity_id: str, body: RespondIn, identity: Identity = Depend
         )
     )
     if existing:
-        return RespondOut(response_id=existing.id, score=existing.score, correct=None)
+        return RespondOut(response_id=existing.id, score=None, correct=None)
 
-    if not activity.config.get("allow_multiple_submissions", False):
-        already = await db.scalar(
-            select(ParticipantResponse).where(
-                ParticipantResponse.question_id == body.question_id,
-                ParticipantResponse.participant_id == participant.id,
-            )
+    already = await db.scalar(
+        select(ParticipantResponse).where(
+            ParticipantResponse.question_id == body.question_id,
+            ParticipantResponse.participant_id == participant.id,
         )
-        if already and not activity.config.get("allow_answer_changes", False):
-            raise HTTPException(409, "You already answered this question")
-        if already and activity.config.get("allow_answer_changes", False):
-            await db.execute(
-                ResponseOptionSelection.__table__.delete().where(ResponseOptionSelection.response_id == already.id)
-            )
-            await db.delete(already)
-            await db.flush()
+    )
+    if already and not activity.config.get("allow_answer_changes", False):
+        raise HTTPException(409, "You already answered this question")
+    if already and activity.config.get("allow_answer_changes", False):
+        await db.execute(
+            ResponseOptionSelection.__table__.delete().where(ResponseOptionSelection.response_id == already.id)
+        )
+        await db.delete(already)
+        await db.flush()
 
     score = None
     correct = None
-    if question.question_type in ("single_choice", "true_false", "yes_no") and question.config.get("correct_answer") is not None and body.selected_option_ids:
-        chosen = body.selected_option_ids[0]
-        opt = next((o for o in question.options if o.id == chosen), None)
-        correct = bool(opt and opt.is_correct)
-        if correct:
-            points = int(question.config.get("points") or 100)
-            if question.time_limit_seconds and body.response_time_ms is not None:
-                fraction_remaining = max(0.0, 1 - (body.response_time_ms / 1000) / question.time_limit_seconds)
-                score = int(points * (0.5 + 0.5 * fraction_remaining))  # time-weighted, floor at 50%
-            else:
-                score = points
-        else:
-            score = 0
+    correct_ids = {o.id for o in question.options if o.is_correct}
+    if question.question_type in ("single_choice", "multiple_choice", "true_false", "yes_no") and correct_ids and selected:
+        strategy = question.config.get("scoring_strategy") or ("time_weighted" if question.time_limit_seconds else "fixed")
+        score, correct = score_choice_response(
+            selected, correct_ids,
+            points=int(question.config.get("points") or 100),
+            strategy=strategy,
+            response_time_ms=body.response_time_ms,
+            time_limit_seconds=question.time_limit_seconds,
+        )
 
     try:
         response = ParticipantResponse(
@@ -196,8 +411,22 @@ async def respond(activity_id: str, body: RespondIn, identity: Identity = Depend
         )
         db.add(response)
         await db.flush()
-        for option_id in body.selected_option_ids:
-            db.add(ResponseOptionSelection(response_id=response.id, option_id=option_id))
+        for index, option_id in enumerate(selected):
+            db.add(ResponseOptionSelection(response_id=response.id, option_id=option_id, sequence=index))
+        if question.question_type in {"short_text", "long_text", "word_cloud"}:
+            content = body.answer_value.strip()
+            flagged, flag_reason = flag_public_text(content) if activity.config.get("profanity_filtering", True) else (False, None)
+            requires_review = activity.config.get("moderation_enabled", False) or flagged
+            db.add(ModerationItem(
+                activity_id=activity_id,
+                question_id=question.id,
+                response_id=response.id,
+                content_type="word_cloud" if question.question_type == "word_cloud" else "open_text",
+                content=content,
+                status="pending" if requires_review else "approved",
+                flagged=flagged,
+                flag_reason=flag_reason,
+            ))
         await db.commit()
     except IntegrityError:
         await db.rollback()
@@ -210,28 +439,43 @@ async def respond(activity_id: str, body: RespondIn, identity: Identity = Depend
             )
         )
         if existing:
-            return RespondOut(response_id=existing.id, score=existing.score, correct=None)
+            return RespondOut(response_id=existing.id, score=None, correct=None)
         raise HTTPException(409, "This response could not be recorded — please try again")
 
     await publish(activity_id, "response.submitted", {"question_id": body.question_id})
-    return RespondOut(response_id=response.id, score=score, correct=correct)
+    RESPONSES.inc()
+    # Correctness and score are deliberately withheld while voting is open.
+    # They become audience-visible only through an explicit reveal state.
+    return RespondOut(response_id=response.id, score=None, correct=None)
 
 
 @router.get("/activities/{activity_id}/results", response_model=ActivityResultsOut)
 async def get_results(activity_id: str, identity: Identity = Depends(current_identity), db: AsyncSession = Depends(get_db)):
-    activity = await _load_activity(activity_id, identity.event_id, db)
+    activity = await _load_activity(activity_id, identity.event_id, identity.org_id, db)
+    require_activity_session(identity, activity.session_id, activity.config)
     if identity.identity_kind != "staff":
         require_guest(identity)
         if not activity.config.get("live_results_enabled", True):
             raise HTTPException(403, "Results aren't available for this activity")
+        visible_ids = {q.id for q in activity.questions if q.live_state in ("results_visible", "answer_revealed")}
+        if not visible_ids:
+            raise HTTPException(403, "Results haven't been revealed")
+        results = await _compute_results(activity, db)
+        results.questions = [q for q in results.questions if q.question_id in visible_ids]
+        for question in results.questions:
+            question.text_samples = []
+        return results
     return await _compute_results(activity, db)
 
 
 @router.get("/activities/{activity_id}/leaderboard")
 async def get_leaderboard(activity_id: str, identity: Identity = Depends(current_identity), db: AsyncSession = Depends(get_db)):
-    activity = await _load_activity(activity_id, identity.event_id, db)
+    activity = await _load_activity(activity_id, identity.event_id, identity.org_id, db)
+    require_activity_session(identity, activity.session_id, activity.config)
     if identity.identity_kind != "staff":
         require_guest(identity)
         if not activity.config.get("leaderboard_enabled", False):
             raise HTTPException(403, "The leaderboard isn't available for this activity")
+        if not any(q.live_state in ("results_visible", "answer_revealed") for q in activity.questions):
+            raise HTTPException(403, "The leaderboard hasn't been revealed")
     return {"entries": await _compute_leaderboard(activity, db)}

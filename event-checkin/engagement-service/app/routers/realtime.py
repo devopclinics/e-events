@@ -3,21 +3,29 @@ import json
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from fastapi.responses import StreamingResponse
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from ..auth import Identity, current_identity
+from ..auth import Identity, current_identity, require_activity_session
 from ..database import get_db
 from ..realtime import mint_realtime_ticket, redis, verify_realtime_ticket
+from ..metrics import REALTIME_CONNECTIONS
+from ..models import LiveDisplay
 from .activities import _fetch_activity
 from .participate import _display_payload
 
 router = APIRouter(prefix="/api/engagement/v1", tags=["engagement-realtime"])
 
 
-async def _sse(channel: str):
+async def _sse(channel: str | list[str]):
+    channels = [channel] if isinstance(channel, str) else channel
     pubsub = redis.pubsub()
-    await pubsub.subscribe(channel)
+    REALTIME_CONNECTIONS.inc()
     try:
+        try:
+            await pubsub.subscribe(*channels)
+        except Exception:
+            pass
         yield "event: ready\ndata: {}\n\n"
         while True:
             try:
@@ -33,8 +41,12 @@ async def _sse(channel: str):
             else:
                 yield ": keepalive\n\n"
     finally:
-        await pubsub.unsubscribe(channel)
-        await pubsub.aclose()
+        REALTIME_CONNECTIONS.dec()
+        try:
+            await pubsub.unsubscribe(*channels)
+            await pubsub.aclose()
+        except Exception:
+            pass
 
 
 @router.get("/activities/{activity_id}/realtime-ticket")
@@ -43,8 +55,9 @@ async def realtime_ticket(activity_id: str, identity: Identity = Depends(current
     Returns a short-lived ticket for the ticket-only /stream endpoint below,
     since EventSource can't carry the normal Authorization bearer token."""
     activity = await _fetch_activity(activity_id, db)
-    if not activity or activity.event_id != identity.event_id:
+    if not activity or activity.event_id != identity.event_id or (identity.org_id and activity.org_id != identity.org_id):
         raise HTTPException(404, "Activity not found")
+    require_activity_session(identity, activity.session_id, activity.config)
     return {"ticket": mint_realtime_ticket(activity_id, identity.subject), "expires_in": 180 * 60}
 
 
@@ -79,6 +92,25 @@ async def display_stream(activity_id: str, token: str = Query(...), db: AsyncSes
         raise HTTPException(404, "Activity not found")
     return StreamingResponse(
         _sse(f"engagement:activity:{activity_id}"),
+        media_type="text/event-stream",
+        headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
+    )
+
+
+@router.get("/live/{display_code}/stream")
+async def named_display_stream(display_code: str, token: str = Query(...), db: AsyncSession = Depends(get_db)):
+    display = await db.scalar(select(LiveDisplay).where(
+        LiveDisplay.display_code == display_code,
+        LiveDisplay.access_token == token,
+        LiveDisplay.status == "active",
+    ))
+    if not display:
+        raise HTTPException(404, "Display not found")
+    channels = [f"engagement:display:{display.id}"]
+    if display.assigned_activity_id:
+        channels.append(f"engagement:activity:{display.assigned_activity_id}")
+    return StreamingResponse(
+        _sse(channels),
         media_type="text/event-stream",
         headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
     )

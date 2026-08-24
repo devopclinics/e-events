@@ -38,8 +38,12 @@ class Settings(BaseSettings):
     # Festio Live (engagement-service) — standalone live quiz/poll/survey
     # microservice. Backend only ever mints a scoped token for it (see
     # /auth/live-token, /events/{id}/live/guest-token); it never calls the
-    # service itself, so unlike the others above there's no *_service_url.
+    # service for user traffic. Program synchronization is delivered only by a
+    # failure-isolated transactional outbox to this internal URL; no core
+    # request waits for it and neither service accesses the other's database.
+    engagement_service_url: str = "http://engagement-service:8060"
     engagement_internal_token: str = ""
+    engagement_request_timeout_seconds: float = 3.0
     marketing_service_url: str = "http://marketing-service:8050"
     # Staging-only paid admission service. The service itself refuses to boot
     # outside staging; this shared secret authenticates token exchange and

@@ -321,6 +321,12 @@ export default function ExperienceRedesignPage() {
   const [confirmStepDelete, setConfirmStepDelete] = useState(null)
   const [sessionImportOpen, setSessionImportOpen] = useState(false)
   const [sessionImportText, setSessionImportText] = useState('')
+  const [liveSync, setLiveSync] = useState(null)
+  const [liveProgramSessions, setLiveProgramSessions] = useState([])
+  const [liveActivities, setLiveActivities] = useState([])
+  const [liveDisplays, setLiveDisplays] = useState([])
+  const [liveLinkStep, setLiveLinkStep] = useState(null)
+  const [liveLinkDraft, setLiveLinkDraft] = useState({ existing_activity_id: '', type: 'poll', title: '', eligibility: 'session', display_id: '' })
   // Speaker Showcase cross-link: only fetched when the add-on is on, so this
   // is a no-op for every event not using it.
   const [eventSpeakers, setEventSpeakers] = useState([])
@@ -384,6 +390,20 @@ export default function ExperienceRedesignPage() {
     }
   }
 
+  async function loadLiveIntegration() {
+    if (!currentEventId || !realEvent?.engagement_enabled) {
+      setLiveSync(null); setLiveProgramSessions([]); setLiveActivities([]); setLiveDisplays([]); return
+    }
+    const [syncResult, sessionsResult, activitiesResult, displaysResult] = await Promise.allSettled([
+      api.getExperienceLiveSync(currentEventId), api.liveProgramSessions(currentEventId),
+      api.liveActivities(currentEventId), api.liveDisplays(currentEventId),
+    ])
+    setLiveSync(syncResult.status === 'fulfilled' ? syncResult.value : { configured: true, pending: 0, failed: 0, unavailable: true })
+    setLiveProgramSessions(sessionsResult.status === 'fulfilled' ? sessionsResult.value : [])
+    setLiveActivities(activitiesResult.status === 'fulfilled' ? activitiesResult.value : [])
+    setLiveDisplays(displaysResult.status === 'fulfilled' ? displaysResult.value : [])
+  }
+
   async function refreshDashboardAndAudit() {
     await Promise.all([
       api.getExperienceDashboard(currentEventId).then(setDashboard).catch(() => {}),
@@ -436,6 +456,18 @@ export default function ExperienceRedesignPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [currentEventId])
 
+  useEffect(() => { loadLiveIntegration() }, [currentEventId, realEvent?.engagement_enabled]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  useEffect(() => {
+    const stepId = new URLSearchParams(window.location.search).get('step')
+    if (!stepId || !workflows?.length) return
+    const workflow = workflows.find((item) => item.steps?.some((step) => step.id === stepId))
+    if (!workflow) return
+    setSelectedId(workflow.id)
+    setActiveTab('Workflow')
+    window.setTimeout(() => document.getElementById(`experience-step-${stepId}`)?.scrollIntoView({ behavior: 'smooth', block: 'center' }), 120)
+  }, [workflows])
+
   // Keeps the selected guest (and their journey) in sync whenever the shared
   // guest list loads or changes, since useGuests owns the fetch itself now.
   useEffect(() => {
@@ -464,9 +496,63 @@ export default function ExperienceRedesignPage() {
     return `${guest.first_name || ''} ${guest.last_name || ''} ${guest.email || ''} ${guest.phone || ''}`.toLowerCase().includes(query)
   })
   const feedbackPreviewGuestAvailable = feedbackPreviewGuests.some((guest) => guest.id === feedbackPreviewGuestId)
+  const linkedLiveActivities = liveActivities.filter((activity) => activity.session_id)
+  const liveResponseTotal = liveProgramSessions.reduce((sum, session) => sum + (session.response_count || 0), 0)
+  const liveParticipantPeak = linkedLiveActivities.reduce((peak, activity) => Math.max(peak, activity.participant_count || 0), 0)
 
   function guestLabel(g) { return g ? `${g.first_name || ''} ${g.last_name || ''}`.trim() : '' }
   function consentSignedFor(guestId) { return !!(realSignatures || []).find((s) => s.guest_id === guestId) }
+
+  function openLiveLink(step) {
+    setLiveLinkStep(step)
+    setLiveLinkDraft({
+      existing_activity_id: '', type: 'poll', title: `${step.title} Pulse`, eligibility: 'session',
+      display_id: liveDisplays.find((display) => !display.assigned_session_id)?.id || liveDisplays[0]?.id || '',
+    })
+  }
+
+  async function saveLiveLink() {
+    if (!liveLinkStep) return
+    const result = await runAction(`live-link:${liveLinkStep.id}`, async () => {
+      let activity
+      if (liveLinkDraft.existing_activity_id) {
+        activity = await api.liveUpdateActivity(currentEventId, liveLinkDraft.existing_activity_id, {
+          session_id: liveLinkStep.id,
+          config: { eligibility: liveLinkDraft.eligibility },
+        })
+      } else {
+        activity = await api.liveCreateActivity(currentEventId, {
+          type: liveLinkDraft.type,
+          title: liveLinkDraft.title.trim(),
+          description: `Connected to ${liveLinkStep.title} in the Experience program.`,
+          session_id: liveLinkStep.id,
+          config: {
+            eligibility: liveLinkDraft.eligibility,
+            allow_guest_participation: true,
+            live_results_enabled: true,
+            moderation_enabled: true,
+          },
+        })
+      }
+      if (liveLinkDraft.display_id) {
+        await api.liveUpdateDisplay(currentEventId, liveLinkDraft.display_id, {
+          assigned_session_id: liveLinkStep.id,
+          assigned_activity_id: activity.id,
+        })
+      }
+      return activity
+    }, 'Festio Live activity linked to this program session.')
+    if (result !== FAILED) { setLiveLinkStep(null); await loadLiveIntegration() }
+  }
+
+  async function requestLiveResync() {
+    const result = await runAction('live-resync', () => api.queueExperienceLiveSync(currentEventId), 'Program synchronization queued.')
+    if (result !== FAILED) window.setTimeout(loadLiveIntegration, 1200)
+  }
+
+  function liveSessionFor(stepId) { return liveProgramSessions.find((session) => session.source_step_id === stepId) || null }
+  function liveActivitiesFor(stepId) { return liveActivities.filter((activity) => activity.session_id === stepId) }
+  function liveSyncFor(stepId) { return liveSync?.sessions?.find((session) => session.source_id === stepId) || null }
 
   function showFeedbackPreviewPicker() {
     const preferredGuestId = selectedGuestId && realGuests.some((guest) => guest.id === selectedGuestId)
@@ -1067,6 +1153,11 @@ export default function ExperienceRedesignPage() {
               onChange={(e) => toggleLiveProgram(e.target.checked)} /><span className="track"/><span className="knob"/>
           </label>
         </div>
+        {realEvent?.engagement_enabled && <div className={`ex-live-sync-summary${liveSync?.failed ? ' failed' : liveSync?.pending ? ' pending' : ''}`}>
+          <span>✦</span><div><strong>Experience + Festio Live</strong><small>{liveSync?.unavailable ? 'Live is temporarily unavailable. Experience continues normally.' : liveSync?.failed ? `${liveSync.failed} session sync failed — retained for review` : liveSync?.pending ? `${liveSync.pending} session sync${liveSync.pending === 1 ? '' : 's'} pending delivery` : `${liveProgramSessions.length} program session${liveProgramSessions.length === 1 ? '' : 's'} synchronized`}</small></div>
+          <button className="rr-btn secondary" disabled={actionKey === 'live-resync' || selectedWorkflow?.status !== 'published'} onClick={requestLiveResync}>{actionKey === 'live-resync' ? 'Queuing…' : 'Sync program now'}</button>
+          <a className="rr-btn secondary" href="/live-redesign">Open Festio Live →</a>
+        </div>}
       </div>
 
       <div className="ex-wf-toolbar">
@@ -1168,13 +1259,18 @@ export default function ExperienceRedesignPage() {
                   <div className="ex-builder-main">
                     <div className="ex-step-list">
                       {sortedSteps.map((step, index) => (
-                        <div className={`ex-step-row${stepForm?.id === step.id ? ' active' : ''}`} key={step.id}>
+                        <div id={`experience-step-${step.id}`} className={`ex-step-row${stepForm?.id === step.id ? ' active' : ''}`} key={step.id}>
                           <span className="ex-step-handle" title="Use the arrows to reorder">⠿</span>
                           <span className="ex-step-num">{index + 1}</span>
                           <span className="ex-step-icon"><Icon name={stepTypeIcon(step.type)} size={14}/></span>
                           <div className="ex-step-info">
                             <strong>{step.title}</strong>
                             <span>{step.description || step.type.replaceAll('_', ' ')}</span>
+                            {(step.is_segment || step.type === 'session_attendance') && realEvent?.engagement_enabled && <div className="ex-step-live-link">
+                              <i>✦</i><div><b>{liveActivitiesFor(step.id).length ? `${liveActivitiesFor(step.id).length} linked Festio Live activit${liveActivitiesFor(step.id).length === 1 ? 'y' : 'ies'}` : 'Festio Live ready'}</b><small>{liveActivitiesFor(step.id).length ? liveActivitiesFor(step.id).map((activity) => activity.title).join(' · ') : selectedWorkflow.status === 'published' ? (liveSessionFor(step.id) ? 'Session synchronized — add its first audience moment' : liveSyncFor(step.id)?.status === 'failed' ? 'Synchronization failed safely — retry from the banner' : 'Synchronization pending') : 'This session will synchronize when the workflow is published'}</small></div>
+                              {selectedWorkflow.status === 'published' && liveSessionFor(step.id) && <button type="button" onClick={() => openLiveLink(step)}>+ Add Live moment</button>}
+                              {liveActivitiesFor(step.id).length > 0 && <a href="/live-redesign">Open Live →</a>}
+                            </div>}
                           </div>
                           <div className="ex-step-actions">
                             <button title="Move up" disabled={!isDraftSelected || index === 0 || actionKey === `step:${step.id}:move`} onClick={() => moveStep(step, -1)}><Icon name="arrow" size={13} className="ex-icon-up"/></button>
@@ -1406,6 +1502,11 @@ export default function ExperienceRedesignPage() {
             <div className="rr-panel er-stat"><span>In progress</span><strong>{dashboard.progress_total}</strong></div>
             <div className="rr-panel er-stat teal"><span>Complete %</span><strong>{dashboard.completion_rate}%</strong></div>
           </div>
+          {realEvent?.engagement_enabled && <div className="rr-grid3 ex-live-analytics" style={{ marginTop: 14 }}>
+            <div className="rr-panel er-stat teal"><span>Program Live moments</span><strong>{linkedLiveActivities.length}</strong><small>{liveProgramSessions.length} synchronized program sessions</small></div>
+            <div className="rr-panel er-stat"><span>Festio Live responses</span><strong>{liveResponseTotal}</strong><small>Aggregated across linked program sessions</small></div>
+            <div className="rr-panel er-stat amber"><span>Peak Live participants</span><strong>{liveParticipantPeak}</strong><small>No response content is copied into Experience</small></div>
+          </div>}
           <div className="rd-wide-grid" style={{ marginTop: 14 }}>
             <div className="rd-panel">
               <div className="rd-panel-head"><h3>Journey funnel</h3><p>Guests completed, per step</p></div>
@@ -1448,6 +1549,27 @@ export default function ExperienceRedesignPage() {
       )}
 
       {toast && <div className={`rd-toast${toast.error ? ' error' : ''}`}><Icon name={toast.error ? 'info' : 'check'}/>{toast.text}</div>}
+
+      {liveLinkStep && (
+        <Modal title={`Festio Live — ${liveLinkStep.title}`} onClose={() => setLiveLinkStep(null)} width={560}>
+          <p className="ex-live-link-note">The program session remains owned by Experience. Festio Live will own its questions, responses, moderation and projector state.</p>
+          <label className="rd-field-label">Use an existing event-wide activity</label>
+          <select className="rr-select" value={liveLinkDraft.existing_activity_id} onChange={(event) => setLiveLinkDraft((value) => ({ ...value, existing_activity_id: event.target.value }))}>
+            <option value="">Create a new Live activity</option>
+            {liveActivities.filter((activity) => !activity.session_id).map((activity) => <option key={activity.id} value={activity.id}>{activity.title} · {activity.type.replaceAll('_', ' ')}</option>)}
+          </select>
+          {!liveLinkDraft.existing_activity_id && <div className="ex-live-link-grid">
+            <label><span className="rd-field-label">Activity type</span><select className="rr-select" value={liveLinkDraft.type} onChange={(event) => setLiveLinkDraft((value) => ({ ...value, type: event.target.value }))}><option value="poll">Pulse poll</option><option value="word_cloud">Word cloud</option><option value="q_and_a">Q&amp;A</option><option value="rating">Rating</option><option value="quiz">Quiz</option><option value="feedback">Feedback</option></select></label>
+            <label><span className="rd-field-label">Activity title</span><input className="rr-input" value={liveLinkDraft.title} onChange={(event) => setLiveLinkDraft((value) => ({ ...value, title: event.target.value }))}/></label>
+          </div>}
+          <div className="ex-live-link-grid">
+            <label><span className="rd-field-label">Guest eligibility</span><select className="rr-select" value={liveLinkDraft.eligibility} onChange={(event) => setLiveLinkDraft((value) => ({ ...value, eligibility: event.target.value }))}><option value="session">Guests in this program</option><option value="checked_in">Checked-in guests</option><option value="event">All eligible event guests</option></select></label>
+            <label><span className="rd-field-label">Projector display</span><select className="rr-select" value={liveLinkDraft.display_id} onChange={(event) => setLiveLinkDraft((value) => ({ ...value, display_id: event.target.value }))}><option value="">Do not assign a display yet</option>{liveDisplays.map((display) => <option value={display.id} key={display.id}>{display.name}</option>)}</select></label>
+          </div>
+          <div className="ex-live-link-safe">Schedule, room and speaker changes synchronize automatically. Starting and closing the activity remain manual presenter actions.</div>
+          <div className="rd-row2" style={{ marginTop: 14 }}><button className="rr-btn secondary" onClick={() => setLiveLinkStep(null)}>Cancel</button><button className="rr-btn primary" disabled={actionKey === `live-link:${liveLinkStep.id}` || (!liveLinkDraft.existing_activity_id && !liveLinkDraft.title.trim())} onClick={saveLiveLink}>{actionKey === `live-link:${liveLinkStep.id}` ? 'Linking…' : 'Create and link activity'}</button></div>
+        </Modal>
+      )}
 
       {signatureGuest && (
         <Modal title={`Consent signature — ${signatureGuest}`} onClose={() => setSignatureGuest(null)} width={420}>

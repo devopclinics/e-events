@@ -187,6 +187,15 @@ function fmtLocalDateTime(value, tz) {
   return d.toLocaleString(undefined, { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit', ...(tz && { timeZone: tz }) })
 }
 
+function programSegmentState(segment, now = Date.now()) {
+  if (['ended', 'ongoing', 'upcoming'].includes(segment?.state)) return segment.state
+  const startsAt = new Date(segment?.starts_at).getTime()
+  const endsAt = new Date(segment?.ends_at).getTime()
+  if (Number.isFinite(endsAt) && endsAt <= now) return 'ended'
+  if (segment?.active || (Number.isFinite(startsAt) && Number.isFinite(endsAt) && startsAt <= now && now < endsAt)) return 'ongoing'
+  return 'upcoming'
+}
+
 const PASTED_URL_RE = /(https?:\/\/[^\s<]+|www\.[^\s<]+)/gi
 
 function LinkifiedText({ text, color }) {
@@ -1321,6 +1330,7 @@ function GuestHub({ event, accessToken, designTheme, previewMock = false, confir
   const [sendingChat, setSendingChat] = useState(false)
   // Experience journey (only populated when the event has Experience enabled).
   const [journey, setJourney] = useState(null)
+  const [liveParticipation, setLiveParticipation] = useState({})
   const [hubMenuDay, setHubMenuDay] = useState('')
   const [signName, setSignName] = useState('')
   const [signing, setSigning] = useState(false)
@@ -1519,6 +1529,15 @@ function GuestHub({ event, accessToken, designTheme, previewMock = false, confir
   }, [event?.id, accessToken, previewMock])
 
   useEffect(() => { loadJourney() }, [loadJourney])
+  useEffect(() => {
+    if (!event?.id || !accessToken || previewMock || !event.engagement_enabled) { setLiveParticipation({}); return }
+    let cancelled = false
+    api.liveGuestSession(event.id, accessToken)
+      .then(({ token }) => api.liveGuestProgramParticipation(token))
+      .then((rows) => { if (!cancelled) setLiveParticipation(Object.fromEntries(rows.map((row) => [row.session_id, row]))) })
+      .catch(() => { if (!cancelled) setLiveParticipation({}) })
+    return () => { cancelled = true }
+  }, [event?.id, event?.engagement_enabled, accessToken, previewMock])
   // Preview surface only: seed sample data instead of loading from the API,
   // so every module renders and the style choice is actually visible without
   // a real guest and RSVP.
@@ -1697,7 +1716,7 @@ function GuestHub({ event, accessToken, designTheme, previewMock = false, confir
     const wantsMeal = journey?.menu_selectable && !journey?.menu_has_choices
     // Single highest-priority action, in the order a guest actually needs to
     // resolve them — never a queue of competing "do this" cards.
-    let nextStep = { icon: '→', label: 'Next step', text: 'Present your Festio Pass at check-in.', urgent: false }
+    let nextStep = { icon: '→', label: 'Next step', text: 'Present your Festio Pass at check-in.', urgent: false, action: null }
     if (hasRsvp && hub?.guest?.rsvp_status && hub.guest.rsvp_status !== 'confirmed') {
       nextStep = hub.guest.rsvp_status === 'pending'
         ? { icon: '⏳', label: 'Next step', text: "We'll notify you once your registration is reviewed.", urgent: false }
@@ -1710,11 +1729,23 @@ function GuestHub({ event, accessToken, designTheme, previewMock = false, confir
       nextStep = { icon: '🍽️', label: 'Next step', text: 'Choose your food order on your Festio Pass.', urgent: false }
     } else if (journey?.program?.current_segments?.[0]) {
       const live = journey.program.current_segments[0]
-      nextStep = { icon: '●', label: 'Happening now', text: `${live.title}${live.category ? ` · ${live.category}` : ''} — show your Pass at the entrance.`, urgent: false }
+      const canJoinLive = event?.engagement_enabled && hub?.guest?.qr_token
+      nextStep = {
+        icon: '●', label: 'Ongoing now',
+        text: `${live.title}${live.category ? ` · ${live.category}` : ''} · Until ${fmtTime(live.ends_at, event?.timezone)}`,
+        urgent: false,
+        action: canJoinLive ? {
+          href: `/live/guest?event=${encodeURIComponent(event.id)}&pass=${encodeURIComponent(hub.guest.qr_token)}&session=${encodeURIComponent(live.step_id)}`,
+          text: liveParticipation[live.step_id]?.participated ? 'Open Festio Live again →' : 'Join Festio Live →',
+        } : null,
+      }
+    } else if (journey?.program?.next_segments?.[0]) {
+      const upcoming = journey.program.next_segments[0]
+      nextStep = { icon: '◷', label: 'Up next', text: `${upcoming.title} · Starts ${fmtTime(upcoming.starts_at, event?.timezone)}`, urgent: false, action: null }
     } else if (passNextStep) {
-      nextStep = { icon: '🎁', label: 'Next step', text: `After entry · ${passNextStep.title}`, urgent: false }
+      nextStep = { icon: '🎁', label: 'Next step', text: `After entry · ${passNextStep.title}`, urgent: false, action: null }
     } else if (hub?.guest?.admitted) {
-      nextStep = { icon: '✓', label: "You're all set", text: 'Enjoy the event.', urgent: false }
+      nextStep = { icon: '✓', label: "You're all set", text: 'Enjoy the event.', urgent: false, action: null }
     }
 
     // Journey checklist: every self-contained step rolls up as its own line,
@@ -1742,6 +1773,11 @@ function GuestHub({ event, accessToken, designTheme, previewMock = false, confir
       journeyRows.push({ done: sDone === sessionSteps.length, label: `Attend your scheduled sessions — ${sDone}/${sessionSteps.length}` })
     }
     if (feedbackForms.length) journeyRows.push({ done: feedbackForms.every((f) => f.submitted), now: feedbackForms.some((f) => !f.submitted), label: 'Share event feedback' })
+    const liveProgramRows = Object.values(liveParticipation)
+    if (liveProgramRows.some((row) => row.activity_count > 0)) {
+      const participated = liveProgramRows.filter((row) => row.participated).length
+      journeyRows.push({ done: participated === liveProgramRows.filter((row) => row.activity_count > 0).length, label: `Join program Live moments — ${participated}/${liveProgramRows.filter((row) => row.activity_count > 0).length}` })
+    }
     let firstNow = false
     journeyRows.forEach((r) => { if (r.now) { if (firstNow) r.now = false; firstNow = true } })
     const journeyDone = journeyRows.filter((r) => r.done).length
@@ -1802,7 +1838,7 @@ function GuestHub({ event, accessToken, designTheme, previewMock = false, confir
                       </a>
                     )}
                     {hubModuleVisible('live') && event?.engagement_enabled && (
-                      <a href={`/live/guest?event=${encodeURIComponent(event.id)}&pass=${encodeURIComponent(hub.guest.qr_token)}`} className="inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-xl border-2 bg-slate-50 px-5 py-2.5 text-sm font-extrabold text-slate-800 dark:bg-slate-800 dark:text-white" style={{ borderColor: colors.accent || undefined }}>
+                      <a href={`/live/guest?event=${encodeURIComponent(event.id)}&pass=${encodeURIComponent(hub.guest.qr_token)}${journey?.program?.current_segments?.[0] ? `&session=${encodeURIComponent(journey.program.current_segments[0].step_id)}` : ''}`} className="inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-xl border-2 bg-slate-50 px-5 py-2.5 text-sm font-extrabold text-slate-800 dark:bg-slate-800 dark:text-white" style={{ borderColor: colors.accent || undefined }}>
                         Join Festio Live
                       </a>
                     )}
@@ -1825,7 +1861,11 @@ function GuestHub({ event, accessToken, designTheme, previewMock = false, confir
           {/* Next step — primary tier */}
           <div className="mt-3 flex items-start gap-3 rounded-2xl border p-4" style={{ background: nextStep.urgent ? `${tone.accent}18` : tone.panel, borderColor: nextStep.urgent ? tone.accent : tone.border }}>
             <span className="grid h-9 w-9 shrink-0 place-items-center rounded-xl text-base" style={{ background: tone.accent, color: tone.background }} aria-hidden="true">{nextStep.icon}</span>
-            <div><div className="text-[11px] font-extrabold uppercase tracking-wide" style={{ color: tone.accent }}>{nextStep.label}</div><div className="mt-0.5 font-bold">{nextStep.text}</div></div>
+            <div className="min-w-0 flex-1">
+              <div className="text-[11px] font-extrabold uppercase tracking-wide" style={{ color: tone.accent }}>{nextStep.label}</div>
+              <div className="mt-0.5 font-bold">{nextStep.text}</div>
+              {nextStep.action && <a href={nextStep.action.href} className="mt-3 inline-flex min-h-10 items-center justify-center rounded-xl px-4 py-2 text-sm font-extrabold text-slate-950" style={{ background: tone.accent }}>{nextStep.action.text}</a>}
+            </div>
           </div>
 
           {/* Your Event Journey — only when Experience is actually enabled */}
@@ -1920,18 +1960,22 @@ function GuestHub({ event, accessToken, designTheme, previewMock = false, confir
               )}
               {selectedProgramDay && (
                 <div className="mt-3 divide-y" style={{ borderColor: tone.border }}>
-                  {selectedProgramDay.segments.map((segment) => (
-                    <div key={segment.step_id} className="flex gap-3 py-2.5 first:pt-0">
-                      <div className="w-20 shrink-0 text-xs font-extrabold" style={{ color: segment.active ? tone.accent : tone.label }}>{fmtTime(segment.starts_at, event?.timezone)}</div>
-                      <div className="min-w-0">
+                  {selectedProgramDay.segments.map((segment) => {
+                    const state = programSegmentState(segment)
+                    const isNext = state === 'upcoming' && journey.program.next_segments?.[0]?.step_id === segment.step_id
+                    const label = state === 'ongoing' ? 'Ongoing' : isNext ? 'Next' : state === 'ended' ? 'Ended' : 'Upcoming'
+                    return <div key={segment.step_id} className={`flex gap-3 py-2.5 first:pt-0 ${state === 'ended' ? 'opacity-55' : ''}`}>
+                      <div className="w-20 shrink-0 text-xs font-extrabold" style={{ color: state === 'ongoing' || isNext ? tone.accent : tone.label }}>{fmtTime(segment.starts_at, event?.timezone)}</div>
+                      <div className="min-w-0 flex-1">
                         <div className="flex flex-wrap items-center gap-2 font-bold">
                           {segment.title}
-                          {segment.active && <span className="rounded-full px-2 py-0.5 text-[10px] font-extrabold uppercase" style={{ background: `${tone.accent}22`, color: tone.accent }}>Now</span>}
+                          <span className="rounded-full px-2 py-0.5 text-[10px] font-extrabold uppercase" style={{ background: state === 'ongoing' || isNext ? `${tone.accent}22` : tone.chip, color: state === 'ongoing' || isNext ? tone.accent : tone.label }}>{label}</span>
                         </div>
                         {segment.description && <div className="text-xs" style={{ color: tone.muted }}>{segment.description}</div>}
+                        {state === 'ongoing' && event?.engagement_enabled && hub?.guest?.qr_token && <a href={`/live/guest?event=${encodeURIComponent(event.id)}&pass=${encodeURIComponent(hub.guest.qr_token)}&session=${encodeURIComponent(segment.step_id)}`} className="mt-2 inline-flex min-h-9 items-center justify-center rounded-lg px-3 py-1.5 text-xs font-extrabold text-slate-950" style={{ background: tone.accent }}>{liveParticipation[segment.step_id]?.participated ? 'Open Festio Live again →' : 'Join Festio Live →'}</a>}
                       </div>
                     </div>
-                  ))}
+                  })}
                 </div>
               )}
             </div>
@@ -2202,7 +2246,7 @@ function GuestHub({ event, accessToken, designTheme, previewMock = false, confir
 
         {hubModuleVisible('live_program') && journey?.program?.enabled && tabActive('program') && <div className="mt-6 rounded-2xl border p-4" style={{ background: tone.panel, borderColor: tone.border }}>
           <div className="flex items-center justify-between gap-3"><div><h3 className="text-lg font-extrabold">Live Program</h3><p className="mt-1 text-sm" style={{ color: tone.muted }}>The program updates automatically as the event moves forward.</p></div><span className="rounded-full px-2.5 py-1 text-xs font-bold" style={{ background: `${tone.accent}22`, color: tone.text }}>LIVE</span></div>
-          {journey.program.current_segments?.length ? <div className="mt-4 space-y-2">{journey.program.current_segments.map((segment) => <div key={segment.step_id} className="rounded-xl border p-3" style={{ background: tone.chip, borderColor: tone.border }}><div className="text-xs font-extrabold uppercase tracking-[0.16em]" style={{ color: tone.label }}>Happening now{segment.category ? ` · ${segment.category}` : ''}</div><div className="mt-1 font-extrabold">{segment.title}</div>{segment.description && <p className="mt-1 text-sm" style={{ color: tone.muted }}>{segment.description}</p>}<p className="mt-2 text-xs font-semibold" style={{ color: tone.label }}>Until {fmtTime(segment.ends_at, event?.timezone)}</p></div>)}</div> : <p className="mt-4 text-sm" style={{ color: tone.muted }}>The next program item will appear here when it begins.</p>}
+          {journey.program.current_segments?.length ? <div className="mt-4 space-y-2">{journey.program.current_segments.map((segment) => <div key={segment.step_id} className="rounded-xl border p-3" style={{ background: tone.chip, borderColor: tone.border }}><div className="text-xs font-extrabold uppercase tracking-[0.16em]" style={{ color: tone.label }}>Happening now{segment.category ? ` · ${segment.category}` : ''}</div><div className="mt-1 font-extrabold">{segment.title}</div>{segment.description && <p className="mt-1 text-sm" style={{ color: tone.muted }}>{segment.description}</p>}<p className="mt-2 text-xs font-semibold" style={{ color: tone.label }}>Until {fmtTime(segment.ends_at, event?.timezone)}</p>{liveParticipation[segment.step_id]?.participated && <div className="mt-3 rounded-xl border px-4 py-2 text-center text-sm font-extrabold" style={{ borderColor: tone.accent, color: tone.accent }}>✓ Participated in Festio Live</div>}{event?.engagement_enabled && hub?.guest?.qr_token && <a href={`/live/guest?event=${encodeURIComponent(event.id)}&pass=${encodeURIComponent(hub.guest.qr_token)}&session=${encodeURIComponent(segment.step_id)}`} className="mt-3 flex min-h-11 items-center justify-center rounded-xl px-4 py-2 text-sm font-extrabold text-slate-950" style={{ background: tone.accent }}>{liveParticipation[segment.step_id]?.participated ? 'Open Festio Live again →' : 'Join Festio Live →'}</a>}</div>)}</div> : <p className="mt-4 text-sm" style={{ color: tone.muted }}>The next program item will appear here when it begins.</p>}
           {!!journey.program.next_segments?.length && <div className="mt-4 border-t pt-3" style={{ borderColor: tone.border }}><div className="text-xs font-extrabold uppercase tracking-[0.16em]" style={{ color: tone.label }}>Up next</div>{journey.program.next_segments.slice(0, 2).map((segment) => <div key={segment.step_id} className="mt-2 text-sm"><span className="font-bold">{fmtLocalDateTime(segment.starts_at, event?.timezone)}</span><span style={{ color: tone.muted }}> · {segment.title}</span></div>)}</div>}
           {tabActive('program') && !!selectedProgramDay && <div className="mt-4 border-t pt-3" style={{ borderColor: tone.border }}>
             <div className="flex flex-wrap gap-2" aria-label="Programme day">
@@ -2599,7 +2643,7 @@ function GuestHub({ event, accessToken, designTheme, previewMock = false, confir
                 )}
                 {hubModuleVisible('live') && event?.engagement_enabled && (
                   <a
-                    href={`/live/guest?event=${encodeURIComponent(event.id)}&pass=${encodeURIComponent(hub.guest.qr_token)}`}
+                    href={`/live/guest?event=${encodeURIComponent(event.id)}&pass=${encodeURIComponent(hub.guest.qr_token)}${journey?.program?.current_segments?.[0] ? `&session=${encodeURIComponent(journey.program.current_segments[0].step_id)}` : ''}`}
                     className="inline-flex min-h-12 w-full items-center justify-center gap-2 rounded-xl border-2 px-5 py-3 text-base font-extrabold transition hover:opacity-90"
                     style={{ background: tone.chip, borderColor: colors.accent || tone.text, color: tone.text }}
                   >

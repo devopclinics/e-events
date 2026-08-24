@@ -53,7 +53,7 @@ async function req(method, path, body) {
   }
   if (!res.ok) {
     const err = await res.json().catch(() => ({ detail: res.statusText }))
-    const detail = Array.isArray(err.detail) ? err.detail.map((d) => d.msg || JSON.stringify(d)).join('; ') : err.detail
+    const detail = Array.isArray(err.detail) ? err.detail.map((d) => d.msg || JSON.stringify(d)).join('; ') : (err.detail?.message || err.detail || err.message)
     const message = typeof detail === 'string' ? detail : detail?.message || detail?.error || res.statusText
     const e = new Error(message || res.statusText)
     e.status = res.status
@@ -291,6 +291,7 @@ async function liveReq(eventId, method, path, body, options = {}) {
   const opts = {
     method,
     headers: { Authorization: `Bearer ${token}`, ...(body ? { 'Content-Type': 'application/json' } : {}) },
+    signal: AbortSignal.timeout(10000),
   }
   if (body) opts.body = JSON.stringify(body)
   const res = await fetch(`${BASE}/engagement${path}`, opts)
@@ -300,6 +301,27 @@ async function liveReq(eventId, method, path, body, options = {}) {
     throw new Error((typeof detail === 'string' && detail) || res.statusText)
   }
   return res.status === 204 ? null : res.json()
+}
+
+async function downloadLiveExport(eventId, activityId, title = 'festio-live') {
+  const token = await getLiveSession(eventId)
+  const res = await fetch(`${BASE}/engagement/v1/activities/${activityId}/export.csv`, { headers: { Authorization: `Bearer ${token}` } })
+  if (!res.ok) throw new Error('Export could not be generated')
+  const url = URL.createObjectURL(await res.blob())
+  const anchor = document.createElement('a'); anchor.href = url; anchor.download = `${title.replace(/[^a-z0-9]+/gi, '-').toLowerCase()}-responses.csv`
+  document.body.appendChild(anchor); anchor.click(); anchor.remove(); URL.revokeObjectURL(url)
+}
+
+async function downloadLiveEventReport(eventId) {
+  const token = await getLiveSession(eventId)
+  const res = await fetch(`${BASE}/engagement/v1/analytics/export.csv`, {
+    headers: { Authorization: `Bearer ${token}` },
+    signal: AbortSignal.timeout(15000),
+  })
+  if (!res.ok) throw new Error('Analytics report could not be generated')
+  const url = URL.createObjectURL(await res.blob())
+  const anchor = document.createElement('a'); anchor.href = url; anchor.download = 'festio-live-event-analytics.csv'
+  document.body.appendChild(anchor); anchor.click(); anchor.remove(); URL.revokeObjectURL(url)
 }
 
 // Guest-facing: exchange the guest's own pass token (from their Guest Hub
@@ -323,12 +345,30 @@ async function liveGuestReq(guestToken, method, path, body) {
   const opts = {
     method,
     headers: { Authorization: `Bearer ${guestToken}`, ...(body ? { 'Content-Type': 'application/json' } : {}) },
+    signal: AbortSignal.timeout(10000),
   }
   if (body) opts.body = JSON.stringify(body)
-  const res = await fetch(`${BASE}/engagement${path}`, opts)
+  let res
+  try {
+    res = await fetch(`${BASE}/engagement${path}`, opts)
+  } catch (cause) {
+    const error = new Error("We're having trouble connecting to this live activity. Please try again shortly.")
+    error.code = 'FESTIO_LIVE_UNAVAILABLE'
+    error.cause = cause
+    throw error
+  }
   if (!res.ok) {
-    const err = await res.json().catch(() => ({ detail: res.statusText }))
-    throw new Error(err.detail || res.statusText)
+    if (res.status >= 500) {
+      const error = new Error("We're having trouble connecting to this live activity. Please try again shortly.")
+      error.code = 'FESTIO_LIVE_UNAVAILABLE'
+      error.status = res.status
+      throw error
+    }
+    const err = await res.json().catch(() => ({}))
+    const detail = typeof err.detail === 'string' ? err.detail : err.detail?.message
+    const error = new Error(detail || "This live activity isn't available right now.")
+    error.status = res.status
+    throw error
   }
   return res.status === 204 ? null : res.json()
 }
@@ -561,6 +601,8 @@ export const api = {
 
   // Experience workflows (admin)
   listExperienceWorkflows: (eventId) => req('GET', `/events/${eventId}/experience/workflows`),
+  getExperienceLiveSync: (eventId) => req('GET', `/events/${eventId}/experience/live-sync`),
+  queueExperienceLiveSync: (eventId) => req('POST', `/events/${eventId}/experience/live-sync`, {}),
   getExperienceDashboard: (eventId) => req('GET', `/events/${eventId}/experience/dashboard`),
   getExperienceAnalytics: (eventId) => req('GET', `/events/${eventId}/experience/analytics`),
   getFeedbackResults: (eventId, filters = {}) => {
@@ -1460,6 +1502,7 @@ export const api = {
 
   // Festio Live (standalone engagement-service) — staff/admin.
   liveActivities: (eventId) => liveReq(eventId, 'GET', '/v1/activities'),
+  liveProgramSessions: (eventId) => liveReq(eventId, 'GET', '/v1/program-sessions'),
   liveCreateActivity: (eventId, body) => liveReq(eventId, 'POST', '/v1/activities', body),
   liveGetActivity: (eventId, activityId) => liveReq(eventId, 'GET', `/v1/activities/${activityId}`),
   liveUpdateActivity: (eventId, activityId, body) => liveReq(eventId, 'PATCH', `/v1/activities/${activityId}`, body),
@@ -1469,17 +1512,39 @@ export const api = {
   liveDeleteQuestion: (eventId, questionId) => liveReq(eventId, 'DELETE', `/v1/questions/${questionId}`),
   liveQuestionBank: (eventId, category) => liveReq(eventId, 'GET', `/v1/question-bank${category ? `?category=${encodeURIComponent(category)}` : ''}`),
   liveCreateBankItem: (eventId, body) => liveReq(eventId, 'POST', '/v1/question-bank', body),
+  liveImportBankItems: (eventId, items) => liveReq(eventId, 'POST', '/v1/question-bank/import', { items }),
+  liveUpdateBankItem: (eventId, itemId, body) => liveReq(eventId, 'PATCH', `/v1/question-bank/${itemId}`, body),
+  liveDuplicateBankItem: (eventId, itemId) => liveReq(eventId, 'POST', `/v1/question-bank/${itemId}/duplicate`),
   liveDeleteBankItem: (eventId, itemId) => liveReq(eventId, 'DELETE', `/v1/question-bank/${itemId}`),
   liveImportBankItem: (eventId, activityId, itemId) => liveReq(eventId, 'POST', `/v1/activities/${activityId}/questions/import/${itemId}`),
   liveResults: (eventId, activityId) => liveReq(eventId, 'GET', `/v1/activities/${activityId}/results`),
+  liveResponseDetails: (eventId, activityId) => liveReq(eventId, 'GET', `/v1/activities/${activityId}/responses`),
   liveLeaderboard: (eventId, activityId) => liveReq(eventId, 'GET', `/v1/activities/${activityId}/leaderboard`),
   liveSetStatus: (eventId, activityId, status) => liveReq(eventId, 'POST', `/v1/activities/${activityId}/status`, { status }),
   liveAdvance: (eventId, activityId, questionId) => liveReq(eventId, 'POST', `/v1/activities/${activityId}/advance`, { question_id: questionId }),
+  liveExtendActivity: (eventId, activityId, minutes) => liveReq(eventId, 'POST', `/v1/activities/${activityId}/extend`, { minutes }),
+  liveQuestionState: (eventId, questionId, state) => liveReq(eventId, 'POST', `/v1/questions/${questionId}/live-state`, { state }),
+  liveRules: (eventId, activityId) => liveReq(eventId, 'GET', `/v1/activities/${activityId}/rules`),
+  liveCreateRule: (eventId, activityId, body) => liveReq(eventId, 'POST', `/v1/activities/${activityId}/rules`, body),
+  liveDeleteRule: (eventId, ruleId) => liveReq(eventId, 'DELETE', `/v1/rules/${ruleId}`),
+  liveDisplays: (eventId) => liveReq(eventId, 'GET', '/v1/displays'),
+  liveCreateDisplay: (eventId, body) => liveReq(eventId, 'POST', '/v1/displays', body),
+  liveUpdateDisplay: (eventId, displayId, body) => liveReq(eventId, 'PATCH', `/v1/displays/${displayId}`, body),
+  liveRotateDisplayToken: (eventId, displayId) => liveReq(eventId, 'POST', `/v1/displays/${displayId}/rotate-token`),
+  liveDeleteDisplay: (eventId, displayId) => liveReq(eventId, 'DELETE', `/v1/displays/${displayId}`),
+  liveSettings: (eventId) => liveReq(eventId, 'GET', '/v1/settings'),
+  liveUpdateSettings: (eventId, body) => liveReq(eventId, 'PUT', '/v1/settings', body),
+  liveDownloadExport: (eventId, activityId, title) => downloadLiveExport(eventId, activityId, title),
+  liveDownloadEventReport: (eventId) => downloadLiveEventReport(eventId),
   liveWordCloud: (eventId, questionId) => liveReq(eventId, 'GET', `/v1/questions/${questionId}/word-cloud`),
   liveAiAnalysis: (eventId, questionId) => liveReq(eventId, 'POST', `/v1/questions/${questionId}/ai-analysis`),
+  liveAiAnalysisStatus: (eventId, jobId) => liveReq(eventId, 'GET', `/v1/analysis/${jobId}`),
   liveQnaList: (eventId, activityId) => liveReq(eventId, 'GET', `/v1/activities/${activityId}/qna`),
   liveQnaModerate: (eventId, qnaId, status) => liveReq(eventId, 'PATCH', `/v1/qna/${qnaId}`, { status }),
+  liveModerationItems: (eventId, activityId, status) => liveReq(eventId, 'GET', `/v1/activities/${activityId}/moderation${status ? `?status=${encodeURIComponent(status)}` : ''}`),
+  liveModerationDecision: (eventId, itemId, status) => liveReq(eventId, 'PATCH', `/v1/moderation/${itemId}`, { status }),
   liveShareLink: (eventId, role, hours) => req('POST', `/events/${eventId}/live/share-link`, { role, hours }),
+  liveJoinInfo: (eventId) => req('GET', `/events/${encodeURIComponent(eventId)}/live/join-info`),
   liveRealtimeTicket: (eventId, activityId) => liveReq(eventId, 'GET', `/v1/activities/${activityId}/realtime-ticket`),
 
   // Festio Live — guest participation (no Firebase login; the guest's own
@@ -1497,7 +1562,20 @@ export const api = {
     return res.json() // { token, expires_in, anon_id }
   }),
   liveJoinQrUrl: (eventId) => `${BASE}/events/${eventId}/live/join-qr.png`,
+  livePublicJoinInfo: (eventId) => fetch(`${BASE}/events/${encodeURIComponent(eventId)}/live/public-join-info`, {
+    signal: AbortSignal.timeout(10000),
+  }).then(async (res) => {
+    if (!res.ok) throw new Error('The Festio Live join code is unavailable.')
+    return res.json()
+  }),
+  liveResolveJoinCode: (joinCode) => fetch(`${BASE}/events/live/join/${encodeURIComponent(joinCode)}`, {
+    signal: AbortSignal.timeout(10000),
+  }).then(async (res) => {
+    if (!res.ok) { const d = await res.json().catch(() => ({})); throw new Error(d.detail || 'That Festio Live code was not found.') }
+    return res.json() // { event_id }
+  }),
   liveGuestActivities: (guestToken) => liveGuestReq(guestToken, 'GET', '/v1/activities/live'),
+  liveGuestProgramParticipation: (guestToken) => liveGuestReq(guestToken, 'GET', '/v1/my-program-participation'),
   liveGuestParticipate: (guestToken, activityId) => liveGuestReq(guestToken, 'GET', `/v1/activities/${activityId}/participate`),
   liveGuestRespond: (guestToken, activityId, body) => liveGuestReq(guestToken, 'POST', `/v1/activities/${activityId}/respond`, body),
   liveGuestResults: (guestToken, activityId) => liveGuestReq(guestToken, 'GET', `/v1/activities/${activityId}/results`),
@@ -1516,7 +1594,10 @@ export const api = {
   liveControlActivity: (token, activityId) => liveGuestReq(token, 'GET', `/v1/activities/${activityId}`),
   liveControlSetStatus: (token, activityId, status) => liveGuestReq(token, 'POST', `/v1/activities/${activityId}/status`, { status }),
   liveControlAdvance: (token, activityId, questionId) => liveGuestReq(token, 'POST', `/v1/activities/${activityId}/advance`, { question_id: questionId }),
+  liveControlQuestionState: (token, questionId, state) => liveGuestReq(token, 'POST', `/v1/questions/${questionId}/live-state`, { state }),
   liveControlResults: (token, activityId) => liveGuestReq(token, 'GET', `/v1/activities/${activityId}/results`),
+  liveControlDisplays: (token) => liveGuestReq(token, 'GET', '/v1/control/displays'),
+  liveControlUpdateDisplay: (token, displayId, body) => liveGuestReq(token, 'PATCH', `/v1/control/displays/${displayId}`, body),
   liveControlQnaList: (token, activityId) => liveGuestReq(token, 'GET', `/v1/activities/${activityId}/qna`),
   liveControlQnaModerate: (token, qnaId, status) => liveGuestReq(token, 'PATCH', `/v1/qna/${qnaId}`, { status }),
 

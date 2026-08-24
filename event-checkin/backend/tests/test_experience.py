@@ -1633,6 +1633,14 @@ async def test_live_program_state_and_clock_are_gated_and_idempotent(ctx):
         state = await program_service.program_state(event, active, s, now=now)
         assert state["enabled"] is True
         assert [item["key"] for item in state["current_segments"]] == ["opening"]
+        assert state["current_segments"][0]["state"] == "ongoing"
+        before = await program_service.program_state(event, active, s, now=now - timedelta(seconds=100))
+        assert before["current_segments"] == []
+        assert before["next_segments"][0]["state"] == "upcoming"
+        after = await program_service.program_state(event, active, s, now=now + timedelta(seconds=300))
+        assert after["current_segments"] == []
+        assert after["next_segments"] == []
+        assert after["days"][0]["segments"][0]["state"] == "ended"
         first = await program_service.tick(s, now=now)
         second = await program_service.tick(s, now=now)
         assert first["segments_started"] == 1

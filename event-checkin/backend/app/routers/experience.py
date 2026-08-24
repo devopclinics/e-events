@@ -10,8 +10,9 @@ from sqlalchemy import delete, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..auth import _org_role, is_org_manager, require_dashboard_access, require_event_admin, require_event_member
+from ..config import settings
 from ..database import get_db
-from ..models import ConsentForm, ConsentSignature, Event, EventUser, ExperienceEvent, ExperienceStep, ExperienceWorkflow, FeedbackSubmission, Guest, GuestExperienceProgress, SeatingTable, TableGroup, TableGroupTable, User
+from ..models import ConsentForm, ConsentSignature, EngagementSyncOutbox, Event, EventUser, ExperienceEvent, ExperienceStep, ExperienceWorkflow, FeedbackSubmission, Guest, GuestExperienceProgress, SeatingTable, TableGroup, TableGroupTable, User
 from .seating import assign_next_seat, group_table_ids
 from ..schemas import (
     ConsentFormOut,
@@ -685,6 +686,57 @@ async def workflows(
     _: User = Depends(require_event_member),
 ):
     return await list_workflows(event_id, db)
+
+
+@router.get("/{event_id}/experience/live-sync")
+async def live_sync_status(
+    event_id: str,
+    db: AsyncSession = Depends(get_db),
+    _: User = Depends(require_event_member),
+):
+    event = await db.get(Event, event_id)
+    if not event:
+        raise HTTPException(404, "Event not found")
+    rows = (await db.execute(
+        select(EngagementSyncOutbox)
+        .where(EngagementSyncOutbox.event_id == event_id)
+        .order_by(EngagementSyncOutbox.created_at.desc())
+        .limit(500)
+    )).scalars().all()
+    latest = {}
+    for row in rows:
+        latest.setdefault(row.source_id, {
+            "source_id": row.source_id,
+            "source_version": row.source_version,
+            "status": row.status,
+            "attempts": row.attempts,
+            "last_error": row.last_error,
+            "queued_at": row.created_at,
+            "delivered_at": row.delivered_at,
+        })
+    return {
+        "event_id": event_id,
+        "configured": bool(settings.engagement_internal_token and settings.engagement_service_url),
+        "pending": sum(1 for row in latest.values() if row["status"] in ("pending", "retry")),
+        "failed": sum(1 for row in latest.values() if row["status"] == "failed"),
+        "sessions": list(latest.values()),
+    }
+
+
+@router.post("/{event_id}/experience/live-sync")
+async def queue_live_resync(
+    event_id: str,
+    db: AsyncSession = Depends(get_db),
+    _: User = Depends(require_event_admin),
+):
+    event = await db.get(Event, event_id)
+    if not event:
+        raise HTTPException(404, "Event not found")
+    _assert_experience_plan(event)
+    from ..services.engagement_sync_outbox import queue_active_program_sync
+    count = await queue_active_program_sync(db, event)
+    await db.commit()
+    return {"status": "queued", "sessions": count}
 
 
 @router.get("/{event_id}/experience/dashboard", response_model=ExperienceDashboardOut)

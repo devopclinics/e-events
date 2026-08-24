@@ -414,8 +414,12 @@ function AppRoutes() {
       <Route path="/festiome/guest" element={<FestioMePage />} />
       {/* Confirmed guests exchange their Festio pass for a scoped Festio Live session. */}
       <Route path="/live/guest" element={<LiveGuestPage />} />
+      {/* Room-wide short code entry and canonical six-character join links. */}
+      <Route path="/live/join" element={<LiveGuestPage />} />
+      <Route path="/live/join/:joinCode" element={<LiveGuestPage />} />
       {/* TV/projector display — public except by the activity's own display_token. */}
       <Route path="/live-display/:activityId" element={<LiveDisplayPage />} />
+      <Route path="/live/:displayCode" element={<LiveDisplayPage />} />
       {/* Presenter/Moderator share-link console — no Festio login, capability-scoped token. */}
       <Route path="/live-control" element={<LiveControlPage />} />
       {/* Public vendor packing list — no auth required */}

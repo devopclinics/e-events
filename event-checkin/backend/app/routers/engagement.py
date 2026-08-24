@@ -3,10 +3,13 @@
 Mints a scoped JWT the same way /auth/live-token does for staff — this file
 exists separately (not in auth.py) because it's guest-facing and rate-limited
 like festiome.py's guest-token exchange, not an authenticated-staff endpoint.
-Backend never calls engagement-service itself; this is the only place backend
-touches Festio Live at all, and it's a pure token mint, not a proxied call.
+Backend never proxies user traffic to engagement-service. This router mints
+scoped tokens and owns the stable public join-code mapping/QR; a separate
+durable outbox asynchronously replicates published Experience program metadata
+without making guest, RSVP, or organizer requests wait for Live.
 """
 import secrets
+import re
 from datetime import datetime, timedelta, timezone
 from typing import Literal
 
@@ -14,11 +17,12 @@ import jwt
 from fastapi import APIRouter, Depends, HTTPException, Response
 from pydantic import BaseModel, Field
 from sqlalchemy import or_, select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..auth import get_current_user, _org_role
 from ..database import get_db
-from ..models import Event, EventUser, Guest, User
+from ..models import Event, EventUser, ExperienceStep, ExperienceWorkflow, Guest, GuestExperienceProgress, User
 from ..ratelimit import rate_limit
 from services.qr_service import generate_qr_for_url
 
@@ -30,6 +34,60 @@ router = APIRouter(tags=["engagement"])
 # which every staff-scoped GET endpoint already allows with no extra
 # capability needed. See engagement-service/app/auth.py's require_capability.
 SHARE_LINK_CAPABILITIES = {"presenter": ["control"], "moderator": ["moderate"], "analyst": []}
+LIVE_JOIN_CODE_ALPHABET = "ABCDEFGHJKMNPQRSTUVWXYZ23456789"
+LIVE_JOIN_CODE_LENGTH = 6
+
+
+def _new_live_join_code() -> str:
+    """Six easy-to-read characters; omit ambiguous I/1 and O/0 glyphs."""
+    return "".join(secrets.choice(LIVE_JOIN_CODE_ALPHABET) for _ in range(LIVE_JOIN_CODE_LENGTH))
+
+
+def _live_join_url(code: str) -> str:
+    from ..config import settings
+    base_url = settings.public_base_url or "https://festio.events"
+    return f"{base_url.rstrip('/')}/live/join/{code}"
+
+
+async def _ensure_live_join_code(event_id: str, db: AsyncSession) -> str:
+    """Return the event's stable code, creating it safely on first use.
+
+    Locking the event row serializes simultaneous QR/info requests for the
+    same event. The unique database index handles the much rarer case where
+    two different events happen to draw the same candidate.
+    """
+    for _ in range(12):
+        event = await db.scalar(
+            select(Event).where(Event.id == event_id).with_for_update().execution_options(populate_existing=True)
+        )
+        if not event or not event.engagement_enabled:
+            raise HTTPException(404, "Festio Live is not available for this event")
+        if event.engagement_join_code:
+            return event.engagement_join_code
+
+        candidate = _new_live_join_code()
+        if await db.scalar(select(Event.id).where(Event.engagement_join_code == candidate)):
+            continue
+        event.engagement_join_code = candidate
+        try:
+            await db.commit()
+            return candidate
+        except IntegrityError:
+            # Either another request assigned this event while we waited, or
+            # a different event won the same candidate. Reload and retry.
+            await db.rollback()
+    raise HTTPException(503, "A Festio Live join code could not be created. Please retry.")
+
+
+async def _require_live_admin(event: Event, user: User, db: AsyncSession) -> None:
+    if user.is_platform_superadmin:
+        return
+    org_role = await _org_role(user, event.org_id, db)
+    if org_role in ("owner", "admin"):
+        return
+    eu = await db.scalar(select(EventUser).where(EventUser.event_id == event.id, EventUser.user_id == user.id))
+    if not eu or eu.event_role != "manager":
+        raise HTTPException(403, "You don't have access to Festio Live for this event")
 
 
 class LiveGuestPassExchange(BaseModel):
@@ -70,6 +128,21 @@ async def live_guest_token(
     if has_rsvp and guest.rsvp_status != "confirmed":
         raise HTTPException(404, "Eligible guest pass not found")
     name = f"{guest.first_name} {guest.last_name}".strip()
+    allowed_session_ids = (await db.execute(
+        select(ExperienceStep.id)
+        .join(ExperienceWorkflow, ExperienceWorkflow.id == ExperienceStep.workflow_id)
+        .outerjoin(GuestExperienceProgress, (
+            (GuestExperienceProgress.step_id == ExperienceStep.id)
+            & (GuestExperienceProgress.guest_id == guest.id)
+        ))
+        .where(
+            ExperienceWorkflow.event_id == event.id,
+            ExperienceWorkflow.status == "published",
+            ExperienceStep.enabled.is_(True),
+            or_(ExperienceStep.is_segment.is_(True), ExperienceStep.type == "session_attendance"),
+            or_(GuestExperienceProgress.id.is_(None), GuestExperienceProgress.status != "skipped"),
+        )
+    )).scalars().all()
     now = datetime.now(timezone.utc)
     token = jwt.encode({
         "sub": guest.id,
@@ -79,6 +152,8 @@ async def live_guest_token(
         "role": "guest",
         "identity_kind": "guest",
         "guest_admitted": bool(guest.admitted),
+        "allowed_session_ids": list(allowed_session_ids),
+        "session_scope_enforced": True,
         "iss": "guesthub",
         "aud": "engagement",
         "iat": now,
@@ -99,6 +174,61 @@ class LiveAnonJoinOut(BaseModel):
     token: str
     expires_in: int
     anon_id: str
+
+
+class LiveJoinInfo(BaseModel):
+    code: str
+    url: str
+
+
+class LiveJoinResolution(BaseModel):
+    event_id: str
+
+
+@router.get("/live/join/{join_code}", response_model=LiveJoinResolution)
+async def resolve_live_join_code(
+    join_code: str,
+    db: AsyncSession = Depends(get_db),
+    _: None = Depends(rate_limit(limit=600, window=60, scope="engagement_join_resolve", key="client_ip")),
+):
+    """Resolve the short public room code without exposing event metadata."""
+    code = join_code.strip().upper()
+    if not re.fullmatch(r"[A-Z0-9]{6}", code):
+        raise HTTPException(404, "Festio Live event not found")
+    event_id = await db.scalar(
+        select(Event.id).where(Event.engagement_join_code == code, Event.engagement_enabled.is_(True)).limit(1)
+    )
+    if not event_id:
+        raise HTTPException(404, "Festio Live event not found")
+    return LiveJoinResolution(event_id=event_id)
+
+
+@router.get("/{event_id}/live/join-info", response_model=LiveJoinInfo)
+async def live_join_info(
+    event_id: str,
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Return (and on first use mint) the stable short join code."""
+    event = await db.get(Event, event_id)
+    if not event:
+        raise HTTPException(404, "Event not found")
+    if not event.engagement_enabled:
+        raise HTTPException(402, "Festio Live needs the Festio Live add-on. Buy it for this event to unlock it.", headers={"X-Required-Addon": "addon_engagement"})
+    await _require_live_admin(event, user, db)
+    code = await _ensure_live_join_code(event_id, db)
+    return LiveJoinInfo(code=code, url=_live_join_url(code))
+
+
+@router.get("/{event_id}/live/public-join-info", response_model=LiveJoinInfo)
+async def public_live_join_info(
+    event_id: str,
+    db: AsyncSession = Depends(get_db),
+    _: None = Depends(rate_limit(limit=120, window=60, scope="engagement_public_join_info", key="event_id")),
+):
+    """Public display-safe join data (the same information encoded in QR)."""
+    code = await _ensure_live_join_code(event_id, db)
+    return LiveJoinInfo(code=code, url=_live_join_url(code))
 
 
 @router.post("/{event_id}/live/anon-token", response_model=LiveAnonJoinOut)
@@ -141,12 +271,11 @@ async def live_anon_token(
 async def live_join_qr(event_id: str, db: AsyncSession = Depends(get_db)):
     """Public — QR code for the broadcast join link, meant to be put on a
     screen/slide so anyone in the room can scan in without a personal Hub link."""
-    from ..config import settings
     event = await db.get(Event, event_id)
     if not event or not event.engagement_enabled:
         return Response(status_code=404)
-    base_url = settings.public_base_url or "https://festio.events"
-    join_url = f"{base_url.rstrip('/')}/live/guest?event={event_id}"
+    code = await _ensure_live_join_code(event_id, db)
+    join_url = _live_join_url(code)
     return Response(content=generate_qr_for_url(join_url), media_type="image/png")
 
 
@@ -174,15 +303,7 @@ async def live_share_link(event_id: str, body: LiveShareLinkIn, user: User = Dep
         raise HTTPException(404, "Event not found")
     if not event.engagement_enabled:
         raise HTTPException(402, "Festio Live needs the Festio Live add-on. Buy it for this event to unlock it.", headers={"X-Required-Addon": "addon_engagement"})
-    is_admin = user.is_platform_superadmin
-    if not is_admin:
-        org_role = await _org_role(user, event.org_id, db)
-        is_admin = org_role in ("owner", "admin")
-    if not is_admin:
-        eu = await db.scalar(select(EventUser).where(EventUser.event_id == event_id, EventUser.user_id == user.id))
-        is_admin = bool(eu and eu.event_role == "manager")
-    if not is_admin:
-        raise HTTPException(403, "You don't have access to Festio Live for this event")
+    await _require_live_admin(event, user, db)
     now = datetime.now(timezone.utc)
     token = jwt.encode({
         "sub": f"share:{body.role}:{secrets.token_hex(6)}",

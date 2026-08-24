@@ -446,6 +446,11 @@ async def publish_workflow(workflow: ExperienceWorkflow, event: Event, db: Async
         source="admin",
         payload={"version": workflow.version},
     ))
+    # Same transaction as the published state: Live may receive this later,
+    # but the synchronization intent can never be lost after a successful
+    # publish response.
+    from .engagement_sync_outbox import queue_workflow_sync
+    queue_workflow_sync(db, event=event, workflow=workflow, status="published")
     await db.flush()
     await initialize_progress(event.id, workflow.id, db)
     await db.commit()
@@ -463,6 +468,8 @@ async def unpublish_workflow(workflow: ExperienceWorkflow, event: Event, db: Asy
         source="admin",
         payload={"version": workflow.version},
     ))
+    from .engagement_sync_outbox import queue_workflow_sync
+    queue_workflow_sync(db, event=event, workflow=workflow, status="draft")
     await db.commit()
     loaded = await load_workflow(workflow.id, db)
     return loaded or workflow
@@ -479,6 +486,8 @@ async def archive_workflow(workflow: ExperienceWorkflow, event: Event, db: Async
         source="admin",
         payload={"version": workflow.version, "was_published": was_published},
     ))
+    from .engagement_sync_outbox import queue_workflow_sync
+    queue_workflow_sync(db, event=event, workflow=workflow, status="archived")
     await db.commit()
     loaded = await load_workflow(workflow.id, db)
     return loaded or workflow

@@ -1,6 +1,6 @@
 import uuid
 from datetime import datetime
-from sqlalchemy import String, Boolean, DateTime, ForeignKey, Integer, Float, Text, UniqueConstraint, Index, text, JSON
+from sqlalchemy import String, BigInteger, Boolean, DateTime, ForeignKey, Integer, Float, Text, UniqueConstraint, Index, text, JSON
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from .database import Base
 
@@ -431,6 +431,12 @@ class Event(Base):
     # planner-service above: off by default, no dependency the rest of the
     # platform relies on, nav link + page both hide/upsell until set.
     engagement_enabled: Mapped[bool] = mapped_column(Boolean, default=False)
+    # Stable room-wide Festio Live join code. It is minted lazily when an
+    # organizer opens Broadcast Join, then remains unchanged so printed QR
+    # codes and presentation slides keep working for the life of the event.
+    engagement_join_code: Mapped[str | None] = mapped_column(
+        String(6), unique=True, nullable=True, index=True
+    )
     # Guest Speaker Showcase add-on. Off by default; same shape as registry
     # (bool + lazily-minted unguessable public token) below.
     speaker_enabled: Mapped[bool] = mapped_column(Boolean, default=False)
@@ -809,6 +815,36 @@ class ExperienceEvent(Base):
     source: Mapped[str] = mapped_column(String(30), default="system")
     payload: Mapped[dict | None] = mapped_column(JSON, nullable=True)
     occurred_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, index=True)
+
+
+class EngagementSyncOutbox(Base):
+    """Durable Experience -> Festio Live program synchronization.
+
+    Rows are committed in the same transaction as workflow publication/state
+    changes. Delivery happens later over the engagement service's internal
+    HTTP contract, so an unavailable Live service can never fail Experience.
+    """
+    __tablename__ = "engagement_sync_outbox"
+    __table_args__ = (
+        UniqueConstraint("idempotency_key", name="uq_engagement_sync_outbox_idempotency"),
+        Index("ix_engagement_sync_outbox_due", "status", "next_attempt_at"),
+        Index("ix_engagement_sync_outbox_event_source", "event_id", "source_id"),
+    )
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+    org_id: Mapped[str] = mapped_column(String(36), ForeignKey("organizations.id"), index=True)
+    event_id: Mapped[str] = mapped_column(String(36), ForeignKey("events.id"), index=True)
+    source_id: Mapped[str] = mapped_column(String(36), index=True)
+    source_version: Mapped[int] = mapped_column(BigInteger)
+    command: Mapped[str] = mapped_column(String(60), index=True)
+    idempotency_key: Mapped[str] = mapped_column(String(255))
+    payload: Mapped[dict] = mapped_column(JSON, default=dict)
+    status: Mapped[str] = mapped_column(String(20), default="pending", index=True)
+    attempts: Mapped[int] = mapped_column(Integer, default=0)
+    next_attempt_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    last_error: Mapped[str | None] = mapped_column(Text, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    delivered_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
 
 
 class FeedbackSubmission(Base):

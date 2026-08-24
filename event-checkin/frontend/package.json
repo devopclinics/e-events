@@ -9,6 +9,9 @@
     "test:e2e": "playwright test",
     "test:e2e:staging": "E2E_BASE_URL=https://staging.festio.events playwright test",
     "test:e2e:staging:isolated": "./e2e/run-staging.sh",
+    "test:e2e:experience-live": "node e2e/experience-live-integration.mjs",
+    "test:e2e:mbf-copy": "node e2e/mbf-production-copy.mjs",
+    "test:e2e:live-guest-regressions": "node e2e/festio-live-guest-regressions.mjs",
     "generate:api-types": "node scripts/generate-api-types.mjs",
     "check:api-contract": "./scripts/check-api-contract-drift.sh"
   },

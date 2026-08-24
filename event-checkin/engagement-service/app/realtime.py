@@ -15,8 +15,15 @@ import jwt
 from redis.asyncio import Redis
 
 from .config import settings
+from .metrics import REALTIME_PUBLISH_FAILURES
 
-redis = Redis.from_url(settings.redis_url, decode_responses=True)
+redis = Redis.from_url(
+    settings.redis_url,
+    decode_responses=True,
+    socket_connect_timeout=0.5,
+    socket_timeout=1.0,
+    health_check_interval=15,
+)
 
 
 def _channel(activity_id: str) -> str:
@@ -30,7 +37,18 @@ async def publish(activity_id: str, event: str, data: dict) -> None:
         # Redis is a nice-to-have for this feature (live counters); losing a
         # push means a client's next poll/reconnect just catches up instead
         # of the request that triggered it failing outright.
-        pass
+        REALTIME_PUBLISH_FAILURES.inc()
+
+
+async def publish_display(display_id: str, event: str, data: dict) -> None:
+    """Push display-only changes without coupling them to an activity."""
+    try:
+        await redis.publish(
+            f"engagement:display:{display_id}",
+            json.dumps({"event": event, "data": data}, default=str),
+        )
+    except Exception:
+        REALTIME_PUBLISH_FAILURES.inc()
 
 
 def mint_realtime_ticket(activity_id: str, subject: str, minutes: int = 180) -> str:

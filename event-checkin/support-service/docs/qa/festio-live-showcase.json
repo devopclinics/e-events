@@ -1,0 +1,222 @@
+{
+  "generated_at": "2026-08-24T11:58:27Z",
+  "base_url": "http://host.docker.internal:4000",
+  "event_id": "f80846d3-8d38-4bc2-a234-d487e7dbcb84",
+  "persistent": true,
+  "settings": {
+    "guest_hub_participation": true,
+    "broadcast_join_enabled": true,
+    "allow_answer_changes": false,
+    "moderation_enabled": true,
+    "profanity_filtering": true,
+    "leaderboard_name_style": "first_last_initial",
+    "response_retention_months": 12,
+    "updated_at": "2026-08-24T04:52:05.034767Z"
+  },
+  "guests": [
+    {
+      "name": "Amina Yusuf",
+      "anon_id": "festio-showcase-guest-01"
+    },
+    {
+      "name": "Daniel Brooks",
+      "anon_id": "festio-showcase-guest-02"
+    },
+    {
+      "name": "Sofia Martinez",
+      "anon_id": "festio-showcase-guest-03"
+    },
+    {
+      "name": "Noah Williams",
+      "anon_id": "festio-showcase-guest-04"
+    },
+    {
+      "name": "Maya Patel",
+      "anon_id": "festio-showcase-guest-05"
+    },
+    {
+      "name": "Ethan Johnson",
+      "anon_id": "festio-showcase-guest-06"
+    },
+    {
+      "name": "Zara Okafor",
+      "anon_id": "festio-showcase-guest-07"
+    },
+    {
+      "name": "Leo Chen",
+      "anon_id": "festio-showcase-guest-08"
+    },
+    {
+      "name": "Grace Kim",
+      "anon_id": "festio-showcase-guest-09"
+    },
+    {
+      "name": "Omar Hassan",
+      "anon_id": "festio-showcase-guest-10"
+    }
+  ],
+  "question_bank_items": 7,
+  "activities": [
+    {
+      "id": "a08c5af0-c738-4224-a842-5b247add6344",
+      "type": "voting",
+      "title": "E2E \u00b7 Audience Awards",
+      "status": "completed",
+      "created_at": "2026-08-24T11:54:54.591707Z",
+      "response_count": 30,
+      "participant_count": 10
+    },
+    {
+      "id": "6bcefac9-c80b-496e-8ba0-359ac930e519",
+      "type": "feedback",
+      "title": "E2E \u00b7 Closing Feedback",
+      "status": "completed",
+      "created_at": "2026-08-24T04:49:41.051142Z",
+      "response_count": 30,
+      "participant_count": 10
+    },
+    {
+      "id": "794f62d6-4a7d-4799-93e4-54f80072d52a",
+      "type": "survey",
+      "title": "E2E \u00b7 Audience Choice Survey",
+      "status": "completed",
+      "created_at": "2026-08-24T04:49:40.312682Z",
+      "response_count": 30,
+      "participant_count": 10
+    },
+    {
+      "id": "d640dd53-8e11-495d-9139-abb9678b6642",
+      "type": "q_and_a",
+      "title": "E2E \u00b7 Ask the Stage",
+      "status": "live",
+      "created_at": "2026-08-24T04:49:40.017061Z",
+      "response_count": 0,
+      "participant_count": 10
+    },
+    {
+      "id": "3ace8ed6-a79a-4f26-a406-9fc2a2363d90",
+      "type": "word_cloud",
+      "title": "E2E \u00b7 Living Word Cloud",
+      "status": "live",
+      "created_at": "2026-08-24T04:49:39.561470Z",
+      "response_count": 10,
+      "participant_count": 10
+    },
+    {
+      "id": "a2748757-e8d4-4a40-9129-b00cbbad8df1",
+      "type": "rating",
+      "title": "E2E \u00b7 Experience Rating",
+      "status": "completed",
+      "created_at": "2026-08-24T04:49:38.817250Z",
+      "response_count": 30,
+      "participant_count": 10
+    },
+    {
+      "id": "5d18c79c-0baa-4f9e-894a-244d8413549f",
+      "type": "quiz",
+      "title": "E2E \u00b7 Future of Events Quiz",
+      "status": "completed",
+      "created_at": "2026-08-24T04:49:38.098579Z",
+      "response_count": 30,
+      "participant_count": 10
+    },
+    {
+      "id": "5b804cb6-bdf8-4b62-8ee2-a8bc3a778276",
+      "type": "poll",
+      "title": "E2E \u00b7 Opening Pulse",
+      "status": "live",
+      "created_at": "2026-08-24T04:49:37.346622Z",
+      "response_count": 20,
+      "participant_count": 10
+    }
+  ],
+  "displays": [
+    {
+      "id": "0a668a2a-a715-4d71-ab71-43a72f80d696",
+      "name": "E2E \u00b7 Main Stage",
+      "scene": "results"
+    },
+    {
+      "id": "89092537-bc50-4fff-8119-f464b56a4351",
+      "name": "E2E \u00b7 Lobby Welcome",
+      "scene": "join"
+    },
+    {
+      "id": "68a9f79f-aafa-4a51-a5f6-d062aafc1d53",
+      "name": "E2E \u00b7 Q&A Spotlight",
+      "scene": "q_and_a"
+    },
+    {
+      "id": "777d7e22-eebd-4b15-9aed-b985a4cc6d7e",
+      "name": "E2E \u00b7 Insight Wall",
+      "scene": "ai_insight"
+    },
+    {
+      "id": "19b62adb-6885-42bc-a9eb-f6c473968a8e",
+      "name": "E2E \u00b7 Word Cloud Wall",
+      "scene": "word_cloud"
+    }
+  ],
+  "qna": [
+    {
+      "text": "How can we keep the audience involved after the event ends?",
+      "status": "featured",
+      "upvotes": 10
+    },
+    {
+      "text": "Can speakers see audience sentiment while they are presenting?",
+      "status": "featured",
+      "upvotes": 10
+    },
+    {
+      "text": "How does Festio protect anonymous participant privacy?",
+      "status": "featured",
+      "upvotes": 10
+    },
+    {
+      "text": "Can multiple breakout rooms run different activities at once?",
+      "status": "answered",
+      "upvotes": 10
+    },
+    {
+      "text": "Will the presentation scenes work on LED walls and projectors?",
+      "status": "answered",
+      "upvotes": 10
+    },
+    {
+      "text": "Can we export responses for a post-event report?",
+      "status": "answered",
+      "upvotes": 10
+    },
+    {
+      "text": "How do team battles and leaderboards calculate points?",
+      "status": "pending",
+      "upvotes": 0
+    },
+    {
+      "text": "Can a moderator feature a question without organizer access?",
+      "status": "pending",
+      "upvotes": 0
+    },
+    {
+      "text": "What happens when venue Wi-Fi briefly disconnects?",
+      "status": "pending",
+      "upvotes": 0
+    },
+    {
+      "text": "Can we reuse these questions at the next event?",
+      "status": "pending",
+      "upvotes": 0
+    }
+  ],
+  "moderation": {
+    "approved_in_this_run": 0,
+    "public_text_policy": "approved_only"
+  },
+  "totals": {
+    "activities": 8,
+    "participants": 80,
+    "responses": 180,
+    "displays": 5
+  }
+}

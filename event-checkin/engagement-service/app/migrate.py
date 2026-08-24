@@ -12,6 +12,7 @@ async def migrate() -> None:
     dsn = settings.database_url.replace("postgresql+asyncpg://", "postgresql://", 1)
     connection = await asyncpg.connect(dsn)
     try:
+        await connection.execute("SELECT pg_advisory_lock(hashtext('engagement_service_migrations'))")
         await connection.execute("CREATE TABLE IF NOT EXISTS schema_migrations (version varchar(255) PRIMARY KEY, applied_at timestamptz NOT NULL DEFAULT now())")
         applied = {row["version"] for row in await connection.fetch("SELECT version FROM schema_migrations")}
         migration_dir = Path(__file__).resolve().parents[1] / "migrations"
@@ -23,6 +24,10 @@ async def migrate() -> None:
                 await connection.execute("INSERT INTO schema_migrations(version) VALUES($1)", path.name)
             print(f"Applied engagement-service migration {path.name}", flush=True)
     finally:
+        try:
+            await connection.execute("SELECT pg_advisory_unlock(hashtext('engagement_service_migrations'))")
+        except Exception:
+            pass
         await connection.close()
 
 

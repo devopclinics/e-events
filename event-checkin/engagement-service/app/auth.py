@@ -27,6 +27,8 @@ class Identity:
     # backend's POST /api/events/{id}/live/anon-token. Such participants are
     # tracked by ActivityParticipant.anon_id instead of .guest_id.
     is_anonymous: bool = False
+    allowed_session_ids: tuple[str, ...] = ()
+    session_scope_enforced: bool = False
 
 
 async def current_identity(authorization: str | None = Header(default=None)) -> Identity:
@@ -57,7 +59,20 @@ async def current_identity(authorization: str | None = Header(default=None)) -> 
         email=(decoded.get("email") or "").lower(),
         guest_admitted=bool(decoded.get("guest_admitted")),
         is_anonymous=bool(decoded.get("anon")),
+        allowed_session_ids=tuple(decoded.get("allowed_session_ids") or ()),
+        session_scope_enforced=bool(decoded.get("session_scope_enforced")),
     )
+
+
+def require_activity_session(identity: Identity, session_id: str | None, config: dict | None = None) -> None:
+    """Enforce guest session and attendance scope without a core callback."""
+    if identity.identity_kind != "guest" or identity.is_anonymous:
+        return
+    config = config or {}
+    if config.get("eligibility") == "checked_in" and not identity.guest_admitted:
+        raise HTTPException(403, "Check in before joining this activity")
+    if session_id and identity.session_scope_enforced and session_id not in identity.allowed_session_ids:
+        raise HTTPException(403, "This activity is not part of your program")
 
 
 def require_staff(identity: Identity) -> Identity:

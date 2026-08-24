@@ -51,6 +51,7 @@ def _segment_out(event: Event, step: ExperienceStep, *, now: datetime, active: b
         "ends_at": end,
         "category": program.get("category"),
         "active": active,
+        "state": "ongoing" if active else "ended" if end <= now else "upcoming",
     }
 
 

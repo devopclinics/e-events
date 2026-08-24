@@ -367,7 +367,7 @@ if $DO_DEPLOY; then
 
   # ── Phase 4a — Pull new images ──────────────────────────────────────────────
   step "4/6  Pulling images from Docker Hub"
-  APP_VERSION="$VERSION" docker compose -f "$PROD_COMPOSE" pull backend frontend messaging-service design-service festiome-service planner-service engagement-service ticketing-service support-service setup-service dashboard-service marketing-service chatwoot chatwoot-sidekiq
+  APP_VERSION="$VERSION" docker compose -f "$PROD_COMPOSE" pull backend frontend messaging-service design-service festiome-service planner-service engagement-service engagement-worker ticketing-service support-service setup-service dashboard-service marketing-service chatwoot chatwoot-sidekiq
   ok "Images pulled"
 
   # ── Phase 4b — Run DB migration in a one-off container ──────────────────────

@@ -7,4 +7,4 @@ COPY app/ app/
 COPY migrations/ migrations/
 
 EXPOSE 8060
-CMD ["sh", "-c", "python -m app.migrate && exec uvicorn app.main:app --host 0.0.0.0 --port 8060"]
+CMD ["sh", "-c", "python -m app.migrate && exec uvicorn app.main:app --host 0.0.0.0 --port 8060 --no-access-log"]

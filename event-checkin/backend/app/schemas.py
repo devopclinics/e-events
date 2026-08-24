@@ -909,6 +909,7 @@ class GuestProgramSegmentOut(BaseModel):
     ends_at: datetime
     category: Optional[str] = None
     active: bool = False
+    state: Literal["ended", "ongoing", "upcoming"] = "upcoming"
 
 
 class GuestProgramDayOut(BaseModel):

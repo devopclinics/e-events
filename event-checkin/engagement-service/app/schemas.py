@@ -5,6 +5,7 @@ from pydantic import BaseModel, ConfigDict, Field
 
 ActivityType = Literal["quiz", "poll", "survey", "feedback", "rating", "q_and_a", "word_cloud", "voting"]
 ActivityStatus = Literal["draft", "scheduled", "live", "paused", "closed", "completed", "archived"]
+QuestionStatus = Literal["active", "archived"]
 QuestionType = Literal[
     "single_choice", "multiple_choice", "true_false", "yes_no", "short_text",
     "long_text", "rating_5", "rating_10", "nps", "number", "word_cloud", "ranking",
@@ -27,11 +28,11 @@ class OptionOut(BaseModel):
 
 class QuestionCreate(BaseModel):
     question_type: QuestionType
-    prompt: str
+    prompt: str = Field(min_length=1, max_length=5000)
     description: str | None = None
     sequence: int = 0
     required: bool = True
-    time_limit_seconds: int | None = None
+    time_limit_seconds: int | None = Field(default=None, ge=1, le=86_400)
     config: dict[str, Any] = Field(default_factory=dict)
     options: list[OptionIn] = Field(default_factory=list)
 
@@ -41,9 +42,9 @@ class QuestionUpdate(BaseModel):
     description: str | None = None
     sequence: int | None = None
     required: bool | None = None
-    time_limit_seconds: int | None = None
+    time_limit_seconds: int | None = Field(default=None, ge=1, le=86_400)
     config: dict[str, Any] | None = None
-    status: str | None = None
+    status: QuestionStatus | None = None
     options: list[OptionIn] | None = None
 
 
@@ -59,12 +60,13 @@ class QuestionOut(BaseModel):
     time_limit_seconds: int | None = None
     config: dict[str, Any] = Field(default_factory=dict)
     status: str
+    live_state: str = "pending"
     options: list[OptionOut] = Field(default_factory=list)
 
 
 class ActivityCreate(BaseModel):
     type: ActivityType
-    title: str = Field(max_length=255)
+    title: str = Field(min_length=1, max_length=255)
     description: str | None = None
     session_id: str | None = None
     config: dict[str, Any] = Field(default_factory=dict)
@@ -75,6 +77,7 @@ class ActivityUpdate(BaseModel):
     description: str | None = None
     status: ActivityStatus | None = None
     config: dict[str, Any] | None = None
+    session_id: str | None = None
 
 
 class ActivityStatusIn(BaseModel):
@@ -83,6 +86,10 @@ class ActivityStatusIn(BaseModel):
 
 class ActivityAdvanceIn(BaseModel):
     question_id: str | None = None
+
+
+class ActivityExtendIn(BaseModel):
+    minutes: int = Field(default=30, ge=5, le=240)
 
 
 class ActivityOut(BaseModel):
@@ -107,14 +114,55 @@ class ActivitySummary(BaseModel):
     type: str
     title: str
     status: str
+    session_id: str | None = None
+    session_title: str | None = None
     created_at: datetime
     response_count: int = 0
     participant_count: int = 0
 
 
+class ProgramSessionOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+    id: str
+    org_id: str
+    event_id: str
+    source_workflow_id: str
+    source_step_id: str
+    source_key: str
+    source_version: int
+    title: str
+    description: str | None = None
+    starts_at: datetime | None = None
+    ends_at: datetime | None = None
+    timezone: str
+    room: str | None = None
+    speaker: str | None = None
+    speaker_id: str | None = None
+    capacity: int | None = None
+    category: str | None = None
+    sort_order: int
+    status: str
+    event_name: str | None = None
+    synced_at: datetime
+    activity_count: int = 0
+    live_activity_count: int = 0
+    response_count: int = 0
+
+
+class ProgramEventIn(BaseModel):
+    delivery_id: str = Field(min_length=1, max_length=64)
+    event_type: Literal["experience.program_session.upsert"]
+    occurred_at: datetime
+    org_id: str = Field(min_length=1, max_length=64)
+    event_id: str = Field(min_length=1, max_length=64)
+    source_id: str = Field(min_length=1, max_length=64)
+    source_version: int = Field(ge=1)
+    data: dict[str, Any]
+
+
 class BankItemCreate(BaseModel):
     question_type: QuestionType
-    prompt: str
+    prompt: str = Field(min_length=1, max_length=5000)
     description: str | None = None
     config: dict[str, Any] = Field(default_factory=dict)
     options: list[OptionIn] = Field(default_factory=list)
@@ -133,6 +181,21 @@ class BankItemOut(BaseModel):
     category: str | None = None
     tags: list[str] = Field(default_factory=list)
     usage_count: int
+    archived: bool = False
+
+
+class BankItemUpdate(BaseModel):
+    prompt: str | None = None
+    description: str | None = None
+    config: dict[str, Any] | None = None
+    options: list[OptionIn] | None = None
+    category: str | None = None
+    tags: list[str] | None = None
+    archived: bool | None = None
+
+
+class BankImportIn(BaseModel):
+    items: list[BankItemCreate] = Field(min_length=1, max_length=200)
 
 
 class ParticipateStateOut(BaseModel):
@@ -146,7 +209,11 @@ class RespondIn(BaseModel):
     idempotency_key: str = Field(max_length=80)
     selected_option_ids: list[str] = Field(default_factory=list)
     answer_value: Any = None
-    response_time_ms: int | None = None
+    response_time_ms: int | None = Field(default=None, ge=0, le=86_400_000)
+
+
+class QuestionLiveStateIn(BaseModel):
+    state: Literal["pending", "open", "closed", "results_visible", "answer_revealed"]
 
 
 class RespondOut(BaseModel):
@@ -163,6 +230,7 @@ class QuestionResultOut(BaseModel):
     option_counts: dict[str, int] = Field(default_factory=dict)  # option_id -> count
     average_rating: float | None = None
     text_samples: list[str] = Field(default_factory=list)
+    ranking_scores: dict[str, int] = Field(default_factory=dict)
 
 
 class ActivityResultsOut(BaseModel):
@@ -172,8 +240,21 @@ class ActivityResultsOut(BaseModel):
     questions: list[QuestionResultOut]
 
 
+class ResponseDetailOut(BaseModel):
+    id: str
+    question_id: str
+    question_prompt: str
+    participant: str
+    anonymous: bool = False
+    answer_value: Any = None
+    selected_options: list[str] = Field(default_factory=list)
+    score: int | None = None
+    response_time_ms: int | None = None
+    submitted_at: datetime
+
+
 class QnaSubmitIn(BaseModel):
-    text: str = Field(max_length=2000)
+    text: str = Field(min_length=1, max_length=2000)
 
 
 class QnaModerateIn(BaseModel):
@@ -189,6 +270,27 @@ class QnaQuestionOut(BaseModel):
     upvote_count: int
     created_at: datetime
     upvoted_by_me: bool = False
+    is_mine: bool = False
+
+
+class ModerationDecisionIn(BaseModel):
+    status: Literal["approved", "rejected"]
+
+
+class ModerationItemOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+    id: str
+    activity_id: str
+    question_id: str
+    response_id: str
+    content_type: str
+    content: str
+    status: str
+    flagged: bool
+    flag_reason: str | None = None
+    reviewed_by: str | None = None
+    created_at: datetime
+    updated_at: datetime
 
 
 class WordCloudEntry(BaseModel):
@@ -202,3 +304,145 @@ class AiAnalysisOut(BaseModel):
     summary: str
     themes: list[str] = Field(default_factory=list)
     sentiment: str | None = None
+
+
+class AnalysisJobOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+    id: str
+    question_id: str
+    status: str
+    response_count: int
+    result: dict[str, Any] = Field(default_factory=dict)
+    error: str | None = None
+    created_at: datetime
+    completed_at: datetime | None = None
+
+
+DisplayScene = Literal[
+    "welcome", "join", "agenda", "question", "responding", "results",
+    "correct_answer", "leaderboard", "team_battle", "rating", "feedback",
+    "word_cloud", "q_and_a", "room_pulse", "ai_insight", "idea_galaxy",
+    "announcement", "break", "countdown", "celebration", "custom_message",
+]
+DisplayTheme = Literal["aurora", "citrus", "ocean", "festio", "mono"]
+
+
+class EventSettings(BaseModel):
+    guest_hub_participation: bool = True
+    broadcast_join_enabled: bool = True
+    allow_answer_changes: bool = False
+    moderation_enabled: bool = False
+    profanity_filtering: bool = True
+    leaderboard_name_style: Literal["first_last_initial", "first_name", "anonymous_alias"] = "first_last_initial"
+    response_retention_months: int = Field(default=12, ge=1, le=84)
+
+
+class EventSettingsOut(EventSettings):
+    updated_at: datetime | None = None
+
+
+class DisplaySettings(BaseModel):
+    """Brand and playback settings owned by engagement-service.
+
+    Extra keys are retained so a display can carry event-specific content
+    (agenda rows, sponsor names, team labels) without a schema migration.
+    """
+    model_config = ConfigDict(extra="allow")
+
+    theme: DisplayTheme = "aurora"
+    motion: bool = True
+    safe_area: bool = False
+    follow_activity: bool = False
+    show_reactions: bool = True
+    title: str | None = Field(default=None, max_length=240)
+    subtitle: str | None = Field(default=None, max_length=500)
+    kicker: str | None = Field(default=None, max_length=120)
+    message: str | None = Field(default=None, max_length=1000)
+    event_name: str | None = Field(default=None, max_length=240)
+    venue: str | None = Field(default=None, max_length=240)
+    date_label: str | None = Field(default=None, max_length=120)
+    status_label: str | None = Field(default=None, max_length=120)
+    join_code: str | None = Field(default=None, max_length=40)
+    countdown_seconds: int | None = Field(default=None, ge=0, le=604800)
+    agenda: list[dict[str, Any]] = Field(default_factory=list, max_length=12)
+    sponsors: list[str] = Field(default_factory=list, max_length=8)
+    team_names: list[str] = Field(default_factory=list, max_length=4)
+
+
+class DisplaySettingsUpdate(BaseModel):
+    model_config = ConfigDict(extra="allow")
+
+    theme: DisplayTheme | None = None
+    motion: bool | None = None
+    safe_area: bool | None = None
+    follow_activity: bool | None = None
+    show_reactions: bool | None = None
+    title: str | None = Field(default=None, max_length=240)
+    subtitle: str | None = Field(default=None, max_length=500)
+    kicker: str | None = Field(default=None, max_length=120)
+    message: str | None = Field(default=None, max_length=1000)
+    event_name: str | None = Field(default=None, max_length=240)
+    venue: str | None = Field(default=None, max_length=240)
+    date_label: str | None = Field(default=None, max_length=120)
+    status_label: str | None = Field(default=None, max_length=120)
+    join_code: str | None = Field(default=None, max_length=40)
+    countdown_seconds: int | None = Field(default=None, ge=0, le=604800)
+    agenda: list[dict[str, Any]] | None = Field(default=None, max_length=12)
+    sponsors: list[str] | None = Field(default=None, max_length=8)
+    team_names: list[str] | None = Field(default=None, max_length=4)
+
+
+class DisplayCreate(BaseModel):
+    name: str = Field(min_length=1, max_length=120)
+    assigned_session_id: str | None = None
+    assigned_activity_id: str | None = None
+    scene: DisplayScene = "welcome"
+    settings: DisplaySettings = Field(default_factory=DisplaySettings)
+
+
+class DisplayUpdate(BaseModel):
+    name: str | None = Field(default=None, min_length=1, max_length=120)
+    assigned_session_id: str | None = None
+    assigned_activity_id: str | None = None
+    scene: DisplayScene | None = None
+    status: Literal["active", "disabled"] | None = None
+    settings: DisplaySettingsUpdate | None = None
+
+
+class DisplayControlUpdate(BaseModel):
+    """Fields a capability-scoped presenter may change during a show."""
+    assigned_activity_id: str | None = None
+    scene: DisplayScene | None = None
+    settings: DisplaySettingsUpdate | None = None
+
+
+class DisplayOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+    id: str
+    name: str
+    display_code: str
+    access_token: str
+    assigned_session_id: str | None = None
+    assigned_activity_id: str | None = None
+    scene: str
+    status: str
+    settings: dict[str, Any] = Field(default_factory=dict)
+
+
+class RuleCreate(BaseModel):
+    source_question_id: str
+    operator: Literal["equals", "not_equals", "greater_than", "less_than", "contains", "answered", "not_answered"]
+    comparison_value: Any = None
+    target_question_id: str
+    action: Literal["show", "hide"] = "show"
+
+
+class RuleOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+    id: str
+    activity_id: str
+    source_question_id: str
+    operator: str
+    comparison_value: Any = None
+    target_question_id: str
+    action: str

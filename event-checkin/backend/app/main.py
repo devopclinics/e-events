@@ -30,7 +30,7 @@ from .routers import ticketing_internal as ticketing_internal_router
 from .routers import redesign_telemetry as redesign_telemetry_router
 from .routers import training as training_router
 from . import sync_poller, db_migrate, entitlements
-from .services import festiome_outbox, webhook_outbox, reminder_outbox
+from .services import engagement_sync_outbox, festiome_outbox, webhook_outbox, reminder_outbox
 from . import routers
 from . import storage
 from .database import AsyncSessionLocal
@@ -71,6 +71,11 @@ async def lifespan(app: FastAPI):
     # stop when the single source-list poller is moved to a dedicated process.
     run_festiome_outbox = os.environ.get("RUN_IN_APP_FESTIOME_OUTBOX", "true").lower() not in ("false", "0", "no")
     festiome_task = asyncio.create_task(festiome_outbox.run()) if run_festiome_outbox else None
+    # Experience -> Festio Live synchronization is also a durable SKIP
+    # LOCKED outbox. It has an independent switch so Live outages never affect
+    # core startup or the other delivery workers.
+    run_engagement_sync = os.environ.get("RUN_IN_APP_ENGAGEMENT_SYNC", "true").lower() not in ("false", "0", "no")
+    engagement_sync_task = asyncio.create_task(engagement_sync_outbox.run()) if run_engagement_sync else None
     # Same SKIP LOCKED-safe multi-replica pattern as the FestioMe outbox, own switch.
     run_webhook_outbox = os.environ.get("RUN_IN_APP_WEBHOOK_OUTBOX", "true").lower() not in ("false", "0", "no")
     webhook_task = asyncio.create_task(webhook_outbox.run()) if run_webhook_outbox else None
@@ -101,6 +106,12 @@ async def lifespan(app: FastAPI):
             festiome_task.cancel()
             try:
                 await festiome_task
+            except asyncio.CancelledError:
+                pass
+        if engagement_sync_task is not None:
+            engagement_sync_task.cancel()
+            try:
+                await engagement_sync_task
             except asyncio.CancelledError:
                 pass
         if webhook_task is not None:

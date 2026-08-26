@@ -25,6 +25,32 @@ def test_missing_required_detects_dropped_placeholder():
     assert tpl.missing_required("sms_invitation", "go {{ticket_link}}", channel="sms") == []
 
 
+def test_missing_required_equivalence_group_satisfied_by_either_member():
+    # experience_invitation requires ("ticket_link", "qr_code") as a group —
+    # they render to the same URL on sms/whatsapp/mms, so either one satisfies it.
+    assert tpl.missing_required("experience_invitation", "link: {{ticket_link}}", channel="sms") == []
+    assert tpl.missing_required("experience_invitation", "link: {{qr_code}}", channel="sms") == []
+    assert tpl.missing_required("experience_invitation", "no link here", channel="sms") == ["ticket_link"]
+
+
+def test_every_shipped_default_body_satisfies_its_own_required_placeholders():
+    """Regression guard: a template's own factory-default text for a channel
+    must not trip its own `required` validation, or saving it unchanged (as
+    the Communications UI does) fails with a 400 the organizer can't fix by
+    editing anything — this happened for real on experience_invitation's
+    sms/whatsapp/mms bodies and 3 other templates before this was caught."""
+    for key, spec in tpl.TEMPLATE_DEFS.items():
+        if not spec.get("required"):
+            continue
+        for channel, field in [("email", "email_body"), ("sms", "sms_body"),
+                                ("whatsapp", "whatsapp_body"), ("mms", "mms_body")]:
+            body = spec.get(field)
+            if not body:
+                continue
+            missing = tpl.missing_required(key, body, channel=channel)
+            assert not missing, f"{key} [{channel}] default body is missing {missing}"
+
+
 def test_sanitize_strips_script_and_handlers():
     dirty = '<p onclick="evil()">hi</p><script>x()</script><a href="javascript:1">l</a>'
     clean = tpl.sanitize_html(dirty)

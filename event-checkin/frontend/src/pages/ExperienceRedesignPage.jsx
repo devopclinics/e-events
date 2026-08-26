@@ -5,6 +5,7 @@ import { useCurrentEvent } from '../hooks/useCurrentEvent'
 import { useEventDetails } from '../hooks/useEventDetails'
 import { useGuests } from '../hooks/useGuests'
 import { api } from '../api'
+import { parseUtc, utcToZonedInput, zonedWallTimeToUtcISOString } from '../timeutil'
 import './ExperienceRedesignPage.css'
 
 const FAILED = Symbol('experience-action-failed')
@@ -87,6 +88,46 @@ function parseJsonMaybe(raw, label) {
   if (!text) return null
   try { return JSON.parse(text) } catch { throw new Error(`${label} must be valid JSON`) }
 }
+
+// Live Program timing stores `starts_offset_seconds`/`duration_seconds` as raw
+// seconds after the event's own start instant (event.event_date) — the same
+// representation the backend uses to place a segment on the projector/Festio
+// Live timeline (see services/program.py::segment_window), which can span
+// multiple calendar days for a multi-day event. These convert that to/from a
+// real date+time the organizer can pick, in the event's own timezone, instead
+// of asking them to do the day/hour/minute arithmetic themselves.
+function offsetSecondsToLocalInput(eventDateIso, timeZone, offsetSeconds) {
+  const base = parseUtc(eventDateIso)
+  if (!base || offsetSeconds === '' || offsetSeconds === null || offsetSeconds === undefined) return ''
+  const n = Number(offsetSeconds)
+  if (!Number.isFinite(n)) return ''
+  return utcToZonedInput(new Date(base.getTime() + n * 1000).toISOString(), timeZone)
+}
+function localInputToOffsetSeconds(eventDateIso, timeZone, localDateTimeStr) {
+  const base = parseUtc(eventDateIso)
+  if (!base || !localDateTimeStr) return ''
+  const at = parseUtc(zonedWallTimeToUtcISOString(localDateTimeStr, timeZone))
+  if (!at) return ''
+  return Math.round((at.getTime() - base.getTime()) / 1000)
+}
+function formatEventInstant(eventDateIso, timeZone, offsetSeconds) {
+  const base = parseUtc(eventDateIso)
+  if (!base || offsetSeconds === '' || offsetSeconds === null || offsetSeconds === undefined) return ''
+  const n = Number(offsetSeconds)
+  if (!Number.isFinite(n)) return ''
+  const at = new Date(base.getTime() + n * 1000)
+  const opts = { weekday: 'short', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit', ...(timeZone && { timeZone }) }
+  return at.toLocaleString(undefined, opts)
+}
+function secondsToHm(totalSeconds) {
+  if (totalSeconds === '' || totalSeconds === null || totalSeconds === undefined) return { hours: '', minutes: '' }
+  const s = Number(totalSeconds)
+  if (!Number.isFinite(s) || s < 0) return { hours: '', minutes: '' }
+  return { hours: Math.floor(s / 3600), minutes: Math.round((s % 3600) / 60) }
+}
+function hmToSeconds(hours, minutes) {
+  return (Number(hours) || 0) * 3600 + (Number(minutes) || 0) * 60
+}
 function normalizeSessionConfig(config = {}) {
   const raw = config.session || config.session_details || config.schedule || config.session_config
   const first = Array.isArray(config.sessions) ? config.sessions[0] : null
@@ -139,7 +180,7 @@ function StepField({ label, hint, children, wide = false }) {
   return <label className={`ex-editor-field${wide ? ' wide' : ''}`}><span>{label}</span>{children}{hint && <small>{hint}</small>}</label>
 }
 
-function ExperienceStepEditor({ form, setForm, steps, busy, onClose, onSave, speakerEnabled, eventSpeakers }) {
+function ExperienceStepEditor({ form, setForm, steps, busy, onClose, onSave, speakerEnabled, eventSpeakers, event }) {
   const dependencyChoices = steps.filter((step) => step.id !== form.id && step.key !== form.key)
   const sessionChoices = steps.filter((step) => step.type === 'session_attendance')
   const feedbackChoices = steps.filter((step) => step.type === 'feedback' && step.id !== form.id)
@@ -199,8 +240,17 @@ function ExperienceStepEditor({ form, setForm, steps, busy, onClose, onSave, spe
         <section className="ex-editor-section accent">
           <div className="ex-editor-section-title with-control"><div><strong>Live Program timing</strong><span>Optional timed program segment</span></div><label><input type="checkbox" checked={form.program_is_segment} onChange={(event) => patch({ program_is_segment: event.target.checked })}/> Include</label></div>
           {form.program_is_segment && <div className="ex-editor-grid">
-            <StepField label="Start offset (seconds)"><input className="rr-input" type="number" min="0" value={form.program_start_offset_seconds} onChange={(event) => patch({ program_start_offset_seconds: event.target.value })}/></StepField>
-            <StepField label="Duration (seconds)"><input className="rr-input" type="number" min="1" value={form.program_duration_seconds} onChange={(event) => patch({ program_duration_seconds: event.target.value })}/></StepField>
+            <StepField label="Segment starts" hint={event?.timezone ? `Local time in ${event.timezone}` : 'Set the event timezone in Setup to schedule this precisely'}>
+              <input className="rr-input" type="datetime-local" value={offsetSecondsToLocalInput(event?.event_date, event?.timezone, form.program_start_offset_seconds)} onChange={(domEvent) => patch({ program_start_offset_seconds: localInputToOffsetSeconds(event?.event_date, event?.timezone, domEvent.target.value) })}/>
+            </StepField>
+            <StepField label="Duration" hint={form.program_start_offset_seconds !== '' && form.program_duration_seconds ? `Ends ${formatEventInstant(event?.event_date, event?.timezone, Number(form.program_start_offset_seconds) + Number(form.program_duration_seconds))}` : 'Hours and minutes'}>
+              <div className="ex-duration-pair">
+                <input className="rr-input" type="number" min="0" placeholder="0" aria-label="Duration hours" value={secondsToHm(form.program_duration_seconds).hours} onChange={(domEvent) => patch({ program_duration_seconds: hmToSeconds(domEvent.target.value, secondsToHm(form.program_duration_seconds).minutes) })}/>
+                <span>h</span>
+                <input className="rr-input" type="number" min="0" max="59" placeholder="0" aria-label="Duration minutes" value={secondsToHm(form.program_duration_seconds).minutes} onChange={(domEvent) => patch({ program_duration_seconds: hmToSeconds(secondsToHm(form.program_duration_seconds).hours, domEvent.target.value) })}/>
+                <span>m</span>
+              </div>
+            </StepField>
             <StepField label="Category"><input className="rr-input" value={form.program_category} onChange={(event) => patch({ program_category: event.target.value })} placeholder="Main session"/></StepField>
             <StepField label="Feedback after segment"><select className="rr-select" value={form.program_feedback_step_key} onChange={(event) => patch({ program_feedback_step_key: event.target.value })}><option value="">No feedback prompt</option>{feedbackChoices.map((step) => <option value={step.key} key={step.id}>{step.title}</option>)}</select></StepField>
             {form.program_feedback_step_key && <StepField label="Feedback window (seconds)"><input className="rr-input" type="number" min="60" value={form.program_feedback_window_seconds} onChange={(event) => patch({ program_feedback_window_seconds: event.target.value })}/></StepField>}
@@ -1305,6 +1355,7 @@ export default function ExperienceRedesignPage() {
                     onSave={saveStepForm}
                     speakerEnabled={!!realEvent?.speaker_enabled}
                     eventSpeakers={eventSpeakers}
+                    event={realEvent}
                   />}
                 </div>
               </>

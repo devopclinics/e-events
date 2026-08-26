@@ -300,7 +300,7 @@ TEMPLATE_DEFS: dict[str, dict] = {
         ),
         sms_body="Approved! Your Festio Pass for {{event_name}}: {{ticket_link}}",
         whatsapp_body="Approved! Your Festio Pass for {{event_name}}: {{ticket_link}}",
-        required=["ticket_link", "qr_code"],
+        required=[("ticket_link", "qr_code")],
     ),
     "approval_rejected": _t(
         "Approval rejected", ["email", "sms", "whatsapp"], group="Approval",
@@ -337,7 +337,7 @@ TEMPLATE_DEFS: dict[str, dict] = {
         sms_body="Hi {{guest_first_name}}, your next steps for {{event_name}}: {{experience_steps_text}} {{ticket_link}}",
         whatsapp_body="Hi {{guest_first_name}}, your next steps for {{event_name}}: {{experience_steps_text}} {{ticket_link}}",
         placeholders=PLACEHOLDERS + ["ticket_link", "experience_steps", "experience_steps_text"],
-        required=["experience_steps_text"],
+        required=[("experience_steps", "experience_steps_text")],
         note=("Used when resending a guest's Experience/runbook instructions from the portal. "
               "{{experience_steps}} renders a formatted email list; {{experience_steps_text}} is the short text version."),
     ),
@@ -353,9 +353,9 @@ TEMPLATE_DEFS: dict[str, dict] = {
         ),
         sms_body="Hi {{guest_first_name}}, your {{event_name}} Experience Pass is ready: {{ticket_link}}",
         whatsapp_body="Hi {{guest_first_name}}, your {{event_name}} Experience Pass is ready: {{ticket_link}}",
-        mms_body="Your {{event_name}} Experience Pass is attached. Show it for check-in and event activity tracking.",
+        mms_body="Your {{event_name}} Experience Pass is attached: {{ticket_link}}. Show it for check-in and event activity tracking.",
         placeholders=_TICKET_EMAIL_PLACEHOLDERS,
-        required=["ticket_link", "qr_code"],
+        required=[("ticket_link", "qr_code")],
         note=("Used instead of the general Festio Pass invite when Experience is enabled. "
               "Keep {{ticket_link}} and {{qr_code}} so guests receive a usable pass."),
     ),
@@ -390,6 +390,7 @@ TEMPLATE_DEFS: dict[str, dict] = {
         subject="{{experience_step_title}} complete — {{event_name}}",
         email_body=(
             "<p>Hi <strong>{{guest_first_name}}</strong>,</p>"
+            "<h3>{{experience_step_title}}</h3>"
             "<p>{{experience_step_message}}</p>"
             "<p>Thank you for attending <strong>{{event_name}}</strong>.</p>"
         ),
@@ -529,12 +530,21 @@ def used_placeholders(text: str | None) -> set[str]:
 
 def missing_required(key: str, body: str | None, *, channel: str) -> list[str]:
     """Required placeholders for `key` that are absent from a saved body.
-    Only enforced when the body is non-empty (empty = fall back to default)."""
+    Only enforced when the body is non-empty (empty = fall back to default).
+
+    An entry in `required` may be a tuple/list of interchangeable placeholders
+    (e.g. `("ticket_link", "qr_code")`, which render to the same URL string on
+    sms/whatsapp/mms) — any one of them present satisfies that entry."""
     spec = TEMPLATE_DEFS.get(key)
     if not spec or not body:
         return []
     present = used_placeholders(body)
-    return [p for p in spec["required"] if p not in present]
+    missing = []
+    for req in spec["required"]:
+        group = req if isinstance(req, (tuple, list)) else (req,)
+        if not any(p in present for p in group):
+            missing.append(group[0])
+    return missing
 
 
 # ── HTML sanitization (stdlib, allowlist) ──────────────────────────────────────

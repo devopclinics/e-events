@@ -1002,6 +1002,8 @@ async def _dispatch_invite(background_tasks: BackgroundTasks, event: Event, gues
                 messaging.send_experience_invite_whatsapp,
                 phone=guest.phone, first_name=guest.first_name,
                 event_name=event.name, ticket_url=ticket_url,
+                event_id=event.id, event_date=event.event_date, event_timezone=event.timezone,
+                event_location=event.venue_address,
             )
         else:
             background_tasks.add_task(

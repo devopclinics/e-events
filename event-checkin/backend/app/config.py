@@ -166,6 +166,14 @@ class Settings(BaseSettings):
     whatsapp_checkin_override_event_id: str = ""
     whatsapp_checkin_override_template: str = ""
 
+    # Same idea, for WhatsApp pass-invite messages: a single event's own
+    # approved Bird template, instead of the platform-wide "experience_invite"
+    # kind shared by every other Experience-enabled event's invite. Only takes
+    # effect when whatsapp_invite_override_event_id matches; remove once the
+    # event is over.
+    whatsapp_invite_override_event_id: str = ""
+    whatsapp_invite_override_template: str = ""
+
     # ── Staging rollout flags — three-surface redesign. Default True since the
     # v2 behavior is already live on staging; set False to instantly fall back
     # to the pre-redesign response shape without a code revert/redeploy.

@@ -112,12 +112,31 @@ async def send_invite_whatsapp(*, phone: str, first_name: str, event_name: str, 
     )
 
 
-async def send_experience_invite_whatsapp(*, phone: str, first_name: str, event_name: str, ticket_url: str) -> dict | None:
+async def send_experience_invite_whatsapp(*, phone: str, first_name: str, event_name: str, ticket_url: str,
+                                          event_id: str | None = None, event_date: datetime | None = None,
+                                          event_timezone: str | None = None, event_location: str | None = None,
+                                          greeting: str = "Asalam Alaykum") -> dict | None:
     """Experience-event pass invite. WhatsApp can only OPEN a conversation with
     an approved template (free text 15003s with 'no active session'), so this
     uses the Experience pass-invite template rather than rendered copy."""
     if not _channel_ready("whatsapp", phone):
         return
+    # One-off per-event override — see whatsapp_invite_override_* in
+    # app/config.py. Takes precedence over the platform-wide "experience_invite"
+    # kind shared by every other Experience-enabled event's invite.
+    if (
+        event_id
+        and settings.whatsapp_invite_override_event_id
+        and event_id == settings.whatsapp_invite_override_event_id
+        and settings.whatsapp_invite_override_template
+    ):
+        _local = to_event_local(event_date, event_timezone) if event_date else None
+        date_str = _local.strftime("%A, %d %B %Y") if _local else ""
+        return await _bird_whatsapp_send(
+            phone, settings.whatsapp_invite_override_template,
+            [greeting, first_name, event_name, ticket_url, ticket_url, date_str, event_location or ""],
+            ["greetings", "firstName", "eventName", "ticketUrl", "qrCodeUrl", "eventDate", "eventLocation"],
+        )
     return await _send_whatsapp_template(
         phone=phone,
         kind="experience_invite",

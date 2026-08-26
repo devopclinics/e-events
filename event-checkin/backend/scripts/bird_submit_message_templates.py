@@ -55,6 +55,9 @@ SAMPLE_VALUES = {
     "sessionRoom": "Main Hall",
     "message": "Doors open at 5:30 PM. Please bring your pass.",
     "roomAssignment": "Cabin: Hilltop A",
+    "eventLocation": "Camp Carolina, Chapel Hill, NC",
+    "qrCodeUrl": "https://festio.events/scan/sample-pass-token",
+    "greetings": "Asalam Alaykum",
 }
 
 
@@ -146,6 +149,54 @@ TEMPLATES: list[TemplateDef] = [
         "{{roomAssignment}}\n\n"
         "Enjoy the event!",
         ("firstName", "roomAssignment"),
+        group="mbf_summit",
+    ),
+    # MBF Summit 2026 (Masjid-ul Mumineen) — its own invite wording, scoped to
+    # this one event only via group="mbf_summit". {{qrCodeUrl}} and {{ticketUrl}}
+    # are the same underlying pass link at send time (WhatsApp template bodies
+    # can't embed an actual scannable image, only text) — kept as two separate
+    # variables to match the requested copy, which labels them differently.
+    # {{greetings}} is parameterized (rather than hardcoding "Asalam Alaykum")
+    # so this same approved template could be reused with a different opener
+    # later — a leading 🌙 keeps the body from literally starting on a
+    # variable, since WhatsApp rejects that the same way it rejects a body
+    # ending on one (see the {{ticketLink}} note below).
+    # NOTE: the copy below says "summit" but the live pending submission at
+    # Bird/Meta for this exact template still says "convention" — it couldn't
+    # be corrected in place (see the v2 entry below) and this record was left
+    # updated to match the intended wording, not what's actually under review.
+    TemplateDef(
+        "MBF Summit 2026 Experience pass invite",
+        "festio_mbf_summit_2026_invite",
+        "🌙 {{greetings}} Brother {{firstName}},\n\n"
+        "Your *{{eventName}} Experience Pass* is ready.\n\n"
+        "Please keep your pass handy. You will use it for *check-in, room assignment, programs, and summit activities.*\n\n"
+        "🎟️ *Open your Experience Pass:*\n{{ticketUrl}}\n\n"
+        "*Your QR Code:*\n{{qrCodeUrl}}\n\n"
+        "📅 {{eventDate}}\n"
+        "📍 {{eventLocation}}\n\n"
+        "Please keep your Experience Pass and QR code handy throughout the summit.",
+        ("greetings", "firstName", "eventName", "ticketUrl", "qrCodeUrl", "eventDate", "eventLocation"),
+        group="mbf_summit",
+    ),
+    # v2 — "convention" -> "summit" wording fix. Submitted as a distinct
+    # template rather than editing the v1 above: Bird/Meta doesn't allow
+    # editing or deleting a channel-template while it's pending review
+    # (ChannelTemplateStatusNoActive), so the only way to correct copy before
+    # v1 resolves is a fresh submission. If v1 is later rejected, this one
+    # supersedes it; if v1 gets approved first, retire it in favor of this one.
+    TemplateDef(
+        "MBF Summit 2026 Experience pass invite v2",
+        "festio_mbf_summit_2026_invite_v2",
+        "🌙 {{greetings}} Brother {{firstName}},\n\n"
+        "Your *{{eventName}} Experience Pass* is ready.\n\n"
+        "Please keep your pass handy. You will use it for *check-in, room assignment, programs, and summit activities.*\n\n"
+        "🎟️ *Open your Experience Pass:*\n{{ticketUrl}}\n\n"
+        "*Your QR Code:*\n{{qrCodeUrl}}\n\n"
+        "📅 {{eventDate}}\n"
+        "📍 {{eventLocation}}\n\n"
+        "Please keep your Experience Pass and QR code handy throughout the summit.",
+        ("greetings", "firstName", "eventName", "ticketUrl", "qrCodeUrl", "eventDate", "eventLocation"),
         group="mbf_summit",
     ),
     # Link-based alternative to the inline template above. No seating/room/seat

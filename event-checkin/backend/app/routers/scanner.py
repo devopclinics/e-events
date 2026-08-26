@@ -532,6 +532,7 @@ async def view_ticket(qr_token: str, db: AsyncSession = Depends(get_db)):
         menu_enabled=event.menu_enabled,
         notify_sms=event.notify_sms,
         notify_whatsapp=event.notify_whatsapp,
+        notify_consent_prompt_enabled=event.notify_consent_prompt_enabled,
         registry_enabled=event.registry_enabled,
         registry_token=event.registry_token,
         registry_message=event.registry_message,

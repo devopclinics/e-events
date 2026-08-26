@@ -2068,6 +2068,7 @@ class EventBrief(BaseModel):
     menu_enabled: bool = False
     notify_sms: bool = True
     notify_whatsapp: bool = True
+    notify_consent_prompt_enabled: bool = True
     # Gift registry — surfaced on the ticket so guests can reach it from their pass.
     registry_enabled: bool = False
     registry_token: Optional[str] = None

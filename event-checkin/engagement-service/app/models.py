@@ -191,6 +191,11 @@ class ActivityParticipant(Base):
     anon_id: Mapped[str | None] = mapped_column(String(64), nullable=True)
     display_name: Mapped[str | None] = mapped_column(String(120), nullable=True)
     joined_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=datetime.utcnow)
+    # Survey/feedback final-submission marker (see routers/participate.py's
+    # /complete endpoint). Null for every other activity type and for a
+    # survey/feedback participant who never reached the end — quiz/poll/Q&A
+    # never set this, so it changes nothing about their behavior.
+    completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
 
 class ParticipantResponse(Base):

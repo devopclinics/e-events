@@ -22,7 +22,10 @@ from ..realtime import publish
 from ..ratelimit import enforce_rate_limit
 from ..metrics import RESPONSES
 from ..scoring import score_choice_response
-from ..schemas import ActivityOut, ActivityResultsOut, ParticipateStateOut, QuestionResultOut, RespondIn, RespondOut
+from ..schemas import (
+    ActivityOut, ActivityResultsOut, CompleteSurveyOut, DraftAnswerOut, ParticipateStateOut,
+    QuestionResultOut, RespondIn, RespondOut, RuleOut,
+)
 from ..wordcloud import word_cloud
 
 router = APIRouter(prefix="/api/engagement/v1", tags=["engagement-participate"])
@@ -348,18 +351,81 @@ async def get_participation_state(activity_id: str, identity: Identity = Depends
         raise HTTPException(403, "This activity isn't open right now")
     participant = await _get_or_create_participant(activity_id, identity, db, bool(activity.config.get("anonymous")))
     await db.commit()
-    answered = (await db.execute(
-        select(ParticipantResponse.question_id).where(ParticipantResponse.participant_id == participant.id)
+    responses = (await db.execute(
+        select(ParticipantResponse).where(ParticipantResponse.participant_id == participant.id)
+        .options(selectinload(ParticipantResponse.selections))
     )).scalars().all()
     safe_activity = ActivityOut.model_validate(activity)
-    visible_ids = await _visible_question_ids(activity, participant.id, db)
-    safe_activity.questions = [question for question in safe_activity.questions if question.id in visible_ids]
+    if activity.type not in ("survey", "feedback"):
+        # Quiz/poll/Q&A: unchanged — the server is the sole authority on
+        # visibility since the client only ever reacts after a round trip.
+        visible_ids = await _visible_question_ids(activity, participant.id, db)
+        safe_activity.questions = [question for question in safe_activity.questions if question.id in visible_ids]
+    # Survey/feedback: send every active question. The client evaluates
+    # branching itself (via `rules` + draft answers below) so selecting an
+    # answer updates the form instantly instead of waiting on a save + reload
+    # round trip; the server still independently re-validates which
+    # questions were actually required at /complete time.
     for question in safe_activity.questions:
         question.config.pop("correct_answer", None)
         question.config.pop("explanation", None)
         for option in question.options:
             option.is_correct = None
-    return ParticipateStateOut(activity=safe_activity, already_responded_question_ids=list(answered), participant_id=participant.id)
+    # Survey/feedback-only additions: draft answers (refresh recovery, instant
+    # client-side branching) and the activity's branching rules. Quiz/poll/Q&A
+    # don't need either — they stay on the existing one-question-at-a-time,
+    # server-round-trip-driven flow untouched.
+    draft_answers: dict[str, DraftAnswerOut] = {}
+    rules: list[RuleOut] = []
+    if activity.type in ("survey", "feedback"):
+        for response in responses:
+            draft_answers[response.question_id] = DraftAnswerOut(
+                selected_option_ids=[selection.option_id for selection in response.selections] or None,
+                answer_value=response.answer_value,
+            )
+        rules = (await db.execute(select(ActivityRule).where(ActivityRule.activity_id == activity_id))).scalars().all()
+    return ParticipateStateOut(
+        activity=safe_activity,
+        already_responded_question_ids=[response.question_id for response in responses],
+        participant_id=participant.id,
+        draft_answers=draft_answers,
+        rules=rules,
+        completed_at=participant.completed_at,
+    )
+
+
+@router.post("/activities/{activity_id}/complete", response_model=CompleteSurveyOut)
+async def complete_survey(activity_id: str, request: Request, identity: Identity = Depends(current_identity), db: AsyncSession = Depends(get_db)):
+    """Finalize a survey/feedback participation. This is the ONLY thing that
+    marks a guest's feedback as completed — answering individual questions via
+    /respond (autosave) never does, by design: it neither sets this nor drives
+    any analytics/AI-analysis trigger, so a refresh or abandoned draft never
+    counts as a completed submission."""
+    require_guest(identity)
+    await enforce_rate_limit(request, "complete", f"{activity_id}:{identity.subject}", 10)
+    activity = await _load_activity(activity_id, identity.event_id, identity.org_id, db)
+    require_activity_session(identity, activity.session_id, activity.config)
+    if activity.type not in ("survey", "feedback"):
+        raise HTTPException(400, "Only survey/feedback activities have a final submission step")
+    if activity.status != "live":
+        raise HTTPException(409, "This activity isn't accepting responses right now")
+    participant = await _get_or_create_participant(activity_id, identity, db, bool(activity.config.get("anonymous")))
+    if participant.completed_at:
+        # Idempotent: a duplicate click (or a retried request) just confirms
+        # the same completion rather than erroring or double-processing.
+        return CompleteSurveyOut(completed=True, completed_at=participant.completed_at)
+    visible_ids = await _visible_question_ids(activity, participant.id, db)
+    required_ids = {question.id for question in activity.questions if question.id in visible_ids and question.required}
+    answered_ids = set((await db.execute(
+        select(ParticipantResponse.question_id).where(ParticipantResponse.participant_id == participant.id)
+    )).scalars().all())
+    missing = list(required_ids - answered_ids)
+    if missing:
+        return CompleteSurveyOut(completed=False, missing_question_ids=missing)
+    participant.completed_at = datetime.now(timezone.utc)
+    await db.commit()
+    await db.refresh(participant)
+    return CompleteSurveyOut(completed=True, completed_at=participant.completed_at)
 
 
 @router.post("/activities/{activity_id}/respond", response_model=RespondOut)
@@ -447,9 +513,15 @@ async def respond(activity_id: str, body: RespondIn, request: Request, identity:
             ParticipantResponse.participant_id == participant.id,
         )
     )
-    if already and not activity.config.get("allow_answer_changes", False):
+    # A survey/feedback draft is revisable up until final submission (the guest
+    # can go back and change an earlier answer, and autosave itself may fire
+    # more than once for the same question as they keep editing) -- always
+    # allow it there regardless of the explicit opt-in flag. Quiz/poll/Q&A
+    # keep the existing config-gated behavior exactly as before.
+    can_change = activity.config.get("allow_answer_changes", False) or activity.type in ("survey", "feedback")
+    if already and not can_change:
         raise HTTPException(409, "You already answered this question")
-    if already and activity.config.get("allow_answer_changes", False):
+    if already and can_change:
         await db.execute(
             ResponseOptionSelection.__table__.delete().where(ResponseOptionSelection.response_id == already.id)
         )

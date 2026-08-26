@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 from datetime import datetime
 from typing import Any, Literal
 
@@ -121,6 +123,10 @@ class ActivitySummary(BaseModel):
     created_at: datetime
     response_count: int = 0
     participant_count: int = 0
+    # Survey/feedback only — how many of participant_count pressed the final
+    # "Submit Feedback" (see ActivityParticipant.completed_at). Always 0 for
+    # every other activity type, since nothing else ever sets it.
+    completed_count: int = 0
     config: dict[str, Any] = Field(default_factory=dict)
 
 
@@ -201,10 +207,30 @@ class BankImportIn(BaseModel):
     items: list[BankItemCreate] = Field(min_length=1, max_length=200)
 
 
+class DraftAnswerOut(BaseModel):
+    """One question's already-persisted answer, in the same shape `RespondIn`
+    accepts — lets a survey/feedback form restore a guest's in-progress
+    draft after a refresh without a second endpoint."""
+    selected_option_ids: list[str] | None = None
+    answer_value: Any = None
+
+
 class ParticipateStateOut(BaseModel):
     activity: ActivityOut
     already_responded_question_ids: list[str] = Field(default_factory=list)
     participant_id: str
+    # Survey/feedback only (see routers/participate.py) — lets the guest form
+    # evaluate branching instantly against a draft answer instead of waiting
+    # on a round trip, and restore in-progress answers after a refresh.
+    draft_answers: dict[str, DraftAnswerOut] = Field(default_factory=dict)
+    rules: list[RuleOut] = Field(default_factory=list)
+    completed_at: datetime | None = None
+
+
+class CompleteSurveyOut(BaseModel):
+    completed: bool
+    completed_at: datetime | None = None
+    missing_question_ids: list[str] = Field(default_factory=list)
 
 
 class RespondIn(BaseModel):

@@ -91,9 +91,15 @@ async def list_activities(identity: Identity = Depends(current_identity), db: As
         participant_count = await db.scalar(
             select(func.count()).select_from(ActivityParticipant).where(ActivityParticipant.activity_id == a.id)
         ) or 0
+        completed_count = await db.scalar(
+            select(func.count()).select_from(ActivityParticipant).where(
+                ActivityParticipant.activity_id == a.id, ActivityParticipant.completed_at.is_not(None),
+            )
+        ) or 0
         summary = ActivitySummary.model_validate(a)
         summary.response_count = response_count
         summary.participant_count = participant_count
+        summary.completed_count = completed_count
         out.append(summary)
     return out
 

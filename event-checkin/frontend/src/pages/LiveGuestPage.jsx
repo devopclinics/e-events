@@ -70,18 +70,32 @@ function useLiveRefresh(guestToken, activityId, onEvent) {
   }, [guestToken, activityId]) // eslint-disable-line react-hooks/exhaustive-deps
 }
 
-function OptionQuestion({ question, onAnswer, busy, alreadyAnswered }) {
+// `draftMode` is the additive path used only by the survey/feedback cohesive
+// form (see FeedbackSurveyForm below) — every quiz/poll/Q&A call site simply
+// never passes it, so their existing immediate-submit-per-question behavior
+// is completely unchanged. In draft mode the component never calls onAnswer
+// itself, never shows a per-question "done" card, and never renders its own
+// submit button — it only reports the current value up via onDraftChange so
+// the parent form can silently autosave it and evaluate branching instantly.
+function OptionQuestion({ question, onAnswer, busy, alreadyAnswered, draftMode, draftValue, onDraftChange }) {
   const multiple = question.question_type === 'multiple_choice'
-  const [selected, setSelected] = useState([])
+  const [selected, setSelected] = useState(() => (draftMode && draftValue?.selected_option_ids) || [])
   const [feedback, setFeedback] = useState(null)
   const startRef = useRef(Date.now())
+  function toggle(id) {
+    setSelected((current) => {
+      const next = multiple ? (current.includes(id) ? current.filter((x) => x !== id) : [...current, id]) : [id]
+      if (draftMode) onDraftChange?.({ selected_option_ids: next })
+      return next
+    })
+  }
   async function submit() {
     if (selected.length === 0) return
     const t0 = startRef.current
     const result = await onAnswer(question.id, { selected_option_ids: selected, response_time_ms: Date.now() - t0 })
     if (result) setFeedback(result)
   }
-  if (alreadyAnswered || feedback) {
+  if (!draftMode && (alreadyAnswered || feedback)) {
     return (
       <div className="rounded-2xl border border-emerald-200 bg-emerald-50 p-4 text-sm font-bold text-emerald-800 dark:border-emerald-800 dark:bg-emerald-950 dark:text-emerald-200">
         {feedback?.correct === true ? `Correct! +${feedback.score} pts` : feedback?.correct === false ? 'Answer recorded.' : 'Your answer is in.'}
@@ -91,57 +105,66 @@ function OptionQuestion({ question, onAnswer, busy, alreadyAnswered }) {
   return (
     <div className="grid gap-2">
       {question.options.map((opt) => (
-        <button key={opt.id} type="button" aria-pressed={selected.includes(opt.id)} onClick={() => setSelected((current) => multiple ? (current.includes(opt.id) ? current.filter((id) => id !== opt.id) : [...current, opt.id]) : [opt.id])}
+        <button key={opt.id} type="button" aria-pressed={selected.includes(opt.id)} onClick={() => toggle(opt.id)}
           className={`min-h-12 rounded-xl border-2 px-4 py-2.5 text-left text-sm font-bold transition ${selected.includes(opt.id) ? 'border-slate-900 bg-slate-900 text-white dark:border-white dark:bg-white dark:text-slate-900' : 'border-slate-200 bg-white text-slate-800 dark:border-slate-700 dark:bg-slate-900 dark:text-white'}`}>
           {opt.label}
         </button>
       ))}
-      <button type="button" disabled={selected.length === 0 || busy} onClick={submit}
-        className="mt-2 min-h-12 rounded-xl bg-teal-400 px-4 py-2.5 text-sm font-extrabold text-slate-950 disabled:opacity-50">
-        {busy ? 'Submitting…' : 'Submit answer'}
-      </button>
+      {!draftMode && (
+        <button type="button" disabled={selected.length === 0 || busy} onClick={submit}
+          className="mt-2 min-h-12 rounded-xl bg-teal-400 px-4 py-2.5 text-sm font-extrabold text-slate-950 disabled:opacity-50">
+          {busy ? 'Submitting…' : 'Submit answer'}
+        </button>
+      )}
     </div>
   )
 }
 
-function TextQuestion({ question, onAnswer, busy, alreadyAnswered }) {
-  const [text, setText] = useState('')
+function TextQuestion({ question, onAnswer, busy, alreadyAnswered, draftMode, draftValue, onDraftChange }) {
+  const [text, setText] = useState(() => (draftMode && draftValue?.answer_value) || '')
   const [done, setDone] = useState(alreadyAnswered)
+  function change(value) {
+    setText(value)
+    if (draftMode) onDraftChange?.({ answer_value: value })
+  }
   async function submit() {
     if (!text.trim()) return
     const result = await onAnswer(question.id, { answer_value: text.trim() })
     if (result) setDone(true)
   }
-  if (done) return <div className="rounded-2xl border border-emerald-200 bg-emerald-50 p-4 text-sm font-bold text-emerald-800 dark:border-emerald-800 dark:bg-emerald-950 dark:text-emerald-200">Thanks — your response is in.</div>
+  if (!draftMode && done) return <div className="rounded-2xl border border-emerald-200 bg-emerald-50 p-4 text-sm font-bold text-emerald-800 dark:border-emerald-800 dark:bg-emerald-950 dark:text-emerald-200">Thanks — your response is in.</div>
   return (
     <div className="grid gap-2">
-      <textarea value={text} onChange={(e) => setText(e.target.value)} rows={3}
-        className="w-full rounded-xl border-2 border-slate-200 bg-white p-3 text-sm dark:border-slate-700 dark:bg-slate-900 dark:text-white"
+      <textarea value={text} onChange={(e) => change(e.target.value)} rows={draftMode ? 4 : 3}
+        className="w-full rounded-xl border-2 border-slate-200 bg-white p-3 text-base dark:border-slate-700 dark:bg-slate-900 dark:text-white"
         placeholder="Type your answer…" />
-      <button type="button" disabled={!text.trim() || busy} onClick={submit}
-        className="min-h-12 rounded-xl bg-teal-400 px-4 py-2.5 text-sm font-extrabold text-slate-950 disabled:opacity-50">
-        {busy ? 'Submitting…' : 'Submit'}
-      </button>
+      {!draftMode && (
+        <button type="button" disabled={!text.trim() || busy} onClick={submit}
+          className="min-h-12 rounded-xl bg-teal-400 px-4 py-2.5 text-sm font-extrabold text-slate-950 disabled:opacity-50">
+          {busy ? 'Submitting…' : 'Submit'}
+        </button>
+      )}
     </div>
   )
 }
 
-function RatingQuestion({ question, onAnswer, busy, alreadyAnswered }) {
+function RatingQuestion({ question, onAnswer, busy, alreadyAnswered, draftMode, draftValue, onDraftChange }) {
   const min = question.question_type === 'nps' ? 0 : 1
   const max = ['rating_10', 'nps'].includes(question.question_type) ? 10 : 5
-  const [value, setValue] = useState(null)
+  const [value, setValue] = useState(() => (draftMode ? draftValue?.answer_value ?? null : null))
   const [done, setDone] = useState(alreadyAnswered)
   async function submit(v) {
     setValue(v)
+    if (draftMode) { onDraftChange?.({ answer_value: v }); return }
     const result = await onAnswer(question.id, { answer_value: v })
     if (result) setDone(true)
   }
-  if (done) return <div className="rounded-2xl border border-emerald-200 bg-emerald-50 p-4 text-sm font-bold text-emerald-800 dark:border-emerald-800 dark:bg-emerald-950 dark:text-emerald-200">Thanks for rating {value ?? ''}!</div>
+  if (!draftMode && done) return <div className="rounded-2xl border border-emerald-200 bg-emerald-50 p-4 text-sm font-bold text-emerald-800 dark:border-emerald-800 dark:bg-emerald-950 dark:text-emerald-200">Thanks for rating {value ?? ''}!</div>
   return (
     <div className="flex flex-wrap gap-2">
       {Array.from({ length: max - min + 1 }, (_, i) => i + min).map((n) => (
-        <button key={n} type="button" disabled={busy} onClick={() => submit(n)}
-          className="grid h-11 w-11 place-items-center rounded-xl border-2 border-slate-200 bg-white text-sm font-extrabold text-slate-800 hover:border-slate-900 dark:border-slate-700 dark:bg-slate-900 dark:text-white">
+        <button key={n} type="button" disabled={busy} aria-pressed={value === n} onClick={() => submit(n)}
+          className={`grid h-12 w-12 place-items-center rounded-xl border-2 text-sm font-extrabold transition ${value === n ? 'border-slate-900 bg-slate-900 text-white dark:border-white dark:bg-white dark:text-slate-900' : 'border-slate-200 bg-white text-slate-800 hover:border-slate-900 dark:border-slate-700 dark:bg-slate-900 dark:text-white'}`}>
           {n}
         </button>
       ))}
@@ -149,32 +172,44 @@ function RatingQuestion({ question, onAnswer, busy, alreadyAnswered }) {
   )
 }
 
-function NumberQuestion({ question, onAnswer, busy, alreadyAnswered }) {
-  const [value, setValue] = useState('')
+function NumberQuestion({ question, onAnswer, busy, alreadyAnswered, draftMode, draftValue, onDraftChange }) {
+  const [value, setValue] = useState(() => (draftMode && draftValue?.answer_value != null ? String(draftValue.answer_value) : ''))
   const [done, setDone] = useState(alreadyAnswered)
+  function change(v) {
+    setValue(v)
+    if (draftMode && v !== '' && Number.isFinite(Number(v))) onDraftChange?.({ answer_value: Number(v) })
+    else if (draftMode && v === '') onDraftChange?.({ answer_value: null })
+  }
   async function submit() {
     if (value === '' || !Number.isFinite(Number(value))) return
     const result = await onAnswer(question.id, { answer_value: Number(value) })
     if (result) setDone(true)
   }
-  if (done) return <div className="rounded-2xl border border-emerald-200 bg-emerald-50 p-4 text-sm font-bold text-emerald-800 dark:border-emerald-800 dark:bg-emerald-950 dark:text-emerald-200">Your number is in.</div>
-  return <div className="grid gap-2"><input type="number" inputMode="decimal" value={value} onChange={(event) => setValue(event.target.value)} className="min-h-12 rounded-xl border-2 border-slate-200 bg-white px-4 text-sm dark:border-slate-700 dark:bg-slate-900 dark:text-white" aria-label="Numeric answer"/><button type="button" disabled={value === '' || busy} onClick={submit} className="min-h-12 rounded-xl bg-teal-400 px-4 py-2.5 text-sm font-extrabold text-slate-950 disabled:opacity-50">{busy ? 'Submitting…' : 'Submit number'}</button></div>
+  if (!draftMode && done) return <div className="rounded-2xl border border-emerald-200 bg-emerald-50 p-4 text-sm font-bold text-emerald-800 dark:border-emerald-800 dark:bg-emerald-950 dark:text-emerald-200">Your number is in.</div>
+  return <div className="grid gap-2"><input type="number" inputMode="numeric" min={question.config?.min} max={question.config?.max} value={value} onChange={(event) => change(event.target.value)} className="min-h-12 rounded-xl border-2 border-slate-200 bg-white px-4 text-base dark:border-slate-700 dark:bg-slate-900 dark:text-white" aria-label="Numeric answer"/>{!draftMode && <button type="button" disabled={value === '' || busy} onClick={submit} className="min-h-12 rounded-xl bg-teal-400 px-4 py-2.5 text-sm font-extrabold text-slate-950 disabled:opacity-50">{busy ? 'Submitting…' : 'Submit number'}</button>}</div>
 }
 
-function RankingQuestion({ question, onAnswer, busy, alreadyAnswered }) {
-  const [ordered, setOrdered] = useState(question.options)
+function RankingQuestion({ question, onAnswer, busy, alreadyAnswered, draftMode, draftValue, onDraftChange }) {
+  const initialOrder = draftMode && draftValue?.selected_option_ids?.length
+    ? draftValue.selected_option_ids.map((id) => question.options.find((option) => option.id === id)).filter(Boolean)
+    : question.options
+  const [ordered, setOrdered] = useState(initialOrder)
   const [done, setDone] = useState(alreadyAnswered)
   function move(index, direction) {
     const target = index + direction
     if (target < 0 || target >= ordered.length) return
-    setOrdered((current) => { const next = [...current]; [next[index], next[target]] = [next[target], next[index]]; return next })
+    setOrdered((current) => {
+      const next = [...current]; [next[index], next[target]] = [next[target], next[index]]
+      if (draftMode) onDraftChange?.({ selected_option_ids: next.map((option) => option.id) })
+      return next
+    })
   }
   async function submit() {
     const result = await onAnswer(question.id, { selected_option_ids: ordered.map((option) => option.id) })
     if (result) setDone(true)
   }
-  if (done) return <div className="rounded-2xl border border-emerald-200 bg-emerald-50 p-4 text-sm font-bold text-emerald-800 dark:border-emerald-800 dark:bg-emerald-950 dark:text-emerald-200">Your ranking is in.</div>
-  return <div className="grid gap-2">{ordered.map((option, index) => <div key={option.id} className="flex min-h-12 items-center gap-2 rounded-xl border-2 border-slate-200 bg-white px-3 dark:border-slate-700 dark:bg-slate-900"><strong className="w-6 text-sm text-slate-600 dark:text-slate-300">{index + 1}</strong><span className="flex-1 text-sm font-bold text-slate-800 dark:text-white">{option.label}</span><button type="button" aria-label={`Move ${option.label} up`} disabled={index === 0 || busy} onClick={() => move(index, -1)} className="h-9 w-9 rounded-lg border border-slate-200 disabled:opacity-30">↑</button><button type="button" aria-label={`Move ${option.label} down`} disabled={index === ordered.length - 1 || busy} onClick={() => move(index, 1)} className="h-9 w-9 rounded-lg border border-slate-200 disabled:opacity-30">↓</button></div>)}<button type="button" disabled={!ordered.length || busy} onClick={submit} className="mt-2 min-h-12 rounded-xl bg-teal-400 px-4 py-2.5 text-sm font-extrabold text-slate-950 disabled:opacity-50">{busy ? 'Submitting…' : 'Submit ranking'}</button></div>
+  if (!draftMode && done) return <div className="rounded-2xl border border-emerald-200 bg-emerald-50 p-4 text-sm font-bold text-emerald-800 dark:border-emerald-800 dark:bg-emerald-950 dark:text-emerald-200">Your ranking is in.</div>
+  return <div className="grid gap-2">{ordered.map((option, index) => <div key={option.id} className="flex min-h-12 items-center gap-2 rounded-xl border-2 border-slate-200 bg-white px-3 dark:border-slate-700 dark:bg-slate-900"><strong className="w-6 text-sm text-slate-600 dark:text-slate-300">{index + 1}</strong><span className="flex-1 text-sm font-bold text-slate-800 dark:text-white">{option.label}</span><button type="button" aria-label={`Move ${option.label} up`} disabled={index === 0 || busy} onClick={() => move(index, -1)} className="h-9 w-9 rounded-lg border border-slate-200 disabled:opacity-30">↑</button><button type="button" aria-label={`Move ${option.label} down`} disabled={index === ordered.length - 1 || busy} onClick={() => move(index, 1)} className="h-9 w-9 rounded-lg border border-slate-200 disabled:opacity-30">↓</button></div>)}{!draftMode && <button type="button" disabled={!ordered.length || busy} onClick={submit} className="mt-2 min-h-12 rounded-xl bg-teal-400 px-4 py-2.5 text-sm font-extrabold text-slate-950 disabled:opacity-50">{busy ? 'Submitting…' : 'Submit ranking'}</button>}</div>
 }
 
 function pointFromClick(ref, event) {
@@ -206,21 +241,25 @@ function handleBoardKeyDown(event, point, setPoint) {
   }
 }
 
-function QuadrantQuestion({ question, onAnswer, busy, alreadyAnswered }) {
+function QuadrantQuestion({ question, onAnswer, busy, alreadyAnswered, draftMode, draftValue, onDraftChange }) {
   const boardRef = useRef(null)
-  const [point, setPoint] = useState(null)
+  const [point, setPoint] = useState(() => (draftMode ? draftValue?.answer_value ?? null : null))
   const [done, setDone] = useState(alreadyAnswered)
   const labels = question.config || {}
+  function place(p) {
+    setPoint(p)
+    if (draftMode) onDraftChange?.({ answer_value: p })
+  }
   async function submit() {
     if (!point) return
     const result = await onAnswer(question.id, { answer_value: point })
     if (result) setDone(true)
   }
-  if (done) return <div className="rounded-2xl border border-emerald-200 bg-emerald-50 p-4 text-sm font-bold text-emerald-800 dark:border-emerald-800 dark:bg-emerald-950 dark:text-emerald-200">Your answer is in.</div>
+  if (!draftMode && done) return <div className="rounded-2xl border border-emerald-200 bg-emerald-50 p-4 text-sm font-bold text-emerald-800 dark:border-emerald-800 dark:bg-emerald-950 dark:text-emerald-200">Your answer is in.</div>
   return (
     <div className="grid gap-2">
-      <div ref={boardRef} onClick={(event) => setPoint(pointFromClick(boardRef, event))}
-        tabIndex={0} role="button" onKeyDown={(event) => handleBoardKeyDown(event, point, setPoint)}
+      <div ref={boardRef} onClick={(event) => place(pointFromClick(boardRef, event))}
+        tabIndex={0} role="button" onKeyDown={(event) => handleBoardKeyDown(event, point, place)}
         aria-label={`Tap anywhere on the grid to place your answer, or use this focused element and the arrow keys. Currently ${point ? `at ${Math.round(point.x * 100)} percent ${labels.x_label_high || 'right'}, ${Math.round(point.y * 100)} percent ${labels.y_label_high || 'up'}` : 'not yet placed'}.`}
         className="relative mx-auto aspect-square w-full max-w-xs cursor-crosshair rounded-xl border-2 border-slate-200 bg-white focus:outline-none focus:ring-4 focus:ring-teal-300 dark:border-slate-700 dark:bg-slate-900">
         <div className="pointer-events-none absolute inset-x-0 top-1/2 h-px bg-slate-200 dark:bg-slate-700" />
@@ -232,61 +271,204 @@ function QuadrantQuestion({ question, onAnswer, busy, alreadyAnswered }) {
         {labels.x_label_high && <span className="pointer-events-none absolute right-1 top-1/2 -translate-y-1/2 text-[10px] font-bold text-slate-500">{labels.x_label_high}</span>}
       </div>
       <p className="text-center text-xs font-bold text-slate-500 dark:text-slate-400">Tap to place, or focus the box and use arrow keys — Enter starts at the center.</p>
-      <button type="button" disabled={!point || busy} onClick={submit}
-        className="min-h-12 rounded-xl bg-teal-400 px-4 py-2.5 text-sm font-extrabold text-slate-950 disabled:opacity-50">
-        {busy ? 'Submitting…' : 'Submit answer'}
-      </button>
+      {!draftMode && (
+        <button type="button" disabled={!point || busy} onClick={submit}
+          className="min-h-12 rounded-xl bg-teal-400 px-4 py-2.5 text-sm font-extrabold text-slate-950 disabled:opacity-50">
+          {busy ? 'Submitting…' : 'Submit answer'}
+        </button>
+      )}
     </div>
   )
 }
 
-function ImageClickQuestion({ question, onAnswer, busy, alreadyAnswered }) {
+function ImageClickQuestion({ question, onAnswer, busy, alreadyAnswered, draftMode, draftValue, onDraftChange }) {
   const boardRef = useRef(null)
-  const [point, setPoint] = useState(null)
+  const [point, setPoint] = useState(() => (draftMode ? draftValue?.answer_value ?? null : null))
   const [done, setDone] = useState(alreadyAnswered)
+  function place(p) {
+    setPoint(p)
+    if (draftMode) onDraftChange?.({ answer_value: p })
+  }
   async function submit() {
     if (!point) return
     const result = await onAnswer(question.id, { answer_value: point })
     if (result) setDone(true)
   }
-  if (done) return <div className="rounded-2xl border border-emerald-200 bg-emerald-50 p-4 text-sm font-bold text-emerald-800 dark:border-emerald-800 dark:bg-emerald-950 dark:text-emerald-200">Your tap is in.</div>
+  if (!draftMode && done) return <div className="rounded-2xl border border-emerald-200 bg-emerald-50 p-4 text-sm font-bold text-emerald-800 dark:border-emerald-800 dark:bg-emerald-950 dark:text-emerald-200">Your tap is in.</div>
   return (
     <div className="grid gap-2">
-      <div ref={boardRef} onClick={(event) => setPoint(pointFromClick(boardRef, event))}
-        tabIndex={0} role="button" onKeyDown={(event) => handleBoardKeyDown(event, point, setPoint)}
+      <div ref={boardRef} onClick={(event) => place(pointFromClick(boardRef, event))}
+        tabIndex={0} role="button" onKeyDown={(event) => handleBoardKeyDown(event, point, place)}
         aria-label={`Tap the image to answer, or use this focused element and the arrow keys. Currently ${point ? `at ${Math.round(point.x * 100)} percent across, ${Math.round((1 - point.y) * 100)} percent down` : 'not yet placed'}.`}
         className="relative w-full cursor-crosshair overflow-hidden rounded-xl border-2 border-slate-200 bg-slate-100 bg-cover bg-center focus:outline-none focus:ring-4 focus:ring-teal-300 dark:border-slate-700"
         style={{ backgroundImage: `url("${question.config?.image_url || ''}")`, aspectRatio: '4 / 3' }}>
         {point && <div className="pointer-events-none absolute h-4 w-4 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-white bg-teal-400 shadow" style={{ left: `${point.x * 100}%`, top: `${(1 - point.y) * 100}%` }} />}
       </div>
       <p className="text-center text-xs font-bold text-slate-500 dark:text-slate-400">Tap to place, or focus the box and use arrow keys — Enter starts at the center.</p>
-      <button type="button" disabled={!point || busy} onClick={submit}
-        className="min-h-12 rounded-xl bg-teal-400 px-4 py-2.5 text-sm font-extrabold text-slate-950 disabled:opacity-50">
-        {busy ? 'Submitting…' : 'Submit answer'}
-      </button>
-    </div>
-  )
-}
-
-function SurveyForm({ activity, answered, onAnswer, busy }) {
-  const questions = activity.questions.filter((q) => q.status === 'active')
-  const requiredRemaining = questions.filter((q) => q.required && !answered.has(q.id)).length
-  return (
-    <div className="grid gap-4">
-      {activity.description && <p className="text-sm text-slate-600 dark:text-slate-300">{activity.description}</p>}
-      {questions.map((q, i) => (
-        <QuestionCard key={q.id} question={q} index={i} onAnswer={onAnswer} busy={busy} alreadyAnswered={answered.has(q.id)} />
-      ))}
-      {questions.length > 0 && requiredRemaining === 0 && (
-        <div className="rounded-2xl border border-emerald-200 bg-emerald-50 p-4 text-center text-sm font-bold text-emerald-800 dark:border-emerald-800 dark:bg-emerald-950 dark:text-emerald-200">
-          Thank you — every response is in.
-        </div>
+      {!draftMode && (
+        <button type="button" disabled={!point || busy} onClick={submit}
+          className="min-h-12 rounded-xl bg-teal-400 px-4 py-2.5 text-sm font-extrabold text-slate-950 disabled:opacity-50">
+          {busy ? 'Submitting…' : 'Submit answer'}
+        </button>
       )}
     </div>
   )
 }
 
-function QuestionCard({ question, index, onAnswer, busy, alreadyAnswered }) {
+// Branching, mirrored from the server's own _rule_matches (participate.py) so
+// a survey/feedback guest sees a question show/hide the instant they answer,
+// instead of waiting on a save + reload round trip. The server independently
+// re-derives the same visibility at /complete time as the actual authority —
+// this copy only drives what's rendered client-side.
+function _ruleMatches(operator, actual, expected) {
+  if (operator === 'answered') return actual !== null && actual !== undefined
+  if (operator === 'not_answered') return actual === null || actual === undefined
+  if (operator === 'equals') return JSON.stringify(actual) === JSON.stringify(expected)
+  if (operator === 'not_equals') return JSON.stringify(actual) !== JSON.stringify(expected)
+  if (operator === 'contains') return (Array.isArray(actual) || typeof actual === 'string') ? actual.includes(expected) : false
+  if (operator === 'greater_than') return typeof actual === 'number' && actual > expected
+  if (operator === 'less_than') return typeof actual === 'number' && actual < expected
+  return false
+}
+function _draftActual(draft, questionId) {
+  const entry = draft[questionId]
+  if (!entry) return null
+  if (entry.selected_option_ids) return entry.selected_option_ids
+  return entry.answer_value ?? null
+}
+function computeVisibleIds(questions, rules, draft) {
+  const visible = new Set(questions.map((q) => q.id))
+  for (const rule of rules || []) {
+    const matches = _ruleMatches(rule.operator, _draftActual(draft, rule.source_question_id), rule.comparison_value)
+    if ((rule.action === 'show' && !matches) || (rule.action === 'hide' && matches)) visible.delete(rule.target_question_id)
+  }
+  return visible
+}
+function hasDraftAnswer(entry) {
+  if (!entry) return false
+  if (entry.selected_option_ids) return entry.selected_option_ids.length > 0
+  return entry.answer_value !== null && entry.answer_value !== undefined && entry.answer_value !== ''
+}
+
+// One entry point, one cohesive form, one final Submit Feedback button — the
+// whole Event Feedback / Survey experience. Every answer autosaves silently
+// in the background (via onAutosave) the moment it changes; that alone never
+// completes the survey, shows a per-question confirmation, or affects
+// analytics — only pressing Submit Feedback (onComplete) does, and it's the
+// server, not this component, that has final say on what was required.
+function SurveyForm({ activity, rules, draftAnswersFromServer, completedAt, onAutosave, onComplete, busy }) {
+  const [draft, setDraft] = useState(() => draftAnswersFromServer || {})
+  const [submitted, setSubmitted] = useState(false)
+  const [submitting, setSubmitting] = useState(false)
+  const [missingIds, setMissingIds] = useState([])
+  const [submitError, setSubmitError] = useState('')
+  const timers = useRef({})
+
+  useEffect(() => () => { Object.values(timers.current).forEach(clearTimeout) }, [])
+
+  const allQuestions = activity.questions.filter((q) => q.status === 'active')
+  const visibleIds = computeVisibleIds(allQuestions, rules, draft)
+  const visibleQuestions = allQuestions.filter((q) => visibleIds.has(q.id))
+  const requiredVisible = visibleQuestions.filter((q) => q.required)
+  const answeredRequiredCount = requiredVisible.filter((q) => hasDraftAnswer(draft[q.id])).length
+  const progressPercent = requiredVisible.length ? Math.round((answeredRequiredCount / requiredVisible.length) * 100) : 100
+
+  function handleDraftChange(questionId, payload) {
+    setDraft((current) => ({ ...current, [questionId]: payload }))
+    setMissingIds((current) => current.filter((id) => id !== questionId))
+    clearTimeout(timers.current[questionId])
+    timers.current[questionId] = setTimeout(() => { onAutosave(questionId, payload) }, 600)
+  }
+
+  async function flushPendingSaves() {
+    const pending = Object.entries(timers.current).filter(([, timer]) => timer)
+    for (const [questionId] of pending) {
+      clearTimeout(timers.current[questionId])
+      timers.current[questionId] = null
+      await onAutosave(questionId, draft[questionId])
+    }
+  }
+
+  function focusFirstMissing(ids) {
+    const target = ids[0]
+    if (!target) return
+    window.requestAnimationFrame(() => document.getElementById(`question-${target}`)?.scrollIntoView({ behavior: 'smooth', block: 'center' }))
+  }
+
+  async function handleSubmit() {
+    if (submitting) return
+    const missingBeforeSave = requiredVisible.filter((q) => !hasDraftAnswer(draft[q.id])).map((q) => q.id)
+    if (missingBeforeSave.length > 0) {
+      setMissingIds(missingBeforeSave)
+      setSubmitError('Please answer the highlighted questions before submitting.')
+      focusFirstMissing(missingBeforeSave)
+      return
+    }
+    setSubmitting(true); setSubmitError('')
+    try {
+      await flushPendingSaves()
+      const result = await onComplete()
+      if (result?.completed) {
+        setSubmitted(true)
+      } else if (result) {
+        setMissingIds(result.missing_question_ids || [])
+        setSubmitError('Please answer the highlighted questions before submitting.')
+        focusFirstMissing(result.missing_question_ids || [])
+      } else {
+        setSubmitError('Something went wrong submitting your feedback. Please try again.')
+      }
+    } finally {
+      setSubmitting(false)
+    }
+  }
+
+  if (submitted || completedAt) {
+    return (
+      <div className="rounded-2xl border border-emerald-200 bg-emerald-50 p-8 text-center dark:border-emerald-800 dark:bg-emerald-950">
+        <div className="text-2xl font-extrabold text-emerald-900 dark:text-emerald-100">Thank You</div>
+        <p className="mt-3 text-sm font-bold text-emerald-800 dark:text-emerald-200">Jazakum Allahu Khairan for sharing your feedback.</p>
+        <p className="mt-2 text-sm text-emerald-700 dark:text-emerald-300">Your input will help the MBF planning committee build an even better Summit experience, in sha Allah.</p>
+      </div>
+    )
+  }
+
+  const sections = []
+  for (const question of visibleQuestions) {
+    const label = question.config?.section || null
+    const last = sections[sections.length - 1]
+    if (!last || last.label !== label) sections.push({ label, questions: [question] })
+    else last.questions.push(question)
+  }
+
+  return (
+    <div className="grid gap-4 pb-2">
+      {activity.description && <p className="text-sm text-slate-600 dark:text-slate-300">{activity.description}</p>}
+      {requiredVisible.length > 0 && (
+        <div>
+          <div className="flex justify-between text-xs font-bold text-slate-500 dark:text-slate-400"><span>Survey progress</span><span>{progressPercent}%</span></div>
+          <div className="mt-1 h-2 overflow-hidden rounded-full bg-slate-100 dark:bg-slate-800"><div className="h-full rounded-full bg-teal-400 transition-all" style={{ width: `${progressPercent}%` }} /></div>
+        </div>
+      )}
+      {sections.map((section, sectionIndex) => (
+        <div key={sectionIndex} className="grid gap-3">
+          {section.label && <div className="mt-2 border-b border-teal-100 pb-1 text-xs font-extrabold uppercase tracking-wide text-teal-700 dark:border-teal-900 dark:text-teal-300">{section.label}</div>}
+          {section.questions.map((question) => (
+            <QuestionCard key={question.id} question={question} index={visibleQuestions.indexOf(question)} onAnswer={() => {}} busy={busy}
+              draftMode draftValue={draft[question.id]} onDraftChange={(payload) => handleDraftChange(question.id, payload)}
+              missing={missingIds.includes(question.id)} />
+          ))}
+        </div>
+      ))}
+      {submitError && <p role="alert" className="text-sm font-bold text-rose-600 dark:text-rose-300">{submitError}</p>}
+      <button type="button" disabled={submitting} onClick={handleSubmit}
+        className="sticky bottom-2 min-h-14 rounded-xl bg-teal-400 px-4 py-3 text-base font-extrabold text-slate-950 shadow-lg disabled:opacity-60">
+        {submitting ? 'Submitting…' : 'Submit Feedback'}
+      </button>
+    </div>
+  )
+}
+
+function QuestionCard({ question, index, onAnswer, busy, alreadyAnswered, draftMode, draftValue, onDraftChange, missing }) {
   const isOptionType = ['single_choice', 'true_false', 'yes_no', 'multiple_choice'].includes(question.question_type)
   const isRating = ['rating_5', 'rating_10', 'nps'].includes(question.question_type)
   const isNumber = question.question_type === 'number'
@@ -294,19 +476,23 @@ function QuestionCard({ question, index, onAnswer, busy, alreadyAnswered }) {
   const isQuadrant = question.question_type === 'quadrant'
   const isImageClick = question.question_type === 'image_click'
   const isFreeform = !isOptionType && !isRating && !isNumber && !isRanking && !isQuadrant && !isImageClick
+  const draftProps = draftMode ? { draftMode: true, draftValue, onDraftChange } : {}
   return (
-    <div className="rounded-2xl border border-slate-200 bg-white p-4 dark:border-slate-700 dark:bg-slate-900">
-      <div className="text-xs font-extrabold uppercase tracking-wide text-slate-600 dark:text-slate-300">Question {index + 1}</div>
+    <div id={`question-${question.id}`} className={`rounded-2xl border p-4 ${missing ? 'border-rose-400 bg-rose-50 dark:border-rose-700 dark:bg-rose-950/40' : 'border-slate-200 bg-white dark:border-slate-700 dark:bg-slate-900'}`}>
+      <div className="text-xs font-extrabold uppercase tracking-wide text-slate-600 dark:text-slate-300">
+        Question {index + 1}{question.required && <span className="ml-1 text-rose-500" aria-hidden="true">*</span>}
+      </div>
       <div className="mt-1 text-base font-extrabold text-slate-900 dark:text-white">{question.prompt}</div>
+      {missing && <p role="alert" className="mt-1 text-xs font-bold text-rose-600 dark:text-rose-300">This question needs an answer before you can submit.</p>}
       <QuestionTimer question={question}/>
       <div className="mt-3">
-        {isOptionType && <OptionQuestion question={question} onAnswer={onAnswer} busy={busy} alreadyAnswered={alreadyAnswered} />}
-        {isRating && <RatingQuestion question={question} onAnswer={onAnswer} busy={busy} alreadyAnswered={alreadyAnswered} />}
-        {isNumber && <NumberQuestion question={question} onAnswer={onAnswer} busy={busy} alreadyAnswered={alreadyAnswered} />}
-        {isRanking && <RankingQuestion question={question} onAnswer={onAnswer} busy={busy} alreadyAnswered={alreadyAnswered} />}
-        {isQuadrant && <QuadrantQuestion question={question} onAnswer={onAnswer} busy={busy} alreadyAnswered={alreadyAnswered} />}
-        {isImageClick && <ImageClickQuestion question={question} onAnswer={onAnswer} busy={busy} alreadyAnswered={alreadyAnswered} />}
-        {isFreeform && <TextQuestion question={question} onAnswer={onAnswer} busy={busy} alreadyAnswered={alreadyAnswered} />}
+        {isOptionType && <OptionQuestion question={question} onAnswer={onAnswer} busy={busy} alreadyAnswered={alreadyAnswered} {...draftProps} />}
+        {isRating && <RatingQuestion question={question} onAnswer={onAnswer} busy={busy} alreadyAnswered={alreadyAnswered} {...draftProps} />}
+        {isNumber && <NumberQuestion question={question} onAnswer={onAnswer} busy={busy} alreadyAnswered={alreadyAnswered} {...draftProps} />}
+        {isRanking && <RankingQuestion question={question} onAnswer={onAnswer} busy={busy} alreadyAnswered={alreadyAnswered} {...draftProps} />}
+        {isQuadrant && <QuadrantQuestion question={question} onAnswer={onAnswer} busy={busy} alreadyAnswered={alreadyAnswered} {...draftProps} />}
+        {isImageClick && <ImageClickQuestion question={question} onAnswer={onAnswer} busy={busy} alreadyAnswered={alreadyAnswered} {...draftProps} />}
+        {isFreeform && <TextQuestion question={question} onAnswer={onAnswer} busy={busy} alreadyAnswered={alreadyAnswered} {...draftProps} />}
       </div>
     </div>
   )
@@ -460,6 +646,28 @@ function ActivityView({ guestToken, activityId, onBack }) {
     } catch (e) { setError(e); return null } finally { setBusy(false) }
   }
 
+  // Survey/feedback autosave: unlike onAnswer above, every call needs its OWN
+  // fresh idempotency key -- the guest may revise the same question's draft
+  // more than once before Submit Feedback, and reusing one key per question
+  // (as onAnswer deliberately does for quiz/poll's answer-once model) would
+  // silently freeze the saved value at whatever the first save captured.
+  // Doesn't await/trigger a full reload -- SSE/polling already keeps `state`
+  // fresh, and a reload isn't needed for the local draft to stay correct.
+  async function autosaveAnswer(questionId, payload) {
+    try {
+      await api.liveGuestRespond(guestToken, activityId, { question_id: questionId, idempotency_key: uid(), ...payload })
+      return true
+    } catch (e) { setError(e); return false }
+  }
+
+  async function completeSurvey() {
+    try {
+      const result = await api.liveGuestComplete(guestToken, activityId)
+      await load()
+      return result
+    } catch (e) { setError(e); return null }
+  }
+
   if (error?.code === 'FESTIO_LIVE_UNAVAILABLE') return <LiveUnavailableState onRetry={() => { setError(''); load() }} />
   if (!state) return <p className="text-sm text-slate-600 dark:text-slate-300">Loading…</p>
   const { activity, already_responded_question_ids } = state
@@ -480,7 +688,7 @@ function ActivityView({ guestToken, activityId, onBack }) {
       ) : activity.status === 'closed' || activity.status === 'completed' ? (
         <div className="rounded-2xl border border-slate-200 bg-white p-4 text-sm font-bold text-slate-500 dark:border-slate-700 dark:bg-slate-900">This activity has ended — thanks for joining!</div>
       ) : ['survey', 'feedback'].includes(activity.type) ? (
-        <SurveyForm activity={activity} answered={answered} onAnswer={onAnswer} busy={busy} />
+        <SurveyForm activity={activity} rules={state.rules} draftAnswersFromServer={state.draft_answers} completedAt={state.completed_at} onAutosave={autosaveAnswer} onComplete={completeSurvey} busy={busy} />
       ) : (
         <div className="grid gap-3">
           {activity.status === 'paused' && <div className="rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm font-bold text-amber-800">The presenter has paused this activity.</div>}

@@ -1578,6 +1578,7 @@ export const api = {
   liveGuestProgramParticipation: (guestToken) => liveGuestReq(guestToken, 'GET', '/v1/my-program-participation'),
   liveGuestParticipate: (guestToken, activityId) => liveGuestReq(guestToken, 'GET', `/v1/activities/${activityId}/participate`),
   liveGuestRespond: (guestToken, activityId, body) => liveGuestReq(guestToken, 'POST', `/v1/activities/${activityId}/respond`, body),
+  liveGuestComplete: (guestToken, activityId) => liveGuestReq(guestToken, 'POST', `/v1/activities/${activityId}/complete`),
   liveGuestResults: (guestToken, activityId) => liveGuestReq(guestToken, 'GET', `/v1/activities/${activityId}/results`),
   liveGuestLeaderboard: (guestToken, activityId) => liveGuestReq(guestToken, 'GET', `/v1/activities/${activityId}/leaderboard`),
   liveGuestQnaList: (guestToken, activityId) => liveGuestReq(guestToken, 'GET', `/v1/activities/${activityId}/qna`),

@@ -79,6 +79,9 @@ class AuthRequiredTests(unittest.TestCase):
         resp = client.post("/api/engagement/v1/activities/x/respond", json={"question_id": "q", "idempotency_key": "k"})
         self.assertEqual(resp.status_code, 401)
 
+    def test_complete_requires_auth(self):
+        self.assertEqual(client.post("/api/engagement/v1/activities/x/complete").status_code, 401)
+
     def test_live_activities_requires_auth(self):
         self.assertEqual(client.get("/api/engagement/v1/activities/live").status_code, 401)
 

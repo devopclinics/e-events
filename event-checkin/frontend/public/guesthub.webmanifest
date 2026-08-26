@@ -1,0 +1,13 @@
+{
+  "name": "Festio Guest Hub",
+  "short_name": "FestioHub",
+  "description": "Your personal event pass, schedule, and messages.",
+  "start_url": "/?guesthub=1",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#07111f",
+  "theme_color": "#14b8a6",
+  "icons": [
+    { "src": "/guesthub-icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any" }
+  ]
+}

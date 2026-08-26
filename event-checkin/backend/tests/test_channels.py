@@ -56,3 +56,19 @@ def test_superadmin_block_wins_over_policy_and_flags():
     # And it wins over a policy that lists it first (falls back to next).
     ev2 = _event(policy={"invite": ["whatsapp", "sms"]}, blocked=["whatsapp"])
     assert channels_for_flow(ev2, _guest(), "invite", paid_ok=True) == {"sms"}
+
+
+def test_mode_all_sends_every_configured_deliverable_channel():
+    ev = _event(policy={"invite": {"mode": "all", "channels": ["email", "sms", "whatsapp"]}})
+    assert channels_for_flow(ev, _guest(), "invite", paid_ok=True) == {"email", "sms", "whatsapp"}
+
+
+def test_mode_all_drops_channels_the_guest_cant_receive():
+    ev = _event(policy={"invite": {"mode": "all", "channels": ["email", "sms", "whatsapp"]}})
+    # No whatsapp consent → still sends on email + sms, just not whatsapp.
+    assert channels_for_flow(ev, _guest(whatsapp=False), "invite", paid_ok=True) == {"email", "sms"}
+
+
+def test_mode_priority_dict_shape_behaves_like_legacy_list():
+    ev = _event(policy={"invite": {"mode": "priority", "channels": ["sms", "email"]}})
+    assert channels_for_flow(ev, _guest(), "invite", paid_ok=True) == {"sms"}

@@ -71,6 +71,9 @@
 .cm-matrix thead th svg { vertical-align: -2px; margin-right: 4px; }
 .cm-matrix-cell { text-align: center; }
 .cm-matrix-cell input[type='checkbox'] { width: 16px; height: 16px; accent-color: var(--teal); cursor: pointer; }
+.cm-matrix-mode { text-align: center; }
+.cm-matrix-mode select { font-size: 12px; padding: 4px 6px; border-radius: 6px; border: 1px solid var(--border, #d8dee5); background: var(--panel-bg, #fff); cursor: pointer; }
+.cm-matrix-mode select:disabled { opacity: 0.6; cursor: default; }
 
 /* ── credits row ──────────────────────────────────────────────────────── */
 .cm-credit-row { display: flex; align-items: center; gap: 12px; margin-bottom: 14px; }

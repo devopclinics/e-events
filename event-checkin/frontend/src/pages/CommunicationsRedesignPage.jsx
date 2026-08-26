@@ -1236,7 +1236,7 @@ function SettingsTab({ notify, eventId, event, onEventChanged }) {
   const [addons, setAddons] = useState(() => Object.fromEntries(ADDON_TOGGLES.map((a) => [a.key, a.on])))
   const [channelToggles, setChannelToggles] = useState(() => Object.fromEntries(CHANNEL_TOGGLE_ROWS.map((c) => [c.key, c.on])))
   const [routing, setRouting] = useState(() =>
-    Object.fromEntries(ROUTING_ROWS.map((r) => [r.key, { email: r.email, sms: r.sms, whatsapp: r.whatsapp, mms: r.mms }]))
+    Object.fromEntries(ROUTING_ROWS.map((r) => [r.key, { email: r.email, sms: r.sms, whatsapp: r.whatsapp, mms: r.mms, mode: 'all' }]))
   )
   const [declineNotify, setDeclineNotify] = useState(true)
   const [thankYou, setThankYou] = useState(true)
@@ -1278,8 +1278,10 @@ function SettingsTab({ notify, eventId, event, onEventChanged }) {
     const policy = event.channel_policy || {}
     setRouting(Object.fromEntries(ROUTING_ROWS.map((row) => {
       const configured = policy[ROUTE_API_KEY[row.key]]
-      const enabled = configured || ['email', 'sms', 'whatsapp', 'mms'].filter((ch) => row[ch])
-      return [row.key, Object.fromEntries(['email', 'sms', 'whatsapp', 'mms'].map((ch) => [ch, enabled.includes(ch)]))]
+      const configuredChannels = Array.isArray(configured) ? configured : configured?.channels
+      const enabled = configuredChannels || ['email', 'sms', 'whatsapp', 'mms'].filter((ch) => row[ch])
+      const mode = Array.isArray(configured) ? 'priority' : (configured?.mode || 'all')
+      return [row.key, { ...Object.fromEntries(['email', 'sms', 'whatsapp', 'mms'].map((ch) => [ch, enabled.includes(ch)])), mode }]
     })))
     setChannelToggles({ email: !!event.notify_email, sms: !!event.notify_sms, whatsapp: !!event.notify_whatsapp })
     setAddons(Object.fromEntries(ADDON_TOGGLES.map((a) => [a.key, !!event[ADDON_FEATURE_KEY[a.key]]])))
@@ -1527,34 +1529,50 @@ function SettingsTab({ notify, eventId, event, onEventChanged }) {
     notify(`${label} channel ${next ? 'turned on' : 'turned off'}`)
   }
 
-  async function toggleRoute(rowKey, ch, rowLabel) {
-    if (!eventId || routingBusy) return
-    const next = { ...routing, [rowKey]: { ...routing[rowKey], [ch]: !routing[rowKey][ch] } }
-    if (!Object.values(next[rowKey]).some(Boolean)) {
-      notify('At least one channel is required for each automated message flow.')
-      return
-    }
+  function applyRoutingResponse(updated) {
+    if (!updated?.channel_policy) return
+    setRouting(Object.fromEntries(ROUTING_ROWS.map((row) => {
+      const configured = updated.channel_policy[ROUTE_API_KEY[row.key]]
+      const configuredChannels = Array.isArray(configured) ? configured : configured?.channels
+      const enabled = configuredChannels || []
+      const mode = Array.isArray(configured) ? 'priority' : (configured?.mode || 'all')
+      return [row.key, { ...Object.fromEntries(['email', 'sms', 'whatsapp', 'mms'].map((channel) => [channel, enabled.includes(channel)])), mode }]
+    })))
+  }
+
+  async function saveRouting(next) {
     const payload = Object.fromEntries(Object.entries(next).map(([key, values]) => [
       ROUTE_API_KEY[key],
-      ['email', 'sms', 'whatsapp', 'mms'].filter((channel) => values[channel]),
+      { mode: values.mode, channels: ['email', 'sms', 'whatsapp', 'mms'].filter((channel) => values[channel]) },
     ]))
     setRoutingBusy(true)
     try {
       const updated = await api.setChannelPolicy(eventId, payload)
       setRouting(next)
-      notify(`${rowLabel} → ${ch.toUpperCase()} ${next[rowKey][ch] ? 'enabled' : 'disabled'}`)
-      if (updated?.channel_policy) {
-        // Keep the confirmed server order/state as the source of truth.
-        setRouting(Object.fromEntries(ROUTING_ROWS.map((row) => {
-          const enabled = updated.channel_policy[ROUTE_API_KEY[row.key]] || []
-          return [row.key, Object.fromEntries(['email', 'sms', 'whatsapp', 'mms'].map((channel) => [channel, enabled.includes(channel)]))]
-        })))
-      }
+      applyRoutingResponse(updated)
     } catch (e) {
       notify(e.message || 'Channel routing could not be saved')
     } finally {
       setRoutingBusy(false)
     }
+  }
+
+  async function toggleRoute(rowKey, ch, rowLabel) {
+    if (!eventId || routingBusy) return
+    const next = { ...routing, [rowKey]: { ...routing[rowKey], [ch]: !routing[rowKey][ch] } }
+    if (!['email', 'sms', 'whatsapp', 'mms'].some((channel) => next[rowKey][channel])) {
+      notify('At least one channel is required for each automated message flow.')
+      return
+    }
+    notify(`${rowLabel} → ${ch.toUpperCase()} ${next[rowKey][ch] ? 'enabled' : 'disabled'}`)
+    await saveRouting(next)
+  }
+
+  async function setRouteMode(rowKey, mode, rowLabel) {
+    if (!eventId || routingBusy || routing[rowKey].mode === mode) return
+    const next = { ...routing, [rowKey]: { ...routing[rowKey], mode } }
+    notify(`${rowLabel} → ${mode === 'all' ? 'sends on every checked channel' : 'sends on the first available channel only'}`)
+    await saveRouting(next)
   }
 
   return (
@@ -1635,6 +1653,7 @@ function SettingsTab({ notify, eventId, event, onEventChanged }) {
               <th><Icon name="message" size={13} /> SMS</th>
               <th><Icon name="whatsapp" size={13} /> WhatsApp</th>
               <th><Icon name="image" size={13} /> MMS</th>
+              <th>Delivery</th>
             </tr>
           </thead>
           <tbody>
@@ -1651,6 +1670,17 @@ function SettingsTab({ notify, eventId, event, onEventChanged }) {
                     />
                   </td>
                 ))}
+                <td className="cm-matrix-mode">
+                  <select
+                    value={routing[r.key].mode}
+                    disabled={routingBusy}
+                    onChange={(e) => setRouteMode(r.key, e.target.value, r.label)}
+                    title="How the checked channels above are used for this message type"
+                  >
+                    <option value="all">All checked channels</option>
+                    <option value="priority">First available (cheapest)</option>
+                  </select>
+                </td>
               </tr>
             ))}
           </tbody>

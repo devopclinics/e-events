@@ -1081,13 +1081,23 @@ async def set_channel_policy(
     db: AsyncSession = Depends(get_db),
     user: User = Depends(require_event_admin),
 ):
-    """Per-flow channel priority (cost control). Body: {flow: [ordered channels]}.
+    """Per-flow channel policy (see channels.py). Body: {flow: [ordered channels]}
+    for priority/fallback (legacy shape, cost control), or
+    {flow: {"mode": "all"|"priority", "channels": [...]}} to also allow sending
+    on every configured channel instead of just the first deliverable one.
     Unknown flows/channels are ignored; an empty map clears the policy (legacy
     'send on all enabled channels')."""
     event = await _get_accessible_event(event_id, user, db)
-    policy: dict[str, list[str]] = {}
-    for flow, channels in (body or {}).items():
-        if flow not in _POLICY_FLOWS or not isinstance(channels, list):
+    policy: dict[str, list[str] | dict] = {}
+    for flow, raw in (body or {}).items():
+        if flow not in _POLICY_FLOWS:
+            continue
+        mode = "priority"
+        channels = raw
+        if isinstance(raw, dict):
+            mode = raw.get("mode") if raw.get("mode") in ("all", "priority") else "priority"
+            channels = raw.get("channels")
+        if not isinstance(channels, list):
             continue
         ordered = [c for c in channels if c in _POLICY_CHANNELS]
         # preserve order, drop dupes
@@ -1096,7 +1106,7 @@ async def set_channel_policy(
             if c not in seen:
                 seen.append(c)
         if seen:
-            policy[flow] = seen
+            policy[flow] = {"mode": mode, "channels": seen}
     event.channel_policy = policy or None
     await db.commit()
     await db.refresh(event)

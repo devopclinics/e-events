@@ -9,6 +9,7 @@ QuestionStatus = Literal["active", "archived"]
 QuestionType = Literal[
     "single_choice", "multiple_choice", "true_false", "yes_no", "short_text",
     "long_text", "rating_5", "rating_10", "nps", "number", "word_cloud", "ranking",
+    "quadrant", "image_click",
 ]
 
 
@@ -24,6 +25,7 @@ class OptionOut(BaseModel):
     label: str
     sequence: int
     is_correct: bool | None = None
+    config: dict[str, Any] = Field(default_factory=dict)
 
 
 class QuestionCreate(BaseModel):
@@ -119,6 +121,7 @@ class ActivitySummary(BaseModel):
     created_at: datetime
     response_count: int = 0
     participant_count: int = 0
+    config: dict[str, Any] = Field(default_factory=dict)
 
 
 class ProgramSessionOut(BaseModel):
@@ -231,6 +234,20 @@ class QuestionResultOut(BaseModel):
     average_rating: float | None = None
     text_samples: list[str] = Field(default_factory=list)
     ranking_scores: dict[str, int] = Field(default_factory=dict)
+    # Discrete value -> count, for rating_5/rating_10/nps (a real distribution,
+    # not just the average) — keys are stringified because JSON object keys
+    # must be strings.
+    value_counts: dict[str, int] = Field(default_factory=dict)
+    # Raw numeric answers for "number" questions, capped so the payload stays
+    # small — enough for the display to bin its own histogram.
+    numeric_values: list[float] = Field(default_factory=list)
+    # Response count per fixed time bucket since the question opened, for a
+    # live participation trend line. Pre-bucketed server-side rather than
+    # shipping raw timestamps, which keeps individual submission times private.
+    response_timeline: list[int] = Field(default_factory=list)
+    # Normalized (0..1, 0..1) points for quadrant and image_click questions —
+    # a real scatter/heatmap needs real coordinates, not a synthesized shape.
+    points: list[list[float]] = Field(default_factory=list)
 
 
 class ActivityResultsOut(BaseModel):
@@ -367,6 +384,11 @@ class DisplaySettings(BaseModel):
     agenda: list[dict[str, Any]] = Field(default_factory=list, max_length=12)
     sponsors: list[str] = Field(default_factory=list, max_length=8)
     team_names: list[str] = Field(default_factory=list, max_length=4)
+    # Off by default -- see app/worker.py's _display_autofollow_tick. When on,
+    # this screen re-points itself to whatever's live for whatever program
+    # session is happening right now, so one TV can run the whole day
+    # unattended instead of staff manually reassigning it each time.
+    auto_follow_program: bool = False
 
 
 class DisplaySettingsUpdate(BaseModel):
@@ -390,6 +412,7 @@ class DisplaySettingsUpdate(BaseModel):
     agenda: list[dict[str, Any]] | None = Field(default=None, max_length=12)
     sponsors: list[str] | None = Field(default=None, max_length=8)
     team_names: list[str] | None = Field(default=None, max_length=4)
+    auto_follow_program: bool | None = None
 
 
 class DisplayCreate(BaseModel):

@@ -136,12 +136,55 @@ async def _compute_results(activity: EngagementActivity, db: AsyncSession) -> Ac
             for response in q_responses:
                 for selection in response.selections:
                     ranking_scores[selection.option_id] += max(1, option_count - selection.sequence)
+
+        points: list[list[float]] = []
+        if question.question_type in ("quadrant", "image_click"):
+            points = [
+                [r.answer_value["x"], r.answer_value["y"]] for r in q_responses
+                if isinstance(r.answer_value, dict) and "x" in r.answer_value and "y" in r.answer_value
+            ][:500]
+
+        value_counts: Counter[str] = Counter()
+        numeric_values: list[float] = []
+        if question.question_type in ("rating_5", "rating_10", "nps"):
+            for value in ratings:
+                value_counts[str(int(value))] += 1
+        elif question.question_type == "number":
+            numeric_values = ratings[:300]
+
+        response_timeline: list[int] = []
+        opened_at_raw = question.config.get("opened_at")
+        if opened_at_raw and q_responses:
+            try:
+                opened_at = datetime.fromisoformat(opened_at_raw)
+                if opened_at.tzinfo is None:
+                    opened_at = opened_at.replace(tzinfo=timezone.utc)
+                now = datetime.now(timezone.utc)
+                span = max((now - opened_at).total_seconds(), 1.0)
+                bucket_count = 12
+                bucket_seconds = span / bucket_count
+                buckets = [0] * bucket_count
+                for response in q_responses:
+                    submitted = response.submitted_at
+                    if submitted.tzinfo is None:
+                        submitted = submitted.replace(tzinfo=timezone.utc)
+                    elapsed = (submitted - opened_at).total_seconds()
+                    index = min(bucket_count - 1, max(0, int(elapsed // bucket_seconds)))
+                    buckets[index] += 1
+                response_timeline = buckets
+            except ValueError:
+                pass
+
         questions_out.append(QuestionResultOut(
             question_id=question.id, question_type=question.question_type, prompt=question.prompt,
             response_count=len(q_responses), option_counts=dict(option_counts),
             average_rating=(sum(ratings) / len(ratings)) if ratings else None,
             text_samples=text_samples,
             ranking_scores=dict(ranking_scores),
+            value_counts=dict(value_counts),
+            numeric_values=numeric_values,
+            response_timeline=response_timeline,
+            points=points,
         ))
 
     return ActivityResultsOut(
@@ -229,7 +272,7 @@ async def _display_payload(activity: EngagementActivity, db: AsyncSession) -> di
 
     safe_config_keys = {
         "event_name", "event_venue", "start_at", "join_code", "leaderboard_enabled",
-        "display_scene", "moderation_enabled", "live_results_enabled",
+        "display_scene", "moderation_enabled", "live_results_enabled", "registered_progress_mode",
     }
     return {
         "event_id": activity.event_id,
@@ -246,10 +289,19 @@ async def _display_payload(activity: EngagementActivity, db: AsyncSession) -> di
             {
                 **q.model_dump(),
                 "option_labels": {o.id: o.label for source in activity.questions if source.id == q.question_id for o in source.options},
+                "option_images": {
+                    o.id: o.config["image_url"] for source in activity.questions if source.id == q.question_id
+                    for o in source.options if o.config.get("image_url")
+                },
                 "correct_option_ids": [
                     o.id for source in activity.questions if source.id == q.question_id
                     for o in source.options if o.is_correct and source.live_state == "answer_revealed"
                 ],
+                "board_image": next((source.config.get("image_url") for source in activity.questions if source.id == q.question_id and source.question_type == "image_click"), None),
+                "axis_labels": next((
+                    {k: source.config.get(k) for k in ("x_label_low", "x_label_high", "y_label_low", "y_label_high") if source.config.get(k)}
+                    for source in activity.questions if source.id == q.question_id and source.question_type == "quadrant"
+                ), {}),
                 "explanation": next((source.config.get("explanation") for source in activity.questions if source.id == q.question_id and source.live_state == "answer_revealed"), None),
                 "time_limit_seconds": next((source.time_limit_seconds for source in activity.questions if source.id == q.question_id), None),
                 "opened_at": next((source.config.get("opened_at") for source in activity.questions if source.id == q.question_id), None),
@@ -321,7 +373,10 @@ async def respond(activity_id: str, body: RespondIn, request: Request, identity:
     question = next((q for q in activity.questions if q.id == body.question_id and q.status == "active"), None)
     if not question:
         raise HTTPException(404, "Question not found")
-    if question.live_state != "open" or activity.config.get("current_question_id") != question.id:
+    # A survey or feedback form is self-paced, not a presenter-advanced quiz/
+    # poll -- every active question is answerable the whole time the activity
+    # is live, not just whichever one Live Control currently has "open".
+    if activity.type not in ("survey", "feedback") and (question.live_state != "open" or activity.config.get("current_question_id") != question.id):
         raise HTTPException(409, "This question isn't open for responses")
     if question.time_limit_seconds and question.config.get("opened_at"):
         try:
@@ -360,6 +415,17 @@ async def respond(activity_id: str, body: RespondIn, request: Request, identity:
             low, high = limits[question.question_type]
             if not low <= body.answer_value <= high:
                 raise HTTPException(422, f"Response must be between {low} and {high}")
+    if question.question_type in {"quadrant", "image_click"}:
+        point = body.answer_value
+        if (
+            not isinstance(point, dict)
+            or "x" not in point or "y" not in point
+            or not isinstance(point.get("x"), (int, float)) or isinstance(point.get("x"), bool)
+            or not isinstance(point.get("y"), (int, float)) or isinstance(point.get("y"), bool)
+            or not (0 <= point["x"] <= 1) or not (0 <= point["y"] <= 1)
+        ):
+            raise HTTPException(422, "Tap a point on the board to answer")
+        body.answer_value = {"x": float(point["x"]), "y": float(point["y"])}
 
     # Idempotent re-submission: same participant+question+idempotency_key
     # returns the original response instead of erroring or double-counting —

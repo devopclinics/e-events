@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import './LiveBroadcastCanvas.css'
+import { DonutChart, DonutLegend, Histogram, RatingDistribution, RankingChart, StarRating, ImageChoiceGrid, TrendLine, ScatterPlot, Heatmap } from './charts/LiveCharts'
 
 const FALLBACK_WORDS = [
   ['inspiring', 12], ['community', 9], ['connected', 8], ['action', 7],
@@ -20,10 +21,38 @@ function resolveScene(requested, state, followActivity) {
   return 'question'
 }
 
+function useRegisteredCount(eventId, enabled) {
+  const [registeredCount, setRegisteredCount] = useState(null)
+  useEffect(() => {
+    if (!enabled || !eventId) return undefined
+    let cancelled = false
+    fetch(`/api/events/${encodeURIComponent(eventId)}/live/registered-count`)
+      .then((res) => res.ok ? res.json() : null)
+      .then((data) => { if (!cancelled && data) setRegisteredCount(data.count) })
+      .catch(() => {})
+    return () => { cancelled = true }
+  }, [enabled, eventId])
+  return registeredCount
+}
+
 function Brand({ state, settings }) {
   return <div className="flb-top">
     <div className="flb-brand"><span className="flb-mark">F</span>Festio Live</div>
     <div className="flb-event">{settings.event_name || state.display_config?.event_name || state.title}<span className="flb-connected">● {state.participant_count || 0} connected</span></div>
+  </div>
+}
+
+function RegisteredProgressBanner({ state }) {
+  const mode = state.display_config?.registered_progress_mode
+  const registeredCount = useRegisteredCount(state.event_id, mode === 'full' || mode === 'percent')
+  if (!mode || mode === 'off' || !registeredCount) return null
+  // Unique people who've responded -- not the count of individual question
+  // answers, which for a 9-question survey would be up to 9x inflated.
+  const responders = state.participant_count || 0
+  const percent = Math.round((responders / registeredCount) * 100)
+  return <div className="flb-progress-banner">
+    {mode === 'full' && <span className="flb-progress-banner-count">{responders} of {registeredCount} guests responded</span>}
+    <span className="flb-progress-banner-percent">{percent}%<small>of guests — add yours!</small></span>
   </div>
 }
 
@@ -47,6 +76,78 @@ function ResultsBars({ question }) {
       <span>{label}</span><div className="flb-bar"><i style={{ width: `${Math.max(3, percent)}%`, '--bar-index': index }}>{count || ''}</i></div><strong>{percent}%</strong>
     </div>
   })}</div>
+}
+
+const SINGLE_SELECT_TYPES = ['single_choice', 'true_false', 'yes_no']
+
+function ResultsVisual({ question }) {
+  const images = question?.option_images || {}
+  const hasImages = Object.keys(images).length > 0
+  const labels = question?.option_labels || {}
+
+  if (question?.question_type === 'ranking') {
+    const items = Object.entries(question.ranking_scores || {}).map(([id, score]) => ({ id, label: labels[id] || id, score }))
+    return items.length ? <RankingChart items={items}/> : <ResultsBars question={question}/>
+  }
+  if (question?.question_type === 'number') {
+    return question.numeric_values?.length ? <Histogram values={question.numeric_values}/> : <EmptyState title="Waiting on numeric answers"/>
+  }
+  if (question?.question_type === 'quadrant') {
+    return question.points?.length ? <ScatterPlot points={question.points} labels={question.axis_labels}/> : <EmptyState title="Waiting on the room's picks"/>
+  }
+  if (['rating_5', 'rating_10', 'nps'].includes(question?.question_type)) {
+    if (question.average_rating == null) return <EmptyState title="Waiting on the first rating"/>
+    const scaleMax = question.question_type === 'rating_5' ? 5 : 10
+    const scaleMin = question.question_type === 'nps' ? 0 : 1
+    return <div className="flb-rating-results"><div className="flb-rating-average"><strong>{question.average_rating.toFixed(1)}</strong><span>average of {scaleMax}</span></div>{scaleMax === 5 ? <StarRating average={question.average_rating} max={5}/> : null}{Object.keys(question.value_counts || {}).length ? <RatingDistribution valueCounts={question.value_counts} max={scaleMax} min={scaleMin}/> : null}</div>
+  }
+  if (question?.question_type === 'image_click') {
+    return question.points?.length ? <Heatmap points={question.points} image={question.board_image}/> : <EmptyState title="Waiting on the room's taps"/>
+  }
+  if (hasImages) {
+    const items = Object.entries(labels).map(([id, label]) => ({ id, label, image: images[id], count: question.option_counts?.[id] || 0 }))
+    return <ImageChoiceGrid items={items}/>
+  }
+  if (SINGLE_SELECT_TYPES.includes(question?.question_type)) {
+    const segments = Object.entries(labels).map(([id, label]) => ({ id, label, value: question.option_counts?.[id] || 0 }))
+    return <div className="flb-donut-row"><DonutChart segments={segments}/><DonutLegend segments={segments}/></div>
+  }
+  return <ResultsBars question={question}/>
+}
+
+function CompactAnswerSummary({ question }) {
+  const labels = question?.option_labels || {}
+  const hasOptions = Object.keys(labels).length > 0
+  if (hasOptions) {
+    const total = Math.max(1, Object.values(question.option_counts || {}).reduce((sum, value) => sum + value, 0))
+    if (total <= 1 && !Object.values(question.option_counts || {}).some((count) => count > 0)) return <span className="flb-survey-waiting">No responses yet</span>
+    return <div className="flb-survey-bars">{Object.entries(labels).map(([id, label]) => {
+      const count = question.option_counts?.[id] || 0
+      const percent = Math.round((count / total) * 100)
+      return <div className="flb-survey-bar-row" key={id}><span>{label}</span><i style={{ width: `${Math.max(3, percent)}%` }} /><b>{percent}%</b></div>
+    })}</div>
+  }
+  if (['rating_5', 'rating_10', 'nps'].includes(question?.question_type)) {
+    return question.average_rating != null ? <div className="flb-survey-stat"><strong>{question.average_rating.toFixed(1)}</strong><span>average</span></div> : <span className="flb-survey-waiting">No responses yet</span>
+  }
+  if (question?.question_type === 'number' && question.numeric_values?.length) {
+    const average = question.numeric_values.reduce((sum, value) => sum + value, 0) / question.numeric_values.length
+    return <div className="flb-survey-stat"><strong>{average.toFixed(1)}</strong><span>average</span></div>
+  }
+  return <span className="flb-survey-waiting">{question?.response_count || 0} response{question?.response_count === 1 ? '' : 's'}</span>
+}
+
+function SurveySummaryGrid({ state }) {
+  const questions = state.questions || []
+  return <div className="flb-survey-grid">
+    {questions.map((q) => (
+      <div className="flb-survey-cell" key={q.question_id}>
+        <h4>{q.prompt}</h4>
+        <CompactAnswerSummary question={q} />
+        <small>{q.response_count || 0} response{q.response_count === 1 ? '' : 's'}</small>
+      </div>
+    ))}
+  </div>
 }
 
 function QuestionOptions({ question }) {
@@ -81,9 +182,11 @@ function SceneContent({ scene, state, settings, currentQuestion, countdown }) {
 
   if (scene === 'question') return <><Brand state={state} settings={settings}/><div className="flb-content">{currentQuestion ? <><div className="flb-progress"><span>Question {questionNumber} of {questionTotal}</span><i><b style={{ width: `${(questionNumber / questionTotal) * 100}%` }}/></i><span>{currentQuestion.question_type.replaceAll('_', ' ')}</span></div><h1 className="flb-headline flb-small">{currentQuestion.prompt}</h1><QuestionOptions question={currentQuestion}/></> : <EmptyState/>}</div><Footer left="Answer privately on your phone" right={currentQuestion ? 'Get ready' : 'Standing by'}/></>
 
-  if (scene === 'responding') return <><Brand state={state} settings={settings}/><div className="flb-content">{currentQuestion ? <div className="flb-vote"><div><Kicker>The room is responding</Kicker><h1 className="flb-headline flb-small">Every voice moves the conversation.</h1><div className="flb-stats"><div><strong>{currentQuestion.response_count || 0}</strong><span>responses received</span></div><div><strong>{questionResponseRate}%</strong><span>participation rate</span></div></div></div><div className="flb-timer"><span>{currentQuestion.time_limit_seconds || 30}</span><small>seconds</small></div></div> : <EmptyState/>}</div>{settings.show_reactions !== false && <div className="flb-reactions"><i>♥</i><i>✦</i><i>●</i><i>◆</i></div>}<Footer left={`${state.participant_count || 0} participants connected`} right="Voting open" live/></>
+  if (scene === 'responding') return <><Brand state={state} settings={settings}/><div className="flb-content">{currentQuestion ? <div className="flb-vote"><div><Kicker>The room is responding</Kicker><h1 className="flb-headline flb-small">Every voice moves the conversation.</h1><div className="flb-stats"><div><strong>{currentQuestion.response_count || 0}</strong><span>responses received</span></div><div><strong>{questionResponseRate}%</strong><span>participation rate</span></div></div><TrendLine buckets={currentQuestion.response_timeline}/></div><div className="flb-timer"><span>{currentQuestion.time_limit_seconds || 30}</span><small>seconds</small></div></div> : <EmptyState/>}</div>{settings.show_reactions !== false && <div className="flb-reactions"><i>♥</i><i>✦</i><i>●</i><i>◆</i></div>}<Footer left={`${state.participant_count || 0} participants connected`} right="Voting open" live/></>
 
-  if (scene === 'results') return <><Brand state={state} settings={settings}/><div className="flb-content">{currentQuestion ? <><Kicker>The room has spoken</Kicker><h1 className="flb-headline flb-result-title">{currentQuestion.prompt}</h1><ResultsBars question={currentQuestion}/></> : <EmptyState title="Results are ready when the room is"/>}</div><Footer left={`${currentQuestion?.response_count || 0} verified responses`} right="Results live" live/></>
+  if (scene === 'results' && ['survey', 'feedback'].includes(state.type)) return <><Brand state={state} settings={settings}/><div className="flb-content">{state.questions?.length ? <><Kicker>Live so far</Kicker><h1 className="flb-headline flb-result-title">{title}</h1><SurveySummaryGrid state={state}/><RegisteredProgressBanner state={state}/></> : <EmptyState title="Waiting on the first response"/>}</div><Footer left={`${state.response_count || 0} responses across ${state.questions?.length || 0} questions`} right="Results live" live/></>
+
+  if (scene === 'results') return <><Brand state={state} settings={settings}/><div className="flb-content">{currentQuestion ? <><Kicker>The room has spoken</Kicker><h1 className="flb-headline flb-result-title">{currentQuestion.prompt}</h1><ResultsVisual question={currentQuestion}/></> : <EmptyState title="Results are ready when the room is"/>}</div><Footer left={`${currentQuestion?.response_count || 0} verified responses`} right="Results live" live/></>
 
   if (scene === 'correct_answer') return <><Brand state={state} settings={settings}/><div className="flb-content">{currentQuestion ? <><Kicker>Smart reveal</Kicker><h1 className="flb-headline flb-small">{correctLabels.join(', ') || 'Answer revealed'}</h1><div className="flb-answer flb-glass"><div className="flb-check">✓</div><div><h2>{questionResponseRate}% of connected participants responded</h2><p>{currentQuestion.explanation || 'The explanation and source are now available on each participant’s phone.'}</p></div></div></> : <EmptyState/>}</div><Footer left="Accuracy, speed and confidence captured" right="Answer revealed"/></>
 
@@ -93,7 +196,10 @@ function SceneContent({ scene, state, settings, currentQuestion, countdown }) {
 
   if (scene === 'rating') {
     const average = currentQuestion?.average_rating
-    return <><Brand state={state} settings={settings}/><div className="flb-content"><Kicker>A five-second check-in</Kicker><h1 className="flb-headline flb-small">{currentQuestion?.prompt || settings.message || 'How useful was this session?'}</h1><div className="flb-rating">{[1,2,3,4,5].map((n) => <span className={average && n === Math.round(average) ? 'selected' : ''} key={n}>{n}</span>)}</div><div className="flb-scale"><span>Not useful</span><span>Extremely useful</span></div></div><Footer left={average ? `Live average ${average.toFixed(1)} from ${currentQuestion.response_count} ratings` : 'Responses can be anonymous'} right="Rating open" live/></>
+    const scaleMax = currentQuestion?.question_type === 'rating_10' || currentQuestion?.question_type === 'nps' ? 10 : 5
+    const scaleMin = currentQuestion?.question_type === 'nps' ? 0 : 1
+    const hasDistribution = currentQuestion && Object.keys(currentQuestion.value_counts || {}).length > 0
+    return <><Brand state={state} settings={settings}/><div className="flb-content"><Kicker>A five-second check-in</Kicker><h1 className="flb-headline flb-small">{currentQuestion?.prompt || settings.message || 'How useful was this session?'}</h1>{scaleMax === 5 ? <StarRating average={average || 0} max={5}/> : <div className="flb-rating">{Array.from({ length: scaleMax - scaleMin + 1 }, (_, i) => i + scaleMin).map((n) => <span className={average != null && n === Math.round(average) ? 'selected' : ''} key={n}>{n}</span>)}</div>}<div className="flb-scale"><span>Not useful</span><span>Extremely useful</span></div>{hasDistribution && <RatingDistribution valueCounts={currentQuestion.value_counts} max={scaleMax} min={scaleMin}/>}</div><Footer left={average ? `Live average ${average.toFixed(1)} from ${currentQuestion.response_count} ratings` : 'Responses can be anonymous'} right="Rating open" live/></>
   }
 
   if (scene === 'feedback') return <><Brand state={state} settings={settings}/><div className="flb-content"><Kicker>Turn insight into action</Kicker><h1 className="flb-headline flb-small">{currentQuestion?.prompt || settings.message || 'What will you do differently after today?'}</h1><div className="flb-feedback"><div className="flb-glass"><span>Live response stream</span><p>Thoughtful responses appear after moderation.</p></div><div className="flb-glass"><span>Completion</span><strong>{questionResponseRate}%</strong><p>{currentQuestion?.response_count || 0} responses</p></div></div></div><Footer left="Sensitive responses remain private" right="Listening" live/></>

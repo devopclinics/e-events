@@ -175,6 +175,10 @@ async def create_activity(body: ActivityCreate, identity: Identity = Depends(cur
         # overridable per-activity below.
         "auto_close_enabled": True,
         "auto_close_grace_minutes": 20,
+        # Opt-in only -- see app/worker.py's _auto_start_tick. The product
+        # promise is that Festio Live never starts anything on its own unless
+        # a presenter explicitly turns this on for a session-linked activity.
+        "auto_start_enabled": False,
         "profanity_filtering": defaults.get("profanity_filtering", True),
         "display_scene": "welcome",
         **body.config,
@@ -318,8 +322,8 @@ async def delete_activity(activity_id: str, identity: Identity = Depends(current
 async def add_question(activity_id: str, body: QuestionCreate, identity: Identity = Depends(current_identity), db: AsyncSession = Depends(get_db)):
     require_admin(identity)
     activity = await _get_owned_activity(activity_id, identity, db)
-    if activity.status not in ("draft", "scheduled"):
-        raise HTTPException(409, "Questions can only be added before an activity goes live")
+    if activity.status not in ("draft", "scheduled", "live", "paused"):
+        raise HTTPException(409, "Questions can't be added to a closed or archived activity")
     choice_types = {"single_choice", "multiple_choice", "true_false", "yes_no", "ranking"}
     if body.question_type in choice_types and len(body.options) < 2:
         raise HTTPException(422, "Choice questions need at least two options")
@@ -343,6 +347,10 @@ async def add_question(activity_id: str, body: QuestionCreate, identity: Identit
     for i, opt in enumerate(body.options):
         db.add(QuestionOption(question_id=question.id, label=opt.label, sequence=i, is_correct=opt.is_correct, config=opt.config))
     await db.commit()
+    if activity.status in ("live", "paused"):
+        # Nudges already-connected guests and displays to refetch so the new
+        # question shows up without waiting on their 5s poll fallback.
+        await publish(activity.id, "question.changed", {"question_id": question.id})
     return await _fetch_question(question.id, db)
 
 

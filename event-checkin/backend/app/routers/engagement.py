@@ -16,7 +16,7 @@ from typing import Literal
 import jwt
 from fastapi import APIRouter, Depends, HTTPException, Response
 from pydantic import BaseModel, Field
-from sqlalchemy import or_, select
+from sqlalchemy import func, or_, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -265,6 +265,27 @@ async def live_anon_token(
         "exp": now + timedelta(hours=12),
     }, settings.engagement_internal_token, algorithm="HS256")
     return LiveAnonJoinOut(token=token, expires_in=43200, anon_id=anon_id)
+
+
+@router.get("/{event_id}/live/registered-count")
+async def live_registered_count(
+    event_id: str,
+    db: AsyncSession = Depends(get_db),
+    _: None = Depends(rate_limit(limit=120, window=60, scope="engagement_registered_count", key="event_id")),
+):
+    """Public, display-safe -- just a headcount, no guest-identifying data --
+    so a Display can show "N of TOTAL responded" as social proof. Same
+    confirmed/registered definition InvitePage.jsx and the guest-pass
+    exchange above use: RSVP-confirmed if the event uses RSVP, otherwise
+    every resolved guest counts."""
+    event = await db.get(Event, event_id)
+    if not event:
+        raise HTTPException(404, "Event not found")
+    query = select(func.count(Guest.id)).where(Guest.event_id == event_id)
+    if event.rsvp_enabled is not False:
+        query = query.where(Guest.rsvp_status == "confirmed")
+    count = await db.scalar(query)
+    return {"count": count or 0}
 
 
 @router.get("/{event_id}/live/join-qr.png")

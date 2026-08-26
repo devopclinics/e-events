@@ -177,11 +177,123 @@ function RankingQuestion({ question, onAnswer, busy, alreadyAnswered }) {
   return <div className="grid gap-2">{ordered.map((option, index) => <div key={option.id} className="flex min-h-12 items-center gap-2 rounded-xl border-2 border-slate-200 bg-white px-3 dark:border-slate-700 dark:bg-slate-900"><strong className="w-6 text-sm text-slate-600 dark:text-slate-300">{index + 1}</strong><span className="flex-1 text-sm font-bold text-slate-800 dark:text-white">{option.label}</span><button type="button" aria-label={`Move ${option.label} up`} disabled={index === 0 || busy} onClick={() => move(index, -1)} className="h-9 w-9 rounded-lg border border-slate-200 disabled:opacity-30">↑</button><button type="button" aria-label={`Move ${option.label} down`} disabled={index === ordered.length - 1 || busy} onClick={() => move(index, 1)} className="h-9 w-9 rounded-lg border border-slate-200 disabled:opacity-30">↓</button></div>)}<button type="button" disabled={!ordered.length || busy} onClick={submit} className="mt-2 min-h-12 rounded-xl bg-teal-400 px-4 py-2.5 text-sm font-extrabold text-slate-950 disabled:opacity-50">{busy ? 'Submitting…' : 'Submit ranking'}</button></div>
 }
 
+function pointFromClick(ref, event) {
+  const rect = ref.current.getBoundingClientRect()
+  const x = Math.max(0, Math.min(1, (event.clientX - rect.left) / rect.width))
+  const y = Math.max(0, Math.min(1, 1 - (event.clientY - rect.top) / rect.height))
+  return { x, y }
+}
+
+const ARROW_STEP = { ArrowLeft: [-1, 0], ArrowRight: [1, 0], ArrowUp: [0, 1], ArrowDown: [0, -1] }
+
+// Click/tap places a point exactly; a keyboard or switch-only guest has no
+// pointer, so arrow keys nudge a point in fixed steps (bigger with Shift) and
+// Enter/Space is equivalent to a click at the current spot — same `point`
+// state either way, so submission is identical for both input methods.
+function handleBoardKeyDown(event, point, setPoint) {
+  const step = event.shiftKey ? 0.1 : 0.02
+  const delta = ARROW_STEP[event.key]
+  if (delta) {
+    event.preventDefault()
+    const base = point || { x: 0.5, y: 0.5 }
+    setPoint({
+      x: Math.max(0, Math.min(1, base.x + delta[0] * step)),
+      y: Math.max(0, Math.min(1, base.y + delta[1] * step)),
+    })
+  } else if (event.key === 'Enter' || event.key === ' ') {
+    event.preventDefault()
+    if (!point) setPoint({ x: 0.5, y: 0.5 })
+  }
+}
+
+function QuadrantQuestion({ question, onAnswer, busy, alreadyAnswered }) {
+  const boardRef = useRef(null)
+  const [point, setPoint] = useState(null)
+  const [done, setDone] = useState(alreadyAnswered)
+  const labels = question.config || {}
+  async function submit() {
+    if (!point) return
+    const result = await onAnswer(question.id, { answer_value: point })
+    if (result) setDone(true)
+  }
+  if (done) return <div className="rounded-2xl border border-emerald-200 bg-emerald-50 p-4 text-sm font-bold text-emerald-800 dark:border-emerald-800 dark:bg-emerald-950 dark:text-emerald-200">Your answer is in.</div>
+  return (
+    <div className="grid gap-2">
+      <div ref={boardRef} onClick={(event) => setPoint(pointFromClick(boardRef, event))}
+        tabIndex={0} role="button" onKeyDown={(event) => handleBoardKeyDown(event, point, setPoint)}
+        aria-label={`Tap anywhere on the grid to place your answer, or use this focused element and the arrow keys. Currently ${point ? `at ${Math.round(point.x * 100)} percent ${labels.x_label_high || 'right'}, ${Math.round(point.y * 100)} percent ${labels.y_label_high || 'up'}` : 'not yet placed'}.`}
+        className="relative mx-auto aspect-square w-full max-w-xs cursor-crosshair rounded-xl border-2 border-slate-200 bg-white focus:outline-none focus:ring-4 focus:ring-teal-300 dark:border-slate-700 dark:bg-slate-900">
+        <div className="pointer-events-none absolute inset-x-0 top-1/2 h-px bg-slate-200 dark:bg-slate-700" />
+        <div className="pointer-events-none absolute inset-y-0 left-1/2 w-px bg-slate-200 dark:bg-slate-700" />
+        {point && <div className="pointer-events-none absolute h-4 w-4 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-white bg-teal-400 shadow" style={{ left: `${point.x * 100}%`, top: `${(1 - point.y) * 100}%` }} />}
+        {labels.y_label_high && <span className="pointer-events-none absolute left-1/2 top-1 -translate-x-1/2 text-[10px] font-bold text-slate-500">{labels.y_label_high}</span>}
+        {labels.y_label_low && <span className="pointer-events-none absolute bottom-1 left-1/2 -translate-x-1/2 text-[10px] font-bold text-slate-500">{labels.y_label_low}</span>}
+        {labels.x_label_low && <span className="pointer-events-none absolute left-1 top-1/2 -translate-y-1/2 text-[10px] font-bold text-slate-500">{labels.x_label_low}</span>}
+        {labels.x_label_high && <span className="pointer-events-none absolute right-1 top-1/2 -translate-y-1/2 text-[10px] font-bold text-slate-500">{labels.x_label_high}</span>}
+      </div>
+      <p className="text-center text-xs font-bold text-slate-500 dark:text-slate-400">Tap to place, or focus the box and use arrow keys — Enter starts at the center.</p>
+      <button type="button" disabled={!point || busy} onClick={submit}
+        className="min-h-12 rounded-xl bg-teal-400 px-4 py-2.5 text-sm font-extrabold text-slate-950 disabled:opacity-50">
+        {busy ? 'Submitting…' : 'Submit answer'}
+      </button>
+    </div>
+  )
+}
+
+function ImageClickQuestion({ question, onAnswer, busy, alreadyAnswered }) {
+  const boardRef = useRef(null)
+  const [point, setPoint] = useState(null)
+  const [done, setDone] = useState(alreadyAnswered)
+  async function submit() {
+    if (!point) return
+    const result = await onAnswer(question.id, { answer_value: point })
+    if (result) setDone(true)
+  }
+  if (done) return <div className="rounded-2xl border border-emerald-200 bg-emerald-50 p-4 text-sm font-bold text-emerald-800 dark:border-emerald-800 dark:bg-emerald-950 dark:text-emerald-200">Your tap is in.</div>
+  return (
+    <div className="grid gap-2">
+      <div ref={boardRef} onClick={(event) => setPoint(pointFromClick(boardRef, event))}
+        tabIndex={0} role="button" onKeyDown={(event) => handleBoardKeyDown(event, point, setPoint)}
+        aria-label={`Tap the image to answer, or use this focused element and the arrow keys. Currently ${point ? `at ${Math.round(point.x * 100)} percent across, ${Math.round((1 - point.y) * 100)} percent down` : 'not yet placed'}.`}
+        className="relative w-full cursor-crosshair overflow-hidden rounded-xl border-2 border-slate-200 bg-slate-100 bg-cover bg-center focus:outline-none focus:ring-4 focus:ring-teal-300 dark:border-slate-700"
+        style={{ backgroundImage: `url("${question.config?.image_url || ''}")`, aspectRatio: '4 / 3' }}>
+        {point && <div className="pointer-events-none absolute h-4 w-4 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-white bg-teal-400 shadow" style={{ left: `${point.x * 100}%`, top: `${(1 - point.y) * 100}%` }} />}
+      </div>
+      <p className="text-center text-xs font-bold text-slate-500 dark:text-slate-400">Tap to place, or focus the box and use arrow keys — Enter starts at the center.</p>
+      <button type="button" disabled={!point || busy} onClick={submit}
+        className="min-h-12 rounded-xl bg-teal-400 px-4 py-2.5 text-sm font-extrabold text-slate-950 disabled:opacity-50">
+        {busy ? 'Submitting…' : 'Submit answer'}
+      </button>
+    </div>
+  )
+}
+
+function SurveyForm({ activity, answered, onAnswer, busy }) {
+  const questions = activity.questions.filter((q) => q.status === 'active')
+  const requiredRemaining = questions.filter((q) => q.required && !answered.has(q.id)).length
+  return (
+    <div className="grid gap-4">
+      {activity.description && <p className="text-sm text-slate-600 dark:text-slate-300">{activity.description}</p>}
+      {questions.map((q, i) => (
+        <QuestionCard key={q.id} question={q} index={i} onAnswer={onAnswer} busy={busy} alreadyAnswered={answered.has(q.id)} />
+      ))}
+      {questions.length > 0 && requiredRemaining === 0 && (
+        <div className="rounded-2xl border border-emerald-200 bg-emerald-50 p-4 text-center text-sm font-bold text-emerald-800 dark:border-emerald-800 dark:bg-emerald-950 dark:text-emerald-200">
+          Thank you — every response is in.
+        </div>
+      )}
+    </div>
+  )
+}
+
 function QuestionCard({ question, index, onAnswer, busy, alreadyAnswered }) {
   const isOptionType = ['single_choice', 'true_false', 'yes_no', 'multiple_choice'].includes(question.question_type)
   const isRating = ['rating_5', 'rating_10', 'nps'].includes(question.question_type)
   const isNumber = question.question_type === 'number'
   const isRanking = question.question_type === 'ranking'
+  const isQuadrant = question.question_type === 'quadrant'
+  const isImageClick = question.question_type === 'image_click'
+  const isFreeform = !isOptionType && !isRating && !isNumber && !isRanking && !isQuadrant && !isImageClick
   return (
     <div className="rounded-2xl border border-slate-200 bg-white p-4 dark:border-slate-700 dark:bg-slate-900">
       <div className="text-xs font-extrabold uppercase tracking-wide text-slate-600 dark:text-slate-300">Question {index + 1}</div>
@@ -192,7 +304,9 @@ function QuestionCard({ question, index, onAnswer, busy, alreadyAnswered }) {
         {isRating && <RatingQuestion question={question} onAnswer={onAnswer} busy={busy} alreadyAnswered={alreadyAnswered} />}
         {isNumber && <NumberQuestion question={question} onAnswer={onAnswer} busy={busy} alreadyAnswered={alreadyAnswered} />}
         {isRanking && <RankingQuestion question={question} onAnswer={onAnswer} busy={busy} alreadyAnswered={alreadyAnswered} />}
-        {!isOptionType && !isRating && !isNumber && !isRanking && <TextQuestion question={question} onAnswer={onAnswer} busy={busy} alreadyAnswered={alreadyAnswered} />}
+        {isQuadrant && <QuadrantQuestion question={question} onAnswer={onAnswer} busy={busy} alreadyAnswered={alreadyAnswered} />}
+        {isImageClick && <ImageClickQuestion question={question} onAnswer={onAnswer} busy={busy} alreadyAnswered={alreadyAnswered} />}
+        {isFreeform && <TextQuestion question={question} onAnswer={onAnswer} busy={busy} alreadyAnswered={alreadyAnswered} />}
       </div>
     </div>
   )
@@ -365,6 +479,8 @@ function ActivityView({ guestToken, activityId, onBack }) {
         <QnaPanel guestToken={guestToken} activityId={activityId} activityStatus={activity.status} />
       ) : activity.status === 'closed' || activity.status === 'completed' ? (
         <div className="rounded-2xl border border-slate-200 bg-white p-4 text-sm font-bold text-slate-500 dark:border-slate-700 dark:bg-slate-900">This activity has ended — thanks for joining!</div>
+      ) : ['survey', 'feedback'].includes(activity.type) ? (
+        <SurveyForm activity={activity} answered={answered} onAnswer={onAnswer} busy={busy} />
       ) : (
         <div className="grid gap-3">
           {activity.status === 'paused' && <div className="rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm font-bold text-amber-800">The presenter has paused this activity.</div>}

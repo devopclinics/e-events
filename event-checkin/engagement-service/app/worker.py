@@ -5,16 +5,17 @@ import logging
 from datetime import datetime, timedelta, timezone
 
 import httpx
-from sqlalchemy import select, update
+from sqlalchemy import or_, select, update
 
 from .config import settings
 from .database import SessionLocal
-from .models import ActivityQuestion, EngagementActivity, FeedbackAnalysis, ModerationItem, ParticipantResponse, ProgramSession
+from .models import ActivityQuestion, EngagementActivity, FeedbackAnalysis, LiveDisplay, ModerationItem, ParticipantResponse, ProgramSession
 from .metrics import AI_JOBS
-from .realtime import publish
+from .realtime import publish, publish_display
 
 logger = logging.getLogger("engagement-worker")
 AUTO_CLOSE_TICK_SECONDS = 60
+DISPLAY_AUTOFOLLOW_TICK_SECONDS = 30
 
 
 async def _claim_job(db):
@@ -118,6 +119,41 @@ async def _auto_close_tick():
             logger.info("auto-closed activity %s (session ended %s, grace %sm)", activity.id, session_ends_at, grace.total_seconds() / 60)
 
 
+async def _auto_start_tick():
+    """Opt-in per activity (auto_start_enabled) -- the product default is that
+    Festio Live never starts anything on its own; a presenter has to turn this
+    on for a specific activity. When on, a draft/scheduled activity linked to
+    a program session goes live the moment that session's scheduled start
+    time arrives, so nobody has to remember to press the button. Skipped if
+    the session already ended by the time the tick runs, so a long worker gap
+    can't retroactively "start" something whose moment already passed."""
+    now = datetime.now(timezone.utc)
+    async with SessionLocal() as db:
+        rows = (await db.execute(
+            select(EngagementActivity, ProgramSession.starts_at, ProgramSession.ends_at)
+            .join(ProgramSession, (ProgramSession.org_id == EngagementActivity.org_id)
+                  & (ProgramSession.event_id == EngagementActivity.event_id)
+                  & (ProgramSession.source_step_id == EngagementActivity.session_id))
+            .where(EngagementActivity.status.in_(("draft", "scheduled")), ProgramSession.starts_at.isnot(None))
+        )).all()
+        for activity, session_starts_at, session_ends_at in rows:
+            config = activity.config or {}
+            if config.get("auto_start_enabled") is not True:
+                continue
+            starts_at = session_starts_at.replace(tzinfo=timezone.utc) if session_starts_at.tzinfo is None else session_starts_at
+            if now < starts_at:
+                continue
+            if session_ends_at:
+                ends_at = session_ends_at.replace(tzinfo=timezone.utc) if session_ends_at.tzinfo is None else session_ends_at
+                if now >= ends_at:
+                    continue
+            activity.status = "live"
+            activity.config = {**config, "auto_started_at": now.isoformat()}
+            await db.commit()
+            await publish(activity.id, "activity.status_changed", {"status": "live", "reason": "auto_start"})
+            logger.info("auto-started activity %s (session started %s)", activity.id, session_starts_at)
+
+
 async def _auto_close_loop():
     while True:
         try:
@@ -125,6 +161,65 @@ async def _auto_close_loop():
         except Exception:
             logger.exception("auto-close tick crashed")
         await asyncio.sleep(AUTO_CLOSE_TICK_SECONDS)
+
+
+async def _auto_start_loop():
+    while True:
+        try:
+            await _auto_start_tick()
+        except Exception:
+            logger.exception("auto-start tick crashed")
+        await asyncio.sleep(AUTO_CLOSE_TICK_SECONDS)
+
+
+async def _display_autofollow_tick():
+    """Opt-in per display (settings.auto_follow_program) -- points a TV/
+    projector screen at whichever activity is live for whatever program
+    session is happening right now, so one physical screen can run all day
+    without staff re-pointing it as the schedule moves. Leaves the display
+    exactly as it is between sessions or when nothing's live yet for the
+    current one, rather than blanking it."""
+    now = datetime.now(timezone.utc)
+    async with SessionLocal() as db:
+        displays = (await db.execute(select(LiveDisplay))).scalars().all()
+        for display in displays:
+            if (display.settings or {}).get("auto_follow_program") is not True:
+                continue
+            current_session = await db.scalar(
+                select(ProgramSession).where(
+                    ProgramSession.org_id == display.org_id,
+                    ProgramSession.event_id == display.event_id,
+                    ProgramSession.starts_at.isnot(None),
+                    ProgramSession.starts_at <= now,
+                    or_(ProgramSession.ends_at.is_(None), ProgramSession.ends_at > now),
+                ).order_by(ProgramSession.starts_at.desc()).limit(1)
+            )
+            if not current_session:
+                continue
+            live_activity = await db.scalar(
+                select(EngagementActivity).where(
+                    EngagementActivity.org_id == display.org_id,
+                    EngagementActivity.event_id == display.event_id,
+                    EngagementActivity.session_id == current_session.source_step_id,
+                    EngagementActivity.status == "live",
+                ).order_by(EngagementActivity.created_at.desc()).limit(1)
+            )
+            if not live_activity or live_activity.id == display.assigned_activity_id:
+                continue
+            display.assigned_activity_id = live_activity.id
+            display.assigned_session_id = current_session.source_step_id
+            await db.commit()
+            await publish_display(display.id, "display.changed", {"assigned_activity_id": live_activity.id})
+            logger.info("auto-followed display %s -> activity %s (session %s)", display.id, live_activity.id, current_session.title)
+
+
+async def _display_autofollow_loop():
+    while True:
+        try:
+            await _display_autofollow_tick()
+        except Exception:
+            logger.exception("display auto-follow tick crashed")
+        await asyncio.sleep(DISPLAY_AUTOFOLLOW_TICK_SECONDS)
 
 
 async def _job_loop():
@@ -144,7 +239,7 @@ async def _job_loop():
 
 
 async def run():
-    await asyncio.gather(_job_loop(), _auto_close_loop())
+    await asyncio.gather(_job_loop(), _auto_close_loop(), _auto_start_loop(), _display_autofollow_loop())
 
 
 if __name__ == "__main__":

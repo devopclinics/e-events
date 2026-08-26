@@ -5,7 +5,7 @@ import { useEventDetails } from '../hooks/useEventDetails'
 import { api } from '../api'
 import './FestioLiveRedesignPage.css'
 
-const TABS = ['Overview', 'Activities', 'Question Bank', 'Live Control', 'Displays', 'Responses', 'Analytics', 'Settings']
+const TABS = ['Overview', 'Activities', 'Question Bank', 'Live Control', 'Displays', 'Responses', 'Analytics', 'Settings', 'Help']
 
 const ACTIVITY_TYPES = [
   ['quiz', 'Quiz'], ['poll', 'Poll'], ['survey', 'Survey'], ['rating', 'Rating'],
@@ -17,9 +17,9 @@ const QUESTION_TYPES = [
   ['true_false', 'True / False'], ['yes_no', 'Yes / No'], ['rating_5', 'Rating (5)'],
   ['rating_10', 'Rating (10)'], ['nps', 'NPS'], ['short_text', 'Open text'],
   ['long_text', 'Long text'], ['number', 'Number'], ['word_cloud', 'Word cloud prompt'],
-  ['ranking', 'Ranking'],
+  ['ranking', 'Ranking'], ['quadrant', 'Quadrant (2x2 grid)'], ['image_click', 'Image click / heatmap'],
 ]
-const TEXT_QUESTION_TYPES = new Set(['short_text', 'long_text', 'feedback', 'word_cloud'])
+const TEXT_QUESTION_TYPES = new Set(['short_text', 'long_text', 'word_cloud'])
 const STATUS_TONE = { draft: 'neutral', scheduled: 'info', live: 'ok', paused: 'warn', closed: 'neutral', completed: 'ok', archived: 'neutral' }
 const DISPLAY_SCENES = [
   ['welcome', 'Opening moment'], ['join', 'Join / QR'], ['agenda', 'Live agenda'],
@@ -30,6 +30,20 @@ const DISPLAY_SCENES = [
   ['idea_galaxy', 'Idea galaxy'], ['announcement', 'Announcement'], ['break', 'Break / up next'],
   ['countdown', 'Countdown'], ['celebration', 'Celebration'], ['custom_message', 'Custom message'],
 ]
+// Several scenes only know how to render a single "current question" (quiz-
+// style advance) or a specific activity type's own data (Q&A, word cloud) —
+// picking one of those for an incompatible activity silently shows nothing
+// useful. Restrict the picker instead of letting that combination happen.
+const SCENES_ALWAYS_SAFE = ['welcome', 'join', 'agenda', 'announcement', 'break', 'countdown', 'celebration', 'custom_message']
+function compatibleScenes(activityType) {
+  if (!activityType) return DISPLAY_SCENES.map(([key]) => key)
+  if (activityType === 'survey' || activityType === 'feedback') return [...SCENES_ALWAYS_SAFE, 'results']
+  if (activityType === 'q_and_a') return [...SCENES_ALWAYS_SAFE, 'q_and_a']
+  if (activityType === 'word_cloud') return [...SCENES_ALWAYS_SAFE, 'word_cloud', 'results']
+  if (activityType === 'rating') return [...SCENES_ALWAYS_SAFE, 'rating', 'results']
+  if (activityType === 'quiz') return [...SCENES_ALWAYS_SAFE, 'question', 'responding', 'results', 'correct_answer', 'leaderboard', 'team_battle']
+  return DISPLAY_SCENES.map(([key]) => key) // poll, voting, and anything else — built to use most scenes
+}
 const DISPLAY_THEMES = [
   ['aurora', 'Aurora', 'linear-gradient(135deg,#65f5c6,#a45bff)'],
   ['citrus', 'Citrus', 'linear-gradient(135deg,#ffd84d,#ff5f94)'],
@@ -124,11 +138,51 @@ function OverviewPanel({ eventId, joinInfo, activities, displays, onCreate, onOp
   </div>
 }
 
-function DisplayCard({ display, activities, programSessions, busy, onUpdate, onDelete }) {
+function DisplayCard({ display, eventId, activities, programSessions, busy, onUpdate, onDelete }) {
   const [editing, setEditing] = useState(false)
   const settings = display.settings || {}
   const link = `${window.location.origin}/live/${display.display_code}?token=${encodeURIComponent(display.access_token)}`
-  const assignableActivities = display.assigned_session_id ? activities.filter((activity) => activity.session_id === display.assigned_session_id) : activities
+
+  // Pending selection — nothing here touches the real screen until "Push to
+  // display" is pressed. Resets to whatever's actually live whenever the
+  // display's committed state changes underneath it (including auto-follow).
+  const [pendingSessionId, setPendingSessionId] = useState(display.assigned_session_id || '')
+  const [pendingActivityId, setPendingActivityId] = useState(display.assigned_activity_id || '')
+  const [pendingScene, setPendingScene] = useState(display.scene)
+  useEffect(() => {
+    setPendingSessionId(display.assigned_session_id || '')
+    setPendingActivityId(display.assigned_activity_id || '')
+    setPendingScene(display.scene)
+  }, [display.assigned_session_id, display.assigned_activity_id, display.scene])
+
+  // Reuses the activity's own always-on TV link (real component, real data,
+  // correctly scaled since an iframe gets its own genuine viewport) rather
+  // than trying to inline the broadcast canvas, which assumes a full-page
+  // viewport and can't be shrunk to fit a card. Shows that activity's own
+  // saved scene — the pending scene choice below only takes effect once
+  // actually pushed to this display.
+  const pendingActivity = activities.find((a) => a.id === pendingActivityId)
+  const previewToken = pendingActivity?.config?.display_token
+  const previewLink = previewToken ? `${window.location.origin}/live-display/${pendingActivityId}?token=${encodeURIComponent(previewToken)}` : null
+  const allowedScenes = compatibleScenes(pendingActivity?.type)
+  const availableScenes = DISPLAY_SCENES.filter(([key]) => allowedScenes.includes(key))
+
+  const isDirty = pendingSessionId !== (display.assigned_session_id || '') || pendingActivityId !== (display.assigned_activity_id || '') || pendingScene !== display.scene
+  function pushToDisplay() {
+    onUpdate(display.id, { assigned_session_id: pendingSessionId || null, assigned_activity_id: pendingActivityId || null, scene: pendingScene })
+  }
+
+  const assignableActivities = activities
+    .filter((activity) => activity.status !== 'archived')
+    .filter((activity) => !pendingSessionId || activity.session_id === pendingSessionId)
+  const sessionHasLive = new Map()
+  for (const activity of activities) {
+    if (!activity.session_id) continue
+    const count = sessionHasLive.get(activity.session_id) || { live: 0, other: 0 }
+    if (activity.status === 'live') count.live += 1; else if (activity.status !== 'archived') count.other += 1
+    sessionHasLive.set(activity.session_id, count)
+  }
+
   return <article className="fl-display-card">
     <div className="fl-display-preview">
       <iframe title={`${display.name} broadcast preview`} src={link} tabIndex="-1" />
@@ -137,18 +191,39 @@ function DisplayCard({ display, activities, programSessions, busy, onUpdate, onD
     <div className="fl-display-body">
     <div className="fl-display-heading">
       <div style={{ flex: '1 1 180px' }}><strong style={{ fontSize: 15 }}>{display.name}</strong><div className="rd-hint">{display.status} · {DISPLAY_SCENES.find(([key]) => key === display.scene)?.[1] || display.scene}</div></div>
-      <select className="rr-select" style={{ minWidth: 180 }} aria-label={`Program session for ${display.name}`} value={display.assigned_session_id || ''} onChange={(event) => {
-        const assignedSessionId = event.target.value || null
-        const currentActivity = activities.find((activity) => activity.id === display.assigned_activity_id)
-        onUpdate(display.id, { assigned_session_id: assignedSessionId, assigned_activity_id: !assignedSessionId || currentActivity?.session_id === assignedSessionId ? display.assigned_activity_id : null })
-      }}><option value="">Whole event</option>{programSessions.filter((session) => session.status === 'published').map((session) => <option key={session.source_step_id} value={session.source_step_id}>{session.title}</option>)}</select>
-      <select className="rr-select" style={{ minWidth: 180 }} aria-label={`Activity for ${display.name}`} value={display.assigned_activity_id || ''} onChange={(e) => onUpdate(display.id, { assigned_activity_id: e.target.value || null })}><option value="">No activity</option>{assignableActivities.map((a) => <option key={a.id} value={a.id}>{a.title}</option>)}</select>
+      <select className="rr-select" style={{ minWidth: 200 }} aria-label={`Program session for ${display.name}`} value={pendingSessionId} onChange={(event) => {
+        const assignedSessionId = event.target.value || ''
+        const currentActivity = activities.find((activity) => activity.id === pendingActivityId)
+        setPendingSessionId(assignedSessionId)
+        if (assignedSessionId && currentActivity?.session_id !== assignedSessionId) setPendingActivityId('')
+      }}><option value="">Whole event</option>{programSessions.filter((session) => session.status === 'published').map((session) => {
+        const counts = sessionHasLive.get(session.source_step_id)
+        const tag = counts?.live ? ` (${counts.live} live)` : counts?.other ? ` (${counts.other} draft)` : ' (none)'
+        return <option key={session.source_step_id} value={session.source_step_id}>{session.title}{tag}</option>
+      })}</select>
+      <select className="rr-select" style={{ minWidth: 220 }} aria-label={`Activity for ${display.name}`} disabled={!!settings.auto_follow_program} value={pendingActivityId} onChange={(e) => setPendingActivityId(e.target.value)}>
+        <option value="">No activity</option>
+        {assignableActivities.map((a) => <option key={a.id} value={a.id}>{a.title} — {a.status}</option>)}
+      </select>
+      <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, fontWeight: 700, whiteSpace: 'nowrap' }} title="Automatically points this screen at whatever's live for whatever program session is happening right now — no one has to reassign it as the day moves.">
+        <input type="checkbox" checked={!!settings.auto_follow_program} onChange={(e) => onUpdate(display.id, { settings: { auto_follow_program: e.target.checked } })} /> Auto-follow program
+      </label>
       <button className="rr-btn secondary" onClick={() => navigator.clipboard?.writeText(link)}>Copy link</button>
       <button className="rr-btn primary" onClick={() => setEditing((value) => !value)}>{editing ? 'Close studio' : 'Design scene'}</button>
     </div>
-    <div className="fl-scene-strip">{DISPLAY_SCENES.slice(0, 8).map(([key, label]) => <button key={key} title={label} className={display.scene === key ? 'active' : ''} onClick={() => onUpdate(display.id, { scene: key })}><span>{({ welcome: '✦', join: '⌗', agenda: '≡', question: '?', responding: '◌', results: '▥', correct_answer: '✓', leaderboard: '♛' })[key]}</span>{label}</button>)}</div>
+    <div className="fl-scene-strip">{availableScenes.slice(0, 8).map(([key, label]) => <button key={key} title={label} className={pendingScene === key ? 'active' : ''} onClick={() => setPendingScene(key)}><span>{({ welcome: '✦', join: '⌗', agenda: '≡', question: '?', responding: '◌', results: '▥', correct_answer: '✓', leaderboard: '♛', rating: '★', q_and_a: '?', word_cloud: 'Aa' })[key] || '◉'}</span>{label}</button>)}</div>
+    {pendingActivity && availableScenes.length < DISPLAY_SCENES.length && <p className="rd-hint" style={{ marginTop: -6, marginBottom: 10 }}>Only showing scenes that work with a {pendingActivity.type.replace('_', ' ')} activity — others would show nothing useful.</p>}
+
+    <div className="fl-display-preview-box">
+      <div className="fl-display-preview-box-head">
+        <span>{pendingActivityId ? 'Preview — not on the real screen yet' : 'No activity selected'}</span>
+        {isDirty && <button className="rr-btn primary" disabled={busy} onClick={pushToDisplay}>Push to display →</button>}
+      </div>
+      {previewLink && <div className="fl-display-preview-canvas"><iframe title={`${display.name} pending preview`} src={previewLink} tabIndex="-1" /></div>}
+    </div>
+
     {editing && <div style={{ marginTop: 16, paddingTop: 16, borderTop: '1px solid var(--rr-line, #eee)', display: 'grid', gap: 14 }}>
-      <div><div className="rd-hint" style={{ marginBottom: 7 }}>Presentation scene</div><select className="rr-select" aria-label={`Presentation scene for ${display.name}`} style={{ width: '100%' }} value={display.scene} onChange={(e) => onUpdate(display.id, { scene: e.target.value })}>{DISPLAY_SCENES.map(([key, label]) => <option key={key} value={key}>{label}</option>)}</select></div>
+      <div><div className="rd-hint" style={{ marginBottom: 7 }}>Presentation scene</div><select className="rr-select" aria-label={`Presentation scene for ${display.name}`} style={{ width: '100%' }} value={pendingScene} onChange={(e) => setPendingScene(e.target.value)}>{availableScenes.map(([key, label]) => <option key={key} value={key}>{label}</option>)}</select></div>
       <div><div className="rd-hint" style={{ marginBottom: 7 }}>Art direction</div><div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>{DISPLAY_THEMES.map(([key, label, background]) => <button type="button" key={key} title={label} aria-label={label} onClick={() => onUpdate(display.id, { settings: { theme: key } })} style={{ width: 34, height: 34, borderRadius: 999, background, border: settings.theme === key || (!settings.theme && key === 'aurora') ? '3px solid #17131f' : '3px solid #fff', boxShadow: '0 0 0 1px #d8d3ca', cursor: 'pointer' }}/>)}</div></div>
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(190px,1fr))', gap: 10 }}>
         <label><span className="rd-hint">Headline</span><input key={`title-${settings.title || ''}`} className="rr-input" defaultValue={settings.title || ''} placeholder="Use activity title" onBlur={(e) => onUpdate(display.id, { settings: { title: e.target.value || null } })}/></label>
@@ -185,9 +260,11 @@ export default function FestioLiveRedesignPage() {
   const [newActivity, setNewActivity] = useState({ type: 'quiz', title: '', description: '', session_id: '', config: { anonymous: false, allow_answer_changes: false, live_results_enabled: true, moderation_enabled: false } })
   const [programSessions, setProgramSessions] = useState(null)
   const [programFilter, setProgramFilter] = useState('')
+  const [activitySearch, setActivitySearch] = useState('')
+  const [activityStatusFilter, setActivityStatusFilter] = useState('')
   const [selected, setSelected] = useState(null) // full activity, with questions
   const [editingActivity, setEditingActivity] = useState(false)
-  const [activityDraft, setActivityDraft] = useState({ title: '', description: '', session_id: '', moderation_enabled: false, auto_close_enabled: true })
+  const [activityDraft, setActivityDraft] = useState({ title: '', description: '', session_id: '', moderation_enabled: false, auto_close_enabled: true, auto_start_enabled: false, registered_progress_mode: 'off' })
   const [editingQuestionId, setEditingQuestionId] = useState(null)
   const [questionPromptDraft, setQuestionPromptDraft] = useState('')
   const [results, setResults] = useState(null)
@@ -206,7 +283,7 @@ export default function FestioLiveRedesignPage() {
   const [bankImportStatus, setBankImportStatus] = useState('')
   const bankFileRef = useRef(null)
 
-  const [newQuestion, setNewQuestion] = useState({ question_type: 'single_choice', prompt: '', options: ['', ''], correct: [], points: 100, time_limit_seconds: '', scoring_strategy: 'fixed' })
+  const [newQuestion, setNewQuestion] = useState({ question_type: 'single_choice', prompt: '', options: ['', ''], imageUrls: ['', ''], correct: [], points: 100, time_limit_seconds: '', scoring_strategy: 'fixed', boardImage: '', axisLabels: { x_label_low: '', x_label_high: '', y_label_low: '', y_label_high: '' } })
 
   const [shareRole, setShareRole] = useState('presenter')
   const [shareHours, setShareHours] = useState(12)
@@ -221,6 +298,20 @@ export default function FestioLiveRedesignPage() {
   const [newRule, setNewRule] = useState({ source_question_id: '', operator: 'equals', comparison_value: '', target_question_id: '', action: 'show' })
 
   const enabled = !!event?.engagement_enabled
+
+  // Opening an activity's controls (or the new-activity form) is a drill-down
+  // within this page, not a route change — react-router never sees it, so
+  // without this the browser's Back button skips straight past it and leaves
+  // Festio Live entirely. Push one history entry per drill-down and, on Back,
+  // just close it instead of letting the browser navigate away.
+  const drilledDown = !!selected || creating
+  useEffect(() => {
+    if (!drilledDown) return undefined
+    window.history.pushState({ festioLiveDrilldown: true }, '')
+    const onPopState = () => { setSelected(null); setCreating(false) }
+    window.addEventListener('popstate', onPopState)
+    return () => window.removeEventListener('popstate', onPopState)
+  }, [drilledDown]) // eslint-disable-line react-hooks/exhaustive-deps
 
   async function loadActivities() {
     if (!eventId || !enabled) return
@@ -346,7 +437,7 @@ export default function FestioLiveRedesignPage() {
       const updated = await api.liveUpdateActivity(eventId, selected.id, {
         title: activityDraft.title.trim(), description: activityDraft.description.trim() || null,
         session_id: activityDraft.session_id || null,
-        config: { moderation_enabled: activityDraft.moderation_enabled, auto_close_enabled: activityDraft.auto_close_enabled },
+        config: { moderation_enabled: activityDraft.moderation_enabled, auto_close_enabled: activityDraft.auto_close_enabled, auto_start_enabled: activityDraft.auto_start_enabled, registered_progress_mode: activityDraft.registered_progress_mode },
       })
       setSelected(updated); setEditingActivity(false); await loadActivities()
     } catch (e) { setError(e.message) } finally { setBusy(false) }
@@ -372,11 +463,19 @@ export default function FestioLiveRedesignPage() {
         prompt: newQuestion.prompt,
         sequence: selected.questions.length,
         time_limit_seconds: newQuestion.time_limit_seconds === '' ? null : Number(newQuestion.time_limit_seconds),
-        config: selected.type === 'quiz' ? { points: Number(newQuestion.points) || 0, scoring_strategy: newQuestion.scoring_strategy } : {},
-        options: needsOptions ? automaticOptions.filter((o) => o.trim()).map((label, index) => ({ label, is_correct: newQuestion.correct.includes(index) })) : [],
+        config: newQuestion.question_type === 'image_click' ? { image_url: newQuestion.boardImage.trim() }
+          : newQuestion.question_type === 'quadrant' ? Object.fromEntries(Object.entries(newQuestion.axisLabels).filter(([, v]) => v.trim()))
+          : selected.type === 'quiz' ? { points: Number(newQuestion.points) || 0, scoring_strategy: newQuestion.scoring_strategy }
+          : {},
+        options: needsOptions ? newQuestion.options
+          .map((label, index) => ({ label, is_correct: newQuestion.correct.includes(index), config: newQuestion.imageUrls[index]?.trim() ? { image_url: newQuestion.imageUrls[index].trim() } : {} }))
+          .filter((o) => o.label.trim()) : [],
+      }
+      if (newQuestion.question_type === 'true_false' || newQuestion.question_type === 'yes_no') {
+        body.options = automaticOptions.map((label, index) => ({ label, is_correct: newQuestion.correct.includes(index) }))
       }
       await api.liveAddQuestion(eventId, selected.id, body)
-      setNewQuestion({ question_type: 'single_choice', prompt: '', options: ['', ''], correct: [], points: 100, time_limit_seconds: '', scoring_strategy: 'fixed' })
+      setNewQuestion({ question_type: 'single_choice', prompt: '', options: ['', ''], imageUrls: ['', ''], correct: [], points: 100, time_limit_seconds: '', scoring_strategy: 'fixed', boardImage: '', axisLabels: { x_label_low: '', x_label_high: '', y_label_low: '', y_label_high: '' } })
       await openActivity(selected.id)
     } catch (e) { setError(e.message) } finally { setBusy(false) }
   }
@@ -414,12 +513,19 @@ export default function FestioLiveRedesignPage() {
     setAiBusy(questionId); setError('')
     try {
       let job = await api.liveAiAnalysis(eventId, questionId)
-      for (let attempt = 0; attempt < 30 && ['queued', 'running'].includes(job.status); attempt += 1) {
+      // The worker retries a failed/unreachable local-ai call up to 3 times
+      // with its own 60s timeout each -- poll for the worst case (~180s),
+      // not just the common case, so this doesn't give up while the backend
+      // is still legitimately working.
+      for (let attempt = 0; attempt < 90 && ['queued', 'running'].includes(job.status); attempt += 1) {
         await new Promise((resolve) => setTimeout(resolve, 2000))
         job = await api.liveAiAnalysisStatus(eventId, job.id)
       }
-      if (job.status !== 'completed') throw new Error(job.error || 'AI analysis is still processing. Try again shortly.')
-      setAiAnalyses((v) => ({ ...v, [questionId]: job.result }))
+      if (job.status === 'completed') { setAiAnalyses((v) => ({ ...v, [questionId]: job.result })); return }
+      if (job.status === 'failed') throw new Error(job.error || 'AI analysis failed.')
+      // Still queued/running after the poll window -- not a failure, it may
+      // still complete; don't tell the organizer something broke.
+      setError('AI analysis is taking longer than usual and is still running in the background — check back in a minute.')
     } catch (e) { setError(e.message) } finally { setAiBusy(null) }
   }
 
@@ -497,6 +603,28 @@ export default function FestioLiveRedesignPage() {
     catch (e) { setError(e.message) } finally { setBusy(false) }
   }
 
+  function exportQuestionBankCsv() {
+    if (!bank?.length) return
+    const escape = (value) => {
+      const text = String(value ?? '')
+      return /[",\n]/.test(text) ? `"${text.replace(/"/g, '""')}"` : text
+    }
+    const headers = ['question_type', 'prompt', 'description', 'category', 'tags', 'options', 'correct_options']
+    const rows = bank.map((item) => [
+      item.question_type, item.prompt, item.description || '', item.category || '',
+      (item.tags || []).join('|'),
+      (item.options || []).map((option) => option.label).join('|'),
+      (item.options || []).filter((option) => option.is_correct).map((option) => option.label).join('|'),
+    ])
+    const csv = [headers, ...rows].map((row) => row.map(escape).join(',')).join('\n')
+    const blob = new Blob([csv], { type: 'text/csv' })
+    const url = URL.createObjectURL(blob)
+    const link = document.createElement('a')
+    link.href = url; link.download = 'question-bank.csv'
+    document.body.appendChild(link); link.click(); link.remove()
+    URL.revokeObjectURL(url)
+  }
+
   async function importQuestionBankCsv(file) {
     if (!file) return
     setBusy(true); setError(''); setBankImportStatus('')
@@ -535,15 +663,32 @@ export default function FestioLiveRedesignPage() {
     )
   }
 
+  const searchTerm = activitySearch.trim().toLowerCase()
+  const isFiltering = !!searchTerm || !!activityStatusFilter
+  const passesActivityFilters = (activity) =>
+    (!searchTerm || activity.title.toLowerCase().includes(searchTerm) || activity.type.toLowerCase().includes(searchTerm))
+    // Archived activities are retired history, not something to present by
+    // default -- they only reappear when someone deliberately filters for them.
+    && (activityStatusFilter ? activity.status === activityStatusFilter : activity.status !== 'archived')
+
   const programSessionById = new Map((programSessions || []).map((session) => [session.source_step_id, session]))
   const groupedActivities = (programSessions || []).filter((session) => !programFilter || programFilter === session.source_step_id).map((session) => ({
     session,
-    activities: (activities || []).filter((activity) => activity.session_id === session.source_step_id),
+    activities: (activities || []).filter((activity) => activity.session_id === session.source_step_id && passesActivityFilters(activity)),
   }))
-  const eventWideActivities = (activities || []).filter((activity) => !activity.session_id || !programSessionById.has(activity.session_id))
-  const visibleActivities = programFilter === 'event-wide'
+  const eventWideActivities = (activities || []).filter((activity) => (!activity.session_id || !programSessionById.has(activity.session_id)) && passesActivityFilters(activity))
+  // Event-wide activities aren't tied to a program moment, so they sort after
+  // every session-linked one — everything else follows the actual Experience
+  // program order rather than creation order.
+  const sessionStartMs = (activity) => {
+    const session = programSessionById.get(activity.session_id)
+    return session?.starts_at ? new Date(session.starts_at).getTime() : Infinity
+  }
+  const sortByProgram = (list) => [...list].sort((a, b) => sessionStartMs(a) - sessionStartMs(b))
+  const visibleActivities = sortByProgram((programFilter === 'event-wide'
     ? eventWideActivities
     : programFilter ? (activities || []).filter((activity) => activity.session_id === programFilter) : (activities || [])
+  ).filter(passesActivityFilters))
   const visibleDisplays = programFilter === 'event-wide'
     ? (displays || []).filter((display) => !display.assigned_session_id)
     : programFilter ? (displays || []).filter((display) => display.assigned_session_id === programFilter) : (displays || [])
@@ -591,6 +736,15 @@ export default function FestioLiveRedesignPage() {
         {programFilter && <button type="button" onClick={() => setProgramFilter('')}>Clear filter</button>}
       </div>}
 
+      {['Activities', 'Live Control'].includes(tab) && <div className="fl-program-filter">
+        <input className="rr-input" style={{ flex: '1 1 240px', minWidth: 180 }} type="search" placeholder="Search activities by name or type…" aria-label="Search activities" value={activitySearch} onChange={(event) => setActivitySearch(event.target.value)} />
+        <select className="rr-select" aria-label="Filter by status" value={activityStatusFilter} onChange={(event) => setActivityStatusFilter(event.target.value)}>
+          <option value="">Any status</option>
+          {['draft', 'scheduled', 'live', 'paused', 'closed', 'completed', 'archived'].map((status) => <option key={status} value={status}>{status[0].toUpperCase() + status.slice(1)}</option>)}
+        </select>
+        {isFiltering && <button type="button" onClick={() => { setActivitySearch(''); setActivityStatusFilter('') }}>Clear</button>}
+      </div>}
+
       {tab === 'Overview' && <OverviewPanel eventId={eventId} joinInfo={joinInfo} activities={activities} displays={displays} onCreate={() => { setTab('Activities'); setSelected(null); setCreating(true) }} onOpen={async (id) => { await openActivity(id); setTab('Activities') }} onTab={setTab} />}
 
       {tab === 'Activities' && !selected && (
@@ -629,8 +783,9 @@ export default function FestioLiveRedesignPage() {
             {activities === null ? <p className="rd-hint">Loading…</p> : activities.length === 0 ? (
               <p className="rd-hint">No activities yet — create your first quiz, poll, or feedback form above.</p>
             ) : <div className="fl-program-groups">
-              {groupedActivities.filter((group) => group.activities.length || group.session.status === 'published').map((group) => <section className="fl-program-group" key={group.session.source_step_id}><header><div><strong>{group.session.title}</strong><small>{group.session.starts_at ? new Date(group.session.starts_at).toLocaleString([], { weekday: 'short', hour: 'numeric', minute: '2-digit' }) : 'Program session'}{group.session.room ? ` · ${group.session.room}` : ''}{group.session.speaker ? ` · ${group.session.speaker}` : ''}</small></div><a className="fl-experience-return" href={`/experience-redesign?step=${encodeURIComponent(group.session.source_step_id)}`}>Open in Experience ↗</a><span className={`fl-sync-chip ${group.session.status}`}>{group.session.status === 'published' ? '✓ Synchronized' : group.session.status}</span></header>{group.activities.length ? group.activities.map((activity) => <ActivityListRow key={activity.id} activity={activity}/>) : <button className="fl-add-session-activity" onClick={() => { setNewActivity((value) => ({ ...value, session_id: group.session.source_step_id, title: `${group.session.title} Pulse` })); setCreating(true) }}>+ Add Live moment</button>}</section>)}
+              {groupedActivities.filter((group) => group.activities.length || (!isFiltering && group.session.status === 'published')).map((group) => <section className="fl-program-group" key={group.session.source_step_id}><header><div><strong>{group.session.title}</strong><small>{group.session.starts_at ? new Date(group.session.starts_at).toLocaleString([], { weekday: 'short', hour: 'numeric', minute: '2-digit' }) : 'Program session'}{group.session.room ? ` · ${group.session.room}` : ''}{group.session.speaker ? ` · ${group.session.speaker}` : ''}</small></div><a className="fl-experience-return" href={`/experience-redesign?step=${encodeURIComponent(group.session.source_step_id)}`}>Open in Experience ↗</a><span className={`fl-sync-chip ${group.session.status}`}>{group.session.status === 'published' ? '✓ Synchronized' : group.session.status}</span></header>{group.activities.length ? group.activities.map((activity) => <ActivityListRow key={activity.id} activity={activity}/>) : <button className="fl-add-session-activity" onClick={() => { setNewActivity((value) => ({ ...value, session_id: group.session.source_step_id, title: `${group.session.title} Pulse` })); setCreating(true) }}>+ Add Live moment</button>}</section>)}
               {(!programFilter || programFilter === 'event-wide') && eventWideActivities.length > 0 && <section className="fl-program-group"><header><div><strong>Event-wide activities</strong><small>Not linked to an Experience program session</small></div></header>{eventWideActivities.map((activity) => <ActivityListRow key={activity.id} activity={activity}/>)}</section>}
+              {isFiltering && !groupedActivities.some((group) => group.activities.length) && !eventWideActivities.length && <p className="rd-hint">No activities match "{activitySearch}"{activityStatusFilter ? ` with status "${activityStatusFilter}"` : ''}.</p>}
             </div>}
           </div>
         </div>
@@ -642,7 +797,7 @@ export default function FestioLiveRedesignPage() {
           <div className="rr-panel fl-section-panel">
             <div className="rd-panel-head">
               <div><h3>{selected.title}</h3><p style={{ margin: 0, fontSize: 12, color: '#5b6a5c', textTransform: 'capitalize' }}>{selected.type}</p></div>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}><button className="rr-btn secondary" onClick={() => { setActivityDraft({ title: selected.title, description: selected.description || '', session_id: selected.session_id || '', moderation_enabled: !!selected.config?.moderation_enabled, auto_close_enabled: selected.config?.auto_close_enabled !== false }); setEditingActivity((value) => !value) }}>{editingActivity ? 'Cancel edit' : 'Edit details'}</button><StatusChip status={selected.status} /></div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}><button className="rr-btn secondary" onClick={() => { setActivityDraft({ title: selected.title, description: selected.description || '', session_id: selected.session_id || '', moderation_enabled: !!selected.config?.moderation_enabled, auto_close_enabled: selected.config?.auto_close_enabled !== false, auto_start_enabled: !!selected.config?.auto_start_enabled, registered_progress_mode: selected.config?.registered_progress_mode || 'off' }); setEditingActivity((value) => !value) }}>{editingActivity ? 'Cancel edit' : 'Edit details'}</button><StatusChip status={selected.status} /></div>
             </div>
             <div className="rd-panel-body">
               {editingActivity && <div style={{ display: 'grid', gap: 9, padding: 14, marginBottom: 14, borderRadius: 10, background: '#f7f6f0' }}>
@@ -659,6 +814,21 @@ export default function FestioLiveRedesignPage() {
                     <span><span className="rd-field-label" style={{ display: 'block' }}>Auto-close when the linked session ends</span><span style={{ fontSize: 12, color: '#5b6a5c' }}>Closes itself ~20 min after the session's scheduled end, so guests don't stumble onto a stale activity from an earlier session. Running long? Use "Extend +30 min" instead of turning this off.</span></span>
                   </label>
                 )}
+                {activityDraft.session_id && (
+                  <label style={{ display: 'flex', alignItems: 'flex-start', gap: 8 }}>
+                    <input type="checkbox" style={{ marginTop: 3 }} checked={activityDraft.auto_start_enabled} onChange={(event) => setActivityDraft((value) => ({ ...value, auto_start_enabled: event.target.checked }))} />
+                    <span><span className="rd-field-label" style={{ display: 'block' }}>Auto-start when the linked session begins</span><span style={{ fontSize: 12, color: '#5b6a5c' }}>Goes live on its own the moment the session's scheduled start time arrives — no one has to press Go Live. Off by default; Festio Live never starts anything without this switched on.</span></span>
+                  </label>
+                )}
+                <label>
+                  <span className="rd-field-label" style={{ display: 'block' }}>Show response progress on the display</span>
+                  <select className="rr-select" value={activityDraft.registered_progress_mode} onChange={(event) => setActivityDraft((value) => ({ ...value, registered_progress_mode: event.target.value }))}>
+                    <option value="off">Off — don't show</option>
+                    <option value="full">Full — count and percent of guests</option>
+                    <option value="percent">Percent only</option>
+                  </select>
+                  <span style={{ display: 'block', fontSize: 12, color: '#5b6a5c', marginTop: 4 }}>Compares unique responders against your total registered guest count, shown as a banner under the results on the big screen. Off by default.</span>
+                </label>
                 <div><button className="rr-btn primary" disabled={busy || !activityDraft.title.trim()} onClick={saveActivityDetails}>{busy ? 'Saving…' : 'Save details'}</button></div>
               </div>}
               <div style={{ display: 'flex', gap: 8, marginBottom: 12, flexWrap: 'wrap' }}>
@@ -747,13 +917,33 @@ export default function FestioLiveRedesignPage() {
                       <div key={idx} style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
                         <input className="rr-input" placeholder={`Option ${idx + 1}`} value={opt}
                           onChange={(e) => setNewQuestion((v) => ({ ...v, options: v.options.map((o, i2) => i2 === idx ? e.target.value : o) }))} />
+                        {['single_choice', 'multiple_choice'].includes(newQuestion.question_type) && <input className="rr-input" style={{ maxWidth: 220 }} placeholder="Image URL (optional)" value={newQuestion.imageUrls[idx] || ''}
+                          onChange={(e) => setNewQuestion((v) => ({ ...v, imageUrls: v.options.map((_, i2) => i2 === idx ? e.target.value : (v.imageUrls[i2] || '')) }))} />}
                         {selected.type === 'quiz' && newQuestion.question_type !== 'ranking' && <label style={{ display: 'flex', gap: 4, alignItems: 'center', fontSize: 12, whiteSpace: 'nowrap' }}>
                           <input type={newQuestion.question_type === 'single_choice' ? 'radio' : 'checkbox'} name="correct-answer"
                             checked={newQuestion.correct.includes(idx)} onChange={() => setNewQuestion((v) => ({ ...v, correct: v.question_type === 'single_choice' ? [idx] : (v.correct.includes(idx) ? v.correct.filter((n) => n !== idx) : [...v.correct, idx]) }))} /> Correct
                         </label>}
                       </div>
                     ))}
-                    <button className="rr-link-btn" onClick={() => setNewQuestion((v) => ({ ...v, options: [...v.options, ''] }))}>+ Add option</button>
+                    <button className="rr-link-btn" onClick={() => setNewQuestion((v) => ({ ...v, options: [...v.options, ''], imageUrls: [...v.imageUrls, ''] }))}>+ Add option</button>
+                  </div>
+                )}
+                {newQuestion.question_type === 'image_click' && (
+                  <div style={{ marginBottom: 8 }}>
+                    <input className="rr-input" style={{ width: '100%' }} placeholder="Image URL guests will tap on" value={newQuestion.boardImage}
+                      onChange={(e) => setNewQuestion((v) => ({ ...v, boardImage: e.target.value }))} />
+                  </div>
+                )}
+                {newQuestion.question_type === 'quadrant' && (
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginBottom: 8 }}>
+                    <input className="rr-input" placeholder="X axis — left label" value={newQuestion.axisLabels.x_label_low}
+                      onChange={(e) => setNewQuestion((v) => ({ ...v, axisLabels: { ...v.axisLabels, x_label_low: e.target.value } }))} />
+                    <input className="rr-input" placeholder="X axis — right label" value={newQuestion.axisLabels.x_label_high}
+                      onChange={(e) => setNewQuestion((v) => ({ ...v, axisLabels: { ...v.axisLabels, x_label_high: e.target.value } }))} />
+                    <input className="rr-input" placeholder="Y axis — bottom label" value={newQuestion.axisLabels.y_label_low}
+                      onChange={(e) => setNewQuestion((v) => ({ ...v, axisLabels: { ...v.axisLabels, y_label_low: e.target.value } }))} />
+                    <input className="rr-input" placeholder="Y axis — top label" value={newQuestion.axisLabels.y_label_high}
+                      onChange={(e) => setNewQuestion((v) => ({ ...v, axisLabels: { ...v.axisLabels, y_label_high: e.target.value } }))} />
                   </div>
                 )}
                 {selected.type === 'quiz' && ['single_choice', 'multiple_choice', 'true_false', 'yes_no'].includes(newQuestion.question_type) && <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 8 }}><label className="rd-field-label">Points<input className="rr-input" type="number" min="0" max="1000000" value={newQuestion.points} onChange={(event) => setNewQuestion((value) => ({ ...value, points: event.target.value }))}/></label><label className="rd-field-label">Timer (seconds)<input className="rr-input" type="number" min="1" value={newQuestion.time_limit_seconds} onChange={(event) => setNewQuestion((value) => ({ ...value, time_limit_seconds: event.target.value }))} placeholder="No timer"/></label><label className="rd-field-label">Scoring<select className="rr-select" value={newQuestion.scoring_strategy} onChange={(event) => setNewQuestion((value) => ({ ...value, scoring_strategy: event.target.value }))}><option value="fixed">Fixed points</option><option value="time_weighted">Time weighted</option><option value="no_speed_bonus">No speed bonus</option><option value="partial">Partial points</option></select></label></div>}
@@ -871,7 +1061,7 @@ export default function FestioLiveRedesignPage() {
 
       {tab === 'Question Bank' && (
         <div className="rr-panel fl-section-panel">
-          <div className="rd-panel-head"><div><span className="fl-eyebrow">Reusable content library</span><h3>Question Bank</h3><p>Create once, organize, and reuse across events and activities.</p></div><div><input ref={bankFileRef} type="file" accept=".csv,text/csv" hidden onChange={(event) => importQuestionBankCsv(event.target.files?.[0])}/><button className="rr-btn secondary" disabled={busy} onClick={() => bankFileRef.current?.click()}>Import CSV</button></div></div>
+          <div className="rd-panel-head"><div><span className="fl-eyebrow">Reusable content library</span><h3>Question Bank</h3><p>Create once, organize, and reuse across events and activities.</p></div><div style={{ display: 'flex', gap: 8 }}><input ref={bankFileRef} type="file" accept=".csv,text/csv" hidden onChange={(event) => importQuestionBankCsv(event.target.files?.[0])}/><button className="rr-btn secondary" disabled={busy} onClick={() => bankFileRef.current?.click()}>Import CSV</button><button className="rr-btn secondary" disabled={!bank?.length} onClick={exportQuestionBankCsv}>Export CSV</button></div></div>
           <div className="rd-panel-body">
             <div style={{ padding: 14, background: '#f7f6f0', borderRadius: 10, marginBottom: 16 }}>
               <div style={{ display: 'flex', gap: 8, marginBottom: 8, flexWrap: 'wrap' }}>
@@ -918,7 +1108,7 @@ export default function FestioLiveRedesignPage() {
         <div className="rr-panel fl-section-panel">
           <div className="rd-panel-head"><div><span className="fl-eyebrow">Pressure-ready control room</span><h3>Live Control</h3><p>See every live room and jump into presenter controls instantly.</p></div><span className="fl-realtime">● Realtime</span></div>
           <div className="rd-panel-body">
-            {suggestedActivity && <div className="fl-program-cue"><span>✦ PROGRAM CUE</span><div><strong>{currentProgramSession.title} is happening now</strong><small>{suggestedActivity.title} is ready. Festio will never start it automatically.</small></div><button className="rr-btn secondary" onClick={async () => { await openActivity(suggestedActivity.id); setTab('Activities') }}>Review and start manually →</button></div>}
+            {suggestedActivity && <div className="fl-program-cue"><span>✦ PROGRAM CUE</span><div><strong>{currentProgramSession.title} is happening now</strong><small>{suggestedActivity.title} is ready.{suggestedActivity.config?.auto_start_enabled ? ' Auto-start is on — it will go live on its own any moment.' : ' Festio will never start it automatically.'}</small></div><button className="rr-btn secondary" onClick={async () => { await openActivity(suggestedActivity.id); setTab('Activities') }}>Review and start manually →</button></div>}
             {visibleActivities.some((a) => a.status === 'live') && (() => { const current = visibleActivities.find((a) => a.status === 'live' && a.response_count > 0) || visibleActivities.find((a) => a.status === 'live'); const rate = current.participant_count ? Math.min(100, Math.round((current.response_count / current.participant_count) * 100)) : 0; return <div className="fl-control-hero"><div><span>● LIVE NOW · {String(current.type).replaceAll('_', ' ')}</span><h2>{current.title}</h2><div><b>{current.participant_count || 0}<small>participants</small></b><b>{current.response_count || 0}<small>responses</small></b><b>{rate}%<small>response rate</small></b></div></div><button onClick={async () => { await openActivity(current.id); setTab('Activities') }}>Open live controls →</button></div> })()}
             {visibleActivities.filter((a) => !['completed', 'archived'].includes(a.status)).map((a) => (
               <div key={a.id} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '12px 0', borderBottom: '1px solid var(--rr-line, #eee)' }}>
@@ -937,7 +1127,7 @@ export default function FestioLiveRedesignPage() {
           <div className="rd-panel-head"><div><span className="fl-eyebrow">Scene manager · 21 presentation styles</span><h3>Festio Broadcast</h3><p>Direct every projector, TV, and LED wall independently in realtime.</p></div><button className="rr-btn primary" disabled={busy} onClick={createDisplay}>+ Add display</button></div>
           <div className="rd-panel-body">
             <div style={{ display: 'flex', gap: 8, marginBottom: 14, maxWidth: 520 }}><input className="rr-input" aria-label="New display name" placeholder="Main stage, lobby, breakout room…" value={newDisplayName} onChange={(e) => setNewDisplayName(e.target.value)} /></div>
-            <div className="fl-display-grid">{visibleDisplays.map((display) => <DisplayCard key={display.id} display={display} activities={activities || []} programSessions={programSessions || []} busy={busy} onUpdate={updateDisplay} onDelete={deleteDisplay}/>)}</div>
+            <div className="fl-display-grid">{visibleDisplays.map((display) => <DisplayCard key={display.id} display={display} eventId={eventId} activities={activities || []} programSessions={programSessions || []} busy={busy} onUpdate={updateDisplay} onDelete={deleteDisplay}/>)}</div>
             {visibleDisplays.length === 0 && <p className="rd-hint">No displays match this program session. Create one or assign an existing display to the session.</p>}
           </div>
         </div>
@@ -1050,6 +1240,65 @@ export default function FestioLiveRedesignPage() {
               Each activity also has its own TV/projector display link — open an activity in the Activities tab and use
               "Copy TV Display Link". That link never expires and needs no login; it's meant to stay open on one screen for the event.
             </p>
+          </div>
+        </div>
+      )}
+
+      {tab === 'Help' && (
+        <div style={{ display: 'grid', gap: 18 }}>
+          <div className="rr-panel fl-section-panel">
+            <div className="rd-panel-head"><div><span className="fl-eyebrow">How it works</span><h3>Running one activity</h3><p>Create it, send it live, guests answer on their phone, results show up everywhere at once.</p></div></div>
+            <div className="rd-panel-body">
+              <div className="fl-help-steps">
+                <div className="fl-help-step"><b>1</b><div><h4>Create the activity</h4><p>Pick a type — poll, quiz, rating, word cloud, ranking, Q&amp;A, quadrant, or image click — write the prompt, add options if it needs them.</p><span className="fl-help-where">Activities → + New activity</span></div></div>
+                <div className="fl-help-step"><b>2</b><div><h4>Link it to a program session — if it belongs to one</h4><p>Scopes it so guests only see it during that session, and it's what auto-close and auto-start key off. Skip this for anything meant to run all event.</p><span className="fl-help-where">Edit details → Experience program session</span></div></div>
+                <div className="fl-help-step"><b>3</b><div><h4>Send it live</h4><p>Press Go Live yourself, or turn on Auto-start beforehand so it opens the instant the linked session's scheduled time arrives.</p><span className="fl-help-where">Activity detail → Go Live · or Edit details → Auto-start</span></div></div>
+                <div className="fl-help-step"><b>4</b><div><h4>Guests join and answer</h4><p>They scan the QR code, tap the join code, or use their personal Guest Hub link — straight to the activity, no app, no account.</p><span className="fl-help-where">Displays → join scene, or shared from Guest Hub</span></div></div>
+                <div className="fl-help-step"><b>5</b><div><h4>Watch it fill in live</h4><p>Participant count, response count, and response rate update in real time as answers come in.</p><span className="fl-help-where">Live Control</span></div></div>
+                <div className="fl-help-step"><b>6</b><div><h4>Put it on the big screen</h4><p>Assign the activity to a display and pick a scene — results bars, a donut chart, the leaderboard, a word cloud, a heatmap. Copy the TV link once and leave it running.</p><span className="fl-help-where">Displays → Broadcast studio</span></div></div>
+                <div className="fl-help-step"><b>7</b><div><h4>Wrap up</h4><p>Close it when the moment's over, or leave Auto-close on and it closes itself about 20 minutes after the session's scheduled end.</p><span className="fl-help-where">Activity detail → Close</span></div></div>
+              </div>
+            </div>
+          </div>
+
+          <div className="rr-panel fl-section-panel">
+            <div className="rd-panel-head"><div><span className="fl-eyebrow">Before you link anything</span><h3>Experience is where the schedule lives</h3><p>Festio Live borrows its program from Experience — sessions, meals, prayers, breakouts, all as timed steps in a guest journey.</p></div></div>
+            <div className="rd-panel-body">
+              <div className="fl-help-bridge">
+                <div className="fl-help-bcard"><span className="fl-help-bnum">1</span><h4>Mark a step as a session</h4><p>Open a step in Experience and switch on Live Program timing. Give it a start offset and duration.</p></div>
+                <div className="fl-help-barrow" aria-hidden="true">→</div>
+                <div className="fl-help-bcard"><span className="fl-help-bnum">2</span><h4>Publish the workflow</h4><p>A draft never reaches Festio Live — only a published workflow's timed steps sync over.</p></div>
+                <div className="fl-help-barrow" aria-hidden="true">→</div>
+                <div className="fl-help-bcard mint"><span className="fl-help-bnum">3</span><h4>Pick it in Festio Live</h4><p>It appears in Experience program session when you edit an activity — link it, and the two stay in sync.</p></div>
+              </div>
+              <p className="rd-hint">Right activity, right time — guests only ever see the activity for whatever session they're currently in, and Live Control lists activities in the order sessions actually happen, not the order they were created.</p>
+            </div>
+          </div>
+
+          <div className="rr-panel fl-section-panel">
+            <div className="rd-panel-head"><div><span className="fl-eyebrow">Pick the right shape</span><h3>Activity types</h3><p>The prompt decides the type — here's what each is actually good for.</p></div></div>
+            <div className="rd-panel-body">
+              <div className="fl-help-gallery">
+                <div className="fl-help-gcard"><span>P</span><h4>Poll</h4><p>Quick single or multi-choice — a temperature check, no right answer.</p></div>
+                <div className="fl-help-gcard"><span>Q</span><h4>Quiz</h4><p>Scored, timed, correct-answer questions with a live leaderboard.</p></div>
+                <div className="fl-help-gcard"><span>★</span><h4>Rating</h4><p>5-star, 10-point, or NPS — how something landed, in one tap.</p></div>
+                <div className="fl-help-gcard"><span>☁</span><h4>Word cloud</h4><p>One word each, sized by how often it's repeated.</p></div>
+                <div className="fl-help-gcard"><span>≡</span><h4>Ranking</h4><p>Drag options into order — what matters most, together.</p></div>
+                <div className="fl-help-gcard"><span>?</span><h4>Q&amp;A</h4><p>Guests submit and upvote their own questions; you moderate and feature.</p></div>
+                <div className="fl-help-gcard"><span>⊞</span><h4>Quadrant</h4><p>Two axes, one tap — a real 2×2 map of where the room stands.</p></div>
+                <div className="fl-help-gcard"><span>◉</span><h4>Image click</h4><p>Guests tap a spot on a photo; the taps build into a live heatmap.</p></div>
+              </div>
+            </div>
+          </div>
+
+          <div className="rr-panel fl-section-panel">
+            <div className="rd-panel-head"><div><span className="fl-eyebrow">Two switches worth knowing</span><h3>Auto-close vs. auto-start</h3><p>Both only apply to session-linked activities — Festio has nothing to time itself against otherwise.</p></div></div>
+            <div className="rd-panel-body">
+              <div className="fl-help-compare">
+                <div className="fl-help-tcard on"><span className="fl-help-tstate">● on by default</span><h4>Auto-close</h4><p>Closes itself about 20 minutes after the linked session's scheduled end.</p><p>Running long? Use Extend +30 min instead of turning it off.</p></div>
+                <div className="fl-help-tcard"><span className="fl-help-tstate">○ off by default</span><h4>Auto-start</h4><p>Goes live the moment the linked session's scheduled start time arrives — nobody presses Go Live.</p><p>Turn it on per activity, in Edit details, once you trust the schedule.</p></div>
+              </div>
+            </div>
           </div>
         </div>
       )}

@@ -1136,6 +1136,13 @@ function MessagesTab({ notify, onPreview, eventId }) {
           {['sms', 'whatsapp', 'mms'].filter((channel) => templateEditor.template.channels.includes(channel)).map((channel) => (
             <div key={channel}>
               <label className="rd-field-label">{channel.toUpperCase()} body</label>
+              {channel === 'whatsapp' && (
+                <p className="rd-hint cm-whatsapp-inert-note">
+                  ⚠️ WhatsApp requires a Meta-approved message template to open a conversation — this text is <strong>never actually sent</strong>.
+                  Real WhatsApp delivery always uses a pre-approved template managed outside Festio (in Bird's dashboard), regardless of what's saved here.
+                  Kept editable for reference/documentation only.
+                </p>
+              )}
               <textarea className="rr-textarea" rows={4} value={templateEditor[`${channel}_body`]} onChange={(event) => setTemplateEditor((value) => ({ ...value, [`${channel}_body`]: event.target.value }))} />
             </div>
           ))}

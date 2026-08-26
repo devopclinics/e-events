@@ -458,6 +458,8 @@ function CommandResultPanel({ result, onStepComplete, stepBusy }) {
   const initials = name ? name.split(/\s+/).slice(0, 2).map((part) => part[0]).join('').toUpperCase() : '?'
   const status = result ? (result.denied ? 'Denied' : (result.status || 'Result').replaceAll('_', ' ')) : ''
   const nextSteps = result?.experience_next_steps || []
+  const requiredSteps = nextSteps.filter(({ step }) => step.required)
+  const optionalSteps = nextSteps.filter(({ step }) => !step.required)
 
   return (
     <aside className="sc-command-panel sc-command-arrival" data-testid={result ? 'scan-result' : undefined} role={result ? 'status' : undefined}>
@@ -473,24 +475,41 @@ function CommandResultPanel({ result, onStepComplete, stepBusy }) {
         </div>
       ) : (
         <>
-          <div className="sc-command-guest">
+          <div className={`sc-command-guest sc-command-guest-${tone}`}>
             <span className="sc-command-avatar">{initials}</span>
-            <div><strong>{name || 'Unknown guest'}</strong><small>{result.message || 'The scan was processed.'}</small></div>
-            <span className={`sc-command-pass sc-command-pass-${tone}`}><Icon name={tone === 'green' ? 'check' : 'info'} size={14}/>{status}</span>
+            <div>
+              <span className={`sc-command-status-headline sc-command-status-${tone}`}><Icon name={tone === 'green' ? 'check' : tone === 'red' ? 'shield' : 'info'} size={13}/>{status}</span>
+              <strong>{name || 'Unknown guest'}</strong>
+              <small>{result.message || 'The scan was processed.'}</small>
+            </div>
           </div>
           <div className="sc-command-guidance">
             {(result.table_name || result.seat_number) && <div><Icon name="chair" size={16}/><span>Seating assignment<strong>{result.table_name ? `Table ${result.table_name}` : 'Table not assigned'}{result.seat_number ? ` · Seat ${result.seat_number}` : ''}</strong></span></div>}
             {result.zone_name && <div><Icon name="external" size={16}/><span>Access decision<strong>{result.direction?.toUpperCase()} · {result.zone_name}</strong></span></div>}
             {result.deny_reason && <div><Icon name="shield" size={16}/><span>Reason<strong>{result.deny_reason}</strong></span></div>}
           </div>
-          {nextSteps.length > 0 && (
+          {requiredSteps.length > 0 && (
             <div className="sc-command-next">
               <span>Next required action</span>
-              {nextSteps.map(({ step }) => {
+              {requiredSteps.map(({ step }) => {
                 const completable = !['check_in', 'seating_assignment', 'meal_selection', 'consent'].includes(step.type)
                 return (
                   <div className="sc-command-next-step" key={step.id}>
-                    <strong>{step.title}{step.required ? ' · Required' : ''}</strong>
+                    <strong>{step.title} · Required</strong>
+                    {completable && <button disabled={stepBusy} onClick={() => onStepComplete(step)}>{stepBusy ? 'Saving…' : step.type === 'session_attendance' ? 'Check in' : 'Complete'}</button>}
+                  </div>
+                )
+              })}
+            </div>
+          )}
+          {optionalSteps.length > 0 && (
+            <div className="sc-command-next sc-command-next-optional">
+              <span>Program sessions (optional)</span>
+              {optionalSteps.map(({ step }) => {
+                const completable = !['check_in', 'seating_assignment', 'meal_selection', 'consent'].includes(step.type)
+                return (
+                  <div className="sc-command-next-step" key={step.id}>
+                    <strong>{step.title}</strong>
                     {completable && <button disabled={stepBusy} onClick={() => onStepComplete(step)}>{stepBusy ? 'Saving…' : step.type === 'session_attendance' ? 'Check in' : 'Complete'}</button>}
                   </div>
                 )

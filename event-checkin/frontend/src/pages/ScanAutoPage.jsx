@@ -611,39 +611,31 @@ function NotificationPreferences({ token, guest, eventNotifySms, eventNotifyWa, 
   }
 
   return (
-    <div className="border border-slate-200 dark:border-slate-700 rounded-lg p-4 space-y-3">
-      <div>
-        <p className="text-sm font-semibold text-slate-800 dark:text-slate-100">🔔 Notification preferences</p>
-        <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
-          We'll send your event ticket link, check-in confirmation, seating updates, session reminders, and
-          event-service notifications to <strong>{phone}</strong>. Message frequency varies by event. Message and data
-          rates may apply. Reply <strong>HELP</strong> for help or <strong>STOP</strong> to opt out at any time. View our{' '}
-          <a href="/privacy" target="_blank" rel="noreferrer" className="font-semibold text-teal-700 underline dark:text-teal-300">Privacy Policy</a>.
-        </p>
-      </div>
-      <div className="space-y-2">
+    <div className="border border-slate-200 dark:border-slate-700 rounded-lg p-2.5 space-y-1.5">
+      <p className="text-[11px] leading-snug text-slate-500 dark:text-slate-400">
+        🔔 Texts/WhatsApp to <strong>{phone}</strong> for tickets, check-in &amp; event updates. Msg &amp; data rates
+        may apply. Reply <strong>STOP</strong> to opt out, <strong>HELP</strong> for help. {' '}
+        <a href="/privacy" target="_blank" rel="noreferrer" className="font-semibold text-teal-700 underline dark:text-teal-300">Privacy Policy</a>.
+      </p>
+      <div className="flex flex-wrap gap-x-4 gap-y-1">
         {eventNotifySms && (
-          <label className="flex items-center gap-3 cursor-pointer">
+          <label className="flex items-center gap-1.5 cursor-pointer">
             <input type="checkbox" checked={smsOn} disabled={saving}
               onChange={(e) => toggle('sms_consent', e.target.checked, setSmsOn)}
-              className="w-5 h-5 accent-teal-500" />
-            <span className="text-sm text-slate-700 dark:text-slate-200">
-              Receive <strong>SMS</strong> updates
-            </span>
+              className="w-3.5 h-3.5 accent-teal-500" />
+            <span className="text-xs text-slate-700 dark:text-slate-200">SMS</span>
           </label>
         )}
         {eventNotifyWa && (
-          <label className="flex items-center gap-3 cursor-pointer">
+          <label className="flex items-center gap-1.5 cursor-pointer">
             <input type="checkbox" checked={waOn} disabled={saving}
               onChange={(e) => toggle('whatsapp_consent', e.target.checked, setWaOn)}
-              className="w-5 h-5 accent-teal-500" />
-            <span className="text-sm text-slate-700 dark:text-slate-200">
-              Receive <strong>WhatsApp</strong> updates
-            </span>
+              className="w-3.5 h-3.5 accent-teal-500" />
+            <span className="text-xs text-slate-700 dark:text-slate-200">WhatsApp</span>
           </label>
         )}
+        {msg && <span className="text-xs text-teal-600 dark:text-teal-400">{msg}</span>}
       </div>
-      {msg && <p className="text-xs text-teal-600 dark:text-teal-400">{msg}</p>}
     </div>
   )
 }
@@ -999,13 +991,15 @@ export default function ScanAutoPage() {
           <ConsentCard token={token} guest={guest} />
 
           {/* Notification preferences — TCR opt-in compliance + guest control */}
-          <NotificationPreferences
-            token={token}
-            guest={guest}
-            eventNotifySms={event?.notify_sms}
-            eventNotifyWa={event?.notify_whatsapp}
-            onChange={reload}
-          />
+          {event?.notify_consent_prompt_enabled !== false && (
+            <NotificationPreferences
+              token={token}
+              guest={guest}
+              eventNotifySms={event?.notify_sms}
+              eventNotifyWa={event?.notify_whatsapp}
+              onChange={reload}
+            />
+          )}
 
           {/* Menu selection */}
           {(menu_locked || (menu_categories && menu_categories.length > 0)) && (

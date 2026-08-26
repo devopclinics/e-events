@@ -499,6 +499,12 @@ class Event(Base):
     notify_whatsapp: Mapped[bool] = mapped_column(Boolean, default=True)
     # MMS (image ticket card). Superadmin-only per-event toggle; off by default.
     notify_mms: Mapped[bool] = mapped_column(Boolean, default=False)
+    # Whether the guest-facing "Notification preferences" consent card (SMS/
+    # WhatsApp opt-in checkboxes + STOP/HELP disclosure) shows on the Guest
+    # Hub check-in screen. Defaults on for 10DLC/carrier compliance whenever
+    # SMS or WhatsApp notifications are enabled — organizers who don't send
+    # guest SMS/WhatsApp from this event can turn it off.
+    notify_consent_prompt_enabled: Mapped[bool] = mapped_column(Boolean, default=True)
     # Optional per-flow channel policy for cost control, e.g.
     # {"invite": ["email","sms"], "admission": ["mms","whatsapp"]}. For a flow
     # with a policy, only the FIRST deliverable channel (consent+contact) is used

@@ -1235,6 +1235,7 @@ function SettingsTab({ notify, eventId, event, onEventChanged }) {
   const [hubSettingsBusy, setHubSettingsBusy] = useState('')
   const [addons, setAddons] = useState(() => Object.fromEntries(ADDON_TOGGLES.map((a) => [a.key, a.on])))
   const [channelToggles, setChannelToggles] = useState(() => Object.fromEntries(CHANNEL_TOGGLE_ROWS.map((c) => [c.key, c.on])))
+  const [consentPromptEnabled, setConsentPromptEnabled] = useState(true)
   const [routing, setRouting] = useState(() =>
     Object.fromEntries(ROUTING_ROWS.map((r) => [r.key, { email: r.email, sms: r.sms, whatsapp: r.whatsapp, mms: r.mms, mode: 'all' }]))
   )
@@ -1248,6 +1249,7 @@ function SettingsTab({ notify, eventId, event, onEventChanged }) {
 
   // Check-in behavior — ported from AdminPage.jsx's CheckoutToggle/WalkInToggle.
   const [checkoutEnabled, setCheckoutEnabled] = useState(false)
+  const [manualCheckinEnabled, setManualCheckinEnabled] = useState(false)
   const [walkInEnabled, setWalkInEnabled] = useState(false)
   const [walkInGroupId, setWalkInGroupId] = useState('')
   const [walkInGroupChoiceEnabled, setWalkInGroupChoiceEnabled] = useState(false)
@@ -1284,12 +1286,14 @@ function SettingsTab({ notify, eventId, event, onEventChanged }) {
       return [row.key, { ...Object.fromEntries(['email', 'sms', 'whatsapp', 'mms'].map((ch) => [ch, enabled.includes(ch)])), mode }]
     })))
     setChannelToggles({ email: !!event.notify_email, sms: !!event.notify_sms, whatsapp: !!event.notify_whatsapp })
+    setConsentPromptEnabled(event.notify_consent_prompt_enabled !== false)
     setAddons(Object.fromEntries(ADDON_TOGGLES.map((a) => [a.key, !!event[ADDON_FEATURE_KEY[a.key]]])))
     setDeclineNotify(!!event.notify_rsvp_responses)
     setThankYou(!!event.post_event_thankyou_enabled)
     setThankYouAudience(({ admitted: 'Checked in', confirmed: 'Confirmed', all: 'All guests' })[event.post_event_thankyou_audience] || 'Checked in')
     setThankYouDelay(event.post_event_thankyou_delay_hours ?? 24)
     setCheckoutEnabled(!!event.checkout_enabled)
+    setManualCheckinEnabled(!!event.manual_checkin_enabled)
     setWalkInEnabled(!!event.walk_in_enabled)
     setWalkInGroupId(event.walk_in_table_group_id || '')
     setWalkInGroupChoiceEnabled(!!event.walk_in_group_choice_enabled)
@@ -1337,6 +1341,13 @@ function SettingsTab({ notify, eventId, event, onEventChanged }) {
     setCheckoutEnabled(next)
     saveFeature('checkout', { checkout_enabled: next }, () => setCheckoutEnabled(!next))
     notify(`Check-out ${next ? 'enabled' : 'disabled'}`)
+  }
+
+  async function toggleManualCheckin() {
+    const next = !manualCheckinEnabled
+    setManualCheckinEnabled(next)
+    saveFeature('manual_checkin', { manual_checkin_enabled: next }, () => setManualCheckinEnabled(!next))
+    notify(`Manual check-in ${next ? 'enabled' : 'disabled'}`)
   }
 
   async function toggleWalkIn() {
@@ -1522,6 +1533,13 @@ function SettingsTab({ notify, eventId, event, onEventChanged }) {
     if (saved) notify(`${label} ${next ? 'enabled' : 'disabled'}`)
   }
 
+  function toggleConsentPrompt() {
+    const next = !consentPromptEnabled
+    setConsentPromptEnabled(next)
+    saveFeature('consent_prompt', { notify_consent_prompt_enabled: next }, () => setConsentPromptEnabled(!next))
+    notify(next ? 'Guest consent prompt turned on' : 'Guest consent prompt turned off')
+  }
+
   function toggleChannel(key, label) {
     const next = !channelToggles[key]
     setChannelToggles((prev) => ({ ...prev, [key]: next }))
@@ -1613,6 +1631,18 @@ function SettingsTab({ notify, eventId, event, onEventChanged }) {
               : <button className="rr-link-btn" disabled={!!channelTestBusy} onClick={() => sendChannelTest(c.key)}>{channelTestBusy === c.key ? 'Sending…' : 'Send test'} <Icon name="arrow" size={11} /></button>}
           </div>
         ))}
+      </div>
+      <div className="rr-panel cm-toggle-card">
+        <div className="cm-toggle-top">
+          <strong>Guest consent prompt</strong>
+          <Switch checked={consentPromptEnabled} disabled={featureBusy === 'consent_prompt'} onChange={toggleConsentPrompt} />
+        </div>
+        <span className="rd-hint">
+          Shows the SMS/WhatsApp opt-in checkboxes and STOP/HELP disclosure on the guest's check-in screen.
+          {(channelToggles.sms || channelToggles.whatsapp)
+            ? ' This event sends SMS or WhatsApp — carriers require this consent notice, so leave it on unless you have opt-in covered another way.'
+            : ' This event only sends email, so it has no effect either way.'}
+        </span>
       </div>
 
       <div className="rr-section-title">
@@ -1776,6 +1806,14 @@ function SettingsTab({ notify, eventId, event, onEventChanged }) {
       </div>
 
       <div className="rr-grid2">
+        <div className="rr-panel cm-toggle-card cm-settings-card">
+          <div className="cm-toggle-top">
+            <strong>Manual check-in</strong>
+            <Switch checked={manualCheckinEnabled} onChange={toggleManualCheckin} />
+          </div>
+          <p>Let staff find and admit a guest by name or phone when their QR isn't available. Adds a Manual search tab to the Scanner.</p>
+        </div>
+
         <div className="rr-panel cm-toggle-card cm-settings-card">
           <div className="cm-toggle-top">
             <strong>Guest check-out</strong>

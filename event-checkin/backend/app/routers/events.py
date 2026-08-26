@@ -377,7 +377,7 @@ _DUPLICATE_TEMPLATE_FIELDS = [
     "manual_checkin_enabled", "self_checkin_enabled", "checkout_enabled", "walk_in_enabled",
     # notifications — includes platform-superadmin blocks, which must carry
     # over so duplication can't be used to dodge a compliance/abuse block
-    "notify_email", "notify_mms", "channel_policy",
+    "notify_email", "notify_mms", "notify_consent_prompt_enabled", "channel_policy",
     "blocked_messaging_channels", "blocked_comm_features", "notify_rsvp_responses",
     "post_event_thankyou_enabled", "post_event_thankyou_delay_hours", "post_event_thankyou_audience",
     # RSVP / invite configuration
@@ -1131,7 +1131,7 @@ async def toggle_features(
         "seating_enabled", "menu_enabled", "logistics_enabled", "registry_enabled",
         "venue_access_enabled", "partner_pairing_enabled", "experience_enabled", "live_program_enabled",
         "section_mode_enabled", "festiome_addon_enabled", "planner_enabled", "engagement_enabled",
-        "speaker_enabled", "partner_enabled", "reminders_enabled",
+        "speaker_enabled", "partner_enabled", "reminders_enabled", "manual_checkin_enabled",
     ):
         if body.get(feature):
             assert_feature_allowed(event, feature)
@@ -1217,7 +1217,10 @@ async def toggle_features(
         event.section_mode_enabled = enable
     if "checkout_enabled" in body:
         event.checkout_enabled = bool(body["checkout_enabled"])
-    for k in ("notify_email", "notify_sms", "notify_whatsapp", "notify_rsvp_responses", "post_event_thankyou_enabled"):
+    if "manual_checkin_enabled" in body:
+        event.manual_checkin_enabled = bool(body["manual_checkin_enabled"])
+    for k in ("notify_email", "notify_sms", "notify_whatsapp", "notify_rsvp_responses",
+              "post_event_thankyou_enabled", "notify_consent_prompt_enabled"):
         if k in body:
             setattr(event, k, bool(body[k]))
     if "post_event_thankyou_delay_hours" in body:

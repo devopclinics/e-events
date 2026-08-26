@@ -211,6 +211,7 @@ class EventOut(BaseModel):
     notify_sms: bool = True
     notify_whatsapp: bool = True
     notify_mms: bool = False
+    notify_consent_prompt_enabled: bool = True
     # Per-flow channel policy (organizer cost control) + superadmin hard blocks
     # (read-only for organizers; set from the operator console).
     channel_policy: Optional[dict] = None

@@ -1064,6 +1064,13 @@ export const api = {
     fetch(`${BASE}/events/${encodeURIComponent(eventId)}/experience/me/feedback?token=${encodeURIComponent(token)}`).then((r) =>
       r.ok ? r.json() : r.json().then((e) => Promise.reject(new Error(e.detail || 'Feedback is temporarily unavailable.'))),
     ),
+  // Self-reports a blocking step as done (e.g. "I signed the waiver") — does
+  // NOT admit the guest; staff still confirms it at check-in. See
+  // guest_marks_step_done in routers/experience.py.
+  markGuestStepDone: (eventId, token, stepId) =>
+    fetch(`${BASE}/events/${encodeURIComponent(eventId)}/experience/me/steps/${encodeURIComponent(stepId)}/mark-done?token=${encodeURIComponent(token)}`, {
+      method: 'POST',
+    }).then((r) => (r.ok ? r.json() : r.json().then((e) => Promise.reject(new Error(e.detail || 'Could not be recorded.'))))),
   submitGuestFeedback: (eventId, token, data) =>
     fetch(`${BASE}/events/${encodeURIComponent(eventId)}/experience/me/feedback?token=${encodeURIComponent(token)}`, {
       method: 'POST',

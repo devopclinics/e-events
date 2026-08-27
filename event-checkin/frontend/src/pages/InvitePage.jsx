@@ -1335,6 +1335,7 @@ function GuestHub({ event, accessToken, designTheme, previewMock = false, confir
   const [signName, setSignName] = useState('')
   const [signing, setSigning] = useState(false)
   const [signError, setSignError] = useState('')
+  const [markingStepId, setMarkingStepId] = useState(null)
   const [feedbackForms, setFeedbackForms] = useState([])
   const [feedbackAnswers, setFeedbackAnswers] = useState({})
   const [feedbackBusy, setFeedbackBusy] = useState('')
@@ -1598,6 +1599,14 @@ function GuestHub({ event, accessToken, designTheme, previewMock = false, confir
     }
   }
 
+  async function markStepDone(stepId) {
+    if (markingStepId) return
+    setMarkingStepId(stepId)
+    try { await api.markGuestStepDone(event.id, accessToken, stepId); await loadJourney() }
+    catch { /* best-effort — the step just stays showing "Action required" */ }
+    finally { setMarkingStepId(null) }
+  }
+
   async function submitConsent(e) {
     e.preventDefault()
     const name = signName.trim()
@@ -1730,10 +1739,14 @@ function GuestHub({ event, accessToken, designTheme, previewMock = false, confir
     } else if (needsConsent) {
       nextStep = { icon: '📝', label: 'Action required', text: `Sign ${consent.form?.title || 'your consent form'} before check-in.`, urgent: true }
     } else if (blockingStep) {
-      nextStep = {
-        icon: '📝', label: 'Action required', text: `Complete "${blockingStep.title}" before check-in.`, urgent: true,
-        action: blockingStep.action_url ? { href: blockingStep.action_url, text: 'Open link →', external: true } : null,
-      }
+      const reported = !!blockingStep.metadata?.guest_reported_done
+      nextStep = reported
+        ? { icon: '✓', label: 'Submitted', text: `"${blockingStep.title}" — we'll confirm this at check-in.`, urgent: false, action: null }
+        : {
+          icon: '📝', label: 'Action required', text: `Complete "${blockingStep.title}" before check-in.`, urgent: true,
+          action: blockingStep.action_url ? { href: blockingStep.action_url, text: 'Open link →', external: true } : null,
+          markDone: { stepId: blockingStep.id, busy: markingStepId === blockingStep.id },
+        }
     } else if (wantsMeal) {
       nextStep = { icon: '🍽️', label: 'Next step', text: 'Choose your food order on your Festio Pass.', urgent: false }
     } else if (journey?.program?.current_segments?.[0]) {
@@ -1874,6 +1887,11 @@ function GuestHub({ event, accessToken, designTheme, previewMock = false, confir
               <div className="text-[11px] font-extrabold uppercase tracking-wide" style={{ color: tone.accent }}>{nextStep.label}</div>
               <div className="mt-0.5 font-bold">{nextStep.text}</div>
               {nextStep.action && <a href={nextStep.action.href} {...(nextStep.action.external ? { target: '_blank', rel: 'noopener noreferrer' } : {})} className="mt-3 inline-flex min-h-10 items-center justify-center rounded-xl px-4 py-2 text-sm font-extrabold text-slate-950" style={{ background: tone.accent }}>{nextStep.action.text}</a>}
+              {nextStep.markDone && (
+                <button type="button" disabled={nextStep.markDone.busy} onClick={() => markStepDone(nextStep.markDone.stepId)} className="mt-2 inline-flex min-h-10 items-center justify-center rounded-xl border-2 px-4 py-2 text-sm font-extrabold" style={{ borderColor: tone.accent, color: tone.text }}>
+                  {nextStep.markDone.busy ? 'Saving…' : "I've completed this"}
+                </button>
+              )}
             </div>
           </div>
 

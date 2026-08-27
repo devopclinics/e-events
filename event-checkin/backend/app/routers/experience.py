@@ -631,6 +631,13 @@ def _guest_safe_step_metadata(step: ExperienceStep, row: GuestExperienceProgress
     if not row or not isinstance(row.progress_metadata, dict):
         return {}
     metadata = row.progress_metadata
+    if metadata.get("guest_reported_done"):
+        # Their own self-report, on any blocking step — safe to always show
+        # back to them regardless of type.
+        safe = {"guest_reported_done": True}
+        if metadata.get("guest_reported_at"):
+            safe["guest_reported_at"] = metadata["guest_reported_at"]
+        return safe
     if step.type == "room_assignment":
         assignment = metadata.get("room_assignment")
         return {"room_assignment": assignment} if isinstance(assignment, dict) else {}
@@ -1809,6 +1816,57 @@ async def sign_my_consent(
     await db.commit()
     await db.refresh(signature)
     return signature
+
+
+@router.post("/{event_id}/experience/me/steps/{step_id}/mark-done", response_model=GuestJourneyStepOut)
+async def guest_marks_step_done(
+    event_id: str,
+    step_id: str,
+    token: str = Query(...),
+    db: AsyncSession = Depends(get_db),
+):
+    """A guest reports they've completed a blocking step Festio has no way to
+    verify automatically (e.g. a third-party waiver link). This does NOT mark
+    the step "completed" — that still requires a staff member to confirm at
+    check-in (see perform_admission in routers/scanner.py), since there's
+    nothing here to check the guest's claim against. It only records that
+    they said so, so the Hub can stop prompting them and staff can see it at
+    the scanner as a head start, not a substitute for confirming."""
+    guest = await _guest_by_token(event_id, token, db)
+    event = await db.get(Event, event_id)
+    if not event or not event.experience_enabled:
+        raise HTTPException(404, "Experience workflow is not enabled for this event")
+    workflow = await active_workflow(event_id, db)
+    if not workflow:
+        raise HTTPException(404, "Workflow not found")
+    step = next((s for s in workflow.steps if s.id == step_id), None)
+    if not step or not step.blocks_checkin:
+        raise HTTPException(404, "Step not found")
+
+    await sync_guest_progress(event_id, guest.id, db, source="guest")
+    progress = await db.scalar(
+        select(GuestExperienceProgress)
+        .where(
+            GuestExperienceProgress.workflow_id == workflow.id,
+            GuestExperienceProgress.step_id == step_id,
+            GuestExperienceProgress.guest_id == guest.id,
+        )
+    )
+    if not progress:
+        progress = GuestExperienceProgress(event_id=event_id, workflow_id=workflow.id, step_id=step_id, guest_id=guest.id, status="available")
+        db.add(progress)
+        await db.flush()
+    metadata = dict(progress.progress_metadata) if isinstance(progress.progress_metadata, dict) else {}
+    metadata["guest_reported_done"] = True
+    metadata["guest_reported_at"] = datetime.utcnow().isoformat()
+    progress.progress_metadata = metadata
+    db.add(ExperienceEvent(
+        event_id=event_id, workflow_id=workflow.id, step_id=step.id, guest_id=guest.id,
+        event_type="guest_reported_done", source="guest", payload={},
+    ))
+    await db.commit()
+    await db.refresh(progress)
+    return _guest_step_out(step, progress)
 
 
 # ── Feedback Experience step ────────────────────────────────────────────────

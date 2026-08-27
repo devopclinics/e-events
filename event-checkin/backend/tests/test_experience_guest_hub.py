@@ -96,6 +96,47 @@ async def test_journey_exposes_blocking_step_as_actionable_with_link(ctx):
 
 
 @pytest.mark.asyncio
+async def test_guest_can_self_report_a_blocking_step_without_completing_it(ctx):
+    """Self-reporting is a UX nicety (stop nagging the guest, give staff a
+    head start), not a way to bypass staff confirmation — there's nothing on
+    Festio's side to verify a third-party signature against, so the step
+    must stay pending (and admission must stay blocked) until staff actually
+    confirms it at check-in."""
+    ctx.login(ctx.ids["user_a"])
+    guest_id, _ = await _setup(ctx, with_consent=False)
+    async with _Session() as s:
+        wf = (await s.execute(select(ExperienceWorkflow).where(ExperienceWorkflow.event_id == ctx.ids["event_a"]))).scalars().first()
+        step = ExperienceStep(
+            workflow_id=wf.id, key="waiver", type="custom", title="Sign the event waiver",
+            sort_order=5, required=True, blocks_checkin=True,
+            config={"external_url": "https://app.waiversign.com/e/example"},
+        )
+        s.add(step)
+        await s.commit()
+        step_id = step.id
+        token = (await s.execute(select(Guest.qr_token).where(Guest.id == guest_id))).scalar_one()
+
+    marked = await ctx.client.post(f"/api/events/{ctx.ids['event_a']}/experience/me/steps/{step_id}/mark-done?token={TOKEN}")
+    assert marked.status_code == 200
+    body = marked.json()
+    assert body["status"] not in ("completed", "overridden")
+    assert body["metadata"]["guest_reported_done"] is True
+
+    journey = (await ctx.client.get(f"/api/events/{ctx.ids['event_a']}/experience/me?token={TOKEN}")).json()
+    waiver = next(s for s in journey["steps"] if s["key"] == "waiver")
+    assert waiver["metadata"]["guest_reported_done"] is True
+    assert any(s["key"] == "waiver" for s in journey["next_steps"])
+
+    async with _Session() as s:
+        ev = await s.get(Event, ctx.ids["event_a"])
+        ev.is_paid = True
+        ev.status = "active"
+        await s.commit()
+    scan = await ctx.client.post(f"/api/scan/{token}")
+    assert scan.json()["status"] == "pending_required_step"
+
+
+@pytest.mark.asyncio
 async def test_journey_exposes_guest_activity_details(ctx):
     async with _Session() as s:
         ev = await s.get(Event, ctx.ids["event_a"])

@@ -78,12 +78,13 @@ function ResultCard({ result, onStepComplete, stepBusy }) {
         {!!result.experience_next_steps?.length && (
           <div className="sc-experience-steps">
             <strong>Next Experience steps</strong>
-            {result.experience_next_steps.map(({ step }) => {
+            {result.experience_next_steps.map(({ step, progress }) => {
               const completable = !['check_in', 'seating_assignment', 'meal_selection', 'consent'].includes(step.type)
               const link = step.config?.external_url
+              const guestReported = !!progress?.metadata?.guest_reported_done
               return (
                 <div className="sc-experience-step" key={step.id}>
-                  <span>{step.title}{step.required ? ' · Required' : ''}{step.blocks_checkin ? ' · Blocks check-in' : ''}</span>
+                  <span>{step.title}{step.required ? ' · Required' : ''}{step.blocks_checkin ? ' · Blocks check-in' : ''}{guestReported ? ' · Guest says done' : ''}</span>
                   {link && <a href={link} target="_blank" rel="noopener noreferrer" className="rr-link-btn">Open link ↗</a>}
                   {completable && <button className="rr-btn secondary" disabled={stepBusy} onClick={() => onStepComplete(step)}>{stepBusy ? 'Saving…' : step.type === 'session_attendance' ? 'Check in' : step.blocks_checkin ? 'Confirm completed & check in' : 'Complete'}</button>}
                 </div>
@@ -494,12 +495,13 @@ function CommandResultPanel({ result, onStepComplete, stepBusy }) {
           {requiredSteps.length > 0 && (
             <div className="sc-command-next">
               <span>Next required action</span>
-              {requiredSteps.map(({ step }) => {
+              {requiredSteps.map(({ step, progress }) => {
                 const completable = !['check_in', 'seating_assignment', 'meal_selection', 'consent'].includes(step.type)
                 const link = step.config?.external_url
+                const guestReported = !!progress?.metadata?.guest_reported_done
                 return (
                   <div className="sc-command-next-step" key={step.id}>
-                    <strong>{step.title} · Required{step.blocks_checkin ? ' · Blocks check-in' : ''}</strong>
+                    <strong>{step.title} · Required{step.blocks_checkin ? ' · Blocks check-in' : ''}{guestReported ? ' · Guest says done' : ''}</strong>
                     {link && <a href={link} target="_blank" rel="noopener noreferrer">Open link ↗</a>}
                     {completable && <button disabled={stepBusy} onClick={() => onStepComplete(step)}>{stepBusy ? 'Saving…' : step.type === 'session_attendance' ? 'Check in' : step.blocks_checkin ? 'Confirm completed & check in' : 'Complete'}</button>}
                   </div>

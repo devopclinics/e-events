@@ -396,6 +396,8 @@ export default function ExperienceRedesignPage() {
     api.listSpeakers(currentEventId).then(setEventSpeakers).catch(() => setEventSpeakers([]))
   }, [currentEventId, realEvent?.speaker_enabled])
   const { guests: realGuests, loading: guestsLoading } = useGuests(currentEventId)
+  const [guestSearch, setGuestSearch] = useState('')
+  const [guestCheckinFilter, setGuestCheckinFilter] = useState('all') // all | admitted | not_yet
   const [selectedGuestId, setSelectedGuestId] = useState('')
   const [guestJourney, setGuestJourney] = useState(null)
   const [consentForm, setConsentForm] = useState(null)
@@ -545,6 +547,14 @@ export default function ExperienceRedesignPage() {
   const sortedSteps = (selectedWorkflow?.steps || []).slice().sort((a, b) => (a.sort_order || 0) - (b.sort_order || 0))
   const filteredWorkflows = (workflows || []).filter((w) => filterMatchesStatus(w.status, statusFilter))
   const selectedGuest = realGuests.find((g) => g.id === selectedGuestId) || null
+  const filteredGuests = realGuests.filter((g) => {
+    if (guestCheckinFilter === 'admitted' && !g.admitted) return false
+    if (guestCheckinFilter === 'not_yet' && g.admitted) return false
+    const q = guestSearch.trim().toLowerCase()
+    if (!q) return true
+    const haystack = `${g.first_name || ''} ${g.last_name || ''} ${g.email || ''} ${g.phone || ''}`.toLowerCase()
+    return haystack.includes(q)
+  })
   // The editor follows the workflow the operator selected. Falling back to the
   // live dashboard first made Feedback appear empty (and uneditable) whenever
   // an event had a selected draft alongside a published workflow.
@@ -1386,11 +1396,21 @@ export default function ExperienceRedesignPage() {
           <div className="rd-panel">
             <div className="rd-panel-head"><h3>Guest progress</h3><p>Select a guest to view and override their journey</p></div>
             <div className="rd-panel-body">
-              {guestsLoading ? <LoadingSkeleton rows={5} variant="list" /> : realGuests.length === 0 ? <p className="rd-rowlink">No guests yet.</p> : (
+              {realGuests.length > 0 && (
+                <div className="rd-row2" style={{ marginBottom: 12 }}>
+                  <input className="rr-input" style={{ flex: 1 }} type="search" placeholder="Search by name, email, or phone…" value={guestSearch} onChange={(e) => setGuestSearch(e.target.value)} />
+                  <select className="rr-select" value={guestCheckinFilter} onChange={(e) => setGuestCheckinFilter(e.target.value)}>
+                    <option value="all">All guests</option>
+                    <option value="not_yet">Not checked in</option>
+                    <option value="admitted">Admitted</option>
+                  </select>
+                </div>
+              )}
+              {guestsLoading ? <LoadingSkeleton rows={5} variant="list" /> : realGuests.length === 0 ? <p className="rd-rowlink">No guests yet.</p> : filteredGuests.length === 0 ? <p className="rd-rowlink">No guests match this search.</p> : (
                 <table className="rr-table">
                   <thead><tr><th>Guest</th><th>RSVP</th><th>Check-in</th><th/></tr></thead>
                   <tbody>
-                    {realGuests.map((g) => (
+                    {filteredGuests.map((g) => (
                       <tr key={g.id} onClick={() => selectGuest(g.id)} className={selectedGuestId === g.id ? 'ex-row-active' : ''} style={{ cursor: 'pointer' }}>
                         <td><div className="rd-who"><span className="dot">{`${g.first_name?.[0] || ''}${g.last_name?.[0] || ''}`}</span> {g.first_name} {g.last_name}</div></td>
                         <td>{g.rsvp_status || '—'}</td>

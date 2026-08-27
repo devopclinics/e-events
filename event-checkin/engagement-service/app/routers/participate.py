@@ -270,6 +270,30 @@ async def _display_payload(activity: EngagementActivity, db: AsyncSession) -> di
     participant_ids = [participant.id for participant in participants]
     joined_count = len(participants)
     participant_count = max(joined_count, results.participant_count)
+    active_questions = [question for question in activity.questions if question.status == "active"]
+    response_pairs = (await db.execute(
+        select(ParticipantResponse.participant_id, ParticipantResponse.question_id)
+        .where(ParticipantResponse.activity_id == activity.id)
+    )).all()
+    answered_by_participant: dict[str, set[str]] = defaultdict(set)
+    for participant_id, question_id in response_pairs:
+        answered_by_participant[participant_id].add(question_id)
+    required_ids = {question.id for question in active_questions if question.required}
+    completed_count = sum(
+        1 for participant in participants
+        if required_ids and required_ids.issubset(answered_by_participant.get(participant.id, set()))
+    )
+    question_capacity = participant_count * len(active_questions)
+    response_rate = round((results.response_count / question_capacity) * 100) if question_capacity else 0
+    cloud_rows = (await db.execute(select(
+        ModerationItem.question_id, ModerationItem.content,
+    ).where(
+        ModerationItem.activity_id == activity.id,
+        ModerationItem.status == "approved",
+    ))).all()
+    cloud_texts: dict[str, list[str]] = defaultdict(list)
+    for question_id, content in cloud_rows:
+        cloud_texts[question_id].append(content)
     leaderboard = await _compute_leaderboard(activity, db) if activity.config.get("leaderboard_enabled") else []
     current_source = next((q for q in activity.questions if q.id == activity.config.get("current_question_id")), None)
     current_result = next((q for q in results.questions if q.question_id == activity.config.get("current_question_id")), None)
@@ -306,7 +330,8 @@ async def _display_payload(activity: EngagementActivity, db: AsyncSession) -> di
     safe_config_keys = {
         "event_name", "event_venue", "start_at", "join_code", "leaderboard_enabled",
         "display_scene", "moderation_enabled", "live_results_enabled", "registered_progress_mode",
-        "survey_insights_layout",
+        "survey_insights_layout", "show_mode", "show_phase", "show_phase_started_at",
+        "show_phase_deadline_at", "show_automation_enabled", "show_automation_timings",
     }
     return {
         "event_id": activity.event_id,
@@ -318,6 +343,14 @@ async def _display_payload(activity: EngagementActivity, db: AsyncSession) -> di
         "current_question_id": activity.config.get("current_question_id"),
         "participant_count": participant_count,
         "response_count": results.response_count,
+        "activity_summary": {
+            "question_count": len(active_questions),
+            "participant_count": participant_count,
+            "response_count": results.response_count,
+            "response_rate": response_rate,
+            "completed_count": completed_count,
+            "completion_rate": round((completed_count / participant_count) * 100) if participant_count else 0,
+        },
         "survey_summary": (
             _survey_completion_summary(participants, participant_count, results.response_count)
             if activity.type in ("survey", "feedback") else None
@@ -347,6 +380,7 @@ async def _display_payload(activity: EngagementActivity, db: AsyncSession) -> di
                 # explicit moderation record. Counts remain safe to show.
                 "text_samples": [],
                 "live_state": next((source.live_state for source in activity.questions if source.id == q.question_id), "pending"),
+                "word_cloud": word_cloud(cloud_texts.get(q.question_id, [])) if q.question_type == "word_cloud" else [],
             }
             for q in results.questions
         ],
@@ -444,6 +478,8 @@ async def complete_survey(activity_id: str, request: Request, identity: Identity
         raise HTTPException(400, "Only survey/feedback activities have a final submission step")
     if activity.status != "live":
         raise HTTPException(409, "This activity isn't accepting responses right now")
+    if activity.config.get("show_mode") == "guided" and activity.config.get("show_phase") != "answering":
+        raise HTTPException(409, "The presenter hasn't opened this activity for responses")
     participant = await _get_or_create_participant(activity_id, identity, db, bool(activity.config.get("anonymous")))
     if participant.completed_at:
         # Idempotent: a duplicate click (or a retried request) just confirms
@@ -471,6 +507,8 @@ async def respond(activity_id: str, body: RespondIn, request: Request, identity:
     require_activity_session(identity, activity.session_id, activity.config)
     if activity.status != "live":
         raise HTTPException(409, "This activity isn't accepting responses right now")
+    if activity.config.get("show_mode") == "guided" and activity.config.get("show_phase") != "answering":
+        raise HTTPException(409, "The presenter hasn't opened this activity for responses")
     question = next((q for q in activity.questions if q.id == body.question_id and q.status == "active"), None)
     if not question:
         raise HTTPException(404, "Question not found")

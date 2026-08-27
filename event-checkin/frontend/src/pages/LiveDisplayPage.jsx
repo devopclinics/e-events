@@ -112,7 +112,7 @@ export default function LiveDisplayPage() {
     events.onerror = () => setConnected(false)
     events.onmessage = refresh
     events.addEventListener('display.changed', refreshDisplay)
-    ;['response.submitted', 'question.changed', 'question.state_changed', 'qna.submitted', 'qna.upvoted', 'qna.moderated', 'activity.status_changed'].forEach((name) => events.addEventListener(name, refresh))
+    ;['response.submitted', 'question.changed', 'question.state_changed', 'show.phase_changed', 'qna.submitted', 'qna.upvoted', 'qna.moderated', 'activity.status_changed'].forEach((name) => events.addEventListener(name, refresh))
     const poll = setInterval(load, 5000)
     return () => { events.close(); clearInterval(poll) }
   }, [activityId, displayCode, token, previewScene, streamVersion]) // eslint-disable-line react-hooks/exhaustive-deps

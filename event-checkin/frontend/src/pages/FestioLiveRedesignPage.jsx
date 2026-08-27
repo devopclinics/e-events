@@ -22,6 +22,31 @@ const QUESTION_TYPES = [
 ]
 const TEXT_QUESTION_TYPES = new Set(['short_text', 'long_text', 'word_cloud'])
 const STATUS_TONE = { draft: 'neutral', scheduled: 'info', live: 'ok', paused: 'warn', closed: 'neutral', completed: 'ok', archived: 'neutral' }
+const SHOW_PHASE_LABELS = { lobby: 'Lobby', intro: 'Introduction', question_preview: 'Question preview', answering: 'Voting open', locked: 'Answers locked', reveal: 'Answer reveal', results: 'Results', leaderboard: 'Leaderboard', complete: 'Complete' }
+const SHOW_AUTOMATION_DEFAULTS = { lobby: 10, intro: 8, question_preview: 5, answering: 30, locked: 3, reveal: 6, results: 10, leaderboard: 8 }
+const SHOW_AUTOMATION_LABELS = { lobby: 'Join screen', intro: 'Introduction', question_preview: 'Prompt preview', answering: 'Participation', locked: 'Locked pause', reveal: 'Answer reveal', results: 'Question results', leaderboard: 'Leaderboard' }
+function automationDraftFor(activity) {
+  return {
+    enabled: !!activity?.config?.show_automation_enabled,
+    timings: { ...SHOW_AUTOMATION_DEFAULTS, ...(activity?.config?.show_automation_timings || {}) },
+  }
+}
+function guidedActionLabel(activity) {
+  if (activity?.config?.show_mode !== 'guided') return 'Start guided show'
+  const phase = activity.config?.show_phase || 'lobby'
+  const questions = (activity.questions || []).filter((question) => question.status === 'active')
+  const currentIndex = questions.findIndex((question) => question.id === activity.config?.current_question_id)
+  const current = questions[currentIndex]
+  if (phase === 'lobby') return 'Show activity intro →'
+  if (phase === 'intro') return ['survey', 'feedback', 'q_and_a'].includes(activity.type) ? 'Open participation →' : 'Preview first question →'
+  if (phase === 'question_preview') return 'Open voting →'
+  if (phase === 'answering') return 'Lock responses →'
+  if (phase === 'locked') return current?.options?.some((option) => option.is_correct) ? 'Reveal answer →' : 'Reveal results →'
+  if (phase === 'reveal') return 'Show full results →'
+  if (phase === 'results' && activity.type === 'quiz' && activity.config?.leaderboard_enabled) return 'Show leaderboard →'
+  if (phase === 'results' || phase === 'leaderboard') return currentIndex < questions.length - 1 ? 'Preview next question →' : 'Finish show →'
+  return 'Restart guided show'
+}
 const DISPLAY_SCENES = [
   ['welcome', 'Opening moment'], ['join', 'Join / QR'], ['agenda', 'Live agenda'],
   ['question', 'Question'], ['responding', 'Voting + reactions'], ['results', 'Animated results'],
@@ -535,7 +560,7 @@ function DisplayCard({ display, eventId, activities, programSessions, busy, onUp
   // A manual scene choice must take control from follow_activity; otherwise
   // the projector resolves to question/responding/results and differs from the
   // exact scene shown in the preview.
-  const isDirty = pendingSessionId !== (display.assigned_session_id || '') || pendingActivityId !== (display.assigned_activity_id || '') || pendingScene !== display.scene || !!settings.follow_activity
+  const isDirty = pendingSessionId !== (display.assigned_session_id || '') || pendingActivityId !== (display.assigned_activity_id || '') || pendingScene !== display.scene || !!settings.follow_activity || settings.control_mode === 'guided'
   async function pushToDisplay() {
     setPushing(true)
     setPushReceipt('')
@@ -543,7 +568,7 @@ function DisplayCard({ display, eventId, activities, programSessions, busy, onUp
       assigned_session_id: pendingSessionId || null,
       assigned_activity_id: pendingActivityId || null,
       scene: pendingScene,
-      settings: { follow_activity: false },
+      settings: { control_mode: 'manual', follow_activity: false },
     })
     if (updated) {
       setLivePreviewVersion((version) => version + 1)
@@ -657,6 +682,7 @@ export default function FestioLiveRedesignPage() {
   const [selected, setSelected] = useState(null) // full activity, with questions
   const [editingActivity, setEditingActivity] = useState(false)
   const [activityDraft, setActivityDraft] = useState({ title: '', description: '', session_id: '', moderation_enabled: false, auto_close_enabled: true, auto_start_enabled: false, registered_progress_mode: 'off' })
+  const [automationDraft, setAutomationDraft] = useState({ enabled: false, timings: { ...SHOW_AUTOMATION_DEFAULTS } })
   const [editingQuestionId, setEditingQuestionId] = useState(null)
   const [questionPromptDraft, setQuestionPromptDraft] = useState('')
   const [results, setResults] = useState(null)
@@ -748,6 +774,14 @@ export default function FestioLiveRedesignPage() {
     if (tab === 'Displays' && eventId && enabled) api.liveDisplays(eventId).then(setDisplays).catch((e) => setError(e.message))
   }, [tab, eventId, enabled])
 
+  useEffect(() => {
+    if (!eventId || !selected?.id || !selected.config?.show_automation_enabled || selected.config?.show_phase === 'complete') return undefined
+    const timer = setInterval(() => {
+      api.liveGetActivity(eventId, selected.id).then(setSelected).catch(() => {})
+    }, 2000)
+    return () => clearInterval(timer)
+  }, [eventId, selected?.id, selected?.config?.show_automation_enabled, selected?.config?.show_phase])
+
   async function createDisplay() {
     if (!newDisplayName.trim()) return
     setBusy(true); setError('')
@@ -790,6 +824,7 @@ export default function FestioLiveRedesignPage() {
     try {
       const full = await api.liveGetActivity(eventId, id)
       setSelected(full)
+      setAutomationDraft(automationDraftFor(full))
       setEditingActivity(false)
       setActivityDraft({ title: full.title, description: full.description || '', session_id: full.session_id || '' })
       setEditingQuestionId(null)
@@ -929,6 +964,45 @@ export default function FestioLiveRedesignPage() {
     try {
       const updated = await api.liveAdvance(eventId, selected.id, selected.config?.current_question_id === questionId ? null : questionId)
       setSelected(updated)
+    } catch (e) { setError(e.message) } finally { setBusy(false) }
+  }
+
+  async function startGuidedShow() {
+    if (!selected) return
+    setBusy(true); setError('')
+    try {
+      const updated = await api.liveStartGuidedShow(eventId, selected.id)
+      const assigned = (displays || []).filter((display) => display.assigned_activity_id === selected.id)
+      if (assigned.length) {
+        const refreshed = await Promise.all(assigned.map((display) => api.liveUpdateDisplay(eventId, display.id, { settings: { control_mode: 'guided', follow_activity: true } })))
+        setDisplays((current) => (current || []).map((display) => refreshed.find((item) => item.id === display.id) || display))
+      }
+      setSelected(updated)
+      await loadActivities()
+    } catch (e) { setError(e.message) } finally { setBusy(false) }
+  }
+
+  async function advanceGuidedShow() {
+    if (!selected) return
+    setBusy(true); setError('')
+    try {
+      const updated = await api.liveAdvanceGuidedShow(eventId, selected.id)
+      setSelected(updated)
+      await loadActivities()
+    } catch (e) { setError(e.message) } finally { setBusy(false) }
+  }
+
+  async function saveGuidedAutomation() {
+    if (!selected) return
+    setBusy(true); setError('')
+    try {
+      const body = {
+        enabled: automationDraft.enabled,
+        timings: Object.fromEntries(Object.entries(automationDraft.timings).map(([phase, seconds]) => [phase, Math.min(3600, Math.max(1, Number(seconds) || SHOW_AUTOMATION_DEFAULTS[phase]))])),
+      }
+      const updated = await api.liveConfigureGuidedShowAutomation(eventId, selected.id, body)
+      setSelected(updated)
+      setAutomationDraft(automationDraftFor(updated))
     } catch (e) { setError(e.message) } finally { setBusy(false) }
   }
 
@@ -1225,6 +1299,21 @@ export default function FestioLiveRedesignPage() {
                 </label>
                 <div><button className="rr-btn primary" disabled={busy || !activityDraft.title.trim()} onClick={saveActivityDetails}>{busy ? 'Saving…' : 'Save details'}</button></div>
               </div>}
+              <div className="fl-guided-console">
+                <div><span>GUIDED SHOW MODE</span><h3>{SHOW_PHASE_LABELS[selected.config?.show_phase] || 'Ready to begin'}</h3><p>One presenter action keeps the main screen, guest phones, timer, voting and results synchronized.</p></div>
+                <button className="rr-btn primary" disabled={busy} onClick={selected.config?.show_mode === 'guided' && selected.config?.show_phase !== 'complete' ? advanceGuidedShow : startGuidedShow}>{busy ? 'Updating every screen…' : guidedActionLabel(selected)}</button>
+                <small>{(displays || []).some((display) => display.assigned_activity_id === selected.id) ? `${(displays || []).filter((display) => display.assigned_activity_id === selected.id).length} assigned display(s) will follow this show.` : 'Assign a display in the Displays tab; the activity flow can still be rehearsed here.'}</small>
+              </div>
+              <section className="fl-automation-panel">
+                <header>
+                  <div><span>FULL AUTOMATION</span><h4>Time every phase</h4><p>Festio advances the projector, guest phones and every question from the server clock. The presenter button remains an instant override.</p></div>
+                  <label className="fl-automation-switch"><input type="checkbox" checked={automationDraft.enabled} onChange={(event) => setAutomationDraft((value) => ({ ...value, enabled: event.target.checked }))}/><b>{automationDraft.enabled ? 'Automatic' : 'Manual'}</b></label>
+                </header>
+                <div className="fl-automation-grid">
+                  {Object.entries(SHOW_AUTOMATION_LABELS).map(([phase, label]) => <label key={phase}><span>{label}</span><div><input type="number" min="1" max="3600" value={automationDraft.timings[phase]} onChange={(event) => setAutomationDraft((value) => ({ ...value, timings: { ...value.timings, [phase]: event.target.value } }))}/><em>sec</em></div></label>)}
+                </div>
+                <footer><span>{selected.type === 'word_cloud' ? 'Participation controls how long words are collected for each prompt.' : 'A question’s own timer overrides Participation for that question.'} The final slide automatically summarizes every question.</span><button className="rr-btn primary" disabled={busy} onClick={saveGuidedAutomation}>{busy ? 'Saving…' : automationDraft.enabled ? 'Save and enable automation' : 'Save manual mode'}</button></footer>
+              </section>
               <div style={{ display: 'flex', gap: 8, marginBottom: 12, flexWrap: 'wrap' }}>
                 {selected.status === 'draft' && <button className="rr-btn primary" disabled={busy} onClick={() => setStatus('live')}>Go Live</button>}
                 {selected.status === 'live' && <button className="rr-btn" disabled={busy} onClick={() => setStatus('paused')}>Pause</button>}

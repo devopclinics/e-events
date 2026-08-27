@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import './LiveBroadcastCanvas.css'
+import './LiveGuidedShow.css'
 import { DonutChart, DonutLegend, Histogram, RatingDistribution, RankingChart, StarRating, ImageChoiceGrid, TrendLine, ScatterPlot, Heatmap } from './charts/LiveCharts'
 
 const FALLBACK_WORDS = [
@@ -11,8 +12,35 @@ const OPTION_LETTERS = ['A', 'B', 'C', 'D', 'E', 'F']
 
 function clamp(value, min, max) { return Math.max(min, Math.min(max, value)) }
 
-function resolveScene(requested, state, followActivity) {
-  if (!followActivity) return requested || 'welcome'
+function guidedScene(state) {
+  const phase = state.display_config?.show_phase
+  const current = state.questions?.find((q) => q.question_id === state.current_question_id)
+  if (phase === 'lobby') return 'join'
+  if (phase === 'intro') return 'welcome'
+  if (phase === 'question_preview' || phase === 'locked') return 'question'
+  if (phase === 'answering') {
+    if (state.type === 'q_and_a') return 'q_and_a'
+    if (current?.question_type === 'word_cloud' || state.type === 'word_cloud') return 'word_cloud'
+    return 'responding'
+  }
+  if (phase === 'reveal') return current?.correct_option_ids?.length ? 'correct_answer' : 'results'
+  if (phase === 'results') {
+    if (['survey', 'feedback'].includes(state.type)) return 'survey_insights'
+    if (state.type === 'q_and_a') return 'q_and_a'
+    if (current?.question_type === 'word_cloud') return 'word_cloud'
+    return 'results'
+  }
+  if (phase === 'leaderboard') return 'leaderboard'
+  if (phase === 'complete') return 'celebration'
+  return null
+}
+
+function resolveScene(requested, state, settings) {
+  if (settings.control_mode === 'guided' && state.display_config?.show_mode === 'guided') {
+    return guidedScene(state) || 'join'
+  }
+  if (!settings.follow_activity) return requested || 'welcome'
+  if (state.display_config?.show_mode === 'guided') return guidedScene(state) || 'join'
   const current = state.questions?.find((q) => q.question_id === state.current_question_id)
   if (!current) return state.status === 'live' ? 'join' : 'welcome'
   if (current.live_state === 'open') return current.response_count ? 'responding' : 'question'
@@ -158,6 +186,40 @@ function SurveySummaryGrid({ state }) {
       </div>
     ))}
   </div>
+}
+
+function FinalQuestionSummary({ question, index }) {
+  const words = (question.word_cloud || []).slice(0, 4)
+  return <article className="flb-final-question" style={{ '--delay': `${index * .06}s` }}>
+    <header><span>Q{index + 1}</span><h3>{question.prompt}</h3><b>{question.response_count || 0}</b></header>
+    {words.length ? <div className="flb-final-words">{words.map((entry) => <span key={entry.word}>{entry.word}<b>{entry.count}</b></span>)}</div> : <CompactAnswerSummary question={question}/>}
+  </article>
+}
+
+function FinalResultsScene({ state, settings }) {
+  const questions = state.questions || []
+  const summary = state.activity_summary || {}
+  const pageSize = 6
+  const pageCount = Math.max(1, Math.ceil(questions.length / pageSize))
+  const [page, setPage] = useState(0)
+  useEffect(() => { setPage(0) }, [state.activity_id, questions.length])
+  useEffect(() => {
+    if (pageCount <= 1 || settings.motion === false) return undefined
+    const timer = setInterval(() => setPage((value) => (value + 1) % pageCount), 8000)
+    return () => clearInterval(timer)
+  }, [pageCount, settings.motion])
+  const shown = questions.slice(page * pageSize, (page + 1) * pageSize)
+  return <><div className="flb-confetti">{Array.from({ length: 24 }, (_, i) => <i style={{ '--x': `${3 + i * 4}%`, '--delay': `${-i * .27}s` }} key={i}/>)}</div><Brand state={state} settings={settings}/><div className="flb-content flb-final-wrap">
+    <div className="flb-final-title"><div><Kicker>Complete activity summary</Kicker><h1>{settings.final_title || 'Every question. One shared result.'}</h1></div>{pageCount > 1 && <span>Results {page * pageSize + 1}–{Math.min(questions.length, (page + 1) * pageSize)} of {questions.length}</span>}</div>
+    <section className="flb-final-kpis">
+      <article><span>Voices</span><strong>{summary.participant_count ?? state.participant_count ?? 0}</strong><small>participants</small></article>
+      <article><span>Answers</span><strong>{summary.response_count ?? state.response_count ?? 0}</strong><small>across all questions</small></article>
+      <article><span>Response rate</span><strong>{summary.response_rate || 0}%</strong><small>of possible answers</small></article>
+      <article><span>Completed</span><strong>{summary.completion_rate || 0}%</strong><small>{summary.completed_count || 0} answered every required question</small></article>
+    </section>
+    <section className={`flb-final-grid is-${shown.length}`}>{shown.map((question, index) => <FinalQuestionSummary key={question.question_id} question={question} index={page * pageSize + index}/>)}</section>
+    {pageCount > 1 && <div className="flb-final-pages">{Array.from({ length: pageCount }, (_, index) => <i className={index === page ? 'active' : ''} key={index}/>)}</div>}
+  </div><Footer left={`${questions.length} questions · complete verified summary`} right="Thank you for taking part" live/></>
 }
 
 const RATING_TYPES = ['rating_5', 'rating_10', 'nps']
@@ -565,7 +627,7 @@ function SpotlightWheelScene({ state, settings }) {
   return <><Brand state={state} settings={settings}/><div className="flb-content"><div className="flb-wheel-layout"><div><Kicker>The room decides who is next</Kicker><h1 className="flb-headline flb-small">Ready for the <span className="flb-gradient">spotlight?</span></h1><p className="flb-subhead">Selection is random, auditable and limited to opted-in participants.</p><div className="flb-wheel-notes"><span>{eligible.length} eligible</span><span>No repeat winners</span><span>Consent on</span></div></div><div><div className="flb-wheel"/><article className="flb-winner flb-glass"><small>{winner ? 'Selected' : 'Waiting for entrants'}</small><i>{winner ? winner.name.split(/\s+/).map((part) => part[0]).join('').slice(0, 2).toUpperCase() : '?'}</i><strong>{winner?.name || 'No eligible participant'}</strong><p>{winner?.detail || 'Opted-in names can be added in Design scene.'}</p></article></div></div></div><Footer left="Consent-gated · random selection · no repeat winners" right="Spotlight ready" live/></>
 }
 
-function SceneContent({ scene, state, settings, currentQuestion, countdown }) {
+function SceneContent({ scene, state, settings, currentQuestion, countdown, questionSeconds }) {
   const questionNumber = Math.max(1, (state.questions || []).findIndex((q) => q.question_id === state.current_question_id) + 1)
   const questionTotal = state.questions?.length || 1
   const questionResponseRate = state.participant_count ? Math.round(((currentQuestion?.response_count || 0) / state.participant_count) * 100) : 0
@@ -589,9 +651,12 @@ function SceneContent({ scene, state, settings, currentQuestion, countdown }) {
     return <><Brand state={state} settings={settings}/><div className="flb-content"><Kicker>What’s happening now</Kicker><h1 className="flb-headline flb-small">Your live event journey</h1><div className="flb-card-grid">{agenda.slice(0, 3).map((item, i) => <div className={`flb-card flb-glass ${item.live || i === 0 ? 'active' : ''}`} key={`${item.time}-${i}`}>{(item.live || i === 0) && <em>LIVE NOW</em>}<span>{item.time}</span><h3>{item.title}</h3><p>{item.speaker || item.room}</p></div>)}</div></div><Footer left="Schedule updates appear automatically" right="On schedule"/></>
   }
 
-  if (scene === 'question') return <><Brand state={state} settings={settings}/><div className="flb-content">{currentQuestion ? <><div className="flb-progress"><span>Question {questionNumber} of {questionTotal}</span><i><b style={{ width: `${(questionNumber / questionTotal) * 100}%` }}/></i><span>{currentQuestion.question_type.replaceAll('_', ' ')}</span></div><h1 className="flb-headline flb-small">{currentQuestion.prompt}</h1><QuestionOptions question={currentQuestion}/></> : <EmptyState/>}</div><Footer left="Answer privately on your phone" right={currentQuestion ? 'Get ready' : 'Standing by'}/></>
+  if (scene === 'question') {
+    const locked = state.display_config?.show_mode === 'guided' && state.display_config?.show_phase === 'locked'
+    return <><Brand state={state} settings={settings}/><div className="flb-content">{currentQuestion ? <><div className="flb-progress"><span>Question {questionNumber} of {questionTotal}</span><i><b style={{ width: `${(questionNumber / questionTotal) * 100}%` }}/></i><span>{currentQuestion.question_type.replaceAll('_', ' ')}</span></div><Kicker>{locked ? 'Answers locked' : 'Read it. Think it through.'}</Kicker><h1 className="flb-headline flb-small">{currentQuestion.prompt}</h1><QuestionOptions question={currentQuestion}/></> : <EmptyState/>}</div><Footer left={locked ? `${currentQuestion?.response_count || 0} verified responses` : 'Voting opens when the presenter is ready'} right={currentQuestion ? (locked ? 'Locked' : 'Get ready') : 'Standing by'} live={locked}/></>
+  }
 
-  if (scene === 'responding') return <><Brand state={state} settings={settings}/><div className="flb-content">{currentQuestion ? <div className="flb-vote"><div><Kicker>The room is responding</Kicker><h1 className="flb-headline flb-small">Every voice moves the conversation.</h1><div className="flb-stats"><div><strong>{currentQuestion.response_count || 0}</strong><span>responses received</span></div><div><strong>{questionResponseRate}%</strong><span>participation rate</span></div></div><TrendLine buckets={currentQuestion.response_timeline}/></div><div className="flb-timer"><span>{currentQuestion.time_limit_seconds || 30}</span><small>seconds</small></div></div> : <EmptyState/>}</div>{settings.show_reactions !== false && <div className="flb-reactions"><i>♥</i><i>✦</i><i>●</i><i>◆</i></div>}<Footer left={`${state.participant_count || 0} participants connected`} right="Voting open" live/></>
+  if (scene === 'responding') return <><Brand state={state} settings={settings}/><div className="flb-content">{currentQuestion ? <div className="flb-vote"><div><Kicker>Voting is open · Question {questionNumber} of {questionTotal}</Kicker><h1 className="flb-headline flb-small">{currentQuestion.prompt}</h1><QuestionOptions question={currentQuestion}/><div className="flb-live-response"><strong>{currentQuestion.response_count || 0}</strong><span>responses · {questionResponseRate}% of connected participants</span></div></div><div className={`flb-timer ${questionSeconds === 0 ? 'is-finished' : ''}`}><span>{questionSeconds == null ? '∞' : questionSeconds}</span><small>{questionSeconds == null ? 'open' : 'seconds'}</small></div></div> : <div className="flb-vote"><div><Kicker>The room is responding</Kicker><h1 className="flb-headline flb-small">{state.title}</h1><div className="flb-stats"><div><strong>{state.participant_count || 0}</strong><span>participants connected</span></div><div><strong>{state.response_count || 0}</strong><span>answers saved</span></div></div></div><div className="flb-timer"><span>●</span><small>live</small></div></div>}</div>{settings.show_reactions !== false && <div className="flb-reactions"><i>♥</i><i>✦</i><i>●</i><i>◆</i></div>}<Footer left={`${state.participant_count || 0} participants connected`} right="Voting open" live/></>
 
   if (scene === 'results' && ['survey', 'feedback'].includes(state.type)) {
     // A handful of questions still reads fine as one tile each; a longer
@@ -665,6 +730,8 @@ function SceneContent({ scene, state, settings, currentQuestion, countdown }) {
 
   if (scene === 'countdown') return <><Brand state={state} settings={settings}/><div className="flb-content flb-center"><div className="flb-countdown flb-gradient">{String(Math.floor(countdown / 60)).padStart(2, '0')}:{String(countdown % 60).padStart(2, '0')}</div><div className="flb-count-label">Until we begin together</div><p className="flb-subhead">{state.participant_count || 0} people are connected. Join now to take part.</p></div><Footer left="Live captions and interpretation available" right="Starting soon" live/></>
 
+  if (scene === 'celebration' && state.display_config?.show_mode === 'guided' && state.display_config?.show_phase === 'complete') return <FinalResultsScene state={state} settings={settings}/>
+
   if (scene === 'celebration') return <><div className="flb-confetti">{Array.from({ length: 28 }, (_, i) => <i style={{ '--x': `${3 + i * 3.6}%`, '--delay': `${-i * .27}s` }} key={i}/>)}</div><Brand state={state} settings={settings}/><div className="flb-content flb-center"><div className="flb-trophy">◆</div><Kicker>{settings.kicker || 'Collective milestone unlocked'}</Kicker><h1 className="flb-headline flb-gradient">{settings.title || `${state.response_count || 0} ideas shared!`}</h1><p className="flb-subhead">{settings.message || 'This room just turned participation into shared momentum.'}</p></div><Footer left="Every contribution helped reach this moment" right="Celebrate" live/></>
 
   return <><Brand state={state} settings={settings}/><div className="flb-content"><div className="flb-custom flb-glass"><Kicker>{settings.kicker || 'A message from your hosts'}</Kicker><h1 className="flb-headline">{settings.title || 'Thank you for building the future'} <span className="flb-gradient">with us.</span></h1><p className="flb-subhead">{settings.message || subtitle}</p></div></div><Footer left={settings.event_name || state.title} right={settings.status_label || 'Feedback open'} live/></>
@@ -673,9 +740,10 @@ function SceneContent({ scene, state, settings, currentQuestion, countdown }) {
 export default function LiveBroadcastCanvas({ state, connected = true, onPresent }) {
   const display = state.display || {}
   const settings = display.settings || {}
-  const scene = resolveScene(display.scene || state.display_config?.display_scene || 'welcome', state, settings.follow_activity)
+  const scene = resolveScene(display.scene || state.display_config?.display_scene || 'welcome', state, settings)
   const currentQuestion = useMemo(() => state.questions?.find((q) => q.question_id === state.current_question_id), [state.questions, state.current_question_id])
   const [countdown, setCountdown] = useState(settings.countdown_seconds ?? 298)
+  const [clock, setClock] = useState(Date.now())
 
   useEffect(() => { setCountdown(settings.countdown_seconds ?? 298) }, [settings.countdown_seconds, display.id])
   useEffect(() => {
@@ -683,11 +751,23 @@ export default function LiveBroadcastCanvas({ state, connected = true, onPresent
     const timer = setInterval(() => setCountdown((value) => Math.max(0, value - 1)), 1000)
     return () => clearInterval(timer)
   }, [scene, countdown])
+  useEffect(() => {
+    if (!(state.display_config?.show_automation_enabled && state.display_config?.show_phase_deadline_at) && (scene !== 'responding' || !currentQuestion?.time_limit_seconds || !currentQuestion?.opened_at)) return undefined
+    const timer = setInterval(() => setClock(Date.now()), 250)
+    return () => clearInterval(timer)
+  }, [scene, currentQuestion?.question_id, currentQuestion?.time_limit_seconds, currentQuestion?.opened_at, state.display_config?.show_automation_enabled, state.display_config?.show_phase_deadline_at])
+  const phaseSeconds = state.display_config?.show_automation_enabled && state.display_config?.show_phase_deadline_at
+    ? Math.max(0, Math.ceil((new Date(state.display_config.show_phase_deadline_at).getTime() - clock) / 1000))
+    : null
+  const questionSeconds = currentQuestion?.time_limit_seconds && currentQuestion?.opened_at
+    ? Math.max(0, Math.ceil(currentQuestion.time_limit_seconds - (clock - new Date(currentQuestion.opened_at).getTime()) / 1000))
+    : phaseSeconds
 
   return <div className="flb-root">
     <div className={`flb-screen flb-${settings.theme || 'aurora'} flb-scene-${scene.replaceAll('_', '-')} ${settings.motion === false ? 'flb-motion-off' : ''} ${settings.safe_area ? 'flb-safe' : ''}`}>
       <div className="flb-orb flb-orb-a"/><div className="flb-orb flb-orb-b"/><div className="flb-noise"/>
-      <SceneContent scene={scene} state={state} settings={settings} currentQuestion={currentQuestion} countdown={countdown}/>
+      <SceneContent scene={scene} state={state} settings={settings} currentQuestion={currentQuestion} countdown={countdown} questionSeconds={questionSeconds}/>
+      {phaseSeconds != null && <div className="flb-auto-clock"><span>Auto</span><strong>{phaseSeconds}s</strong><small>next scene</small></div>}
       {!connected && <div className="flb-offline">Reconnecting · showing the last verified state</div>}
     </div>
     <button type="button" className="flb-present" onClick={onPresent} aria-label="Enter fullscreen presentation">Present ↗</button>

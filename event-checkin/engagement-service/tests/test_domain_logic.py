@@ -1,5 +1,6 @@
 import asyncio
 import unittest
+from datetime import datetime, timezone
 from unittest.mock import AsyncMock, patch
 
 from fastapi import HTTPException
@@ -9,6 +10,7 @@ from app.config import settings
 from app.moderation import flag_public_text
 from app.realtime import mint_realtime_ticket, publish, verify_realtime_ticket
 from app.routers.operations import _csv_safe
+from app.routers.activities import _apply_guided_advance, _guided_next_phase, _guided_phase_deadline
 from app.routers.participate import _leaderboard_name, _load_activity, _participant_locator, _rule_matches, _survey_completion_summary
 from app.scoring import score_choice_response
 from app.wordcloud import word_cloud
@@ -75,6 +77,82 @@ class SurveyDisplaySummaryTests(unittest.TestCase):
             "avg_completion_seconds": 150.0,
             "answer_count": 42,
         })
+
+
+class GuidedShowPhaseTests(unittest.TestCase):
+    @staticmethod
+    def activity(activity_type="quiz", phase="lobby", current_id=None, questions=None, leaderboard=False):
+        return type("Activity", (), {
+            "type": activity_type,
+            "config": {"show_phase": phase, "current_question_id": current_id, "leaderboard_enabled": leaderboard},
+            "questions": questions or [],
+        })()
+
+    @staticmethod
+    def question(question_id, sequence=0, correct=False):
+        option = type("Option", (), {"is_correct": correct})()
+        return type("Question", (), {
+            "id": question_id, "sequence": sequence, "status": "active", "options": [option],
+            "live_state": "pending", "config": {}, "time_limit_seconds": None,
+        })()
+
+    def test_quiz_preview_voting_lock_reveal_results_sequence(self):
+        question = self.question("q1", correct=True)
+        activity = self.activity(phase="intro", questions=[question])
+        self.assertEqual(_guided_next_phase(activity), "question_preview")
+        activity.config.update(show_phase="question_preview", current_question_id="q1")
+        self.assertEqual(_guided_next_phase(activity), "answering")
+        activity.config["show_phase"] = "answering"
+        self.assertEqual(_guided_next_phase(activity), "locked")
+        activity.config["show_phase"] = "locked"
+        self.assertEqual(_guided_next_phase(activity), "reveal")
+        activity.config["show_phase"] = "reveal"
+        self.assertEqual(_guided_next_phase(activity), "results")
+
+    def test_quiz_results_move_to_leaderboard_then_next_question(self):
+        questions = [self.question("q1", 0), self.question("q2", 1)]
+        activity = self.activity(phase="results", current_id="q1", questions=questions, leaderboard=True)
+        self.assertEqual(_guided_next_phase(activity), "leaderboard")
+        activity.config["show_phase"] = "leaderboard"
+        self.assertEqual(_guided_next_phase(activity), "question_preview")
+
+    def test_survey_has_one_controlled_answering_window(self):
+        activity = self.activity(activity_type="survey", phase="intro")
+        self.assertEqual(_guided_next_phase(activity), "answering")
+        activity.config["show_phase"] = "answering"
+        self.assertEqual(_guided_next_phase(activity), "locked")
+        activity.config["show_phase"] = "locked"
+        self.assertEqual(_guided_next_phase(activity), "results")
+
+    def test_automated_word_cloud_runs_every_question_and_sets_deadlines(self):
+        questions = [self.question("q1", 0), self.question("q2", 1)]
+        activity = self.activity(activity_type="word_cloud", phase="intro", questions=questions)
+        activity.status = "live"
+        activity.config.update(show_mode="guided", show_automation_enabled=True, show_automation_timings={
+            "lobby": 10, "intro": 8, "question_preview": 5, "answering": 45,
+            "locked": 3, "reveal": 6, "results": 10, "leaderboard": 8,
+        })
+        now = datetime(2026, 8, 27, 12, 0, tzinfo=timezone.utc)
+
+        phase, current = _apply_guided_advance(activity, now)
+        self.assertEqual((phase, current.id), ("question_preview", "q1"))
+        self.assertTrue(activity.config["show_phase_deadline_at"].endswith("12:00:05+00:00"))
+        phase, current = _apply_guided_advance(activity, now)
+        self.assertEqual((phase, current.live_state), ("answering", "open"))
+        self.assertTrue(activity.config["show_phase_deadline_at"].endswith("12:00:45+00:00"))
+        _apply_guided_advance(activity, now)  # locked
+        phase, _ = _apply_guided_advance(activity, now)  # results
+        self.assertEqual(phase, "results")
+        phase, current = _apply_guided_advance(activity, now)
+        self.assertEqual((phase, current.id), ("question_preview", "q2"))
+
+    def test_question_timer_overrides_activity_answering_duration(self):
+        question = self.question("q1")
+        question.time_limit_seconds = 17
+        activity = self.activity(activity_type="quiz", phase="answering", current_id="q1", questions=[question])
+        activity.config.update(show_automation_enabled=True, show_automation_timings={"answering": 90})
+        deadline = _guided_phase_deadline(activity, "answering", datetime(2026, 8, 27, 12, 0, tzinfo=timezone.utc), question)
+        self.assertTrue(deadline.endswith("12:00:17+00:00"))
 
 
 class AuthorizationAndPrivacyTests(unittest.TestCase):

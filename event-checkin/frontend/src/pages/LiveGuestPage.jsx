@@ -25,18 +25,21 @@ function LiveUnavailableState({ onRetry, backHref = '/' }) {
   )
 }
 
-function QuestionTimer({ question }) {
+function QuestionTimer({ question, deadlineAt }) {
   const calculate = () => {
-    if (!question.time_limit_seconds || !question.config?.opened_at) return null
-    const elapsed = (Date.now() - new Date(question.config.opened_at).getTime()) / 1000
-    return Math.max(0, Math.ceil(question.time_limit_seconds - elapsed))
+    if (question.time_limit_seconds && question.config?.opened_at) {
+      const elapsed = (Date.now() - new Date(question.config.opened_at).getTime()) / 1000
+      return Math.max(0, Math.ceil(question.time_limit_seconds - elapsed))
+    }
+    if (deadlineAt) return Math.max(0, Math.ceil((new Date(deadlineAt).getTime() - Date.now()) / 1000))
+    return null
   }
   const [remaining, setRemaining] = useState(calculate)
   useEffect(() => {
     if (remaining == null) return undefined
     const interval = setInterval(() => setRemaining(calculate()), 500)
     return () => clearInterval(interval)
-  }, [question.id]) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [question.id, deadlineAt]) // eslint-disable-line react-hooks/exhaustive-deps
   if (remaining == null) return null
   return <div role="timer" aria-live="polite" className={`mt-2 text-xs font-extrabold ${remaining <= 5 ? 'text-rose-600' : 'text-slate-600 dark:text-slate-300'}`}>{remaining}s remaining</div>
 }
@@ -56,6 +59,8 @@ function useLiveRefresh(guestToken, activityId, onEvent) {
       sourceRef.current = es
       es.addEventListener('response.submitted', onEvent)
       es.addEventListener('question.changed', onEvent)
+      es.addEventListener('question.state_changed', onEvent)
+      es.addEventListener('show.phase_changed', onEvent)
       es.addEventListener('qna.submitted', onEvent)
       es.addEventListener('qna.upvoted', onEvent)
       es.addEventListener('qna.moderated', onEvent)
@@ -468,7 +473,7 @@ function SurveyForm({ activity, rules, draftAnswersFromServer, completedAt, onAu
   )
 }
 
-function QuestionCard({ question, index, onAnswer, busy, alreadyAnswered, draftMode, draftValue, onDraftChange, missing }) {
+function QuestionCard({ question, index, onAnswer, busy, alreadyAnswered, draftMode, draftValue, onDraftChange, missing, deadlineAt }) {
   const isOptionType = ['single_choice', 'true_false', 'yes_no', 'multiple_choice'].includes(question.question_type)
   const isRating = ['rating_5', 'rating_10', 'nps'].includes(question.question_type)
   const isNumber = question.question_type === 'number'
@@ -484,7 +489,7 @@ function QuestionCard({ question, index, onAnswer, busy, alreadyAnswered, draftM
       </div>
       <div className="mt-1 text-base font-extrabold text-slate-900 dark:text-white">{question.prompt}</div>
       {missing && <p role="alert" className="mt-1 text-xs font-bold text-rose-600 dark:text-rose-300">This question needs an answer before you can submit.</p>}
-      <QuestionTimer question={question}/>
+      <QuestionTimer question={question} deadlineAt={deadlineAt}/>
       <div className="mt-3">
         {isOptionType && <OptionQuestion question={question} onAnswer={onAnswer} busy={busy} alreadyAnswered={alreadyAnswered} {...draftProps} />}
         {isRating && <RatingQuestion question={question} onAnswer={onAnswer} busy={busy} alreadyAnswered={alreadyAnswered} {...draftProps} />}
@@ -612,6 +617,21 @@ function GuestResultCard({ question, result }) {
   )
 }
 
+function GuidedGuestNotice({ phase, activity }) {
+  const copy = {
+    lobby: ['You’re in', 'Keep this screen open. The host will begin shortly.'],
+    intro: ['Starting now', 'Look at the main screen for the activity introduction.'],
+    question_preview: ['Get ready', 'Read the question on the main screen. Voting will open in a moment.'],
+    locked: ['Answers locked', 'Your response is safe. The host is about to reveal the result.'],
+    results: ['Results are live', 'Look at the main screen to see what the room chose.'],
+    leaderboard: ['Leaderboard update', 'See who moved up on the main screen.'],
+    complete: ['Thanks for taking part', 'You helped shape this live moment.'],
+  }
+  const [title, message] = copy[phase] || ['Waiting for the presenter', 'The next live moment will appear automatically.']
+  const timerQuestion = { id: `phase-${phase}`, time_limit_seconds: null, config: {} }
+  return <div role="status" className="overflow-hidden rounded-2xl border border-violet-200 bg-white shadow-sm dark:border-violet-800 dark:bg-slate-900"><div className="h-2 bg-gradient-to-r from-violet-500 via-fuchsia-500 to-teal-400"/><div className="p-5"><div className="text-xs font-extrabold uppercase tracking-[.16em] text-violet-600 dark:text-violet-300">{activity.title}</div><div className="mt-2 text-xl font-black text-slate-950 dark:text-white">{title}</div><p className="mt-2 text-sm font-semibold text-slate-600 dark:text-slate-300">{message}</p>{activity.config?.show_automation_enabled && <QuestionTimer question={timerQuestion} deadlineAt={activity.config?.show_phase_deadline_at}/>}</div></div>
+}
+
 function ActivityView({ guestToken, activityId, onBack }) {
   const [state, setState] = useState(null)
   const [busy, setBusy] = useState(false)
@@ -673,6 +693,8 @@ function ActivityView({ guestToken, activityId, onBack }) {
   const { activity, already_responded_question_ids } = state
   const answered = new Set(already_responded_question_ids)
   const currentQuestion = activity.questions.find((question) => question.id === activity.config?.current_question_id)
+  const guided = activity.config?.show_mode === 'guided'
+  const showPhase = activity.config?.show_phase || 'lobby'
 
   return (
     <div className="grid gap-4">
@@ -684,24 +706,29 @@ function ActivityView({ guestToken, activityId, onBack }) {
       {error && error.code !== 'FESTIO_LIVE_UNAVAILABLE' && <div role="alert" className="rounded-xl bg-rose-50 p-3 text-sm font-bold text-rose-700 dark:bg-rose-950 dark:text-rose-200">{error.message || error}</div>}
 
       {activity.type === 'q_and_a' ? (
-        <QnaPanel guestToken={guestToken} activityId={activityId} activityStatus={activity.status} />
+        !guided || showPhase === 'answering'
+          ? <QnaPanel guestToken={guestToken} activityId={activityId} activityStatus={activity.status} />
+          : <GuidedGuestNotice phase={showPhase} activity={activity}/>
       ) : activity.status === 'closed' || activity.status === 'completed' ? (
-        <div className="rounded-2xl border border-slate-200 bg-white p-4 text-sm font-bold text-slate-500 dark:border-slate-700 dark:bg-slate-900">This activity has ended — thanks for joining!</div>
+        guided ? <GuidedGuestNotice phase="complete" activity={activity}/> : <div className="rounded-2xl border border-slate-200 bg-white p-4 text-sm font-bold text-slate-500 dark:border-slate-700 dark:bg-slate-900">This activity has ended — thanks for joining!</div>
       ) : ['survey', 'feedback'].includes(activity.type) ? (
-        <SurveyForm activity={activity} rules={state.rules} draftAnswersFromServer={state.draft_answers} completedAt={state.completed_at} onAutosave={autosaveAnswer} onComplete={completeSurvey} busy={busy} />
+        !guided || showPhase === 'answering'
+          ? <SurveyForm activity={activity} rules={state.rules} draftAnswersFromServer={state.draft_answers} completedAt={state.completed_at} onAutosave={autosaveAnswer} onComplete={completeSurvey} busy={busy} />
+          : <GuidedGuestNotice phase={showPhase} activity={activity}/>
       ) : (
         <div className="grid gap-3">
           {activity.status === 'paused' && <div className="rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm font-bold text-amber-800">The presenter has paused this activity.</div>}
           {currentQuestion && ['results_visible', 'answer_revealed'].includes(currentQuestion.live_state) && <GuestResultCard question={currentQuestion} result={revealedResult} />}
-          {activity.status === 'live' && currentQuestion && ['results_visible', 'answer_revealed'].includes(currentQuestion.live_state) && <div role="status" className="rounded-xl bg-slate-100 p-3 text-sm font-bold text-slate-600 dark:bg-slate-800 dark:text-slate-200">Results are on screen. Waiting for the host to reopen this question or start the next one.</div>}
-          {!activity.questions.some((q) => q.id === activity.config?.current_question_id && ['open', 'results_visible', 'answer_revealed'].includes(q.live_state)) && activity.status === 'live' && <p className="text-sm text-slate-600 dark:text-slate-300">Waiting for the presenter to open the next question…</p>}
+          {guided && showPhase !== 'answering' && !['reveal', 'results'].includes(showPhase) && <GuidedGuestNotice phase={showPhase} activity={activity}/>}
+          {!guided && activity.status === 'live' && currentQuestion && ['results_visible', 'answer_revealed'].includes(currentQuestion.live_state) && <div role="status" className="rounded-xl bg-slate-100 p-3 text-sm font-bold text-slate-600 dark:bg-slate-800 dark:text-slate-200">Results are on screen. Waiting for the host to reopen this question or start the next one.</div>}
+          {!guided && !activity.questions.some((q) => q.id === activity.config?.current_question_id && ['open', 'results_visible', 'answer_revealed'].includes(q.live_state)) && activity.status === 'live' && <p className="text-sm text-slate-600 dark:text-slate-300">Waiting for the presenter to open the next question…</p>}
           {activity.questions.filter((q) => activity.status === 'live' && q.id === activity.config?.current_question_id && q.live_state === 'open').map((q) => (
-            <QuestionCard key={q.id} question={q} index={activity.questions.findIndex((item) => item.id === q.id)} onAnswer={onAnswer} busy={busy} alreadyAnswered={answered.has(q.id)} />
+            <QuestionCard key={q.id} question={q} index={activity.questions.findIndex((item) => item.id === q.id)} onAnswer={onAnswer} busy={busy} alreadyAnswered={answered.has(q.id)} deadlineAt={activity.config?.show_automation_enabled ? activity.config?.show_phase_deadline_at : null} />
           ))}
         </div>
       )}
 
-      <Leaderboard entries={leaderboard} />
+      {(!guided || showPhase === 'leaderboard') && <Leaderboard entries={leaderboard} />}
     </div>
   )
 }

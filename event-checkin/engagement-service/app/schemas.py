@@ -96,6 +96,23 @@ class ActivityExtendIn(BaseModel):
     minutes: int = Field(default=30, ge=5, le=240)
 
 
+class GuidedShowTimings(BaseModel):
+    """Durations for the server-authoritative Guided Show phase clock."""
+    lobby: int = Field(default=10, ge=1, le=3600)
+    intro: int = Field(default=8, ge=1, le=3600)
+    question_preview: int = Field(default=5, ge=1, le=3600)
+    answering: int = Field(default=30, ge=1, le=3600)
+    locked: int = Field(default=3, ge=1, le=3600)
+    reveal: int = Field(default=6, ge=1, le=3600)
+    results: int = Field(default=10, ge=1, le=3600)
+    leaderboard: int = Field(default=8, ge=1, le=3600)
+
+
+class GuidedShowAutomationIn(BaseModel):
+    enabled: bool
+    timings: GuidedShowTimings = Field(default_factory=GuidedShowTimings)
+
+
 class ActivityOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)
     id: str

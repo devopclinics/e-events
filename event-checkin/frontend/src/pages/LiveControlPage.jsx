@@ -13,6 +13,32 @@ const BROADCAST_THEMES = [
   ['aurora', '#65f5c6'], ['citrus', '#ffd84d'], ['ocean', '#37d8ff'], ['festio', '#ffad72'], ['mono', '#fff'],
 ]
 
+const SHOW_PHASE_LABELS = {
+  lobby: 'Lobby · audience joining', intro: 'Activity introduction', question_preview: 'Question preview',
+  answering: 'Voting open', locked: 'Answers locked', reveal: 'Answer reveal', results: 'Results',
+  leaderboard: 'Leaderboard', complete: 'Show complete',
+}
+const SHOW_AUTOMATION_DEFAULTS = { lobby: 10, intro: 8, question_preview: 5, answering: 30, locked: 3, reveal: 6, results: 10, leaderboard: 8 }
+
+function guidedActionLabel(activity) {
+  if (activity?.config?.show_mode !== 'guided') return 'Start guided show'
+  const phase = activity.config?.show_phase || 'lobby'
+  const currentId = activity.config?.current_question_id
+  const questions = (activity.questions || []).filter((question) => question.status === 'active')
+  const currentIndex = questions.findIndex((question) => question.id === currentId)
+  const hasNext = currentIndex < questions.length - 1
+  const current = questions[currentIndex]
+  if (phase === 'lobby') return 'Show activity intro →'
+  if (phase === 'intro') return ['survey', 'feedback', 'q_and_a'].includes(activity.type) ? 'Open participation →' : 'Preview first question →'
+  if (phase === 'question_preview') return 'Open voting →'
+  if (phase === 'answering') return 'Lock responses →'
+  if (phase === 'locked') return current?.options?.some((option) => option.is_correct) ? 'Reveal answer →' : 'Reveal results →'
+  if (phase === 'reveal') return 'Show full results →'
+  if (phase === 'results' && activity.type === 'quiz' && activity.config?.leaderboard_enabled) return 'Show leaderboard →'
+  if (phase === 'results' || phase === 'leaderboard') return hasNext ? 'Preview next question →' : 'Finish show →'
+  return 'Restart guided show'
+}
+
 // A lightweight console for a Presenter or Moderator share-link (Settings →
 // Share Links in the admin page) — no Festio login. The URL's ?role= only
 // picks which UI to render; the token's own embedded capabilities are what
@@ -65,6 +91,37 @@ export default function LiveControlPage() {
     try { await api.liveControlAdvance(token, activityId, questionId); await load() }
     catch (e) { setError(e.message) } finally { setBusy(false) }
   }
+  async function startGuidedShow() {
+    setBusy(true); setError('')
+    try {
+      const updated = await api.liveControlStartGuidedShow(token, activityId)
+      setActivity(updated)
+      if (displayId) {
+        const display = await api.liveControlUpdateDisplay(token, displayId, {
+          assigned_activity_id: activityId,
+          settings: { control_mode: 'guided', follow_activity: true },
+        })
+        setDisplays((current) => (current || []).map((item) => item.id === display.id ? display : item))
+      }
+      await load()
+    } catch (e) { setError(e.message) } finally { setBusy(false) }
+  }
+  async function advanceGuidedShow() {
+    setBusy(true); setError('')
+    try { setActivity(await api.liveControlAdvanceGuidedShow(token, activityId)); await load() }
+    catch (e) { setError(e.message) } finally { setBusy(false) }
+  }
+  async function toggleGuidedAutomation() {
+    setBusy(true); setError('')
+    try {
+      const updated = await api.liveControlConfigureGuidedShowAutomation(token, activityId, {
+        enabled: !activity.config?.show_automation_enabled,
+        timings: { ...SHOW_AUTOMATION_DEFAULTS, ...(activity.config?.show_automation_timings || {}) },
+      })
+      setActivity(updated)
+      await load()
+    } catch (e) { setError(e.message) } finally { setBusy(false) }
+  }
   async function setQuestionState(questionId, state) {
     setBusy(true); setError('')
     try { await api.liveControlQuestionState(token, questionId, state); await load() }
@@ -90,6 +147,9 @@ export default function LiveControlPage() {
   const currentResult = results?.questions?.find((question) => question.question_id === currentQuestion?.id)
   const secondsRemaining = currentQuestion?.time_limit_seconds && currentQuestion.config?.opened_at
     ? Math.max(0, Math.ceil(currentQuestion.time_limit_seconds - (clock - new Date(currentQuestion.config.opened_at).getTime()) / 1000))
+    : null
+  const automationRemaining = activity?.config?.show_automation_enabled && activity.config?.show_phase_deadline_at
+    ? Math.max(0, Math.ceil((new Date(activity.config.show_phase_deadline_at).getTime() - clock) / 1000))
     : null
 
   return (
@@ -119,6 +179,15 @@ export default function LiveControlPage() {
 
             {role === 'presenter' && (
               <>
+                <section className="overflow-hidden rounded-2xl bg-gradient-to-br from-slate-950 via-violet-950 to-slate-900 text-white shadow-xl">
+                  <div className="p-5">
+                    <div className="flex items-start justify-between gap-3"><div><div className="text-[10px] font-black uppercase tracking-[.2em] text-teal-300">Guided Show Mode</div><h2 className="mt-1 text-xl font-black">{SHOW_PHASE_LABELS[activity.config?.show_phase] || 'Ready to begin'}</h2><p className="mt-1 text-xs font-semibold text-slate-300">One action keeps the projector, guest phones, voting, timer and results in sync.</p></div><span className={`rounded-full px-2.5 py-1 text-[10px] font-black uppercase ${activity.config?.show_mode === 'guided' ? 'bg-teal-300 text-slate-950' : 'bg-white/10 text-slate-300'}`}>{activity.config?.show_mode === 'guided' ? 'Active' : 'Off'}</span></div>
+                    {currentQuestion && <div className="mt-4 rounded-xl border border-white/10 bg-white/5 p-3"><div className="text-[10px] font-black uppercase tracking-wider text-slate-400">Question {currentQuestionIndex + 1} of {activity.questions.length}</div><div className="mt-1 text-sm font-extrabold">{currentQuestion.prompt}</div></div>}
+                    <button type="button" disabled={busy} onClick={activity.config?.show_mode === 'guided' && activity.config?.show_phase !== 'complete' ? advanceGuidedShow : startGuidedShow} className="mt-4 min-h-14 w-full rounded-xl bg-gradient-to-r from-teal-300 via-cyan-300 to-violet-400 px-4 text-sm font-black text-slate-950 shadow-lg disabled:opacity-40">{busy ? 'Updating every screen…' : guidedActionLabel(activity)}</button>
+                    <div className="mt-3 flex items-center justify-between text-[11px] font-bold text-slate-400"><span>{selectedDisplay ? `Main screen: ${selectedDisplay.name}` : 'Select a main screen below'}</span><span>{automationRemaining != null ? `Auto advance in ${automationRemaining}s` : secondsRemaining != null && activity.config?.show_phase === 'answering' ? `${secondsRemaining}s remaining` : 'Server synchronized'}</span></div>
+                    <button type="button" disabled={busy} onClick={toggleGuidedAutomation} className="mt-3 w-full rounded-xl border border-white/20 px-3 py-2 text-xs font-extrabold text-white">{activity.config?.show_automation_enabled ? 'Pause automation' : 'Resume automation'}</button>
+                  </div>
+                </section>
                 <section className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm dark:border-slate-700 dark:bg-slate-900">
                   <div className="flex flex-wrap items-center justify-between gap-2">
                     <div><div className="text-xs font-extrabold uppercase tracking-[.16em] text-fuchsia-500">Festio Broadcast</div><div className="mt-1 text-sm font-bold text-slate-500">Control every projector without leaving this screen</div></div>
@@ -126,7 +195,8 @@ export default function LiveControlPage() {
                   </div>
                   {displays?.length ? <div className="mt-4 grid gap-4">
                     <div className="flex gap-2"><select value={displayId || ''} onChange={(e) => setDisplayId(e.target.value)} className="min-w-0 flex-1 rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm font-bold dark:border-slate-700 dark:bg-slate-950 dark:text-white">{displays.map((display) => <option key={display.id} value={display.id}>{display.name}</option>)}</select><button type="button" disabled={busy || selectedDisplay?.assigned_activity_id === activityId} onClick={() => updateDisplay({ assigned_activity_id: activityId })} className="rounded-xl border border-slate-300 px-3 py-2 text-xs font-extrabold text-slate-700 disabled:opacity-40 dark:text-white">Use this activity</button></div>
-                    <div><div className="mb-2 text-xs font-extrabold text-slate-500">Scene</div><div className="grid grid-cols-3 gap-1.5">{BROADCAST_SCENES.map(([key, label]) => <button type="button" disabled={busy} key={key} onClick={() => updateDisplay({ scene: key })} className={`min-h-10 rounded-lg border px-2 py-1 text-[11px] font-extrabold ${selectedDisplay?.scene === key ? 'border-fuchsia-500 bg-fuchsia-50 text-fuchsia-800 dark:bg-fuchsia-950 dark:text-fuchsia-200' : 'border-slate-200 text-slate-600 dark:border-slate-700 dark:text-slate-300'}`}>{label}</button>)}</div></div>
+                    <div className="grid grid-cols-2 gap-2"><button type="button" disabled={busy} onClick={() => updateDisplay({ assigned_activity_id: activityId, settings: { control_mode: 'guided', follow_activity: true } })} className={`rounded-xl border-2 px-3 py-2 text-xs font-extrabold ${selectedDisplay?.settings?.control_mode === 'guided' ? 'border-teal-400 bg-teal-50 text-teal-800' : 'border-slate-200 text-slate-600'}`}>Guided by activity</button><button type="button" disabled={busy} onClick={() => updateDisplay({ settings: { control_mode: 'manual', follow_activity: false } })} className={`rounded-xl border-2 px-3 py-2 text-xs font-extrabold ${selectedDisplay?.settings?.control_mode === 'manual' ? 'border-fuchsia-400 bg-fuchsia-50 text-fuchsia-800' : 'border-slate-200 text-slate-600'}`}>Manual broadcast</button></div>
+                    <div><div className="mb-2 text-xs font-extrabold text-slate-500">Manual scenes</div><div className="grid grid-cols-3 gap-1.5">{BROADCAST_SCENES.map(([key, label]) => <button type="button" disabled={busy} key={key} onClick={() => updateDisplay({ scene: key, settings: { control_mode: 'manual', follow_activity: false } })} className={`min-h-10 rounded-lg border px-2 py-1 text-[11px] font-extrabold ${selectedDisplay?.scene === key && selectedDisplay?.settings?.control_mode !== 'guided' ? 'border-fuchsia-500 bg-fuchsia-50 text-fuchsia-800 dark:bg-fuchsia-950 dark:text-fuchsia-200' : 'border-slate-200 text-slate-600 dark:border-slate-700 dark:text-slate-300'}`}>{label}</button>)}</div></div>
                     <div className="flex flex-wrap items-center justify-between gap-3"><div className="flex items-center gap-2">{BROADCAST_THEMES.map(([theme, color]) => <button type="button" key={theme} title={theme} aria-label={`${theme} theme`} onClick={() => updateDisplay({ settings: { theme } })} style={{ background: color }} className={`h-8 w-8 rounded-full border-4 ${selectedDisplay?.settings?.theme === theme || (!selectedDisplay?.settings?.theme && theme === 'aurora') ? 'border-slate-950 dark:border-white' : 'border-white dark:border-slate-900'} shadow ring-1 ring-slate-300`}/>)}</div><div className="flex gap-3 text-xs font-bold text-slate-600 dark:text-slate-300"><label className="flex items-center gap-1"><input type="checkbox" checked={selectedDisplay?.settings?.motion !== false} onChange={(e) => updateDisplay({ settings: { motion: e.target.checked } })}/> Motion</label><label className="flex items-center gap-1"><input type="checkbox" checked={!!selectedDisplay?.settings?.safe_area} onChange={(e) => updateDisplay({ settings: { safe_area: e.target.checked } })}/> Safe area</label><label className="flex items-center gap-1"><input type="checkbox" checked={!!selectedDisplay?.settings?.follow_activity} onChange={(e) => updateDisplay({ settings: { follow_activity: e.target.checked } })}/> Auto-follow</label></div></div>
                   </div> : <p className="mt-4 text-sm text-slate-400">An event admin must create a display before it can be controlled here.</p>}
                 </section>

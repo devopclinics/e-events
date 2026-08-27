@@ -11,7 +11,7 @@ from ..auth import Identity, current_identity, require_activity_session, require
 from ..database import get_db
 from ..models import ActivityParticipant, ActivityQuestion, EngagementActivity, EngagementEventSettings, ParticipantResponse, ProgramSession, QuestionOption
 from ..realtime import publish
-from ..schemas import ActivityAdvanceIn, ActivityCreate, ActivityExtendIn, ActivityOut, ActivityStatusIn, ActivitySummary, ActivityUpdate, QuestionCreate, QuestionLiveStateIn, QuestionOut, QuestionUpdate
+from ..schemas import ActivityAdvanceIn, ActivityCreate, ActivityExtendIn, ActivityOut, ActivityStatusIn, ActivitySummary, ActivityUpdate, GuidedShowAutomationIn, QuestionCreate, QuestionLiveStateIn, QuestionOut, QuestionUpdate
 
 router = APIRouter(prefix="/api/engagement/v1", tags=["engagement-activities"])
 
@@ -24,6 +24,167 @@ VALID_STATUS_TRANSITIONS = {
     "completed": {"archived"},
     "archived": set(),
 }
+
+GUIDED_QUESTION_TYPES = {"quiz", "poll", "rating", "word_cloud", "voting"}
+GUIDED_FORM_TYPES = {"survey", "feedback"}
+GUIDED_PHASES = {
+    "lobby", "intro", "question_preview", "answering", "locked",
+    "reveal", "results", "leaderboard", "complete",
+}
+GUIDED_AUTOMATION_DEFAULTS = {
+    "lobby": 10, "intro": 8, "question_preview": 5, "answering": 30,
+    "locked": 3, "reveal": 6, "results": 10, "leaderboard": 8,
+}
+
+
+def _active_questions(activity: EngagementActivity) -> list[ActivityQuestion]:
+    """Stable presenter order even when the ORM relationship was loaded in a
+    different database order."""
+    return sorted(
+        (question for question in activity.questions if question.status == "active"),
+        key=lambda question: (question.sequence, question.id),
+    )
+
+
+def _question_has_answer(question: ActivityQuestion | None) -> bool:
+    return bool(question and any(option.is_correct for option in question.options))
+
+
+def _next_active_question(activity: EngagementActivity, current_id: str | None) -> ActivityQuestion | None:
+    questions = _active_questions(activity)
+    if not questions:
+        return None
+    if not current_id:
+        return questions[0]
+    current_index = next((index for index, question in enumerate(questions) if question.id == current_id), -1)
+    return questions[current_index + 1] if 0 <= current_index < len(questions) - 1 else None
+
+
+def _guided_next_phase(activity: EngagementActivity) -> str:
+    """Pure phase decision used by the authoritative show endpoint and tests."""
+    phase = activity.config.get("show_phase") or "lobby"
+    if phase not in GUIDED_PHASES:
+        phase = "lobby"
+    if activity.type in GUIDED_FORM_TYPES:
+        return {
+            "lobby": "intro", "intro": "answering", "answering": "locked",
+            "locked": "results", "results": "complete",
+        }.get(phase, "complete")
+    if activity.type == "q_and_a":
+        return {
+            "lobby": "intro", "intro": "answering", "answering": "results",
+            "results": "complete",
+        }.get(phase, "complete")
+
+    current = next((q for q in activity.questions if q.id == activity.config.get("current_question_id")), None)
+    if phase == "lobby":
+        return "intro"
+    if phase == "intro":
+        return "question_preview" if _next_active_question(activity, None) else "complete"
+    if phase == "question_preview":
+        return "answering"
+    if phase == "answering":
+        return "locked"
+    if phase == "locked":
+        return "reveal" if _question_has_answer(current) else "results"
+    if phase == "reveal":
+        return "results"
+    if phase == "results":
+        if activity.config.get("leaderboard_enabled") and activity.type == "quiz":
+            return "leaderboard"
+        return "question_preview" if _next_active_question(activity, activity.config.get("current_question_id")) else "complete"
+    if phase == "leaderboard":
+        return "question_preview" if _next_active_question(activity, activity.config.get("current_question_id")) else "complete"
+    return "complete"
+
+
+def _guided_automation_timings(activity: EngagementActivity) -> dict[str, int]:
+    configured = (activity.config or {}).get("show_automation_timings") or {}
+    return {
+        phase: min(3600, max(1, int(configured.get(phase, default))))
+        for phase, default in GUIDED_AUTOMATION_DEFAULTS.items()
+    }
+
+
+def _guided_phase_deadline(activity: EngagementActivity, phase: str, now: datetime, current=None) -> str | None:
+    if not (activity.config or {}).get("show_automation_enabled") or phase == "complete":
+        return None
+    seconds = _guided_automation_timings(activity).get(phase)
+    # A question-specific timer remains the strongest instruction. This keeps
+    # quizzes with mixed 15/30/60-second questions intact while giving Word
+    # Cloud, polls, ratings and voting a reusable activity-level duration.
+    if phase == "answering" and current and current.time_limit_seconds:
+        seconds = current.time_limit_seconds
+    return (now + timedelta(seconds=seconds)).isoformat() if seconds else None
+
+
+def _set_guided_lobby(activity: EngagementActivity, now: datetime) -> None:
+    for question in activity.questions:
+        if question.live_state == "open":
+            question.live_state = "closed"
+    activity.config = {
+        **(activity.config or {}),
+        "show_mode": "guided",
+        "show_phase": "lobby",
+        "show_phase_started_at": now.isoformat(),
+        "show_phase_deadline_at": _guided_phase_deadline(activity, "lobby", now),
+        "current_question_id": None,
+        "display_scene": "join",
+    }
+
+
+def _apply_guided_advance(activity: EngagementActivity, now: datetime) -> tuple[str, ActivityQuestion | None]:
+    """Mutate one synchronized show phase for presenter and worker paths."""
+    previous_phase = activity.config.get("show_phase") or "lobby"
+    next_phase = _guided_next_phase(activity)
+    current_id = activity.config.get("current_question_id")
+    current = next((question for question in activity.questions if question.id == current_id), None)
+
+    if next_phase == "question_preview":
+        current = _next_active_question(activity, None if previous_phase == "intro" else current_id)
+        if not current:
+            next_phase = "complete"
+        else:
+            for question in activity.questions:
+                if question.id != current.id and question.live_state == "open":
+                    question.live_state = "closed"
+            if current.live_state != "pending":
+                current.live_state = "closed"
+            current_id = current.id
+    elif next_phase == "answering" and current:
+        for question in activity.questions:
+            if question.id != current.id and question.live_state == "open":
+                question.live_state = "closed"
+        current.live_state = "open"
+        current.config = {**(current.config or {}), "opened_at": now.isoformat()}
+    elif next_phase == "locked" and current:
+        current.live_state = "closed"
+    elif next_phase == "reveal" and current:
+        current.live_state = "answer_revealed"
+    elif next_phase == "results" and current and current.live_state != "answer_revealed":
+        current.live_state = "results_visible"
+
+    if next_phase == "complete":
+        if current and current.live_state == "open":
+            current.live_state = "closed"
+        activity.status = "closed"
+
+    scene_by_phase = {
+        "lobby": "join", "intro": "welcome", "question_preview": "question",
+        "answering": "responding", "locked": "question", "reveal": "correct_answer",
+        "results": "survey_insights" if activity.type in GUIDED_FORM_TYPES else "results",
+        "leaderboard": "leaderboard", "complete": "celebration",
+    }
+    activity.config = {
+        **(activity.config or {}),
+        "show_mode": "guided",
+        "show_phase": next_phase,
+        "show_phase_started_at": now.isoformat(),
+        "show_phase_deadline_at": _guided_phase_deadline(activity, next_phase, now, current),
+        "current_question_id": current_id,
+        "display_scene": scene_by_phase[next_phase],
+    }
+    return next_phase, current
 
 
 # Session.get(Model, pk, options=[...]) silently ignores `options` and returns
@@ -192,6 +353,11 @@ async def create_activity(body: ActivityCreate, identity: Identity = Depends(cur
         # promise is that Festio Live never starts anything on its own unless
         # a presenter explicitly turns this on for a session-linked activity.
         "auto_start_enabled": False,
+        # Guided Show automation is opt-in. When enabled, the worker advances
+        # each phase from the persisted server deadline; presenter controls
+        # remain available as an immediate override.
+        "show_automation_enabled": False,
+        "show_automation_timings": dict(GUIDED_AUTOMATION_DEFAULTS),
         "profanity_filtering": defaults.get("profanity_filtering", True),
         "display_scene": "welcome",
         **body.config,
@@ -274,9 +440,95 @@ async def advance_question(activity_id: str, body: ActivityAdvanceIn, identity: 
         current = next(q for q in activity.questions if q.id == body.question_id)
         current.live_state = "open"
         current.config = {**(current.config or {}), "opened_at": datetime.now(timezone.utc).isoformat()}
-    activity.config = {**activity.config, "current_question_id": body.question_id, "display_scene": "question" if body.question_id else "waiting"}
+    activity.config = {**activity.config, "show_mode": "manual", "current_question_id": body.question_id, "display_scene": "question" if body.question_id else "waiting"}
     await db.commit()
     await publish(activity_id, "question.changed", {"question_id": body.question_id})
+    return await _fetch_activity(activity_id, db)
+
+
+@router.post("/activities/{activity_id}/show/start", response_model=ActivityOut)
+async def start_guided_show(activity_id: str, identity: Identity = Depends(current_identity), db: AsyncSession = Depends(get_db)):
+    """Put an activity into Guided Show Mode at its lobby.
+
+    The activity, guest surface, and projector all read the same persisted
+    phase. Existing responses and questions are preserved; only presentation
+    state is reset.
+    """
+    require_capability(identity, "control")
+    activity = await _get_owned_activity(activity_id, identity, db)
+    if activity.status in ("completed", "archived"):
+        raise HTTPException(409, "Completed or archived activities can't start a guided show")
+    if activity.status == "closed":
+        activity.status = "live"
+    elif activity.status in ("draft", "scheduled", "paused"):
+        activity.status = "live"
+    now = datetime.now(timezone.utc)
+    _set_guided_lobby(activity, now)
+    await db.commit()
+    await publish(activity_id, "show.phase_changed", {"phase": "lobby"})
+    await publish(activity_id, "activity.status_changed", {"status": activity.status})
+    return await _fetch_activity(activity_id, db)
+
+
+@router.post("/activities/{activity_id}/show/advance", response_model=ActivityOut)
+async def advance_guided_show(activity_id: str, identity: Identity = Depends(current_identity), db: AsyncSession = Depends(get_db)):
+    """Advance exactly one server-authoritative show phase.
+
+    This is deliberately contextual: the same presenter button previews a
+    question, opens voting, locks it, reveals the answer/results, and moves on.
+    It prevents a projector, guest phone, and presenter console from drifting
+    into contradictory states.
+    """
+    require_capability(identity, "control")
+    activity = await _get_owned_activity(activity_id, identity, db)
+    if activity.config.get("show_mode") != "guided":
+        raise HTTPException(409, "Start Guided Show Mode before advancing")
+    if activity.status not in ("live", "paused"):
+        raise HTTPException(409, "This activity is not available for a guided show")
+    if activity.status == "paused":
+        activity.status = "live"
+
+    now = datetime.now(timezone.utc)
+    next_phase, current = _apply_guided_advance(activity, now)
+    await db.commit()
+    await publish(activity_id, "show.phase_changed", {"phase": next_phase, "question_id": current_id})
+    if current:
+        await publish(activity_id, "question.state_changed", {"question_id": current.id, "state": current.live_state})
+    if next_phase == "complete":
+        await publish(activity_id, "activity.status_changed", {"status": activity.status})
+    return await _fetch_activity(activity_id, db)
+
+
+@router.put("/activities/{activity_id}/show/automation", response_model=ActivityOut)
+async def configure_guided_show_automation(activity_id: str, body: GuidedShowAutomationIn, identity: Identity = Depends(current_identity), db: AsyncSession = Depends(get_db)):
+    """Configure or pause automatic phase progression without losing state."""
+    require_capability(identity, "control")
+    activity = await _get_owned_activity(activity_id, identity, db)
+    timings = body.timings.model_dump()
+    config = {
+        **(activity.config or {}),
+        "show_automation_enabled": body.enabled,
+        "show_automation_timings": timings,
+    }
+    activity.config = config
+    if config.get("show_mode") == "guided" and config.get("show_phase") != "complete":
+        now = datetime.now(timezone.utc)
+        current = next((question for question in activity.questions if question.id == config.get("current_question_id")), None)
+        activity.config = {
+            **config,
+            # Resuming deliberately starts a fresh duration for the current
+            # slide rather than surprising the presenter with an old deadline.
+            "show_phase_started_at": now.isoformat(),
+            "show_phase_deadline_at": _guided_phase_deadline(activity, config.get("show_phase") or "lobby", now, current),
+        }
+    else:
+        activity.config = {**config, "show_phase_deadline_at": None}
+    await db.commit()
+    await publish(activity_id, "show.automation_changed", {
+        "enabled": body.enabled,
+        "timings": timings,
+        "deadline_at": activity.config.get("show_phase_deadline_at"),
+    })
     return await _fetch_activity(activity_id, db)
 
 
@@ -313,10 +565,12 @@ async def set_question_live_state(question_id: str, body: QuestionLiveStateIn, i
         for sibling in activity.questions:
             if sibling.id != question.id and sibling.live_state == "open":
                 sibling.live_state = "closed"
-        activity.config = {**activity.config, "current_question_id": question.id, "display_scene": "question"}
+        activity.config = {**activity.config, "show_mode": "manual", "current_question_id": question.id, "display_scene": "question"}
         question.config = {**(question.config or {}), "opened_at": datetime.now(timezone.utc).isoformat()}
     elif body.state in ("results_visible", "answer_revealed"):
-        activity.config = {**activity.config, "current_question_id": question.id, "display_scene": body.state}
+        activity.config = {**activity.config, "show_mode": "manual", "current_question_id": question.id, "display_scene": body.state}
+    else:
+        activity.config = {**activity.config, "show_mode": "manual"}
     question.live_state = body.state
     await db.commit()
     await publish(activity.id, "question.state_changed", {"question_id": question.id, "state": body.state})

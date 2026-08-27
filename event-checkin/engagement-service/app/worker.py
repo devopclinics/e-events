@@ -6,16 +6,19 @@ from datetime import datetime, timedelta, timezone
 
 import httpx
 from sqlalchemy import or_, select, update
+from sqlalchemy.orm import selectinload
 
 from .config import settings
 from .database import SessionLocal
 from .models import ActivityQuestion, EngagementActivity, FeedbackAnalysis, LiveDisplay, ModerationItem, ParticipantResponse, ProgramSession
 from .metrics import AI_JOBS
 from .realtime import publish, publish_display
+from .routers.activities import _apply_guided_advance, _set_guided_lobby
 
 logger = logging.getLogger("engagement-worker")
 AUTO_CLOSE_TICK_SECONDS = 60
 DISPLAY_AUTOFOLLOW_TICK_SECONDS = 30
+QUESTION_TIMER_TICK_SECONDS = 1
 
 
 async def _claim_job(db):
@@ -135,6 +138,7 @@ async def _auto_start_tick():
                   & (ProgramSession.event_id == EngagementActivity.event_id)
                   & (ProgramSession.source_step_id == EngagementActivity.session_id))
             .where(EngagementActivity.status.in_(("draft", "scheduled")), ProgramSession.starts_at.isnot(None))
+            .options(selectinload(EngagementActivity.questions).selectinload(ActivityQuestion.options))
         )).all()
         for activity, session_starts_at, session_ends_at in rows:
             config = activity.config or {}
@@ -149,6 +153,8 @@ async def _auto_start_tick():
                     continue
             activity.status = "live"
             activity.config = {**config, "auto_started_at": now.isoformat()}
+            if config.get("show_automation_enabled") is True:
+                _set_guided_lobby(activity, now)
             await db.commit()
             await publish(activity.id, "activity.status_changed", {"status": "live", "reason": "auto_start"})
             logger.info("auto-started activity %s (session started %s)", activity.id, session_starts_at)
@@ -170,6 +176,80 @@ async def _auto_start_loop():
         except Exception:
             logger.exception("auto-start tick crashed")
         await asyncio.sleep(AUTO_CLOSE_TICK_SECONDS)
+
+
+async def _question_timer_tick():
+    """Advance due Guided Show phases from the durable server clock.
+
+    With automation off this retains the original safety behavior: a timed
+    answering question still locks at zero. With automation on, every phase
+    advances, including multi-question Word Clouds with an activity-level
+    collection duration.
+    """
+    now = datetime.now(timezone.utc)
+    async with SessionLocal() as db:
+        activities = (await db.execute(
+            select(EngagementActivity)
+            .where(EngagementActivity.status == "live")
+            .options(selectinload(EngagementActivity.questions).selectinload(ActivityQuestion.options))
+        )).scalars().all()
+        for activity in activities:
+            if (activity.config or {}).get("show_mode") != "guided":
+                continue
+            phase = activity.config.get("show_phase") or "lobby"
+            current = next((question for question in activity.questions if question.id == activity.config.get("current_question_id")), None)
+            deadline_raw = activity.config.get("show_phase_deadline_at") if activity.config.get("show_automation_enabled") else None
+            # Manual Guided Show keeps per-question timers authoritative even
+            # though the other phases wait for a presenter action.
+            if not deadline_raw and phase == "answering" and current and current.time_limit_seconds:
+                opened_at_raw = (current.config or {}).get("opened_at")
+                if opened_at_raw:
+                    try:
+                        opened_at = datetime.fromisoformat(opened_at_raw)
+                        if opened_at.tzinfo is None:
+                            opened_at = opened_at.replace(tzinfo=timezone.utc)
+                        deadline_raw = (opened_at + timedelta(seconds=current.time_limit_seconds)).isoformat()
+                    except (TypeError, ValueError):
+                        continue
+            if not deadline_raw:
+                continue
+            try:
+                deadline = datetime.fromisoformat(deadline_raw)
+                if deadline.tzinfo is None:
+                    deadline = deadline.replace(tzinfo=timezone.utc)
+            except (TypeError, ValueError):
+                continue
+            if now < deadline:
+                continue
+            if activity.config.get("show_automation_enabled"):
+                next_phase, changed_question = _apply_guided_advance(activity, now)
+                reason = "automation"
+            else:
+                current.live_state = "closed"
+                activity.config = {
+                    **(activity.config or {}),
+                    "show_phase": "locked",
+                    "show_phase_started_at": now.isoformat(),
+                    "show_phase_deadline_at": None,
+                    "display_scene": "question",
+                }
+                next_phase, changed_question, reason = "locked", current, "timer"
+            await db.commit()
+            await publish(activity.id, "show.phase_changed", {"phase": next_phase, "question_id": changed_question.id if changed_question else None, "reason": reason})
+            if changed_question:
+                await publish(activity.id, "question.state_changed", {"question_id": changed_question.id, "state": changed_question.live_state, "reason": reason})
+            if next_phase == "complete":
+                await publish(activity.id, "activity.status_changed", {"status": activity.status, "reason": reason})
+            logger.info("guided show activity %s advanced to %s (%s)", activity.id, next_phase, reason)
+
+
+async def _question_timer_loop():
+    while True:
+        try:
+            await _question_timer_tick()
+        except Exception:
+            logger.exception("question timer tick crashed")
+        await asyncio.sleep(QUESTION_TIMER_TICK_SECONDS)
 
 
 async def _display_autofollow_tick():
@@ -239,7 +319,7 @@ async def _job_loop():
 
 
 async def run():
-    await asyncio.gather(_job_loop(), _auto_close_loop(), _auto_start_loop(), _display_autofollow_loop())
+    await asyncio.gather(_job_loop(), _auto_close_loop(), _auto_start_loop(), _question_timer_loop(), _display_autofollow_loop())
 
 
 if __name__ == "__main__":

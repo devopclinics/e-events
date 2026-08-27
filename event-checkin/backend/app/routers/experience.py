@@ -648,8 +648,13 @@ def _guest_safe_step_metadata(step: ExperienceStep, row: GuestExperienceProgress
 
 def _guest_step_out(step: ExperienceStep, row: GuestExperienceProgress | None) -> GuestJourneyStepOut:
     status = row.status if row else "available"
-    self_service = step.type in GUEST_SELF_SERVICE_STEP_TYPES
     config = step.config or {}
+    # A step that blocks check-in is inherently something the guest needs to
+    # see and act on before arriving, regardless of its type — most useful
+    # for a `custom` step whose completion has no native Festio path (e.g. a
+    # third-party waiver link), which otherwise isn't in
+    # GUEST_SELF_SERVICE_STEP_TYPES at all.
+    self_service = step.type in GUEST_SELF_SERVICE_STEP_TYPES or step.blocks_checkin
     messages = config.get("messages") if isinstance(config.get("messages"), dict) else {}
     session = _session_config(step) if step.type == "session_attendance" else None
     return GuestJourneyStepOut(
@@ -663,6 +668,8 @@ def _guest_step_out(step: ExperienceStep, row: GuestExperienceProgress | None) -
         completed_at=row.completed_at if row else None,
         self_service=self_service,
         actionable=self_service and status in _PENDING_STATUSES,
+        blocks_checkin=step.blocks_checkin,
+        action_url=config.get("external_url") or None,
         guest_message=messages.get("guest") or config.get("guest_message"),
         completion_message=messages.get("complete") or config.get("completion_message"),
         session=session or None,

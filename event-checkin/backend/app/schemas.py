@@ -891,6 +891,8 @@ class GuestJourneyStepOut(BaseModel):
     completed_at: Optional[datetime] = None
     self_service: bool = False  # a guest can complete this step from the Hub
     actionable: bool = False     # self_service AND still pending
+    blocks_checkin: bool = False
+    action_url: Optional[str] = None  # config.external_url — a form/waiver the guest completes off-platform
     guest_message: Optional[str] = None
     completion_message: Optional[str] = None
     session: Optional[dict[str, Any]] = None

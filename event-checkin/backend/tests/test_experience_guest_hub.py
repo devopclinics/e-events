@@ -69,6 +69,33 @@ async def test_journey_lists_steps_and_pending_consent(ctx):
 
 
 @pytest.mark.asyncio
+async def test_journey_exposes_blocking_step_as_actionable_with_link(ctx):
+    """A required step with blocks_checkin=True must be visible and
+    actionable to the guest before they ever arrive — regardless of its
+    step type — since it's the only way they'd know to complete it (e.g. a
+    third-party waiver link) ahead of time. See routers/scanner.py's
+    perform_admission for the check-in side of this same gate."""
+    guest_id, _ = await _setup(ctx, with_consent=False)
+    async with _Session() as s:
+        wf = (await s.execute(select(ExperienceWorkflow).where(ExperienceWorkflow.event_id == ctx.ids["event_a"]))).scalars().first()
+        s.add(ExperienceStep(
+            workflow_id=wf.id, key="waiver", type="custom", title="Sign the event waiver",
+            sort_order=5, required=True, blocks_checkin=True,
+            config={"external_url": "https://app.waiversign.com/e/example"},
+        ))
+        await s.commit()
+
+    r = await ctx.client.get(f"/api/events/{ctx.ids['event_a']}/experience/me?token={TOKEN}")
+    assert r.status_code == 200
+    waiver = next(s for s in r.json()["steps"] if s["key"] == "waiver")
+    assert waiver["self_service"] is True
+    assert waiver["actionable"] is True
+    assert waiver["blocks_checkin"] is True
+    assert waiver["action_url"] == "https://app.waiversign.com/e/example"
+    assert any(s["key"] == "waiver" for s in r.json()["next_steps"])
+
+
+@pytest.mark.asyncio
 async def test_journey_exposes_guest_activity_details(ctx):
     async with _Session() as s:
         ev = await s.get(Event, ctx.ids["event_a"])

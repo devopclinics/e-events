@@ -1713,6 +1713,10 @@ function GuestHub({ event, accessToken, designTheme, previewMock = false, confir
     const isConfirmed = !hasRsvp || hub?.guest?.rsvp_status === 'confirmed'
     const consent = journey?.consent
     const needsConsent = !!(consent?.required && !consent.signed)
+    // A required step marked blocks_checkin (e.g. a third-party waiver link)
+    // is just as much a hard pre-entry gate as native consent, but the guest
+    // has no other way to learn about it before arriving at the door.
+    const blockingStep = (journey?.steps || []).find((s) => s.required && s.blocks_checkin && !['completed', 'overridden'].includes(s.status))
     const wantsMeal = journey?.menu_selectable && !journey?.menu_has_choices
     // Single highest-priority action, in the order a guest actually needs to
     // resolve them — never a queue of competing "do this" cards.
@@ -1725,6 +1729,11 @@ function GuestHub({ event, accessToken, designTheme, previewMock = false, confir
           : { icon: '💬', label: 'Next step', text: 'Contact the host if this doesn’t look right.', urgent: false }
     } else if (needsConsent) {
       nextStep = { icon: '📝', label: 'Action required', text: `Sign ${consent.form?.title || 'your consent form'} before check-in.`, urgent: true }
+    } else if (blockingStep) {
+      nextStep = {
+        icon: '📝', label: 'Action required', text: `Complete "${blockingStep.title}" before check-in.`, urgent: true,
+        action: blockingStep.action_url ? { href: blockingStep.action_url, text: 'Open link →', external: true } : null,
+      }
     } else if (wantsMeal) {
       nextStep = { icon: '🍽️', label: 'Next step', text: 'Choose your food order on your Festio Pass.', urgent: false }
     } else if (journey?.program?.current_segments?.[0]) {
@@ -1864,7 +1873,7 @@ function GuestHub({ event, accessToken, designTheme, previewMock = false, confir
             <div className="min-w-0 flex-1">
               <div className="text-[11px] font-extrabold uppercase tracking-wide" style={{ color: tone.accent }}>{nextStep.label}</div>
               <div className="mt-0.5 font-bold">{nextStep.text}</div>
-              {nextStep.action && <a href={nextStep.action.href} className="mt-3 inline-flex min-h-10 items-center justify-center rounded-xl px-4 py-2 text-sm font-extrabold text-slate-950" style={{ background: tone.accent }}>{nextStep.action.text}</a>}
+              {nextStep.action && <a href={nextStep.action.href} {...(nextStep.action.external ? { target: '_blank', rel: 'noopener noreferrer' } : {})} className="mt-3 inline-flex min-h-10 items-center justify-center rounded-xl px-4 py-2 text-sm font-extrabold text-slate-950" style={{ background: tone.accent }}>{nextStep.action.text}</a>}
             </div>
           </div>
 
@@ -2181,7 +2190,7 @@ function GuestHub({ event, accessToken, designTheme, previewMock = false, confir
               // progress bar, so skip these two compact duplicates whenever it will render.
               if (module.key === 'next_action' && journey?.next_steps?.[0] && !activityDetailShown) {
                 const next = journey.next_steps[0]
-                return <div key={module.key} className="rounded-2xl border p-5" style={{ background: tone.panelStrong, borderColor: tone.accent }}><div className="text-xs font-extrabold uppercase tracking-[0.18em]" style={{ color: tone.accent }}>Your next step</div><div className="mt-2 text-xl font-extrabold">{next.title}</div>{(next.guest_message || next.description) && <p className="mt-2 text-sm leading-6" style={{ color: tone.muted }}>{next.guest_message || next.description}</p>}</div>
+                return <div key={module.key} className="rounded-2xl border p-5" style={{ background: tone.panelStrong, borderColor: tone.accent }}><div className="text-xs font-extrabold uppercase tracking-[0.18em]" style={{ color: tone.accent }}>Your next step</div><div className="mt-2 text-xl font-extrabold">{next.title}</div>{(next.guest_message || next.description) && <p className="mt-2 text-sm leading-6" style={{ color: tone.muted }}>{next.guest_message || next.description}</p>}{next.action_url && <a href={next.action_url} target="_blank" rel="noopener noreferrer" className="mt-3 inline-flex min-h-10 items-center justify-center rounded-xl px-4 py-2 text-sm font-extrabold text-slate-950" style={{ background: tone.accent }}>Open link →</a>}</div>
               }
               if (module.key === 'activity_progress' && journey?.experience_enabled && !activityDetailShown) {
                 const total = journey.total_count || journey.steps?.length || 0

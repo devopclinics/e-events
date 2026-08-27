@@ -488,7 +488,12 @@ function CommandResultPanel({ result, onStepComplete, stepBusy }) {
             </div>
           </div>
           <div className="sc-command-guidance">
-            {(result.table_name || result.seat_number) && <div><Icon name="chair" size={16}/><span>Seating assignment<strong>{result.table_name ? `Table ${result.table_name}` : 'Table not assigned'}{result.seat_number ? ` · Seat ${result.seat_number}` : ''}</strong></span></div>}
+            {(result.table_name || result.seat_number) && (
+              <div className="sc-command-guidance-seat">
+                <i aria-hidden="true"><Icon name="chair" size={18}/></i>
+                <span>Seating assignment<strong>{result.table_name ? `Table ${result.table_name}` : 'Table not assigned'}{result.seat_number ? ` · Seat ${result.seat_number}` : ''}</strong></span>
+              </div>
+            )}
             {result.zone_name && <div><Icon name="external" size={16}/><span>Access decision<strong>{result.direction?.toUpperCase()} · {result.zone_name}</strong></span></div>}
             {result.deny_reason && <div><Icon name="shield" size={16}/><span>Reason<strong>{result.deny_reason}</strong></span></div>}
           </div>

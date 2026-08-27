@@ -84,9 +84,10 @@ function ResultCard({ result, onStepComplete, stepBusy }) {
               const guestReported = !!progress?.metadata?.guest_reported_done
               return (
                 <div className="sc-experience-step" key={step.id}>
-                  <span>{step.title}{step.required ? ' · Required' : ''}{step.blocks_checkin ? ' · Blocks check-in' : ''}{guestReported ? ' · Guest says done' : ''}</span>
+                  <span>{step.title}{step.required ? ' · Required' : ''}{step.blocks_checkin ? ' · Blocks check-in' : ''}</span>
+                  {guestReported && <span className="sc-receipt-chip"><Icon name="check" size={12}/> Consent submitted</span>}
                   {link && <a href={link} target="_blank" rel="noopener noreferrer" className="rr-link-btn">Open link ↗</a>}
-                  {completable && <button className="rr-btn secondary" disabled={stepBusy} onClick={() => onStepComplete(step)}>{stepBusy ? 'Saving…' : step.type === 'session_attendance' ? 'Check in' : step.blocks_checkin ? 'Confirm completed & check in' : 'Complete'}</button>}
+                  {completable && <button className="rr-btn secondary" disabled={stepBusy} onClick={() => onStepComplete(step)}>{stepBusy ? 'Saving…' : step.type === 'session_attendance' ? 'Check in' : step.blocks_checkin ? (guestReported ? 'Check them in' : 'Confirm completed & check in') : 'Complete'}</button>}
                 </div>
               )
             })}
@@ -506,9 +507,10 @@ function CommandResultPanel({ result, onStepComplete, stepBusy }) {
                 const guestReported = !!progress?.metadata?.guest_reported_done
                 return (
                   <div className="sc-command-next-step" key={step.id}>
-                    <strong>{step.title} · Required{step.blocks_checkin ? ' · Blocks check-in' : ''}{guestReported ? ' · Guest says done' : ''}</strong>
+                    <strong>{step.title} · Required{step.blocks_checkin ? ' · Blocks check-in' : ''}</strong>
+                    {guestReported && <span className="sc-receipt-chip"><Icon name="check" size={12}/> Consent submitted</span>}
                     {link && <a href={link} target="_blank" rel="noopener noreferrer">Open link ↗</a>}
-                    {completable && <button disabled={stepBusy} onClick={() => onStepComplete(step)}>{stepBusy ? 'Saving…' : step.type === 'session_attendance' ? 'Check in' : step.blocks_checkin ? 'Confirm completed & check in' : 'Complete'}</button>}
+                    {completable && <button disabled={stepBusy} onClick={() => onStepComplete(step)}>{stepBusy ? 'Saving…' : step.type === 'session_attendance' ? 'Check in' : step.blocks_checkin ? (guestReported ? 'Check them in' : 'Confirm completed & check in') : 'Complete'}</button>}
                   </div>
                 )
               })}

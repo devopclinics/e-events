@@ -144,6 +144,10 @@
 .sc-command-pass-blue { background: #e8f0fa; color: #326caa; }
 .sc-command-next-step { display: grid; gap: 6px; }
 .sc-command-next-step + .sc-command-next-step { margin-top: 8px; padding-top: 8px; border-top: 1px solid color-mix(in srgb, var(--teal) 18%, transparent); }
+/* A guest's own "I've completed this" self-report, surfaced as a clear
+   receipt so staff can see at a glance the guest already claims to have
+   signed — still requires an explicit staff tap to actually admit them. */
+.sc-receipt-chip { display: inline-flex; align-items: center; gap: 4px; width: fit-content; padding: 3px 8px; border-radius: 99px; background: var(--success-soft); color: var(--success); font-size: 9px; font-weight: 800; }
 .sc-command-result-error { margin: 0 14px 14px; color: var(--danger); font-size: 10px; }
 .sc-command-activity-empty { min-height: 120px; display: grid; place-items: center; padding: 18px; color: var(--muted); font-size: 10px; text-align: center; }
 

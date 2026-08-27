@@ -1540,6 +1540,8 @@ export const api = {
   liveDisplays: (eventId) => liveReq(eventId, 'GET', '/v1/displays'),
   liveCreateDisplay: (eventId, body) => liveReq(eventId, 'POST', '/v1/displays', body),
   liveUpdateDisplay: (eventId, displayId, body) => liveReq(eventId, 'PATCH', `/v1/displays/${displayId}`, body),
+  livePresentDisplayResults: (eventId, displayId, body) => liveReq(eventId, 'PUT', `/v1/control/displays/${displayId}/results`, body),
+  liveSetDisplayRehearsal: (eventId, displayId, body) => liveReq(eventId, 'PUT', `/v1/control/displays/${displayId}/rehearsal`, body),
   liveRotateDisplayToken: (eventId, displayId) => liveReq(eventId, 'POST', `/v1/displays/${displayId}/rotate-token`),
   liveDeleteDisplay: (eventId, displayId) => liveReq(eventId, 'DELETE', `/v1/displays/${displayId}`),
   liveSettings: (eventId) => liveReq(eventId, 'GET', '/v1/settings'),
@@ -1612,6 +1614,8 @@ export const api = {
   liveControlResults: (token, activityId) => liveGuestReq(token, 'GET', `/v1/activities/${activityId}/results`),
   liveControlDisplays: (token) => liveGuestReq(token, 'GET', '/v1/control/displays'),
   liveControlUpdateDisplay: (token, displayId, body) => liveGuestReq(token, 'PATCH', `/v1/control/displays/${displayId}`, body),
+  liveControlPresentResults: (token, displayId, body) => liveGuestReq(token, 'PUT', `/v1/control/displays/${displayId}/results`, body),
+  liveControlSetRehearsal: (token, displayId, body) => liveGuestReq(token, 'PUT', `/v1/control/displays/${displayId}/rehearsal`, body),
   liveControlQnaList: (token, activityId) => liveGuestReq(token, 'GET', `/v1/activities/${activityId}/qna`),
   liveControlQnaModerate: (token, qnaId, status) => liveGuestReq(token, 'PATCH', `/v1/qna/${qnaId}`, { status }),
 

@@ -3,7 +3,7 @@ import { useParams } from 'react-router-dom'
 import LiveBroadcastCanvas from '../components/LiveBroadcastCanvas'
 
 const PREVIEW_SCENES = new Set([
-  'welcome', 'join', 'agenda', 'question', 'responding', 'results', 'survey_insights',
+  'welcome', 'join', 'agenda', 'question', 'responding', 'results', 'all_results', 'survey_insights',
   'correct_answer', 'leaderboard', 'team_battle', 'rating', 'feedback', 'word_cloud',
   'q_and_a', 'room_pulse', 'ai_insight', 'idea_galaxy', 'live_spectrum',
   'interactive_quadrant', 'image_heatmap', 'ranking_race', 'prediction_reveal',

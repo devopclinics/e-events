@@ -10,7 +10,7 @@ from app.main import app
 from app.auth import Identity, current_identity
 from app.database import get_db
 from app.routers.activities import VALID_STATUS_TRANSITIONS
-from app.schemas import DisplayControlUpdate, DisplayCreate, QuestionLiveStateIn, RespondIn
+from app.schemas import DisplayControlUpdate, DisplayCreate, DisplayResultsControlIn, QuestionLiveStateIn, RespondIn
 
 client = TestClient(app)
 
@@ -135,6 +135,8 @@ class AuthRequiredTests(unittest.TestCase):
     def test_presenter_display_controls_require_auth(self):
         self.assertEqual(client.get("/api/engagement/v1/control/displays").status_code, 401)
         self.assertEqual(client.patch("/api/engagement/v1/control/displays/x", json={"scene": "welcome"}).status_code, 401)
+        self.assertEqual(client.put("/api/engagement/v1/control/displays/x/results", json={"activity_id": "a"}).status_code, 401)
+        self.assertEqual(client.put("/api/engagement/v1/control/displays/x/rehearsal", json={"activity_id": "a"}).status_code, 401)
 
     def test_rules_require_auth(self):
         self.assertEqual(client.get("/api/engagement/v1/activities/x/rules").status_code, 401)
@@ -182,7 +184,7 @@ class DomainSafetyTests(unittest.TestCase):
 
     def test_broadcast_contract_supports_every_approved_scene(self):
         scenes = {
-            "welcome", "join", "agenda", "question", "responding", "results",
+            "welcome", "join", "agenda", "question", "responding", "results", "all_results",
             "survey_insights",
             "correct_answer", "leaderboard", "team_battle", "rating", "feedback",
             "word_cloud", "q_and_a", "room_pulse", "ai_insight", "idea_galaxy",
@@ -193,7 +195,13 @@ class DomainSafetyTests(unittest.TestCase):
         }
         for scene in scenes:
             self.assertEqual(DisplayCreate(name="Main stage", scene=scene).scene, scene)
-        self.assertEqual(len(scenes), 32)
+        self.assertEqual(len(scenes), 33)
+
+    def test_results_control_validates_playback_bounds(self):
+        model = DisplayResultsControlIn(activity_id="activity-a", mode="all", question_ids=["q2", "q1"], freeze=True, page_seconds=12)
+        self.assertEqual(model.question_ids, ["q2", "q1"])
+        with self.assertRaises(ValidationError):
+            DisplayResultsControlIn(activity_id="activity-a", page_seconds=2)
 
     def test_broadcast_settings_validate_themes_and_countdowns(self):
         update = DisplayControlUpdate(scene="room_pulse", settings={"theme": "citrus", "countdown_seconds": 90})

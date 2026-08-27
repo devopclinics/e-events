@@ -1,9 +1,11 @@
 import csv
+import copy
 import io
 import json
 import secrets
 
 from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi.encoders import jsonable_encoder
 from fastapi.responses import StreamingResponse
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -12,7 +14,7 @@ from ..auth import Identity, current_identity, require_admin, require_capability
 from ..database import get_db
 from ..models import ActivityParticipant, ActivityQuestion, ActivityRule, EngagementActivity, EngagementEventSettings, EngagementQnaQuestion, LiveDisplay, ParticipantResponse, ProgramSession, QuestionOption, ResponseOptionSelection
 from ..realtime import publish_display
-from ..schemas import DisplayControlUpdate, DisplayCreate, DisplayOut, DisplayUpdate, EventSettings, EventSettingsOut, ResponseDetailOut, RuleCreate, RuleOut
+from ..schemas import DisplayControlUpdate, DisplayCreate, DisplayOut, DisplayRehearsalIn, DisplayResultsControlIn, DisplayUpdate, EventSettings, EventSettingsOut, ResponseDetailOut, RuleCreate, RuleOut
 from .activities import _fetch_activity
 from .participate import _display_payload
 
@@ -61,6 +63,81 @@ def _merge_display_settings(display: LiveDisplay, patch) -> None:
         return
     values = patch.model_dump(mode="json", exclude_unset=True)
     display.settings = {**(display.settings or {}), **values}
+
+
+def _apply_results_view(payload: dict, settings: dict) -> dict:
+    """Apply display-only result ordering without changing activity data."""
+    result = copy.deepcopy(payload)
+    requested_ids = settings.get("results_question_ids") or []
+    if requested_ids:
+        by_id = {question.get("question_id"): question for question in result.get("questions", [])}
+        result["questions"] = [by_id[question_id] for question_id in requested_ids if question_id in by_id]
+    current_id = settings.get("results_question_id")
+    if current_id and any(question.get("question_id") == current_id for question in result.get("questions", [])):
+        result["current_question_id"] = current_id
+    if settings.get("results_mode") == "all":
+        questions = result.get("questions", [])
+        answer_count = sum(int(question.get("response_count") or 0) for question in questions)
+        participant_count = int(result.get("participant_count") or 0)
+        capacity = participant_count * len(questions)
+        result["response_count"] = answer_count
+        result["activity_summary"] = {
+            **(result.get("activity_summary") or {}),
+            "question_count": len(questions),
+            "response_count": answer_count,
+            "response_rate": round(answer_count / capacity * 100) if capacity else 0,
+        }
+    return result
+
+
+def _rehearsal_payload(payload: dict, participants: int) -> dict:
+    """Create a deterministic display snapshot; never writes response rows."""
+    result = copy.deepcopy(payload)
+    words = ["connected", "inspired", "community", "energized", "hopeful", "creative"]
+    for index, question in enumerate(result.get("questions", [])):
+        question["response_count"] = participants
+        option_ids = list((question.get("option_labels") or {}).keys())
+        if option_ids:
+            base, remainder = divmod(participants, len(option_ids))
+            question["option_counts"] = {
+                option_id: base + (1 if (option_index + index) % len(option_ids) < remainder else 0)
+                for option_index, option_id in enumerate(option_ids)
+            }
+            question["ranking_scores"] = {
+                option_id: (len(option_ids) - option_index) * max(1, participants // 2)
+                for option_index, option_id in enumerate(option_ids)
+            }
+        question_type = question.get("question_type")
+        if question_type in ("rating_5", "rating_10", "nps"):
+            maximum = 5 if question_type == "rating_5" else 10
+            question["average_rating"] = round(maximum * .82, 1)
+            question["value_counts"] = {str(maximum): max(1, participants * 3 // 5), str(maximum - 1): max(1, participants * 2 // 5)}
+        if question_type == "number":
+            question["numeric_values"] = [20 + ((value * 7 + index * 3) % 60) for value in range(participants)]
+        if question_type == "word_cloud":
+            question["word_cloud"] = [{"word": word, "count": max(1, participants - word_index - index)} for word_index, word in enumerate(words)]
+        if question_type in ("quadrant", "image_click"):
+            question["points"] = [[((value * 37 + index * 11) % 100) / 100, ((value * 61 + index * 7) % 100) / 100] for value in range(participants)]
+        question["response_timeline"] = [max(0, round(participants * weight)) for weight in (.05, .08, .12, .18, .2, .16, .1, .06, .03, .02)]
+    question_count = len(result.get("questions", []))
+    answer_count = participants * question_count
+    result["participant_count"] = participants
+    result["response_count"] = answer_count
+    result["activity_summary"] = {
+        "question_count": question_count,
+        "participant_count": participants,
+        "response_count": answer_count,
+        "response_rate": 100,
+        "completed_count": participants,
+        "completion_rate": 100,
+    }
+    result["leaderboard"] = [
+        {"participant_id": f"rehearsal-{index}", "display_name": f"Demo Guest {index + 1}", "score": 1000 - index * 85, "rank": index + 1}
+        for index in range(min(participants, 5))
+    ]
+    result["room_pulse"] = {"energy": 88, "participation_percent": 100, "consensus_percent": 62, "sentiment": "Positive", "responses": participants}
+    result.setdefault("display_config", {})["rehearsal_mode"] = True
+    return result
 
 
 @router.get("/settings", response_model=EventSettingsOut)
@@ -181,6 +258,82 @@ async def control_display(display_id: str, body: DisplayControlUpdate, identity:
     return display
 
 
+@router.put("/control/displays/{display_id}/results", response_model=DisplayOut)
+async def control_display_results(display_id: str, body: DisplayResultsControlIn, identity: Identity = Depends(current_identity), db: AsyncSession = Depends(get_db)):
+    """Put one question or an ordered aggregate directly on a projector."""
+    require_capability(identity, "control")
+    display = await _owned_display(display_id, identity, db)
+    activity = await _fetch_activity(body.activity_id, db)
+    if not activity or activity.event_id != identity.event_id or (identity.org_id and activity.org_id != identity.org_id):
+        raise HTTPException(404, "Activity not found")
+    active_ids = [question.id for question in activity.questions if question.status == "active"]
+    if not active_ids:
+        raise HTTPException(422, "This activity has no active questions to present")
+    unknown = set(body.question_ids) - set(active_ids)
+    if body.question_id and body.question_id not in active_ids:
+        unknown.add(body.question_id)
+    if unknown:
+        raise HTTPException(422, "Results can only include active questions from this activity")
+    selected_ids = list(dict.fromkeys(body.question_ids or active_ids))
+    current_id = body.question_id or activity.config.get("current_question_id") or selected_ids[0]
+    if current_id not in selected_ids:
+        selected_ids.insert(0, current_id)
+    settings = {
+        **(display.settings or {}),
+        "control_mode": "manual",
+        "follow_activity": False,
+        "results_mode": body.mode,
+        "results_question_id": current_id,
+        "results_question_ids": selected_ids,
+        "results_frozen": body.freeze,
+        "results_page": body.page,
+        "results_auto_rotate": body.auto_rotate,
+        "results_page_seconds": body.page_seconds,
+        "rehearsal_mode": False,
+    }
+    if body.freeze:
+        settings["results_snapshot"] = jsonable_encoder(await _display_payload(activity, db))
+    else:
+        settings["results_snapshot"] = None
+    display.assigned_activity_id = activity.id
+    display.scene = "all_results" if body.mode == "all" else "results"
+    display.settings = settings
+    await db.commit(); await db.refresh(display)
+    await publish_display(display.id, "display.changed", {"scene": display.scene, "results_mode": body.mode})
+    return display
+
+
+@router.put("/control/displays/{display_id}/rehearsal", response_model=DisplayOut)
+async def control_display_rehearsal(display_id: str, body: DisplayRehearsalIn, identity: Identity = Depends(current_identity), db: AsyncSession = Depends(get_db)):
+    """Preview realistic results without creating participants or responses."""
+    require_capability(identity, "control")
+    display = await _owned_display(display_id, identity, db)
+    if not body.enabled:
+        display.scene = "join"
+        display.settings = {
+            **(display.settings or {}), "control_mode": "manual", "follow_activity": False,
+            "rehearsal_mode": False, "results_frozen": False, "results_snapshot": None,
+        }
+    else:
+        activity_id = body.activity_id or display.assigned_activity_id
+        activity = await _fetch_activity(activity_id, db) if activity_id else None
+        if not activity or activity.event_id != identity.event_id or (identity.org_id and activity.org_id != identity.org_id):
+            raise HTTPException(422, "Choose an activity before starting rehearsal")
+        payload = _rehearsal_payload(await _display_payload(activity, db), body.participants)
+        question_ids = [question["question_id"] for question in payload.get("questions", [])]
+        display.assigned_activity_id = activity.id
+        display.scene = "all_results"
+        display.settings = {
+            **(display.settings or {}), "control_mode": "manual", "follow_activity": False,
+            "results_mode": "all", "results_question_ids": question_ids, "results_question_id": question_ids[0] if question_ids else None,
+            "results_frozen": True, "results_snapshot": jsonable_encoder(payload), "results_page": 0,
+            "results_auto_rotate": True, "results_page_seconds": 8, "rehearsal_mode": True,
+        }
+    await db.commit(); await db.refresh(display)
+    await publish_display(display.id, "display.changed", {"scene": display.scene, "rehearsal_mode": bool(body.enabled)})
+    return display
+
+
 @router.post("/displays/{display_id}/rotate-token", response_model=DisplayOut)
 async def rotate_display_token(display_id: str, identity: Identity = Depends(current_identity), db: AsyncSession = Depends(get_db)):
     require_admin(identity)
@@ -209,6 +362,7 @@ async def public_display(display_code: str, token: str = Query(...), db: AsyncSe
             ProgramSession.status == "published",
         ).order_by(ProgramSession.starts_at.asc().nullslast(), ProgramSession.sort_order, ProgramSession.id)
     )).scalars().all()
+    public_display_settings = {key: value for key, value in (display.settings or {}).items() if key != "results_snapshot"}
     payload = {
         "event_id": display.event_id,
         "display": {
@@ -216,7 +370,7 @@ async def public_display(display_code: str, token: str = Query(...), db: AsyncSe
             "name": display.name,
             "scene": display.scene,
             "assigned_session_id": display.assigned_session_id,
-            "settings": display.settings,
+            "settings": public_display_settings,
         },
         "activity": None,
         "program_sessions": [
@@ -235,7 +389,13 @@ async def public_display(display_code: str, token: str = Query(...), db: AsyncSe
     }
     if display.assigned_activity_id:
         activity = await _fetch_activity(display.assigned_activity_id, db)
-        if activity: payload["activity"] = await _display_payload(activity, db)
+        if activity:
+            settings = display.settings or {}
+            if settings.get("results_frozen") and isinstance(settings.get("results_snapshot"), dict):
+                activity_payload = settings["results_snapshot"]
+            else:
+                activity_payload = await _display_payload(activity, db)
+            payload["activity"] = _apply_results_view(activity_payload, settings)
     return payload
 
 

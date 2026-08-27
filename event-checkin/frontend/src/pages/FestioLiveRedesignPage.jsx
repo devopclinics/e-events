@@ -49,7 +49,7 @@ function guidedActionLabel(activity) {
 }
 const DISPLAY_SCENES = [
   ['welcome', 'Opening moment'], ['join', 'Join / QR'], ['agenda', 'Live agenda'],
-  ['question', 'Question'], ['responding', 'Voting + reactions'], ['results', 'Animated results'],
+  ['question', 'Question'], ['responding', 'Voting + reactions'], ['results', 'Current result'], ['all_results', 'All results'],
   ['survey_insights', 'Survey insights wall'],
   ['correct_answer', 'Smart reveal'], ['leaderboard', 'Leaderboard'], ['team_battle', 'Team battle'],
   ['rating', 'Rating'], ['feedback', 'Feedback'], ['word_cloud', 'Living word cloud'],
@@ -70,11 +70,11 @@ const DISPLAY_SCENES = [
 const SCENES_ALWAYS_SAFE = ['welcome', 'join', 'agenda', 'photo_mosaic', 'location_map', 'journey_recap', 'spotlight_wheel', 'announcement', 'break', 'countdown', 'celebration', 'custom_message']
 function compatibleScenes(activityType) {
   if (!activityType) return DISPLAY_SCENES.map(([key]) => key)
-  if (activityType === 'survey' || activityType === 'feedback') return [...SCENES_ALWAYS_SAFE, 'results', 'survey_insights', 'commitment_wall', 'prediction_reveal']
+  if (activityType === 'survey' || activityType === 'feedback') return [...SCENES_ALWAYS_SAFE, 'results', 'all_results', 'survey_insights', 'commitment_wall', 'prediction_reveal']
   if (activityType === 'q_and_a') return [...SCENES_ALWAYS_SAFE, 'q_and_a']
-  if (activityType === 'word_cloud') return [...SCENES_ALWAYS_SAFE, 'word_cloud', 'results', 'commitment_wall']
-  if (activityType === 'rating') return [...SCENES_ALWAYS_SAFE, 'rating', 'results', 'live_spectrum']
-  if (activityType === 'quiz') return [...SCENES_ALWAYS_SAFE, 'question', 'responding', 'results', 'correct_answer', 'leaderboard', 'team_battle', 'ranking_race', 'prediction_reveal']
+  if (activityType === 'word_cloud') return [...SCENES_ALWAYS_SAFE, 'word_cloud', 'results', 'all_results', 'commitment_wall']
+  if (activityType === 'rating') return [...SCENES_ALWAYS_SAFE, 'rating', 'results', 'all_results', 'live_spectrum']
+  if (activityType === 'quiz') return [...SCENES_ALWAYS_SAFE, 'question', 'responding', 'results', 'all_results', 'correct_answer', 'leaderboard', 'team_battle', 'ranking_race', 'prediction_reveal']
   return DISPLAY_SCENES.map(([key]) => key) // poll, voting, and anything else — built to use most scenes
 }
 const DISPLAY_THEMES = [
@@ -523,7 +523,20 @@ function OverviewPanel({ eventId, joinInfo, activities, displays, onCreate, onOp
   </div>
 }
 
-function DisplayCard({ display, eventId, activities, programSessions, busy, onUpdate, onDelete }) {
+function ParticipantReviewPreview({ activity, results, onClose }) {
+  return <div className="fl-participant-preview-backdrop" role="dialog" aria-modal="true" aria-label="Participant results review preview" onMouseDown={(event) => { if (event.target === event.currentTarget) onClose() }}>
+    <div className="fl-participant-preview-shell">
+      <header><div><span>PARTICIPANT PHONE PREVIEW</span><h3>Review every result</h3><p>This is the aggregate view. Each real participant also sees their own recorded answer and revealed correctness.</p></div><button onClick={onClose} aria-label="Close participant preview">×</button></header>
+      <div className="fl-participant-phone"><div className="fl-participant-phone-top">FESTIO LIVE</div><div className="fl-participant-complete"><span>ACTIVITY COMPLETE</span><strong>{activity.title}</strong><small>{results.participant_count} participants · {results.response_count} answers</small></div>{results.questions.map((result, index) => {
+        const question = activity.questions.find((item) => item.id === result.question_id)
+        const total = Object.values(result.option_counts || {}).reduce((sum, value) => sum + value, 0)
+        return <article key={result.question_id}><header><b>Q{index + 1}</b><strong>{result.prompt}</strong><span>{result.response_count}</span></header>{question?.options?.map((option) => { const count = result.option_counts?.[option.id] || 0; const percent = total ? Math.round(count / total * 100) : 0; return <div className="fl-participant-option" key={option.id}><span>{option.label}</span><b>{percent}%</b><i><em style={{ width: `${percent}%` }}/></i></div> })}{result.average_rating != null && <div className="fl-participant-rating">{result.average_rating.toFixed(1)} <small>average</small></div>}{result.word_cloud?.length > 0 && <div className="fl-participant-words">{result.word_cloud.slice(0, 8).map((entry) => <span key={entry.word}>{entry.word} <b>{entry.count}</b></span>)}</div>}<footer>Your response and correct answer appear here for the actual participant.</footer></article>
+      })}</div>
+    </div>
+  </div>
+}
+
+function DisplayCard({ display, eventId, activities, programSessions, busy, onUpdate, onDelete, onPresentResults, onRehearsal }) {
   const [editing, setEditing] = useState(false)
   const [pushing, setPushing] = useState(false)
   const [pushReceipt, setPushReceipt] = useState('')
@@ -537,12 +550,27 @@ function DisplayCard({ display, eventId, activities, programSessions, busy, onUp
   const [pendingSessionId, setPendingSessionId] = useState(display.assigned_session_id || '')
   const [pendingActivityId, setPendingActivityId] = useState(display.assigned_activity_id || '')
   const [pendingScene, setPendingScene] = useState(display.scene)
+  const [activityDetail, setActivityDetail] = useState(null)
+  const [resultQuestionIds, setResultQuestionIds] = useState([])
+  const [resultPageSeconds, setResultPageSeconds] = useState(settings.results_page_seconds || 8)
   useEffect(() => {
     setPendingSessionId(display.assigned_session_id || '')
     setPendingActivityId(display.assigned_activity_id || '')
     setPendingScene(display.scene)
   }, [display.assigned_session_id, display.assigned_activity_id, display.scene])
   useEffect(() => { setPushReceipt('') }, [pendingSessionId, pendingActivityId, pendingScene])
+  useEffect(() => {
+    if (!pendingActivityId) { setActivityDetail(null); setResultQuestionIds([]); return }
+    let cancelled = false
+    api.liveGetActivity(eventId, pendingActivityId).then((activity) => {
+      if (cancelled) return
+      setActivityDetail(activity)
+      const activeIds = activity.questions.filter((question) => question.status === 'active').map((question) => question.id)
+      const configured = (display.settings?.results_question_ids || []).filter((questionId) => activeIds.includes(questionId))
+      setResultQuestionIds(configured.length ? configured : activeIds)
+    }).catch(() => { if (!cancelled) setActivityDetail(null) })
+    return () => { cancelled = true }
+  }, [eventId, pendingActivityId, display.settings?.results_question_ids])
 
   // Reuses the activity's read-only TV payload (real component and real data)
   // inside an iframe with a local-only scene override. This makes selection
@@ -577,6 +605,38 @@ function DisplayCard({ display, eventId, activities, programSessions, busy, onUp
     setPushing(false)
   }
 
+  function moveResultQuestion(questionId, direction) {
+    setResultQuestionIds((current) => {
+      const index = current.indexOf(questionId)
+      const target = index + direction
+      if (index < 0 || target < 0 || target >= current.length) return current
+      const next = [...current]; [next[index], next[target]] = [next[target], next[index]]
+      return next
+    })
+  }
+
+  async function presentResults(mode, extra = {}) {
+    if (!pendingActivityId || !resultQuestionIds.length) return
+    setPushing(true); setPushReceipt('')
+    const configuredCurrent = resultQuestionIds.includes(settings.results_question_id) ? settings.results_question_id : null
+    const activityCurrent = resultQuestionIds.includes(activityDetail?.config?.current_question_id) ? activityDetail.config.current_question_id : null
+    const updated = await onPresentResults(display.id, {
+      activity_id: pendingActivityId, mode,
+      question_id: mode === 'current' ? (extra.question_id || configuredCurrent || activityCurrent || resultQuestionIds[0]) : null,
+      question_ids: resultQuestionIds,
+      freeze: extra.freeze ?? !!settings.results_frozen,
+      page: extra.page ?? Number(settings.results_page || 0),
+      auto_rotate: extra.auto_rotate ?? settings.results_auto_rotate !== false,
+      page_seconds: Number(resultPageSeconds) || 8,
+    })
+    if (updated) {
+      setPendingScene(mode === 'all' ? 'all_results' : 'results')
+      setLivePreviewVersion((version) => version + 1)
+      setPushReceipt(`Results sent to main screen ✓ ${new Date().toLocaleTimeString([], { hour: 'numeric', minute: '2-digit', second: '2-digit' })}`)
+    }
+    setPushing(false)
+  }
+
   const assignableActivities = activities
     .filter((activity) => activity.status !== 'archived')
     .filter((activity) => !pendingSessionId || activity.session_id === pendingSessionId)
@@ -587,6 +647,9 @@ function DisplayCard({ display, eventId, activities, programSessions, busy, onUp
     if (activity.status === 'live') count.live += 1; else if (activity.status !== 'archived') count.other += 1
     sessionHasLive.set(activity.session_id, count)
   }
+  const resultQuestions = (activityDetail?.questions || []).filter((question) => question.status === 'active')
+  const resultPageCount = Math.max(1, Math.ceil(resultQuestionIds.length / 6))
+  const resultPage = Math.min(resultPageCount - 1, Number(settings.results_page || 0))
 
   return <article className="fl-display-card">
     <div className="fl-display-preview">
@@ -616,7 +679,7 @@ function DisplayCard({ display, eventId, activities, programSessions, busy, onUp
       <button className="rr-btn secondary" onClick={() => navigator.clipboard?.writeText(link)}>Copy link</button>
       <button className="rr-btn primary" onClick={() => setEditing((value) => !value)}>{editing ? 'Close studio' : 'Design scene'}</button>
     </div>
-    <div className="fl-scene-strip">{availableScenes.map(([key, label]) => <button key={key} title={label} className={pendingScene === key ? 'active' : ''} onClick={() => setPendingScene(key)}><span>{({ welcome: '✦', join: '⌗', agenda: '≡', question: '?', responding: '◌', results: '▥', survey_insights: '◫', correct_answer: '✓', leaderboard: '♛', rating: '★', q_and_a: '?', word_cloud: 'Aa', live_spectrum: '↔', interactive_quadrant: '⊞', image_heatmap: '◉', ranking_race: '≋', prediction_reveal: '◐', commitment_wall: '▦', photo_mosaic: '▦', location_map: '⌖', journey_recap: '⌁', spotlight_wheel: '◎' })[key] || '◉'}</span>{label}</button>)}</div>
+    <div className="fl-scene-strip">{availableScenes.map(([key, label]) => <button key={key} title={label} className={pendingScene === key ? 'active' : ''} onClick={() => setPendingScene(key)}><span>{({ welcome: '✦', join: '⌗', agenda: '≡', question: '?', responding: '◌', results: '▥', all_results: '▦', survey_insights: '◫', correct_answer: '✓', leaderboard: '♛', rating: '★', q_and_a: '?', word_cloud: 'Aa', live_spectrum: '↔', interactive_quadrant: '⊞', image_heatmap: '◉', ranking_race: '≋', prediction_reveal: '◐', commitment_wall: '▦', photo_mosaic: '▦', location_map: '⌖', journey_recap: '⌁', spotlight_wheel: '◎' })[key] || '◉'}</span>{label}</button>)}</div>
     {pendingActivity && availableScenes.length < DISPLAY_SCENES.length && <p className="rd-hint" style={{ marginTop: -6, marginBottom: 10 }}>Only showing scenes that work with a {pendingActivity.type.replace('_', ' ')} activity — others would show nothing useful.</p>}
 
     <div className="fl-display-preview-box">
@@ -631,6 +694,26 @@ function DisplayCard({ display, eventId, activities, programSessions, busy, onUp
       {pushReceipt && <div className="fl-display-push-receipt" role="status" aria-live="polite">{pushReceipt}</div>}
       {previewLink && <div className="fl-display-preview-canvas"><iframe title={`${display.name} pending preview`} src={previewLink} tabIndex="-1" /></div>}
     </div>
+
+    {activityDetail && resultQuestions.length > 0 && <section className="fl-results-control">
+      <header><div><span>RESULTS-ONLY CONTROL</span><h4>Put the outcome on screen</h4><p>Choose exactly what the room sees. This never changes responses or analytics.</p></div><b>{settings.rehearsal_mode ? 'Rehearsal' : settings.results_frozen ? 'Frozen' : display.scene === 'all_results' || display.scene === 'results' ? 'Live results' : 'Ready'}</b></header>
+      <div className="fl-results-actions">
+        <button className="rr-btn secondary" disabled={busy || pushing} onClick={() => presentResults('current', { question_id: settings.results_question_id || resultQuestionIds[0] })}>Show current result</button>
+        <button className="rr-btn primary" disabled={busy || pushing} onClick={() => presentResults('all')}>Show all results</button>
+        <button className="rr-btn secondary" disabled={busy || pushing || !['results', 'all_results'].includes(display.scene)} onClick={() => presentResults(settings.results_mode || 'all', { freeze: !settings.results_frozen })}>{settings.results_frozen ? 'Return to live results' : 'Freeze results'}</button>
+        <button className="rr-btn secondary" disabled={busy} onClick={() => onUpdate(display.id, { assigned_activity_id: pendingActivityId, scene: 'join', settings: { control_mode: 'manual', follow_activity: false, rehearsal_mode: false, results_frozen: false, results_snapshot: null } })}>Return to join screen</button>
+        <button className="rr-btn secondary" disabled={busy} onClick={() => onUpdate(display.id, { assigned_activity_id: pendingActivityId, settings: { control_mode: 'guided', follow_activity: true, rehearsal_mode: false, results_frozen: false, results_snapshot: null } })}>Resume guided display</button>
+      </div>
+      <div className="fl-results-playback">
+        <label><input type="checkbox" checked={settings.results_auto_rotate !== false} onChange={(event) => presentResults('all', { auto_rotate: event.target.checked, page: resultPage })}/> Auto-rotate pages</label>
+        <label>Every <input type="number" min="3" max="60" value={resultPageSeconds} onChange={(event) => setResultPageSeconds(event.target.value)}/> sec</label>
+        <button className="rr-btn secondary" disabled={busy || resultPage <= 0} onClick={() => presentResults('all', { auto_rotate: false, page: resultPage - 1 })}>← Previous page</button>
+        <span>Page {resultPage + 1} of {resultPageCount}</span>
+        <button className="rr-btn secondary" disabled={busy || resultPage >= resultPageCount - 1} onClick={() => presentResults('all', { auto_rotate: false, page: resultPage + 1 })}>Next page →</button>
+      </div>
+      <details><summary>Select and arrange result cards ({resultQuestionIds.length}/{resultQuestions.length})</summary><div className="fl-results-question-list">{resultQuestions.map((question) => { const selectedIndex = resultQuestionIds.indexOf(question.id); const included = selectedIndex >= 0; return <div key={question.id}><label><input type="checkbox" checked={included} onChange={(event) => setResultQuestionIds((current) => event.target.checked ? [...current, question.id] : current.filter((questionId) => questionId !== question.id))}/><span>{question.prompt}</span></label><button disabled={!included || selectedIndex === 0} onClick={() => moveResultQuestion(question.id, -1)}>↑</button><button disabled={!included || selectedIndex === resultQuestionIds.length - 1} onClick={() => moveResultQuestion(question.id, 1)}>↓</button><button disabled={!included} onClick={() => presentResults('current', { question_id: question.id })}>Show</button></div> })}</div></details>
+      <div className="fl-rehearsal-actions"><button className="rr-btn secondary" disabled={busy || pushing} onClick={() => onRehearsal(display.id, { activity_id: pendingActivityId, enabled: true, participants: 10 })}>Rehearse with 10 simulated guests</button>{settings.rehearsal_mode && <button className="rr-btn secondary" disabled={busy} onClick={() => onRehearsal(display.id, { enabled: false })}>End rehearsal</button>}<small>Simulation exists only on this display and never creates response records.</small></div>
+    </section>}
 
     {editing && <div style={{ marginTop: 16, paddingTop: 16, borderTop: '1px solid var(--rr-line, #eee)', display: 'grid', gap: 14 }}>
       <div><div className="rd-hint" style={{ marginBottom: 7 }}>Presentation scene</div><select className="rr-select" aria-label={`Presentation scene for ${display.name}`} style={{ width: '100%' }} value={pendingScene} onChange={(e) => setPendingScene(e.target.value)}>{availableScenes.map(([key, label]) => <option key={key} value={key}>{label}</option>)}</select></div>
@@ -694,6 +777,7 @@ export default function FestioLiveRedesignPage() {
   const [moderationItems, setModerationItems] = useState(null)
   const [responseDetails, setResponseDetails] = useState(null)
   const [analyticsOverlayOpen, setAnalyticsOverlayOpen] = useState(false)
+  const [participantPreviewOpen, setParticipantPreviewOpen] = useState(false)
   const [busy, setBusy] = useState(false)
 
   const [bank, setBank] = useState(null)
@@ -795,6 +879,24 @@ export default function FestioLiveRedesignPage() {
     setBusy(true); setError('')
     try {
       const updated = await api.liveUpdateDisplay(eventId, displayId, patch)
+      setDisplays((current) => (current || []).map((display) => display.id === displayId ? updated : display))
+      return updated
+    } catch (e) { setError(e.message); return null } finally { setBusy(false) }
+  }
+
+  async function presentDisplayResults(displayId, body) {
+    setBusy(true); setError('')
+    try {
+      const updated = await api.livePresentDisplayResults(eventId, displayId, body)
+      setDisplays((current) => (current || []).map((display) => display.id === displayId ? updated : display))
+      return updated
+    } catch (e) { setError(e.message); return null } finally { setBusy(false) }
+  }
+
+  async function setDisplayRehearsal(displayId, body) {
+    setBusy(true); setError('')
+    try {
+      const updated = await api.liveSetDisplayRehearsal(eventId, displayId, body)
       setDisplays((current) => (current || []).map((display) => display.id === displayId ? updated : display))
       return updated
     } catch (e) { setError(e.message); return null } finally { setBusy(false) }
@@ -928,6 +1030,15 @@ export default function FestioLiveRedesignPage() {
       setResponseDetails(await api.liveResponseDetails(eventId, selected.id))
       if (selected.type !== 'q_and_a') setModerationItems(await api.liveModerationItems(eventId, selected.id))
       if (selected.config?.leaderboard_enabled) setLeaderboard((await api.liveLeaderboard(eventId, selected.id)).entries)
+    } catch (e) { setError(e.message) }
+  }
+
+  async function openParticipantPreview() {
+    if (!selected) return
+    try {
+      const payload = await api.liveResults(eventId, selected.id)
+      setResults(payload)
+      setParticipantPreviewOpen(true)
     } catch (e) { setError(e.message) }
   }
 
@@ -1321,6 +1432,7 @@ export default function FestioLiveRedesignPage() {
                 {['live', 'paused'].includes(selected.status) && <button className="rr-btn" disabled={busy} onClick={() => setStatus('closed')}>Close</button>}
                 {selected.status === 'closed' && <button className="rr-btn primary" disabled={busy} onClick={() => window.confirm('End this activity and mark it completed?') && setStatus('completed')}>End activity</button>}
                 <button className="rr-btn secondary" onClick={viewResults}>View Results</button>
+                <button className="rr-btn secondary" onClick={openParticipantPreview}>Preview participant review</button>
                 <button className="rr-btn secondary" onClick={() => {
                   const url = `${window.location.origin}/live-display/${selected.id}?token=${encodeURIComponent(selected.config?.display_token || '')}`
                   navigator.clipboard?.writeText(url)
@@ -1616,7 +1728,7 @@ export default function FestioLiveRedesignPage() {
           <div className="rd-panel-head"><div><span className="fl-eyebrow">Scene manager · 22 presentation styles</span><h3>Festio Broadcast</h3><p>Direct every projector, TV, and LED wall independently in realtime.</p></div><button className="rr-btn primary" disabled={busy} onClick={createDisplay}>+ Add display</button></div>
           <div className="rd-panel-body">
             <div style={{ display: 'flex', gap: 8, marginBottom: 14, maxWidth: 520 }}><input className="rr-input" aria-label="New display name" placeholder="Main stage, lobby, breakout room…" value={newDisplayName} onChange={(e) => setNewDisplayName(e.target.value)} /></div>
-            <div className="fl-display-grid">{visibleDisplays.map((display) => <DisplayCard key={display.id} display={display} eventId={eventId} activities={activities || []} programSessions={programSessions || []} busy={busy} onUpdate={updateDisplay} onDelete={deleteDisplay}/>)}</div>
+            <div className="fl-display-grid">{visibleDisplays.map((display) => <DisplayCard key={display.id} display={display} eventId={eventId} activities={activities || []} programSessions={programSessions || []} busy={busy} onUpdate={updateDisplay} onDelete={deleteDisplay} onPresentResults={presentDisplayResults} onRehearsal={setDisplayRehearsal}/>)}</div>
             {visibleDisplays.length === 0 && <p className="rd-hint">No displays match this program session. Create one or assign an existing display to the session.</p>}
           </div>
         </div>
@@ -1805,6 +1917,7 @@ export default function FestioLiveRedesignPage() {
           displayUrl={selected.config?.display_token ? `/live-display/${selected.id}?token=${selected.config.display_token}` : null}
         />
       )}
+      {participantPreviewOpen && results && selected && <ParticipantReviewPreview activity={selected} results={results} onClose={() => setParticipantPreviewOpen(false)}/>}
     </RedesignShell>
   )
 }

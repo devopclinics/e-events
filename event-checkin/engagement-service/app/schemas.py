@@ -388,7 +388,7 @@ class AnalysisJobOut(BaseModel):
 
 
 DisplayScene = Literal[
-    "welcome", "join", "agenda", "question", "responding", "results",
+    "welcome", "join", "agenda", "question", "responding", "results", "all_results",
     "survey_insights",
     "correct_answer", "leaderboard", "team_battle", "rating", "feedback",
     "word_cloud", "q_and_a", "room_pulse", "ai_insight", "idea_galaxy",
@@ -445,6 +445,15 @@ class DisplaySettings(BaseModel):
     # session is happening right now, so one TV can run the whole day
     # unattended instead of staff manually reassigning it each time.
     auto_follow_program: bool = False
+    results_mode: Literal["current", "all"] = "current"
+    results_question_id: str | None = None
+    results_question_ids: list[str] = Field(default_factory=list, max_length=100)
+    results_frozen: bool = False
+    results_snapshot: dict[str, Any] | None = None
+    results_page: int = Field(default=0, ge=0, le=999)
+    results_auto_rotate: bool = True
+    results_page_seconds: int = Field(default=8, ge=3, le=60)
+    rehearsal_mode: bool = False
 
 
 class DisplaySettingsUpdate(BaseModel):
@@ -469,6 +478,15 @@ class DisplaySettingsUpdate(BaseModel):
     sponsors: list[str] | None = Field(default=None, max_length=8)
     team_names: list[str] | None = Field(default=None, max_length=4)
     auto_follow_program: bool | None = None
+    results_mode: Literal["current", "all"] | None = None
+    results_question_id: str | None = None
+    results_question_ids: list[str] | None = Field(default=None, max_length=100)
+    results_frozen: bool | None = None
+    results_snapshot: dict[str, Any] | None = None
+    results_page: int | None = Field(default=None, ge=0, le=999)
+    results_auto_rotate: bool | None = None
+    results_page_seconds: int | None = Field(default=None, ge=3, le=60)
+    rehearsal_mode: bool | None = None
 
 
 class DisplayCreate(BaseModel):
@@ -493,6 +511,23 @@ class DisplayControlUpdate(BaseModel):
     assigned_activity_id: str | None = None
     scene: DisplayScene | None = None
     settings: DisplaySettingsUpdate | None = None
+
+
+class DisplayResultsControlIn(BaseModel):
+    activity_id: str
+    mode: Literal["current", "all"] = "all"
+    question_id: str | None = None
+    question_ids: list[str] = Field(default_factory=list, max_length=100)
+    freeze: bool = False
+    page: int = Field(default=0, ge=0, le=999)
+    auto_rotate: bool = True
+    page_seconds: int = Field(default=8, ge=3, le=60)
+
+
+class DisplayRehearsalIn(BaseModel):
+    activity_id: str | None = None
+    enabled: bool = True
+    participants: int = Field(default=10, ge=1, le=500)
 
 
 class DisplayOut(BaseModel):

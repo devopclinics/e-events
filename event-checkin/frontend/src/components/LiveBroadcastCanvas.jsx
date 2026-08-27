@@ -197,20 +197,24 @@ function FinalQuestionSummary({ question, index }) {
 }
 
 function FinalResultsScene({ state, settings }) {
-  const questions = state.questions || []
+  const byId = new Map((state.questions || []).map((question) => [question.question_id, question]))
+  const questions = settings.results_question_ids?.length
+    ? settings.results_question_ids.map((questionId) => byId.get(questionId)).filter(Boolean)
+    : state.questions || []
   const summary = state.activity_summary || {}
   const pageSize = 6
   const pageCount = Math.max(1, Math.ceil(questions.length / pageSize))
-  const [page, setPage] = useState(0)
-  useEffect(() => { setPage(0) }, [state.activity_id, questions.length])
+  const requestedPage = clamp(Number(settings.results_page) || 0, 0, pageCount - 1)
+  const [page, setPage] = useState(requestedPage)
+  useEffect(() => { setPage(requestedPage) }, [state.activity_id, questions.length, requestedPage])
   useEffect(() => {
-    if (pageCount <= 1 || settings.motion === false) return undefined
-    const timer = setInterval(() => setPage((value) => (value + 1) % pageCount), 8000)
+    if (pageCount <= 1 || settings.motion === false || settings.results_auto_rotate === false) return undefined
+    const timer = setInterval(() => setPage((value) => (value + 1) % pageCount), Math.max(3, Number(settings.results_page_seconds) || 8) * 1000)
     return () => clearInterval(timer)
-  }, [pageCount, settings.motion])
+  }, [pageCount, settings.motion, settings.results_auto_rotate, settings.results_page_seconds])
   const shown = questions.slice(page * pageSize, (page + 1) * pageSize)
   return <><div className="flb-confetti">{Array.from({ length: 24 }, (_, i) => <i style={{ '--x': `${3 + i * 4}%`, '--delay': `${-i * .27}s` }} key={i}/>)}</div><Brand state={state} settings={settings}/><div className="flb-content flb-final-wrap">
-    <div className="flb-final-title"><div><Kicker>Complete activity summary</Kicker><h1>{settings.final_title || 'Every question. One shared result.'}</h1></div>{pageCount > 1 && <span>Results {page * pageSize + 1}–{Math.min(questions.length, (page + 1) * pageSize)} of {questions.length}</span>}</div>
+    <div className="flb-final-title"><div><Kicker>{settings.rehearsal_mode ? 'Rehearsal preview · analytics unaffected' : settings.results_frozen ? 'Frozen verified snapshot' : 'Live activity summary'}</Kicker><h1>{settings.final_title || 'Every question. One shared result.'}</h1></div>{pageCount > 1 && <span>Results {page * pageSize + 1}–{Math.min(questions.length, (page + 1) * pageSize)} of {questions.length}</span>}</div>
     <section className="flb-final-kpis">
       <article><span>Voices</span><strong>{summary.participant_count ?? state.participant_count ?? 0}</strong><small>participants</small></article>
       <article><span>Answers</span><strong>{summary.response_count ?? state.response_count ?? 0}</strong><small>across all questions</small></article>
@@ -219,7 +223,7 @@ function FinalResultsScene({ state, settings }) {
     </section>
     <section className={`flb-final-grid is-${shown.length}`}>{shown.map((question, index) => <FinalQuestionSummary key={question.question_id} question={question} index={page * pageSize + index}/>)}</section>
     {pageCount > 1 && <div className="flb-final-pages">{Array.from({ length: pageCount }, (_, index) => <i className={index === page ? 'active' : ''} key={index}/>)}</div>}
-  </div><Footer left={`${questions.length} questions · complete verified summary`} right="Thank you for taking part" live/></>
+  </div><Footer left={`${questions.length} questions · ${settings.rehearsal_mode ? 'simulated rehearsal' : settings.results_frozen ? 'snapshot frozen' : 'updating live'}`} right={settings.results_auto_rotate === false && pageCount > 1 ? `Page ${page + 1} of ${pageCount}` : 'Thank you for taking part'} live={!settings.results_frozen}/></>
 }
 
 const RATING_TYPES = ['rating_5', 'rating_10', 'nps']
@@ -730,6 +734,8 @@ function SceneContent({ scene, state, settings, currentQuestion, countdown, ques
 
   if (scene === 'countdown') return <><Brand state={state} settings={settings}/><div className="flb-content flb-center"><div className="flb-countdown flb-gradient">{String(Math.floor(countdown / 60)).padStart(2, '0')}:{String(countdown % 60).padStart(2, '0')}</div><div className="flb-count-label">Until we begin together</div><p className="flb-subhead">{state.participant_count || 0} people are connected. Join now to take part.</p></div><Footer left="Live captions and interpretation available" right="Starting soon" live/></>
 
+  if (scene === 'all_results') return <FinalResultsScene state={state} settings={settings}/>
+
   if (scene === 'celebration' && state.display_config?.show_mode === 'guided' && state.display_config?.show_phase === 'complete') return <FinalResultsScene state={state} settings={settings}/>
 
   if (scene === 'celebration') return <><div className="flb-confetti">{Array.from({ length: 28 }, (_, i) => <i style={{ '--x': `${3 + i * 3.6}%`, '--delay': `${-i * .27}s` }} key={i}/>)}</div><Brand state={state} settings={settings}/><div className="flb-content flb-center"><div className="flb-trophy">◆</div><Kicker>{settings.kicker || 'Collective milestone unlocked'}</Kicker><h1 className="flb-headline flb-gradient">{settings.title || `${state.response_count || 0} ideas shared!`}</h1><p className="flb-subhead">{settings.message || 'This room just turned participation into shared momentum.'}</p></div><Footer left="Every contribution helped reach this moment" right="Celebrate" live/></>
@@ -741,7 +747,7 @@ export default function LiveBroadcastCanvas({ state, connected = true, onPresent
   const display = state.display || {}
   const settings = display.settings || {}
   const scene = resolveScene(display.scene || state.display_config?.display_scene || 'welcome', state, settings)
-  const currentQuestion = useMemo(() => state.questions?.find((q) => q.question_id === state.current_question_id), [state.questions, state.current_question_id])
+  const currentQuestion = useMemo(() => state.questions?.find((q) => q.question_id === (settings.results_question_id || state.current_question_id)), [state.questions, state.current_question_id, settings.results_question_id])
   const [countdown, setCountdown] = useState(settings.countdown_seconds ?? 298)
   const [clock, setClock] = useState(Date.now())
 

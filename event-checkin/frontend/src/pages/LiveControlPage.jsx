@@ -3,7 +3,7 @@ import { api } from '../api'
 
 const BROADCAST_SCENES = [
   ['welcome', 'Welcome'], ['join', 'Join / QR'], ['agenda', 'Agenda'], ['question', 'Question'],
-  ['responding', 'Voting'], ['results', 'Results'], ['correct_answer', 'Answer'], ['leaderboard', 'Leaderboard'],
+  ['responding', 'Voting'], ['results', 'Current result'], ['all_results', 'All results'], ['correct_answer', 'Answer'], ['leaderboard', 'Leaderboard'],
   ['team_battle', 'Teams'], ['rating', 'Rating'], ['feedback', 'Feedback'], ['word_cloud', 'Word cloud'],
   ['q_and_a', 'Q&A'], ['room_pulse', 'Room pulse'], ['ai_insight', 'AI insight'], ['idea_galaxy', 'Idea galaxy'],
   ['announcement', 'Announcement'], ['break', 'Break'], ['countdown', 'Countdown'], ['celebration', 'Celebrate'],
@@ -56,6 +56,8 @@ export default function LiveControlPage() {
   const [displayId, setDisplayId] = useState(null)
   const [error, setError] = useState('')
   const [busy, setBusy] = useState(false)
+  const [resultQuestionIds, setResultQuestionIds] = useState([])
+  const [resultPageSeconds, setResultPageSeconds] = useState(8)
   const [clock, setClock] = useState(Date.now())
   useEffect(() => { const timer = setInterval(() => setClock(Date.now()), 500); return () => clearInterval(timer) }, [])
 
@@ -141,7 +143,43 @@ export default function LiveControlPage() {
     } catch (e) { setError(e.message) } finally { setBusy(false) }
   }
 
+  async function presentResults(mode, extra = {}) {
+    if (!displayId || !activityId || !resultQuestionIds.length) return
+    setBusy(true); setError('')
+    try {
+      const currentDisplay = displays?.find((display) => display.id === displayId)
+      const settings = currentDisplay?.settings || {}
+      const configuredCurrent = resultQuestionIds.includes(settings.results_question_id) ? settings.results_question_id : null
+      const activityCurrent = resultQuestionIds.includes(activity.config?.current_question_id) ? activity.config.current_question_id : null
+      const updated = await api.liveControlPresentResults(token, displayId, {
+        activity_id: activityId, mode,
+        question_id: mode === 'current' ? (extra.question_id || configuredCurrent || activityCurrent || resultQuestionIds[0]) : null,
+        question_ids: resultQuestionIds,
+        freeze: extra.freeze ?? !!settings.results_frozen,
+        page: extra.page ?? Number(settings.results_page || 0),
+        auto_rotate: extra.auto_rotate ?? settings.results_auto_rotate !== false,
+        page_seconds: Number(resultPageSeconds) || 8,
+      })
+      setDisplays((current) => (current || []).map((display) => display.id === updated.id ? updated : display))
+    } catch (e) { setError(e.message) } finally { setBusy(false) }
+  }
+  async function setRehearsal(enabled) {
+    if (!displayId) return
+    setBusy(true); setError('')
+    try {
+      const updated = await api.liveControlSetRehearsal(token, displayId, { activity_id: activityId, enabled, participants: 10 })
+      setDisplays((current) => (current || []).map((display) => display.id === updated.id ? updated : display))
+    } catch (e) { setError(e.message) } finally { setBusy(false) }
+  }
+
   const selectedDisplay = displays?.find((display) => display.id === displayId)
+  useEffect(() => {
+    if (!activity?.questions?.length) { setResultQuestionIds([]); return }
+    const activeIds = activity.questions.filter((question) => question.status === 'active').map((question) => question.id)
+    const configured = (selectedDisplay?.settings?.results_question_ids || []).filter((questionId) => activeIds.includes(questionId))
+    setResultQuestionIds(configured.length ? configured : activeIds)
+    setResultPageSeconds(selectedDisplay?.settings?.results_page_seconds || 8)
+  }, [activity?.id, activity?.questions?.length, selectedDisplay?.id, selectedDisplay?.settings?.results_question_ids, selectedDisplay?.settings?.results_page_seconds])
   const currentQuestionIndex = activity?.questions?.findIndex((question) => question.id === activity.config?.current_question_id) ?? -1
   const currentQuestion = currentQuestionIndex >= 0 ? activity.questions[currentQuestionIndex] : null
   const currentResult = results?.questions?.find((question) => question.question_id === currentQuestion?.id)
@@ -151,6 +189,8 @@ export default function LiveControlPage() {
   const automationRemaining = activity?.config?.show_automation_enabled && activity.config?.show_phase_deadline_at
     ? Math.max(0, Math.ceil((new Date(activity.config.show_phase_deadline_at).getTime() - clock) / 1000))
     : null
+  const resultPageCount = Math.max(1, Math.ceil(resultQuestionIds.length / 6))
+  const resultPage = Math.min(resultPageCount - 1, Number(selectedDisplay?.settings?.results_page || 0))
 
   return (
     <div className="min-h-screen bg-slate-50 px-4 py-8 dark:bg-slate-950">
@@ -196,6 +236,16 @@ export default function LiveControlPage() {
                   {displays?.length ? <div className="mt-4 grid gap-4">
                     <div className="flex gap-2"><select value={displayId || ''} onChange={(e) => setDisplayId(e.target.value)} className="min-w-0 flex-1 rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm font-bold dark:border-slate-700 dark:bg-slate-950 dark:text-white">{displays.map((display) => <option key={display.id} value={display.id}>{display.name}</option>)}</select><button type="button" disabled={busy || selectedDisplay?.assigned_activity_id === activityId} onClick={() => updateDisplay({ assigned_activity_id: activityId })} className="rounded-xl border border-slate-300 px-3 py-2 text-xs font-extrabold text-slate-700 disabled:opacity-40 dark:text-white">Use this activity</button></div>
                     <div className="grid grid-cols-2 gap-2"><button type="button" disabled={busy} onClick={() => updateDisplay({ assigned_activity_id: activityId, settings: { control_mode: 'guided', follow_activity: true } })} className={`rounded-xl border-2 px-3 py-2 text-xs font-extrabold ${selectedDisplay?.settings?.control_mode === 'guided' ? 'border-teal-400 bg-teal-50 text-teal-800' : 'border-slate-200 text-slate-600'}`}>Guided by activity</button><button type="button" disabled={busy} onClick={() => updateDisplay({ settings: { control_mode: 'manual', follow_activity: false } })} className={`rounded-xl border-2 px-3 py-2 text-xs font-extrabold ${selectedDisplay?.settings?.control_mode === 'manual' ? 'border-fuchsia-400 bg-fuchsia-50 text-fuchsia-800' : 'border-slate-200 text-slate-600'}`}>Manual broadcast</button></div>
+                    <div className="rounded-2xl border border-violet-200 bg-gradient-to-br from-teal-50 via-white to-violet-50 p-3 dark:border-violet-800 dark:from-slate-900 dark:via-slate-900 dark:to-violet-950">
+                      <div className="flex items-start justify-between gap-3"><div><div className="text-[10px] font-black uppercase tracking-[.16em] text-teal-700 dark:text-teal-300">Results-only control</div><div className="mt-1 text-sm font-black text-slate-900 dark:text-white">Show the outcome immediately</div></div><span className="rounded-full bg-slate-900 px-2 py-1 text-[9px] font-black uppercase text-teal-300">{selectedDisplay?.settings?.rehearsal_mode ? 'Rehearsal' : selectedDisplay?.settings?.results_frozen ? 'Frozen' : 'Ready'}</span></div>
+                      <div className="mt-3 grid grid-cols-2 gap-2"><button type="button" disabled={busy || !resultQuestionIds.length} onClick={() => presentResults('current')} className="rounded-xl border-2 border-teal-300 px-3 py-2 text-xs font-extrabold text-teal-800 dark:text-teal-200">Current result</button><button type="button" disabled={busy || !resultQuestionIds.length} onClick={() => presentResults('all')} className="rounded-xl bg-gradient-to-r from-teal-300 to-violet-400 px-3 py-2 text-xs font-black text-slate-950">All results</button></div>
+                      <div className="mt-2 grid grid-cols-2 gap-2"><button type="button" disabled={busy || !['results', 'all_results'].includes(selectedDisplay?.scene)} onClick={() => presentResults(selectedDisplay?.settings?.results_mode || 'all', { freeze: !selectedDisplay?.settings?.results_frozen })} className="rounded-xl border border-slate-300 px-3 py-2 text-[11px] font-extrabold dark:text-white">{selectedDisplay?.settings?.results_frozen ? 'Return to live' : 'Freeze now'}</button><button type="button" disabled={busy} onClick={() => updateDisplay({ assigned_activity_id: activityId, scene: 'join', settings: { control_mode: 'manual', follow_activity: false, rehearsal_mode: false, results_frozen: false, results_snapshot: null } })} className="rounded-xl border border-slate-300 px-3 py-2 text-[11px] font-extrabold dark:text-white">Join screen</button></div>
+                      <div className="mt-2 grid grid-cols-[auto_1fr_auto] items-center gap-2"><button type="button" disabled={busy || resultPage <= 0} onClick={() => presentResults('all', { auto_rotate: false, page: resultPage - 1 })} className="rounded-lg border border-slate-300 px-2 py-1.5 text-[10px] font-black">←</button><div className="text-center text-[10px] font-extrabold text-slate-500">Page {resultPage + 1}/{resultPageCount}</div><button type="button" disabled={busy || resultPage >= resultPageCount - 1} onClick={() => presentResults('all', { auto_rotate: false, page: resultPage + 1 })} className="rounded-lg border border-slate-300 px-2 py-1.5 text-[10px] font-black">→</button></div>
+                      <div className="mt-2 flex flex-wrap items-center gap-3 text-[10px] font-extrabold text-slate-600 dark:text-slate-300"><label className="flex items-center gap-1"><input type="checkbox" checked={selectedDisplay?.settings?.results_auto_rotate !== false} onChange={(event) => presentResults('all', { auto_rotate: event.target.checked, page: resultPage })}/> Auto-rotate</label><label className="flex items-center gap-1">Every <input className="w-12 rounded border px-1 py-0.5 dark:bg-slate-950" type="number" min="3" max="60" value={resultPageSeconds} onChange={(event) => setResultPageSeconds(event.target.value)}/> sec</label></div>
+                      <div className="mt-3 flex flex-wrap gap-2"><button type="button" disabled={busy} onClick={() => updateDisplay({ assigned_activity_id: activityId, settings: { control_mode: 'guided', follow_activity: true, rehearsal_mode: false, results_frozen: false, results_snapshot: null } })} className="rounded-lg border border-violet-300 px-2.5 py-1.5 text-[10px] font-black text-violet-700 dark:text-violet-200">Resume guided display</button><button type="button" disabled={busy} onClick={() => setRehearsal(!selectedDisplay?.settings?.rehearsal_mode)} className="rounded-lg border border-amber-300 px-2.5 py-1.5 text-[10px] font-black text-amber-700 dark:text-amber-200">{selectedDisplay?.settings?.rehearsal_mode ? 'End rehearsal' : 'Rehearse 10 guests'}</button></div>
+                      <details className="mt-3"><summary className="cursor-pointer text-[10px] font-black text-slate-500">Choose result cards ({resultQuestionIds.length})</summary><div className="mt-2 grid gap-1">{activity.questions.filter((question) => question.status === 'active').map((question) => <label key={question.id} className="flex items-start gap-2 rounded-lg border border-slate-200 bg-white p-2 text-[10px] font-bold dark:border-slate-700 dark:bg-slate-950"><input type="checkbox" checked={resultQuestionIds.includes(question.id)} onChange={(event) => setResultQuestionIds((current) => event.target.checked ? [...current, question.id] : current.filter((questionId) => questionId !== question.id))}/><span className="flex-1">{question.prompt}</span><button type="button" onClick={(event) => { event.preventDefault(); presentResults('current', { question_id: question.id }) }} className="font-black text-teal-700">Show</button></label>)}</div></details>
+                      <p className="mt-2 text-[9px] font-bold text-slate-400">Rehearsal is display-only and never changes participant analytics.</p>
+                    </div>
                     <div><div className="mb-2 text-xs font-extrabold text-slate-500">Manual scenes</div><div className="grid grid-cols-3 gap-1.5">{BROADCAST_SCENES.map(([key, label]) => <button type="button" disabled={busy} key={key} onClick={() => updateDisplay({ scene: key, settings: { control_mode: 'manual', follow_activity: false } })} className={`min-h-10 rounded-lg border px-2 py-1 text-[11px] font-extrabold ${selectedDisplay?.scene === key && selectedDisplay?.settings?.control_mode !== 'guided' ? 'border-fuchsia-500 bg-fuchsia-50 text-fuchsia-800 dark:bg-fuchsia-950 dark:text-fuchsia-200' : 'border-slate-200 text-slate-600 dark:border-slate-700 dark:text-slate-300'}`}>{label}</button>)}</div></div>
                     <div className="flex flex-wrap items-center justify-between gap-3"><div className="flex items-center gap-2">{BROADCAST_THEMES.map(([theme, color]) => <button type="button" key={theme} title={theme} aria-label={`${theme} theme`} onClick={() => updateDisplay({ settings: { theme } })} style={{ background: color }} className={`h-8 w-8 rounded-full border-4 ${selectedDisplay?.settings?.theme === theme || (!selectedDisplay?.settings?.theme && theme === 'aurora') ? 'border-slate-950 dark:border-white' : 'border-white dark:border-slate-900'} shadow ring-1 ring-slate-300`}/>)}</div><div className="flex gap-3 text-xs font-bold text-slate-600 dark:text-slate-300"><label className="flex items-center gap-1"><input type="checkbox" checked={selectedDisplay?.settings?.motion !== false} onChange={(e) => updateDisplay({ settings: { motion: e.target.checked } })}/> Motion</label><label className="flex items-center gap-1"><input type="checkbox" checked={!!selectedDisplay?.settings?.safe_area} onChange={(e) => updateDisplay({ settings: { safe_area: e.target.checked } })}/> Safe area</label><label className="flex items-center gap-1"><input type="checkbox" checked={!!selectedDisplay?.settings?.follow_activity} onChange={(e) => updateDisplay({ settings: { follow_activity: e.target.checked } })}/> Auto-follow</label></div></div>
                   </div> : <p className="mt-4 text-sm text-slate-400">An event admin must create a display before it can be controlled here.</p>}

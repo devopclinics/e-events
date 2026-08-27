@@ -279,7 +279,8 @@ async def list_activities(identity: Identity = Depends(current_identity), db: As
 async def list_live_activities(identity: Identity = Depends(current_identity), db: AsyncSession = Depends(get_db)):
     """Guest-visible discovery — what's open to join right now. Staff can hit
     this too (it's just a filtered view of the admin listing above)."""
-    statuses = ("live", "paused", "closed", "completed") if identity.identity_kind == "guest" else ("live", "paused")
+    can_present_results = identity.identity_kind == "staff" and (identity.role in ("owner", "admin", "presenter") or "control" in identity.capabilities)
+    statuses = ("live", "paused", "closed", "completed") if identity.identity_kind == "guest" or can_present_results else ("live", "paused")
     rows = (await db.execute(
         select(EngagementActivity)
         .where(

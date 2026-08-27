@@ -9,7 +9,7 @@ from app.auth import Identity, require_activity_session, require_admin, require_
 from app.config import settings
 from app.moderation import flag_public_text
 from app.realtime import mint_realtime_ticket, publish, verify_realtime_ticket
-from app.routers.operations import _csv_safe
+from app.routers.operations import _apply_results_view, _csv_safe, _rehearsal_payload
 from app.routers.activities import _apply_guided_advance, _guided_next_phase, _guided_phase_deadline
 from app.routers.participate import _leaderboard_name, _load_activity, _participant_locator, _rule_matches, _survey_completion_summary
 from app.scoring import score_choice_response
@@ -77,6 +77,35 @@ class SurveyDisplaySummaryTests(unittest.TestCase):
             "avg_completion_seconds": 150.0,
             "answer_count": 42,
         })
+
+
+class ResultsOnlyDisplayTests(unittest.TestCase):
+    @staticmethod
+    def payload():
+        return {
+            "activity_id": "activity-a", "participant_count": 10, "response_count": 20,
+            "activity_summary": {"question_count": 2, "participant_count": 10, "response_count": 20, "response_rate": 100},
+            "questions": [
+                {"question_id": "q1", "question_type": "single_choice", "prompt": "First", "response_count": 10, "option_labels": {"a": "A", "b": "B"}, "option_counts": {}},
+                {"question_id": "q2", "question_type": "word_cloud", "prompt": "Second", "response_count": 10, "option_labels": {}, "word_cloud": []},
+            ],
+        }
+
+    def test_result_selection_is_ordered_and_recalculates_summary(self):
+        viewed = _apply_results_view(self.payload(), {"results_mode": "all", "results_question_ids": ["q2"]})
+        self.assertEqual([question["question_id"] for question in viewed["questions"]], ["q2"])
+        self.assertEqual(viewed["activity_summary"]["question_count"], 1)
+        self.assertEqual(viewed["activity_summary"]["response_count"], 10)
+
+    def test_rehearsal_is_a_pure_display_snapshot(self):
+        source = self.payload()
+        rehearsed = _rehearsal_payload(source, 10)
+        self.assertEqual(source["questions"][0]["option_counts"], {})
+        self.assertEqual(rehearsed["participant_count"], 10)
+        self.assertEqual(rehearsed["response_count"], 20)
+        self.assertEqual(sum(rehearsed["questions"][0]["option_counts"].values()), 10)
+        self.assertTrue(rehearsed["questions"][1]["word_cloud"])
+        self.assertTrue(rehearsed["display_config"]["rehearsal_mode"])
 
 
 class GuidedShowPhaseTests(unittest.TestCase):

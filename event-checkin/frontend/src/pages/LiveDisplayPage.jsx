@@ -2,6 +2,15 @@ import { useEffect, useRef, useState } from 'react'
 import { useParams } from 'react-router-dom'
 import LiveBroadcastCanvas from '../components/LiveBroadcastCanvas'
 
+const PREVIEW_SCENES = new Set([
+  'welcome', 'join', 'agenda', 'question', 'responding', 'results', 'survey_insights',
+  'correct_answer', 'leaderboard', 'team_battle', 'rating', 'feedback', 'word_cloud',
+  'q_and_a', 'room_pulse', 'ai_insight', 'idea_galaxy', 'live_spectrum',
+  'interactive_quadrant', 'image_heatmap', 'ranking_race', 'prediction_reveal',
+  'commitment_wall', 'photo_mosaic', 'location_map', 'journey_recap',
+  'spotlight_wheel', 'announcement', 'break', 'countdown', 'celebration', 'custom_message',
+])
+
 function programAgenda(sessions = [], assignedSessionId = '') {
   if (!sessions.length) return []
   const now = Date.now()
@@ -27,7 +36,10 @@ function programAgenda(sessions = [], assignedSessionId = '') {
 // no staff or participant capability and can be rotated independently.
 export default function LiveDisplayPage() {
   const { activityId, displayCode } = useParams()
-  const token = new URLSearchParams(window.location.search).get('token') || ''
+  const query = new URLSearchParams(window.location.search)
+  const token = query.get('token') || ''
+  const requestedPreviewScene = query.get('previewScene') || ''
+  const previewScene = PREVIEW_SCENES.has(requestedPreviewScene) ? requestedPreviewScene : ''
   const [state, setState] = useState(null)
   const [error, setError] = useState('')
   const [connected, setConnected] = useState(true)
@@ -50,6 +62,24 @@ export default function LiveDisplayPage() {
             ...(nextState.display?.settings || {}),
             agenda: programAgenda(data.program_sessions, nextState.display?.assigned_session_id),
           },
+        }
+      }
+      // Admin display cards can audition a scene without changing the real TV.
+      // Force follow_activity off only in this in-browser preview so the chosen
+      // scene is not immediately replaced by the activity's current live state.
+      if (previewScene) {
+        if (displayCode) {
+          nextState.display = {
+            ...nextState.display,
+            scene: previewScene,
+            settings: { ...(nextState.display?.settings || {}), follow_activity: false },
+          }
+        } else {
+          nextState.display_config = {
+            ...(nextState.display_config || {}),
+            display_scene: previewScene,
+            follow_activity: false,
+          }
         }
       }
       try {
@@ -85,7 +115,7 @@ export default function LiveDisplayPage() {
     ;['response.submitted', 'question.changed', 'question.state_changed', 'qna.submitted', 'qna.upvoted', 'qna.moderated', 'activity.status_changed'].forEach((name) => events.addEventListener(name, refresh))
     const poll = setInterval(load, 5000)
     return () => { events.close(); clearInterval(poll) }
-  }, [activityId, displayCode, token, streamVersion]) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [activityId, displayCode, token, previewScene, streamVersion]) // eslint-disable-line react-hooks/exhaustive-deps
 
   if (error) return <div className="grid min-h-screen place-items-center bg-[#07070d] px-8 text-center text-2xl font-extrabold text-white"><div><div className="mb-3 text-sm uppercase tracking-[.25em] text-fuchsia-400">Festio Live</div>{error}</div></div>
   if (!state) return <div className="grid min-h-screen place-items-center bg-[#07070d] text-sm font-bold uppercase tracking-[.22em] text-slate-500">Connecting to Festio Broadcast…</div>

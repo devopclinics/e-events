@@ -127,6 +127,10 @@ class ActivitySummary(BaseModel):
     # "Submit Feedback" (see ActivityParticipant.completed_at). Always 0 for
     # every other activity type, since nothing else ever sets it.
     completed_count: int = 0
+    # Survey/feedback only — average seconds between joining and pressing
+    # Submit Feedback, across completed participants. Null when there are no
+    # completions yet (or for any other activity type, which never has one).
+    avg_completion_seconds: float | None = None
     config: dict[str, Any] = Field(default_factory=dict)
 
 
@@ -363,9 +367,13 @@ class AnalysisJobOut(BaseModel):
 
 DisplayScene = Literal[
     "welcome", "join", "agenda", "question", "responding", "results",
+    "survey_insights",
     "correct_answer", "leaderboard", "team_battle", "rating", "feedback",
     "word_cloud", "q_and_a", "room_pulse", "ai_insight", "idea_galaxy",
-    "announcement", "break", "countdown", "celebration", "custom_message",
+    "live_spectrum", "interactive_quadrant", "image_heatmap", "ranking_race",
+    "prediction_reveal", "commitment_wall", "photo_mosaic", "location_map",
+    "journey_recap", "spotlight_wheel", "announcement", "break", "countdown",
+    "celebration", "custom_message",
 ]
 DisplayTheme = Literal["aurora", "citrus", "ocean", "festio", "mono"]
 

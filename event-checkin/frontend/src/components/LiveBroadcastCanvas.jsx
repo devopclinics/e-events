@@ -35,10 +35,20 @@ function useRegisteredCount(eventId, enabled) {
   return registeredCount
 }
 
+function displayJoinCode(state, settings) {
+  return state.live_join_code || settings.join_code || state.display_config?.join_code || 'FESTIO'
+}
+
 function Brand({ state, settings }) {
+  const joinCode = displayJoinCode(state, settings)
   return <div className="flb-top">
     <div className="flb-brand"><span className="flb-mark">F</span>Festio Live</div>
-    <div className="flb-event">{settings.event_name || state.display_config?.event_name || state.title}<span className="flb-connected">● {state.participant_count || 0} connected</span></div>
+    <div className="flb-event-name"><small>Live event</small><strong>{settings.event_name || state.display_config?.event_name || state.title}</strong></div>
+    <div className="flb-join-dock">
+      <img src={`/api/events/${encodeURIComponent(state.event_id || '')}/live/join-qr.png`} alt="QR code to join Festio Live"/>
+      <div><small>Join live</small><strong>{joinCode}</strong><span>festio.events/live</span></div>
+      <b>● {state.participant_count || 0} connected</b>
+    </div>
   </div>
 }
 
@@ -150,17 +160,416 @@ function SurveySummaryGrid({ state }) {
   </div>
 }
 
+const RATING_TYPES = ['rating_5', 'rating_10', 'nps']
+
+// A curated aggregate view for a survey/feedback activity's public display —
+// used instead of SurveySummaryGrid once a survey has more than a handful of
+// questions (see the scene dispatch below), where one raw tile per question
+// stops being readable on a TV. Fixed-height, no-scroll dashboard: two
+// columns (headline rating + compact experience-ratings list on the left,
+// choice donuts + a ranking chart on the right) plus a footer strip for
+// number stats and "+N more in the full report" — a TV/projector isn't
+// scrollable by anyone in the room, so every section is capped hard enough
+// to fit in one screen rather than growing with the question count. Never
+// shows raw open-text content (per Festio Live's own moderation-first
+// design — AI-analyzed themes belong in the organizer's report, not here).
+const DASHBOARD_MAX_RATINGS = 8
+const DASHBOARD_MAX_CHOICES = 2
+// A donut's legend column only has room for short labels in a handful of
+// options — "Labor Day weekend / early September" as one of six options
+// doesn't fit no matter how the legend wraps. Past this, a compact bar list
+// (already used below for multiple_choice) reads far better on a TV.
+const DASHBOARD_DONUT_MAX_OPTIONS = 4
+const DASHBOARD_DONUT_MAX_LABEL_LEN = 18
+function isDonutFriendly(q) {
+  const labels = Object.values(q.option_labels || {})
+  return labels.length > 0 && labels.length <= DASHBOARD_DONUT_MAX_OPTIONS && !labels.some((label) => (label || '').length > DASHBOARD_DONUT_MAX_LABEL_LEN)
+}
+
+function SurveyDashboard({ state }) {
+  const questions = state.questions || []
+  const ratings = questions.filter((q) => RATING_TYPES.includes(q.question_type))
+  const choices = questions.filter((q) => SINGLE_SELECT_TYPES.includes(q.question_type))
+  const multi = questions.filter((q) => q.question_type === 'multiple_choice')
+  const numbers = questions.filter((q) => q.question_type === 'number')
+  const textCount = questions.filter((q) => ['short_text', 'long_text', 'word_cloud'].includes(q.question_type))
+    .reduce((sum, q) => sum + (q.response_count || 0), 0)
+
+  const [headline, ...otherRatings] = ratings
+  const shownRatings = otherRatings.slice(0, DASHBOARD_MAX_RATINGS)
+  const shownChoices = choices.slice(0, DASHBOARD_MAX_CHOICES)
+  const donutChoices = shownChoices.filter(isDonutFriendly)
+  const barChoices = shownChoices.filter((q) => !isDonutFriendly(q))
+  const hiddenCount = (choices.length - shownChoices.length) + Math.max(0, otherRatings.length - shownRatings.length) + Math.max(0, multi.length - 1)
+
+  return (
+    <div className="flb-survey-dashboard">
+      <div className="flb-survey-col">
+        {headline && (
+          <div className="flb-survey-headline-card">
+            <span>{headline.prompt}</span>
+            {headline.average_rating != null
+              ? <div className="flb-survey-headline-value"><strong>{headline.average_rating.toFixed(1)}</strong><StarRating average={headline.average_rating} max={headline.question_type === 'rating_5' ? 5 : 10}/></div>
+              : <span className="flb-survey-waiting">No ratings yet</span>}
+          </div>
+        )}
+        {shownRatings.length > 0 && (
+          <div className="flb-survey-section">
+            <Kicker>Experience ratings</Kicker>
+            <div className="flb-survey-bars flb-survey-bars-compact">
+              {shownRatings.map((q) => (
+                <div className="flb-survey-bar-row" key={q.question_id}>
+                  <span>{q.prompt.replace(/^How would you rate:?\s*/i, '').replace(/\?$/, '')}</span>
+                  {q.average_rating != null
+                    ? <><i style={{ width: `${(q.average_rating / 5) * 100}%` }} /><b>{q.average_rating.toFixed(1)}</b></>
+                    : <><i style={{ width: '0%' }} /><b className="flb-survey-waiting">—</b></>}
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+      </div>
+      <div className="flb-survey-col">
+        {shownChoices.length > 0 && (
+          <div className="flb-survey-section">
+            <Kicker>What people chose</Kicker>
+            {donutChoices.length > 0 && (
+              <div className="flb-survey-choice-grid flb-survey-choice-grid-compact">
+                {donutChoices.map((q) => {
+                  const segments = Object.entries(q.option_labels || {}).map(([id, label]) => ({ id, label, value: q.option_counts?.[id] || 0 }))
+                  const hasResponses = segments.some((segment) => segment.value > 0)
+                  return (
+                    <div className="flb-survey-cell" key={q.question_id}>
+                      <h4>{q.prompt}</h4>
+                      {hasResponses ? <div className="flb-donut-row"><DonutChart segments={segments}/><DonutLegend segments={segments}/></div> : <span className="flb-survey-waiting">No responses yet</span>}
+                    </div>
+                  )
+                })}
+              </div>
+            )}
+            {barChoices.map((q) => {
+              const items = Object.entries(q.option_labels || {}).map(([id, label]) => ({ id, label, score: q.option_counts?.[id] || 0 }))
+                .sort((a, b) => b.score - a.score).slice(0, 5)
+              const hasResponses = items.some((item) => item.score > 0)
+              return (
+                <div className="flb-survey-cell flb-survey-cell-full" key={q.question_id}>
+                  <h4>{q.prompt}</h4>
+                  {hasResponses ? <RankingChart items={items}/> : <span className="flb-survey-waiting">No responses yet</span>}
+                </div>
+              )
+            })}
+          </div>
+        )}
+        {multi[0] && (() => {
+          const q = multi[0]
+          const items = Object.entries(q.option_labels || {}).map(([id, label]) => ({ id, label, score: q.option_counts?.[id] || 0 }))
+          const hasResponses = items.some((item) => item.score > 0)
+          return (
+            <div className="flb-survey-section">
+              <Kicker>{q.prompt}</Kicker>
+              {hasResponses ? <RankingChart items={items}/> : <span className="flb-survey-waiting">No responses yet</span>}
+            </div>
+          )
+        })()}
+      </div>
+      <div className="flb-survey-dashboard-footer">
+        {numbers.slice(0, 2).map((q) => {
+          const values = q.numeric_values || []
+          const average = values.length ? values.reduce((sum, value) => sum + value, 0) / values.length : null
+          return (
+            <div className="flb-survey-stat flb-survey-stat-inline" key={q.question_id}>
+              {average != null ? <strong>{average.toFixed(1)}</strong> : <span className="flb-survey-waiting">—</span>}
+              <span>{q.prompt}</span>
+            </div>
+          )
+        })}
+        {textCount > 0 && <span className="flb-survey-more-note">+{textCount} written response{textCount === 1 ? '' : 's'} collected</span>}
+        {hiddenCount > 0 && <span className="flb-survey-more-note">+{hiddenCount} more in the full report</span>}
+      </div>
+    </div>
+  )
+}
+
+function formatSurveyDuration(seconds) {
+  if (seconds == null || !Number.isFinite(Number(seconds))) return '—'
+  const rounded = Math.max(0, Math.round(Number(seconds)))
+  return `${String(Math.floor(rounded / 60)).padStart(2, '0')}:${String(rounded % 60).padStart(2, '0')}`
+}
+
+function surveyQuestionById(questions, questionId) {
+  return questionId ? questions.find((question) => question.question_id === questionId) : null
+}
+
+function compactSurveySegments(question, limit = 4) {
+  const ranked = Object.entries(question?.option_labels || {})
+    .map(([id, label]) => ({ id, label, value: question.option_counts?.[id] || 0 }))
+    .sort((a, b) => b.value - a.value)
+  if (ranked.length <= limit) return ranked
+  const visible = ranked.slice(0, limit - 1)
+  const remainder = ranked.slice(limit - 1).reduce((sum, segment) => sum + segment.value, 0)
+  return [...visible, { id: `${question.question_id}-other`, label: 'Other choices', value: remainder }]
+}
+
+function SurveyInsightKpi({ icon, label, value, note, tone }) {
+  return <div className={`flb-si-kpi flb-si-tone-${tone}`}>
+    <span className="flb-si-kpi-icon" aria-hidden="true">{icon}</span>
+    <div><small>{label}</small><strong>{value}</strong>{note && <em>{note}</em>}</div>
+  </div>
+}
+
+function SurveyInsightDonutCard({ question, title }) {
+  const segments = compactSurveySegments(question)
+  const total = Math.max(1, segments.reduce((sum, segment) => sum + segment.value, 0))
+  return <article className="flb-si-card flb-si-choice-card">
+    <h2>{title || question?.prompt || 'Audience choice'}</h2>
+    {segments.some((segment) => segment.value > 0) ? <div className="flb-si-donut-body">
+      <DonutChart segments={segments} size={7.2}/>
+      <div className="flb-si-legend">{segments.map((segment, index) => <div key={segment.id}>
+        <i style={{ background: segment.color || `var(--flb-chart-${(index % 6) + 1})` }}/>
+        <span title={segment.label}>{segment.label}</span>
+        <b>{Math.round((segment.value / total) * 100)}%</b>
+      </div>)}</div>
+    </div> : <span className="flb-survey-waiting">Waiting for responses</span>}
+  </article>
+}
+
+function SurveyInsightPriorityCard({ question, title }) {
+  const denominator = Math.max(1, question?.response_count || 0)
+  const items = Object.entries(question?.option_labels || {})
+    .map(([id, label]) => ({ id, label, count: question.option_counts?.[id] || 0 }))
+    .filter((item) => item.count > 0)
+    .sort((a, b) => b.count - a.count)
+    .slice(0, 6)
+  return <article className="flb-si-card flb-si-priorities">
+    <h2>{title || 'What Attendees Want More Of'}</h2>
+    {items.length ? <div className="flb-si-priority-bars">{items.map((item, index) => {
+      const percent = Math.round((item.count / denominator) * 100)
+      return <div className="flb-si-priority-row" key={item.id}>
+        <span title={item.label}>{item.label}</span>
+        <i><b style={{ width: `${percent}%`, '--priority-index': index }}/></i>
+        <strong>{percent}%</strong>
+      </div>
+    })}</div> : <span className="flb-survey-waiting">Waiting for priorities</span>}
+  </article>
+}
+
+function SurveyInsightHouseholdCard({ householdQuestion, youthQuestion }) {
+  const householdValues = householdQuestion?.numeric_values || []
+  const youthValues = youthQuestion?.numeric_values || []
+  const householdTotal = householdValues.reduce((sum, value) => sum + Number(value || 0), 0)
+  const youthTotal = youthValues.reduce((sum, value) => sum + Number(value || 0), 0)
+  const householdAverage = householdValues.length ? householdTotal / householdValues.length : null
+  const youthAverage = youthValues.length ? youthTotal / youthValues.length : null
+  const metrics = [
+    ['◎', householdValues.length ? householdTotal.toLocaleString() : '—', 'likely attendees'],
+    ['◌', youthValues.length ? youthTotal.toLocaleString() : '—', 'youth'],
+    ['⌂', householdAverage != null ? householdAverage.toFixed(1) : '—', 'average household'],
+    ['◉', youthAverage != null ? youthAverage.toFixed(1) : '—', 'youth per household'],
+  ]
+  return <article className="flb-si-card flb-si-household">
+    <h2>Household Attendance</h2>
+    <div className="flb-si-household-grid">{metrics.map(([icon, value, label], index) => <div key={label}>
+      <span className={`flb-si-household-icon is-${index}`} aria-hidden="true">{icon}</span>
+      <strong>{value}</strong><small>{label}</small>
+    </div>)}</div>
+  </article>
+}
+
+function SurveyInsightRatingCard({ question }) {
+  const valueCounts = question?.value_counts || {}
+  const total = Math.max(1, Object.values(valueCounts).reduce((sum, count) => sum + count, 0))
+  const average = question?.average_rating
+  return <article className="flb-si-card flb-si-rating-card">
+    <h2>Overall Summit Rating</h2>
+    <div className="flb-si-rating-body">
+      <div className="flb-si-rating-score"><strong>{average != null ? average.toFixed(1) : '—'}</strong><StarRating average={average || 0} max={5}/><small>out of 5</small></div>
+      <div className="flb-si-rating-bars">{[5, 4, 3, 2, 1].map((rating) => {
+        const count = valueCounts[String(rating)] || 0
+        const percent = Math.round((count / total) * 100)
+        return <div key={rating}><span>{rating} Star{rating === 1 ? '' : 's'}</span><i><b style={{ width: `${percent}%` }}/></i><strong>{percent}%</strong></div>
+      })}</div>
+    </div>
+  </article>
+}
+
+function SurveyInsightsScene({ state, settings }) {
+  const questions = state.questions || []
+  const layout = state.display_config?.survey_insights_layout || settings.survey_insights_layout || {}
+  const ratings = questions.filter((question) => RATING_TYPES.includes(question.question_type))
+  const choices = questions.filter((question) => SINGLE_SELECT_TYPES.includes(question.question_type))
+  const numbers = questions.filter((question) => question.question_type === 'number')
+  const priorities = questions.filter((question) => question.question_type === 'multiple_choice')
+  const overallRating = surveyQuestionById(questions, layout.overall_rating_question_id)
+    || ratings.find((question) => /overall/i.test(question.prompt)) || ratings[0]
+  const configuredChoices = (layout.choice_question_ids || []).map((id) => surveyQuestionById(questions, id)).filter(Boolean)
+  const shownChoices = (configuredChoices.length ? configuredChoices : choices.slice(-4)).slice(0, 4)
+  const priorityQuestion = surveyQuestionById(questions, layout.priority_question_id)
+    || priorities.find((question) => /more of/i.test(question.prompt)) || priorities.at(-1)
+  const householdQuestions = (layout.household_question_ids || []).map((id) => surveyQuestionById(questions, id)).filter(Boolean)
+  const [householdQuestion, youthQuestion] = householdQuestions.length ? householdQuestions : numbers.slice(0, 2)
+  const summary = state.survey_summary
+  const completed = summary?.completed_count
+  const completionRate = summary?.completion_rate
+  const choiceTitles = layout.choice_titles || {}
+  const priorityItems = Object.entries(priorityQuestion?.option_labels || {})
+    .map(([id, label]) => ({ id, label, count: priorityQuestion.option_counts?.[id] || 0 }))
+    .filter((item) => item.count > 0).sort((a, b) => b.count - a.count).slice(0, 3)
+  const joinCode = state.live_join_code || settings.join_code || state.display_config?.join_code || 'FESTIO'
+  const title = settings.title || state.title || 'Live audience insights'
+
+  return <div className="flb-survey-insights-scene">
+    <header className="flb-si-header">
+      <div className="flb-si-brand"><span className="flb-si-mark">F</span><b>FESTIO LIVE</b></div>
+      <div className="flb-si-title"><h1>{title}</h1><p>{settings.subtitle || 'Live audience insights'}</p></div>
+      <div className="flb-si-live"><span>● LIVE</span><b>◎ {state.participant_count || 0} connected</b></div>
+      <div className="flb-si-join"><img src={`/api/events/${encodeURIComponent(state.event_id || '')}/live/join-qr.png`} alt="QR code to join Festio Live"/><div><small>JOIN CODE</small><strong>{joinCode}</strong></div></div>
+    </header>
+
+    <section className="flb-si-kpis" aria-label="Survey metrics">
+      <SurveyInsightKpi tone="mint" icon="◎" label="Participants" value={state.participant_count || 0} note="unique voices"/>
+      <SurveyInsightKpi tone="blue" icon="✓" label="Completion" value={completionRate != null ? `${completionRate}%` : '—'} note={completed != null ? `${completed} completed` : 'final submissions'}/>
+      <SurveyInsightKpi tone="violet" icon="◷" label="Avg. Time" value={formatSurveyDuration(summary?.avg_completion_seconds)} note="mm:ss"/>
+      <SurveyInsightKpi tone="gold" icon="☆" label="Overall Rating" value={overallRating?.average_rating != null ? `${overallRating.average_rating.toFixed(1)} / 5` : '—'} note={`${overallRating?.response_count || 0} ratings`}/>
+      <SurveyInsightKpi tone="coral" icon="▤" label="Answers" value={(summary?.answer_count ?? state.response_count ?? 0).toLocaleString()} note="across the survey"/>
+    </section>
+
+    <section className="flb-si-choice-grid">
+      {shownChoices.map((question, index) => <SurveyInsightDonutCard key={question.question_id} question={question} title={choiceTitles[question.question_id] || ['Preferred Summit Time', 'Preferred Experience', 'Travel Distance', 'Price Per Person'][index]}/>) }
+    </section>
+
+    <section className="flb-si-detail-grid">
+      <SurveyInsightPriorityCard question={priorityQuestion} title={layout.priority_title}/>
+      <SurveyInsightHouseholdCard householdQuestion={householdQuestion} youthQuestion={youthQuestion}/>
+      <SurveyInsightRatingCard question={overallRating}/>
+    </section>
+
+    <section className="flb-si-insights" aria-label="Emerging priorities">
+      <div className="flb-si-insights-title"><span>✦</span><div><strong>Emerging Priorities</strong><small>Live aggregate choices</small></div></div>
+      {priorityItems.length ? priorityItems.map((item, index) => <div className={`flb-si-insight-chip is-${index}`} key={item.id}><span>{['◇', '◎', '◷'][index]}</span><strong>{item.label}</strong></div>) : <div className="flb-si-insight-chip"><strong>Insights gathering</strong></div>}
+      <div className="flb-si-privacy"><span>✓</span><small>Anonymous<br/>aggregate insights</small></div>
+    </section>
+  </div>
+}
+
 function QuestionOptions({ question }) {
   return <div className="flb-options">{Object.entries(question?.option_labels || {}).slice(0, 6).map(([id, label], index) => (
     <div className="flb-option" key={id}><b>{OPTION_LETTERS[index]}</b><span>{label}</span></div>
   ))}</div>
 }
 
+function sceneQuestion(state, currentQuestion, types) {
+  if (currentQuestion && types.includes(currentQuestion.question_type)) return currentQuestion
+  return (state.questions || []).find((question) => types.includes(question.question_type)) || currentQuestion
+}
+
+function optionResults(question) {
+  const scores = Object.keys(question?.ranking_scores || {}).length ? question.ranking_scores : (question?.option_counts || {})
+  return Object.entries(question?.option_labels || {})
+    .map(([id, label]) => ({ id, label, score: Number(scores[id] || 0) }))
+    .sort((a, b) => b.score - a.score)
+}
+
+function SpectrumScene({ state, settings, currentQuestion }) {
+  const question = sceneQuestion(state, currentQuestion, ['rating_10', 'nps', 'rating_5', 'number', 'single_choice'])
+  const min = question?.question_type === 'nps' ? 0 : 1
+  const max = question?.question_type === 'rating_5' ? 5 : 10
+  let values = (question?.numeric_values || []).map(Number).filter(Number.isFinite)
+  if (!values.length && Object.keys(question?.value_counts || {}).length) {
+    values = Object.entries(question.value_counts).flatMap(([value, count]) => Array.from({ length: Math.min(Number(count), 8) }, () => Number(value)))
+  }
+  if (!values.length && Object.keys(question?.option_counts || {}).length) {
+    const options = Object.keys(question.option_labels || {})
+    values = options.flatMap((id, index) => Array.from({ length: Math.min(Number(question.option_counts[id] || 0), 8) }, () => min + ((max - min) * index / Math.max(1, options.length - 1))))
+  }
+  const dots = values.slice(0, 18)
+  const average = values.length ? values.reduce((sum, value) => sum + value, 0) / values.length : null
+  const labels = settings.spectrum_labels || ['Not ready yet', 'Exploring', 'Ready now']
+  return <><Brand state={state} settings={settings}/><div className="flb-content"><Kicker>Live opinion spectrum</Kicker><h1 className="flb-headline flb-small">{question?.prompt || settings.message || 'How ready are we to turn these ideas into action?'}</h1><div className="flb-spectrum flb-glass"><div className="flb-spectrum-labels"><span>{labels[0]}</span><span>{labels[1]}</span><span>{labels[2]}</span></div><div className="flb-spectrum-track">{dots.map((value, index) => <i key={index} style={{ '--x': `${clamp(((value - min) / Math.max(1, max - min)) * 100, 2, 98)}%`, '--delay': `${index * .04}s` }}>{String.fromCharCode(65 + (index % 26))}</i>)}</div><div className="flb-spectrum-summary"><span>Room average <strong>{average == null ? '—' : `${average.toFixed(1)} / ${max}`}</strong></span><span>Responses <strong>{question?.response_count || values.length}</strong></span><span>Live range <strong>{min}–{max}</strong></span></div></div></div><Footer left="Anonymous positions · no individual profiling" right="Updating live" live/></>
+}
+
+function QuadrantScene({ state, settings, currentQuestion }) {
+  const question = sceneQuestion(state, currentQuestion, ['quadrant'])
+  const points = question?.points || []
+  const labels = question?.axis_labels || {}
+  const buckets = [
+    { x: .73, y: .27, count: 0, label: 'High impact · less effort' },
+    { x: .27, y: .27, count: 0, label: 'High impact · more effort' },
+    { x: .73, y: .72, count: 0, label: 'Lower impact · less effort' },
+    { x: .27, y: .72, count: 0, label: 'Lower impact · more effort' },
+  ]
+  points.forEach(([x, y]) => { buckets[(y >= .5 ? 2 : 0) + (x < .5 ? 1 : 0)].count += 1 })
+  const strongest = [...buckets].sort((a, b) => b.count - a.count)[0]
+  return <><Brand state={state} settings={settings}/><div className="flb-content"><div className="flb-quadrant-layout"><div><Kicker>Map the opportunity</Kicker><h1 className="flb-headline flb-small">{question?.prompt || settings.message || 'Where should we focus first?'}</h1><div className="flb-signature-quadrant"><span className="top">{labels.y_label_high || 'High impact'}</span><span className="bottom">{labels.y_label_low || 'Lower impact'}</span><span className="left">{labels.x_label_low || 'More effort'}</span><span className="right">{labels.x_label_high || 'Less effort'}</span>{buckets.filter((bucket) => bucket.count).map((bucket, index) => <i key={bucket.label} style={{ '--x': `${bucket.x * 100}%`, '--y': `${bucket.y * 100}%`, '--size': `${2.4 + Math.min(2.5, bucket.count / 6)}cqw`, '--delay': `${index * .1}s` }}>{bucket.count}</i>)}</div></div><aside className="flb-quadrant-side"><article className="flb-glass"><small>Strongest opportunity</small><strong>{points.length ? strongest.label : 'Gathering responses'}</strong><span>{strongest.count || 0} placements</span></article><article className="flb-glass"><small>High-impact share</small><strong>{points.length ? `${Math.round(((buckets[0].count + buckets[1].count) / points.length) * 100)}%` : '—'}</strong><span>of all placements</span></article><article className="flb-glass"><small>Participation</small><strong>{points.length}</strong><span>anonymous placements</span></article></aside></div></div><Footer left="Aggregate clusters · exact identities remain private" right="Quadrant live" live/></>
+}
+
+function ImageHeatmapScene({ state, settings, currentQuestion }) {
+  const question = sceneQuestion(state, currentQuestion, ['image_click'])
+  const points = question?.points || []
+  const image = question?.board_image
+  return <><Brand state={state} settings={settings}/><div className="flb-content"><div className="flb-heatmap-layout"><div><Kicker>Tap what matters</Kicker><h1 className="flb-headline flb-small">{question?.prompt || settings.message || 'Which part of this image needs attention?'}</h1><div className={`flb-signature-heatmap ${image ? 'has-image' : ''}`} style={image ? { backgroundImage: `linear-gradient(#06131b42,#06131b42),url("${image}")` } : undefined}>{points.slice(0, 36).map(([x, y], index) => <i key={index} style={{ '--x': `${x * 100}%`, '--y': `${(1 - y) * 100}%`, '--delay': `${index * -.08}s` }}/>)}</div></div><aside className="flb-heatmap-side"><article className="flb-glass"><span>Interaction</span><strong>{points.length} taps</strong><p>Anonymous visual choices</p></article><article className="flb-glass"><span>Coverage</span><strong>{points.length ? `${Math.min(100, Math.round(points.length * 1.7))}%` : '—'}</strong><p>of the visual explored</p></article><article className="flb-glass"><span>Status</span><strong>{points.length ? 'Heat rising' : 'Waiting'}</strong><p>Updates as taps arrive</p></article></aside></div></div><Footer left="Privacy-safe visual aggregation" right="Heatmap live" live/></>
+}
+
+function RankingRaceScene({ state, settings, currentQuestion }) {
+  const question = sceneQuestion(state, currentQuestion, ['ranking', 'multiple_choice', 'single_choice'])
+  const items = optionResults(question).slice(0, 5)
+  const peak = Math.max(1, ...items.map((item) => item.score))
+  return <><Brand state={state} settings={settings}/><div className="flb-content"><Kicker>Preferences in motion</Kicker><h1 className="flb-headline flb-small">{question?.prompt || settings.message || 'What should lead next?'}</h1>{items.length ? <div className="flb-ranking-race">{items.map((item, index) => <article key={item.id} style={{ '--delay': `${index * .08}s` }}><strong>{index + 1}</strong><div><h3>{item.label}</h3><i><b style={{ width: `${Math.max(4, (item.score / peak) * 100)}%` }}/></i></div><span><b>{item.score.toLocaleString()}</b><small>{index === 0 ? 'leading now' : 'live score'}</small></span></article>)}</div> : <EmptyState title="The ranking race is ready" copy="Ranked preferences appear as soon as the first answers arrive."/>}</div><Footer left="Positions reorder as verified answers arrive" right={`${question?.response_count || 0} responses`} live/></>
+}
+
+function PredictionRevealScene({ state, settings, currentQuestion }) {
+  const question = sceneQuestion(state, currentQuestion, ['single_choice', 'true_false', 'yes_no', 'multiple_choice'])
+  const items = optionResults(question)
+  const total = Math.max(1, items.reduce((sum, item) => sum + item.score, 0))
+  const winner = items[0]
+  const actual = winner ? Math.round((winner.score / total) * 100) : null
+  const prediction = settings.prediction || {}
+  return <><Brand state={state} settings={settings}/><div className="flb-content"><Kicker>{prediction.locked === false ? 'Prediction open' : 'Prediction locked'}</Kicker><h1 className="flb-headline flb-small">{question?.prompt || settings.message || 'Will the room predict the real result?'}</h1><div className="flb-prediction-grid"><article className="flb-prediction-card flb-glass"><span>Audience predicted</span><strong>{prediction.percent != null ? `${prediction.percent}%` : '—'}</strong><p>{prediction.label || 'Set a prediction in Design scene'}</p></article><b className="flb-reveal-bolt">◆</b><article className="flb-prediction-card flb-glass"><span>Actual result</span><strong>{actual == null ? '—' : `${actual}%`}</strong><p>{winner ? `${winner.label} leads the final choice` : 'Waiting for verified responses'}</p></article></div></div><Footer left="Prediction and outcome remain clearly labelled" right={actual == null ? 'Awaiting result' : 'Outcome revealed'} live/></>
+}
+
+function CommitmentWallScene({ state, settings, currentQuestion }) {
+  const entries = (settings.commitments || []).filter((entry) => entry && (typeof entry === 'string' || entry.text)).slice(0, 8)
+  return <><Brand state={state} settings={settings}/><div className="flb-content"><Kicker>From intention to action</Kicker><h1 className="flb-headline flb-small">{currentQuestion?.prompt || settings.message || 'What will you commit to in the next 30 days?'}</h1>{entries.length ? <div className="flb-commitments">{entries.map((entry, index) => { const item = typeof entry === 'string' ? { text: entry } : entry; return <article key={`${item.text}-${index}`} style={{ '--delay': `${index * .06}s` }}><span>{item.theme || 'Commitment'}</span><p>{item.text}</p><small>{item.author || 'Anonymous'} · moderator approved</small></article> })}</div> : <EmptyState title="Approved commitments will appear here" copy="Add curated commitments in Design scene; unmoderated open text is never projected."/>}</div><Footer left="Moderator-approved commitments only" right={`${entries.length} on the wall`} live/></>
+}
+
+function PhotoMosaicScene({ state, settings }) {
+  const configured = (settings.photo_mosaic_entries || []).filter((entry) => entry?.consent === true)
+  const safeLeaders = configured.length ? [] : (state.leaderboard || []).map((entry) => ({ name: entry.display_name }))
+  const entries = [...configured, ...safeLeaders]
+  const count = Math.max(entries.length, Math.min(72, state.participant_count || 0))
+  const tiles = Array.from({ length: count }, (_, index) => entries[index % Math.max(1, entries.length)] || { name: 'Guest' })
+  return <><Brand state={state} settings={settings}/><div className="flb-content"><div className="flb-mosaic-layout"><div className="flb-photo-mosaic flb-glass"><span>F</span>{tiles.map((entry, index) => <i key={index} style={entry.image_url ? { backgroundImage: `url("${entry.image_url}")`, '--delay': `${index * .01}s` } : { '--delay': `${index * .01}s` }}>{entry.image_url ? '' : (entry.name || 'Guest').split(/\s+/).map((part) => part[0]).join('').slice(0, 2).toUpperCase()}</i>)}</div><div className="flb-mosaic-copy"><Kicker>Every face builds the picture</Kicker><strong>{state.participant_count || configured.length || 0}</strong><p>{configured.length ? 'consent-verified portraits have joined the living event mosaic.' : 'privacy-safe participant tiles are assembling live.'}</p><div><span>{configured.length ? 'Consent verified' : 'Private by design'}</span><span>Updating live</span></div></div></div></div><Footer left="Only consented portraits or privacy-safe aliases" right="Living mosaic" live/></>
+}
+
+function LocationMapScene({ state, settings }) {
+  const regions = (settings.location_regions || []).filter((region) => region?.name).slice(0, 5)
+  const positions = [[43, 69], [68, 48], [24, 44], [57, 35], [77, 58]]
+  return <><Brand state={state} settings={settings}/><div className="flb-content"><div className="flb-location-layout"><div><Kicker>Our community has reach</Kicker><h1 className="flb-headline flb-small">{settings.message || 'Where the room is joining from.'}</h1><div className="flb-live-map"><svg viewBox="0 0 900 430" aria-hidden="true"><path fill="none" stroke="currentColor" strokeWidth="3" d="M102 238L144 151 225 119 287 71 373 89 444 61 527 94 589 87 640 124 713 132 770 184 753 244 690 258 653 310 592 293 549 347 480 319 419 350 359 302 292 320 247 276 176 284Z"/><path fill="none" stroke="currentColor" strokeOpacity=".3" d="M210 124L250 278M360 90L360 302M510 94L505 319M638 126L612 291M146 201L752 203"/></svg>{regions.map((region, index) => <i key={region.name} style={{ '--x': `${positions[index][0]}%`, '--y': `${positions[index][1]}%`, '--delay': `${index * -.4}s` }}/>)}</div></div><aside className="flb-region-list">{regions.length ? regions.map((region) => <div className="flb-glass" key={region.name}><i/><span>{region.name}</span><strong>{Number(region.count || 0).toLocaleString()}</strong></div>) : <EmptyState title="No location aggregates yet" copy="Add privacy-safe regional totals in Design scene. Exact locations are never displayed."/>}</aside></div></div><Footer left="Regions only · exact locations remain private" right={`${regions.reduce((sum, region) => sum + Number(region.count || 0), 0)} represented`} live/></>
+}
+
+function JourneyRecapScene({ state, settings }) {
+  const configured = (settings.journey_steps || []).filter((step) => step?.title).slice(0, 5)
+  const derived = [
+    { icon: '⌗', title: 'We gathered', value: `${state.participant_count || 0} voices`, note: 'joined the live experience' },
+    { icon: '◌', title: 'We chose', value: `${state.response_count || 0} answers`, note: 'across every live moment' },
+    { icon: '?', title: 'We asked', value: `${state.featured_qna ? 1 : 0} featured`, note: 'audience question elevated' },
+    { icon: '✦', title: 'We discovered', value: `${state.ai_insight?.themes?.length || state.word_cloud?.length || 0} themes`, note: 'from shared reflections' },
+    { icon: '✓', title: 'We committed', value: `${settings.commitments?.length || 0} actions`, note: 'ready for what comes next' },
+  ]
+  const steps = configured.length ? configured : derived
+  return <><Brand state={state} settings={settings}/><div className="flb-content"><Kicker>Your event story</Kicker><h1 className="flb-headline flb-small">{settings.message || 'Five moments. One unforgettable journey.'}</h1><div className="flb-journey"><div/><section>{steps.map((step, index) => <article key={`${step.title}-${index}`} style={{ '--delay': `${index * .08}s` }}><i>{step.icon || ['⌗', '◌', '?', '✦', '✓'][index]}</i><h3>{step.title}</h3><strong>{step.value || step.metric || '—'}</strong><p>{step.note || step.description}</p></article>)}</section></div></div><Footer left="A live recap built from verified event activity" right="Journey complete" live/></>
+}
+
+function SpotlightWheelScene({ state, settings }) {
+  const eligible = (settings.spotlight_entries || []).filter((entry) => entry?.consent === true && entry?.name)
+  const winner = eligible.find((entry) => entry.selected) || eligible[0]
+  return <><Brand state={state} settings={settings}/><div className="flb-content"><div className="flb-wheel-layout"><div><Kicker>The room decides who is next</Kicker><h1 className="flb-headline flb-small">Ready for the <span className="flb-gradient">spotlight?</span></h1><p className="flb-subhead">Selection is random, auditable and limited to opted-in participants.</p><div className="flb-wheel-notes"><span>{eligible.length} eligible</span><span>No repeat winners</span><span>Consent on</span></div></div><div><div className="flb-wheel"/><article className="flb-winner flb-glass"><small>{winner ? 'Selected' : 'Waiting for entrants'}</small><i>{winner ? winner.name.split(/\s+/).map((part) => part[0]).join('').slice(0, 2).toUpperCase() : '?'}</i><strong>{winner?.name || 'No eligible participant'}</strong><p>{winner?.detail || 'Opted-in names can be added in Design scene.'}</p></article></div></div></div><Footer left="Consent-gated · random selection · no repeat winners" right="Spotlight ready" live/></>
+}
+
 function SceneContent({ scene, state, settings, currentQuestion, countdown }) {
   const questionNumber = Math.max(1, (state.questions || []).findIndex((q) => q.question_id === state.current_question_id) + 1)
   const questionTotal = state.questions?.length || 1
   const questionResponseRate = state.participant_count ? Math.round(((currentQuestion?.response_count || 0) / state.participant_count) * 100) : 0
-  const joinCode = state.live_join_code || settings.join_code || state.display_config?.join_code || 'FESTIO LIVE'
+  const joinCode = displayJoinCode(state, settings)
   const title = settings.title || state.title || 'Welcome to Festio Live'
   const subtitle = settings.subtitle || state.description || 'A live experience shaped by every voice in the room.'
   const featured = state.featured_qna
@@ -184,7 +593,16 @@ function SceneContent({ scene, state, settings, currentQuestion, countdown }) {
 
   if (scene === 'responding') return <><Brand state={state} settings={settings}/><div className="flb-content">{currentQuestion ? <div className="flb-vote"><div><Kicker>The room is responding</Kicker><h1 className="flb-headline flb-small">Every voice moves the conversation.</h1><div className="flb-stats"><div><strong>{currentQuestion.response_count || 0}</strong><span>responses received</span></div><div><strong>{questionResponseRate}%</strong><span>participation rate</span></div></div><TrendLine buckets={currentQuestion.response_timeline}/></div><div className="flb-timer"><span>{currentQuestion.time_limit_seconds || 30}</span><small>seconds</small></div></div> : <EmptyState/>}</div>{settings.show_reactions !== false && <div className="flb-reactions"><i>♥</i><i>✦</i><i>●</i><i>◆</i></div>}<Footer left={`${state.participant_count || 0} participants connected`} right="Voting open" live/></>
 
-  if (scene === 'results' && ['survey', 'feedback'].includes(state.type)) return <><Brand state={state} settings={settings}/><div className="flb-content">{state.questions?.length ? <><Kicker>Live so far</Kicker><h1 className="flb-headline flb-result-title">{title}</h1><SurveySummaryGrid state={state}/><RegisteredProgressBanner state={state}/></> : <EmptyState title="Waiting on the first response"/>}</div><Footer left={`${state.response_count || 0} responses across ${state.questions?.length || 0} questions`} right="Results live" live/></>
+  if (scene === 'results' && ['survey', 'feedback'].includes(state.type)) {
+    // A handful of questions still reads fine as one tile each; a longer
+    // survey (this is what a 15+ question Event Feedback form needs) gets
+    // the curated highlights view instead of a wall of "no responses yet"
+    // cards — see SurveyHighlights above.
+    const useDashboard = (state.questions?.length || 0) > 6
+    return <><Brand state={state} settings={settings}/><div className="flb-content">{state.questions?.length ? <><Kicker>Live so far</Kicker><h1 className="flb-headline flb-result-title">{title}</h1>{useDashboard ? <SurveyDashboard state={state}/> : <SurveySummaryGrid state={state}/>}<RegisteredProgressBanner state={state}/></> : <EmptyState title="Waiting on the first response"/>}</div><Footer left={`${state.response_count || 0} responses across ${state.questions?.length || 0} questions`} right="Results live" live/></>
+  }
+
+  if (scene === 'survey_insights' && ['survey', 'feedback'].includes(state.type)) return <SurveyInsightsScene state={state} settings={settings}/>
 
   if (scene === 'results') return <><Brand state={state} settings={settings}/><div className="flb-content">{currentQuestion ? <><Kicker>The room has spoken</Kicker><h1 className="flb-headline flb-result-title">{currentQuestion.prompt}</h1><ResultsVisual question={currentQuestion}/></> : <EmptyState title="Results are ready when the room is"/>}</div><Footer left={`${currentQuestion?.response_count || 0} verified responses`} right="Results live" live/></>
 
@@ -203,6 +621,26 @@ function SceneContent({ scene, state, settings, currentQuestion, countdown }) {
   }
 
   if (scene === 'feedback') return <><Brand state={state} settings={settings}/><div className="flb-content"><Kicker>Turn insight into action</Kicker><h1 className="flb-headline flb-small">{currentQuestion?.prompt || settings.message || 'What will you do differently after today?'}</h1><div className="flb-feedback"><div className="flb-glass"><span>Live response stream</span><p>Thoughtful responses appear after moderation.</p></div><div className="flb-glass"><span>Completion</span><strong>{questionResponseRate}%</strong><p>{currentQuestion?.response_count || 0} responses</p></div></div></div><Footer left="Sensitive responses remain private" right="Listening" live/></>
+
+  if (scene === 'live_spectrum') return <SpectrumScene state={state} settings={settings} currentQuestion={currentQuestion}/>
+
+  if (scene === 'interactive_quadrant') return <QuadrantScene state={state} settings={settings} currentQuestion={currentQuestion}/>
+
+  if (scene === 'image_heatmap') return <ImageHeatmapScene state={state} settings={settings} currentQuestion={currentQuestion}/>
+
+  if (scene === 'ranking_race') return <RankingRaceScene state={state} settings={settings} currentQuestion={currentQuestion}/>
+
+  if (scene === 'prediction_reveal') return <PredictionRevealScene state={state} settings={settings} currentQuestion={currentQuestion}/>
+
+  if (scene === 'commitment_wall') return <CommitmentWallScene state={state} settings={settings} currentQuestion={currentQuestion}/>
+
+  if (scene === 'photo_mosaic') return <PhotoMosaicScene state={state} settings={settings}/>
+
+  if (scene === 'location_map') return <LocationMapScene state={state} settings={settings}/>
+
+  if (scene === 'journey_recap') return <JourneyRecapScene state={state} settings={settings}/>
+
+  if (scene === 'spotlight_wheel') return <SpotlightWheelScene state={state} settings={settings}/>
 
   if (scene === 'word_cloud') {
     const max = Math.max(1, ...cloud.map((item) => item.count))
@@ -247,7 +685,7 @@ export default function LiveBroadcastCanvas({ state, connected = true, onPresent
   }, [scene, countdown])
 
   return <div className="flb-root">
-    <div className={`flb-screen flb-${settings.theme || 'aurora'} ${settings.motion === false ? 'flb-motion-off' : ''} ${settings.safe_area ? 'flb-safe' : ''}`}>
+    <div className={`flb-screen flb-${settings.theme || 'aurora'} flb-scene-${scene.replaceAll('_', '-')} ${settings.motion === false ? 'flb-motion-off' : ''} ${settings.safe_area ? 'flb-safe' : ''}`}>
       <div className="flb-orb flb-orb-a"/><div className="flb-orb flb-orb-b"/><div className="flb-noise"/>
       <SceneContent scene={scene} state={state} settings={settings} currentQuestion={currentQuestion} countdown={countdown}/>
       {!connected && <div className="flb-offline">Reconnecting · showing the last verified state</div>}

@@ -9,7 +9,7 @@ from app.config import settings
 from app.moderation import flag_public_text
 from app.realtime import mint_realtime_ticket, publish, verify_realtime_ticket
 from app.routers.operations import _csv_safe
-from app.routers.participate import _leaderboard_name, _load_activity, _participant_locator, _rule_matches
+from app.routers.participate import _leaderboard_name, _load_activity, _participant_locator, _rule_matches, _survey_completion_summary
 from app.scoring import score_choice_response
 from app.wordcloud import word_cloud
 
@@ -55,6 +55,26 @@ class FailureIsolationTests(unittest.TestCase):
     def test_csv_cells_cannot_execute_spreadsheet_formulas(self):
         self.assertEqual(_csv_safe("=HYPERLINK('bad')"), "'=HYPERLINK('bad')")
         self.assertEqual(_csv_safe("ordinary answer"), "ordinary answer")
+
+
+class SurveyDisplaySummaryTests(unittest.TestCase):
+    def test_completion_uses_final_submission_and_real_elapsed_time(self):
+        from datetime import datetime, timedelta, timezone
+
+        joined = datetime(2026, 8, 26, 12, 0, tzinfo=timezone.utc)
+        participants = [
+            type("Participant", (), {"joined_at": joined, "completed_at": joined + timedelta(seconds=120)})(),
+            type("Participant", (), {"joined_at": joined, "completed_at": joined + timedelta(seconds=180)})(),
+            type("Participant", (), {"joined_at": joined, "completed_at": None})(),
+        ]
+
+        self.assertEqual(_survey_completion_summary(participants, participant_count=3, answer_count=42), {
+            "participant_count": 3,
+            "completed_count": 2,
+            "completion_rate": 67,
+            "avg_completion_seconds": 150.0,
+            "answer_count": 42,
+        })
 
 
 class AuthorizationAndPrivacyTests(unittest.TestCase):

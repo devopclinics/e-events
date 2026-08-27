@@ -3,6 +3,7 @@ import RedesignShell, { Icon } from './redesign/RedesignShell'
 import { useCurrentEvent } from '../hooks/useCurrentEvent'
 import { useEventDetails } from '../hooks/useEventDetails'
 import { api } from '../api'
+import { DonutChart, StarRating, RatingDistribution, PALETTE } from '../components/charts/LiveCharts'
 import './FestioLiveRedesignPage.css'
 
 const TABS = ['Overview', 'Activities', 'Question Bank', 'Live Control', 'Displays', 'Responses', 'Analytics', 'Settings', 'Help']
@@ -24,24 +25,31 @@ const STATUS_TONE = { draft: 'neutral', scheduled: 'info', live: 'ok', paused: '
 const DISPLAY_SCENES = [
   ['welcome', 'Opening moment'], ['join', 'Join / QR'], ['agenda', 'Live agenda'],
   ['question', 'Question'], ['responding', 'Voting + reactions'], ['results', 'Animated results'],
+  ['survey_insights', 'Survey insights wall'],
   ['correct_answer', 'Smart reveal'], ['leaderboard', 'Leaderboard'], ['team_battle', 'Team battle'],
   ['rating', 'Rating'], ['feedback', 'Feedback'], ['word_cloud', 'Living word cloud'],
   ['q_and_a', 'Q&A spotlight'], ['room_pulse', 'Room pulse'], ['ai_insight', 'AI synthesis'],
-  ['idea_galaxy', 'Idea galaxy'], ['announcement', 'Announcement'], ['break', 'Break / up next'],
-  ['countdown', 'Countdown'], ['celebration', 'Celebration'], ['custom_message', 'Custom message'],
+  ['idea_galaxy', 'Idea galaxy'], ['live_spectrum', 'Live spectrum'],
+  ['interactive_quadrant', 'Interactive quadrant'], ['image_heatmap', 'Image heatmap'],
+  ['ranking_race', 'Ranking race'], ['prediction_reveal', 'Prediction reveal'],
+  ['commitment_wall', 'Commitment wall'], ['photo_mosaic', 'Photo mosaic'],
+  ['location_map', 'Live location map'], ['journey_recap', 'Event journey recap'],
+  ['spotlight_wheel', 'Spotlight wheel'], ['announcement', 'Announcement'],
+  ['break', 'Break / up next'], ['countdown', 'Countdown'], ['celebration', 'Celebration'],
+  ['custom_message', 'Custom message'],
 ]
 // Several scenes only know how to render a single "current question" (quiz-
 // style advance) or a specific activity type's own data (Q&A, word cloud) —
 // picking one of those for an incompatible activity silently shows nothing
 // useful. Restrict the picker instead of letting that combination happen.
-const SCENES_ALWAYS_SAFE = ['welcome', 'join', 'agenda', 'announcement', 'break', 'countdown', 'celebration', 'custom_message']
+const SCENES_ALWAYS_SAFE = ['welcome', 'join', 'agenda', 'photo_mosaic', 'location_map', 'journey_recap', 'spotlight_wheel', 'announcement', 'break', 'countdown', 'celebration', 'custom_message']
 function compatibleScenes(activityType) {
   if (!activityType) return DISPLAY_SCENES.map(([key]) => key)
-  if (activityType === 'survey' || activityType === 'feedback') return [...SCENES_ALWAYS_SAFE, 'results']
+  if (activityType === 'survey' || activityType === 'feedback') return [...SCENES_ALWAYS_SAFE, 'results', 'survey_insights', 'commitment_wall', 'prediction_reveal']
   if (activityType === 'q_and_a') return [...SCENES_ALWAYS_SAFE, 'q_and_a']
-  if (activityType === 'word_cloud') return [...SCENES_ALWAYS_SAFE, 'word_cloud', 'results']
-  if (activityType === 'rating') return [...SCENES_ALWAYS_SAFE, 'rating', 'results']
-  if (activityType === 'quiz') return [...SCENES_ALWAYS_SAFE, 'question', 'responding', 'results', 'correct_answer', 'leaderboard', 'team_battle']
+  if (activityType === 'word_cloud') return [...SCENES_ALWAYS_SAFE, 'word_cloud', 'results', 'commitment_wall']
+  if (activityType === 'rating') return [...SCENES_ALWAYS_SAFE, 'rating', 'results', 'live_spectrum']
+  if (activityType === 'quiz') return [...SCENES_ALWAYS_SAFE, 'question', 'responding', 'results', 'correct_answer', 'leaderboard', 'team_battle', 'ranking_race', 'prediction_reveal']
   return DISPLAY_SCENES.map(([key]) => key) // poll, voting, and anything else — built to use most scenes
 }
 const DISPLAY_THEMES = [
@@ -83,6 +91,358 @@ function MetricCard({ label, value, note, tone = 'copper', icon }) {
     <div className="fl-metric-top"><span>{label}</span><b aria-hidden="true">{icon}</b></div>
     <strong>{value}</strong><small>{note}</small>
   </article>
+}
+
+// The Event Feedback / Survey "Engagement Analytics" dashboard — see the big
+// block comment above SurveyAnalyticsOverlay for the architecture. Quiz,
+// poll, rating, word_cloud, voting, and Q&A never render any of this; they
+// keep the existing plain per-question results list untouched.
+const FLA_NAV_ITEMS = ['Overview', 'Live Results', 'Responses', 'Analytics', 'Questions', 'Participants', 'Exports', 'Settings']
+const FLA_CHOICE_TYPES = ['single_choice', 'true_false', 'yes_no']
+const FLA_RATING_TYPES = ['rating_5', 'rating_10', 'nps']
+const FLA_TEXT_TYPES = ['short_text', 'long_text', 'word_cloud']
+
+// Merges an activity's own question definition (options, config, sequence)
+// with its aggregated result row (response_count, option_counts, etc.) into
+// one object every chart component below can read from directly.
+function buildQuestionView(defQuestion, resultsById) {
+  const qr = resultsById.get(defQuestion.id)
+  if (!qr) return null
+  return { ...qr, options: defQuestion.options || [], section: defQuestion.config?.section || null }
+}
+
+// The visualization resolver (spec: "resolveVisualization"). Decides chart
+// type from question type + answer cardinality — never from a question id —
+// so this keeps working unmodified for any future Event Feedback survey.
+function resolveVisualization(view) {
+  if (FLA_CHOICE_TYPES.includes(view.question_type)) {
+    const n = view.options.length
+    const hasLongLabel = view.options.some((o) => (o.label || '').length > 24)
+    return (n > 0 && n <= 5 && !hasLongLabel) ? 'donut' : 'bar'
+  }
+  if (view.question_type === 'multiple_choice') return 'bar'
+  if (FLA_RATING_TYPES.includes(view.question_type)) return 'rating'
+  if (view.question_type === 'number') return 'number'
+  if (FLA_TEXT_TYPES.includes(view.question_type)) return 'text'
+  return 'bar'
+}
+
+// Groups questions by their own config.section (an organizer-authored
+// heading, e.g. "Planning the Next Summit" — see the seed script's comment
+// on ActivityQuestion.config). Questions with no section at all are almost
+// always the survey's entry/gating question(s); bucket choice-type ones
+// under a default "What People Chose" heading rather than dropping them.
+function sectionsFor(views) {
+  const bySection = new Map()
+  const defaultBucket = []
+  const overflow = []
+  views.forEach((v) => {
+    if (v.section) {
+      if (!bySection.has(v.section)) bySection.set(v.section, [])
+      bySection.get(v.section).push(v)
+    } else if (FLA_CHOICE_TYPES.includes(v.question_type) || v.question_type === 'multiple_choice') {
+      defaultBucket.push(v)
+    } else {
+      overflow.push(v)
+    }
+  })
+  const sections = []
+  if (defaultBucket.length) sections.push({ name: 'What People Chose', questions: defaultBucket })
+  bySection.forEach((questions, name) => sections.push({ name, questions }))
+  if (overflow.length) sections.push({ name: 'More Questions', questions: overflow })
+  return sections
+}
+
+// Branching means a targeted question's response_count already excludes
+// anyone routed away from it — but an organizer still wants to know how many
+// people were even ELIGIBLE to answer. Derived from the ActivityRule that
+// shows this section (not stored anywhere as its own aggregate).
+function eligibleCountFor(sectionQuestions, rules, results) {
+  for (const v of sectionQuestions) {
+    const rule = rules.find((r) => r.target_question_id === v.question_id && r.action === 'show')
+    if (!rule) continue
+    const source = results.questions.find((qr) => qr.question_id === rule.source_question_id)
+    if (source && ['equals', 'contains'].includes(rule.operator)) {
+      const n = source.option_counts?.[rule.comparison_value]
+      if (n != null) return n
+    }
+  }
+  return null
+}
+
+function AnalyticsEmptyState({ message }) {
+  return <p className="fla-empty-note">{message || 'No responses yet — results will appear here as participants respond.'}</p>
+}
+
+function AnalyticsKpiCard({ label, value, secondary, icon, color }) {
+  return <div className="fla-stat">
+    <i className={`fla-stat-icon ${color}`} aria-hidden="true">{icon}</i>
+    <div><span>{label}</span><strong>{value}</strong>{secondary && <small>{secondary}</small>}</div>
+  </div>
+}
+
+// Donut + a legend that keeps each answer's percentage AND raw count right
+// next to its label (spec: never on the opposite side of the card).
+function DonutQuestionCard({ view }) {
+  const segments = view.options.map((o) => ({ id: o.id, label: o.label, value: view.option_counts?.[o.id] || 0 }))
+  const total = segments.reduce((sum, s) => sum + s.value, 0)
+  if (total === 0) return <AnalyticsEmptyState />
+  const top = [...segments].sort((a, b) => b.value - a.value)[0]
+  return <>
+    <div className="fla-donut-block">
+      <DonutChart segments={segments} size={30} />
+      <div className="fla-legend2">
+        {segments.map((s, i) => (
+          <div className="fla-legend2-row" key={s.id}>
+            <i style={{ background: PALETTE[i % PALETTE.length] }} />
+            <span>{s.label}</span>
+            <b>{Math.round((s.value / total) * 100)}%</b>
+            <small>{s.value}</small>
+          </div>
+        ))}
+      </div>
+    </div>
+    <p className="fla-card-footnote">Most popular: <strong>{top.label}</strong> · {view.response_count} response{view.response_count === 1 ? '' : 's'}</p>
+  </>
+}
+
+// Ranked horizontal bars for multi-select and any single-choice question
+// whose options are too numerous or too long to read as a donut legend.
+function BarQuestionCard({ view }) {
+  const denom = Math.max(1, view.response_count || 0)
+  const items = view.options.map((o) => ({ id: o.id, label: o.label, value: view.option_counts?.[o.id] || 0 }))
+  const total = items.reduce((sum, item) => sum + item.value, 0)
+  if (total === 0) return <AnalyticsEmptyState />
+  const sorted = [...items].sort((a, b) => b.value - a.value)
+  const peak = Math.max(1, ...sorted.map((item) => item.value))
+  return <>
+    <div className="fla-bar-list">
+      {sorted.map((item, i) => (
+        <div className="fla-bar-row" key={item.id}>
+          <b>{i + 1}</b>
+          <span>{item.label}</span>
+          <div className="fla-bar-track"><i style={{ width: `${Math.max(3, (item.value / peak) * 100)}%` }} /></div>
+          <em>{item.value} · {Math.round((item.value / denom) * 100)}%</em>
+        </div>
+      ))}
+    </div>
+    <p className="fla-card-footnote">{view.response_count} response{view.response_count === 1 ? '' : 's'}{view.question_type === 'multiple_choice' ? ' · respondents could pick more than one, so totals may exceed 100%' : ''}</p>
+  </>
+}
+
+function RatingQuestionCard({ view }) {
+  if (view.average_rating == null) return <AnalyticsEmptyState message="No ratings yet." />
+  const max = view.question_type === 'rating_10' ? 10 : 5
+  return <div className="fla-rating-breakdown">
+    <div className="fla-rating-big"><strong>{view.average_rating.toFixed(1)}</strong><StarRating average={view.average_rating} max={max} /><span>out of {max}</span></div>
+    {view.value_counts && <RatingDistribution valueCounts={view.value_counts} max={max} min={1} />}
+    <p className="fla-card-footnote">{view.response_count} response{view.response_count === 1 ? '' : 's'}</p>
+  </div>
+}
+
+// A comparative view across several related rating questions in the same
+// section (e.g. rating each of 8 experience areas) — the spec's "matrix"
+// visualization. Sorted worst-to-best isn't useful; sorted best-to-worst
+// with the top and bottom rows flagged is (spec: "Highest Rated" /
+// "Needs Attention").
+function MatrixRatingChart({ views }) {
+  const rated = views.filter((v) => v.average_rating != null)
+  if (!rated.length) return <AnalyticsEmptyState message="No ratings yet." />
+  const sorted = [...rated].sort((a, b) => b.average_rating - a.average_rating)
+  return <div className="fla-matrix">
+    {sorted.map((v, i) => {
+      const max = v.question_type === 'rating_10' ? 10 : 5
+      const label = v.prompt.replace(/^How would you rate:?\s*/i, '').replace(/\?$/, '')
+      return <div className="fla-matrix-row" key={v.question_id}>
+        <span>{label}
+          {i === 0 && <em className="fla-tag fla-tag-good">Highest rated</em>}
+          {i === sorted.length - 1 && sorted.length > 1 && <em className="fla-tag fla-tag-warn">Needs attention</em>}
+        </span>
+        <div className="fla-bar-track"><i style={{ width: `${(v.average_rating / max) * 100}%` }} /></div>
+        <b>{v.average_rating.toFixed(1)}</b>
+      </div>
+    })}
+  </div>
+}
+
+function NumberQuestionCard({ view }) {
+  const values = view.numeric_values || []
+  if (!values.length) return <AnalyticsEmptyState />
+  const total = values.reduce((sum, value) => sum + value, 0)
+  const avg = total / values.length
+  return <div className="fla-number-card">
+    <strong>{total.toLocaleString()}</strong>
+    <small>Reported across {view.response_count} response{view.response_count === 1 ? '' : 's'} · avg {avg.toFixed(1)} each</small>
+  </div>
+}
+
+function TextQuestionCard({ view, analysis, busy, onAnalyze }) {
+  if (!view.response_count) return <AnalyticsEmptyState />
+  return <div className="fla-text-card">
+    <p className="fla-card-footnote">{view.response_count} response{view.response_count === 1 ? '' : 's'}</p>
+    {analysis?.themes?.length > 0
+      ? <ul className="fla-theme-list">{analysis.themes.slice(0, 6).map((theme) => <li key={theme}>{theme}</li>)}</ul>
+      : <button className="rr-btn secondary" disabled={busy} onClick={onAnalyze}>{busy ? 'Analyzing…' : 'Generate insights'}</button>}
+  </div>
+}
+
+function QuestionAnalyticsCard({ view, aiAnalyses, aiBusy, runAiAnalysis }) {
+  const vis = resolveVisualization(view)
+  return <div className="fla-card">
+    <h4>{view.prompt}</h4>
+    {vis === 'donut' && <DonutQuestionCard view={view} />}
+    {vis === 'bar' && <BarQuestionCard view={view} />}
+    {vis === 'rating' && <RatingQuestionCard view={view} />}
+    {vis === 'number' && <NumberQuestionCard view={view} />}
+    {vis === 'text' && <TextQuestionCard view={view} analysis={aiAnalyses[view.question_id]} busy={aiBusy === view.question_id} onAnalyze={() => runAiAnalysis(view.question_id)} />}
+  </div>
+}
+
+function AnalyticsSection({ title, eligibleCount, children }) {
+  return <section className="fla-section">
+    <h3 className="fla-section-title">{title}{eligibleCount != null && <span className="fla-eligible-badge">{eligibleCount} eligible respondent{eligibleCount === 1 ? '' : 's'}</span>}</h3>
+    <div className="fla-section-grid">{children}</div>
+  </section>
+}
+
+// Full-screen "Engagement Analytics" overlay for a survey/feedback
+// activity's results — a dedicated dark dashboard (its own mini nav, KPI
+// row, and a per-question chart chosen by resolveVisualization()) rather
+// than another tab inside the regular light-themed Festio Live admin page.
+// Opened via the "Open Engagement Analytics" button in the Activities tab;
+// closing it returns there exactly as it was.
+function SurveyAnalyticsOverlay({ event, selected, results, summary, aiAnalyses, aiBusy, runAiAnalysis, responseDetails, rules, onClose, onExportCsv, onGenerateReport, displayUrl }) {
+  const [showResponses, setShowResponses] = useState(false)
+  const resultsById = new Map(results.questions.map((qr) => [qr.question_id, qr]))
+  const views = selected.questions.map((q) => buildQuestionView(q, resultsById)).filter(Boolean)
+
+  const ratingViews = views.filter((v) => FLA_RATING_TYPES.includes(v.question_type))
+  const [headlineRating, ...otherRatings] = ratingViews
+  const useMatrix = otherRatings.length >= 3
+  const matrixIds = new Set(useMatrix ? otherRatings.map((v) => v.question_id) : [])
+
+  const sections = sectionsFor(views)
+  const textViews = views.filter((v) => FLA_TEXT_TYPES.includes(v.question_type) && v.response_count > 0)
+  const sentimentSource = textViews.find((v) => aiAnalyses[v.question_id]?.sentiment)
+
+  const participantCount = summary?.participant_count ?? results.participant_count ?? 0
+  const completedCount = summary?.completed_count ?? 0
+  const completionRate = participantCount ? Math.round((completedCount / participantCount) * 100) : 0
+  const avgSeconds = summary?.avg_completion_seconds
+  const avgTimeLabel = avgSeconds != null
+    ? `${String(Math.floor(avgSeconds / 60)).padStart(2, '0')}:${String(Math.round(avgSeconds % 60)).padStart(2, '0')}`
+    : null
+  const startedLabel = selected.created_at ? new Date(selected.created_at).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' }) : '—'
+
+  const kpis = [
+    { key: 'total', label: 'Total Responses', icon: '☺', color: 'mint', value: completedCount, secondary: participantCount ? `${completionRate}% of participants` : null },
+    { key: 'completion', label: 'Completion Rate', icon: '✓', color: 'blue', value: `${completionRate}%`, secondary: `${completedCount} completed` },
+    avgTimeLabel && { key: 'time', label: 'Avg. Time to Complete', icon: '◷', color: 'violet', value: avgTimeLabel, secondary: 'mm:ss' },
+    headlineRating && { key: 'rating', label: 'Overall Rating', icon: '★', color: 'gold', value: headlineRating.average_rating != null ? `${headlineRating.average_rating.toFixed(1)} / ${headlineRating.question_type === 'rating_10' ? 10 : 5}` : '—', secondary: `${headlineRating.response_count} responses` },
+    { key: 'participation', label: 'Participation', icon: '↗', color: 'coral', value: participantCount, secondary: 'Unique participants' },
+  ].filter(Boolean)
+
+  return (
+    <div className="fla-overlay" role="dialog" aria-label="Engagement analytics">
+      <aside className="fla-sidebar">
+        <div className="fla-brand"><span className="fla-mark">◈</span><div><b>festio live</b><small>ENGAGEMENT ANALYTICS</small></div></div>
+        <div className="fla-event-select">{event?.name || 'Event'}</div>
+        <nav className="fla-nav">
+          {FLA_NAV_ITEMS.map((item) => (
+            <button key={item} type="button" className={item === 'Overview' ? 'active' : ''}
+              onClick={item === 'Responses' ? () => setShowResponses((v) => !v) : item === 'Exports' ? onExportCsv : undefined}
+              disabled={!['Overview', 'Responses', 'Exports'].includes(item)}>
+              {item}
+            </button>
+          ))}
+        </nav>
+        <div className="fla-status-card">
+          <span>Survey Status</span>
+          <div className="fla-status-live"><i className={selected.status === 'live' ? 'on' : ''} />{selected.status === 'live' ? 'Live' : selected.status}</div>
+          <div className="fla-status-row">Started: {startedLabel}</div>
+          <div className="fla-status-row">Responses: {completedCount}</div>
+          <button type="button" className="fla-view-survey" onClick={onClose}>View Survey</button>
+        </div>
+      </aside>
+
+      <main className="fla-main">
+        <header className="fla-header">
+          <div><h1>{selected.title}</h1><p>See how participants answered key questions.</p></div>
+          <div className="fla-header-actions">
+            <button type="button" className="fla-chip" onClick={onGenerateReport}>⬇ Export</button>
+            <button type="button" className="fla-close" onClick={onClose} aria-label="Close analytics">✕</button>
+          </div>
+        </header>
+
+        <div className="fla-stats-row" role="group" aria-label="Key metrics">
+          {kpis.map((k) => <AnalyticsKpiCard key={k.key} {...k} />)}
+        </div>
+
+        {sections.map((sec) => {
+          const isMatrixSection = useMatrix && sec.questions.some((v) => matrixIds.has(v.question_id))
+          const cardQuestions = sec.questions.filter((v) => !matrixIds.has(v.question_id))
+          const eligible = eligibleCountFor(sec.questions, rules, results)
+          return (
+            <AnalyticsSection key={sec.name} title={sec.name} eligibleCount={eligible}>
+              {cardQuestions.map((v) => <QuestionAnalyticsCard key={v.question_id} view={v} aiAnalyses={aiAnalyses} aiBusy={aiBusy} runAiAnalysis={runAiAnalysis} />)}
+              {isMatrixSection && <div className="fla-card fla-matrix-card"><h4>Detailed Ratings</h4><MatrixRatingChart views={otherRatings} /></div>}
+            </AnalyticsSection>
+          )
+        })}
+
+        {textViews.length > 0 && (
+          <div className="fla-row fla-bottom-row">
+            <div className="fla-card fla-ai-panel">
+              <h4>AI Summary Insights</h4>
+              <div className="fla-ai-grid">
+                {textViews.slice(0, 2).map((v) => (
+                  <div className="fla-ai-cell" key={v.question_id}>
+                    <span>{v.prompt.length > 46 ? `${v.prompt.slice(0, 46)}…` : v.prompt}</span>
+                    {aiAnalyses[v.question_id]?.themes?.length > 0
+                      ? <ul>{aiAnalyses[v.question_id].themes.slice(0, 4).map((theme) => <li key={theme}>{theme}</li>)}</ul>
+                      : <button className="rr-btn secondary" disabled={aiBusy === v.question_id} onClick={() => runAiAnalysis(v.question_id)}>{aiBusy === v.question_id ? 'Analyzing…' : 'Generate insights'}</button>}
+                  </div>
+                ))}
+                <div className="fla-ai-cell fla-sentiment-cell">
+                  <span>Overall Sentiment</span>
+                  {sentimentSource ? (
+                    <>
+                      <div className={`fla-sentiment-badge fla-sentiment-${aiAnalyses[sentimentSource.question_id].sentiment}`}>
+                        <i aria-hidden="true">{aiAnalyses[sentimentSource.question_id].sentiment === 'positive' ? '☺' : aiAnalyses[sentimentSource.question_id].sentiment === 'negative' ? '☹' : '😐'}</i>
+                        <b>{aiAnalyses[sentimentSource.question_id].sentiment}</b>
+                      </div>
+                      <small className="fla-ai-disclaimer">AI-generated analysis, not objective measurement</small>
+                    </>
+                  ) : <p className="fla-empty-note">Generate insights on a written response to see sentiment.</p>}
+                </div>
+              </div>
+            </div>
+            <div className="fla-card fla-quick-actions">
+              <h4>Quick Actions</h4>
+              <button type="button" onClick={() => setShowResponses((v) => !v)}><i>◈</i><div><b>{showResponses ? 'Hide' : 'View'} All Responses</b><small>See individual anonymous responses</small></div><span>›</span></button>
+              <button type="button" onClick={onGenerateReport}><i>▤</i><div><b>Generate Report</b><small>Download a summary report</small></div><span>›</span></button>
+              {displayUrl && <button type="button" onClick={() => window.open(displayUrl, '_blank', 'noopener')}><i>▣</i><div><b>Live Display</b><small>Show results on projector/TV</small></div><span>›</span></button>}
+            </div>
+          </div>
+        )}
+
+        {showResponses && (
+          <div className="fla-card fla-responses-panel">
+            <h4>Individual responses</h4>
+            {responseDetails?.length > 0 ? (
+              <div className="fla-responses-table">
+                {responseDetails.map((response) => (
+                  <div className="fla-responses-row" key={response.id}>
+                    <strong>{response.participant}</strong><span>{response.question_prompt}</span><span>{response.selected_options?.length ? response.selected_options.join(' → ') : String(response.answer_value ?? '—')}</span>
+                  </div>
+                ))}
+              </div>
+            ) : <AnalyticsEmptyState />}
+          </div>
+        )}
+      </main>
+    </div>
+  )
 }
 
 function EmptyActivity({ onCreate }) {
@@ -133,13 +493,16 @@ function OverviewPanel({ eventId, joinInfo, activities, displays, onCreate, onOp
       <button onClick={() => window.open(joinInfo?.url || `${window.location.origin}/live/guest?event=${eventId}`, '_blank')}><span>09</span><b>Guest mobile</b><small>Preview the participant experience</small></button>
       <button onClick={() => onTab('Settings')}><span>10</span><b>Presenter mobile</b><small>Create a pressure-ready control link</small></button>
       <button onClick={() => onTab('Activities')}><span>11</span><b>Moderator queue</b><small>Review and feature audience Q&amp;A</small></button>
-      <button onClick={() => onTab('Displays')}><span>12</span><b>TV / Projector</b><small>Direct 21 cinematic scenes</small></button>
+      <button onClick={() => onTab('Displays')}><span>12</span><b>TV / Projector</b><small>Direct 32 cinematic scenes</small></button>
     </section>
   </div>
 }
 
 function DisplayCard({ display, eventId, activities, programSessions, busy, onUpdate, onDelete }) {
   const [editing, setEditing] = useState(false)
+  const [pushing, setPushing] = useState(false)
+  const [pushReceipt, setPushReceipt] = useState('')
+  const [livePreviewVersion, setLivePreviewVersion] = useState(0)
   const settings = display.settings || {}
   const link = `${window.location.origin}/live/${display.display_code}?token=${encodeURIComponent(display.access_token)}`
 
@@ -154,22 +517,39 @@ function DisplayCard({ display, eventId, activities, programSessions, busy, onUp
     setPendingActivityId(display.assigned_activity_id || '')
     setPendingScene(display.scene)
   }, [display.assigned_session_id, display.assigned_activity_id, display.scene])
+  useEffect(() => { setPushReceipt('') }, [pendingSessionId, pendingActivityId, pendingScene])
 
-  // Reuses the activity's own always-on TV link (real component, real data,
-  // correctly scaled since an iframe gets its own genuine viewport) rather
-  // than trying to inline the broadcast canvas, which assumes a full-page
-  // viewport and can't be shrunk to fit a card. Shows that activity's own
-  // saved scene — the pending scene choice below only takes effect once
-  // actually pushed to this display.
+  // Reuses the activity's read-only TV payload (real component and real data)
+  // inside an iframe with a local-only scene override. This makes selection
+  // immediately visible without changing the actual projector until pushed.
   const pendingActivity = activities.find((a) => a.id === pendingActivityId)
   const previewToken = pendingActivity?.config?.display_token
-  const previewLink = previewToken ? `${window.location.origin}/live-display/${pendingActivityId}?token=${encodeURIComponent(previewToken)}` : null
+  const previewLink = pendingActivityId && pendingActivityId === (display.assigned_activity_id || '')
+    ? `${link}&previewScene=${encodeURIComponent(pendingScene)}`
+    : previewToken
+      ? `${window.location.origin}/live-display/${pendingActivityId}?token=${encodeURIComponent(previewToken)}&previewScene=${encodeURIComponent(pendingScene)}`
+      : null
   const allowedScenes = compatibleScenes(pendingActivity?.type)
   const availableScenes = DISPLAY_SCENES.filter(([key]) => allowedScenes.includes(key))
 
-  const isDirty = pendingSessionId !== (display.assigned_session_id || '') || pendingActivityId !== (display.assigned_activity_id || '') || pendingScene !== display.scene
-  function pushToDisplay() {
-    onUpdate(display.id, { assigned_session_id: pendingSessionId || null, assigned_activity_id: pendingActivityId || null, scene: pendingScene })
+  // A manual scene choice must take control from follow_activity; otherwise
+  // the projector resolves to question/responding/results and differs from the
+  // exact scene shown in the preview.
+  const isDirty = pendingSessionId !== (display.assigned_session_id || '') || pendingActivityId !== (display.assigned_activity_id || '') || pendingScene !== display.scene || !!settings.follow_activity
+  async function pushToDisplay() {
+    setPushing(true)
+    setPushReceipt('')
+    const updated = await onUpdate(display.id, {
+      assigned_session_id: pendingSessionId || null,
+      assigned_activity_id: pendingActivityId || null,
+      scene: pendingScene,
+      settings: { follow_activity: false },
+    })
+    if (updated) {
+      setLivePreviewVersion((version) => version + 1)
+      setPushReceipt(`Main screen refreshed ✓ ${new Date().toLocaleTimeString([], { hour: 'numeric', minute: '2-digit', second: '2-digit' })}`)
+    }
+    setPushing(false)
   }
 
   const assignableActivities = activities
@@ -185,7 +565,7 @@ function DisplayCard({ display, eventId, activities, programSessions, busy, onUp
 
   return <article className="fl-display-card">
     <div className="fl-display-preview">
-      <iframe title={`${display.name} broadcast preview`} src={link} tabIndex="-1" />
+      <iframe title={`${display.name} broadcast preview`} src={`${link}&adminRefresh=${livePreviewVersion}`} tabIndex="-1" />
       <div className="fl-display-preview-shade"><span>{DISPLAY_SCENES.find(([key]) => key === display.scene)?.[1] || display.scene}</span><button onClick={() => window.open(link, '_blank', 'noopener,noreferrer')}>Open fullscreen ↗</button></div>
     </div>
     <div className="fl-display-body">
@@ -211,14 +591,19 @@ function DisplayCard({ display, eventId, activities, programSessions, busy, onUp
       <button className="rr-btn secondary" onClick={() => navigator.clipboard?.writeText(link)}>Copy link</button>
       <button className="rr-btn primary" onClick={() => setEditing((value) => !value)}>{editing ? 'Close studio' : 'Design scene'}</button>
     </div>
-    <div className="fl-scene-strip">{availableScenes.slice(0, 8).map(([key, label]) => <button key={key} title={label} className={pendingScene === key ? 'active' : ''} onClick={() => setPendingScene(key)}><span>{({ welcome: '✦', join: '⌗', agenda: '≡', question: '?', responding: '◌', results: '▥', correct_answer: '✓', leaderboard: '♛', rating: '★', q_and_a: '?', word_cloud: 'Aa' })[key] || '◉'}</span>{label}</button>)}</div>
+    <div className="fl-scene-strip">{availableScenes.map(([key, label]) => <button key={key} title={label} className={pendingScene === key ? 'active' : ''} onClick={() => setPendingScene(key)}><span>{({ welcome: '✦', join: '⌗', agenda: '≡', question: '?', responding: '◌', results: '▥', survey_insights: '◫', correct_answer: '✓', leaderboard: '♛', rating: '★', q_and_a: '?', word_cloud: 'Aa', live_spectrum: '↔', interactive_quadrant: '⊞', image_heatmap: '◉', ranking_race: '≋', prediction_reveal: '◐', commitment_wall: '▦', photo_mosaic: '▦', location_map: '⌖', journey_recap: '⌁', spotlight_wheel: '◎' })[key] || '◉'}</span>{label}</button>)}</div>
     {pendingActivity && availableScenes.length < DISPLAY_SCENES.length && <p className="rd-hint" style={{ marginTop: -6, marginBottom: 10 }}>Only showing scenes that work with a {pendingActivity.type.replace('_', ' ')} activity — others would show nothing useful.</p>}
 
     <div className="fl-display-preview-box">
       <div className="fl-display-preview-box-head">
-        <span>{pendingActivityId ? 'Preview — not on the real screen yet' : 'No activity selected'}</span>
-        {isDirty && <button className="rr-btn primary" disabled={busy} onClick={pushToDisplay}>Push to display →</button>}
+        <span>{pendingActivityId
+          ? isDirty
+            ? `Preview: ${DISPLAY_SCENES.find(([key]) => key === pendingScene)?.[1] || pendingScene} — not on the main screen yet`
+            : `Live preview: ${DISPLAY_SCENES.find(([key]) => key === pendingScene)?.[1] || pendingScene} — currently on the main screen`
+          : 'No activity selected'}</span>
+        {pendingActivityId && <button className="rr-btn primary" disabled={busy || pushing} onClick={pushToDisplay}>{pushing ? 'Sending to main screen…' : isDirty ? 'Push to main screen →' : 'Repush to main screen ↻'}</button>}
       </div>
+      {pushReceipt && <div className="fl-display-push-receipt" role="status" aria-live="polite">{pushReceipt}</div>}
       {previewLink && <div className="fl-display-preview-canvas"><iframe title={`${display.name} pending preview`} src={previewLink} tabIndex="-1" /></div>}
     </div>
 
@@ -239,7 +624,14 @@ function DisplayCard({ display, eventId, activities, programSessions, busy, onUp
         <label style={{ gridColumn: '1 / -1' }}><span className="rd-hint">Message</span><input key={`message-${settings.message || ''}`} className="rr-input" defaultValue={settings.message || ''} placeholder="Optional scene message" onBlur={(e) => onUpdate(display.id, { settings: { message: e.target.value || null } })}/></label>
         <label style={{ gridColumn: '1 / -1' }}><span className="rd-hint">Subtitle / supporting copy</span><input key={`subtitle-${settings.subtitle || ''}`} className="rr-input" defaultValue={settings.subtitle || ''} placeholder="Optional supporting copy" onBlur={(e) => onUpdate(display.id, { settings: { subtitle: e.target.value || null } })}/></label>
       </div>
-      {display.scene === 'agenda' && <div><div className="rd-hint" style={{ marginBottom: 7 }}>Agenda cards — enter “time | title | speaker or room”</div><div style={{ display: 'grid', gap: 7 }}>{[0, 1, 2].map((index) => { const item = settings.agenda?.[index] || {}; return <input key={`agenda-${index}-${item.title || ''}`} className="rr-input" defaultValue={[item.time, item.title, item.speaker || item.room].filter(Boolean).join(' | ')} placeholder={`${index ? '11:15' : '10:30'} | Session title | Speaker`} onBlur={(e) => { const [time, title, speaker] = e.target.value.split('|').map((value) => value.trim()); const agenda = [...(settings.agenda || [])]; agenda[index] = { time: time || '', title: title || '', speaker: speaker || '', live: index === 0 }; onUpdate(display.id, { settings: { agenda: agenda.filter((entry) => entry.title) } }) }}/> })}</div></div>}
+      {pendingScene === 'agenda' && <div><div className="rd-hint" style={{ marginBottom: 7 }}>Agenda cards — enter “time | title | speaker or room”</div><div style={{ display: 'grid', gap: 7 }}>{[0, 1, 2].map((index) => { const item = settings.agenda?.[index] || {}; return <input key={`agenda-${index}-${item.title || ''}`} className="rr-input" defaultValue={[item.time, item.title, item.speaker || item.room].filter(Boolean).join(' | ')} placeholder={`${index ? '11:15' : '10:30'} | Session title | Speaker`} onBlur={(e) => { const [time, title, speaker] = e.target.value.split('|').map((value) => value.trim()); const agenda = [...(settings.agenda || [])]; agenda[index] = { time: time || '', title: title || '', speaker: speaker || '', live: index === 0 }; onUpdate(display.id, { settings: { agenda: agenda.filter((entry) => entry.title) } }) }}/> })}</div></div>}
+      {pendingScene === 'live_spectrum' && <label><span className="rd-hint">Spectrum labels — left | center | right</span><input className="rr-input" defaultValue={(settings.spectrum_labels || []).join(' | ')} placeholder="Not ready yet | Exploring | Ready now" onBlur={(e) => onUpdate(display.id, { settings: { spectrum_labels: e.target.value.split('|').map((value) => value.trim()).filter(Boolean).slice(0, 3) } })}/></label>}
+      {pendingScene === 'prediction_reveal' && <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}><label><span className="rd-hint">Locked prediction label</span><input className="rr-input" defaultValue={settings.prediction?.label || ''} placeholder="The room predicts July" onBlur={(e) => onUpdate(display.id, { settings: { prediction: { ...(settings.prediction || {}), label: e.target.value, locked: true } } })}/></label><label><span className="rd-hint">Predicted percentage</span><input className="rr-input" type="number" min="0" max="100" defaultValue={settings.prediction?.percent ?? ''} placeholder="68" onBlur={(e) => onUpdate(display.id, { settings: { prediction: { ...(settings.prediction || {}), percent: e.target.value === '' ? null : Math.min(100, Math.max(0, Number(e.target.value))), locked: true } } })}/></label></div>}
+      {pendingScene === 'commitment_wall' && <label><span className="rd-hint">Moderator-approved commitments — one per line: theme | commitment | author</span><textarea className="rr-input" rows="6" defaultValue={(settings.commitments || []).map((entry) => typeof entry === 'string' ? entry : [entry.theme, entry.text, entry.author].filter(Boolean).join(' | ')).join('\n')} placeholder="Youth | Invite two younger voices into our planning circle | Anonymous" onBlur={(e) => onUpdate(display.id, { settings: { commitments: e.target.value.split('\n').map((line) => { const [theme, text, author] = line.split('|').map((value) => value.trim()); return { theme: theme || 'Commitment', text: text || '', author: author || 'Anonymous' } }).filter((entry) => entry.text).slice(0, 8) } })}/></label>}
+      {pendingScene === 'photo_mosaic' && <label><span className="rd-hint">Consent-verified portraits — one per line: name | image URL (URL optional)</span><textarea className="rr-input" rows="5" defaultValue={(settings.photo_mosaic_entries || []).map((entry) => [entry.name, entry.image_url].filter(Boolean).join(' | ')).join('\n')} placeholder="Amina Yusuf | https://…" onBlur={(e) => onUpdate(display.id, { settings: { photo_mosaic_entries: e.target.value.split('\n').map((line) => { const [name, image_url] = line.split('|').map((value) => value.trim()); return { name, image_url: image_url || null, consent: true } }).filter((entry) => entry.name).slice(0, 72) } })}/></label>}
+      {pendingScene === 'location_map' && <label><span className="rd-hint">Privacy-safe regions — one per line: region | participant count</span><textarea className="rr-input" rows="5" defaultValue={(settings.location_regions || []).map((entry) => `${entry.name} | ${entry.count || 0}`).join('\n')} placeholder={'Houston area | 86\nEast Coast | 34'} onBlur={(e) => onUpdate(display.id, { settings: { location_regions: e.target.value.split('\n').map((line) => { const [name, count] = line.split('|').map((value) => value.trim()); return { name, count: Math.max(0, Number(count) || 0) } }).filter((entry) => entry.name).slice(0, 5) } })}/></label>}
+      {pendingScene === 'journey_recap' && <label><span className="rd-hint">Journey moments — one per line: icon | title | metric | note</span><textarea className="rr-input" rows="5" defaultValue={(settings.journey_steps || []).map((entry) => [entry.icon, entry.title, entry.value, entry.note].filter(Boolean).join(' | ')).join('\n')} placeholder={'⌗ | We gathered | 184 voices | joined in under 90 seconds\n◌ | We chose | 1,284 votes | across seven decisions'} onBlur={(e) => onUpdate(display.id, { settings: { journey_steps: e.target.value.split('\n').map((line) => { const [icon, title, value, note] = line.split('|').map((part) => part.trim()); return { icon, title, value, note } }).filter((entry) => entry.title).slice(0, 5) } })}/></label>}
+      {pendingScene === 'spotlight_wheel' && <label><span className="rd-hint">Opted-in spotlight participants — one per line: name | detail. Saving confirms consent.</span><textarea className="rr-input" rows="5" defaultValue={(settings.spotlight_entries || []).map((entry) => [entry.name, entry.detail].filter(Boolean).join(' | ')).join('\n')} placeholder="Zainab A. | Table 14 · Community challenge" onBlur={(e) => onUpdate(display.id, { settings: { spotlight_entries: e.target.value.split('\n').map((line, index) => { const [name, detail] = line.split('|').map((value) => value.trim()); return { name, detail, consent: true, selected: index === 0 } }).filter((entry) => entry.name).slice(0, 200) } })}/></label>}
       <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap' }}>
         {[['motion', 'Motion'], ['show_reactions', 'Audience reactions'], ['safe_area', 'Safe area'], ['follow_activity', 'Follow activity automatically']].map(([key, label]) => <label key={key} style={{ display: 'flex', alignItems: 'center', gap: 7, fontSize: 12, fontWeight: 700 }}><input type="checkbox" checked={key === 'motion' || key === 'show_reactions' ? settings[key] !== false : !!settings[key]} onChange={(e) => onUpdate(display.id, { settings: { [key]: e.target.checked } })}/>{label}</label>)}
       </div>
@@ -275,6 +667,7 @@ export default function FestioLiveRedesignPage() {
   const [qnaItems, setQnaItems] = useState(null)
   const [moderationItems, setModerationItems] = useState(null)
   const [responseDetails, setResponseDetails] = useState(null)
+  const [analyticsOverlayOpen, setAnalyticsOverlayOpen] = useState(false)
   const [busy, setBusy] = useState(false)
 
   const [bank, setBank] = useState(null)
@@ -369,7 +762,8 @@ export default function FestioLiveRedesignPage() {
     try {
       const updated = await api.liveUpdateDisplay(eventId, displayId, patch)
       setDisplays((current) => (current || []).map((display) => display.id === displayId ? updated : display))
-    } catch (e) { setError(e.message) } finally { setBusy(false) }
+      return updated
+    } catch (e) { setError(e.message); return null } finally { setBusy(false) }
   }
 
   async function deleteDisplay(displayId) {
@@ -993,7 +1387,13 @@ export default function FestioLiveRedesignPage() {
                 </div>
               )}
 
-              {results && (
+              {results && ['survey', 'feedback'].includes(selected.type) && (
+                <div style={{ marginTop: 20 }}>
+                  <button className="rr-btn primary" onClick={() => setAnalyticsOverlayOpen(true)}>Open Engagement Analytics →</button>
+                </div>
+              )}
+
+              {results && !['survey', 'feedback'].includes(selected.type) && (
                 <div style={{ marginTop: 20 }}>
                   <h4 style={{ fontSize: 13, textTransform: 'uppercase', letterSpacing: '.05em', color: '#5b6a5c', margin: '0 0 10px' }}>
                     Results — {results.participant_count} participants, {results.response_count} responses
@@ -1124,7 +1524,7 @@ export default function FestioLiveRedesignPage() {
 
       {tab === 'Displays' && (
         <div className="rr-panel fl-section-panel fl-displays-panel">
-          <div className="rd-panel-head"><div><span className="fl-eyebrow">Scene manager · 21 presentation styles</span><h3>Festio Broadcast</h3><p>Direct every projector, TV, and LED wall independently in realtime.</p></div><button className="rr-btn primary" disabled={busy} onClick={createDisplay}>+ Add display</button></div>
+          <div className="rd-panel-head"><div><span className="fl-eyebrow">Scene manager · 22 presentation styles</span><h3>Festio Broadcast</h3><p>Direct every projector, TV, and LED wall independently in realtime.</p></div><button className="rr-btn primary" disabled={busy} onClick={createDisplay}>+ Add display</button></div>
           <div className="rd-panel-body">
             <div style={{ display: 'flex', gap: 8, marginBottom: 14, maxWidth: 520 }}><input className="rr-input" aria-label="New display name" placeholder="Main stage, lobby, breakout room…" value={newDisplayName} onChange={(e) => setNewDisplayName(e.target.value)} /></div>
             <div className="fl-display-grid">{visibleDisplays.map((display) => <DisplayCard key={display.id} display={display} eventId={eventId} activities={activities || []} programSessions={programSessions || []} busy={busy} onUpdate={updateDisplay} onDelete={deleteDisplay}/>)}</div>
@@ -1142,7 +1542,7 @@ export default function FestioLiveRedesignPage() {
                 <div style={{ flex: 1 }}><strong>{a.title}</strong><div className="rd-hint">{programSessionById.get(a.session_id)?.title || 'Event-wide'} · {a.participant_count} participants</div></div>
                 <strong>{a.response_count} responses</strong>
                 <button className="rr-btn secondary" onClick={() => api.liveDownloadExport(eventId, a.id, a.title).catch((e) => setError(e.message))}>Export CSV</button>
-                <button className="rr-btn secondary" onClick={async () => { setError(''); try { const [full, data, details, moderation] = await Promise.all([api.liveGetActivity(eventId, a.id), api.liveResults(eventId, a.id), api.liveResponseDetails(eventId, a.id), a.type === 'q_and_a' ? Promise.resolve([]) : api.liveModerationItems(eventId, a.id)]); setSelected(full); setResults(data); setResponseDetails(details); setModerationItems(moderation); setTab('Activities') } catch (e) { setError(e.message) } }}>Review</button>
+                <button className="rr-btn secondary" onClick={async () => { setError(''); try { const [full, data, details, moderation, activityRules] = await Promise.all([api.liveGetActivity(eventId, a.id), api.liveResults(eventId, a.id), api.liveResponseDetails(eventId, a.id), a.type === 'q_and_a' ? Promise.resolve([]) : api.liveModerationItems(eventId, a.id), ['survey', 'feedback'].includes(a.type) ? api.liveRules(eventId, a.id) : Promise.resolve([])]); setSelected(full); setResults(data); setResponseDetails(details); setModerationItems(moderation); setRules(activityRules); setTab('Activities') } catch (e) { setError(e.message) } }}>Review</button>
               </div>
             ))}
           </div>
@@ -1303,6 +1703,19 @@ export default function FestioLiveRedesignPage() {
         </div>
       )}
       </div>
+
+      {analyticsOverlayOpen && results && selected && ['survey', 'feedback'].includes(selected.type) && (
+        <SurveyAnalyticsOverlay
+          event={event} selected={selected} results={results}
+          summary={visibleActivities.find((a) => a.id === selected.id)}
+          aiAnalyses={aiAnalyses} aiBusy={aiBusy} runAiAnalysis={runAiAnalysis}
+          responseDetails={responseDetails} rules={rules}
+          onClose={() => setAnalyticsOverlayOpen(false)}
+          onExportCsv={() => api.liveDownloadExport(eventId, selected.id, selected.title).catch((e) => setError(e.message))}
+          onGenerateReport={() => api.liveDownloadExport(eventId, selected.id, selected.title).catch((e) => setError(e.message))}
+          displayUrl={selected.config?.display_token ? `/live-display/${selected.id}?token=${selected.config.display_token}` : null}
+        />
+      )}
     </RedesignShell>
   )
 }

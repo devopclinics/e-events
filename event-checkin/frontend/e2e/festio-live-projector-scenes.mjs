@@ -6,9 +6,13 @@ if (!token) throw new Error('ENGAGEMENT_TOKEN is required')
 
 const scenes = [
   'welcome', 'join', 'agenda', 'question', 'responding', 'results',
+  'survey_insights',
   'correct_answer', 'leaderboard', 'team_battle', 'rating', 'feedback',
   'word_cloud', 'q_and_a', 'room_pulse', 'ai_insight', 'idea_galaxy',
-  'announcement', 'break', 'countdown', 'celebration', 'custom_message',
+  'live_spectrum', 'interactive_quadrant', 'image_heatmap', 'ranking_race',
+  'prediction_reveal', 'commitment_wall', 'photo_mosaic', 'location_map',
+  'journey_recap', 'spotlight_wheel', 'announcement', 'break', 'countdown',
+  'celebration', 'custom_message',
 ]
 const sizes = [[1366, 768], [1920, 1080], [2560, 1440], [3840, 2160]]
 

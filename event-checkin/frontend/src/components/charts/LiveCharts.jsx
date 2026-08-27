@@ -5,7 +5,7 @@ import './LiveCharts.css'
 // library, matching the rest of LiveBroadcastCanvas. Colors come from the
 // screen's --flb-accent* theme variables so every chart follows whichever
 // theme (aurora/citrus/ocean/festio/mono) the presenter picked.
-const PALETTE = ['var(--flb-accent)', 'var(--flb-accent2)', 'var(--flb-accent3)', 'var(--flb-good)', '#f3a526', '#20a4f3']
+export const PALETTE = ['var(--flb-accent)', 'var(--flb-accent2)', 'var(--flb-accent3)', 'var(--flb-good)', '#f3a526', '#20a4f3']
 const STAR_PATH = 'M12 2.5l2.97 6.28 6.78.82-5.1 4.75 1.4 6.9L12 17.9l-6.05 3.35 1.4-6.9-5.1-4.75 6.78-.82L12 2.5z'
 
 function clamp01(value) { return Math.max(0, Math.min(1, value)) }

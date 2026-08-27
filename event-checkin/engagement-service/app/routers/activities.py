@@ -96,10 +96,17 @@ async def list_activities(identity: Identity = Depends(current_identity), db: As
                 ActivityParticipant.activity_id == a.id, ActivityParticipant.completed_at.is_not(None),
             )
         ) or 0
+        avg_completion_seconds = None
+        if completed_count:
+            avg_completion_seconds = await db.scalar(
+                select(func.avg(func.extract("epoch", ActivityParticipant.completed_at - ActivityParticipant.joined_at)))
+                .where(ActivityParticipant.activity_id == a.id, ActivityParticipant.completed_at.is_not(None))
+            )
         summary = ActivitySummary.model_validate(a)
         summary.response_count = response_count
         summary.participant_count = participant_count
         summary.completed_count = completed_count
+        summary.avg_completion_seconds = float(avg_completion_seconds) if avg_completion_seconds is not None else None
         out.append(summary)
     return out
 

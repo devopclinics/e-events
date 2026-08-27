@@ -178,13 +178,17 @@ class DomainSafetyTests(unittest.TestCase):
     def test_broadcast_contract_supports_every_approved_scene(self):
         scenes = {
             "welcome", "join", "agenda", "question", "responding", "results",
+            "survey_insights",
             "correct_answer", "leaderboard", "team_battle", "rating", "feedback",
             "word_cloud", "q_and_a", "room_pulse", "ai_insight", "idea_galaxy",
-            "announcement", "break", "countdown", "celebration", "custom_message",
+            "live_spectrum", "interactive_quadrant", "image_heatmap", "ranking_race",
+            "prediction_reveal", "commitment_wall", "photo_mosaic", "location_map",
+            "journey_recap", "spotlight_wheel", "announcement", "break", "countdown",
+            "celebration", "custom_message",
         }
         for scene in scenes:
             self.assertEqual(DisplayCreate(name="Main stage", scene=scene).scene, scene)
-        self.assertEqual(len(scenes), 21)
+        self.assertEqual(len(scenes), 32)
 
     def test_broadcast_settings_validate_themes_and_countdowns(self):
         update = DisplayControlUpdate(scene="room_pulse", settings={"theme": "citrus", "countdown_seconds": 90})

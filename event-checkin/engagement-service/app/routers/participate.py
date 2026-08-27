@@ -235,10 +235,40 @@ async def _compute_leaderboard(activity: EngagementActivity, db: AsyncSession, l
     ]
 
 
+def _survey_completion_summary(participants: list[ActivityParticipant], participant_count: int, answer_count: int) -> dict:
+    """Privacy-safe aggregate metrics for a public survey projector.
+
+    Completion is an explicit final submission, not an estimate based on how
+    many individual questions somebody answered. That distinction matters for
+    branched surveys where two fully-completed guests may legitimately answer
+    different numbers of questions.
+    """
+    completed = [participant for participant in participants if participant.completed_at is not None]
+    durations: list[float] = []
+    for participant in completed:
+        try:
+            duration = (participant.completed_at - participant.joined_at).total_seconds()
+        except (AttributeError, TypeError):
+            continue
+        if duration >= 0:
+            durations.append(duration)
+    completed_count = len(completed)
+    return {
+        "participant_count": participant_count,
+        "completed_count": completed_count,
+        "completion_rate": round((completed_count / participant_count) * 100) if participant_count else 0,
+        "avg_completion_seconds": round(sum(durations) / len(durations), 2) if durations else None,
+        "answer_count": answer_count,
+    }
+
+
 async def _display_payload(activity: EngagementActivity, db: AsyncSession) -> dict:
     results = await _compute_results(activity, db)
-    participant_ids = list((await db.execute(select(ActivityParticipant.id).where(ActivityParticipant.activity_id == activity.id))).scalars().all())
-    joined_count = len(participant_ids)
+    participants = list((await db.execute(
+        select(ActivityParticipant).where(ActivityParticipant.activity_id == activity.id)
+    )).scalars().all())
+    participant_ids = [participant.id for participant in participants]
+    joined_count = len(participants)
     participant_count = max(joined_count, results.participant_count)
     leaderboard = await _compute_leaderboard(activity, db) if activity.config.get("leaderboard_enabled") else []
     current_source = next((q for q in activity.questions if q.id == activity.config.get("current_question_id")), None)
@@ -276,6 +306,7 @@ async def _display_payload(activity: EngagementActivity, db: AsyncSession) -> di
     safe_config_keys = {
         "event_name", "event_venue", "start_at", "join_code", "leaderboard_enabled",
         "display_scene", "moderation_enabled", "live_results_enabled", "registered_progress_mode",
+        "survey_insights_layout",
     }
     return {
         "event_id": activity.event_id,
@@ -287,6 +318,10 @@ async def _display_payload(activity: EngagementActivity, db: AsyncSession) -> di
         "current_question_id": activity.config.get("current_question_id"),
         "participant_count": participant_count,
         "response_count": results.response_count,
+        "survey_summary": (
+            _survey_completion_summary(participants, participant_count, results.response_count)
+            if activity.type in ("survey", "feedback") else None
+        ),
         "display_config": {key: activity.config.get(key) for key in safe_config_keys if key in activity.config},
         "questions": [
             {

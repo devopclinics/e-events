@@ -679,6 +679,17 @@ function DisplayCard({ display, eventId, activities, programSessions, busy, onUp
       <button className="rr-btn secondary" onClick={() => navigator.clipboard?.writeText(link)}>Copy link</button>
       <button className="rr-btn primary" onClick={() => setEditing((value) => !value)}>{editing ? 'Close studio' : 'Design scene'}</button>
     </div>
+    <div className="fl-results-quickbar" aria-label="Results and rehearsal controls">
+      <div><span>RESULTS &amp; REHEARSAL</span><strong>Put results on screen or practise safely</strong></div>
+      {!pendingActivityId && <small>Select an activity above to unlock these controls.</small>}
+      {pendingActivityId && !activityDetail && <small>Loading activity questions…</small>}
+      {activityDetail && resultQuestions.length === 0 && <small>This activity has no active questions yet. Add a question first.</small>}
+      {resultQuestions.length > 0 && <>
+        <button className="rr-btn primary" disabled={busy || pushing} onClick={() => presentResults('all')}>Show all results</button>
+        <button className="rr-btn secondary" disabled={busy || pushing} onClick={() => onRehearsal(display.id, { activity_id: pendingActivityId, enabled: true, participants: 10 })}>Rehearse with 10 guests</button>
+        <button className="rr-btn secondary" onClick={() => document.getElementById(`results-control-${display.id}`)?.scrollIntoView({ behavior: 'smooth', block: 'center' })}>Full results controls ↓</button>
+      </>}
+    </div>
     <div className="fl-scene-strip">{availableScenes.map(([key, label]) => <button key={key} title={label} className={pendingScene === key ? 'active' : ''} onClick={() => setPendingScene(key)}><span>{({ welcome: '✦', join: '⌗', agenda: '≡', question: '?', responding: '◌', results: '▥', all_results: '▦', survey_insights: '◫', correct_answer: '✓', leaderboard: '♛', rating: '★', q_and_a: '?', word_cloud: 'Aa', live_spectrum: '↔', interactive_quadrant: '⊞', image_heatmap: '◉', ranking_race: '≋', prediction_reveal: '◐', commitment_wall: '▦', photo_mosaic: '▦', location_map: '⌖', journey_recap: '⌁', spotlight_wheel: '◎' })[key] || '◉'}</span>{label}</button>)}</div>
     {pendingActivity && availableScenes.length < DISPLAY_SCENES.length && <p className="rd-hint" style={{ marginTop: -6, marginBottom: 10 }}>Only showing scenes that work with a {pendingActivity.type.replace('_', ' ')} activity — others would show nothing useful.</p>}
 
@@ -695,7 +706,7 @@ function DisplayCard({ display, eventId, activities, programSessions, busy, onUp
       {previewLink && <div className="fl-display-preview-canvas"><iframe title={`${display.name} pending preview`} src={previewLink} tabIndex="-1" /></div>}
     </div>
 
-    {activityDetail && resultQuestions.length > 0 && <section className="fl-results-control">
+    {activityDetail && resultQuestions.length > 0 && <section className="fl-results-control" id={`results-control-${display.id}`}>
       <header><div><span>RESULTS-ONLY CONTROL</span><h4>Put the outcome on screen</h4><p>Choose exactly what the room sees. This never changes responses or analytics.</p></div><b>{settings.rehearsal_mode ? 'Rehearsal' : settings.results_frozen ? 'Frozen' : display.scene === 'all_results' || display.scene === 'results' ? 'Live results' : 'Ready'}</b></header>
       <div className="fl-results-actions">
         <button className="rr-btn secondary" disabled={busy || pushing} onClick={() => presentResults('current', { question_id: settings.results_question_id || resultQuestionIds[0] })}>Show current result</button>

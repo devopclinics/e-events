@@ -1398,7 +1398,7 @@ export default function ExperienceRedesignPage() {
             <div className="rd-panel-body">
               {realGuests.length > 0 && (
                 <div className="rd-row2" style={{ marginBottom: 12 }}>
-                  <input className="rr-input" style={{ flex: 1 }} type="search" placeholder="Search by name, email, or phone…" value={guestSearch} onChange={(e) => setGuestSearch(e.target.value)} />
+                  <input className="rr-input" style={{ flex: 1, minWidth: 0 }} type="text" placeholder="Search by name, email, or phone…" value={guestSearch} onChange={(e) => setGuestSearch(e.target.value)} />
                   <select className="rr-select" value={guestCheckinFilter} onChange={(e) => setGuestCheckinFilter(e.target.value)}>
                     <option value="all">All guests</option>
                     <option value="not_yet">Not checked in</option>

@@ -601,6 +601,7 @@ class ExperienceStepCreate(BaseModel):
     sort_order: int = 0
     required: bool = True
     enabled: bool = True
+    blocks_checkin: bool = False
     starts_offset_seconds: Optional[int] = Field(default=None, ge=0)
     duration_seconds: Optional[int] = Field(default=None, gt=0)
     is_segment: bool = False
@@ -630,6 +631,7 @@ class ExperienceStepUpdate(BaseModel):
     sort_order: Optional[int] = None
     required: Optional[bool] = None
     enabled: Optional[bool] = None
+    blocks_checkin: Optional[bool] = None
     starts_offset_seconds: Optional[int] = Field(default=None, ge=0)
     duration_seconds: Optional[int] = Field(default=None, gt=0)
     is_segment: Optional[bool] = None
@@ -708,6 +710,7 @@ class ExperienceStepOut(BaseModel):
     sort_order: int
     required: bool
     enabled: bool
+    blocks_checkin: bool = False
     starts_offset_seconds: Optional[int] = None
     duration_seconds: Optional[int] = None
     is_segment: bool = False
@@ -2039,7 +2042,7 @@ class MergeDuplicatesRequest(BaseModel):
 # ── Scanner ──────────────────────────────────────────────────────────────────
 
 class ScanResult(BaseModel):
-    status: str  # admitted | already_admitted | invalid | not_active | not_assigned
+    status: str  # admitted | already_admitted | invalid | not_active | not_assigned | pending_required_step | denied
     message: str
     guest: Optional[GuestOut] = None
     table_name: Optional[str] = None
@@ -2739,6 +2742,7 @@ class PublicExperienceStepIn(BaseModel):
     sort_order: int = 0
     required: bool = True
     enabled: bool = True
+    blocks_checkin: bool = False
     starts_offset_seconds: Optional[int] = Field(default=None, ge=0)
     duration_seconds: Optional[int] = Field(default=None, gt=0)
     conditions: Optional[dict] = None
@@ -2767,6 +2771,7 @@ class PublicExperienceStepUpdate(BaseModel):
     sort_order: Optional[int] = None
     required: Optional[bool] = None
     enabled: Optional[bool] = None
+    blocks_checkin: Optional[bool] = None
     starts_offset_seconds: Optional[int] = Field(default=None, ge=0)
     duration_seconds: Optional[int] = Field(default=None, gt=0)
     conditions: Optional[dict] = None
@@ -2801,6 +2806,7 @@ class PublicExperienceStepOut(BaseModel):
     sort_order: int
     required: bool
     enabled: bool
+    blocks_checkin: bool = False
     starts_offset_seconds: Optional[int] = None
     duration_seconds: Optional[int] = None
     is_segment: bool = False

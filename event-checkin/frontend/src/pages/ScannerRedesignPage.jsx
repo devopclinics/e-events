@@ -50,6 +50,7 @@ function extractScanPayload(raw) {
 function resultTone(result) {
   if (!result) return ''
   if (result.denied || result.status === 'denied' || result.status === 'invalid') return 'red'
+  if (result.status === 'pending_required_step') return 'amber'
   if (/already/.test(result.status || '')) return 'amber'
   if (result.status === 'offline_queued') return 'blue'
   return 'green'
@@ -79,10 +80,12 @@ function ResultCard({ result, onStepComplete, stepBusy }) {
             <strong>Next Experience steps</strong>
             {result.experience_next_steps.map(({ step }) => {
               const completable = !['check_in', 'seating_assignment', 'meal_selection', 'consent'].includes(step.type)
+              const link = step.config?.external_url
               return (
                 <div className="sc-experience-step" key={step.id}>
-                  <span>{step.title}{step.required ? ' · Required' : ''}</span>
-                  {completable && <button className="rr-btn secondary" disabled={stepBusy} onClick={() => onStepComplete(step)}>{stepBusy ? 'Saving…' : step.type === 'session_attendance' ? 'Check in' : 'Complete'}</button>}
+                  <span>{step.title}{step.required ? ' · Required' : ''}{step.blocks_checkin ? ' · Blocks check-in' : ''}</span>
+                  {link && <a href={link} target="_blank" rel="noopener noreferrer" className="rr-link-btn">Open link ↗</a>}
+                  {completable && <button className="rr-btn secondary" disabled={stepBusy} onClick={() => onStepComplete(step)}>{stepBusy ? 'Saving…' : step.type === 'session_attendance' ? 'Check in' : step.blocks_checkin ? 'Confirm completed & check in' : 'Complete'}</button>}
                 </div>
               )
             })}
@@ -493,10 +496,12 @@ function CommandResultPanel({ result, onStepComplete, stepBusy }) {
               <span>Next required action</span>
               {requiredSteps.map(({ step }) => {
                 const completable = !['check_in', 'seating_assignment', 'meal_selection', 'consent'].includes(step.type)
+                const link = step.config?.external_url
                 return (
                   <div className="sc-command-next-step" key={step.id}>
-                    <strong>{step.title} · Required</strong>
-                    {completable && <button disabled={stepBusy} onClick={() => onStepComplete(step)}>{stepBusy ? 'Saving…' : step.type === 'session_attendance' ? 'Check in' : 'Complete'}</button>}
+                    <strong>{step.title} · Required{step.blocks_checkin ? ' · Blocks check-in' : ''}</strong>
+                    {link && <a href={link} target="_blank" rel="noopener noreferrer">Open link ↗</a>}
+                    {completable && <button disabled={stepBusy} onClick={() => onStepComplete(step)}>{stepBusy ? 'Saving…' : step.type === 'session_attendance' ? 'Check in' : step.blocks_checkin ? 'Confirm completed & check in' : 'Complete'}</button>}
                   </div>
                 )
               })}
@@ -722,6 +727,7 @@ export default function ScannerRedesignPage() {
   async function completeExperienceStep(step) {
     const resultEventId = result?.guest?.event_id || eventId
     if (!resultEventId || !result?.guest?.id || !step?.id || stepBusy) return
+    const wasBlockingCheckin = result.status === 'pending_required_step'
     const payload = {
       status: 'completed',
       metadata: { source: 'scanner', ...(step.type === 'session_attendance' ? { action: 'session_check_in' } : {}) },
@@ -730,6 +736,14 @@ export default function ScannerRedesignPage() {
     try {
       await api.updateGuestExperienceStep(resultEventId, result.guest.id, step.id, payload)
       const nextSteps = await api.getExperienceNextSteps(resultEventId, result.guest.id)
+      const stillBlocked = nextSteps.some((item) => item.step.required && item.step.blocks_checkin)
+      if (wasBlockingCheckin && !stillBlocked && result.guest.qr_token) {
+        // Confirming the required step (e.g. "guest signed the waiver") also
+        // admits them in the same action — no second scan needed.
+        const admitted = await api.scan(result.guest.qr_token)
+        await handleResult(admitted)
+        return
+      }
       setResult((current) => current ? { ...current, experience_next_steps: nextSteps, step_error: '' } : current)
     } catch (error) {
       if (!navigator.onLine || /failed to fetch|network|load failed/i.test(error.message || '')) {

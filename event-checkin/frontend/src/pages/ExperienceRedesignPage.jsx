@@ -59,8 +59,8 @@ function feedbackTypeLabel(t) { return FEEDBACK_TYPE_LABELS[t] || t }
 
 function blankStepForm() {
   return {
-    id: null, key: '', type: 'custom', title: '', description: '', sort_order: 0, required: true, enabled: true, depends_on: '',
-    guest_message: '', staff_prompt: '', completion_message: '',
+    id: null, key: '', type: 'custom', title: '', description: '', sort_order: 0, required: true, enabled: true, blocks_checkin: false, depends_on: '',
+    guest_message: '', staff_prompt: '', completion_message: '', external_link: '',
     session_topic: '', session_date: '', session_start_time: '', session_end_time: '', session_room: '', session_speaker: '', session_speaker_id: '', session_capacity: '', session_checkin_window_minutes: '',
     room_assignment_mode: 'global', room_assignment_scope: '', room_assignment_room: '', room_assignment_table_group: '',
     feedback_audience: 'all', feedback_session_step_id: '', feedback_anonymous: false, feedback_status: 'open',
@@ -216,7 +216,15 @@ function ExperienceStepEditor({ form, setForm, steps, busy, onClose, onSave, spe
           <div className="ex-editor-toggle-row">
             <label><input type="checkbox" checked={form.required} onChange={(event) => patch({ required: event.target.checked })}/> Required</label>
             <label><input type="checkbox" checked={form.enabled} onChange={(event) => patch({ enabled: event.target.checked })}/> Enabled</label>
+            <label><input type="checkbox" checked={form.blocks_checkin} onChange={(event) => patch({ blocks_checkin: event.target.checked })}/> Blocks check-in until completed</label>
           </div>
+          {form.blocks_checkin && (
+            <p className="rd-hint">
+              A guest with this step still pending cannot be admitted at the scanner. Staff can open the link below and
+              tap "Confirm completed &amp; check in" once the guest has actually done it — that action is logged with
+              which staff member confirmed it and when.
+            </p>
+          )}
         </section>
 
         <section className="ex-editor-section">
@@ -232,6 +240,9 @@ function ExperienceStepEditor({ form, setForm, steps, busy, onClose, onSave, spe
 
         <section className="ex-editor-section">
           <div className="ex-editor-section-title"><strong>Step messages</strong><span>Guest, scanner, and completion guidance</span></div>
+          <StepField label="External link" hint="A form, waiver, or page the guest completes outside Festio (e.g. a third-party e-signature link). Shown to staff at the scanner.">
+            <input className="rr-input" type="url" value={form.external_link} onChange={(event) => patch({ external_link: event.target.value })} placeholder="https://…"/>
+          </StepField>
           <StepField label="Guest message"><textarea className="rr-textarea" rows={3} value={form.guest_message} onChange={(event) => patch({ guest_message: event.target.value })} placeholder="What guests should see"/></StepField>
           <StepField label="Staff scanner prompt"><textarea className="rr-textarea" rows={3} value={form.staff_prompt} onChange={(event) => patch({ staff_prompt: event.target.value })} placeholder="What staff should do"/></StepField>
           <StepField label="Completion message"><textarea className="rr-textarea" rows={3} value={form.completion_message} onChange={(event) => patch({ completion_message: event.target.value })} placeholder="What appears after completion"/></StepField>
@@ -747,11 +758,12 @@ export default function ExperienceRedesignPage() {
     setStepForm({
       id: step.id, key: step.key, type: step.type, title: step.title, description: step.description || '',
       sort_order: step.sort_order || 0,
-      required: !!step.required, enabled: !!step.enabled,
+      required: !!step.required, enabled: !!step.enabled, blocks_checkin: !!step.blocks_checkin,
       depends_on: listText(config.depends_on || config.depends_on_keys || config.prerequisites),
       guest_message: messages.guest || config.guest_message || '',
       staff_prompt: messages.staff || config.staff_prompt || '',
       completion_message: messages.complete || config.completion_message || '',
+      external_link: config.external_url || '',
       session_topic: session.topic || '', session_date: session.date || '', session_start_time: session.start_time || '',
       session_end_time: session.end_time || '', session_room: session.room || '', session_speaker: session.speaker || '',
       session_speaker_id: session.speaker_id || '',
@@ -831,6 +843,10 @@ export default function ExperienceRedesignPage() {
     else delete messages.complete
     if (Object.keys(messages).length) config.messages = messages
     else delete config.messages
+
+    const externalLink = stepForm.external_link.trim()
+    if (externalLink) config.external_url = externalLink
+    else delete config.external_url
 
     if (stepForm.type === 'session_attendance') {
       const jsonSession = normalizeSessionConfig(config)
@@ -939,6 +955,7 @@ export default function ExperienceRedesignPage() {
       sort_order: Number(stepForm.sort_order || 0),
       required: !!stepForm.required,
       enabled: !!stepForm.enabled,
+      blocks_checkin: !!stepForm.blocks_checkin,
       is_segment: !!stepForm.program_is_segment,
       starts_offset_seconds: stepForm.program_is_segment ? Number(stepForm.program_start_offset_seconds) : null,
       duration_seconds: stepForm.program_is_segment ? Number(stepForm.program_duration_seconds) : null,

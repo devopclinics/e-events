@@ -814,6 +814,70 @@ async def test_scan_returns_next_steps_and_staff_can_complete_them(ctx):
 
 
 @pytest.mark.asyncio
+async def test_required_blocking_step_prevents_admission_until_confirmed(ctx):
+    """A required step with blocks_checkin=True (e.g. a third-party waiver
+    link with no automatic completion signal) must refuse admission until a
+    staff member marks it completed via the normal Experience step endpoint —
+    same one action then admits the guest (see ScannerRedesignPage.jsx's
+    "immediate admit" flow)."""
+    ctx.login(ctx.ids["user_a"])
+    event_id = ctx.ids["event_a"]
+
+    async with _Session() as s:
+        ev = await s.get(Event, event_id)
+        ev.is_paid = True
+        ev.status = "active"
+        ev.experience_enabled = True
+        ev.notify_email = False
+        ev.notify_sms = False
+        ev.notify_whatsapp = False
+        guest = (await s.execute(select(Guest).where(Guest.event_id == event_id))).scalars().first()
+        token = guest.qr_token
+        guest_id = guest.id
+        await s.commit()
+
+    workflow = await ctx.client.post(
+        f"/api/events/{event_id}/experience/workflows",
+        json={
+            "name": "Waiver Gate",
+            "steps": [
+                {"key": "checkin", "type": "check_in", "title": "Check in"},
+                {"key": "waiver", "type": "custom", "title": "Sign the event waiver", "required": True,
+                 "blocks_checkin": True, "config": {"external_url": "https://app.waiversign.com/e/example"}},
+            ],
+        },
+    )
+    assert workflow.status_code == 201
+    waiver_step_id = next(s["id"] for s in workflow.json()["steps"] if s["key"] == "waiver")
+    assert workflow.json()["steps"][1]["blocks_checkin"] is True
+    assert (await ctx.client.post(f"/api/events/{event_id}/experience/workflows/{workflow.json()['id']}/publish")).status_code == 200
+
+    blocked = await ctx.client.post(f"/api/scan/{token}")
+    assert blocked.status_code == 200
+    blocked_body = blocked.json()
+    assert blocked_body["status"] == "pending_required_step"
+    assert "Sign the event waiver" in blocked_body["message"]
+    assert "waiver" in [item["step"]["key"] for item in blocked_body["experience_next_steps"]]
+    assert blocked_body["guest"]["admitted"] is False
+
+    # A second scan while still unsigned stays blocked — this isn't a
+    # one-time check, it must hold every time until actually confirmed.
+    still_blocked = await ctx.client.post(f"/api/scan/{token}")
+    assert still_blocked.json()["status"] == "pending_required_step"
+
+    complete = await ctx.client.put(
+        f"/api/events/{event_id}/experience/guests/{guest_id}/steps/{waiver_step_id}",
+        json={"status": "completed", "metadata": {"source": "scanner"}},
+    )
+    assert complete.status_code == 200
+
+    admitted = await ctx.client.post(f"/api/scan/{token}")
+    assert admitted.status_code == 200
+    assert admitted.json()["status"] == "admitted"
+    assert admitted.json()["guest"]["admitted"] is True
+
+
+@pytest.mark.asyncio
 async def test_souvenir_unlocks_after_guest_consent_signature(ctx):
     ctx.login(ctx.ids["user_a"])
     event_id = ctx.ids["event_a"]

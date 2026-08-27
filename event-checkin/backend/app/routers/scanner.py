@@ -1050,6 +1050,23 @@ async def perform_admission(guest, event, background_tasks, db) -> ScanResult:
             **context,
         )
 
+    # A required step explicitly marked blocks_checkin (e.g. a third-party
+    # waiver link with no API to verify automatically) must be completed —
+    # by the guest, or confirmed by staff via the normal Experience step
+    # endpoint — before admission proceeds. Every other required step stays
+    # informational-only, exactly as before this existed.
+    if event:
+        pending_steps = await next_guest_steps(event.id, guest.id, db)
+        blocking = next((step for step, _progress in pending_steps if step.required and step.blocks_checkin), None)
+        if blocking:
+            next_steps = [ExperienceNextStepOut(step=ExperienceStepOut.model_validate(step), progress=_progress_out(progress) if progress else None) for step, progress in pending_steps]
+            return ScanResult(
+                status="pending_required_step",
+                message=f"{guest.first_name} {guest.last_name} must complete \"{blocking.title}\" before check-in.",
+                guest=GuestOut.model_validate(guest),
+                experience_next_steps=next_steps,
+            )
+
     # First-come-first-served seat assignment if this guest has no seat yet.
     # Honors couple pairings + table-group restrictions (see assign_next_seat).
     # Keyed on seat_number (not table_id) so pre-assigned-table guests still get a seat.

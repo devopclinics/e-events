@@ -772,6 +772,16 @@ class ExperienceStep(Base):
     sort_order: Mapped[int] = mapped_column(Integer, default=0)
     required: Mapped[bool] = mapped_column(Boolean, default=True)
     enabled: Mapped[bool] = mapped_column(Boolean, default=True)
+    # Opt-in, off by default so no existing event's check-in behavior changes.
+    # When true AND required, perform_admission() (routers/scanner.py) refuses
+    # to admit the guest until this step's GuestExperienceProgress is
+    # "completed" (or "overridden") — see the ScanResult.status
+    # "pending_required_step" branch. Steps that already have a native
+    # completion path (guest e-signing a `consent` step, a scanned
+    # `session_attendance`) can set this too; it's most useful for a `custom`
+    # step whose completion can only be confirmed by staff (e.g. a
+    # third-party waiver link with no API integration).
+    blocks_checkin: Mapped[bool] = mapped_column(Boolean, default=False)
     # Optional timed agenda metadata. Operational Experience steps leave these
     # NULL/false and retain their existing behavior.
     starts_offset_seconds: Mapped[int | None] = mapped_column(Integer, nullable=True)

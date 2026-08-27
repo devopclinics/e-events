@@ -306,10 +306,17 @@ def _step_email_payload(item: ExperienceNextStepOut, ticket_url: str | None) -> 
     }
 
 
-def _experience_session_text(session: dict | None) -> str:
+def _experience_session_text(session: dict | None, *, skip_topic: str | None = None) -> str:
+    """skip_topic drops session.topic when it's the same as the step's own
+    title (the common case — organizers rarely set a topic that differs from
+    the step title) so a caller that already shows the title once doesn't
+    repeat it verbatim in the metadata line right below it."""
     if not isinstance(session, dict):
         return ""
-    parts = [str(session[key]) for key in ("topic", "date") if session.get(key)]
+    topic = session.get("topic")
+    parts = [str(topic)] if topic and str(topic) != skip_topic else []
+    if session.get("date"):
+        parts.append(str(session["date"]))
     times = " - ".join(str(session.get(key)) for key in ("start_time", "end_time") if session.get(key))
     if times:
         parts.append(times)
@@ -318,6 +325,33 @@ def _experience_session_text(session: dict | None) -> str:
     if session.get("speaker"):
         parts.append(f"Speaker: {session['speaker']}")
     return " · ".join(parts)
+
+
+def _experience_step_email_html(title: str, required: bool, description: str, session_text: str, action: str) -> str:
+    """One card-styled <li> for the "Your next steps" email. Previously a
+    plain `<li><strong>…</strong><br>…</li>` with zero inline styling — every
+    email client renders that as a bare wall of text with no separation
+    between a step's description and its session metadata line."""
+    required_badge = (
+        '<span style="display:inline-block;margin-left:8px;padding:2px 9px;border-radius:99px;'
+        'background:#fef3e2;color:#b45309;font-size:10px;font-weight:800;'
+        'text-transform:uppercase;letter-spacing:.04em;">Required</span>'
+    ) if required else ""
+    description_html = (
+        f'<div style="margin-top:6px;font-size:13px;line-height:19px;color:#475569;">{html_escape.escape(description)}</div>'
+    ) if description else ""
+    session_html = (
+        f'<div style="margin-top:6px;font-size:12px;line-height:17px;color:#0f766e;font-weight:700;">{html_escape.escape(session_text)}</div>'
+    ) if session_text else ""
+    action_html = f'<div style="margin-top:8px;font-size:13px;">{action}</div>' if action else ""
+    return (
+        '<li style="list-style:none;margin:0 0 12px 0;padding:14px 16px;'
+        'border:1px solid #e2e8f0;border-radius:10px;background:#f8fafc;">'
+        f'<div style="font-size:15px;font-weight:800;color:#0f172a;line-height:20px;">'
+        f'{html_escape.escape(title)}{required_badge}</div>'
+        f'{description_html}{session_html}{action_html}'
+        '</li>'
+    )
 
 
 async def _queue_experience_next_steps_email(
@@ -340,24 +374,16 @@ async def _queue_experience_next_steps_email(
         config = step.config or {}
         messages = config.get("messages") if isinstance(config.get("messages"), dict) else {}
         description = (messages.get("guest") or config.get("guest_message") or step.description or "").strip()
-        session = _experience_session_text(config.get("session"))
-        if session:
-            description = f"{description}\n{session}" if description else session
+        session = _experience_session_text(config.get("session"), skip_topic=step.title)
         action = (
-            f'<br><a href="{html_escape.escape(ticket_url + "#consent", quote=True)}">Open consent form</a>'
+            f'<a href="{html_escape.escape(ticket_url + "#consent", quote=True)}" '
+            'style="color:#0f766e;font-weight:700;text-decoration:underline;">Open consent form</a>'
             if step.type == "consent" and ticket_url else ""
         )
-        list_items.append(
-            "<li><strong>{title}</strong>{required}{description}{action}</li>".format(
-                title=html_escape.escape(step.title),
-                required=" <span>(required)</span>" if step.required else "",
-                description=f"<br>{html_escape.escape(description)}" if description else "",
-                action=action,
-            )
-        )
+        list_items.append(_experience_step_email_html(step.title, step.required, description, session, action))
         text_items.append(f"{step.title}{' (required)' if step.required else ''}")
 
-    steps_html = f"<ol>{''.join(list_items)}</ol>"
+    steps_html = f'<ol style="margin:0;padding:0;">{"".join(list_items)}</ol>'
     steps_text = "; ".join(text_items)
     ctx = build_template_context(
         event,

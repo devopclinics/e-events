@@ -51,7 +51,15 @@ from services.email_service import send_invite_email, send_manual_invite_email, 
 from services.outbound_safety import recipient_allowed
 from ..template_resolve import load_overrides, channel_text as template_channel_text, email_override as template_email_override, channel_text_or_default as template_channel_or_default, email_or_default as template_email_or_default
 from services.templates import TEMPLATE_DEFS, build_context as build_template_context
-from .scanner import checkin_guard, perform_admission, perform_checkout, queue_admission_email, queue_consent_copy_email
+from .scanner import (
+    _experience_session_text,
+    _experience_step_email_html,
+    checkin_guard,
+    perform_admission,
+    perform_checkout,
+    queue_admission_email,
+    queue_consent_copy_email,
+)
 from services import messaging
 from services.credit_ledger import send_with_credit_ledger
 from ..services.experience import next_guest_steps, sync_guest_progress
@@ -1334,53 +1342,25 @@ async def _dispatch_experience_next_steps(
     if not event.notify_email or not guest.email:
         return False
 
-    def session_text(session: dict | None) -> str:
-        if not isinstance(session, dict):
-            return ""
-        parts = [str(session[key]) for key in ("topic", "date") if session.get(key)]
-        times = " - ".join(str(session.get(key)) for key in ("start_time", "end_time") if session.get(key))
-        if times:
-            parts.append(times)
-        if session.get("room"):
-            parts.append(str(session["room"]))
-        if session.get("speaker"):
-            parts.append(f"Speaker: {session['speaker']}")
-        return " · ".join(parts)
-
     rows = await next_guest_steps(event.id, guest.id, db)
-    step_items = []
+    list_items = []
+    text_items = []
     ticket_url = f"{event.checkin_base_url.rstrip('/')}/scan/{guest.qr_token}" if event.checkin_base_url else ""
     for step, _progress in rows:
         config = step.config or {}
         messages = config.get("messages") if isinstance(config.get("messages"), dict) else {}
         description = (messages.get("guest") or config.get("guest_message") or step.description or "").strip()
-        session = session_text(config.get("session"))
-        if session:
-            description = f"{description}\n{session}" if description else session
+        session = _experience_session_text(config.get("session"), skip_topic=step.title)
         action = (
-            f'<br><a href="{html.escape(ticket_url + "#consent", quote=True)}">Open consent form</a>'
+            f'<a href="{html.escape(ticket_url + "#consent", quote=True)}" '
+            'style="color:#0f766e;font-weight:700;text-decoration:underline;">Open consent form</a>'
             if step.type == "consent" and ticket_url else ""
         )
-        step_items.append({
-            "title": step.title,
-            "description": description,
-            "required": bool(step.required),
-            "action": action,
-        })
-    if step_items:
-        list_items = "".join(
-            "<li><strong>{title}</strong>{required}{description}{action}</li>".format(
-                title=html.escape(item["title"]),
-                required=" <span>(required)</span>" if item["required"] else "",
-                description=f"<br>{html.escape(item['description'])}" if item["description"] else "",
-                action=item.get("action") or "",
-            )
-            for item in step_items
-        )
-        steps_html = f"<ol>{list_items}</ol>"
-        steps_text = "; ".join(
-            f"{item['title']}{' (required)' if item['required'] else ''}" for item in step_items
-        )
+        list_items.append(_experience_step_email_html(step.title, bool(step.required), description, session, action))
+        text_items.append(f"{step.title}{' (required)' if step.required else ''}")
+    if list_items:
+        steps_html = f'<ol style="margin:0;padding:0;">{"".join(list_items)}</ol>'
+        steps_text = "; ".join(text_items)
     else:
         steps_html = "<p>You have no pending Experience steps right now.</p>"
         steps_text = "No pending steps right now."

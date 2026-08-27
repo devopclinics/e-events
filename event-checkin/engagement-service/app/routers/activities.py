@@ -1,3 +1,5 @@
+import hashlib
+import hmac
 import secrets
 from datetime import datetime, timedelta, timezone
 
@@ -9,6 +11,7 @@ from sqlalchemy.orm import selectinload
 
 from ..auth import Identity, current_identity, require_activity_session, require_admin, require_capability, require_staff
 from ..database import get_db
+from ..config import settings
 from ..models import ActivityParticipant, ActivityQuestion, EngagementActivity, EngagementEventSettings, ParticipantResponse, ProgramSession, QuestionOption
 from ..realtime import publish
 from ..schemas import ActivityAdvanceIn, ActivityCreate, ActivityExtendIn, ActivityOut, ActivityStatusIn, ActivitySummary, ActivityUpdate, GuidedShowAutomationIn, QuestionCreate, QuestionLiveStateIn, QuestionOut, QuestionUpdate
@@ -276,17 +279,38 @@ async def list_activities(identity: Identity = Depends(current_identity), db: As
 async def list_live_activities(identity: Identity = Depends(current_identity), db: AsyncSession = Depends(get_db)):
     """Guest-visible discovery — what's open to join right now. Staff can hit
     this too (it's just a filtered view of the admin listing above)."""
+    statuses = ("live", "paused", "closed", "completed") if identity.identity_kind == "guest" else ("live", "paused")
     rows = (await db.execute(
         select(EngagementActivity)
         .where(
             EngagementActivity.event_id == identity.event_id,
             EngagementActivity.org_id == identity.org_id,
-            EngagementActivity.status.in_(("live", "paused")),
+            EngagementActivity.status.in_(statuses),
         )
         .order_by(EngagementActivity.created_at.desc())
     )).scalars().all()
     if identity.identity_kind == "guest":
-        rows = [a for a in rows if not _session_denied(a, identity)]
+        visible_rows = []
+        for activity in rows:
+            if _session_denied(activity, identity):
+                continue
+            if activity.status in ("live", "paused"):
+                visible_rows.append(activity)
+                continue
+            config = activity.config or {}
+            if config.get("show_mode") != "guided" or config.get("show_phase") != "complete" or not config.get("live_results_enabled", True):
+                continue
+            truly_anonymous = bool(config.get("anonymous"))
+            subject = identity.subject
+            if truly_anonymous:
+                subject = hmac.new(settings.internal_service_token.encode(), f"{activity.id}:{identity.subject}".encode(), hashlib.sha256).hexdigest()[:48]
+            column = ActivityParticipant.anon_id if identity.is_anonymous or truly_anonymous else ActivityParticipant.guest_id
+            participated = await db.scalar(select(ActivityParticipant.id).where(
+                ActivityParticipant.activity_id == activity.id, column == subject,
+            ))
+            if participated:
+                visible_rows.append(activity)
+        rows = visible_rows
     session_ids = {a.session_id for a in rows if a.session_id}
     session_titles: dict[str, str] = {}
     if session_ids:

@@ -244,6 +244,9 @@ class ParticipateStateOut(BaseModel):
     # evaluate branching instantly against a draft answer instead of waiting
     # on a round trip, and restore in-progress answers after a refresh.
     draft_answers: dict[str, DraftAnswerOut] = Field(default_factory=dict)
+    # The participant's own persisted answers. Used by the post-show review;
+    # never contains another participant's response.
+    my_answers: dict[str, DraftAnswerOut] = Field(default_factory=dict)
     rules: list[RuleOut] = Field(default_factory=list)
     completed_at: datetime | None = None
 
@@ -295,6 +298,8 @@ class QuestionResultOut(BaseModel):
     # Normalized (0..1, 0..1) points for quadrant and image_click questions —
     # a real scatter/heatmap needs real coordinates, not a synthesized shape.
     points: list[list[float]] = Field(default_factory=list)
+    # Moderator-approved words only; raw open text is never exposed here.
+    word_cloud: list[dict[str, Any]] = Field(default_factory=list)
 
 
 class ActivityResultsOut(BaseModel):

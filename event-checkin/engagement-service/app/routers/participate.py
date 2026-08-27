@@ -188,6 +188,7 @@ async def _compute_results(activity: EngagementActivity, db: AsyncSession) -> Ac
             numeric_values=numeric_values,
             response_timeline=response_timeline,
             points=points,
+            word_cloud=await _approved_word_cloud(activity.id, question.id, db) if question.question_type == "word_cloud" else [],
         ))
 
     return ActivityResultsOut(
@@ -285,15 +286,6 @@ async def _display_payload(activity: EngagementActivity, db: AsyncSession) -> di
     )
     question_capacity = participant_count * len(active_questions)
     response_rate = round((results.response_count / question_capacity) * 100) if question_capacity else 0
-    cloud_rows = (await db.execute(select(
-        ModerationItem.question_id, ModerationItem.content,
-    ).where(
-        ModerationItem.activity_id == activity.id,
-        ModerationItem.status == "approved",
-    ))).all()
-    cloud_texts: dict[str, list[str]] = defaultdict(list)
-    for question_id, content in cloud_rows:
-        cloud_texts[question_id].append(content)
     leaderboard = await _compute_leaderboard(activity, db) if activity.config.get("leaderboard_enabled") else []
     current_source = next((q for q in activity.questions if q.id == activity.config.get("current_question_id")), None)
     current_result = next((q for q in results.questions if q.question_id == activity.config.get("current_question_id")), None)
@@ -380,7 +372,6 @@ async def _display_payload(activity: EngagementActivity, db: AsyncSession) -> di
                 # explicit moderation record. Counts remain safe to show.
                 "text_samples": [],
                 "live_state": next((source.live_state for source in activity.questions if source.id == q.question_id), "pending"),
-                "word_cloud": word_cloud(cloud_texts.get(q.question_id, [])) if q.question_type == "word_cloud" else [],
             }
             for q in results.questions
         ],
@@ -416,10 +407,24 @@ async def get_participation_state(activity_id: str, identity: Identity = Depends
     require_guest(identity)
     activity = await _load_activity(activity_id, identity.event_id, identity.org_id, db)
     require_activity_session(identity, activity.session_id, activity.config)
-    if activity.status not in ("live", "paused") or not activity.config.get("allow_guest_participation", True):
+    final_review = (
+        activity.status in ("closed", "completed")
+        and activity.config.get("show_mode") == "guided"
+        and activity.config.get("show_phase") == "complete"
+        and activity.config.get("live_results_enabled", True)
+    )
+    if activity.status in ("live", "paused") and activity.config.get("allow_guest_participation", True):
+        participant = await _get_or_create_participant(activity_id, identity, db, bool(activity.config.get("anonymous")))
+        await db.commit()
+    elif final_review:
+        column, subject = _participant_locator(activity_id, identity, bool(activity.config.get("anonymous")))
+        participant = await db.scalar(select(ActivityParticipant).where(
+            ActivityParticipant.activity_id == activity_id, column == subject,
+        ))
+        if not participant:
+            raise HTTPException(403, "The final review is available to participants in this activity")
+    else:
         raise HTTPException(403, "This activity isn't open right now")
-    participant = await _get_or_create_participant(activity_id, identity, db, bool(activity.config.get("anonymous")))
-    await db.commit()
     responses = (await db.execute(
         select(ParticipantResponse).where(ParticipantResponse.participant_id == participant.id)
         .options(selectinload(ParticipantResponse.selections))
@@ -436,14 +441,24 @@ async def get_participation_state(activity_id: str, identity: Identity = Depends
     # round trip; the server still independently re-validates which
     # questions were actually required at /complete time.
     for question in safe_activity.questions:
-        question.config.pop("correct_answer", None)
-        question.config.pop("explanation", None)
-        for option in question.options:
-            option.is_correct = None
+        source = next((item for item in activity.questions if item.id == question.id), None)
+        answer_revealed = bool(source and source.live_state == "answer_revealed")
+        if not answer_revealed:
+            question.config.pop("correct_answer", None)
+            question.config.pop("explanation", None)
+            for option in question.options:
+                option.is_correct = None
     # Survey/feedback-only additions: draft answers (refresh recovery, instant
     # client-side branching) and the activity's branching rules. Quiz/poll/Q&A
     # don't need either — they stay on the existing one-question-at-a-time,
     # server-round-trip-driven flow untouched.
+    my_answers = {
+        response.question_id: DraftAnswerOut(
+            selected_option_ids=[selection.option_id for selection in response.selections] or None,
+            answer_value=response.answer_value,
+        )
+        for response in responses
+    }
     draft_answers: dict[str, DraftAnswerOut] = {}
     rules: list[RuleOut] = []
     if activity.type in ("survey", "feedback"):
@@ -458,6 +473,7 @@ async def get_participation_state(activity_id: str, identity: Identity = Depends
         already_responded_question_ids=[response.question_id for response in responses],
         participant_id=participant.id,
         draft_answers=draft_answers,
+        my_answers=my_answers,
         rules=rules,
         completed_at=participant.completed_at,
     )
@@ -668,7 +684,24 @@ async def get_results(activity_id: str, identity: Identity = Depends(current_ide
         require_guest(identity)
         if not activity.config.get("live_results_enabled", True):
             raise HTTPException(403, "Results aren't available for this activity")
-        visible_ids = {q.id for q in activity.questions if q.live_state in ("results_visible", "answer_revealed")}
+        final_review = (
+            activity.status in ("closed", "completed")
+            and activity.config.get("show_mode") == "guided"
+            and activity.config.get("show_phase") == "complete"
+        )
+        if final_review:
+            column, subject = _participant_locator(activity_id, identity, bool(activity.config.get("anonymous")))
+            participant = await db.scalar(select(ActivityParticipant).where(
+                ActivityParticipant.activity_id == activity_id, column == subject,
+            ))
+            if not participant:
+                raise HTTPException(403, "The final review is available to participants in this activity")
+            # Guided surveys complete as one form, without the per-question
+            # reveal states used by quizzes. Their final review still includes
+            # every active question.
+            visible_ids = {q.id for q in activity.questions if q.status == "active"}
+        else:
+            visible_ids = {q.id for q in activity.questions if q.live_state in ("results_visible", "answer_revealed")}
         if not visible_ids:
             raise HTTPException(403, "Results haven't been revealed")
         results = await _compute_results(activity, db)
@@ -687,6 +720,18 @@ async def get_leaderboard(activity_id: str, identity: Identity = Depends(current
         require_guest(identity)
         if not activity.config.get("leaderboard_enabled", False):
             raise HTTPException(403, "The leaderboard isn't available for this activity")
-        if not any(q.live_state in ("results_visible", "answer_revealed") for q in activity.questions):
+        final_review = (
+            activity.status in ("closed", "completed")
+            and activity.config.get("show_mode") == "guided"
+            and activity.config.get("show_phase") == "complete"
+        )
+        if final_review:
+            column, subject = _participant_locator(activity_id, identity, bool(activity.config.get("anonymous")))
+            participant = await db.scalar(select(ActivityParticipant).where(
+                ActivityParticipant.activity_id == activity_id, column == subject,
+            ))
+            if not participant:
+                raise HTTPException(403, "The final review is available to participants in this activity")
+        elif not any(q.live_state in ("results_visible", "answer_revealed") for q in activity.questions):
             raise HTTPException(403, "The leaderboard hasn't been revealed")
     return {"entries": await _compute_leaderboard(activity, db)}

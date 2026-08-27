@@ -590,7 +590,7 @@ function Leaderboard({ entries }) {
   )
 }
 
-function GuestResultCard({ question, result }) {
+function GuestResultCard({ question, result, myAnswer }) {
   if (!question || !result) return null
   const counts = result.option_counts || {}
   const total = Object.values(counts).reduce((sum, count) => sum + count, 0)
@@ -603,18 +603,32 @@ function GuestResultCard({ question, result }) {
           {question.options.map((option) => {
             const count = counts[option.id] || 0
             const percent = total ? Math.round((count / total) * 100) : 0
-            return <div key={option.id}>
-              <div className="mb-1 flex justify-between gap-3 text-xs font-bold text-slate-700 dark:text-slate-200"><span>{option.label}</span><span>{percent}%</span></div>
-              <div className="h-2.5 overflow-hidden rounded-full bg-slate-100 dark:bg-slate-800"><div className="h-full rounded-full bg-gradient-to-r from-violet-500 to-teal-400" style={{ width: `${Math.max(percent, count ? 3 : 0)}%` }} /></div>
+            const selectedByMe = myAnswer?.selected_option_ids?.includes(option.id)
+            return <div key={option.id} className={option.is_correct ? 'rounded-xl bg-emerald-50 p-2 dark:bg-emerald-950/50' : selectedByMe ? 'rounded-xl bg-violet-50 p-2 dark:bg-violet-950/50' : ''}>
+              <div className="mb-1 flex justify-between gap-3 text-xs font-bold text-slate-700 dark:text-slate-200"><span>{option.label}{option.is_correct && <b className="ml-2 text-emerald-600 dark:text-emerald-300">✓ Correct</b>}{selectedByMe && <b className="ml-2 text-violet-600 dark:text-violet-300">Your answer</b>}</span><span>{percent}%</span></div>
+              <div className="h-2.5 overflow-hidden rounded-full bg-slate-100 dark:bg-slate-800"><div className={`h-full rounded-full ${option.is_correct ? 'bg-gradient-to-r from-emerald-500 to-teal-400' : 'bg-gradient-to-r from-violet-500 to-teal-400'}`} style={{ width: `${Math.max(percent, count ? 3 : 0)}%` }} /></div>
             </div>
           })}
         </div>
       )}
       {result.average_rating != null && <div className="mt-4 rounded-xl bg-teal-50 p-4 text-center dark:bg-teal-950"><strong className="text-3xl text-teal-600 dark:text-teal-300">{result.average_rating.toFixed(1)}</strong><span className="ml-1 text-sm font-bold text-slate-500">average</span></div>}
+      {!!result.word_cloud?.length && <div className="mt-4 flex flex-wrap gap-2">{result.word_cloud.slice(0, 12).map((entry) => <span key={entry.word} className="rounded-full border border-violet-200 bg-violet-50 px-3 py-1.5 text-xs font-extrabold text-violet-800 dark:border-violet-700 dark:bg-violet-950 dark:text-violet-200">{entry.word} <b className="text-teal-600">{entry.count}</b></span>)}</div>}
+      {myAnswer?.answer_value != null && <div className="mt-3 rounded-xl bg-slate-50 p-3 text-xs font-bold text-slate-600 dark:bg-slate-800 dark:text-slate-200"><span className="text-slate-400">Your response: </span>{typeof myAnswer.answer_value === 'object' ? 'Recorded on the activity canvas' : String(myAnswer.answer_value)}</div>}
       {!question.options?.length && result.average_rating == null && <div className="mt-4 rounded-xl bg-teal-50 p-4 text-sm font-bold text-teal-800 dark:bg-teal-950 dark:text-teal-200">Your response is part of {result.response_count} voices shaping this result.</div>}
       <div className="mt-4 text-xs font-bold text-slate-600 dark:text-slate-300">{result.response_count} verified responses · Updated live</div>
     </div>
   )
+}
+
+function ParticipantReview({ activity, results, myAnswers, leaderboard }) {
+  return <div className="grid gap-4">
+    <div className="overflow-hidden rounded-2xl border border-emerald-200 bg-white shadow-sm dark:border-emerald-800 dark:bg-slate-900"><div className="h-2 bg-gradient-to-r from-emerald-400 via-teal-400 to-violet-500"/><div className="p-5"><div className="text-xs font-extrabold uppercase tracking-[.16em] text-emerald-600 dark:text-emerald-300">Activity complete</div><h2 className="mt-2 text-xl font-black text-slate-950 dark:text-white">Review every result</h2><p className="mt-2 text-sm font-semibold text-slate-600 dark:text-slate-300">{results?.participant_count || 0} participants shared {results?.response_count || 0} answers across {results?.questions?.length || 0} questions.</p></div></div>
+    {(results?.questions || []).map((result) => {
+      const question = activity.questions.find((item) => item.id === result.question_id)
+      return <GuestResultCard key={result.question_id} question={question} result={result} myAnswer={myAnswers?.[result.question_id]}/>
+    })}
+    <Leaderboard entries={leaderboard}/>
+  </div>
 }
 
 function GuidedGuestNotice({ phase, activity }) {
@@ -637,13 +651,20 @@ function ActivityView({ guestToken, activityId, onBack }) {
   const [busy, setBusy] = useState(false)
   const [leaderboard, setLeaderboard] = useState(null)
   const [revealedResult, setRevealedResult] = useState(null)
+  const [reviewResults, setReviewResults] = useState(null)
   const [error, setError] = useState('')
   const idemKeys = useRef({})
 
   const load = useCallback(async () => {
     try {
+      setError('')
       const s = await api.liveGuestParticipate(guestToken, activityId)
       setState(s)
+      const isComplete = s.activity.config?.show_mode === 'guided' && s.activity.config?.show_phase === 'complete'
+      if (isComplete) {
+        const payload = await api.liveGuestResults(guestToken, activityId)
+        setReviewResults(payload)
+      } else setReviewResults(null)
       const revealed = s.activity.questions.find((question) => question.id === s.activity.config?.current_question_id && ['results_visible', 'answer_revealed'].includes(question.live_state))
       if (revealed) {
         api.liveGuestResults(guestToken, activityId).then((payload) => setRevealedResult(payload.questions.find((question) => question.question_id === revealed.id) || null)).catch(() => setRevealedResult(null))
@@ -690,7 +711,7 @@ function ActivityView({ guestToken, activityId, onBack }) {
 
   if (error?.code === 'FESTIO_LIVE_UNAVAILABLE') return <LiveUnavailableState onRetry={() => { setError(''); load() }} />
   if (!state) return <p className="text-sm text-slate-600 dark:text-slate-300">Loading…</p>
-  const { activity, already_responded_question_ids } = state
+  const { activity, already_responded_question_ids, my_answers } = state
   const answered = new Set(already_responded_question_ids)
   const currentQuestion = activity.questions.find((question) => question.id === activity.config?.current_question_id)
   const guided = activity.config?.show_mode === 'guided'
@@ -710,7 +731,7 @@ function ActivityView({ guestToken, activityId, onBack }) {
           ? <QnaPanel guestToken={guestToken} activityId={activityId} activityStatus={activity.status} />
           : <GuidedGuestNotice phase={showPhase} activity={activity}/>
       ) : activity.status === 'closed' || activity.status === 'completed' ? (
-        guided ? <GuidedGuestNotice phase="complete" activity={activity}/> : <div className="rounded-2xl border border-slate-200 bg-white p-4 text-sm font-bold text-slate-500 dark:border-slate-700 dark:bg-slate-900">This activity has ended — thanks for joining!</div>
+        guided && reviewResults ? <ParticipantReview activity={activity} results={reviewResults} myAnswers={my_answers} leaderboard={leaderboard}/> : guided ? <GuidedGuestNotice phase="complete" activity={activity}/> : <div className="rounded-2xl border border-slate-200 bg-white p-4 text-sm font-bold text-slate-500 dark:border-slate-700 dark:bg-slate-900">This activity has ended — thanks for joining!</div>
       ) : ['survey', 'feedback'].includes(activity.type) ? (
         !guided || showPhase === 'answering'
           ? <SurveyForm activity={activity} rules={state.rules} draftAnswersFromServer={state.draft_answers} completedAt={state.completed_at} onAutosave={autosaveAnswer} onComplete={completeSurvey} busy={busy} />
@@ -870,7 +891,7 @@ export default function LiveGuestPage() {
                 className="flex items-center justify-between rounded-2xl border border-slate-200 bg-white p-4 text-left dark:border-slate-700 dark:bg-slate-900">
                 <div>
                   <div className="text-sm font-extrabold text-slate-900 dark:text-white">{a.title}</div>
-                  <div className="text-xs font-bold uppercase tracking-wide text-teal-700 dark:text-teal-300">{a.status === 'live' ? 'Live now' : 'Paused'}{a.session_title ? ` · ${a.session_title}` : ''}</div>
+                  <div className="text-xs font-bold uppercase tracking-wide text-teal-700 dark:text-teal-300">{a.status === 'live' ? 'Live now' : ['closed', 'completed'].includes(a.status) ? 'Review results' : 'Paused'}{a.session_title ? ` · ${a.session_title}` : ''}</div>
                 </div>
                 <span aria-hidden="true">›</span>
               </button>

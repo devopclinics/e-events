@@ -2194,6 +2194,82 @@ class EventReminderSend(Base):
     sent_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
 
 
+class ScheduledCommunication(Base):
+    """One organizer-authored communication that will be delivered later.
+
+    This is deliberately broader than ``EventReminder``.  The reminder table
+    remains the backwards-compatible home for the existing add-on, while this
+    table powers the unified Guest Communication scheduler (invitations, RSVP
+    chasers, event/session notices, feedback prompts, and follow-ups).
+
+    ``scheduled_for_utc`` is materialized when the row is saved so the outbox
+    can use a small indexed due query.  Relative schedules retain their anchor
+    and offset so an event date/timezone edit can safely recompute pending rows.
+    """
+    __tablename__ = "scheduled_communications"
+    __table_args__ = (
+        Index("ix_scheduled_communications_due", "status", "scheduled_for_utc"),
+    )
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+    event_id: Mapped[str] = mapped_column(String(36), ForeignKey("events.id"), index=True)
+    name: Mapped[str] = mapped_column(String(160))
+    communication_type: Mapped[str] = mapped_column(String(40), index=True)
+
+    # absolute = a local wall-clock date/time; relative = offset from an event
+    # anchor.  offset_minutes may be negative (before) or positive (after).
+    trigger_type: Mapped[str] = mapped_column(String(20), default="absolute")
+    anchor: Mapped[str | None] = mapped_column(String(30), nullable=True)
+    anchor_step_id: Mapped[str | None] = mapped_column(
+        String(36), ForeignKey("experience_steps.id"), nullable=True, index=True
+    )
+    offset_minutes: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    scheduled_for_utc: Mapped[datetime] = mapped_column(DateTime, index=True)
+    timezone: Mapped[str] = mapped_column(String(80), default="UTC")
+
+    channels: Mapped[list] = mapped_column(JSON, default=list)
+    audience_type: Mapped[str] = mapped_column(String(40), default="all")
+    # dynamic re-evaluates at fire time; frozen uses recipient rows captured at
+    # creation/update time.  Both modes use delivery rows for crash-safe dedup.
+    audience_mode: Mapped[str] = mapped_column(String(20), default="dynamic")
+    subject: Mapped[str | None] = mapped_column(Text, nullable=True)
+    email_body: Mapped[str | None] = mapped_column(Text, nullable=True)
+    sms_body: Mapped[str | None] = mapped_column(Text, nullable=True)
+    whatsapp_body: Mapped[str | None] = mapped_column(Text, nullable=True)
+
+    status: Mapped[str] = mapped_column(String(20), default="scheduled", index=True)
+    claimed_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    sent_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    recipients_targeted: Mapped[int] = mapped_column(Integer, default=0)
+    recipients_sent: Mapped[int] = mapped_column(Integer, default=0)
+    recipients_failed: Mapped[int] = mapped_column(Integer, default=0)
+    last_error: Mapped[str | None] = mapped_column(Text, nullable=True)
+
+    created_by: Mapped[str | None] = mapped_column(String(36), ForeignKey("users.id"), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+
+class ScheduledCommunicationDelivery(Base):
+    """Recipient snapshot and durable delivery audit for a scheduled send."""
+    __tablename__ = "scheduled_communication_deliveries"
+    __table_args__ = (
+        UniqueConstraint("communication_id", "guest_id", name="uq_scheduled_communication_guest"),
+        Index("ix_scheduled_delivery_communication", "communication_id"),
+    )
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+    communication_id: Mapped[str] = mapped_column(
+        String(36), ForeignKey("scheduled_communications.id"), index=True
+    )
+    guest_id: Mapped[str] = mapped_column(String(36), ForeignKey("guests.id"), index=True)
+    status: Mapped[str] = mapped_column(String(20), default="pending")
+    channels_sent: Mapped[list] = mapped_column(JSON, default=list)
+    error: Mapped[str | None] = mapped_column(Text, nullable=True)
+    sent_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+
+
 class QaChecklistSubmission(Base):
     """One tester's saved progress from the standalone staging QA checklist
     (public/media/festio-qa-checklist.html). That page has no login of its own —

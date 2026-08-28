@@ -6,7 +6,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from .database import engine
 from .config import settings
-from .routers import events, guests, scanner, dashboard, seating, menu, logistics, registry, speakers, partners, reminders, access, trials, demo, classify, messaging, meta_whatsapp, resend_webhooks, templates as templates_router, self_checkin, experience, tasks
+from .routers import events, guests, scanner, dashboard, seating, menu, logistics, registry, speakers, partners, reminders, scheduled_communications, access, trials, demo, classify, messaging, meta_whatsapp, resend_webhooks, templates as templates_router, self_checkin, experience, tasks
 from .routers import auth as auth_router
 from .routers import invite as invite_router
 from .routers import billing as billing_router
@@ -30,7 +30,7 @@ from .routers import ticketing_internal as ticketing_internal_router
 from .routers import redesign_telemetry as redesign_telemetry_router
 from .routers import training as training_router
 from . import sync_poller, db_migrate, entitlements
-from .services import engagement_sync_outbox, festiome_outbox, webhook_outbox, reminder_outbox
+from .services import engagement_sync_outbox, festiome_outbox, webhook_outbox, reminder_outbox, scheduled_communication_outbox
 from . import routers
 from . import storage
 from .database import AsyncSessionLocal
@@ -83,6 +83,15 @@ async def lifespan(app: FastAPI):
     # own switch.
     run_reminder_outbox = os.environ.get("RUN_IN_APP_REMINDER_OUTBOX", "true").lower() not in ("false", "0", "no")
     reminder_outbox_task = asyncio.create_task(reminder_outbox.run()) if run_reminder_outbox else None
+    # Unified Guest Communication scheduler. Uses its own table and worker so
+    # legacy Reminder add-on records remain untouched during the rollout.
+    run_scheduled_communication_outbox = os.environ.get(
+        "RUN_IN_APP_SCHEDULED_COMMUNICATION_OUTBOX", "true"
+    ).lower() not in ("false", "0", "no")
+    scheduled_communication_task = (
+        asyncio.create_task(scheduled_communication_outbox.run())
+        if run_scheduled_communication_outbox else None
+    )
 
     # Start the Redis SSE fan-in subscriber (no-op unless REDIS_URL is set) so
     # dashboard events published by any replica reach the connections on this one.
@@ -124,6 +133,12 @@ async def lifespan(app: FastAPI):
             reminder_outbox_task.cancel()
             try:
                 await reminder_outbox_task
+            except asyncio.CancelledError:
+                pass
+        if scheduled_communication_task is not None:
+            scheduled_communication_task.cancel()
+            try:
+                await scheduled_communication_task
             except asyncio.CancelledError:
                 pass
 
@@ -191,6 +206,7 @@ app.include_router(speakers.speaker_router, prefix="/api/speakers", tags=["speak
 app.include_router(partners.router,    prefix="/api/events", tags=["partners"])
 app.include_router(partners.partner_router, prefix="/api/partners", tags=["partners-public"])
 app.include_router(reminders.router,   prefix="/api/events", tags=["reminders"])
+app.include_router(scheduled_communications.router, prefix="/api/events", tags=["scheduled-communications"])
 app.include_router(access.router,      prefix="/api/events", tags=["access"])
 app.include_router(classify.router,    prefix="/api/events", tags=["classify"])
 app.include_router(scanner.router,     prefix="/api/scan",   tags=["scanner"])

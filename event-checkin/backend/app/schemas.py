@@ -1692,6 +1692,88 @@ class ReminderTestSendRequest(BaseModel):
     body: str = ""
 
 
+ScheduledCommunicationType = Literal[
+    "invitation", "rsvp_reminder", "event_reminder", "session_reminder",
+    "feedback_request", "follow_up", "announcement",
+]
+ScheduledTriggerType = Literal["absolute", "relative"]
+ScheduledAnchor = Literal["event_start", "event_end", "rsvp_deadline", "experience_step"]
+ScheduledAudienceType = Literal[
+    "all", "not_invited", "not_responded", "confirmed", "declined",
+    "waitlisted", "checked_in", "not_checked_in",
+]
+ScheduledAudienceMode = Literal["dynamic", "frozen"]
+ScheduledChannel = Literal["email", "sms", "whatsapp"]
+
+
+class ScheduledCommunicationCreate(BaseModel):
+    name: str = Field(min_length=1, max_length=160)
+    communication_type: ScheduledCommunicationType
+    trigger_type: ScheduledTriggerType = "absolute"
+    # Event-local wall clock, e.g. 2026-09-01T09:00. Required for absolute.
+    scheduled_at_local: Optional[str] = None
+    anchor: Optional[ScheduledAnchor] = None
+    anchor_step_id: Optional[str] = None
+    offset_minutes: Optional[int] = Field(default=None, ge=-525600, le=525600)
+    channels: list[ScheduledChannel] = []
+    audience_type: ScheduledAudienceType = "all"
+    audience_mode: ScheduledAudienceMode = "dynamic"
+    subject: Optional[str] = None
+    email_body: Optional[str] = None
+    sms_body: Optional[str] = None
+    whatsapp_body: Optional[str] = None
+    status: Literal["draft", "scheduled", "paused"] = "scheduled"
+
+
+class ScheduledCommunicationUpdate(BaseModel):
+    name: Optional[str] = Field(default=None, min_length=1, max_length=160)
+    communication_type: Optional[ScheduledCommunicationType] = None
+    trigger_type: Optional[ScheduledTriggerType] = None
+    scheduled_at_local: Optional[str] = None
+    anchor: Optional[ScheduledAnchor] = None
+    anchor_step_id: Optional[str] = None
+    offset_minutes: Optional[int] = Field(default=None, ge=-525600, le=525600)
+    channels: Optional[list[ScheduledChannel]] = None
+    audience_type: Optional[ScheduledAudienceType] = None
+    audience_mode: Optional[ScheduledAudienceMode] = None
+    subject: Optional[str] = None
+    email_body: Optional[str] = None
+    sms_body: Optional[str] = None
+    whatsapp_body: Optional[str] = None
+    status: Optional[Literal["draft", "scheduled", "paused", "cancelled"]] = None
+
+
+class ScheduledCommunicationOut(BaseModel):
+    id: str
+    event_id: str
+    name: str
+    communication_type: str
+    trigger_type: str
+    anchor: Optional[str] = None
+    anchor_step_id: Optional[str] = None
+    offset_minutes: Optional[int] = None
+    scheduled_for_utc: datetime
+    scheduled_at_local: str
+    timezone: str
+    channels: list[str] = []
+    audience_type: str
+    audience_mode: str
+    subject: Optional[str] = None
+    email_body: Optional[str] = None
+    sms_body: Optional[str] = None
+    whatsapp_body: Optional[str] = None
+    status: str
+    recipients_estimated: int = 0
+    recipients_targeted: int = 0
+    recipients_sent: int = 0
+    recipients_failed: int = 0
+    last_error: Optional[str] = None
+    claimed_at: Optional[datetime] = None
+    sent_at: Optional[datetime] = None
+    created_at: datetime
+    updated_at: datetime
+
+
 class SpeakerSettingsOut(BaseModel):
     speaker_token: Optional[str] = None
     speaker_show_before_rsvp: bool = False

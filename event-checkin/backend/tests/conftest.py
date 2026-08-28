@@ -59,9 +59,9 @@ def _reset_credit_rate_cache():
 @pytest.fixture(autouse=True)
 def _outbox_modules_use_test_db(monkeypatch):
     from app import main as main_module
-    from app.services import festiome_outbox, webhook_outbox
+    from app.services import festiome_outbox, webhook_outbox, scheduled_communication_outbox
     from services import shortlinks
-    for module in (main_module, festiome_outbox, webhook_outbox, shortlinks):
+    for module in (main_module, festiome_outbox, webhook_outbox, scheduled_communication_outbox, shortlinks):
         monkeypatch.setattr(module, "AsyncSessionLocal", _Session)
 
 _engine = create_async_engine(

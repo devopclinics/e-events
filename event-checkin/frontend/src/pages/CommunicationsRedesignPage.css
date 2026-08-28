@@ -183,6 +183,53 @@
 .cm-test-selected { margin: -4px 0 8px; color: var(--teal); }
 .cm-test-actions { margin-top: 14px; }
 
+/* ── unified communication scheduler ────────────────────────────────── */
+.cm-scheduler-hero { display: flex; align-items: center; justify-content: space-between; gap: 24px; padding: 24px 26px; margin-bottom: 14px; border-radius: 16px; color: #f7fffd; background: radial-gradient(circle at 82% 18%, rgba(73, 222, 184, .26), transparent 32%), linear-gradient(135deg, #092f35 0%, #0a4b4a 56%, #163c31 100%); box-shadow: 0 18px 38px rgba(12, 67, 63, .16); }
+.cm-scheduler-hero h2 { margin: 5px 0 5px; font-size: 23px; letter-spacing: -.02em; }
+.cm-scheduler-hero p { margin: 0; color: rgba(247, 255, 253, .74); font-size: 11.5px; }
+.cm-scheduler-kicker { color: #72efcc; font-size: 9px; font-weight: 800; letter-spacing: .16em; }
+.cm-scheduler-hero .rr-btn.primary { background: #63e5bd; border-color: #63e5bd; color: #073832; box-shadow: 0 8px 22px rgba(56, 217, 170, .22); }
+.cm-scheduler-stats { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; margin-bottom: 14px; }
+.cm-scheduler-stats > div { display: grid; gap: 2px; padding: 15px 17px; border: 1px solid var(--line); border-radius: 12px; background: var(--surface); }
+.cm-scheduler-stats strong { color: var(--ink); font-size: 21px; }
+.cm-scheduler-stats span { color: var(--muted); font-size: 10px; }
+.cm-schedule-editor { margin-bottom: 14px; border-color: color-mix(in srgb, var(--teal) 35%, var(--line)); }
+.cm-schedule-presets { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; margin: 6px 0 16px; }
+.cm-schedule-presets button { min-height: 78px; padding: 10px; text-align: left; border: 1px solid var(--line); border-radius: 10px; background: var(--surface); color: var(--ink); cursor: pointer; }
+.cm-schedule-presets button:hover, .cm-schedule-presets button.active { border-color: var(--teal); background: var(--teal-soft); }
+.cm-schedule-presets strong, .cm-schedule-presets span { display: block; }
+.cm-schedule-presets strong { margin-bottom: 4px; font-size: 11px; }
+.cm-schedule-presets span { color: var(--muted); font-size: 9px; line-height: 1.35; }
+.cm-schedule-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px 16px; }
+.cm-schedule-grid label { min-width: 0; }
+.cm-schedule-grid .rr-select { width: 100%; }
+.cm-relative-row { display: grid; grid-template-columns: 100px 1fr 1fr 1.4fr; gap: 8px; align-items: center; margin: 6px 0 14px; }
+.cm-relative-row .rd-field, .cm-relative-row .rr-select { margin: 0; width: 100%; }
+.cm-schedule-channels { margin: 8px 0 12px; padding: 11px 12px; border: 1px solid var(--line-soft); border-radius: 9px; background: var(--surface-2); }
+.cm-message-fields { margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--line-soft); }
+.cm-message-fields .rr-textarea { width: 100%; margin-bottom: 10px; }
+.cm-schedule-save { display: flex; align-items: center; justify-content: space-between; gap: 16px; margin-top: 14px; padding-top: 14px; border-top: 1px solid var(--line-soft); }
+.cm-schedule-save label { display: flex; align-items: center; gap: 7px; color: var(--muted); font-size: 11px; }
+.cm-schedule-list { display: grid; gap: 9px; }
+.cm-schedule-card { display: grid; grid-template-columns: 82px minmax(0, 1fr) auto; gap: 14px; align-items: center; padding: 13px; border: 1px solid var(--line-soft); border-radius: 11px; background: var(--surface); }
+.cm-schedule-status { justify-self: start; padding: 5px 8px; border-radius: 999px; background: var(--surface-2); color: var(--muted); font-size: 8.5px; font-weight: 800; text-transform: uppercase; letter-spacing: .05em; }
+.cm-schedule-status.scheduled { background: #e4f8f2; color: #08725d; }
+.cm-schedule-status.sent { background: #eaf4ff; color: #1d5d96; }
+.cm-schedule-status.partial, .cm-schedule-status.paused { background: #fff4d8; color: #8b5a00; }
+.cm-schedule-status.failed, .cm-schedule-status.cancelled { background: var(--danger-soft); color: var(--danger); }
+.cm-schedule-main { display: grid; gap: 3px; min-width: 0; }
+.cm-schedule-main strong { color: var(--ink); font-size: 12.5px; }
+.cm-schedule-main span { color: var(--muted); font-size: 9.5px; overflow: hidden; text-overflow: ellipsis; }
+.cm-schedule-main .cm-schedule-error { color: var(--danger); }
+.cm-schedule-actions { display: flex; align-items: center; justify-content: flex-end; gap: 8px; flex-wrap: wrap; }
+.cm-schedule-empty { display: grid; justify-items: center; gap: 5px; padding: 40px 16px; color: var(--muted); text-align: center; }
+.cm-schedule-empty strong { color: var(--ink); }
+.cm-schedule-empty span { font-size: 10.5px; }
+.cm-legacy-reminders { margin-top: 14px; }
+.cm-legacy-row { display: flex; align-items: center; justify-content: space-between; gap: 18px; padding: 9px 0; border-bottom: 1px solid var(--line-soft); font-size: 10.5px; }
+.cm-legacy-row:last-child { border-bottom: 0; }
+.cm-legacy-row span { color: var(--muted); }
+
 /* ── post-event thank-you dependent config ────────────────────────────── */
 .cm-thankyou-config { margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--line-soft); }
 
@@ -204,6 +251,18 @@
   .cm-purpose-grid, .cm-direct-recipient, .cm-broadcast-controls { grid-template-columns: 1fr; }
   .cm-broadcast-summary, .cm-broadcast-actions { align-items: flex-start; flex-direction: column; }
   .cm-broadcast-actions .rr-btn { width: 100%; }
+  .cm-scheduler-hero, .cm-schedule-save { align-items: stretch; flex-direction: column; }
+  .cm-scheduler-hero .rr-btn, .cm-schedule-save .rr-btn { width: 100%; justify-content: center; }
+  .cm-scheduler-stats { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .cm-schedule-presets, .cm-schedule-grid { grid-template-columns: 1fr; }
+  .cm-relative-row { grid-template-columns: 90px 1fr; }
+  .cm-schedule-card { grid-template-columns: 1fr; }
+  .cm-schedule-actions { justify-content: flex-start; }
+  .cm-legacy-row { align-items: flex-start; flex-direction: column; gap: 3px; }
+}
+
+@media (min-width: 761px) and (max-width: 1100px) {
+  .cm-schedule-presets { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
 
 /* ── System banners ───────────────────────────────────────────────────── */

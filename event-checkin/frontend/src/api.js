@@ -1231,6 +1231,17 @@ export const api = {
   previewReminder: (eventId, id, data) => req('POST', `/events/${eventId}/reminders/${id}/preview`, data),
   testSendReminder: (eventId, id, data) => req('POST', `/events/${eventId}/reminders/${id}/test-send`, data),
 
+  // Unified Guest Communication scheduler
+  listScheduledCommunications: (eventId) => req('GET', `/events/${eventId}/communications/scheduled`),
+  createScheduledCommunication: (eventId, data) => req('POST', `/events/${eventId}/communications/scheduled`, data),
+  updateScheduledCommunication: (eventId, id, data) => req('PUT', `/events/${eventId}/communications/scheduled/${id}`, data),
+  pauseScheduledCommunication: (eventId, id) => req('POST', `/events/${eventId}/communications/scheduled/${id}/pause`),
+  resumeScheduledCommunication: (eventId, id) => req('POST', `/events/${eventId}/communications/scheduled/${id}/resume`),
+  sendScheduledCommunicationNow: (eventId, id) => req('POST', `/events/${eventId}/communications/scheduled/${id}/send-now`),
+  cancelScheduledCommunication: (eventId, id) => req('POST', `/events/${eventId}/communications/scheduled/${id}/cancel`),
+  retryScheduledCommunication: (eventId, id) => req('POST', `/events/${eventId}/communications/scheduled/${id}/retry`),
+  scheduledCommunicationDeliveries: (eventId, id) => req('GET', `/events/${eventId}/communications/scheduled/${id}/deliveries`),
+
   // Billing (Event Pass)
   getBillingTiers: (eventId) => req('GET', `/billing/tiers/${eventId}`),
   getCreditLedger: (eventId) => req('GET', `/billing/credits/${eventId}`),

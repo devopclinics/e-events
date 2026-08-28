@@ -10,6 +10,11 @@
 //   /** @type {import('../types/api').GuestOut[]} */
 //   const guests = await api.listGuests(eventId)
 
+export interface AccessGrantRequest {
+  email: string
+  reason?: (string) | null
+}
+
 export interface AccountMemberOut {
   email: string
   is_active: boolean
@@ -92,6 +97,12 @@ export interface ApiKeyOut {
   scope: string
 }
 
+export interface AssignmentRequest {
+  due_at?: (string) | null
+  org_id?: (string) | null
+  user_ids: (string)[]
+}
+
 export interface AssignUserRequest {
   user_id: string
 }
@@ -117,6 +128,18 @@ export interface Body_upload_floor_bg_api_events__event_id__floor_plan_bg_post {
 }
 
 export interface Body_upload_guests_api_events__event_id__guests_upload_post {
+  file: string
+}
+
+export interface Body_upload_logo_api_events__event_id__upload_logo_post {
+  file: string
+}
+
+export interface Body_upload_partner_logo_api_events__event_id__partners_upload_logo_post {
+  file: string
+}
+
+export interface Body_upload_speaker_photo_api_events__event_id__speakers_upload_photo_post {
   file: string
 }
 
@@ -385,6 +408,10 @@ export interface DemoRequestOut {
   ok?: boolean
 }
 
+export interface DueDateRequest {
+  due_at?: (string) | null
+}
+
 export interface EventBrief {
   checkout_enabled?: boolean
   couples_name: string
@@ -395,12 +422,14 @@ export interface EventBrief {
   live_program_enabled?: boolean
   menu_enabled?: boolean
   name: string
+  notify_consent_prompt_enabled?: boolean
   notify_sms?: boolean
   notify_whatsapp?: boolean
   partner_pairing_enabled?: boolean
   registry_enabled?: boolean
   registry_message?: (string) | null
   registry_token?: (string) | null
+  seat_term?: (string) | null
   seating_enabled?: boolean
   seating_term?: (string) | null
   status: string
@@ -464,7 +493,7 @@ export interface EventMemberOut {
 
 export interface EventOut {
   admission_note?: (string) | null
-  attendance_mode?: 'rsvp' | 'ticketed' | 'hybrid' | 'private'
+  attendance_mode?: string
   blocked_comm_features?: ((string)[]) | null
   blocked_messaging_channels?: ((string)[]) | null
   channel_policy?: (Record<string, unknown>) | null
@@ -475,6 +504,7 @@ export interface EventOut {
   default_guest_table_group_id?: (string) | null
   description: (string) | null
   enforce_table_groups?: boolean
+  engagement_enabled?: boolean
   event_code?: (string) | null
   event_date: string
   event_end_date?: (string) | null
@@ -488,16 +518,22 @@ export interface EventOut {
   festiome_last_sync_at?: (string) | null
   festiome_open_url?: (string) | null
   guest_cap?: (number) | null
+  guest_hub_layout?: (string) | null
   hotel_address?: (string) | null
   hotel_name?: (string) | null
   id: string
+  invite_add_to_calendar_enabled?: boolean
+  invite_capacity_bar_enabled?: boolean
+  invite_countdown_enabled?: boolean
   invite_cover_image?: (string) | null
   invite_message?: (string) | null
   invite_mode?: string
+  invite_share_enabled?: boolean
   invite_theme?: string
   is_paid?: boolean
   live_program_enabled?: boolean
   logistics_enabled?: boolean
+  logo_url?: (string) | null
   manual_checkin_enabled?: boolean
   menu_enabled: boolean
   message_credits?: number
@@ -509,12 +545,14 @@ export interface EventOut {
   my_redesign_accessible?: boolean
   my_redesign_cohort?: string
   name: string
+  notify_consent_prompt_enabled?: boolean
   notify_email?: boolean
   notify_mms?: boolean
   notify_rsvp_responses?: boolean
   notify_sms?: boolean
   notify_whatsapp?: boolean
   paid_channels?: boolean
+  partner_enabled?: boolean
   partner_pairing_enabled?: boolean
   plan_tier?: string
   planner_enabled?: boolean
@@ -524,11 +562,13 @@ export interface EventOut {
   post_event_thankyou_sent_at?: (string) | null
   purchased_addons?: ((string)[]) | null
   registry_enabled?: boolean
+  reminders_enabled?: boolean
   rsvp_allow_duplicate_emails?: boolean
   rsvp_capacity?: (number) | null
   rsvp_category_seating_rules?: (Record<string, Record<string, (string) | null>>) | null
   rsvp_collect_email?: boolean
   rsvp_collect_phone?: boolean
+  rsvp_confetti_enabled?: boolean
   rsvp_deadline?: (string) | null
   rsvp_email_required?: boolean
   rsvp_enabled?: boolean
@@ -543,6 +583,8 @@ export interface EventOut {
   rsvp_phone_required?: boolean
   rsvp_require_approval?: boolean
   rsvp_token?: (string) | null
+  seat_assignment_order?: string
+  seat_term?: (string) | null
   seating_enabled: boolean
   seating_term?: (string) | null
   section_mode_enabled?: boolean
@@ -553,6 +595,8 @@ export interface EventOut {
   source_sync_enabled?: boolean
   source_sync_interval_seconds?: number
   source_url?: (string) | null
+  speaker_enabled?: boolean
+  speaker_show_before_rsvp?: boolean
   status: string
   timezone?: (string) | null
   updated_at?: (string) | null
@@ -560,7 +604,58 @@ export interface EventOut {
   venue_address?: (string) | null
   venue_name?: (string) | null
   walk_in_enabled?: boolean
+  walk_in_group_choice_enabled?: boolean
   walk_in_table_group_id?: (string) | null
+}
+
+export interface EventReminderCreate {
+  audience_rsvp_statuses?: (('invited' | 'confirmed' | 'declined' | 'pending' | 'waitlisted')[]) | null
+  channels?: ('email' | 'sms' | 'whatsapp')[]
+  email_body?: (string) | null
+  enabled?: boolean
+  label: string
+  offset_days?: number
+  send_time_local?: string
+  sms_body?: (string) | null
+  sort_order?: number
+  subject?: (string) | null
+  whatsapp_body?: (string) | null
+}
+
+export interface EventReminderOut {
+  audience_rsvp_statuses?: ((string)[]) | null
+  channels?: (string)[]
+  email_body?: (string) | null
+  enabled: boolean
+  event_id: string
+  fire_at_utc: string
+  fired_at?: (string) | null
+  guests_sent?: number
+  guests_targeted?: number
+  id: string
+  label: string
+  last_error?: (string) | null
+  offset_days: number
+  send_time_local: string
+  sms_body?: (string) | null
+  sort_order?: number
+  status: string
+  subject?: (string) | null
+  whatsapp_body?: (string) | null
+}
+
+export interface EventReminderUpdate {
+  audience_rsvp_statuses?: (('invited' | 'confirmed' | 'declined' | 'pending' | 'waitlisted')[]) | null
+  channels?: (('email' | 'sms' | 'whatsapp')[]) | null
+  email_body?: (string) | null
+  enabled?: (boolean) | null
+  label?: (string) | null
+  offset_days?: (number) | null
+  send_time_local?: (string) | null
+  sms_body?: (string) | null
+  sort_order?: (number) | null
+  subject?: (string) | null
+  whatsapp_body?: (string) | null
 }
 
 export interface EventResetRequest {
@@ -579,8 +674,8 @@ export interface EventSourceUpdate {
 }
 
 export interface EventUpdate {
-  attendance_mode?: ('rsvp' | 'ticketed' | 'hybrid' | 'private') | null
   admission_note?: (string) | null
+  attendance_mode?: ('rsvp' | 'ticketed' | 'hybrid' | 'private') | null
   checkin_base_url?: (string) | null
   couples_name?: (string) | null
   description?: (string) | null
@@ -634,6 +729,7 @@ export interface ExperienceProgressUpdate {
 }
 
 export interface ExperienceStepCreate {
+  blocks_checkin?: boolean
   conditions?: (Record<string, unknown>) | null
   config?: (Record<string, unknown>) | null
   description?: (string) | null
@@ -668,6 +764,7 @@ export interface ExperienceStepDashboardOut {
 }
 
 export interface ExperienceStepOut {
+  blocks_checkin?: boolean
   conditions?: (Record<string, unknown>) | null
   config?: (Record<string, unknown>) | null
   created_at: string
@@ -691,6 +788,7 @@ export interface ExperienceStepReorder {
 }
 
 export interface ExperienceStepUpdate {
+  blocks_checkin?: (boolean) | null
   conditions?: (Record<string, unknown>) | null
   config?: (Record<string, unknown>) | null
   description?: (string) | null
@@ -777,6 +875,7 @@ export interface FloorPlanOut {
   event_id: string
   event_name: string
   height?: number
+  seat_term?: string
   seating_term?: string
   share_token?: (string) | null
   tables?: (FloorTableOut)[]
@@ -865,12 +964,18 @@ export interface GuestConsentStateOut {
 
 export interface GuestCreate {
   assigned_table_group_id?: (string) | null
+  confirm_duplicate?: boolean
   email?: (string) | null
   first_name: string
   is_vip?: boolean
   is_walk_in?: boolean
   last_name: string
   phone?: (string) | null
+}
+
+export interface GuestDuplicateGroup {
+  guests: (GuestOut)[]
+  normalized_name: string
 }
 
 export interface GuestExperienceOut {
@@ -919,7 +1024,9 @@ export interface GuestJourneyOut {
 }
 
 export interface GuestJourneyStepOut {
+  action_url?: (string) | null
   actionable?: boolean
+  blocks_checkin?: boolean
   completed_at?: (string) | null
   completion_message?: (string) | null
   description?: (string) | null
@@ -1025,6 +1132,7 @@ export interface GuestProgramSegmentOut {
   ends_at: string
   key: string
   starts_at: string
+  state?: 'ended' | 'ongoing' | 'upcoming'
   step_id: string
   title: string
 }
@@ -1055,6 +1163,37 @@ export interface GuestShipmentUpdate {
   ship_status?: ('pending' | 'shipped' | 'delivered') | null
   size?: (string) | null
   tracking_number?: (string) | null
+}
+
+export interface GuestSpeakerCreate {
+  bio?: (string) | null
+  name: string
+  photo_url?: (string) | null
+  social_links?: (SocialLink)[]
+  sort_order?: number
+  title?: (string) | null
+}
+
+export interface GuestSpeakerOut {
+  bio?: (string) | null
+  event_id: string
+  id: string
+  is_active: boolean
+  name: string
+  photo_url?: (string) | null
+  social_links?: (SocialLink)[]
+  sort_order: number
+  title?: (string) | null
+}
+
+export interface GuestSpeakerUpdate {
+  bio?: (string) | null
+  is_active?: (boolean) | null
+  name?: (string) | null
+  photo_url?: (string) | null
+  social_links?: ((SocialLink)[]) | null
+  sort_order?: (number) | null
+  title?: (string) | null
 }
 
 export interface GuestTagIn {
@@ -1132,12 +1271,14 @@ export interface InvitePageOut {
   couples_name: string
   deadline_passed?: boolean
   description: (string) | null
+  engagement_enabled?: boolean
   event_date: string
   event_end_date?: (string) | null
   event_time_tbd?: boolean
   experience_enabled?: boolean
   festiome_addon_enabled?: boolean
   festiome_enabled?: boolean
+  guest_hub_layout?: (string) | null
   guest_hub_v2?: boolean
   hotel_address?: (string) | null
   hotel_name?: (string) | null
@@ -1151,6 +1292,7 @@ export interface InvitePageOut {
   invite_share_enabled?: boolean
   invite_theme: string
   live_program_enabled?: boolean
+  logo_url?: (string) | null
   name: string
   questions?: (RSVPQuestionOut)[]
   registry_enabled?: boolean
@@ -1175,8 +1317,12 @@ export interface InvitePageOut {
   rsvp_phone_required?: boolean
   rsvp_require_approval?: boolean
   rsvp_token?: (string) | null
+  seat_term?: (string) | null
   seating_term?: (string) | null
   shipping?: (InviteShippingOut) | null
+  speaker_enabled?: boolean
+  speaker_show_before_rsvp?: boolean
+  speaker_token?: (string) | null
   timezone?: (string) | null
   venue_address?: (string) | null
   venue_name?: (string) | null
@@ -1184,6 +1330,7 @@ export interface InvitePageOut {
 
 export interface InviteSettingsUpdate {
   event_time_tbd?: (boolean) | null
+  guest_hub_layout?: ('classic' | 'companion') | null
   invite_add_to_calendar_enabled?: (boolean) | null
   invite_capacity_bar_enabled?: (boolean) | null
   invite_countdown_enabled?: (boolean) | null
@@ -1192,6 +1339,7 @@ export interface InviteSettingsUpdate {
   invite_mode?: ('open' | 'closed') | null
   invite_share_enabled?: (boolean) | null
   invite_theme?: ('default' | 'gold' | 'rose' | 'midnight' | 'forest') | null
+  logo_url?: (string) | null
   rsvp_allow_duplicate_emails?: (boolean) | null
   rsvp_capacity?: (number) | null
   rsvp_category_seating_rules?: (Record<string, Record<string, (string) | null>>) | null
@@ -1242,6 +1390,46 @@ export interface JourneyStep {
   direction: string
   scanned_at: string
   zone_name?: (string) | null
+}
+
+export interface LiveAnonJoinIn {
+  anon_id?: string
+  display_name?: string
+}
+
+export interface LiveAnonJoinOut {
+  anon_id: string
+  expires_in: number
+  token: string
+}
+
+export interface LiveGuestPassExchange {
+  pass_token: string
+}
+
+export interface LiveGuestSession {
+  expires_in: number
+  token: string
+}
+
+export interface LiveJoinInfo {
+  code: string
+  url: string
+}
+
+export interface LiveJoinResolution {
+  event_id: string
+}
+
+export interface LiveShareLinkIn {
+  hours?: number
+  role: 'presenter' | 'moderator' | 'analyst'
+}
+
+export interface LiveShareLinkOut {
+  expires_in: number
+  role: string
+  token: string
 }
 
 export interface ManualInviteRecipient {
@@ -1375,6 +1563,10 @@ export interface MenuItemTotal {
   name: string
 }
 
+export interface MergeDuplicatesRequest {
+  duplicate_ids: (string)[]
+}
+
 export interface MessageTemplateSave {
   email_body?: (string) | null
   mms_body?: (string) | null
@@ -1405,6 +1597,15 @@ export interface MyTaskOut {
 
 export interface OperatorInvite {
   email: string
+}
+
+export interface OrganizationEntitlementUpdate {
+  credit_delta_units?: (number) | null
+  extend_addon_promo_days?: (number) | null
+  extend_pass_days?: (number) | null
+  guest_cap?: (number) | null
+  reason: string
+  tier?: (string) | null
 }
 
 export interface OrgMemberInvite {
@@ -1485,11 +1686,70 @@ export interface PairRequest {
   partner_last_name: string
 }
 
+export interface PartnerCategoryCreate {
+  name: string
+  sort_order?: number
+}
+
+export interface PartnerCategoryOut {
+  event_id: string
+  id: string
+  name: string
+  sort_order: number
+}
+
+export interface PartnerCategoryUpdate {
+  name?: (string) | null
+  sort_order?: (number) | null
+}
+
+export interface PartnerCreate {
+  category_id?: (string) | null
+  description?: (string) | null
+  logo_url?: (string) | null
+  name: string
+  sort_order?: number
+  website_url?: (string) | null
+}
+
 export interface PartnerInfo {
   admitted?: boolean
   email: string
   first_name: string
   last_name: string
+}
+
+export interface PartnerOut {
+  category_id?: (string) | null
+  category_name?: (string) | null
+  description?: (string) | null
+  event_id: string
+  id: string
+  is_active: boolean
+  logo_url?: (string) | null
+  name: string
+  sort_order: number
+  website_url?: (string) | null
+}
+
+export interface PartnerPageOut {
+  categories?: (PartnerCategoryOut)[]
+  event_name: string
+  partners?: (PartnerOut)[]
+}
+
+export interface PartnerSettingsOut {
+  partner_token?: (string) | null
+}
+
+export interface PartnerUpdate {
+  category_id?: (string) | null
+  description?: (string) | null
+  is_active?: (boolean) | null
+  logo_url?: (string) | null
+  name?: (string) | null
+  sort_order?: (number) | null
+  website_url?: (string) | null
 }
 
 export interface PeakBucket {
@@ -1520,6 +1780,16 @@ export interface PlatformSettingsUpdate {
   support_chat_enabled?: (boolean) | null
 }
 
+export interface PracticalRequest {
+  link?: (string) | null
+  note: string
+}
+
+export interface PracticalReview {
+  notes?: (string) | null
+  status: 'approved' | 'rejected'
+}
+
 export interface ProgramSegmentImport {
   items: (ProgramSegmentImportItem)[]
 }
@@ -1547,6 +1817,7 @@ export interface PublicCalendarEventOut {
   id: string
   invite_cover_image?: (string) | null
   invite_message?: (string) | null
+  logo_url?: (string) | null
   name: string
   register_url: string
   rsvp_status?: (string) | null
@@ -1603,6 +1874,7 @@ export interface PublicEventOut {
 }
 
 export interface PublicExperienceStepIn {
+  blocks_checkin?: boolean
   conditions?: (Record<string, unknown>) | null
   config?: (Record<string, unknown>) | null
   description?: (string) | null
@@ -1617,6 +1889,7 @@ export interface PublicExperienceStepIn {
 }
 
 export interface PublicExperienceStepOut {
+  blocks_checkin?: boolean
   conditions?: (Record<string, unknown>) | null
   config?: (Record<string, unknown>) | null
   created_at: string
@@ -1640,6 +1913,7 @@ export interface PublicExperienceStepReorder {
 }
 
 export interface PublicExperienceStepUpdate {
+  blocks_checkin?: (boolean) | null
   conditions?: (Record<string, unknown>) | null
   config?: (Record<string, unknown>) | null
   description?: (string) | null
@@ -1812,6 +2086,10 @@ export interface QaChecklistSubmissionOut {
   user_agent?: (string) | null
 }
 
+export interface QuizSubmission {
+  answers: (number)[]
+}
+
 export interface RedesignCohortUpdate {
   redesign_cohort: 'legacy_only' | 'redesign_opt_in' | 'redesign_internal' | 'redesign_cohort' | 'redesign_default' | 'legacy_retired'
 }
@@ -1960,6 +2238,33 @@ export interface RegistryUnfurlRequest {
   url: string
 }
 
+export interface ReleaseRequest {
+  title: string
+}
+
+export interface ReminderPreviewOut {
+  body: string
+  subject?: (string) | null
+}
+
+export interface ReminderPreviewRequest {
+  body?: string
+  channel: 'email' | 'sms' | 'whatsapp'
+  subject?: (string) | null
+}
+
+export interface ReminderRequest {
+  org_id?: (string) | null
+  user_ids: (string)[]
+}
+
+export interface ReminderTestSendRequest {
+  body?: string
+  channel: 'email' | 'sms' | 'whatsapp'
+  subject?: (string) | null
+  to: string
+}
+
 export interface RSVPConfirm {
   first_name: string
   id: string
@@ -2064,6 +2369,73 @@ export interface ScanZoneResult {
   zone_name: string
 }
 
+export interface ScheduledCommunicationCreate {
+  anchor?: ('event_start' | 'event_end' | 'rsvp_deadline' | 'experience_step') | null
+  anchor_step_id?: (string) | null
+  audience_mode?: 'dynamic' | 'frozen'
+  audience_type?: 'all' | 'not_invited' | 'not_responded' | 'confirmed' | 'declined' | 'waitlisted' | 'checked_in' | 'not_checked_in'
+  channels?: ('email' | 'sms' | 'whatsapp')[]
+  communication_type: 'invitation' | 'rsvp_reminder' | 'event_reminder' | 'session_reminder' | 'feedback_request' | 'follow_up' | 'announcement'
+  email_body?: (string) | null
+  name: string
+  offset_minutes?: (number) | null
+  scheduled_at_local?: (string) | null
+  sms_body?: (string) | null
+  status?: 'draft' | 'scheduled' | 'paused'
+  subject?: (string) | null
+  trigger_type?: 'absolute' | 'relative'
+  whatsapp_body?: (string) | null
+}
+
+export interface ScheduledCommunicationOut {
+  anchor?: (string) | null
+  anchor_step_id?: (string) | null
+  audience_mode: string
+  audience_type: string
+  channels?: (string)[]
+  claimed_at?: (string) | null
+  communication_type: string
+  created_at: string
+  email_body?: (string) | null
+  event_id: string
+  id: string
+  last_error?: (string) | null
+  name: string
+  offset_minutes?: (number) | null
+  recipients_estimated?: number
+  recipients_failed?: number
+  recipients_sent?: number
+  recipients_targeted?: number
+  scheduled_at_local: string
+  scheduled_for_utc: string
+  sent_at?: (string) | null
+  sms_body?: (string) | null
+  status: string
+  subject?: (string) | null
+  timezone: string
+  trigger_type: string
+  updated_at: string
+  whatsapp_body?: (string) | null
+}
+
+export interface ScheduledCommunicationUpdate {
+  anchor?: ('event_start' | 'event_end' | 'rsvp_deadline' | 'experience_step') | null
+  anchor_step_id?: (string) | null
+  audience_mode?: ('dynamic' | 'frozen') | null
+  audience_type?: ('all' | 'not_invited' | 'not_responded' | 'confirmed' | 'declined' | 'waitlisted' | 'checked_in' | 'not_checked_in') | null
+  channels?: (('email' | 'sms' | 'whatsapp')[]) | null
+  communication_type?: ('invitation' | 'rsvp_reminder' | 'event_reminder' | 'session_reminder' | 'feedback_request' | 'follow_up' | 'announcement') | null
+  email_body?: (string) | null
+  name?: (string) | null
+  offset_minutes?: (number) | null
+  scheduled_at_local?: (string) | null
+  sms_body?: (string) | null
+  status?: ('draft' | 'scheduled' | 'paused' | 'cancelled') | null
+  subject?: (string) | null
+  trigger_type?: ('absolute' | 'relative') | null
+  whatsapp_body?: (string) | null
+}
+
 export interface SeatAssignRequest {
   seat_number?: (string) | null
   table_id?: (string) | null
@@ -2103,6 +2475,7 @@ export interface SelfCheckinResult {
   message?: (string) | null
   name?: (string) | null
   seat_number?: (string) | null
+  seat_term?: (string) | null
   seating_term?: (string) | null
   status: string
   table_name?: (string) | null
@@ -2169,6 +2542,21 @@ export interface ShippingAddressUpdate {
   ship_state?: (string) | null
 }
 
+export interface SocialLink {
+  platform: string
+  url: string
+}
+
+export interface SpeakerPageOut {
+  event_name: string
+  speakers?: (GuestSpeakerOut)[]
+}
+
+export interface SpeakerSettingsOut {
+  speaker_show_before_rsvp?: boolean
+  speaker_token?: (string) | null
+}
+
 export interface SubGroupCreate {
   description?: string
   join_policy?: 'closed' | 'request' | 'open'
@@ -2222,6 +2610,7 @@ export interface TableGroupOut {
   name: string
   over_capacity?: boolean
   remaining_seats?: number
+  seated_guest_count?: number
   sort_order?: number
   table_ids?: (string)[]
   tag: string
@@ -2406,6 +2795,7 @@ export interface UserOut {
   is_org_admin?: boolean
   is_platform_superadmin?: boolean
   name: string
+  redesign_cohort?: string
   role: string
 }
 

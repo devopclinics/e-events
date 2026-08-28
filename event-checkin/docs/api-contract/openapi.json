@@ -1,6 +1,33 @@
 {
   "components": {
     "schemas": {
+      "AccessGrantRequest": {
+        "properties": {
+          "email": {
+            "maxLength": 255,
+            "minLength": 3,
+            "title": "Email",
+            "type": "string"
+          },
+          "reason": {
+            "anyOf": [
+              {
+                "maxLength": 1000,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reason"
+          }
+        },
+        "required": [
+          "email"
+        ],
+        "title": "AccessGrantRequest",
+        "type": "object"
+      },
       "AccountMemberOut": {
         "properties": {
           "email": {
@@ -412,6 +439,46 @@
         "title": "AssignUserRequest",
         "type": "object"
       },
+      "AssignmentRequest": {
+        "properties": {
+          "due_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Due At"
+          },
+          "org_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Org Id"
+          },
+          "user_ids": {
+            "items": {
+              "type": "string"
+            },
+            "minItems": 1,
+            "title": "User Ids",
+            "type": "array"
+          }
+        },
+        "required": [
+          "user_ids"
+        ],
+        "title": "AssignmentRequest",
+        "type": "object"
+      },
       "Body_import_contacts_csv_api_organizations_me_contact_lists__list_id__contacts_csv_post": {
         "properties": {
           "file": {
@@ -494,6 +561,48 @@
           "file"
         ],
         "title": "Body_upload_guests_api_events__event_id__guests_upload_post",
+        "type": "object"
+      },
+      "Body_upload_logo_api_events__event_id__upload_logo_post": {
+        "properties": {
+          "file": {
+            "contentMediaType": "application/octet-stream",
+            "title": "File",
+            "type": "string"
+          }
+        },
+        "required": [
+          "file"
+        ],
+        "title": "Body_upload_logo_api_events__event_id__upload_logo_post",
+        "type": "object"
+      },
+      "Body_upload_partner_logo_api_events__event_id__partners_upload_logo_post": {
+        "properties": {
+          "file": {
+            "contentMediaType": "application/octet-stream",
+            "title": "File",
+            "type": "string"
+          }
+        },
+        "required": [
+          "file"
+        ],
+        "title": "Body_upload_partner_logo_api_events__event_id__partners_upload_logo_post",
+        "type": "object"
+      },
+      "Body_upload_speaker_photo_api_events__event_id__speakers_upload_photo_post": {
+        "properties": {
+          "file": {
+            "contentMediaType": "application/octet-stream",
+            "title": "File",
+            "type": "string"
+          }
+        },
+        "required": [
+          "file"
+        ],
+        "title": "Body_upload_speaker_photo_api_events__event_id__speakers_upload_photo_post",
         "type": "object"
       },
       "Body_upload_task_attachment_api_events__event_id__tasks__task_id__attachments_post": {
@@ -1895,6 +2004,24 @@
         "title": "DemoRequestOut",
         "type": "object"
       },
+      "DueDateRequest": {
+        "properties": {
+          "due_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Due At"
+          }
+        },
+        "title": "DueDateRequest",
+        "type": "object"
+      },
       "EventBrief": {
         "properties": {
           "checkout_enabled": {
@@ -1940,6 +2067,11 @@
             "title": "Name",
             "type": "string"
           },
+          "notify_consent_prompt_enabled": {
+            "default": true,
+            "title": "Notify Consent Prompt Enabled",
+            "type": "boolean"
+          },
           "notify_sms": {
             "default": true,
             "title": "Notify Sms",
@@ -1981,6 +2113,17 @@
               }
             ],
             "title": "Registry Token"
+          },
+          "seat_term": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Seat Term"
           },
           "seating_enabled": {
             "default": false,
@@ -2057,6 +2200,17 @@
               }
             ],
             "title": "Admission Note"
+          },
+          "attendance_mode": {
+            "default": "rsvp",
+            "enum": [
+              "rsvp",
+              "ticketed",
+              "hybrid",
+              "private"
+            ],
+            "title": "Attendance Mode",
+            "type": "string"
           },
           "checkin_base_url": {
             "title": "Checkin Base Url",
@@ -2387,6 +2541,11 @@
             ],
             "title": "Admission Note"
           },
+          "attendance_mode": {
+            "default": "rsvp",
+            "title": "Attendance Mode",
+            "type": "string"
+          },
           "blocked_comm_features": {
             "anyOf": [
               {
@@ -2470,6 +2629,11 @@
           "enforce_table_groups": {
             "default": true,
             "title": "Enforce Table Groups",
+            "type": "boolean"
+          },
+          "engagement_enabled": {
+            "default": false,
+            "title": "Engagement Enabled",
             "type": "boolean"
           },
           "event_code": {
@@ -2587,6 +2751,17 @@
             ],
             "title": "Guest Cap"
           },
+          "guest_hub_layout": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Guest Hub Layout"
+          },
           "hotel_address": {
             "anyOf": [
               {
@@ -2612,6 +2787,21 @@
           "id": {
             "title": "Id",
             "type": "string"
+          },
+          "invite_add_to_calendar_enabled": {
+            "default": true,
+            "title": "Invite Add To Calendar Enabled",
+            "type": "boolean"
+          },
+          "invite_capacity_bar_enabled": {
+            "default": true,
+            "title": "Invite Capacity Bar Enabled",
+            "type": "boolean"
+          },
+          "invite_countdown_enabled": {
+            "default": true,
+            "title": "Invite Countdown Enabled",
+            "type": "boolean"
           },
           "invite_cover_image": {
             "anyOf": [
@@ -2640,6 +2830,11 @@
             "title": "Invite Mode",
             "type": "string"
           },
+          "invite_share_enabled": {
+            "default": true,
+            "title": "Invite Share Enabled",
+            "type": "boolean"
+          },
           "invite_theme": {
             "default": "default",
             "title": "Invite Theme",
@@ -2659,6 +2854,17 @@
             "default": false,
             "title": "Logistics Enabled",
             "type": "boolean"
+          },
+          "logo_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Logo Url"
           },
           "manual_checkin_enabled": {
             "default": false,
@@ -2713,6 +2919,11 @@
             "title": "Name",
             "type": "string"
           },
+          "notify_consent_prompt_enabled": {
+            "default": true,
+            "title": "Notify Consent Prompt Enabled",
+            "type": "boolean"
+          },
           "notify_email": {
             "default": true,
             "title": "Notify Email",
@@ -2741,6 +2952,11 @@
           "paid_channels": {
             "default": false,
             "title": "Paid Channels",
+            "type": "boolean"
+          },
+          "partner_enabled": {
+            "default": false,
+            "title": "Partner Enabled",
             "type": "boolean"
           },
           "partner_pairing_enabled": {
@@ -2804,6 +3020,11 @@
             "title": "Registry Enabled",
             "type": "boolean"
           },
+          "reminders_enabled": {
+            "default": false,
+            "title": "Reminders Enabled",
+            "type": "boolean"
+          },
           "rsvp_allow_duplicate_emails": {
             "default": false,
             "title": "Rsvp Allow Duplicate Emails",
@@ -2852,6 +3073,11 @@
           "rsvp_collect_phone": {
             "default": true,
             "title": "Rsvp Collect Phone",
+            "type": "boolean"
+          },
+          "rsvp_confetti_enabled": {
+            "default": true,
+            "title": "Rsvp Confetti Enabled",
             "type": "boolean"
           },
           "rsvp_deadline": {
@@ -2973,6 +3199,22 @@
             ],
             "title": "Rsvp Token"
           },
+          "seat_assignment_order": {
+            "default": "sequential",
+            "title": "Seat Assignment Order",
+            "type": "string"
+          },
+          "seat_term": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Seat Term"
+          },
           "seating_enabled": {
             "title": "Seating Enabled",
             "type": "boolean"
@@ -3053,6 +3295,16 @@
             ],
             "title": "Source Url"
           },
+          "speaker_enabled": {
+            "default": false,
+            "title": "Speaker Enabled",
+            "type": "boolean"
+          },
+          "speaker_show_before_rsvp": {
+            "default": false,
+            "title": "Speaker Show Before Rsvp",
+            "type": "boolean"
+          },
           "status": {
             "title": "Status",
             "type": "string"
@@ -3112,6 +3364,11 @@
             "title": "Walk In Enabled",
             "type": "boolean"
           },
+          "walk_in_group_choice_enabled": {
+            "default": false,
+            "title": "Walk In Group Choice Enabled",
+            "type": "boolean"
+          },
           "walk_in_table_group_id": {
             "anyOf": [
               {
@@ -3137,6 +3394,421 @@
           "created_at"
         ],
         "title": "EventOut",
+        "type": "object"
+      },
+      "EventReminderCreate": {
+        "properties": {
+          "audience_rsvp_statuses": {
+            "anyOf": [
+              {
+                "items": {
+                  "enum": [
+                    "invited",
+                    "confirmed",
+                    "declined",
+                    "pending",
+                    "waitlisted"
+                  ],
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Audience Rsvp Statuses"
+          },
+          "channels": {
+            "default": [],
+            "items": {
+              "enum": [
+                "email",
+                "sms",
+                "whatsapp"
+              ],
+              "type": "string"
+            },
+            "title": "Channels",
+            "type": "array"
+          },
+          "email_body": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Email Body"
+          },
+          "enabled": {
+            "default": true,
+            "title": "Enabled",
+            "type": "boolean"
+          },
+          "label": {
+            "title": "Label",
+            "type": "string"
+          },
+          "offset_days": {
+            "default": 1,
+            "maximum": 90.0,
+            "minimum": 0.0,
+            "title": "Offset Days",
+            "type": "integer"
+          },
+          "send_time_local": {
+            "default": "09:00",
+            "pattern": "^\\d{2}:\\d{2}$",
+            "title": "Send Time Local",
+            "type": "string"
+          },
+          "sms_body": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Sms Body"
+          },
+          "sort_order": {
+            "default": 0,
+            "title": "Sort Order",
+            "type": "integer"
+          },
+          "subject": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Subject"
+          },
+          "whatsapp_body": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Whatsapp Body"
+          }
+        },
+        "required": [
+          "label"
+        ],
+        "title": "EventReminderCreate",
+        "type": "object"
+      },
+      "EventReminderOut": {
+        "properties": {
+          "audience_rsvp_statuses": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Audience Rsvp Statuses"
+          },
+          "channels": {
+            "default": [],
+            "items": {
+              "type": "string"
+            },
+            "title": "Channels",
+            "type": "array"
+          },
+          "email_body": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Email Body"
+          },
+          "enabled": {
+            "title": "Enabled",
+            "type": "boolean"
+          },
+          "event_id": {
+            "title": "Event Id",
+            "type": "string"
+          },
+          "fire_at_utc": {
+            "format": "date-time",
+            "title": "Fire At Utc",
+            "type": "string"
+          },
+          "fired_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Fired At"
+          },
+          "guests_sent": {
+            "default": 0,
+            "title": "Guests Sent",
+            "type": "integer"
+          },
+          "guests_targeted": {
+            "default": 0,
+            "title": "Guests Targeted",
+            "type": "integer"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "label": {
+            "title": "Label",
+            "type": "string"
+          },
+          "last_error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Error"
+          },
+          "offset_days": {
+            "title": "Offset Days",
+            "type": "integer"
+          },
+          "send_time_local": {
+            "title": "Send Time Local",
+            "type": "string"
+          },
+          "sms_body": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Sms Body"
+          },
+          "sort_order": {
+            "default": 0,
+            "title": "Sort Order",
+            "type": "integer"
+          },
+          "status": {
+            "title": "Status",
+            "type": "string"
+          },
+          "subject": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Subject"
+          },
+          "whatsapp_body": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Whatsapp Body"
+          }
+        },
+        "required": [
+          "id",
+          "event_id",
+          "label",
+          "offset_days",
+          "send_time_local",
+          "fire_at_utc",
+          "enabled",
+          "status"
+        ],
+        "title": "EventReminderOut",
+        "type": "object"
+      },
+      "EventReminderUpdate": {
+        "properties": {
+          "audience_rsvp_statuses": {
+            "anyOf": [
+              {
+                "items": {
+                  "enum": [
+                    "invited",
+                    "confirmed",
+                    "declined",
+                    "pending",
+                    "waitlisted"
+                  ],
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Audience Rsvp Statuses"
+          },
+          "channels": {
+            "anyOf": [
+              {
+                "items": {
+                  "enum": [
+                    "email",
+                    "sms",
+                    "whatsapp"
+                  ],
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Channels"
+          },
+          "email_body": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Email Body"
+          },
+          "enabled": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Enabled"
+          },
+          "label": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Label"
+          },
+          "offset_days": {
+            "anyOf": [
+              {
+                "maximum": 90.0,
+                "minimum": 0.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Offset Days"
+          },
+          "send_time_local": {
+            "anyOf": [
+              {
+                "pattern": "^\\d{2}:\\d{2}$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Send Time Local"
+          },
+          "sms_body": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Sms Body"
+          },
+          "sort_order": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Sort Order"
+          },
+          "subject": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Subject"
+          },
+          "whatsapp_body": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Whatsapp Body"
+          }
+        },
+        "title": "EventReminderUpdate",
         "type": "object"
       },
       "EventResetRequest": {
@@ -3227,6 +3899,23 @@
               }
             ],
             "title": "Admission Note"
+          },
+          "attendance_mode": {
+            "anyOf": [
+              {
+                "enum": [
+                  "rsvp",
+                  "ticketed",
+                  "hybrid",
+                  "private"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Attendance Mode"
           },
           "checkin_base_url": {
             "anyOf": [
@@ -3607,6 +4296,11 @@
       },
       "ExperienceStepCreate": {
         "properties": {
+          "blocks_checkin": {
+            "default": false,
+            "title": "Blocks Checkin",
+            "type": "boolean"
+          },
           "conditions": {
             "anyOf": [
               {
@@ -3813,6 +4507,11 @@
       },
       "ExperienceStepOut": {
         "properties": {
+          "blocks_checkin": {
+            "default": false,
+            "title": "Blocks Checkin",
+            "type": "boolean"
+          },
           "conditions": {
             "anyOf": [
               {
@@ -3948,6 +4647,17 @@
       },
       "ExperienceStepUpdate": {
         "properties": {
+          "blocks_checkin": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Blocks Checkin"
+          },
           "conditions": {
             "anyOf": [
               {
@@ -4499,6 +5209,11 @@
             "title": "Height",
             "type": "integer"
           },
+          "seat_term": {
+            "default": "Seat",
+            "title": "Seat Term",
+            "type": "string"
+          },
           "seating_term": {
             "default": "Table",
             "title": "Seating Term",
@@ -5024,6 +5739,11 @@
             ],
             "title": "Assigned Table Group Id"
           },
+          "confirm_duplicate": {
+            "default": false,
+            "title": "Confirm Duplicate",
+            "type": "boolean"
+          },
           "email": {
             "anyOf": [
               {
@@ -5071,6 +5791,27 @@
           "last_name"
         ],
         "title": "GuestCreate",
+        "type": "object"
+      },
+      "GuestDuplicateGroup": {
+        "properties": {
+          "guests": {
+            "items": {
+              "$ref": "#/components/schemas/GuestOut"
+            },
+            "title": "Guests",
+            "type": "array"
+          },
+          "normalized_name": {
+            "title": "Normalized Name",
+            "type": "string"
+          }
+        },
+        "required": [
+          "normalized_name",
+          "guests"
+        ],
+        "title": "GuestDuplicateGroup",
         "type": "object"
       },
       "GuestExperienceOut": {
@@ -5338,9 +6079,25 @@
       },
       "GuestJourneyStepOut": {
         "properties": {
+          "action_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Action Url"
+          },
           "actionable": {
             "default": false,
             "title": "Actionable",
+            "type": "boolean"
+          },
+          "blocks_checkin": {
+            "default": false,
+            "title": "Blocks Checkin",
             "type": "boolean"
           },
           "completed_at": {
@@ -6124,6 +6881,16 @@
             "title": "Starts At",
             "type": "string"
           },
+          "state": {
+            "default": "upcoming",
+            "enum": [
+              "ended",
+              "ongoing",
+              "upcoming"
+            ],
+            "title": "State",
+            "type": "string"
+          },
           "step_id": {
             "title": "Step Id",
             "type": "string"
@@ -6366,6 +7133,225 @@
           }
         },
         "title": "GuestShipmentUpdate",
+        "type": "object"
+      },
+      "GuestSpeakerCreate": {
+        "properties": {
+          "bio": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Bio"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "photo_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Photo Url"
+          },
+          "social_links": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/SocialLink"
+            },
+            "title": "Social Links",
+            "type": "array"
+          },
+          "sort_order": {
+            "default": 0,
+            "title": "Sort Order",
+            "type": "integer"
+          },
+          "title": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Title"
+          }
+        },
+        "required": [
+          "name"
+        ],
+        "title": "GuestSpeakerCreate",
+        "type": "object"
+      },
+      "GuestSpeakerOut": {
+        "properties": {
+          "bio": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Bio"
+          },
+          "event_id": {
+            "title": "Event Id",
+            "type": "string"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "is_active": {
+            "title": "Is Active",
+            "type": "boolean"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "photo_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Photo Url"
+          },
+          "social_links": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/SocialLink"
+            },
+            "title": "Social Links",
+            "type": "array"
+          },
+          "sort_order": {
+            "title": "Sort Order",
+            "type": "integer"
+          },
+          "title": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Title"
+          }
+        },
+        "required": [
+          "id",
+          "event_id",
+          "name",
+          "sort_order",
+          "is_active"
+        ],
+        "title": "GuestSpeakerOut",
+        "type": "object"
+      },
+      "GuestSpeakerUpdate": {
+        "properties": {
+          "bio": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Bio"
+          },
+          "is_active": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Is Active"
+          },
+          "name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Name"
+          },
+          "photo_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Photo Url"
+          },
+          "social_links": {
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/components/schemas/SocialLink"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Social Links"
+          },
+          "sort_order": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Sort Order"
+          },
+          "title": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Title"
+          }
+        },
+        "title": "GuestSpeakerUpdate",
         "type": "object"
       },
       "GuestTagIn": {
@@ -6843,6 +7829,11 @@
             ],
             "title": "Description"
           },
+          "engagement_enabled": {
+            "default": false,
+            "title": "Engagement Enabled",
+            "type": "boolean"
+          },
           "event_date": {
             "format": "date-time",
             "title": "Event Date",
@@ -6879,6 +7870,17 @@
             "default": false,
             "title": "Festiome Enabled",
             "type": "boolean"
+          },
+          "guest_hub_layout": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Guest Hub Layout"
           },
           "guest_hub_v2": {
             "default": true,
@@ -6966,6 +7968,17 @@
             "default": false,
             "title": "Live Program Enabled",
             "type": "boolean"
+          },
+          "logo_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Logo Url"
           },
           "name": {
             "title": "Name",
@@ -7147,6 +8160,17 @@
             ],
             "title": "Rsvp Token"
           },
+          "seat_term": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Seat Term"
+          },
           "seating_term": {
             "anyOf": [
               {
@@ -7167,6 +8191,27 @@
                 "type": "null"
               }
             ]
+          },
+          "speaker_enabled": {
+            "default": false,
+            "title": "Speaker Enabled",
+            "type": "boolean"
+          },
+          "speaker_show_before_rsvp": {
+            "default": false,
+            "title": "Speaker Show Before Rsvp",
+            "type": "boolean"
+          },
+          "speaker_token": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Speaker Token"
           },
           "timezone": {
             "anyOf": [
@@ -7230,6 +8275,21 @@
               }
             ],
             "title": "Event Time Tbd"
+          },
+          "guest_hub_layout": {
+            "anyOf": [
+              {
+                "enum": [
+                  "classic",
+                  "companion"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Guest Hub Layout"
           },
           "invite_add_to_calendar_enabled": {
             "anyOf": [
@@ -7329,6 +8389,17 @@
               }
             ],
             "title": "Invite Theme"
+          },
+          "logo_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Logo Url"
           },
           "rsvp_allow_duplicate_emails": {
             "anyOf": [
@@ -7712,6 +8783,159 @@
           "scanned_at"
         ],
         "title": "JourneyStep",
+        "type": "object"
+      },
+      "LiveAnonJoinIn": {
+        "properties": {
+          "anon_id": {
+            "default": "",
+            "maxLength": 64,
+            "title": "Anon Id",
+            "type": "string"
+          },
+          "display_name": {
+            "default": "",
+            "maxLength": 80,
+            "title": "Display Name",
+            "type": "string"
+          }
+        },
+        "title": "LiveAnonJoinIn",
+        "type": "object"
+      },
+      "LiveAnonJoinOut": {
+        "properties": {
+          "anon_id": {
+            "title": "Anon Id",
+            "type": "string"
+          },
+          "expires_in": {
+            "title": "Expires In",
+            "type": "integer"
+          },
+          "token": {
+            "title": "Token",
+            "type": "string"
+          }
+        },
+        "required": [
+          "token",
+          "expires_in",
+          "anon_id"
+        ],
+        "title": "LiveAnonJoinOut",
+        "type": "object"
+      },
+      "LiveGuestPassExchange": {
+        "properties": {
+          "pass_token": {
+            "maxLength": 200,
+            "minLength": 8,
+            "title": "Pass Token",
+            "type": "string"
+          }
+        },
+        "required": [
+          "pass_token"
+        ],
+        "title": "LiveGuestPassExchange",
+        "type": "object"
+      },
+      "LiveGuestSession": {
+        "properties": {
+          "expires_in": {
+            "title": "Expires In",
+            "type": "integer"
+          },
+          "token": {
+            "title": "Token",
+            "type": "string"
+          }
+        },
+        "required": [
+          "token",
+          "expires_in"
+        ],
+        "title": "LiveGuestSession",
+        "type": "object"
+      },
+      "LiveJoinInfo": {
+        "properties": {
+          "code": {
+            "title": "Code",
+            "type": "string"
+          },
+          "url": {
+            "title": "Url",
+            "type": "string"
+          }
+        },
+        "required": [
+          "code",
+          "url"
+        ],
+        "title": "LiveJoinInfo",
+        "type": "object"
+      },
+      "LiveJoinResolution": {
+        "properties": {
+          "event_id": {
+            "title": "Event Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "event_id"
+        ],
+        "title": "LiveJoinResolution",
+        "type": "object"
+      },
+      "LiveShareLinkIn": {
+        "properties": {
+          "hours": {
+            "default": 12,
+            "maximum": 48.0,
+            "minimum": 1.0,
+            "title": "Hours",
+            "type": "integer"
+          },
+          "role": {
+            "enum": [
+              "presenter",
+              "moderator",
+              "analyst"
+            ],
+            "title": "Role",
+            "type": "string"
+          }
+        },
+        "required": [
+          "role"
+        ],
+        "title": "LiveShareLinkIn",
+        "type": "object"
+      },
+      "LiveShareLinkOut": {
+        "properties": {
+          "expires_in": {
+            "title": "Expires In",
+            "type": "integer"
+          },
+          "role": {
+            "title": "Role",
+            "type": "string"
+          },
+          "token": {
+            "title": "Token",
+            "type": "string"
+          }
+        },
+        "required": [
+          "token",
+          "expires_in",
+          "role"
+        ],
+        "title": "LiveShareLinkOut",
         "type": "object"
       },
       "ManualInviteRecipient": {
@@ -8391,6 +9615,22 @@
         "title": "MenuItemTotal",
         "type": "object"
       },
+      "MergeDuplicatesRequest": {
+        "properties": {
+          "duplicate_ids": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Duplicate Ids",
+            "type": "array"
+          }
+        },
+        "required": [
+          "duplicate_ids"
+        ],
+        "title": "MergeDuplicatesRequest",
+        "type": "object"
+      },
       "MessageTemplateSave": {
         "properties": {
           "email_body": {
@@ -8757,6 +9997,74 @@
         "title": "OrgSubscriptionOut",
         "type": "object"
       },
+      "OrganizationEntitlementUpdate": {
+        "properties": {
+          "credit_delta_units": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Credit Delta Units"
+          },
+          "extend_addon_promo_days": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Extend Addon Promo Days"
+          },
+          "extend_pass_days": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Extend Pass Days"
+          },
+          "guest_cap": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Guest Cap"
+          },
+          "reason": {
+            "title": "Reason",
+            "type": "string"
+          },
+          "tier": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Tier"
+          }
+        },
+        "required": [
+          "reason"
+        ],
+        "title": "OrganizationEntitlementUpdate",
+        "type": "object"
+      },
       "OutboxStatus": {
         "properties": {
           "delivered": {
@@ -8973,6 +10281,142 @@
         "title": "PairRequest",
         "type": "object"
       },
+      "PartnerCategoryCreate": {
+        "properties": {
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "sort_order": {
+            "default": 0,
+            "title": "Sort Order",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "name"
+        ],
+        "title": "PartnerCategoryCreate",
+        "type": "object"
+      },
+      "PartnerCategoryOut": {
+        "properties": {
+          "event_id": {
+            "title": "Event Id",
+            "type": "string"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "sort_order": {
+            "title": "Sort Order",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "id",
+          "event_id",
+          "name",
+          "sort_order"
+        ],
+        "title": "PartnerCategoryOut",
+        "type": "object"
+      },
+      "PartnerCategoryUpdate": {
+        "properties": {
+          "name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Name"
+          },
+          "sort_order": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Sort Order"
+          }
+        },
+        "title": "PartnerCategoryUpdate",
+        "type": "object"
+      },
+      "PartnerCreate": {
+        "properties": {
+          "category_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Category Id"
+          },
+          "description": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Description"
+          },
+          "logo_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Logo Url"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "sort_order": {
+            "default": 0,
+            "title": "Sort Order",
+            "type": "integer"
+          },
+          "website_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Website Url"
+          }
+        },
+        "required": [
+          "name"
+        ],
+        "title": "PartnerCreate",
+        "type": "object"
+      },
       "PartnerInfo": {
         "properties": {
           "admitted": {
@@ -8999,6 +10443,223 @@
           "email"
         ],
         "title": "PartnerInfo",
+        "type": "object"
+      },
+      "PartnerOut": {
+        "properties": {
+          "category_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Category Id"
+          },
+          "category_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Category Name"
+          },
+          "description": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Description"
+          },
+          "event_id": {
+            "title": "Event Id",
+            "type": "string"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "is_active": {
+            "title": "Is Active",
+            "type": "boolean"
+          },
+          "logo_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Logo Url"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "sort_order": {
+            "title": "Sort Order",
+            "type": "integer"
+          },
+          "website_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Website Url"
+          }
+        },
+        "required": [
+          "id",
+          "event_id",
+          "name",
+          "sort_order",
+          "is_active"
+        ],
+        "title": "PartnerOut",
+        "type": "object"
+      },
+      "PartnerPageOut": {
+        "properties": {
+          "categories": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/PartnerCategoryOut"
+            },
+            "title": "Categories",
+            "type": "array"
+          },
+          "event_name": {
+            "title": "Event Name",
+            "type": "string"
+          },
+          "partners": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/PartnerOut"
+            },
+            "title": "Partners",
+            "type": "array"
+          }
+        },
+        "required": [
+          "event_name"
+        ],
+        "title": "PartnerPageOut",
+        "type": "object"
+      },
+      "PartnerSettingsOut": {
+        "properties": {
+          "partner_token": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Partner Token"
+          }
+        },
+        "title": "PartnerSettingsOut",
+        "type": "object"
+      },
+      "PartnerUpdate": {
+        "properties": {
+          "category_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Category Id"
+          },
+          "description": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Description"
+          },
+          "is_active": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Is Active"
+          },
+          "logo_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Logo Url"
+          },
+          "name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Name"
+          },
+          "sort_order": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Sort Order"
+          },
+          "website_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Website Url"
+          }
+        },
+        "title": "PartnerUpdate",
         "type": "object"
       },
       "PeakBucket": {
@@ -9140,6 +10801,62 @@
           }
         },
         "title": "PlatformSettingsUpdate",
+        "type": "object"
+      },
+      "PracticalRequest": {
+        "properties": {
+          "link": {
+            "anyOf": [
+              {
+                "maxLength": 1000,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Link"
+          },
+          "note": {
+            "maxLength": 2000,
+            "minLength": 3,
+            "title": "Note",
+            "type": "string"
+          }
+        },
+        "required": [
+          "note"
+        ],
+        "title": "PracticalRequest",
+        "type": "object"
+      },
+      "PracticalReview": {
+        "properties": {
+          "notes": {
+            "anyOf": [
+              {
+                "maxLength": 2000,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Notes"
+          },
+          "status": {
+            "enum": [
+              "approved",
+              "rejected"
+            ],
+            "title": "Status",
+            "type": "string"
+          }
+        },
+        "required": [
+          "status"
+        ],
+        "title": "PracticalReview",
         "type": "object"
       },
       "ProgramSegmentImport": {
@@ -9300,6 +11017,17 @@
               }
             ],
             "title": "Invite Message"
+          },
+          "logo_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Logo Url"
           },
           "name": {
             "title": "Name",
@@ -9604,6 +11332,11 @@
       },
       "PublicExperienceStepIn": {
         "properties": {
+          "blocks_checkin": {
+            "default": false,
+            "title": "Blocks Checkin",
+            "type": "boolean"
+          },
           "conditions": {
             "anyOf": [
               {
@@ -9717,6 +11450,11 @@
       },
       "PublicExperienceStepOut": {
         "properties": {
+          "blocks_checkin": {
+            "default": false,
+            "title": "Blocks Checkin",
+            "type": "boolean"
+          },
           "conditions": {
             "anyOf": [
               {
@@ -9852,6 +11590,17 @@
       },
       "PublicExperienceStepUpdate": {
         "properties": {
+          "blocks_checkin": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Blocks Checkin"
+          },
           "conditions": {
             "anyOf": [
               {
@@ -10949,6 +12698,22 @@
           "created_at"
         ],
         "title": "QaChecklistSubmissionOut",
+        "type": "object"
+      },
+      "QuizSubmission": {
+        "properties": {
+          "answers": {
+            "items": {
+              "type": "integer"
+            },
+            "title": "Answers",
+            "type": "array"
+          }
+        },
+        "required": [
+          "answers"
+        ],
+        "title": "QuizSubmission",
         "type": "object"
       },
       "RSVPConfirm": {
@@ -12475,6 +14240,146 @@
         "title": "RegistryUnfurlRequest",
         "type": "object"
       },
+      "ReleaseRequest": {
+        "properties": {
+          "title": {
+            "maxLength": 255,
+            "minLength": 3,
+            "title": "Title",
+            "type": "string"
+          }
+        },
+        "required": [
+          "title"
+        ],
+        "title": "ReleaseRequest",
+        "type": "object"
+      },
+      "ReminderPreviewOut": {
+        "properties": {
+          "body": {
+            "title": "Body",
+            "type": "string"
+          },
+          "subject": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Subject"
+          }
+        },
+        "required": [
+          "body"
+        ],
+        "title": "ReminderPreviewOut",
+        "type": "object"
+      },
+      "ReminderPreviewRequest": {
+        "properties": {
+          "body": {
+            "default": "",
+            "title": "Body",
+            "type": "string"
+          },
+          "channel": {
+            "enum": [
+              "email",
+              "sms",
+              "whatsapp"
+            ],
+            "title": "Channel",
+            "type": "string"
+          },
+          "subject": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Subject"
+          }
+        },
+        "required": [
+          "channel"
+        ],
+        "title": "ReminderPreviewRequest",
+        "type": "object"
+      },
+      "ReminderRequest": {
+        "properties": {
+          "org_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Org Id"
+          },
+          "user_ids": {
+            "items": {
+              "type": "string"
+            },
+            "minItems": 1,
+            "title": "User Ids",
+            "type": "array"
+          }
+        },
+        "required": [
+          "user_ids"
+        ],
+        "title": "ReminderRequest",
+        "type": "object"
+      },
+      "ReminderTestSendRequest": {
+        "properties": {
+          "body": {
+            "default": "",
+            "title": "Body",
+            "type": "string"
+          },
+          "channel": {
+            "enum": [
+              "email",
+              "sms",
+              "whatsapp"
+            ],
+            "title": "Channel",
+            "type": "string"
+          },
+          "subject": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Subject"
+          },
+          "to": {
+            "title": "To",
+            "type": "string"
+          }
+        },
+        "required": [
+          "channel",
+          "to"
+        ],
+        "title": "ReminderTestSendRequest",
+        "type": "object"
+      },
       "ScanResult": {
         "properties": {
           "eligibilities": {
@@ -12686,6 +14591,625 @@
           "direction"
         ],
         "title": "ScanZoneResult",
+        "type": "object"
+      },
+      "ScheduledCommunicationCreate": {
+        "properties": {
+          "anchor": {
+            "anyOf": [
+              {
+                "enum": [
+                  "event_start",
+                  "event_end",
+                  "rsvp_deadline",
+                  "experience_step"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Anchor"
+          },
+          "anchor_step_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Anchor Step Id"
+          },
+          "audience_mode": {
+            "default": "dynamic",
+            "enum": [
+              "dynamic",
+              "frozen"
+            ],
+            "title": "Audience Mode",
+            "type": "string"
+          },
+          "audience_type": {
+            "default": "all",
+            "enum": [
+              "all",
+              "not_invited",
+              "not_responded",
+              "confirmed",
+              "declined",
+              "waitlisted",
+              "checked_in",
+              "not_checked_in"
+            ],
+            "title": "Audience Type",
+            "type": "string"
+          },
+          "channels": {
+            "default": [],
+            "items": {
+              "enum": [
+                "email",
+                "sms",
+                "whatsapp"
+              ],
+              "type": "string"
+            },
+            "title": "Channels",
+            "type": "array"
+          },
+          "communication_type": {
+            "enum": [
+              "invitation",
+              "rsvp_reminder",
+              "event_reminder",
+              "session_reminder",
+              "feedback_request",
+              "follow_up",
+              "announcement"
+            ],
+            "title": "Communication Type",
+            "type": "string"
+          },
+          "email_body": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Email Body"
+          },
+          "name": {
+            "maxLength": 160,
+            "minLength": 1,
+            "title": "Name",
+            "type": "string"
+          },
+          "offset_minutes": {
+            "anyOf": [
+              {
+                "maximum": 525600.0,
+                "minimum": -525600.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Offset Minutes"
+          },
+          "scheduled_at_local": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Scheduled At Local"
+          },
+          "sms_body": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Sms Body"
+          },
+          "status": {
+            "default": "scheduled",
+            "enum": [
+              "draft",
+              "scheduled",
+              "paused"
+            ],
+            "title": "Status",
+            "type": "string"
+          },
+          "subject": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Subject"
+          },
+          "trigger_type": {
+            "default": "absolute",
+            "enum": [
+              "absolute",
+              "relative"
+            ],
+            "title": "Trigger Type",
+            "type": "string"
+          },
+          "whatsapp_body": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Whatsapp Body"
+          }
+        },
+        "required": [
+          "name",
+          "communication_type"
+        ],
+        "title": "ScheduledCommunicationCreate",
+        "type": "object"
+      },
+      "ScheduledCommunicationOut": {
+        "properties": {
+          "anchor": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Anchor"
+          },
+          "anchor_step_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Anchor Step Id"
+          },
+          "audience_mode": {
+            "title": "Audience Mode",
+            "type": "string"
+          },
+          "audience_type": {
+            "title": "Audience Type",
+            "type": "string"
+          },
+          "channels": {
+            "default": [],
+            "items": {
+              "type": "string"
+            },
+            "title": "Channels",
+            "type": "array"
+          },
+          "claimed_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Claimed At"
+          },
+          "communication_type": {
+            "title": "Communication Type",
+            "type": "string"
+          },
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "email_body": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Email Body"
+          },
+          "event_id": {
+            "title": "Event Id",
+            "type": "string"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "last_error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Error"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "offset_minutes": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Offset Minutes"
+          },
+          "recipients_estimated": {
+            "default": 0,
+            "title": "Recipients Estimated",
+            "type": "integer"
+          },
+          "recipients_failed": {
+            "default": 0,
+            "title": "Recipients Failed",
+            "type": "integer"
+          },
+          "recipients_sent": {
+            "default": 0,
+            "title": "Recipients Sent",
+            "type": "integer"
+          },
+          "recipients_targeted": {
+            "default": 0,
+            "title": "Recipients Targeted",
+            "type": "integer"
+          },
+          "scheduled_at_local": {
+            "title": "Scheduled At Local",
+            "type": "string"
+          },
+          "scheduled_for_utc": {
+            "format": "date-time",
+            "title": "Scheduled For Utc",
+            "type": "string"
+          },
+          "sent_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Sent At"
+          },
+          "sms_body": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Sms Body"
+          },
+          "status": {
+            "title": "Status",
+            "type": "string"
+          },
+          "subject": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Subject"
+          },
+          "timezone": {
+            "title": "Timezone",
+            "type": "string"
+          },
+          "trigger_type": {
+            "title": "Trigger Type",
+            "type": "string"
+          },
+          "updated_at": {
+            "format": "date-time",
+            "title": "Updated At",
+            "type": "string"
+          },
+          "whatsapp_body": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Whatsapp Body"
+          }
+        },
+        "required": [
+          "id",
+          "event_id",
+          "name",
+          "communication_type",
+          "trigger_type",
+          "scheduled_for_utc",
+          "scheduled_at_local",
+          "timezone",
+          "audience_type",
+          "audience_mode",
+          "status",
+          "created_at",
+          "updated_at"
+        ],
+        "title": "ScheduledCommunicationOut",
+        "type": "object"
+      },
+      "ScheduledCommunicationUpdate": {
+        "properties": {
+          "anchor": {
+            "anyOf": [
+              {
+                "enum": [
+                  "event_start",
+                  "event_end",
+                  "rsvp_deadline",
+                  "experience_step"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Anchor"
+          },
+          "anchor_step_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Anchor Step Id"
+          },
+          "audience_mode": {
+            "anyOf": [
+              {
+                "enum": [
+                  "dynamic",
+                  "frozen"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Audience Mode"
+          },
+          "audience_type": {
+            "anyOf": [
+              {
+                "enum": [
+                  "all",
+                  "not_invited",
+                  "not_responded",
+                  "confirmed",
+                  "declined",
+                  "waitlisted",
+                  "checked_in",
+                  "not_checked_in"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Audience Type"
+          },
+          "channels": {
+            "anyOf": [
+              {
+                "items": {
+                  "enum": [
+                    "email",
+                    "sms",
+                    "whatsapp"
+                  ],
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Channels"
+          },
+          "communication_type": {
+            "anyOf": [
+              {
+                "enum": [
+                  "invitation",
+                  "rsvp_reminder",
+                  "event_reminder",
+                  "session_reminder",
+                  "feedback_request",
+                  "follow_up",
+                  "announcement"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Communication Type"
+          },
+          "email_body": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Email Body"
+          },
+          "name": {
+            "anyOf": [
+              {
+                "maxLength": 160,
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Name"
+          },
+          "offset_minutes": {
+            "anyOf": [
+              {
+                "maximum": 525600.0,
+                "minimum": -525600.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Offset Minutes"
+          },
+          "scheduled_at_local": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Scheduled At Local"
+          },
+          "sms_body": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Sms Body"
+          },
+          "status": {
+            "anyOf": [
+              {
+                "enum": [
+                  "draft",
+                  "scheduled",
+                  "paused",
+                  "cancelled"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Status"
+          },
+          "subject": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Subject"
+          },
+          "trigger_type": {
+            "anyOf": [
+              {
+                "enum": [
+                  "absolute",
+                  "relative"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Trigger Type"
+          },
+          "whatsapp_body": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Whatsapp Body"
+          }
+        },
+        "title": "ScheduledCommunicationUpdate",
         "type": "object"
       },
       "SeatAssignRequest": {
@@ -12932,6 +15456,17 @@
               }
             ],
             "title": "Seat Number"
+          },
+          "seat_term": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Seat Term"
           },
           "seating_term": {
             "anyOf": [
@@ -13421,6 +15956,67 @@
         "title": "ShippingAddressUpdate",
         "type": "object"
       },
+      "SocialLink": {
+        "properties": {
+          "platform": {
+            "title": "Platform",
+            "type": "string"
+          },
+          "url": {
+            "title": "Url",
+            "type": "string"
+          }
+        },
+        "required": [
+          "platform",
+          "url"
+        ],
+        "title": "SocialLink",
+        "type": "object"
+      },
+      "SpeakerPageOut": {
+        "properties": {
+          "event_name": {
+            "title": "Event Name",
+            "type": "string"
+          },
+          "speakers": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/GuestSpeakerOut"
+            },
+            "title": "Speakers",
+            "type": "array"
+          }
+        },
+        "required": [
+          "event_name"
+        ],
+        "title": "SpeakerPageOut",
+        "type": "object"
+      },
+      "SpeakerSettingsOut": {
+        "properties": {
+          "speaker_show_before_rsvp": {
+            "default": false,
+            "title": "Speaker Show Before Rsvp",
+            "type": "boolean"
+          },
+          "speaker_token": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Speaker Token"
+          }
+        },
+        "title": "SpeakerSettingsOut",
+        "type": "object"
+      },
       "SubGroupCreate": {
         "properties": {
           "description": {
@@ -13749,6 +16345,11 @@
           "remaining_seats": {
             "default": 0,
             "title": "Remaining Seats",
+            "type": "integer"
+          },
+          "seated_guest_count": {
+            "default": 0,
+            "title": "Seated Guest Count",
             "type": "integer"
           },
           "sort_order": {
@@ -14945,6 +17546,11 @@
           },
           "name": {
             "title": "Name",
+            "type": "string"
+          },
+          "redesign_cohort": {
+            "default": "legacy_only",
+            "title": "Redesign Cohort",
             "type": "string"
           },
           "role": {
@@ -17075,6 +19681,105 @@
         ]
       }
     },
+    "/api/admin/orgs/{org_id}/event-pass": {
+      "get": {
+        "operationId": "get_org_event_pass_api_admin_orgs__org_id__event_pass_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "org_id",
+            "required": true,
+            "schema": {
+              "title": "Org Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Get Org Event Pass",
+        "tags": [
+          "admin"
+        ]
+      },
+      "patch": {
+        "description": "Audited, transactional operator controls for pass, promo and credits.",
+        "operationId": "update_org_event_pass_api_admin_orgs__org_id__event_pass_patch",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "org_id",
+            "required": true,
+            "schema": {
+              "title": "Org Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/OrganizationEntitlementUpdate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Update Org Event Pass",
+        "tags": [
+          "admin"
+        ]
+      }
+    },
     "/api/admin/orgs/{org_id}/members/{user_id}": {
       "delete": {
         "description": "Remove a user from an org. Their account itself is untouched.",
@@ -17674,6 +20379,52 @@
         ]
       }
     },
+    "/api/auth/live-token": {
+      "post": {
+        "description": "Mint a short-lived scoped staff token for Festio Live (engagement-\nservice) \u2014 same token-exchange pattern as /planner-token. MVP role model:\norg owner/admin get role=\"admin\" (full access); everyone else is denied\nfor now. A capability-flag layer (Presenter/Moderator/Analyst, mirroring\nEventUser's planner capability booleans) is a real follow-up, not shipped\nin this pass \u2014 see the architecture doc's \u00a7I role table.",
+        "operationId": "live_token_api_auth_live_token_post",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "event_id",
+            "required": true,
+            "schema": {
+              "title": "Event Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Live Token",
+        "tags": [
+          "auth"
+        ]
+      }
+    },
     "/api/auth/marketing-preferences": {
       "get": {
         "operationId": "get_marketing_preferences_api_auth_marketing_preferences_get",
@@ -18110,6 +20861,51 @@
           }
         ],
         "summary": "Set Currency",
+        "tags": [
+          "billing"
+        ]
+      }
+    },
+    "/api/billing/event-pass/{event_id}": {
+      "get": {
+        "operationId": "event_pass_status_api_billing_event_pass__event_id__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "event_id",
+            "required": true,
+            "schema": {
+              "title": "Event Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Event Pass Status",
         "tags": [
           "billing"
         ]
@@ -18569,6 +21365,24 @@
     "/api/events": {
       "get": {
         "operationId": "list_events_api_events_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "status",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Status"
+            }
+          }
+        ],
         "responses": {
           "200": {
             "content": {
@@ -18583,6 +21397,16 @@
               }
             },
             "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
           }
         },
         "security": [
@@ -18637,6 +21461,50 @@
         "summary": "Create Event",
         "tags": [
           "events"
+        ]
+      }
+    },
+    "/api/events/live/join/{join_code}": {
+      "get": {
+        "description": "Resolve the short public room code without exposing event metadata.",
+        "operationId": "resolve_live_join_code_api_events_live_join__join_code__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "join_code",
+            "required": true,
+            "schema": {
+              "title": "Join Code",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LiveJoinResolution"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Resolve Live Join Code",
+        "tags": [
+          "Festio Live",
+          "engagement"
         ]
       }
     },
@@ -19028,7 +21896,7 @@
     },
     "/api/events/{event_id}/channel-policy": {
       "put": {
-        "description": "Per-flow channel priority (cost control). Body: {flow: [ordered channels]}.\nUnknown flows/channels are ignored; an empty map clears the policy (legacy\n'send on all enabled channels').",
+        "description": "Per-flow channel policy (see channels.py). Body: {flow: [ordered channels]}\nfor priority/fallback (legacy shape, cost control), or\n{flow: {\"mode\": \"all\"|\"priority\", \"channels\": [...]}} to also allow sending\non every configured channel instead of just the first deliverable one.\nUnknown flows/channels are ignored; an empty map clears the policy (legacy\n'send on all enabled channels').",
         "operationId": "set_channel_policy_api_events__event_id__channel_policy_put",
         "parameters": [
           {
@@ -19083,6 +21951,512 @@
         "summary": "Set Channel Policy",
         "tags": [
           "events"
+        ]
+      }
+    },
+    "/api/events/{event_id}/communications/scheduled": {
+      "get": {
+        "operationId": "list_scheduled_communications_api_events__event_id__communications_scheduled_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "event_id",
+            "required": true,
+            "schema": {
+              "title": "Event Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/ScheduledCommunicationOut"
+                  },
+                  "title": "Response List Scheduled Communications Api Events  Event Id  Communications Scheduled Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "List Scheduled Communications",
+        "tags": [
+          "scheduled-communications"
+        ]
+      },
+      "post": {
+        "operationId": "create_scheduled_communication_api_events__event_id__communications_scheduled_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "event_id",
+            "required": true,
+            "schema": {
+              "title": "Event Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ScheduledCommunicationCreate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ScheduledCommunicationOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Create Scheduled Communication",
+        "tags": [
+          "scheduled-communications"
+        ]
+      }
+    },
+    "/api/events/{event_id}/communications/scheduled/{communication_id}": {
+      "put": {
+        "operationId": "update_scheduled_communication_api_events__event_id__communications_scheduled__communication_id__put",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "event_id",
+            "required": true,
+            "schema": {
+              "title": "Event Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "communication_id",
+            "required": true,
+            "schema": {
+              "title": "Communication Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ScheduledCommunicationUpdate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ScheduledCommunicationOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Update Scheduled Communication",
+        "tags": [
+          "scheduled-communications"
+        ]
+      }
+    },
+    "/api/events/{event_id}/communications/scheduled/{communication_id}/cancel": {
+      "post": {
+        "operationId": "cancel_scheduled_communication_api_events__event_id__communications_scheduled__communication_id__cancel_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "event_id",
+            "required": true,
+            "schema": {
+              "title": "Event Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "communication_id",
+            "required": true,
+            "schema": {
+              "title": "Communication Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ScheduledCommunicationOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Cancel Scheduled Communication",
+        "tags": [
+          "scheduled-communications"
+        ]
+      }
+    },
+    "/api/events/{event_id}/communications/scheduled/{communication_id}/deliveries": {
+      "get": {
+        "operationId": "scheduled_communication_deliveries_api_events__event_id__communications_scheduled__communication_id__deliveries_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "event_id",
+            "required": true,
+            "schema": {
+              "title": "Event Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "communication_id",
+            "required": true,
+            "schema": {
+              "title": "Communication Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Scheduled Communication Deliveries",
+        "tags": [
+          "scheduled-communications"
+        ]
+      }
+    },
+    "/api/events/{event_id}/communications/scheduled/{communication_id}/pause": {
+      "post": {
+        "operationId": "pause_scheduled_communication_api_events__event_id__communications_scheduled__communication_id__pause_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "event_id",
+            "required": true,
+            "schema": {
+              "title": "Event Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "communication_id",
+            "required": true,
+            "schema": {
+              "title": "Communication Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ScheduledCommunicationOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Pause Scheduled Communication",
+        "tags": [
+          "scheduled-communications"
+        ]
+      }
+    },
+    "/api/events/{event_id}/communications/scheduled/{communication_id}/resume": {
+      "post": {
+        "operationId": "resume_scheduled_communication_api_events__event_id__communications_scheduled__communication_id__resume_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "event_id",
+            "required": true,
+            "schema": {
+              "title": "Event Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "communication_id",
+            "required": true,
+            "schema": {
+              "title": "Communication Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ScheduledCommunicationOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Resume Scheduled Communication",
+        "tags": [
+          "scheduled-communications"
+        ]
+      }
+    },
+    "/api/events/{event_id}/communications/scheduled/{communication_id}/retry": {
+      "post": {
+        "operationId": "retry_scheduled_communication_api_events__event_id__communications_scheduled__communication_id__retry_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "event_id",
+            "required": true,
+            "schema": {
+              "title": "Event Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "communication_id",
+            "required": true,
+            "schema": {
+              "title": "Communication Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ScheduledCommunicationOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Retry Scheduled Communication",
+        "tags": [
+          "scheduled-communications"
+        ]
+      }
+    },
+    "/api/events/{event_id}/communications/scheduled/{communication_id}/send-now": {
+      "post": {
+        "operationId": "send_scheduled_communication_now_api_events__event_id__communications_scheduled__communication_id__send_now_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "event_id",
+            "required": true,
+            "schema": {
+              "title": "Event Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "communication_id",
+            "required": true,
+            "schema": {
+              "title": "Communication Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ScheduledCommunicationOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Send Scheduled Communication Now",
+        "tags": [
+          "scheduled-communications"
         ]
       }
     },
@@ -20647,6 +24021,94 @@
         ]
       }
     },
+    "/api/events/{event_id}/experience/live-sync": {
+      "get": {
+        "operationId": "live_sync_status_api_events__event_id__experience_live_sync_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "event_id",
+            "required": true,
+            "schema": {
+              "title": "Event Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Live Sync Status",
+        "tags": [
+          "experience"
+        ]
+      },
+      "post": {
+        "operationId": "queue_live_resync_api_events__event_id__experience_live_sync_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "event_id",
+            "required": true,
+            "schema": {
+              "title": "Event Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Queue Live Resync",
+        "tags": [
+          "experience"
+        ]
+      }
+    },
     "/api/events/{event_id}/experience/me": {
       "get": {
         "description": "The signed-in guest's own journey: ordered steps with status, the pending\nnext-steps, and consent state. Safe to call for any event \u2014 returns\n``experience_enabled=False`` when the feature is off so the Hub can simply\nhide the section.",
@@ -20864,6 +24326,67 @@
           }
         },
         "summary": "Submit My Feedback",
+        "tags": [
+          "experience"
+        ]
+      }
+    },
+    "/api/events/{event_id}/experience/me/steps/{step_id}/mark-done": {
+      "post": {
+        "description": "A guest reports they've completed a blocking step Festio has no way to\nverify automatically (e.g. a third-party waiver link). This does NOT mark\nthe step \"completed\" \u2014 that still requires a staff member to confirm at\ncheck-in (see perform_admission in routers/scanner.py), since there's\nnothing here to check the guest's claim against. It only records that\nthey said so, so the Hub can stop prompting them and staff can see it at\nthe scanner as a head start, not a substitute for confirming.",
+        "operationId": "guest_marks_step_done_api_events__event_id__experience_me_steps__step_id__mark_done_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "event_id",
+            "required": true,
+            "schema": {
+              "title": "Event Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "step_id",
+            "required": true,
+            "schema": {
+              "title": "Step Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "token",
+            "required": true,
+            "schema": {
+              "title": "Token",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GuestJourneyStepOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Guest Marks Step Done",
         "tags": [
           "experience"
         ]
@@ -23169,6 +26692,58 @@
         ]
       }
     },
+    "/api/events/{event_id}/guests/duplicates": {
+      "get": {
+        "description": "Existing guests that collide under the same name-normalization\nadd_guest() checks at creation time (honorifics stripped, case/whitespace\ninsensitive) -- this retroactively surfaces duplicates that predate that\ncheck, or were created another way (e.g. two separate CSV imports with a\nslightly different spelling). Read-only; see merge_guest_duplicates for\nresolving a group.",
+        "operationId": "list_guest_duplicates_api_events__event_id__guests_duplicates_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "event_id",
+            "required": true,
+            "schema": {
+              "title": "Event Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/GuestDuplicateGroup"
+                  },
+                  "title": "Response List Guest Duplicates Api Events  Event Id  Guests Duplicates Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "List Guest Duplicates",
+        "tags": [
+          "guests"
+        ]
+      }
+    },
     "/api/events/{event_id}/guests/export": {
       "get": {
         "description": "Download event data. `sections` (comma-separated: guests, messaging,\nexperience) selects what to include. CSV emits one flattened sheet; XLSX emits\none sheet per selected section. Includes RSVP answers, per-channel delivery\nstatus, consent, timestamps, and Experience step progress. `guest_ids`\n(comma-separated) restricts the export to those guests, e.g. to match a\nfiltered view in the UI; omit to export the whole event.",
@@ -24833,6 +28408,73 @@
         ]
       }
     },
+    "/api/events/{event_id}/guests/{keep_id}/merge-duplicates": {
+      "post": {
+        "description": "Fold one or more duplicate guest records into `keep_id`, then delete\nthe duplicates via the same cascade-delete used everywhere else (so their\nRSVP answers, messages, scans, etc. are cleaned up the normal way -- this\ndoes not attempt to merge that history onto the keeper, only the small\nset of fields that caused real operational problems: contact info, table\ngroup, and seat). Only fills fields the keeper is missing -- never\noverwrites something already on the keeper, so the caller's choice of\nwhich record to keep is always respected.",
+        "operationId": "merge_guest_duplicates_api_events__event_id__guests__keep_id__merge_duplicates_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "event_id",
+            "required": true,
+            "schema": {
+              "title": "Event Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "keep_id",
+            "required": true,
+            "schema": {
+              "title": "Keep Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MergeDuplicatesRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GuestOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Merge Guest Duplicates",
+        "tags": [
+          "guests"
+        ]
+      }
+    },
     "/api/events/{event_id}/households": {
       "get": {
         "operationId": "list_households_api_events__event_id__households_get",
@@ -25106,6 +28748,350 @@
         "summary": "Update Invite Settings",
         "tags": [
           "events"
+        ]
+      }
+    },
+    "/api/events/{event_id}/live/anon-token": {
+      "post": {
+        "description": "Broadcast/QR join \u2014 no Guest record required, for a keynote-style\naudience where distributing per-guest Hub links isn't practical. Anyone\nwith the join link or QR code gets a scoped session; the resulting\nActivityParticipant is tracked by anon_id, never guest_id (see\nengagement-service's Identity.is_anonymous).",
+        "operationId": "live_anon_token_api_events__event_id__live_anon_token_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "event_id",
+            "required": true,
+            "schema": {
+              "title": "Event Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/LiveAnonJoinIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LiveAnonJoinOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Live Anon Token",
+        "tags": [
+          "Festio Live",
+          "engagement"
+        ]
+      }
+    },
+    "/api/events/{event_id}/live/guest-token": {
+      "post": {
+        "description": "Exchange a guest's own invite/pass token for a scoped Festio Live\nsession. Same eligibility shape as the Guest Hub itself: if this event\nuses RSVP, the guest must be confirmed; if it doesn't, any resolved guest\nis eligible (mirrors InvitePage.jsx's isConfirmed logic).",
+        "operationId": "live_guest_token_api_events__event_id__live_guest_token_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "event_id",
+            "required": true,
+            "schema": {
+              "title": "Event Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/LiveGuestPassExchange"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LiveGuestSession"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Live Guest Token",
+        "tags": [
+          "Festio Live",
+          "engagement"
+        ]
+      }
+    },
+    "/api/events/{event_id}/live/join-info": {
+      "get": {
+        "description": "Return (and on first use mint) the stable short join code.",
+        "operationId": "live_join_info_api_events__event_id__live_join_info_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "event_id",
+            "required": true,
+            "schema": {
+              "title": "Event Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LiveJoinInfo"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Live Join Info",
+        "tags": [
+          "Festio Live",
+          "engagement"
+        ]
+      }
+    },
+    "/api/events/{event_id}/live/join-qr.png": {
+      "get": {
+        "description": "Public \u2014 QR code for the broadcast join link, meant to be put on a\nscreen/slide so anyone in the room can scan in without a personal Hub link.",
+        "operationId": "live_join_qr_api_events__event_id__live_join_qr_png_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "event_id",
+            "required": true,
+            "schema": {
+              "title": "Event Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Live Join Qr",
+        "tags": [
+          "Festio Live",
+          "engagement"
+        ]
+      }
+    },
+    "/api/events/{event_id}/live/public-join-info": {
+      "get": {
+        "description": "Public display-safe join data (the same information encoded in QR).",
+        "operationId": "public_live_join_info_api_events__event_id__live_public_join_info_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "event_id",
+            "required": true,
+            "schema": {
+              "title": "Event Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LiveJoinInfo"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Public Live Join Info",
+        "tags": [
+          "Festio Live",
+          "engagement"
+        ]
+      }
+    },
+    "/api/events/{event_id}/live/registered-count": {
+      "get": {
+        "description": "Public, display-safe -- just a headcount, no guest-identifying data --\nso a Display can show \"N of TOTAL responded\" as social proof. Same\nconfirmed/registered definition InvitePage.jsx and the guest-pass\nexchange above use: RSVP-confirmed if the event uses RSVP, otherwise\nevery resolved guest counts.",
+        "operationId": "live_registered_count_api_events__event_id__live_registered_count_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "event_id",
+            "required": true,
+            "schema": {
+              "title": "Event Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Live Registered Count",
+        "tags": [
+          "Festio Live",
+          "engagement"
+        ]
+      }
+    },
+    "/api/events/{event_id}/live/share-link": {
+      "post": {
+        "description": "Admin-minted, capability-scoped staff token for handing Live Control or\nQ&A moderation to someone without a Festio login \u2014 a co-presenter's phone,\na volunteer at the mic. Same admin-resolution rule as /auth/live-token.",
+        "operationId": "live_share_link_api_events__event_id__live_share_link_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "event_id",
+            "required": true,
+            "schema": {
+              "title": "Event Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/LiveShareLinkIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LiveShareLinkOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Live Share Link",
+        "tags": [
+          "Festio Live",
+          "engagement"
         ]
       }
     },
@@ -26518,6 +30504,546 @@
         ]
       }
     },
+    "/api/events/{event_id}/partner-categories": {
+      "get": {
+        "operationId": "list_partner_categories_api_events__event_id__partner_categories_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "event_id",
+            "required": true,
+            "schema": {
+              "title": "Event Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/PartnerCategoryOut"
+                  },
+                  "title": "Response List Partner Categories Api Events  Event Id  Partner Categories Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "List Partner Categories",
+        "tags": [
+          "partners"
+        ]
+      },
+      "post": {
+        "operationId": "create_partner_category_api_events__event_id__partner_categories_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "event_id",
+            "required": true,
+            "schema": {
+              "title": "Event Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PartnerCategoryCreate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PartnerCategoryOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Create Partner Category",
+        "tags": [
+          "partners"
+        ]
+      }
+    },
+    "/api/events/{event_id}/partner-categories/{category_id}": {
+      "delete": {
+        "operationId": "delete_partner_category_api_events__event_id__partner_categories__category_id__delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "event_id",
+            "required": true,
+            "schema": {
+              "title": "Event Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "category_id",
+            "required": true,
+            "schema": {
+              "title": "Category Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Delete Partner Category",
+        "tags": [
+          "partners"
+        ]
+      },
+      "put": {
+        "operationId": "update_partner_category_api_events__event_id__partner_categories__category_id__put",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "event_id",
+            "required": true,
+            "schema": {
+              "title": "Event Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "category_id",
+            "required": true,
+            "schema": {
+              "title": "Category Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PartnerCategoryUpdate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PartnerCategoryOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Update Partner Category",
+        "tags": [
+          "partners"
+        ]
+      }
+    },
+    "/api/events/{event_id}/partners": {
+      "get": {
+        "operationId": "list_partners_api_events__event_id__partners_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "event_id",
+            "required": true,
+            "schema": {
+              "title": "Event Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/PartnerOut"
+                  },
+                  "title": "Response List Partners Api Events  Event Id  Partners Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "List Partners",
+        "tags": [
+          "partners"
+        ]
+      },
+      "post": {
+        "operationId": "create_partner_api_events__event_id__partners_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "event_id",
+            "required": true,
+            "schema": {
+              "title": "Event Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PartnerCreate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PartnerOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Create Partner",
+        "tags": [
+          "partners"
+        ]
+      }
+    },
+    "/api/events/{event_id}/partners/settings": {
+      "get": {
+        "operationId": "get_partner_settings_api_events__event_id__partners_settings_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "event_id",
+            "required": true,
+            "schema": {
+              "title": "Event Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PartnerSettingsOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Get Partner Settings",
+        "tags": [
+          "partners"
+        ]
+      }
+    },
+    "/api/events/{event_id}/partners/upload-logo": {
+      "post": {
+        "operationId": "upload_partner_logo_api_events__event_id__partners_upload_logo_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "event_id",
+            "required": true,
+            "schema": {
+              "title": "Event Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "$ref": "#/components/schemas/Body_upload_partner_logo_api_events__event_id__partners_upload_logo_post"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Upload Partner Logo",
+        "tags": [
+          "partners"
+        ]
+      }
+    },
+    "/api/events/{event_id}/partners/{partner_id}": {
+      "delete": {
+        "operationId": "delete_partner_api_events__event_id__partners__partner_id__delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "event_id",
+            "required": true,
+            "schema": {
+              "title": "Event Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "partner_id",
+            "required": true,
+            "schema": {
+              "title": "Partner Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Delete Partner",
+        "tags": [
+          "partners"
+        ]
+      },
+      "put": {
+        "operationId": "update_partner_api_events__event_id__partners__partner_id__put",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "event_id",
+            "required": true,
+            "schema": {
+              "title": "Event Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "partner_id",
+            "required": true,
+            "schema": {
+              "title": "Partner Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PartnerUpdate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PartnerOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Update Partner",
+        "tags": [
+          "partners"
+        ]
+      }
+    },
     "/api/events/{event_id}/post-event-thankyou/send-now": {
       "post": {
         "description": "Send the post-event thank-you/feedback message to the whole configured\naudience right now, instead of waiting for event_end_date + delay_hours.\nMarks the event as sent so the automatic poller doesn't also send it\nlater \u2014 a manual send-now and the automatic one are mutually exclusive.\n\nBody: {force: bool} \u2014 required to resend once already sent (e.g. testing,\nor a real resend after fixing the template/audience); the frontend makes\nthe admin confirm this explicitly rather than silently allowing repeats.",
@@ -27125,6 +31651,357 @@
         "summary": "Unfurl Link",
         "tags": [
           "registry"
+        ]
+      }
+    },
+    "/api/events/{event_id}/reminders": {
+      "get": {
+        "operationId": "list_reminders_api_events__event_id__reminders_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "event_id",
+            "required": true,
+            "schema": {
+              "title": "Event Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/EventReminderOut"
+                  },
+                  "title": "Response List Reminders Api Events  Event Id  Reminders Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "List Reminders",
+        "tags": [
+          "reminders"
+        ]
+      },
+      "post": {
+        "operationId": "create_reminder_api_events__event_id__reminders_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "event_id",
+            "required": true,
+            "schema": {
+              "title": "Event Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/EventReminderCreate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EventReminderOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Create Reminder",
+        "tags": [
+          "reminders"
+        ]
+      }
+    },
+    "/api/events/{event_id}/reminders/{reminder_id}": {
+      "delete": {
+        "operationId": "delete_reminder_api_events__event_id__reminders__reminder_id__delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "event_id",
+            "required": true,
+            "schema": {
+              "title": "Event Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "reminder_id",
+            "required": true,
+            "schema": {
+              "title": "Reminder Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Delete Reminder",
+        "tags": [
+          "reminders"
+        ]
+      },
+      "put": {
+        "operationId": "update_reminder_api_events__event_id__reminders__reminder_id__put",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "event_id",
+            "required": true,
+            "schema": {
+              "title": "Event Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "reminder_id",
+            "required": true,
+            "schema": {
+              "title": "Reminder Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/EventReminderUpdate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EventReminderOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Update Reminder",
+        "tags": [
+          "reminders"
+        ]
+      }
+    },
+    "/api/events/{event_id}/reminders/{reminder_id}/preview": {
+      "post": {
+        "description": "Renders draft content against sample_context(event) -- same mechanism\ntemplates.py's preview_template uses, not a second preview implementation.",
+        "operationId": "preview_reminder_api_events__event_id__reminders__reminder_id__preview_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "event_id",
+            "required": true,
+            "schema": {
+              "title": "Event Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "reminder_id",
+            "required": true,
+            "schema": {
+              "title": "Reminder Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ReminderPreviewRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReminderPreviewOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Preview Reminder",
+        "tags": [
+          "reminders"
+        ]
+      }
+    },
+    "/api/events/{event_id}/reminders/{reminder_id}/test-send": {
+      "post": {
+        "description": "Sends the draft content to an admin-supplied address, not a guest --\nunlike the real per-guest fan-out, this must call recipient_allowed()\nitself (mirrors templates.py's test_send_template). Does not reserve\ncredit or write EventReminderSend -- it's a test, same as the template\neditor's test-send.",
+        "operationId": "test_send_reminder_api_events__event_id__reminders__reminder_id__test_send_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "event_id",
+            "required": true,
+            "schema": {
+              "title": "Event Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "reminder_id",
+            "required": true,
+            "schema": {
+              "title": "Reminder Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ReminderTestSendRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Test Send Reminder",
+        "tags": [
+          "reminders"
         ]
       }
     },
@@ -28331,6 +33208,327 @@
         "summary": "Update Event Source",
         "tags": [
           "events"
+        ]
+      }
+    },
+    "/api/events/{event_id}/speakers": {
+      "get": {
+        "operationId": "list_speakers_api_events__event_id__speakers_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "event_id",
+            "required": true,
+            "schema": {
+              "title": "Event Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/GuestSpeakerOut"
+                  },
+                  "title": "Response List Speakers Api Events  Event Id  Speakers Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "List Speakers",
+        "tags": [
+          "speakers"
+        ]
+      },
+      "post": {
+        "operationId": "create_speaker_api_events__event_id__speakers_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "event_id",
+            "required": true,
+            "schema": {
+              "title": "Event Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/GuestSpeakerCreate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GuestSpeakerOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Create Speaker",
+        "tags": [
+          "speakers"
+        ]
+      }
+    },
+    "/api/events/{event_id}/speakers/settings": {
+      "get": {
+        "operationId": "get_speaker_settings_api_events__event_id__speakers_settings_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "event_id",
+            "required": true,
+            "schema": {
+              "title": "Event Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SpeakerSettingsOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Get Speaker Settings",
+        "tags": [
+          "speakers"
+        ]
+      }
+    },
+    "/api/events/{event_id}/speakers/upload-photo": {
+      "post": {
+        "operationId": "upload_speaker_photo_api_events__event_id__speakers_upload_photo_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "event_id",
+            "required": true,
+            "schema": {
+              "title": "Event Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "$ref": "#/components/schemas/Body_upload_speaker_photo_api_events__event_id__speakers_upload_photo_post"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Upload Speaker Photo",
+        "tags": [
+          "speakers"
+        ]
+      }
+    },
+    "/api/events/{event_id}/speakers/{speaker_id}": {
+      "delete": {
+        "operationId": "delete_speaker_api_events__event_id__speakers__speaker_id__delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "event_id",
+            "required": true,
+            "schema": {
+              "title": "Event Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "speaker_id",
+            "required": true,
+            "schema": {
+              "title": "Speaker Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Delete Speaker",
+        "tags": [
+          "speakers"
+        ]
+      },
+      "put": {
+        "operationId": "update_speaker_api_events__event_id__speakers__speaker_id__put",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "event_id",
+            "required": true,
+            "schema": {
+              "title": "Event Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "speaker_id",
+            "required": true,
+            "schema": {
+              "title": "Speaker Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/GuestSpeakerUpdate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GuestSpeakerOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Update Speaker",
+        "tags": [
+          "speakers"
         ]
       }
     },
@@ -30995,6 +36193,108 @@
         ]
       }
     },
+    "/api/events/{event_id}/upload-logo": {
+      "delete": {
+        "description": "Remove the logo badge from an event.",
+        "operationId": "delete_logo_api_events__event_id__upload_logo_delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "event_id",
+            "required": true,
+            "schema": {
+              "title": "Event Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EventOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Delete Logo",
+        "tags": [
+          "events"
+        ]
+      },
+      "post": {
+        "description": "Upload a small organizer/community logo badge for the invite page header --\ndistinct from the full cover photo. Stored in /app/uploads/.",
+        "operationId": "upload_logo_api_events__event_id__upload_logo_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "event_id",
+            "required": true,
+            "schema": {
+              "title": "Event Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "$ref": "#/components/schemas/Body_upload_logo_api_events__event_id__upload_logo_post"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Upload Logo",
+        "tags": [
+          "events"
+        ]
+      }
+    },
     "/api/events/{event_id}/waitlist": {
       "get": {
         "description": "Guests currently queued on the capacity waitlist, oldest first \u2014 the\norder they'd be auto-promoted in as spots free up.",
@@ -31156,6 +36456,66 @@
           }
         ],
         "summary": "Set Walk In Group",
+        "tags": [
+          "events"
+        ]
+      }
+    },
+    "/api/events/{event_id}/walk-in-group-choice": {
+      "patch": {
+        "description": "Toggle whether staff can pick any table group per walk-in, instead of\nalways using the single default. Body: {enabled: bool}.",
+        "operationId": "set_walk_in_group_choice_api_events__event_id__walk_in_group_choice_patch",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "event_id",
+            "required": true,
+            "schema": {
+              "title": "Event Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "additionalProperties": true,
+                "title": "Body",
+                "type": "object"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EventOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Set Walk In Group Choice",
         "tags": [
           "events"
         ]
@@ -34227,6 +39587,48 @@
         ]
       }
     },
+    "/api/partners/{token}": {
+      "get": {
+        "operationId": "public_partners_api_partners__token__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "token",
+            "required": true,
+            "schema": {
+              "title": "Token",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PartnerPageOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Public Partners",
+        "tags": [
+          "partners-public"
+        ]
+      }
+    },
     "/api/platform-settings": {
       "get": {
         "operationId": "get_platform_settings_api_platform_settings_get",
@@ -36910,6 +42312,48 @@
         ]
       }
     },
+    "/api/speakers/{token}": {
+      "get": {
+        "operationId": "public_speakers_api_speakers__token__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "token",
+            "required": true,
+            "schema": {
+              "title": "Token",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SpeakerPageOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Public Speakers",
+        "tags": [
+          "speakers-public"
+        ]
+      }
+    },
     "/api/tasks/mine": {
       "get": {
         "description": "Every task across every event the caller can see (same scoping as\nGET /api/events), optionally filtered to their own / others' / all.",
@@ -37004,6 +42448,836 @@
         "summary": "Record Redesign Telemetry",
         "tags": [
           "telemetry"
+        ]
+      }
+    },
+    "/api/training/admin/access": {
+      "get": {
+        "operationId": "access_grants_api_training_admin_access_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Access Grants",
+        "tags": [
+          "training"
+        ]
+      },
+      "post": {
+        "operationId": "grant_access_api_training_admin_access_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AccessGrantRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Grant Access",
+        "tags": [
+          "training"
+        ]
+      }
+    },
+    "/api/training/admin/access/{grant_id}": {
+      "delete": {
+        "operationId": "revoke_access_api_training_admin_access__grant_id__delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "grant_id",
+            "required": true,
+            "schema": {
+              "title": "Grant Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Revoke Access",
+        "tags": [
+          "training"
+        ]
+      }
+    },
+    "/api/training/admin/releases": {
+      "get": {
+        "operationId": "releases_api_training_admin_releases_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Releases",
+        "tags": [
+          "training"
+        ]
+      },
+      "post": {
+        "operationId": "create_release_api_training_admin_releases_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ReleaseRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Create Release",
+        "tags": [
+          "training"
+        ]
+      }
+    },
+    "/api/training/admin/releases/{release_id}/publish": {
+      "post": {
+        "operationId": "publish_release_api_training_admin_releases__release_id__publish_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "release_id",
+            "required": true,
+            "schema": {
+              "title": "Release Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Publish Release",
+        "tags": [
+          "training"
+        ]
+      }
+    },
+    "/api/training/manage/assignments": {
+      "post": {
+        "operationId": "assign_api_training_manage_assignments_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AssignmentRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Assign",
+        "tags": [
+          "training"
+        ]
+      }
+    },
+    "/api/training/manage/assignments/{assignment_id}/due-date": {
+      "patch": {
+        "operationId": "set_due_date_api_training_manage_assignments__assignment_id__due_date_patch",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "assignment_id",
+            "required": true,
+            "schema": {
+              "title": "Assignment Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "org_id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Org Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DueDateRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Set Due Date",
+        "tags": [
+          "training"
+        ]
+      }
+    },
+    "/api/training/manage/audit": {
+      "get": {
+        "operationId": "audit_api_training_manage_audit_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "org_id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Org Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Audit",
+        "tags": [
+          "training"
+        ]
+      }
+    },
+    "/api/training/manage/orgs": {
+      "get": {
+        "operationId": "manage_orgs_api_training_manage_orgs_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Manage Orgs",
+        "tags": [
+          "training"
+        ]
+      }
+    },
+    "/api/training/manage/people": {
+      "get": {
+        "operationId": "manage_people_api_training_manage_people_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "org_id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Org Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Manage People",
+        "tags": [
+          "training"
+        ]
+      }
+    },
+    "/api/training/manage/people/{target_user_id}/reset": {
+      "post": {
+        "operationId": "reset_progress_api_training_manage_people__target_user_id__reset_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "target_user_id",
+            "required": true,
+            "schema": {
+              "title": "Target User Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "org_id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Org Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Reset Progress",
+        "tags": [
+          "training"
+        ]
+      }
+    },
+    "/api/training/manage/practicals/{practical_id}/review": {
+      "post": {
+        "operationId": "review_api_training_manage_practicals__practical_id__review_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "practical_id",
+            "required": true,
+            "schema": {
+              "title": "Practical Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "org_id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Org Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PracticalReview"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Review",
+        "tags": [
+          "training"
+        ]
+      }
+    },
+    "/api/training/manage/reminders": {
+      "post": {
+        "operationId": "send_reminders_api_training_manage_reminders_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ReminderRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Send Reminders",
+        "tags": [
+          "training"
+        ]
+      }
+    },
+    "/api/training/me": {
+      "get": {
+        "operationId": "my_training_api_training_me_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "org_id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Org Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "My Training",
+        "tags": [
+          "training"
+        ]
+      }
+    },
+    "/api/training/practicals/{lesson_key}": {
+      "post": {
+        "operationId": "submit_practical_api_training_practicals__lesson_key__post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "lesson_key",
+            "required": true,
+            "schema": {
+              "title": "Lesson Key",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "org_id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Org Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PracticalRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Submit Practical",
+        "tags": [
+          "training"
+        ]
+      }
+    },
+    "/api/training/quiz/{lesson_key}": {
+      "post": {
+        "operationId": "submit_quiz_api_training_quiz__lesson_key__post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "lesson_key",
+            "required": true,
+            "schema": {
+              "title": "Lesson Key",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "org_id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Org Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/QuizSubmission"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Submit Quiz",
+        "tags": [
+          "training"
         ]
       }
     },

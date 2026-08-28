@@ -700,6 +700,9 @@ async def update_event(
     if event.event_date != previous_date or event.timezone != previous_timezone:
         from ..services.reminders import recompute_fire_times
         await recompute_fire_times(event, db)
+    if any(field in payload for field in ("event_date", "event_end_date", "rsvp_deadline", "timezone")):
+        from ..services.scheduled_communications import recompute_relative_schedules
+        await recompute_relative_schedules(event, db)
     if event.event_date != previous_date or event.venue_name != previous_venue:
         when = event.event_date.strftime("%A, %B %d at %I:%M %p")
         venue = f" at {event.venue_name}" if event.venue_name else ""

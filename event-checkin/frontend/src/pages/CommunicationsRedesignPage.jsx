@@ -20,6 +20,54 @@ const AUDIENCE_OPTIONS = [
 
 const AUDIENCE_LABEL = Object.fromEntries(AUDIENCE_OPTIONS.map((o) => [o.value, o.label]))
 
+const SCHEDULE_AUDIENCES = [
+  { value: 'all', label: 'All guests' },
+  { value: 'not_invited', label: 'Guests not yet invited' },
+  { value: 'not_responded', label: 'RSVP nonresponders' },
+  { value: 'confirmed', label: 'Confirmed guests' },
+  { value: 'declined', label: 'Declined guests' },
+  { value: 'waitlisted', label: 'Waitlisted guests' },
+  { value: 'checked_in', label: 'Checked-in guests' },
+  { value: 'not_checked_in', label: 'Confirmed, not checked in' },
+]
+
+const SCHEDULE_PRESETS = [
+  { type: 'invitation', label: 'Invitation', description: 'Send each guest their personal invitation or RSVP link.', audience: 'not_invited', channels: ['email'] },
+  { type: 'rsvp_reminder', label: 'RSVP reminder', description: 'Chase only guests who still have not responded.', audience: 'not_responded', channels: ['email', 'sms'] },
+  { type: 'event_reminder', label: 'Event reminder', description: 'Share arrival details before the event begins.', audience: 'confirmed', channels: ['email', 'sms'], subject: 'Coming up: {{event_name}}', body: 'Hi {{first_name}}, {{event_name}} is coming up. View your event details here: {{guest_hub_link}}' },
+  { type: 'session_reminder', label: 'Session reminder', description: 'Send a timed program or room reminder.', audience: 'confirmed', channels: ['email', 'sms'], subject: 'Your next session at {{event_name}}', body: 'Hi {{first_name}}, your next session begins soon. Open your event schedule: {{guest_hub_link}}' },
+  { type: 'feedback_request', label: 'Feedback request', description: 'Invite participants to review a session or experience.', audience: 'checked_in', channels: ['email'], subject: 'How was {{event_name}}?', body: 'Hi {{first_name}}, thank you for joining us. Please share your feedback from your FestioHub: {{guest_hub_link}}' },
+  { type: 'follow_up', label: 'Thank-you / follow-up', description: 'Send a post-event thank-you or next step.', audience: 'checked_in', channels: ['email'], subject: 'Thank you for joining {{event_name}}', body: 'Hi {{first_name}}, thank you for being part of {{event_name}}. We hope to see you again.' },
+  { type: 'announcement', label: 'Scheduled announcement', description: 'Plan an operational update for a selected audience.', audience: 'all', channels: ['email', 'sms'], subject: 'Update for {{event_name}}', body: 'Hi {{first_name}}, here is an important event update.' },
+]
+
+const SCHEDULE_STATUS_LABEL = {
+  draft: 'Draft', scheduled: 'Scheduled', paused: 'Paused', sending: 'Sending',
+  sent: 'Sent', partial: 'Partially sent', failed: 'Failed', cancelled: 'Cancelled',
+}
+
+function localInputValue(date = new Date(Date.now() + 3600000), timeZone = '') {
+  if (timeZone) {
+    try {
+      const parts = Object.fromEntries(new Intl.DateTimeFormat('en-CA', {
+        timeZone, year: 'numeric', month: '2-digit', day: '2-digit',
+        hour: '2-digit', minute: '2-digit', hourCycle: 'h23',
+      }).formatToParts(date).filter((part) => part.type !== 'literal').map((part) => [part.type, part.value]))
+      return `${parts.year}-${parts.month}-${parts.day}T${parts.hour}:${parts.minute}`
+    } catch { /* fall through to browser-local time */ }
+  }
+  const shifted = new Date(date.getTime() - date.getTimezoneOffset() * 60000)
+  return shifted.toISOString().slice(0, 16)
+}
+
+function formatEventLocal(value) {
+  if (!value) return ''
+  const [date, time = ''] = value.split('T')
+  const parsed = new Date(`${date}T12:00:00`)
+  const day = Number.isNaN(parsed.getTime()) ? date : parsed.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })
+  return `${day} at ${time}`
+}
+
 function fmtRelTime(iso) {
   if (!iso) return ''
   const d = new Date(iso)
@@ -1906,11 +1954,255 @@ function SettingsTab({ notify, eventId, event, onEventChanged }) {
   )
 }
 
+/* ── unified scheduler ───────────────────────────────────────────────── */
+
+function SchedulerTab({ eventId, event, notify, initialPreset }) {
+  const [items, setItems] = useState(null)
+  const [legacy, setLegacy] = useState([])
+  const [programSegments, setProgramSegments] = useState([])
+  const [editing, setEditing] = useState(null)
+  const [busy, setBusy] = useState('')
+  const initialPresetOpened = useRef(false)
+
+  function blankForm(preset = SCHEDULE_PRESETS[0]) {
+    return {
+      name: preset.label,
+      communication_type: preset.type,
+      trigger_type: 'absolute',
+      scheduled_at_local: localInputValue(undefined, event?.timezone),
+      anchor: 'event_start',
+      anchor_step_id: '',
+      direction: 'before',
+      offset_amount: preset.type === 'follow_up' || preset.type === 'feedback_request' ? 2 : 24,
+      offset_unit: 'hours',
+      channels: [...preset.channels],
+      audience_type: preset.audience,
+      audience_mode: preset.type === 'invitation' ? 'frozen' : 'dynamic',
+      subject: preset.subject || '',
+      email_body: preset.body || '',
+      sms_body: preset.body || '',
+      whatsapp_body: preset.body || '',
+      status: 'scheduled',
+    }
+  }
+
+  async function load() {
+    if (!eventId) { setItems([]); return }
+    try {
+      const [scheduled, reminders, workflows] = await Promise.all([
+        api.listScheduledCommunications(eventId),
+        event?.reminders_enabled ? api.listReminders(eventId).catch(() => []) : Promise.resolve([]),
+        event?.experience_enabled ? api.listExperienceWorkflows(eventId).catch(() => []) : Promise.resolve([]),
+      ])
+      setItems(scheduled)
+      setLegacy(reminders)
+      const preferred = workflows.find((workflow) => workflow.status === 'published') || workflows[0]
+      setProgramSegments((preferred?.steps || []).filter((step) => step.enabled && step.is_segment && Number.isFinite(step.starts_offset_seconds)))
+    } catch (e) {
+      setItems([])
+      notify(e.message || 'Communication schedule could not be loaded')
+    }
+  }
+
+  useEffect(() => { load() }, [eventId, event?.reminders_enabled, event?.experience_enabled])
+  useEffect(() => {
+    if (!initialPreset || initialPresetOpened.current) return
+    const preset = SCHEDULE_PRESETS.find((item) => item.type === initialPreset)
+    if (!preset) return
+    initialPresetOpened.current = true
+    setEditing({ id: null, form: blankForm(preset) })
+  }, [initialPreset, event?.timezone])
+
+  function choosePreset(type) {
+    const preset = SCHEDULE_PRESETS.find((item) => item.type === type) || SCHEDULE_PRESETS[0]
+    setEditing({ id: editing?.id || null, form: blankForm(preset) })
+  }
+
+  function editItem(item) {
+    const minutes = Math.abs(item.offset_minutes || 0)
+    const divisibleByDay = minutes > 0 && minutes % 1440 === 0
+    const divisibleByHour = minutes > 0 && minutes % 60 === 0
+    setEditing({ id: item.id, form: {
+      name: item.name,
+      communication_type: item.communication_type,
+      trigger_type: item.trigger_type,
+      scheduled_at_local: item.scheduled_at_local,
+      anchor: item.anchor || 'event_start',
+      anchor_step_id: item.anchor_step_id || '',
+      direction: (item.offset_minutes || 0) < 0 ? 'before' : 'after',
+      offset_amount: divisibleByDay ? minutes / 1440 : divisibleByHour ? minutes / 60 : minutes,
+      offset_unit: divisibleByDay ? 'days' : divisibleByHour ? 'hours' : 'minutes',
+      channels: item.channels || [],
+      audience_type: item.audience_type,
+      audience_mode: item.audience_mode,
+      subject: item.subject || '',
+      email_body: item.email_body || '',
+      sms_body: item.sms_body || '',
+      whatsapp_body: item.whatsapp_body || '',
+      status: item.status,
+    } })
+  }
+
+  function setForm(patch) {
+    setEditing((current) => ({ ...current, form: { ...current.form, ...patch } }))
+  }
+
+  function toggleChannel(channel) {
+    const channels = editing.form.channels.includes(channel)
+      ? editing.form.channels.filter((item) => item !== channel)
+      : [...editing.form.channels, channel]
+    setForm({ channels })
+  }
+
+  function payload() {
+    const form = editing.form
+    const multiplier = form.offset_unit === 'days' ? 1440 : form.offset_unit === 'hours' ? 60 : 1
+    const sign = form.direction === 'before' ? -1 : 1
+    return {
+      name: form.name.trim(), communication_type: form.communication_type,
+      trigger_type: form.trigger_type,
+      scheduled_at_local: form.trigger_type === 'absolute' ? form.scheduled_at_local : null,
+      anchor: form.trigger_type === 'relative' ? form.anchor : null,
+      anchor_step_id: form.trigger_type === 'relative' && form.anchor === 'experience_step' ? form.anchor_step_id : null,
+      offset_minutes: form.trigger_type === 'relative' ? sign * Number(form.offset_amount || 0) * multiplier : null,
+      channels: form.channels, audience_type: form.audience_type, audience_mode: form.audience_mode,
+      subject: form.subject || null, email_body: form.email_body || null,
+      sms_body: form.sms_body || null, whatsapp_body: form.whatsapp_body || null,
+      status: ['draft', 'paused'].includes(form.status) ? form.status : 'scheduled',
+    }
+  }
+
+  async function save() {
+    if (!editing.form.name.trim() || !editing.form.channels.length || busy) return
+    setBusy('save')
+    try {
+      if (editing.id) await api.updateScheduledCommunication(eventId, editing.id, payload())
+      else await api.createScheduledCommunication(eventId, payload())
+      setEditing(null)
+      await load()
+      notify(editing.id ? 'Scheduled communication updated' : 'Communication scheduled')
+    } catch (e) { notify(e.message || 'Communication could not be scheduled') }
+    finally { setBusy('') }
+  }
+
+  async function runAction(id, action, message) {
+    if (busy) return
+    setBusy(`${action}:${id}`)
+    try {
+      await api[action](eventId, id)
+      await load()
+      notify(message)
+    } catch (e) { notify(e.message || 'Schedule could not be updated') }
+    finally { setBusy('') }
+  }
+
+  if (!eventId) return <div className="rr-panel"><div className="rd-panel-body">Select an event to use the scheduler.</div></div>
+  if (items === null) return <div className="rr-panel"><div className="rd-panel-body">Loading communication schedule…</div></div>
+
+  const upcoming = items.filter((item) => ['draft', 'scheduled', 'paused', 'sending'].includes(item.status)).length
+  const completed = items.filter((item) => ['sent', 'partial'].includes(item.status)).length
+
+  return <>
+    <div className="cm-scheduler-hero">
+      <div>
+        <span className="cm-scheduler-kicker">AUTOMATION CONTROL CENTER</span>
+        <h2>Plan every guest touchpoint</h2>
+        <p>Schedule invitations, RSVP chasers, session notices, feedback and follow-ups in {event?.timezone || 'the event timezone'}.</p>
+      </div>
+      <button className="rr-btn primary" onClick={() => setEditing({ id: null, form: blankForm() })}><Icon name="plus" size={14} /> New scheduled message</button>
+    </div>
+
+    <div className="cm-scheduler-stats">
+      <div><strong>{upcoming}</strong><span>Upcoming</span></div>
+      <div><strong>{completed}</strong><span>Completed</span></div>
+      <div><strong>{items.reduce((sum, item) => sum + (item.recipients_sent || 0), 0)}</strong><span>Recipients reached</span></div>
+      <div><strong>{legacy.length}</strong><span>Existing reminder steps</span></div>
+    </div>
+
+    {editing && <div className="rr-panel cm-schedule-editor">
+      <div className="rd-panel-head">
+        <div><h3>{editing.id ? 'Edit scheduled communication' : 'Create scheduled communication'}</h3><p>Times are saved and executed in {event?.timezone || 'UTC'}.</p></div>
+        <button className="rr-btn secondary" onClick={() => setEditing(null)}>Close</button>
+      </div>
+      <div className="rd-panel-body">
+        <label className="rd-field-label">Purpose</label>
+        <div className="cm-schedule-presets">
+          {SCHEDULE_PRESETS.map((preset) => <button key={preset.type} className={editing.form.communication_type === preset.type ? 'active' : ''} onClick={() => choosePreset(preset.type)}>
+            <strong>{preset.label}</strong><span>{preset.description}</span>
+          </button>)}
+        </div>
+
+        <div className="cm-schedule-grid">
+          <label><span className="rd-field-label">Internal name</span><input className="rd-field" value={editing.form.name} onChange={(e) => setForm({ name: e.target.value })} /></label>
+          <label><span className="rd-field-label">Audience</span><select className="rr-select" value={editing.form.audience_type} onChange={(e) => setForm({ audience_type: e.target.value })}>{SCHEDULE_AUDIENCES.map((item) => <option key={item.value} value={item.value}>{item.label}</option>)}</select></label>
+          <label><span className="rd-field-label">Recipient mode</span><select className="rr-select" value={editing.form.audience_mode} onChange={(e) => setForm({ audience_mode: e.target.value })}><option value="dynamic">Dynamic — evaluate when sent</option><option value="frozen">Frozen — lock recipients now</option></select></label>
+          <label><span className="rd-field-label">Timing</span><select className="rr-select" value={editing.form.trigger_type} onChange={(e) => setForm({ trigger_type: e.target.value })}><option value="absolute">Specific date and time</option><option value="relative">Relative to event timing</option></select></label>
+        </div>
+
+        {editing.form.trigger_type === 'absolute' ? <label><span className="rd-field-label">Send date and time · {event?.timezone || 'UTC'}</span><input className="rd-field" type="datetime-local" value={editing.form.scheduled_at_local} onChange={(e) => setForm({ scheduled_at_local: e.target.value })} /></label> : <div className="cm-relative-row">
+          <input className="rd-field" type="number" min="0" value={editing.form.offset_amount} onChange={(e) => setForm({ offset_amount: e.target.value })} />
+          <select className="rr-select" value={editing.form.offset_unit} onChange={(e) => setForm({ offset_unit: e.target.value })}><option value="minutes">minutes</option><option value="hours">hours</option><option value="days">days</option></select>
+          <select className="rr-select" value={editing.form.direction} onChange={(e) => setForm({ direction: e.target.value })}><option value="before">before</option><option value="after">after</option></select>
+          <select className="rr-select" value={editing.form.anchor} onChange={(e) => setForm({ anchor: e.target.value, anchor_step_id: e.target.value === 'experience_step' ? (editing.form.anchor_step_id || programSegments[0]?.id || '') : '' })}><option value="event_start">event starts</option><option value="event_end">event ends</option><option value="rsvp_deadline">RSVP deadline</option>{programSegments.length > 0 && <option value="experience_step">Experience session</option>}</select>
+        </div>}
+        {editing.form.trigger_type === 'relative' && editing.form.anchor === 'experience_step' && <label><span className="rd-field-label">Program session</span><select className="rr-select" value={editing.form.anchor_step_id} onChange={(e) => setForm({ anchor_step_id: e.target.value })}>{programSegments.map((step) => <option key={step.id} value={step.id}>{step.title}</option>)}</select></label>}
+
+        <span className="rd-field-label">Delivery channels</span>
+        <div className="cm-channel-checks cm-schedule-channels">{['email', 'sms', 'whatsapp'].map((channel) => <label key={channel}><input type="checkbox" checked={editing.form.channels.includes(channel)} onChange={() => toggleChannel(channel)} /> {channel === 'sms' ? 'SMS' : channel[0].toUpperCase() + channel.slice(1)}</label>)}</div>
+        {['invitation', 'rsvp_reminder'].includes(editing.form.communication_type) && <p className="rd-hint">Invitation sends use your approved invitation templates, personal guest links, channel consent, and event channel policy.</p>}
+
+        {!['invitation', 'rsvp_reminder'].includes(editing.form.communication_type) && <div className="cm-message-fields">
+          {editing.form.channels.includes('email') && <><label className="rd-field-label">Email subject</label><input className="rd-field" value={editing.form.subject} onChange={(e) => setForm({ subject: e.target.value })} /><label className="rd-field-label">Email message</label><textarea className="rr-textarea" rows={5} value={editing.form.email_body} onChange={(e) => setForm({ email_body: e.target.value })} /></>}
+          {editing.form.channels.includes('sms') && <><label className="rd-field-label">SMS message</label><textarea className="rr-textarea" rows={3} value={editing.form.sms_body} onChange={(e) => setForm({ sms_body: e.target.value })} /></>}
+          {editing.form.channels.includes('whatsapp') && <><label className="rd-field-label">WhatsApp message</label><textarea className="rr-textarea" rows={3} value={editing.form.whatsapp_body} onChange={(e) => setForm({ whatsapp_body: e.target.value })} /></>}
+          <p className="rd-hint">Merge fields: {'{{first_name}}'}, {'{{event_name}}'}, {'{{event_date}}'}, {'{{guest_hub_link}}'} and {'{{ticket_link}}'}.</p>
+        </div>}
+
+        <div className="cm-schedule-save">
+          <label><input type="checkbox" checked={editing.form.status === 'draft'} onChange={(e) => setForm({ status: e.target.checked ? 'draft' : 'scheduled' })} /> Save as draft</label>
+          <button className="rr-btn primary" disabled={busy === 'save' || !editing.form.name.trim() || !editing.form.channels.length} onClick={save}>{busy === 'save' ? 'Saving…' : editing.form.status === 'draft' ? 'Save draft' : 'Schedule communication'}</button>
+        </div>
+      </div>
+    </div>}
+
+    <div className="rr-panel">
+      <div className="rd-panel-head"><h3>Communication timeline</h3><p>{items.length} unified scheduled communication{items.length === 1 ? '' : 's'}</p></div>
+      <div className="rd-panel-body cm-schedule-list">
+        {!items.length && <div className="cm-schedule-empty"><Icon name="clock" size={24} /><strong>No communications scheduled</strong><span>Start with an invitation or RSVP reminder sequence.</span></div>}
+        {items.map((item) => <article className="cm-schedule-card" key={item.id}>
+          <div className={`cm-schedule-status ${item.status}`}>{SCHEDULE_STATUS_LABEL[item.status] || item.status}</div>
+          <div className="cm-schedule-main">
+            <strong>{item.name}</strong>
+            <span>{SCHEDULE_PRESETS.find((preset) => preset.type === item.communication_type)?.label || item.communication_type} · {SCHEDULE_AUDIENCES.find((audience) => audience.value === item.audience_type)?.label || item.audience_type}</span>
+            <span>{formatEventLocal(item.scheduled_at_local)} · {item.timezone} · {(item.channels || []).join(', ')}</span>
+            <span>{item.audience_mode === 'dynamic' ? `${item.recipients_estimated} currently match` : `${item.recipients_estimated} recipients locked`}{item.sent_at ? ` · ${item.recipients_sent}/${item.recipients_targeted} reached` : ''}</span>
+            {item.last_error && <span className="cm-schedule-error">{item.last_error}</span>}
+          </div>
+          <div className="cm-schedule-actions">
+            {['draft', 'scheduled', 'paused'].includes(item.status) && <button className="rr-link-btn" onClick={() => editItem(item)}>Edit</button>}
+            {item.status === 'scheduled' && <button className="rr-link-btn" onClick={() => runAction(item.id, 'pauseScheduledCommunication', 'Communication paused')}>Pause</button>}
+            {['draft', 'paused'].includes(item.status) && <button className="rr-link-btn" onClick={() => runAction(item.id, 'resumeScheduledCommunication', 'Communication scheduled')}>Schedule</button>}
+            {['draft', 'scheduled', 'paused'].includes(item.status) && <button className="rr-link-btn" onClick={() => runAction(item.id, 'sendScheduledCommunicationNow', 'Communication queued to send now')}>Send now</button>}
+            {['draft', 'scheduled', 'paused'].includes(item.status) && <button className="rr-link-btn gr-danger-link" onClick={() => runAction(item.id, 'cancelScheduledCommunication', 'Communication cancelled')}>Cancel</button>}
+            {['failed', 'partial'].includes(item.status) && <button className="rr-link-btn" onClick={() => runAction(item.id, 'retryScheduledCommunication', 'Failed recipients queued for retry')}>Retry failed</button>}
+          </div>
+        </article>)}
+      </div>
+    </div>
+
+    {!!legacy.length && <div className="rr-panel cm-legacy-reminders">
+      <div className="rd-panel-head"><div><h3>Existing reminder series</h3><p>Preserved from the Reminders add-on while schedules move into one timeline.</p></div><Link className="rr-btn secondary" to="/addons-redesign?tab=reminders">Manage legacy reminders</Link></div>
+      <div className="rd-panel-body">{legacy.map((item) => <div className="cm-legacy-row" key={item.id}><strong>{item.label}</strong><span>{new Date(item.fire_at_utc).toLocaleString()} · {(item.channels || []).join(', ')} · {item.status}</span></div>)}</div>
+    </div>}
+  </>
+}
+
 /* ── page ────────────────────────────────────────────────────────────── */
 
 const TABS = [
   { key: 'hub', label: 'Guest Communication', eventActive: 'communication' },
   { key: 'messages', label: 'Messages', eventActive: 'messages' },
+  { key: 'scheduler', label: 'Scheduler', eventActive: 'communication' },
   { key: 'settings', label: 'Features & Channels', eventActive: 'features' },
 ]
 
@@ -1953,7 +2245,8 @@ export default function CommunicationsRedesignPage() {
         </div>
         <div className="rr-head-actions">
           <button className="rr-btn secondary" onClick={() => goTab('hub')}><Icon name="bell" size={15} /> Guest inbox</button>
-          <button className="rr-btn primary" onClick={() => goTab('messages')}><Icon name="send" size={14} /> Broadcasts</button>
+          <button className="rr-btn secondary" onClick={() => goTab('messages')}><Icon name="send" size={14} /> Broadcasts</button>
+          <button className="rr-btn primary" onClick={() => goTab('scheduler')}><Icon name="clock" size={14} /> Schedule</button>
         </div>
       </div>
 
@@ -1965,6 +2258,7 @@ export default function CommunicationsRedesignPage() {
 
       {tab === 'hub' && <HubTab eventId={eventId} notify={notify} />}
       {tab === 'messages' && <MessagesTab eventId={eventId} notify={notify} onPreview={(tpl, ch) => { setPreviewTemplate(tpl); setPreviewChannel(ch || 'email') }} />}
+      {tab === 'scheduler' && <SchedulerTab eventId={eventId} event={event} notify={notify} initialPreset={searchParams.get('preset')} />}
       {tab === 'settings' && <SettingsTab eventId={eventId} event={event} notify={notify} onEventChanged={loadEvent} />}
 
       {toast && <div className="rd-toast"><Icon name="check" />{toast}</div>}

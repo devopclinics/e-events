@@ -1354,6 +1354,7 @@ function InviteTab({ notify, onSendInvites, onSendGuests, onPreviewInvite, event
 }
 
 export default function GuestsRedesignPage() {
+  const navigate = useNavigate()
   const [searchParams, setSearchParams] = useSearchParams()
   const [toast, setToast] = useState(null)
   const [eventId] = useCurrentEvent()
@@ -2009,9 +2010,10 @@ export default function GuestsRedesignPage() {
               <div style={{ background: '#fffbeb', border: '1px solid #fcd34d', borderRadius: 6, padding: '8px 12px', fontSize: '0.82rem', marginBottom: 14 }}>
                 <Icon name="warning" size={12} /> The server will apply the event's configured channel policy, consent rules, recipient safety, and available credits.
               </div>
-              <div className="rd-row2">
+              <div className="rd-row2" style={{ gridTemplateColumns: 'auto 1fr 1fr' }}>
                 <button className="rr-btn secondary" onClick={() => setSendCount(null)}>Cancel</button>
-                <button className="rr-btn primary" onClick={() => startSend(sendCount)}>Send to {sendCount} guests</button>
+                <button className="rr-btn secondary" onClick={() => { setSendCount(null); navigate('/communications-redesign?tab=scheduler&preset=invitation') }}><Icon name="clock" size={13} /> Schedule instead</button>
+                <button className="rr-btn primary" onClick={() => startSend(sendCount)}>Send now</button>
               </div>
             </div>
           )}

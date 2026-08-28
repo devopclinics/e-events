@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { api } from "../api";
 import { useAuth } from "../context/AuthContext";
+import { useGuestPush } from "../hooks/useGuestPush";
 
 const KINDS = { discussion: "#", announcement: "📣", staff: "🔒" };
 const STAFF_ROLES = ["owner", "admin", "moderator"];
@@ -48,10 +49,7 @@ const errorText = (error) =>
   !error || error.status >= 500
     ? "FestioMe is temporarily unavailable. Your other Festio features are unaffected."
     : error.message || "FestioMe could not complete that request.";
-const heart = (message) =>
-  (message?.reactions || []).find((reaction) =>
-    ["❤️", "❤"].includes(reaction.emoji),
-  );
+const REACTION_EMOJIS = ["❤️", "👍", "😂", "😮", "👏"];
 
 function Dialog({ title, children, onClose }) {
   return (
@@ -81,6 +79,11 @@ function Dialog({ title, children, onClose }) {
 export default function FestioMePage() {
   const { user } = useAuth();
   const guestMode = typeof window !== "undefined" && window.location.pathname === "/festiome/guest";
+  // Web Push is guest-only today (organizer/staff push isn't wired yet) and
+  // reuses the same Guest Hub session token FestioMe already stores on entry.
+  const guestPushContext = guestMode ? api.festiomeGuestContext() : null;
+  const { pushConfig, pushState, pushBusy, pushError, enablePush, disablePush } =
+    useGuestPush(guestPushContext?.eventId, guestPushContext?.passToken, { skip: !guestPushContext });
   const [showHome, setShowHome] = useState(true);
   const [groups, setGroups] = useState([]),
     [groupId, setGroupId] = useState("");
@@ -111,8 +114,13 @@ export default function FestioMePage() {
   const [editing, setEditing] = useState(null),
     [attachments, setAttachments] = useState([]),
     [uploading, setUploading] = useState(false);
+  const [reactionPickerFor, setReactionPickerFor] = useState(null);
+  const [typingMember, setTypingMember] = useState(null);
+  const typingClearRef = useRef(null);
+  const lastTypingPingRef = useRef(0);
   const [search, setSearch] = useState(""),
     [searchResults, setSearchResults] = useState([]),
+    [searchAllGroups, setSearchAllGroups] = useState(false),
     [reports, setReports] = useState([]);
   const [scheduleAt, setScheduleAt] = useState(""),
     [showComposerTools, setShowComposerTools] = useState(false);
@@ -121,6 +129,7 @@ export default function FestioMePage() {
   const [preferences, setPreferences] = useState({
     in_app: true,
     email: true,
+    push: true,
     digest: "daily",
     muted: false,
   });
@@ -382,6 +391,17 @@ export default function FestioMePage() {
         ].forEach((eventName) =>
           source.addEventListener(eventName, refreshFromEvent),
         );
+        source.addEventListener("typing.started", (event) => {
+          try {
+            const payload = JSON.parse(event.data);
+            if (payload.member_id === me?.id) return;
+            setTypingMember(payload);
+            clearTimeout(typingClearRef.current);
+            typingClearRef.current = setTimeout(() => setTypingMember(null), 4000);
+          } catch {
+            /* ignore malformed typing events */
+          }
+        });
         source.onerror = () => {
           source?.close();
           if (!timer) polling();
@@ -392,6 +412,8 @@ export default function FestioMePage() {
       stopped = true;
       source?.close();
       if (timer) clearInterval(timer);
+      clearTimeout(typingClearRef.current);
+      setTypingMember(null);
     };
   }, [channelId, loadMessages, mergeMessages]);
   useEffect(() => {
@@ -638,12 +660,15 @@ export default function FestioMePage() {
       setNotice(errorText(e));
     }
   }
-  async function toggleLike(message) {
-    const h = heart(message),
-      liked = h?.reacted_by_me;
+  function pingTyping() {
+    if (!channelId || Date.now() - lastTypingPingRef.current < 3000) return;
+    lastTypingPingRef.current = Date.now();
+    api.festiomeTyping(channelId).catch(() => {});
+  }
+  async function toggleReaction(message, emoji, reactedByMe) {
     try {
-      if (liked) await api.festiomeUnlike(message.id);
-      else await api.festiomeLike(message.id);
+      if (reactedByMe) await api.festiomeUnreact(message.id, emoji);
+      else await api.festiomeReact(message.id, emoji);
       loadMessages(true);
     } catch (e) {
       setNotice(errorText(e));
@@ -701,7 +726,13 @@ export default function FestioMePage() {
     event.preventDefault();
     if (!search.trim()) return;
     try {
-      setSearchResults(list(await api.festiomeSearch(groupId, search.trim())));
+      setSearchResults(
+        list(
+          searchAllGroups
+            ? await api.festiomeSearchAllGroups(search.trim())
+            : await api.festiomeSearch(groupId, search.trim()),
+        ),
+      );
     } catch (e) {
       setNotice(errorText(e));
     }
@@ -1171,7 +1202,6 @@ export default function FestioMePage() {
                         message.parent ||
                         messages.find((item) => item.id === message.parent_id);
                       const deleted = message.deleted || message.deleted_at;
-                      const h = heart(message);
                       return (
                         <article key={message.id} className="group flex gap-3">
                           <span className="grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-slate-200 text-xs font-bold dark:bg-slate-700">
@@ -1259,14 +1289,40 @@ export default function FestioMePage() {
                                 <button onClick={() => setReply(message)}>
                                   Reply
                                 </button>
-                                <button
-                                  onClick={() => toggleLike(message)}
-                                  className={
-                                    h?.reacted_by_me ? "text-rose-500" : ""
-                                  }
-                                >
-                                  ♥ {h?.count || ""}
-                                </button>
+                                <span className="relative flex items-center gap-1">
+                                  {(message.reactions || []).filter((r) => r.count > 0).map((r) => (
+                                    <button
+                                      key={r.emoji}
+                                      onClick={() => toggleReaction(message, r.emoji, r.reacted_by_me)}
+                                      className={`rounded-full border px-1.5 ${r.reacted_by_me ? "border-teal-400 bg-teal-500/10 text-teal-600 dark:text-teal-300" : "border-slate-300 dark:border-slate-600"}`}
+                                    >
+                                      {r.emoji} {r.count}
+                                    </button>
+                                  ))}
+                                  <button
+                                    onClick={() => setReactionPickerFor(reactionPickerFor === message.id ? null : message.id)}
+                                    className="rounded-full border border-dashed border-slate-300 px-1.5 dark:border-slate-600"
+                                  >
+                                    +
+                                  </button>
+                                  {reactionPickerFor === message.id && (
+                                    <span className="absolute bottom-full left-0 z-10 mb-1 flex gap-1 rounded-full border bg-white p-1 text-sm shadow-lg dark:border-slate-700 dark:bg-slate-800">
+                                      {REACTION_EMOJIS.map((emoji) => (
+                                        <button
+                                          key={emoji}
+                                          onClick={() => {
+                                            const existing = (message.reactions || []).find((r) => r.emoji === emoji);
+                                            toggleReaction(message, emoji, existing?.reacted_by_me);
+                                            setReactionPickerFor(null);
+                                          }}
+                                          className="rounded-full px-1 hover:bg-slate-100 dark:hover:bg-slate-700"
+                                        >
+                                          {emoji}
+                                        </button>
+                                      ))}
+                                    </span>
+                                  )}
+                                </span>
                                 {(message.can_edit ||
                                   message.author_member_id === me?.id) && (
                                   <button
@@ -1291,6 +1347,12 @@ export default function FestioMePage() {
                                   Report
                                 </button>
                               </div>
+                            )}
+                            {message.author_member_id === me?.id && message.seen_count > 0 && (
+                              <p className="mt-0.5 flex items-center gap-1 text-[10px] text-slate-400">
+                                <svg viewBox="0 0 20 20" width="11" height="11" fill="none" stroke="currentColor" strokeWidth="2"><path d="M3 10l4 4 10-10"/></svg>
+                                Seen by {message.seen_count}
+                              </p>
                             )}
                           </div>
                         </article>
@@ -1413,6 +1475,11 @@ export default function FestioMePage() {
                         )}
                       </div>
                     )}
+                    {typingMember && (
+                      <p className="mb-1 px-1 text-xs italic text-slate-400">
+                        {typingMember.display_name || "Someone"} is typing…
+                      </p>
+                    )}
                     <div className="flex gap-2">
                       <button
                         type="button"
@@ -1423,7 +1490,10 @@ export default function FestioMePage() {
                       </button>
                       <input
                         value={draft}
-                        onChange={(e) => setDraft(e.target.value)}
+                        onChange={(e) => {
+                          setDraft(e.target.value);
+                          pingTyping();
+                        }}
                         placeholder={`Message ${channelIcon(activeChannel)} ${activeChannel?.name || ""} — use @ to mention`}
                         className="min-w-0 flex-1 rounded-full border bg-white px-4 py-2.5 text-sm dark:border-slate-600 dark:bg-slate-800 dark:text-white"
                       />
@@ -1563,6 +1633,22 @@ export default function FestioMePage() {
                           ⌕
                         </button>
                       </form>
+                      <div className="mt-2 flex gap-1 rounded-lg border p-0.5 text-[11px] font-bold dark:border-slate-700">
+                        <button
+                          type="button"
+                          onClick={() => setSearchAllGroups(false)}
+                          className={`flex-1 rounded-md py-1 ${!searchAllGroups ? "bg-teal-600 text-white" : "text-slate-400"}`}
+                        >
+                          This group
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setSearchAllGroups(true)}
+                          className={`flex-1 rounded-md py-1 ${searchAllGroups ? "bg-teal-600 text-white" : "text-slate-400"}`}
+                        >
+                          All my groups
+                        </button>
+                      </div>
                       <div className="mt-4 space-y-3">
                         {searchResults.map((result) => (
                           <button
@@ -2152,6 +2238,43 @@ export default function FestioMePage() {
                 }
               />
             </label>
+            <label className="flex justify-between">
+              Push notifications
+              <input
+                type="checkbox"
+                checked={preferences.push ?? true}
+                onChange={(e) =>
+                  setPreferences({ ...preferences, push: e.target.checked })
+                }
+              />
+            </label>
+            {guestMode && pushConfig && (
+              <div className="flex items-center justify-between rounded-lg bg-slate-100 p-2 text-xs dark:bg-slate-800">
+                <span>Notifications on this device</span>
+                {pushState === "enabled" ? (
+                  <button
+                    type="button"
+                    onClick={disablePush}
+                    disabled={pushBusy}
+                    className="rounded-md border border-slate-400 px-2 py-1 font-bold dark:border-slate-500"
+                  >
+                    {pushBusy ? "Updating…" : "On ✓"}
+                  </button>
+                ) : pushState === "blocked" ? (
+                  <span className="text-amber-600 dark:text-amber-300">Blocked in browser settings</span>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={enablePush}
+                    disabled={pushBusy}
+                    className="rounded-md bg-teal-600 px-2 py-1 font-bold text-white"
+                  >
+                    {pushBusy ? "Enabling…" : "Enable"}
+                  </button>
+                )}
+              </div>
+            )}
+            {pushError && <p className="text-xs text-amber-600 dark:text-amber-300">{pushError}</p>}
             <label className="flex items-center justify-between">
               Email digest
               <select

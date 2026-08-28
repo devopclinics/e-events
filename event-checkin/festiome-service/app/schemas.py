@@ -245,6 +245,7 @@ class MessageOut(BaseModel):
     scheduled_for: datetime | None = None
     published_at: datetime | None = None
     poll: dict | None = None
+    seen_count: int = 0
 
 
 class MessagePage(BaseModel):
@@ -310,6 +311,7 @@ class PollVoteCreate(BaseModel):
 class NotificationPreferenceIn(BaseModel):
     in_app: bool = True
     email: bool = True
+    push: bool = True
     digest: Literal["immediate", "daily", "weekly", "none"] = "daily"
     muted_channel_ids: list[str] = Field(default_factory=list, max_length=500)
 

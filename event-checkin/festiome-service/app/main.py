@@ -24,6 +24,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from .auth import Identity, current_identity, internal_service
 from .database import SessionLocal, get_db
+from .messaging_client import MessagingUnavailable, get_messaging_client
 from .models import (
     Attachment, AuditLog, Channel, ChannelMember, ChannelReadState, FestioMeGroup, IntegrationCommand, Invitation, JoinRequest, Member, Mention, Message,
     ModerationReport, NotificationJob, NotificationPreference, PendingUpload, Poll, PollOption, PollVote, Reaction, Tenant,
@@ -76,7 +77,71 @@ async def _scheduled_publisher():
                     await _publish(message.channel_id, "message.created", result.model_dump(mode="json"))
         except Exception:
             logger.exception("festiome_scheduled_publisher_failed")
+        try:
+            async with SessionLocal() as db:
+                await _process_notification_jobs(db)
+        except Exception:
+            logger.exception("festiome_notification_jobs_failed")
         await asyncio.sleep(5)
+
+
+async def _process_notification_jobs(db: AsyncSession) -> None:
+    """Best-effort push delivery for queued NotificationJob rows (new
+    message, DM, @mention). A messaging-service outage marks jobs failed
+    rather than blocking or retrying forever — there is no other consumer of
+    these rows, so failures are logged, not requeued."""
+    jobs = (await db.execute(select(NotificationJob).where(
+        NotificationJob.status == "queued", NotificationJob.available_at <= datetime.utcnow(),
+    ).with_for_update(skip_locked=True).limit(200))).scalars().all()
+    if not jobs:
+        return
+    client = get_messaging_client()
+    message_cache: dict[str, Message | None] = {}
+    channel_cache: dict[str, Channel | None] = {}
+    group_cache: dict[str, FestioMeGroup | None] = {}
+    member_cache: dict[str, Member | None] = {}
+    pref_cache: dict[str, NotificationPreference | None] = {}
+    for job in jobs:
+        job.status = "skipped"
+        try:
+            if job.member_id not in member_cache:
+                member_cache[job.member_id] = await db.get(Member, job.member_id)
+            member = member_cache[job.member_id]
+            if not member or member.identity_kind != "guest" or member.removed_at:
+                continue
+            if job.member_id not in pref_cache:
+                pref_cache[job.member_id] = (await db.execute(select(NotificationPreference).where(
+                    NotificationPreference.member_id == job.member_id))).scalar_one_or_none()
+            pref = pref_cache[job.member_id]
+            if pref and not pref.push:
+                continue
+            if job.message_id not in message_cache:
+                message_cache[job.message_id] = await db.get(Message, job.message_id)
+            message = message_cache[job.message_id]
+            if not message or message.deleted_at:
+                continue
+            if message.channel_id not in channel_cache:
+                channel_cache[message.channel_id] = await db.get(Channel, message.channel_id)
+            channel = channel_cache[message.channel_id]
+            if not channel or (pref and message.channel_id in (pref.muted_channel_ids or [])):
+                continue
+            if channel.group_id not in group_cache:
+                group_cache[channel.group_id] = await db.get(FestioMeGroup, channel.group_id)
+            group = group_cache[channel.group_id]
+            if not group or not group.external_event_ref:
+                continue
+            author = await db.get(Member, message.author_member_id)
+            author_name = author.display_name if author else "Someone"
+            title = f"{author_name} sent you a message" if channel.is_dm else f"{author_name} in {channel.name}"
+            body = (message.body or "New FestioMe message")[:500]
+            await client.send_push(group.external_event_ref, guest_ids=[member.identity_ref], title=title[:255], body=body)
+            job.status = "sent"
+        except MessagingUnavailable:
+            job.status = "failed"
+        except Exception:
+            logger.exception("festiome_notification_job_failed", extra={"job_id": job.id})
+            job.status = "failed"
+    await db.commit()
 
 
 app = FastAPI(title="FestioMe Internal Service", version="0.2.0", lifespan=lifespan)
@@ -226,6 +291,21 @@ async def _can_access_channel(db: AsyncSession, channel: Channel, member: Member
     return (not channel.is_dm) and member.role in STAFF_ROLES
 
 
+async def _notifiable_member_ids(db: AsyncSession, channel: Channel, *, exclude: str) -> set[str]:
+    """Members who could see this channel and should get a push about a new
+    message in it — mirrors _can_access_channel's own access rule, minus the
+    author. Mute/opt-out is applied later, at send time, not here."""
+    if channel.is_private:
+        ids = set((await db.execute(select(ChannelMember.member_id).where(
+            ChannelMember.channel_id == channel.id))).scalars().all())
+        return ids - {exclude}
+    query = select(Member.id).where(Member.group_id == channel.group_id, Member.removed_at.is_(None))
+    if channel.kind == "staff":
+        query = query.where(Member.role.in_(STAFF_ROLES))
+    ids = set((await db.execute(query)).scalars().all())
+    return ids - {exclude}
+
+
 def _channel_visibility_condition(member: Member, enrolled_ids: set[str]):
     """SQL predicate selecting the channels a member may see, for list/unread
     queries. Mirrors _can_access_channel."""
@@ -282,6 +362,13 @@ async def _messages_out(db: AsyncSession, messages: list[Message], viewer_id: st
             select(Mention.message_id, Mention.member_id).where(Mention.message_id.in_(ids)))).all():
         mentions_by_msg.setdefault(mid, []).append(member_id)
 
+    channel_ids = {m.channel_id for m in messages}
+    read_by_channel: dict[str, list[tuple[str, datetime]]] = {}
+    for channel_id, member_id, read_at in (await db.execute(
+            select(ChannelReadState.channel_id, ChannelReadState.member_id, ChannelReadState.read_at)
+            .where(ChannelReadState.channel_id.in_(channel_ids)))).all():
+        read_by_channel.setdefault(channel_id, []).append((member_id, read_at))
+
     polls = (await db.execute(select(Poll).where(Poll.message_id.in_(ids)))).scalars().all()
     poll_by_msg = {p.message_id: p for p in polls}
     poll_ids = [p.id for p in polls]
@@ -312,6 +399,10 @@ async def _messages_out(db: AsyncSession, messages: list[Message], viewer_id: st
         counts = Counter(reaction.emoji for reaction in rlist)
         mine = {reaction.emoji for reaction in rlist if reaction.member_id == viewer_id}
         author = authors.get(message.author_member_id)
+        seen_count = sum(
+            1 for mid, read_at in read_by_channel.get(message.channel_id, [])
+            if mid != message.author_member_id and read_at >= message.created_at
+        )
         result.append(MessageOut(
             id=message.id, group_id=message.group_id, channel_id=message.channel_id,
             author_member_id=message.author_member_id,
@@ -326,6 +417,7 @@ async def _messages_out(db: AsyncSession, messages: list[Message], viewer_id: st
             mention_member_ids=mentions_by_msg.get(message.id, []),
             poll=_poll_data(message.id),
             reactions=[ReactionOut(emoji=emoji, count=count, reacted_by_me=emoji in mine) for emoji, count in counts.items()],
+            seen_count=seen_count,
         ))
     return result
 
@@ -999,12 +1091,30 @@ async def list_join_requests(group_id: str, status: str = Query("pending"), iden
     return [JoinRequestOut.model_validate(r) for r in rows]
 
 
+async def _send_join_decision_push(db: AsyncSession, group_id: str, request_id: str, *, approved: bool) -> None:
+    """Best-effort — a messaging-service outage must never fail the decision
+    itself, which has already been committed by the time this runs."""
+    req = await db.get(JoinRequest, request_id)
+    group = await db.get(FestioMeGroup, group_id)
+    if not req or not group or req.identity_kind != "guest" or not group.external_event_ref:
+        return
+    title = "Request approved" if approved else "Request declined"
+    body = f'Your request to join "{group.name}" was {"approved" if approved else "declined"}.'
+    try:
+        await get_messaging_client().send_push(group.external_event_ref, guest_ids=[req.identity_ref], title=title, body=body)
+    except MessagingUnavailable:
+        pass
+    except Exception:
+        logger.exception("festiome_join_decision_push_failed", extra={"request_id": request_id})
+
+
 @app.post("/v1/groups/{group_id}/join-requests/{request_id}/approve", response_model=MemberOut)
 async def approve_join_request(group_id: str, request_id: str, body: JoinRequestDecision, identity: Identity = Depends(current_identity), db: AsyncSession = Depends(get_db)):
     actor = await _member(db, group_id, identity)
     _require_role(actor, STAFF_ROLES)
     member = await _decide_join_request(db, group_id, request_id, actor, approve=True, role=body.role)
     await db.commit(); await db.refresh(member)
+    await _send_join_decision_push(db, group_id, request_id, approved=True)
     return _member_out(member, identity)
 
 
@@ -1014,6 +1124,7 @@ async def deny_join_request(group_id: str, request_id: str, identity: Identity =
     _require_role(actor, STAFF_ROLES)
     await _decide_join_request(db, group_id, request_id, actor, approve=False)
     await db.commit()
+    await _send_join_decision_push(db, group_id, request_id, approved=False)
 
 
 @app.post("/v1/groups/{group_id}/accept-rules", response_model=RulesAcceptResult)
@@ -1467,22 +1578,41 @@ async def create_message(channel_id: str, body: MessageCreate, identity: Identit
         elif parsed.scheme != "https" or not parsed.netloc or (allowed_hosts and parsed.hostname not in allowed_hosts):
             raise HTTPException(400, "Attachment URL is not from an approved HTTPS host")
         db.add(Attachment(message_id=message.id, **item.model_dump()))
+    mentioned_ids: set[str] = set()
     if body.mention_member_ids:
         members = (await db.execute(select(Member.id).where(Member.group_id == channel.group_id,
                   Member.id.in_(set(body.mention_member_ids)), Member.removed_at.is_(None)))).scalars().all()
         if len(set(members)) != len(set(body.mention_member_ids)):
             raise HTTPException(400, "Mentioned member does not belong to this FestioMe group")
-        for member_id in set(members):
+        mentioned_ids = set(members)
+        for member_id in mentioned_ids:
             db.add(Mention(message_id=message.id, member_id=member_id))
             if member_id != member.id:
                 db.add(NotificationJob(member_id=member_id, message_id=message.id, kind="mention",
                                        available_at=scheduled or now))
+    notify_kind = "dm" if channel.is_dm else "channel_message"
+    for member_id in await _notifiable_member_ids(db, channel, exclude=member.id) - mentioned_ids:
+        db.add(NotificationJob(member_id=member_id, message_id=message.id, kind=notify_kind,
+                               available_at=scheduled or now))
     await db.commit()
     await db.refresh(message)
     result = await _message_out(db, message, member.id)
     if message.published_at:
         await _publish(channel.id, "message.created", result.model_dump(mode="json"))
     return result
+
+
+@app.post("/v1/channels/{channel_id}/typing", status_code=202)
+async def typing_indicator(channel_id: str, identity: Identity = Depends(current_identity), db: AsyncSession = Depends(get_db)):
+    """Ephemeral broadcast only — no row is written. The client debounces its
+    own calls; this just rides the same Redis pub/sub channel every message
+    event already uses, so the existing SSE stream delivers it for free."""
+    channel, member = await _channel_access(db, channel_id, identity)
+    if member.role == "readonly":
+        return {"ok": True}
+    await _rate_limit(f"typing:{member.id}", 20, 10)
+    await _publish(channel.id, "typing.started", {"member_id": member.id, "display_name": member.display_name})
+    return {"ok": True}
 
 
 @app.patch("/v1/messages/{message_id}", response_model=MessageOut)
@@ -1617,6 +1747,20 @@ async def update_report(group_id: str, report_id: str, body: ReportUpdate, ident
     _audit(db, group_id, member, "moderation.status_changed", "report", report.id, status=body.status)
     await db.commit()
     await db.refresh(report)
+    if body.status in {"resolved", "dismissed"}:
+        try:
+            reporter = await db.get(Member, report.reporter_member_id)
+            group = await db.get(FestioMeGroup, group_id)
+            if reporter and group and reporter.identity_kind == "guest" and group.external_event_ref:
+                await get_messaging_client().send_push(
+                    group.external_event_ref, guest_ids=[reporter.identity_ref],
+                    title="Your report was reviewed",
+                    body=f"Staff marked your report as {body.status}." + (f" {report.resolution_note}" if report.resolution_note else ""),
+                )
+        except MessagingUnavailable:
+            pass
+        except Exception:
+            logger.exception("festiome_report_resolution_push_failed", extra={"report_id": report_id})
     return report
 
 
@@ -1633,6 +1777,42 @@ async def search_group(group_id: str, q: str = Query(min_length=2, max_length=20
         or_(Message.scheduled_for.is_(None), Message.published_at.is_not(None)), Message.body.ilike(pattern),
     ).order_by(Message.created_at.desc()).limit(limit))).scalars().all()
     return {"items": await _messages_out(db, rows, member.id)}
+
+
+@app.get("/v1/members/me/search")
+async def search_my_groups(q: str = Query(min_length=2, max_length=200), limit: int = Query(30, ge=1, le=100),
+                           identity: Identity = Depends(current_identity), db: AsyncSession = Depends(get_db)):
+    """Same rules as search_group, applied across every group this identity
+    belongs to — one Message query using the combined allowed-channel set
+    rather than one search per group."""
+    memberships = (await db.execute(select(Member).where(
+        Member.identity_kind == identity.kind, Member.identity_ref == identity.subject,
+        Member.removed_at.is_(None),
+    ))).scalars().all()
+    if not memberships:
+        return {"items": []}
+    allowed_channel_ids: set[str] = set()
+    member_by_group: dict[str, Member] = {}
+    for member in memberships:
+        member_by_group[member.group_id] = member
+        channels = select(Channel.id).where(Channel.group_id == member.group_id, Channel.archived.is_(False))
+        if member.role not in STAFF_ROLES:
+            channels = channels.where(Channel.kind != "staff")
+        allowed_channel_ids |= set((await db.execute(channels)).scalars().all())
+    if not allowed_channel_ids:
+        return {"items": []}
+    pattern = f"%{q.strip()}%"
+    rows = (await db.execute(select(Message).where(
+        Message.channel_id.in_(allowed_channel_ids), Message.deleted_at.is_(None),
+        or_(Message.scheduled_for.is_(None), Message.published_at.is_not(None)), Message.body.ilike(pattern),
+    ).order_by(Message.created_at.desc()).limit(limit))).scalars().all()
+    # _messages_out takes one viewer_id for "reacted_by_me" — resolve it per
+    # message from that message's own group membership (results span groups).
+    items = [
+        (await _messages_out(db, [message], member_by_group[message.group_id].id))[0]
+        for message in rows
+    ]
+    return {"items": items}
 
 
 @app.post("/v1/channels/{channel_id}/polls", status_code=201)
@@ -1709,7 +1889,7 @@ async def get_notification_preferences(group_id: str = Query(...), identity: Ide
     pref = (await db.execute(select(NotificationPreference).where(NotificationPreference.member_id == member.id))).scalar_one_or_none()
     if not pref:
         pref = NotificationPreference(member_id=member.id); db.add(pref); await db.commit(); await db.refresh(pref)
-    return NotificationPreferenceOut(member_id=member.id, in_app=pref.in_app, email=pref.email, digest=pref.digest,
+    return NotificationPreferenceOut(member_id=member.id, in_app=pref.in_app, email=pref.email, push=pref.push, digest=pref.digest,
                                      muted_channel_ids=pref.muted_channel_ids or [], updated_at=pref.updated_at)
 
 
@@ -1720,7 +1900,7 @@ async def put_notification_preferences(body: NotificationPreferenceIn, group_id:
     if not set(body.muted_channel_ids).issubset(channel_ids): raise HTTPException(400, "Muted channel is outside this group")
     pref = (await db.execute(select(NotificationPreference).where(NotificationPreference.member_id == member.id))).scalar_one_or_none()
     if not pref: pref = NotificationPreference(member_id=member.id); db.add(pref)
-    pref.in_app, pref.email, pref.digest = body.in_app, body.email, body.digest
+    pref.in_app, pref.email, pref.push, pref.digest = body.in_app, body.email, body.push, body.digest
     pref.muted_channel_ids, pref.updated_at = body.muted_channel_ids, datetime.utcnow()
     await db.commit(); await db.refresh(pref)
     return NotificationPreferenceOut(member_id=member.id, **body.model_dump(), updated_at=pref.updated_at)

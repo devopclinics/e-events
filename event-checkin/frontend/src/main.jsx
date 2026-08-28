@@ -33,7 +33,7 @@ if (new URLSearchParams(window.location.search).get('guesthub') === '1') {
 // the pass installable and retains the guest's QR image for weak venue Wi-Fi.
 if ('serviceWorker' in navigator && window.isSecureContext) {
   window.addEventListener('load', () => {
-    navigator.serviceWorker.register('/guesthub-sw.js?v=2').catch(() => {
+    navigator.serviceWorker.register('/guesthub-sw.js?v=3').catch(() => {
       // Installing the app is optional; the browser experience stays usable.
     })
   })

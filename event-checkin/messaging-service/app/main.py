@@ -963,6 +963,12 @@ class InternalStaffPushIn(BaseModel):
     roles: list[str] | None = None
 
 
+class InternalFestioMePushIn(BaseModel):
+    guest_ids: list[str] = Field(min_length=1)
+    title: str = Field(min_length=1, max_length=255)
+    body: str = Field(min_length=1, max_length=1000)
+
+
 def _message_out(m: EventMessage, guest_name: str | None = None) -> dict[str, Any]:
     return {
         "id": m.id,
@@ -1074,6 +1080,26 @@ async def internal_staff_push(event_id: str, payload: InternalStaffPushIn, reque
     if not settings.internal_service_token or provided != settings.internal_service_token:
         raise HTTPException(401, "Invalid internal token")
     await send_staff_push(event_id=event_id, title=payload.title, body=payload.body, roles=payload.roles)
+    return {"queued": True}
+
+
+@app.post("/api/messaging/internal/events/{event_id}/festiome-push", status_code=202)
+async def internal_festiome_push(event_id: str, payload: InternalFestioMePushIn, request: Request):
+    """Server-to-server trigger for FestioMe notifications (new message, DM,
+    @mention, join-request outcome, moderation resolution) — called by
+    festiome-service, which has no push delivery of its own. Lands on the
+    guest's Hub (send_event_push always points there, not a FestioMe deep
+    link) since that's the shared entry point into FestioMe today."""
+    provided = request.headers.get("x-internal-token", "")
+    if not settings.internal_service_token or provided != settings.internal_service_token:
+        raise HTTPException(401, "Invalid internal token")
+    await send_event_push(
+        event_id=event_id,
+        guest_ids=payload.guest_ids,
+        title=payload.title,
+        body=payload.body,
+        category="festiome",
+    )
     return {"queued": True}
 
 

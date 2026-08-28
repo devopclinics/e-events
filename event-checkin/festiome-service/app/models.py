@@ -238,6 +238,7 @@ class NotificationPreference(Base):
     member_id: Mapped[str] = mapped_column(String(36), ForeignKey("members.id"), index=True)
     in_app: Mapped[bool] = mapped_column(Boolean, default=True)
     email: Mapped[bool] = mapped_column(Boolean, default=True)
+    push: Mapped[bool] = mapped_column(Boolean, default=True)
     digest: Mapped[str] = mapped_column(String(20), default="daily")
     muted_channel_ids: Mapped[list] = mapped_column(JSON, default=list)
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)

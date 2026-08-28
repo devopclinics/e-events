@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import RedesignShell, { Icon, ConfirmDialog, Modal } from './redesign/RedesignShell'
 import { useCurrentEvent } from '../hooks/useCurrentEvent'
 import { api } from '../api'
@@ -12,6 +12,8 @@ function listResponse(value) {
   if (Array.isArray(value)) return value
   return value?.items || value?.results || []
 }
+
+const REACTION_EMOJIS = ['❤️', '👍', '😂', '😮', '👏']
 
 function adaptMessage(message, members = []) {
   const reaction = (message.reactions || []).find((item) => item.emoji === '❤️')
@@ -34,6 +36,7 @@ export default function FestioMeRedesignPage() {
   const [activeGroup, setActiveGroup] = useState('')
   const [active, setActive] = useState('')
   const [messages, setMessages] = useState([])
+  const [reactionPickerFor, setReactionPickerFor] = useState('')
   const [groups, setGroups] = useState([])
   const [channelsByGroup, setChannelsByGroup] = useState({})
   const [members, setMembers] = useState([])
@@ -52,12 +55,14 @@ export default function FestioMeRedesignPage() {
   const [channelMemberIds, setChannelMemberIds] = useState([])
   const [editDraft, setEditDraft] = useState('')
   const [poll, setPoll] = useState({ question: '', first: '', second: '' })
-  const [preferences, setPreferences] = useState({ in_app: true, email: true, digest: 'daily', muted_channel_ids: [] })
+  const [preferences, setPreferences] = useState({ in_app: true, email: true, push: true, digest: 'daily', muted_channel_ids: [] })
   const [messageCursor, setMessageCursor] = useState('')
   const [attachments, setAttachments] = useState([])
   const [draft, setDraft] = useState('')
   const [search, setSearch] = useState('')
   const [searchOpen, setSearchOpen] = useState(false)
+  const [crossGroupSearch, setCrossGroupSearch] = useState(false)
+  const [crossResults, setCrossResults] = useState([])
   const [createChannelOpen, setCreateChannelOpen] = useState(false)
   const [createGroupOpen, setCreateGroupOpen] = useState(false)
   const [pollOpen, setPollOpen] = useState(false)
@@ -139,12 +144,30 @@ export default function FestioMeRedesignPage() {
       .catch((e) => setError(e.message || 'Channel messages could not be loaded'))
   }, [active, members])
 
-  async function toggleLike(id) {
-    const message = messages.find((item) => item.id === id)
+  const lastTypingPingRef = useRef(0)
+  function pingTyping() {
+    // This page has no live SSE connection (messages only refresh on channel
+    // reselect/reload), so a staff typing ping is one-way — visible to guests
+    // on the live guest page, not reflected here. Building a full realtime
+    // listener for this page is a bigger lift than this ping alone.
+    if (!active || Date.now() - lastTypingPingRef.current < 3000) return
+    lastTypingPingRef.current = Date.now()
+    api.festiomeTyping(active).catch(() => {})
+  }
+
+  async function runCrossGroupSearch() {
+    if (!search.trim()) { setCrossResults([]); return }
+    try { setCrossResults(listResponse(await api.festiomeSearchAllGroups(search.trim()))) }
+    catch (e) { setError(e.message || 'Search could not be completed') }
+  }
+
+  async function toggleReaction(id, emoji, reactedByMe) {
     try {
-      if (message?.liked) await api.festiomeUnlike(id)
-      else await api.festiomeLike(id)
-      setMessages((prev) => prev.map((m) => (m.id === id ? { ...m, liked: !m.liked, likes: m.likes + (m.liked ? -1 : 1) } : m)))
+      if (reactedByMe) await api.festiomeUnreact(id, emoji)
+      else await api.festiomeReact(id, emoji)
+      const result = await api.festiomeMessages(active)
+      const listed = result.items || result.messages || result || []
+      setMessages(listed.map((message) => adaptMessage(message, members)))
     } catch (e) { setError(e.message || 'Reaction could not be saved') }
   }
 
@@ -439,8 +462,26 @@ export default function FestioMeRedesignPage() {
                 <div className="fm-search-row">
                   <div className="rd-search" style={{ margin: '8px 14px 0' }}>
                     <Icon name="search" size={13} />
-                    <input placeholder="Search messages in this channel…" value={search} onChange={(e) => setSearch(e.target.value)} />
+                    <input
+                      placeholder={crossGroupSearch ? 'Search all my groups…' : 'Search messages in this channel…'}
+                      value={search}
+                      onChange={(e) => setSearch(e.target.value)}
+                      onKeyDown={(e) => { if (crossGroupSearch && e.key === 'Enter') runCrossGroupSearch() }}
+                    />
                   </div>
+                  <div className="fm-search-toggle" style={{ margin: '6px 14px 0' }}>
+                    <span className={!crossGroupSearch ? 'on' : ''} onClick={() => { setCrossGroupSearch(false); setCrossResults([]) }}>This channel</span>
+                    <span className={crossGroupSearch ? 'on' : ''} onClick={() => { setCrossGroupSearch(true); runCrossGroupSearch() }}>All my groups</span>
+                  </div>
+                  {crossGroupSearch && crossResults.length > 0 && (
+                    <div className="fm-cross-results">
+                      {crossResults.map((r) => (
+                        <button key={r.id} onClick={() => { setActiveGroup(r.group_id); setActive(r.channel_id); setCrossResults([]); setSearchOpen(false) }}>
+                          <b>{r.author_name}</b><span>{r.body}</span>
+                        </button>
+                      ))}
+                    </div>
+                  )}
                 </div>
               )}
               {manageMembersOpen && (
@@ -557,7 +598,24 @@ export default function FestioMeRedesignPage() {
                         </div>
                       )}
                       <div className="fm-msg-actions">
-                        <button className={`fm-like-btn ${m.liked ? 'liked' : ''}`} onClick={() => toggleLike(m.id)}>👍 {m.likes > 0 ? m.likes : ''}</button>
+                        <span className="fm-reactions">
+                          {(m.reactions || []).filter((r) => r.count > 0).map((r) => (
+                            <button key={r.emoji} className={`fm-reaction-chip ${r.reacted_by_me ? 'mine' : ''}`}
+                              onClick={() => toggleReaction(m.id, r.emoji, r.reacted_by_me)}>{r.emoji} {r.count}</button>
+                          ))}
+                          <button className="fm-reaction-add" onClick={() => setReactionPickerFor(reactionPickerFor === m.id ? '' : m.id)}>+</button>
+                          {reactionPickerFor === m.id && (
+                            <span className="fm-reaction-picker">
+                              {REACTION_EMOJIS.map((emoji) => (
+                                <button key={emoji} onClick={() => {
+                                  const existing = (m.reactions || []).find((r) => r.emoji === emoji)
+                                  toggleReaction(m.id, emoji, existing?.reacted_by_me)
+                                  setReactionPickerFor('')
+                                }}>{emoji}</button>
+                              ))}
+                            </span>
+                          )}
+                        </span>
                         {m.mine ? (
                           <>
                             <button className="fm-msg-action" onClick={() => { setEditingId(m.id); setEditDraft(m.text) }}>Edit</button>
@@ -573,6 +631,7 @@ export default function FestioMeRedesignPage() {
                           }}>Report</button>
                         )}
                       </div>
+                      {m.mine && m.seen_count > 0 && <div className="fm-seen">Seen by {m.seen_count}</div>}
                     </div>
                   </div>
                 ))}
@@ -586,7 +645,7 @@ export default function FestioMeRedesignPage() {
                   e.target.value = ''
                 }} /></label>
                 <input className="rr-input" disabled={!active} style={{ marginBottom: 0 }} placeholder={activeChannel ? `Message #${activeChannel.name} — try @ to mention someone` : 'Select a channel to send a message'}
-                  value={draft} onChange={(e) => setDraft(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && sendMessage()} />
+                  value={draft} onChange={(e) => { setDraft(e.target.value); pingTyping() }} onKeyDown={(e) => e.key === 'Enter' && sendMessage()} />
                 <button className="rr-link-btn" disabled={!active} onClick={() => setPollOpen((v) => !v)}>Poll</button>
                 <button className="rr-btn primary" disabled={!active || (!draft.trim() && !attachments.length)} onClick={sendMessage}>Send</button>
               </div>
@@ -675,7 +734,7 @@ export default function FestioMeRedesignPage() {
           <div className="rr-panel fm-modal" onClick={(e) => e.stopPropagation()}>
             <div className="rd-panel-head"><h3>Notification preferences</h3></div>
             <div className="rd-panel-body">
-              {[['in_app', 'In-app notifications'], ['email', 'Email notifications']].map(([key, label]) => (
+              {[['in_app', 'In-app notifications'], ['email', 'Email notifications'], ['push', 'Push notifications']].map(([key, label]) => (
                 <label key={key} className="gr-required-check" style={{ marginBottom: 8 }}><input type="checkbox" checked={!!preferences[key]} onChange={(e) => setPreferences((value) => ({ ...value, [key]: e.target.checked }))} /> {label}</label>
               ))}
               <label className="rd-field-label">Digest frequency</label>
@@ -686,6 +745,7 @@ export default function FestioMeRedesignPage() {
                   setPreferences(await api.festiomeSaveNotificationPreferences(activeGroup, {
                     in_app: !!preferences.in_app,
                     email: !!preferences.email,
+                    push: !!preferences.push,
                     digest: preferences.digest || 'daily',
                     muted_channel_ids: preferences.muted_channel_ids || [],
                   }))

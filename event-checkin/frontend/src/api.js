@@ -1408,6 +1408,8 @@ export const api = {
   festiomeDeleteMessage: (id) => festiomeReq('DELETE', `/festiome/v1/messages/${id}`),
   festiomeReportMessage: (id, data) => festiomeReq('POST', `/festiome/v1/messages/${id}/reports`, data),
   festiomeSearch: (id, query) => festiomeReq('GET', `/festiome/v1/groups/${id}/search?q=${encodeURIComponent(query)}`),
+  festiomeSearchAllGroups: (query) => festiomeReq('GET', `/festiome/v1/members/me/search?q=${encodeURIComponent(query)}`),
+  festiomeTyping: (channelId) => festiomeReq('POST', `/festiome/v1/channels/${channelId}/typing`),
   festiomeCreatePoll: (id, data) => festiomeReq('POST', `/festiome/v1/channels/${id}/polls`, data),
   festiomeUpload,
   festiomeDownloadAttachment,
@@ -1416,11 +1418,10 @@ export const api = {
       option_ids: [optionId],
     }),
   festiomeRealtimeTicket: (id) => festiomeReq('POST', '/festiome/v1/realtime-ticket', { channel_id: id }),
-  festiomeLike: (messageId) =>
-    festiomeReq('POST', `/festiome/v1/messages/${messageId}/reactions`, {
-      emoji: '❤️',
-    }),
-  festiomeUnlike: (messageId) => festiomeReq('DELETE', `/festiome/v1/messages/${messageId}/reactions/${encodeURIComponent('❤️')}`),
+  festiomeReact: (messageId, emoji) =>
+    festiomeReq('POST', `/festiome/v1/messages/${messageId}/reactions`, { emoji }),
+  festiomeUnreact: (messageId, emoji) =>
+    festiomeReq('DELETE', `/festiome/v1/messages/${messageId}/reactions/${encodeURIComponent(emoji)}`),
   festiomeRead: (id, messageId) =>
     festiomeReq('PUT', `/festiome/v1/channels/${id}/read`, {
       message_id: messageId,

@@ -13,6 +13,9 @@ class Settings(BaseSettings):
     realtime_ticket_secret: str = ""
     attachment_hosts: str = ""
     upload_dir: str = "/data/festiome-uploads"
+    messaging_service_url: str = "http://messaging-service:8001"
+    messaging_internal_token: str = ""
+    messaging_request_timeout_seconds: float = 3.0
 
 
 settings = Settings()

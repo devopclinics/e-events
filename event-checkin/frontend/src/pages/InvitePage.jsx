@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback } from 'react'
 import confetti from 'canvas-confetti'
 import { useParams } from 'react-router-dom'
 import { api } from '../api'
-import { isNativePushSupported, registerNativePush, unregisterNativePush } from '../push/fcmPush'
+import { useGuestPush } from '../hooks/useGuestPush'
 import { parseUtc, fmtEventDateRange } from '../timeutil'
 import { seatingTerm, seatTerm } from '../seatingTerm'
 import './GuestHubThemes.css'
@@ -79,13 +79,6 @@ function normalizePhone(raw) {
   if (digits.startsWith('234')) return '+' + digits          // 234... → +234...
   if (digits.startsWith('0')) return '+234' + digits.slice(1) // 080... → +23480...
   return '+234' + digits                                      // bare local → +234...
-}
-
-function vapidKeyToUint8Array(value) {
-  const padding = '='.repeat((4 - (value.length % 4)) % 4)
-  const base64 = (value + padding).replace(/-/g, '+').replace(/_/g, '/')
-  const raw = window.atob(base64)
-  return Uint8Array.from(raw, (char) => char.charCodeAt(0))
 }
 
 // ── Theme definitions ─────────────────────────────────────────────────────────
@@ -1344,10 +1337,8 @@ function GuestHub({ event, accessToken, designTheme, previewMock = false, confir
   const [installPrompt, setInstallPrompt] = useState(null)
   const [installState, setInstallState] = useState('')
   const [showInstallDialog, setShowInstallDialog] = useState(false)
-  const [pushConfig, setPushConfig] = useState(null)
-  const [pushState, setPushState] = useState('')
-  const [pushBusy, setPushBusy] = useState(false)
-  const [pushError, setPushError] = useState('')
+  const { pushConfig, pushState, pushBusy, pushError, enablePush, disablePush } =
+    useGuestPush(event?.id, accessToken, { skip: previewMock })
   const hubLayout = designTheme?.hub_layout || {}
   const hubModuleVisible = (key) => {
     const module = (hubLayout.modules || []).find((item) => item.key === key)
@@ -1426,36 +1417,6 @@ function GuestHub({ event, accessToken, designTheme, previewMock = false, confir
     return () => clearTimeout(timer)
   }, [installPrompt])
 
-  const loadPush = useCallback(async () => {
-    if (!event?.id || !accessToken || previewMock) return
-    // Native (Capacitor) app: FCM, not the browser VAPID flow below — there's
-    // no service worker/PushManager to check, and no upfront config fetch
-    // needed since registerNativePush() fails harmlessly if FCM is disabled
-    // server-side (matches _fcm_configured()'s gate).
-    if (isNativePushSupported()) {
-      setPushConfig({ enabled: true, native: true })
-      setPushState(window.localStorage.getItem(`festio.fcmToken.${event.id}`) ? 'enabled' : 'ready')
-      return
-    }
-    if (!('serviceWorker' in navigator) || !('PushManager' in window) || !('Notification' in window)) return
-    try {
-      const config = await api.guestPushConfig(event.id, accessToken)
-      if (!config.enabled || !config.public_key) {
-        setPushConfig(null)
-        return
-      }
-      setPushConfig(config)
-      const registration = await navigator.serviceWorker.ready
-      const subscription = await registration.pushManager.getSubscription()
-      setPushState(subscription ? 'enabled' : Notification.permission === 'denied' ? 'blocked' : 'ready')
-    } catch {
-      // Push is optional. Keep the pass, QR, and event updates working normally.
-      setPushConfig(null)
-    }
-  }, [event?.id, accessToken, previewMock])
-
-  useEffect(() => { loadPush() }, [loadPush])
-
   function dismissInstall() {
     sessionStorage.setItem('festio:install-prompt-dismissed', '1')
     setShowInstallDialog(false)
@@ -1468,57 +1429,6 @@ function GuestHub({ event, accessToken, designTheme, previewMock = false, confir
     setInstallState(result?.outcome === 'accepted' ? 'installed' : '')
     setInstallPrompt(null)
     setShowInstallDialog(false)
-  }
-
-  async function enablePush() {
-    if (!pushConfig?.enabled || pushBusy) return
-    setPushBusy(true)
-    setPushError('')
-    try {
-      if (pushConfig.native) {
-        await registerNativePush(event.id, accessToken)
-        setPushState(window.localStorage.getItem(`festio.fcmToken.${event.id}`) ? 'enabled' : 'blocked')
-        return
-      }
-      const permission = await Notification.requestPermission()
-      if (permission !== 'granted') {
-        setPushState(permission === 'denied' ? 'blocked' : 'ready')
-        return
-      }
-      const registration = await navigator.serviceWorker.ready
-      const subscription = await registration.pushManager.getSubscription()
-        || await registration.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: vapidKeyToUint8Array(pushConfig.public_key) })
-      await api.saveGuestPushSubscription(event.id, accessToken, subscription.toJSON())
-      setPushState('enabled')
-    } catch (err) {
-      setPushError(err.message || 'Notifications could not be enabled on this device.')
-    } finally {
-      setPushBusy(false)
-    }
-  }
-
-  async function disablePush() {
-    if (pushBusy) return
-    setPushBusy(true)
-    setPushError('')
-    try {
-      if (pushConfig?.native) {
-        await unregisterNativePush(event.id, accessToken)
-        setPushState('ready')
-        return
-      }
-      const registration = await navigator.serviceWorker.ready
-      const subscription = await registration.pushManager.getSubscription()
-      if (subscription) {
-        await api.removeGuestPushSubscription(event.id, accessToken, subscription.endpoint)
-        await subscription.unsubscribe()
-      }
-      setPushState('ready')
-    } catch (err) {
-      setPushError(err.message || 'Notifications could not be turned off on this device.')
-    } finally {
-      setPushBusy(false)
-    }
   }
 
   const loadJourney = useCallback(async () => {

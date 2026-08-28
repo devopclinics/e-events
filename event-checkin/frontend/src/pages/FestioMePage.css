@@ -84,6 +84,10 @@
 .fm-dashboard-empty { grid-column: 1 / -1; min-height: 100px; display: grid; place-items: center; padding: 18px; border: 1px dashed rgba(143,190,211,.18); border-radius: 11px; color: #7893a8; font-size: 9px; text-align: center; }
 
 .fm-guest-page { display: grid; gap: 16px; }
+.fm-people-search input { width: 100%; padding: 11px 14px; border: 1px solid rgba(143,190,211,.16); border-radius: 10px;
+  background: rgba(10,31,51,.72); color: #fff; font: inherit; font-size: 11px; }
+.fm-people-search input::placeholder { color: #7893a8; }
+.fm-people-search input:focus { outline: none; border-color: rgba(46,214,184,.5); }
 .fm-guest-people-grid { display: grid; grid-template-columns: repeat(3, minmax(0,1fr)); gap: 10px; }
 .fm-guest-people-grid article { padding: 15px; }
 .fm-guest-meetup-form { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; padding: 14px; border: 1px solid rgba(46,214,184,.25); border-radius: 13px; background: rgba(13,35,56,.9); }

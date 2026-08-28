@@ -85,6 +85,18 @@ export default function FestioMePage() {
   const guestPushContext = guestMode ? api.festiomeGuestContext() : null;
   const { pushConfig, pushState, pushBusy, pushError, enablePush, disablePush } =
     useGuestPush(guestPushContext?.eventId, guestPushContext?.passToken, { skip: !guestPushContext });
+  // "Back to FestioHub" used to rely purely on browser history, which
+  // silently no-ops when the guest arrived here fresh (new tab, QR code,
+  // bookmark) — there's no history entry to go back to. The guest's Guest
+  // Hub pass token is the same token FestioMe's own session was opened
+  // with, so we can always build a real return URL instead of guessing.
+  function openFestioHub() {
+    if (guestPushContext?.passToken) {
+      window.location.href = `/r/${encodeURIComponent(guestPushContext.passToken)}#guest-hub`;
+    } else {
+      history.back();
+    }
+  }
   const [showHome, setShowHome] = useState(true);
   const [groups, setGroups] = useState([]),
     [groupId, setGroupId] = useState("");
@@ -122,10 +134,11 @@ export default function FestioMePage() {
   const [search, setSearch] = useState(""),
     [searchResults, setSearchResults] = useState([]),
     [searchAllGroups, setSearchAllGroups] = useState(false),
+    [peopleSearch, setPeopleSearch] = useState(""),
     [reports, setReports] = useState([]);
   const [leaderboard, setLeaderboard] = useState({ items: [], me: null }),
     [matches, setMatches] = useState([]),
-    [profileForm, setProfileForm] = useState({ display_name: "", bio: "", tags: "" });
+    [profileForm, setProfileForm] = useState({ display_name: "", bio: "", tags: "", discoverable: true });
   const [connections, setConnections] = useState([]),
     [meetups, setMeetups] = useState([]),
     [journey, setJourney] = useState(null),
@@ -800,6 +813,7 @@ export default function FestioMePage() {
       display_name: me?.display_name || name(user) || "",
       bio: me?.bio || "",
       tags: (me?.interest_tags || []).join(", "),
+      discoverable: me?.discoverable !== false,
     });
     setDialog("editProfile");
   }
@@ -811,6 +825,7 @@ export default function FestioMePage() {
         display_name: profileForm.display_name.trim(),
         bio: profileForm.bio.trim(),
         interest_tags: profileForm.tags.split(",").map((t) => t.trim()).filter(Boolean),
+        discoverable: profileForm.discoverable,
       });
       await loadWorkspace(groupId);
       setDialog("");
@@ -1047,11 +1062,21 @@ export default function FestioMePage() {
 
             {homeSection === "guest-chat" && <section><div className="mb-5 flex items-center justify-between gap-3"><div><h2 className="text-3xl font-black"># General</h2><p className="mt-1 text-sm text-slate-400">Shared Guest Chat · not merged with FestioMe channels</p></div>{sourceBadge("Guest Chat")}</div><div className="space-y-3 rounded-2xl border border-white/10 bg-white/[0.025] p-4">{guestChat.length ? guestChat.map((item) => <div key={item.id} className="flex gap-3 rounded-xl p-2"><span className="grid h-9 w-9 shrink-0 place-items-center rounded-full bg-orange-500/20 text-xs font-black">{initials(name(item))}</span><div><div className="text-xs font-black">{name(item)} <span className="ml-1 font-normal text-slate-500">{time(item.created_at)}</span></div><p className="mt-1 text-sm text-slate-200">{text(item)}</p></div></div>) : <p className="p-4 text-sm text-slate-400">No messages yet.</p>}</div>{guestMode && communication?.capabilities?.guest_chat_posting && <form onSubmit={sendHomePost} className="mt-4 flex gap-2"><input value={homeDraft} onChange={(event) => setHomeDraft(event.target.value)} placeholder="Message Guest Chat…" className="min-w-0 flex-1 rounded-xl border border-white/15 bg-[#0b1a30] px-4 py-3 text-sm"/><button disabled={sending || !homeDraft.trim()} className="rounded-xl bg-teal-500 px-5 font-black text-slate-950 disabled:opacity-40">Send</button></form>}{!communication?.capabilities?.guest_chat_posting && <p className="mt-4 rounded-xl border border-amber-400/20 bg-amber-500/10 p-3 text-sm text-amber-100">Guest posting is paused. Existing messages remain visible.</p>}</section>}
 
-            {homeSection === "people" && <section className="fm-guest-page"><div className="fm-dashboard-title"><div><h2>People</h2><p>Discover attendees through interests they chose to share.</p></div><button onClick={openEditProfile}>Edit my interests</button></div><div className="fm-guest-people-grid">{members.filter((member) => !member.is_me).map((member) => {
-              const suggestion = matches.find((item) => item.member_id === member.id);
-              const relationship = connections.find((item) => item.other_member?.id === member.id);
-              return <article key={member.id}><span className="fm-preview-avatar">{initials(name(member))}</span><div><h3>{name(member)}</h3><p>{member.bio || "Event community member"}</p></div><div className="fm-preview-tags">{(suggestion?.shared_tags || member.interest_tags || []).slice(0, 4).map((tag) => <span key={tag}>{tag}</span>)}</div>{relationship?.direction === "incoming" && relationship.status === "pending" ? <div className="fm-preview-actions"><button className="primary" onClick={async () => { try { const updated = await api.festiomeDecideConnection(relationship.id, "accepted"); setConnections((items) => items.map((item) => item.id === updated.id ? updated : item)); } catch (error) { setNotice(errorText(error)); } }}>Accept</button><button onClick={async () => { try { const updated = await api.festiomeDecideConnection(relationship.id, "declined"); setConnections((items) => items.map((item) => item.id === updated.id ? updated : item)); } catch (error) { setNotice(errorText(error)); } }}>Decline</button></div> : <div className="fm-preview-actions"><button onClick={async () => { try { const dm = await api.festiomeOpenDirectMessage(groupId, member.id); await loadGroupData(); openWorkspace(activeGroup, dm.id); } catch (error) { setNotice(errorText(error)); } }}>Message</button><button className="primary" disabled={relationship?.status === "accepted" || relationship?.status === "pending"} onClick={async () => { try { const next = await api.festiomeRequestConnection(groupId, member.id); setConnections((items) => [next, ...items.filter((item) => item.id !== next.id)]); } catch (error) { setNotice(errorText(error)); } }}>{relationship?.status === "accepted" ? "Connected" : relationship?.status === "pending" ? "Requested" : "Connect"}</button></div>}</article>
-            })}</div></section>}
+            {homeSection === "people" && (() => {
+              const q = peopleSearch.trim().toLowerCase()
+              const everyone = members.filter((member) => !member.is_me)
+              const filteredPeople = !q ? everyone : everyone.filter((member) =>
+                name(member).toLowerCase().includes(q)
+                || (member.bio || "").toLowerCase().includes(q)
+                || (member.interest_tags || []).some((tag) => tag.toLowerCase().includes(q)))
+              return <section className="fm-guest-page"><div className="fm-dashboard-title"><div><h2>People</h2><p>Discover attendees through interests they chose to share.</p></div><button onClick={openEditProfile}>Edit my interests</button></div>
+                <div className="fm-people-search"><input value={peopleSearch} onChange={(event) => setPeopleSearch(event.target.value)} placeholder="Search people by name, bio, or interest…" /></div>
+                <div className="fm-guest-people-grid">{filteredPeople.map((member) => {
+                  const suggestion = matches.find((item) => item.member_id === member.id);
+                  const relationship = connections.find((item) => item.other_member?.id === member.id);
+                  return <article key={member.id}><span className="fm-preview-avatar">{initials(name(member))}</span><div><h3>{name(member)}</h3><p>{member.bio || "Event community member"}</p></div><div className="fm-preview-tags">{(suggestion?.shared_tags || member.interest_tags || []).slice(0, 4).map((tag) => <span key={tag}>{tag}</span>)}</div>{relationship?.direction === "incoming" && relationship.status === "pending" ? <div className="fm-preview-actions"><button className="primary" onClick={async () => { try { const updated = await api.festiomeDecideConnection(relationship.id, "accepted"); setConnections((items) => items.map((item) => item.id === updated.id ? updated : item)); } catch (error) { setNotice(errorText(error)); } }}>Accept</button><button onClick={async () => { try { const updated = await api.festiomeDecideConnection(relationship.id, "declined"); setConnections((items) => items.map((item) => item.id === updated.id ? updated : item)); } catch (error) { setNotice(errorText(error)); } }}>Decline</button></div> : <div className="fm-preview-actions"><button onClick={async () => { try { const dm = await api.festiomeOpenDirectMessage(groupId, member.id); await loadGroupData(); openWorkspace(activeGroup, dm.id); } catch (error) { setNotice(errorText(error)); } }}>Message</button><button className="primary" disabled={relationship?.status === "accepted" || relationship?.status === "pending"} onClick={async () => { try { const next = await api.festiomeRequestConnection(groupId, member.id); setConnections((items) => [next, ...items.filter((item) => item.id !== next.id)]); } catch (error) { setNotice(errorText(error)); } }}>{relationship?.status === "accepted" ? "Connected" : relationship?.status === "pending" ? "Requested" : "Connect"}</button></div>}</article>
+                })}{!filteredPeople.length && <div className="fm-dashboard-empty">{q ? `No one matches "${peopleSearch}".` : "No one else has joined yet."}</div>}</div></section>
+            })()}
 
             {homeSection === "meetups" && <section className="fm-guest-page"><div className="fm-dashboard-title"><div><h2>Meetups</h2><p>Turn online introductions into useful event connections.</p></div><button onClick={() => setDialog(dialog === "meetup" ? "" : "meetup")}>Create meetup</button></div>{dialog === "meetup" && <form className="fm-guest-meetup-form" onSubmit={async (event) => { event.preventDefault(); try { const created = await api.festiomeCreateMeetup(groupId, { ...meetupDraft, title: meetupDraft.title.trim(), description: meetupDraft.description.trim(), location: meetupDraft.location.trim() }); setMeetups((items) => [...items, created].sort((a, b) => new Date(a.starts_at) - new Date(b.starts_at))); setMeetupDraft({ title: "", location: "", starts_at: "", description: "" }); setDialog(""); } catch (error) { setNotice(errorText(error)); } }}><input required value={meetupDraft.title} onChange={(event) => setMeetupDraft((value) => ({ ...value, title: event.target.value }))} placeholder="Meetup title"/><input value={meetupDraft.location} onChange={(event) => setMeetupDraft((value) => ({ ...value, location: event.target.value }))} placeholder="Location"/><input required type="datetime-local" value={meetupDraft.starts_at} onChange={(event) => setMeetupDraft((value) => ({ ...value, starts_at: event.target.value }))}/><textarea value={meetupDraft.description} onChange={(event) => setMeetupDraft((value) => ({ ...value, description: event.target.value }))} placeholder="What should people expect?"/><button>Create meetup</button></form>}<div className="fm-guest-meetup-list">{meetups.map((meetup) => <article key={meetup.id}><div className="fm-meetup-day"><strong>{new Date(meetup.starts_at).getDate()}</strong><span>{new Date(meetup.starts_at).toLocaleDateString([], { month: "short" })}</span></div><div><span>{new Date(meetup.starts_at).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}{meetup.location ? ` · ${meetup.location}` : ""}</span><h3>{meetup.title}</h3><p>{meetup.description || `Hosted by ${meetup.creator_name}`}</p><small>{meetup.attendee_count} going{meetup.capacity ? ` · ${Math.max(0, meetup.capacity - meetup.attendee_count)} spots left` : ""}</small></div><button className={meetup.my_status === "going" ? "active" : ""} onClick={async () => { try { const updated = await api.festiomeRsvpMeetup(meetup.id, meetup.my_status === "going" ? "interested" : "going"); setMeetups((items) => items.map((item) => item.id === updated.id ? updated : item)); } catch (error) { setNotice(errorText(error)); } }}>{meetup.my_status === "going" ? "Going ✓" : "RSVP"}</button></article>)}{!meetups.length && <div className="fm-dashboard-empty">No upcoming meetups yet. Create the first one.</div>}</div></section>}
 
@@ -1062,7 +1087,7 @@ export default function FestioMePage() {
 
             {homeSection === "groups" && <section><div className="mb-5 flex items-center justify-between gap-3"><div><h2 className="text-3xl font-black">Groups</h2><p className="mt-1 text-sm text-slate-400">Native FestioMe communities.</p></div>{!guestMode && <button onClick={() => { setShowHome(false); setDialog("new-group"); setFormValue(""); }} className="rounded-xl bg-teal-500 px-4 py-2 text-sm font-black text-slate-950">New group</button>}</div><div className="space-y-3">{groups.map((group) => <div key={group.id} className="flex items-center gap-4 rounded-2xl border border-white/10 bg-white/[0.035] p-4"><span className="grid h-12 w-12 place-items-center rounded-xl bg-teal-500/20 font-black text-teal-200">{initials(group.name)}</span><div className="min-w-0 flex-1"><strong className="block truncate">{group.name}</strong><span className="text-sm text-slate-400">{group.member_count || 0} members</span></div><button onClick={() => openWorkspace(group)} className="rounded-xl border border-teal-400/40 px-4 py-2 text-sm font-black text-teal-300">Open group</button></div>)}</div></section>}
 
-            {homeSection === "messages" && <section><div className="mb-5"><h2 className="text-3xl font-black">Messages</h2><p className="mt-1 text-sm text-slate-400">Private conversations stay in their original inbox.</p></div><div className="space-y-4">{guestMode && <article className="rounded-2xl border border-blue-400/20 bg-blue-500/[0.05] p-5"><div className="flex items-center justify-between gap-3"><strong>Message Host</strong><span className="text-xs text-amber-200">🔒 Only you and the organizer</span></div><div className="mt-4 space-y-3">{hostMessages.length ? hostMessages.map((item) => <div key={item.id} className="rounded-xl bg-white/[0.04] p-3"><div className="text-xs font-black">{item.sender_type === "organizer" ? "Event organizer" : "You"} · <span className="font-normal text-slate-500">{time(item.created_at)}</span></div><p className="mt-1 text-sm">{text(item)}</p></div>) : <p className="text-sm text-slate-400">No private messages yet. Use FestioHub to start a host conversation.</p>}</div>{guestMode && <button onClick={() => history.back()} className="mt-4 rounded-xl border border-blue-300/40 px-4 py-2 text-sm font-black text-blue-200">Open in FestioHub</button>}</article>}{!guestMode && <article className="rounded-2xl border border-blue-400/20 p-5"><strong>Guest Questions Inbox</strong><div className="mt-4 space-y-2">{hostInbox.length ? hostInbox.map((thread) => <div key={thread.thread_id || thread.id} className="rounded-xl bg-white/[0.04] p-3"><div className="text-sm font-black">{thread.guest_name || thread.title || "Guest question"}</div><p className="mt-1 text-sm text-slate-400">{thread.latest_message || thread.preview || "Private guest conversation"}</p></div>) : <p className="text-sm text-slate-400">No guest questions.</p>}</div><a href={`/admin?event=${encodeURIComponent(eventRef || "")}#communication`} className="mt-4 inline-flex rounded-xl border border-blue-300/40 px-4 py-2 text-sm font-black text-blue-200">Open organizer inbox</a></article>}{dmChannels.map((channel) => <button key={channel.id} onClick={() => openWorkspace(activeGroup, channel.id)} className="flex w-full items-center gap-3 rounded-2xl border border-white/10 p-4 text-left"><span className="grid h-10 w-10 place-items-center rounded-full bg-purple-500/20">✉</span><span className="flex-1"><strong className="block">{channel.name}</strong><span className="text-xs text-slate-400">FestioMe direct message</span></span><span className="text-sm font-black text-teal-300">Open</span></button>)}</div></section>}
+            {homeSection === "messages" && <section><div className="mb-5"><h2 className="text-3xl font-black">Messages</h2><p className="mt-1 text-sm text-slate-400">Private conversations stay in their original inbox.</p></div><div className="space-y-4">{guestMode && <article className="rounded-2xl border border-blue-400/20 bg-blue-500/[0.05] p-5"><div className="flex items-center justify-between gap-3"><strong>Message Host</strong><span className="text-xs text-amber-200">🔒 Only you and the organizer</span></div><div className="mt-4 space-y-3">{hostMessages.length ? hostMessages.map((item) => <div key={item.id} className="rounded-xl bg-white/[0.04] p-3"><div className="text-xs font-black">{item.sender_type === "organizer" ? "Event organizer" : "You"} · <span className="font-normal text-slate-500">{time(item.created_at)}</span></div><p className="mt-1 text-sm">{text(item)}</p></div>) : <p className="text-sm text-slate-400">No private messages yet. Use FestioHub to start a host conversation.</p>}</div>{guestMode && <button onClick={openFestioHub} className="mt-4 rounded-xl border border-blue-300/40 px-4 py-2 text-sm font-black text-blue-200">Open in FestioHub</button>}</article>}{!guestMode && <article className="rounded-2xl border border-blue-400/20 p-5"><strong>Guest Questions Inbox</strong><div className="mt-4 space-y-2">{hostInbox.length ? hostInbox.map((thread) => <div key={thread.thread_id || thread.id} className="rounded-xl bg-white/[0.04] p-3"><div className="text-sm font-black">{thread.guest_name || thread.title || "Guest question"}</div><p className="mt-1 text-sm text-slate-400">{thread.latest_message || thread.preview || "Private guest conversation"}</p></div>) : <p className="text-sm text-slate-400">No guest questions.</p>}</div><a href={`/admin?event=${encodeURIComponent(eventRef || "")}#communication`} className="mt-4 inline-flex rounded-xl border border-blue-300/40 px-4 py-2 text-sm font-black text-blue-200">Open organizer inbox</a></article>}{dmChannels.map((channel) => <button key={channel.id} onClick={() => openWorkspace(activeGroup, channel.id)} className="flex w-full items-center gap-3 rounded-2xl border border-white/10 p-4 text-left"><span className="grid h-10 w-10 place-items-center rounded-full bg-purple-500/20">✉</span><span className="flex-1"><strong className="block">{channel.name}</strong><span className="text-xs text-slate-400">FestioMe direct message</span></span><span className="text-sm font-black text-teal-300">Open</span></button>)}</div></section>}
 
             {homeSection === "profile" && (
               <section>
@@ -1094,15 +1119,15 @@ export default function FestioMePage() {
   }
 
   return (
-    <div className="mx-auto flex h-[calc(100vh-8rem)] max-w-7xl overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm dark:border-slate-700 dark:bg-slate-900">
+    <div className="mx-auto flex h-[calc(100vh-8rem)] max-w-7xl overflow-hidden rounded-2xl border border-[#1b3a52] bg-[#0a1f33] shadow-sm border-[#1b3a52] bg-[#0a1f33]">
       <aside
-        className={`${groupId ? "hidden md:flex" : "flex"} w-full shrink-0 flex-col border-r border-slate-200 dark:border-slate-700 md:w-72`}
+        className={`${groupId ? "hidden md:flex" : "flex"} w-full shrink-0 flex-col border-r border-[#1b3a52] border-[#1b3a52] md:w-72`}
       >
-        <div className="flex items-center justify-between border-b p-4 dark:border-slate-700">
+        <div className="flex items-center justify-between border-b p-4 border-[#1b3a52]">
           <div>
-            {guestMode && <a href="#" onClick={(event) => { event.preventDefault(); history.back(); }} className="mb-1 inline-flex items-center gap-1 text-xs font-bold text-teal-600 dark:text-teal-300">← FestioHub</a>}
-            <h1 className="font-bold dark:text-white">FestioMe</h1>
-            <p className="text-xs text-slate-500">Connect, share and stay updated.</p>
+            {guestMode && <a href="#" onClick={(event) => { event.preventDefault(); openFestioHub(); }} className="mb-1 inline-flex items-center gap-1 text-xs font-bold text-teal-600 text-teal-300">← FestioHub</a>}
+            <h1 className="font-bold text-white">FestioMe</h1>
+            <p className="text-xs text-[#7893a8]">Connect, share and stay updated.</p>
           </div>
           {!guestMode && <button
             onClick={() => {
@@ -1116,7 +1141,7 @@ export default function FestioMePage() {
         </div>
         <div className="flex-1 overflow-y-auto p-2">
           {!groups.length && (
-            <div className="m-2 rounded-xl border border-dashed p-5 text-center text-sm text-slate-500">
+            <div className="m-2 rounded-xl border border-dashed p-5 text-center text-sm text-[#7893a8]">
               Create your first FestioMe group.
             </div>
           )}
@@ -1124,16 +1149,16 @@ export default function FestioMePage() {
             <button
               key={group.id}
               onClick={() => setGroupId(group.id)}
-              className={`mb-1 flex w-full items-center gap-3 rounded-xl p-3 text-left ${group.id === groupId ? "bg-teal-50 dark:bg-teal-900/30" : "hover:bg-slate-50 dark:hover:bg-slate-800"}`}
+              className={`mb-1 flex w-full items-center gap-3 rounded-xl p-3 text-left ${group.id === groupId ? "bg-teal-500/10 bg-teal-500/15" : "hover:bg-[#132b45] hover:bg-[#132b45]"}`}
             >
               <span className="grid h-10 w-10 place-items-center rounded-xl bg-gradient-to-br from-teal-500 to-cyan-700 text-sm font-bold text-white">
                 {initials(group.name)}
               </span>
               <span className="min-w-0 flex-1">
-                <b className="block truncate text-sm dark:text-white">
+                <b className="block truncate text-sm text-white">
                   {group.name}
                 </b>
-                <small className="text-slate-500">
+                <small className="text-[#7893a8]">
                   {group.member_count || 0} members
                 </small>
               </span>
@@ -1153,26 +1178,26 @@ export default function FestioMePage() {
           <div className="grid flex-1 place-items-center text-center">
             <div>
               <div className="text-4xl">💬</div>
-              <h2 className="mt-3 font-bold dark:text-white">
+              <h2 className="mt-3 font-bold text-white">
                 Welcome to FestioMe
               </h2>
-              <p className="text-sm text-slate-500">
+              <p className="text-sm text-[#7893a8]">
                 Choose or create a group.
               </p>
             </div>
           </div>
         ) : (
           <>
-            <header className="flex flex-wrap items-center gap-2 border-b p-3 dark:border-slate-700">
-              <button onClick={() => setShowHome(true)} className="rounded-lg border px-3 py-2 text-xs font-bold text-teal-600 dark:border-slate-600 dark:text-teal-300">← Home</button>
+            <header className="flex flex-wrap items-center gap-2 border-b p-3 border-[#1b3a52]">
+              <button onClick={() => setShowHome(true)} className="rounded-lg border px-3 py-2 text-xs font-bold text-teal-600 border-[#1b3a52] text-teal-300">← Home</button>
               <button onClick={() => setGroupId("")} className="p-2 md:hidden">
                 ←
               </button>
               <div className="min-w-0 flex-1">
-                <h2 className="truncate font-bold dark:text-white">
+                <h2 className="truncate font-bold text-white">
                   {activeGroup.name}
                 </h2>
-                <p className="text-xs text-slate-500">
+                <p className="text-xs text-[#7893a8]">
                   {members.length} members ·{" "}
                   <span
                     className={connection === "live" ? "text-emerald-500" : ""}
@@ -1181,42 +1206,42 @@ export default function FestioMePage() {
                   </span>
                 </p>
               </div>
-              {guestMode && <a href="#" onClick={(event) => { event.preventDefault(); history.back(); }} className="rounded-lg border px-3 py-2 text-xs font-bold text-teal-700 dark:border-slate-600 dark:text-teal-300">FestioHub</a>}
+              {guestMode && <a href="#" onClick={(event) => { event.preventDefault(); openFestioHub(); }} className="rounded-lg border px-3 py-2 text-xs font-bold text-teal-700 border-[#1b3a52] text-teal-300">FestioHub</a>}
               {eventRef && (
                 <button
                   onClick={openDiscover}
-                  className="rounded-lg border px-3 py-2 text-xs dark:border-slate-600"
+                  className="rounded-lg border px-3 py-2 text-xs border-[#1b3a52]"
                 >
                   Discover
                 </button>
               )}
               <button
                 onClick={() => setPanel("search")}
-                className="rounded-lg border px-3 py-2 text-xs dark:border-slate-600"
+                className="rounded-lg border px-3 py-2 text-xs border-[#1b3a52]"
               >
                 Search
               </button>
               <button
                 onClick={() => setPanel(panel === "people" ? "" : "people")}
-                className="rounded-lg border px-3 py-2 text-xs dark:border-slate-600"
+                className="rounded-lg border px-3 py-2 text-xs border-[#1b3a52]"
               >
                 People
               </button>
               <button
                 onClick={() => (panel === "leaderboard" ? setPanel("") : openLeaderboard())}
-                className="rounded-lg border px-3 py-2 text-xs dark:border-slate-600"
+                className="rounded-lg border px-3 py-2 text-xs border-[#1b3a52]"
               >
                 🏆 Leaderboard
               </button>
               <button
                 onClick={() => (panel === "matches" ? setPanel("") : openMatches())}
-                className="rounded-lg border px-3 py-2 text-xs dark:border-slate-600"
+                className="rounded-lg border px-3 py-2 text-xs border-[#1b3a52]"
               >
                 🤝 Suggested
               </button>
               <button
                 onClick={openPreferences}
-                className="rounded-lg border px-3 py-2 text-xs dark:border-slate-600"
+                className="rounded-lg border px-3 py-2 text-xs border-[#1b3a52]"
                 aria-label="FestioMe settings"
               >
                 ⚙
@@ -1224,15 +1249,15 @@ export default function FestioMePage() {
               {canModerate && (
                 <button
                   onClick={() => setPanel(panel === "manage" ? "" : "manage")}
-                  className="rounded-lg border px-3 py-2 text-xs dark:border-slate-600"
+                  className="rounded-lg border px-3 py-2 text-xs border-[#1b3a52]"
                 >
                   Manage
                 </button>
               )}
             </header>
             <div className="relative flex min-h-0 flex-1">
-              <aside className="hidden w-48 shrink-0 border-r bg-slate-50/60 p-2 dark:border-slate-700 dark:bg-slate-950/20 sm:block">
-                <div className="flex items-center justify-between px-2 py-2 text-[11px] font-bold uppercase text-slate-500">
+              <aside className="hidden w-48 shrink-0 border-r bg-[#061120]/60 p-2 border-[#1b3a52] sm:block">
+                <div className="flex items-center justify-between px-2 py-2 text-[11px] font-bold uppercase text-[#7893a8]">
                   <span>Channels</span>
                   {canManage && (
                     <button
@@ -1252,7 +1277,7 @@ export default function FestioMePage() {
                     <button
                       key={channel.id}
                       onClick={() => setChannelId(channel.id)}
-                      className={`mb-1 flex w-full items-center gap-2 rounded-lg px-2 py-2 text-left text-sm ${channel.id === channelId ? "bg-white font-semibold text-teal-700 shadow dark:bg-slate-800 dark:text-teal-300" : "text-slate-600 dark:text-slate-300"}`}
+                      className={`mb-1 flex w-full items-center gap-2 rounded-lg px-2 py-2 text-left text-sm ${channel.id === channelId ? "bg-[#0a1f33] font-semibold text-teal-700 shadow bg-[#0d2338] text-teal-300" : "text-[#9bb0c1] text-[#c9d8e3]"}`}
                     >
                       <span>{channelIcon(channel)}</span>
                       <span className="truncate">{channel.name}</span>
@@ -1264,7 +1289,7 @@ export default function FestioMePage() {
                     </button>
                   ))}
                 {channels.some((channel) => channel.is_dm) && (
-                  <div className="mt-4 px-2 py-2 text-[11px] font-bold uppercase text-slate-500">
+                  <div className="mt-4 px-2 py-2 text-[11px] font-bold uppercase text-[#7893a8]">
                     Direct Messages
                   </div>
                 )}
@@ -1274,7 +1299,7 @@ export default function FestioMePage() {
                     <button
                       key={channel.id}
                       onClick={() => setChannelId(channel.id)}
-                      className={`mb-1 flex w-full items-center gap-2 rounded-lg px-2 py-2 text-left text-sm ${channel.id === channelId ? "bg-white font-semibold text-teal-700 shadow dark:bg-slate-800 dark:text-teal-300" : "text-slate-600 dark:text-slate-300"}`}
+                      className={`mb-1 flex w-full items-center gap-2 rounded-lg px-2 py-2 text-left text-sm ${channel.id === channelId ? "bg-[#0a1f33] font-semibold text-teal-700 shadow bg-[#0d2338] text-teal-300" : "text-[#9bb0c1] text-[#c9d8e3]"}`}
                     >
                       <span>{channelIcon(channel)}</span>
                       <span className="truncate">{channel.name}</span>
@@ -1291,7 +1316,7 @@ export default function FestioMePage() {
                   <select
                     value={channelId}
                     onChange={(e) => setChannelId(e.target.value)}
-                    className="w-full rounded-lg border bg-white p-2 text-sm dark:bg-slate-800 dark:text-white"
+                    className="w-full rounded-lg border bg-[#0a1f33] p-2 text-sm bg-[#0d2338] text-white"
                   >
                     {channels.map((channel) => (
                       <option key={channel.id} value={channel.id}>
@@ -1301,25 +1326,25 @@ export default function FestioMePage() {
                   </select>
                 </div>
                 {activeChannel && (
-                  <div className="flex items-center gap-2 border-b px-4 py-2 text-sm dark:border-slate-700 sm:px-6">
+                  <div className="flex items-center gap-2 border-b px-4 py-2 text-sm border-[#1b3a52] sm:px-6">
                     <span>{channelIcon(activeChannel)}</span>
-                    <b className="truncate dark:text-white">{activeChannel.name}</b>
+                    <b className="truncate text-white">{activeChannel.name}</b>
                     {activeChannel.is_private && !activeChannel.is_dm && (
                       <>
-                        <span className="text-xs text-slate-400">
+                        <span className="text-xs text-[#7893a8]">
                           · {activeChannel.member_count} member
                           {activeChannel.member_count === 1 ? "" : "s"} · private
                         </span>
                         <button
                           onClick={() => openChannelMembers(activeChannel)}
-                          className="ml-auto rounded-lg border px-2 py-1 text-xs text-teal-600 dark:border-slate-600 dark:text-teal-400"
+                          className="ml-auto rounded-lg border px-2 py-1 text-xs text-teal-600 border-[#1b3a52] text-teal-300"
                         >
                           Members
                         </button>
                       </>
                     )}
                     {activeChannel.is_dm && (
-                      <span className="text-xs text-slate-400">· direct message</span>
+                      <span className="text-xs text-[#7893a8]">· direct message</span>
                     )}
                   </div>
                 )}
@@ -1329,14 +1354,14 @@ export default function FestioMePage() {
                       <button
                         onClick={older}
                         disabled={loadingOlder}
-                        className="rounded-full border px-4 py-1.5 text-xs text-slate-500 dark:border-slate-600"
+                        className="rounded-full border px-4 py-1.5 text-xs text-[#7893a8] border-[#1b3a52]"
                       >
                         {loadingOlder ? "Loading…" : "Load older messages"}
                       </button>
                     </div>
                   )}
                   {threadLoading && (
-                    <p className="py-8 text-center text-sm text-slate-400">
+                    <p className="py-8 text-center text-sm text-[#7893a8]">
                       Loading messages…
                     </p>
                   )}
@@ -1344,7 +1369,7 @@ export default function FestioMePage() {
                     <div className="grid h-full place-items-center text-center">
                       <div>
                         <div className="text-3xl">👋</div>
-                        <h3 className="mt-3 font-bold dark:text-white">
+                        <h3 className="mt-3 font-bold text-white">
                           Start {channelIcon(activeChannel)}{" "}
                           {activeChannel?.name}
                         </h3>
@@ -1359,31 +1384,31 @@ export default function FestioMePage() {
                       const deleted = message.deleted || message.deleted_at;
                       return (
                         <article key={message.id} className="group flex gap-3">
-                          <span className="grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-slate-200 text-xs font-bold dark:bg-slate-700">
+                          <span className="grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-[#13294a] text-xs font-bold bg-[#13294a]">
                             {initials(name(message))}
                           </span>
                           <div className="min-w-0 flex-1">
                             <div className="flex items-baseline gap-2">
-                              <b className="text-sm dark:text-white">
+                              <b className="text-sm text-white">
                                 {name(message)}
                               </b>
-                              <time className="text-[11px] text-slate-400">
+                              <time className="text-[11px] text-[#7893a8]">
                                 {time(message.created_at)}
                                 {message.edited_at ? " · edited" : ""}
                               </time>
                               {message.scheduled_for && (
-                                <span className="rounded bg-amber-100 px-1.5 text-[10px] text-amber-700">
+                                <span className="rounded bg-amber-500/10 px-1.5 text-[10px] text-amber-700">
                                   Scheduled
                                 </span>
                               )}
                             </div>
                             {parent && (
-                              <div className="my-1 truncate border-l-2 border-teal-400 pl-2 text-xs text-slate-400">
+                              <div className="my-1 truncate border-l-2 border-teal-400 pl-2 text-xs text-[#7893a8]">
                                 {name(parent)}: {text(parent)}
                               </div>
                             )}
                             <p
-                              className={`whitespace-pre-wrap break-words text-sm ${deleted ? "italic text-slate-400" : "text-slate-700 dark:text-slate-200"}`}
+                              className={`whitespace-pre-wrap break-words text-sm ${deleted ? "italic text-[#7893a8]" : "text-[#c9d8e3] text-[#eef6f7]"}`}
                             >
                               {deleted ? "Message deleted" : text(message)}
                             </p>
@@ -1401,13 +1426,13 @@ export default function FestioMePage() {
                                       setNotice(errorText(error)),
                                     )
                                 }
-                                className="mt-2 flex max-w-sm items-center gap-2 rounded-lg border p-2 text-xs text-teal-700 dark:border-slate-700"
+                                className="mt-2 flex max-w-sm items-center gap-2 rounded-lg border p-2 text-xs text-teal-700 border-[#1b3a52]"
                               >
                                 <span>📎</span>
                                 <span className="truncate">
                                   {file.name || file.filename || "Attachment"}
                                 </span>
-                                <span className="ml-auto text-slate-400">
+                                <span className="ml-auto text-[#7893a8]">
                                   {file.size_bytes > 1
                                     ? `${Math.ceil(file.size_bytes / 1024)} KB`
                                     : ""}
@@ -1415,8 +1440,8 @@ export default function FestioMePage() {
                               </button>
                             ))}
                             {message.poll && (
-                              <div className="mt-2 max-w-md rounded-xl border p-3 dark:border-slate-700">
-                                <b className="text-sm dark:text-white">
+                              <div className="mt-2 max-w-md rounded-xl border p-3 border-[#1b3a52]">
+                                <b className="text-sm text-white">
                                   {message.poll.question}
                                 </b>
                                 {message.poll.options?.map((option) => (
@@ -1431,7 +1456,7 @@ export default function FestioMePage() {
                                         .then(() => loadMessages(true))
                                         .catch((e) => setNotice(errorText(e)))
                                     }
-                                    className="mt-2 flex w-full justify-between rounded-lg bg-slate-100 px-3 py-2 text-left text-xs dark:bg-slate-800"
+                                    className="mt-2 flex w-full justify-between rounded-lg bg-[#0d2338] px-3 py-2 text-left text-xs bg-[#0d2338]"
                                   >
                                     <span>{option.label || option.text}</span>
                                     <span>{option.votes || 0}</span>
@@ -1440,7 +1465,7 @@ export default function FestioMePage() {
                               </div>
                             )}
                             {!deleted && (
-                              <div className="mt-1 flex gap-3 text-xs text-slate-400 opacity-20 group-hover:opacity-100">
+                              <div className="mt-1 flex gap-3 text-xs text-[#7893a8] opacity-20 group-hover:opacity-100">
                                 <button onClick={() => setReply(message)}>
                                   Reply
                                 </button>
@@ -1449,19 +1474,19 @@ export default function FestioMePage() {
                                     <button
                                       key={r.emoji}
                                       onClick={() => toggleReaction(message, r.emoji, r.reacted_by_me)}
-                                      className={`rounded-full border px-1.5 ${r.reacted_by_me ? "border-teal-400 bg-teal-500/10 text-teal-600 dark:text-teal-300" : "border-slate-300 dark:border-slate-600"}`}
+                                      className={`rounded-full border px-1.5 ${r.reacted_by_me ? "border-teal-400 bg-teal-500/10 text-teal-600 text-teal-300" : "border-[#1b3a52] border-[#1b3a52]"}`}
                                     >
                                       {r.emoji} {r.count}
                                     </button>
                                   ))}
                                   <button
                                     onClick={() => setReactionPickerFor(reactionPickerFor === message.id ? null : message.id)}
-                                    className="rounded-full border border-dashed border-slate-300 px-1.5 dark:border-slate-600"
+                                    className="rounded-full border border-dashed border-[#1b3a52] px-1.5 border-[#1b3a52]"
                                   >
                                     +
                                   </button>
                                   {reactionPickerFor === message.id && (
-                                    <span className="absolute bottom-full left-0 z-10 mb-1 flex gap-1 rounded-full border bg-white p-1 text-sm shadow-lg dark:border-slate-700 dark:bg-slate-800">
+                                    <span className="absolute bottom-full left-0 z-10 mb-1 flex gap-1 rounded-full border bg-[#0a1f33] p-1 text-sm shadow-lg border-[#1b3a52] bg-[#0d2338]">
                                       {REACTION_EMOJIS.map((emoji) => (
                                         <button
                                           key={emoji}
@@ -1470,7 +1495,7 @@ export default function FestioMePage() {
                                             toggleReaction(message, emoji, existing?.reacted_by_me);
                                             setReactionPickerFor(null);
                                           }}
-                                          className="rounded-full px-1 hover:bg-slate-100 dark:hover:bg-slate-700"
+                                          className="rounded-full px-1 hover:bg-[#0d2338] hover:bg-[#1a3555]"
                                         >
                                           {emoji}
                                         </button>
@@ -1504,7 +1529,7 @@ export default function FestioMePage() {
                               </div>
                             )}
                             {message.author_member_id === me?.id && message.seen_count > 0 && (
-                              <p className="mt-0.5 flex items-center gap-1 text-[10px] text-slate-400">
+                              <p className="mt-0.5 flex items-center gap-1 text-[10px] text-[#7893a8]">
                                 <svg viewBox="0 0 20 20" width="11" height="11" fill="none" stroke="currentColor" strokeWidth="2"><path d="M3 10l4 4 10-10"/></svg>
                                 Seen by {message.seen_count}
                               </p>
@@ -1517,11 +1542,11 @@ export default function FestioMePage() {
                   </div>
                 </div>
                 {channelId && rulesBlocked && (
-                  <div className="border-t bg-amber-50 p-4 dark:border-slate-700 dark:bg-amber-950/30">
-                    <b className="text-sm text-amber-800 dark:text-amber-200">
+                  <div className="border-t bg-amber-500/10 p-4 border-[#1b3a52] bg-amber-500/10">
+                    <b className="text-sm text-amber-800 text-amber-200">
                       Please review the group rules
                     </b>
-                    <p className="mt-1 max-h-32 overflow-y-auto whitespace-pre-wrap text-xs text-slate-600 dark:text-slate-300">
+                    <p className="mt-1 max-h-32 overflow-y-auto whitespace-pre-wrap text-xs text-[#9bb0c1] text-[#c9d8e3]">
                       {activeGroup.rules}
                     </p>
                     <button
@@ -1535,16 +1560,16 @@ export default function FestioMePage() {
                 {channelId && !rulesBlocked && (
                   <form
                     onSubmit={send}
-                    className="relative border-t p-3 dark:border-slate-700"
+                    className="relative border-t p-3 border-[#1b3a52]"
                   >
                     {mentionChoices.length > 0 && (
-                      <div className="absolute bottom-full left-6 mb-1 w-64 rounded-xl border bg-white p-1 shadow-xl dark:border-slate-700 dark:bg-slate-800">
+                      <div className="absolute bottom-full left-6 mb-1 w-64 rounded-xl border bg-[#0a1f33] p-1 shadow-xl border-[#1b3a52] bg-[#0d2338]">
                         {mentionChoices.map((member) => (
                           <button
                             type="button"
                             key={member.id}
                             onClick={() => insertMention(member)}
-                            className="block w-full rounded-lg px-3 py-2 text-left text-sm hover:bg-slate-100 dark:hover:bg-slate-700"
+                            className="block w-full rounded-lg px-3 py-2 text-left text-sm hover:bg-[#0d2338] hover:bg-[#1a3555]"
                           >
                             @{name(member).replace(/\s+/g, "")}
                           </button>
@@ -1552,7 +1577,7 @@ export default function FestioMePage() {
                       </div>
                     )}
                     {(reply || editing) && (
-                      <div className="mb-2 flex justify-between rounded-lg bg-slate-50 px-3 py-2 text-xs text-slate-500 dark:bg-slate-800">
+                      <div className="mb-2 flex justify-between rounded-lg bg-[#0d2338] px-3 py-2 text-xs text-[#7893a8] bg-[#0d2338]">
                         <span>
                           {editing
                             ? "Editing message"
@@ -1575,7 +1600,7 @@ export default function FestioMePage() {
                         {attachments.map((file, index) => (
                           <span
                             key={file.id || index}
-                            className="rounded-lg bg-slate-100 px-2 py-1 text-xs dark:bg-slate-800"
+                            className="rounded-lg bg-[#0d2338] px-2 py-1 text-xs bg-[#0d2338]"
                           >
                             📎 {file.name || file.filename}{" "}
                             <button
@@ -1593,12 +1618,12 @@ export default function FestioMePage() {
                       </div>
                     )}
                     {showComposerTools && (
-                      <div className="mb-2 flex flex-wrap items-center gap-2 rounded-xl bg-slate-50 p-2 dark:bg-slate-800">
+                      <div className="mb-2 flex flex-wrap items-center gap-2 rounded-xl bg-[#0d2338] p-2 bg-[#0d2338]">
                         <button
                           type="button"
                           onClick={() => fileRef.current?.click()}
                           disabled={uploading}
-                          className="rounded-lg border px-3 py-1.5 text-xs dark:border-slate-600"
+                          className="rounded-lg border px-3 py-1.5 text-xs border-[#1b3a52]"
                         >
                           {uploading ? "Uploading…" : "📎 Attach files"}
                         </button>
@@ -1613,7 +1638,7 @@ export default function FestioMePage() {
                         <button
                           type="button"
                           onClick={() => setDialog("poll")}
-                          className="rounded-lg border px-3 py-1.5 text-xs dark:border-slate-600"
+                          className="rounded-lg border px-3 py-1.5 text-xs border-[#1b3a52]"
                         >
                           📊 Poll
                         </button>
@@ -1624,14 +1649,14 @@ export default function FestioMePage() {
                               type="datetime-local"
                               value={scheduleAt}
                               onChange={(e) => setScheduleAt(e.target.value)}
-                              className="rounded border bg-white p-1 dark:bg-slate-900"
+                              className="rounded border bg-[#0a1f33] p-1 bg-[#0a1f33]"
                             />
                           </label>
                         )}
                       </div>
                     )}
                     {typingMember && (
-                      <p className="mb-1 px-1 text-xs italic text-slate-400">
+                      <p className="mb-1 px-1 text-xs italic text-[#7893a8]">
                         {typingMember.display_name || "Someone"} is typing…
                       </p>
                     )}
@@ -1639,7 +1664,7 @@ export default function FestioMePage() {
                       <button
                         type="button"
                         onClick={() => setShowComposerTools((v) => !v)}
-                        className="rounded-full border px-3 dark:border-slate-600"
+                        className="rounded-full border px-3 border-[#1b3a52]"
                       >
                         +
                       </button>
@@ -1650,7 +1675,7 @@ export default function FestioMePage() {
                           pingTyping();
                         }}
                         placeholder={`Message ${channelIcon(activeChannel)} ${activeChannel?.name || ""} — use @ to mention`}
-                        className="min-w-0 flex-1 rounded-full border bg-white px-4 py-2.5 text-sm dark:border-slate-600 dark:bg-slate-800 dark:text-white"
+                        className="min-w-0 flex-1 rounded-full border bg-[#0a1f33] px-4 py-2.5 text-sm border-[#1b3a52] bg-[#0d2338] text-white"
                       />
                       <button
                         disabled={
@@ -1671,9 +1696,9 @@ export default function FestioMePage() {
                 )}
               </main>
               {panel && (
-                <aside className="absolute inset-y-0 right-0 z-20 w-80 overflow-y-auto border-l bg-white p-4 shadow-xl dark:border-slate-700 dark:bg-slate-900 md:static">
+                <aside className="absolute inset-y-0 right-0 z-20 w-80 overflow-y-auto border-l bg-[#0a1f33] p-4 shadow-xl border-[#1b3a52] bg-[#0a1f33] md:static">
                   <div className="mb-4 flex justify-between">
-                    <h3 className="font-bold capitalize dark:text-white">
+                    <h3 className="font-bold capitalize text-white">
                       {panel}
                     </h3>
                     <button onClick={() => setPanel("")}>×</button>
@@ -1687,7 +1712,7 @@ export default function FestioMePage() {
                           value={inviteEmail}
                           onChange={(e) => setInviteEmail(e.target.value)}
                           placeholder="Email address"
-                          className="min-w-0 flex-1 rounded-lg border px-3 py-2 text-xs dark:bg-slate-800"
+                          className="min-w-0 flex-1 rounded-lg border px-3 py-2 text-xs bg-[#0d2338]"
                         />
                         <button className="rounded-lg bg-teal-600 px-3 text-xs font-semibold text-white">
                           Invite
@@ -1695,7 +1720,7 @@ export default function FestioMePage() {
                       </form>
                       {members.some((member) => STAFF_ROLES.includes(member.role)) && (
                         <div className="mb-4">
-                          <p className="mb-1 text-[11px] font-bold uppercase text-slate-500">
+                          <p className="mb-1 text-[11px] font-bold uppercase text-[#7893a8]">
                             Event staff
                           </p>
                           <div className="flex flex-wrap gap-1.5">
@@ -1704,7 +1729,7 @@ export default function FestioMePage() {
                               .map((member) => (
                                 <span
                                   key={member.id}
-                                  className="rounded-full bg-teal-50 px-2 py-0.5 text-[11px] font-medium text-teal-700 dark:bg-teal-900/40 dark:text-teal-300"
+                                  className="rounded-full bg-teal-500/10 px-2 py-0.5 text-[11px] font-medium text-teal-700 bg-teal-500/15 text-teal-300"
                                   title={member.role}
                                 >
                                   {name(member)}
@@ -1719,11 +1744,11 @@ export default function FestioMePage() {
                             key={member.id}
                             className="flex items-center gap-2"
                           >
-                            <span className="grid h-8 w-8 place-items-center rounded-lg bg-slate-200 text-[11px] font-bold dark:bg-slate-700">
+                            <span className="grid h-8 w-8 place-items-center rounded-lg bg-[#13294a] text-[11px] font-bold bg-[#13294a]">
                               {initials(name(member))}
                             </span>
                             <span className="min-w-0 flex-1">
-                              <b className="block truncate text-sm dark:text-white">
+                              <b className="block truncate text-sm text-white">
                                 {name(member)}
                               </b>
                               {canManage && !member.is_me ? (
@@ -1732,14 +1757,14 @@ export default function FestioMePage() {
                                   onChange={(e) =>
                                     memberAction(member, "role", e.target.value)
                                   }
-                                  className="bg-transparent text-[11px] capitalize text-slate-400"
+                                  className="bg-transparent text-[11px] capitalize text-[#7893a8]"
                                 >
                                   <option>member</option>
                                   <option>moderator</option>
                                   <option>admin</option>
                                 </select>
                               ) : (
-                                <small className="capitalize text-slate-400">
+                                <small className="capitalize text-[#7893a8]">
                                   {member.role}
                                 </small>
                               )}
@@ -1748,7 +1773,7 @@ export default function FestioMePage() {
                               <button
                                 onClick={() => startDirectMessage(member)}
                                 title="Send a direct message"
-                                className="text-xs text-teal-600 dark:text-teal-400"
+                                className="text-xs text-teal-600 text-teal-300"
                               >
                                 Message
                               </button>
@@ -1778,7 +1803,7 @@ export default function FestioMePage() {
                   {panel === "leaderboard" && (
                     <div className="space-y-2">
                       {!leaderboard.items.length && (
-                        <p className="py-8 text-center text-sm text-slate-400">
+                        <p className="py-8 text-center text-sm text-[#7893a8]">
                           No points yet — post, react, vote, or check in to start climbing.
                         </p>
                       )}
@@ -1787,11 +1812,11 @@ export default function FestioMePage() {
                           key={row.member_id}
                           className={`flex items-center gap-3 rounded-lg px-2 py-2 ${row.member_id === leaderboard.me?.member_id ? "bg-teal-500/10" : ""}`}
                         >
-                          <span className="w-6 text-center text-sm font-black text-slate-400">{row.rank}</span>
-                          <span className="grid h-8 w-8 place-items-center rounded-lg bg-slate-200 text-[11px] font-bold dark:bg-slate-700">
+                          <span className="w-6 text-center text-sm font-black text-[#7893a8]">{row.rank}</span>
+                          <span className="grid h-8 w-8 place-items-center rounded-lg bg-[#13294a] text-[11px] font-bold bg-[#13294a]">
                             {initials(row.display_name)}
                           </span>
-                          <span className="min-w-0 flex-1 truncate text-sm font-semibold dark:text-white">{row.display_name}</span>
+                          <span className="min-w-0 flex-1 truncate text-sm font-semibold text-white">{row.display_name}</span>
                           <span className="text-sm font-black text-teal-500">{row.points}</span>
                         </div>
                       ))}
@@ -1800,27 +1825,27 @@ export default function FestioMePage() {
                   {panel === "matches" && (
                     <div className="space-y-3">
                       {!matches.length && (
-                        <p className="py-8 text-center text-sm text-slate-400">
+                        <p className="py-8 text-center text-sm text-[#7893a8]">
                           {me?.interest_tags?.length
                             ? "No shared interests found yet in this group."
                             : "Add interests to your profile to see suggested connections."}
                         </p>
                       )}
                       {matches.map((match) => (
-                        <div key={match.member_id} className="rounded-xl border p-3 dark:border-slate-700">
+                        <div key={match.member_id} className="rounded-xl border p-3 border-[#1b3a52]">
                           <div className="flex items-center gap-2">
-                            <span className="grid h-8 w-8 place-items-center rounded-lg bg-slate-200 text-[11px] font-bold dark:bg-slate-700">
+                            <span className="grid h-8 w-8 place-items-center rounded-lg bg-[#13294a] text-[11px] font-bold bg-[#13294a]">
                               {initials(match.display_name)}
                             </span>
-                            <b className="flex-1 truncate text-sm dark:text-white">{match.display_name}</b>
+                            <b className="flex-1 truncate text-sm text-white">{match.display_name}</b>
                             <button
                               onClick={() => startDirectMessage(match)}
-                              className="text-xs font-bold text-teal-600 dark:text-teal-400"
+                              className="text-xs font-bold text-teal-600 text-teal-300"
                             >
                               Message
                             </button>
                           </div>
-                          {match.bio && <p className="mt-2 text-xs text-slate-400">{match.bio}</p>}
+                          {match.bio && <p className="mt-2 text-xs text-[#7893a8]">{match.bio}</p>}
                           <div className="mt-2 flex flex-wrap gap-1">
                             {match.shared_tags.map((tag) => (
                               <span key={tag} className="rounded-full bg-teal-500/15 px-2 py-0.5 text-[10px] font-bold text-teal-500">{tag}</span>
@@ -1837,24 +1862,24 @@ export default function FestioMePage() {
                           value={search}
                           onChange={(e) => setSearch(e.target.value)}
                           placeholder="Search FestioMe"
-                          className="min-w-0 flex-1 rounded-lg border px-3 py-2 text-sm dark:bg-slate-800"
+                          className="min-w-0 flex-1 rounded-lg border px-3 py-2 text-sm bg-[#0d2338]"
                         />
                         <button className="rounded-lg bg-teal-600 px-3 text-white">
                           ⌕
                         </button>
                       </form>
-                      <div className="mt-2 flex gap-1 rounded-lg border p-0.5 text-[11px] font-bold dark:border-slate-700">
+                      <div className="mt-2 flex gap-1 rounded-lg border p-0.5 text-[11px] font-bold border-[#1b3a52]">
                         <button
                           type="button"
                           onClick={() => setSearchAllGroups(false)}
-                          className={`flex-1 rounded-md py-1 ${!searchAllGroups ? "bg-teal-600 text-white" : "text-slate-400"}`}
+                          className={`flex-1 rounded-md py-1 ${!searchAllGroups ? "bg-teal-600 text-white" : "text-[#7893a8]"}`}
                         >
                           This group
                         </button>
                         <button
                           type="button"
                           onClick={() => setSearchAllGroups(true)}
-                          className={`flex-1 rounded-md py-1 ${searchAllGroups ? "bg-teal-600 text-white" : "text-slate-400"}`}
+                          className={`flex-1 rounded-md py-1 ${searchAllGroups ? "bg-teal-600 text-white" : "text-[#7893a8]"}`}
                         >
                           All my groups
                         </button>
@@ -1868,12 +1893,12 @@ export default function FestioMePage() {
                                 setChannelId(result.channel_id);
                               setPanel("");
                             }}
-                            className="block w-full rounded-lg border p-3 text-left dark:border-slate-700"
+                            className="block w-full rounded-lg border p-3 text-left border-[#1b3a52]"
                           >
-                            <b className="text-xs dark:text-white">
+                            <b className="text-xs text-white">
                               {name(result)}
                             </b>
-                            <p className="line-clamp-2 text-xs text-slate-500">
+                            <p className="line-clamp-2 text-xs text-[#7893a8]">
                               {text(result)}
                             </p>
                           </button>
@@ -1889,7 +1914,7 @@ export default function FestioMePage() {
                             setDialog("rename");
                             setFormValue(activeGroup.name);
                           }}
-                          className="w-full rounded-lg border p-3 text-left text-sm dark:border-slate-700"
+                          className="w-full rounded-lg border p-3 text-left text-sm border-[#1b3a52]"
                         >
                           Rename FestioMe group
                         </button>
@@ -1897,7 +1922,7 @@ export default function FestioMePage() {
                       {canModerate && !activeGroup.is_primary && (
                         <button
                           onClick={openJoinRequests}
-                          className="flex w-full items-center justify-between rounded-lg border p-3 text-left text-sm dark:border-slate-700"
+                          className="flex w-full items-center justify-between rounded-lg border p-3 text-left text-sm border-[#1b3a52]"
                         >
                           <span>Join requests</span>
                           {Number(activeGroup.pending_request_count || 0) > 0 && (
@@ -1917,7 +1942,7 @@ export default function FestioMePage() {
                             });
                             setDialog("settings");
                           }}
-                          className="w-full rounded-lg border p-3 text-left text-sm dark:border-slate-700"
+                          className="w-full rounded-lg border p-3 text-left text-sm border-[#1b3a52]"
                         >
                           Access &amp; rules
                         </button>
@@ -1928,27 +1953,27 @@ export default function FestioMePage() {
                             setSubForm({ name: "", join_policy: "request", visibility: "listed", rules: "" });
                             setDialog("new-subgroup");
                           }}
-                          className="w-full rounded-lg border p-3 text-left text-sm dark:border-slate-700"
+                          className="w-full rounded-lg border p-3 text-left text-sm border-[#1b3a52]"
                         >
                           New group for this event
                         </button>
                       )}
                       <button
                         onClick={openReports}
-                        className="w-full rounded-lg border p-3 text-left text-sm dark:border-slate-700"
+                        className="w-full rounded-lg border p-3 text-left text-sm border-[#1b3a52]"
                       >
                         Moderation reports
                       </button>
                       <button
                         onClick={() => setDialog("leave")}
-                        className="w-full rounded-lg border p-3 text-left text-sm text-amber-600 dark:border-slate-700"
+                        className="w-full rounded-lg border p-3 text-left text-sm text-amber-600 border-[#1b3a52]"
                       >
                         Leave group
                       </button>
                       {isOwner && (
                         <button
                           onClick={() => setDialog("archive")}
-                          className="w-full rounded-lg border p-3 text-left text-sm text-rose-600 dark:border-slate-700"
+                          className="w-full rounded-lg border p-3 text-left text-sm text-rose-600 border-[#1b3a52]"
                         >
                           Archive group
                         </button>
@@ -1957,32 +1982,32 @@ export default function FestioMePage() {
                   )}
                   {panel === "discover" && (
                     <div className="space-y-3">
-                      <p className="text-xs text-slate-500">
+                      <p className="text-xs text-[#7893a8]">
                         Groups for this event you can join.
                       </p>
                       {!discover.length && (
-                        <p className="text-sm text-slate-500">
+                        <p className="text-sm text-[#7893a8]">
                           No other groups to join right now.
                         </p>
                       )}
                       {discover.map((group) => (
                         <div
                           key={group.id}
-                          className="rounded-xl border p-3 dark:border-slate-700"
+                          className="rounded-xl border p-3 border-[#1b3a52]"
                         >
                           <div className="flex items-center justify-between gap-2">
-                            <b className="text-sm dark:text-white">{group.name}</b>
-                            <span className="rounded bg-slate-100 px-1.5 py-0.5 text-[10px] capitalize text-slate-500 dark:bg-slate-800">
+                            <b className="text-sm text-white">{group.name}</b>
+                            <span className="rounded bg-[#0d2338] px-1.5 py-0.5 text-[10px] capitalize text-[#7893a8] bg-[#0d2338]">
                               {group.is_primary ? "everyone" : group.join_policy}
                             </span>
                           </div>
                           {group.description && (
-                            <p className="mt-1 line-clamp-2 text-xs text-slate-500">
+                            <p className="mt-1 line-clamp-2 text-xs text-[#7893a8]">
                               {group.description}
                             </p>
                           )}
                           <div className="mt-2 flex items-center justify-between">
-                            <small className="text-slate-400">
+                            <small className="text-[#7893a8]">
                               {group.member_count || 0} members
                             </small>
                             {group.is_member ? (
@@ -1991,12 +2016,12 @@ export default function FestioMePage() {
                                   setPanel("");
                                   setGroupId(group.id);
                                 }}
-                                className="rounded-lg border px-3 py-1.5 text-xs dark:border-slate-600"
+                                className="rounded-lg border px-3 py-1.5 text-xs border-[#1b3a52]"
                               >
                                 Open
                               </button>
                             ) : group.is_primary || group.join_policy === "closed" ? (
-                              <span className="text-xs text-slate-400">Invite only</span>
+                              <span className="text-xs text-[#7893a8]">Invite only</span>
                             ) : group.has_pending_request ? (
                               <span className="text-xs text-amber-600">Requested</span>
                             ) : (
@@ -2015,20 +2040,20 @@ export default function FestioMePage() {
                   {panel === "requests" && (
                     <div className="space-y-3">
                       {!joinReqs.length && (
-                        <p className="text-sm text-slate-500">
+                        <p className="text-sm text-[#7893a8]">
                           No pending join requests.
                         </p>
                       )}
                       {joinReqs.map((request) => (
                         <div
                           key={request.id}
-                          className="rounded-xl border p-3 dark:border-slate-700"
+                          className="rounded-xl border p-3 border-[#1b3a52]"
                         >
-                          <b className="text-sm dark:text-white">
+                          <b className="text-sm text-white">
                             {request.display_name}
                           </b>
                           {request.message && (
-                            <p className="mt-1 text-xs text-slate-500">
+                            <p className="mt-1 text-xs text-[#7893a8]">
                               “{request.message}”
                             </p>
                           )}
@@ -2041,7 +2066,7 @@ export default function FestioMePage() {
                             </button>
                             <button
                               onClick={() => decideRequest(request, false)}
-                              className="rounded-lg border px-3 py-1.5 text-xs text-rose-500 dark:border-slate-600"
+                              className="rounded-lg border px-3 py-1.5 text-xs text-rose-500 border-[#1b3a52]"
                             >
                               Deny
                             </button>
@@ -2053,19 +2078,19 @@ export default function FestioMePage() {
                   {panel === "reports" && (
                     <div className="space-y-3">
                       {!reports.length && (
-                        <p className="text-sm text-slate-500">
+                        <p className="text-sm text-[#7893a8]">
                           No moderation reports.
                         </p>
                       )}
                       {reports.map((report) => (
                         <div
                           key={report.id}
-                          className="rounded-xl border p-3 dark:border-slate-700"
+                          className="rounded-xl border p-3 border-[#1b3a52]"
                         >
-                          <b className="text-sm dark:text-white">
+                          <b className="text-sm text-white">
                             {report.reason}
                           </b>
-                          <p className="mt-1 text-xs text-slate-500">
+                          <p className="mt-1 text-xs text-[#7893a8]">
                             {report.details || `Message ${report.message_id}`}
                           </p>
                           <div className="mt-2 flex gap-2">
@@ -2078,7 +2103,7 @@ export default function FestioMePage() {
                                   onClick={() =>
                                     resolveReport(report, "dismissed")
                                   }
-                                  className="text-xs text-slate-500"
+                                  className="text-xs text-[#7893a8]"
                                 >
                                   Dismiss
                                 </button>
@@ -2112,7 +2137,7 @@ export default function FestioMePage() {
               value={formValue}
               onChange={(e) => setFormValue(e.target.value)}
               placeholder="Group name"
-              className="w-full rounded-lg border p-3 dark:bg-slate-800 dark:text-white"
+              className="w-full rounded-lg border p-3 bg-[#0d2338] text-white"
             />
             <button className="mt-4 w-full rounded-lg bg-teal-600 p-2 font-semibold text-white">
               Create
@@ -2129,20 +2154,20 @@ export default function FestioMePage() {
               value={formValue}
               onChange={(e) => setFormValue(e.target.value)}
               placeholder="Channel name"
-              className="w-full rounded-lg border p-3 dark:bg-slate-800 dark:text-white"
+              className="w-full rounded-lg border p-3 bg-[#0d2338] text-white"
             />
             {!channelPrivate && (
               <select
                 value={channelKind}
                 onChange={(e) => setChannelKind(e.target.value)}
-                className="w-full rounded-lg border p-3 dark:bg-slate-800 dark:text-white"
+                className="w-full rounded-lg border p-3 bg-[#0d2338] text-white"
               >
                 <option value="discussion">Discussion — everyone can talk</option>
                 <option value="announcement">Announcement — admins post</option>
                 <option value="staff">Staff — visible to staff only</option>
               </select>
             )}
-            <label className="flex items-center gap-2 text-sm text-slate-600 dark:text-slate-300">
+            <label className="flex items-center gap-2 text-sm text-[#9bb0c1] text-[#c9d8e3]">
               <input
                 type="checkbox"
                 checked={channelPrivate}
@@ -2151,8 +2176,8 @@ export default function FestioMePage() {
               Private — only the people you choose can see it
             </label>
             {channelPrivate && (
-              <div className="max-h-48 space-y-1 overflow-y-auto rounded-lg border p-2 dark:border-slate-700">
-                <p className="px-1 pb-1 text-[11px] text-slate-400">
+              <div className="max-h-48 space-y-1 overflow-y-auto rounded-lg border p-2 border-[#1b3a52]">
+                <p className="px-1 pb-1 text-[11px] text-[#7893a8]">
                   Select members (you are added automatically)
                 </p>
                 {members
@@ -2160,7 +2185,7 @@ export default function FestioMePage() {
                   .map((member) => (
                     <label
                       key={member.id}
-                      className="flex items-center gap-2 rounded px-1 py-1 text-sm text-slate-600 hover:bg-slate-50 dark:text-slate-300 dark:hover:bg-slate-800"
+                      className="flex items-center gap-2 rounded px-1 py-1 text-sm text-[#9bb0c1] hover:bg-[#132b45] text-[#c9d8e3] hover:bg-[#132b45]"
                     >
                       <input
                         type="checkbox"
@@ -2190,10 +2215,10 @@ export default function FestioMePage() {
             <div className="space-y-2">
               {channelMembers.map((member) => (
                 <div key={member.id} className="flex items-center gap-2 text-sm">
-                  <span className="grid h-7 w-7 place-items-center rounded-lg bg-slate-200 text-[10px] font-bold dark:bg-slate-700">
+                  <span className="grid h-7 w-7 place-items-center rounded-lg bg-[#13294a] text-[10px] font-bold bg-[#13294a]">
                     {initials(name(member))}
                   </span>
-                  <span className="min-w-0 flex-1 truncate dark:text-white">
+                  <span className="min-w-0 flex-1 truncate text-white">
                     {name(member)}
                     {member.is_me && " (you)"}
                   </span>
@@ -2209,10 +2234,10 @@ export default function FestioMePage() {
               ))}
             </div>
             <div>
-              <p className="mb-1 text-[11px] font-bold uppercase text-slate-500">
+              <p className="mb-1 text-[11px] font-bold uppercase text-[#7893a8]">
                 Add people
               </p>
-              <div className="max-h-40 space-y-1 overflow-y-auto rounded-lg border p-2 dark:border-slate-700">
+              <div className="max-h-40 space-y-1 overflow-y-auto rounded-lg border p-2 border-[#1b3a52]">
                 {members
                   .filter(
                     (member) =>
@@ -2221,7 +2246,7 @@ export default function FestioMePage() {
                   .map((member) => (
                     <label
                       key={member.id}
-                      className="flex items-center gap-2 rounded px-1 py-1 text-sm text-slate-600 dark:text-slate-300"
+                      className="flex items-center gap-2 rounded px-1 py-1 text-sm text-[#9bb0c1] text-[#c9d8e3]"
                     >
                       <input
                         type="checkbox"
@@ -2240,7 +2265,7 @@ export default function FestioMePage() {
                 {members.filter(
                   (member) => !channelMembers.some((cm) => cm.id === member.id),
                 ).length === 0 && (
-                  <p className="px-1 py-1 text-xs text-slate-400">
+                  <p className="px-1 py-1 text-xs text-[#7893a8]">
                     Everyone in this group is already in the channel.
                   </p>
                 )}
@@ -2265,26 +2290,26 @@ export default function FestioMePage() {
               value={subForm.name}
               onChange={(e) => setSubForm({ ...subForm, name: e.target.value })}
               placeholder="Group name (e.g. VIP, Table 5, Bus A)"
-              className="w-full rounded-lg border p-3 dark:bg-slate-800 dark:text-white"
+              className="w-full rounded-lg border p-3 bg-[#0d2338] text-white"
             />
-            <label className="block text-xs font-semibold text-slate-500">
+            <label className="block text-xs font-semibold text-[#7893a8]">
               Who can join
               <select
                 value={subForm.join_policy}
                 onChange={(e) => setSubForm({ ...subForm, join_policy: e.target.value })}
-                className="mt-1 w-full rounded-lg border p-2 dark:bg-slate-800 dark:text-white"
+                className="mt-1 w-full rounded-lg border p-2 bg-[#0d2338] text-white"
               >
                 <option value="open">Open — any guest can join instantly</option>
                 <option value="request">Request — you approve each guest</option>
                 <option value="closed">Closed — invite only</option>
               </select>
             </label>
-            <label className="block text-xs font-semibold text-slate-500">
+            <label className="block text-xs font-semibold text-[#7893a8]">
               Visibility
               <select
                 value={subForm.visibility}
                 onChange={(e) => setSubForm({ ...subForm, visibility: e.target.value })}
-                className="mt-1 w-full rounded-lg border p-2 dark:bg-slate-800 dark:text-white"
+                className="mt-1 w-full rounded-lg border p-2 bg-[#0d2338] text-white"
               >
                 <option value="listed">Listed in the event group directory</option>
                 <option value="unlisted">Unlisted — reachable only by invite</option>
@@ -2295,7 +2320,7 @@ export default function FestioMePage() {
               onChange={(e) => setSubForm({ ...subForm, rules: e.target.value })}
               placeholder="Optional group rules members must accept before posting"
               rows={3}
-              className="w-full rounded-lg border p-3 text-sm dark:bg-slate-800 dark:text-white"
+              className="w-full rounded-lg border p-3 text-sm bg-[#0d2338] text-white"
             />
             <button className="w-full rounded-lg bg-teal-600 p-2 font-semibold text-white">
               Create group
@@ -2306,37 +2331,37 @@ export default function FestioMePage() {
       {dialog === "settings" && (
         <Dialog title="Access & rules" onClose={() => setDialog("")}>
           <form onSubmit={saveGroupSettings} className="space-y-3">
-            <label className="block text-xs font-semibold text-slate-500">
+            <label className="block text-xs font-semibold text-[#7893a8]">
               Who can join
               <select
                 value={settingsForm.join_policy}
                 onChange={(e) => setSettingsForm({ ...settingsForm, join_policy: e.target.value })}
-                className="mt-1 w-full rounded-lg border p-2 dark:bg-slate-800 dark:text-white"
+                className="mt-1 w-full rounded-lg border p-2 bg-[#0d2338] text-white"
               >
                 <option value="open">Open — any guest can join instantly</option>
                 <option value="request">Request — you approve each guest</option>
                 <option value="closed">Closed — invite only</option>
               </select>
             </label>
-            <label className="block text-xs font-semibold text-slate-500">
+            <label className="block text-xs font-semibold text-[#7893a8]">
               Visibility
               <select
                 value={settingsForm.visibility}
                 onChange={(e) => setSettingsForm({ ...settingsForm, visibility: e.target.value })}
-                className="mt-1 w-full rounded-lg border p-2 dark:bg-slate-800 dark:text-white"
+                className="mt-1 w-full rounded-lg border p-2 bg-[#0d2338] text-white"
               >
                 <option value="listed">Listed in the event group directory</option>
                 <option value="unlisted">Unlisted — reachable only by invite</option>
               </select>
             </label>
-            <label className="block text-xs font-semibold text-slate-500">
+            <label className="block text-xs font-semibold text-[#7893a8]">
               Group rules
               <textarea
                 value={settingsForm.rules}
                 onChange={(e) => setSettingsForm({ ...settingsForm, rules: e.target.value })}
                 placeholder="Members must accept these before posting. Editing re-prompts everyone."
                 rows={3}
-                className="mt-1 w-full rounded-lg border p-3 text-sm dark:bg-slate-800 dark:text-white"
+                className="mt-1 w-full rounded-lg border p-3 text-sm bg-[#0d2338] text-white"
               />
             </label>
             <button className="w-full rounded-lg bg-teal-600 p-2 font-semibold text-white">
@@ -2351,7 +2376,7 @@ export default function FestioMePage() {
             autoFocus
             value={formValue}
             onChange={(e) => setFormValue(e.target.value)}
-            className="w-full rounded-lg border p-3 dark:bg-slate-800 dark:text-white"
+            className="w-full rounded-lg border p-3 bg-[#0d2338] text-white"
           />
           <button
             onClick={() => updateGroup("rename")}
@@ -2370,7 +2395,7 @@ export default function FestioMePage() {
           }
           onClose={() => setDialog("")}
         >
-          <p className="text-sm text-slate-500">
+          <p className="text-sm text-[#7893a8]">
             {dialog === "leave"
               ? "You will lose access unless invited again."
               : "Members will no longer be able to post."}
@@ -2391,7 +2416,7 @@ export default function FestioMePage() {
               value={pollQuestion}
               onChange={(e) => setPollQuestion(e.target.value)}
               placeholder="Question"
-              className="w-full rounded-lg border p-3 dark:bg-slate-800 dark:text-white"
+              className="w-full rounded-lg border p-3 bg-[#0d2338] text-white"
             />
             {pollOptions.map((option, index) => (
               <input
@@ -2406,7 +2431,7 @@ export default function FestioMePage() {
                   )
                 }
                 placeholder={`Option ${index + 1}`}
-                className="w-full rounded-lg border p-3 dark:bg-slate-800 dark:text-white"
+                className="w-full rounded-lg border p-3 bg-[#0d2338] text-white"
               />
             ))}
             <button
@@ -2424,38 +2449,52 @@ export default function FestioMePage() {
       )}
       {dialog === "editProfile" && (
         <Dialog title="Edit profile" onClose={() => setDialog("")}>
-          <form onSubmit={saveProfile} className="space-y-3 text-sm dark:text-white">
+          <form onSubmit={saveProfile} className="space-y-3 text-sm text-white">
             <label className="block">
-              <span className="mb-1 block text-xs font-bold uppercase text-slate-500">Display name</span>
+              <span className="mb-1 block text-xs font-bold uppercase text-[#7893a8]">Display name</span>
               <input
                 required
                 value={profileForm.display_name}
                 onChange={(e) => setProfileForm({ ...profileForm, display_name: e.target.value })}
-                className="w-full rounded-lg border px-3 py-2 dark:bg-slate-800"
+                className="w-full rounded-lg border px-3 py-2 bg-[#0d2338]"
               />
             </label>
             <label className="block">
-              <span className="mb-1 block text-xs font-bold uppercase text-slate-500">Bio</span>
+              <span className="mb-1 block text-xs font-bold uppercase text-[#7893a8]">Bio</span>
               <textarea
                 maxLength={280}
                 rows={3}
                 value={profileForm.bio}
                 onChange={(e) => setProfileForm({ ...profileForm, bio: e.target.value })}
                 placeholder="A line about you"
-                className="w-full rounded-lg border px-3 py-2 dark:bg-slate-800"
+                className="w-full rounded-lg border px-3 py-2 bg-[#0d2338]"
               />
             </label>
             <label className="block">
-              <span className="mb-1 block text-xs font-bold uppercase text-slate-500">Interests</span>
+              <span className="mb-1 block text-xs font-bold uppercase text-[#7893a8]">Interests</span>
               <input
                 value={profileForm.tags}
                 onChange={(e) => setProfileForm({ ...profileForm, tags: e.target.value })}
                 placeholder="hiking, photography, coffee"
-                className="w-full rounded-lg border px-3 py-2 dark:bg-slate-800"
+                className="w-full rounded-lg border px-3 py-2 bg-[#0d2338]"
               />
-              <span className="mt-1 block text-[11px] text-slate-400">
+              <span className="mt-1 block text-[11px] text-[#7893a8]">
                 Comma-separated. Shared interests power your Suggested connections — up to 10.
               </span>
+            </label>
+            <label className="flex items-center justify-between rounded-lg border px-3 py-2 border-[#1b3a52]">
+              <span>
+                <span className="block text-xs font-bold uppercase text-[#7893a8]">Show me in People</span>
+                <span className="block text-[11px] text-[#7893a8]">
+                  Off hides you from the People directory and Suggested connections. You can still message and be messaged.
+                </span>
+              </span>
+              <input
+                type="checkbox"
+                checked={profileForm.discoverable}
+                onChange={(e) => setProfileForm({ ...profileForm, discoverable: e.target.checked })}
+                className="ml-3 h-5 w-5 shrink-0"
+              />
             </label>
             <button className="w-full rounded-lg bg-teal-600 p-2 font-semibold text-white">
               Save
@@ -2467,7 +2506,7 @@ export default function FestioMePage() {
         <Dialog title="FestioMe notifications" onClose={() => setDialog("")}>
           <form
             onSubmit={savePreferences}
-            className="space-y-3 text-sm dark:text-white"
+            className="space-y-3 text-sm text-white"
           >
             <label className="flex justify-between">
               In-app notifications
@@ -2500,19 +2539,19 @@ export default function FestioMePage() {
               />
             </label>
             {guestMode && pushConfig && (
-              <div className="flex items-center justify-between rounded-lg bg-slate-100 p-2 text-xs dark:bg-slate-800">
+              <div className="flex items-center justify-between rounded-lg bg-[#0d2338] p-2 text-xs bg-[#0d2338]">
                 <span>Notifications on this device</span>
                 {pushState === "enabled" ? (
                   <button
                     type="button"
                     onClick={disablePush}
                     disabled={pushBusy}
-                    className="rounded-md border border-slate-400 px-2 py-1 font-bold dark:border-slate-500"
+                    className="rounded-md border border-[#1b3a52] px-2 py-1 font-bold dark:border-[#1b3a52]"
                   >
                     {pushBusy ? "Updating…" : "On ✓"}
                   </button>
                 ) : pushState === "blocked" ? (
-                  <span className="text-amber-600 dark:text-amber-300">Blocked in browser settings</span>
+                  <span className="text-amber-600 text-amber-200">Blocked in browser settings</span>
                 ) : (
                   <button
                     type="button"
@@ -2525,7 +2564,7 @@ export default function FestioMePage() {
                 )}
               </div>
             )}
-            {pushError && <p className="text-xs text-amber-600 dark:text-amber-300">{pushError}</p>}
+            {pushError && <p className="text-xs text-amber-600 text-amber-200">{pushError}</p>}
             <label className="flex items-center justify-between">
               Email digest
               <select
@@ -2533,7 +2572,7 @@ export default function FestioMePage() {
                 onChange={(e) =>
                   setPreferences({ ...preferences, digest: e.target.value })
                 }
-                className="rounded border bg-white p-2 dark:bg-slate-800"
+                className="rounded border bg-[#0a1f33] p-2 bg-[#0d2338]"
               >
                 <option value="immediate">Immediate</option>
                 <option value="daily">Daily</option>
@@ -2550,7 +2589,7 @@ export default function FestioMePage() {
       {notice && (
         <button
           onClick={() => setNotice("")}
-          className="fixed bottom-20 right-4 z-[80] max-w-sm rounded-xl bg-slate-900 px-4 py-3 text-left text-sm text-white shadow-xl dark:bg-white dark:text-slate-900"
+          className="fixed bottom-20 right-4 z-[80] max-w-sm rounded-xl bg-slate-900 px-4 py-3 text-left text-sm text-white shadow-xl bg-[#0a1f33] text-white"
         >
           {notice}
         </button>

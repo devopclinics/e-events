@@ -1440,8 +1440,13 @@ async def open_direct_message(group_id: str, body: DirectMessageCreate, identity
 
 @app.get("/v1/groups/{group_id}/members", response_model=list[MemberOut])
 async def list_members(group_id: str, identity: Identity = Depends(current_identity), db: AsyncSession = Depends(get_db)):
+    """Staff see the full roster (needed for moderation/management) — a
+    non-staff member sees only discoverable members, plus themselves even if
+    they've turned discoverability off."""
     viewer = await _member(db, group_id, identity)
     members = (await db.execute(select(Member).where(Member.group_id == group_id, Member.removed_at.is_(None)).order_by(Member.joined_at))).scalars().all()
+    if viewer.role not in STAFF_ROLES:
+        members = [m for m in members if m.discoverable or m.id == viewer.id]
     return [MemberOut.model_validate(member).model_copy(update={"is_me": member.id == viewer.id}) for member in members]
 
 
@@ -1958,6 +1963,7 @@ async def suggested_connections(group_id: str, limit: int = Query(10, ge=1, le=5
         return {"items": []}
     others = (await db.execute(select(Member).where(
         Member.group_id == group_id, Member.removed_at.is_(None), Member.id != member.id,
+        Member.discoverable.is_(True),
     ))).scalars().all()
     scored = []
     for other in others:
@@ -2301,6 +2307,8 @@ async def update_my_profile(
             membership.bio = body.bio.strip() or None
         if tags is not None:
             membership.interest_tags = tags
+        if body.discoverable is not None:
+            membership.discoverable = body.discoverable
     await db.commit()
     await db.refresh(current)
     return MemberOut.model_validate(current).model_copy(update={"is_me": True})

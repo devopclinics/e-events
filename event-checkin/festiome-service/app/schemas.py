@@ -165,6 +165,7 @@ class MemberOut(BaseModel):
     is_me: bool = False
     bio: str | None = None
     interest_tags: list[str] = []
+    discoverable: bool = True
 
 
 class ConnectionOut(BaseModel):
@@ -282,6 +283,7 @@ class ProfileUpdate(BaseModel):
     # (main.py), not rejected; the guest shouldn't see a validation error
     # for typing one tag too many.
     interest_tags: list[str] | None = None
+    discoverable: bool | None = None
 
 
 class OwnershipTransfer(BaseModel):

@@ -83,10 +83,12 @@ export default function FestioMeRedesignPage() {
   const [profileName, setProfileName] = useState('')
   const [profileBio, setProfileBio] = useState('')
   const [profileTags, setProfileTags] = useState('')
+  const [profileDiscoverable, setProfileDiscoverable] = useState(true)
   const [leaderboard, setLeaderboard] = useState({ items: [], me: null })
   const [overview, setOverview] = useState(null)
   const [meetups, setMeetups] = useState([])
   const [connections, setConnections] = useState([])
+  const [peopleSearch, setPeopleSearch] = useState('')
   const [meetupOpen, setMeetupOpen] = useState(false)
   const [meetupForm, setMeetupForm] = useState({ title: '', description: '', location: '', starts_at: '', ends_at: '', capacity: '' })
   const [connection, setConnection] = useState('polling')
@@ -281,7 +283,8 @@ export default function FestioMeRedesignPage() {
     if (me?.display_name) setProfileName(me.display_name)
     setProfileBio(me?.bio || '')
     setProfileTags((me?.interest_tags || []).join(', '))
-  }, [me?.display_name, me?.bio, me?.interest_tags])
+    setProfileDiscoverable(me?.discoverable !== false)
+  }, [me?.display_name, me?.bio, me?.interest_tags, me?.discoverable])
 
   useEffect(() => {
     if (!activeGroup) return
@@ -463,8 +466,16 @@ export default function FestioMeRedesignPage() {
       {homeSection === 'People' && (
         <section className="fm-modern-section">
           <div className="fm-section-head"><div><span>ATTENDEE NETWORK</span><h2>People</h2><p>Help attendees discover relevant people without exposing private profile data.</p></div><button className="rr-btn primary" onClick={() => setInviteOpen(true)}><Icon name="plus" size={12}/> Invite member</button></div>
+          <div className="rd-search" style={{ marginBottom: 14, maxWidth: 360 }}><Icon name="search" size={13} /><input value={peopleSearch} onChange={(event) => setPeopleSearch(event.target.value)} placeholder="Search people by name, bio, or interest…" /></div>
           <div className="fm-people-grid">
-            {members.filter((member) => !member.is_me).map((member) => {
+            {members.filter((member) => {
+              if (member.is_me) return false
+              const q = peopleSearch.trim().toLowerCase()
+              if (!q) return true
+              return (member.display_name || '').toLowerCase().includes(q)
+                || (member.bio || '').toLowerCase().includes(q)
+                || (member.interest_tags || []).some((tag) => tag.toLowerCase().includes(q))
+            }).map((member) => {
               const relationship = connections.find((item) => item.other_member?.id === member.id)
               return <article className="fm-person-card" key={member.id}>
                 <span className="fm-person-avatar">{(member.display_name || '?').split(/\s+/).slice(0, 2).map((part) => part[0]).join('').toUpperCase()}</span>
@@ -474,6 +485,12 @@ export default function FestioMeRedesignPage() {
               </article>
             })}
             {!members.filter((member) => !member.is_me).length && <div className="fm-empty-modern"><Icon name="users" size={24}/><h3>No attendees yet</h3><p>Sync guests or invite event members to begin networking.</p></div>}
+            {!!members.filter((member) => !member.is_me).length && !members.filter((member) => {
+              if (member.is_me) return false
+              const q = peopleSearch.trim().toLowerCase()
+              if (!q) return true
+              return (member.display_name || '').toLowerCase().includes(q) || (member.bio || '').toLowerCase().includes(q) || (member.interest_tags || []).some((tag) => tag.toLowerCase().includes(q))
+            }).length && <div className="fm-empty-modern"><Icon name="search" size={24}/><h3>No matches</h3><p>No one matches "{peopleSearch}".</p></div>}
           </div>
         </section>
       )}
@@ -548,11 +565,15 @@ export default function FestioMeRedesignPage() {
             <label className="rd-field-label" style={{ marginTop: 10 }}>Interests</label>
             <input className="rd-field" value={profileTags} onChange={(event) => setProfileTags(event.target.value)} placeholder="hiking, photography, coffee" />
             <span className="rd-rowlink" style={{ display: 'block', marginTop: 4 }}>Comma-separated — powers Suggested connections.</span>
+            <label className="gr-required-check" style={{ marginTop: 12 }}>
+              <input type="checkbox" checked={profileDiscoverable} onChange={(event) => setProfileDiscoverable(event.target.checked)} /> Show me in the People directory
+            </label>
             <button className="rr-btn primary" disabled={!activeGroup || !profileName.trim()} style={{ width: '100%', justifyContent: 'center', marginTop: 8 }} onClick={async () => {
               try {
                 await api.festiomeUpdateProfile(activeGroup, {
                   display_name: profileName.trim(), bio: profileBio.trim(),
                   interest_tags: profileTags.split(',').map((t) => t.trim()).filter(Boolean),
+                  discoverable: profileDiscoverable,
                 })
                 setMembers(await api.festiomeMembers(activeGroup))
                 notify('Profile updated')

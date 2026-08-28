@@ -225,3 +225,36 @@ async def test_no_tags_means_no_suggestions(api):
 
     mine = (await api.get(f"/v1/groups/{group['id']}/matches", headers=user("host"))).json()["items"]
     assert mine == []  # host has no tags of their own
+
+
+# ── Discoverability ───────────────────────────────────────────────────────
+
+@pytest.mark.asyncio
+async def test_non_discoverable_member_hidden_from_non_staff_but_visible_to_staff(api):
+    group = (await api.post("/v1/groups", json={"name": "Reunion"}, headers=user("host"))).json()
+    invite = (await api.post(f"/v1/groups/{group['id']}/invitations", json={}, headers=user("host"))).json()
+    await api.post(f"/v1/invitations/{invite['token']}/accept", headers=user("hidden"))
+    await api.patch(f"/v1/profile?group_id={group['id']}", headers=user("hidden"), json={
+        "display_name": "Hidden", "discoverable": False})
+
+    as_host = (await api.get(f"/v1/groups/{group['id']}/members", headers=user("host"))).json()
+    assert "Hidden" in [m["display_name"] for m in as_host]  # staff still sees everyone
+
+    invite2 = (await api.post(f"/v1/groups/{group['id']}/invitations", json={}, headers=user("host"))).json()
+    await api.post(f"/v1/invitations/{invite2['token']}/accept", headers=user("plain"))
+    as_plain_member = (await api.get(f"/v1/groups/{group['id']}/members", headers=user("plain"))).json()
+    assert "Hidden" not in [m["display_name"] for m in as_plain_member]
+
+
+@pytest.mark.asyncio
+async def test_non_discoverable_member_excluded_from_suggestions(api):
+    group = (await api.post("/v1/groups", json={"name": "Reunion"}, headers=user("host"))).json()
+    invite = (await api.post(f"/v1/groups/{group['id']}/invitations", json={}, headers=user("host"))).json()
+    await api.post(f"/v1/invitations/{invite['token']}/accept", headers=user("hidden"))
+    await api.patch(f"/v1/profile?group_id={group['id']}", headers=user("hidden"), json={
+        "display_name": "Hidden", "interest_tags": ["hiking"], "discoverable": False})
+    await api.patch(f"/v1/profile?group_id={group['id']}", headers=user("host"), json={
+        "display_name": "Host", "interest_tags": ["hiking"]})
+
+    matches = (await api.get(f"/v1/groups/{group['id']}/matches", headers=user("host"))).json()["items"]
+    assert matches == []

@@ -80,6 +80,12 @@ class Member(Base):
     # in or receives suggested connections; that's the whole privacy model.
     bio: Mapped[str | None] = mapped_column(String(280), nullable=True)
     interest_tags: Mapped[list] = mapped_column(JSON, default=list)
+    # Separate from the tags-based opt-in above: whether this member appears
+    # in the People directory / suggested connections for OTHER non-staff
+    # members at all, regardless of profile content. Staff/organizers always
+    # see the full roster (they need it for moderation), this only hides a
+    # member from other attendees browsing.
+    discoverable: Mapped[bool] = mapped_column(Boolean, default=True)
 
 
 class JoinRequest(Base):

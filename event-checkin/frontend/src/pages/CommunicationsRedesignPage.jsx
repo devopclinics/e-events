@@ -20,6 +20,8 @@ const AUDIENCE_OPTIONS = [
 
 const AUDIENCE_LABEL = Object.fromEntries(AUDIENCE_OPTIONS.map((o) => [o.value, o.label]))
 
+const SCHEDULE_ANCHOR_LABEL = { event_start: 'the event starts', event_end: 'the event ends', rsvp_deadline: 'the RSVP deadline', experience_step: 'a chosen Experience session starts' }
+
 const SCHEDULE_AUDIENCES = [
   { value: 'all', label: 'All guests' },
   { value: 'not_invited', label: 'Guests not yet invited' },
@@ -30,6 +32,7 @@ const SCHEDULE_AUDIENCES = [
   { value: 'checked_in', label: 'Checked-in guests' },
   { value: 'not_checked_in', label: 'Confirmed, not checked in' },
 ]
+const SCHEDULE_AUDIENCE_LABEL = Object.fromEntries(SCHEDULE_AUDIENCES.map((o) => [o.value, o.label]))
 
 const SCHEDULE_PRESETS = [
   { type: 'invitation', label: 'Invitation', description: 'Send each guest their personal invitation or RSVP link.', audience: 'not_invited', channels: ['email'] },
@@ -2143,6 +2146,32 @@ function SchedulerTab({ eventId, event, notify, initialPreset }) {
           <article><span>2</span><div><strong>Choose who should receive it</strong><p>Use an audience segment. <b>Dynamic</b> recalculates recipients when the message sends; <b>Frozen</b> locks the matching recipients when you save.</p></div></article>
           <article><span>3</span><div><strong>Choose when it should send</strong><p>Set a specific date and time, or schedule relative to the event, RSVP deadline, or an Experience session. All times use {event?.timezone || 'the event timezone'}.</p></div></article>
           <article><span>4</span><div><strong>Review before it fires</strong><p>Save as a draft while preparing. Scheduled and paused messages remain editable; pause a message if you need more time.</p></div></article>
+        </div>
+        <div className="cm-scheduler-help-types">
+          <h4>Every purpose, and how to set it up</h4>
+          <div className="cm-scheduler-help-types-grid">
+            {SCHEDULE_PRESETS.map((preset) => {
+              const usesExistingTemplate = ['invitation', 'rsvp_reminder'].includes(preset.type)
+              return (
+                <article key={preset.type}>
+                  <strong>{preset.label}</strong>
+                  <p>{preset.description}</p>
+                  <ul>
+                    <li>Suggested audience: <b>{SCHEDULE_AUDIENCE_LABEL[preset.audience] || preset.audience}</b></li>
+                    <li>Suggested channels: <b>{preset.channels.join(' + ')}</b></li>
+                    <li>
+                      {usesExistingTemplate
+                        ? <>Content comes from your existing <b>{preset.type === 'rsvp_reminder' ? 'RSVP reminder' : 'invitation'}</b> message in the <b>Messages</b> tab — anything typed here is ignored.</>
+                        : <>Content is written right here — subject, email, SMS, and WhatsApp bodies are each editable per scheduled message.</>}
+                    </li>
+                  </ul>
+                </article>
+              )
+            })}
+          </div>
+          <p className="cm-scheduler-help-types-footnote">
+            <b>Timing reference:</b> pick an absolute date/time, or relative — a number of minutes/hours/days before or after {SCHEDULE_ANCHOR_LABEL.event_start}, {SCHEDULE_ANCHOR_LABEL.event_end}, {SCHEDULE_ANCHOR_LABEL.rsvp_deadline}, or {SCHEDULE_ANCHOR_LABEL.experience_step}. Pending messages anchored to the event date, end date, RSVP deadline, or timezone recompute automatically if you edit those. A message anchored to an <b>Experience session</b> does <b>not</b> auto-recompute if you only change that session's own time — re-save the message afterward to pick up the new time.
+          </p>
         </div>
         <div className="cm-scheduler-help-notes">
           <div><Icon name="lock" size={15} /><p><strong>Why can’t I edit a sent message?</strong><br />Sent messages are permanent delivery records. Create a new scheduled message if you need to resend with different timing, content, channels, or recipients.</p></div>

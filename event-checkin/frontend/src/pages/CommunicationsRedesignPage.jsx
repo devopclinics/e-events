@@ -2109,7 +2109,10 @@ function SchedulerTab({ eventId, event, notify, initialPreset }) {
         <h2>Plan every guest touchpoint</h2>
         <p>Schedule invitations, RSVP chasers, session notices, feedback and follow-ups in {event?.timezone || 'the event timezone'}.</p>
       </div>
-      <button className="rr-btn primary" onClick={() => setEditing({ id: null, form: blankForm() })}><Icon name="plus" size={14} /> New scheduled message</button>
+      <div className="cm-scheduler-hero-actions">
+        <a className="rr-btn secondary cm-scheduler-help-link" href="#scheduler-help"><Icon name="help" size={14} /> How it works</a>
+        <button className="rr-btn primary" onClick={() => setEditing({ id: null, form: blankForm() })}><Icon name="plus" size={14} /> New scheduled message</button>
+      </div>
     </div>
 
     <div className="cm-scheduler-stats">
@@ -2118,6 +2121,27 @@ function SchedulerTab({ eventId, event, notify, initialPreset }) {
       <div><strong>{items.reduce((sum, item) => sum + (item.recipients_sent || 0), 0)}</strong><span>Recipients reached</span></div>
       <div><strong>{legacy.length}</strong><span>Existing reminder steps</span></div>
     </div>
+
+    <details className="cm-scheduler-help" id="scheduler-help">
+      <summary>
+        <span className="cm-scheduler-help-icon"><Icon name="help" size={16} /></span>
+        <span><strong>Scheduler help</strong><small>Timing, audiences, editing and safe testing</small></span>
+        <span className="cm-scheduler-help-chevron">⌄</span>
+      </summary>
+      <div className="cm-scheduler-help-body">
+        <div className="cm-scheduler-help-steps">
+          <article><span>1</span><div><strong>Choose the purpose</strong><p>Start with an invitation, RSVP reminder, event or session reminder, feedback request, follow-up, or announcement.</p></div></article>
+          <article><span>2</span><div><strong>Choose who should receive it</strong><p>Use an audience segment. <b>Dynamic</b> recalculates recipients when the message sends; <b>Frozen</b> locks the matching recipients when you save.</p></div></article>
+          <article><span>3</span><div><strong>Choose when it should send</strong><p>Set a specific date and time, or schedule relative to the event, RSVP deadline, or an Experience session. All times use {event?.timezone || 'the event timezone'}.</p></div></article>
+          <article><span>4</span><div><strong>Review before it fires</strong><p>Save as a draft while preparing. Scheduled and paused messages remain editable; pause a message if you need more time.</p></div></article>
+        </div>
+        <div className="cm-scheduler-help-notes">
+          <div><Icon name="lock" size={15} /><p><strong>Why can’t I edit a sent message?</strong><br />Sent messages are permanent delivery records. Create a new scheduled message if you need to resend with different timing, content, channels, or recipients.</p></div>
+          <div><Icon name="check" size={15} /><p><strong>How should I test?</strong><br />Use a staging event and a test guest whose email or phone you control. Schedule it a few minutes ahead, confirm the locked recipient count, then watch the status change from Scheduled to Sent.</p></div>
+          <div><Icon name="message" size={15} /><p><strong>What does “reached” mean?</strong><br />Festio successfully handed the message to the configured provider. Final inbox placement or carrier delivery can still depend on the provider.</p></div>
+        </div>
+      </div>
+    </details>
 
     {editing && <div className="rr-panel cm-schedule-editor">
       <div className="rd-panel-head">

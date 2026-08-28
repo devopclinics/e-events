@@ -2096,6 +2096,15 @@ function SchedulerTab({ eventId, event, notify, initialPreset }) {
     finally { setBusy('') }
   }
 
+  function openSchedulerHelp() {
+    // A plain #scheduler-help anchor link only scrolls a <details> into
+    // view — it doesn't open it, so the button looked like it did nothing.
+    const el = document.getElementById('scheduler-help')
+    if (!el) return
+    el.open = true
+    el.scrollIntoView({ behavior: 'smooth', block: 'start' })
+  }
+
   if (!eventId) return <div className="rr-panel"><div className="rd-panel-body">Select an event to use the scheduler.</div></div>
   if (items === null) return <div className="rr-panel"><div className="rd-panel-body">Loading communication schedule…</div></div>
 
@@ -2110,7 +2119,7 @@ function SchedulerTab({ eventId, event, notify, initialPreset }) {
         <p>Schedule invitations, RSVP chasers, session notices, feedback and follow-ups in {event?.timezone || 'the event timezone'}.</p>
       </div>
       <div className="cm-scheduler-hero-actions">
-        <a className="rr-btn secondary cm-scheduler-help-link" href="#scheduler-help"><Icon name="help" size={14} /> How it works</a>
+        <button type="button" className="rr-btn secondary cm-scheduler-help-link" onClick={openSchedulerHelp}><Icon name="help" size={14} /> How it works</button>
         <button className="rr-btn primary" onClick={() => setEditing({ id: null, form: blankForm() })}><Icon name="plus" size={14} /> New scheduled message</button>
       </div>
     </div>

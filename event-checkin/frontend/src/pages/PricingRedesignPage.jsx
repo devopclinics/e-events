@@ -46,14 +46,18 @@ const ADDON_ICON = {
   addon_speakers: '◈', addon_partners: '❖', addon_reminders: '◷',
 }
 
-function AddonCard({ addon, unlocked, eventId }) {
+function AddonCard({ addon, unlocked, eventId, promoActive }) {
   const buyHref = eventId ? `/admin-redesign?buy_addon=${encodeURIComponent(addon.key)}` : '/register?redesign=1'
   return (
     <article className={`pr-addon-card${addon.key === 'addon_venue_access' ? ' featured' : ''}`}>
       <div className="pr-addon-top">
         <div className="pr-addon-ic">{ADDON_ICON[addon.key] || '✦'}</div>
         {unlocked ? (
-          <div className="pr-addon-price"><b>{money(addon.amount, addon.currency)}</b><i>per event</i></div>
+          promoActive ? (
+            <span className="pr-addon-promo">Included</span>
+          ) : (
+            <div className="pr-addon-price"><b>{money(addon.amount, addon.currency)}</b><i>per event</i></div>
+          )
         ) : (
           <span className="pr-addon-locked">&#128274; Starter+</span>
         )}
@@ -258,7 +262,7 @@ export default function PricingRedesignPage() {
               </div>
               <div className="pr-addon-grid">
                 {addonPlans.map((addon) => (
-                  <AddonCard key={addon.key} addon={addon} unlocked={addonsUnlocked} />
+                  <AddonCard key={addon.key} addon={addon} unlocked={addonsUnlocked} promoActive={addonPromoActive} />
                 ))}
               </div>
               <p className="pr-addon-note">Advanced messaging (MMS and rich media) is not a separate add-on. It is available on paid tiers and uses message credits, just like SMS and WhatsApp.</p>

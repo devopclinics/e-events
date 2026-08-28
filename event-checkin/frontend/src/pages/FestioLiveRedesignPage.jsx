@@ -1868,8 +1868,47 @@ export default function FestioLiveRedesignPage() {
                 <div className="fl-help-step"><b>4</b><div><h4>Guests join and answer</h4><p>They scan the QR code, tap the join code, or use their personal Guest Hub link — straight to the activity, no app, no account.</p><span className="fl-help-where">Displays → join scene, or shared from Guest Hub</span></div></div>
                 <div className="fl-help-step"><b>5</b><div><h4>Watch it fill in live</h4><p>Participant count, response count, and response rate update in real time as answers come in.</p><span className="fl-help-where">Live Control</span></div></div>
                 <div className="fl-help-step"><b>6</b><div><h4>Put it on the big screen</h4><p>Assign the activity to a display and pick a scene — results bars, a donut chart, the leaderboard, a word cloud, a heatmap. Copy the TV link once and leave it running.</p><span className="fl-help-where">Displays → Broadcast studio</span></div></div>
-                <div className="fl-help-step"><b>7</b><div><h4>Wrap up</h4><p>Close it when the moment's over, or leave Auto-close on and it closes itself about 20 minutes after the session's scheduled end.</p><span className="fl-help-where">Activity detail → Close</span></div></div>
+                <div className="fl-help-step"><b>7</b><div><h4>Reveal, review, and wrap up</h4><p>Show one result or every question together, freeze the final numbers, and let participants review the revealed results on their phones. Close manually, or leave Auto-close on.</p><span className="fl-help-where">Displays → Results &amp; rehearsal · Activity detail → Preview participant review</span></div></div>
               </div>
+            </div>
+          </div>
+
+          <div className="rr-panel fl-section-panel">
+            <div className="rd-panel-head"><div><span className="fl-eyebrow">A strong opening sequence</span><h3>Formal opening / joint session playbook</h3><p>Keep ceremonial moments respectful while giving the room a few short, memorable ways to participate.</p></div><span className="fl-help-duration">8–12 min total</span></div>
+            <div className="rd-panel-body">
+              <div className="fl-help-runofshow">
+                <article><b>Before start</b><span>JOIN / QR</span><h4>Welcome the room</h4><p>Leave the join code and QR on screen while guests arrive. Ask everyone to join once; the same link follows the live activity.</p><small>5–10 minutes before</small></article>
+                <article><b>Opening</b><span>WORD CLOUD</span><h4>One shared intention</h4><p>“In one word, what do you hope this summit creates for our community?”</p><small>60–90 seconds</small></article>
+                <article><b>After welcome</b><span>POLL / VOTING</span><h4>Take the room's pulse</h4><p>“Which outcome should guide this summit most?” Keep it to four clear options and reveal the result immediately.</p><small>90 seconds</small></article>
+                <article><b>During speakers</b><span>MODERATED Q&amp;A</span><h4>Collect questions quietly</h4><p>Guests submit and upvote without interrupting the program. A moderator approves and features the best questions.</p><small>Open throughout</small></article>
+                <article><b>Closing</b><span>COMMITMENT + RESULTS</span><h4>Turn inspiration into action</h4><p>Ask for one action each person will take, then show All results as the session's visual recap.</p><small>2–3 minutes</small></article>
+              </div>
+              <div className="fl-help-tip"><b>Keep it focused:</b> for a formal opening, use one word cloud, one poll, and moderated Q&amp;A as the core. Save a competitive quiz or leaderboard for a later energizer unless it fits the tone of the program.</div>
+            </div>
+          </div>
+
+          <div className="rr-panel fl-section-panel">
+            <div className="rd-panel-head"><div><span className="fl-eyebrow">Choose how hands-free it should be</span><h3>Three levels of automation</h3><p>You can automate the event schedule, the activity's question flow, and the final result pages independently.</p></div></div>
+            <div className="rd-panel-body">
+              <div className="fl-help-automation">
+                <article><span>1</span><div><h4>Program timing</h4><p>Link the activity to an Experience session. Enable Auto-start and Auto-close only after its start time and duration are correct.</p><b>Activity → Edit details</b></div></article>
+                <article><span>2</span><div><h4>Question flow</h4><p>Enable Full automation and set the duration of the join, question, participation, results, transition, and final slides. A presenter can still override instantly.</p><b>Activity → Full automation</b></div></article>
+                <article><span>3</span><div><h4>Display and results</h4><p>Use Auto-follow program for a venue screen, then use All results with Auto-rotate when several result pages need to cycle.</p><b>Displays → Results &amp; rehearsal</b></div></article>
+              </div>
+              <div className="fl-help-tip"><b>Recommended first event:</b> use manual Go Live with automated question flow. Once the timing feels right in rehearsal, enable session Auto-start.</div>
+            </div>
+          </div>
+
+          <div className="rr-panel fl-section-panel">
+            <div className="rd-panel-head"><div><span className="fl-eyebrow">Rehearse the real room</span><h3>Four-screen control-room checklist</h3><p>Separate operating controls from what guests and the audience see.</p></div></div>
+            <div className="rd-panel-body">
+              <div className="fl-help-gallery fl-help-roles">
+                <div className="fl-help-gcard"><span>1</span><h4>Admin laptop</h4><p>Create activities, edit questions, configure automation, assign displays, and monitor responses.</p><b>Festio Live admin</b></div>
+                <div className="fl-help-gcard"><span>2</span><h4>Presenter phone</h4><p>Start, pause, advance, reveal results, freeze the screen, and return to the join slide.</p><b>Presenter share link</b></div>
+                <div className="fl-help-gcard"><span>3</span><h4>Projector / TV</h4><p>Open the copied display link once, enter fullscreen, and leave the browser on that page.</p><b>Displays → Copy link</b></div>
+                <div className="fl-help-gcard"><span>4</span><h4>Moderator device</h4><p>Approve public text and feature or dismiss Q&amp;A while the presenter stays focused on the room.</p><b>Moderator share link</b></div>
+              </div>
+              <div className="fl-help-checks"><span>□ Rehearse with 10 guests</span><span>□ Scan the real QR from a phone</span><span>□ Test projector fullscreen</span><span>□ Check question and result timing</span><span>□ Confirm moderation</span><span>□ End rehearsal before doors open</span></div>
             </div>
           </div>
 
@@ -1888,18 +1927,19 @@ export default function FestioLiveRedesignPage() {
           </div>
 
           <div className="rr-panel fl-section-panel">
-            <div className="rd-panel-head"><div><span className="fl-eyebrow">Pick the right shape</span><h3>Activity types</h3><p>The prompt decides the type — here's what each is actually good for.</p></div></div>
+            <div className="rd-panel-head"><div><span className="fl-eyebrow">Pick the right shape</span><h3>Activity types</h3><p>Choose the activity for the moment, then choose question formats inside it.</p></div></div>
             <div className="rd-panel-body">
               <div className="fl-help-gallery">
                 <div className="fl-help-gcard"><span>P</span><h4>Poll</h4><p>Quick single or multi-choice — a temperature check, no right answer.</p></div>
                 <div className="fl-help-gcard"><span>Q</span><h4>Quiz</h4><p>Scored, timed, correct-answer questions with a live leaderboard.</p></div>
+                <div className="fl-help-gcard"><span>S</span><h4>Survey</h4><p>Several question formats in one guided flow, with a combined final result.</p></div>
                 <div className="fl-help-gcard"><span>★</span><h4>Rating</h4><p>5-star, 10-point, or NPS — how something landed, in one tap.</p></div>
+                <div className="fl-help-gcard"><span>↗</span><h4>Feedback</h4><p>Structured and open-text reflections for post-session learning and analysis.</p></div>
                 <div className="fl-help-gcard"><span>☁</span><h4>Word cloud</h4><p>One word each, sized by how often it's repeated.</p></div>
-                <div className="fl-help-gcard"><span>≡</span><h4>Ranking</h4><p>Drag options into order — what matters most, together.</p></div>
                 <div className="fl-help-gcard"><span>?</span><h4>Q&amp;A</h4><p>Guests submit and upvote their own questions; you moderate and feature.</p></div>
-                <div className="fl-help-gcard"><span>⊞</span><h4>Quadrant</h4><p>Two axes, one tap — a real 2×2 map of where the room stands.</p></div>
-                <div className="fl-help-gcard"><span>◉</span><h4>Image click</h4><p>Guests tap a spot on a photo; the taps build into a live heatmap.</p></div>
+                <div className="fl-help-gcard"><span>✓</span><h4>Live voting</h4><p>A clear decision moment with visible choices and an immediate room result.</p></div>
               </div>
+              <p className="rd-hint">Inside surveys and other multi-question activities you can also use ranking, quadrant, open text, image click, rating, choice, and word-cloud question formats.</p>
             </div>
           </div>
 
@@ -1909,6 +1949,20 @@ export default function FestioLiveRedesignPage() {
               <div className="fl-help-compare">
                 <div className="fl-help-tcard on"><span className="fl-help-tstate">● on by default</span><h4>Auto-close</h4><p>Closes itself about 20 minutes after the linked session's scheduled end.</p><p>Running long? Use Extend +30 min instead of turning it off.</p></div>
                 <div className="fl-help-tcard"><span className="fl-help-tstate">○ off by default</span><h4>Auto-start</h4><p>Goes live the moment the linked session's scheduled start time arrives — nobody presses Go Live.</p><p>Turn it on per activity, in Edit details, once you trust the schedule.</p></div>
+              </div>
+            </div>
+          </div>
+
+          <div className="rr-panel fl-section-panel">
+            <div className="rd-panel-head"><div><span className="fl-eyebrow">When something does not appear</span><h3>Fast troubleshooting</h3><p>Most event-day issues can be fixed without closing the display link.</p></div></div>
+            <div className="rd-panel-body">
+              <div className="fl-help-troubleshoot">
+                <article><h4>The activity is missing</h4><p>Confirm the correct event and program filter, then check that the activity is not archived and is linked to the intended session.</p></article>
+                <article><h4>The projector did not change</h4><p>In Displays, choose the activity and scene, then press Push to main screen. Use Repush if it is already selected.</p></article>
+                <article><h4>Results are empty</h4><p>Confirm the question is active and guests submitted answers. Use Rehearse with 10 guests to verify the presentation safely.</p></article>
+                <article><h4>Preview and live differ</h4><p>Preview is only a draft until you press Push to main screen. Open the copied display link to confirm what the venue actually sees.</p></article>
+                <article><h4>Unsafe text is not visible</h4><p>Moderated or flagged words and Q&amp;A wait for staff approval before appearing publicly.</p></article>
+                <article><h4>The schedule is wrong</h4><p>Correct the session time in Experience, publish the workflow, and verify the activity's linked session before using Auto-start.</p></article>
               </div>
             </div>
           </div>

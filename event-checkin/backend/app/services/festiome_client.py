@@ -265,6 +265,20 @@ class FestioMeClient:
         if response.status_code not in (200, 204, 404):
             raise FestioMeUnavailable("FestioMe join request could not be denied")
 
+    async def award_points(
+        self, external_event_ref: str, *, guest_ref: str, reason: str, points: int, source_ref: str,
+    ) -> dict[str, Any]:
+        response = await self._request(
+            "POST",
+            f"/internal/v1/guesthub/event-links/{external_event_ref}/members/{guest_ref}/points",
+            json={"reason": reason, "points": points, "source_ref": source_ref},
+        )
+        if response.status_code == 404:
+            return {"ignored": True}
+        if response.status_code >= 400:
+            raise FestioMeUnavailable("FestioMe points could not be awarded")
+        return response.json()
+
     async def publish_announcement(
         self, external_event_ref: str, *, idempotency_key: str, title: str,
         body: str, kind: str, urgent: bool, source_ref: str | None = None,

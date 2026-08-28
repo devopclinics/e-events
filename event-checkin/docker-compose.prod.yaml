@@ -97,6 +97,7 @@ services:
       DIRECT_HOST_MESSAGES_ENABLED: ${DIRECT_HOST_MESSAGES_ENABLED:-true}
       ANNOUNCEMENTS_ENABLED: ${ANNOUNCEMENTS_ENABLED:-true}
       REALTIME_MESSAGING_ENABLED: ${REALTIME_MESSAGING_ENABLED:-false}
+      INTERNAL_SERVICE_TOKEN: ${FESTIOME_MESSAGING_INTERNAL_TOKEN:-}
     depends_on:
       db:
         condition: service_healthy
@@ -406,6 +407,8 @@ services:
       INTERNAL_SERVICE_TOKEN: ${FESTIOME_INTERNAL_SERVICE_TOKEN:-}
       REDIS_URL: redis://festiome-redis:6379/0
       UPLOAD_DIR: /data/festiome-uploads
+      MESSAGING_SERVICE_URL: http://messaging-service:8001
+      MESSAGING_INTERNAL_TOKEN: ${FESTIOME_MESSAGING_INTERNAL_TOKEN:-}
     volumes:
       - festiome-uploads:/data/festiome-uploads
     depends_on:

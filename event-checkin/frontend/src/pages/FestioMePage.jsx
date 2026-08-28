@@ -122,6 +122,9 @@ export default function FestioMePage() {
     [searchResults, setSearchResults] = useState([]),
     [searchAllGroups, setSearchAllGroups] = useState(false),
     [reports, setReports] = useState([]);
+  const [leaderboard, setLeaderboard] = useState({ items: [], me: null }),
+    [matches, setMatches] = useState([]),
+    [profileForm, setProfileForm] = useState({ display_name: "", bio: "", tags: "" });
   const [scheduleAt, setScheduleAt] = useState(""),
     [showComposerTools, setShowComposerTools] = useState(false);
   const [pollQuestion, setPollQuestion] = useState(""),
@@ -745,6 +748,53 @@ export default function FestioMePage() {
       setNotice(errorText(e));
     }
   }
+  const refreshLeaderboard = useCallback(async () => {
+    if (!groupId) return;
+    try {
+      const result = await api.festiomeLeaderboard(groupId);
+      setLeaderboard({ items: result.items || [], me: result.me || null });
+    } catch {
+      /* the Profile tab's "your points" line is a nicety, not critical */
+    }
+  }, [groupId]);
+  useEffect(() => { refreshLeaderboard(); }, [refreshLeaderboard]);
+  function openLeaderboard() {
+    setPanel("leaderboard");
+    refreshLeaderboard();
+  }
+  async function openMatches() {
+    setPanel("matches");
+    if (!groupId) return;
+    try {
+      setMatches(list(await api.festiomeMatches(groupId)));
+    } catch (e) {
+      setNotice(errorText(e));
+    }
+  }
+  function openEditProfile() {
+    setProfileForm({
+      display_name: me?.display_name || name(user) || "",
+      bio: me?.bio || "",
+      tags: (me?.interest_tags || []).join(", "),
+    });
+    setDialog("editProfile");
+  }
+  async function saveProfile(event) {
+    event.preventDefault();
+    if (!groupId) return;
+    try {
+      await api.festiomeUpdateProfile(groupId, {
+        display_name: profileForm.display_name.trim(),
+        bio: profileForm.bio.trim(),
+        interest_tags: profileForm.tags.split(",").map((t) => t.trim()).filter(Boolean),
+      });
+      await loadWorkspace(groupId);
+      setDialog("");
+      setNotice("Profile updated");
+    } catch (e) {
+      setNotice(errorText(e));
+    }
+  }
   async function reportMessage(message) {
     const reason = prompt("Why are you reporting this message?");
     if (!reason?.trim()) return;
@@ -943,7 +993,29 @@ export default function FestioMePage() {
 
             {homeSection === "messages" && <section><div className="mb-5"><h2 className="text-3xl font-black">Messages</h2><p className="mt-1 text-sm text-slate-400">Private conversations stay in their original inbox.</p></div><div className="space-y-4">{guestMode && <article className="rounded-2xl border border-blue-400/20 bg-blue-500/[0.05] p-5"><div className="flex items-center justify-between gap-3"><strong>Message Host</strong><span className="text-xs text-amber-200">🔒 Only you and the organizer</span></div><div className="mt-4 space-y-3">{hostMessages.length ? hostMessages.map((item) => <div key={item.id} className="rounded-xl bg-white/[0.04] p-3"><div className="text-xs font-black">{item.sender_type === "organizer" ? "Event organizer" : "You"} · <span className="font-normal text-slate-500">{time(item.created_at)}</span></div><p className="mt-1 text-sm">{text(item)}</p></div>) : <p className="text-sm text-slate-400">No private messages yet. Use FestioHub to start a host conversation.</p>}</div>{guestMode && <button onClick={() => history.back()} className="mt-4 rounded-xl border border-blue-300/40 px-4 py-2 text-sm font-black text-blue-200">Open in FestioHub</button>}</article>}{!guestMode && <article className="rounded-2xl border border-blue-400/20 p-5"><strong>Guest Questions Inbox</strong><div className="mt-4 space-y-2">{hostInbox.length ? hostInbox.map((thread) => <div key={thread.thread_id || thread.id} className="rounded-xl bg-white/[0.04] p-3"><div className="text-sm font-black">{thread.guest_name || thread.title || "Guest question"}</div><p className="mt-1 text-sm text-slate-400">{thread.latest_message || thread.preview || "Private guest conversation"}</p></div>) : <p className="text-sm text-slate-400">No guest questions.</p>}</div><a href={`/admin?event=${encodeURIComponent(eventRef || "")}#communication`} className="mt-4 inline-flex rounded-xl border border-blue-300/40 px-4 py-2 text-sm font-black text-blue-200">Open organizer inbox</a></article>}{dmChannels.map((channel) => <button key={channel.id} onClick={() => openWorkspace(activeGroup, channel.id)} className="flex w-full items-center gap-3 rounded-2xl border border-white/10 p-4 text-left"><span className="grid h-10 w-10 place-items-center rounded-full bg-purple-500/20">✉</span><span className="flex-1"><strong className="block">{channel.name}</strong><span className="text-xs text-slate-400">FestioMe direct message</span></span><span className="text-sm font-black text-teal-300">Open</span></button>)}</div></section>}
 
-            {homeSection === "profile" && <section><h2 className="text-3xl font-black">Profile</h2><div className="mt-5 max-w-lg rounded-2xl border border-white/10 bg-white/[0.035] p-6"><span className="grid h-20 w-20 place-items-center rounded-full bg-teal-700 text-xl font-black">{initials(me?.display_name || name(user))}</span><h3 className="mt-4 text-xl font-black">{me?.display_name || name(user)}</h3><p className="mt-1 text-sm capitalize text-slate-400">{me?.role || (guestMode ? "Guest" : "Organizer")}</p><div className="mt-5 flex flex-wrap gap-2"><button onClick={async () => { const next = window.prompt("Community display name", me?.display_name || name(user)); if (!next?.trim() || !groupId) return; try { await api.festiomeUpdateProfile(groupId, { display_name: next.trim() }); await loadWorkspace(groupId); setNotice("Profile updated"); } catch (error) { setNotice(errorText(error)); } }} className="rounded-xl bg-teal-500 px-4 py-2 text-sm font-black text-slate-950">Edit profile</button><button onClick={() => { setShowHome(false); setPanel("people"); }} className="rounded-xl border border-teal-400/40 px-4 py-2 text-sm font-black text-teal-300">View community profile</button></div></div></section>}
+            {homeSection === "profile" && (
+              <section>
+                <h2 className="text-3xl font-black">Profile</h2>
+                <div className="mt-5 max-w-lg rounded-2xl border border-white/10 bg-white/[0.035] p-6">
+                  <span className="grid h-20 w-20 place-items-center rounded-full bg-teal-700 text-xl font-black">{initials(me?.display_name || name(user))}</span>
+                  <h3 className="mt-4 text-xl font-black">{me?.display_name || name(user)}</h3>
+                  <p className="mt-1 text-sm capitalize text-slate-400">{me?.role || (guestMode ? "Guest" : "Organizer")}</p>
+                  {me?.bio && <p className="mt-3 text-sm text-slate-300">{me.bio}</p>}
+                  {!!me?.interest_tags?.length && (
+                    <div className="mt-2 flex flex-wrap gap-1.5">
+                      {me.interest_tags.map((tag) => (
+                        <span key={tag} className="rounded-full bg-teal-500/15 px-2.5 py-1 text-[11px] font-bold text-teal-300">{tag}</span>
+                      ))}
+                    </div>
+                  )}
+                  {leaderboard.me && <p className="mt-3 text-xs font-bold text-slate-400">Your points: <span className="text-teal-300">{leaderboard.me.points}</span></p>}
+                  <div className="mt-5 flex flex-wrap gap-2">
+                    <button onClick={openEditProfile} className="rounded-xl bg-teal-500 px-4 py-2 text-sm font-black text-slate-950">Edit profile</button>
+                    <button onClick={() => { setShowHome(false); setPanel("people"); }} className="rounded-xl border border-teal-400/40 px-4 py-2 text-sm font-black text-teal-300">View community profile</button>
+                  </div>
+                </div>
+              </section>
+            )}
           </main>
         </div>
       </div>
@@ -1058,6 +1130,18 @@ export default function FestioMePage() {
                 className="rounded-lg border px-3 py-2 text-xs dark:border-slate-600"
               >
                 People
+              </button>
+              <button
+                onClick={() => (panel === "leaderboard" ? setPanel("") : openLeaderboard())}
+                className="rounded-lg border px-3 py-2 text-xs dark:border-slate-600"
+              >
+                🏆 Leaderboard
+              </button>
+              <button
+                onClick={() => (panel === "matches" ? setPanel("") : openMatches())}
+                className="rounded-lg border px-3 py-2 text-xs dark:border-slate-600"
+              >
+                🤝 Suggested
               </button>
               <button
                 onClick={openPreferences}
@@ -1619,6 +1703,61 @@ export default function FestioMePage() {
                         ))}
                       </div>
                     </>
+                  )}
+                  {panel === "leaderboard" && (
+                    <div className="space-y-2">
+                      {!leaderboard.items.length && (
+                        <p className="py-8 text-center text-sm text-slate-400">
+                          No points yet — post, react, vote, or check in to start climbing.
+                        </p>
+                      )}
+                      {leaderboard.items.map((row) => (
+                        <div
+                          key={row.member_id}
+                          className={`flex items-center gap-3 rounded-lg px-2 py-2 ${row.member_id === leaderboard.me?.member_id ? "bg-teal-500/10" : ""}`}
+                        >
+                          <span className="w-6 text-center text-sm font-black text-slate-400">{row.rank}</span>
+                          <span className="grid h-8 w-8 place-items-center rounded-lg bg-slate-200 text-[11px] font-bold dark:bg-slate-700">
+                            {initials(row.display_name)}
+                          </span>
+                          <span className="min-w-0 flex-1 truncate text-sm font-semibold dark:text-white">{row.display_name}</span>
+                          <span className="text-sm font-black text-teal-500">{row.points}</span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                  {panel === "matches" && (
+                    <div className="space-y-3">
+                      {!matches.length && (
+                        <p className="py-8 text-center text-sm text-slate-400">
+                          {me?.interest_tags?.length
+                            ? "No shared interests found yet in this group."
+                            : "Add interests to your profile to see suggested connections."}
+                        </p>
+                      )}
+                      {matches.map((match) => (
+                        <div key={match.member_id} className="rounded-xl border p-3 dark:border-slate-700">
+                          <div className="flex items-center gap-2">
+                            <span className="grid h-8 w-8 place-items-center rounded-lg bg-slate-200 text-[11px] font-bold dark:bg-slate-700">
+                              {initials(match.display_name)}
+                            </span>
+                            <b className="flex-1 truncate text-sm dark:text-white">{match.display_name}</b>
+                            <button
+                              onClick={() => startDirectMessage(match)}
+                              className="text-xs font-bold text-teal-600 dark:text-teal-400"
+                            >
+                              Message
+                            </button>
+                          </div>
+                          {match.bio && <p className="mt-2 text-xs text-slate-400">{match.bio}</p>}
+                          <div className="mt-2 flex flex-wrap gap-1">
+                            {match.shared_tags.map((tag) => (
+                              <span key={tag} className="rounded-full bg-teal-500/15 px-2 py-0.5 text-[10px] font-bold text-teal-500">{tag}</span>
+                            ))}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
                   )}
                   {panel === "search" && (
                     <>
@@ -2208,6 +2347,47 @@ export default function FestioMePage() {
             </button>
             <button className="w-full rounded-lg bg-teal-600 p-2 font-semibold text-white">
               Post poll
+            </button>
+          </form>
+        </Dialog>
+      )}
+      {dialog === "editProfile" && (
+        <Dialog title="Edit profile" onClose={() => setDialog("")}>
+          <form onSubmit={saveProfile} className="space-y-3 text-sm dark:text-white">
+            <label className="block">
+              <span className="mb-1 block text-xs font-bold uppercase text-slate-500">Display name</span>
+              <input
+                required
+                value={profileForm.display_name}
+                onChange={(e) => setProfileForm({ ...profileForm, display_name: e.target.value })}
+                className="w-full rounded-lg border px-3 py-2 dark:bg-slate-800"
+              />
+            </label>
+            <label className="block">
+              <span className="mb-1 block text-xs font-bold uppercase text-slate-500">Bio</span>
+              <textarea
+                maxLength={280}
+                rows={3}
+                value={profileForm.bio}
+                onChange={(e) => setProfileForm({ ...profileForm, bio: e.target.value })}
+                placeholder="A line about you"
+                className="w-full rounded-lg border px-3 py-2 dark:bg-slate-800"
+              />
+            </label>
+            <label className="block">
+              <span className="mb-1 block text-xs font-bold uppercase text-slate-500">Interests</span>
+              <input
+                value={profileForm.tags}
+                onChange={(e) => setProfileForm({ ...profileForm, tags: e.target.value })}
+                placeholder="hiking, photography, coffee"
+                className="w-full rounded-lg border px-3 py-2 dark:bg-slate-800"
+              />
+              <span className="mt-1 block text-[11px] text-slate-400">
+                Comma-separated. Shared interests power your Suggested connections — up to 10.
+              </span>
+            </label>
+            <button className="w-full rounded-lg bg-teal-600 p-2 font-semibold text-white">
+              Save
             </button>
           </form>
         </Dialog>

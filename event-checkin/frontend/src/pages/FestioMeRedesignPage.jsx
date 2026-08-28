@@ -4,7 +4,7 @@ import { useCurrentEvent } from '../hooks/useCurrentEvent'
 import { api } from '../api'
 import './FestioMeRedesignPage.css'
 
-const HOME_SECTIONS = ['Feed', 'Guest Chat', 'Groups', 'Messages', 'Profile']
+const HOME_SECTIONS = ['Feed', 'Guest Chat', 'Groups', 'Messages', 'Leaderboard', 'Profile']
 
 const TYPE_ICON = { discussion: '#', announcement: '📣', staff: '🔒' }
 
@@ -81,6 +81,9 @@ export default function FestioMeRedesignPage() {
   const [inviteQuery, setInviteQuery] = useState('')
   const [teamCandidates, setTeamCandidates] = useState([])
   const [profileName, setProfileName] = useState('')
+  const [profileBio, setProfileBio] = useState('')
+  const [profileTags, setProfileTags] = useState('')
+  const [leaderboard, setLeaderboard] = useState({ items: [], me: null })
 
   function notify(msg) {
     setToast(msg)
@@ -232,7 +235,14 @@ export default function FestioMeRedesignPage() {
 
   useEffect(() => {
     if (me?.display_name) setProfileName(me.display_name)
-  }, [me?.display_name])
+    setProfileBio(me?.bio || '')
+    setProfileTags((me?.interest_tags || []).join(', '))
+  }, [me?.display_name, me?.bio, me?.interest_tags])
+
+  useEffect(() => {
+    if (!activeGroup) return
+    api.festiomeLeaderboard(activeGroup).then((r) => setLeaderboard({ items: r.items || [], me: r.me || null })).catch(() => {})
+  }, [activeGroup])
 
   useEffect(() => {
     if (!activeChannel || activeChannel.is_dm) {
@@ -312,16 +322,41 @@ export default function FestioMeRedesignPage() {
         </div>
       )}
 
+      {homeSection === 'Leaderboard' && (
+        <div className="rd-panel" style={{ maxWidth: 480 }}>
+          <div className="rd-panel-head"><h3>Leaderboard</h3></div>
+          <div className="rd-panel-body">
+            {!activeGroup && <p className="rd-rowlink">Select a group to see its leaderboard.</p>}
+            {activeGroup && !leaderboard.items.length && <p className="rd-rowlink">No points yet in this group.</p>}
+            {leaderboard.items.map((row) => (
+              <div key={row.member_id} className="fm-profile-row" style={{ padding: '8px 0', borderBottom: '1px solid var(--line-soft)' }}>
+                <span style={{ width: 22, textAlign: 'center', fontWeight: 800, color: 'var(--faint)' }}>{row.rank}</span>
+                <span className="fm-dm-avatar">{(row.display_name || '?')[0].toUpperCase()}</span>
+                <div style={{ flex: 1 }}><strong>{row.display_name}</strong></div>
+                <strong style={{ color: 'var(--teal)' }}>{row.points}</strong>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
       {homeSection === 'Profile' && (
         <div className="rd-panel" style={{ maxWidth: 420 }}>
           <div className="rd-panel-head"><h3>Your profile</h3></div>
           <div className="rd-panel-body">
-            <div className="fm-profile-row"><span className="fm-dm-avatar">{(me?.display_name || '?')[0].toUpperCase()}</span><div><strong>{me?.display_name || 'Event administrator'}</strong><span className="rd-rowlink">{groups.length} managed groups</span></div></div>
+            <div className="fm-profile-row"><span className="fm-dm-avatar">{(me?.display_name || '?')[0].toUpperCase()}</span><div><strong>{me?.display_name || 'Event administrator'}</strong><span className="rd-rowlink">{groups.length} managed groups{leaderboard.me ? ` · ${leaderboard.me.points} points` : ''}</span></div></div>
             <label className="rd-field-label" style={{ marginTop: 14 }}>Display name</label>
             <input className="rd-field" value={profileName} onChange={(event) => setProfileName(event.target.value)} placeholder="Your community display name" />
-            <button className="rr-btn primary" disabled={!activeGroup || !profileName.trim() || profileName.trim() === me?.display_name} style={{ width: '100%', justifyContent: 'center', marginTop: 8 }} onClick={async () => {
+            <label className="rd-field-label" style={{ marginTop: 10 }}>Bio</label>
+            <input className="rd-field" value={profileBio} onChange={(event) => setProfileBio(event.target.value)} placeholder="A line about you" maxLength={280} />
+            <label className="rd-field-label" style={{ marginTop: 10 }}>Interests</label>
+            <input className="rd-field" value={profileTags} onChange={(event) => setProfileTags(event.target.value)} placeholder="hiking, photography, coffee" />
+            <span className="rd-rowlink" style={{ display: 'block', marginTop: 4 }}>Comma-separated — powers Suggested connections.</span>
+            <button className="rr-btn primary" disabled={!activeGroup || !profileName.trim()} style={{ width: '100%', justifyContent: 'center', marginTop: 8 }} onClick={async () => {
               try {
-                await api.festiomeUpdateProfile(activeGroup, { display_name: profileName.trim() })
+                await api.festiomeUpdateProfile(activeGroup, {
+                  display_name: profileName.trim(), bio: profileBio.trim(),
+                  interest_tags: profileTags.split(',').map((t) => t.trim()).filter(Boolean),
+                })
                 setMembers(await api.festiomeMembers(activeGroup))
                 notify('Profile updated')
               } catch (e) { setError(e.message || 'Profile could not be updated') }

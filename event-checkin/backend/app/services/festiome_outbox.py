@@ -68,6 +68,25 @@ def queue_guest_remove(db: AsyncSession, *, event_id: str, guest_id: str) -> Non
     ))
 
 
+async def queue_points_award(
+    db: AsyncSession, *, event_id: str, guest_id: str, reason: str, points: int,
+) -> None:
+    """Queue real-world-action gamification credit (currently: check-in).
+    idempotency_key has no timestamp component — unlike guest sync/
+    announcements, this must never fire twice for the same guest+reason, so
+    it uses the same ON CONFLICT DO NOTHING pattern as queue_announcement:
+    a concurrent double-scan racing this insert is a safe no-op, not a
+    crash."""
+    idempotency_key = f"points:{guest_id}:{reason}"
+    stmt = pg_insert(FestioMeOutbox).values(
+        event_id=event_id,
+        command="points.award",
+        idempotency_key=idempotency_key,
+        payload={"guest_ref": guest_id, "reason": reason, "points": points, "source_ref": idempotency_key},
+    ).on_conflict_do_nothing(index_elements=["idempotency_key"])
+    await db.execute(stmt)
+
+
 async def queue_announcement(
     db: AsyncSession, *, event_id: str, title: str, body: str,
     kind: str = "event", urgent: bool = False, source_ref: str | None = None,
@@ -108,6 +127,8 @@ async def _deliver(row: FestioMeOutbox, client: FestioMeClient) -> None:
         await client.publish_announcement(
             row.event_id, idempotency_key=row.idempotency_key, **row.payload
         )
+    elif row.command == "points.award":
+        await client.award_points(row.event_id, **row.payload)
     else:
         raise ValueError(f"Unknown FestioMe outbox command: {row.command}")
 

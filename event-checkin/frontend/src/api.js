@@ -1409,6 +1409,8 @@ export const api = {
   festiomeReportMessage: (id, data) => festiomeReq('POST', `/festiome/v1/messages/${id}/reports`, data),
   festiomeSearch: (id, query) => festiomeReq('GET', `/festiome/v1/groups/${id}/search?q=${encodeURIComponent(query)}`),
   festiomeSearchAllGroups: (query) => festiomeReq('GET', `/festiome/v1/members/me/search?q=${encodeURIComponent(query)}`),
+  festiomeLeaderboard: (groupId) => festiomeReq('GET', `/festiome/v1/groups/${groupId}/leaderboard`),
+  festiomeMatches: (groupId) => festiomeReq('GET', `/festiome/v1/groups/${groupId}/matches`),
   festiomeTyping: (channelId) => festiomeReq('POST', `/festiome/v1/channels/${channelId}/typing`),
   festiomeCreatePoll: (id, data) => festiomeReq('POST', `/festiome/v1/channels/${id}/polls`, data),
   festiomeUpload,

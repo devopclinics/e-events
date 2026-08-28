@@ -27,7 +27,7 @@ from .database import SessionLocal, get_db
 from .messaging_client import MessagingUnavailable, get_messaging_client
 from .models import (
     Attachment, AuditLog, Channel, ChannelMember, ChannelReadState, FestioMeGroup, IntegrationCommand, Invitation, JoinRequest, Member, Mention, Message,
-    ModerationReport, NotificationJob, NotificationPreference, PendingUpload, Poll, PollOption, PollVote, Reaction, Tenant,
+    ModerationReport, NotificationJob, NotificationPreference, PendingUpload, Poll, PollOption, PollVote, PointsEntry, Reaction, Tenant,
 )
 from .schemas import (
     AttachmentOut, ChannelCreate, ChannelMemberAdd, ChannelMemberOut, ChannelOut, DirectMessageCreate, EventGroupAdminOut, EventLinkCreate, EventLinkOut, GroupCreate, GroupDirectoryOut, GroupOut, GroupUpdate, InternalSubGroupCreate, InvitationCreate,
@@ -192,6 +192,40 @@ async def _rate_limit(key: str, limit: int, seconds: int = 60) -> None:
     except Exception:
         logger.warning("festiome_rate_limit_unavailable", extra={"key": key})
         return
+
+
+async def _award_points(
+    db: AsyncSession, *, group_id: str, member_id: str, reason: str, points: int,
+    source_ref: str | None = None, daily_cap: int | None = None,
+) -> None:
+    """Best-effort gamification credit — never raises, never blocks the
+    action that triggered it. `source_ref` makes one-time awards (group
+    join, check-in) idempotent; `daily_cap` throttles per-action farming
+    (message/reaction spam) via the same Redis fixed-window counter
+    `_rate_limit` uses, so a Redis outage silently stops awarding rather
+    than blocking anything."""
+    try:
+        if source_ref:
+            existing = (await db.execute(select(PointsEntry.id).where(
+                PointsEntry.member_id == member_id, PointsEntry.reason == reason,
+                PointsEntry.source_ref == source_ref,
+            ))).scalar_one_or_none()
+            if existing:
+                return
+        if daily_cap:
+            day_key = f"points:{reason}:{member_id}:{datetime.utcnow().strftime('%Y%m%d')}"
+            try:
+                count = await redis.incr(day_key)
+                if count == 1:
+                    await redis.expire(day_key, 86400)
+                if count > daily_cap:
+                    return
+            except Exception:
+                pass
+        db.add(PointsEntry(group_id=group_id, member_id=member_id, points=points,
+                           reason=reason, source_ref=source_ref))
+    except Exception:
+        logger.exception("festiome_award_points_failed", extra={"member_id": member_id, "reason": reason})
 
 
 async def _publish(channel_id: str, event: str, payload: dict) -> None:
@@ -583,6 +617,33 @@ async def remove_event_guest(external_event_ref: str, guest_ref: str, _: None = 
     member = (await db.execute(select(Member).where(Member.group_id == group.id, Member.identity_kind == "guest",
               Member.identity_ref == guest_ref, Member.removed_at.is_(None)))).scalar_one_or_none()
     if member: member.removed_at = datetime.utcnow(); await db.commit()
+
+
+@app.post("/internal/v1/guesthub/event-links/{external_event_ref}/members/{guest_ref}/points", status_code=202)
+async def award_event_points(
+    external_event_ref: str, guest_ref: str, body: dict = Body(...),
+    _: None = Depends(internal_service), db: AsyncSession = Depends(get_db),
+):
+    """Real-world action credit (currently: event check-in), pushed from
+    GuestHub via the festiome_outbox — the reverse direction of every other
+    endpoint on this prefix. A guest with no FestioMe membership yet (never
+    opened FestioMe) is a silent no-op, not an error — check-in must never
+    fail on this."""
+    group = await _event_group(db, external_event_ref)
+    member = (await db.execute(select(Member).where(
+        Member.group_id == group.id, Member.identity_kind == "guest",
+        Member.identity_ref == guest_ref, Member.removed_at.is_(None),
+    ))).scalar_one_or_none()
+    if not member:
+        return {"awarded": False}
+    reason = str(body.get("reason") or "event_checked_in")[:30]
+    points = int(body.get("points") or 0)
+    source_ref = body.get("source_ref") or f"{reason}:{guest_ref}"
+    if points > 0:
+        await _award_points(db, group_id=group.id, member_id=member.id, reason=reason,
+                            points=points, source_ref=source_ref)
+        await db.commit()
+    return {"awarded": True}
 
 
 @app.put("/internal/v1/guesthub/event-links/{external_event_ref}/users/{subject}", response_model=MemberOut)
@@ -1071,6 +1132,8 @@ async def _admit_member(db: AsyncSession, group: FestioMeGroup, identity: Identi
                         display_name=identity.name, role=role)
         db.add(member)
     await db.flush()
+    await _award_points(db, group_id=group.id, member_id=member.id, reason="group_joined",
+                        points=5, source_ref=f"group:{group.id}")
     return member
 
 
@@ -1594,6 +1657,9 @@ async def create_message(channel_id: str, body: MessageCreate, identity: Identit
     for member_id in await _notifiable_member_ids(db, channel, exclude=member.id) - mentioned_ids:
         db.add(NotificationJob(member_id=member_id, message_id=message.id, kind=notify_kind,
                                available_at=scheduled or now))
+    if not channel.is_dm and message.published_at:
+        await _award_points(db, group_id=channel.group_id, member_id=member.id,
+                            reason="message_posted", points=1, daily_cap=15)
     await db.commit()
     await db.refresh(message)
     result = await _message_out(db, message, member.id)
@@ -1658,6 +1724,8 @@ async def add_reaction(message_id: str, body: ReactionCreate, identity: Identity
     existing = (await db.execute(select(Reaction).where(Reaction.message_id == message.id, Reaction.member_id == member.id, Reaction.emoji == emoji))).scalar_one_or_none()
     if not existing:
         db.add(Reaction(message_id=message.id, member_id=member.id, emoji=emoji))
+        await _award_points(db, group_id=channel.group_id, member_id=member.id,
+                            reason="reaction_given", points=1, daily_cap=20)
         try:
             await db.commit()
         except IntegrityError:
@@ -1815,6 +1883,60 @@ async def search_my_groups(q: str = Query(min_length=2, max_length=200), limit: 
     return {"items": items}
 
 
+@app.get("/v1/groups/{group_id}/leaderboard")
+async def group_leaderboard(group_id: str, limit: int = Query(20, ge=1, le=100),
+                            identity: Identity = Depends(current_identity), db: AsyncSession = Depends(get_db)):
+    """Sums the append-only PointsEntry ledger per member, live — same
+    on-the-fly aggregation Festio Live's own quiz leaderboard uses, no
+    persisted rank. Visible to every member of the group."""
+    member = await _member(db, group_id, identity)
+    totals = (await db.execute(
+        select(PointsEntry.member_id, func.sum(PointsEntry.points).label("total"))
+        .where(PointsEntry.group_id == group_id)
+        .group_by(PointsEntry.member_id)
+        .order_by(func.sum(PointsEntry.points).desc())
+    )).all()
+    member_ids = [row[0] for row in totals]
+    members_by_id = {}
+    if member_ids:
+        members_by_id = {m.id: m for m in (await db.execute(
+            select(Member).where(Member.id.in_(member_ids)))).scalars().all()}
+    ranked = [
+        {"member_id": mid, "display_name": members_by_id[mid].display_name, "points": int(total), "rank": i + 1}
+        for i, (mid, total) in enumerate(totals) if mid in members_by_id
+    ]
+    top = ranked[:limit]
+    me = next((row for row in ranked if row["member_id"] == member.id), None)
+    if me and me not in top:
+        top = top + [me]
+    return {"items": top, "me": me}
+
+
+@app.get("/v1/groups/{group_id}/matches")
+async def suggested_connections(group_id: str, limit: int = Query(10, ge=1, le=50),
+                                identity: Identity = Depends(current_identity), db: AsyncSession = Depends(get_db)):
+    """Ranked by count of shared interest_tags with the requesting member,
+    scoped to this group only. A member with no tags gets — and appears in
+    — no suggestions; filling in tags is the entire opt-in."""
+    member = await _member(db, group_id, identity)
+    my_tags = set(member.interest_tags or [])
+    if not my_tags:
+        return {"items": []}
+    others = (await db.execute(select(Member).where(
+        Member.group_id == group_id, Member.removed_at.is_(None), Member.id != member.id,
+    ))).scalars().all()
+    scored = []
+    for other in others:
+        shared = my_tags & set(other.interest_tags or [])
+        if shared:
+            scored.append({
+                "member_id": other.id, "display_name": other.display_name,
+                "bio": other.bio, "shared_tags": sorted(shared), "score": len(shared),
+            })
+    scored.sort(key=lambda row: row["score"], reverse=True)
+    return {"items": scored[:limit]}
+
+
 @app.post("/v1/channels/{channel_id}/polls", status_code=201)
 async def create_poll(channel_id: str, body: PollCreate, identity: Identity = Depends(current_identity), db: AsyncSession = Depends(get_db)):
     channel, member = await _channel_access(db, channel_id, identity)
@@ -1854,6 +1976,8 @@ async def vote_poll(poll_id: str, body: PollVoteCreate, identity: Identity = Dep
         raise HTTPException(400, "Invalid poll selection")
     await db.execute(delete(PollVote).where(PollVote.poll_id == poll.id, PollVote.member_id == member.id))
     db.add_all([PollVote(poll_id=poll.id, option_id=option_id, member_id=member.id) for option_id in requested])
+    await _award_points(db, group_id=message.group_id, member_id=member.id, reason="poll_voted",
+                        points=2, source_ref=f"poll:{poll.id}")
     await db.commit()
     counts = dict((await db.execute(select(PollVote.option_id, func.count(PollVote.id)).where(PollVote.poll_id == poll.id).group_by(PollVote.option_id))).all())
     result = {"id": poll.id, "options": [{"id": o.id, "label": o.label, "votes": counts.get(o.id, 0), "voted_by_me": o.id in requested} for o in options]}
@@ -1868,7 +1992,9 @@ async def update_my_profile(
     identity: Identity = Depends(current_identity),
     db: AsyncSession = Depends(get_db),
 ):
-    """Update the caller's community name across all active memberships."""
+    """Update the caller's community name (and matchmaking bio/tags) across
+    all active memberships — one profile, shared everywhere this identity
+    has joined."""
     current = await _member(db, group_id, identity)
     memberships = (await db.execute(select(Member).where(
         Member.identity_kind == identity.kind,
@@ -1876,8 +2002,20 @@ async def update_my_profile(
         Member.removed_at.is_(None),
     ))).scalars().all()
     display_name = body.display_name.strip()
+    tags = None
+    if body.interest_tags is not None:
+        seen = []
+        for tag in body.interest_tags:
+            normalized = tag.strip().lower()[:40]
+            if normalized and normalized not in seen:
+                seen.append(normalized)
+        tags = seen[:10]
     for membership in memberships:
         membership.display_name = display_name
+        if body.bio is not None:
+            membership.bio = body.bio.strip() or None
+        if tags is not None:
+            membership.interest_tags = tags
     await db.commit()
     await db.refresh(current)
     return MemberOut.model_validate(current).model_copy(update={"is_me": True})

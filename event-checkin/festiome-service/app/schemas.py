@@ -156,6 +156,8 @@ class MemberOut(BaseModel):
     role: str
     joined_at: datetime
     is_me: bool = False
+    bio: str | None = None
+    interest_tags: list[str] = []
 
 
 class InvitationCreate(BaseModel):
@@ -212,6 +214,11 @@ class MemberUpdate(BaseModel):
 
 class ProfileUpdate(BaseModel):
     display_name: str = Field(min_length=1, max_length=255)
+    bio: str | None = Field(default=None, max_length=280)
+    # No max_length here — over-the-cap lists are truncated server-side
+    # (main.py), not rejected; the guest shouldn't see a validation error
+    # for typing one tag too many.
+    interest_tags: list[str] | None = None
 
 
 class OwnershipTransfer(BaseModel):

@@ -76,6 +76,10 @@ class Member(Base):
     rules_accepted_version: Mapped[int] = mapped_column(Integer, default=0, server_default="0")
     joined_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, index=True)
     removed_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    # Matchmaking profile — guest-editable, optional. No tags = never appears
+    # in or receives suggested connections; that's the whole privacy model.
+    bio: Mapped[str | None] = mapped_column(String(280), nullable=True)
+    interest_tags: Mapped[list] = mapped_column(JSON, default=list)
 
 
 class JoinRequest(Base):
@@ -264,6 +268,24 @@ class AuditLog(Base):
     target_type: Mapped[str] = mapped_column(String(50))
     target_id: Mapped[str] = mapped_column(String(36))
     details: Mapped[dict] = mapped_column(JSON, default=dict)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, index=True)
+
+
+class PointsEntry(Base):
+    """Append-only gamification ledger — never mutated, summed on read (same
+    shape as AuditLog above). One row per point-earning action; reason
+    disambiguates why, source_ref carries idempotency for reasons that must
+    never double-award (e.g. one group-join, one check-in)."""
+    __tablename__ = "points_entries"
+    __table_args__ = (
+        Index("ix_points_group_member", "group_id", "member_id"),
+    )
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=uid)
+    group_id: Mapped[str] = mapped_column(String(36), ForeignKey("festiome_groups.id"), index=True)
+    member_id: Mapped[str] = mapped_column(String(36), ForeignKey("members.id"), index=True)
+    points: Mapped[int] = mapped_column(Integer)
+    reason: Mapped[str] = mapped_column(String(30))
+    source_ref: Mapped[str | None] = mapped_column(String(120), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, index=True)
 
 

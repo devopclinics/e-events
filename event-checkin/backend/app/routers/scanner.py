@@ -19,6 +19,7 @@ from services.email_service import send_admission_email, send_simple_email
 from services import messaging
 from services.credit_ledger import send_with_credit_ledger
 from ..services.webhook_outbox import queue_webhook_event
+from ..services.festiome_outbox import queue_points_award
 from services.qr_service import generate_qr_bytes, generate_qr_for_url
 from . import broadcast
 from .seating import assign_next_seat
@@ -1178,6 +1179,9 @@ async def perform_admission(guest, event, background_tasks, db) -> ScanResult:
         "admitted_at": guest.admitted_at.isoformat() if guest.admitted_at else None,
     }):
         await db.commit()
+
+    await queue_points_award(db, event_id=event.id, guest_id=guest.id, reason="event_checked_in", points=15)
+    await db.commit()
 
     # Look up menu choices for this guest as "Category: Item" pairs.
     menu_lines: list[tuple[str, str]] = []

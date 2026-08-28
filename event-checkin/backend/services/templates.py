@@ -681,6 +681,14 @@ def build_context(event, guest=None, *, extras: dict | None = None) -> dict:
             ctx["festiome_link"] = f"{event.checkin_base_url.rstrip('/')}/festiome/guest?{query}"
     if extras:
         ctx.update({k: ("" if v is None else v) for k, v in extras.items()})
+    # room_name is a declared placeholder (PLACEHOLDERS above) that no caller
+    # ever actually populates -- it silently rendered as empty text in any
+    # template that used it. table_name (the guest's assigned SeatingTable,
+    # whatever this event calls it via seating_term -- "Table", "Cabin",
+    # "Room"...) is the same underlying value; alias it here once so every
+    # caller gets both without having to remember to set both.
+    if not ctx.get("room_name"):
+        ctx["room_name"] = ctx.get("table_name", "")
     return ctx
 
 

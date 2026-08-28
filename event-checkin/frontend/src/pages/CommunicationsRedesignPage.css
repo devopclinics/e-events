@@ -222,6 +222,15 @@
 .cm-scheduler-help-types-grid li b { color: var(--teal); font-weight: 700; }
 .cm-scheduler-help-types-footnote { margin: 10px 0 0; padding: 10px 11px; border-radius: 9px; background: var(--surface-2); color: var(--muted); font-size: 9px; line-height: 1.5; }
 .cm-scheduler-help-types-footnote b { color: var(--ink); }
+.cm-scheduler-help-modes { padding: 4px 0 16px; border-bottom: 1px solid var(--line-soft); margin-bottom: 14px; }
+.cm-scheduler-help-modes h4 { margin: 0 0 9px; color: var(--ink); font-size: 10.5px; font-weight: 800; text-transform: uppercase; letter-spacing: .04em; }
+.cm-scheduler-help-modes-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 9px; }
+.cm-scheduler-help-modes-grid article { padding: 12px; border: 1px solid var(--line-soft); border-radius: 10px; background: var(--surface); }
+.cm-scheduler-help-modes-grid strong { display: block; margin-bottom: 5px; color: var(--teal); font-size: 11px; font-weight: 800; }
+.cm-scheduler-help-modes-grid p { margin: 0 0 7px; color: var(--muted); font-size: 9px; line-height: 1.5; }
+.cm-scheduler-help-modes-grid p:last-child { margin-bottom: 0; }
+.cm-scheduler-help-modes-grid p b { color: var(--ink); }
+.cm-scheduler-help-modes-when { padding-top: 7px; border-top: 1px dashed var(--line-soft); }
 .cm-scheduler-help-notes { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 9px; }
 .cm-scheduler-help-notes > div { display: flex; align-items: flex-start; gap: 8px; padding: 10px 11px; border-radius: 9px; background: var(--surface-2); color: var(--teal); }
 .cm-scheduler-help-notes p { margin: 0; color: var(--muted); font-size: 9px; line-height: 1.45; }
@@ -287,7 +296,7 @@
   .cm-scheduler-hero, .cm-schedule-save, .cm-scheduler-hero-actions { align-items: stretch; flex-direction: column; }
   .cm-scheduler-hero .rr-btn, .cm-schedule-save .rr-btn { width: 100%; justify-content: center; }
   .cm-scheduler-stats { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-  .cm-scheduler-help-steps, .cm-scheduler-help-notes, .cm-scheduler-help-types-grid { grid-template-columns: 1fr; }
+  .cm-scheduler-help-steps, .cm-scheduler-help-notes, .cm-scheduler-help-types-grid, .cm-scheduler-help-modes-grid { grid-template-columns: 1fr; }
   .cm-schedule-presets, .cm-schedule-grid { grid-template-columns: 1fr; }
   .cm-relative-row { grid-template-columns: 90px 1fr; }
   .cm-schedule-card { grid-template-columns: 1fr; }

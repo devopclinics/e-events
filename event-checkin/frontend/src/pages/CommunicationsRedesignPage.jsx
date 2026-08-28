@@ -2173,6 +2173,24 @@ function SchedulerTab({ eventId, event, notify, initialPreset }) {
             <b>Timing reference:</b> pick an absolute date/time, or relative — a number of minutes/hours/days before or after {SCHEDULE_ANCHOR_LABEL.event_start}, {SCHEDULE_ANCHOR_LABEL.event_end}, {SCHEDULE_ANCHOR_LABEL.rsvp_deadline}, or {SCHEDULE_ANCHOR_LABEL.experience_step}. Pending messages anchored to the event date, end date, RSVP deadline, or timezone recompute automatically if you edit those. A message anchored to an <b>Experience session</b> does <b>not</b> auto-recompute if you only change that session's own time — re-save the message afterward to pick up the new time.
           </p>
         </div>
+        <div className="cm-scheduler-help-modes">
+          <h4>Recipient mode: Dynamic vs. Frozen</h4>
+          <div className="cm-scheduler-help-modes-grid">
+            <article>
+              <strong>Dynamic</strong>
+              <p>No recipient list is stored ahead of time. At the exact moment this message actually sends, Festio re-runs your audience filter (e.g. "RSVP nonresponders") fresh and sends to whoever matches <b>right then</b>.</p>
+              <p className="cm-scheduler-help-modes-when"><b>Use for:</b> anything where the right recipients can only be known close to send time — RSVP chasers (so someone who just responded is correctly skipped), reminders scheduled more than a day or two out, or any message where new guests might still be added before it fires.</p>
+            </article>
+            <article>
+              <strong>Frozen</strong>
+              <p>The moment you save (create, or edit while still Draft/Scheduled/Paused), Festio runs your audience filter once and writes down exactly who matched — that list is what actually gets the message, even if the real audience shifts afterward. <b>Saving again re-freezes it</b> — it's a snapshot as of your last save, not a one-time capture at creation.</p>
+              <p className="cm-scheduler-help-modes-when"><b>Use for:</b> a message where the recipient list should be locked in and predictable — e.g. "everyone confirmed as of tonight" for a supply/headcount-sensitive reminder, where you don't want the list silently growing or shrinking between now and send time.</p>
+            </article>
+          </div>
+          <p className="cm-scheduler-help-types-footnote">
+            Either way, each recipient gets their own delivery record the moment they're actually sent to — so if a send is interrupted partway through, resuming it skips everyone already delivered rather than risking a duplicate message. The recipient count shown while editing is always a live estimate; for Frozen, it becomes exact and fixed the instant you save.
+          </p>
+        </div>
         <div className="cm-scheduler-help-notes">
           <div><Icon name="lock" size={15} /><p><strong>Why can’t I edit a sent message?</strong><br />Sent messages are permanent delivery records. Create a new scheduled message if you need to resend with different timing, content, channels, or recipients.</p></div>
           <div><Icon name="check" size={15} /><p><strong>How should I test?</strong><br />Use a staging event and a test guest whose email or phone you control. Schedule it a few minutes ahead, confirm the locked recipient count, then watch the status change from Scheduled to Sent.</p></div>
